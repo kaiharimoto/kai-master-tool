@@ -16,23 +16,26 @@ of your chair and walk around with.
 
 <p align="center">
   <img src="docs/shots/desk-night-pov.png"
-       alt="The play stage at night: a desk lit by a lamp, cards laid across routed zones, the room falling away behind it"
+       alt="The play stage at night: a desk lit by a lamp, the whole deck fanned out across it in four rows, a hand of five below"
        width="100%">
 </p>
 
 <p align="center">
   <img src="docs/shots/desk-day-table.png"
-       alt="The same desk in daylight, seen from above the table, the window throwing light across the wood"
+       alt="The same desk in daylight, seen from over the table, the window throwing light across the wood"
        width="49%">
   <img src="docs/shots/minimal-day-table.png"
-       alt="The minimal stage: sharp white on true black, no room at all"
+       alt="The minimal stage: the same spread on true black, the routed zones showing through"
        width="49%">
 </p>
 
 <p align="center"><sub>
-The night desk from the seat the stage opens at · the same desk in daylight · the
-minimal stage. Rendered headlessly from the real screen by
-<a href="app/studio"><code>:studio</code></a>.
+A deck being searched, in three rooms: the night desk from the seat the stage
+opens at, the same desk in daylight, and the minimal stage. Tap any pile and it
+spreads across the board at full size — the cards never shrink, because a search
+shows you the cards. Rendered headlessly from the real screen by
+<a href="app/studio"><code>:studio</code></a>, at
+<a href=".github/workflows/shots.yml"><code>shots.yml</code></a>.
 </sub></p>
 
 ## Install

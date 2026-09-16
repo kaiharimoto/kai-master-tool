@@ -41,7 +41,7 @@ on:
           s shuffle, f search the deck (it fans across the board), t end turn.
           Empty is the opening state.
         required: false
-        default: ''
+        default: 'f'
         type: string
       density:
         description: 'Display density. 2 re-solves every layout at tablet metrics.'
