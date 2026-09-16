@@ -51,6 +51,18 @@ so every pixel that moves is a change in the code. It needs the Android SDK
 (`:ui` has an `androidTarget`); point `ANDROID_HOME` at one and the script
 writes `local.properties` itself.
 
+**`shots/` is the loop's scratch; `docs/shots/` is the published strip.** The
+first is gitignored and regenerated constantly. The second is the three pictures
+at the top of the root README, written by dispatching
+`.github/workflows/shots.yml` — which renders at the reference 1600×1000, reads
+the studio's *log* as well as its pixels (a card pool that did not sync and a
+deck that did not import both render a pretty, empty table and exit 0), refuses
+two shots that came back identical, and resamples to half size before
+committing. **Dispatch it on the `claude/**` branch, before the fast-forward,
+never on `main`** — a commit CI puts on `main` is a commit the next
+fast-forward is rejected by. It refuses that itself, but the reason is worth
+knowing.
+
 **`docs/TUNING.md` is the in-app tuning panel.** Long-press the life-point
 number on the play stage: twenty-nine numbers — camera angle, focal length, where
 it is aimed, how close you may sit, the defocus falloff, the hand, the card lifts,

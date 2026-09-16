@@ -1,14 +1,21 @@
 name: Shoot the play stage
 
-# The pictures in the root README. `:studio` composes the real PlayScreen into
-# an ImageComposeScene - real theme, real dependencies, real card art - with no
-# window and no GPU, so the only thing it needs that a laptop might not have is
-# an Android SDK, because `:ui` has an androidTarget. CI has one. That is the
-# whole reason this workflow exists rather than a line in a contributing guide.
+# The pictures at the top of the root README. `:studio` composes the real
+# PlayScreen into an ImageComposeScene - real theme, real dependencies, real
+# card art - with no window and no GPU, so the only thing it needs that a laptop
+# might not have is an Android SDK, because `:ui` has an androidTarget. CI has
+# one. That is the whole reason this workflow exists rather than a line in a
+# contributing guide.
 #
-# Dispatch only. The deal is seeded, so two runs are bit-identical and a run on
-# every push would rewrite five binaries to say nothing. Run it when the stage
-# has actually changed and the README should show it.
+# Dispatch only, on the claude/** branch. Two reasons, and the second one bites:
+#
+#  - The deal is seeded, so two runs are bit-identical. A run per push would
+#    rewrite binaries to say nothing, and a PNG has no useful delta - every
+#    regeneration is a whole new blob in the history, forever.
+#  - `main` is a strict fast-forward of the working branch. A workflow that
+#    commits to `main` puts a commit there that is not on the branch, and the
+#    next fast-forward in the shipping ritual is rejected - at the worst
+#    possible moment. Shoot on the branch and let `main` catch up.
 
 on:
   workflow_dispatch:
@@ -16,23 +23,29 @@ on:
       shots:
         description: 'Comma-separated shot names (scene-light-seat)'
         required: false
-        default: 'desk-night-pov,desk-day-table,desk-day-overhead,desk-night-seated,minimal-day-table'
+        default: 'desk-night-pov,desk-day-table,minimal-day-table'
         type: string
-      width:
-        description: 'Frame width in pixels'
+      scale:
+        description: 'Percent of the rendered size to commit. GitHub renders a README about 850px wide.'
         required: false
-        default: '1440'
+        default: '50'
         type: string
-      height:
-        description: 'Frame height in pixels'
+      settle:
+        description: 'Frames to run before the first shot. The card art arrives during these.'
         required: false
-        default: '900'
+        default: '300'
         type: string
       density:
         description: 'Display density. 2 re-solves every layout at tablet metrics.'
         required: false
         default: '1'
-        type: string
+        type: choice
+        options: ['1', '2']
+      commit:
+        description: 'Commit the result. Off renders, checks and uploads the artifact only.'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -45,7 +58,15 @@ jobs:
   shoot:
     name: Render and commit
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
+      # Refuse before spending fifteen minutes, not after.
+      - name: Refuse to commit to the default branch
+        if: ${{ inputs.commit && github.ref_name == 'main' }}
+        run: |
+          echo "::error::shoot on the claude/** branch and let main fast-forward onto it, or re-run with commit off"
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
@@ -55,8 +76,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # This is what sets ANDROID_HOME, which is the only reason tools/shoot.sh
-      # can write app/local.properties for itself.
       # `packages: ''` because the action's default is `tools platform-tools`,
       # and `tools` was removed from Google's repository - sdkmanager now exits 1
       # with "Failed to find package 'tools'" and takes the whole job with it. The
@@ -68,70 +87,85 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # Studio.kt's --data default. It holds the synced card pool and the art
-      # cache, and a cold one costs a full YGOPRODeck sync before the first
-      # frame is composed.
-      - name: Cache the studio's card pool
+      # Without this, tools/shoot.sh silently skips writing local.properties,
+      # -Pmastertool.android=true forces :ui in anyway, and AGP fails a hundred
+      # lines later with an unrelated message.
+      - name: Assert there is an SDK
+        run: |
+          test -d "${ANDROID_HOME:-/nonexistent}" || {
+            echo "::error::no Android SDK - :ui cannot be configured"
+            exit 1
+          }
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+      # Studio.kt's --data default: the SQLite card pool and Coil's art cache.
+      # Warm, CardRepository.sync returns UpToDate without touching the network
+      # and the art is on disk before the first frame - which is the difference
+      # between a table with cards on it and a table without.
+      - name: Cache the studio's card pool and art
         uses: actions/cache@v4
         with:
           path: ~/.cache/mastertool-studio
-          key: studio-pool-${{ github.run_id }}
-          restore-keys: studio-pool-
+          key: studio-data-${{ hashFiles('lab.ydkx') }}-${{ github.run_id }}
+          restore-keys: |
+            studio-data-${{ hashFiles('lab.ydkx') }}-
+            studio-data-
 
+      - name: Install Pillow
+        run: python3 -m pip install --quiet --disable-pip-version-check pillow
+
+      # The script, never a hand-rolled gradlew line, so this and a developer's
+      # terminal cannot drift. No --width/--height: 1600x1000 is the reference
+      # stage every before/after number in docs/LOOP.md is measured against, and
+      # layout is dp-driven, so a narrower render is a differently laid out
+      # scene rather than a smaller picture. It is resampled afterwards instead.
       - name: Render
         run: |
+          set -o pipefail
           tools/shoot.sh \
-            --out="$GITHUB_WORKSPACE/docs/shots" \
+            --out="$RUNNER_TEMP/shots" \
             --shots='${{ inputs.shots }}' \
-            --width='${{ inputs.width }}' \
-            --height='${{ inputs.height }}' \
-            --density='${{ inputs.density }}'
+            --settle='${{ inputs.settle }}' \
+            --density='${{ inputs.density }}' \
+            2>&1 | tee "$RUNNER_TEMP/shoot.log"
 
-      # A shot that failed to reach the GPU-less renderer, or one whose card art
-      # never arrived, still encodes: it encodes a black rectangle, and a black
-      # 1440x900 PNG compresses to a few kilobytes where a real render of a lit
-      # room is hundreds. Committing one of those to the README is worse than
-      # failing here, so this fails here.
-      - name: Refuse a black frame
+      # Reads the log as well as the pixels, because the studio is cheerful
+      # about failure: a card pool that did not sync and a deck that did not
+      # import both render a pretty, empty, perfectly well-formed table and
+      # exit 0. See the docstring in tools/contact.py.
+      - name: Check the run and resample into docs/shots
         run: |
-          set -euo pipefail
-          floor=100000
-          shopt -s nullglob
-          files=(docs/shots/*.png)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "::error::the studio wrote no PNGs at all"
-            exit 1
-          fi
-          bad=0
-          for png in "${files[@]}"; do
-            size=$(stat -c%s "$png")
-            printf '%10d  %s\n' "$size" "$png"
-            if [ "$size" -lt "$floor" ]; then
-              echo "::error file=$png::$size bytes is below the $floor-byte floor - this is almost certainly a blank frame"
-              bad=1
-            fi
-          done
-          exit $bad
+          python3 tools/contact.py \
+            --raw "$RUNNER_TEMP/shots" \
+            --out docs/shots \
+            --shots '${{ inputs.shots }}' \
+            --log "$RUNNER_TEMP/shoot.log" \
+            --scale '${{ inputs.scale }}' \
+            | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Commit if any pixels moved
+        if: ${{ inputs.commit }}
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain docs/shots)" ]; then
+          git add -- docs/shots
+          if git diff --cached --quiet; then
             echo "Nothing moved. The deal is seeded, so this is the expected result of a re-run."
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/shots
           git commit \
-            -m "Re-shoot the play stage for the README" \
-            -m "Rendered by .github/workflows/shots.yml from ${GITHUB_SHA:0:7}. Shots: ${{ inputs.shots }} at ${{ inputs.width }}x${{ inputs.height }} @${{ inputs.density }}x."
+            -m "The contact strip is re-shot from ${GITHUB_SHA:0:7}" \
+            -m "tools/shoot.sh --shots=${{ inputs.shots }} --settle=${{ inputs.settle }} --density=${{ inputs.density }}, resampled to ${{ inputs.scale }}% by tools/contact.py. Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
           git push origin "HEAD:${GITHUB_REF_NAME}"
 
-      - name: Upload the shots as an artifact too
+      # The committed strip is documentation; the full-size originals are the
+      # instrument. Somebody reviewing a binary diff will want them.
+      - name: Upload the originals
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: shots
-          path: docs/shots/*.png
+          name: shots-full-size
+          path: ${{ runner.temp }}/shots/*.png
+          retention-days: 14
           if-no-files-found: ignore
