@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How the app is built and why
+    url: https://github.com/kaiharimoto/kaihari-s-master-tool#documentation
+    about: The design handbook and the nine documents behind the decisions in this app.
+  - name: Releases
+    url: https://github.com/kaiharimoto/kaihari-s-master-tool/releases
+    about: Download the latest APK, or the 3DS .cia from the 3ds-v* pre-release track.

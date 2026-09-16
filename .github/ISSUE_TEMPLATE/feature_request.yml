@@ -1,0 +1,46 @@
+name: Feature request
+description: Something the app should be able to do and cannot
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two things are already known and deliberately deferred — **siding
+        patterns** and **shootout mode**. Both existed in the archived HTML tool
+        and will be redesigned from scratch rather than ported, so a request to
+        "bring them back" is already on the list. Everything else is open.
+
+        `docs/TABLE.md` §5 is the ordered backlog if you want to see what is
+        already queued.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The situation, not the solution. What are you doing when you hit the wall?
+      placeholder: >
+        When I am testing a combo I want to put the board back two steps and try
+        the other line, and right now I have to set the whole thing up again.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you think should happen
+      description: Optional. If you already have a shape in mind, describe it.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the app
+      options:
+        - Deck builder
+        - Play stage
+        - Search
+        - Deck library / import / export
+        - Statistics and hand odds
+        - 3DS port
+        - Something else
+    validations:
+      required: true

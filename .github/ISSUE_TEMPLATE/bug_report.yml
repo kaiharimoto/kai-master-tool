@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in the app is wrong, crashes, or does not do what it says
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the app **crashed**, it already caught the trace for you: the crash
+        reporter shows it on the next launch with a share button. Paste that in
+        and you can skip most of the rest of this form.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+      placeholder: |
+        I dragged a card out of the deck fan and let go over a monster zone.
+        I expected it to land there. It went back into the deck instead.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: The number in the top bar. Tap it and it also checks for an update.
+      placeholder: "1.2.62"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where
+      options:
+        - Android tablet
+        - Android phone
+        - Desktop (macOS)
+        - Desktop (Windows)
+        - Desktop (Linux)
+        - New 3DS
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Model and OS version, if you know them.
+      placeholder: "Samsung Tab S11 Ultra, Android 15"
+
+  - type: textarea
+    id: trace
+    attributes:
+      label: Crash trace or logs
+      description: From the in-app crash reporter, if there was one. Pasted here it is formatted automatically.
+      render: text
+
+  - type: textarea
+    id: deck
+    attributes:
+      label: Deck file
+      description: >
+        If the bug involves a specific deck, attaching the `.ydk` / `.ydkx` makes it
+        reproducible in one step. Drag the file into this box.

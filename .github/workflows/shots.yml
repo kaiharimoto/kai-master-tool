@@ -57,7 +57,14 @@ jobs:
 
       # This is what sets ANDROID_HOME, which is the only reason tools/shoot.sh
       # can write app/local.properties for itself.
+      # `packages: ''` because the action's default is `tools platform-tools`,
+      # and `tools` was removed from Google's repository - sdkmanager now exits 1
+      # with "Failed to find package 'tools'" and takes the whole job with it. The
+      # runner image already ships an SDK; what is wanted from this action is the
+      # accepted licences and ANDROID_HOME, not a download.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
 
       - uses: gradle/actions/setup-gradle@v4
 
