@@ -35,6 +35,14 @@ on:
         required: false
         default: '300'
         type: string
+      keys:
+        description: >-
+          Shortcuts to press before the shots, as one string: d draw, n new hand,
+          s shuffle, f search the deck (it fans across the board), t end turn.
+          Empty is the opening state.
+        required: false
+        default: ''
+        type: string
       density:
         description: 'Display density. 2 re-solves every layout at tablet metrics.'
         required: false
@@ -126,6 +134,7 @@ jobs:
             --out="$RUNNER_TEMP/shots" \
             --shots='${{ inputs.shots }}' \
             --settle='${{ inputs.settle }}' \
+            --keys='${{ inputs.keys }}' \
             --density='${{ inputs.density }}' \
             2>&1 | tee "$RUNNER_TEMP/shoot.log"
 
@@ -156,7 +165,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit \
             -m "The contact strip is re-shot from ${GITHUB_SHA:0:7}" \
-            -m "tools/shoot.sh --shots=${{ inputs.shots }} --settle=${{ inputs.settle }} --density=${{ inputs.density }}, resampled to ${{ inputs.scale }}% by tools/contact.py. Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
+            -m "tools/shoot.sh --shots=${{ inputs.shots }} --settle=${{ inputs.settle }} --keys='${{ inputs.keys }}' --density=${{ inputs.density }}, resampled to ${{ inputs.scale }}% by tools/contact.py. Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
 
           # A render takes a quarter of an hour, and a branch somebody is
           # working on moves inside one. Rebasing is safe here and only here:
