@@ -102,8 +102,8 @@ in one and not the other.
 
 ### Knowing whether the deck actually works
 
-- **Exact opening-hand odds**, not a simulation — per key, for the hand size you
-  choose, on the going-first/going-second split.
+- **Exact opening-hand odds**, not a simulation — hypergeometric, per key, at
+  whatever hand size you ask for (five going second, six on the draw).
 - **The breakdown is a lens.** The same machinery draws your own roles, the
   deck's archetypes, its type split, its copy counts and its banlist exposure,
   because the partition is a parameter.
