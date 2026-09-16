@@ -1,0 +1,130 @@
+name: Shoot the play stage
+
+# The pictures in the root README. `:studio` composes the real PlayScreen into
+# an ImageComposeScene - real theme, real dependencies, real card art - with no
+# window and no GPU, so the only thing it needs that a laptop might not have is
+# an Android SDK, because `:ui` has an androidTarget. CI has one. That is the
+# whole reason this workflow exists rather than a line in a contributing guide.
+#
+# Dispatch only. The deal is seeded, so two runs are bit-identical and a run on
+# every push would rewrite five binaries to say nothing. Run it when the stage
+# has actually changed and the README should show it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      shots:
+        description: 'Comma-separated shot names (scene-light-seat)'
+        required: false
+        default: 'desk-night-pov,desk-day-table,desk-day-overhead,desk-night-seated,minimal-day-table'
+        type: string
+      width:
+        description: 'Frame width in pixels'
+        required: false
+        default: '1440'
+        type: string
+      height:
+        description: 'Frame height in pixels'
+        required: false
+        default: '900'
+        type: string
+      density:
+        description: 'Display density. 2 re-solves every layout at tablet metrics.'
+        required: false
+        default: '1'
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shoot:
+    name: Render and commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # This is what sets ANDROID_HOME, which is the only reason tools/shoot.sh
+      # can write app/local.properties for itself.
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Studio.kt's --data default. It holds the synced card pool and the art
+      # cache, and a cold one costs a full YGOPRODeck sync before the first
+      # frame is composed.
+      - name: Cache the studio's card pool
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mastertool-studio
+          key: studio-pool-${{ github.run_id }}
+          restore-keys: studio-pool-
+
+      - name: Render
+        run: |
+          tools/shoot.sh \
+            --out="$GITHUB_WORKSPACE/docs/shots" \
+            --shots='${{ inputs.shots }}' \
+            --width='${{ inputs.width }}' \
+            --height='${{ inputs.height }}' \
+            --density='${{ inputs.density }}'
+
+      # A shot that failed to reach the GPU-less renderer, or one whose card art
+      # never arrived, still encodes: it encodes a black rectangle, and a black
+      # 1440x900 PNG compresses to a few kilobytes where a real render of a lit
+      # room is hundreds. Committing one of those to the README is worse than
+      # failing here, so this fails here.
+      - name: Refuse a black frame
+        run: |
+          set -euo pipefail
+          floor=100000
+          shopt -s nullglob
+          files=(docs/shots/*.png)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::the studio wrote no PNGs at all"
+            exit 1
+          fi
+          bad=0
+          for png in "${files[@]}"; do
+            size=$(stat -c%s "$png")
+            printf '%10d  %s\n' "$size" "$png"
+            if [ "$size" -lt "$floor" ]; then
+              echo "::error file=$png::$size bytes is below the $floor-byte floor - this is almost certainly a blank frame"
+              bad=1
+            fi
+          done
+          exit $bad
+
+      - name: Commit if any pixels moved
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain docs/shots)" ]; then
+            echo "Nothing moved. The deal is seeded, so this is the expected result of a re-run."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/shots
+          git commit \
+            -m "Re-shoot the play stage for the README" \
+            -m "Rendered by .github/workflows/shots.yml from ${GITHUB_SHA:0:7}. Shots: ${{ inputs.shots }} at ${{ inputs.width }}x${{ inputs.height }} @${{ inputs.density }}x."
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Upload the shots as an artifact too
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shots
+          path: docs/shots/*.png
+          if-no-files-found: ignore
