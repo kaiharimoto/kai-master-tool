@@ -157,7 +157,22 @@ jobs:
           git commit \
             -m "The contact strip is re-shot from ${GITHUB_SHA:0:7}" \
             -m "tools/shoot.sh --shots=${{ inputs.shots }} --settle=${{ inputs.settle }} --density=${{ inputs.density }}, resampled to ${{ inputs.scale }}% by tools/contact.py. Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+          # A render takes a quarter of an hour, and a branch somebody is
+          # working on moves inside one. Rebasing is safe here and only here:
+          # this commit touches docs/shots and nothing else does, so there is
+          # nothing for it to conflict with. Never --force - if the rebase
+          # cannot replay cleanly, something is wrong that a push should not
+          # paper over.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            echo "push $attempt rejected - the branch moved under the render, replaying onto it"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+          done
+          echo "::error::could not push the contact strip after three attempts"
+          exit 1
 
       # The committed strip is documentation; the full-size originals are the
       # instrument. Somebody reviewing a binary diff will want them.
