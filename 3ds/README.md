@@ -1,7 +1,9 @@
 # kai's master tool, on the Nintendo 3DS
 
-A New 3DS port. See **`docs/PORT.md`** for why it is a rewrite rather than a
-port, what it deletes, and the phase it is currently in.
+A New 3DS port. See **[`docs/PORT.md`](../docs/PORT.md)** for why it is a
+rewrite rather than a port, what it deletes, and the phase it is currently in.
+The root [`README.md`](../README.md) covers the app this is a port of, and how
+to install the `.cia`.
 
 ## Build
 

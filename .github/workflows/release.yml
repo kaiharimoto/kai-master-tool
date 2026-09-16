@@ -34,7 +34,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # versionCode is derived from the commit count, which needs history.
+          # versionCode is derived from the version name, not from history - see
+          # the comment on the step below for why that changed. The full history
+          # is still wanted, for the compare link in the generated release notes.
           fetch-depth: 0
 
       - name: Resolve version

@@ -1,9 +1,13 @@
 # kai's master tool — cross-platform app
 
 A clean-room rebuild of the deck builder as a single Kotlin codebase targeting
-Android tablets, desktop and iOS. Not a port of the HTML tool: the domain rules
-were rewritten from the rulebook up, with tests, and the UI was designed for
-touch rather than adapted to it.
+Android and desktop. Not a port of the HTML tool: the domain rules were
+rewritten from the rulebook up, with tests, and the UI was designed for touch
+rather than adapted to it.
+
+The root [`README.md`](../README.md) is the front page - what the app does and
+how to install it. This file is how it is put together. The reasoning behind the
+decisions is in [`docs/`](../docs).
 
 ## Modules
 
@@ -11,8 +15,9 @@ touch rather than adapted to it.
 |---|---|---|
 | `core` | Pure Kotlin: models, YDK/YDKX codec, deck rules, search, API client, SQLite | No |
 | `ui` | Compose Multiplatform screens shared by every platform | Yes |
-| `androidApp` | The APK. Landscape-locked, built for a Tab S11 Ultra | Yes |
+| `androidApp` | The APK. Built for a Tab S11 Ultra; runs on phones too | Yes |
 | `desktopApp` | JVM app, packaged as `.dmg` / `.msi` / `.deb` | Yes |
+| `studio` | Draws the play stage to PNG headlessly. Opt-in with `-Pmastertool.studio=true`, ships in nothing | Yes |
 
 `core` deliberately has no Compose and no platform code, so it compiles and its
 tests run anywhere — including environments with no Android SDK.
@@ -39,12 +44,20 @@ skips the Android and Compose modules when it is not, so `:core` stays usable in
 restricted environments. Android Studio and CI pick everything up automatically.
 Force it either way with `-Pmastertool.android=true|false`.
 
-iOS targets are off unless building on a Mac; enable with `-Pmastertool.ios=true`.
+iOS targets exist in the build but are off, and nothing ships from them; they
+need a Mac and are enabled with `-Pmastertool.ios=true`.
 
 ### CI and releases
 
-`.github/workflows/build-app.yml` builds a debug APK on every push and uploads
-it as a run artifact.
+`.github/workflows/build-app.yml` runs on every push to `main` or a `claude/**`
+branch that touches `app/`. Three jobs: `:core` tests with Android switched off
+(so a failure there is the rules, not the SDK), the debug APK, and a desktop
+build that catches genuinely platform-specific code the Android job cannot see.
+The APK is uploaded as a run artifact.
+
+`.github/workflows/shots.yml` is the play stage drawn to PNG on a runner, for
+the pictures in the root README. Dispatch only, and on a `claude/**` branch -
+see `tools/contact.py`.
 
 `.github/workflows/release.yml` publishes a signed release. Trigger it by
 pushing a `v*` tag, or from the Actions tab with a version number:
@@ -53,9 +66,17 @@ pushing a `v*` tag, or from the Actions tab with a version number:
 git tag v1.0.1 && git push origin v1.0.1
 ```
 
-It derives `versionCode` from the commit count (monotonic, reproducible),
-verifies the APK carries the committed signing certificate, and attaches
-`kai-master-tool-<version>.apk` to the GitHub release.
+It derives `versionCode` from the version *name*, as
+`100000 + major*10000 + minor*100 + patch`, verifies the APK carries the
+committed signing certificate, and attaches `kai-master-tool-<version>.apk` to
+the GitHub release.
+
+**That formula is permanent.** An earlier scheme derived the code from the commit
+count, which is not monotonic across branches: v1.1.0 shipped as 281 from a
+281-commit branch, the next release came off a 61-commit branch and produced 61,
+and every installed device refused the update. The `+100000` floor keeps the new
+scheme above anything the old one ever emitted. Never go back to commit counts,
+and keep the patch digit under 100 - 1.2.100 and 1.3.0 collide.
 
 ## Updating from GitHub
 
@@ -97,8 +118,19 @@ cannot disagree with each other.
 **A failed card-pool refresh never clears the cache.** An outdated pool beats no
 pool at a venue with no signal.
 
-**Landscape-locked on Android.** Removes rotation recreation entirely, which is
-why the app uses plain remembered state holders instead of ViewModels.
+**The builder has two arrangements, and one rule picks between them.** The
+manifest was `userLandscape` until the app met a phone; it is `fullUser` now.
+`core/layout/Posture.kt` is the whole decision - a window taller than it is wide
+is `TALL`, everything else is `WIDE` - with no dp threshold, because a threshold
+has to be re-chosen for every new device and the aspect ratio is what the two
+arrangements actually turn on. A portrait tablet gets `TALL` too, which is right
+rather than incidental. `docs/DEVICES.md` §6 is the authority.
+
+Rotation therefore *does* recreate the activity, and the app still uses plain
+remembered state holders rather than ViewModels: what survives a rotation is the
+SQLite database and the preferences document, both of which are read back on the
+way up. A screen's transient state is deliberately not worth preserving across a
+turn of the device.
 
 **Sorting a deck is an edit, not a view setting.** The stored order is exactly
 what gets written back to `.ydk`, so a sort that only reordered the display would
@@ -122,7 +154,7 @@ schema changes.
 
 ## Status
 
-Shipping in v1: deck builder with search and filters, drag and drop between the
+Shipping: deck builder with search and filters, drag and drop between the
 pool and every deck section, per-section copy steppers and moves, adjustable and
 collapsible deck panes with per-section sorting and card density, an inspector
 you can page through the results in, deck statistics with opening-hand odds, a
@@ -132,5 +164,14 @@ library, YDK/YDKX import, export and share.
 On desktop: keyboard shortcuts throughout (press `?` for the list, which is
 generated from the table that implements them) and a hover preview on any card.
 
-Not yet built: siding patterns, shootout mode, the sandbox board simulator,
-PDF export, and autoscrolling a pane while dragging over its edge.
+Also shipping: the freeform **play stage** - a table where cards go anywhere,
+stack, and set face-down, with ten simultaneous gesture lanes, searchable piles,
+a hold-to-read card reader, and a free-flight camera over a room drawn by
+`core/render/`. It replaced the goldfish screen. A second board - "Table", a
+zone board over a `BoardState` - was built and then cut as redundant; the zones
+survive it in `core/layout/BoardLayout.kt`, which still solves all ten of them.
+
+Not yet built: siding patterns and shootout mode (both deliberately deferred, to
+be redesigned from scratch rather than ported), PDF export, the deck showcase
+stage, and autoscrolling a pane while dragging over its edge. `docs/TABLE.md` §5
+is the ordered list.
