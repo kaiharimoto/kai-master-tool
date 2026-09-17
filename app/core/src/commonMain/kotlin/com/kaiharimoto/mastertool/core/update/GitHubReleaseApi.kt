@@ -85,7 +85,16 @@ class GitHubReleaseApi(
 
     companion object {
         const val DEFAULT_OWNER = "kaiharimoto"
-        const val DEFAULT_REPO = "kaihari-s-master-tool"
+
+        /**
+         * The repository the installed app asks for its updates.
+         *
+         * It was `kaihari-s-master-tool` until the rename. GitHub redirects the
+         * API for a renamed repository, so shipped builds kept updating - but a
+         * freed-up name is one anybody can register, and this is the endpoint
+         * that hands a device an APK to install. It points at the real name.
+         */
+        const val DEFAULT_REPO = "kai-master-tool"
         const val DEFAULT_BASE_URL = "https://api.github.com"
     }
 }

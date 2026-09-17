@@ -8,8 +8,8 @@ out on a table that is a *room*: a desk lit by a window in the day and a lamp at
 night, cards that lift and lean and throw shadows, and a camera you can get out
 of your chair and walk around with.
 
-[![Latest release](https://img.shields.io/github/v/release/kaiharimoto/kaihari-s-master-tool?label=latest&sort=semver)](https://github.com/kaiharimoto/kaihari-s-master-tool/releases/latest)
-[![Build](https://github.com/kaiharimoto/kaihari-s-master-tool/actions/workflows/build-app.yml/badge.svg)](https://github.com/kaiharimoto/kaihari-s-master-tool/actions/workflows/build-app.yml)
+[![Latest release](https://img.shields.io/github/v/release/kaiharimoto/kai-master-tool?label=latest&sort=semver)](https://github.com/kaiharimoto/kai-master-tool/releases/latest)
+[![Build](https://github.com/kaiharimoto/kai-master-tool/actions/workflows/build-app.yml/badge.svg)](https://github.com/kaiharimoto/kai-master-tool/actions/workflows/build-app.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 ---
@@ -43,7 +43,7 @@ shows you the cards. Rendered headlessly from the real screen by
 ### Android
 
 1. Download **`kai-master-tool-<version>.apk`** from the
-   [latest release](https://github.com/kaiharimoto/kaihari-s-master-tool/releases/latest).
+   [latest release](https://github.com/kaiharimoto/kai-master-tool/releases/latest).
 2. Open it. Android will ask once for permission to install unknown apps — that
    is a one-time, per-app setting.
 3. After that the app updates itself: it checks this repository's latest release
@@ -69,7 +69,7 @@ The desktop build does not self-update; it opens the release page instead.
 ### New 3DS
 
 Grab **`kai-master-tool-1.0.0.cia`** from the
-[`3ds-v*` release track](https://github.com/kaiharimoto/kaihari-s-master-tool/releases/tag/3ds-v1.0.0)
+[`3ds-v*` release track](https://github.com/kaiharimoto/kai-master-tool/releases/tag/3ds-v1.0.0)
 and install it with FBI. A `.3dsx` is attached too, for the Homebrew Launcher,
 but **test the `.cia`** — a `.3dsx` inherits its host title's permissions while a
 `.cia` gets only what its own RSF grants, so a missing service is a black screen
