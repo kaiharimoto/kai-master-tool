@@ -191,5 +191,71 @@
         ]
       }
     }
+  },
+  "groups": {
+    "defs": [
+      {
+        "id": "g-engine",
+        "name": "Labrynth engine",
+        "color": 2,
+        "order": 0
+      },
+      {
+        "id": "g-handtraps",
+        "name": "Handtraps",
+        "color": 3,
+        "order": 1
+      },
+      {
+        "id": "g-breakers",
+        "name": "Breakers",
+        "color": 4,
+        "order": 2
+      },
+      {
+        "id": "g-rollback",
+        "name": "Rollback",
+        "color": 5,
+        "order": 3
+      }
+    ],
+    "cards": {
+      "2511": "g-engine",
+      "1225009": "g-engine",
+      "2347656": "g-engine",
+      "5380979": "g-engine",
+      "6351147": "g-rollback",
+      "25096909": "g-breakers",
+      "30748475": "g-breakers",
+      "37629703": "g-engine",
+      "40366667": "g-handtraps",
+      "42141493": "g-handtraps",
+      "60990740": "g-rollback",
+      "73602965": "g-engine",
+      "74018812": "g-engine",
+      "80101899": "g-engine",
+      "81497285": "g-engine",
+      "92714517": "g-engine"
+    },
+    "lens": "ROLES",
+    "goals": [
+      {
+        "id": "q-opens",
+        "name": "Opens",
+        "hand": 5,
+        "asks": {
+          "g-engine": "AT_LEAST_1"
+        }
+      },
+      {
+        "id": "q-opens-interaction",
+        "name": "Opens with interaction",
+        "hand": 5,
+        "asks": {
+          "g-engine": "AT_LEAST_1",
+          "g-handtraps": "AT_LEAST_1"
+        }
+      }
+    ]
   }
 }

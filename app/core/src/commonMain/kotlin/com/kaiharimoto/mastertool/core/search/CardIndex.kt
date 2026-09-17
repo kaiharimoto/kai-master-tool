@@ -145,15 +145,6 @@ class CardIndex private constructor(
         )
     }
 
-    /**
-     * Short list for the autocomplete dropdown.
-     *
-     * Names only, whatever the pool is being searched by elsewhere: a dropdown
-     * of eight rows has room for the card you are spelling and nothing else.
-     */
-    fun suggest(query: String, limit: Int = 8): List<Card> =
-        search(query, CardFilter.NONE, SearchScope.NAMES, limit).cards
-
     private class ScoredCard(val card: Card, val score: Int)
 
     companion object {

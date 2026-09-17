@@ -5,7 +5,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
-import io.ktor.client.request.parameter
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
@@ -29,17 +28,6 @@ class YgoProDeckApi(
         if (!response.status.isSuccess()) {
             error("Card database request failed with ${response.status}")
         }
-        response.body<CardInfoResponse>().data.map { it.toDomain() }
-    }
-
-    /** Server-side name search, used only when the local pool is still empty. */
-    suspend fun searchByName(fragment: String): Result<List<Card>> = runCatching {
-        val response: HttpResponse = client.get("$baseUrl/cardinfo.php") {
-            parameter("fname", fragment)
-        }
-        // The API answers 400 with an error body when nothing matches, which is
-        // an empty result rather than a failure worth surfacing.
-        if (!response.status.isSuccess()) return@runCatching emptyList()
         response.body<CardInfoResponse>().data.map { it.toDomain() }
     }
 

@@ -20,11 +20,6 @@ name: Shoot the play stage
 on:
   workflow_dispatch:
     inputs:
-      shots:
-        description: 'Comma-separated shot names (scene-light-seat)'
-        required: false
-        default: 'desk-night-pov,desk-day-table,minimal-day-table'
-        type: string
       scale:
         description: 'Percent of the rendered size to commit. GitHub renders a README about 850px wide.'
         required: false
@@ -35,20 +30,6 @@ on:
         required: false
         default: '300'
         type: string
-      keys:
-        description: >-
-          Shortcuts to press before the shots, as one string: d draw, n new hand,
-          s shuffle, f search the deck (it fans across the board), t end turn.
-          Empty is the opening state.
-        required: false
-        default: 'f'
-        type: string
-      density:
-        description: 'Display density. 2 re-solves every layout at tablet metrics.'
-        required: false
-        default: '1'
-        type: choice
-        options: ['1', '2']
       commit:
         description: 'Commit the result. Off renders, checks and uploads the artifact only.'
         required: false
@@ -58,6 +39,13 @@ on:
 permissions:
   contents: write
 
+# Defined once: the render step shoots these and the check step asserts exactly
+# these came back, so a row added to one and not the other is a red build rather
+# than a missing picture.
+env:
+  STAGE_SHOTS: desk-night-pov,desk-day-table,minimal-day-table
+  BUILDER_SHOTS: builder-wide,builder-lens,builder-odds,builder-stats,builder-check,builder-tall
+
 concurrency:
   group: shots-${{ github.ref }}
   cancel-in-progress: true
@@ -66,7 +54,7 @@ jobs:
   shoot:
     name: Render and commit
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       # Refuse before spending fifteen minutes, not after.
       - name: Refuse to commit to the default branch
@@ -114,29 +102,62 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/mastertool-studio
-          key: studio-data-${{ hashFiles('lab.ydkx') }}-${{ github.run_id }}
+          key: studio-data-${{ hashFiles('lab.ydkx', 'ydk/lab.ydkx') }}-${{ github.run_id }}
           restore-keys: |
-            studio-data-${{ hashFiles('lab.ydkx') }}-
+            studio-data-${{ hashFiles('lab.ydkx', 'ydk/lab.ydkx') }}-
             studio-data-
 
       - name: Install Pillow
         run: python3 -m pip install --quiet --disable-pip-version-check pillow
 
       # The script, never a hand-rolled gradlew line, so this and a developer's
-      # terminal cannot drift. No --width/--height: 1600x1000 is the reference
-      # stage every before/after number in docs/LOOP.md is measured against, and
-      # layout is dp-driven, so a narrower render is a differently laid out
-      # scene rather than a smaller picture. It is resampled afterwards instead.
+      # terminal cannot drift.
+      #
+      # One invocation per row, because `--screen`, `--keys` and the frame size
+      # are per-*run* rather than per-shot: the studio composes once and then
+      # takes every `--shots` name off that one composition. So a strip that
+      # wants the builder and the stage, or two builder panels, is that many
+      # runs. They share a warm Gradle daemon and a warm card pool, so only the
+      # first is expensive.
+      #
+      # The stage keeps the studio's own 1600x1000: it is the reference every
+      # before/after number in docs/LOOP.md is measured against, and layout is
+      # dp-driven, so a narrower render is a differently laid out scene rather
+      # than a smaller picture. The builder is sized deliberately instead -
+      # 1480dp wide clears the 1400dp cutoff below which the header starts
+      # dropping controls (docs/DEVICES.md), and the TALL shot is a phone.
       - name: Render
         run: |
-          set -o pipefail
-          tools/shoot.sh \
-            --out="$RUNNER_TEMP/shots" \
-            --shots='${{ inputs.shots }}' \
-            --settle='${{ inputs.settle }}' \
-            --keys='${{ inputs.keys }}' \
-            --density='${{ inputs.density }}' \
-            2>&1 | tee "$RUNNER_TEMP/shoot.log"
+          set -euo pipefail
+
+          shoot() {
+            local name="$1"; shift
+            echo "::group::$name"
+            set -o pipefail
+            tools/shoot.sh --out="$RUNNER_TEMP/shots" --shots="$name" \
+              --settle='${{ inputs.settle }}' "$@" 2>&1 | tee -a "$RUNNER_TEMP/shoot.log"
+            echo "::endgroup::"
+          }
+
+          # The builder rows all share these. `ydk/lab.ydkx` rather than the
+          # root `lab.ydkx` on purpose: it is the copy carrying roles and hand
+          # goals, and leaving the studio's default deck untouched is what keeps
+          # the three stage renders bit-identical across this change.
+          builder=(--screen=builder --deck=../ydk/lab.ydkx --width=2960 --height=1848 --density=2)
+
+          # The play stage: three rooms, one moment, off one composition.
+          shoot "$STAGE_SHOTS" --keys=f
+
+          shoot builder-wide  "${builder[@]}"
+          shoot builder-lens  "${builder[@]}" --keys=b
+          shoot builder-odds  "${builder[@]}" --keys=c
+          shoot builder-stats "${builder[@]}" --keys=s
+          shoot builder-check "${builder[@]}" --keys=i
+
+          # A phone, which is a different arrangement rather than a smaller one:
+          # taller than wide is all `Posture.of` looks at.
+          shoot builder-tall --screen=builder --deck=../ydk/lab.ydkx \
+            --width=1080 --height=2340 --density=3
 
       # Reads the log as well as the pixels, because the studio is cheerful
       # about failure: a card pool that did not sync and a deck that did not
@@ -147,7 +168,7 @@ jobs:
           python3 tools/contact.py \
             --raw "$RUNNER_TEMP/shots" \
             --out docs/shots \
-            --shots '${{ inputs.shots }}' \
+            --shots "$STAGE_SHOTS,$BUILDER_SHOTS" \
             --log "$RUNNER_TEMP/shoot.log" \
             --scale '${{ inputs.scale }}' \
             | tee -a "$GITHUB_STEP_SUMMARY"
@@ -165,7 +186,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit \
             -m "The contact strip is re-shot from ${GITHUB_SHA:0:7}" \
-            -m "tools/shoot.sh --shots=${{ inputs.shots }} --settle=${{ inputs.settle }} --keys='${{ inputs.keys }}' --density=${{ inputs.density }}, resampled to ${{ inputs.scale }}% by tools/contact.py. Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
+            -m "Shots: $STAGE_SHOTS, $BUILDER_SHOTS at settle=${{ inputs.settle }}, resampled to ${{ inputs.scale }}% by tools/contact.py. Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
 
           # A render takes a quarter of an hour, and a branch somebody is
           # working on moves inside one. Rebasing is safe here and only here:

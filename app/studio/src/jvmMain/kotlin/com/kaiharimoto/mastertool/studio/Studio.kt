@@ -22,12 +22,12 @@ import com.kaiharimoto.mastertool.core.update.UpdateChecker
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import com.kaiharimoto.mastertool.ui.DeckFileAccess
 import com.kaiharimoto.mastertool.ui.ImportedFile
-import com.kaiharimoto.mastertool.ui.MasterToolApp
 import com.kaiharimoto.mastertool.ui.SafeArea
 import com.kaiharimoto.mastertool.ui.components.CardBackChoice
 import com.kaiharimoto.mastertool.ui.components.LocalCardBack
 import com.kaiharimoto.mastertool.ui.theme.LocalPrismaticCards
 import com.kaiharimoto.mastertool.ui.configureImageLoader
+import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderScreen
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckLayoutState
 import com.kaiharimoto.mastertool.ui.fx.LocalFeedback
@@ -37,6 +37,7 @@ import com.kaiharimoto.mastertool.ui.play.PlayScreen
 import com.kaiharimoto.mastertool.ui.theme.MasterToolTheme
 import com.kaiharimoto.mastertool.ui.update.AppUpdater
 import com.kaiharimoto.mastertool.ui.update.InstallOutcome
+import com.kaiharimoto.mastertool.ui.update.UpdateState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -137,7 +138,7 @@ fun main(args: Array<String>) {
             // press gets its own settle, because a stage mid-spring is a
             // different picture from the one that press was meant to produce.
             for (char in opts.keys) {
-                val key = Keys.of(char) ?: error("nothing on the play stage is bound to '$char'")
+                val key = Keys.of(char) ?: error("nothing is bound to '$char' that the studio can press")
                 Keys.press(scene, key)
                 clock.run(opts.shotFrames)
             }
@@ -151,8 +152,18 @@ fun main(args: Array<String>) {
                 // one group of knobs it was most wanted for: every shot came
                 // back at its named seat with only the lens surviving, because
                 // `aimAt(seat)` carries the lens across and nothing else.
+                //
+                // And the seat is a *play stage* idea, so it may not be pressed
+                // on a screen that is not the play stage. In the builder `1`,
+                // `2` and `3` are FOCUS_MAIN / FOCUS_EXTRA / FOCUS_SIDE, and an
+                // unrecognised name falls back to TABLE — so every builder shot
+                // was taken with two of the three deck panes collapsed, which is
+                // what `tools/devices.sh --screen=builder` has been
+                // photographing. Worse, `focusSection` toggles and persists, so
+                // consecutive runs alternated between two layouts and the
+                // studio's two-runs-are-bit-identical contract did not hold.
                 val seat = shot.seat
-                if (seat != null && opts.tuning.camera == StageTuning.DEFAULT.camera) {
+                if (seat != null && opts.aimsAtTable && opts.tuning.camera == StageTuning.DEFAULT.camera) {
                     Keys.press(scene, seat.digit)
                 }
                 // A seat change is a spring, and the room's palette crosses a
@@ -302,6 +313,7 @@ private fun Stage(deps: AppDependencies, director: Director, opts: Options) {
     val scope = rememberCoroutineScope()
     val builderState = remember { DeckBuilderState(deps, scope) }
     val layoutState = remember { DeckLayoutState(deps.preferencesRepository, scope) }
+    val updateState = remember { UpdateState(deps.updateChecker, deps.updater, scope) }
 
     DisposableEffect(Unit) {
         configureImageLoader(deps.imageCacheDir)
@@ -337,7 +349,20 @@ private fun Stage(deps: AppDependencies, director: Director, opts: Options) {
                 // in coverage, it is the reason a broken builder shipped: the
                 // harness was pointed at the one screen that was fine.
                 when (opts.screen) {
-                    "builder" -> MasterToolApp(deps)
+                    // `DeckBuilderScreen` rather than `MasterToolApp`, because
+                    // the app makes its *own* `DeckBuilderState` and never loads
+                    // anything into it. `--deck` was a no-op on this screen: the
+                    // studio imported the deck into the state above and then
+                    // photographed a second, empty one — "Untitled Deck", 0/0/0.
+                    // Handing over the state that already holds the deck is also
+                    // one card-pool sync rather than two.
+                    "builder" -> DeckBuilderScreen(
+                        state = builderState,
+                        layout = layoutState,
+                        updateState = updateState,
+                        onOpenLibrary = {},
+                        onOpenPlay = {},
+                    )
                     "library" -> DeckLibraryScreen(deps = deps, onOpenDeck = {}, onBack = {})
                     else -> PlayScreen(
                         state = builderState,
@@ -489,7 +514,10 @@ private class Options(
     val pauseMillis: Long,
     val keys: String,
     val seed: Long,
-    /** `play`, `builder` (the whole app, which opens on it) or `table`. */
+    /**
+     * `play` (the default), `builder` or `library`. Anything unrecognised — and
+     * `table`, which is not a branch of its own — falls through to `play`.
+     */
     val screen: String,
     val budget: Int,
     /**
@@ -513,6 +541,12 @@ private class Options(
     val drag: Pair<Pair<Float, Float>, Pair<Float, Float>>?,
     val shots: List<Shot>,
 ) {
+    /**
+     * Whether this run is looking at the table, and so whether a shot name's
+     * seat means anything. Only the play stage binds the digits to seats.
+     */
+    val aimsAtTable: Boolean get() = screen != "builder" && screen != "library"
+
     companion object {
         /**
          * The default contact sheet: both rooms, both hours, and every seat once.

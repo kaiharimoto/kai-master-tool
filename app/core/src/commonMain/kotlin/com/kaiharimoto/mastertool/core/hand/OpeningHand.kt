@@ -7,11 +7,18 @@ import kotlin.random.Random
 /**
  * One goldfish session: the main deck shuffled, hands dealt, mulligans taken.
  *
- * Pure and seeded so the UI can replay any open exactly — the same seed deals
- * the same cards, which is what makes "show me that hand again" and the tests
- * possible at all. The state machine is deliberately tiny: shuffle, draw,
- * mulligan (sweep the hand back, reshuffle what remains unseen plus the swept
- * cards, draw again), and draw-one for turns beyond the opener.
+ * Pure and seeded so an open can be replayed exactly — the same seed deals the
+ * same cards, which is what would make "show me that hand again" possible and
+ * is what makes the tests possible. The state machine is deliberately tiny:
+ * shuffle, draw, mulligan (sweep the hand back, reshuffle what remains unseen
+ * plus the swept cards, draw again), and draw-one for turns beyond the opener.
+ *
+ * **Nothing in the app calls this yet.** There is no goldfish surface in the
+ * builder: the consistency question is answered exactly by [HandOdds] rather
+ * than sampled, so a dealt hand would be an illustration of a number the app
+ * already knows. It is kept, tested, because a scrubbable practice hand is a
+ * queued piece of work (`docs/TABLE.md` §5) and this is the half of it that is
+ * hard to get right. Until then, do not describe it in the README as a feature.
  */
 data class OpeningHand(
     val seed: Long,
@@ -65,7 +72,12 @@ data class OpeningHand(
         return next.copy(mulligans = mulligans + 1)
     }
 
-    /** Copies of each group in the current hand — the readout chip's numbers. */
+    /**
+     * Copies of each group in the current hand.
+     *
+     * For a readout beside a dealt hand, when there is one. There is no such
+     * chip today — see the note on the class.
+     */
     fun tally(groups: DeckGroups): Map<String?, Int> =
         hand.groupingBy { groups.assignments[it] }.eachCount()
 }

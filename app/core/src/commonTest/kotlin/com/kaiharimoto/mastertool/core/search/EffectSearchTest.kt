@@ -153,7 +153,10 @@ class EffectSearchTest {
     }
 
     @Test
-    fun `suggestions stay on names whatever the pool is searched by`() {
-        assertEquals(listOf(theRitual.id), index.suggest("light and darkness").map { it.id })
+    fun `a names-scoped search stays on names whatever the pool is searched by`() {
+        // The text hits are the point of this fixture, so a scope that still
+        // returns only the card actually *called* this is the assertion.
+        val outcome = index.search("light and darkness", scope = SearchScope.NAMES, limit = 8)
+        assertEquals(listOf(theRitual.id), outcome.cards.map { it.id })
     }
 }

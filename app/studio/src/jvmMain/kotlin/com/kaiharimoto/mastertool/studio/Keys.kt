@@ -32,9 +32,15 @@ internal object Keys {
     /**
      * The subset of the shortcut table a script can name.
      *
-     * Deliberately only the keys the play stage binds: a mapping that can name
-     * keys nothing listens for is a mapping whose script fails silently, and a
-     * silent failure in a harness is a picture of the wrong thing.
+     * Deliberately only keys something binds: a mapping that can name keys
+     * nothing listens for is a mapping whose script fails silently, and a silent
+     * failure in a harness is a picture of the wrong thing. `x` was exactly that
+     * — no scope has ever bound it — and `i`, the deck check, was missing, which
+     * is the one builder panel a shot could not reach.
+     *
+     * The digits and `f`/`r`/`t`/space are the play stage's; `s`, `b`, `n`, `g`,
+     * `d`, `c` and `i` are the builder's. A key is inert on a screen that does
+     * not bind it rather than an error, because `--screen` decides which.
      */
     fun of(char: Char): Key? = when (char.lowercaseChar()) {
         '1' -> Key.One
@@ -46,11 +52,11 @@ internal object Keys {
         'd' -> Key.D
         'f' -> Key.F
         'g' -> Key.G
+        'i' -> Key.I
         'n' -> Key.N
         'r' -> Key.R
         's' -> Key.S
         't' -> Key.T
-        'x' -> Key.X
         ' ' -> Key.Spacebar
         else -> null
     }
