@@ -52,16 +52,30 @@ so every pixel that moves is a change in the code. It needs the Android SDK
 writes `local.properties` itself.
 
 **`shots/` is the loop's scratch; `docs/shots/` is the published strip.** The
-first is gitignored and regenerated constantly. The second is the three pictures
-at the top of the root README, written by dispatching
-`.github/workflows/shots.yml` — which renders at the reference 1600×1000, reads
-the studio's *log* as well as its pixels (a card pool that did not sync and a
-deck that did not import both render a pretty, empty table and exit 0), refuses
-two shots that came back identical, and resamples to half size before
-committing. **Dispatch it on the `claude/**` branch, before the fast-forward,
-never on `main`** — a commit CI puts on `main` is a commit the next
-fast-forward is rejected by. It refuses that itself, but the reason is worth
-knowing.
+first is gitignored and regenerated constantly. The second is the nine pictures
+in the root README — three of the play stage and six of the builder — written by
+dispatching `.github/workflows/shots.yml`.
+
+Three things about that workflow are load-bearing. **`--screen`, `--keys` and the
+frame size are per-*run*, not per-shot**, because the studio composes once and
+takes every `--shots` name off that one composition — so the strip is seven
+invocations rather than one, and a row added to the render step must also be
+added to `BUILDER_SHOTS` or the check step fails. **It reads the studio's log as
+well as its pixels**: a card pool that did not sync and a deck that did not
+import both render a pretty, empty table and exit 0, and a file-size floor never
+catches that. And it **refuses two shots that came back identical**, which is
+what a keypress that did not land looks like.
+
+**Dispatch it on the `claude/**` branch, before the fast-forward, never on
+`main`** — a commit CI puts on `main` is a commit the next fast-forward is
+rejected by. It refuses that itself, but the reason is worth knowing.
+
+**The builder shots use `ydk/lab.ydkx`, not the root `lab.ydkx`.** That copy
+carries a `groups` payload — four roles over its forty main cards and two hand
+goals — because without one the Roles lens and every consistency chip photograph
+blank, which is the opposite of what those panels are for. The root file is the
+studio's default and stays untouched, which is what keeps the three play-stage
+renders bit-identical across changes to the builder.
 
 **`docs/TUNING.md` is the in-app tuning panel.** Long-press the life-point
 number on the play stage: twenty-nine numbers — camera angle, focal length, where
