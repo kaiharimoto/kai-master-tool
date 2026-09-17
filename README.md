@@ -127,6 +127,10 @@ individually.
        width="100%">
 </p>
 
+<p align="center"><sub>
+Two questions kept with the deck. 23 of the 40 cards are the engine, so it opens on one 99.1% of the time — and the same sheet is where you watch that number move when you cut a card.
+</sub></p>
+
 **The odds are exact, not simulated.** A multivariate hypergeometric,
 enumerated over hand compositions with multiplicative binomials — no sampling,
 no convergence, no "run 10,000 hands". Ask the same question twice and you get
@@ -161,6 +165,10 @@ half-remember.
        alt="The deck coloured by archetype, with everything past the top four left uncoloured"
        width="100%">
 </p>
+
+<p align="center"><sub>
+The same deck read by archetype instead. The top four are coloured and <b>the other 14 are not</b> — that uncoloured block is the non-engine, and finding it is most of what this lens is for.
+</sub></p>
 
 The deck is a mosaic that **cracks open only where two groups meet** — a 4dp
 gutter, traced around whole blocks, with the group's colour drawn solid in the
@@ -222,9 +230,15 @@ than as zero.
 
 <p align="center">
   <img src="docs/shots/builder-check.png"
-       alt="The deck check panel listing what is wrong and what is worth a look"
+       alt="The deck check panel on a legal deck, reporting no issues"
        width="100%">
 </p>
+
+<p align="center"><sub>
+A deck with nothing wrong with it. When there is, the panel splits into
+“Not legal — <i>n</i> to fix” and “Worth a look”, and every row carries a
+<b>Show</b> that scrolls that card into view and flashes it.
+</sub></p>
 
 Seven checks: each section under its minimum, each over its maximum, copies over
 the format's limit, cards that cannot be played at all (Tokens, Skill Cards), a
@@ -246,6 +260,10 @@ the pool has not refreshed, this will not know. Refreshing is one menu item.
        alt="The statistics panel: counts, a distribution bar, a level histogram and the opening-hand table"
        width="100%">
 </p>
+
+<p align="center"><sub>
+Computed against the deck’s actual size, so the cost of a 41st card is a number rather than a principle.
+</sub></p>
 
 Per section: counts by card type, a proportional distribution bar, a level/rank
 histogram (with Link monsters noted as uncounted rather than quietly folded in),
@@ -357,6 +375,10 @@ Goldfishing the deck you just built, on a table rather than in a list.
        alt="The portrait builder: deck above, card pool docked along the bottom with its search field at the very bottom"
        width="42%">
 </p>
+
+<p align="center"><sub>
+The same builder on a phone. The pool is docked where the thumbs are, with its search field immediately above the keyboard.
+</sub></p>
 
 One rule decides, and it is not a dp threshold: **a window taller than it is
 wide gets the portrait arrangement, everything else gets the tablet one.** A

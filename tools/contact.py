@@ -44,6 +44,11 @@ MIN_STDDEV = 5.0
 # A gradient alone would pass the deviation test. A real render carries card
 # art, which is the thing this actually checks for.
 MIN_COLOURS = 2000
+# What counts as a rounding error rather than a change: a single level out of
+# 255, on under a tenth of a per cent of the frame. Anything a person could see
+# is orders of magnitude above both.
+NOISE_LEVEL = 1
+NOISE_SHARE = 0.001
 
 # Lines the studio prints when it has failed without failing.
 BAD_LOG_LINES = {
@@ -79,7 +84,24 @@ def inspect(path: Path) -> tuple[list[str], str]:
 
 
 def identical(a: Image.Image, b: Image.Image) -> bool:
-    return a.size == b.size and ImageChops.difference(a, b).getbbox() is None
+    """Alike enough that rewriting the file would buy nothing.
+
+    Exact for the pairwise check, which is looking for two shots that really are
+    the same picture. Not exact for deciding whether to re-commit: a resample is
+    floating-point, so a Pillow upgrade on the runner moves a few dozen pixels by
+    a single level out of 255 - invisible, and a megabyte of new blob in the
+    history every run, forever, because a PNG has no useful delta. A change worth
+    committing moves more than a rounding error.
+    """
+    if a.size != b.size:
+        return False
+    diff = ImageChops.difference(a, b)
+    if diff.getbbox() is None:
+        return True
+    histogram = diff.convert("L").histogram()
+    peak = max((level for level, count in enumerate(histogram) if count), default=0)
+    moved = sum(histogram[1:])
+    return peak <= NOISE_LEVEL and moved <= a.size[0] * a.size[1] * NOISE_SHARE
 
 
 def main() -> int:
@@ -115,7 +137,8 @@ def main() -> int:
     # every picture is of one camera. Nothing about a single image reveals that.
     for i, a in enumerate(present):
         for b in present[i + 1:]:
-            if identical(load(args.raw / f"{a}.png"), load(args.raw / f"{b}.png")):
+            pair = ImageChops.difference(load(args.raw / f"{a}.png"), load(args.raw / f"{b}.png"))
+            if pair.getbbox() is None:
                 faults.append(f"{a} and {b} are pixel-identical - the seat presses did not land")
 
     if faults:
