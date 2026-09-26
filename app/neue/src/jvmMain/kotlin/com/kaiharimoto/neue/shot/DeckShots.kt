@@ -14,6 +14,8 @@ import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.art.ArtLibrary
+import com.kaiharimoto.neue.cards.NameMasks
+import com.kaiharimoto.neue.cards.NameStyles
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,9 +71,13 @@ class DeckShots(
     /** The PNG, and how many cards had no picture to put in it. Drawn on the calling thread; call it from the UI thread. */
     suspend fun picture(model: ShotModel): Pair<ByteArray, Int> {
         val cards = model.sections.flatMap { it.cards }.filterNotNull().distinctBy { it.id }
-        val images = withContext(Dispatchers.IO) { load(cards) }
+        val loaded = withContext(Dispatchers.IO) { load(cards) }
+        val images = loaded.mapValues { it.value.first.toComposeImageBitmap() }
+        val masks = if (model.names == NameStyles.PRINTED) emptyMap() else withContext(Dispatchers.Default) {
+            loaded.mapNotNull { (id, pair) -> runCatching { NameMasks.read(pair.first, pair.second) }.getOrNull()?.let { id to it } }.toMap()
+        }
         val latest = withContext(Dispatchers.IO) { latestSet(model.date) }
-        return DeckShot.render(model.copy(latestSet = latest), images) to (cards.size - images.size)
+        return DeckShot.render(model.copy(latestSet = latest), images, masks) to (cards.size - images.size)
     }
 
     fun snapshot(state: DeckBuilderState, neue: NeueState): ShotModel {
@@ -92,6 +98,7 @@ class DeckShots(
             lens = if (showing) state.lens.displayName else null,
             ink = neue.prefs.theme == NeueTheme.INK,
             foil = neue.prefs.foil,
+            names = neue.prefs.foilNames,
         )
     }
 
@@ -111,7 +118,7 @@ class DeckShots(
     }
 
     /** Every picture, the original where it can be had and the small render where it cannot, eight at a time. */
-    private suspend fun load(cards: List<Card>): Map<Int, ImageBitmap> {
+    private suspend fun load(cards: List<Card>): Map<Int, Pair<Image, String>> {
         val gate = Semaphore(8)
         return withContext(Dispatchers.IO) {
             cards.map { card ->
@@ -120,7 +127,7 @@ class DeckShots(
                         val bytes = withTimeoutOrNull(20_000) { art.ensure(card)?.readBytes() }
                             ?: runCatching { card.imageUrlSmall?.let { URI.create(it).toURL().readBytes() } }.getOrNull()
                         bytes?.let { data ->
-                            runCatching { card.id.value to Image.makeFromEncoded(data).toComposeImageBitmap() }.getOrNull()
+                            runCatching { card.id.value to (Image.makeFromEncoded(data) to card.frameType) }.getOrNull()
                         }
                     }
                 }

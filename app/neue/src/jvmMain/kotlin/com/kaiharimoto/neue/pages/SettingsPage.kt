@@ -23,6 +23,7 @@ import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.cards.Foils
+import com.kaiharimoto.neue.cards.NameStyles
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Breathe
@@ -76,6 +77,9 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                     SettingRow("Foil", "The light on a card's face. It follows the pointer across the card.") {
                         Segmented(prefs.foil, Foils.all.map { it.id }, Foils::label, { f -> neue.update { it.copy(foil = f) } })
+                    }
+                    SettingRow("Card names", "The name printed across the top of a card, stamped in the same foil as its border. Holographic foil only.") {
+                        Segmented(prefs.foilNames, NameStyles.all, NameStyles::label, { n -> neue.update { it.copy(foilNames = n) } })
                     }
                     SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. Ctrl 1 to 4 reach the pages either way.") {
                         Segmented(prefs.railPinned, listOf(false, true), { if (it) "Pinned" else "Auto-hide" }, { p -> neue.update { it.copy(railPinned = p) } })

@@ -45,6 +45,12 @@ data class NeuePreferences(
     val filtersOpen: Boolean = false,
     /** The foil on card faces. A style name so that a style added later is a string, not a migration. */
     val foil: String = DEFAULT_FOIL,
+    /**
+     * How a card's name is drawn: stamped in the foil (the default, kai's pick),
+     * foil over an ink outline, or as printed. A name, like [foil], so a style
+     * added later is a string rather than a migration.
+     */
+    val foilNames: String = DEFAULT_FOIL_NAMES,
     val sound: Boolean = false,
     /**
      * The index rail stays out. Off by default: the rail folds away until the
@@ -69,6 +75,7 @@ data class NeuePreferences(
         },
         poolColumns = if (poolColumns <= 0) 0 else poolColumns.coerceIn(MIN_POOL_COLUMNS, MAX_POOL_COLUMNS),
         foil = foil.ifBlank { DEFAULT_FOIL },
+        foilNames = foilNames.ifBlank { DEFAULT_FOIL_NAMES },
         window = window?.takeIf {
             it.x.isFinite() && it.y.isFinite() && it.width.isFinite() && it.height.isFinite() &&
                 it.width >= MIN_WINDOW_WIDTH && it.height >= MIN_WINDOW_HEIGHT
@@ -98,6 +105,7 @@ data class NeuePreferences(
         const val MIN_WINDOW_WIDTH = 1024f
         const val MIN_WINDOW_HEIGHT = 680f
         const val DEFAULT_FOIL = "holo"
+        const val DEFAULT_FOIL_NAMES = "foil"
 
         val DEFAULT = NeuePreferences()
     }

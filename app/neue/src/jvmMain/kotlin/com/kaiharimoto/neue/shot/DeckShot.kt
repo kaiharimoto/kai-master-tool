@@ -45,7 +45,11 @@ import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.cards.Marker
 import com.kaiharimoto.neue.cards.MarkerChip
+import com.kaiharimoto.neue.cards.Foils
+import com.kaiharimoto.neue.cards.NameMask
+import com.kaiharimoto.neue.cards.NameStyles
 import com.kaiharimoto.neue.cards.drawFoil
+import com.kaiharimoto.neue.cards.drawFoilName
 import com.kaiharimoto.neue.kit.Hatch
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Mark
@@ -79,6 +83,8 @@ data class ShotModel(
     val lens: String?,
     val ink: Boolean,
     val foil: String,
+    /** How the names are drawn (`NameStyles`). */
+    val names: String = NameStyles.FOIL,
 )
 
 /**
@@ -128,11 +134,11 @@ object DeckShot {
         } + FOOTER
 
     /** Draws [model] to a PNG. [images] holds the pictures by card id; a card without one is drawn as the hatch. */
-    fun render(model: ShotModel, images: Map<Int, ImageBitmap>): ByteArray {
+    fun render(model: ShotModel, images: Map<Int, ImageBitmap>, masks: Map<Int, NameMask> = emptyMap()): ByteArray {
         val width = (WIDTH.value * DENSITY).toInt()
         val height = (heightOf(model).value * DENSITY).toInt()
         val scene = ImageComposeScene(width, height, Density(DENSITY)) {
-            MuTheme(ink = model.ink) { Picture(model, images) }
+            MuTheme(ink = model.ink) { Picture(model, images, masks) }
         }
         try {
             val image = scene.render(0L)
@@ -143,7 +149,7 @@ object DeckShot {
     }
 
     @Composable
-    fun Picture(model: ShotModel, images: Map<Int, ImageBitmap>) {
+    fun Picture(model: ShotModel, images: Map<Int, ImageBitmap>, masks: Map<Int, NameMask> = emptyMap()) {
         val c = Mu.colors
         val f = LocalMuFonts.current
         Column(Modifier.fillMaxSize().background(c.paper).padding(horizontal = PAD)) {
@@ -181,7 +187,7 @@ object DeckShot {
             }
             HRule(strong = true)
 
-            shown(model).forEach { s -> SectionBlock(s, model, images) }
+            shown(model).forEach { s -> SectionBlock(s, model, images, masks) }
 
             // The footer: one quiet line, so a picture that travels says where it came from.
             Row(Modifier.fillMaxWidth().height(FOOTER), verticalAlignment = Alignment.CenterVertically) {
@@ -193,7 +199,7 @@ object DeckShot {
     }
 
     @Composable
-    private fun SectionBlock(s: ShotSection, model: ShotModel, images: Map<Int, ImageBitmap>) {
+    private fun SectionBlock(s: ShotSection, model: ShotModel, images: Map<Int, ImageBitmap>, masks: Map<Int, NameMask>) {
         val c = Mu.colors
         val cols = columnsOf(s.section)
         val w = cardWidth(s.section)
@@ -263,7 +269,7 @@ object DeckShot {
                             .offset(x + (place.left / DENSITY).dp, y + (place.top / DENSITY).dp)
                             .size((place.width / DENSITY).dp, (place.height / DENSITY).dp),
                     ) {
-                        ShotCard(card, images[card?.id?.value], model, key?.let { Marker(it.mark, GroupMarkers.paint(it.paint, c.ink)) })
+                        ShotCard(card, images[card?.id?.value], masks[card?.id?.value], model, key?.let { Marker(it.mark, GroupMarkers.paint(it.paint, c.ink)) })
                     }
                 }
             }
@@ -272,7 +278,7 @@ object DeckShot {
     }
 
     @Composable
-    private fun ShotCard(card: Card?, image: ImageBitmap?, model: ShotModel, marker: Marker?) {
+    private fun ShotCard(card: Card?, image: ImageBitmap?, mask: NameMask?, model: ShotModel, marker: Marker?) {
         val c = Mu.colors
         Box(Modifier.fillMaxSize().background(c.ink06).clipToBounds()) {
             if (image == null || card == null) {
@@ -293,6 +299,9 @@ object DeckShot {
                         drawContent()
                         // The foil at rest: the light straight on, as a card lies on a table.
                         drawFoil(model.foil, Offset.Zero, frame)
+                        if (mask != null && model.foil == Foils.HOLO && model.names != NameStyles.PRINTED) {
+                            drawFoilName(mask, Offset.Zero, outlined = model.names == NameStyles.OUTLINE)
+                        }
                     },
                 )
             }

@@ -363,8 +363,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   or the deck re-fits and every card jumps.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
-  falling back to the small render. `NameInk` (the name in foil) is an
-  exploration kai has not approved; nothing in the app draws with it.
+  falling back to the small render. **Card names are stamped in the foil**
+  too, kai's pick — the letters found in the render's pixels by `NameInk`,
+  the ink's polarity decided by the frame type (`NEUE.md` §2c).
 - **Releases are `neue-v*`, always published as pre-releases**, by
   `release-neue.yml` (`.msi`, `.dmg`, `.deb`). Never tag one `v*`, and never
   publish one as a full release: `/releases/latest` is what every APK reads.

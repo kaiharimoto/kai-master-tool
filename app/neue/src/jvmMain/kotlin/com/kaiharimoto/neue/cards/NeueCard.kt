@@ -33,7 +33,12 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.LaunchedEffect
+import coil3.BitmapImage
 import coil3.compose.AsyncImage
+import coil3.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.kaiharimoto.mastertool.core.motion.DeskLean
 import com.kaiharimoto.mastertool.core.motion.LeanPose
 import com.kaiharimoto.neue.art.LocalArt
@@ -100,6 +105,23 @@ fun NeueCard(
     var art by remember(card.id) { mutableStateOf(ArtState.LOADING) }
     var original by remember(card.id) { mutableStateOf(ArtState.LOADING) }
     val library = LocalArt.current
+    val names = LocalNameStyle.current
+    // The decoded pictures, kept so the name can be read off whichever is showing.
+    var smallImage by remember(card.id) { mutableStateOf<coil3.Image?>(null) }
+    var hdImage by remember(card.id) { mutableStateOf<coil3.Image?>(null) }
+    var nameMask by remember(card.id) { mutableStateOf<NameMask?>(null) }
+    val nameSource = hdImage ?: smallImage
+    LaunchedEffect(nameSource, names, foil) {
+        val source = nameSource
+        if (source == null || names == NameStyles.PRINTED || foil != Foils.HOLO) return@LaunchedEffect
+        val key = "${card.id.value}@${source.width}"
+        nameMask = NameMasks.cached(key) ?: withContext(Dispatchers.Default) {
+            runCatching {
+                val bitmap = (source as? BitmapImage)?.bitmap ?: source.toBitmap()
+                NameMasks.read(key, bitmap, card.frameType)
+            }.getOrNull()
+        }
+    }
     val hd by remember(card.id, library) {
         derivedStateOf { library?.let { it.version; it.fileFor(card.id.value) } }
     }
@@ -172,6 +194,10 @@ fun NeueCard(
                             else -> Offset((own.x + lean.first).coerceIn(-1f, 1f), (own.y + lean.second).coerceIn(-1f, 1f))
                         }
                         drawFoil(foil, lit, artFrame)
+                        val mask = nameMask
+                        if (mask != null && foil == Foils.HOLO && names != NameStyles.PRINTED) {
+                            drawFoilName(mask, lit ?: Offset.Zero, outlined = names == NameStyles.OUTLINE)
+                        }
                     }
                 },
         ) {
@@ -183,6 +209,7 @@ fun NeueCard(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                     onState = { state ->
+                        if (state is AsyncImagePainter.State.Success) smallImage = state.result.image
                         art = when (state) {
                             is AsyncImagePainter.State.Success -> ArtState.READY
                             is AsyncImagePainter.State.Error -> ArtState.FAILED
@@ -199,6 +226,7 @@ fun NeueCard(
                     filterQuality = FilterQuality.High,
                     modifier = Modifier.fillMaxSize(),
                     onState = { state ->
+                        if (state is AsyncImagePainter.State.Success) hdImage = state.result.image
                         original = when (state) {
                             is AsyncImagePainter.State.Success -> ArtState.READY
                             is AsyncImagePainter.State.Error -> ArtState.FAILED

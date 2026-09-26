@@ -136,16 +136,22 @@ lost the hover would flicker). And the eye is **2.2 of the card's own widths**
 away: `cameraDistance` is in 72-pixel inches, so a fixed one leaves a small card
 flat and throws a large one at the viewer.
 
-### 2c. The name in foil — an exploration, not a feature
+### 2c. The name in foil
 
-kai asked whether a card's *name* could be stamped in the foil too.
-`core/layout/NameInk.kt` finds the letters in the pixels: every render sets the
-name in one bar left of the attribute icon, and the ink is black or white by
-frame (spells, traps, Xyz and Link are white) — which the frame says more
-reliably than the pixels can. A letter is how far a pixel has gone from the
-bar's median toward its ink, so the letters keep their antialiased edges.
-`:studio:shootNames` draws it three ways (as it is; foil letters; foil letters
-over an ink outline). **Nothing in the app uses it until kai has looked.**
+kai asked whether a card's *name* could be stamped in the foil too, saw three
+versions (`:studio:shootNames`: as printed; foil letters; foil letters over an
+ink outline) and chose **foil letters**, which is the default. Settings → Card
+names offers the other two.
+
+The letters are found in the pixels (`core/layout/NameInk.kt`): every render
+sets the name in one bar left of the attribute icon, and the ink is black or
+white by frame (spells, traps, Xyz and Link are white), which the frame says
+more reliably than the pixels can. A letter is how far a pixel has gone from the
+bar's median toward its ink, so the letters keep their antialiased edges. The
+mask is read off the picture the card has already decoded (`cards/NameMasks.kt`,
+off the UI thread, kept by card and size), and the stamp is `Holo`'s sheet mode
+kept only where the mask has a letter, so the name and the border catch the
+light together. Holographic foil only; the screenshot carries it too.
 
 ---
 

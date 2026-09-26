@@ -11,6 +11,7 @@ import com.kaiharimoto.mastertool.core.layout.EdgeReveal
 import com.kaiharimoto.mastertool.core.layout.Revealed
 import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.art.LocalArt
+import com.kaiharimoto.neue.cards.LocalNameStyle
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.neue.builder.BuilderFooter
 import com.kaiharimoto.neue.builder.BuilderHeader
@@ -321,7 +322,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     }
 
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK) {
             CompositionLocalProvider(LocalContextMenuRepresentation provides remember { MuContextMenuRepresentation() }) {
                 Shell(h)
