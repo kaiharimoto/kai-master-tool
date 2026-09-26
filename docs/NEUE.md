@@ -241,46 +241,76 @@ In immersive mode, on the builder, doing nothing is a mode too
   waking: it lands on no card and runs no shortcut. The deck floats home and the
   chrome returns a little slower than it left.
 
-**The garden is a karesansui, raked under the cards** — kai's third brief, after
-a first garden that crowded the deck and a second of two balls drawing loops at
-the sides: *a real zen garden uses rakes, the patterns should feel underneath
-the cards, span the entire page, and converge before being wiped by a bigger
-rake in one sweep.* The whole window is gravel and the floating deck is its
-great stone (`core/layout/RakeGarden.kt`, `neue/zen/SandGarden.kt`):
+**The garden is a karesansui, raked under the cards, and a gardener plans it.**
+kai's briefs, in order: a first garden crowded the deck; a second, two balls
+looping at the sides, was not a garden (*"a real zen garden uses rakes … span
+the entire page … converge before being wiped by a bigger rake in one sweep"*);
+the third, five hand-drawn samon at a 10 px pitch, was too fine and, at a bolder
+scale, looked wrong (*"design a smart algorithm that the rake uses to create the
+patterns"*, and *"more subtle … a background element"*). What is there now
+(`core/layout/RakeGarden.kt`, `neue/zen/SandGarden.kt`):
 
-- It opens raked in **straight lines** (chokusen), which stay under the deck.
-- A **composition** is raked over them — one of the classical samon: ripples
-  (mizumon) round the deck and three small stones, the checkerboard (ichimatsu),
-  the blue-sea waves (seigaiha), whirlpools (uzumaki) or flowing water (ryūsui)
-  — by several six-tine rakes at once, from different places, **whose work
-  converges**: rings from each stone meet halfway between, the waves and the
-  water are raked from top and bottom to the middle, the checkerboard from all
-  four corners in. A composition takes a minute or two.
-- It is **held eight seconds**, then **one wide rake sweeps it back** to
-  straight lines in a single pass, eased in and out (a smoothstep, top speed
-  300 px/s), and the next composition begins — never the one just wiped.
-- **The rakes are invisible**, on kai's instruction: the pattern draws itself,
-  and all that shows of a rake is the gravel heaped just ahead of its tines.
+- **A rake can only draw distances.** Its tines are fixed, so every pass leaves
+  grooves one pitch apart however it turns, and the only curves that stay a
+  constant distance apart are the contours of a distance. So every composition
+  is one field — the distance to the garden's seeds (stones, and a stream) —
+  and a groove is wherever it is a whole number and a half of pitches
+  (`RakeLayer.phase`). `RakeGardenTest.aRakeCanDrawIt` measures the field's
+  slope over every composition: one pitch per pitch everywhere but in the
+  fillets.
+- **Waves fold together instead of creasing.** The old samon met their
+  neighbours along a hard nearest-seed seam, grooves colliding at an angle — the
+  "weird" look. The distances are joined with a polynomial smooth minimum
+  (`RakeGrain.blend`, 0.6 of a band), so two stones' rings merge into one
+  envelope with a rounded fillet, the way a gardener takes one pass round both.
+- **The stones are set by the rules of ishigumi** (`GardenComposer`): every
+  candidate is scored — room (never within two bands of another), uneven
+  triangles (three nearly in line is refused), no mirror about the middle,
+  balance (the stones' centre of weight near the garden's centre), the first two
+  beside the deck rather than under it, clear of the frame — and the best is
+  kept; the whole arrangement is tried six times and the one whose flattest
+  triangle is least flat wins. One principal stone, the rest smaller.
+- **Three compositions come out of it**, never the same kind twice running:
+  **ripples** (mizumon — three or five stones whose rings fill the garden),
+  **flowing water** (ryūsui — a gentle meander across the garden, its lines
+  bending round the two stones standing in it; gentle because a bend tighter
+  than the furthest line's distance folds that line) and **islands** (shima —
+  two or three groups of stones, a few rings each, left in the straight lines,
+  which run up into the crest of the last ring: Ryōan-ji).
+- **Each stone has two rakes** lapping outward from opposite sides, a band a
+  lap; a stream has one rake on each bank, pass after pass. All of them work at
+  once, so the garden grows out of every seed and **the waves converge**. A
+  stone crowded into a corner owns only part of each circle it laps, and its
+  rakes step over the rest rather than walking it (`RakeLayer.pace`); ripples
+  and islands are raked with more care than a stream, so every composition takes
+  about 35–55 seconds.
+- It is **held ten seconds**, then **one wide rake sweeps it back** to straight
+  lines in a single eased pass, and after three seconds of those the next is
+  planned. **The rakes are invisible**, on kai's instruction: all that shows of
+  one is the gravel heaped just ahead of its tines.
+- **The look** (`GardenLook`): kai chose the 32 px pitch, five tines, out of six
+  mock-ups; the grooves are shallow (relief 0.8, 60% of the contrast of the
+  mock-up) and the grains of sand drawn twice as large, so the gravel reads as
+  near and the garden as a background. A stone's own ground is left smooth.
 
-Every samon is a pure function of position: `RakeLayer.phase` says which
-groove is at a point and `RakeLayer.reveal` when it is raked, and the SkSL is
-a line-for-line copy of both, so the garden remembers nothing between frames
-and any moment of it can be drawn directly. The rakes that are never drawn are
-still modelled (`RakeLayer.heads`), because they are what keep the pattern
-honest: `RakeGardenTest` holds every reveal to the edge a real rake, moving at
-a real speed, is cutting. A groove's trough is at a half line — where a tine
-runs. The grain is a normal map and an albedo **baked in Blender**
-(`tools/zen/garden.py`, tileable). White gravel on paper, black on ink, and
-never a colour. `GardenShaderTest` fails the build if the SkSL stops
-compiling, which in the app is only a log line and an empty zen.
+Everything is a pure function of position and time: the SkSL is a line-for-line
+copy of `field`, `owner`, `phase` and `reveal`, the stones travel as a uniform
+array (`x, y, r, pace`), and the garden remembers nothing between frames. The
+rakes that are never drawn are still modelled (`RakeLayer.heads`), because they
+keep the pattern honest: `RakeGardenTest` holds every reveal to the edge a real
+rake is cutting, at the chosen grain and at a fine one. The grain is a normal map
+and an albedo **baked in Blender** (`tools/zen/garden.py`, tileable). White
+gravel on paper, black on ink, never a colour. `GardenShaderTest` fails the build
+if the SkSL stops compiling, which in the app is only a log line and an empty zen.
 
 Nothing idles: the phase clock sleeps until the next boundary, and the float,
 the lean and the garden run only while zen is deep. Fades are read in layers, so
 zen redraws and never recomposes. `tools/shoot.sh --neue --zen=deep
 --zen-seconds=20 --hover=x,y` photographs it, `--garden-plan` prints when each
-composition is raked, held and swept, and `--garden-times=45,122,131` takes a
-still at each garden time. `GardenReel` (in `:neue`'s tests) draws the garden
-alone, a second a frame instead of a minute a still, and renders a reel.
+composition is raked, held and swept, `--garden-times=45,122,131` takes a
+still at each garden time and `--garden-held=6` photographs the first six
+compositions finished. `GardenReel` (in `:neue`'s tests) draws the garden alone,
+a second a frame instead of a minute a still, and renders a reel.
 
 ### 4a. Groups
 

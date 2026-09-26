@@ -38,14 +38,14 @@ class GardenReel {
         return GardenRect(474f * s, 108f * s, 1446f * s, 974f * s)
     }
 
-    private fun renderAll(w: Int, h: Int, seed: Int, ink: Boolean, out: File, times: List<Float>) {
+    private fun renderAll(w: Int, h: Int, seed: Int, ink: Boolean, out: File, times: List<Float>, look: GardenLook = GardenLook()) {
         out.mkdirs()
         val pool = Executors.newFixedThreadPool(4)
         val chunks = times.withIndex().groupBy { it.index % 4 }
         chunks.values.forEach { chunk ->
             pool.submit {
                 val garden = Garden()
-                garden.prepare(w.toFloat(), h.toFloat(), stoneFor(w), seed)
+                garden.prepare(w.toFloat(), h.toFloat(), stoneFor(w), seed, look)
                 chunk.forEach { (i, t) ->
                     val bmp = ImageBitmap(w, h)
                     CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bmp), Size(w.toFloat(), h.toFloat())) {
@@ -58,6 +58,24 @@ class GardenReel {
         }
         pool.shutdown()
         pool.awaitTermination(2, TimeUnit.HOURS)
+    }
+
+    @Test
+    fun held() {
+        val spec = System.getenv("GARDEN_HELD") ?: return
+        // GARDEN_HELD="w,h,seed,ink,out,n": the first n compositions, each held finished.
+        val parts = spec.split(",")
+        val w = parts[0].toInt(); val h = parts[1].toInt(); val seed = parts[2].toInt(); val ink = parts[3] == "1"
+        val program = RakeProgram(w.toFloat(), h.toFloat(), stoneFor(w), seed)
+        var t = RakeProgram.OPENING
+        val times = (0 until parts[5].toInt()).map { n ->
+            val c = program.composition(n)
+            val held = t + c.duration + RakeProgram.HOLD / 2f
+            t += c.duration + RakeProgram.HOLD + program.grain.sweepTime(w.toFloat()) + RakeProgram.REST
+            println("[held] $n ${c.samon}: ${c.stones.size} stones, raked in ${c.duration}s")
+            held
+        }
+        renderAll(w, h, seed, ink, File(parts[4]), times)
     }
 
     @Test

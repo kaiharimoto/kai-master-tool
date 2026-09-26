@@ -1,8 +1,8 @@
 package com.kaiharimoto.mastertool.core.layout
 
 import kotlin.math.abs
-import kotlin.math.floor
-import kotlin.math.round
+import kotlin.math.hypot
+import kotlin.math.min
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -10,134 +10,202 @@ import kotlin.test.assertTrue
 
 class RakeGardenTest {
 
-    private val deck = GardenRect(560f, 120f, 1360f, 960f)
-    private val pebbles = listOf(GardenPoint(260f, 330f), GardenPoint(1680f, 740f), GardenPoint(280f, 860f))
+    private val w = 1920f
+    private val h = 1080f
+    private val deck = GardenRect(474f, 108f, 1446f, 974f)
+    private val fine = RakeGrain(spacing = 10f, tines = 6, speed = 210f)
 
-    private val coarse = RakeGrain(spacing = 30f, tines = 5)
+    /** Every kind of composition, several times over, as the program deals them. */
+    private fun compositions(grain: RakeGrain = RakeGrain(), seeds: IntRange = 1..6): List<RakeLayer> =
+        seeds.flatMap { s -> RakeProgram(w, h, deck, s, grain).let { p -> (0 until 3).map(p::composition) } }
 
-    private fun layer(samon: Samon, variant: Float = 0.4f, grain: RakeGrain = RakeGrain()) = RakeLayer(
-        samon, 1920f, 1080f, deck,
-        if (samon == Samon.MIZUMON || samon == Samon.UZUMAKI) pebbles else emptyList(),
-        variant,
-        grain,
-    )
+    @Test
+    fun theProgramDealsEveryKindOfComposition() {
+        val kinds = compositions(seeds = 1..10).map { it.samon }.toSet()
+        assertEquals(setOf(Samon.MIZUMON, Samon.RYUSUI, Samon.SHIMA), kinds)
+    }
 
     @Test
     fun theRakeIsAlwaysAtTheEdgeOfTheFreshSand() {
         // Where a rake is and what the shader says has just been raked must agree, at any grain.
-        for (samon in Samon.entries) for (grain in listOf(RakeGrain(), coarse)) {
-            val l = layer(samon, grain = grain)
+        for (grain in listOf(RakeGrain(), fine)) for (l in compositions(grain, 1..4)) {
             var checked = 0
             var t = 0.7f
             while (t < l.duration) {
-                l.heads(t).forEach { h ->
-                    if (h.x in 1f..1919f && h.y in 1f..1079f) {
-                        val r = l.reveal(h.x, h.y)
-                        assertTrue(abs(r - t) < 0.4f, "$samon ($grain) at $t: the head at (${h.x}, ${h.y}) is over sand raked at $r")
+                l.heads(t).forEach { head ->
+                    if (head.x in 1f..w - 1f && head.y in 1f..h - 1f) {
+                        val r = l.reveal(head.x, head.y)
+                        assertTrue(abs(r - t) < 0.4f, "${l.samon} ($grain) at $t: the rake at (${head.x}, ${head.y}) is over sand raked at $r")
                         checked++
                     }
                 }
                 t += l.duration / 37f
             }
-            assertTrue(checked > 5, "$samon ($grain): only $checked heads were in the window")
+            assertTrue(checked > 5, "${l.samon} ($grain): only $checked rakes were in the window")
         }
     }
 
     @Test
     fun everyCompositionRakesTheWholeWindowInAReasonableTime() {
-        for (samon in Samon.entries) for (grain in listOf(RakeGrain(), coarse)) {
-            val l = layer(samon, grain = grain)
-            assertTrue(l.duration in 3f..160f, "$samon takes ${l.duration}s")
+        for (l in compositions()) {
+            assertTrue(l.duration in 10f..150f, "${l.samon} takes ${l.duration}s")
             for (i in 0..40) for (j in 0..24) {
-                val r = l.reveal(1920f * i / 40, 1080f * j / 24)
-                assertTrue(r >= 0f && r <= l.duration, "$samon at ($i, $j): $r")
+                val r = l.reveal(w * i / 40, h * j / 24)
+                assertTrue(r >= 0f && r <= l.duration, "${l.samon} at ($i, $j): $r")
             }
         }
     }
 
     @Test
     fun severalRakesWorkAtOnceAndMeet() {
-        for (samon in Samon.entries - Samon.CHOKUSEN) {
-            val l = layer(samon)
+        for (l in compositions()) {
             val busy = (1..20).maxOf { l.heads(l.duration * it / 24f).size }
-            assertTrue(busy >= 2, "$samon is raked by one rake at a time")
+            assertTrue(busy >= 2, "${l.samon} is raked by one rake at a time")
+        }
+    }
+
+    @Test
+    fun aRakeCanDrawIt() {
+        // A rake leaves its grooves a pitch apart however it turns, so the field must be a
+        // distance: its slope one pitch per pitch everywhere but in the fillets where waves meet.
+        for (l in compositions()) {
+            var samples = 0
+            var even = 0
+            for (i in 1..63) for (j in 1..35) {
+                val x = w * i / 64
+                val y = h * j / 36
+                if (l.onStone(x, y)) continue
+                // The islands' rings end where the straight lines resume: an edge, not a groove.
+                if (l.samon == Samon.SHIMA && abs(l.field(x, y) - l.rings * l.grain.band) < 3f) continue
+                val gx = (l.phase(x + 1f, y) - l.phase(x - 1f, y)) / 2f
+                val gy = (l.phase(x, y + 1f) - l.phase(x, y - 1f)) / 2f
+                val slope = hypot(gx, gy) * l.grain.spacing
+                assertTrue(slope < 1.1f, "${l.samon} at ($x, $y): grooves ${1 / slope} pitches apart")
+                samples++
+                if (slope > 0.9f) even++
+            }
+            assertTrue(even > samples * 0.75f, "${l.samon}: only $even of $samples points are evenly raked")
+        }
+    }
+
+    @Test
+    fun wavesMeetWithoutACrease() {
+        // Halfway between two stones a plain nearest-distance peaks in a corner — the slope
+        // jumps from +1 to −1 — and the grooves collide there. The smooth join rounds it over.
+        val grain = RakeGrain()
+        val a = GardenStone(600f, 540f, 40f)
+        val b = GardenStone(1000f, 540f, 40f)
+        val l = RakeLayer(Samon.MIZUMON, w, h, listOf(a, b), grain = grain)
+        val mid = 800f
+        fun slope(x: Float) = (l.field(x + 0.5f, 540f) - l.field(x - 0.5f, 540f))
+        assertTrue(abs(slope(mid + 3f) - slope(mid - 3f)) < 0.2f, "the waves meet in a crease")
+        // And away from the fillet the rings are exact distances.
+        assertEquals(100f, l.field(740f, 540f) + 0f, 1f)
+    }
+
+    @Test
+    fun theStonesAreSetByTheRules() {
+        val grain = RakeGrain()
+        val b = grain.band
+        var triangles = 0
+        var groups = 0
+        for (s in 1..40) {
+            val l = RakeProgram(w, h, deck, s, grain).composition(0)
+            if (l.samon != Samon.MIZUMON) continue
+            val st = l.stones
+            // Room between them, and the first two where they can be seen.
+            for (i in st.indices) for (j in i + 1 until st.size) {
+                assertTrue(hypot(st[i].x - st[j].x, st[i].y - st[j].y) >= b * GardenComposer.ROOM, "seed $s: stones $i and $j crowd")
+            }
+            assertTrue(st.take(2).all { deck.distanceTo(it.x, it.y) > 0f }, "seed $s: a first stone is under the deck")
+            // The principal stone is the largest.
+            assertTrue(st.drop(1).all { it.r < st[0].r })
+            // Never three in a line.
+            groups++
+            var worst = 1f
+            for (i in st.indices) for (j in i + 1 until st.size) for (k in j + 1 until st.size) {
+                worst = min(worst, minSine(st[i], st[j], st[k]))
+            }
+            if (worst > 0.2f) triangles++
+        }
+        assertTrue(groups >= 5, "only $groups ripple compositions in 40 seeds")
+        assertTrue(triangles == groups, "$triangles of $groups compositions have no three stones in a line")
+    }
+
+    private fun minSine(a: GardenStone, b: GardenStone, c: GardenStone): Float {
+        fun sine(p: GardenStone, q: GardenStone, r: GardenStone): Float {
+            val ux = q.x - p.x
+            val uy = q.y - p.y
+            val vx = r.x - p.x
+            val vy = r.y - p.y
+            return abs(ux * vy - uy * vx) / (hypot(ux, uy) * hypot(vx, vy))
+        }
+        return minOf(sine(a, b, c), sine(b, c, a), sine(c, a, b))
+    }
+
+    @Test
+    fun islandsKeepTheStraightLinesPastTheirRings() {
+        val l = compositions(seeds = 1..20).first { it.samon == Samon.SHIMA }
+        var straight = 0
+        for (i in 0..40) for (j in 0..24) {
+            val x = w * i / 40
+            val y = h * j / 24
+            if (l.field(x, y) >= l.rings * l.grain.band) {
+                assertEquals(y / l.grain.spacing, l.phase(x, y))
+                assertEquals(0f, l.reveal(x, y))
+                straight++
+            }
+        }
+        assertTrue(straight > 100, "the islands' rings cover the garden")
+    }
+
+    @Test
+    fun theStreamsLinesFollowIt() {
+        val l = compositions(seeds = 1..20).first { it.samon == Samon.RYUSUI }
+        val r = l.river!!
+        // Away from its stones, a line of the stream is a fixed distance from it all the way across.
+        val d = 2.5f * l.grain.band
+        for (x0 in listOf(100f, 700f, 1300f, 1850f)) {
+            // Out along the stream's normal.
+            val s = r.slope(x0)
+            val n = kotlin.math.sqrt(1f + s * s)
+            val x = x0 - s * d / n
+            val y = r.at(x0) + d / n
+            if (l.stones.any { hypot(it.x - x, it.y - y) - it.r < d + l.grain.blend }) continue
+            assertEquals(d, l.field(x, y), 0.06f * d)
         }
     }
 
     @Test
     fun theWideRakeSweepsInOnePassLeftToRight() {
-        val l = layer(Samon.CHOKUSEN)
+        val l = RakeLayer(Samon.CHOKUSEN, w, h)
         var last = -1f
         for (i in 0..20) {
-            val r = l.reveal(1920f * i / 20, 540f)
+            val r = l.reveal(w * i / 20, 540f)
             assertTrue(r > last)
             last = r
             // Its lines are straight: the same at every height.
-            assertEquals(l.reveal(1920f * i / 20, 0f), l.reveal(1920f * i / 20, 1080f))
+            assertEquals(l.reveal(w * i / 20, 0f), l.reveal(w * i / 20, h))
         }
         val heads = l.heads(3f)
         assertEquals(1, heads.size)
-        assertTrue(heads.single().wide && heads.single().length >= 1080f)
-    }
-
-    @Test
-    fun ripplesAreRingsRoundTheStoneAndThePebbles() {
-        val l = layer(Samon.MIZUMON)
-        // Just outside the deck's edge, the rings run parallel to it: the same groove all along the top.
-        val a = l.phase(700f, 120f - 25f)
-        val b = l.phase(1200f, 120f - 25f)
-        assertEquals(a, b, 1e-3f)
-        // Round a pebble, the same groove at the same distance.
-        val p = pebbles[1]
-        assertEquals(l.phase(p.x + 40f, p.y), l.phase(p.x, p.y - 40f), 1e-3f)
-    }
-
-    @Test
-    fun whirlpoolsAreContinuousWhereTheirTurnWraps() {
-        val l = layer(Samon.UZUMAKI)
-        val c = pebbles[0]
-        // Either side of the angle where a turn wraps, the groove differs by whole lines only
-        // (two bands of six tines: twelve).
-        val above = l.phase(c.x + 120f, c.y - 0.01f)
-        val below = l.phase(c.x + 120f, c.y + 0.01f)
-        val d = above - below
-        assertTrue(abs(d - round(d)) < 0.02f, "a seam of $d lines")
-    }
-
-    @Test
-    fun theCheckerboardIsRakedFromEveryCornerWithoutWaiting() {
-        val l = layer(Samon.ICHIMATSU)
-        val cell = RakeGrain().cell
-        // Every block starts on a whole turn, and each corner's turns run 0, 1, 2, … with no gaps.
-        val starts = mutableMapOf<Int, MutableSet<Int>>()
-        for (i in 0 until 8) for (j in 0 until 5) {
-            val x = i * cell + cell / 2
-            val y = -60f + j * cell + cell / 2
-            if (y < 0f || y > 1080f) continue
-            val turn = floor(l.reveal(x, y) / RakeGrain().cellTime).toInt()
-            val q = (if (i >= 4) 1 else 0) + (if (j >= 3) 2 else 0)
-            starts.getOrPut(q) { mutableSetOf() } += turn
-        }
-        starts.values.forEach { turns -> assertEquals((0 until turns.size).toSet(), turns) }
-        // Alternate blocks run across and down.
-        assertNotEquals(l.phase(120f, 60f) - l.phase(120f, 50f), l.phase(360f, 60f) - l.phase(360f, 50f))
+        assertTrue(heads.single().wide && heads.single().length >= h)
     }
 
     @Test
     fun theProgramRakesThenSweepsThenRakesSomethingElse() {
-        val program = RakeProgram(1920f, 1080f, deck, seed = 5)
+        val program = RakeProgram(w, h, deck, seed = 5)
         assertEquals(Samon.CHOKUSEN, program.at(0f).base.samon)
-        var t = 0f
         var last: Samon? = null
         repeat(12) { n ->
             val c = program.composition(n)
-            assertNotEquals(last, c.samon, "the same samon twice running at $n")
+            assertNotEquals(last, c.samon, "the same kind twice running at $n")
             assertNotEquals(Samon.CHOKUSEN, c.samon)
             last = c.samon
         }
         // Through the first cycle: raking, holding, sweeping, resting.
         val first = program.composition(0)
-        t = RakeProgram.OPENING + first.duration / 2
+        var t = RakeProgram.OPENING + first.duration / 2
         assertEquals(first.samon, program.at(t).top?.samon)
         t = RakeProgram.OPENING + first.duration + RakeProgram.HOLD / 2
         assertEquals(first.samon, program.at(t).base.samon)
@@ -151,15 +219,13 @@ class RakeGardenTest {
 
     @Test
     fun theSweepEasesAcrossAndIsNotCutAwayWhileTheRakeIsInView() {
-        val w = 1920f
-        val sweep = RakeLayer(Samon.CHOKUSEN, w, 1080f)
         val g = RakeGrain()
+        val sweep = RakeLayer(Samon.CHOKUSEN, w, h)
         val total = g.sweepTime(w)
         // Eased: slow off the left edge, fastest across the middle, slow into the right.
         val early = g.sweepX(total * 0.1f, w) - g.sweepX(0f, w)
         val middle = g.sweepX(total * 0.55f, w) - g.sweepX(total * 0.45f, w)
         assertTrue(middle > 3f * early, "the sweep is not eased: $early then $middle")
-        // sweepReveal inverts sweepX.
         for (x in listOf(0f, 300f, 960f, 1500f, 1919f)) {
             assertEquals(x, g.sweepX(g.sweepReveal(x, w), w), 0.5f)
         }
@@ -171,23 +237,19 @@ class RakeGardenTest {
 
     @Test
     fun aCoarserGrainIsTheSameGardenRakedBigger() {
-        // Straight lines, waves and the checkerboard are the fine pattern magnified: the groove at a point
-        // of the coarse garden is the groove at the corresponding point of the fine one.
-        val k = 3f
-        val fine = RakeGrain()
-        val big = RakeGrain(spacing = fine.spacing * k)
-        for (samon in listOf(Samon.CHOKUSEN, Samon.SEIGAIHA)) {
-            val f = RakeLayer(samon, 640f, 360f, grain = fine)
-            val c = RakeLayer(samon, 1920f, 1080f, grain = big)
-            for (i in 1..30) for (j in 1..17) {
-                val x = 640f * i / 31f
-                val y = 360f * j / 18f
-                assertEquals(f.phase(x, y), c.phase(x * k, y * k), 1e-3f, "$samon at ($x, $y)")
-            }
+        // The field is a distance, so a garden raked k times coarser with its stones k times further
+        // apart is the fine one magnified: the groove at every point is the groove at the matching point.
+        val k = 3.2f
+        val small = RakeLayer(Samon.MIZUMON, 600f, 340f, listOf(GardenStone(150f, 120f, 15f), GardenStone(420f, 200f, 10f)), grain = fine)
+        val big = RakeLayer(
+            Samon.MIZUMON, 600f * k, 340f * k,
+            small.stones.map { GardenStone(it.x * k, it.y * k, it.r * k) },
+            grain = RakeGrain(spacing = fine.spacing * k, tines = fine.tines),
+        )
+        for (i in 1..30) for (j in 1..17) {
+            val x = 600f * i / 31f
+            val y = 340f * j / 18f
+            assertEquals(small.phase(x, y), big.phase(x * k, y * k), 1e-2f, "at ($x, $y)")
         }
-        // And the rakes cover it faster in proportion to how much wider they are.
-        val ripplesFine = layer(Samon.MIZUMON).duration
-        val ripplesCoarse = layer(Samon.MIZUMON, grain = coarse).duration
-        assertTrue(ripplesCoarse < ripplesFine / 1.5f, "coarse ripples take ${ripplesCoarse}s against ${ripplesFine}s")
     }
 }
