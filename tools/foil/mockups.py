@@ -4,7 +4,7 @@
     python tools/foil/mockups.py --out OUT_DIR            # bpy from PyPI (pip install bpy)
     blender -b -P tools/foil/mockups.py -- --out OUT_DIR  # or a Blender binary
 
-Six looks for the border band `drawPrismaticInset` paints today (Prismatic.kt),
+Seven looks for the border band `drawPrismaticInset` paints today (Prismatic.kt),
 one card, one light rig, one camera. The point of doing it in Blender rather than
 straight in SkSL is to argue about the *look* with real light before anybody
 writes a shader, and to leave the shader port with the exact textures the
@@ -27,6 +27,12 @@ what kai picks from the contact sheet is what those textures produce:
   F  prismatic secret  diamond cells of alternating +/-45 deg gratings over the
                     whole frame (not the art or the text box), printed ink over
                     it as a colour filter             -> secret_cells.png, spectrum_ramp.png, foil_mask.png
+  G  holographic, refined  C done properly: polished anisotropic silver whose
+                    streak slides round the band, a crisper grating (d = 1600nm)
+                    broken into striations by micro rings, and an embossed rim
+                    at the band's inner edge. Every term is analytic and listed
+                    in G_MODEL, which is what the SkSL port copies
+                                                      -> spectrum_ramp.png
 
 foil_mask.png (R = 4% band, G = frame outside art and text box, B = art box) is
 exported for the port; the renders compute the same regions analytically.
@@ -86,7 +92,30 @@ VARIANTS = {
     "D": ("Brushed silver", "Monochrome ink foil: anisotropic brushed aluminium, hairline texture, no hue at all. The Master UI purist option."),
     "E": ("Glitter", "Secret-rare sparkle: thousands of tiny tilted mirror flakes, each with its own film colour, so glints wink on and off in different hues."),
     "F": ("Prismatic secret", "Konami's prismatic-secret idea: diamond cells of alternating diagonal gratings over the whole frame (not the art), printed ink on top as a filter."),
+    "G": ("Holographic, refined", "C, refined: polished anisotropic silver with a narrow streak that slides round the band, a crisp grating rainbow broken into fine striations by micro rings, and an embossed rim that catches the key light."),
 }
+
+# G, the refined holographic band. Every number the SkSL port needs, in one place.
+# Card space: p = position from the card's centre in units of card WIDTH (so the
+# card spans x -0.5..0.5, y -0.729..0.729); g = normalize(p) runs ACROSS the
+# concentric grooves, t = perp(g) along them. L = KEY_DIR, V = toward the eye.
+G_MODEL = dict(
+    albedo=0.82,              # silver base colour (linear), neutral
+    edge_tint=0.95,           # F82 edge tint: silver whitens toward grazing
+    rough_along=0.06,         # perceptual roughness along t (alpha = 0.0036)
+    rough_across=0.40,        # perceptual roughness across, along g (alpha = 0.16)
+    period_nm=1600.0,         # grating period d
+    orders=((1, 1.0), (2, 0.6), (3, 0.35)),
+    emission=1.3,             # rainbow added on top of the metal
+    micro_period=0.004,       # ring period in r = |p|, card widths
+    micro_jitter=0.012,       # s += micro_jitter * h before the spectrum lookup
+    micro_slope=0.05,         # bump: n = normalize(n - micro_slope * cos(2 pi r / P) * g)
+    bevel=0.0035,             # rim width inside the band's inner edge, card widths
+    rim_lit=0.95,             # rim shade facing the key (display / sRGB value)
+    rim_shadow=0.35,          # rim shade facing away (display / sRGB value)
+    keyline=0.001,            # dark line just inside the print, card widths
+    keyline_ink=0.25,         # the print is multiplied by this on the keyline
+)
 
 
 # =================================================================================
@@ -471,6 +500,86 @@ def build_material(letter, card_img, tex):
         art_or_text = b.math("MAXIMUM", inbox(ART_BOX), inbox(TEXT_BOX))
         mask = b.math("MAXIMUM", band, b.math("SUBTRACT", 1.0, art_or_text))
 
+    elif letter == "G":
+        M = G_MODEL
+        # Card space in card widths. The band test below is the same band as every
+        # other variant (edge = distance outside the band's inner rectangle, > 0 in
+        # the band), but measured in p so the rim and keyline widths are exact.
+        px = b.math("DIVIDE", ox, CARD_W)
+        py = b.math("DIVIDE", oy, CARD_W)
+        hx_in = 0.5 - BAND
+        hy_in = 0.5 * CARD_H / CARD_W - BAND
+        ex = b.math("SUBTRACT", b.math("ABSOLUTE", px), hx_in)
+        ey = b.math("SUBTRACT", b.math("ABSOLUTE", py), hy_in)
+        edge = b.math("MAXIMUM", ex, ey)
+
+        # Grooves: concentric rings. g across them, t along them, both analytic.
+        p_vec = b.xyz(px, py, 0.0)
+        r = b.vmath("LENGTH", p_vec)
+        g_obj = b.vmath("NORMALIZE", p_vec)
+        gw = b.vmath("NORMALIZE", b.to_world(g_obj))
+        tw = b.vmath("NORMALIZE", b.to_world(b.xyz(b.math("MULTIPLY", py, -1.0), px, 0.0)))
+
+        # 3. Micro rings: h = sin(2 pi r / P); the bump's slope is its derivative.
+        phase = b.math("MULTIPLY", r, 2 * math.pi / M["micro_period"])
+        h = b.math("SINE", phase)
+        slope = b.math("MULTIPLY", b.math("COSINE", phase), -M["micro_slope"])
+        n_bumped = b.vmath("NORMALIZE", b.vmath("ADD", N, b.vmath("SCALE", gw, scale=slope)))
+
+        # 1. Silver. Blender's Metallic BSDF maps (roughness r, anisotropy a > 0) to
+        # alpha_T = r^2 (1 - a), alpha_B = r^2 / (1 - a), T being the tangent, so
+        # T = t and r, a are solved from the two roughnesses the model gives.
+        a_t, a_g = M["rough_along"] ** 2, M["rough_across"] ** 2
+        r_m = (a_t * a_g) ** 0.25
+        aniso = 1.0 - math.sqrt(a_t / a_g)
+        metal_n = b.node("ShaderNodeBsdfMetallic", fresnel_type="F82", distribution="GGX")
+        alb, tint = M["albedo"], M["edge_tint"]
+        metal_n.inputs["Base Color"].default_value = (alb, alb, alb, 1)
+        metal_n.inputs["Edge Tint"].default_value = (tint, tint, tint, 1)
+        metal_n.inputs["Roughness"].default_value = r_m
+        metal_n.inputs["Anisotropy"].default_value = aniso
+        b.feed(metal_n.inputs["Tangent"], tw)
+        b.feed(metal_n.inputs["Normal"], n_bumped)
+
+        # 2. Diffraction, s jittered by the micro rings, added on top as emission.
+        rainbow = diffraction(g_obj, M["period_nm"], jitter=b.math("MULTIPLY", h, M["micro_jitter"]),
+                              orders=M["orders"])
+        em = b.node("ShaderNodeEmission")
+        b.feed(em.inputs["Color"], rainbow)
+        em.inputs["Strength"].default_value = M["emission"]
+        add = b.node("ShaderNodeAddShader")
+        b.feed(add.inputs[0], metal_n.outputs[0])
+        b.feed(add.inputs[1], em.outputs[0])
+        foil_body = add.outputs[0]
+
+        # 4. Embossed rim: the band stands proud of the print, so its inner edge is a
+        # bevel sloping down toward the card's centre. Its in-plane normal e points
+        # at the centre along the nearer side (a 45 deg mitre at the corners); the
+        # shade is mix(shadow, lit, 0.5 + 0.5 * dot(e, normalize(L.xy))), L in card
+        # space, so the lower and right edges catch an upper-left key.
+        on_x = b.math("GREATER_THAN", ex, ey)
+        sgn_x = b.math("SIGN", px)
+        sgn_y = b.math("SIGN", py)
+        e_obj = b.xyz(b.math("MULTIPLY", b.math("MULTIPLY", on_x, sgn_x), -1.0),
+                      b.math("MULTIPLY", b.math("SUBTRACT", on_x, 1.0), sgn_y), 0.0)
+        l_obj = b.node("ShaderNodeVectorTransform", vector_type="VECTOR", convert_from="WORLD", convert_to="OBJECT")
+        l_obj.inputs[0].default_value = KEY_DIR
+        lx, ly, _ = b.sep(l_obj.outputs[0])
+        l_flat = b.vmath("NORMALIZE", b.xyz(lx, ly, 0.0))
+        facing = b.math("ADD", 0.5, b.math("MULTIPLY", b.vmath("DOT_PRODUCT", e_obj, l_flat), 0.5))
+        shade = b.math("ADD", M["rim_shadow"], b.math("MULTIPLY", facing, M["rim_lit"] - M["rim_shadow"]))
+        shade_lin = b.math("POWER", shade, 2.2)      # the model's shades are display values
+        rim_em = b.node("ShaderNodeEmission")
+        b.feed(rim_em.inputs["Color"], b.xyz(shade_lin, shade_lin, shade_lin))
+        rim_em.inputs["Strength"].default_value = 1.0
+        in_rim = b.math("LESS_THAN", edge, M["bevel"])
+        foil = b.mix_shader(in_rim, foil_body, rim_em.outputs[0])
+
+        # ...and a hairline of shadow on the print side of the edge.
+        on_line = b.math("MULTIPLY", b.math("GREATER_THAN", edge, -M["keyline"]), b.math("LESS_THAN", edge, 0.0))
+        inked = b.mix(on_line, print_col, b.mix(1.0, print_col, (M["keyline_ink"],) * 3 + (1,), blend="MULTIPLY"))
+        paper = b.principled(Base_Color=inked, Roughness=0.6, Specular_IOR_Level=0.15)
+
     surf = b.mix_shader(mask, paper, foil)
     nt.links.new(surf, out.inputs["Surface"])
     return mat
@@ -644,7 +753,8 @@ def contact_sheet(out, letters, tags, bg, fg, path):
     sheet = Image.new("RGB", (W, H), bg)
     d = ImageDraw.Draw(sheet)
     fb, fr, fs = font(44, True), font(20), font(16)
-    d.text((pad, 24), "Card foil mockups: A-F at -20, 0, +20 degrees", font=font(22, True), fill=fg)
+    span = f"{letters[0]}-{letters[-1]}" if len(letters) > 1 else letters[0]
+    d.text((pad, 24), f"Card foil mockups: {span} at -20, 0, +20 degrees", font=font(22, True), fill=fg)
     for c, t in enumerate(tags):
         d.text((label_w + c * (cw + pad) + cw // 2, head - 16), TAG_LABEL[t], font=fs, fill=fg, anchor="mm")
     for r, L in enumerate(letters):
@@ -658,6 +768,60 @@ def contact_sheet(out, letters, tags, bg, fg, path):
 
 
 TAG_LABEL = {"m20": "-20°", "p00": "0°", "p20": "+20°"}
+
+# Where the corner detail sits in the 0-degree still: a 0.2h x 0.25h box whose
+# top-left is 8px up and left of the card's own top-left corner.
+DETAIL_W, DETAIL_H, DETAIL_PAD, DETAIL_ZOOM = 0.2, 0.25, 8, 3
+
+
+def detail_box(rgba):
+    x0, y0, _, _ = rgba.getchannel("A").point(lambda p: 255 if p > 128 else 0).getbbox()
+    h = rgba.size[1]
+    return (x0 - DETAIL_PAD, y0 - DETAIL_PAD, x0 - DETAIL_PAD + int(h * DETAIL_W), y0 - DETAIL_PAD + int(h * DETAIL_H))
+
+
+def detail(raw, L, bg):
+    """The 3x corner: rendered natively at 3x where raw/<L>_corner.png exists (so the
+    micro structure is real pixels), otherwise the 0-degree still upscaled."""
+    native = raw / f"{L}_corner.png"
+    if native.exists():
+        return on(bg, Image.open(native))
+    rgba = Image.open(raw / f"{L}_p00.png")
+    crop = on(bg, rgba).crop(detail_box(rgba))
+    return crop.resize((crop.width * DETAIL_ZOOM, crop.height * DETAIL_ZOOM), Image.LANCZOS)
+
+
+def compare_sheet(out, pair, labels, tags, bg, fg, path):
+    """Two rows (e.g. C and G), three angles each plus the corner detail."""
+    raw = out / "raw"
+    ch = 420
+    pad, label_w, head = 24, 250, 96
+    rows = []
+    for L in pair:
+        ims = [on(bg, Image.open(raw / f"{L}_{t}.png")) for t in tags]
+        ims = [im.resize((int(im.width * ch / im.height), ch), Image.LANCZOS) for im in ims]
+        det = detail(raw, L, bg)
+        ims.append(det.resize((int(det.width * ch / det.height), ch), Image.LANCZOS))
+        rows.append(ims)
+    W = label_w + sum(im.width + pad for im in rows[0]) + pad
+    H = head + len(rows) * (ch + pad) + pad
+    sheet = Image.new("RGB", (W, H), bg)
+    d = ImageDraw.Draw(sheet)
+    d.text((pad, 24), f"{pair[0]} vs {pair[1]}: -20, 0, +20 degrees and the corner at 3x", font=font(22, True), fill=fg)
+    x = label_w
+    for im, cap in zip(rows[0], [TAG_LABEL[t] for t in tags] + ["corner, 3×"]):
+        d.text((x + im.width // 2, head - 16), cap, font=font(16), fill=fg, anchor="mm")
+        x += im.width + pad
+    for r, (L, ims) in enumerate(zip(pair, rows)):
+        y = head + r * (ch + pad)
+        name, _, rest = labels[L].partition(" — ")
+        d.text((pad, y + 10), name, font=font(44, True), fill=fg)
+        d.text((pad, y + 66), "— " + rest, font=font(20), fill=fg)
+        x = label_w
+        for im in ims:
+            sheet.paste(im, (x, y))
+            x += im.width + pad
+    sheet.save(path)
 
 
 def write_html(out, letters, tags, seconds):
@@ -703,7 +867,7 @@ def write_html(out, letters, tags, seconds):
 </style></head>
 <body><main>
 <h1>Card foil mockups</h1>
-<p class="lede">Six treatments for the 4% border band on a card face, rendered in Blender (Cycles) with one card,
+<p class="lede">{len(letters)} treatments for the 4% border band on a card face, rendered in Blender (Cycles) with one card,
 one light rig and one camera. Stills are the card turned &minus;20&deg;, 0&deg; and +20&deg; about its vertical
 axis with the lights fixed; the turntable sweeps &minus;25&deg;&rarr;+25&deg;&rarr;&minus;25&deg;. In the app the
 pointer stands in for that tilt.</p>
@@ -724,6 +888,22 @@ def render_to(path):
     bpy.ops.render.render(write_still=True)
 
 
+def render_corner(path, still_path, still_samples):
+    """Render the detail box of the 0-degree still again at DETAIL_ZOOM x the
+    resolution, cropped to the box, so a 3x corner shows real sub-pixel structure."""
+    sc = bpy.context.scene
+    W, H = sc.render.resolution_x, sc.render.resolution_y
+    x0, y0, x1, y1 = detail_box(Image.open(still_path))
+    sc.render.resolution_x, sc.render.resolution_y = W * DETAIL_ZOOM, H * DETAIL_ZOOM
+    sc.render.use_border, sc.render.use_crop_to_border = True, True
+    sc.render.border_min_x, sc.render.border_max_x = x0 / W, x1 / W
+    sc.render.border_min_y, sc.render.border_max_y = 1 - y1 / H, 1 - y0 / H
+    sc.cycles.samples = still_samples
+    render_to(path)
+    sc.render.use_border = False
+    sc.render.resolution_x, sc.render.resolution_y = W, H
+
+
 def set_pose(card, mat, letter, tilt_deg):
     card.rotation_euler = (math.radians(90), 0, math.radians(tilt_deg))
     if letter == "A":
@@ -736,7 +916,7 @@ def main(argv):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--card", default="89631139", help="passcode (YGOPRODeck) or a local image path")
-    ap.add_argument("--variants", default="ABCDEF")
+    ap.add_argument("--variants", default="ABCDEFG")
     ap.add_argument("--still-height", type=int, default=720)
     ap.add_argument("--still-samples", type=int, default=128)
     ap.add_argument("--gif-height", type=int, default=400)
@@ -772,6 +952,10 @@ def main(argv):
                 s = time.time()
                 render_to(raw / f"{L}_{t}.png")
                 print(f"{L} {t}: {time.time() - s:.1f}s", flush=True)
+            set_pose(card, mats[L], L, 0.0)
+            s = time.time()
+            render_corner(raw / f"{L}_corner.png", raw / f"{L}_p00.png", a.still_samples)
+            print(f"{L} corner: {time.time() - s:.1f}s", flush=True)
             if not a.no_gif:
                 gh = a.gif_height
                 sc.render.resolution_x, sc.render.resolution_y = int(gh * aspect) // 2 * 2, gh
@@ -791,26 +975,31 @@ def main(argv):
             on((255, 255, 255), im).save(d / f"{L}_{t}.png")
             on((0, 0, 0), im).save(d / f"{L}_{t}_black.png")
         # Top-left corner of the 0-degree still, 3x, so a 4% band can be judged.
-        rgba = Image.open(raw / f"{L}_p00.png")
-        x0, y0, _, _ = rgba.getchannel("A").point(lambda p: 255 if p > 128 else 0).getbbox()
-        im = on((255, 255, 255), rgba)
-        h = im.size[1]
-        crop = im.crop((x0 - 8, y0 - 8, x0 - 8 + int(h * 0.2), y0 - 8 + int(h * 0.25)))
-        crop.resize((crop.width * 3, crop.height * 3), Image.LANCZOS).save(d / f"{L}_detail.png")
+        detail(raw, L, (255, 255, 255)).save(d / f"{L}_detail.png")
+        detail(raw, L, (0, 0, 0)).save(d / f"{L}_detail_black.png")
         frames = sorted(raw.glob(f"{L}_gif*.png"))
         if frames:
             pics = [on((255, 255, 255), Image.open(f)) for f in frames]
             pal = [p.convert("P", palette=Image.ADAPTIVE, colors=255, dither=Image.FLOYDSTEINBERG) for p in pics]
             pal[0].save(d / f"{L}_turntable.gif", save_all=True, append_images=pal[1:], duration=90, loop=0, optimize=False, disposal=1)
-    contact_sheet(out, letters, tags, (255, 255, 255), (0, 0, 0), out / "contact_white.png")
-    contact_sheet(out, letters, tags, (0, 0, 0), (255, 255, 255), out / "contact_black.png")
+    # The sheets and the page show every variant that has renders, not only this run's.
+    present = [L for L in VARIANTS if all((raw / f"{L}_{t}.png").exists() for t in tags)]
+    contact_sheet(out, present, tags, (255, 255, 255), (0, 0, 0), out / "contact_white.png")
+    contact_sheet(out, present, tags, (0, 0, 0), (255, 255, 255), out / "contact_black.png")
+    if "C" in present and "G" in present:
+        labels = {"C": "C — original", "G": "G — refined"}
+        compare_sheet(out, "CG", labels, tags, (255, 255, 255), (0, 0, 0), out / "C_vs_G.png")
+        compare_sheet(out, "CG", labels, tags, (0, 0, 0), (255, 255, 255), out / "C_vs_G_black.png")
     secs = time.time() - t0
-    timing = out / "render_seconds.txt"
+    # A partial run (--variants) keeps its own timing, so the page's total stays the full run's.
+    whole = set(letters) == set(VARIANTS)
+    timing = out / ("render_seconds.txt" if whole or a.only_present else f"render_seconds_{''.join(letters)}.txt")
     if not a.only_present:
         timing.write_text(f"{secs:.0f}\n")
-    elif timing.exists():
-        secs = float(timing.read_text())
-    write_html(out, letters, tags, secs)
+    if not whole or a.only_present:
+        full = out / "render_seconds.txt"
+        secs = float(full.read_text()) if full.exists() else secs
+    write_html(out, present, tags, secs)
     print(f"done in {secs:.0f}s -> {out}")
 
 

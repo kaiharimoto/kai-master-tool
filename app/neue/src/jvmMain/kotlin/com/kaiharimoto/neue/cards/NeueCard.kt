@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.cards
 
+import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -37,6 +39,7 @@ import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.theme.Inverted
 import com.kaiharimoto.neue.theme.Mu
+import com.kaiharimoto.neue.theme.MuMotion
 
 /** A Yu-Gi-Oh! card is 59 × 86. */
 const val CARD_RATIO = 59f / 86f
@@ -68,7 +71,7 @@ fun NeueCard(
     copies: Int = 0,
     selected: Boolean = false,
     dimmed: Boolean = false,
-    foil: String = "classic",
+    foil: String = Foils.HOLO,
     marker: Marker? = null,
     outlined: Boolean = false,
 ) {
@@ -77,6 +80,9 @@ fun NeueCard(
     // Where the pointer is over the card, -1..1 on each axis; null when it is not.
     var feel by remember { mutableStateOf<Offset?>(null) }
     var hovered by remember { mutableStateOf(false) }
+    // The light follows the pointer and settles back when it leaves, over the
+    // family's base duration: light moving, never the card.
+    val light by animateOffsetAsState(feel ?: Offset.Zero, tween(MuMotion.BASE, easing = MuMotion.ease), label = "light")
 
     Box(
         modifier
@@ -110,7 +116,7 @@ fun NeueCard(
                 .fillMaxSize()
                 .drawWithContent {
                     drawContent()
-                    if (art == ArtState.READY) drawFoil(foil, feel)
+                    if (art == ArtState.READY) drawFoil(foil, if (foil == Foils.HOLO) light else feel)
                 },
             onState = { state ->
                 art = when (state) {

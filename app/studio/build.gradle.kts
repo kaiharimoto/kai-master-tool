@@ -20,6 +20,7 @@ kotlin {
             implementation(project(":core"))
             // Neue Master Tool, the desktop builder, is photographed by `shootNeue`.
             implementation(project(":neue"))
+            implementation(libs.coil.compose)
 
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.core)
@@ -101,6 +102,24 @@ tasks.register<JavaExec>("shootNeue") {
     classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
         kotlin.jvm().compilations.getByName("main").output.allOutputs
     jvmArgs("-Djava.awt.headless=true", "-Dskiko.renderApi=SOFTWARE", "-Dneue.version=studio")
+    argumentProviders.add(
+        CommandLineArgumentProvider {
+            providers.gradleProperty("shot.args").orNull?.split(" ")?.filter { it.isNotBlank() }
+                ?: emptyList()
+        }
+    )
+}
+
+// The card foil alone, drawn by the app's own shader at scripted pointer positions.
+tasks.register<JavaExec>("shootFoil") {
+    group = "verification"
+    description = "Renders Neue's card foil offscreen to PNG files."
+    dependsOn("jvmMainClasses")
+    mainClass.set("com.kaiharimoto.mastertool.studio.FoilStudio")
+    workingDir = rootProject.projectDir
+    classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
+        kotlin.jvm().compilations.getByName("main").output.allOutputs
+    jvmArgs("-Djava.awt.headless=true", "-Dskiko.renderApi=SOFTWARE")
     argumentProviders.add(
         CommandLineArgumentProvider {
             providers.gradleProperty("shot.args").orNull?.split(" ")?.filter { it.isNotBlank() }

@@ -17,10 +17,12 @@ import com.kaiharimoto.mastertool.ui.theme.foilAngleFor
 data class FoilStyle(val id: String, val label: String, val description: String)
 
 object Foils {
+    const val HOLO = "holo"
     const val CLASSIC = "classic"
     const val OFF = "off"
 
     val all = listOf(
+        FoilStyle(HOLO, "Holographic", "Silver with a diffraction grating; the rainbow follows the pointer"),
         FoilStyle(CLASSIC, "Classic", "The original two-hue band"),
         FoilStyle(OFF, "Off", "No foil"),
     )
@@ -31,11 +33,16 @@ object Foils {
 fun DrawScope.drawFoil(style: String, feel: Offset?) {
     when (style) {
         Foils.OFF -> Unit
-        // Square corners: nothing in the family is rounded, not even foil.
-        else -> drawPrismaticInset(
-            angleDegrees = foilAngleFor(feel ?: Offset.Zero),
-            cornerRadiusPx = 0f,
-            highlight = feel,
-        )
+        // Where there is no runtime shader, the classic band stands in (DESIGN.md §6:
+        // every shader keeps a drawing that works without one).
+        Foils.HOLO -> with(Holo) { if (!drawHolo(feel ?: Offset.Zero)) drawClassic(feel) }
+        else -> drawClassic(feel)
     }
 }
+
+// Square corners: nothing in the family is rounded, not even foil.
+private fun DrawScope.drawClassic(feel: Offset?) = drawPrismaticInset(
+    angleDegrees = foilAngleFor(feel ?: Offset.Zero),
+    cornerRadiusPx = 0f,
+    highlight = feel,
+)

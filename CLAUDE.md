@@ -342,8 +342,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 - **Master UI is enforced by a test**, `MasterUiLawTest`: a radius, a shadow, a
   gradient, a colour literal, a Material import, weight 600 or a spring in
   `neue/` fails CI. Read `MASTER-UI.md` before drawing anything there.
-- **Colour is allowed in exactly two files**, on kai's instruction: the foil
-  on a card's face (`cards/Foil.kt`) and the group markers the user draws on
+- **Colour is allowed in exactly two places**, on kai's instruction: the foil
+  on a card's face (`cards/Foil.kt`, `cards/Holo.kt` — the holographic shader
+  kai chose from the Blender mockups) and the group markers the user draws on
   their deck (`cards/GroupMarkers.kt`). Card art keeps its colour as content.
 - **Its keyboard is `core/input/DeskShortcuts.kt`**, a second table beside
   `ShortcutTable`, so the tablet's exhaustive `when`s never carry desktop

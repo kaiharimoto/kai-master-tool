@@ -58,10 +58,9 @@ a spring or an exclamation mark anywhere in `neue/` fails the build.
 
 kai granted two exceptions, and the law test names the two files they live in:
 
-- **`cards/Foil.kt`** — the prismatic border on a card's face. It is kept, as
-  kai asked, and it is content rather than chrome (§17: the pixels of a
-  picture keep their colour). The choice between the Blender mockups
-  (`tools/foil/`) replaces the classic band here.
+- **`cards/Foil.kt`** and **`cards/Holo.kt`** — the foil border on a card's
+  face. It is kept, as kai asked, and it is content rather than chrome (§17:
+  the pixels of a picture keep their colour). See §2a.
 - **`cards/GroupMarkers.kt`** — *"colors are allowed for deckbuilding markers
   only (like card groups in the deck itself assigned by the user)"*. A group's
   hue shows in the deck's cracks, on its key, on its mark. Lenses that are
@@ -69,6 +68,33 @@ kai granted two exceptions, and the law test names the two files they live in:
   apart by ink weight, the way everything else in Master UI is.
 
 Card art keeps its colour inside a §17 content frame. Nothing else does.
+
+### 2a. The holographic foil
+
+kai chose it from six Blender mockups (`tools/foil/`, variant C) and asked for it
+to be made better; `Holo.kt` is the refined model, per pixel, as a runtime
+shader through `ui/gpu/StageShader`. A foil stamp is a mirror with a
+diffraction grating pressed into it:
+
+- **silver** with an anisotropic highlight — a streak that slides round the
+  band — under two lights, a key from the upper left and a bounce from the
+  lower right;
+- **diffraction** from concentric grooves: order *m* shows the wavelength
+  `λ = d · |(L + V) · g| / m`, three orders, d = 1600 nm, added as light;
+- **grooves** you can see up close, which break the rainbow into striations
+  (their pitch never drops below 3 px — finer is moiré);
+- a **rim** where the stamp meets the print, lit by the same key, with an ink
+  hairline.
+
+The eye is a couple of card-widths away and the **pointer moves it**: a mouse
+stands in for tilting the card, and the light glides there over 180 ms when
+the pointer leaves. The card itself never moves. Where runtime shaders are
+unavailable the classic two-hue band is drawn instead (DESIGN.md §6).
+
+`tools/shoot.sh`'s studio has a mode for it — `:studio:shootFoil` draws the
+real `drawFoil` on real card art at scripted pointer positions, or as a sweep
+for a GIF — so the app's foil can be compared frame for frame with the Blender
+reference. Settings → Foil offers Holographic (the default), Classic and Off.
 
 ---
 

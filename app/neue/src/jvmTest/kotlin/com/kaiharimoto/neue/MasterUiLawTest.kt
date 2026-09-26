@@ -17,7 +17,7 @@ import kotlin.test.fail
 class MasterUiLawTest {
 
     private val root = File("src/jvmMain/kotlin")
-    private val colourAllowed = setOf("Foil.kt", "GroupMarkers.kt")
+    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt")
 
     private val sources: List<File> =
         root.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()

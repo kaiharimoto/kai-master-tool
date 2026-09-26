@@ -86,7 +86,7 @@ data class NeuePreferences(
         const val MAX_POOL_COLUMNS = 12
         const val MIN_WINDOW_WIDTH = 1024f
         const val MIN_WINDOW_HEIGHT = 680f
-        const val DEFAULT_FOIL = "classic"
+        const val DEFAULT_FOIL = "holo"
 
         val DEFAULT = NeuePreferences()
     }
