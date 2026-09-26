@@ -44,9 +44,57 @@ class SpiralGardenTest {
         layers.zipWithNext().forEach { (a, b) ->
             assertEquals(setOf(34, 55), setOf(a.arms, b.arms))
             assertEquals(-a.hand, b.hand)
-            // Each is turned by the golden angle from the last, so it never lies along the one it covers.
-            val step = ((b.turn - a.turn) / (2 * PI) % 1.0 + 1.0) % 1.0
-            assertEquals(SpiralGarden.GOLDEN_TURN, step, 1e-4)
+        }
+        // Each is set round by the golden angle from the last, plus the turn the flow has given the
+        // spiral by the time it begins.
+        layers.forEach { l ->
+            val turns = l.index * SpiralGarden.GOLDEN_TURN -
+                l.hand * SpiralGarden.B * SpiralGarden.FLOW * l.index * g.layerTime / (2 * PI)
+            val want = (turns - floor(turns)) * 2 * PI
+            val d = abs(l.turn - want)
+            assertTrue(d < 1e-3 || abs(d - 2 * PI) < 1e-3, "layer ${l.index}: turned ${l.turn}, not $want")
+        }
+    }
+
+    @Test
+    fun theSandFlowsOutwardAndTheFlowIsAZoom() {
+        // A golden spiral zoomed is a golden spiral turned: the pattern flowed by z is the
+        // pattern at rest, scaled by e^z about the centre.
+        for (n in 0..1) {
+            val l = g.layer(n)
+            for (z in listOf(0.1f, 0.4f, 1.3f)) for (a in listOf(0.3, 2.0, 4.4)) {
+                val r = 320.0
+                val x0 = (g.centreX + r * cos(a)).toFloat()
+                val y0 = (g.centreY + r * sin(a)).toFloat()
+                val s = kotlin.math.exp(z.toDouble())
+                val x1 = (g.centreX + r * s * cos(a)).toFloat()
+                val y1 = (g.centreY + r * s * sin(a)).toFloat()
+                assertEquals(g.phase(l, x0, y0), g.phase(l, x1, y1, z), 2e-3f)
+            }
+            // A zoom of e^(2π/b) is a whole turn: every groove is back where it started.
+            val whole = (2 * PI / SpiralGarden.B).toFloat()
+            val d = g.phase(l, 700f, 300f, whole) - g.phase(l, 700f, 300f)
+            assertTrue(abs(d - round(d)) < 0.01f, "a whole turn of flow moved the grooves by $d")
+        }
+    }
+
+    @Test
+    fun theFlowStaysExactHoursIntoZen() {
+        // The flow a layer is born into is folded into its turn; the unfolded phase, computed
+        // from the raw time in doubles, must agree however late the layer.
+        for (n in listOf(0, 1, 7, 150, 600)) {
+            val l = g.layer(n)
+            val tau = 3.7f
+            val t = n * g.layerTime.toDouble() + tau
+            val x = 1500f
+            val y = 250f
+            val theta = kotlin.math.atan2((y - g.centreY).toDouble(), (x - g.centreX).toDouble())
+            val r = kotlin.math.hypot((x - g.centreX).toDouble(), (y - g.centreY).toDouble())
+            val golden = n * SpiralGarden.GOLDEN_TURN * 2 * PI
+            val raw = l.arms * (theta - l.hand * SpiralGarden.B * (kotlin.math.ln(r) - SpiralGarden.FLOW * t) - golden) / (2 * PI)
+            val folded = g.phase(l, x, y, SpiralGarden.FLOW * tau).toDouble()
+            val d = raw - folded
+            assertTrue(abs(d - round(d)) < 0.02, "layer $n: folded phase off by ${d - round(d)} grooves")
         }
     }
 
@@ -84,40 +132,45 @@ class SpiralGardenTest {
     fun aLayerCoversTheWholeWindowBeforeTheNextBegins() {
         for (n in 0..1) {
             val l = g.layer(n)
-            val done = g.layerTime - SpiralGarden.HOLD + SpiralGarden.FADE
+            val done = g.drawnBy + SpiralGarden.FADE
             for (i in 0..40) for (j in 0..24) {
                 assertEquals(1f, g.weight(l, 1920f * i / 40, 1080f * j / 24, done), 1e-4f)
             }
             assertEquals(0f, g.weight(l, 1900f, 1060f, 0f))
+            assertTrue(done < g.layerTime)
         }
     }
 
     @Test
     fun theWeightOnlyGrowsAndNeverSteps() {
+        // Following the sand as it flows out, what has been drawn stays drawn.
         val l = g.layer(1)
-        var last = FloatArray(64 * 36)
+        val points = (0 until 64).flatMap { i -> (0 until 36).map { j -> 1920f * (i + 0.5f) / 64 to 1080f * (j + 0.5f) / 36 } }
+        val last = FloatArray(points.size)
         var tau = 0f
         while (tau < g.layerTime) {
-            var idx = 0
-            for (i in 0 until 64) for (j in 0 until 36) {
-                val w = g.weight(l, 1920f * (i + 0.5f) / 64, 1080f * (j + 0.5f) / 36, tau)
-                assertTrue(w >= last[idx] - 1e-5f, "the garden un-drew itself")
-                last[idx++] = w
+            val s = kotlin.math.exp(SpiralGarden.FLOW * tau)
+            points.forEachIndexed { idx, (x0, y0) ->
+                val x = g.centreX + (x0 - g.centreX) * s
+                val y = g.centreY + (y0 - g.centreY) * s
+                val w = g.weight(l, x, y, tau)
+                // A grain exactly on the line between two arms may be counted to either; both sides carry the mean there.
+                assertTrue(w >= last[idx] - 2e-3f, "the garden un-drew itself at ($x0, $y0), $tau s in: ${last[idx]} to $w")
+                last[idx] = w
             }
             tau += 0.5f
         }
         // Across the edge between a drawn arm and one not yet drawn, both sides agree.
-        val r = 700f
-        for (step in 0 until 720) {
-            val a = step * 2 * PI / 720
-            val x = (g.centreX + r * cos(a)).toFloat()
-            val y = (g.centreY + r * sin(a)).toFloat()
-            val p = g.phase(l, x, y)
-            if (offWhole(p) > 0.02f) continue
-            // A ridge — a strip edge: the weight a hair either side is the same.
-            val dx = 0.05f * cos(a + 1.2).toFloat()
-            val dy = 0.05f * sin(a + 1.2).toFloat()
-            for (t in listOf(2f, 4f, 6f, 9f)) {
+        for (t in listOf(2f, 4f, 6f, 9f)) {
+            val z = SpiralGarden.FLOW * t
+            val r = 700f
+            for (step in 0 until 720) {
+                val a = step * 2 * PI / 720
+                val x = (g.centreX + r * cos(a)).toFloat()
+                val y = (g.centreY + r * sin(a)).toFloat()
+                if (offWhole(g.phase(l, x, y, z)) > 0.02f) continue
+                val dx = 0.05f * cos(a + 1.2).toFloat()
+                val dy = 0.05f * sin(a + 1.2).toFloat()
                 assertEquals(g.weight(l, x - dx, y - dy, t), g.weight(l, x + dx, y + dy, t), 0.02f)
             }
         }
@@ -141,16 +194,28 @@ class SpiralGardenTest {
     @Test
     fun theRakesReachTheFarCornerAndTheGardenRunsOnForever() {
         val l = g.layer(0)
-        val last = (0 until l.arms).maxOf { g.start(l, it) }
-        val tip = (0 until l.arms).minOf { g.tip(l, it, g.layerTime - SpiralGarden.HOLD)!! }
+        val tip = (0 until l.arms).minOf { g.tip(l, it, g.drawnBy)!! }
         assertTrue(tip >= g.reach - 1f, "an arm stops at $tip of ${g.reach}")
-        assertTrue(last < SpiralGarden.STAGGER)
+        // A rake opens out as it goes, like the spiral it follows.
+        val early = g.tip(l, 0, 2f)!! - g.tip(l, 0, 1f)!!
+        val late = g.tip(l, 0, 12f)!! - g.tip(l, 0, 11f)!!
+        assertTrue(late > 2f * early)
         val m = g.at(g.layerTime * 7.25f)
         assertEquals(7, m.layer)
         assertEquals(g.layerTime * 0.25f, m.tau, 0.01f)
         assertNotEquals(g.layer(7).hand, g.layer(8).hand)
         assertEquals(0, g.at(-3f).layer)
         assertEquals(0f, floor(g.at(0f).tau))
-        assertTrue(max(0f, g.layerTime) in 20f..40f, "a layer takes ${g.layerTime}s")
+        assertTrue(g.layerTime in 18f..40f, "a layer takes ${g.layerTime}s")
+    }
+
+    @Test
+    fun theSunGoesRound() {
+        // It starts where the gravel has always been lit from — up and to the left — and comes back.
+        val usual = kotlin.math.atan2(-0.66, -0.5).let { if (it < 0) it + 2 * PI else it }
+        assertEquals(usual, g.sunAzimuth(0f).toDouble(), 0.01)
+        assertEquals(g.sunAzimuth(0f), g.sunAzimuth(SpiralGarden.SUN_TURN.toFloat()), 1e-3f)
+        val quarter = (g.sunAzimuth(SpiralGarden.SUN_TURN.toFloat() / 4) - g.sunAzimuth(0f) + 2 * PI.toFloat()) % (2 * PI.toFloat())
+        assertEquals((PI / 2).toFloat(), quarter, 1e-3f)
     }
 }

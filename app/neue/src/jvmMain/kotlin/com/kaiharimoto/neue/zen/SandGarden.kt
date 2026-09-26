@@ -22,7 +22,9 @@ import org.jetbrains.skia.Shader
  * other forever (`SpiralGarden`).
  *
  * The whole window is gravel and the floating deck sits where a sunflower's head
- * would be. From under it, arms of golden spiral are drawn outward one by one,
+ * would be. The sand blooms outward from under it forever — a golden spiral
+ * zoomed is a golden spiral turned — and the sun goes slowly round it. Into the
+ * flowing sand, arms of golden spiral are drawn outward one by one,
  * setting off in golden-ratio order so they are always evenly spread; when every
  * arm has reached the far corner, the other family — 55 after 34, turning the
  * other way, set round by the golden angle — is drawn over the top, its arms
@@ -31,7 +33,7 @@ import org.jetbrains.skia.Shader
  *
  * Nothing is remembered between frames: the garden at any moment is a function
  * of the time. The shader evaluates, per pixel, a line-for-line copy of
- * `SpiralGarden.phase`, `spacing`, `start` and `weight`. The grain of the sand
+ * `SpiralGarden.phase`, `spacing`, `start`, `past` and `weight`. The grain of the sand
  * was made in Blender (`tools/zen/garden.py`). White gravel on paper, black on
  * ink, and never a colour.
  */
@@ -78,7 +80,7 @@ internal class Garden {
 
     fun draw(scope: DrawScope, t: Float, ink: Boolean, look: GardenLook = GardenLook()) {
         val g = garden ?: return
-        val shader = Textures.shade(g, g.at(t), ink, look)
+        val shader = Textures.shade(g, t, ink, look)
         if (shader != null) scope.drawRect(ShaderBrush(shader.asComposeShader()))
     }
 }
@@ -105,7 +107,10 @@ uniform float3 uNew;        // the layer being drawn: arms, hand, turn
 uniform float3 uOld;        // the layer beneath it
 uniform float uOldStraight; // 1 while the first layer is drawn, over straight lines
 uniform float uTau;         // seconds into the layer being drawn
-uniform float4 uSpiral;     // B, ARC, SPEED, R_IN
+uniform float2 uZoom;       // how far the sand has flowed since each layer began: new, old
+uniform float4 uSpiral;     // B, ARC, GROWTH, R_IN
+uniform float uFlow;        // FLOW
+uniform float uSun;         // the sun's azimuth: the direction the gravel is lit from
 uniform float3 uTiming;     // STAGGER, FADE, PHI
 uniform float uPitch;       // the straight lines' pitch
 uniform float uInk;
@@ -119,9 +124,9 @@ const float TAU = 6.2831853;
 
 float radius(float2 p) { return max(1.0, length(p - uCentre)); }
 
-float phaseOf(float3 l, float2 p) {
+float phaseOf(float3 l, float2 p, float zoom) {
     float theta = atan(p.y - uCentre.y, p.x - uCentre.x);
-    return l.x * (theta - l.y * uSpiral.x * log(radius(p)) - l.z) / TAU;
+    return l.x * (theta - l.y * uSpiral.x * (log(radius(p)) - zoom) - l.z) / TAU;
 }
 
 float spacingOf(float3 l, float2 p) { return TAU * radius(p) / (l.x * uSpiral.y); }
@@ -131,14 +136,15 @@ float startOf(float3 l, float strip) {
     return uTiming.x * (f - floor(f));
 }
 
+// SpiralGarden.past, measured in the flowing sand.
 float settled(float3 l, float strip, float2 p) {
-    float reveal = startOf(l, strip) + max(0.0, radius(p) - uSpiral.w) * uSpiral.y / uSpiral.z;
-    float u = clamp((uTau - reveal) / uTiming.y, 0.0, 1.0);
+    float past = uTau - startOf(l, strip) - (log(radius(p)) - uFlow * uTau - log(uSpiral.w)) / uSpiral.z;
+    float u = clamp(past / uTiming.y, 0.0, 1.0);
     return u * u * (3.0 - 2.0 * u);
 }
 
 float weightOf(float3 l, float2 p) {
-    float ph = phaseOf(l, p);
+    float ph = phaseOf(l, p, uZoom.x);
     float k = floor(ph);
     float u = ph - k - 0.5;
     float own = settled(l, k, p);
@@ -156,8 +162,8 @@ float heightOf(float phase, float spacing) {
 }
 
 float heightAt(float2 p) {
-    float fresh = heightOf(phaseOf(uNew, p), spacingOf(uNew, p));
-    float old = uOldStraight > 0.5 ? heightOf(p.y / uPitch, uPitch) : heightOf(phaseOf(uOld, p), spacingOf(uOld, p));
+    float fresh = heightOf(phaseOf(uNew, p, uZoom.x), spacingOf(uNew, p));
+    float old = uOldStraight > 0.5 ? heightOf(p.y / uPitch, uPitch) : heightOf(phaseOf(uOld, p, uZoom.y), spacingOf(uOld, p));
     return mix(old, fresh, weightOf(uNew, p));
 }
 
@@ -169,7 +175,8 @@ half4 main(float2 p) {
     float3 g = grain.eval(p / uTexScale).rgb * 2.0 - 1.0;
     g.y = -g.y;
     n = normalize(float3(n.xy + g.xy * uGrainRelief, n.z));
-    float3 L = normalize(float3(-0.5, -0.66, uLightZ));
+    // The sun, at the height the gravel has always been lit from, going round.
+    float3 L = normalize(float3(0.828 * cos(uSun), 0.828 * sin(uSun), uLightZ));
     // Lit so flat sand is the same brightness whatever the light's height: only slopes change.
     float diff = max(dot(n, L), 0.0) / L.z;
     float a = mix(0.93, albedo.eval(p / uTexScale).r, 0.35);
@@ -188,7 +195,8 @@ half4 main(float2 p) {
         runCatching { RuntimeEffect.makeForShader(SKSL) }.onFailure { println("[zen] garden shader: ${it.message}") }.getOrNull()
     }
 
-    fun shade(garden: SpiralGarden, moment: SpiralGarden.Moment, ink: Boolean, look: GardenLook): Shader? {
+    fun shade(garden: SpiralGarden, t: Float, ink: Boolean, look: GardenLook): Shader? {
+        val moment = garden.at(t)
         val e = effect ?: return null
         val n = normal ?: return null
         val a = albedo ?: return null
@@ -203,7 +211,10 @@ half4 main(float2 p) {
             uniform("uOld", old.arms.toFloat(), old.hand, old.turn)
             uniform("uOldStraight", if (moment.layer == 0) 1f else 0f)
             uniform("uTau", moment.tau)
-            uniform("uSpiral", SpiralGarden.B, SpiralGarden.ARC, SpiralGarden.SPEED, SpiralGarden.R_IN)
+            uniform("uZoom", SpiralGarden.FLOW * moment.tau, SpiralGarden.FLOW * (moment.tau + garden.layerTime))
+            uniform("uSpiral", SpiralGarden.B, SpiralGarden.ARC, SpiralGarden.GROWTH, SpiralGarden.R_IN)
+            uniform("uFlow", SpiralGarden.FLOW)
+            uniform("uSun", garden.sunAzimuth(t))
             uniform("uTiming", SpiralGarden.STAGGER, SpiralGarden.FADE, SpiralGarden.PHI.toFloat())
             uniform("uPitch", SpiralGarden.PITCH)
             uniform("uInk", if (ink) 1f else 0f)

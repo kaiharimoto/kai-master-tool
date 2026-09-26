@@ -258,26 +258,44 @@ infinitely … it should really feel like a background texture rather than moir�
   the middle (below twelve pixels apart) the gravel is smoothed rather than drawn
   as a shimmer. Out where they can be seen they are 14–70 px apart, which reads
   as a grain.
-- **The algorithm.** Each arm is drawn outward by its own rake at 260 px/s
-  along the curve. Arm k sets off at 8·frac(k/φ) seconds — the golden-ratio
-  sequence, whose three-gap property keeps the arms under way evenly spread round
-  the circle however many have started (`SpiralGardenTest` holds it). A new
+- **The sand blooms.** kai found the finished garden "too simple", and chose,
+  of five prototypes (`tools/zen/ideas.py`), the endless bloom and the travelling
+  light. A golden spiral zoomed is a golden spiral turned, so the whole garden
+  flows outward from under the deck forever at 3.5% of its radius a second,
+  without a seam — a zoom of e^(2π/b) is exactly one turn. Every layer flows, and
+  since zooming a spiral turns it, each family seems to turn its own way: the new
+  one against the one it is drawn over. The flow a layer is born into is folded
+  into its turn, so the shader only sees the flow since it began, and
+  `SpiralGardenTest` holds the folded phase to the unfolded one hours into zen.
+- **The algorithm.** Each arm is drawn outward by its own rake, in the flowing
+  sand's own frame — measured on the screen, a groove would flicker as it flowed
+  past the edge of an arm half drawn. The rake gains 0.085 in log-radius a
+  second, so like the spiral it follows it opens out as it goes, and on screen it
+  gathers speed. Arm k sets off at 8·frac(k/φ) seconds — the golden-ratio
+  sequence, whose three-gap property keeps the arms under way evenly spread
+  round the circle however many have started (`SpiralGardenTest` holds it). A new
   groove settles in over 0.6 s behind its rake, and where a drawn arm lies
   beside one not yet drawn the two strips meet at the mean of their weights, so
   nothing is ever cut with a step.
-- **Forever.** When every arm has reached the far corner and five seconds have
+- **Forever.** When every arm has passed the far corner and five seconds have
   passed, the other family is drawn over the top — 55 after 34, the opposite
   way round, set round by the golden angle from the last so it never lies along
   the one it covers. Its arms cross the old ones as they grow and replace them.
-  A layer takes about 24 s; there is no wipe, and the first layer is drawn over
+  A layer takes about 23 s; there is no wipe, and the first layer is drawn over
   straight lines.
+- **The sun goes round.** The gravel is lit from a direction that circles the
+  garden once every 90 seconds, at the height it has always been lit from and
+  starting where it always was, so the grooves' light and shade turn slowly
+  while the pattern flows. kai turned down the other two prototypes: the
+  pointer parting the sand, and phyllotaxis seeding.
 - **Subtle.** The grooves are shallow (relief 0.45, against 0.8 for the garden
   before), the grains of sand drawn twice as large, no colour anywhere; the rakes
   are invisible, as kai asked of the garden before this one.
 
 Everything is a pure function of position and time, and the SkSL is a
-line-for-line copy of `SpiralGarden.phase`, `spacing`, `start` and `weight`; a
-layer travels to it as (arms, hand, turn). The grain is a normal map and an
+line-for-line copy of `SpiralGarden.phase`, `spacing`, `start`, `past` and
+`weight`; a layer travels to it as (arms, hand, turn), with the flow since each
+layer began and the sun's azimuth beside it. The grain is a normal map and an
 albedo **baked in Blender** (`tools/zen/garden.py`, tileable). White gravel on
 paper, black on ink. `GardenShaderTest` fails the build if the SkSL stops
 compiling, which in the app is only a log line and an empty zen.
