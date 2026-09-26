@@ -20,9 +20,17 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import com.kaiharimoto.mastertool.core.layout.SandFigure
 import com.kaiharimoto.mastertool.core.layout.SandPaths
-import com.kaiharimoto.mastertool.core.layout.SandTrack
+import org.jetbrains.skia.BlendMode
+import org.jetbrains.skia.Color4f
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorSpace
+import org.jetbrains.skia.ColorType
+import org.jetbrains.skia.FilterBlurMode
+import org.jetbrains.skia.FilterTileMode
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.MaskFilter
 import org.jetbrains.skia.Paint
 import org.jetbrains.skia.PaintMode
@@ -30,41 +38,42 @@ import org.jetbrains.skia.PaintStrokeCap
 import org.jetbrains.skia.PaintStrokeJoin
 import org.jetbrains.skia.Path
 import org.jetbrains.skia.PathBuilder
-import org.jetbrains.skia.PathDirection
-import org.jetbrains.skia.RRect
 import org.jetbrains.skia.RuntimeEffect
 import org.jetbrains.skia.RuntimeShaderBuilder
 import org.jetbrains.skia.SamplingMode
 import org.jetbrains.skia.Shader
 import org.jetbrains.skia.Surface
-import org.jetbrains.skia.FilterTileMode
+import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 
 /**
- * The sand garden zen mode rakes around the deck: white sand on paper, black on
- * ink, with the deck as the stone.
+ * The sand zen mode draws in, either side of the floating deck.
  *
- * The garden is a **height field**, drawn into as it is raked. At the start of a
- * session it is raked in straight lines across the window and in rings round the
- * stone — a karesansui. Then two steel balls, one either side of the deck, roll
- * through it on the programs in `SandPaths` — a spiral out that rakes a disk
- * smooth, a spiral that breathes back in, a rose — and every inch they cover is
- * pressed into a groove with a ridge pushed up either side, over whatever was
- * there, the way a kinetic sand table draws.
+ * It is meant to be looked past, not at. The sand is plain and smooth; a ball
+ * either side draws one figure after another (`SandPaths`: roses, spirograph
+ * stars and flowers, Lissajous weaves, breathing spirals, turning loops), slowly,
+ * as a shallow groove — and **every trail fades back into the sand as it goes**,
+ * so the garden never fills up and never stops, and what is on the sand at any
+ * moment is the last half a minute of drawing, fainter the older it is. No
+ * figure family comes twice in a row, and each is turned and sized afresh.
  *
- * The field is shaded per pixel by a runtime shader: normals from the field's
- * slope, a low light from the upper left so the grooves read, and under that the
- * grain of real sand — a normal map and an albedo baked in Blender
- * (`tools/zen/garden.py`), tiled. The ball is Blender's too.
+ * The cards keep their distance: the figures are placed clear of the deck, and
+ * the shader smooths the sand out entirely in a margin round it, so a groove
+ * never runs up against a card.
  *
- * Grey throughout. It is content, like card art, and Master UI's colour rule is
- * not suspended for it.
+ * How it is made: a height field in half-float (so a fade of a fraction of a
+ * percent a frame is not rounded away), grooves pressed into it with a soft
+ * ridge either side, and a runtime shader that lights it from its own slope,
+ * low, from the upper left, over the grain of real sand — a normal map and an
+ * albedo baked in Blender (`tools/zen/garden.py`), tiled. The ball is Blender's
+ * too, and half there. White sand on paper, black on ink, and never a colour.
  */
 @Composable
 fun SandGarden(zen: ZenLayer, ink: Boolean, modifier: Modifier = Modifier) {
     val garden = remember { Garden() }
-    // The field is native memory: a garden is raked fresh each time zen begins, and let go when it ends.
+    // The field is native memory: a garden starts smooth each time zen begins, and is let go when it ends.
     DisposableEffect(garden) { onDispose { garden.close() } }
     var frame by remember { mutableIntStateOf(0) }
     LaunchedEffect(garden) {
@@ -85,7 +94,6 @@ fun SandGarden(zen: ZenLayer, ink: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
-/** The garden's height field, its two balls, and how it is shaded. */
 private class Garden {
     private var surface: Surface? = null
     private var width = 0
@@ -94,6 +102,7 @@ private class Garden {
     private val tracers = mutableListOf<Tracer>()
     private var snapshot: Image? = null
     private var dirty = true
+    private var sinceFade = 0f
 
     fun prepare(w: Int, h: Int, deck: Rect) {
         if (w <= 0 || h <= 0) return
@@ -103,51 +112,29 @@ private class Garden {
         stone = deck
         val hw = max(1, (w * SCALE).toInt())
         val hh = max(1, (h * SCALE).toInt())
-        surface?.close()
-        surface = Surface.makeRasterN32Premul(hw, hh).also { rake(it, hw, hh) }
+        close()
+        surface = Surface.makeRaster(ImageInfo(hw, hh, ColorType.RGBA_F16, ColorAlphaType.PREMUL, ColorSpace.sRGB)).also {
+            it.canvas.clear(Color4f(FLAT, FLAT, FLAT, 1f).toColor())
+        }
         tracers.clear()
         placeTracers()
         dirty = true
     }
 
-    /** Straight lines everywhere, then rings round the stone. */
-    private fun rake(s: Surface, hw: Int, hh: Int) {
-        val c = s.canvas
-        c.clear(level(0.5f))
-        val spacing = SPACING * SCALE
-        var y = spacing / 2f
-        while (y < hh) {
-            groove(c, PathBuilder().moveTo(-10f, y).lineTo(hw + 10f, y).detach())
-            y += spacing
-        }
-        if (stone.width > 0f) {
-            val r = Rect(stone.left * SCALE, stone.top * SCALE, stone.right * SCALE, stone.bottom * SCALE)
-            val band = RINGS * spacing + spacing * 0.6f
-            // Level the band the rings go in, so the lines meet them rather than cross them.
-            val flat = Paint().apply { color = level(0.5f); isAntiAlias = true }
-            c.drawRRect(RRect.makeLTRB(r.left - band, r.top - band, r.right + band, r.bottom + band, band), flat)
-            for (k in 1..RINGS) {
-                val d = k * spacing - spacing * 0.4f
-                groove(c, PathBuilder().addRRect(RRect.makeLTRB(r.left - d, r.top - d, r.right + d, r.bottom + d, d), PathDirection.CLOCKWISE, 0).detach())
-            }
-        }
-    }
-
-    /** A ball each side of the stone, where there is room for one. */
+    /** A ball either side of the deck, each in a disk that keeps its distance from the cards. */
     private fun placeTracers() {
-        val margin = SPACING * 3f
-        val leftW = stone.left - margin
-        val rightW = width - stone.right - margin
-        fun add(cx: Float, room: Float, seed: Int) {
-            val radius = min(room / 2f, height / 2f) - SPACING * 1.5f
-            if (radius >= MIN_RADIUS) tracers += Tracer(Offset(cx, height / 2f), radius, seed)
+        val clear = BREATHING + FEATHER
+        fun add(left: Float, right: Float, seed: Int) {
+            val room = right - left
+            val radius = min(room / 2f, height * 0.36f)
+            if (radius >= MIN_RADIUS) tracers += Tracer(Offset((left + right) / 2f, height / 2f), radius, seed)
         }
         if (stone.width <= 0f) {
-            add(width * 0.25f, width * 0.5f, 0)
-            add(width * 0.75f, width * 0.5f, 2)
+            add(0f, width * 0.5f, 0)
+            add(width * 0.5f, width.toFloat(), 3)
         } else {
-            add(leftW / 2f, leftW, 0)
-            add(stone.right + margin + rightW / 2f, rightW, 2)
+            add(EDGE, stone.left - clear, 0)
+            add(stone.right + clear, width - EDGE, 3)
         }
     }
 
@@ -161,9 +148,17 @@ private class Garden {
     fun step(dt: Float) {
         val s = surface ?: return
         val c = s.canvas
+        // The fade: everything drifts back toward smooth sand, a little each frame.
+        sinceFade += dt
+        if (sinceFade >= FADE_EVERY) {
+            val keep = 0.5f.pow(sinceFade / HALF_LIFE)
+            fade.color4f = Color4f(FLAT, FLAT, FLAT, 1f - keep)
+            c.drawPaint(fade)
+            sinceFade = 0f
+            dirty = true
+        }
         tracers.forEach { t ->
-            val path = t.advance(dt) ?: return@forEach
-            groove(c, path)
+            groove(c, t.advance(dt))
             dirty = true
         }
     }
@@ -176,46 +171,52 @@ private class Garden {
             dirty = false
         }
         val field = snapshot ?: return
-        val shader = Textures.shade(field, ink) ?: return
+        val shader = Textures.shade(field, ink, stone) ?: return
         scope.drawRect(ShaderBrush(shader.asComposeShader()))
         val ball = Textures.ball ?: return
-        val d = (GROOVE * 1.7f).toInt()
+        val d = (GROOVE * 1.6f).toInt().coerceAtLeast(4)
         tracers.forEach { t ->
             val at = t.position
             scope.drawImage(
                 ball,
                 dstOffset = IntOffset((at.x - d / 2f).toInt(), (at.y - d / 2f).toInt()),
                 dstSize = IntSize(d, d),
+                alpha = BALL_ALPHA,
             )
         }
     }
 
     companion object {
-        /** Height-field pixels per window pixel: half, which the shader's linear filter hides. */
+        /** Height-field pixels per window pixel. */
         const val SCALE = 0.5f
 
-        /** Window pixels between the lines of a rake. */
-        const val SPACING = 13f
+        /** The level of smooth sand. */
+        const val FLAT = 0.5f
 
-        /** The width of the ball's groove, window pixels. */
-        const val GROOVE = 7f
+        /** Window pixels: the groove the ball leaves. */
+        const val GROOVE = 5f
 
-        const val RINGS = 6
-        const val MIN_RADIUS = 90f
+        /** Seconds for a trail to fade to half its depth. */
+        const val HALF_LIFE = 9f
+        private const val FADE_EVERY = 1f / 30f
 
-        fun level(h: Float): Int {
-            val v = (h.coerceIn(0f, 1f) * 255f).toInt()
-            return (0xFF shl 24) or (v shl 16) or (v shl 8) or v
-        }
+        /** Smooth sand round the deck, window pixels, and the width of the fade into it. */
+        const val BREATHING = 72f
+        const val FEATHER = 110f
+        private const val EDGE = 36f
+        private const val MIN_RADIUS = 80f
+        private const val BALL_ALPHA = 0.55f
+
+        private val fade = Paint().apply { blendMode = BlendMode.SRC_OVER }
 
         private val ridge = Paint().apply {
             mode = PaintMode.STROKE
-            strokeWidth = GROOVE * 2.1f * SCALE
+            strokeWidth = GROOVE * 2.2f * SCALE
             strokeCap = PaintStrokeCap.ROUND
             strokeJoin = PaintStrokeJoin.ROUND
             isAntiAlias = true
-            color = level(0.63f)
-            maskFilter = MaskFilter.makeBlur(org.jetbrains.skia.FilterBlurMode.NORMAL, GROOVE * 0.32f * SCALE)
+            color4f = Color4f(0.56f, 0.56f, 0.56f, 1f)
+            maskFilter = MaskFilter.makeBlur(FilterBlurMode.NORMAL, GROOVE * 0.4f * SCALE)
         }
         private val trough = Paint().apply {
             mode = PaintMode.STROKE
@@ -223,47 +224,62 @@ private class Garden {
             strokeCap = PaintStrokeCap.ROUND
             strokeJoin = PaintStrokeJoin.ROUND
             isAntiAlias = true
-            color = level(0.26f)
-            maskFilter = MaskFilter.makeBlur(org.jetbrains.skia.FilterBlurMode.NORMAL, GROOVE * 0.28f * SCALE)
+            color4f = Color4f(0.38f, 0.38f, 0.38f, 1f)
+            maskFilter = MaskFilter.makeBlur(FilterBlurMode.NORMAL, GROOVE * 0.35f * SCALE)
         }
 
-        /** A groove along [path] (height-field pixels): a ridge pushed up either side, the trough pressed down the middle. */
-        fun groove(c: org.jetbrains.skia.Canvas, path: Path) {
+        /** A groove along [path] (height-field pixels): a soft ridge either side, a shallow trough between. */
+        fun groove(c: org.jetbrains.skia.Canvas, path: Path?) {
+            if (path == null) return
             c.drawPath(path, ridge)
             c.drawPath(path, trough)
         }
     }
 
-    /** One ball, rolling through its program in a disk of [radius] px about [centre]. */
-    private class Tracer(val centre: Offset, val radius: Float, seed: Int) {
-        private val run = SandPaths.startSeed(seed)
+    /**
+     * One ball, drawing figure after figure in a disk of [radius] about
+     * [centre]. Between two figures it glides — a short, eased line from where
+     * one ended to where the next begins, which leaves its trace like everything
+     * else and fades like everything else.
+     */
+    private class Tracer(val centre: Offset, val radius: Float, private val seed: Int) {
         private var n = 0
-        private var track: SandTrack = SandPaths.first(radius, SPACING, seed)
+        private var figure: SandFigure = SandPaths.figure(0, seed)
         private var s = 0.0
+        private var glide: Pair<Offset, Offset>? = null
+        private var g = 0.0
 
         val position: Offset
-            get() = point(track.at(s))
+            get() = glide?.let { (a, b) -> lerp(a, b, ease(g)) } ?: point(figure.at(s))
 
         private fun point(p: Pair<Double, Double>) = Offset(centre.x + (p.first * radius).toFloat(), centre.y + (p.second * radius).toFloat())
 
-        /** Rolls on for [dt] seconds; the stretch covered, in height-field pixels, to be pressed into the sand. */
         fun advance(dt: Float): Path? {
-            var budget = speed(track.kind) * dt
+            var budget = SPEED * dt
             if (budget <= 0f) return null
-            val start = point(track.at(s))
+            val start = position
             val path = PathBuilder().moveTo(start.x * SCALE, start.y * SCALE)
             var steps = 0
-            while (budget > 0f && steps < 4000) {
+            while (budget > 0f && steps < 2000) {
                 val step = min(STEP, budget)
-                s = SandPaths.advance(track, s, step, radius)
-                if (s >= 1.0) {
-                    val end = point(track.at(1.0))
-                    path.lineTo(end.x * SCALE, end.y * SCALE)
-                    n++
-                    track = SandPaths.track(n, radius, SPACING, track, run)
-                    s = 0.0
+                val route = glide
+                if (route != null) {
+                    val length = hypot(route.second.x - route.first.x, route.second.y - route.first.y).coerceAtLeast(1f)
+                    g += step / length
+                    if (g >= 1.0) glide = null
+                } else {
+                    s = SandPaths.advance(figure::at, s, step, radius)
+                    if (s >= 1.0) {
+                        // The figure is done: the next one, and a glide to where it begins.
+                        val end = point(figure.at(1.0))
+                        n++
+                        figure = SandPaths.figure(n, seed)
+                        s = 0.0
+                        glide = end to point(figure.at(0.0))
+                        g = 0.0
+                    }
                 }
-                val p = point(track.at(s))
+                val p = position
                 path.lineTo(p.x * SCALE, p.y * SCALE)
                 budget -= step
                 steps++
@@ -275,12 +291,11 @@ private class Garden {
             /** Window pixels between the points of a stroke. */
             const val STEP = 1.5f
 
-            /** How fast the ball rolls, px/s: quick through a raking spiral, slower drawing a rose. */
-            fun speed(kind: SandTrack.Kind) = when (kind) {
-                SandTrack.Kind.SPIRAL_OUT -> 460f
-                SandTrack.Kind.SPIRAL_IN -> 300f
-                SandTrack.Kind.ROSE -> 250f
-            }
+            /** How fast the ball rolls: slow enough to be looked past. */
+            const val SPEED = 70f
+
+            fun ease(t: Double) = (t * t * (3 - 2 * t)).toFloat()
+            fun lerp(a: Offset, b: Offset, t: Float) = Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
         }
     }
 }
@@ -296,33 +311,42 @@ private object Textures {
     val ball: ImageBitmap? by lazy { load("ball.png")?.toComposeImageBitmap() }
 
     private const val SKSL = """
-uniform shader height;   // the raked field, SCALE px per window px
+uniform shader height;   // the drawn field, uScale px per window px
 uniform shader grain;    // Blender's sand, tangent-space normals, tiled
-uniform shader albedo;   // Blender's sand, colour (grey), tiled
+uniform shader albedo;   // Blender's sand, grey, tiled
 uniform float uScale;
 uniform float uInk;
 uniform float uRelief;
+uniform float4 uStone;   // the deck in zen, window px: left, top, right, bottom
+uniform float uClear;    // smooth sand this far round it
+uniform float uFeather;  // and this far to fade back in
+
+float boxDistance(float2 p, float4 r) {
+    float2 c = (r.xy + r.zw) * 0.5;
+    float2 h = (r.zw - r.xy) * 0.5;
+    float2 q = abs(p - c) - h;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+}
 
 half4 main(float2 p) {
     float2 q = p * uScale;
-    float hc = height.eval(q).r;
     float hx = height.eval(q + float2(1.0, 0.0)).r - height.eval(q - float2(1.0, 0.0)).r;
     float hy = height.eval(q + float2(0.0, 1.0)).r - height.eval(q - float2(0.0, 1.0)).r;
-    float3 n = normalize(float3(-hx * uRelief, -hy * uRelief, 1.0));
+    // Round the cards the sand lies smooth: whatever was drawn there fades out entirely.
+    float calm = 1.0;
+    if (uStone.z > uStone.x) calm = smoothstep(uClear, uClear + uFeather, boxDistance(p, uStone));
+    float3 n = normalize(float3(-hx * uRelief * calm, -hy * uRelief * calm, 1.0));
     // Blender's normals are y-up; the window is y-down.
     float3 g = grain.eval(p).rgb * 2.0 - 1.0;
     g.y = -g.y;
-    n = normalize(float3(n.xy + g.xy * 0.7, n.z * max(g.z, 0.2)));
-    // A low light from the upper left: grooves read by the side they turn to it.
-    float3 L = normalize(float3(-0.55, -0.62, 0.52));
+    n = normalize(float3(n.xy + g.xy * 0.45, n.z * max(g.z, 0.3)));
+    float3 L = normalize(float3(-0.55, -0.62, 0.62));
     float diff = max(dot(n, L), 0.0);
     float a = albedo.eval(p).r;
-    float lum = a * (0.66 + 0.62 * diff);
-    // The floor of a groove sits in its own shade.
-    lum *= mix(0.84, 1.0, smoothstep(0.22, 0.5, hc));
+    // Soft light and a high floor: the sand is a surface to rest the eye on, not a picture.
+    float lum = a * (0.86 + 0.34 * diff);
     lum = min(lum, 1.0);
-    // Black sand on ink, lit low.
-    if (uInk > 0.5) lum = lum * 0.24;
+    if (uInk > 0.5) lum = lum * 0.2;
     return half4(half3(lum), 1.0);
 }
 """
@@ -331,7 +355,7 @@ half4 main(float2 p) {
         runCatching { RuntimeEffect.makeForShader(SKSL) }.onFailure { println("[zen] sand shader: ${it.message}") }.getOrNull()
     }
 
-    fun shade(field: Image, ink: Boolean): Shader? {
+    fun shade(field: Image, ink: Boolean, stone: Rect): Shader? {
         val e = effect ?: return null
         val n = normal ?: return null
         val a = albedo ?: return null
@@ -342,7 +366,10 @@ half4 main(float2 p) {
             child("albedo", a.makeShader(FilterTileMode.REPEAT, FilterTileMode.REPEAT, linear, null))
             uniform("uScale", Garden.SCALE)
             uniform("uInk", if (ink) 1f else 0f)
-            uniform("uRelief", 7f)
+            uniform("uRelief", 9f)
+            uniform("uStone", stone.left, stone.top, stone.right, stone.bottom)
+            uniform("uClear", Garden.BREATHING)
+            uniform("uFeather", Garden.FEATHER)
         }.makeShader()
     }
 }

@@ -98,9 +98,9 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
     val density = LocalDensity.current
     val lensOn = state.lens != Lens.DECK || state.groupDraft != null
     val crack by animateFloatAsState(if (lensOn) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "crack")
-    val motion = rememberDeckMotion(drag)
-    val origin = remember { floatArrayOf(0f, 0f) }
     val zen = LocalZen.current
+    val motion = rememberDeckMotion(drag, zen)
+    val origin = remember { floatArrayOf(0f, 0f) }
     val grids = remember { mutableMapOf<DeckSection, Rect>() }
 
     BoxWithConstraints(
@@ -265,6 +265,7 @@ private fun DeckSectionPane(
                     .size(contentWidth, gridHeight)
                     .onGloballyPositioned { coords ->
                         val at = coords.positionInWindow()
+                        if (zen.deep == 0f) laid.restOrigin = at
                         // Only the cards: an empty side deck is not part of the stone.
                         if (ids.isNotEmpty()) onGrid(Rect(at.x, at.y, at.x + coords.size.width, at.y + fit.gridHeight)) else onGrid(Rect.Zero)
                         laid.grid = GridGeometry(
@@ -348,7 +349,8 @@ private fun DeckSectionPane(
                                         onAction = { action, at -> CardActions.onDeck(action, at, card, section, position, state, neue) },
                                     ),
                                 motion = {
-                                    val o = laid.grid?.origin ?: Offset.Zero
+                                    // Where the card is at rest: zen's lean works out from there where it has gone.
+                                    val o = laid.restOrigin ?: laid.grid?.origin ?: Offset.Zero
                                     val lean = if (held) LeanPose.REST else motion.poseAt(Offset(o.x + left + place.width / 2f, o.y + top + place.height / 2f))
                                     val pressed = press.pose()
                                     val deep = zen.deep
@@ -394,6 +396,9 @@ private fun DeckSectionPane(
 private class PaneLayout {
     var pane: Rect = Rect.Zero
     var grid: GridGeometry? = null
+
+    /** The grid's origin measured at rest, outside zen's transform. */
+    var restOrigin: Offset? = null
 }
 
 private val NO_EDGES = CellEdges(start = false, top = false, end = false, bottom = false)

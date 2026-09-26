@@ -1,122 +1,178 @@
 package com.kaiharimoto.mastertool.core.layout
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.max
 import kotlin.math.sin
 
 /**
- * What the ball in zen mode's sand garden draws: a kinetic sand table's
- * program. A steel ball rolls through white sand on one unbroken path, and the
- * groove it leaves is the picture — so every track here starts exactly where the
- * last one ended, and the ball never jumps.
+ * One figure a ball draws in zen mode's sand: a closed or nearly closed curve in
+ * the unit disk, traced from `s = 0` to `s = 1`.
  *
- * Three kinds of pass, all in the unit disk:
+ * Six families, each a curve people have drawn with a pin and a string for
+ * centuries, and each with a handful of parameters that give it a different
+ * character:
  *
- * - **Spiral out**, tight enough that each turn lies against the last: it rakes
- *   the whole disk smooth, the way a table erases its previous drawing.
- * - **Spiral in, breathing**: a looser spiral whose radius swells and narrows in
- *   [SandTrack.waves] lobes, so the rings between the turns ripple.
- * - **Rose** — `r = sin(kθ)`, `k = p/q` — the curve that draws petals, which
- *   starts and ends at the centre and so hands the ball back to a spiral.
+ * - **Rose** — `r = sin(kθ)`, `k = p/q`: petals.
+ * - **Hypotrochoid** — a circle rolling inside another, a pen at [c] from its
+ *   centre: the spirograph star.
+ * - **Epitrochoid** — rolling outside: rounded lobes, a flower from the side.
+ * - **Lissajous** — two sines at a ratio: a woven figure.
+ * - **Breathing spiral** — out from the centre and back, its radius swelling in
+ *   lobes: a ripple.
+ * - **Limaçon** — a loop that turns a little each time round, so the loops lay
+ *   down a slow rosette.
  *
- * The angle carries across tracks ([SandTrack.turn]): a spiral in starts at the
- * angle the spiral out finished on, and a rose is turned by it, so no two passes
- * of the program are laid down in the same orientation.
+ * Every family is normalised by its own true maximum radius, so nothing leaves
+ * the disk; [turn] rotates the whole figure and [scale] shrinks it a little, so
+ * the same parameters never land in the same place twice.
  */
-data class SandTrack(
+data class SandFigure(
     val kind: Kind,
-    /** Turns, for a spiral. */
-    val turns: Float = 0f,
-    /** Lobes of a breathing spiral. */
-    val waves: Int = 0,
-    /** A rose's k = p / q. */
-    val p: Int = 0,
-    val q: Int = 1,
-    /** The angle, in radians, the track begins at. */
-    val turn: Float = 0f,
+    val a: Double,
+    val b: Double,
+    val c: Double,
+    val turn: Double,
+    val scale: Double = 1.0,
 ) {
-    enum class Kind { SPIRAL_OUT, SPIRAL_IN, ROSE }
+    enum class Kind { ROSE, HYPOTROCHOID, EPITROCHOID, LISSAJOUS, SPIRAL, LIMACON }
 
-    /** How far round a rose goes before it closes: qπ when p and q are both odd, else 2qπ. */
-    val roseSpan: Double get() = if (p % 2 == 1 && q % 2 == 1) q * PI else 2.0 * q * PI
+    /** The range of the curve's own parameter that closes it. */
+    val span: Double
+        get() = when (kind) {
+            // a = p, b = q: qπ when both are odd, else 2qπ.
+            Kind.ROSE -> if (a.toInt() % 2 == 1 && b.toInt() % 2 == 1) b * PI else 2.0 * b * PI
+            // a = R, b = r (integers): closes after r / gcd(R, r) turns.
+            Kind.HYPOTROCHOID, Kind.EPITROCHOID -> 2.0 * PI * b / gcd(a.toInt(), b.toInt())
+            Kind.LISSAJOUS -> 2.0 * PI
+            // a = turns.
+            Kind.SPIRAL -> 2.0 * PI * a
+            // a = loops.
+            Kind.LIMACON -> 2.0 * PI * a
+        }
 
-    /** The point at [s] in 0..1, in the unit disk. */
     fun at(s: Double): Pair<Double, Double> {
-        val t = s.coerceIn(0.0, 1.0)
-        return when (kind) {
-            Kind.SPIRAL_OUT -> {
-                val a = turn + 2.0 * PI * turns * t
-                t * cos(a) to t * sin(a)
-            }
-            Kind.SPIRAL_IN -> {
-                val a = turn + 2.0 * PI * turns * t
-                // The breath is zero at both ends, so the ends meet their neighbours exactly.
-                val r = (1.0 - t) * (1.0 + 0.16 * 4.0 * t * (1.0 - t) * sin(waves * a))
-                val rr = r.coerceIn(0.0, 1.0)
-                rr * cos(a) to rr * sin(a)
-            }
+        val t = s.coerceIn(0.0, 1.0) * span
+        val (x, y) = when (kind) {
             Kind.ROSE -> {
-                val theta = roseSpan * t
-                val r = sin(p.toDouble() / q * theta)
-                r * cos(theta + turn) to r * sin(theta + turn)
+                val r = sin(a / b * t)
+                r * cos(t) to r * sin(t)
+            }
+            Kind.HYPOTROCHOID -> {
+                val k = (a - b) / b
+                val m = a - b + c
+                ((a - b) * cos(t) + c * cos(k * t)) / m to ((a - b) * sin(t) - c * sin(k * t)) / m
+            }
+            Kind.EPITROCHOID -> {
+                val k = (a + b) / b
+                val m = a + b + c
+                ((a + b) * cos(t) - c * cos(k * t)) / m to ((a + b) * sin(t) - c * sin(k * t)) / m
+            }
+            Kind.LISSAJOUS -> {
+                // a and b are the two frequencies, c the phase; 1/√2 keeps the corners in the disk.
+                val k = 0.7071
+                k * sin(a * t + c) to k * sin(b * t)
+            }
+            Kind.SPIRAL -> {
+                val u = t / span
+                // Out and back in, swelling in b lobes by c.
+                val r = sin(PI * u) * (1.0 - c + c * (0.5 + 0.5 * sin(b * t)))
+                r * cos(t) to r * sin(t)
+            }
+            Kind.LIMACON -> {
+                // A limaçon r = (b + cos φ)/(b + 1), its axis turning once over all a loops.
+                val loop = t % (2.0 * PI)
+                val r = (b + cos(loop)) / (b + 1.0)
+                val axis = t / a
+                r * cos(loop + axis) to r * sin(loop + axis)
             }
         }
+        val ct = cos(turn)
+        val st = sin(turn)
+        return scale * (x * ct - y * st) to scale * (x * st + y * ct)
     }
 
-    /** The angle the track finishes on, which the next one starts from. */
-    val endTurn: Float
-        get() = when (kind) {
-            Kind.SPIRAL_OUT, Kind.SPIRAL_IN -> (turn + 2.0 * PI * turns).rem(2.0 * PI).toFloat()
-            Kind.ROSE -> turn
-        }
+    private fun gcd(x: Int, y: Int): Int = if (y == 0) abs(x).coerceAtLeast(1) else gcd(y, x % y)
 }
 
 object SandPaths {
 
-    /** The roses the program cycles through: five, fourteen, eight and eleven petals' worth of spirograph. */
-    private val ROSES = listOf(5 to 3, 7 to 4, 8 to 5, 11 to 6)
+    private val ROSES = listOf(5.0 to 3.0, 7.0 to 4.0, 8.0 to 5.0, 11.0 to 6.0, 4.0 to 1.0, 3.0 to 1.0, 7.0 to 3.0)
+    private val HYPO = listOf(Triple(5.0, 3.0, 5.0), Triple(7.0, 4.0, 4.0), Triple(8.0, 5.0, 3.0), Triple(9.0, 4.0, 6.0), Triple(10.0, 7.0, 7.0), Triple(11.0, 3.0, 4.0))
+    private val EPI = listOf(Triple(3.0, 1.0, 1.0), Triple(5.0, 2.0, 1.5), Triple(4.0, 1.0, 2.0), Triple(7.0, 2.0, 2.0), Triple(6.0, 5.0, 3.0))
+    private val LISSA = listOf(Triple(3.0, 2.0, PI / 2), Triple(5.0, 4.0, PI / 4), Triple(3.0, 4.0, PI / 2), Triple(5.0, 6.0, PI / 3), Triple(1.0, 2.0, PI / 4))
 
     /**
-     * The [n]th track of a program for a disk of [radius] px raked at [spacing]
-     * px, after a track that ended on [previous]'s angle. The cycle is: rake it
-     * smooth, breathe back in, draw a rose; with the roses taken in turn and
-     * [seed] choosing where a garden's program begins.
+     * The [n]th figure a ball with [seed] draws. Deterministic — the same garden
+     * always draws the same things — but it never draws the same family twice
+     * running, and it cycles through the families in an order that changes every
+     * cycle, so the sequence has no period a person would notice.
      */
-    fun track(n: Int, radius: Float, spacing: Float, previous: SandTrack?, seed: Int = 0): SandTrack {
-        val turn = previous?.endTurn ?: 0f
-        val dense = max(4f, radius / spacing)
-        return when ((n + seed) % 3) {
-            0 -> SandTrack(SandTrack.Kind.SPIRAL_OUT, turns = dense, turn = turn)
-            1 -> SandTrack(SandTrack.Kind.SPIRAL_IN, turns = max(3f, dense * 0.45f), waves = 5 + ((n + seed) / 3) % 4, turn = turn)
-            else -> {
-                val (p, q) = ROSES[((n + seed) / 3) % ROSES.size]
-                SandTrack(SandTrack.Kind.ROSE, p = p, q = q, turn = turn + 0.37f * n)
-            }
+    fun figure(n: Int, seed: Int): SandFigure {
+        val kind = kindAt(n, seed)
+        val h = hash(seed * 31 + 7, n)
+        val turn = (h % 3600) / 3600.0 * 2.0 * PI
+        val scale = 0.86 + ((h ushr 12) % 140) / 1000.0
+        fun <T> pick(list: List<T>) = list[((h ushr 4) % list.size)]
+        return when (kind) {
+            SandFigure.Kind.ROSE -> pick(ROSES).let { (p, q) -> SandFigure(kind, p, q, 0.0, turn, scale) }
+            SandFigure.Kind.HYPOTROCHOID -> pick(HYPO).let { (r1, r2, d) -> SandFigure(kind, r1, r2, d, turn, scale) }
+            SandFigure.Kind.EPITROCHOID -> pick(EPI).let { (r1, r2, d) -> SandFigure(kind, r1, r2, d, turn, scale) }
+            SandFigure.Kind.LISSAJOUS -> pick(LISSA).let { (fa, fb, ph) -> SandFigure(kind, fa, fb, ph, turn, scale) }
+            SandFigure.Kind.SPIRAL -> SandFigure(kind, 7.0 + (h ushr 6) % 7, 5.0 + (h ushr 9) % 5, 0.12 + ((h ushr 3) % 8) / 100.0, turn, scale)
+            SandFigure.Kind.LIMACON -> SandFigure(kind, 9.0 + (h ushr 7) % 8, 0.4 + ((h ushr 5) % 5) / 10.0, 0.0, turn, scale)
         }
     }
 
     /**
-     * The seed a program actually runs on. A spiral out and a rose start at the
-     * centre, but a spiral in starts at the rim, so a seed that would open on one
-     * is moved on to the rose after it. Pass this, not the raw seed, to [track].
+     * The family of the [n]th figure: each cycle is a fresh permutation of all
+     * six, so nothing repeats inside a cycle, and where two cycles meet, a
+     * permutation that would open on the family the last one closed on swaps its
+     * first two.
      */
-    fun startSeed(seed: Int): Int = if (seed % 3 == 1) seed + 1 else seed
-
-    /** The first track of the program [startSeed] runs, which begins at the centre. */
-    fun first(radius: Float, spacing: Float, seed: Int): SandTrack = track(0, radius, spacing, null, startSeed(seed))
+    fun kindAt(n: Int, seed: Int): SandFigure.Kind {
+        val kinds = SandFigure.Kind.entries
+        val cycle = n / kinds.size
+        val order = shuffled(kinds.size, hash(seed, cycle))
+        if (cycle > 0 && order[0] == shuffled(kinds.size, hash(seed, cycle - 1)).last()) {
+            val t = order[0]; order[0] = order[1]; order[1] = t
+        }
+        return kinds[order[n % kinds.size]]
+    }
 
     /**
-     * How far along [track] to move so the ball covers [stepPx] on a disk of
+     * How far along a curve to move so the ball covers [stepPx] on a disk of
      * [radiusPx]: arc length, not parameter, so the ball rolls at one speed
-     * through the tight middle of a spiral and round its wide rim alike.
+     * through a tight petal and round a wide loop alike.
      */
-    fun advance(track: SandTrack, s: Double, stepPx: Float, radiusPx: Float): Double {
+    fun advance(curve: (Double) -> Pair<Double, Double>, s: Double, stepPx: Float, radiusPx: Float): Double {
         val h = 1e-5
-        val (x0, y0) = track.at(s)
-        val (x1, y1) = track.at((s + h).coerceAtMost(1.0))
+        val (x0, y0) = curve(s)
+        val (x1, y1) = curve((s + h).coerceAtMost(1.0))
         val speed = hypot(x1 - x0, y1 - y0) / h * radiusPx
         return s + if (speed < 1e-6) h else stepPx / speed
+    }
+
+    /** A fixed permutation of 0 until [size] for [key]: Fisher–Yates on an integer hash. */
+    private fun shuffled(size: Int, key: Int): IntArray {
+        val out = IntArray(size) { it }
+        var h = key
+        for (i in size - 1 downTo 1) {
+            h = hash(h, i)
+            val j = (h ushr 1) % (i + 1)
+            val t = out[i]; out[i] = out[j]; out[j] = t
+        }
+        return out
+    }
+
+    private fun hash(a: Int, b: Int): Int {
+        var h = a * 0x27D4EB2D xor b * 0x165667B1
+        h = h xor (h ushr 15)
+        h *= 0x2C1B3C6D
+        h = h xor (h ushr 12)
+        h *= 0x297A2D39
+        h = h xor (h ushr 15)
+        return h and 0x7FFFFFFF
     }
 }

@@ -1,7 +1,7 @@
 package com.kaiharimoto.mastertool.core.motion
 
 import com.kaiharimoto.mastertool.core.layout.SandPaths
-import com.kaiharimoto.mastertool.core.layout.SandTrack
+import com.kaiharimoto.mastertool.core.layout.SandFigure
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.test.Test
@@ -30,8 +30,8 @@ class ZenTest {
         assertEquals(960f, cx, 0.5f)
         assertEquals(540f, cy, 0.5f)
         // The deck takes no more than its share of the width, or of the height.
-        assertTrue(1000f * stage.scale <= 1920f * 0.58f + 0.5f)
-        assertTrue(800f * stage.scale <= 1080f * 0.86f + 0.5f)
+        assertTrue(1000f * stage.scale <= 1920f * 0.52f + 0.5f)
+        assertTrue(800f * stage.scale <= 1080f * 0.8f + 0.5f)
         // At zero it is where it was.
         assertEquals(400f to 100f, stage.apply(400f, 100f, 900f, 500f, 0f))
     }
@@ -53,53 +53,65 @@ class ZenTest {
     }
 
     @Test
-    fun theBallNeverJumpsBetweenTracks() {
-        for (seed in 0 until 3) {
-            val run = SandPaths.startSeed(seed)
-            var track = SandPaths.first(radius = 300f, spacing = 12f, seed = seed)
-            repeat(24) { n ->
-                val next = SandPaths.track(n + 1, 300f, 12f, track, seed = run)
-                val (ex, ey) = track.at(1.0)
-                val (sx, sy) = next.at(0.0)
-                assertTrue(hypot(ex - sx, ey - sy) < 1e-3, "seed $seed track $n (${track.kind}) ends at ($ex,$ey), ${next.kind} starts at ($sx,$sy)")
-                track = next
+    fun everyFigureStaysInTheDisk() {
+        for (seed in 0 until 3) for (n in 0 until 60) {
+            val f = SandPaths.figure(n, seed)
+            for (i in 0..3000) {
+                val (x, y) = f.at(i / 3000.0)
+                assertTrue(hypot(x, y) <= 1.0 + 1e-9, "${f.kind} $f leaves the disk")
             }
         }
     }
 
     @Test
-    fun everyProgramBeginsAtTheCentre() {
-        for (seed in 0 until 6) {
-            val (x, y) = SandPaths.first(300f, 12f, seed).at(0.0)
-            assertTrue(hypot(x, y) < 1e-6, "seed $seed")
+    fun theGardenNeverDrawsTheSameFamilyTwiceRunning() {
+        for (seed in 0 until 4) {
+            val kinds = (0 until 400).map { SandPaths.kindAt(it, seed) }
+            kinds.zipWithNext().forEachIndexed { i, (a, b) -> assertNotEquals(a, b, "seed $seed at $i") }
+            // Every family turns up in every stretch of a cycle's length.
+            kinds.windowed(SandFigure.Kind.entries.size, SandFigure.Kind.entries.size).forEach {
+                assertEquals(SandFigure.Kind.entries.toSet(), it.toSet())
+            }
         }
+        // Two gardens side by side do not draw in step.
+        assertNotEquals((0 until 12).map { SandPaths.kindAt(it, 0) }, (0 until 12).map { SandPaths.kindAt(it, 2) })
     }
 
     @Test
-    fun everyTrackStaysInTheDisk() {
-        var track = SandPaths.first(300f, 12f, 1)
-        repeat(12) { n ->
-            for (i in 0..2000) {
-                val (x, y) = track.at(i / 2000.0)
-                assertTrue(hypot(x, y) <= 1.0 + 1e-9, "${track.kind} leaves the disk")
-            }
-            track = SandPaths.track(n + 1, 300f, 12f, track, SandPaths.startSeed(1))
+    fun theSameGardenDrawsTheSameFigures() {
+        assertEquals(SandPaths.figure(17, 3), SandPaths.figure(17, 3))
+        assertNotEquals(SandPaths.figure(17, 3), SandPaths.figure(18, 3))
+    }
+
+    @Test
+    fun closedFiguresClose() {
+        for (n in 0 until 30) {
+            val f = SandPaths.figure(n, 1)
+            if (f.kind == SandFigure.Kind.SPIRAL || f.kind == SandFigure.Kind.LIMACON) continue
+            val (x0, y0) = f.at(0.0)
+            val (x1, y1) = f.at(1.0)
+            assertTrue(hypot(x1 - x0, y1 - y0) < 1e-6, "${f.kind} $f does not close")
         }
     }
 
     @Test
     fun theBallRollsAtOneSpeed() {
-        for (track in listOf(SandTrack(SandTrack.Kind.SPIRAL_OUT, turns = 20f), SandTrack(SandTrack.Kind.ROSE, p = 7, q = 4))) {
-            var s = 0.05
-            val steps = mutableListOf<Double>()
-            repeat(400) {
-                val next = SandPaths.advance(track, s, 2f, 300f)
-                val (x0, y0) = track.at(s)
-                val (x1, y1) = track.at(next)
-                steps += hypot(x1 - x0, y1 - y0) * 300.0
+        for (f in listOf(SandPaths.figure(0, 0), SandPaths.figure(1, 0), SandPaths.figure(2, 0))) {
+            var s = 0.02
+            repeat(300) {
+                val next = SandPaths.advance(f::at, s, 2f, 300f)
+                val (x0, y0) = f.at(s)
+                val (x1, y1) = f.at(next)
+                assertEquals(2.0, hypot(x1 - x0, y1 - y0) * 300.0, 0.25)
                 s = next
             }
-            steps.forEach { assertEquals(2.0, it, 0.2) }
         }
+    }
+
+    @Test
+    fun theDreamyLeanIsWiderAndGentler() {
+        // Two cards away the builder's bump has all but gone; zen's has not.
+        assertTrue(abs(DeskLean.dreamy(2f, 0f).rotationY) > abs(DeskLean.toward(2f, 0f).rotationY))
+        assertTrue(abs(DeskLean.dreamy(0.45f, 0f).rotationY) < abs(DeskLean.toward(0.45f, 0f).rotationY))
     }
 }

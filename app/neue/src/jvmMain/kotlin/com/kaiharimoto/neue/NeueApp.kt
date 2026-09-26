@@ -411,11 +411,18 @@ private fun Shell(h: NeueHolders) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val at = event.changes.firstOrNull()?.position
                         val gone = event.type == PointerEventType.Exit
-                        // Any real movement, any press, any scroll: the person is back.
-                        // A pointer that twitches a pixel on a desk is not.
+                        // Where the pointer is, for the deck to turn toward in zen.
+                        if (neue.immersive) h.zen.pointer = if (gone) null else at
+                        // Waking. Before zen is deep, any real movement, press or scroll brings
+                        // the builder back (a pointer that twitches a pixel on a desk does not).
+                        // Once it is deep, only a click or a key does: the pointer is free to
+                        // wander and the deck follows it, and the click that wakes it is spent
+                        // on waking — it does not also land on a card.
+                        val deepZen = neue.zen == ZenPhase.DEEP
                         when (event.type) {
-                            PointerEventType.Press, PointerEventType.Scroll -> h.wake()
-                            PointerEventType.Move -> if (at != null) {
+                            PointerEventType.Press -> if (h.wake() == ZenPhase.DEEP) event.changes.forEach { it.consume() }
+                            PointerEventType.Scroll -> if (!deepZen) h.wake()
+                            PointerEventType.Move -> if (at != null && !deepZen) {
                                 if (!still.isSpecified || (at - still).getDistance() > 3f) {
                                     still = at
                                     h.wake()
@@ -440,7 +447,7 @@ private fun Shell(h: NeueHolders) {
                             bottomHeight = measured.bottom.toFloat(),
                             immersive = neue.immersive,
                             holdTop = state.textInputFocused && !neue.searchFocused,
-                            suppress = h.drag.held != null || neue.menu != null,
+                            suppress = h.drag.held != null || neue.menu != null || neue.zen == ZenPhase.DEEP,
                         )
                     }
                 }

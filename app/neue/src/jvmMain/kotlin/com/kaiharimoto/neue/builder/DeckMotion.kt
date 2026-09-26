@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import com.kaiharimoto.mastertool.core.motion.DeskLean
 import com.kaiharimoto.mastertool.core.motion.LeanField
 import com.kaiharimoto.mastertool.core.motion.LeanPose
+import com.kaiharimoto.neue.zen.ZenLayer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 
@@ -23,10 +24,14 @@ import kotlinx.coroutines.isActive
  * (bulk state in one place, per-card reads in the layer).
  *
  * It follows the pointer over the deck, and the card in the air while one is
- * being carried, so the deck makes way for a card as it passes over.
+ * being carried, so the deck makes way for a card as it passes over. In zen a
+ * second field takes over — slower to follow, slower to fade, and wider
+ * (`DeskLean.dreamy`) — and follows the pointer anywhere in the window, so the
+ * floating deck turns toward it like things on water.
  */
-class DeckMotion(private val drag: NeueDrag) {
+class DeckMotion(private val drag: NeueDrag, private val zen: ZenLayer) {
     private val field = LeanField()
+    private val dream = LeanField.dreamy()
 
     /** The pointer over the deck, in window pixels; null when it is elsewhere. */
     var hover by mutableStateOf<Offset?>(null)
@@ -37,36 +42,60 @@ class DeckMotion(private val drag: NeueDrag) {
     private var x by mutableFloatStateOf(0f)
     private var y by mutableFloatStateOf(0f)
     private var presence by mutableFloatStateOf(0f)
+    private var dx by mutableFloatStateOf(0f)
+    private var dy by mutableFloatStateOf(0f)
+    private var dreaming by mutableFloatStateOf(0f)
 
-    /** Where the bump is aimed this instant. */
-    fun aim(): Offset? = if (drag.held != null) drag.pointer else hover
-
-    fun poseAt(centre: Offset): LeanPose {
-        val p = presence
-        if (p <= 0f) return LeanPose.REST
-        val w = cardWidth.coerceAtLeast(1f)
-        return DeskLean.toward((x - centre.x) / w, (y - centre.y) / w, p)
+    /** Where the builder's bump is aimed this instant: nowhere once zen has the deck. */
+    fun aim(): Offset? = when {
+        zen.deep > 0.5f -> null
+        drag.held != null -> drag.pointer
+        else -> hover
     }
 
-    /** The point the bump is at, while it is present: which card to draw on top. */
+    /** Where zen's bump is aimed: the pointer anywhere in the window, while zen is deep. */
+    fun dreamAim(): Offset? = if (zen.deep > 0f) zen.pointer else null
+
+    /**
+     * The lean of a card whose centre is at [centre] at rest, [width] px wide. In
+     * zen the card is somewhere else — scaled and moved with the deck — so zen's
+     * bump is measured where the card is actually drawn.
+     */
+    fun poseAt(centre: Offset, width: Float = cardWidth): LeanPose {
+        val w = width.coerceAtLeast(1f)
+        val p = presence
+        val builder = if (p > 0f) DeskLean.toward((x - centre.x) / w, (y - centre.y) / w, p) else LeanPose.REST
+        val d = dreaming
+        val amount = zen.deep
+        if (d <= 0f || amount <= 0f || zen.deck.width <= 0f) return builder
+        val stage = zen.stage
+        val (cx, cy) = stage.apply(centre.x, centre.y, zen.deck.center.x, zen.deck.center.y, amount)
+        val scale = 1f + (stage.scale - 1f) * amount
+        return builder + DeskLean.dreamy((dx - cx) / (w * scale), (dy - cy) / (w * scale), d)
+    }
+
+    /** The point the builder's bump is at, while it is present: which card to draw on top. */
     fun point(): Offset? = if (presence > 0.05f) Offset(x, y) else null
 
     internal suspend fun run() {
         var last = 0L
         while (kotlin.coroutines.coroutineContext.isActive) {
             val aim = aim()
+            val dreamAim = dreamAim()
             if (aim != null) field.aim(aim.x, aim.y) else field.release()
-            if (field.settled) {
+            if (dreamAim != null) dream.aim(dreamAim.x, dreamAim.y) else dream.release()
+            if (field.settled && dream.settled) {
                 publish()
                 last = 0L
                 // Nothing moves until the pointer does: the loop sleeps rather than idles.
-                snapshotFlow { aim() }.first { it != aim }
+                snapshotFlow { aim() to dreamAim() }.first { it != (aim to dreamAim) }
                 continue
             }
             withFrameNanos { now ->
                 val dt = if (last == 0L) 1f / 60f else ((now - last) / 1e9f).coerceIn(0f, 0.1f)
                 last = now
                 field.step(dt)
+                dream.step(dt)
                 publish()
             }
         }
@@ -76,12 +105,15 @@ class DeckMotion(private val drag: NeueDrag) {
         x = field.x
         y = field.y
         presence = field.presence
+        dx = dream.x
+        dy = dream.y
+        dreaming = dream.presence
     }
 }
 
 @Composable
-fun rememberDeckMotion(drag: NeueDrag): DeckMotion {
-    val motion = remember(drag) { DeckMotion(drag) }
+fun rememberDeckMotion(drag: NeueDrag, zen: ZenLayer): DeckMotion {
+    val motion = remember(drag, zen) { DeckMotion(drag, zen) }
     LaunchedEffect(motion) { motion.run() }
     return motion
 }

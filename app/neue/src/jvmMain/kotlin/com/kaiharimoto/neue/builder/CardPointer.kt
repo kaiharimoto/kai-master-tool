@@ -115,7 +115,8 @@ fun Modifier.cardPointer(
         .onPointerEvent(PointerEventType.Exit) { if (neue.hovered == heldCard) neue.hovered = null }
         .pointerInput(dragEnabled, from) {
             awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
+                // A press something above has already spent (the click that wakes zen) is not a card's.
+                val down = awaitFirstDown(requireUnconsumed = true)
                 val buttons = currentEvent.buttons
                 val shift = currentEvent.keyboardModifiers.isShiftPressed
                 if (buttons.isSecondaryPressed) {

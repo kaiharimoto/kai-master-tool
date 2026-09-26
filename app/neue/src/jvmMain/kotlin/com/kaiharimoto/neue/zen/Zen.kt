@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.zen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -28,6 +30,9 @@ class ZenLayer {
     var quiet by mutableFloatStateOf(0f)
     var deep by mutableFloatStateOf(0f)
     var time by mutableFloatStateOf(0f)
+
+    /** Where the pointer is in the window while immersive, for the deck to turn toward in zen. */
+    var pointer by mutableStateOf<Offset?>(null)
 
     /** The window, in pixels, which the deck is centred in. Plain: only layers read it. */
     var window: Size = Size.Zero

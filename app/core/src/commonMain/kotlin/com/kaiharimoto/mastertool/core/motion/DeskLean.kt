@@ -106,6 +106,20 @@ object DeskLean {
         )
     }
 
+    /** How much wider zen's bump is than the builder's. */
+    const val DREAM_REACH = 1.8f
+
+    /**
+     * Zen's lean: the same bump, spread nearly twice as wide and a little gentler,
+     * so the floating deck turns toward the pointer like things on water rather
+     * than cards on a desk. It is paired with a slower [LeanField] (`LeanField.dreamy`)
+     * — most of the dream is in the timing.
+     */
+    fun dreamy(dx: Float, dy: Float, presence: Float = 1f): LeanPose {
+        val p = toward(dx / DREAM_REACH, dy / DREAM_REACH, presence)
+        return p.copy(rotationX = p.rotationX * 0.9f, rotationY = p.rotationY * 0.9f, lift = p.lift * 0.6f)
+    }
+
     /**
      * A carried card: it trails the pointer by ([lagX], [lagY]) card widths
      * (pointer minus where the card has caught up to), and leans back against
@@ -152,6 +166,11 @@ class LeanField(
     private val fadeInHalfLife: Float = 0.06f,
     private val fadeOutHalfLife: Float = 0.12f,
 ) {
+    companion object {
+        /** Zen's field: it follows the pointer over a quarter of a second and fades over most of one. */
+        fun dreamy() = LeanField(followHalfLife = 0.26f, fadeInHalfLife = 0.4f, fadeOutHalfLife = 0.8f)
+    }
+
     var x: Float = 0f
         private set
     var y: Float = 0f

@@ -44,7 +44,7 @@ object ZenClock {
  * the deck's own centre and a move that puts that centre in the middle of the
  * window, sized so the deck fills [fillWidth] of the window's width or
  * [fillHeight] of its height, whichever is reached first — leaving the sides for
- * the garden.
+ * the garden, with room to breathe between the two.
  */
 data class ZenStage(val scale: Float, val dx: Float, val dy: Float) {
     companion object {
@@ -57,8 +57,8 @@ data class ZenStage(val scale: Float, val dx: Float, val dy: Float) {
             deckHeight: Float,
             windowWidth: Float,
             windowHeight: Float,
-            fillWidth: Float = 0.58f,
-            fillHeight: Float = 0.86f,
+            fillWidth: Float = 0.52f,
+            fillHeight: Float = 0.8f,
         ): ZenStage {
             if (deckWidth <= 0f || deckHeight <= 0f || windowWidth <= 0f || windowHeight <= 0f) return NONE
             val scale = min(windowWidth * fillWidth / deckWidth, windowHeight * fillHeight / deckHeight).coerceIn(0.6f, 2.2f)

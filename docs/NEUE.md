@@ -229,34 +229,43 @@ In immersive mode, on the builder, doing nothing is a mode too
 
 - **Three seconds** idle: everything that is not a card fades — the strips, the
   rules, the search and its controls, the inspector's text, the scrollbars. The
-  cards stay exactly where they are.
-- **Ten seconds**: the pool and the inspector go too, and the deck comes to the
-  middle of the window and grows into it (`ZenStage`: a transform about its own
-  centre, never a re-fit), each card floating on its own slow clock
-  (`ZenFloat`: sums of sines, six to thirteen seconds, phases hashed from the
-  card's place so no two neighbours move in step, and a lean large enough for
-  the foil to catch the light). Behind it a **sand garden** is raked.
-- **Any movement** (more than three pixels), press, scroll or key brings it all
-  back: the deck floats home and the chrome returns a little slower than it left.
-  The first key after deep zen only wakes the builder.
+  cards stay exactly where they are. Any movement brings it back.
+- **Ten seconds**: this is zen. The pool and the inspector go too, and the deck
+  comes to the middle of the window and grows into it, leaving the sides free
+  (`ZenStage`: a transform about its own centre, never a re-fit), each card
+  floating on its own slow clock (`ZenFloat`). Behind it, a sand garden.
+- **In zen the pointer is free.** Moving it wakes nothing; the deck turns toward
+  it on a slower, wider lean (`DeskLean.dreamy`, followed by `LeanField.dreamy`
+  over a quarter of a second and faded over most of one) — floating, not
+  handled. **Only a click or a key ends zen**, and that click or key is spent on
+  waking: it lands on no card and runs no shortcut. The deck floats home and the
+  chrome returns a little slower than it left.
 
-The garden (`zen/SandGarden.kt`) is a height field drawn into as it is raked. It
-opens raked in straight lines, with rings round the deck as the stone, a
-karesansui. Then a steel ball either side of the deck rolls through it on the
-programs in `core/layout/SandPaths.kt`: a spiral out that rakes a disk smooth, a
-spiral that breathes back in, a rose (`r = sin(kθ)`), and round again. Every
-track starts where the last one ended, so the ball never jumps, and `ZenTest`
-holds that. Each stretch is pressed into a groove with a ridge either side, over
-whatever was there, as a kinetic sand table draws. A runtime shader lights the
-field from its own slope with a low key from the upper left, over the grain of
-real sand: a normal map and an albedo **baked in Blender** (`tools/zen/garden.py`,
-tileable), with Blender's steel ball on top. White sand on paper, black on ink,
-and never a colour.
+**The garden is to be looked past, not at** — kai's word on the first one, which
+raked the whole window in lines and rings, was that it was distracting and
+crowded the cards. So: plain, smooth sand; a ball either side of the deck,
+drawing one figure after another from `core/layout/SandPaths.kt` — roses,
+spirograph stars (hypotrochoids) and flowers (epitrochoids), Lissajous weaves,
+breathing spirals, turning limaçon loops — slowly (70 px/s), as a shallow groove;
+and **every trail fades back into the sand as it is drawn** (a half-life of nine
+seconds), so the garden loops forever without filling up. The families come in
+a fresh order each cycle and never twice running, each figure turned and sized
+afresh (`ZenTest` holds both). The cards keep their distance twice over: the
+figures' disks are placed clear of the deck, and the shader lies the sand
+smooth for 72 px round it and fades back in over 110 more.
 
-Nothing idles: the phase clock sleeps until the next boundary, and the float
-and the garden run only while zen is deep. Fades are read in layers, so zen
-redraws and never recomposes. `tools/shoot.sh --neue --zen=deep --zen-seconds=12`
-photographs it; `--zen-frames=60,12` writes the frames of a GIF.
+It is a height field in half-float — so a fade of a fraction of a percent a
+frame is not rounded away, which in eight bits leaves every trail a permanent
+ghost — lit by a runtime shader from its own slope, low and soft, over the
+grain of real sand: a normal map and an albedo **baked in Blender**
+(`tools/zen/garden.py`, tileable), with Blender's steel ball, half there, on
+top. White sand on paper, black on ink, and never a colour.
+
+Nothing idles: the phase clock sleeps until the next boundary, and the float,
+the lean and the garden run only while zen is deep. Fades are read in layers, so
+zen redraws and never recomposes. `tools/shoot.sh --neue --zen=deep
+--zen-seconds=20 --hover=x,y` photographs it; `--zen-frames=60,12` writes the
+frames of a GIF.
 
 ### 4a. Groups
 
