@@ -233,7 +233,7 @@ In immersive mode, on the builder, doing nothing is a mode too
 - **Ten seconds**: this is zen. The pool and the inspector go too, and the deck
   comes to the middle of the window and grows into it, leaving the sides free
   (`ZenStage`: a transform about its own centre, never a re-fit), each card
-  floating on its own slow clock (`ZenFloat`). Behind it, a sand garden.
+  floating on its own slow clock (`ZenFloat`). Under it, a raked garden.
 - **In zen the pointer is free.** Moving it wakes nothing; the deck turns toward
   it on a slower, wider lean (`DeskLean.dreamy`, followed by `LeanField.dreamy`
   over a quarter of a second and faded over most of one) — floating, not
@@ -241,31 +241,46 @@ In immersive mode, on the builder, doing nothing is a mode too
   waking: it lands on no card and runs no shortcut. The deck floats home and the
   chrome returns a little slower than it left.
 
-**The garden is to be looked past, not at** — kai's word on the first one, which
-raked the whole window in lines and rings, was that it was distracting and
-crowded the cards. So: plain, smooth sand; a ball either side of the deck,
-drawing one figure after another from `core/layout/SandPaths.kt` — roses,
-spirograph stars (hypotrochoids) and flowers (epitrochoids), Lissajous weaves,
-breathing spirals, turning limaçon loops — slowly (70 px/s), as a shallow groove;
-and **every trail fades back into the sand as it is drawn** (a half-life of twelve
-seconds), so the garden loops forever without filling up. The families come in
-a fresh order each cycle and never twice running, each figure turned and sized
-afresh (`ZenTest` holds both). The cards keep their distance twice over: the
-figures' disks are placed clear of the deck, and the shader lies the sand
-smooth for 72 px round it and fades back in over 110 more.
+**The garden is a karesansui, raked under the cards** — kai's third brief, after
+a first garden that crowded the deck and a second of two balls drawing loops at
+the sides: *a real zen garden uses rakes, the patterns should feel underneath
+the cards, span the entire page, and converge before being wiped by a bigger
+rake in one sweep.* The whole window is gravel and the floating deck is its
+great stone (`core/layout/RakeGarden.kt`, `neue/zen/SandGarden.kt`):
 
-It is a height field in half-float — so a fade of a fraction of a percent a
-frame is not rounded away, which in eight bits leaves every trail a permanent
-ghost — lit by a runtime shader from its own slope, low and soft, over the
-grain of real sand: a normal map and an albedo **baked in Blender**
-(`tools/zen/garden.py`, tileable), with Blender's steel ball, half there, on
-top. White sand on paper, black on ink, and never a colour.
+- It opens raked in **straight lines** (chokusen), which stay under the deck.
+- A **composition** is raked over them — one of the classical samon: ripples
+  (mizumon) round the deck and three small stones, the checkerboard (ichimatsu),
+  the blue-sea waves (seigaiha), whirlpools (uzumaki) or flowing water (ryūsui)
+  — by several six-tine rakes at once, from different places, **whose work
+  converges**: rings from each stone meet halfway between, the waves and the
+  water are raked from top and bottom to the middle, the checkerboard from all
+  four corners in. A composition takes a minute or two.
+- It is **held eight seconds**, then **one wide rake sweeps it back** to
+  straight lines in a single pass, eased in and out (a smoothstep, top speed
+  300 px/s), and the next composition begins — never the one just wiped.
+- **The rakes are invisible**, on kai's instruction: the pattern draws itself,
+  and all that shows of a rake is the gravel heaped just ahead of its tines.
+
+Every samon is a pure function of position: `RakeLayer.phase` says which
+groove is at a point and `RakeLayer.reveal` when it is raked, and the SkSL is
+a line-for-line copy of both, so the garden remembers nothing between frames
+and any moment of it can be drawn directly. The rakes that are never drawn are
+still modelled (`RakeLayer.heads`), because they are what keep the pattern
+honest: `RakeGardenTest` holds every reveal to the edge a real rake, moving at
+a real speed, is cutting. A groove's trough is at a half line — where a tine
+runs. The grain is a normal map and an albedo **baked in Blender**
+(`tools/zen/garden.py`, tileable). White gravel on paper, black on ink, and
+never a colour. `GardenShaderTest` fails the build if the SkSL stops
+compiling, which in the app is only a log line and an empty zen.
 
 Nothing idles: the phase clock sleeps until the next boundary, and the float,
 the lean and the garden run only while zen is deep. Fades are read in layers, so
 zen redraws and never recomposes. `tools/shoot.sh --neue --zen=deep
---zen-seconds=20 --hover=x,y` photographs it; `--zen-frames=60,12` writes the
-frames of a GIF.
+--zen-seconds=20 --hover=x,y` photographs it, `--garden-plan` prints when each
+composition is raked, held and swept, and `--garden-times=45,122,131` takes a
+still at each garden time. `GardenReel` (in `:neue`'s tests) draws the garden
+alone, a second a frame instead of a minute a still, and renders a reel.
 
 ### 4a. Groups
 

@@ -143,7 +143,7 @@ class RakeGardenTest {
         val sweep = program.at(t)
         assertEquals(Samon.CHOKUSEN, sweep.top?.samon)
         assertEquals(first.samon, sweep.base.samon)
-        assertTrue(sweep.heads.single().wide)
+        assertTrue(sweep.top!!.heads(sweep.topTime).single().wide)
     }
 
     @Test

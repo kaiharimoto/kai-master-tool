@@ -36,8 +36,11 @@ data class GardenPoint(val x: Float, val y: Float)
 
 /**
  * A rake head where it is this instant: its centre, the direction it is being
- * drawn in (radians; its bar lies across that, and its handle trails behind),
- * how long the bar is, and whether it is the wide rake that wipes the garden.
+ * drawn in (radians; its bar lies across that), how long the bar is, and
+ * whether it is the wide rake that wipes the garden. The app never draws one —
+ * the rakes are invisible and the pattern draws itself — but the rakes are what
+ * make the pattern honest: a head is a real rake moving at a real speed, and
+ * `RakeGardenTest` holds [RakeLayer.reveal] to the edge each head is cutting.
  */
 data class RakeHead(val x: Float, val y: Float, val heading: Float, val length: Float, val wide: Boolean = false)
 
@@ -49,9 +52,10 @@ data class RakeHead(val x: Float, val y: Float, val heading: Float, val length: 
  * pattern at a point is [phase] — which groove, counted in lines — and the
  * moment it is raked is [reveal], in seconds from the layer's start. The garden
  * shader evaluates the same two functions per pixel (its SkSL is a line-for-line
- * copy), so the garden needs no memory of what was drawn, any moment of it can
- * be drawn directly, and the rake heads ([heads]) are always exactly at the edge
- * of the fresh sand — `RakeGardenTest` holds them to it.
+ * copy), so the garden needs no memory of what was drawn and any moment of it can
+ * be drawn directly. The rakes that do the work ([heads]) are never shown, but
+ * they are always exactly at the edge of the fresh sand — `RakeGardenTest`
+ * holds them to it — so the edge moves the way a raked garden grows.
  *
  * Every layer is raked by several rakes at once, from different places, whose
  * work meets: rings from each stone meet along the line halfway between; the
@@ -525,7 +529,7 @@ class RakeProgram(
     private val seed: Int = 0,
 ) {
     /** What the garden is doing at a moment: the layer underneath, the one being raked over it, and how far in. */
-    data class Frame(val base: RakeLayer, val top: RakeLayer?, val topTime: Float, val heads: List<RakeHead>)
+    data class Frame(val base: RakeLayer, val top: RakeLayer?, val topTime: Float)
 
     private val straight = RakeLayer(Samon.CHOKUSEN, width, height)
     private val cycles = mutableListOf<RakeLayer>()
@@ -576,20 +580,20 @@ class RakeProgram(
     fun at(t: Float): Frame {
         var base = straight
         var clock = OPENING
-        if (t < clock) return Frame(base, null, 0f, emptyList())
+        if (t < clock) return Frame(base, null, 0f)
         var n = 0
         while (true) {
             val layer = composition(n)
             // Raked over the straight lines.
-            if (t < clock + layer.duration) return Frame(base, layer, t - clock, layer.heads(t - clock))
+            if (t < clock + layer.duration) return Frame(base, layer, t - clock)
             clock += layer.duration
-            if (t < clock + HOLD) return Frame(layer, null, 0f, emptyList())
+            if (t < clock + HOLD) return Frame(layer, null, 0f)
             clock += HOLD
             // Swept back to straight.
-            if (t < clock + straight.duration) return Frame(layer, straight, t - clock, straight.heads(t - clock))
+            if (t < clock + straight.duration) return Frame(layer, straight, t - clock)
             clock += straight.duration
             base = straight
-            if (t < clock + REST) return Frame(base, null, 0f, emptyList())
+            if (t < clock + REST) return Frame(base, null, 0f)
             clock += REST
             n++
         }

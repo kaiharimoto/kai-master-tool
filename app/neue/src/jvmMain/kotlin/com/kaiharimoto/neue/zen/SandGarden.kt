@@ -6,18 +6,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.asComposeShader
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.rotateRad
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import com.kaiharimoto.mastertool.core.layout.GardenRect
 import com.kaiharimoto.mastertool.core.layout.Rake
-import com.kaiharimoto.mastertool.core.layout.RakeHead
 import com.kaiharimoto.mastertool.core.layout.RakeLayer
 import com.kaiharimoto.mastertool.core.layout.RakeProgram
 import com.kaiharimoto.mastertool.core.layout.Samon
@@ -27,8 +21,6 @@ import org.jetbrains.skia.RuntimeEffect
 import org.jetbrains.skia.RuntimeShaderBuilder
 import org.jetbrains.skia.SamplingMode
 import org.jetbrains.skia.Shader
-import kotlin.math.PI
-import kotlin.math.roundToInt
 
 /**
  * The karesansui zen mode rakes under the deck.
@@ -39,17 +31,19 @@ import kotlin.math.roundToInt
  * stones, flowing water, the blue-sea waves, whirlpools, the checkerboard —
  * by several six-tine rakes at once, from different places, whose work meets
  * across the window until the garden is whole. It is left a moment to be looked
- * at; then the wide rake is drawn across from edge to edge in one sweep, leaving
+ * at; then a wide rake is drawn across from edge to edge in one sweep, leaving
  * straight lines again, and the next composition begins, never the one just
  * wiped.
+ *
+ * The rakes are never drawn, on kai's instruction: the pattern draws itself.
+ * All that shows of a rake is the gravel it pushes up just ahead of its tines.
  *
  * Nothing is remembered between frames: the garden at any moment is a function
  * of the time. The shader evaluates, per pixel, which groove of which pattern
  * is there and whether a rake has reached it yet — a line-for-line copy of
- * `RakeLayer.phase` and `RakeLayer.reveal` — and the rakes are drawn where
- * `RakeLayer.heads` puts them, which a test holds to the edge of the fresh
- * gravel. Sand just ahead of a rake is heaped a little, the way a rake pushes
- * it. The grain and the rakes were made in Blender (`tools/zen/garden.py`).
+ * `RakeLayer.phase` and `RakeLayer.reveal`. Gravel just ahead of the fresh
+ * edge is heaped a little, the way a rake pushes it. The grain was made in
+ * Blender (`tools/zen/garden.py`).
  * White gravel on paper, black on ink, and never a colour.
  */
 @Composable
@@ -81,69 +75,10 @@ internal class Garden {
         val frame = program?.at(t) ?: return
         val shader = Textures.shade(frame, stone, ink)
         if (shader != null) scope.drawRect(ShaderBrush(shader.asComposeShader()))
-        frame.heads.forEach { drawRake(scope, it, ink) }
-    }
-
-    /**
-     * A rake over the gravel, turned to the way it is being drawn: its handle
-     * trailing back, and its bar laid across the pass as whole segments of six
-     * tines each, so every tine rides in a groove it is cutting. The sprites'
-     * rakes travel up the image, so they are turned by the heading plus a
-     * quarter turn. The wide rake is one bar the window's height, with two
-     * handles, since nobody sweeps a garden that wide one-handed.
-     */
-    private fun drawRake(scope: DrawScope, head: RakeHead, ink: Boolean) {
-        val bar = Textures.bar ?: return
-        val handle = Textures.handle
-        // A segment is one band: the sprite is drawn at the scale that makes it one.
-        val scale = Rake.BAND / bar.width
-        val barHeight = bar.height * scale
-        val top = head.y - barHeight * BAR_AT
-        val start = head.x - head.length / 2f
-        val alpha = if (ink) RAKE_ALPHA_INK else RAKE_ALPHA
-        scope.rotateRad(head.heading + (PI / 2).toFloat(), Offset(head.x, head.y)) {
-            if (handle != null) {
-                val w = handle.width * scale
-                val h = handle.height * scale
-                val at = if (head.wide) listOf(-HANDLES_APART, HANDLES_APART).map { head.x + it * head.length } else listOf(head.x)
-                at.forEach { hx ->
-                    drawImage(
-                        handle,
-                        dstOffset = IntOffset((hx - w / 2f).roundToInt(), head.y.roundToInt()),
-                        dstSize = IntSize(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1)),
-                        alpha = alpha,
-                    )
-                }
-            }
-            var covered = 0f
-            while (covered < head.length - 0.5f) {
-                val piece = minOf(Rake.BAND, head.length - covered)
-                val left = (start + covered).roundToInt()
-                val right = (start + covered + piece).roundToInt()
-                drawImage(
-                    bar,
-                    srcSize = IntSize((piece / scale).roundToInt().coerceIn(1, bar.width), bar.height),
-                    dstOffset = IntOffset(left, top.roundToInt()),
-                    dstSize = IntSize((right - left).coerceAtLeast(1), barHeight.roundToInt().coerceAtLeast(1)),
-                    alpha = alpha,
-                )
-                covered += piece
-            }
-        }
-    }
-
-    companion object {
-        /** Where the bar's centre line is in its sprite, as a fraction of the height from the top (`garden.py`). */
-        const val BAR_AT = 0.625f
-
-        /** The wide rake's two handles, either side of its middle, as a fraction of its length. */
-        const val HANDLES_APART = 0.28f
-        private const val RAKE_ALPHA = 0.95f
-        private const val RAKE_ALPHA_INK = 0.7f
     }
 }
 
-/** Blender's gravel and rakes, and the shader that rakes the garden. */
+/** Blender's gravel, and the shader that rakes the garden. */
 internal object Textures {
     private fun load(name: String): Image? = runCatching {
         Garden::class.java.getResourceAsStream("/zen/$name")?.use { Image.makeFromEncoded(it.readBytes()) }
@@ -151,8 +86,6 @@ internal object Textures {
 
     private val normal: Image? by lazy { load("sand_normal.png") }
     private val albedo: Image? by lazy { load("sand_albedo.png") }
-    val bar: ImageBitmap? by lazy { load("rake_bar.png")?.toComposeImageBitmap() }
-    val handle: ImageBitmap? by lazy { load("rake_handle.png")?.toComposeImageBitmap() }
 
     /*
      * RakeLayer.phase and RakeLayer.reveal, in SkSL. Keep the two in step: every

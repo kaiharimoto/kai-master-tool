@@ -363,12 +363,17 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   or the deck re-fits and every card jumps. Leaving full screen must go through
   `Floating`: Compose's `Maximized` never clears full screen.
 - **Immersive mode has a zen**: idle three seconds and the chrome fades, ten and
-  the deck floats in the middle while two balls draw slow, fading figures in
-  sand either side (`core/motion/Zen.kt`, `core/layout/SandPaths.kt`,
-  `neue/zen/`, textures baked in Blender by `tools/zen/garden.py`). In zen the
-  pointer is free and the deck leans toward it dreamily; only a click or a key
-  ends it. The garden must stay ambient and clear of the cards — kai rejected a
-  busier one. `NEUE.md` §3a.
+  the deck floats in the middle over a karesansui that fills the window — the
+  classical samon raked by several rakes whose work converges, held, then swept
+  back to straight lines by one wide rake, and a different samon raked next
+  (`core/motion/Zen.kt`, `core/layout/RakeGarden.kt`, `neue/zen/`, grain baked
+  in Blender by `tools/zen/garden.py`). **The rakes are invisible** on kai's
+  instruction — the pattern draws itself — but they are still modelled, and
+  `RakeGardenTest` holds the pattern to where they are. The shader is a
+  line-for-line copy of `RakeLayer.phase`/`reveal`; change one, change both. In
+  zen the pointer is free and the deck leans toward it dreamily; only a click or
+  a key ends it. kai rejected two gardens before this one (too busy; balls
+  looping at the sides). `NEUE.md` §3a.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
   falling back to the small render. **Card names are stamped in the foil**
