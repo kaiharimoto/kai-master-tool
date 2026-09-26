@@ -513,12 +513,12 @@ def build_material(letter, card_img, tex):
         ey = b.math("SUBTRACT", b.math("ABSOLUTE", py), hy_in)
         edge = b.math("MAXIMUM", ex, ey)
 
-        # Grooves: concentric rings. g across them, t along them, both analytic.
+        # Grooves: concentric rings. g runs across them (t, along them, is implied:
+        # the metal is only told its wide axis).
         p_vec = b.xyz(px, py, 0.0)
         r = b.vmath("LENGTH", p_vec)
         g_obj = b.vmath("NORMALIZE", p_vec)
         gw = b.vmath("NORMALIZE", b.to_world(g_obj))
-        tw = b.vmath("NORMALIZE", b.to_world(b.xyz(b.math("MULTIPLY", py, -1.0), px, 0.0)))
 
         # 3. Micro rings: h = sin(2 pi r / P); the bump's slope is its derivative.
         phase = b.math("MULTIPLY", r, 2 * math.pi / M["micro_period"])
@@ -526,19 +526,26 @@ def build_material(letter, card_img, tex):
         slope = b.math("MULTIPLY", b.math("COSINE", phase), -M["micro_slope"])
         n_bumped = b.vmath("NORMALIZE", b.vmath("ADD", N, b.vmath("SCALE", gw, scale=slope)))
 
-        # 1. Silver. Blender's Metallic BSDF maps (roughness r, anisotropy a > 0) to
-        # alpha_T = r^2 (1 - a), alpha_B = r^2 / (1 - a), T being the tangent, so
-        # T = t and r, a are solved from the two roughnesses the model gives.
-        a_t, a_g = M["rough_along"] ** 2, M["rough_across"] ** 2
-        r_m = (a_t * a_g) ** 0.25
-        aniso = 1.0 - math.sqrt(a_t / a_g)
+        # 1. Silver. Blender's Metallic BSDF maps (roughness r, anisotropy a) to
+        # alpha_T = r^2 / k and alpha_B = r^2 * k with k = sqrt(1 - 0.9 a) (measured:
+        # the wide axis is the TANGENT, and an unlinked Tangent means isotropic). So
+        # T = g, the wide axis, and alpha_g / alpha_t can be at most 10. The model's
+        # 0.4 / 0.06 is a ratio of 44, so Blender keeps alpha_g = 0.16 exactly and
+        # stops at alpha_t = 0.016 (roughness 0.126 along the grooves). Across is the
+        # one that decides whether the key's streak exists at rest; along is swamped
+        # by the key's own 1.4 m size either way. A port writes the GGX out and has
+        # no cap: it uses rough_along/rough_across as given.
+        a_g = M["rough_across"] ** 2
+        aniso = 1.0
+        k = math.sqrt(1.0 - 0.9 * aniso)
+        r_m = math.sqrt(a_g * k)
         metal_n = b.node("ShaderNodeBsdfMetallic", fresnel_type="F82", distribution="GGX")
         alb, tint = M["albedo"], M["edge_tint"]
         metal_n.inputs["Base Color"].default_value = (alb, alb, alb, 1)
         metal_n.inputs["Edge Tint"].default_value = (tint, tint, tint, 1)
         metal_n.inputs["Roughness"].default_value = r_m
         metal_n.inputs["Anisotropy"].default_value = aniso
-        b.feed(metal_n.inputs["Tangent"], tw)
+        b.feed(metal_n.inputs["Tangent"], gw)
         b.feed(metal_n.inputs["Normal"], n_bumped)
 
         # 2. Diffraction, s jittered by the micro rings, added on top as emission.
@@ -990,7 +997,7 @@ def main(argv):
         labels = {"C": "C — original", "G": "G — refined"}
         compare_sheet(out, "CG", labels, tags, (255, 255, 255), (0, 0, 0), out / "C_vs_G.png")
         compare_sheet(out, "CG", labels, tags, (0, 0, 0), (255, 255, 255), out / "C_vs_G_black.png")
-    secs = time.time() - t0
+    secs = run_secs = time.time() - t0
     # A partial run (--variants) keeps its own timing, so the page's total stays the full run's.
     whole = set(letters) == set(VARIANTS)
     timing = out / ("render_seconds.txt" if whole or a.only_present else f"render_seconds_{''.join(letters)}.txt")
@@ -1000,7 +1007,7 @@ def main(argv):
         full = out / "render_seconds.txt"
         secs = float(full.read_text()) if full.exists() else secs
     write_html(out, present, tags, secs)
-    print(f"done in {secs:.0f}s -> {out}")
+    print(f"done in {run_secs:.0f}s -> {out}")
 
 
 if __name__ == "__main__":

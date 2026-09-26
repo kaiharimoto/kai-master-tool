@@ -1,6 +1,6 @@
 # Foil border mockups
 
-`mockups.py` renders six candidate treatments for the card-face border that
+`mockups.py` renders seven candidate treatments for the card-face border that
 `drawPrismaticInset` (`app/ui/.../theme/Prismatic.kt`) draws today. It uses
 Blender Cycles on the CPU, with one card, one light rig and one camera. It also
 writes the textures a shader port would sample, and the Blender materials render
@@ -18,15 +18,21 @@ blender -b -P tools/foil/mockups.py -- --out /some/scratch/foil/out
 
 On 4 cores it takes about 25 minutes: roughly 35–60 s per still and 7 s per GIF frame. Useful flags:
 
-- `--variants ACE`: render only some of the variants.
+- `--variants ACE`: render only some of the variants. The sheets and the page still
+  show every variant that has renders in `raw/`, and a partial run keeps its own
+  timing in `render_seconds_<letters>.txt`.
 - `--card <passcode|path>`: the default card is Blue-Eyes, 89631139.
 - `--still-height`, `--still-samples`, `--gif-*`: size and sample counts.
 - `--no-gif`: skip the turntables.
 - `--only-present`: rebuild the sheets and HTML from `raw/` without rendering.
 
 Output: `raw/` holds the RGBA renders. `<letter>/` holds the stills on paper and
-on ink, a 3× corner detail and the turntable GIF. You also get
-`contact_white.png`, `contact_black.png`, `index.html` and `textures/`.
+on ink, a 3× corner detail (on paper and on ink) and the turntable GIF. The corner
+is rendered again at three times the still's resolution and cropped
+(`raw/<letter>_corner.png`), so sub-pixel structure such as G's micro rings is real
+pixels rather than an upscale. You also get `contact_white.png`,
+`contact_black.png`, `index.html` and `textures/`, and, when C and G both have
+renders, `C_vs_G.png` and `C_vs_G_black.png`.
 
 ## Setup
 
@@ -53,6 +59,7 @@ on ink, a 3× corner detail and the turntable GIF. You also get
 | D | Brushed silver | Anisotropic GGX (0.9, tangent = card x), roughness 0.28, hairline bump. No hue | `brushed_height.png` |
 | E | Glitter | Voronoi flakes, each a tilted mirror with its own film colour. A third of them also carry a grating at a random angle (d = 2600 nm) | `flake_normal.png`, `flake_id.png`, `iridescence_ramp.png`, `spectrum_ramp.png` |
 | F | Prismatic secret | Diamond cells (45°-rotated checker) of ±45° gratings, d = 3000 nm, with a per-cell period nudge. It covers the whole frame except the art and text boxes. The print multiplies the metal and part of the rainbow, like ink over foil | `secret_cells.png`, `spectrum_ramp.png`, `foil_mask.png` |
+| G | Holographic, refined | C, refined; every number is in `G_MODEL`. Silver: F82 metal, albedo 0.82, GGX roughness 0.06 along the grooves and 0.40 across them, so a narrow streak slides round the band. Rainbow: `spectrum(d·s/m)` with s = \|(L+V)·g\| + 0.012·h, d = 1600 nm, m = 1, 2, 3 weighted 1, 0.6, 0.35, added as emission ×1.3. Micro rings: h = sin(2π·r/0.004), r = \|p\| in card widths. They jitter s and tilt the normal across the grooves, n = normalize(n − 0.05·cos(2π·r/0.004)·g). Rim: the band stands proud. A 0.35% bevel at its inner edge is shaded mix(0.35, 0.95, ½ + ½·e·L̂xy) in display values, where e points at the card's centre. A 0.1% keyline on the print side multiplies the print by 0.25 | `spectrum_ramp.png` |
 
 All tiled textures are tileable. The ramps are 256×1 and sRGB-encoded. Normal,
 height, id and cell maps are non-colour data: sample them with nearest
@@ -60,6 +67,16 @@ filtering where noted (flakes, cells). `foil_mask.png` is in card space: R is
 the band, G is the frame outside the art and text boxes, and B is the art box.
 The boxes were measured on a normal monster frame. Spell, trap, pendulum and
 link frames differ.
+
+G notes for a port. Blender caps an anisotropic lobe at a ratio of 10 between
+its axes. It keeps the across-groove alpha (0.16) and stops at roughness 0.126
+along the grooves, and the key's own size hides the difference. A port writes the
+GGX out and uses 0.06 and 0.40 as given. The micro rings have a 0.004-card-width
+period. On a still that is 1.7 px, and on a GIF frame or a builder-sized card it
+is below a pixel. The render supersamples it into a faint shimmer and a sawtooth
+edge on each colour band. A port point-samples, so it should fade both micro terms
+by pixel footprint (for example × clamp(period_px / 2 − 0.5, 0, 1)) or it will
+alias.
 
 In a port, the pointer stands in for tilt: `V` becomes a view vector tilted by
 feel.x/feel.y, and `L` is a fixed key direction. The strips and studio panels
