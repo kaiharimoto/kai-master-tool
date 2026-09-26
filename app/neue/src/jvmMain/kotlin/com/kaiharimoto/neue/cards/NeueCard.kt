@@ -145,6 +145,10 @@ fun NeueCard(
                     rotationY = -pose.rotationY
                     scaleX = 1f + pose.lift
                     scaleY = 1f + pose.lift
+                    // Zen's float: a drift in card widths, and a turn in the card's own plane.
+                    translationX = pose.dx * size.width
+                    translationY = pose.dy * size.width
+                    rotationZ = pose.spin
                     // The eye two card-widths off the page, whatever size the card is drawn:
                     // cameraDistance is in 72-pixel inches, so a fixed one flattens a small
                     // card to nothing and throws a large one at the viewer.

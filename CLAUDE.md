@@ -355,12 +355,17 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 - **Its keyboard is `core/input/DeskShortcuts.kt`**, a second table beside
   `ShortcutTable`, so the tablet's exhaustive `when`s never carry desktop
   actions. The palette and the help dialog render it. **Its mouse is
-  `core/input/DeskMouse.kt`**: right-click adds from the pool and removes from
-  the deck, hold opens the pool's menu and adds a copy in the deck, Shift
-  right-click is a deck card's menu. `NEUE.md` §4 has why.
+  `core/input/DeskMouse.kt`**: right-click adds to the main deck wherever the
+  card is, Shift right-click removes a deck copy (or sends a pool card to the
+  side), hold is the menu everywhere. `NEUE.md` §4 has why.
 - **The index rail folds away and F11 is immersive mode**, both decided by
   `core/layout/EdgeReveal.kt`; bars come out *over* the page, never pushing it,
-  or the deck re-fits and every card jumps.
+  or the deck re-fits and every card jumps. Leaving full screen must go through
+  `Floating`: Compose's `Maximized` never clears full screen.
+- **Immersive mode has a zen**: idle three seconds and the chrome fades, ten and
+  the deck floats in the middle of a sand garden raked live by two steel balls
+  (`core/motion/Zen.kt`, `core/layout/SandPaths.kt`, `neue/zen/`, textures baked
+  in Blender by `tools/zen/garden.py`). `NEUE.md` §3a.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
   falling back to the small render. **Card names are stamped in the foil**

@@ -155,19 +155,33 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
 
     // Immersive mode is the window going full screen, and leaving full screen
     // any other way (the green button, a window manager's key) leaves it too.
+    //
+    // Leaving goes through Floating first. Compose's `placement = Maximized` only
+    // sets maximised — it never clears full screen — so restoring a window that
+    // was maximised before (most of them, on a large display) left it stuck full
+    // screen with the bars back. Floating clears both; Maximized is re-applied a
+    // frame later, once the window has actually come out.
     var before by remember { mutableStateOf(WindowPlacement.Floating) }
+    var entered by remember { mutableStateOf(false) }
     LaunchedEffect(h.neue.immersive) {
         if (h.neue.immersive) {
             if (windowState.placement != WindowPlacement.Fullscreen) before = windowState.placement
+            entered = true
             windowState.placement = WindowPlacement.Fullscreen
-        } else if (windowState.placement == WindowPlacement.Fullscreen) {
-            windowState.placement = before
+        } else if (entered) {
+            entered = false
+            windowState.placement = WindowPlacement.Floating
+            if (before == WindowPlacement.Maximized) {
+                delay(120)
+                windowState.placement = WindowPlacement.Maximized
+            }
         }
     }
     LaunchedEffect(windowState) {
         var last = windowState.placement
         snapshotFlow { windowState.placement }.collect { placement ->
             if (last == WindowPlacement.Fullscreen && placement != WindowPlacement.Fullscreen && h.neue.immersive) {
+                entered = false
                 h.neue.immersive = false
             }
             last = placement

@@ -50,8 +50,13 @@ object CardActions {
                     neue.selection = Selection.InDeck(card, section, index)
                 }
             }
+            // Another copy into the main deck — beside this one when it is already there
+            // (or in the extra deck, which the rules keep it in), at the end from the side.
             // Drawing up a group, the deck is being chosen from, not edited.
-            MouseAction.ADD_COPY -> if (state.groupDraft == null && state.remaining(card) > 0) state.addCardAt(card, section, index + 1)
+            MouseAction.ADD_COPY -> if (state.groupDraft == null && state.remaining(card) > 0) {
+                val home = card.requiredSection()
+                if (section == home) state.addCardAt(card, section, index + 1) else state.addCard(card, home)
+            }
             MouseAction.REMOVE -> {
                 state.removeAt(card, section, index)
                 val sel = neue.selection as? Selection.InDeck

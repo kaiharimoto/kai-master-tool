@@ -1,6 +1,19 @@
 package com.kaiharimoto.neue
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
+import com.kaiharimoto.mastertool.core.motion.ZenClock
+import com.kaiharimoto.mastertool.core.motion.ZenPhase
+import com.kaiharimoto.neue.zen.LocalZen
+import com.kaiharimoto.neue.zen.SandGarden
+import com.kaiharimoto.neue.zen.ZenLayer
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -110,6 +123,23 @@ class NeueHolders(
 ) {
     private val held = mutableSetOf<androidx.compose.ui.input.key.Key>()
     var focus: FocusManager? = null
+
+    /** Zen's amounts and clock, shared with everything that fades or floats. */
+    val zen = ZenLayer()
+
+    /** When the person last did anything, in `System.nanoTime`. */
+    var lastInput = System.nanoTime()
+
+    /** Whether idleness deepens into zen by itself. The studio turns it off and sets the phase by hand. */
+    var zenAuto = true
+
+    /** Something happened: zen, if it had begun, ends. Returns the phase it woke from. */
+    fun wake(): ZenPhase {
+        lastInput = System.nanoTime()
+        val was = neue.zen
+        if (was != ZenPhase.AWAKE) neue.zen = ZenPhase.AWAKE
+        return was
+    }
     var decksReload by mutableStateOf(0)
 
     fun setFormat(format: Format) {
@@ -129,6 +159,12 @@ class NeueHolders(
             return false
         }
         if (event.type != KeyEventType.KeyDown) return false
+        // The first key after deep zen only wakes the builder: nothing should
+        // happen to a deck you were not looking at.
+        if (wake() == ZenPhase.DEEP) {
+            held.add(event.key)
+            return true
+        }
         val repeat = !held.add(event.key)
         val chord = DeskKeys.chord(event) ?: return false
         val context = DeskContext(
@@ -322,7 +358,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     }
 
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK) {
             CompositionLocalProvider(LocalContextMenuRepresentation provides remember { MuContextMenuRepresentation() }) {
                 Shell(h)
@@ -360,18 +396,40 @@ private fun Shell(h: NeueHolders) {
         )
     }
 
+    ZenClockwork(h)
     Box(
         Modifier
             .fillMaxSize()
             .background(c.paper)
+            .onSizeChanged { h.zen.window = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }
             .pointerInput(Unit) {
                 // One watcher over the whole window, on the way down, consuming
                 // nothing: every bar that folds away comes out from here.
                 awaitPointerEventScope {
+                    var still = Offset.Unspecified
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val at = event.changes.firstOrNull()?.position
                         val gone = event.type == PointerEventType.Exit
+                        // Any real movement, any press, any scroll: the person is back.
+                        // A pointer that twitches a pixel on a desk is not.
+                        when (event.type) {
+                            PointerEventType.Press, PointerEventType.Scroll -> h.wake()
+                            PointerEventType.Move -> if (at != null) {
+                                if (!still.isSpecified || (at - still).getDistance() > 3f) {
+                                    still = at
+                                    h.wake()
+                                }
+                            }
+                        }
+                        // A click anywhere below the folded-out header lets go of the deck name:
+                        // on a desktop nothing else takes focus from a text field, so the bar
+                        // that is held out while you type would otherwise never fold away.
+                        if (event.type == PointerEventType.Press && neue.immersive && neue.revealed.top &&
+                            state.textInputFocused && !neue.searchFocused && at != null && at.y > measured.top
+                        ) {
+                            h.focus?.clearFocus()
+                        }
                         neue.revealed = EdgeReveal.next(
                             current = neue.revealed,
                             x = if (gone) null else at?.x,
@@ -393,6 +451,11 @@ private fun Shell(h: NeueHolders) {
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 if (pinned) Rail(neue = neue, version = Platform.version, counts = mapOf(Page.BUILDER to state.deck.main.size.toString()))
                 Box(Modifier.weight(1f)) {
+                    // Zen's garden, under the page: it shows where the pool and the inspector were.
+                    val gardening by remember { derivedStateOf { h.zen.deep > 0f } }
+                    if (immersive && neue.page == Page.BUILDER && gardening) {
+                        SandGarden(h.zen, ink = neue.prefs.theme == NeueTheme.INK, modifier = Modifier.matchParentSize())
+                    }
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
                             Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload)
@@ -510,6 +573,71 @@ private fun Shell(h: NeueHolders) {
         Toasts(h, Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 88.dp))
     }
 }
+
+/**
+ * Zen's clockwork: the phase deepens with idleness (`ZenClock`), and two
+ * amounts follow the phase — slowly in, and back "slowly" as kai asked, a little
+ * slower than they went. They are written into [ZenLayer] frame by frame and read
+ * only in layers and draw blocks, so nothing recomposes while they move. The
+ * clock that floats the cards and rolls the balls runs only while zen is deep.
+ */
+@Composable
+private fun ZenClockwork(h: NeueHolders) {
+    val neue = h.neue
+    val eligible = neue.immersive && neue.page == Page.BUILDER
+    LaunchedEffect(eligible, h.zenAuto) {
+        if (!eligible) {
+            neue.zen = ZenPhase.AWAKE
+            return@LaunchedEffect
+        }
+        if (!h.zenAuto) return@LaunchedEffect
+        h.lastInput = System.nanoTime()
+        while (true) {
+            // A menu, a dialog or a card in the hand is someone doing something.
+            if (h.drag.held != null || neue.overlayOpen || h.updates.dialogOpen) h.lastInput = System.nanoTime()
+            val idle = (System.nanoTime() - h.lastInput) / 1_000_000
+            val phase = ZenClock.phase(idle)
+            if (phase > neue.zen) neue.zen = phase
+            val wait = ZenClock.untilNext(idle)
+            if (wait == null) {
+                snapshotFlow { neue.zen }.first { it != ZenPhase.DEEP }
+            } else {
+                delay(wait.coerceAtLeast(50))
+            }
+        }
+    }
+
+    val quiet = remember { Animatable(0f) }
+    val deep = remember { Animatable(0f) }
+    val phase = if (eligible) neue.zen else ZenPhase.AWAKE
+    LaunchedEffect(phase) {
+        val q = if (phase != ZenPhase.AWAKE) 1f else 0f
+        val d = if (phase == ZenPhase.DEEP) 1f else 0f
+        coroutineScope {
+            launch {
+                quiet.animateTo(q, tween(if (q > 0f) ZEN_IN else ZEN_OUT, delayMillis = if (q > 0f) 0 else 400, easing = MuMotion.ease)) { h.zen.quiet = value }
+            }
+            launch {
+                deep.animateTo(d, tween(if (d > 0f) ZEN_DEEP_IN else ZEN_OUT, easing = MuMotion.ease)) { h.zen.deep = value }
+            }
+        }
+    }
+    val floating by remember { derivedStateOf { h.zen.deep > 0f } }
+    LaunchedEffect(floating) {
+        var last = 0L
+        while (floating && h.zen.deep > 0f) {
+            withFrameNanos { now ->
+                if (last != 0L) h.zen.time += ((now - last) / 1e9f).coerceIn(0f, 0.1f)
+                last = now
+            }
+        }
+    }
+}
+
+/** Zen's fades, in milliseconds: a breath in, a longer one for the deck to come forward, and back a little slower. */
+private const val ZEN_IN = 1400
+private const val ZEN_DEEP_IN = 2600
+private const val ZEN_OUT = 1600
 
 /** How tall the folded bars were when last laid out, in pixels. Plain fields: only the pointer watcher reads them. */
 private class FoldedBars {

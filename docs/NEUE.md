@@ -169,7 +169,12 @@ the rail itself). **Immersive mode** (`F11`, or the button in the title bar) is
 full screen with the title bar and the builder's header folded over the top and
 its footer over the bottom, each coming out when the pointer reaches its edge —
 the deck and the panes that build it get the whole screen. `Esc`, last in its
-chain, leaves it; so does leaving full screen any other way. One pointer
+chain, leaves it; so does leaving full screen any other way. Leaving goes
+through `Floating` first and re-maximises a moment later: Compose's
+`placement = Maximized` sets maximised and **never clears full screen**, which is
+how 1.0.3 left a window stuck full screen with its bars back. And a click below
+the folded-out header lets go of the deck name — on a desktop nothing else takes
+focus from a text field, so a bar held out while you type never folded away. One pointer
 watcher at the root, consuming nothing, decides all of it
 (`core/layout/EdgeReveal.kt`): a bar comes out at 8 px from the edge and folds
 once the pointer is 24 px clear of it; a deck name being typed holds the top
@@ -191,19 +196,20 @@ The mouse is a table too, `core/input/DeskMouse.kt`, and the help dialog
 |---|---|---|
 | hover | the inspector shows it | the inspector shows it |
 | click | select | select |
-| right-click | **add** (main or extra) | **remove this copy** |
-| Shift right-click | add to the side deck | everything else (move, groups, copy name) |
-| hold | everything else (the menu) | **add another copy** |
+| right-click | **add** to the main deck (the extra, for a card that lives there) | **add another copy** |
+| Shift right-click | add to the side deck | **remove this copy** |
+| hold | everything else (the menu) | everything else (the menu) |
 | double-click | add (Shift: side) | — |
 | drag | pick it up | move it; drop it on the pool to remove |
 
-That is kai's brief, reconciled: right-click quick-adds, holding left opens the
-menu *except* on a deck card, where it adds a copy, and right-click on a deck
-card removes it. Two pairs collided and the more specific ask won each time,
-which left the deck's menu with no gesture — so it went on Shift + right-click,
-because Shift already means "the other way" (Shift Enter, Shift right-click in
-the pool, both the side deck). `DeskMouseTest` holds kai's six rows and no
-gesture meaning two things.
+That is kai's brief as it settled after 1.0.3: **right-click adds, to the main
+deck, wherever the card is.** 1.0.3 had read "right-clicking it will remove it"
+as the deck's right-click, and kai meant right-click to add everywhere. Taking
+a copy out is therefore Shift + right-click, because Shift already means "the
+other way" (Shift Enter and Shift right-click in the pool both mean the side
+deck), and a hold is the menu on every card — one answer in both places. A card
+in the side deck that is right-clicked sends a copy to the main deck.
+`DeskMouseTest` holds these rows and no gesture meaning two things.
 
 A press selects at once, then becomes a click, a drag (past the slop) or a hold
 (450 ms still), whichever comes first; the card rises under the button while
@@ -215,6 +221,42 @@ the help dialog (`F1`) and reachable by name from the palette (`Ctrl K`).
 once; `DeskKeysTest` holds every key in the table pressable. The pool keys
 (`↑ ↓ Enter`, `Shift Enter` for the side) are live *while typing in the search
 field* and nowhere else, so confirming a deck name never adds a card.
+
+### 3a. Zen
+
+In immersive mode, on the builder, doing nothing is a mode too
+(`core/motion/Zen.kt`, `neue/zen/`):
+
+- **Three seconds** idle: everything that is not a card fades — the strips, the
+  rules, the search and its controls, the inspector's text, the scrollbars. The
+  cards stay exactly where they are.
+- **Ten seconds**: the pool and the inspector go too, and the deck comes to the
+  middle of the window and grows into it (`ZenStage`: a transform about its own
+  centre, never a re-fit), each card floating on its own slow clock
+  (`ZenFloat`: sums of sines, six to thirteen seconds, phases hashed from the
+  card's place so no two neighbours move in step, and a lean large enough for
+  the foil to catch the light). Behind it a **sand garden** is raked.
+- **Any movement** (more than three pixels), press, scroll or key brings it all
+  back: the deck floats home and the chrome returns a little slower than it left.
+  The first key after deep zen only wakes the builder.
+
+The garden (`zen/SandGarden.kt`) is a height field drawn into as it is raked. It
+opens raked in straight lines, with rings round the deck as the stone, a
+karesansui. Then a steel ball either side of the deck rolls through it on the
+programs in `core/layout/SandPaths.kt`: a spiral out that rakes a disk smooth, a
+spiral that breathes back in, a rose (`r = sin(kθ)`), and round again. Every
+track starts where the last one ended, so the ball never jumps, and `ZenTest`
+holds that. Each stretch is pressed into a groove with a ridge either side, over
+whatever was there, as a kinetic sand table draws. A runtime shader lights the
+field from its own slope with a low key from the upper left, over the grain of
+real sand: a normal map and an albedo **baked in Blender** (`tools/zen/garden.py`,
+tileable), with Blender's steel ball on top. White sand on paper, black on ink,
+and never a colour.
+
+Nothing idles: the phase clock sleeps until the next boundary, and the float
+and the garden run only while zen is deep. Fades are read in layers, so zen
+redraws and never recomposes. `tools/shoot.sh --neue --zen=deep --zen-seconds=12`
+photographs it; `--zen-frames=60,12` writes the frames of a GIF.
 
 ### 4a. Groups
 

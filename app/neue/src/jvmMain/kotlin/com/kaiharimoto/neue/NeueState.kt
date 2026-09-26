@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.data.PreferencesRepository
 import com.kaiharimoto.mastertool.core.layout.Revealed
+import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
@@ -82,6 +83,9 @@ class NeueState(
      * a window that opened full screen by surprise would be a worse surprise.
      */
     var immersive by mutableStateOf(false)
+
+    /** How far into zen the builder is (immersive mode only): `ZenClock` decides, any input wakes it. */
+    var zen by mutableStateOf(ZenPhase.AWAKE)
 
     /** Which folded bars the pointer has brought out (`EdgeReveal`). */
     var revealed by mutableStateOf(Revealed.NONE)

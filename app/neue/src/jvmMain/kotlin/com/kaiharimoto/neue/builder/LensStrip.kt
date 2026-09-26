@@ -124,7 +124,7 @@ fun LensStrip(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
         ) {
             if (state.lens != Lens.DECK && keying.keys.isEmpty()) {
                 Small(
-                    if (state.lens == Lens.ROLES) "No groups yet. Press N, or Shift right-click a card in the deck." else "Nothing to show.",
+                    if (state.lens == Lens.ROLES) "No groups yet. Press N, or hold a card in the deck." else "Nothing to show.",
                     color = c.ink45,
                     maxLines = 1,
                 )

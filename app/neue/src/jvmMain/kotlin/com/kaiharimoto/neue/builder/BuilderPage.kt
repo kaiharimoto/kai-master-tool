@@ -20,6 +20,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -56,6 +65,7 @@ import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
+import com.kaiharimoto.neue.zen.zenQuiet
 import java.awt.Cursor
 
 private fun kbd(action: DeskAction) = DeskShortcuts.chordFor(action)?.let(DeskShortcuts::kbd)
@@ -110,6 +120,7 @@ fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -
         Column(Modifier.weight(1f)) {
             // The deck's name is the page's title, and editable where it stands.
             val source = remember { MutableInteractionSource() }
+            val focusManager = LocalFocusManager.current
             val focused by source.collectIsFocusedAsState()
             val hovered by source.collectIsHoveredAsState()
             val line = animatedColor(if (focused) c.ink else if (hovered) c.ink25 else c.paper)
@@ -120,7 +131,18 @@ fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -
                 textStyle = MuType.h1(f).copy(color = c.ink),
                 cursorBrush = SolidColor(c.ink),
                 interactionSource = source,
+                // Enter is done: the name is kept, and the field lets go.
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                 modifier = Modifier
+                    .onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.NumPadEnter)) {
+                            focusManager.clearFocus()
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     .widthIn(min = 240.dp, max = 720.dp)
                     .hoverable(source)
                     .onFocusChanged { state.onTextFieldFocusChanged(it.isFocused) }
@@ -215,6 +237,7 @@ private fun ResizeRule(onDrag: (Float) -> Unit) {
     val c = Mu.colors
     Box(
         Modifier
+            .zenQuiet()
             .width(7.dp)
             .fillMaxHeight()
             .hoverable(source)

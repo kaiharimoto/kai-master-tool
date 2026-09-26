@@ -29,6 +29,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import com.kaiharimoto.mastertool.core.motion.ZenFloat
+import com.kaiharimoto.neue.zen.LocalZen
+import com.kaiharimoto.neue.zen.zenQuiet
 import com.kaiharimoto.mastertool.core.input.MouseTarget
 import com.kaiharimoto.mastertool.core.motion.LeanPose
 import androidx.compose.ui.geometry.Rect
@@ -95,13 +100,32 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
     val crack by animateFloatAsState(if (lensOn) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "crack")
     val motion = rememberDeckMotion(drag)
     val origin = remember { floatArrayOf(0f, 0f) }
+    val zen = LocalZen.current
+    val grids = remember { mutableMapOf<DeckSection, Rect>() }
 
     BoxWithConstraints(
         modifier
             .onGloballyPositioned { val p = it.positionInWindow(); origin[0] = p.x; origin[1] = p.y }
             .onPointerEvent(PointerEventType.Move) { e -> e.changes.firstOrNull()?.let { motion.hover = Offset(origin[0] + it.position.x, origin[1] + it.position.y) } }
             .onPointerEvent(PointerEventType.Enter) { e -> e.changes.firstOrNull()?.let { motion.hover = Offset(origin[0] + it.position.x, origin[1] + it.position.y) } }
-            .onPointerEvent(PointerEventType.Exit) { motion.hover = null },
+            .onPointerEvent(PointerEventType.Exit) { motion.hover = null }
+            // Zen: the deck comes to the middle of the window and grows into it, about
+            // its own centre — a transform, never a re-fit, so nothing jumps on the way
+            // there or back.
+            .graphicsLayer {
+                val a = zen.deep
+                if (a > 0f && zen.deck.width > 0f) {
+                    val stage = zen.stage
+                    val scale = 1f + (stage.scale - 1f) * a
+                    val cx = zen.deck.center.x - origin[0]
+                    val cy = zen.deck.center.y - origin[1]
+                    transformOrigin = TransformOrigin(0f, 0f)
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = cx * (1f - scale) + stage.dx * a
+                    translationY = cy * (1f - scale) + stage.dy * a
+                }
+            },
     ) {
         val sections = DeckSection.entries
         val fit = with(density) {
@@ -136,6 +160,14 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
                     crack = crack,
                     lensStrip = section == DeckSection.MAIN,
                     motion = motion,
+                    onGrid = { rect ->
+                        // Measured at rest only: in zen the grids are inside the transform, and a
+                        // deck measured there would chase its own reflection.
+                        if (zen.deep == 0f) {
+                            grids[section] = rect
+                            zen.deck = grids.values.filter { it.width > 0f && it.height > 0f }.reduceOrNull { a, b -> Rect(minOf(a.left, b.left), minOf(a.top, b.top), maxOf(a.right, b.right), maxOf(a.bottom, b.bottom)) } ?: Rect.Zero
+                        }
+                    },
                 )
             }
         }
@@ -153,9 +185,11 @@ private fun DeckSectionPane(
     crack: Float,
     lensStrip: Boolean,
     motion: DeckMotion,
+    onGrid: (Rect) -> Unit,
 ) {
     val c = Mu.colors
     val density = LocalDensity.current
+    val zen = LocalZen.current
     val ids = state.deck[section]
     val hover = drag.hover?.takeIf { it.section == section && drag.held != null }
     val count = ids.size
@@ -193,7 +227,7 @@ private fun DeckSectionPane(
     ) {
         Strip(
             label = "${section.displayName} deck",
-            modifier = Modifier.height(if (lensStrip) MAIN_STRIP else STRIP),
+            modifier = Modifier.zenQuiet().height(if (lensStrip) MAIN_STRIP else STRIP),
         ) {
             if (hover != null && !hover.accepted) Micro("✕ Not allowed here", color = c.ink)
             if (lensStrip) {
@@ -204,7 +238,7 @@ private fun DeckSectionPane(
                 color = if (outOfRange) c.ink else c.ink45,
             )
         }
-        if (lensStrip) LensStrip(state, neue, Modifier.height(LENS_STRIP))
+        if (lensStrip) LensStrip(state, neue, Modifier.zenQuiet().height(LENS_STRIP))
 
         val keying = state.keying(section)
         val plan: BreakdownPlan? = if (crack > 0.01f && !keying.isEmpty) BreakdownLayout.plan(keying, fit.columns) else null
@@ -230,6 +264,9 @@ private fun DeckSectionPane(
                 Modifier
                     .size(contentWidth, gridHeight)
                     .onGloballyPositioned { coords ->
+                        val at = coords.positionInWindow()
+                        // Only the cards: an empty side deck is not part of the stone.
+                        if (ids.isNotEmpty()) onGrid(Rect(at.x, at.y, at.x + coords.size.width, at.y + fit.gridHeight)) else onGrid(Rect.Zero)
                         laid.grid = GridGeometry(
                             bounds = coords.boundsInWindow(),
                             origin = coords.positionInWindow(),
@@ -314,7 +351,9 @@ private fun DeckSectionPane(
                                     val o = laid.grid?.origin ?: Offset.Zero
                                     val lean = if (held) LeanPose.REST else motion.poseAt(Offset(o.x + left + place.width / 2f, o.y + top + place.height / 2f))
                                     val pressed = press.pose()
-                                    lean.copy(lift = lean.lift + pressed.lift)
+                                    val deep = zen.deep
+                                    val drift = if (deep > 0f) ZenFloat.pose(section.ordinal * 100 + position, zen.time).times(deep) else LeanPose.REST
+                                    lean.copy(lift = lean.lift + pressed.lift) + drift
                                 },
                 format = state.format,
                                 selected = selected,
@@ -339,7 +378,7 @@ private fun DeckSectionPane(
                 }
 
                 if (ids.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Box(Modifier.fillMaxSize().zenQuiet(), contentAlignment = Alignment.Center) {
                         Help(
                             if (section == DeckSection.SIDE) "Shift right-click a card in the pool, or drag it here" else "Right-click a card in the pool, or drag it here",
                         )
@@ -347,7 +386,7 @@ private fun DeckSectionPane(
                 }
             }
         }
-        com.kaiharimoto.neue.kit.HRule(color = c.ink)
+        com.kaiharimoto.neue.kit.HRule(Modifier.zenQuiet(), color = c.ink)
     }
 }
 

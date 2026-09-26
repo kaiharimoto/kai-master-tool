@@ -104,6 +104,9 @@ fun neueMain(args: Array<String>) {
                 val card = id?.let(h.builder.index::byId)
                 if (card != null) h.neue.selection = Selection.InDeck(card, section, index)
             }
+            // Zen is set by hand here: idleness is measured in wall-clock time, and a
+            // studio run is minutes of it for seconds of frames.
+            h.zenAuto = false
             if (map["immersive"] == "true") h.neue.immersive = true
             if (map["pinned"] == "true") h.neue.update { it.copy(railPinned = true) }
             map["reveal"]?.let { spec ->
@@ -115,6 +118,24 @@ fun neueMain(args: Array<String>) {
             map["drawer"]?.let { h.neue.drawer = if (it == "groups") Drawer.GROUPS else Drawer.ISSUES }
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())
+            map["zen"]?.let { phase ->
+                h.neue.immersive = true
+                clock.run(30)
+                h.neue.zen = if (phase == "quiet") com.kaiharimoto.mastertool.core.motion.ZenPhase.QUIET else com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
+                // The fades take under three seconds; the garden is raked for as long as asked.
+                clock.run(((map["zen-seconds"] ?: "4").toFloat() * 60).toInt())
+                // --zen-frames=N,K: N stills, K frames apart, for a GIF of the garden being raked.
+                map["zen-frames"]?.let { spec ->
+                    val (n, k) = spec.split(",").map { it.toInt() }
+                    val dir = File(out, "$name-frames").apply { mkdirs() }
+                    repeat(n) { i ->
+                        clock.run(k)
+                        val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
+                        File(dir, "%03d.png".format(i)).writeBytes(still.bytes)
+                    }
+                    println("[neue-studio] $n frames in ${dir.name}")
+                }
+            }
             map["hover"]?.let { spec ->
                 val (x, y) = spec.split(",").map { it.toFloat() }
                 scene.sendPointerEvent(PointerEventType.Move, Offset(x * width, y * height))

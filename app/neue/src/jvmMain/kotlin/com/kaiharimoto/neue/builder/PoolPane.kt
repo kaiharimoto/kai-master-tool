@@ -34,6 +34,8 @@ import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.Selection
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
+import com.kaiharimoto.neue.zen.zenDeep
+import com.kaiharimoto.neue.zen.zenQuiet
 import com.kaiharimoto.neue.kit.Hatch
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Kbd
@@ -72,8 +74,9 @@ fun PoolPane(
         if (neue.focusSearchTick > 0) runCatching { focus.requestFocus() }
     }
 
-    Column(modifier.onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }) {
-        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Zen: the search and its controls fade with the chrome; the pool, cards and all, goes at ten seconds.
+    Column(modifier.zenDeep().onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }) {
+        Column(Modifier.zenQuiet().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MuInput(
                     value = state.query,
@@ -113,10 +116,10 @@ fun PoolPane(
             }
         }
         if (neue.prefs.filtersOpen) {
-            HRule()
-            FilterPanel(state, Modifier.padding(16.dp))
+            HRule(Modifier.zenQuiet())
+            FilterPanel(state, Modifier.zenQuiet().padding(16.dp))
         }
-        HRule(color = c.ink)
+        HRule(Modifier.zenQuiet(), color = c.ink)
 
         val grid = rememberLazyGridState()
         val cursor = neue.poolCursor.coerceIn(0, (state.results.size - 1).coerceAtLeast(0))
@@ -180,7 +183,7 @@ fun PoolPane(
                             )
                         }
                     }
-                    ScrollbarFor(grid)
+                    Box(Modifier.matchParentSize().zenQuiet()) { ScrollbarFor(grid) }
                 }
             }
         }

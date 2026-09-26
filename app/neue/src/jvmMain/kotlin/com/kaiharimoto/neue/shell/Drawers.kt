@@ -224,7 +224,7 @@ private fun Groups(state: DeckBuilderState, neue: NeueState) {
             }
             Help(
                 "A group is a role you draw on the deck. Edit cards opens it on the main deck, where a click adds or removes a card. " +
-                    "Shift right-click a card in the deck to put it in a group, and the Roles lens shows them all with their opening odds.",
+                    "Hold a card in the deck to put it in a group, and the Roles lens shows them all with their opening odds.",
                 Modifier.padding(24.dp),
                 color = c.ink45,
             )

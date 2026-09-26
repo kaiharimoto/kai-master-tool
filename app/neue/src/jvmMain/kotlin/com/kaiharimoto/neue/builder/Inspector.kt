@@ -29,6 +29,8 @@ import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.cards.NeueCard
+import com.kaiharimoto.neue.zen.zenDeep
+import com.kaiharimoto.neue.zen.zenQuiet
 import com.kaiharimoto.neue.kit.Badge
 import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.H2
@@ -56,9 +58,9 @@ import com.kaiharimoto.neue.theme.MuType
 fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
     val c = Mu.colors
     val card = neue.inspected
-    Box(modifier) {
+    Box(modifier.zenDeep()) {
         if (card == null) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.zenQuiet().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 com.kaiharimoto.neue.kit.MuText("Nothing here.", style = MuType.h1(LocalMuFonts.current))
                 Body("Point at a card to read it. Click one to keep it here.", color = c.ink70)
             }
@@ -72,15 +74,18 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
                 format = state.format,
                 foil = neue.prefs.foil,
             )
-            CardFacts(card, state)
-            HRule(color = c.ink)
-            Copies(card, state)
-            HRule()
-            SelectionContainer {
-                Body(card.description.ifBlank { "No card text." }, color = c.ink)
+            // In zen the card stays a moment longer than what is written about it.
+            Column(Modifier.zenQuiet(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                CardFacts(card, state)
+                HRule(color = c.ink)
+                Copies(card, state)
+                HRule()
+                SelectionContainer {
+                    Body(card.description.ifBlank { "No card text." }, color = c.ink)
+                }
             }
         }
-        ScrollbarFor(scroll)
+        Box(Modifier.matchParentSize().zenQuiet()) { ScrollbarFor(scroll) }
     }
 }
 

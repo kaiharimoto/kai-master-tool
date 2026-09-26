@@ -24,12 +24,12 @@ class DeskMouseTest {
 
     @Test
     fun kaisBrief() {
-        // Right-click quick-adds from the pool and removes from the deck.
+        // Right-click adds, wherever the card is: into the deck from the pool,
+        // another copy on a deck card.
         assertEquals(MouseAction.ADD, DeskMouse.resolve(MouseTarget.POOL, MouseGesture.RIGHT_CLICK))
-        assertEquals(MouseAction.REMOVE, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.RIGHT_CLICK))
-        // Holding left opens the menu, except on a deck card, where it adds a copy.
-        assertEquals(MouseAction.MENU, DeskMouse.resolve(MouseTarget.POOL, MouseGesture.HOLD))
-        assertEquals(MouseAction.ADD_COPY, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.HOLD))
+        assertEquals(MouseAction.ADD_COPY, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.RIGHT_CLICK))
+        // Holding left opens the menu, on every card.
+        MouseTarget.entries.forEach { assertEquals(MouseAction.MENU, DeskMouse.resolve(it, MouseGesture.HOLD)) }
         // Left drag picks up, both places.
         MouseTarget.entries.forEach { assertEquals(MouseAction.PICK_UP, DeskMouse.resolve(it, MouseGesture.DRAG)) }
     }
@@ -37,7 +37,7 @@ class DeskMouseTest {
     @Test
     fun shiftMeansTheSideOrTheOtherWay() {
         assertEquals(MouseAction.ADD_TO_SIDE, DeskMouse.resolve(MouseTarget.POOL, MouseGesture.SHIFT_RIGHT_CLICK))
-        assertEquals(MouseAction.MENU, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.SHIFT_RIGHT_CLICK))
+        assertEquals(MouseAction.REMOVE, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.SHIFT_RIGHT_CLICK))
     }
 
     @Test

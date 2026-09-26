@@ -13,7 +13,25 @@ data class LeanPose(
     val rotationY: Float = 0f,
     /** Fraction the card is scaled up by: 0.03 is three per cent larger. */
     val lift: Float = 0f,
+    /** How far the card has drifted, in card widths (zen mode's float). */
+    val dx: Float = 0f,
+    val dy: Float = 0f,
+    /** Degrees the card has turned in its own plane. */
+    val spin: Float = 0f,
 ) {
+    /** Two poses at once: angles and drift add, as a lean on top of a float. */
+    operator fun plus(other: LeanPose) = LeanPose(
+        rotationX + other.rotationX,
+        rotationY + other.rotationY,
+        lift + other.lift,
+        dx + other.dx,
+        dy + other.dy,
+        spin + other.spin,
+    )
+
+    /** This pose, [amount] of the way from rest. */
+    fun times(amount: Float) = LeanPose(rotationX * amount, rotationY * amount, lift * amount, dx * amount, dy * amount, spin * amount)
+
     /** The lean as a light direction for the foil, -1..1 on each axis, so a card catches light as it turns. */
     fun light(maxDegrees: Float): Pair<Float, Float> =
         (rotationY / maxDegrees).coerceIn(-1f, 1f) to (-rotationX / maxDegrees).coerceIn(-1f, 1f)
