@@ -2,7 +2,7 @@
 The zen garden's materials, made in Blender and baked for the app.
 
 Neue's zen mode (docs/NEUE.md §3a) draws a garden of white sand behind the deck,
-raked live with the classical samon, then swept clean by a wide rake.
+drawn with Fibonacci spirals, one family over another, forever.
 The *pattern* is computed by the app per pixel; what it cannot invent at run
 time is what sand looks like up close. That is made here:
 

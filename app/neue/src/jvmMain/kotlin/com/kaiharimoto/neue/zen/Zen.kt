@@ -31,10 +31,7 @@ class ZenLayer {
     var deep by mutableFloatStateOf(0f)
     var time by mutableFloatStateOf(0f)
 
-    /** The garden's choice of compositions; null draws a fresh one each zen. The studio fixes it. */
-    var gardenSeed: Int? = null
-
-    /** How the garden is raked and lit. Plain: the garden reads it as it draws. */
+    /** How the garden is lit. Plain: the garden reads it as it draws. */
     var gardenLook: GardenLook = GardenLook()
 
     /** The studio's: paint the garden plain white (true) or black (false), to lift the deck off it. */

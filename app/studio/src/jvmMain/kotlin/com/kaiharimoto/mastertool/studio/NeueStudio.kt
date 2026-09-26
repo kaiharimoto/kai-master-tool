@@ -120,28 +120,15 @@ fun neueMain(args: Array<String>) {
             clock.run((map["frames"] ?: "90").toInt())
             map["zen"]?.let { phase ->
                 h.neue.immersive = true
-                h.zen.gardenSeed = map["garden-seed"]?.toInt() ?: 7
                 clock.run(30)
                 h.neue.zen = if (phase == "quiet") com.kaiharimoto.mastertool.core.motion.ZenPhase.QUIET else com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
                 // The fades take under three seconds; the garden is raked for as long as asked.
                 clock.run(((map["zen-seconds"] ?: "4").toFloat() * 60).toInt())
-                // --garden-plan: when each composition is raked, held and wiped, for choosing --garden-at.
+                // --garden-plan: how long a layer of spirals takes, for choosing --garden-times.
                 if (map["garden-plan"] == "true") {
-                    val stone = h.zen.deckInZen.let { com.kaiharimoto.mastertool.core.layout.GardenRect(it.left, it.top, it.right, it.bottom) }
-                    val program = com.kaiharimoto.mastertool.core.layout.RakeProgram(width.toFloat(), height.toFloat(), stone, h.zen.gardenSeed ?: 7, h.zen.gardenLook.grain)
-                    var t = com.kaiharimoto.mastertool.core.layout.RakeProgram.OPENING
-                    val wipe = com.kaiharimoto.mastertool.core.layout.RakeLayer(com.kaiharimoto.mastertool.core.layout.Samon.CHOKUSEN, width.toFloat(), height.toFloat(), grain = h.zen.gardenLook.grain).duration
-                    repeat(8) { n ->
-                        val c = program.composition(n)
-                        println("[neue-studio] garden %d %-9s raked %6.1f..%6.1f  held ..%6.1f  wiped ..%6.1f".format(
-                            n, c.samon, t, t + c.duration, t + c.duration + 8f, t + c.duration + 8f + wipe))
-                        t += c.duration + 8f + wipe + com.kaiharimoto.mastertool.core.layout.RakeProgram.REST
-                    }
-                }
-                // --garden-at=T: the garden is a function of its clock, so jump it to T seconds in.
-                map["garden-at"]?.let { at ->
-                    h.zen.time += at.toFloat() - (map["zen-seconds"] ?: "4").toFloat()
-                    clock.run(2)
+                    val d = h.zen.deckInZen
+                    val g = com.kaiharimoto.mastertool.core.layout.SpiralGarden(width.toFloat(), height.toFloat(), d.center.x, d.center.y)
+                    println("[neue-studio] a layer of spirals every %.1fs".format(g.layerTime))
                 }
                 // --garden-mattes: the deck over plain white and plain black, for lifting it off the garden.
                 if (map["garden-mattes"] == "true") {
@@ -154,21 +141,6 @@ fun neueMain(args: Array<String>) {
                     }
                     h.zen.gardenMatte = null
                     println("[neue-studio] mattes written")
-                }
-                // --garden-held=N: the first N compositions, each photographed finished.
-                map["garden-held"]?.let { spec ->
-                    val stone = h.zen.deckInZen.let { com.kaiharimoto.mastertool.core.layout.GardenRect(it.left, it.top, it.right, it.bottom) }
-                    val program = com.kaiharimoto.mastertool.core.layout.RakeProgram(width.toFloat(), height.toFloat(), stone, h.zen.gardenSeed ?: 7, h.zen.gardenLook.grain)
-                    var t = com.kaiharimoto.mastertool.core.layout.RakeProgram.OPENING
-                    repeat(spec.toInt()) { n ->
-                        val c = program.composition(n)
-                        h.zen.time = t + c.duration + com.kaiharimoto.mastertool.core.layout.RakeProgram.HOLD / 2f
-                        clock.run(2)
-                        val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
-                        File(out, "$name-$n-${c.samon.name.lowercase()}.png").writeBytes(still.bytes)
-                        println("[neue-studio] $n ${c.samon}: raked in %.0fs".format(c.duration))
-                        t += c.duration + com.kaiharimoto.mastertool.core.layout.RakeProgram.HOLD + program.grain.sweepTime(width.toFloat()) + com.kaiharimoto.mastertool.core.layout.RakeProgram.REST
-                    }
                 }
                 // --garden-times=a,b,c: one still per garden time, in seconds. The garden's clock
                 // started with zen's, so setting zen's sets the garden's.

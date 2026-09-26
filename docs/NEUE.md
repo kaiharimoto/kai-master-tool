@@ -241,75 +241,54 @@ In immersive mode, on the builder, doing nothing is a mode too
   waking: it lands on no card and runs no shortcut. The deck floats home and the
   chrome returns a little slower than it left.
 
-**The garden is a karesansui, raked under the cards, and a gardener plans it.**
-kai's briefs, in order: a first garden crowded the deck; a second, two balls
-looping at the sides, was not a garden (*"a real zen garden uses rakes … span
-the entire page … converge before being wiped by a bigger rake in one sweep"*);
-the third, five hand-drawn samon at a 10 px pitch, was too fine and, at a bolder
-scale, looked wrong (*"design a smart algorithm that the rake uses to create the
-patterns"*, and *"more subtle … a background element"*). What is there now
-(`core/layout/RakeGarden.kt`, `neue/zen/SandGarden.kt`):
+**The garden is Fibonacci spirals, drawn over each other forever**
+(`core/layout/SpiralGarden.kt`, `neue/zen/SandGarden.kt`). It is the fifth: kai
+turned down a raked garden that crowded the deck, two balls looping at the
+sides, five hand-drawn samon, and a gardener's composition of stones; a
+research run over eleven mathematically defined patterns
+(`tools/zen/patterns.py`, which draws any of them under the real deck in
+seconds) ended in *"Fibonacci spirals that draw on top of each other
+infinitely … it should really feel like a background texture rather than moiré"*.
 
-- **A rake can only draw distances.** Its tines are fixed, so every pass leaves
-  grooves one pitch apart however it turns, and the only curves that stay a
-  constant distance apart are the contours of a distance. So every composition
-  is one field — the distance to the garden's seeds (stones, and a stream) —
-  and a groove is wherever it is a whole number and a half of pitches
-  (`RakeLayer.phase`). `RakeGardenTest.aRakeCanDrawIt` measures the field's
-  slope over every composition: one pitch per pitch everywhere but in the
-  fillets.
-- **Waves fold together instead of creasing.** The old samon met their
-  neighbours along a hard nearest-seed seam, grooves colliding at an angle — the
-  "weird" look. The distances are joined with a polynomial smooth minimum
-  (`RakeGrain.blend`, 0.6 of a band), so two stones' rings merge into one
-  envelope with a rounded fillet, the way a gardener takes one pass round both.
-- **The stones are set by the rules of ishigumi** (`GardenComposer`): every
-  candidate is scored — room (never within two bands of another), uneven
-  triangles (three nearly in line is refused), no mirror about the middle,
-  balance (the stones' centre of weight near the garden's centre), the first two
-  beside the deck rather than under it, clear of the frame — and the best is
-  kept; the whole arrangement is tried six times and the one whose flattest
-  triangle is least flat wins. One principal stone, the rest smaller.
-- **Three compositions come out of it**, never the same kind twice running:
-  **ripples** (mizumon — three or five stones whose rings fill the garden),
-  **flowing water** (ryūsui — a gentle meander across the garden, its lines
-  bending round the two stones standing in it; gentle because a bend tighter
-  than the furthest line's distance folds that line) and **islands** (shima —
-  two or three groups of stones, a few rings each, left in the straight lines,
-  which run up into the crest of the last ring: Ryōan-ji).
-- **Each stone has two rakes** lapping outward from opposite sides, a band a
-  lap; a stream has one rake on each bank, pass after pass. All of them work at
-  once, so the garden grows out of every seed and **the waves converge**. A
-  stone crowded into a corner owns only part of each circle it laps, and its
-  rakes step over the rest rather than walking it (`RakeLayer.pace`); ripples
-  and islands are raked with more care than a stream, so every composition takes
-  about 35–55 seconds.
-- It is **held ten seconds**, then **one wide rake sweeps it back** to straight
-  lines in a single eased pass, and after three seconds of those the next is
-  planned. **The rakes are invisible**, on kai's instruction: all that shows of
-  one is the gravel heaped just ahead of its tines.
-- **The look** (`GardenLook`): kai chose the 32 px pitch, five tines, out of six
-  mock-ups; the grooves are shallow (relief 0.8, 60% of the contrast of the
-  mock-up) and the grains of sand drawn twice as large, so the gravel reads as
-  near and the garden as a background. A stone's own ground is left smooth.
+- **The spirals are a sunflower's.** Two families of golden spirals —
+  logarithmic, growing by φ every quarter turn (θ = b·ln r, b = π / 2 ln φ) —
+  34 turning one way and 55 the other, the counts of a large sunflower head.
+  They are centred on the floating deck, which sits where the flower's head
+  would be; the arms come out from under the cards, and where they crowd toward
+  the middle (below twelve pixels apart) the gravel is smoothed rather than drawn
+  as a shimmer. Out where they can be seen they are 14–70 px apart, which reads
+  as a grain.
+- **The algorithm.** Each arm is drawn outward by its own rake at 260 px/s
+  along the curve. Arm k sets off at 8·frac(k/φ) seconds — the golden-ratio
+  sequence, whose three-gap property keeps the arms under way evenly spread round
+  the circle however many have started (`SpiralGardenTest` holds it). A new
+  groove settles in over 0.6 s behind its rake, and where a drawn arm lies
+  beside one not yet drawn the two strips meet at the mean of their weights, so
+  nothing is ever cut with a step.
+- **Forever.** When every arm has reached the far corner and five seconds have
+  passed, the other family is drawn over the top — 55 after 34, the opposite
+  way round, set round by the golden angle from the last so it never lies along
+  the one it covers. Its arms cross the old ones as they grow and replace them.
+  A layer takes about 24 s; there is no wipe, and the first layer is drawn over
+  straight lines.
+- **Subtle.** The grooves are shallow (relief 0.45, against 0.8 for the garden
+  before), the grains of sand drawn twice as large, no colour anywhere; the rakes
+  are invisible, as kai asked of the garden before this one.
 
-Everything is a pure function of position and time: the SkSL is a line-for-line
-copy of `field`, `owner`, `phase` and `reveal`, the stones travel as a uniform
-array (`x, y, r, pace`), and the garden remembers nothing between frames. The
-rakes that are never drawn are still modelled (`RakeLayer.heads`), because they
-keep the pattern honest: `RakeGardenTest` holds every reveal to the edge a real
-rake is cutting, at the chosen grain and at a fine one. The grain is a normal map
-and an albedo **baked in Blender** (`tools/zen/garden.py`, tileable). White
-gravel on paper, black on ink, never a colour. `GardenShaderTest` fails the build
-if the SkSL stops compiling, which in the app is only a log line and an empty zen.
+Everything is a pure function of position and time, and the SkSL is a
+line-for-line copy of `SpiralGarden.phase`, `spacing`, `start` and `weight`; a
+layer travels to it as (arms, hand, turn). The grain is a normal map and an
+albedo **baked in Blender** (`tools/zen/garden.py`, tileable). White gravel on
+paper, black on ink. `GardenShaderTest` fails the build if the SkSL stops
+compiling, which in the app is only a log line and an empty zen.
 
 Nothing idles: the phase clock sleeps until the next boundary, and the float,
 the lean and the garden run only while zen is deep. Fades are read in layers, so
 zen redraws and never recomposes. `tools/shoot.sh --neue --zen=deep
---zen-seconds=20 --hover=x,y` photographs it, `--garden-plan` prints when each
-composition is raked, held and swept, `--garden-times=45,122,131` takes a
-still at each garden time and `--garden-held=6` photographs the first six
-compositions finished. `GardenReel` (in `:neue`'s tests) draws the garden alone,
+--zen-seconds=20 --hover=x,y` photographs it, `--garden-plan` prints how long a layer
+of spirals takes, `--garden-times=20,30,36` takes a still at each garden time,
+and `--garden-mattes` photographs the deck over plain white and plain black, which
+`tools/zen/patterns.py` lifts it off with. `GardenReel` (in `:neue`'s tests) draws the garden alone,
 a second a frame instead of a minute a still, and renders a reel.
 
 ### 4a. Groups

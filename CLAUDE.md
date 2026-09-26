@@ -363,22 +363,20 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   or the deck re-fits and every card jumps. Leaving full screen must go through
   `Floating`: Compose's `Maximized` never clears full screen.
 - **Immersive mode has a zen**: idle three seconds and the chrome fades, ten and
-  the deck floats in the middle over a karesansui that fills the window. A
-  **gardener plans it**: `GardenComposer` sets stones by the rules of ishigumi
-  (room, uneven triangles, no mirror, balance), and every pattern is the
-  contours of one field — the smooth-minimum distance to the stones and a stream
-  — because a rake with fixed tines can only draw distances. Rakes lap outward
-  from every seed at once until the waves meet; it is held, swept back to
-  straight lines by one wide rake, and a new composition is planned
-  (`core/layout/RakeGarden.kt`, `neue/zen/`, grain baked in Blender by
-  `tools/zen/garden.py`). **The rakes are invisible** on kai's instruction, but
-  still modelled, and `RakeGardenTest` holds the pattern to where they are. The
-  shader is a line-for-line copy of `RakeLayer.field`/`owner`/`reveal`; change
-  one, change both. The look is kai's pick of six mock-ups — 32 px pitch, five
-  tines — made shallow so it stays a background. In zen the pointer is free and
-  the deck leans toward it dreamily; only a click or a key ends it. kai rejected
-  three gardens before this one (too busy; balls looping at the sides; five
-  hand-drawn samon that looked wrong at a bold scale). `NEUE.md` §3a.
+  the deck floats in the middle over a garden of **Fibonacci spirals drawn over
+  each other forever** (`core/layout/SpiralGarden.kt`, `neue/zen/`). Golden
+  spirals, 34 one way then 55 the other — a sunflower's two families — centred
+  on the deck as the flower's head; each arm is drawn outward by its own
+  invisible rake, the arms setting off in golden-ratio order so they are always
+  evenly spread, and each finished layer is drawn over by the next, turned by
+  the golden angle. No wipe. Shallow on purpose: kai wants a background texture,
+  not a moiré. The shader is a line-for-line copy of `SpiralGarden`'s `phase`,
+  `spacing`, `start` and `weight`; change one, change both. In zen the pointer is
+  free and the deck leans toward it dreamily; only a click or a key ends it.
+  kai rejected four gardens before this one (too busy; balls looping at the
+  sides; hand-drawn samon; a gardener's stones) — `tools/zen/patterns.py` draws
+  any equation's grooves under the real deck in seconds, for the next round.
+  `NEUE.md` §3a.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
   falling back to the small render. **Card names are stamped in the foil**
