@@ -50,7 +50,8 @@ object CardActions {
                     neue.selection = Selection.InDeck(card, section, index)
                 }
             }
-            MouseAction.ADD_COPY -> if (state.remaining(card) > 0) state.addCardAt(card, section, index + 1)
+            // Drawing up a group, the deck is being chosen from, not edited.
+            MouseAction.ADD_COPY -> if (state.groupDraft == null && state.remaining(card) > 0) state.addCardAt(card, section, index + 1)
             MouseAction.REMOVE -> {
                 state.removeAt(card, section, index)
                 val sel = neue.selection as? Selection.InDeck
