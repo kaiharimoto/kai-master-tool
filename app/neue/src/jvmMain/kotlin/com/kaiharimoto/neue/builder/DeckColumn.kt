@@ -18,15 +18,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.zIndex
+import com.kaiharimoto.mastertool.core.input.MouseTarget
+import com.kaiharimoto.mastertool.core.motion.LeanPose
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -40,7 +46,6 @@ import com.kaiharimoto.mastertool.core.layout.BreakdownPlan
 import com.kaiharimoto.mastertool.core.layout.CardPlacement
 import com.kaiharimoto.mastertool.core.layout.CellEdges
 import com.kaiharimoto.mastertool.core.layout.DeckFitter
-import com.kaiharimoto.mastertool.core.layout.GridPoint
 import com.kaiharimoto.mastertool.core.layout.GridRegion
 import com.kaiharimoto.mastertool.core.layout.SectionFit
 import com.kaiharimoto.mastertool.core.layout.SectionFitRequest
@@ -82,13 +87,22 @@ private fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 1
  * display the fitter simply hands back bigger cards. Sections are divided by
  * rules, not gaps (law 6); the main deck carries the lens.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
     val lensOn = state.lens != Lens.DECK || state.groupDraft != null
     val crack by animateFloatAsState(if (lensOn) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "crack")
+    val motion = rememberDeckMotion(drag)
+    val origin = remember { floatArrayOf(0f, 0f) }
 
-    BoxWithConstraints(modifier) {
+    BoxWithConstraints(
+        modifier
+            .onGloballyPositioned { val p = it.positionInWindow(); origin[0] = p.x; origin[1] = p.y }
+            .onPointerEvent(PointerEventType.Move) { e -> e.changes.firstOrNull()?.let { motion.hover = Offset(origin[0] + it.position.x, origin[1] + it.position.y) } }
+            .onPointerEvent(PointerEventType.Enter) { e -> e.changes.firstOrNull()?.let { motion.hover = Offset(origin[0] + it.position.x, origin[1] + it.position.y) } }
+            .onPointerEvent(PointerEventType.Exit) { motion.hover = null },
+    ) {
         val sections = DeckSection.entries
         val fit = with(density) {
             DeckFitter.plan(
@@ -107,6 +121,7 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
             )
         }
         val contentWidth = with(density) { fit.contentWidth.toDp() }
+        motion.cardWidth = fit.sections.firstOrNull()?.cardWidth ?: 100f
         Column(
             Modifier.fillMaxSize().let { if (!fit.fits) it.verticalScroll(rememberScrollState()) else it },
         ) {
@@ -120,6 +135,7 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
                     contentWidth = contentWidth,
                     crack = crack,
                     lensStrip = section == DeckSection.MAIN,
+                    motion = motion,
                 )
             }
         }
@@ -136,6 +152,7 @@ private fun DeckSectionPane(
     contentWidth: Dp,
     crack: Float,
     lensStrip: Boolean,
+    motion: DeckMotion,
 ) {
     val c = Mu.colors
     val density = LocalDensity.current
@@ -187,13 +204,26 @@ private fun DeckSectionPane(
                 color = if (outOfRange) c.ink else c.ink45,
             )
         }
-        if (lensStrip) LensStrip(state, Modifier.height(LENS_STRIP))
+        if (lensStrip) LensStrip(state, neue, Modifier.height(LENS_STRIP))
 
         val keying = state.keying(section)
         val plan: BreakdownPlan? = if (crack > 0.01f && !keying.isEmpty) BreakdownLayout.plan(keying, fit.columns) else null
         val cardW = with(density) { fit.cardWidth.toDp() }
         val cardH = with(density) { fit.cardHeight.toDp() }
         val gridHeight = with(density) { fit.gridHeight.toDp() }
+        val pitchX = fit.cardWidth + with(density) { SPACING.toPx() }
+        val pitchY = fit.cardHeight + with(density) { SPACING.toPx() }
+        // The card the bump is over is drawn above its neighbours, so its lift is never
+        // tucked under the next card along. Recomposes when the pointer crosses a card, not every frame.
+        val onTop by remember(section, fit.columns, ids.size) {
+            derivedStateOf {
+                val p = motion.point() ?: return@derivedStateOf -1
+                val o = laid.grid?.origin ?: return@derivedStateOf -1
+                val col = ((p.x - o.x) / pitchX).toInt()
+                val row = ((p.y - o.y) / pitchY).toInt()
+                if (p.x < o.x || p.y < o.y || col >= fit.columns) -1 else (row * fit.columns + col).takeIf { it < ids.size } ?: -1
+            }
+        }
 
         Box(Modifier.fillMaxWidth().padding(vertical = GRID_PAD), contentAlignment = Alignment.TopCenter) {
             Box(
@@ -247,10 +277,13 @@ private fun DeckSectionPane(
                     )
                     val held = drag.held?.let { it.from == section && it.index == position } == true
                     val covered = state.isolatedKey != null && state.isolatedKey != keyId
+                    val left = x.value * density.density + place.left
+                    val top = y.value * density.density + place.top
                     Box(
                         Modifier
-                            .offset { IntOffset((x.toPx() + place.left).toInt(), (y.toPx() + place.top).toInt()) }
+                            .offset { IntOffset(left.toInt(), top.toInt()) }
                             .size(with(density) { place.width.toDp() }, with(density) { place.height.toDp() })
+                            .zIndex(if (position == onTop) 1f else 0f)
                             .alpha(if (held) 0.4f else if (covered) 0.3f else 1f),
                     ) {
                         if (card == null) {
@@ -262,6 +295,7 @@ private fun DeckSectionPane(
                             }
                         } else {
                             val selected = (neue.selection as? Selection.InDeck)?.let { it.section == section && it.index == position } == true
+                            val press = rememberPress()
                             NeueCard(
                                 card = card,
                                 modifier = Modifier
@@ -272,17 +306,17 @@ private fun DeckSectionPane(
                                         drag = drag,
                                         from = section,
                                         index = position,
-                                        onSelect = {
-                                            if (state.groupDraft != null && section == DeckSection.MAIN) {
-                                                state.toggleDraftSelection(card.id)
-                                            } else {
-                                                neue.selection = Selection.InDeck(card, section, position)
-                                            }
-                                        },
-                                        onDouble = { state.removeAt(card, section, position) },
-                                        menu = { CardActions.deckMenu(card, section, position, state, neue) },
+                                        target = MouseTarget.DECK,
+                                        press = press,
+                                        onAction = { action, at -> CardActions.onDeck(action, at, card, section, position, state, neue) },
                                     ),
-                                format = state.format,
+                                motion = {
+                                    val o = laid.grid?.origin ?: Offset.Zero
+                                    val lean = if (held) LeanPose.REST else motion.poseAt(Offset(o.x + left + place.width / 2f, o.y + top + place.height / 2f))
+                                    val pressed = press.pose()
+                                    lean.copy(lift = lean.lift + pressed.lift)
+                                },
+                format = state.format,
                                 selected = selected,
                                 foil = neue.prefs.foil,
                                 marker = key?.let { Marker(it.mark, GroupMarkers.paint(it.paint, c.ink)) },
@@ -307,7 +341,7 @@ private fun DeckSectionPane(
                 if (ids.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Help(
-                            if (section == DeckSection.SIDE) "Shift double-click a card, or drag it here" else "Double-click a card in the pool, or drag it here",
+                            if (section == DeckSection.SIDE) "Shift right-click a card in the pool, or drag it here" else "Right-click a card in the pool, or drag it here",
                         )
                     }
                 }
@@ -324,47 +358,3 @@ private class PaneLayout {
 }
 
 private val NO_EDGES = CellEdges(start = false, top = false, end = false, bottom = false)
-
-/**
- * One solid shape per cluster of cards that share a key — the tablet's
- * breakdown, traced by `GridRegion` and pulled in by [inset]. The colour stands
- * only in the space the crack opened, so a block reads as one object with an
- * edge rather than as cards with a tint.
- */
-private fun DrawScope.drawRegion(
-    cells: List<Int>,
-    columns: Int,
-    pitchX: Float,
-    pitchY: Float,
-    spacing: Float,
-    inset: Float,
-    color: Color,
-    alpha: Float,
-) {
-    if (cells.isEmpty() || alpha <= 0f) return
-    val rings = GridRegion.outline(cells, columns)
-    val path = Path()
-    rings.forEach { ring ->
-        val corners = ring.corners
-        if (corners.size < 4) return@forEach
-        corners.indices.forEach { i ->
-            val previous = corners[(i - 1 + corners.size) % corners.size]
-            val point = corners[i]
-            val next = corners[(i + 1) % corners.size]
-            val a = normalOf(previous, point)
-            val b = normalOf(point, next)
-            val x = point.x * pitchX - spacing / 2f + inset * (a.first + b.first)
-            val y = point.y * pitchY - spacing / 2f + inset * (a.second + b.second)
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        path.close()
-    }
-    drawPath(path, color.copy(alpha = color.alpha * alpha))
-}
-
-private fun normalOf(from: GridPoint, to: GridPoint): Pair<Float, Float> {
-    val dx = (to.x - from.x).coerceIn(-1, 1).toFloat()
-    val dy = (to.y - from.y).coerceIn(-1, 1).toFloat()
-    return -dy to dx
-}
-

@@ -50,6 +50,11 @@ enum class DeskAction {
     ZOOM_OUT,
     ZOOM_RESET,
     TOGGLE_THEME,
+
+    /** Full screen, with every bar folded away until the pointer reaches for it. */
+    IMMERSIVE,
+    /** A picture of the deck — main, extra and side — with none of the window around it. */
+    SCREENSHOT,
 }
 
 /** Where a desk shortcut applies, with the heading it is listed under. Declaration order is display order. */
@@ -115,6 +120,8 @@ object DeskShortcuts {
         DeskShortcut(ctrl("minus"), DeskAction.ZOOM_OUT, DeskScope.APP, "Smaller interface", allowedInTextInput = true),
         DeskShortcut(ctrl("0"), DeskAction.ZOOM_RESET, DeskScope.APP, "Interface at 100%", allowedInTextInput = true),
         DeskShortcut(ctrl("i", shift = true), DeskAction.TOGGLE_THEME, DeskScope.APP, "Switch paper and ink", allowedInTextInput = true),
+        DeskShortcut(KeyChord("f11"), DeskAction.IMMERSIVE, DeskScope.APP, "Immersive mode", allowedInTextInput = true),
+        DeskShortcut(ctrl("s", shift = true), DeskAction.SCREENSHOT, DeskScope.APP, "Screenshot of the deck", allowedInTextInput = true),
 
         DeskShortcut(ctrl("z"), DeskAction.UNDO, DeskScope.BUILDER, "Undo", repeatable = true),
         DeskShortcut(ctrl("z", shift = true), DeskAction.REDO, DeskScope.BUILDER, "Redo", repeatable = true),
@@ -185,6 +192,7 @@ object DeskShortcuts {
         "backspace" -> "Backspace"
         "space" -> "Space"
         "f1" -> "F1"
+        "f11" -> "F11"
         else -> key.uppercase()
     }
 }

@@ -31,6 +31,15 @@ class YgoProDeckApi(
         response.body<CardInfoResponse>().data.map { it.toDomain() }
     }
 
+    /** Every set ever printed, with its TCG release date where it has one. A couple of hundred kilobytes. */
+    suspend fun fetchCardSets(): Result<List<CardSetRelease>> = runCatching {
+        val response: HttpResponse = client.get("$baseUrl/cardsets.php")
+        if (!response.status.isSuccess()) {
+            error("Card set request failed with ${response.status}")
+        }
+        response.body<List<CardSetRelease>>()
+    }
+
     companion object {
         const val DEFAULT_BASE_URL = "https://db.ygoprodeck.com/api/v7"
 

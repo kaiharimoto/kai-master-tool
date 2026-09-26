@@ -136,7 +136,8 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
         snapshotFlow { Triple(windowState.position, windowState.size, windowState.placement) }
             .collectLatest { (position, size, placement) ->
                 delay(600)
-                if (position is WindowPosition.Absolute) {
+                // Full screen is a mode, not a place to reopen at.
+                if (position is WindowPosition.Absolute && placement != WindowPlacement.Fullscreen) {
                     h.neue.update(debounce = true) {
                         it.copy(
                             window = WindowBounds(
@@ -150,6 +151,27 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
                     }
                 }
             }
+    }
+
+    // Immersive mode is the window going full screen, and leaving full screen
+    // any other way (the green button, a window manager's key) leaves it too.
+    var before by remember { mutableStateOf(WindowPlacement.Floating) }
+    LaunchedEffect(h.neue.immersive) {
+        if (h.neue.immersive) {
+            if (windowState.placement != WindowPlacement.Fullscreen) before = windowState.placement
+            windowState.placement = WindowPlacement.Fullscreen
+        } else if (windowState.placement == WindowPlacement.Fullscreen) {
+            windowState.placement = before
+        }
+    }
+    LaunchedEffect(windowState) {
+        var last = windowState.placement
+        snapshotFlow { windowState.placement }.collect { placement ->
+            if (last == WindowPlacement.Fullscreen && placement != WindowPlacement.Fullscreen && h.neue.immersive) {
+                h.neue.immersive = false
+            }
+            last = placement
+        }
     }
 
     Window(

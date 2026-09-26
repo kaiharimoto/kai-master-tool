@@ -1,6 +1,21 @@
 package com.kaiharimoto.neue
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import com.kaiharimoto.mastertool.core.layout.EdgeReveal
+import com.kaiharimoto.mastertool.core.layout.Revealed
+import com.kaiharimoto.neue.art.ArtLibrary
+import com.kaiharimoto.neue.art.LocalArt
+import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.neue.builder.BuilderFooter
+import com.kaiharimoto.neue.builder.BuilderHeader
+import com.kaiharimoto.neue.shot.DeckShots
+import com.kaiharimoto.neue.theme.MuShell
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalContextMenuRepresentation
 import androidx.compose.foundation.background
@@ -50,6 +65,7 @@ import com.kaiharimoto.mastertool.ui.deckbuilder.DeckLayoutState
 import com.kaiharimoto.neue.builder.BuilderPage
 import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.builder.NeueDrag
+import com.kaiharimoto.neue.builder.rememberCarryMotion
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Body
@@ -88,6 +104,8 @@ class NeueHolders(
     val neue: NeueState,
     val drag: NeueDrag,
     val updates: NeueUpdates,
+    val art: ArtLibrary,
+    val shots: DeckShots,
 ) {
     private val held = mutableSetOf<androidx.compose.ui.input.key.Key>()
     var focus: FocusManager? = null
@@ -166,6 +184,11 @@ class NeueHolders(
             DeskAction.ZOOM_OUT -> neue.update { it.zoomedOut() }
             DeskAction.ZOOM_RESET -> neue.update { it.copy(scale = 1f) }
             DeskAction.TOGGLE_THEME -> neue.toggleTheme()
+            DeskAction.IMMERSIVE -> {
+                neue.immersive = !neue.immersive
+                neue.revealed = Revealed.NONE
+            }
+            DeskAction.SCREENSHOT -> shots.export(builder, neue)
         }
     }
 
@@ -180,6 +203,7 @@ class NeueHolders(
             state.textInputFocused || neue.searchFocused -> focus?.clearFocus()
             state.isolatedKey != null -> state.isolatedKey?.let(state::toggleIsolation)
             neue.selection != null -> neue.selection = null
+            neue.immersive -> run(DeskAction.IMMERSIVE)
         }
     }
 
@@ -209,6 +233,8 @@ class NeueHolders(
             cmd("App", if (neue.prefs.theme == NeueTheme.PAPER) "Switch to ink (dark)" else "Switch to paper (light)", DeskAction.TOGGLE_THEME),
             cmd("App", "Show or hide the pool", DeskAction.TOGGLE_POOL),
             cmd("App", "Show or hide the inspector", DeskAction.TOGGLE_INSPECTOR),
+            cmd("App", if (neue.immersive) "Leave immersive mode" else "Immersive mode", DeskAction.IMMERSIVE),
+            cmd("Deck", "Screenshot of the deck", DeskAction.SCREENSHOT),
             cmd("App", "Larger interface", DeskAction.ZOOM_IN),
             cmd("App", "Smaller interface", DeskAction.ZOOM_OUT),
             cmd("App", "Keyboard shortcuts", DeskAction.HELP),
@@ -239,6 +265,7 @@ fun rememberHolders(deps: AppDependencies, makeUpdates: (kotlinx.coroutines.Coro
     val scope = rememberCoroutineScope()
     return remember {
         val builder = DeckBuilderState(deps, scope)
+        val art = ArtLibrary(java.io.File(Platform.dataDir, "card-art-hd"), scope)
         NeueHolders(
             deps = deps,
             builder = builder,
@@ -246,6 +273,8 @@ fun rememberHolders(deps: AppDependencies, makeUpdates: (kotlinx.coroutines.Coro
             neue = NeueState(deps.preferencesRepository, scope),
             drag = NeueDrag(builder),
             updates = makeUpdates(scope),
+            art = art,
+            shots = DeckShots(art, scope),
         )
     }
 }
@@ -271,15 +300,28 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
             neue.start()
             state.start()
             h.updates.check(userInitiated = false)
+            h.art.start()
             onDispose {
+                h.art.stop()
                 h.layout.flush()
                 neue.flush()
             }
         }
     }
 
+    if (launchEffects) {
+        // The art library takes the pool in its own order, and what is on screen first.
+        LaunchedEffect(state.index) { if (state.index.size > 0) h.art.catalogue(state.index.cards) }
+        LaunchedEffect(state.deck, state.index) {
+            h.art.want(DeckSection.entries.flatMap { state.deck[it] }.distinct().mapNotNull(state.index::byId))
+        }
+        LaunchedEffect(state.results) { h.art.want(state.results.take(48)) }
+        LaunchedEffect(neue.inspected) { neue.inspected?.let(h.art::want) }
+        LaunchedEffect(neue.prefs.hdArt) { h.art.enable(neue.prefs.hdArt) }
+    }
+
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale)) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK) {
             CompositionLocalProvider(LocalContextMenuRepresentation provides remember { MuContextMenuRepresentation() }) {
                 Shell(h)
@@ -294,31 +336,66 @@ private fun Shell(h: NeueHolders) {
     val state = h.builder
     val c = Mu.colors
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val immersive = neue.immersive
+    val pinned = neue.prefs.railPinned && !immersive
+    val builderBars = neue.page == Page.BUILDER
+    // How tall the folded bars are when out, measured, so the pointer knows when it has left them.
+    val measured = remember { FoldedBars() }
 
-    Box(Modifier.fillMaxSize().background(c.paper)) {
+    val status = when {
+        state.isSyncing -> ShellStatus("Syncing card pool", running = true)
+        state.index.size == 0 -> ShellStatus("No card pool", running = false)
+        else -> ShellStatus("${"%,d".format(state.index.size)} cards · ${state.format.name}", running = false)
+    }
+    val titleBar: @Composable () -> Unit = {
+        TitleBar(
+            neue = neue,
+            status = status,
+            update = h.updates.available?.versionName,
+            onUpdate = { h.updates.dialogOpen = true },
+            art = h.art.progressLine,
+            onImmersive = { h.run(DeskAction.IMMERSIVE) },
+        )
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(c.paper)
+            .pointerInput(Unit) {
+                // One watcher over the whole window, on the way down, consuming
+                // nothing: every bar that folds away comes out from here.
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val at = event.changes.firstOrNull()?.position
+                        val gone = event.type == PointerEventType.Exit
+                        neue.revealed = EdgeReveal.next(
+                            current = neue.revealed,
+                            x = if (gone) null else at?.x,
+                            y = if (gone) null else at?.y,
+                            height = size.height.toFloat(),
+                            railWidth = MuShell.rail.toPx(),
+                            topHeight = measured.top.toFloat(),
+                            bottomHeight = measured.bottom.toFloat(),
+                            immersive = neue.immersive,
+                            holdTop = state.textInputFocused && !neue.searchFocused,
+                            suppress = h.drag.held != null || neue.menu != null,
+                        )
+                    }
+                }
+            },
+    ) {
         Column(Modifier.fillMaxSize()) {
-            val status = when {
-                state.isSyncing -> ShellStatus("Syncing card pool", running = true)
-                state.index.size == 0 -> ShellStatus("No card pool", running = false)
-                else -> ShellStatus("${"%,d".format(state.index.size)} cards · ${state.format.name}", running = false)
-            }
-            TitleBar(
-                neue = neue,
-                status = status,
-                update = h.updates.available?.versionName,
-                onUpdate = { h.updates.dialogOpen = true },
-            )
+            if (!immersive) titleBar()
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                Rail(
-                    neue = neue,
-                    version = Platform.version,
-                    counts = mapOf(Page.BUILDER to state.deck.main.size.toString()),
-                )
+                if (pinned) Rail(neue = neue, version = Platform.version, counts = mapOf(Page.BUILDER to state.deck.main.size.toString()))
                 Box(Modifier.weight(1f)) {
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
                             Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload)
-                            Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setFormat, h::setSearchEffects)
+                            Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setFormat, h::setSearchEffects, bars = !immersive, onScreenshot = { h.run(DeskAction.SCREENSHOT) })
                             Page.ODDS -> OddsPage(state)
                             Page.STATS -> StatsPage(state)
                             Page.SETTINGS -> SettingsPage(
@@ -333,6 +410,7 @@ private fun Shell(h: NeueHolders) {
                                     onReportIssue = { Platform.reportIssue() },
                                     onOpenDataDir = { Platform.open(Platform.dataDir) },
                                     onSearchEffects = h::setSearchEffects,
+                                    art = h.art,
                                 ),
                             )
                         }
@@ -342,15 +420,65 @@ private fun Shell(h: NeueHolders) {
             }
         }
 
-        // The card in the air: drawn where the pointer is, at the size it was, no shadow and no lift (§7).
+        // The bars that fold away slide over the page rather than pushing it:
+        // a bar that pushed would re-fit the deck, and every card would jump.
+        val out = neue.revealed
+        if (immersive) {
+            val top by animateFloatAsState(if (out.top) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "top")
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .onSizeChanged { measured.top = it.height }
+                    .offset { IntOffset(0, (-(1f - top) * (measured.top + 2)).toInt()) }
+                    .background(c.paper),
+            ) {
+                titleBar()
+                if (builderBars) BuilderHeader(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) })
+            }
+            if (builderBars) {
+                val bottom by animateFloatAsState(if (out.bottom) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "bottom")
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .onSizeChanged { measured.bottom = it.height }
+                        .offset { IntOffset(0, ((1f - bottom) * (measured.bottom + 2)).toInt()) },
+                ) { BuilderFooter(state, neue) }
+            }
+        }
+        if (!pinned) {
+            val left by animateFloatAsState(if (out.left) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "rail")
+            val railPx = with(density) { MuShell.rail.roundToPx() }
+            if (left > 0.001f) {
+                Box(
+                    Modifier
+                        .padding(top = if (immersive) 0.dp else MuShell.top)
+                        .fillMaxHeight()
+                        .offset { IntOffset((-(1f - left) * (railPx + 2)).toInt(), 0) },
+                ) {
+                    Rail(neue = neue, version = Platform.version, counts = mapOf(Page.BUILDER to state.deck.main.size.toString()))
+                }
+            }
+        }
+
+        // The card in the air: drawn where the pointer is, lifted off the page and
+        // leaning back against the motion (DeskLean.carried) — kai's one
+        // exception to Master UI's stillness, and only ever on a card.
+        val carry = rememberCarryMotion(h.drag)
         h.drag.held?.let { held ->
-            val density = LocalDensity.current
             Box(
                 Modifier
                     .offset { IntOffset((h.drag.pointer.x - held.size.width / 2f).toInt(), (h.drag.pointer.y - held.size.height / 2f).toInt()) }
                     .size(with(density) { held.size.width.toDp() }, with(density) { held.size.height.toDp() }),
             ) {
-                NeueCard(held.card, Modifier.fillMaxSize(), format = state.format, foil = neue.prefs.foil, outlined = true)
+                NeueCard(
+                    held.card,
+                    Modifier.fillMaxSize(),
+                    format = state.format,
+                    foil = neue.prefs.foil,
+                    outlined = true,
+                    motion = { carry.pose(held.size.width.toFloat()) },
+                )
             }
         }
 
@@ -382,14 +510,28 @@ private fun Shell(h: NeueHolders) {
     }
 }
 
+/** How tall the folded bars were when last laid out, in pixels. Plain fields: only the pointer watcher reads them. */
+private class FoldedBars {
+    var top: Int = 0
+    var bottom: Int = 0
+}
+
 @Composable
 private fun Toasts(h: NeueHolders, modifier: Modifier) {
     val toast = h.builder.toast
     val note = h.updates.message
+    val own = h.neue.note
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
         if (note != null) {
             LaunchedEffect(note) { delay(4000); h.updates.message = null }
             ToastBox(note, null, {})
+        }
+        if (own != null) {
+            LaunchedEffect(own.id) { delay(6000); if (h.neue.note?.id == own.id) h.neue.note = null }
+            ToastBox(own.message, own.action, {
+                own.onAction()
+                h.neue.note = null
+            })
         }
         if (toast != null) {
             LaunchedEffect(toast.id) { delay(4000); h.builder.consumeToast() }

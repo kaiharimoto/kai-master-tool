@@ -38,6 +38,7 @@ import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.HRule
+import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.Kbd
 import com.kaiharimoto.neue.kit.Mark
@@ -70,6 +71,8 @@ fun TitleBar(
     status: ShellStatus,
     update: String?,
     onUpdate: () -> Unit,
+    art: String? = null,
+    onImmersive: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val c = Mu.colors
@@ -93,6 +96,12 @@ fun TitleBar(
             Mark(20.dp, ink = c.ink, paper = c.paper)
             MuText("NEUE MASTER TOOL", style = MuType.wordmark(LocalMuFonts.current))
         }
+        // Where you are, because the rail that says so is folded away.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Micro("/", color = c.ink25)
+            neue.page.numeral?.let { Mono(it.toString().padStart(2, '0'), color = c.ink45) }
+            Micro(neue.page.title, color = c.ink70)
+        }
         Box(Modifier.weight(1f))
         if (update != null) {
             Tip("A newer build is ready. Click to read what changed and install it") {
@@ -104,6 +113,17 @@ fun TitleBar(
             }
         }
         SearchTrigger { neue.paletteOpen = true }
+        Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, bars out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
+            IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 28.dp)
+        }
+        if (art != null) {
+            Tip("High-resolution card art, downloading. Settings has the details") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Breathe(running = true)
+                    Micro(art, color = c.ink70)
+                }
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Breathe(running = status.running)
             Micro(status.text, color = c.ink70)
@@ -185,6 +205,11 @@ fun Rail(neue: NeueState, version: String, counts: Map<Page, String>, modifier: 
         ) {
             MicroLink(if (neue.prefs.theme == NeueTheme.PAPER) "Ink" else "Paper", neue::toggleTheme)
             MicroLink("Keys", { neue.helpOpen = true })
+            if (!neue.immersive) {
+                Tip(if (neue.prefs.railPinned) "Fold the index away until the pointer reaches the left edge" else "Keep the index out") {
+                    MicroLink(if (neue.prefs.railPinned) "Unpin" else "Pin", { neue.update { it.copy(railPinned = !it.railPinned) } })
+                }
+            }
             Box(Modifier.weight(1f))
             Mono("v$version")
         }

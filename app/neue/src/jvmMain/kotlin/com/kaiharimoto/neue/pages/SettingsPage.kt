@@ -21,6 +21,7 @@ import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
+import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.cards.Foils
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -46,6 +47,7 @@ class SettingsHost(
     val onReportIssue: () -> Unit,
     val onOpenDataDir: () -> Unit,
     val onSearchEffects: (Boolean) -> Unit,
+    val art: ArtLibrary? = null,
 )
 
 /**
@@ -75,6 +77,9 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Foil", "The light on a card's face. It follows the pointer across the card.") {
                         Segmented(prefs.foil, Foils.all.map { it.id }, Foils::label, { f -> neue.update { it.copy(foil = f) } })
                     }
+                    SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. Ctrl 1 to 4 reach the pages either way.") {
+                        Segmented(prefs.railPinned, listOf(false, true), { if (it) "Pinned" else "Auto-hide" }, { p -> neue.update { it.copy(railPinned = p) } })
+                    }
                 }
                 Column {
                     SectionTitle(2, "Building")
@@ -98,8 +103,27 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         }
                     }
                 }
+                host.art?.let { art ->
+                    Column {
+                        SectionTitle(3, "Card art")
+                        SettingRow(
+                            "High-resolution art",
+                            "Downloads every card's full-size picture while you work, about 2 GB in all, and draws from it once it is here: " +
+                                "the deck and the card you are reading first. ${art.describe()}${art.problem?.let { " · $it" } ?: ""}",
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                MuSwitch(prefs.hdArt, { on -> neue.update { it.copy(hdArt = on) } })
+                                if (art.running) {
+                                    Breathe()
+                                    Mono(art.percent(), color = Mu.colors.ink)
+                                }
+                                MuButton("Open folder", { com.kaiharimoto.neue.platform.Platform.open(art.dir) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+                            }
+                        }
+                    }
+                }
                 Column {
-                    SectionTitle(3, "Updates and feedback")
+                    SectionTitle(if (host.art != null) 4 else 3, "Updates and feedback")
                     SettingRow("Version", host.updateStatus) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Mono(host.version, color = Mu.colors.ink)
@@ -115,7 +139,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(4, "Licences")
+                    SectionTitle(if (host.art != null) 5 else 4, "Licences")
                     Help("Inter and JetBrains Mono, SIL Open Font License 1.1. Card images and data from YGOPRODeck. Neue Master Tool is not affiliated with Konami.")
                 }
             }

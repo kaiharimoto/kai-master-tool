@@ -29,7 +29,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import coil3.compose.AsyncImage
+import com.kaiharimoto.mastertool.core.motion.DeskLean
+import com.kaiharimoto.mastertool.core.motion.LeanPose
+import com.kaiharimoto.neue.art.LocalArt
 import coil3.compose.AsyncImagePainter
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
 import com.kaiharimoto.mastertool.core.model.BanStatus
@@ -45,6 +52,12 @@ import com.kaiharimoto.neue.theme.MuMotion
 /** A Yu-Gi-Oh! card is 59 × 86. */
 const val CARD_RATIO = 59f / 86f
 
+/** The width of YGOPRODeck's small render. A card drawn wider than this is an upscale of it. */
+private const val SMALL_WIDTH = 268
+
+/** How many of its own widths the eye is from a leaning card. */
+private const val EYE_WIDTHS = 2.2f
+
 /** How a card's picture is still arriving, arrived, or failed. */
 private enum class ArtState { LOADING, READY, FAILED }
 
@@ -52,9 +65,14 @@ private enum class ArtState { LOADING, READY, FAILED }
  * A card, as Master UI §17 frames a picture.
  *
  * The art is content and keeps its colour; everything the app draws on it is
- * paper and ink. Square corners, no tilt, no lift, no shadow, no hover zoom —
- * the one thing that answers the pointer is the foil, because foil is light
- * and light is what a card does when you move over it.
+ * paper and ink. Square corners, no shadow. The foil answers the pointer,
+ * because foil is light and light is what a card does when you move over it —
+ * and, at kai's request and nowhere but on a card, the card itself may lean and
+ * lift ([motion], `DeskLean`). Chrome never moves.
+ *
+ * - The picture is the full-size original when the art library has it
+ *   ([LocalArt]), else YGOPRODeck's small render. The small one stays
+ *   underneath until the original has decoded, so arriving never flashes.
  *
  * - Pending art is the live hatch at the card's own ratio; failed art is the
  *   static hatch with the name in a paper block (§17.2).
@@ -75,9 +93,16 @@ fun NeueCard(
     foil: String = Foils.HOLO,
     marker: Marker? = null,
     outlined: Boolean = false,
+    /** How the card is leaning this frame; read in the draw phase, so leaning never recomposes. */
+    motion: (() -> LeanPose)? = null,
 ) {
     val c = Mu.colors
     var art by remember(card.id) { mutableStateOf(ArtState.LOADING) }
+    var original by remember(card.id) { mutableStateOf(ArtState.LOADING) }
+    val library = LocalArt.current
+    val hd by remember(card.id, library) {
+        derivedStateOf { library?.let { it.version; it.fileFor(card.id.value) } }
+    }
     // Where the pointer is over the card, -1..1 on each axis; null when it is not.
     var feel by remember { mutableStateOf<Offset?>(null) }
     var hovered by remember { mutableStateOf(false) }
@@ -89,6 +114,25 @@ fun NeueCard(
 
     Box(
         modifier
+            .let { base ->
+                if (motion == null) base else base.graphicsLayer {
+                    val pose = motion()
+                    // Compose turns a positive rotationY right-edge-away; the pose
+                    // is written the other way round, nearest edge up.
+                    rotationX = pose.rotationX
+                    rotationY = -pose.rotationY
+                    scaleX = 1f + pose.lift
+                    scaleY = 1f + pose.lift
+                    // The eye two card-widths off the page, whatever size the card is drawn:
+                    // cameraDistance is in 72-pixel inches, so a fixed one flattens a small
+                    // card to nothing and throws a large one at the viewer.
+                    cameraDistance = (size.width * EYE_WIDTHS / 72f).coerceAtLeast(0.5f)
+                }
+            }
+            .onSizeChanged { px ->
+                // Drawn wider than the small render: ask for the original now, not in its turn.
+                if (px.width > SMALL_WIDTH && hd == null) library?.want(card)
+            }
             .alpha(if (dimmed) 0.35f else 1f)
             .background(c.ink06)
             .clipToBounds()
@@ -101,34 +145,69 @@ fun NeueCard(
                 feel = Offset((p.x / w) * 2f - 1f, (p.y / h) * 2f - 1f)
             },
     ) {
-        if (art != ArtState.READY) {
+        val shown = art == ArtState.READY || original == ArtState.READY
+        if (!shown) {
             Hatch(Modifier.fillMaxSize(), live = art == ArtState.LOADING, color = c.ink25)
         }
-        if (art == ArtState.FAILED) {
+        if (art == ArtState.FAILED && !shown) {
             Box(Modifier.fillMaxSize().padding(6.dp), contentAlignment = Alignment.Center) {
                 Box(Modifier.background(c.paper).padding(horizontal = 4.dp, vertical = 2.dp)) {
                     Help(card.name, color = c.ink, maxLines = 4)
                 }
             }
         }
-        AsyncImage(
-            model = card.imageUrlSmall ?: card.imageUrl,
-            contentDescription = card.name,
-            contentScale = ContentScale.Fit,
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxSize()
                 .drawWithContent {
                     drawContent()
-                    if (art == ArtState.READY) drawFoil(foil, if (foil == Foils.HOLO) light else feel, artFrame)
+                    if (art == ArtState.READY || original == ArtState.READY) {
+                        // The pointer's own light on this card, plus the lean it shares with its
+                        // neighbours — so a card beside the pointer catches light as it turns.
+                        val lean = motion?.invoke()?.light(DeskLean.MAX_DEGREES)
+                        val own = if (foil == Foils.HOLO) light else feel
+                        val lit = when {
+                            lean == null -> own
+                            own == null -> Offset(lean.first, lean.second)
+                            else -> Offset((own.x + lean.first).coerceIn(-1f, 1f), (own.y + lean.second).coerceIn(-1f, 1f))
+                        }
+                        drawFoil(foil, lit, artFrame)
+                    }
                 },
-            onState = { state ->
-                art = when (state) {
-                    is AsyncImagePainter.State.Success -> ArtState.READY
-                    is AsyncImagePainter.State.Error -> ArtState.FAILED
-                    else -> ArtState.LOADING
-                }
-            },
-        )
+        ) {
+            val file = hd
+            if (file == null || original != ArtState.READY) {
+                AsyncImage(
+                    model = card.imageUrlSmall ?: card.imageUrl,
+                    contentDescription = card.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                    onState = { state ->
+                        art = when (state) {
+                            is AsyncImagePainter.State.Success -> ArtState.READY
+                            is AsyncImagePainter.State.Error -> ArtState.FAILED
+                            else -> if (art == ArtState.READY) ArtState.READY else ArtState.LOADING
+                        }
+                    },
+                )
+            }
+            if (file != null) {
+                AsyncImage(
+                    model = file,
+                    contentDescription = card.name,
+                    contentScale = ContentScale.Fit,
+                    filterQuality = FilterQuality.High,
+                    modifier = Modifier.fillMaxSize(),
+                    onState = { state ->
+                        original = when (state) {
+                            is AsyncImagePainter.State.Success -> ArtState.READY
+                            is AsyncImagePainter.State.Error -> ArtState.FAILED
+                            else -> ArtState.LOADING
+                        }
+                    },
+                )
+            }
+        }
 
         val ban = card.banStatus(format)
         if (ban != BanStatus.UNLIMITED) {

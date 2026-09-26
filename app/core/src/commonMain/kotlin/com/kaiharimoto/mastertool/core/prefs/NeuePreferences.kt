@@ -46,6 +46,17 @@ data class NeuePreferences(
     /** The foil on card faces. A style name so that a style added later is a string, not a migration. */
     val foil: String = DEFAULT_FOIL,
     val sound: Boolean = false,
+    /**
+     * The index rail stays out. Off by default: the rail folds away until the
+     * pointer reaches the window's left edge, which is the deck's space back.
+     */
+    val railPinned: Boolean = false,
+    /**
+     * Download every card's full-size picture in the background and draw from
+     * those once they are here. The small renders YGOPRODeck serves for a grid
+     * are 268 pixels wide, and a card drawn larger than that is blurred text.
+     */
+    val hdArt: Boolean = true,
     val window: WindowBounds? = null,
 ) {
     fun sanitised(): NeuePreferences = copy(

@@ -27,6 +27,8 @@ import com.kaiharimoto.mastertool.core.model.Attribute
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.CardCategory
 import com.kaiharimoto.mastertool.core.search.CardFilter
+import com.kaiharimoto.mastertool.core.input.MouseAction
+import com.kaiharimoto.mastertool.core.input.MouseTarget
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.Selection
@@ -150,6 +152,7 @@ fun PoolPane(
                             val selected = (neue.selection as? Selection.InPool)?.card?.id == card.id ||
                                 (neue.searchFocused && i == cursor)
                             val held = drag.held?.let { it.from == null && it.card.id == card.id } == true
+                            val press = rememberPress()
                             NeueCard(
                                 card = card,
                                 modifier = Modifier
@@ -160,14 +163,15 @@ fun PoolPane(
                                         drag = drag,
                                         from = null,
                                         index = i,
-                                        onSelect = {
-                                            neue.poolCursor = i
-                                            neue.selection = Selection.InPool(card, i)
+                                        target = MouseTarget.POOL,
+                                        press = press,
+                                        onAction = { action, at ->
+                                            if (action == MouseAction.SELECT) neue.poolCursor = i
+                                            CardActions.onPool(action, at, card, i, state, neue)
                                         },
-                                        onDouble = { side -> CardActions.add(state, card, toSide = side) },
-                                        menu = { CardActions.poolMenu(card, state) },
                                         dragEnabled = left > 0,
                                     ),
+                                motion = press::pose,
                                 format = state.format,
                                 copies = state.copiesInDeck(card.id),
                                 selected = selected,

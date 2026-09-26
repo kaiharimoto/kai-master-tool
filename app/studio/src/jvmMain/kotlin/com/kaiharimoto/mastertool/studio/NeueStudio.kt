@@ -104,6 +104,12 @@ fun neueMain(args: Array<String>) {
                 val card = id?.let(h.builder.index::byId)
                 if (card != null) h.neue.selection = Selection.InDeck(card, section, index)
             }
+            if (map["immersive"] == "true") h.neue.immersive = true
+            if (map["pinned"] == "true") h.neue.update { it.copy(railPinned = true) }
+            map["reveal"]?.let { spec ->
+                val parts = spec.split(",")
+                h.neue.revealed = com.kaiharimoto.mastertool.core.layout.Revealed(left = "left" in parts, top = "top" in parts, bottom = "bottom" in parts)
+            }
             if (map["palette"] == "true") h.neue.paletteOpen = true
             if (map["help"] == "true") h.neue.helpOpen = true
             map["drawer"]?.let { h.neue.drawer = if (it == "groups") Drawer.GROUPS else Drawer.ISSUES }
@@ -112,9 +118,18 @@ fun neueMain(args: Array<String>) {
             map["hover"]?.let { spec ->
                 val (x, y) = spec.split(",").map { it.toFloat() }
                 scene.sendPointerEvent(PointerEventType.Move, Offset(x * width, y * height))
+                // A second move, so the pointer has arrived rather than appeared: Enter then Move.
+                scene.sendPointerEvent(PointerEventType.Move, Offset(x * width + 1f, y * height))
                 clock.run(60)
             }
 
+            if (map["deckshot"] == "true") {
+                // The shared picture, drawn by the app's own code rather than photographed off the window.
+                val (shot, missing) = h.shots.picture(h.shots.snapshot(h.builder, h.neue))
+                val file = File(out, "$name-deckshot.png")
+                file.writeBytes(shot)
+                println("[neue-studio] ${file.name}  ${shot.size / 1024} KiB  $missing without a picture")
+            }
             val png = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("Skia declined to encode $name")
             val file = File(out, "$name.png")
             file.writeBytes(png.bytes)

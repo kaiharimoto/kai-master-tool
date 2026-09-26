@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.data.PreferencesRepository
+import com.kaiharimoto.mastertool.core.layout.Revealed
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
@@ -25,6 +26,9 @@ enum class Page(val numeral: Int?, val title: String) {
 }
 
 enum class Drawer { ISSUES, GROUPS }
+
+/** A toast the shell owns, with at most one action. */
+data class Note(val message: String, val action: String? = null, val id: Long = System.nanoTime(), val onAction: () -> Unit = {})
 
 /** A card picked out on the builder: a deck position, or a pool row. */
 sealed interface Selection {
@@ -71,6 +75,19 @@ class NeueState(
 
     /** Bumped to ask the pool's search field for focus. */
     var focusSearchTick by mutableStateOf(0)
+
+    /**
+     * Full screen, with the title bar, the builder's header and its footer
+     * folded away until the pointer reaches for them. For the session only:
+     * a window that opened full screen by surprise would be a worse surprise.
+     */
+    var immersive by mutableStateOf(false)
+
+    /** Which folded bars the pointer has brought out (`EdgeReveal`). */
+    var revealed by mutableStateOf(Revealed.NONE)
+
+    /** A line at the bottom right that is the app's rather than the deck's: "Saved", "Copied". */
+    var note by mutableStateOf<Note?>(null)
 
     val overlayOpen: Boolean
         get() = paletteOpen || helpOpen || drawer != null || menu != null || confirmDelete != null

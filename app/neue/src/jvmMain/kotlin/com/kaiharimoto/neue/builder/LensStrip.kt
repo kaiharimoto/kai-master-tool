@@ -31,7 +31,20 @@ import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.hand.LensOdds
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import com.kaiharimoto.neue.Drawer
+import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.cards.GroupMarkers
+import com.kaiharimoto.neue.kit.Icons
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Micro
@@ -54,8 +67,9 @@ import com.kaiharimoto.neue.theme.Mu
  * remove cards from it until then — the one modal gesture in the builder, as on
  * the tablet.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun LensStrip(state: DeckBuilderState, modifier: Modifier = Modifier) {
+fun LensStrip(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
     val c = Mu.colors
     Row(
         modifier
@@ -91,7 +105,11 @@ fun LensStrip(state: DeckBuilderState, modifier: Modifier = Modifier) {
             }
             Mono("${draft.selection.size} cards", color = c.ink45)
             Small("Click cards in the main deck to add or remove them", Modifier.weight(1f), color = c.ink45, maxLines = 1)
-            if (!draft.isNew) MicroLink("✕ Delete group", state::deleteDraftGroup)
+            if (!draft.isNew) {
+                Tip("Delete the group. Its cards stay in the deck") {
+                    MuButton("Delete group", state::deleteDraftGroup, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Trash)
+                }
+            }
             MuButton("Cancel", state::cancelGroupDraft, variant = BtnVariant.GHOST, size = BtnSize.SM)
             MuButton("Save group", state::saveGroupDraft, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
             return@Row
@@ -106,7 +124,7 @@ fun LensStrip(state: DeckBuilderState, modifier: Modifier = Modifier) {
         ) {
             if (state.lens != Lens.DECK && keying.keys.isEmpty()) {
                 Small(
-                    if (state.lens == Lens.ROLES) "No groups yet. Right-click a card, or press N." else "Nothing to show.",
+                    if (state.lens == Lens.ROLES) "No groups yet. Press N, or Shift right-click a card in the deck." else "Nothing to show.",
                     color = c.ink45,
                     maxLines = 1,
                 )
@@ -115,14 +133,36 @@ fun LensStrip(state: DeckBuilderState, modifier: Modifier = Modifier) {
                 val isolated = state.isolatedKey == key.id
                 val source = remember(key.id) { MutableInteractionSource() }
                 val hovered by source.collectIsHoveredAsState()
-                Tip("Isolate ${key.label.lowercase()}. Chance of opening at least one in five cards") {
+                // A key on the Roles lens is a group the user drew, and can be changed from here.
+                val group = if (state.lens == Lens.ROLES) state.groups.byId(key.id) else null
+                var at by remember(key.id) { mutableStateOf(Offset.Zero) }
+                Tip(
+                    "Isolate ${key.label.lowercase()}. Chance of opening at least one in five cards" +
+                        if (group != null) ". Right-click to edit or delete it" else "",
+                ) {
                     Row(
                         Modifier
                             .height(28.dp)
+                            .onGloballyPositioned { at = it.positionInWindow() }
                             .background(animatedColor(if (isolated) c.ink else Color.Transparent))
                             .border(1.dp, if (isolated || hovered) c.ink else c.ink25)
                             .hoverable(source)
                             .pointerHoverIcon(PointerIcon.Hand)
+                            .onPointerEvent(PointerEventType.Press) { event ->
+                                if (group != null && event.buttons.isSecondaryPressed) {
+                                    val p = event.changes.first().position
+                                    neue.menu = MenuSpec(
+                                        at + p,
+                                        listOf(
+                                            MenuEntry("Edit cards in “${group.name}”") { state.editGroup(group) },
+                                            MenuEntry("Rename or recolour", hint = "G") { neue.drawer = Drawer.GROUPS },
+                                            MenuEntry("Delete group", danger = true, separatorBefore = true) {
+                                                com.kaiharimoto.neue.shell.deleteGroup(state, group.id)
+                                            },
+                                        ),
+                                    )
+                                }
+                            }
                             .clickable(interactionSource = source, indication = null) { state.toggleIsolation(key.id) }
                             .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -135,6 +175,9 @@ fun LensStrip(state: DeckBuilderState, modifier: Modifier = Modifier) {
                     }
                 }
             }
+        }
+        if (state.lens == Lens.ROLES && state.groups.groups.isNotEmpty()) {
+            MicroLink("Edit groups", { neue.drawer = Drawer.GROUPS })
         }
         if (state.lens == Lens.ROLES || state.lens == Lens.DECK) {
             MicroLink("+ New group", { state.startGroupDraft() })

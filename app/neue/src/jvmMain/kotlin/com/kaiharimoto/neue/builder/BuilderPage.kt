@@ -72,10 +72,13 @@ fun BuilderPage(
     drag: NeueDrag,
     onFormat: (Format) -> Unit,
     onSearchEffects: (Boolean) -> Unit,
+    bars: Boolean = true,
+    onScreenshot: () -> Unit = {},
 ) {
-    val c = Mu.colors
     Column(Modifier.fillMaxSize()) {
-        BuilderHeader(state, neue, onFormat)
+        // In immersive mode the shell draws the header and footer itself, folded
+        // over the page, so the deck is fitted to the whole window.
+        if (bars) BuilderHeader(state, neue, onFormat, onScreenshot)
         Row(Modifier.weight(1f).fillMaxWidth()) {
             if (neue.prefs.poolVisible) {
                 PoolPane(state, neue, drag, onSearchEffects, Modifier.width(neue.prefs.poolWidth.dp).fillMaxHeight())
@@ -87,12 +90,12 @@ fun BuilderPage(
                 Inspector(state, neue, Modifier.width(neue.prefs.inspectorWidth.dp).fillMaxHeight())
             }
         }
-        BuilderFooter(state, neue)
+        if (bars) BuilderFooter(state, neue)
     }
 }
 
 @Composable
-private fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -> Unit) {
+fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -> Unit, onScreenshot: () -> Unit) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     Row(
@@ -144,6 +147,9 @@ private fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (F
             Tip("Export the deck", kbd = kbd(DeskAction.EXPORT)) {
                 MuButton("Export", state::exportToFile, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Export)
             }
+            Tip("A picture of the deck, without the window around it", kbd = kbd(DeskAction.SCREENSHOT)) {
+                MuButton("Screenshot", onScreenshot, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Camera)
+            }
             Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
             Tip("Show or hide the pool", kbd = kbd(DeskAction.TOGGLE_POOL)) {
                 IconButton(Icons.PanelLeft, { neue.update { it.copy(poolVisible = !it.poolVisible) } }, toggled = neue.prefs.poolVisible, size = 32.dp)
@@ -157,7 +163,7 @@ private fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (F
 
 /** The page's one strong rule, its status in mono, and its one primary action. */
 @Composable
-private fun BuilderFooter(state: DeckBuilderState, neue: NeueState) {
+fun BuilderFooter(state: DeckBuilderState, neue: NeueState) {
     val c = Mu.colors
     val validation = state.validation
     Row(

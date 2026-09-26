@@ -33,6 +33,7 @@ object DeskKeys {
         Key.Delete to "delete",
         Key.Backspace to "backspace",
         Key.F1 to "f1",
+        Key.F11 to "f11",
         Key.Zero to "0",
         Key.One to "1",
         Key.Two to "2",

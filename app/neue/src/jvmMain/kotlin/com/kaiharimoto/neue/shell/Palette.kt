@@ -48,7 +48,9 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.input.DeskMouse
 import com.kaiharimoto.mastertool.core.input.DeskScope
+import com.kaiharimoto.mastertool.core.input.MouseTarget
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Kbd
@@ -186,9 +188,9 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
 @Composable
 fun HelpDialog(onDismiss: () -> Unit) {
     val c = Mu.colors
-    MuDialog("Keyboard shortcuts", onDismiss, width = 896.dp, description = "Every shortcut in Neue Master Tool. The palette, Ctrl K, reaches all of them by name.") {
+    MuDialog("Keyboard and mouse", onDismiss, width = 896.dp, description = "Every shortcut in Neue Master Tool, and what the mouse does to a card. The palette, Ctrl K, reaches every shortcut by name.") {
         val scroll = androidx.compose.foundation.rememberScrollState()
-        Box(Modifier.heightIn(max = 560.dp)) {
+        Box(Modifier.heightIn(max = 420.dp)) {
             Row(
                 Modifier.fillMaxWidth().padding(end = 12.dp).verticalScroll(scroll),
                 horizontalArrangement = Arrangement.spacedBy(40.dp),
@@ -216,12 +218,30 @@ fun HelpDialog(onDismiss: () -> Unit) {
             }
             ScrollbarFor(scroll)
         }
+        // The mouse, from its own table: the two places a card can be, side by side.
+        Row(Modifier.fillMaxWidth().padding(top = 24.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            MouseTarget.entries.forEach { target ->
+                Column(Modifier.weight(1f)) {
+                    SectionTitle(null, target.heading)
+                    DeskMouse.all.filter { it.target == target }.forEach { row ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            RowText(row.description, Modifier.weight(1f))
+                            Kbd(row.gesture.label)
+                        }
+                        HRule()
+                    }
+                }
+            }
+        }
         MuText(
-            "The mouse: hover a card to read it · double-click to add · Shift double-click for the side deck · right-click for everything else · drag anywhere.",
+            "The index folds away: move to the left edge of the window to bring it out. F11 is immersive mode, where the top and bottom bars fold away too.",
             Modifier.padding(top = 20.dp),
             MuType.help(LocalMuFonts.current),
             color = c.ink45,
         )
     }
 }
-
