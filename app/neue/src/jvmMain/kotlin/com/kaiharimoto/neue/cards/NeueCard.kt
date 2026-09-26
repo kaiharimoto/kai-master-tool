@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
+import com.kaiharimoto.mastertool.core.layout.ArtFrame
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.Format
@@ -82,6 +83,8 @@ fun NeueCard(
     var hovered by remember { mutableStateOf(false) }
     // The light follows the pointer and settles back when it leaves, over the
     // family's base duration: light moving, never the card.
+    // The frame round the artwork moves with the card's template, so the foil lands on it.
+    val artFrame = remember(card.frameType) { ArtFrame.of(card.frameType) }
     val light by animateOffsetAsState(feel ?: Offset.Zero, tween(MuMotion.BASE, easing = MuMotion.ease), label = "light")
 
     Box(
@@ -116,7 +119,7 @@ fun NeueCard(
                 .fillMaxSize()
                 .drawWithContent {
                     drawContent()
-                    if (art == ArtState.READY) drawFoil(foil, if (foil == Foils.HOLO) light else feel)
+                    if (art == ArtState.READY) drawFoil(foil, if (foil == Foils.HOLO) light else feel, artFrame)
                 },
             onState = { state ->
                 art = when (state) {

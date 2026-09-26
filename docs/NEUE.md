@@ -86,6 +86,18 @@ diffraction grating pressed into it:
 - a **rim** where the stamp meets the print, lit by the same key, with an ink
   hairline.
 
+**The frame round the artwork is the same stamp.** One set of grooves runs
+across the card, so the border and the art frame catch the light together. Where
+that frame is depends on the card's template, and `core/layout/ArtFrame.kt`
+holds the three, measured to the pixel off YGOPRODeck's renders (813 × 1185):
+**standard** for every monster, spell, trap and token frame, a square bevel from
+(86, 205) to (728, 846); **pendulum**, wider and reaching down past the scales
+because the art runs on behind the pendulum-effect box, from (44, 204) to (769,
+887); and **Link**, the standard square with the eight arrow sockets left
+unfoiled, because they are printed over it. Skill cards have no frame here.
+`ArtFrameTest` pins the shapes; `:studio:shootFoil --cards=id:frameType,...`
+draws a row of card types for checking the alignment by eye.
+
 The eye is a couple of card-widths away and the **pointer moves it**: a mouse
 stands in for tilting the card, and the light glides there over 180 ms when
 the pointer leaves. The card itself never moves. Where runtime shaders are

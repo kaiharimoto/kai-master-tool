@@ -2,6 +2,7 @@ package com.kaiharimoto.neue.cards
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.kaiharimoto.mastertool.core.layout.ArtFrame
 import com.kaiharimoto.mastertool.ui.theme.drawPrismaticInset
 import com.kaiharimoto.mastertool.ui.theme.foilAngleFor
 
@@ -30,12 +31,12 @@ object Foils {
     fun label(id: String): String = all.firstOrNull { it.id == id }?.label ?: id
 }
 
-fun DrawScope.drawFoil(style: String, feel: Offset?) {
+fun DrawScope.drawFoil(style: String, feel: Offset?, frame: ArtFrame? = null) {
     when (style) {
         Foils.OFF -> Unit
         // Where there is no runtime shader, the classic band stands in (DESIGN.md §6:
         // every shader keeps a drawing that works without one).
-        Foils.HOLO -> with(Holo) { if (!drawHolo(feel ?: Offset.Zero)) drawClassic(feel) }
+        Foils.HOLO -> with(Holo) { if (!drawHolo(feel ?: Offset.Zero, frame)) drawClassic(feel) }
         else -> drawClassic(feel)
     }
 }
