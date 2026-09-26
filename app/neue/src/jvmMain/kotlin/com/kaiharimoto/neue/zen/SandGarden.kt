@@ -123,7 +123,9 @@ private class Garden {
 
     /** A ball either side of the deck, each in a disk that keeps its distance from the cards. */
     private fun placeTracers() {
-        val clear = BREATHING + FEATHER
+        // Into the start of the feather, where the shader is already calming the sand,
+        // so a figure's inner edge softens away as it nears the cards.
+        val clear = BREATHING + FEATHER * 0.4f
         fun add(left: Float, right: Float, seed: Int) {
             val room = right - left
             val radius = min(room / 2f, height * 0.36f)
@@ -197,7 +199,7 @@ private class Garden {
         const val GROOVE = 5f
 
         /** Seconds for a trail to fade to half its depth. */
-        const val HALF_LIFE = 9f
+        const val HALF_LIFE = 12f
         private const val FADE_EVERY = 1f / 30f
 
         /** Smooth sand round the deck, window pixels, and the width of the fade into it. */
@@ -339,10 +341,11 @@ half4 main(float2 p) {
     // Blender's normals are y-up; the window is y-down.
     float3 g = grain.eval(p).rgb * 2.0 - 1.0;
     g.y = -g.y;
-    n = normalize(float3(n.xy + g.xy * 0.45, n.z * max(g.z, 0.3)));
+    n = normalize(float3(n.xy + g.xy * 0.16, n.z));
     float3 L = normalize(float3(-0.55, -0.62, 0.62));
     float diff = max(dot(n, L), 0.0);
-    float a = albedo.eval(p).r;
+    // The grain is there to be felt, not counted: most of its speckle is flattened out.
+    float a = mix(0.93, albedo.eval(p).r, 0.3);
     // Soft light and a high floor: the sand is a surface to rest the eye on, not a picture.
     float lum = a * (0.86 + 0.34 * diff);
     lum = min(lum, 1.0);
@@ -366,7 +369,7 @@ half4 main(float2 p) {
             child("albedo", a.makeShader(FilterTileMode.REPEAT, FilterTileMode.REPEAT, linear, null))
             uniform("uScale", Garden.SCALE)
             uniform("uInk", if (ink) 1f else 0f)
-            uniform("uRelief", 9f)
+            uniform("uRelief", 15f)
             uniform("uStone", stone.left, stone.top, stone.right, stone.bottom)
             uniform("uClear", Garden.BREATHING)
             uniform("uFeather", Garden.FEATHER)

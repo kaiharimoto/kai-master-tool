@@ -247,7 +247,7 @@ crowded the cards. So: plain, smooth sand; a ball either side of the deck,
 drawing one figure after another from `core/layout/SandPaths.kt` — roses,
 spirograph stars (hypotrochoids) and flowers (epitrochoids), Lissajous weaves,
 breathing spirals, turning limaçon loops — slowly (70 px/s), as a shallow groove;
-and **every trail fades back into the sand as it is drawn** (a half-life of nine
+and **every trail fades back into the sand as it is drawn** (a half-life of twelve
 seconds), so the garden loops forever without filling up. The families come in
 a fresh order each cycle and never twice running, each figure turned and sized
 afresh (`ZenTest` holds both). The cards keep their distance twice over: the
