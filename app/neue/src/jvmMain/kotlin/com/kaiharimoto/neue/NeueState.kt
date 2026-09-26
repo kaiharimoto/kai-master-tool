@@ -1,0 +1,132 @@
+package com.kaiharimoto.neue
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.data.PreferencesRepository
+import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
+import com.kaiharimoto.neue.kit.MenuSpec
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/** The rail's pages, numbered the way the family numbers them. Settings sits below the rail's rule, unnumbered. */
+enum class Page(val numeral: Int?, val title: String) {
+    DECKS(1, "Decks"),
+    BUILDER(2, "Builder"),
+    ODDS(3, "Odds"),
+    STATS(4, "Stats"),
+    SETTINGS(null, "Settings"),
+}
+
+enum class Drawer { ISSUES, GROUPS }
+
+/** A card picked out on the builder: a deck position, or a pool row. */
+sealed interface Selection {
+    val card: Card
+
+    data class InDeck(override val card: Card, val section: DeckSection, val index: Int) : Selection
+    data class InPool(override val card: Card, val row: Int) : Selection
+}
+
+/**
+ * Everything about the window that is not the deck: which page, what is open
+ * on top, what the pointer is over, and the desktop's own settings.
+ *
+ * The deck itself lives in `:ui`'s `DeckBuilderState`, shared with the tablet
+ * so the rules cannot drift between the two apps; this is only the shell.
+ */
+class NeueState(
+    private val repository: PreferencesRepository,
+    private val scope: CoroutineScope,
+) {
+    var page by mutableStateOf(Page.BUILDER)
+
+    var prefs by mutableStateOf(NeuePreferences.DEFAULT)
+        private set
+
+    var paletteOpen by mutableStateOf(false)
+    var helpOpen by mutableStateOf(false)
+    var drawer by mutableStateOf<Drawer?>(null)
+    var menu by mutableStateOf<MenuSpec?>(null)
+
+    /** A deck the user asked to delete, waiting on the confirmation dialog. */
+    var confirmDelete by mutableStateOf<Pair<String, String>?>(null)
+
+    /** The card under the pointer, which the inspector shows. Hover is the desktop's cheapest question. */
+    var hovered by mutableStateOf<Card?>(null)
+
+    /** The card clicked, which the inspector falls back to and `Delete` acts on. */
+    var selection by mutableStateOf<Selection?>(null)
+
+    /** The highlighted pool row, walked by ↑ and ↓. */
+    var poolCursor by mutableStateOf(0)
+
+    var searchFocused by mutableStateOf(false)
+
+    /** Bumped to ask the pool's search field for focus. */
+    var focusSearchTick by mutableStateOf(0)
+
+    val overlayOpen: Boolean
+        get() = paletteOpen || helpOpen || drawer != null || menu != null || confirmDelete != null
+
+    /** What the inspector is showing: the hover, else the selection. */
+    val inspected: Card? get() = hovered ?: selection?.card
+
+    private var loaded = false
+    private var saveJob: Job? = null
+    private val flushScope = CoroutineScope(SupervisorJob())
+
+    fun start() {
+        scope.launch {
+            val stored = repository.loadNeue()
+            // Whatever the user changed while the database was opening wins.
+            if (!loaded) prefs = stored
+            loaded = true
+        }
+    }
+
+    fun update(debounce: Boolean = false, transform: (NeuePreferences) -> NeuePreferences) {
+        loaded = true
+        prefs = transform(prefs).sanitised()
+        saveJob?.cancel()
+        saveJob = scope.launch {
+            if (debounce) delay(400)
+            repository.saveNeue(prefs)
+        }
+    }
+
+    /** The last write before the window closes is the one the user quit to keep. */
+    fun flush() {
+        val last = prefs
+        flushScope.launch { repository.saveNeue(last) }
+    }
+
+    fun toggleTheme() = update { it.copy(theme = if (it.theme == NeueTheme.PAPER) NeueTheme.INK else NeueTheme.PAPER) }
+
+    /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
+    fun dismissTop(): Boolean = when {
+        menu != null -> { menu = null; true }
+        paletteOpen -> { paletteOpen = false; true }
+        confirmDelete != null -> { confirmDelete = null; true }
+        helpOpen -> { helpOpen = false; true }
+        drawer != null -> { drawer = null; true }
+        else -> false
+    }
+
+    fun go(to: Page) {
+        dismissTop()
+        page = to
+    }
+
+    fun focusSearch() {
+        page = Page.BUILDER
+        if (!prefs.poolVisible) update { it.copy(poolVisible = true) }
+        focusSearchTick++
+    }
+}

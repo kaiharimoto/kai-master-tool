@@ -18,9 +18,18 @@ data class Release(
     val apkSizeBytes: Long?,
     val htmlUrl: String,
     val isPreRelease: Boolean,
+    /** Every file attached, for release tracks that ship something other than an APK. */
+    val assets: List<ReleaseAsset> = emptyList(),
 ) {
     val hasApk: Boolean get() = apkUrl != null
 }
+
+/** One file attached to a release. */
+data class ReleaseAsset(
+    val name: String,
+    val url: String,
+    val sizeBytes: Long,
+)
 
 /**
  * Reads the repository's releases from the public GitHub API.
@@ -51,6 +60,27 @@ class GitHubReleaseApi(
         response.body<ReleaseDto>().toDomain()
     }
 
+    /**
+     * The most recent releases of every tag shape, newest first, pre-releases
+     * included.
+     *
+     * `/releases/latest` cannot serve a second release track: it answers with
+     * the newest *non*-pre-release of any tag, which is the APK's by
+     * construction (see `release-neue.yml`). A track that publishes as
+     * pre-releases has to list and filter instead.
+     */
+    suspend fun releases(perPage: Int = 30): Result<List<Release>> = runCatching {
+        val response: HttpResponse = client.get("$baseUrl/repos/$owner/$repo/releases?per_page=$perPage") {
+            header("Accept", "application/vnd.github+json")
+            header("X-GitHub-Api-Version", "2022-11-28")
+        }
+        if (response.status.value == 404) return@runCatching emptyList()
+        if (!response.status.isSuccess()) {
+            error("GitHub returned ${response.status}")
+        }
+        response.body<List<ReleaseDto>>().filterNot { it.draft }.map { it.toDomain() }
+    }
+
     @Serializable
     private data class ReleaseDto(
         @SerialName("tag_name") val tagName: String = "",
@@ -72,6 +102,7 @@ class GitHubReleaseApi(
                 apkSizeBytes = apk?.size,
                 htmlUrl = htmlUrl,
                 isPreRelease = prerelease,
+                assets = assets.map { ReleaseAsset(it.name, it.browserDownloadUrl, it.size) },
             )
         }
     }

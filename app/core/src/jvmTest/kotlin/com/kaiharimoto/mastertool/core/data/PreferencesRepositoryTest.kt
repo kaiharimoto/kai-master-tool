@@ -3,6 +3,8 @@ package com.kaiharimoto.mastertool.core.data
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
 import com.kaiharimoto.mastertool.core.deck.SortMode
 import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.prefs.SectionPreferences
 import com.kaiharimoto.mastertool.core.prefs.UiPreferences
 import kotlinx.coroutines.Dispatchers
@@ -77,5 +79,23 @@ class PreferencesRepositoryTest {
         )
 
         assertTrue(repository.load().side.weight >= SectionPreferences.MIN_WEIGHT)
+    }
+
+    @Test
+    fun theDesktopDocumentLivesBesideTheTabletOne() = runTest {
+        val repository = repository(testDatabase())
+        val tablet = UiPreferences.DEFAULT.copy(searchWeight = 0.5f)
+        val desk = NeuePreferences.DEFAULT.copy(theme = NeueTheme.INK, scale = 1.5f, poolWidth = 520f)
+
+        repository.save(tablet)
+        repository.saveNeue(desk)
+
+        assertEquals(tablet, repository.load())
+        assertEquals(desk, repository.loadNeue())
+    }
+
+    @Test
+    fun theDesktopDocumentDefaultsWhenAbsent() = runTest {
+        assertEquals(NeuePreferences.DEFAULT, repository(testDatabase()).loadNeue())
     }
 }

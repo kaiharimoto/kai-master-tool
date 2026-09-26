@@ -326,6 +326,41 @@ authority** — read it before touching anything in there. The short version:
   after install, not a build error, which is why `app.rsf` already lists every
   service the app will ever call.
 
+## There is a desktop app in another design language: Neue Master Tool
+
+`app/neue/` is **Neue Master Tool**, the deck builder for a mouse, a keyboard
+and a large display, drawn in **Master UI** (`kaiharimoto/Master-UI`,
+`kit/MASTER-UI.md`): paper and ink, zero radius, no shadows, Inter, `01`
+numerals. **`docs/NEUE.md` is the authority.** The short version:
+
+- **It is a separate, installable app** with its own data folder, its own
+  settings document (`NeuePreferences`, key `neue.ui`) and its own release
+  track. It shares `:core` and `:ui`'s state holders (`DeckBuilderState`), and
+  none of `:ui`'s look — no Material, no `MasterToolPalette`. The tablet's
+  design identity below does not apply to it, and its rules do not apply to
+  the tablet.
+- **Master UI is enforced by a test**, `MasterUiLawTest`: a radius, a shadow, a
+  gradient, a colour literal, a Material import, weight 600 or a spring in
+  `neue/` fails CI. Read `MASTER-UI.md` before drawing anything there.
+- **Colour is allowed in exactly two files**, on kai's instruction: the foil
+  on a card's face (`cards/Foil.kt`) and the group markers the user draws on
+  their deck (`cards/GroupMarkers.kt`). Card art keeps its colour as content.
+- **Its keyboard is `core/input/DeskShortcuts.kt`**, a second table beside
+  `ShortcutTable`, so the tablet's exhaustive `when`s never carry desktop
+  actions. The palette and the help dialog render it.
+- **Releases are `neue-v*`, always published as pre-releases**, by
+  `release-neue.yml` (`.msi`, `.dmg`, `.deb`). Never tag one `v*`, and never
+  publish one as a full release: `/releases/latest` is what every APK reads.
+  `windows.upgradeUuid` in `app/neue/build.gradle.kts` and the rule that the
+  version only rises are permanent, like the `versionCode` floor.
+- **Ship a Neue change on its own track**: green `build-app.yml` (its `neue`
+  job), fast-forward `main`, dispatch `release-neue.yml` with the next patch,
+  confirm all three installers attached. A change only to `neue/` needs no APK
+  release; say so.
+- `tools/shoot.sh --neue --page=builder --theme=ink` photographs it headlessly.
+
+Play mode is not in Neue; kai will rebuild it from scratch in a later session.
+
 ## Roadmap State
 
 Shipped: the full deck builder (drag-and-drop, exact consistency calculator,

@@ -1,0 +1,226 @@
+package com.kaiharimoto.neue.builder
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.model.Attribute
+import com.kaiharimoto.mastertool.core.model.BanStatus
+import com.kaiharimoto.mastertool.core.model.CardCategory
+import com.kaiharimoto.mastertool.core.search.CardFilter
+import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
+import com.kaiharimoto.neue.NeueState
+import com.kaiharimoto.neue.Selection
+import com.kaiharimoto.neue.cards.CARD_RATIO
+import com.kaiharimoto.neue.cards.NeueCard
+import com.kaiharimoto.neue.kit.Hatch
+import com.kaiharimoto.neue.kit.HRule
+import com.kaiharimoto.neue.kit.Kbd
+import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.MicroLink
+import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.MuInput
+import com.kaiharimoto.neue.kit.MuSwitch
+import com.kaiharimoto.neue.kit.ScrollbarFor
+import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.kit.Tag
+import com.kaiharimoto.neue.kit.Tip
+import com.kaiharimoto.neue.theme.LocalMuFonts
+import com.kaiharimoto.neue.theme.Mu
+import com.kaiharimoto.neue.theme.MuType
+
+/**
+ * The card pool: search at the top, filters under it when asked for, results
+ * below as a ruled grid of cards.
+ *
+ * The keyboard lives here too. With the caret in the search field ↑ and ↓ walk
+ * the results and Enter adds the highlighted card — type a name, press Enter,
+ * never touch the mouse. That is [NeueState.poolCursor].
+ */
+@Composable
+fun PoolPane(
+    state: DeckBuilderState,
+    neue: NeueState,
+    drag: NeueDrag,
+    onSearchEffects: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val c = Mu.colors
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(neue.focusSearchTick) {
+        if (neue.focusSearchTick > 0) runCatching { focus.requestFocus() }
+    }
+
+    Column(modifier.onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }) {
+        Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MuInput(
+                    value = state.query,
+                    onValueChange = {
+                        state.onQueryChange(it)
+                        neue.poolCursor = 0
+                    },
+                    placeholder = if (state.index.size > 0) "Search ${"%,d".format(state.index.size)} cards" else "Search cards",
+                    focusRequester = focus,
+                    onFocusChange = {
+                        neue.searchFocused = it
+                        state.onTextFieldFocusChanged(it)
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                Kbd("/")
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val shown = state.results.size
+                val meta = buildString {
+                    append(if (shown < state.matchCount) "$shown of ${"%,d".format(state.matchCount)}" else "%,d".format(state.matchCount))
+                    if (state.searchEffects && state.effectMatchCount > 0) append(" · ${state.effectMatchCount} by text")
+                }
+                Mono(meta, Modifier.weight(1f))
+                Tip("Also match the words printed on the card. Prefix name: or text: to choose one") {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Micro("Text", color = c.ink45)
+                        MuSwitch(state.searchEffects, onSearchEffects)
+                    }
+                }
+                val facets = state.filter.activeFacetCount
+                MicroLink(
+                    if (facets > 0) "Filters ($facets)" else "Filters",
+                    { neue.update { it.copy(filtersOpen = !it.filtersOpen) } },
+                    color = if (neue.prefs.filtersOpen || facets > 0) c.ink else c.ink45,
+                )
+            }
+        }
+        if (neue.prefs.filtersOpen) {
+            HRule()
+            FilterPanel(state, Modifier.padding(16.dp))
+        }
+        HRule(color = c.ink)
+
+        val grid = rememberLazyGridState()
+        val cursor = neue.poolCursor.coerceIn(0, (state.results.size - 1).coerceAtLeast(0))
+        LaunchedEffect(cursor, state.results) {
+            val visible = grid.layoutInfo.visibleItemsInfo
+            if (visible.isNotEmpty() && (cursor < visible.first().index || cursor > visible.last().index)) {
+                grid.scrollToItem(cursor)
+            }
+        }
+
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when {
+                state.index.size == 0 -> Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Hatch(Modifier.fillMaxWidth().aspectRatio(3f), live = state.isSyncing, color = c.ink25)
+                    Small(if (state.isSyncing) "Fetching the card pool" else state.syncMessage ?: "No card pool yet", color = c.ink70)
+                }
+                state.results.isEmpty() -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.kaiharimoto.neue.kit.MuText("No matches.", style = MuType.h1(LocalMuFonts.current))
+                    Small("Try fewer words, or turn off a filter.", color = c.ink70)
+                }
+                else -> {
+                    val columns = neue.prefs.poolColumns
+                    LazyVerticalGrid(
+                        columns = if (columns > 0) GridCells.Fixed(columns) else GridCells.Adaptive(112.dp),
+                        state = grid,
+                        modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 12.dp, bottom = 16.dp, end = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        itemsIndexed(state.results, key = { _, card -> card.id.value }) { i, card ->
+                            val left = state.remaining(card)
+                            val selected = (neue.selection as? Selection.InPool)?.card?.id == card.id ||
+                                (neue.searchFocused && i == cursor)
+                            val held = drag.held?.let { it.from == null && it.card.id == card.id } == true
+                            NeueCard(
+                                card = card,
+                                modifier = Modifier
+                                    .aspectRatio(CARD_RATIO)
+                                    .cardPointer(
+                                        card = card,
+                                        neue = neue,
+                                        drag = drag,
+                                        from = null,
+                                        index = i,
+                                        onSelect = {
+                                            neue.poolCursor = i
+                                            neue.selection = Selection.InPool(card, i)
+                                        },
+                                        onDouble = { side -> CardActions.add(state, card, toSide = side) },
+                                        menu = { CardActions.poolMenu(card, state) },
+                                        dragEnabled = left > 0,
+                                    ),
+                                format = state.format,
+                                copies = state.copiesInDeck(card.id),
+                                selected = selected,
+                                dimmed = left <= 0 || held,
+                                foil = neue.prefs.foil,
+                            )
+                        }
+                    }
+                    ScrollbarFor(grid)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FilterPanel(state: DeckBuilderState, modifier: Modifier = Modifier) {
+    val f = state.filter
+    fun <T> Set<T>.toggle(item: T) = if (item in this) this - item else this + item
+
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        FacetRow("Kind") {
+            listOf(CardCategory.MONSTER to "Monster", CardCategory.SPELL to "Spell", CardCategory.TRAP to "Trap").forEach { (value, label) ->
+                Tag(label, value in f.categories, { state.onFilterChange(f.copy(categories = f.categories.toggle(value))) })
+            }
+            Tag("Main deck", f.extraDeckOnly == false, { state.onFilterChange(f.copy(extraDeckOnly = if (f.extraDeckOnly == false) null else false)) })
+            Tag("Extra deck", f.extraDeckOnly == true, { state.onFilterChange(f.copy(extraDeckOnly = if (f.extraDeckOnly == true) null else true)) })
+        }
+        FacetRow("Attribute") {
+            Attribute.entries.filter { it != Attribute.UNKNOWN }.forEach { a ->
+                Tag(a.name.lowercase().replaceFirstChar { it.uppercase() }, a in f.attributes, { state.onFilterChange(f.copy(attributes = f.attributes.toggle(a))) })
+            }
+        }
+        FacetRow("Level or rank") {
+            (1..12).forEach { level ->
+                Tag(level.toString(), level in f.levels, { state.onFilterChange(f.copy(levels = f.levels.toggle(level))) })
+            }
+        }
+        FacetRow("Banlist") {
+            listOf(BanStatus.FORBIDDEN to "Forbidden", BanStatus.LIMITED to "Limited", BanStatus.SEMI_LIMITED to "Semi-limited").forEach { (s, label) ->
+                Tag(label, s in f.banStatuses, { state.onFilterChange(f.copy(banStatuses = f.banStatuses.toggle(s))) })
+            }
+        }
+        if (f.isActive) MicroLink("Clear filters", { state.onFilterChange(CardFilter(format = f.format)) })
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FacetRow(label: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Micro(label, color = Mu.colors.ink45)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+    }
+}

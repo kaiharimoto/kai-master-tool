@@ -18,6 +18,8 @@ kotlin {
         jvmMain.dependencies {
             implementation(project(":ui"))
             implementation(project(":core"))
+            // Neue Master Tool, the desktop builder, is photographed by `shootNeue`.
+            implementation(project(":neue"))
 
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.core)
@@ -81,6 +83,24 @@ tasks.register<JavaExec>("shoot") {
     jvmArgs("-Djava.awt.headless=true", "-Dskiko.renderApi=SOFTWARE")
     // Args come through as `-Pshot.args="..."` so the whole thing is one Gradle
     // invocation from a script.
+    argumentProviders.add(
+        CommandLineArgumentProvider {
+            providers.gradleProperty("shot.args").orNull?.split(" ")?.filter { it.isNotBlank() }
+                ?: emptyList()
+        }
+    )
+}
+
+// Neue Master Tool, one picture per run. Same headless raster as `shoot`.
+tasks.register<JavaExec>("shootNeue") {
+    group = "verification"
+    description = "Renders a page of Neue Master Tool offscreen to a PNG file."
+    dependsOn("jvmMainClasses")
+    mainClass.set("com.kaiharimoto.mastertool.studio.NeueStudio")
+    workingDir = rootProject.projectDir
+    classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
+        kotlin.jvm().compilations.getByName("main").output.allOutputs
+    jvmArgs("-Djava.awt.headless=true", "-Dskiko.renderApi=SOFTWARE", "-Dneue.version=studio")
     argumentProviders.add(
         CommandLineArgumentProvider {
             providers.gradleProperty("shot.args").orNull?.split(" ")?.filter { it.isNotBlank() }

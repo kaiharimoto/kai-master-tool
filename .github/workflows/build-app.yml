@@ -109,3 +109,38 @@ jobs:
       - name: Build desktop application
         working-directory: app
         run: ./gradlew :desktopApp:assemble --stacktrace
+
+  neue:
+    name: Neue Master Tool
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # The Master UI law test runs here (MasterUiLawTest): a colour, a radius or
+      # a shadow in the desktop app fails the build, the way `check.mjs` fails a
+      # web project in the family. Packaging the .deb as well catches a missing
+      # JVM module or resource before a release does.
+      - name: Packaging tools
+        run: sudo apt-get install -y -qq fakeroot
+
+      - name: Test and package
+        working-directory: app
+        run: ./gradlew :neue:jvmTest :neue:packageDeb -Pmastertool.android=true --stacktrace
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: neue-master-tool-deb
+          path: app/neue/build/compose/binaries/main/deb/*.deb
+          if-no-files-found: error

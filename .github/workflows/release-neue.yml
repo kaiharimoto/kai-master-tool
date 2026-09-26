@@ -1,0 +1,210 @@
+name: Release Neue Master Tool
+
+# Publishes Neue Master Tool — the desktop builder in Master UI — as a GitHub
+# release with a Windows .msi, a macOS .dmg and a Linux .deb attached. The app's
+# own updater (`NeueReleaseTrack`) finds it there.
+#
+# ## A third track, kept apart the way the 3DS one is
+#
+# Tags are `neue-v1.0.0`, never `v*`, and every release is a **pre-release**.
+# Both are load-bearing, for the reason spelled out at the top of
+# `release-3ds.yml`: GitHub's `/releases/latest` returns the newest
+# *non*-pre-release of any tag shape, and every installed APK asks exactly that
+# endpoint for its update. A Neue release that was not a pre-release would
+# become the repository's "Latest" and hide the next APK from every tablet.
+# `AppVersion.parse("neue-v…")` reads as unknown as a second fence
+# (`NeueReleaseTrackTest` pins it). Neue itself lists releases and filters by
+# the prefix, so the pre-release flag costs it nothing.
+#
+# ## The permanent numbers
+#
+# - The version only goes up. Windows Installer treats an equal or lower
+#   version as "already installed" and the in-app update does nothing.
+#   MSI versions are `major.minor.build` with major and minor under 256 and
+#   build under 65536 — ample, but it is why the version is three numbers.
+# - `windows.upgradeUuid` in `app/neue/build.gradle.kts` is fixed forever. An
+#   MSI with a different one installs *beside* the old app instead of over it.
+
+on:
+  push:
+    tags:
+      - 'neue-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 1.0.1 (tagged neue-v1.0.1)'
+        required: true
+        type: string
+      republish:
+        description: 'Re-publish the newest version (asset or notes fixes)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-neue
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Resolve the version
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.v.outputs.name }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: v
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RAW="${{ inputs.version }}"
+          else
+            RAW="${GITHUB_REF_NAME}"
+          fi
+          NAME="${RAW#neue-v}"
+          NAME="${NAME#v}"
+          if ! [[ "$NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$NAME' is not major.minor.patch."
+            exit 1
+          fi
+          IFS=. read -r MAJ MIN PAT <<< "$NAME"
+          if [ "$MAJ" -lt 1 ] || [ "$MAJ" -gt 255 ] || [ "$MIN" -gt 255 ] || [ "$PAT" -gt 65535 ]; then
+            echo "::error::$NAME cannot be an MSI or DMG version (major 1-255, minor 0-255, patch 0-65535)."
+            exit 1
+          fi
+          PREV="$(git tag -l 'neue-v*' | sed 's/^neue-v//' \
+                  | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+          if [ -n "$PREV" ]; then
+            HIGHEST="$(printf '%s\n%s\n' "$PREV" "$NAME" | sort -V | tail -1)"
+            if [ "$HIGHEST" != "$NAME" ]; then
+              echo "::error::$NAME does not come after the last released $PREV."
+              exit 1
+            fi
+            if [ "$NAME" = "$PREV" ] && [ "${{ inputs.republish }}" != "true" ]; then
+              echo "::error::$NAME is already released. Pass republish=true to publish over it."
+              exit 1
+            fi
+          fi
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "tag=neue-v$NAME" >> "$GITHUB_OUTPUT"
+          echo "Releasing neue-v$NAME (previous: ${PREV:-none})"
+
+  package:
+    name: Package (${{ matrix.os }})
+    needs: version
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            task: packageMsi
+            ext: msi
+          - os: macos-latest
+            task: packageDmg
+            ext: dmg
+          - os: ubuntu-latest
+            task: packageDeb
+            ext: deb
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # :neue borrows :ui's state holders, and :ui applies the Android library
+      # plugin, so an SDK has to be present to configure it even for a desktop
+      # build. `packages: ''` for the reason given in build-app.yml.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y -qq fakeroot
+
+      - name: Package
+        working-directory: app
+        run: ./gradlew :neue:${{ matrix.task }} -Pmastertool.android=true -Pneue.versionName=${{ needs.version.outputs.name }} --stacktrace
+
+      - name: Name the installer
+        run: |
+          set -euo pipefail
+          FOUND="$(find app/neue/build/compose/binaries -type f -name "*.${{ matrix.ext }}" | head -1)"
+          if [ -z "$FOUND" ]; then
+            echo "::error::no .${{ matrix.ext }} was produced"
+            exit 1
+          fi
+          # The name NeueReleaseTrack.installerName expects, so the updater finds it.
+          cp "$FOUND" "neue-master-tool-${{ needs.version.outputs.name }}.${{ matrix.ext }}"
+          ls -l neue-master-tool-*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neue-${{ matrix.ext }}
+          path: neue-master-tool-*.${{ matrix.ext }}
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    needs: [version, package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: neue-*
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          NAME: ${{ needs.version.outputs.name }}
+        run: |
+          set -euo pipefail
+          ls -l neue-master-tool-*
+          for ext in msi dmg deb; do
+            test -f "neue-master-tool-$NAME.$ext" || { echo "::error::missing .$ext"; exit 1; }
+          done
+
+          NOTES=$(mktemp)
+          {
+            echo "Neue Master Tool $NAME — the deck builder for the desktop, in Master UI."
+            echo
+            echo "- **Windows:** \`neue-master-tool-$NAME.msi\`. Installs for your user, no administrator needed. Windows may warn that the publisher is unknown; the installer is not code-signed yet."
+            echo "- **macOS:** \`neue-master-tool-$NAME.dmg\`. Drag it into Applications. The first time, right-click the app and choose Open, because it is not notarised."
+            echo "- **Linux:** \`neue-master-tool-$NAME.deb\`."
+            echo
+            echo "Once installed, Neue checks here on launch and offers the next version itself."
+            echo
+            echo "This is the Neue track (\`neue-v*\`). It is separate from the Android \`v*\` releases and the 3DS \`3ds-v*\` ones."
+            echo "**It is marked a pre-release on purpose.** GitHub's \`/releases/latest\` returns the newest non-pre-release of any tag, and the Android app's updater reads exactly that; the flag keeps this release from hiding the next APK. Neue reads its own track and is not affected."
+          } > "$NOTES"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --prerelease --notes-file "$NOTES"
+            gh release upload "$TAG" neue-master-tool-* --clobber
+          else
+            gh release create "$TAG" neue-master-tool-* \
+              --title "Neue Master Tool $NAME" \
+              --notes-file "$NOTES" \
+              --target "${{ github.sha }}" \
+              --prerelease \
+              --latest=false
+          fi

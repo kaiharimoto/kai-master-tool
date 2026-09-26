@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.data
 
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.UiPreferences
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +44,28 @@ class PreferencesRepository(
             database.preferenceQueries.upsert(
                 prefKey = KEY,
                 prefValue = json.encodeToString(UiPreferences.serializer(), preferences.sanitised()),
+            )
+        }
+    }
+
+    /**
+     * The desktop builder's own document, under its own key in the same table —
+     * a new row, not a new schema. Unreadable reads as the defaults, as above.
+     */
+    suspend fun loadNeue(): NeuePreferences = withContext(ioDispatcher) {
+        val stored = database.preferenceQueries.selectByKey(NeuePreferences.KEY).executeAsOneOrNull()
+            ?: return@withContext NeuePreferences.DEFAULT
+
+        runCatching { json.decodeFromString(NeuePreferences.serializer(), stored) }
+            .getOrElse { NeuePreferences.DEFAULT }
+            .sanitised()
+    }
+
+    suspend fun saveNeue(preferences: NeuePreferences) {
+        withContext(ioDispatcher) {
+            database.preferenceQueries.upsert(
+                prefKey = NeuePreferences.KEY,
+                prefValue = json.encodeToString(NeuePreferences.serializer(), preferences.sanitised()),
             )
         }
     }
