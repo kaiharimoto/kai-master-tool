@@ -60,6 +60,7 @@ uniform float uArtBevel;  // its width, px; 0 when the card has no art frame
 uniform float uLink;      // 1 when link-arrow sockets interrupt it
 uniform float uCorner;    // how far a corner socket reaches along each edge, px
 uniform float uEdge;      // half the width of an edge socket, px
+uniform float uSheet;     // 1: the stamp everywhere, for a shape the caller masks (the name exploration)
 
 // Wavelength (nm) to linear-ish RGB: Zucconi's six-bump fit to the CIE curves,
 // faded at the ends so orders beyond the visible go dark rather than clamp.
@@ -150,6 +151,8 @@ half4 main(float2 at) {
     float2 inner = c - uBand;                 // half-size of the print
     float d = box(pc, inner);                 // > 0 on the band, < 0 on the print
 
+    if (uSheet > 0.5) return finish(foil(pc, w));
+
     if (d >= 0.0) {
         float3 col = foil(pc, w);
         // 4. Rim: a bevel at the border's inner edge, lit by the key.
@@ -226,6 +229,7 @@ half4 main(float2 at) {
             float("uLink", if (frame?.interrupted == true) 1f else 0f)
             float("uCorner", ArtFrame.LINK_CORNER * w)
             float("uEdge", ArtFrame.LINK_EDGE_HALF * w)
+            float("uSheet", 0f)
         }
         // Only the border, the art frame and their hairlines are shaded: the print is
         // left alone. Nested rectangles under even-odd: card, print, frame, picture.
@@ -241,6 +245,33 @@ half4 main(float2 at) {
             }
         }
         drawPath(region, brush)
+        return true
+    }
+
+    /**
+     * The same stamp over all of [area], lit as though it were part of a card
+     * this size — for a shape the caller then masks. The foil-name exploration
+     * draws it under a mask of the printed letters.
+     */
+    fun DrawScope.drawHoloSheet(area: Rect, feel: Offset): Boolean {
+        val program = shader ?: return false
+        val w = size.width
+        val brush = program.brush {
+            float2("uSize", size.width, size.height)
+            float2("uFeel", feel.x, feel.y)
+            float("uBand", max(1f, w * BAND))
+            float("uGroove", max(3f, w * 0.004f))
+            float("uBevel", max(1.5f, w * 0.006f))
+            float("uLine", max(1f, w * 0.0012f))
+            float2("uArtMin", 0f, 0f)
+            float2("uArtMax", 0f, 0f)
+            float("uArtBevel", 0f)
+            float("uLink", 0f)
+            float("uCorner", 0f)
+            float("uEdge", 0f)
+            float("uSheet", 1f)
+        }
+        drawRect(brush, topLeft = area.topLeft, size = area.size)
         return true
     }
 }

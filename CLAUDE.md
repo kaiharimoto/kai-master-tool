@@ -346,9 +346,25 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   on a card's face (`cards/Foil.kt`, `cards/Holo.kt` — the holographic shader
   kai chose from the Blender mockups) and the group markers the user draws on
   their deck (`cards/GroupMarkers.kt`). Card art keeps its colour as content.
+- **Cards may move, and nothing else may.** kai asked for the deck to lean
+  toward the pointer and for a carried card to tilt and lift; that is
+  `core/motion/DeskLean.kt`, read inside each card's `graphicsLayer` from one
+  frame loop that sleeps when the cards settle. No springs — the law test still
+  refuses them — and `cameraDistance` is set from the card's own width, because
+  it is in 72-pixel inches and a fixed one leaves small cards flat.
 - **Its keyboard is `core/input/DeskShortcuts.kt`**, a second table beside
   `ShortcutTable`, so the tablet's exhaustive `when`s never carry desktop
-  actions. The palette and the help dialog render it.
+  actions. The palette and the help dialog render it. **Its mouse is
+  `core/input/DeskMouse.kt`**: right-click adds from the pool and removes from
+  the deck, hold opens the pool's menu and adds a copy in the deck, Shift
+  right-click is a deck card's menu. `NEUE.md` §4 has why.
+- **The index rail folds away and F11 is immersive mode**, both decided by
+  `core/layout/EdgeReveal.kt`; bars come out *over* the page, never pushing it,
+  or the deck re-fits and every card jumps.
+- **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
+  about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
+  falling back to the small render. `NameInk` (the name in foil) is an
+  exploration kai has not approved; nothing in the app draws with it.
 - **Releases are `neue-v*`, always published as pre-releases**, by
   `release-neue.yml` (`.msi`, `.dmg`, `.deb`). Never tag one `v*`, and never
   publish one as a full release: `/releases/latest` is what every APK reads.

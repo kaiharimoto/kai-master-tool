@@ -56,7 +56,8 @@ primitives. **Material is not used**, not restyled: it is not imported.
 radius, a shadow, a gradient, a colour literal, a Material import, weight 600,
 a spring or an exclamation mark anywhere in `neue/` fails the build.
 
-kai granted two exceptions, and the law test names the two files they live in:
+kai granted three exceptions. The law test names the files the two colour
+ones live in; the third is motion, and lives in `core/motion/DeskLean.kt`:
 
 - **`cards/Foil.kt`** and **`cards/Holo.kt`** — the foil border on a card's
   face. It is kept, as kai asked, and it is content rather than chrome (§17:
@@ -66,6 +67,13 @@ kai granted two exceptions, and the law test names the two files they live in:
   hue shows in the deck's cracks, on its key, on its mark. Lenses that are
   facts rather than the user's own drawing — type, copies, legality — are told
   apart by ink weight, the way everything else in Master UI is.
+
+- **Cards move** — *"have the cards animate and react by tilting in a
+  satisfying way"*, and a card that *"slightly tilts and lifts in 3d space"*
+  when picked up. See §2b. Cards only: chrome never moves, and nothing uses a
+  spring (the law test still refuses one) — a thing that follows a pointer has
+  no duration, so its easing is `DeskLean.approach`, a frame-rate independent
+  half-life.
 
 Card art keeps its colour inside a §17 content frame. Nothing else does.
 
@@ -108,13 +116,58 @@ real `drawFoil` on real card art at scripted pointer positions, or as a sweep
 for a GIF — so the app's foil can be compared frame for frame with the Blender
 reference. Settings → Foil offers Holographic (the default), Classic and Off.
 
+### 2b. Cards that lean
+
+One picture rather than two rules: **the pointer is a finger pressed up under
+a cloth the cards lie on.** The card over it rises (3.5%); the cards around it
+sit on the slope, each with its edge nearest the pointer higher than its far
+edge, falling away over about a card and a half (`DeskLean.toward`). Sweep
+across the deck and the bump travels with you, and each card's foil catches the
+light as it turns. A card being carried lifts 7% and leans back against its own
+motion, its leading edge up (`DeskLean.carried`); the deck makes way for it as
+it passes over.
+
+It is the play stage's recipe: one `LeanField` per deck, stepped by one frame
+loop that **sleeps once the cards settle** (nothing idles), and every card reads
+its pose inside its own `graphicsLayer`, so leaning never recomposes. Two things
+are load-bearing. The hit area is outside the layer, so a leaning card never
+changes what the pointer is over (a card that tilted away from the pointer and
+lost the hover would flicker). And the eye is **2.2 of the card's own widths**
+away: `cameraDistance` is in 72-pixel inches, so a fixed one leaves a small card
+flat and throws a large one at the viewer.
+
+### 2c. The name in foil — an exploration, not a feature
+
+kai asked whether a card's *name* could be stamped in the foil too.
+`core/layout/NameInk.kt` finds the letters in the pixels: every render sets the
+name in one bar left of the attribute icon, and the ink is black or white by
+frame (spells, traps, Xyz and Link are white) — which the frame says more
+reliably than the pixels can. A letter is how far a pixel has gone from the
+bar's median toward its ink, so the letters keep their antialiased edges.
+`:studio:shootNames` draws it three ways (as it is; foil letters; foil letters
+over an ink outline). **Nothing in the app uses it until kai has looked.**
+
 ---
 
 ## 3. The window
 
-A 40 px title bar (mark, wordmark, update pill, `Search Ctrl K`, status), the
-232 px index rail — `01 Decks · 02 Builder · 03 Odds · 04 Stats`, Settings
-below the rule — and the page.
+A 40 px title bar (mark, wordmark, the page you are on, update pill,
+`Search Ctrl K`, immersive mode, status), the 232 px index rail —
+`01 Decks · 02 Builder · 03 Odds · 04 Stats`, Settings below the rule — and the
+page.
+
+**The rail folds away** until the pointer reaches the window's left edge, and
+comes out *over* the page rather than pushing it: a rail that pushed would
+re-fit the deck, and every card would jump. It can be pinned (Settings, or on
+the rail itself). **Immersive mode** (`F11`, or the button in the title bar) is
+full screen with the title bar and the builder's header folded over the top and
+its footer over the bottom, each coming out when the pointer reaches its edge —
+the deck and the panes that build it get the whole screen. `Esc`, last in its
+chain, leaves it; so does leaving full screen any other way. One pointer
+watcher at the root, consuming nothing, decides all of it
+(`core/layout/EdgeReveal.kt`): a bar comes out at 8 px from the edge and folds
+once the pointer is 24 px clear of it; a deck name being typed holds the top
+out; a carried card opens nothing.
 
 **02 Builder** is three columns and a footer. The pool (search, inline
 filters, a ruled grid of cards) and the inspector are resizable and hideable;
@@ -125,20 +178,30 @@ carries the one strong rule, the counts, legality, and the one primary action.
 
 ## 4. Mouse and keyboard
 
-| Mouse | |
-|---|---|
-| hover a card | the inspector shows it |
-| click | select (the inspector keeps it; `Delete` acts on it) |
-| double-click, pool | add to the main or extra deck |
-| Shift double-click, pool | add to the side deck |
-| double-click, deck | remove that copy |
-| right-click | everything else: move, group, copy name, remove all |
-| drag | anywhere, with the tablet's drop rules (`GridDropResolver`, `DeckBuilderState`) |
+The mouse is a table too, `core/input/DeskMouse.kt`, and the help dialog
+(`F1`) renders it:
 
-Presses select immediately and a second press within 350 ms is the
-double-click — no `combinedClickable`, which delays every single click.
-Dragging starts past the slop, with no hold: a mouse scrolls with its wheel,
-so the tablet's 120 ms settle has nothing to disambiguate.
+| | a card in the pool | a card in the deck |
+|---|---|---|
+| hover | the inspector shows it | the inspector shows it |
+| click | select | select |
+| right-click | **add** (main or extra) | **remove this copy** |
+| Shift right-click | add to the side deck | everything else (move, groups, copy name) |
+| hold | everything else (the menu) | **add another copy** |
+| double-click | add (Shift: side) | — |
+| drag | pick it up | move it; drop it on the pool to remove |
+
+That is kai's brief, reconciled: right-click quick-adds, holding left opens the
+menu *except* on a deck card, where it adds a copy, and right-click on a deck
+card removes it. Two pairs collided and the more specific ask won each time,
+which left the deck's menu with no gesture — so it went on Shift + right-click,
+because Shift already means "the other way" (Shift Enter, Shift right-click in
+the pool, both the side deck). `DeskMouseTest` holds kai's six rows and no
+gesture meaning two things.
+
+A press selects at once, then becomes a click, a drag (past the slop) or a hold
+(450 ms still), whichever comes first; the card rises under the button while
+the hold counts down, so the press says what it is about to do.
 
 The keyboard is `DeskShortcuts`, one table resolved in one place, rendered by
 the help dialog (`F1`) and reachable by name from the palette (`Ctrl K`).
@@ -146,6 +209,41 @@ the help dialog (`F1`) and reachable by name from the palette (`Ctrl K`).
 once; `DeskKeysTest` holds every key in the table pressable. The pool keys
 (`↑ ↓ Enter`, `Shift Enter` for the side) are live *while typing in the search
 field* and nowhere else, so confirming a deck name never adds a card.
+
+### 4a. Groups
+
+Every row of the Groups drawer (`G`) says what can be done to it: the name is a
+field (written on Enter or on leaving it, so one rename is one undo), the colour
+is six swatches, and **Edit cards**, up, down and **Delete** are buttons on the
+row. Delete keeps the cards and offers Undo. On the Roles lens, right-click a key
+for the same; `Edit groups` sits beside `+ New group`. Before this, deleting a
+group meant opening it and finding a link in the lens strip, and kai could not
+tell it was possible.
+
+### 4b. High-resolution art
+
+YGOPRODeck's small renders are 268 px wide, and the inspector — and the deck, on
+a large display — draws wider than that, which blurs the small print first.
+`art/ArtLibrary.kt` downloads every card's 813 × 1185 original into
+`<data>/card-art-hd` while the app is used: what is on screen first (the deck,
+the card being read, the pool's results, anything drawn wider than 268 px), then
+the rest of the pool. About 2 GB. Four at a time, under a dozen requests a
+second (YGOPRODeck allows twenty and asks that images be kept, not re-fetched);
+a file is written beside its name and moved into place, so quitting halfway
+costs one picture. A card draws the original the moment it is on disk, over the
+small render until it has decoded, so arriving never flashes. Settings has the
+switch, the count, the size and the folder.
+
+### 4c. The screenshot
+
+`Ctrl Shift S`, or Screenshot in the header: main, extra and side as they stand,
+with none of the window — and with the lens's colours and a legend if a lens was
+on, because that is the part of a deck its builder drew. Above them, the deck's
+name, its counts, its format, the date, and the newest TCG set already out on
+that date (`cardsets.php`, `CardSetReleases.latest` — the feed lists announced
+sets too). Drawn by `shot/DeckShot.kt` offscreen at 2× from the originals, 1600
+dp wide, in the theme you are in. `tools/shoot.sh --neue --deckshot` renders it
+headlessly.
 
 ---
 

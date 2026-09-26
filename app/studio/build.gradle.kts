@@ -127,3 +127,20 @@ tasks.register<JavaExec>("shootFoil") {
         }
     )
 }
+
+tasks.register<JavaExec>("shootNames") {
+    group = "verification"
+    description = "Renders the foil-name exploration: card names stamped in the foil, beside the cards as they are."
+    dependsOn("jvmMainClasses")
+    mainClass.set("com.kaiharimoto.mastertool.studio.NameFoilStudio")
+    workingDir = rootProject.projectDir
+    classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
+        kotlin.jvm().compilations.getByName("main").output.allOutputs
+    jvmArgs("-Djava.awt.headless=true", "-Dskiko.renderApi=SOFTWARE")
+    argumentProviders.add(
+        CommandLineArgumentProvider {
+            providers.gradleProperty("shot.args").orNull?.split(" ")?.filter { it.isNotBlank() }
+                ?: emptyList()
+        }
+    )
+}
