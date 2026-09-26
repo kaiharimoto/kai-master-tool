@@ -8,7 +8,6 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import com.kaiharimoto.mastertool.core.layout.GardenRect
-import com.kaiharimoto.mastertool.core.layout.Rake
 import com.kaiharimoto.mastertool.core.layout.RakeProgram
 import com.kaiharimoto.mastertool.core.layout.Samon
 import org.jetbrains.skia.EncodedImageFormat
@@ -81,7 +80,7 @@ class GardenReel {
             (0 until cycles).map { p.composition(it).samon }.toSet().size == minOf(cycles, kinds.size) && p.composition(0).samon == Samon.MIZUMON
         }
         val program = RakeProgram(w.toFloat(), h.toFloat(), stoneFor(w), seed)
-        val sweep = Rake.sweepTime(w.toFloat()) + (System.getenv("GARDEN_REEL_PAD")?.toFloat() ?: 0f)
+        val sweep = program.grain.sweepTime(w.toFloat()) + (System.getenv("GARDEN_REEL_PAD")?.toFloat() ?: 0f)
         val times = mutableListOf<Float>()
         val labels = mutableListOf<String>()
         var t = 0f

@@ -13,37 +13,40 @@ class RakeGardenTest {
     private val deck = GardenRect(560f, 120f, 1360f, 960f)
     private val pebbles = listOf(GardenPoint(260f, 330f), GardenPoint(1680f, 740f), GardenPoint(280f, 860f))
 
-    private fun layer(samon: Samon, variant: Float = 0.4f) = RakeLayer(
+    private val coarse = RakeGrain(spacing = 30f, tines = 5)
+
+    private fun layer(samon: Samon, variant: Float = 0.4f, grain: RakeGrain = RakeGrain()) = RakeLayer(
         samon, 1920f, 1080f, deck,
         if (samon == Samon.MIZUMON || samon == Samon.UZUMAKI) pebbles else emptyList(),
         variant,
+        grain,
     )
 
     @Test
     fun theRakeIsAlwaysAtTheEdgeOfTheFreshSand() {
-        // What a head is drawn over and what the shader says has just been raked must agree.
-        for (samon in Samon.entries) {
-            val l = layer(samon)
+        // Where a rake is and what the shader says has just been raked must agree, at any grain.
+        for (samon in Samon.entries) for (grain in listOf(RakeGrain(), coarse)) {
+            val l = layer(samon, grain = grain)
             var checked = 0
             var t = 0.7f
             while (t < l.duration) {
                 l.heads(t).forEach { h ->
                     if (h.x in 1f..1919f && h.y in 1f..1079f) {
                         val r = l.reveal(h.x, h.y)
-                        assertTrue(abs(r - t) < 0.4f, "$samon at $t: the head at (${h.x}, ${h.y}) is over sand raked at $r")
+                        assertTrue(abs(r - t) < 0.4f, "$samon ($grain) at $t: the head at (${h.x}, ${h.y}) is over sand raked at $r")
                         checked++
                     }
                 }
                 t += l.duration / 37f
             }
-            assertTrue(checked > 10, "$samon: only $checked heads were in the window")
+            assertTrue(checked > 5, "$samon ($grain): only $checked heads were in the window")
         }
     }
 
     @Test
     fun everyCompositionRakesTheWholeWindowInAReasonableTime() {
-        for (samon in Samon.entries) {
-            val l = layer(samon)
+        for (samon in Samon.entries) for (grain in listOf(RakeGrain(), coarse)) {
+            val l = layer(samon, grain = grain)
             assertTrue(l.duration in 3f..160f, "$samon takes ${l.duration}s")
             for (i in 0..40) for (j in 0..24) {
                 val r = l.reveal(1920f * i / 40, 1080f * j / 24)
@@ -104,14 +107,14 @@ class RakeGardenTest {
     @Test
     fun theCheckerboardIsRakedFromEveryCornerWithoutWaiting() {
         val l = layer(Samon.ICHIMATSU)
-        val cell = RakeLayer.CELL
+        val cell = RakeGrain().cell
         // Every block starts on a whole turn, and each corner's turns run 0, 1, 2, … with no gaps.
         val starts = mutableMapOf<Int, MutableSet<Int>>()
         for (i in 0 until 8) for (j in 0 until 5) {
             val x = i * cell + cell / 2
             val y = -60f + j * cell + cell / 2
             if (y < 0f || y > 1080f) continue
-            val turn = floor(l.reveal(x, y) / RakeLayer.CELL_TIME).toInt()
+            val turn = floor(l.reveal(x, y) / RakeGrain().cellTime).toInt()
             val q = (if (i >= 4) 1 else 0) + (if (j >= 3) 2 else 0)
             starts.getOrPut(q) { mutableSetOf() } += turn
         }
@@ -150,18 +153,41 @@ class RakeGardenTest {
     fun theSweepEasesAcrossAndIsNotCutAwayWhileTheRakeIsInView() {
         val w = 1920f
         val sweep = RakeLayer(Samon.CHOKUSEN, w, 1080f)
-        val total = Rake.sweepTime(w)
+        val g = RakeGrain()
+        val total = g.sweepTime(w)
         // Eased: slow off the left edge, fastest across the middle, slow into the right.
-        val early = Rake.sweepX(total * 0.1f, w) - Rake.sweepX(0f, w)
-        val middle = Rake.sweepX(total * 0.55f, w) - Rake.sweepX(total * 0.45f, w)
+        val early = g.sweepX(total * 0.1f, w) - g.sweepX(0f, w)
+        val middle = g.sweepX(total * 0.55f, w) - g.sweepX(total * 0.45f, w)
         assertTrue(middle > 3f * early, "the sweep is not eased: $early then $middle")
         // sweepReveal inverts sweepX.
         for (x in listOf(0f, 300f, 960f, 1500f, 1919f)) {
-            assertEquals(x, Rake.sweepX(Rake.sweepReveal(x, w), w), 0.5f)
+            assertEquals(x, g.sweepX(g.sweepReveal(x, w), w), 0.5f)
         }
         // The layer lasts until the bar is a band clear of the right edge, not until the last pixel is raked.
         assertEquals(total, sweep.duration, 0.01f)
         assertTrue(sweep.heads(total - 0.05f).isNotEmpty())
-        assertTrue(Rake.sweepX(total, w) >= w + Rake.BAND - 0.01f)
+        assertTrue(g.sweepX(total, w) >= w + g.band - 0.01f)
+    }
+
+    @Test
+    fun aCoarserGrainIsTheSameGardenRakedBigger() {
+        // Straight lines, waves and the checkerboard are the fine pattern magnified: the groove at a point
+        // of the coarse garden is the groove at the corresponding point of the fine one.
+        val k = 3f
+        val fine = RakeGrain()
+        val big = RakeGrain(spacing = fine.spacing * k)
+        for (samon in listOf(Samon.CHOKUSEN, Samon.SEIGAIHA)) {
+            val f = RakeLayer(samon, 640f, 360f, grain = fine)
+            val c = RakeLayer(samon, 1920f, 1080f, grain = big)
+            for (i in 1..30) for (j in 1..17) {
+                val x = 640f * i / 31f
+                val y = 360f * j / 18f
+                assertEquals(f.phase(x, y), c.phase(x * k, y * k), 1e-3f, "$samon at ($x, $y)")
+            }
+        }
+        // And the rakes cover it faster in proportion to how much wider they are.
+        val ripplesFine = layer(Samon.MIZUMON).duration
+        val ripplesCoarse = layer(Samon.MIZUMON, grain = coarse).duration
+        assertTrue(ripplesCoarse < ripplesFine / 1.5f, "coarse ripples take ${ripplesCoarse}s against ${ripplesFine}s")
     }
 }

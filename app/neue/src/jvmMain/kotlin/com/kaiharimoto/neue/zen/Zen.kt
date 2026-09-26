@@ -34,6 +34,9 @@ class ZenLayer {
     /** The garden's choice of compositions; null draws a fresh one each zen. The studio fixes it. */
     var gardenSeed: Int? = null
 
+    /** How the garden is raked and lit. Plain: the garden reads it as it draws. */
+    var gardenLook: GardenLook = GardenLook()
+
     /** Where the pointer is in the window while immersive, for the deck to turn toward in zen. */
     var pointer by mutableStateOf<Offset?>(null)
 

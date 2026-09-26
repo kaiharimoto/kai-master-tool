@@ -128,9 +128,9 @@ fun neueMain(args: Array<String>) {
                 // --garden-plan: when each composition is raked, held and wiped, for choosing --garden-at.
                 if (map["garden-plan"] == "true") {
                     val stone = h.zen.deckInZen.let { com.kaiharimoto.mastertool.core.layout.GardenRect(it.left, it.top, it.right, it.bottom) }
-                    val program = com.kaiharimoto.mastertool.core.layout.RakeProgram(width.toFloat(), height.toFloat(), stone, h.zen.gardenSeed ?: 7)
+                    val program = com.kaiharimoto.mastertool.core.layout.RakeProgram(width.toFloat(), height.toFloat(), stone, h.zen.gardenSeed ?: 7, h.zen.gardenLook.grain)
                     var t = com.kaiharimoto.mastertool.core.layout.RakeProgram.OPENING
-                    val wipe = com.kaiharimoto.mastertool.core.layout.RakeLayer(com.kaiharimoto.mastertool.core.layout.Samon.CHOKUSEN, width.toFloat(), height.toFloat()).duration
+                    val wipe = com.kaiharimoto.mastertool.core.layout.RakeLayer(com.kaiharimoto.mastertool.core.layout.Samon.CHOKUSEN, width.toFloat(), height.toFloat(), grain = h.zen.gardenLook.grain).duration
                     repeat(8) { n ->
                         val c = program.composition(n)
                         println("[neue-studio] garden %d %-9s raked %6.1f..%6.1f  held ..%6.1f  wiped ..%6.1f".format(
@@ -142,6 +142,32 @@ fun neueMain(args: Array<String>) {
                 map["garden-at"]?.let { at ->
                     h.zen.time += at.toFloat() - (map["zen-seconds"] ?: "4").toFloat()
                     clock.run(2)
+                }
+                // --garden-looks=all|a-fine,b-double: each look, on the finished compositions named by
+                // --garden-holds (default ripples and flowing water), one still apiece.
+                map["garden-looks"]?.let { spec ->
+                    val looks = com.kaiharimoto.neue.zen.GardenLook.MOCKUPS.filterKeys { spec == "all" || it in spec.split(",") }
+                    val wanted = (map["garden-holds"] ?: "MIZUMON,RYUSUI").split(",").map { com.kaiharimoto.mastertool.core.layout.Samon.valueOf(it) }
+                    val stone = h.zen.deckInZen.let { com.kaiharimoto.mastertool.core.layout.GardenRect(it.left, it.top, it.right, it.bottom) }
+                    val seed = (1..5000).first { s ->
+                        val p = com.kaiharimoto.mastertool.core.layout.RakeProgram(width.toFloat(), height.toFloat(), stone, s)
+                        wanted.indices.all { p.composition(it).samon == wanted[it] }
+                    }
+                    h.zen.gardenSeed = seed
+                    looks.forEach { (lookName, look) ->
+                        val program = com.kaiharimoto.mastertool.core.layout.RakeProgram(width.toFloat(), height.toFloat(), stone, seed, look.grain)
+                        h.zen.gardenLook = look
+                        var t = com.kaiharimoto.mastertool.core.layout.RakeProgram.OPENING
+                        wanted.indices.forEach { n ->
+                            val c = program.composition(n)
+                            h.zen.time = t + c.duration + com.kaiharimoto.mastertool.core.layout.RakeProgram.HOLD / 2f
+                            clock.run(2)
+                            val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
+                            File(out, "$name-$lookName-${c.samon.name.lowercase()}.png").writeBytes(still.bytes)
+                            println("[neue-studio] $lookName ${c.samon}: raked in %.0fs".format(c.duration))
+                            t += c.duration + com.kaiharimoto.mastertool.core.layout.RakeProgram.HOLD + look.grain.sweepTime(width.toFloat()) + com.kaiharimoto.mastertool.core.layout.RakeProgram.REST
+                        }
+                    }
                 }
                 // --garden-times=a,b,c: one still per garden time, in seconds. The garden's clock
                 // started with zen's, so setting zen's sets the garden's.

@@ -11,7 +11,7 @@ import androidx.compose.ui.graphics.asComposeShader
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import com.kaiharimoto.mastertool.core.layout.GardenRect
-import com.kaiharimoto.mastertool.core.layout.Rake
+import com.kaiharimoto.mastertool.core.layout.RakeGrain
 import com.kaiharimoto.mastertool.core.layout.RakeLayer
 import com.kaiharimoto.mastertool.core.layout.RakeProgram
 import com.kaiharimoto.mastertool.core.layout.Samon
@@ -46,13 +46,44 @@ import org.jetbrains.skia.Shader
  * Blender (`tools/zen/garden.py`).
  * White gravel on paper, black on ink, and never a colour.
  */
+/**
+ * How the garden is raked and lit: everything about its look that is not which
+ * pattern it is. [grain] is how coarse the raking is (core's `RakeGrain`, which
+ * every pattern is measured in); the rest is how a groove is shaped and lit.
+ */
+data class GardenLook(
+    val grain: RakeGrain = RakeGrain(),
+    /** How deep a groove is, against its pitch. */
+    val relief: Float = 1.6f,
+    /** 0 a round sine; 1 a tine's furrow, a narrow trough under a broad rounded ridge. */
+    val profile: Float = 0f,
+    /** The light's height (the z of its direction before normalising): lower rakes across the grooves. */
+    val lightZ: Float = 0.56f,
+    /** How much darker a groove's bottom is than its crest. */
+    val cavity: Float = 0.1f,
+    /** How big the grains of sand are drawn against the baked texture. */
+    val texScale: Float = 1f,
+) {
+    companion object {
+        /** The looks put to kai to choose between: the same garden, raked and lit six ways. */
+        val MOCKUPS: Map<String, GardenLook> = linkedMapOf(
+            "a-fine" to GardenLook(),
+            "b-double" to GardenLook(RakeGrain(spacing = 20f), texScale = 1.4f),
+            "c-bold" to GardenLook(RakeGrain(spacing = 32f, tines = 5), texScale = 2f),
+            "d-furrow" to GardenLook(RakeGrain(spacing = 20f), relief = 1.8f, profile = 1f, cavity = 0.18f, texScale = 1.4f),
+            "e-raking-light" to GardenLook(RakeGrain(spacing = 32f, tines = 5), profile = 1f, lightZ = 0.34f, cavity = 0.2f, texScale = 2f),
+            "f-grand" to GardenLook(RakeGrain(spacing = 48f, tines = 4), relief = 1.6f, profile = 1f, lightZ = 0.42f, cavity = 0.2f, texScale = 2.8f),
+        )
+    }
+}
+
 @Composable
 fun SandGarden(zen: ZenLayer, ink: Boolean, modifier: Modifier = Modifier) {
     // The garden's own clock starts when it does, so every zen opens on straight lines.
     val start = remember { zen.time }
     val garden = remember { Garden() }
     Canvas(modifier.graphicsLayer { alpha = zen.deep.coerceIn(0f, 1f) }) {
-        garden.prepare(size.width, size.height, zen.deckInZen.let { GardenRect(it.left, it.top, it.right, it.bottom) }, zen.gardenSeed)
+        garden.prepare(size.width, size.height, zen.deckInZen.let { GardenRect(it.left, it.top, it.right, it.bottom) }, zen.gardenSeed, zen.gardenLook)
         garden.draw(this, zen.time - start, ink)
     }
 }
@@ -62,18 +93,20 @@ internal class Garden {
     private var width = 0f
     private var height = 0f
     private var stone: GardenRect? = null
+    private var look = GardenLook()
 
-    fun prepare(w: Float, h: Float, deck: GardenRect, seed: Int?) {
-        if (program != null && w == width && h == height) return
+    fun prepare(w: Float, h: Float, deck: GardenRect, seed: Int?, look: GardenLook = GardenLook()) {
+        if (program != null && w == width && h == height && look == this.look) return
         width = w
         height = h
+        this.look = look
         stone = deck.takeIf { it.width > 0f && it.height > 0f }
-        program = RakeProgram(w, h, stone, seed = seed ?: (System.nanoTime() and 0xFFFF).toInt())
+        program = RakeProgram(w, h, stone, seed = seed ?: (System.nanoTime() and 0xFFFF).toInt(), grain = look.grain)
     }
 
     fun draw(scope: DrawScope, t: Float, ink: Boolean) {
         val frame = program?.at(t) ?: return
-        val shader = Textures.shade(frame, stone, ink)
+        val shader = Textures.shade(frame, stone, ink, look)
         if (shader != null) scope.drawRect(ShaderBrush(shader.asComposeShader()))
     }
 }
@@ -109,16 +142,20 @@ uniform float uCount;
 uniform float uMode;      // 0 straight, composition being raked; 1 composition, sweep; 2 composition; 3 straight
 uniform float uT;         // seconds into the layer being raked
 uniform float uInk;
-uniform float uRelief;
+uniform float uRelief;    // how deep a groove is, against its pitch
+uniform float uProfile;   // 0 a round sine; 1 a tine's furrow: a narrow trough and a broad, rounded ridge
+uniform float uLightZ;    // the light's height: lower is a raking light, and deeper shadows in the grooves
+uniform float uCavity;    // how much darker the bottom of a groove is than its crest
+uniform float uTexScale;  // how big the grains of sand are drawn, against the baked texture
+
+// RakeGrain: the pitch, a pass's band, the rakes' speed, the sweep's, and a checkerboard block.
+uniform float S;
+uniform float B;
+uniform float V;
+uniform float VS;
+uniform float CELL;
 
 const float PI = 3.14159265;
-const float S = 10.0;
-const float B = 60.0;
-const float V = 210.0;
-const float VS = 300.0;
-const float PEB = 10.0;
-const float SC = 60.0;
-const float CELL = 240.0;
 
 float boxDist(float2 p, float4 r) {
     float2 c = (r.xy + r.zw) * 0.5;
@@ -148,7 +185,7 @@ float3 ripple(float2 p) {   // distance, source, 0
     float who = 0.0;
     for (int i = 0; i < 4; i++) {
         if (float(i) >= uCount) break;
-        float d = (i == 0 && uStoneFirst > 0.5) ? max(0.0, boxDist(p, uStone)) : max(0.0, length(p - centre(i)) - PEB);
+        float d = (i == 0 && uStoneFirst > 0.5) ? max(0.0, boxDist(p, uStone)) : max(0.0, length(p - centre(i)) - S);
         if (d < best) { best = d; who = float(i); }
     }
     return float3(best, who, 0.0);
@@ -158,13 +195,13 @@ float lapTime(float laps, int i) {
     float share = 0.5;
     float ring = 2.0 * PI * B / V * share;
     float perimeter = (i == 0 && uStoneFirst > 0.5) ? 2.0 * ((uStone.z - uStone.x) + (uStone.w - uStone.y)) / V * share : 0.0;
-    float start = i > 0 ? 2.0 * PI * PEB / V * share : 0.0;
+    float start = i > 0 ? 2.0 * PI * S / V * share : 0.0;
     return ring * (laps * laps / 2.0 + laps / 2.0) + (perimeter + start) * laps;
 }
 
 // --- flowing water -----------------------------------------------------------
-float amp() { return 26.0 + 22.0 * uVariant; }
-float wlen() { return 460.0 + 260.0 * uVariant; }
+float amp() { return (26.0 + 22.0 * uVariant) * B / 60.0; }
+float wlen() { return (460.0 + 260.0 * uVariant) * sqrt(B / 60.0); }
 float flow(float2 p) { return p.y + amp() * sin(p.x * 2.0 * PI / wlen() + uVariant * 2.0 * PI); }
 float flowBands() { return ceil((uSize.y + 2.0 * amp()) / B); }
 
@@ -182,20 +219,20 @@ float rowsOrder(float band, float count, out float fromLeft) {
 
 // --- blue-sea waves ------------------------------------------------------------
 float scaleDist(float2 p) {
-    float base = floor(p.y / SC);
+    float base = floor(p.y / B);
     for (int k = 0; k < 4; k++) {
         float row = base + 2.0 - float(k);
-        float cy = row * SC;
+        float cy = row * B;
         float odd = row - 2.0 * floor(row / 2.0);
-        float offset = odd < 0.5 ? 0.0 : SC;
-        float i = floor((p.x - offset) / (2.0 * SC) + 0.5);
-        float cx = offset + i * 2.0 * SC;
+        float offset = odd < 0.5 ? 0.0 : B;
+        float i = floor((p.x - offset) / (2.0 * B) + 0.5);
+        float cx = offset + i * 2.0 * B;
         float d = length(p - float2(cx, cy));
-        if (d < SC) return d;
+        if (d < B) return d;
     }
     return 0.0;
 }
-float scaleRows() { return ceil(uSize.y / SC) + 2.0; }
+float scaleRows() { return ceil(uSize.y / B) + 2.0; }
 
 // --- whirlpools ---------------------------------------------------------------
 float3 whirl(float2 p) {   // distance, turn, source
@@ -284,7 +321,7 @@ float compReveal(float2 p) {
     }
     if (uKind < 3.5) {
         float n = scaleRows();
-        float band = clamp(floor(p.y / SC) + 1.0, 0.0, n - 1.0);
+        float band = clamp(floor(p.y / B) + 1.0, 0.0, n - 1.0);
         float fromLeft;
         float order = rowsOrder(band, n, fromLeft);
         return passReveal(order, fromLeft, p.x);
@@ -300,8 +337,11 @@ float compReveal(float2 p) {
 // --- the gravel -----------------------------------------------------------------
 // A trough at every half line, where a tine runs, and a ridge pushed up at every whole one.
 float groove(float phase) {
-    float h = 0.5 + 0.5 * cos(2.0 * PI * phase);
-    return pow(h, 0.8);
+    float sine = pow(0.5 + 0.5 * cos(2.0 * PI * phase), 0.8);
+    // The furrow: steep where the tine cut, rounding over into a broad crest.
+    float d = abs(fract(phase) - 0.5) * 2.0;
+    float furrow = sqrt(d) * (1.5 - 0.5 * d);
+    return mix(sine, furrow, uProfile);
 }
 
 float compHeight(float2 p) { return groove(compPhase(p)); }
@@ -333,16 +373,17 @@ half4 main(float2 p) {
     // Gravel a rake is about to reach is heaped up in front of it.
     // In pixels ahead of the rake; bounded before squaring, since a layer with no
     // rake in it says 1e9, which overflows to NaN on the CPU.
-    float reach = (uMode > 0.5 && uMode < 1.5 ? clamp(p.x - sweepX(uT), 0.0, 60.0) : clamp(ahead, 0.0, 1.0) * V) / 9.0;
+    float reach = (uMode > 0.5 && uMode < 1.5 ? clamp(p.x - sweepX(uT), 0.0, B) : clamp(ahead, 0.0, 1.0) * V) / (0.9 * S);
     float heap = ahead > 0.0 ? exp(-reach * reach) : 0.0;
     float3 n = normalize(float3(-hx * uRelief, -hy * uRelief + heap * 0.6, 1.0));
-    float3 g = grain.eval(p).rgb * 2.0 - 1.0;
+    float3 g = grain.eval(p / uTexScale).rgb * 2.0 - 1.0;
     g.y = -g.y;
     n = normalize(float3(n.xy + g.xy * 0.18, n.z));
-    float3 L = normalize(float3(-0.5, -0.66, 0.56));
-    float diff = max(dot(n, L), 0.0);
-    float a = mix(0.93, albedo.eval(p).r, 0.35);
-    float lum = a * (0.74 + 0.42 * diff) * mix(0.9, 1.0, h) * (1.0 + 0.05 * heap);
+    float3 L = normalize(float3(-0.5, -0.66, uLightZ));
+    // Lit so flat sand is the same brightness whatever the light's height: only slopes change.
+    float diff = max(dot(n, L), 0.0) / L.z;
+    float a = mix(0.93, albedo.eval(p / uTexScale).r, 0.35);
+    float lum = a * (0.74 + 0.42 * 0.56 * diff) * mix(1.0 - uCavity, 1.0, h) * (1.0 + 0.05 * heap);
     lum = min(lum, 1.0);
     // Ink: black gravel, with the contrast lifted a little so the grooves survive the dark.
     if (uInk > 0.5) lum = pow(lum, 1.8) * 0.3;
@@ -366,7 +407,7 @@ half4 main(float2 p) {
         Samon.ICHIMATSU -> 5f
     }
 
-    fun shade(frame: RakeProgram.Frame, stone: GardenRect?, ink: Boolean): Shader? {
+    fun shade(frame: RakeProgram.Frame, stone: GardenRect?, ink: Boolean, look: GardenLook): Shader? {
         val e = effect ?: return null
         val n = normal ?: return null
         val a = albedo ?: return null
@@ -401,7 +442,18 @@ half4 main(float2 p) {
             uniform("uMode", mode)
             uniform("uT", frame.topTime)
             uniform("uInk", if (ink) 1f else 0f)
-            uniform("uRelief", 1.6f * Rake.SPACING / 10f)
+            val g = frame.base.grain
+            uniform("S", g.spacing)
+            uniform("B", g.band)
+            uniform("V", g.speed)
+            uniform("VS", g.sweepSpeed)
+            uniform("CELL", g.cell)
+            // Depth grows with the pitch, so a coarser garden is as deep for its size, not flatter.
+            uniform("uRelief", look.relief * g.spacing / 10f)
+            uniform("uProfile", look.profile)
+            uniform("uLightZ", look.lightZ)
+            uniform("uCavity", look.cavity)
+            uniform("uTexScale", look.texScale)
         }.makeShader()
     }
 }

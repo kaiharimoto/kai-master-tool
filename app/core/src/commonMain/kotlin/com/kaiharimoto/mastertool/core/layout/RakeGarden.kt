@@ -72,6 +72,8 @@ data class RakeLayer(
     val pebbles: List<GardenPoint> = emptyList(),
     /** 0..1: how this layer's pattern varies from the last time it was raked. */
     val variant: Float = 0f,
+    /** How coarse the raking is: every length in the pattern is measured in it. */
+    val grain: RakeGrain = RakeGrain(),
 ) {
     // --- the pattern ---------------------------------------------------------
 
@@ -81,26 +83,26 @@ data class RakeLayer(
      * middle of its bar's segments — and the ridges between are the whole numbers.
      */
     fun phase(x: Float, y: Float): Float = when (samon) {
-        Samon.CHOKUSEN -> y / Rake.SPACING
+        Samon.CHOKUSEN -> y / grain.spacing
         // The rings are raked round the deck, not under it: under the cards the straight lines stay.
-        Samon.MIZUMON -> if (stone != null && stone.distanceTo(x, y) < 0f) y / Rake.SPACING else ripple(x, y).first / Rake.SPACING
-        Samon.RYUSUI -> flow(x, y) / Rake.SPACING
-        Samon.SEIGAIHA -> scale(x, y).distance / Rake.SPACING
+        Samon.MIZUMON -> if (stone != null && stone.distanceTo(x, y) < 0f) y / grain.spacing else ripple(x, y).first / grain.spacing
+        Samon.RYUSUI -> flow(x, y) / grain.spacing
+        Samon.SEIGAIHA -> scale(x, y).distance / grain.spacing
         // Two arms: a groove moves out two bands a turn.
-        Samon.UZUMAKI -> whirl(x, y).let { (d, turn) -> (d - 2f * turn * Rake.BAND) / Rake.SPACING }
-        Samon.ICHIMATSU -> if (checkAcross(x, y)) y / Rake.SPACING else x / Rake.SPACING
+        Samon.UZUMAKI -> whirl(x, y).let { (d, turn) -> (d - 2f * turn * grain.band) / grain.spacing }
+        Samon.ICHIMATSU -> if (checkAcross(x, y)) y / grain.spacing else x / grain.spacing
     }
 
     /** When ([x], [y]) is raked, in seconds from the start of the layer. */
     fun reveal(x: Float, y: Float): Float = when (samon) {
-        Samon.CHOKUSEN -> Rake.sweepReveal(x, width)
+        Samon.CHOKUSEN -> grain.sweepReveal(x, width)
         // Under the deck nothing is raked: the straight lines there were never disturbed.
         Samon.MIZUMON -> if (stone != null && stone.distanceTo(x, y) < 0f) 0f else {
             // Two rakes round each stone, from opposite sides: each lap is two half-laps at once.
             val (d, source) = ripple(x, y)
             val c = centreOf(source)
             val turn = angleTurn(x - c.x, y - c.y, source)
-            val band = floor(d / Rake.BAND)
+            val band = floor(d / grain.band)
             val half = 2f * turn - floor(2f * turn)
             lapTime(band + half, source)
         }
@@ -118,12 +120,12 @@ data class RakeLayer(
             val (d, turn, _) = whirlFull(x, y)
             // The second arm starts at the centre half a turn round, so in its first
             // half-turn its pass is −1: the lowest pass is the one that keeps it at or past the start.
-            val pass = max(ceil(-2f * turn), ((d / Rake.BAND) - 2f * turn).roundToInt().toFloat())
+            val pass = max(ceil(-2f * turn), ((d / grain.band) - 2f * turn).roundToInt().toFloat())
             spiralTime((pass + 2f * turn) / 2f)
         }
         Samon.ICHIMATSU -> {
             val (order, progress) = checkPass(x, y)
-            order * CELL_TIME + progress * CELL_TIME
+            order * grain.cellTime + progress * grain.cellTime
         }
     }
 
@@ -133,7 +135,7 @@ data class RakeLayer(
      * pixel is raked while the bar is still on the edge.
      */
     val duration: Float by lazy {
-        if (samon == Samon.CHOKUSEN) return@lazy Rake.sweepTime(width)
+        if (samon == Samon.CHOKUSEN) return@lazy grain.sweepTime(width)
         var worst = 0f
         val nx = 48
         val ny = 28
@@ -146,20 +148,20 @@ data class RakeLayer(
     /** Where the rakes are, [t] seconds into the layer. A rake that has finished, or is crossing another's ground, is lifted. */
     fun heads(t: Float): List<RakeHead> = when (samon) {
         Samon.CHOKUSEN -> {
-            val x = Rake.sweepX(t, width)
-            if (t < 0f || t > Rake.sweepTime(width) || x < -Rake.BAND || x > width + Rake.BAND) emptyList() else listOf(RakeHead(x, height / 2f, 0f, height + 2 * Rake.BAND, wide = true))
+            val x = grain.sweepX(t, width)
+            if (t < 0f || t > grain.sweepTime(width) || x < -grain.band || x > width + grain.band) emptyList() else listOf(RakeHead(x, height / 2f, 0f, height + 2 * grain.band, wide = true))
         }
         Samon.MIZUMON -> sources().indices.flatMap { s ->
             val tau = lapsAt(t, s)
             val band = floor(tau)
             val f = tau - band
             val c = centreOf(s)
-            val r = (band + 0.5f) * Rake.BAND
+            val r = (band + 0.5f) * grain.band
             listOf(0f, 0.5f).mapNotNull { side ->
                 val a = directionOf(s) * (side + f / 2f) * 2f * PI.toFloat()
-                val p = if (s == 0 && stone != null) onRing(stone, a, r) else GardenPoint(c.x + cos(a) * (r + PEBBLE), c.y + sin(a) * (r + PEBBLE))
+                val p = if (s == 0 && stone != null) onRing(stone, a, r) else GardenPoint(c.x + cos(a) * (r + grain.pebble), c.y + sin(a) * (r + grain.pebble))
                 val round = atan2(p.y - c.y, p.x - c.x) + directionOf(s) * (PI / 2).toFloat()
-                p.takeIf { inside(it) && ripple(it.x, it.y).second == s }?.let { RakeHead(it.x, it.y, round, Rake.BAND) }
+                p.takeIf { inside(it) && ripple(it.x, it.y).second == s }?.let { RakeHead(it.x, it.y, round, grain.band) }
             }
         }
         Samon.RYUSUI -> listOf(true, false).mapNotNull { fromTop ->
@@ -169,10 +171,10 @@ data class RakeLayer(
             if (band < 0 || band >= flowBands() || (fromTop && band > (flowBands() - 1) / 2) || (!fromTop && band <= (flowBands() - 1) / 2)) return@mapNotNull null
             val fromLeft = order.toInt() % 2 == 0
             val x = if (fromLeft) f * width else (1f - f) * width
-            val y = (band + 0.5f) * Rake.BAND - amplitude() - amplitude() * sin(x * 2f * PI.toFloat() / wavelength() + wavePhase())
+            val y = (band + 0.5f) * grain.band - amplitude() - amplitude() * sin(x * 2f * PI.toFloat() / wavelength() + wavePhase())
             val slope = -amplitude() * 2f * PI.toFloat() / wavelength() * cos(x * 2f * PI.toFloat() / wavelength() + wavePhase())
             val sx = if (fromLeft) 1f else -1f
-            RakeHead(x, y, atan2(slope * sx, sx), Rake.BAND)
+            RakeHead(x, y, atan2(slope * sx, sx), grain.band)
         }
         Samon.SEIGAIHA -> listOf(true, false).mapNotNull { fromTop ->
             val order = floor(t / passTime())
@@ -182,35 +184,35 @@ data class RakeLayer(
             if (row < 0 || row >= rows || (fromTop && row > (rows - 1) / 2) || (!fromTop && row <= (rows - 1) / 2)) return@mapNotNull null
             val fromLeft = order.toInt() % 2 == 0
             val x = if (fromLeft) f * width else (1f - f) * width
-            RakeHead(x, row * SCALE - SCALE / 2f, if (fromLeft) 0f else PI.toFloat(), SCALE)
+            RakeHead(x, row * grain.scale - grain.scale / 2f, if (fromLeft) 0f else PI.toFloat(), grain.scale)
         }
         Samon.UZUMAKI -> sources().indices.flatMap { s ->
             val u = spiralTurns(t)
             val c = centreOf(s)
-            val r = 2f * u * Rake.BAND
+            val r = 2f * u * grain.band
             listOf(0f, 0.5f).mapNotNull { side ->
                 val a = directionOf(s) * (u + side) * 2f * PI.toFloat()
                 val p = GardenPoint(c.x + cos(a) * r, c.y + sin(a) * r)
-                p.takeIf { inside(it) && whirlFull(it.x, it.y).third == s }?.let { RakeHead(it.x, it.y, a + directionOf(s) * (PI / 2).toFloat(), Rake.BAND) }
+                p.takeIf { inside(it) && whirlFull(it.x, it.y).third == s }?.let { RakeHead(it.x, it.y, a + directionOf(s) * (PI / 2).toFloat(), grain.band) }
             }
         }
         Samon.ICHIMATSU -> (0 until 4).mapNotNull { q ->
-            val i = floor(t / CELL_TIME).toInt()
+            val i = floor(t / grain.cellTime).toInt()
             val cell = cellAt(q, i) ?: return@mapNotNull null
             val (cx, cy) = cell
-            val f = t / CELL_TIME - i
-            val passes = (CELL / Rake.BAND).roundToInt()
+            val f = t / grain.cellTime - i
+            val passes = (grain.cell / grain.band).roundToInt()
             val lane = min(passes - 1, floor(f * passes).toInt())
             val g = f * passes - lane
-            val left = cellLeft() + cx * CELL
-            val top = cellTop() + cy * CELL
+            val left = cellLeft() + cx * grain.cell
+            val top = cellTop() + cy * grain.cell
             val across = (cx + cy) % 2 == 0
             val forward = lane % 2 == 0
             val along = if (forward) g else 1f - g
             if (across) {
-                RakeHead(left + along * CELL, top + (lane + 0.5f) * Rake.BAND, if (forward) 0f else PI.toFloat(), Rake.BAND)
+                RakeHead(left + along * grain.cell, top + (lane + 0.5f) * grain.band, if (forward) 0f else PI.toFloat(), grain.band)
             } else {
-                RakeHead(left + (lane + 0.5f) * Rake.BAND, top + along * CELL, if (forward) (PI / 2).toFloat() else -(PI / 2).toFloat(), Rake.BAND)
+                RakeHead(left + (lane + 0.5f) * grain.band, top + along * grain.cell, if (forward) (PI / 2).toFloat() else -(PI / 2).toFloat(), grain.band)
             }
         }
     }
@@ -233,7 +235,7 @@ data class RakeLayer(
         var best = Float.MAX_VALUE
         var who = 0
         sources().forEachIndexed { i, c ->
-            val d = if (i == 0 && stone != null) max(0f, stone.distanceTo(x, y)) else max(0f, hypot(x - c.x, y - c.y) - PEBBLE)
+            val d = if (i == 0 && stone != null) max(0f, stone.distanceTo(x, y)) else max(0f, hypot(x - c.x, y - c.y) - grain.pebble)
             if (d < best) {
                 best = d
                 who = i
@@ -266,9 +268,9 @@ data class RakeLayer(
      */
     private fun lapCosts(source: Int): Triple<Float, Float, Float> {
         val share = if (samon == Samon.MIZUMON) 0.5f else 1f
-        val ring = 2f * PI.toFloat() * Rake.BAND / Rake.SPEED * share
-        val perimeter = if (samon == Samon.MIZUMON && source == 0 && stone != null) 2f * (stone.width + stone.height) / Rake.SPEED * share else 0f
-        val start = if (samon == Samon.MIZUMON && source > 0) 2f * PI.toFloat() * PEBBLE / Rake.SPEED * share else 0f
+        val ring = 2f * PI.toFloat() * grain.band / grain.speed * share
+        val perimeter = if (samon == Samon.MIZUMON && source == 0 && stone != null) 2f * (stone.width + stone.height) / grain.speed * share else 0f
+        val start = if (samon == Samon.MIZUMON && source > 0) 2f * PI.toFloat() * grain.pebble / grain.speed * share else 0f
         return Triple(ring, perimeter, start)
     }
 
@@ -284,9 +286,9 @@ data class RakeLayer(
      * Seconds for a whirlpool's rakes to have turned [turns] times: at 2u bands
      * out the circumference is 4πuB, so the time grows as the square.
      */
-    private fun spiralTime(turns: Float): Float = SPIRAL * turns * turns + SPIRAL_START * turns
+    private fun spiralTime(turns: Float): Float = grain.spiral * turns * turns + SPIRAL_START * turns
 
-    private fun spiralTurns(t: Float): Float = (-SPIRAL_START + sqrt(SPIRAL_START * SPIRAL_START + 4f * SPIRAL * max(0f, t))) / (2f * SPIRAL)
+    private fun spiralTurns(t: Float): Float = (-SPIRAL_START + sqrt(SPIRAL_START * SPIRAL_START + 4f * grain.spiral * max(0f, t))) / (2f * grain.spiral)
 
     /** Distance from the nearest whirlpool centre, how far round it (0..1), and which centre. */
     private fun whirlFull(x: Float, y: Float): Triple<Float, Float, Int> {
@@ -320,18 +322,19 @@ data class RakeLayer(
 
     // --- flowing water -------------------------------------------------------
 
-    private fun amplitude() = 26f + 22f * variant
-    private fun wavelength() = 460f + 260f * variant
+    // The meander grows with the grain: its swing in proportion, its length more slowly, so a coarse garden still bends on the screen.
+    private fun amplitude() = (26f + 22f * variant) * grain.band / 60f
+    private fun wavelength() = (460f + 260f * variant) * sqrt(grain.band / 60f)
     private fun wavePhase() = variant * 2f * PI.toFloat()
 
     /** The warped height that makes the lines meander: a line of flowing water is where this is constant. */
     private fun flow(x: Float, y: Float): Float = y + amplitude() * sin(x * 2f * PI.toFloat() / wavelength() + wavePhase())
 
-    private fun flowBands(): Int = ceil((height + 2f * amplitude()) / Rake.BAND).toInt()
+    private fun flowBands(): Int = ceil((height + 2f * amplitude()) / grain.band).toInt()
 
     /** Which pass of which rake rakes ([x], [y]) in flowing water, and whether that pass goes left to right. */
     private fun flowPass(x: Float, y: Float): Pair<Float, Boolean> {
-        val band = floor((flow(x, y) + amplitude()) / Rake.BAND).toInt().coerceIn(0, flowBands() - 1)
+        val band = floor((flow(x, y) + amplitude()) / grain.band).toInt().coerceIn(0, flowBands() - 1)
         val fromTop = band <= (flowBands() - 1) / 2
         val order = if (fromTop) band else flowBands() - 1 - band
         return order.toFloat() to (order % 2 == 0)
@@ -339,7 +342,7 @@ data class RakeLayer(
 
     // --- the waves of the blue sea -------------------------------------------
 
-    private fun scaleRows(): Int = ceil(height / SCALE).toInt() + 2
+    private fun scaleRows(): Int = ceil(height / grain.scale).toInt() + 2
 
     data class Scale(val distance: Float, val row: Int)
 
@@ -350,20 +353,20 @@ data class RakeLayer(
      * part, the scale, and the whole plane is covered.
      */
     fun scale(x: Float, y: Float): Scale {
-        val base = floor(y / SCALE).toInt()
+        val base = floor(y / grain.scale).toInt()
         for (row in base + 2 downTo base - 1) {
-            val cy = row * SCALE
-            val offset = if (row % 2 == 0) 0f else SCALE
-            val i = ((x - offset) / (2f * SCALE)).roundToInt()
-            val cx = offset + i * 2f * SCALE
+            val cy = row * grain.scale
+            val offset = if (row % 2 == 0) 0f else grain.scale
+            val i = ((x - offset) / (2f * grain.scale)).roundToInt()
+            val cx = offset + i * 2f * grain.scale
             val d = hypot(x - cx, y - cy)
-            if (d < SCALE) return Scale(d, row)
+            if (d < grain.scale) return Scale(d, row)
         }
         return Scale(0f, base)
     }
 
     /** The band of the scales a rake pass covers: one scale-radius of height, numbered so its middle is at (row − ½) radii. */
-    private fun scaleBand(y: Float): Int = (floor(y / SCALE).toInt() + 1).coerceIn(0, scaleRows() - 1)
+    private fun scaleBand(y: Float): Int = (floor(y / grain.scale).toInt() + 1).coerceIn(0, scaleRows() - 1)
 
     private fun rowPass(row: Int): Pair<Float, Boolean> {
         val rows = scaleRows()
@@ -374,19 +377,19 @@ data class RakeLayer(
 
     // --- passes, shared by the two raked in rows -----------------------------
 
-    private fun passTime(): Float = width / Rake.SPEED
+    private fun passTime(): Float = width / grain.speed
 
     private fun pass(order: Float, progress: Float): Float = (order + progress) * passTime()
 
     // --- the checkerboard ----------------------------------------------------
 
-    private fun cellsAcross(): Int = ceil(width / CELL).toInt()
-    private fun cellsDown(): Int = ceil(height / CELL).toInt()
-    private fun cellLeft(): Float = (width - cellsAcross() * CELL) / 2f
-    private fun cellTop(): Float = (height - cellsDown() * CELL) / 2f
+    private fun cellsAcross(): Int = ceil(width / grain.cell).toInt()
+    private fun cellsDown(): Int = ceil(height / grain.cell).toInt()
+    private fun cellLeft(): Float = (width - cellsAcross() * grain.cell) / 2f
+    private fun cellTop(): Float = (height - cellsDown() * grain.cell) / 2f
 
     private fun cellOf(x: Float, y: Float): Pair<Int, Int> =
-        floor((x - cellLeft()) / CELL).toInt().coerceIn(0, cellsAcross() - 1) to floor((y - cellTop()) / CELL).toInt().coerceIn(0, cellsDown() - 1)
+        floor((x - cellLeft()) / grain.cell).toInt().coerceIn(0, cellsAcross() - 1) to floor((y - cellTop()) / grain.cell).toInt().coerceIn(0, cellsDown() - 1)
 
     private fun checkAcross(x: Float, y: Float): Boolean = cellOf(x, y).let { (i, j) -> (i + j) % 2 == 0 }
 
@@ -437,66 +440,74 @@ data class RakeLayer(
         val (i, j) = cellOf(x, y)
         val (q, dx, dy) = quadrant(i, j)
         val order = cellOrder(q, dx, dy)
-        val left = cellLeft() + i * CELL
-        val top = cellTop() + j * CELL
-        val passes = (CELL / Rake.BAND).roundToInt()
+        val left = cellLeft() + i * grain.cell
+        val top = cellTop() + j * grain.cell
+        val passes = (grain.cell / grain.band).roundToInt()
         val across = (i + j) % 2 == 0
-        val lane = floor(((if (across) y - top else x - left) / Rake.BAND)).toInt().coerceIn(0, passes - 1)
-        val along = ((if (across) x - left else y - top) / CELL).coerceIn(0f, 1f)
+        val lane = floor(((if (across) y - top else x - left) / grain.band)).toInt().coerceIn(0, passes - 1)
+        val along = ((if (across) x - left else y - top) / grain.cell).coerceIn(0f, 1f)
         val g = if (lane % 2 == 0) along else 1f - along
         return order.toFloat() to (lane + g) / passes
     }
 
-    private fun inside(p: GardenPoint) = p.x >= -Rake.BAND && p.y >= -Rake.BAND && p.x <= width + Rake.BAND && p.y <= height + Rake.BAND
+    private fun inside(p: GardenPoint) = p.x >= -grain.band && p.y >= -grain.band && p.x <= width + grain.band && p.y <= height + grain.band
 
     companion object {
-        /** A pebble's own radius: the first ring starts clear of it. */
-        const val PEBBLE = 10f
-
-        /** A wave scale's radius. */
-        const val SCALE = 60f
-
-        private val SPIRAL: Float get() = 2f * PI.toFloat() * Rake.BAND / Rake.SPEED
+        /** Turns' worth of seconds a whirlpool's rakes take to get going: the tight middle is slow. */
         private const val SPIRAL_START = 0.8f
-
-        /** A checkerboard block's side: four passes of the rake. */
-        const val CELL = 240f
-        val CELL_TIME: Float get() = (CELL / Rake.BAND) * (CELL / Rake.SPEED)
     }
 }
 
-/** The rake and how it is used: every number the garden's drawing and its shader share. */
-object Rake {
+/**
+ * How coarse the raking is: the pitch between two grooves, how many tines a
+ * rake has, and how fast rakes are drawn. Every length in every samon is
+ * measured in it — a ripple ring is a band, a wave scale's radius is a band, a
+ * checkerboard block is four — so a coarser grain is the same garden raked
+ * bigger, not a different one. The shader is handed the same numbers.
+ */
+data class RakeGrain(
     /** Window pixels between two grooves: a tine's pitch. */
-    const val SPACING = 10f
-
-    const val TINES = 6
-
-    /** The width of ground one pass rakes. */
-    const val BAND = SPACING * TINES
-
+    val spacing: Float = 10f,
+    val tines: Int = 6,
     /** How fast a rake is drawn through the gravel, px/s. */
-    const val SPEED = 210f
-
+    val speed: Float = 210f,
     /** The wide rake's top speed, px/s: it gathers up to this across the middle and eases out at the far edge. */
-    const val SWEEP_SPEED = 300f
+    val sweepSpeed: Float = 300f,
+) {
+    /** The width of ground one pass rakes. */
+    val band: Float get() = spacing * tines
+
+    /** A pebble's own radius: the first ring starts clear of it. */
+    val pebble: Float get() = spacing
+
+    /** A wave scale's radius. */
+    val scale: Float get() = band
+
+    /** A checkerboard block's side: four passes of the rake. */
+    val cell: Float get() = band * 4f
+
+    /** Seconds one rake takes over one block: four passes along it. */
+    val cellTime: Float get() = (cell / band) * (cell / speed)
+
+    /** Seconds per turn², for a whirlpool's rakes: at 2u bands out the circumference is 4πuB. */
+    val spiral: Float get() = 2f * PI.toFloat() * band / speed
 
     /**
      * Seconds the sweep takes across a window [width] wide, from a band off the
      * left edge to a band off the right. It is eased in and out (a smoothstep),
      * whose top speed is one and a half times its mean.
      */
-    fun sweepTime(width: Float): Float = (width + 2 * BAND) / SWEEP_SPEED * 1.5f
+    fun sweepTime(width: Float): Float = (width + 2 * band) / sweepSpeed * 1.5f
 
     /** Where the wide rake's bar is, [t] seconds into a sweep. */
     fun sweepX(t: Float, width: Float): Float {
         val u = (t / sweepTime(width)).coerceIn(0f, 1f)
-        return -BAND + (width + 2 * BAND) * u * u * (3f - 2f * u)
+        return -band + (width + 2 * band) * u * u * (3f - 2f * u)
     }
 
     /** When the sweep reaches [x]: [sweepX] inverted, in closed form (the smoothstep's inverse is a sine of a third of an arcsine). */
     fun sweepReveal(x: Float, width: Float): Float {
-        val s = ((x + BAND) / (width + 2 * BAND)).coerceIn(0f, 1f)
+        val s = ((x + band) / (width + 2 * band)).coerceIn(0f, 1f)
         return sweepTime(width) * (0.5f - sin(asin(1f - 2f * s) / 3f))
     }
 }
@@ -527,11 +538,12 @@ class RakeProgram(
     val height: Float,
     private val stone: GardenRect?,
     private val seed: Int = 0,
+    val grain: RakeGrain = RakeGrain(),
 ) {
     /** What the garden is doing at a moment: the layer underneath, the one being raked over it, and how far in. */
     data class Frame(val base: RakeLayer, val top: RakeLayer?, val topTime: Float)
 
-    private val straight = RakeLayer(Samon.CHOKUSEN, width, height)
+    private val straight = RakeLayer(Samon.CHOKUSEN, width, height, grain = grain)
     private val cycles = mutableListOf<RakeLayer>()
 
     /** The [n]th composition. */
@@ -550,7 +562,7 @@ class RakeProgram(
             Samon.UZUMAKI -> placePebbles(h, 3) + listOfNotNull(stone?.let { GardenPoint((it.left + it.right) / 2f, (it.top + it.bottom) / 2f) })
             else -> emptyList()
         }
-        return RakeLayer(kind, width, height, stone, pebbles, variant)
+        return RakeLayer(kind, width, height, stone, pebbles, variant, grain)
     }
 
     /**
