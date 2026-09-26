@@ -37,6 +37,9 @@ class ZenLayer {
     /** How the garden is raked and lit. Plain: the garden reads it as it draws. */
     var gardenLook: GardenLook = GardenLook()
 
+    /** The studio's: paint the garden plain white (true) or black (false), to lift the deck off it. */
+    var gardenMatte by mutableStateOf<Boolean?>(null)
+
     /** Where the pointer is in the window while immersive, for the deck to turn toward in zen. */
     var pointer by mutableStateOf<Offset?>(null)
 

@@ -143,6 +143,18 @@ fun neueMain(args: Array<String>) {
                     h.zen.time += at.toFloat() - (map["zen-seconds"] ?: "4").toFloat()
                     clock.run(2)
                 }
+                // --garden-mattes: the deck over plain white and plain black, for lifting it off the garden.
+                if (map["garden-mattes"] == "true") {
+                    h.zen.time = 30f
+                    listOf(true to "white", false to "black").forEach { (white, label) ->
+                        h.zen.gardenMatte = white
+                        clock.run(2)
+                        val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
+                        File(out, "$name-$label.png").writeBytes(still.bytes)
+                    }
+                    h.zen.gardenMatte = null
+                    println("[neue-studio] mattes written")
+                }
                 // --garden-held=N: the first N compositions, each photographed finished.
                 map["garden-held"]?.let { spec ->
                     val stone = h.zen.deckInZen.let { com.kaiharimoto.mastertool.core.layout.GardenRect(it.left, it.top, it.right, it.bottom) }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.asComposeShader
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -49,6 +50,11 @@ fun SandGarden(zen: ZenLayer, ink: Boolean, modifier: Modifier = Modifier) {
     val start = remember { zen.time }
     val garden = remember { Garden() }
     Canvas(modifier.graphicsLayer { alpha = zen.deep.coerceIn(0f, 1f) }) {
+        val matte = zen.gardenMatte
+        if (matte != null) {
+            drawRect(if (matte) Color.White else Color.Black)
+            return@Canvas
+        }
         garden.prepare(size.width, size.height, zen.deckInZen.let { GardenRect(it.left, it.top, it.right, it.bottom) }, zen.gardenSeed, zen.gardenLook)
         garden.draw(this, zen.time - start, ink)
     }
