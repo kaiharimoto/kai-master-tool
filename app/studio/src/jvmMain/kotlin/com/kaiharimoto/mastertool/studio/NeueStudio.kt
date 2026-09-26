@@ -120,16 +120,53 @@ fun neueMain(args: Array<String>) {
             clock.run((map["frames"] ?: "90").toInt())
             map["zen"]?.let { phase ->
                 h.neue.immersive = true
+                h.zen.gardenSeed = map["garden-seed"]?.toInt() ?: 7
                 clock.run(30)
                 h.neue.zen = if (phase == "quiet") com.kaiharimoto.mastertool.core.motion.ZenPhase.QUIET else com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
                 // The fades take under three seconds; the garden is raked for as long as asked.
                 clock.run(((map["zen-seconds"] ?: "4").toFloat() * 60).toInt())
+                // --garden-plan: when each composition is raked, held and wiped, for choosing --garden-at.
+                if (map["garden-plan"] == "true") {
+                    val stone = h.zen.deckInZen.let { com.kaiharimoto.mastertool.core.layout.GardenRect(it.left, it.top, it.right, it.bottom) }
+                    val program = com.kaiharimoto.mastertool.core.layout.RakeProgram(width.toFloat(), height.toFloat(), stone, h.zen.gardenSeed ?: 7)
+                    var t = com.kaiharimoto.mastertool.core.layout.RakeProgram.OPENING
+                    val wipe = com.kaiharimoto.mastertool.core.layout.RakeLayer(com.kaiharimoto.mastertool.core.layout.Samon.CHOKUSEN, width.toFloat(), height.toFloat()).duration
+                    repeat(8) { n ->
+                        val c = program.composition(n)
+                        println("[neue-studio] garden %d %-9s raked %6.1f..%6.1f  held ..%6.1f  wiped ..%6.1f".format(
+                            n, c.samon, t, t + c.duration, t + c.duration + 8f, t + c.duration + 8f + wipe))
+                        t += c.duration + 8f + wipe + com.kaiharimoto.mastertool.core.layout.RakeProgram.REST
+                    }
+                }
+                // --garden-at=T: the garden is a function of its clock, so jump it to T seconds in.
+                map["garden-at"]?.let { at ->
+                    h.zen.time += at.toFloat() - (map["zen-seconds"] ?: "4").toFloat()
+                    clock.run(2)
+                }
+                // --garden-times=a,b,c: one still per garden time, in seconds. The garden's clock
+                // started with zen's, so setting zen's sets the garden's.
+                map["garden-times"]?.let { spec ->
+                    spec.split(",").forEach { at ->
+                        h.zen.time = at.toFloat()
+                        clock.run(2)
+                        val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
+                        File(out, "$name-t$at.png").writeBytes(still.bytes)
+                    }
+                    println("[neue-studio] garden stills at $spec")
+                }
                 // --zen-frames=N,K: N stills, K frames apart, for a GIF of the garden being raked.
                 map["zen-frames"]?.let { spec ->
                     val (n, k) = spec.split(",").map { it.toInt() }
                     val dir = File(out, "$name-frames").apply { mkdirs() }
+                    // --garden-step=S: each still is S garden-seconds on, rather than K frames.
+                    val step = map["garden-step"]?.toFloat()
                     repeat(n) { i ->
-                        clock.run(k)
+                        if (step != null) {
+                            h.zen.time += step
+                            clock.run(1)
+                        } else {
+                            clock.run(k)
+                        }
                         val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
                         File(dir, "%03d.png".format(i)).writeBytes(still.bytes)
                     }

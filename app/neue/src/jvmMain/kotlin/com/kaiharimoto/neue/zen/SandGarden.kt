@@ -2,377 +2,473 @@ package com.kaiharimoto.neue.zen
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.asComposeShader
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotateRad
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
-import com.kaiharimoto.mastertool.core.layout.SandFigure
-import com.kaiharimoto.mastertool.core.layout.SandPaths
-import org.jetbrains.skia.BlendMode
-import org.jetbrains.skia.Color4f
-import org.jetbrains.skia.ColorAlphaType
-import org.jetbrains.skia.ColorSpace
-import org.jetbrains.skia.ColorType
-import org.jetbrains.skia.FilterBlurMode
+import com.kaiharimoto.mastertool.core.layout.GardenRect
+import com.kaiharimoto.mastertool.core.layout.Rake
+import com.kaiharimoto.mastertool.core.layout.RakeHead
+import com.kaiharimoto.mastertool.core.layout.RakeLayer
+import com.kaiharimoto.mastertool.core.layout.RakeProgram
+import com.kaiharimoto.mastertool.core.layout.Samon
 import org.jetbrains.skia.FilterTileMode
 import org.jetbrains.skia.Image
-import org.jetbrains.skia.ImageInfo
-import org.jetbrains.skia.MaskFilter
-import org.jetbrains.skia.Paint
-import org.jetbrains.skia.PaintMode
-import org.jetbrains.skia.PaintStrokeCap
-import org.jetbrains.skia.PaintStrokeJoin
-import org.jetbrains.skia.Path
-import org.jetbrains.skia.PathBuilder
 import org.jetbrains.skia.RuntimeEffect
 import org.jetbrains.skia.RuntimeShaderBuilder
 import org.jetbrains.skia.SamplingMode
 import org.jetbrains.skia.Shader
-import org.jetbrains.skia.Surface
-import kotlin.math.hypot
-import kotlin.math.max
-import kotlin.math.min
-import kotlin.math.pow
+import kotlin.math.PI
+import kotlin.math.roundToInt
 
 /**
- * The sand zen mode draws in, either side of the floating deck.
+ * The karesansui zen mode rakes under the deck.
  *
- * It is meant to be looked past, not at. The sand is plain and smooth; a ball
- * either side draws one figure after another (`SandPaths`: roses, spirograph
- * stars and flowers, Lissajous weaves, breathing spirals, turning loops), slowly,
- * as a shallow groove — and **every trail fades back into the sand as it goes**,
- * so the garden never fills up and never stops, and what is on the sand at any
- * moment is the last half a minute of drawing, fainter the older it is. No
- * figure family comes twice in a row, and each is turned and sized afresh.
+ * The whole window is gravel, and the floating deck is its great stone. It
+ * opens raked in straight lines. Then a composition is raked over them — one of
+ * the classical samon (`RakeGarden`): ripples round the deck and three small
+ * stones, flowing water, the blue-sea waves, whirlpools, the checkerboard —
+ * by several six-tine rakes at once, from different places, whose work meets
+ * across the window until the garden is whole. It is left a moment to be looked
+ * at; then the wide rake is drawn across from edge to edge in one sweep, leaving
+ * straight lines again, and the next composition begins, never the one just
+ * wiped.
  *
- * The cards keep their distance: the figures are placed clear of the deck, and
- * the shader smooths the sand out entirely in a margin round it, so a groove
- * never runs up against a card.
- *
- * How it is made: a height field in half-float (so a fade of a fraction of a
- * percent a frame is not rounded away), grooves pressed into it with a soft
- * ridge either side, and a runtime shader that lights it from its own slope,
- * low, from the upper left, over the grain of real sand — a normal map and an
- * albedo baked in Blender (`tools/zen/garden.py`), tiled. The ball is Blender's
- * too, and half there. White sand on paper, black on ink, and never a colour.
+ * Nothing is remembered between frames: the garden at any moment is a function
+ * of the time. The shader evaluates, per pixel, which groove of which pattern
+ * is there and whether a rake has reached it yet — a line-for-line copy of
+ * `RakeLayer.phase` and `RakeLayer.reveal` — and the rakes are drawn where
+ * `RakeLayer.heads` puts them, which a test holds to the edge of the fresh
+ * gravel. Sand just ahead of a rake is heaped a little, the way a rake pushes
+ * it. The grain and the rakes were made in Blender (`tools/zen/garden.py`).
+ * White gravel on paper, black on ink, and never a colour.
  */
 @Composable
 fun SandGarden(zen: ZenLayer, ink: Boolean, modifier: Modifier = Modifier) {
+    // The garden's own clock starts when it does, so every zen opens on straight lines.
+    val start = remember { zen.time }
     val garden = remember { Garden() }
-    // The field is native memory: a garden starts smooth each time zen begins, and is let go when it ends.
-    DisposableEffect(garden) { onDispose { garden.close() } }
-    var frame by remember { mutableIntStateOf(0) }
-    LaunchedEffect(garden) {
-        var last = 0L
-        while (zen.deep > 0f) {
-            withFrameNanos { now ->
-                val dt = if (last == 0L) 1f / 60f else ((now - last) / 1e9f).coerceIn(0f, 0.1f)
-                last = now
-                garden.step(dt)
-                frame++
-            }
-        }
-    }
     Canvas(modifier.graphicsLayer { alpha = zen.deep.coerceIn(0f, 1f) }) {
-        frame.let { }
-        garden.prepare(size.width.toInt(), size.height.toInt(), zen.deckInZen)
-        garden.draw(this, ink)
+        garden.prepare(size.width, size.height, zen.deckInZen.let { GardenRect(it.left, it.top, it.right, it.bottom) }, zen.gardenSeed)
+        garden.draw(this, zen.time - start, ink)
     }
 }
 
-private class Garden {
-    private var surface: Surface? = null
-    private var width = 0
-    private var height = 0
-    private var stone = Rect.Zero
-    private val tracers = mutableListOf<Tracer>()
-    private var snapshot: Image? = null
-    private var dirty = true
-    private var sinceFade = 0f
+internal class Garden {
+    private var program: RakeProgram? = null
+    private var width = 0f
+    private var height = 0f
+    private var stone: GardenRect? = null
 
-    fun prepare(w: Int, h: Int, deck: Rect) {
-        if (w <= 0 || h <= 0) return
-        if (surface != null && w == width && h == height) return
+    fun prepare(w: Float, h: Float, deck: GardenRect, seed: Int?) {
+        if (program != null && w == width && h == height) return
         width = w
         height = h
-        stone = deck
-        val hw = max(1, (w * SCALE).toInt())
-        val hh = max(1, (h * SCALE).toInt())
-        close()
-        surface = Surface.makeRaster(ImageInfo(hw, hh, ColorType.RGBA_F16, ColorAlphaType.PREMUL, ColorSpace.sRGB)).also {
-            it.canvas.clear(Color4f(FLAT, FLAT, FLAT, 1f).toColor())
-        }
-        tracers.clear()
-        placeTracers()
-        dirty = true
+        stone = deck.takeIf { it.width > 0f && it.height > 0f }
+        program = RakeProgram(w, h, stone, seed = seed ?: (System.nanoTime() and 0xFFFF).toInt())
     }
 
-    /** A ball either side of the deck, each in a disk that keeps its distance from the cards. */
-    private fun placeTracers() {
-        // Into the start of the feather, where the shader is already calming the sand,
-        // so a figure's inner edge softens away as it nears the cards.
-        val clear = BREATHING + FEATHER * 0.4f
-        fun add(left: Float, right: Float, seed: Int) {
-            val room = right - left
-            val radius = min(room / 2f, height * 0.36f)
-            if (radius >= MIN_RADIUS) tracers += Tracer(Offset((left + right) / 2f, height / 2f), radius, seed)
-        }
-        if (stone.width <= 0f) {
-            add(0f, width * 0.5f, 0)
-            add(width * 0.5f, width.toFloat(), 3)
-        } else {
-            add(EDGE, stone.left - clear, 0)
-            add(stone.right + clear, width - EDGE, 3)
-        }
+    fun draw(scope: DrawScope, t: Float, ink: Boolean) {
+        val frame = program?.at(t) ?: return
+        val shader = Textures.shade(frame, stone, ink)
+        if (shader != null) scope.drawRect(ShaderBrush(shader.asComposeShader()))
+        frame.heads.forEach { drawRake(scope, it, ink) }
     }
 
-    fun close() {
-        snapshot?.close()
-        snapshot = null
-        surface?.close()
-        surface = null
-    }
-
-    fun step(dt: Float) {
-        val s = surface ?: return
-        val c = s.canvas
-        // The fade: everything drifts back toward smooth sand, a little each frame.
-        sinceFade += dt
-        if (sinceFade >= FADE_EVERY) {
-            val keep = 0.5f.pow(sinceFade / HALF_LIFE)
-            fade.color4f = Color4f(FLAT, FLAT, FLAT, 1f - keep)
-            c.drawPaint(fade)
-            sinceFade = 0f
-            dirty = true
-        }
-        tracers.forEach { t ->
-            groove(c, t.advance(dt))
-            dirty = true
-        }
-    }
-
-    fun draw(scope: DrawScope, ink: Boolean) {
-        val s = surface ?: return
-        if (dirty || snapshot == null) {
-            snapshot?.close()
-            snapshot = s.makeImageSnapshot()
-            dirty = false
-        }
-        val field = snapshot ?: return
-        val shader = Textures.shade(field, ink, stone) ?: return
-        scope.drawRect(ShaderBrush(shader.asComposeShader()))
-        val ball = Textures.ball ?: return
-        val d = (GROOVE * 1.6f).toInt().coerceAtLeast(4)
-        tracers.forEach { t ->
-            val at = t.position
-            scope.drawImage(
-                ball,
-                dstOffset = IntOffset((at.x - d / 2f).toInt(), (at.y - d / 2f).toInt()),
-                dstSize = IntSize(d, d),
-                alpha = BALL_ALPHA,
-            )
+    /**
+     * A rake over the gravel, turned to the way it is being drawn: its handle
+     * trailing back, and its bar laid across the pass as whole segments of six
+     * tines each, so every tine rides in a groove it is cutting. The sprites'
+     * rakes travel up the image, so they are turned by the heading plus a
+     * quarter turn. The wide rake is one bar the window's height, with two
+     * handles, since nobody sweeps a garden that wide one-handed.
+     */
+    private fun drawRake(scope: DrawScope, head: RakeHead, ink: Boolean) {
+        val bar = Textures.bar ?: return
+        val handle = Textures.handle
+        // A segment is one band: the sprite is drawn at the scale that makes it one.
+        val scale = Rake.BAND / bar.width
+        val barHeight = bar.height * scale
+        val top = head.y - barHeight * BAR_AT
+        val start = head.x - head.length / 2f
+        val alpha = if (ink) RAKE_ALPHA_INK else RAKE_ALPHA
+        scope.rotateRad(head.heading + (PI / 2).toFloat(), Offset(head.x, head.y)) {
+            if (handle != null) {
+                val w = handle.width * scale
+                val h = handle.height * scale
+                val at = if (head.wide) listOf(-HANDLES_APART, HANDLES_APART).map { head.x + it * head.length } else listOf(head.x)
+                at.forEach { hx ->
+                    drawImage(
+                        handle,
+                        dstOffset = IntOffset((hx - w / 2f).roundToInt(), head.y.roundToInt()),
+                        dstSize = IntSize(w.roundToInt().coerceAtLeast(1), h.roundToInt().coerceAtLeast(1)),
+                        alpha = alpha,
+                    )
+                }
+            }
+            var covered = 0f
+            while (covered < head.length - 0.5f) {
+                val piece = minOf(Rake.BAND, head.length - covered)
+                val left = (start + covered).roundToInt()
+                val right = (start + covered + piece).roundToInt()
+                drawImage(
+                    bar,
+                    srcSize = IntSize((piece / scale).roundToInt().coerceIn(1, bar.width), bar.height),
+                    dstOffset = IntOffset(left, top.roundToInt()),
+                    dstSize = IntSize((right - left).coerceAtLeast(1), barHeight.roundToInt().coerceAtLeast(1)),
+                    alpha = alpha,
+                )
+                covered += piece
+            }
         }
     }
 
     companion object {
-        /** Height-field pixels per window pixel. */
-        const val SCALE = 0.5f
+        /** Where the bar's centre line is in its sprite, as a fraction of the height from the top (`garden.py`). */
+        const val BAR_AT = 0.625f
 
-        /** The level of smooth sand. */
-        const val FLAT = 0.5f
-
-        /** Window pixels: the groove the ball leaves. */
-        const val GROOVE = 5f
-
-        /** Seconds for a trail to fade to half its depth. */
-        const val HALF_LIFE = 12f
-        private const val FADE_EVERY = 1f / 30f
-
-        /** Smooth sand round the deck, window pixels, and the width of the fade into it. */
-        const val BREATHING = 72f
-        const val FEATHER = 110f
-        private const val EDGE = 36f
-        private const val MIN_RADIUS = 80f
-        private const val BALL_ALPHA = 0.55f
-
-        private val fade = Paint().apply { blendMode = BlendMode.SRC_OVER }
-
-        private val ridge = Paint().apply {
-            mode = PaintMode.STROKE
-            strokeWidth = GROOVE * 2.2f * SCALE
-            strokeCap = PaintStrokeCap.ROUND
-            strokeJoin = PaintStrokeJoin.ROUND
-            isAntiAlias = true
-            color4f = Color4f(0.56f, 0.56f, 0.56f, 1f)
-            maskFilter = MaskFilter.makeBlur(FilterBlurMode.NORMAL, GROOVE * 0.4f * SCALE)
-        }
-        private val trough = Paint().apply {
-            mode = PaintMode.STROKE
-            strokeWidth = GROOVE * SCALE
-            strokeCap = PaintStrokeCap.ROUND
-            strokeJoin = PaintStrokeJoin.ROUND
-            isAntiAlias = true
-            color4f = Color4f(0.38f, 0.38f, 0.38f, 1f)
-            maskFilter = MaskFilter.makeBlur(FilterBlurMode.NORMAL, GROOVE * 0.35f * SCALE)
-        }
-
-        /** A groove along [path] (height-field pixels): a soft ridge either side, a shallow trough between. */
-        fun groove(c: org.jetbrains.skia.Canvas, path: Path?) {
-            if (path == null) return
-            c.drawPath(path, ridge)
-            c.drawPath(path, trough)
-        }
-    }
-
-    /**
-     * One ball, drawing figure after figure in a disk of [radius] about
-     * [centre]. Between two figures it glides — a short, eased line from where
-     * one ended to where the next begins, which leaves its trace like everything
-     * else and fades like everything else.
-     */
-    private class Tracer(val centre: Offset, val radius: Float, private val seed: Int) {
-        private var n = 0
-        private var figure: SandFigure = SandPaths.figure(0, seed)
-        private var s = 0.0
-        private var glide: Pair<Offset, Offset>? = null
-        private var g = 0.0
-
-        val position: Offset
-            get() = glide?.let { (a, b) -> lerp(a, b, ease(g)) } ?: point(figure.at(s))
-
-        private fun point(p: Pair<Double, Double>) = Offset(centre.x + (p.first * radius).toFloat(), centre.y + (p.second * radius).toFloat())
-
-        fun advance(dt: Float): Path? {
-            var budget = SPEED * dt
-            if (budget <= 0f) return null
-            val start = position
-            val path = PathBuilder().moveTo(start.x * SCALE, start.y * SCALE)
-            var steps = 0
-            while (budget > 0f && steps < 2000) {
-                val step = min(STEP, budget)
-                val route = glide
-                if (route != null) {
-                    val length = hypot(route.second.x - route.first.x, route.second.y - route.first.y).coerceAtLeast(1f)
-                    g += step / length
-                    if (g >= 1.0) glide = null
-                } else {
-                    s = SandPaths.advance(figure::at, s, step, radius)
-                    if (s >= 1.0) {
-                        // The figure is done: the next one, and a glide to where it begins.
-                        val end = point(figure.at(1.0))
-                        n++
-                        figure = SandPaths.figure(n, seed)
-                        s = 0.0
-                        glide = end to point(figure.at(0.0))
-                        g = 0.0
-                    }
-                }
-                val p = position
-                path.lineTo(p.x * SCALE, p.y * SCALE)
-                budget -= step
-                steps++
-            }
-            return path.detach()
-        }
-
-        companion object {
-            /** Window pixels between the points of a stroke. */
-            const val STEP = 1.5f
-
-            /** How fast the ball rolls: slow enough to be looked past. */
-            const val SPEED = 70f
-
-            fun ease(t: Double) = (t * t * (3 - 2 * t)).toFloat()
-            fun lerp(a: Offset, b: Offset, t: Float) = Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
-        }
+        /** The wide rake's two handles, either side of its middle, as a fraction of its length. */
+        const val HANDLES_APART = 0.28f
+        private const val RAKE_ALPHA = 0.95f
+        private const val RAKE_ALPHA_INK = 0.7f
     }
 }
 
-/** Blender's sand and ball, and the shader that lights the field with them. */
-private object Textures {
+/** Blender's gravel and rakes, and the shader that rakes the garden. */
+internal object Textures {
     private fun load(name: String): Image? = runCatching {
         Garden::class.java.getResourceAsStream("/zen/$name")?.use { Image.makeFromEncoded(it.readBytes()) }
     }.getOrNull()
 
     private val normal: Image? by lazy { load("sand_normal.png") }
     private val albedo: Image? by lazy { load("sand_albedo.png") }
-    val ball: ImageBitmap? by lazy { load("ball.png")?.toComposeImageBitmap() }
+    val bar: ImageBitmap? by lazy { load("rake_bar.png")?.toComposeImageBitmap() }
+    val handle: ImageBitmap? by lazy { load("rake_handle.png")?.toComposeImageBitmap() }
 
+    /*
+     * RakeLayer.phase and RakeLayer.reveal, in SkSL. Keep the two in step: every
+     * branch here has its twin in RakeGarden.kt, in the same order, and
+     * RakeGardenTest pins the Kotlin side. Integer arithmetic there is float here
+     * with floor, which agrees for the non-negative values both sides use.
+     */
     private const val SKSL = """
-uniform shader height;   // the drawn field, uScale px per window px
-uniform shader grain;    // Blender's sand, tangent-space normals, tiled
-uniform shader albedo;   // Blender's sand, grey, tiled
-uniform float uScale;
+uniform shader grain;
+uniform shader albedo;
+uniform float2 uSize;
+uniform float uKind;      // the composition's samon: 1 ripples, 2 flowing, 3 waves, 4 whirlpools, 5 checkerboard
+uniform float uVariant;
+uniform float4 uStone;    // the deck in zen: left, top, right, bottom
+uniform float uStoneFirst;// ripples: source 0 is the deck, measured to its edge
+uniform float2 uC0;
+uniform float2 uC1;
+uniform float2 uC2;
+uniform float2 uC3;
+uniform float uCount;
+uniform float uMode;      // 0 straight, composition being raked; 1 composition, sweep; 2 composition; 3 straight
+uniform float uT;         // seconds into the layer being raked
 uniform float uInk;
 uniform float uRelief;
-uniform float4 uStone;   // the deck in zen, window px: left, top, right, bottom
-uniform float uClear;    // smooth sand this far round it
-uniform float uFeather;  // and this far to fade back in
 
-float boxDistance(float2 p, float4 r) {
+const float PI = 3.14159265;
+const float S = 10.0;
+const float B = 60.0;
+const float V = 210.0;
+const float VS = 300.0;
+const float PEB = 10.0;
+const float SC = 60.0;
+const float CELL = 240.0;
+
+float boxDist(float2 p, float4 r) {
     float2 c = (r.xy + r.zw) * 0.5;
     float2 h = (r.zw - r.xy) * 0.5;
     float2 q = abs(p - c) - h;
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
 }
 
+float2 centre(int i) {
+    if (i == 0) return uC0;
+    if (i == 1) return uC1;
+    if (i == 2) return uC2;
+    return uC3;
+}
+
+float dirOf(int i) { return (i - (i / 2) * 2) == 0 ? 1.0 : -1.0; }
+
+float turnOf(float2 d, int i) {
+    float a = atan(d.y, d.x) / (2.0 * PI);
+    float t = dirOf(i) > 0.0 ? a : -a;
+    return t - floor(t);
+}
+
+// --- ripples ---------------------------------------------------------------
+float3 ripple(float2 p) {   // distance, source, 0
+    float best = 1e9;
+    float who = 0.0;
+    for (int i = 0; i < 4; i++) {
+        if (float(i) >= uCount) break;
+        float d = (i == 0 && uStoneFirst > 0.5) ? max(0.0, boxDist(p, uStone)) : max(0.0, length(p - centre(i)) - PEB);
+        if (d < best) { best = d; who = float(i); }
+    }
+    return float3(best, who, 0.0);
+}
+
+float lapTime(float laps, int i) {
+    float share = 0.5;
+    float ring = 2.0 * PI * B / V * share;
+    float perimeter = (i == 0 && uStoneFirst > 0.5) ? 2.0 * ((uStone.z - uStone.x) + (uStone.w - uStone.y)) / V * share : 0.0;
+    float start = i > 0 ? 2.0 * PI * PEB / V * share : 0.0;
+    return ring * (laps * laps / 2.0 + laps / 2.0) + (perimeter + start) * laps;
+}
+
+// --- flowing water -----------------------------------------------------------
+float amp() { return 26.0 + 22.0 * uVariant; }
+float wlen() { return 460.0 + 260.0 * uVariant; }
+float flow(float2 p) { return p.y + amp() * sin(p.x * 2.0 * PI / wlen() + uVariant * 2.0 * PI); }
+float flowBands() { return ceil((uSize.y + 2.0 * amp()) / B); }
+
+float passReveal(float order, float fromLeftF, float x) {
+    float progress = fromLeftF > 0.5 ? x / uSize.x : 1.0 - x / uSize.x;
+    return (order + progress) * (uSize.x / V);
+}
+
+float rowsOrder(float band, float count, out float fromLeft) {
+    float mid = floor((count - 1.0) / 2.0);
+    float order = band <= mid ? band : count - 1.0 - band;
+    fromLeft = (order - 2.0 * floor(order / 2.0)) < 0.5 ? 1.0 : 0.0;
+    return order;
+}
+
+// --- blue-sea waves ------------------------------------------------------------
+float scaleDist(float2 p) {
+    float base = floor(p.y / SC);
+    for (int k = 0; k < 4; k++) {
+        float row = base + 2.0 - float(k);
+        float cy = row * SC;
+        float odd = row - 2.0 * floor(row / 2.0);
+        float offset = odd < 0.5 ? 0.0 : SC;
+        float i = floor((p.x - offset) / (2.0 * SC) + 0.5);
+        float cx = offset + i * 2.0 * SC;
+        float d = length(p - float2(cx, cy));
+        if (d < SC) return d;
+    }
+    return 0.0;
+}
+float scaleRows() { return ceil(uSize.y / SC) + 2.0; }
+
+// --- whirlpools ---------------------------------------------------------------
+float3 whirl(float2 p) {   // distance, turn, source
+    float best = 1e9;
+    int who = 0;
+    for (int i = 0; i < 4; i++) {
+        if (float(i) >= uCount) break;
+        float d = length(p - centre(i));
+        if (d < best) { best = d; who = i; }
+    }
+    return float3(best, turnOf(p - centre(who), who), float(who));
+}
+float spiralTime(float u) { float sp = 2.0 * PI * B / V; return sp * u * u + 0.8 * u; }
+
+// --- the checkerboard -------------------------------------------------------------
+float cellsX() { return ceil(uSize.x / CELL); }
+float cellsY() { return ceil(uSize.y / CELL); }
+float cellLeft() { return (uSize.x - cellsX() * CELL) / 2.0; }
+float cellTop() { return (uSize.y - cellsY() * CELL) / 2.0; }
+float2 cellOf(float2 p) {
+    return float2(clamp(floor((p.x - cellLeft()) / CELL), 0.0, cellsX() - 1.0), clamp(floor((p.y - cellTop()) / CELL), 0.0, cellsY() - 1.0));
+}
+bool across(float2 c) { float s = c.x + c.y; return (s - 2.0 * floor(s / 2.0)) < 0.5; }
+float checkReveal(float2 p) {
+    float2 c = cellOf(p);
+    float leftCells = floor((cellsX() + 1.0) / 2.0);
+    float topCells = floor((cellsY() + 1.0) / 2.0);
+    bool right = c.x >= leftCells;
+    bool down = c.y >= topCells;
+    float dx = right ? cellsX() - 1.0 - c.x : c.x;
+    float dy = down ? cellsY() - 1.0 - c.y : c.y;
+    float qa = right ? cellsX() - leftCells : leftCells;
+    float qd = down ? cellsY() - topCells : topCells;
+    float r = max(dx, dy);
+    float before = min(r, qa) * min(r, qd);
+    float column = r < qa ? min(r, qd - 1.0) + 1.0 : 0.0;
+    float index = dx == r ? dy : column + dx;
+    float order = before + index;
+    float left = cellLeft() + c.x * CELL;
+    float top = cellTop() + c.y * CELL;
+    float passes = CELL / B;
+    bool ac = across(c);
+    float lane = clamp(floor((ac ? p.y - top : p.x - left) / B), 0.0, passes - 1.0);
+    float along = clamp((ac ? p.x - left : p.y - top) / CELL, 0.0, 1.0);
+    float g = (lane - 2.0 * floor(lane / 2.0)) < 0.5 ? along : 1.0 - along;
+    float cellTime = passes * (CELL / V);
+    return (order + (lane + g) / passes) * cellTime;
+}
+
+// --- the composition: its groove, and when it is raked -------------------------------
+float compPhase(float2 p) {
+    if (uKind < 1.5) return (uStoneFirst > 0.5 && boxDist(p, uStone) < 0.0) ? p.y / S : ripple(p).x / S;
+    if (uKind < 2.5) return flow(p) / S;
+    if (uKind < 3.5) return scaleDist(p) / S;
+    if (uKind < 4.5) { float3 w = whirl(p); return (w.x - 2.0 * w.y * B) / S; }
+    return across(cellOf(p)) ? p.y / S : p.x / S;
+}
+
+// Rake.sweepTime, sweepX and sweepReveal: the wide rake eases in and out.
+float sweepTime() { return (uSize.x + 2.0 * B) / VS * 1.5; }
+float sweepX(float t) {
+    float u = clamp(t / sweepTime(), 0.0, 1.0);
+    return -B + (uSize.x + 2.0 * B) * u * u * (3.0 - 2.0 * u);
+}
+float sweepReveal(float x) {
+    float s = clamp((x + B) / (uSize.x + 2.0 * B), 0.0, 1.0);
+    return sweepTime() * (0.5 - sin(asin(1.0 - 2.0 * s) / 3.0));
+}
+
+float compReveal(float2 p) {
+    if (uKind < 1.5) {
+        if (uStoneFirst > 0.5 && boxDist(p, uStone) < 0.0) return 0.0;
+        float3 r = ripple(p);
+        int src = int(r.y);
+        float turn = turnOf(p - centre(src), src);
+        float band = floor(r.x / B);
+        float frac2 = 2.0 * turn - floor(2.0 * turn);
+        return lapTime(band + frac2, src);
+    }
+    if (uKind < 2.5) {
+        float n = flowBands();
+        float band = clamp(floor((flow(p) + amp()) / B), 0.0, n - 1.0);
+        float fromLeft;
+        float order = rowsOrder(band, n, fromLeft);
+        return passReveal(order, fromLeft, p.x);
+    }
+    if (uKind < 3.5) {
+        float n = scaleRows();
+        float band = clamp(floor(p.y / SC) + 1.0, 0.0, n - 1.0);
+        float fromLeft;
+        float order = rowsOrder(band, n, fromLeft);
+        return passReveal(order, fromLeft, p.x);
+    }
+    if (uKind < 4.5) {
+        float3 w = whirl(p);
+        float pass = max(ceil(-2.0 * w.y), floor(w.x / B - 2.0 * w.y + 0.5));
+        return spiralTime((pass + 2.0 * w.y) / 2.0);
+    }
+    return checkReveal(p);
+}
+
+// --- the gravel -----------------------------------------------------------------
+// A trough at every half line, where a tine runs, and a ridge pushed up at every whole one.
+float groove(float phase) {
+    float h = 0.5 + 0.5 * cos(2.0 * PI * phase);
+    return pow(h, 0.8);
+}
+
+float compHeight(float2 p) { return groove(compPhase(p)); }
+float straightHeight(float2 p) { return groove(p.y / S); }
+
+// The height at p, and how far a rake is from reaching it (seconds; ≤ 0 once raked).
+float heightAt(float2 p, out float ahead) {
+    ahead = 1e9;
+    if (uMode < 0.5) {
+        float r = compReveal(p);
+        ahead = r - uT;
+        return ahead <= 0.0 ? compHeight(p) : straightHeight(p);
+    }
+    if (uMode < 1.5) {
+        float r = sweepReveal(p.x);
+        ahead = r - uT;
+        return ahead <= 0.0 ? straightHeight(p) : compHeight(p);
+    }
+    if (uMode < 2.5) return compHeight(p);
+    return straightHeight(p);
+}
+
 half4 main(float2 p) {
-    float2 q = p * uScale;
-    float hx = height.eval(q + float2(1.0, 0.0)).r - height.eval(q - float2(1.0, 0.0)).r;
-    float hy = height.eval(q + float2(0.0, 1.0)).r - height.eval(q - float2(0.0, 1.0)).r;
-    // Round the cards the sand lies smooth: whatever was drawn there fades out entirely.
-    float calm = 1.0;
-    if (uStone.z > uStone.x) calm = smoothstep(uClear, uClear + uFeather, boxDistance(p, uStone));
-    float3 n = normalize(float3(-hx * uRelief * calm, -hy * uRelief * calm, 1.0));
-    // Blender's normals are y-up; the window is y-down.
+    float ahead;
+    float h = heightAt(p, ahead);
+    float a1; float a2; float a3; float a4;
+    float hx = heightAt(p + float2(1.0, 0.0), a1) - heightAt(p - float2(1.0, 0.0), a2);
+    float hy = heightAt(p + float2(0.0, 1.0), a3) - heightAt(p - float2(0.0, 1.0), a4);
+    // Gravel a rake is about to reach is heaped up in front of it.
+    // In pixels ahead of the rake; bounded before squaring, since a layer with no
+    // rake in it says 1e9, which overflows to NaN on the CPU.
+    float reach = (uMode > 0.5 && uMode < 1.5 ? clamp(p.x - sweepX(uT), 0.0, 60.0) : clamp(ahead, 0.0, 1.0) * V) / 9.0;
+    float heap = ahead > 0.0 ? exp(-reach * reach) : 0.0;
+    float3 n = normalize(float3(-hx * uRelief, -hy * uRelief + heap * 0.6, 1.0));
     float3 g = grain.eval(p).rgb * 2.0 - 1.0;
     g.y = -g.y;
-    n = normalize(float3(n.xy + g.xy * 0.16, n.z));
-    float3 L = normalize(float3(-0.55, -0.62, 0.62));
+    n = normalize(float3(n.xy + g.xy * 0.18, n.z));
+    float3 L = normalize(float3(-0.5, -0.66, 0.56));
     float diff = max(dot(n, L), 0.0);
-    // The grain is there to be felt, not counted: most of its speckle is flattened out.
-    float a = mix(0.93, albedo.eval(p).r, 0.3);
-    // Soft light and a high floor: the sand is a surface to rest the eye on, not a picture.
-    float lum = a * (0.86 + 0.34 * diff);
+    float a = mix(0.93, albedo.eval(p).r, 0.35);
+    float lum = a * (0.74 + 0.42 * diff) * mix(0.9, 1.0, h) * (1.0 + 0.05 * heap);
     lum = min(lum, 1.0);
-    if (uInk > 0.5) lum = lum * 0.2;
+    // Ink: black gravel, with the contrast lifted a little so the grooves survive the dark.
+    if (uInk > 0.5) lum = pow(lum, 1.8) * 0.3;
     return half4(half3(lum), 1.0);
 }
 """
 
+    /** Why the shader will not compile, or null when it does: a test holds it to null, since the app only logs it. */
+    fun compileError(): String? = runCatching { RuntimeEffect.makeForShader(SKSL) }.exceptionOrNull()?.message
+
     private val effect: RuntimeEffect? by lazy {
-        runCatching { RuntimeEffect.makeForShader(SKSL) }.onFailure { println("[zen] sand shader: ${it.message}") }.getOrNull()
+        runCatching { RuntimeEffect.makeForShader(SKSL) }.onFailure { println("[zen] garden shader: ${it.message}") }.getOrNull()
     }
 
-    fun shade(field: Image, ink: Boolean, stone: Rect): Shader? {
+    private fun kindOf(samon: Samon): Float = when (samon) {
+        Samon.CHOKUSEN -> 0f
+        Samon.MIZUMON -> 1f
+        Samon.RYUSUI -> 2f
+        Samon.SEIGAIHA -> 3f
+        Samon.UZUMAKI -> 4f
+        Samon.ICHIMATSU -> 5f
+    }
+
+    fun shade(frame: RakeProgram.Frame, stone: GardenRect?, ink: Boolean): Shader? {
         val e = effect ?: return null
         val n = normal ?: return null
         val a = albedo ?: return null
+        val composition: RakeLayer? = listOf(frame.top, frame.base).firstOrNull { it != null && it.samon != Samon.CHOKUSEN }
+        val top = frame.top
+        val mode = when {
+            top != null && top.samon != Samon.CHOKUSEN -> 0f
+            top != null -> 1f
+            frame.base.samon != Samon.CHOKUSEN -> 2f
+            else -> 3f
+        }
+        // The same list of centres the layer circles: the deck first for ripples, then the pebbles.
+        val sources = buildList {
+            if (composition?.samon == Samon.MIZUMON && stone != null) add(Offset((stone.left + stone.right) / 2f, (stone.top + stone.bottom) / 2f))
+            composition?.pebbles?.forEach { add(Offset(it.x, it.y)) }
+        }.take(4)
         val linear = SamplingMode.LINEAR
         return RuntimeShaderBuilder(e).apply {
-            child("height", field.makeShader(FilterTileMode.CLAMP, FilterTileMode.CLAMP, linear, null))
             child("grain", n.makeShader(FilterTileMode.REPEAT, FilterTileMode.REPEAT, linear, null))
             child("albedo", a.makeShader(FilterTileMode.REPEAT, FilterTileMode.REPEAT, linear, null))
-            uniform("uScale", Garden.SCALE)
+            uniform("uSize", frame.base.width, frame.base.height)
+            uniform("uKind", composition?.let { kindOf(it.samon) } ?: 0f)
+            uniform("uVariant", composition?.variant ?: 0f)
+            val s = stone
+            uniform("uStone", s?.left ?: 0f, s?.top ?: 0f, s?.right ?: 0f, s?.bottom ?: 0f)
+            uniform("uStoneFirst", if (composition?.samon == Samon.MIZUMON && s != null) 1f else 0f)
+            listOf("uC0", "uC1", "uC2", "uC3").forEachIndexed { i, name ->
+                val c = sources.getOrNull(i) ?: Offset.Zero
+                uniform(name, c.x, c.y)
+            }
+            uniform("uCount", sources.size.toFloat())
+            uniform("uMode", mode)
+            uniform("uT", frame.topTime)
             uniform("uInk", if (ink) 1f else 0f)
-            uniform("uRelief", 15f)
-            uniform("uStone", stone.left, stone.top, stone.right, stone.bottom)
-            uniform("uClear", Garden.BREATHING)
-            uniform("uFeather", Garden.FEATHER)
+            uniform("uRelief", 1.6f * Rake.SPACING / 10f)
         }.makeShader()
     }
 }

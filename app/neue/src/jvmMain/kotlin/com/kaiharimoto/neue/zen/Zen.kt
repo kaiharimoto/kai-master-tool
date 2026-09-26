@@ -31,6 +31,9 @@ class ZenLayer {
     var deep by mutableFloatStateOf(0f)
     var time by mutableFloatStateOf(0f)
 
+    /** The garden's choice of compositions; null draws a fresh one each zen. The studio fixes it. */
+    var gardenSeed: Int? = null
+
     /** Where the pointer is in the window while immersive, for the deck to turn toward in zen. */
     var pointer by mutableStateOf<Offset?>(null)
 
