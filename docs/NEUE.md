@@ -224,11 +224,18 @@ full screen with the title bar and the builder's bar folded over the top,
 coming out when the pointer reaches the edge —
 the deck and the panes that build it get the whole screen. `Esc`, last in its
 chain, leaves it; so does leaving full screen any other way. **It stays when
-another window takes focus** (1.0.12): Compose goes full screen through the JDK's
-exclusive mode, and on Windows the JDK both put the window into Direct3D exclusive
-mode and added a listener that minimised it on focus loss — a click on a second
-monitor minimised the builder. Neue turns Java2D's D3D pipeline off at start-up
-(skiko draws with its own) and removes that listener (`Platform.keepFullScreen`).
+another window takes focus** (1.0.13). Compose's full screen on Windows is the
+JDK's exclusive mode (`GraphicsDevice.setFullScreenWindow`, via skiko, and nothing
+else): with Java2D's Direct3D pipeline it minimised the window the moment a click
+went to another monitor, and without it (1.0.12's attempt) the window stayed
+decorated and never went full screen. So on Windows immersive mode is **a second,
+borderless window laid exactly over the monitor** the builder is on — which Windows
+treats as full screen, taskbar and all, and leaves alone when focus moves. A
+frame's decorations cannot change while it is showing (`JFrame.setUndecorated`
+throws), so entering and leaving swap windows (`key(full != null)` in `Main.kt`);
+everything the builder knows lives in `NeueHolders`, outside the window, and
+carries across. macOS and Linux keep the window's own full screen, which does
+neither.
 In immersive mode the page keeps **32 px of paper at the top** (`IMMERSIVE_TOP`),
 so the deck's own row is out of the bar's reach, and the deck's spare height is
 shared above and below it — centred, not pushed down. Leaving goes

@@ -90,23 +90,4 @@ object Platform {
             crashFile.writeText(systemLine() + "\n\n" + error.stackTraceToString())
         }
     }
-
-    /**
-     * Keeps a full-screen window full screen when another window takes focus.
-     *
-     * Compose (through skiko) makes a window full screen on Windows and Linux with
-     * `GraphicsDevice.setFullScreenWindow`, the JDK's exclusive mode, and on
-     * Windows the JDK then adds a listener of its own that **minimises the window
-     * the moment it loses focus** (`Win32GraphicsDevice`'s full-screen window
-     * adapter, and Direct3D's) — made for games that change the display mode.
-     * Neue changes no display mode, so a click on another monitor should leave
-     * the builder where it is (kai, 1.0.12). Removing that one listener is the
-     * whole fix; it is found by name because the class is private to the JDK,
-     * and a JDK that does not add it leaves nothing to remove.
-     */
-    fun keepFullScreen(window: java.awt.Window) {
-        window.windowListeners
-            .filter { it.javaClass.name.contains("FSWindowAdapter") }
-            .forEach(window::removeWindowListener)
-    }
 }
