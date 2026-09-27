@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.shell
 
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,7 +27,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.deck.IssueSeverity
 import com.kaiharimoto.mastertool.core.model.DeckSection
@@ -195,7 +195,7 @@ private fun Groups(state: DeckBuilderState, neue: NeueState) {
                                             .size(16.dp)
                                             .background(hue)
                                             .border(if (group.color == h) 2.dp else 0.dp, if (group.color == h) c.ink else Color.Transparent)
-                                            .pointerHoverIcon(PointerIcon.Hand)
+                                            .cursorPointer(caption = "Pick")
                                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                                 state.updateGroups { it.upsert(group.copy(color = h)) }
                                             },
@@ -211,10 +211,10 @@ private fun Groups(state: DeckBuilderState, neue: NeueState) {
                             }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = Icons.Pencil)
                         }
                         Tip("Move up") {
-                            IconButton(Icons.ArrowUp, { state.updateGroups { it.reorder(group.id, i - 1) } }, enabled = i > 0, size = 32.dp)
+                            IconButton(Icons.ArrowUp, { state.updateGroups { it.reorder(group.id, i - 1) } }, enabled = i > 0, size = 32.dp, label = "Move up", reason = "Already first")
                         }
                         Tip("Move down") {
-                            IconButton(Icons.ArrowDown, { state.updateGroups { it.reorder(group.id, i + 1) } }, enabled = i < groups.lastIndex, size = 32.dp)
+                            IconButton(Icons.ArrowDown, { state.updateGroups { it.reorder(group.id, i + 1) } }, enabled = i < groups.lastIndex, size = 32.dp, label = "Move down", reason = "Already last")
                         }
                         Tip("Delete the group. Its cards stay in the deck") {
                             MuButton("Delete", { deleteGroup(state, group.id) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Trash)

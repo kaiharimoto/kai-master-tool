@@ -1,5 +1,11 @@
 package com.kaiharimoto.neue.kit
 
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import com.kaiharimoto.mastertool.core.input.CursorMode
+import com.kaiharimoto.neue.cursor.cursor
+import com.kaiharimoto.neue.cursor.cursorPointer
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -96,6 +102,8 @@ fun MuButton(
     icon: ImageVector? = null,
     arrow: Boolean = false,
     toggled: Boolean = false,
+    /** Why it is disabled, when that is not obvious: the family cursor's caption over it. */
+    reason: String? = null,
 ) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
@@ -118,7 +126,7 @@ fun MuButton(
             .background(animatedColor(bg))
             .border(1.dp, animatedColor(edge))
             .hoverable(source, enabled)
-            .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
+            .cursorPointer(label = label, showsWords = true, enabled = enabled, reason = reason)
             .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
             .padding(horizontal = size.padding),
         verticalAlignment = Alignment.CenterVertically,
@@ -131,7 +139,7 @@ fun MuButton(
     }
 }
 
-/** A square icon-only button, ghost by default. Always give it a tooltip. */
+/** A square icon-only button, ghost by default. Always give it a [label] (the cursor's caption) and a tooltip. */
 @Composable
 fun IconButton(
     icon: ImageVector,
@@ -141,6 +149,10 @@ fun IconButton(
     enabled: Boolean = true,
     toggled: Boolean = false,
     variant: BtnVariant = BtnVariant.GHOST,
+    /** What it does, in a word or two: the family cursor captions an icon button with it (its `aria-label`). */
+    label: String? = null,
+    /** Why it is disabled, when that is not obvious. */
+    reason: String? = null,
 ) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
@@ -159,7 +171,7 @@ fun IconButton(
             .background(animatedColor(bg))
             .border(1.dp, animatedColor(edge))
             .hoverable(source, enabled)
-            .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
+            .cursorPointer(label = label, enabled = enabled, reason = reason)
             .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -176,7 +188,7 @@ fun MicroLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
         text,
         modifier
             .hoverable(source)
-            .pointerHoverIcon(PointerIcon.Hand)
+            .cursorPointer(showsWords = true)
             .clickable(interactionSource = source, indication = null, onClick = onClick),
         color = animatedColor(if (hovered) Mu.colors.ink else color),
     )
@@ -210,6 +222,7 @@ fun MuInput(
     Box(
         modifier
             .height(if (dense) 28.dp else 36.dp)
+            .cursor(CursorMode.TEXT, fontSize = style.fontSize, focused = focused)
             .hoverable(source)
             .drawBehind {
                 val y = size.height - 0.5.dp.toPx()
@@ -254,16 +267,44 @@ fun <T> MuSelect(
     var widthPx by remember { mutableStateOf(0) }
     val height = if (small) 32.dp else 36.dp
     val density = LocalDensity.current
+    val overlays = LocalOverlays.current
+    var anchor by remember { mutableStateOf(Offset.Zero) }
+    val list: @Composable () -> Unit = {
+        Column(
+            Modifier
+                .width(with(density) { widthPx.toDp() }.coerceAtLeast(144.dp))
+                .background(c.paper)
+                .border(1.dp, c.ink),
+        ) {
+            options.forEachIndexed { i, option ->
+                MenuRow(
+                    text = label(option),
+                    selected = option == value,
+                    last = i == options.lastIndex,
+                    onClick = { overlays?.dismiss(); open = false; onSelect(option) },
+                )
+            }
+        }
+    }
     Box(modifier) {
         Row(
             Modifier
                 .height(height)
                 .onSizeChanged { widthPx = it.width }
+                .onGloballyPositioned { anchor = it.positionInWindow() }
                 .background(c.paper)
                 .border(1.dp, animatedColor(if (open || hovered) c.ink else c.ink25))
                 .hoverable(source)
-                .pointerHoverIcon(PointerIcon.Hand)
-                .clickable(interactionSource = source, indication = null) { open = !open }
+                .cursorPointer(showsWords = true)
+                .clickable(interactionSource = source, indication = null) {
+                    if (overlays != null) {
+                        // In the window's own layer, under the family cursor.
+                        open = true
+                        overlays.show(Offset(anchor.x, anchor.y + with(density) { height.toPx() } - 1f), onDismiss = { open = false }, content = list)
+                    } else {
+                        open = !open
+                    }
+                }
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -271,7 +312,7 @@ fun <T> MuSelect(
             RowText(label(value), Modifier.weight(1f))
             MuText("▼", style = MuType.help(LocalMuFonts.current).copy(fontSize = 10.sp), color = c.ink70)
         }
-        if (open) {
+        if (open && overlays == null) {
             Popup(
                 offset = IntOffset(0, with(density) { height.roundToPx() } - 1),
                 onDismissRequest = { open = false },
@@ -319,7 +360,7 @@ fun <T> Segmented(
                     .fillMaxHeight()
                     .background(animatedColor(if (selected) c.ink else if (hovered) c.ink06 else Color.Transparent))
                     .hoverable(source)
-                    .pointerHoverIcon(PointerIcon.Hand)
+                    .cursorPointer(showsWords = true)
                     .clickable(interactionSource = source, indication = null) { onSelect(option) }
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
@@ -340,7 +381,7 @@ fun MuSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier =
             .size(36.dp, 18.dp)
             .background(animatedColor(if (checked) c.ink else c.paper))
             .border(1.dp, c.ink)
-            .pointerHoverIcon(PointerIcon.Hand)
+            .cursorPointer(caption = if (checked) "Turn off" else "Turn on")
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onChange(!checked) },
     ) {
         Box(
@@ -361,7 +402,7 @@ fun MuCheckbox(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier
             .size(14.dp)
             .background(if (checked) c.ink else c.paper)
             .border(1.dp, c.ink)
-            .pointerHoverIcon(PointerIcon.Hand)
+            .cursorPointer(caption = if (checked) "Clear" else "Tick")
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onChange(!checked) },
     )
 }
@@ -377,6 +418,10 @@ fun MuSlider(
     modifier: Modifier = Modifier,
     range: ClosedFloatingPointRange<Float> = 0f..1f,
     steps: Int = 0,
+    /** Its name, for the family cursor's caption. */
+    name: String? = null,
+    /** Its value as people read it (`3:00`, `72%`), kept in step by the caller. */
+    valueText: String? = null,
 ) {
     val c = Mu.colors
     var widthPx by remember { mutableStateOf(1) }
@@ -393,7 +438,7 @@ fun MuSlider(
         modifier
             .height(20.dp)
             .onSizeChanged { widthPx = it.width }
-            .pointerHoverIcon(PointerIcon.Hand)
+            .cursor(CursorMode.DRAG, caption = name, value = valueText ?: "%.2f".format(value), slider = true)
             .pointerInput(range, steps) { detectTapGestures { onChange(at(it.x)) } }
             .pointerInput(range, steps) {
                 detectDragGestures(onDragStart = { onChange(at(it.x)) }) { change, _ ->
@@ -424,9 +469,9 @@ fun Stepper(
     max: Int = 3,
 ) {
     Row(modifier.border(1.dp, Mu.colors.ink25), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(Icons.Minus, { onChange(count - 1) }, enabled = count > min)
+        IconButton(Icons.Minus, { onChange(count - 1) }, enabled = count > min, label = "Remove one", reason = "None to remove")
         Mono(count.toString(), Modifier.widthIn(min = 24.dp), color = Mu.colors.ink, size = 13.sp, align = androidx.compose.ui.text.style.TextAlign.Center)
-        IconButton(Icons.Plus, { onChange(count + 1) }, enabled = count < max)
+        IconButton(Icons.Plus, { onChange(count + 1) }, enabled = count < max, label = "Add one", reason = "No more allowed")
     }
 }
 
@@ -447,7 +492,7 @@ fun <T> MuTabs(value: T, options: List<T>, label: (T) -> String, onSelect: (T) -
             Box(
                 Modifier
                     .hoverable(source)
-                    .pointerHoverIcon(PointerIcon.Hand)
+                    .cursorPointer(showsWords = true)
                     .clickable(interactionSource = source, indication = null) { onSelect(option) }
                     .drawBehind {
                         if (active) drawRect(c.ink, Offset(0f, size.height - 2.dp.toPx()), androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx()))
@@ -472,6 +517,7 @@ fun MenuRow(
     icon: ImageVector? = null,
     danger: Boolean = false,
     enabled: Boolean = true,
+    reason: String? = null,
 ) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
@@ -484,7 +530,7 @@ fun MenuRow(
                 .alpha(if (enabled) 1f else 0.3f)
                 .background(if (hovered && enabled) inner.paper else Color.Transparent)
                 .hoverable(source, enabled)
-                .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
+                .cursorPointer(showsWords = true, enabled = enabled, reason = reason)
                 .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
                 .drawBehind {
                     if (!last) drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,7 +30,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,7 +79,7 @@ fun OddsPage(state: DeckBuilderState) {
     val size = state.deck.main.size
     Column(Modifier.fillMaxSize()) {
         PageHeader(3, "Odds", "Main deck · $size cards · exact, not simulated") {
-            MuButton("New goal", state::newGoal, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = Icons.Plus, enabled = size > 0)
+            MuButton("New goal", state::newGoal, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = Icons.Plus, enabled = size > 0, reason = "Main deck is empty")
         }
         if (size == 0) {
             EmptyState("Empty deck.", "Odds are about a main deck. Add cards on the builder and they appear here.")
@@ -125,7 +125,7 @@ private fun Goals(state: DeckBuilderState) {
                     .fillMaxWidth()
                     .background(animatedColor(if (hovered) c.ink06 else Color.Transparent))
                     .hoverable(source)
-                    .pointerHoverIcon(PointerIcon.Hand)
+                    .cursorPointer(caption = "Open")
                     .clickable(interactionSource = source, indication = null) { state.openGoal(goal.id) }
                     .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
                     .padding(vertical = 12.dp),

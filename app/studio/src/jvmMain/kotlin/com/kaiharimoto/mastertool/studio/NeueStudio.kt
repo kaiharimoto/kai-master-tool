@@ -153,6 +153,23 @@ fun neueMain(args: Array<String>) {
                 clock.run(60)
             }
 
+            // --hovers=card@0.3,0.2;undo@0.47,0.02: the family cursor at each point, one still
+            // apiece, and what it resolved to in the log — the frame, the caret, the bar, ✕.
+            map["hovers"]?.let { spec ->
+                spec.split(";").filter { it.isNotBlank() }.forEach { step ->
+                    val (label, where) = step.split("@")
+                    val (fx, fy) = where.split(",").map { it.toFloat() }
+                    val at = Offset(fx * width, fy * height)
+                    scene.sendPointerEvent(PointerEventType.Move, at)
+                    scene.sendPointerEvent(PointerEventType.Move, at + Offset(1f, 0f))
+                    clock.run(30)
+                    val (mode, hook) = h.cursor.debugResolve()
+                    println("[neue-studio] hover $label at ($fx, $fy): $mode ${hook ?: ""}")
+                    val still = clock.frame().encodeToData(EncodedImageFormat.PNG)
+                    if (still != null) File(out, "$name-hover-$label.png").writeBytes(still.bytes)
+                }
+            }
+
             // --mouse=right@0.1,0.3;left-hold@0.5,0.5: real presses, with real buttons, at fractions
             // of the frame; after each the deck's counts and any open menu are logged, so a gesture
             // that does nothing shows up as numbers that did not move.

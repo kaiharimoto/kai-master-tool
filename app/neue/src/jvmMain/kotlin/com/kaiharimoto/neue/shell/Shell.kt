@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.shell
 
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -30,8 +31,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
@@ -94,7 +93,7 @@ fun TitleBar(
         ) {
             Row(
                 Modifier
-                    .pointerHoverIcon(PointerIcon.Hand)
+                    .cursorPointer(caption = "Decks →")
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { neue.go(Page.DECKS) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -121,7 +120,7 @@ fun TitleBar(
                 }
             }
             Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, bars out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
-                IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 32.dp)
+                IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 32.dp, label = if (neue.immersive) "Leave full screen" else "Full screen")
             }
         }
     }
@@ -139,7 +138,7 @@ private fun Pill(onClick: () -> Unit, content: @Composable () -> Unit) {
                 .background(Mu.colors.paper)
                 .border(1.dp, c.ink)
                 .hoverable(source)
-                .pointerHoverIcon(PointerIcon.Hand)
+                .cursorPointer(showsWords = true)
                 .clickable(interactionSource = source, indication = null, onClick = onClick)
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -159,7 +158,7 @@ private fun SearchTrigger(modifier: Modifier = Modifier, onClick: () -> Unit) {
             .height(32.dp)
             .border(1.dp, animatedColor(if (hovered) c.ink else c.ink25))
             .hoverable(source)
-            .pointerHoverIcon(PointerIcon.Hand)
+            .cursorPointer(showsWords = true)
             .clickable(interactionSource = source, indication = null, onClick = onClick)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -262,7 +261,7 @@ private fun RailRow(page: Page, active: Boolean, count: String?, onClick: () -> 
                     .height(MuShell.railRow)
                     .background(animatedColor(if (active) inner.paper else if (hovered) c.ink06 else Color.Transparent))
                     .hoverable(source)
-                    .pointerHoverIcon(PointerIcon.Hand)
+                    .cursorPointer(showsWords = true)
                     .clickable(interactionSource = source, indication = null, onClick = onClick)
                     .padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.kit
 
+import com.kaiharimoto.neue.cursor.cursorPointer
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -71,7 +73,7 @@ fun Badge(text: String, modifier: Modifier = Modifier, inverted: Boolean = false
 
 /** Tag (§6): a selectable square chip, inverted when on. */
 @Composable
-fun Tag(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, count: String? = null) {
+fun Tag(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, count: String? = null, caption: String? = null) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -81,7 +83,7 @@ fun Tag(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier
             .background(animatedColor(if (selected) c.ink else Color.Transparent))
             .border(1.dp, animatedColor(if (selected || hovered) c.ink else c.ink25))
             .hoverable(source)
-            .pointerHoverIcon(PointerIcon.Hand)
+            .cursorPointer(caption = caption, showsWords = true)
             .clickable(interactionSource = source, indication = null, onClick = onClick)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -135,7 +135,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Mono(host.version, color = Mu.colors.ink)
                             if (host.checking) Breathe()
-                            MuButton("Check now", host.onCheckUpdates, variant = BtnVariant.SUBTLE, size = BtnSize.SM, enabled = !host.checking)
+                            MuButton("Check now", host.onCheckUpdates, variant = BtnVariant.SUBTLE, size = BtnSize.SM, enabled = !host.checking, reason = "Checking")
                         }
                     }
                     SettingRow("Report an issue", "Opens a new issue on GitHub with the version and the system filled in.") {

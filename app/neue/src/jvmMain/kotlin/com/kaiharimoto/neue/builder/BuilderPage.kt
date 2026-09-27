@@ -39,8 +39,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
+import com.kaiharimoto.neue.cursor.cursor
+import com.kaiharimoto.mastertool.core.input.CursorMode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,7 +65,6 @@ import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 import com.kaiharimoto.neue.zen.zenQuiet
-import java.awt.Cursor
 
 private fun kbd(action: DeskAction) = DeskShortcuts.chordFor(action)?.let(DeskShortcuts::kbd)
 
@@ -88,11 +87,11 @@ fun BuilderPage(
     Row(Modifier.fillMaxSize()) {
         if (neue.prefs.poolVisible) {
             PoolPane(state, neue, drag, onSearchEffects, Modifier.width(neue.prefs.poolWidth.dp).fillMaxHeight())
-            ResizeRule { delta -> neue.update(debounce = true) { it.copy(poolWidth = it.poolWidth + delta) } }
+            ResizeRule("Pool", neue.prefs.poolWidth) { delta -> neue.update(debounce = true) { it.copy(poolWidth = it.poolWidth + delta) } }
         }
         DeckColumn(state, neue, drag, Modifier.weight(1f).fillMaxHeight())
         if (neue.prefs.inspectorVisible) {
-            ResizeRule { delta -> neue.update(debounce = true) { it.copy(inspectorWidth = it.inspectorWidth - delta) } }
+            ResizeRule("Inspector", neue.prefs.inspectorWidth) { delta -> neue.update(debounce = true) { it.copy(inspectorWidth = it.inspectorWidth - delta) } }
             Inspector(state, neue, Modifier.width(neue.prefs.inspectorWidth.dp).fillMaxHeight())
         }
     }
@@ -139,14 +138,15 @@ fun RowScope.BuilderBar(
             }
             .weight(1f, fill = false)
             .widthIn(min = 140.dp, max = 560.dp)
+            .cursor(CursorMode.TEXT, caption = "Rename", fontSize = 20.sp, focused = focused)
             .hoverable(source)
             .onFocusChanged { state.onTextFieldFocusChanged(it.isFocused) }
             .drawBehind { drawLine(line, Offset(0f, size.height + 2.dp.toPx()), Offset(size.width, size.height + 2.dp.toPx()), 1.dp.toPx()) },
     )
     Standing(state, neue)
     Box(Modifier.weight(1f))
-    Tip("Undo", kbd = kbd(DeskAction.UNDO)) { IconButton(Icons.Undo, state::undo, enabled = state.canUndo, size = 32.dp) }
-    Tip("Redo", kbd = kbd(DeskAction.REDO)) { IconButton(Icons.Redo, state::redo, enabled = state.canRedo, size = 32.dp) }
+    Tip("Undo", kbd = kbd(DeskAction.UNDO)) { IconButton(Icons.Undo, state::undo, enabled = state.canUndo, size = 32.dp, label = "Undo", reason = "Nothing to undo") }
+    Tip("Redo", kbd = kbd(DeskAction.REDO)) { IconButton(Icons.Redo, state::redo, enabled = state.canRedo, size = 32.dp, label = "Redo", reason = "Nothing to redo") }
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     Segmented(state.format, Format.entries, { it.name }, onFormat, small = true)
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
@@ -155,10 +155,10 @@ fun RowScope.BuilderBar(
     Tool("Screenshot", "A picture of the deck, without the window around it", Icons.Camera, kbd(DeskAction.SCREENSHOT), !narrow, onScreenshot)
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     Tip("Show or hide the pool", kbd = kbd(DeskAction.TOGGLE_POOL)) {
-        IconButton(Icons.PanelLeft, { neue.update { it.copy(poolVisible = !it.poolVisible) } }, toggled = neue.prefs.poolVisible, size = 32.dp)
+        IconButton(Icons.PanelLeft, { neue.update { it.copy(poolVisible = !it.poolVisible) } }, toggled = neue.prefs.poolVisible, size = 32.dp, label = if (neue.prefs.poolVisible) "Hide pool" else "Show pool")
     }
     Tip("Show or hide the inspector", kbd = kbd(DeskAction.TOGGLE_INSPECTOR)) {
-        IconButton(Icons.PanelRight, { neue.update { it.copy(inspectorVisible = !it.inspectorVisible) } }, toggled = neue.prefs.inspectorVisible, size = 32.dp)
+        IconButton(Icons.PanelRight, { neue.update { it.copy(inspectorVisible = !it.inspectorVisible) } }, toggled = neue.prefs.inspectorVisible, size = 32.dp, label = if (neue.prefs.inspectorVisible) "Hide inspector" else "Show inspector")
     }
     Tip("Save the deck", kbd = kbd(DeskAction.SAVE)) {
         MuButton("Save", onSave, variant = BtnVariant.PRIMARY, size = BtnSize.SM, icon = Icons.Save)
@@ -173,7 +173,7 @@ private fun Tool(label: String, tip: String, icon: androidx.compose.ui.graphics.
         if (words) {
             MuButton(label, onClick, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = icon)
         } else {
-            IconButton(icon, onClick, size = 32.dp)
+            IconButton(icon, onClick, size = 32.dp, label = label)
         }
     }
 }
@@ -204,7 +204,7 @@ private fun Standing(state: DeckBuilderState, neue: NeueState) {
  * the interface is zoomed.
  */
 @Composable
-private fun ResizeRule(onDrag: (Float) -> Unit) {
+private fun ResizeRule(name: String, width: Float, onDrag: (Float) -> Unit) {
     val density = LocalDensity.current
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -215,7 +215,8 @@ private fun ResizeRule(onDrag: (Float) -> Unit) {
             .width(7.dp)
             .fillMaxHeight()
             .hoverable(source)
-            .pointerHoverIcon(PointerIcon(Cursor(Cursor.E_RESIZE_CURSOR)))
+            // A drag: the family cursor names the pane and reads its width as it moves.
+            .cursor(CursorMode.DRAG, caption = name, value = "${kotlin.math.round(width).toInt()} px")
             .draggable(
                 rememberDraggableState { px -> onDrag(with(density) { px.toDp().value }) },
                 Orientation.Horizontal,

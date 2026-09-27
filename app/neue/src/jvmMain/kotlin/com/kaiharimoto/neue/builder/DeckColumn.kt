@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -13,8 +14,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import com.kaiharimoto.mastertool.core.layout.DeckLabels
 import com.kaiharimoto.mastertool.core.layout.LabelPlace
 import com.kaiharimoto.mastertool.core.motion.ZenArrangement
@@ -258,7 +257,7 @@ private fun BoxToggle(label: String, on: Boolean, onClick: () -> Unit) {
             .background(animatedColor(if (on) c.ink else if (hovered) c.ink06 else Color.Transparent))
             .border(1.dp, c.ink)
             .hoverable(source)
-            .pointerHoverIcon(PointerIcon.Hand)
+            .cursorPointer(showsWords = true)
             .clickable(interactionSource = source, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,

@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -122,7 +122,7 @@ private fun Fold(title: String, key: String, neue: NeueState, modifier: Modifier
                 .fillMaxWidth()
                 .height(36.dp)
                 .hoverable(source)
-                .pointerHoverIcon(PointerIcon.Hand)
+                .cursorPointer(caption = if (open) "Fold" else "Unfold")
                 .clickable(interactionSource = source, indication = null) {
                     neue.update { p -> p.copy(inspectorFolded = if (open) p.inspectorFolded + key else p.inspectorFolded - key) }
                 },
@@ -165,14 +165,14 @@ internal fun CardTags(card: Card, state: DeckBuilderState) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            card.race?.let { race -> Tag(race, false, { state.onFilterChange(CardFilter(races = setOf(race), format = state.format)) }) }
+            card.race?.let { race -> Tag(race, false, { state.onFilterChange(CardFilter(races = setOf(race), format = state.format)) }, caption = "Search") }
             if (card.category == CardCategory.MONSTER) {
                 val attribute = card.attribute
                 Tag(attribute.name.lowercase().replaceFirstChar { it.uppercase() }, false, {
                     state.onFilterChange(CardFilter(attributes = setOf(attribute), format = state.format))
-                })
+                }, caption = "Search")
             }
-            card.archetype?.let { archetype -> Tag(archetype, false, { state.onFilterChange(CardFilter(archetypes = setOf(archetype), format = state.format)) }) }
+            card.archetype?.let { archetype -> Tag(archetype, false, { state.onFilterChange(CardFilter(archetypes = setOf(archetype), format = state.format)) }, caption = "Search") }
         }
         val ban = card.banStatus(state.format)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

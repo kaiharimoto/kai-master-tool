@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.shell
 
+import com.kaiharimoto.neue.cursor.cursor
+import com.kaiharimoto.neue.cursor.cursorPointer
+import com.kaiharimoto.mastertool.core.input.CursorMode
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -133,6 +136,7 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                             cursorBrush = SolidColor(c.ink),
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .cursor(CursorMode.TEXT, fontSize = 15.sp, focused = true)
                                 .focusRequester(focus)
                                 .onPreviewKeyEvent { e ->
                                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
@@ -163,6 +167,7 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                                             .fillMaxWidth()
                                             .background(if (on) inner.paper else androidx.compose.ui.graphics.Color.Transparent)
                                             .onPointerEvent(PointerEventType.Enter) { highlighted = i }
+                                            .cursorPointer(caption = if (row.group == "Cards") "Add" else "Run")
                                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { run(row, false) }
                                             .padding(horizontal = 16.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically,

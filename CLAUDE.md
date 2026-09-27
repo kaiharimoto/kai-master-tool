@@ -362,6 +362,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   primary** — it is why right-click did nothing for six releases;
   `CardPointer.awaitAnyDown` is the fix, and `tools/shoot.sh --neue --mouse=…`
   proves a gesture by the deck's counts. `NEUE.md` §4 has why.
+- **It uses the Master UI family cursor, "Crop caption"** — ported, because
+  `cursor.js` reads a DOM and Compose has none: `core/input/CropCaption.kt` (the
+  arithmetic, tested) and `neue/cursor/FamilyCursor.kt` (the drawing). Every
+  target declares its intent with `Modifier.cursor(…)`/`cursorPointer(…)` — the
+  kit's `data-cursor*` hooks as parameters — so **a new clickable needs one**,
+  with a verb caption where it shows no words, and a `reason` where it can be
+  disabled for a reason that is not obvious. Menus open in the window's own
+  layer (`AnchoredBox`), never a `Popup`, or they draw over the cursor.
+  `docs/master-ui/CURSOR.md` is the spec; `NEUE.md` §2d.
 - **Every pixel of chrome is a pixel off every card.** One 48px bar for the
   window and the builder together (search is on the rail), one row over the
   main deck (the boxed Groups button, the name, the lens), and the extra and

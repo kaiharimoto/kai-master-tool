@@ -85,11 +85,13 @@ object CardActions {
                 "Add to ${home.displayName.lowercase()} deck",
                 hint = hint(MouseTarget.POOL, MouseAction.ADD),
                 enabled = left > 0 && state.canDrop(card, null, home),
+                reason = if (left <= 0) "No copies left" else "${home.displayName} deck is full",
             ) { add(state, card) },
             MenuEntry(
                 "Add to side deck",
                 hint = hint(MouseTarget.POOL, MouseAction.ADD_TO_SIDE),
                 enabled = left > 0 && state.canDrop(card, null, DeckSection.SIDE),
+                reason = if (left <= 0) "No copies left" else "Side deck is full",
             ) { add(state, card, toSide = true) },
             MenuEntry("Copy name", separatorBefore = true) { copyName(card) },
         )
@@ -101,8 +103,8 @@ object CardActions {
         val groups = state.groups.ordered()
         val current = state.groups.groupOf(card.id)
         return buildList {
-            add(MenuEntry("Add a copy", hint = hint(MouseTarget.DECK, MouseAction.ADD_COPY), enabled = state.remaining(card) > 0) { state.addCardAt(card, section, index + 1) })
-            add(MenuEntry("Move to ${other.displayName.lowercase()} deck", enabled = state.canDrop(card, section, other)) {
+            add(MenuEntry("Add a copy", hint = hint(MouseTarget.DECK, MouseAction.ADD_COPY), enabled = state.remaining(card) > 0, reason = "No copies left") { state.addCardAt(card, section, index + 1) })
+            add(MenuEntry("Move to ${other.displayName.lowercase()} deck", enabled = state.canDrop(card, section, other), reason = "${other.displayName} deck is full") {
                 state.moveCardTo(card, section, index, other, state.deck[other].size)
             })
             add(MenuEntry("Group", separatorBefore = true))

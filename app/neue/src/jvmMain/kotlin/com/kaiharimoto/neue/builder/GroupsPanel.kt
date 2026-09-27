@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,10 +33,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Dp
@@ -112,7 +111,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
                             .size(20.dp)
                             .background(hue)
                             .border(if (draft.color == i) 2.dp else 0.dp, if (draft.color == i) c.ink else Color.Transparent)
-                            .pointerHoverIcon(PointerIcon.Hand)
+                            .cursorPointer(caption = "Pick")
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.setDraftColor(i) },
                     )
                 }
@@ -161,7 +160,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
                         .background(animatedColor(if (isolated) c.ink else Color.Transparent))
                         .border(1.dp, if (isolated || hovered) c.ink else c.ink25)
                         .hoverable(source)
-                        .pointerHoverIcon(PointerIcon.Hand)
+                        .cursorPointer(caption = if (isolated) "Show all" else "Isolate")
                         .onPointerEvent(PointerEventType.Press) { event ->
                             if (group != null && event.buttons.isSecondaryPressed) {
                                 val p = event.changes.first().position

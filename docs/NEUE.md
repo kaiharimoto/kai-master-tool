@@ -155,6 +155,50 @@ light together. Holographic foil only; the screenshot carries it too.
 
 ---
 
+### 2d. The family cursor
+
+Neue uses the pointer every Master app uses, **Crop caption** — four 2 px trim
+marks around a 2 px point, in difference mode; over something clickable they
+open out and frame it, and a micro-caps caption in the slug under the frame says
+what a click will do. `docs/master-ui/CURSOR.md` is the spec, vendored from the
+Master UI repo (where it lives, with `kit/cursor/cursor.js`, on the
+`claude/beautiful-bell-7du12e` branch; `main` does not carry it yet).
+
+`cursor.js` cannot run here — it reads intent off a DOM, and Compose has none —
+so it is **ported, not installed**: the arithmetic is `core/input/CropCaption.kt`
+(the reference script's numbers: 5 px pad, 6 px inset past 480 × 160, the caret
+at 1.8 × the type between 20 and 56, the 36 × 14 drag bar, the caption 6 px
+under the frame and flipped above near the bottom, 180 ms snaps, 120 ms fades,
+a tick every 300 ms), tested in `CropCaptionTest`; the drawing is
+`neue/cursor/FamilyCursor.kt`. Three differences are forced by Compose and
+worth knowing:
+
+- **Intent is declared, not read.** A target says what it is with
+  `Modifier.cursor(…)` / `cursorPointer(…)` — `caption`, `label` (the
+  `aria-label`), `reason`, `value`, `showsWords` — which is the kit's
+  `data-cursor*` hooks as parameters. Which targets are under the pointer is
+  Compose's own hit testing (their hover), so a dialog occludes what is under it
+  exactly as it does for a click; the innermost wins.
+- **Menus are not popups any more.** A Compose `Popup` draws above everything in
+  the window, the cursor included, and the kit's menus must keep the family
+  cursor. The context menu and the select list now open in the window's own layer
+  (`AnchoredBox`, `Overlays`), under the cursor. Tooltips are still popups; they
+  sit under the caption slot now (36 px below the component), so the two never
+  overlap. The text field's own Cut/Copy/Paste menu is still a popup, and the
+  system pointer shows over it — as over a native top-layer surface.
+- **The system pointer is hidden by the window's root** (`pointerHoverIcon(…,
+  overrideDescendants = true)` with a one-pixel transparent cursor), over every
+  child's own icon, and comes back wherever the cursor steps aside. Where the
+  toolkit cannot make that cursor (headless), the arrow stays, as the kit's
+  does when its script never loads.
+
+Busy: the pool while the card pool syncs (a region, `Working`), the update
+download (`Downloading` and its percent) and the screenshot export
+(`Exporting`). The crash reporter's window has no family cursor: it is drawn
+theme-free, to render when nothing else can, and keeps the system arrow.
+`tools/shoot.sh --neue --hovers=card@0.3,0.2;undo@0.47,0.02` photographs the
+cursor at each point and logs what it resolved to.
+
 ## 3. The window
 
 **One 48 px bar** — the mark, the page you are on, then whatever the page puts

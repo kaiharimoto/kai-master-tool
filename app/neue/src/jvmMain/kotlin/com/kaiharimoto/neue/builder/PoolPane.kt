@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.cursor.cursor
+import com.kaiharimoto.mastertool.core.input.CursorMode
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,7 +81,14 @@ fun PoolPane(
 
     // Zen: the search and its controls fade with the chrome; the pool, cards and all, goes at ten seconds.
     val gutter = if (neue.prefs.railPinned && !neue.immersive) 0.dp else RAIL_GUTTER
-    Column(modifier.zenDeep().onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }.padding(start = gutter)) {
+    Column(
+        modifier
+            .zenDeep()
+            .onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }
+            // aria-busy: the pool is the region that is working while the card pool syncs.
+            .let { if (state.isSyncing) it.cursor(CursorMode.BUSY) else it }
+            .padding(start = gutter),
+    ) {
         Column(Modifier.zenQuiet().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MuInput(

@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.shot
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.kaiharimoto.mastertool.core.deck.Lens
@@ -43,6 +46,10 @@ class DeckShots(
     private val scope: CoroutineScope,
 ) {
     private var busy = false
+
+    /** Taking the picture: seconds, with the full-size art to load. The family cursor shows it busy. */
+    var taking by mutableStateOf(false)
+        private set
     private var sets: List<CardSetRelease>? = null
     private val api by lazy { YgoProDeckApi(HttpClientFactory.create()) }
 
@@ -54,8 +61,12 @@ class DeckShots(
             try {
                 val file = withContext(Dispatchers.IO) { ask(suggestedName(model)) } ?: return@launch
                 neue.note = Note("Taking the picture")
-                val (png, missing) = picture(model)
-                withContext(Dispatchers.IO) { file.writeBytes(png) }
+                taking = true
+                val (png, missing) = try {
+                    picture(model).also { withContext(Dispatchers.IO) { file.writeBytes(it.first) } }
+                } finally {
+                    taking = false
+                }
                 neue.note = Note(
                     if (missing == 0) "Saved ${file.name}" else "Saved ${file.name} · $missing without a picture",
                     action = "Show",

@@ -1,5 +1,14 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.cursor.CursorLayer
+import com.kaiharimoto.neue.cursor.FamilyCursor
+import com.kaiharimoto.neue.cursor.LocalCursor
+import com.kaiharimoto.neue.kit.LocalOverlays
+import com.kaiharimoto.neue.kit.OverlayLayer
+import com.kaiharimoto.neue.kit.Overlays
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.input.pointer.areAnyPressed
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.derivedStateOf
@@ -129,6 +138,12 @@ class NeueHolders(
     /** Zen's amounts and clock, shared with everything that fades or floats. */
     val zen = ZenLayer()
 
+    /** The family pointer, Crop caption: one per window. */
+    val cursor = FamilyCursor()
+
+    /** Anchored surfaces in the window's own layer (a select's list), under the cursor. */
+    val overlays = Overlays()
+
     /** When the person last did anything, in `System.nanoTime`. */
     var lastInput = System.nanoTime()
 
@@ -172,7 +187,7 @@ class NeueHolders(
         val context = DeskContext(
             textInputFocused = builder.textInputFocused || neue.searchFocused,
             searchFocused = neue.searchFocused,
-            overlayOpen = neue.overlayOpen || builder.editingGoal != null || updates.dialogOpen,
+            overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen,
             onBuilder = neue.page == Page.BUILDER,
         )
         val shortcut = DeskShortcuts.resolveShortcut(chord, context) ?: return false
@@ -242,6 +257,7 @@ class NeueHolders(
         val state = builder
         when {
             updates.dialogOpen -> updates.dialogOpen = false
+            overlays.dismiss() -> Unit
             neue.dismissTop() -> Unit
             state.editingGoal != null -> state.cancelGoal()
             state.groupDraft != null -> state.cancelGroupDraft()
@@ -366,7 +382,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     }
 
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             CompositionLocalProvider(LocalContextMenuRepresentation provides remember { MuContextMenuRepresentation() }) {
                 Shell(h)
@@ -422,6 +438,9 @@ private fun Shell(h: NeueHolders) {
             .fillMaxSize()
             .background(c.paper)
             .onSizeChanged { h.zen.window = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }
+            // The family cursor draws the pointer; the system's is hidden everywhere in the
+            // window, over every child's own icon, unless the cursor has stepped aside.
+            .pointerHoverIcon(if (h.cursor.native) PointerIcon.Default else FamilyCursor.BLANK, overrideDescendants = true)
             .pointerInput(Unit) {
                 // One watcher over the whole window, on the way down, consuming
                 // nothing: every bar that folds away comes out from here.
@@ -431,6 +450,7 @@ private fun Shell(h: NeueHolders) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val at = event.changes.firstOrNull()?.position
                         val gone = event.type == PointerEventType.Exit
+                        h.cursor.moved(if (gone) null else at, event.buttons.areAnyPressed)
                         // Where the pointer is, for the deck to turn toward in zen.
                         if (neue.immersive) h.zen.pointer = if (gone) null else at
                         // Waking. Before zen is deep, any real movement, press or scroll brings
@@ -585,8 +605,19 @@ private fun Shell(h: NeueHolders) {
         if (immersive) ZenReset(h.zen, Modifier.align(Alignment.BottomEnd))
         CardViewer(state, neue)
         MenuLayer(neue.menu) { neue.menu = null }
+        OverlayLayer(h.overlays)
 
         Toasts(h, Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 24.dp))
+
+        // Long jobs the whole window waits on: the cursor ticks and says so.
+        val job = when {
+            h.updates.downloading -> "Downloading" to h.updates.progress?.let { it * 100f }
+            h.shots.taking -> "Exporting" to null
+            else -> null
+        }
+        LaunchedEffect(job) { if (job == null) h.cursor.clearBusy() else h.cursor.setBusy(job.first, job.second) }
+        // Last in the window, over everything in it.
+        CursorLayer(h.cursor)
     }
 }
 

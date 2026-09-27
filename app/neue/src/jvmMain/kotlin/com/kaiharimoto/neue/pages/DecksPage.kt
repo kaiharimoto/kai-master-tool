@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +32,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
@@ -140,7 +140,7 @@ private fun DeckRow(
                 .fillMaxWidth()
                 .background(animatedColor(if (current) inner.paper else if (hovered) c.ink06 else Color.Transparent))
                 .hoverable(source)
-                .pointerHoverIcon(PointerIcon.Hand)
+                .cursorPointer(caption = "Open")
                 .clickable(interactionSource = source, indication = null, onClick = onOpen)
                 .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
                 .padding(horizontal = 32.dp, vertical = 12.dp),

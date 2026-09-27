@@ -17,7 +17,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToDown
@@ -25,7 +24,7 @@ import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.onPointerEvent
-import androidx.compose.ui.input.pointer.pointerHoverIcon
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -125,7 +124,8 @@ fun Modifier.cardPointer(
             origin = it.positionInWindow()
             size = it.size
         }
-        .pointerHoverIcon(PointerIcon.Hand)
+        // A click selects; in deep zen a press carries the card instead.
+        .cursorPointer(caption = if (zenKey != null && neue.zen == ZenPhase.DEEP) "Move" else "Select")
         .onPointerEvent(PointerEventType.Enter) { neue.hovered = heldCard }
         .onPointerEvent(PointerEventType.Exit) { if (neue.hovered == heldCard) neue.hovered = null }
         .pointerInput(dragEnabled, from) {

@@ -95,7 +95,7 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                 Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Box(Modifier.weight(1f).padding(end = 16.dp)) { CardHeading(card, large = true) }
-                        IconButton(Icons.X, close, size = 32.dp)
+                        IconButton(Icons.X, close, size = 32.dp, label = "Close")
                     }
                     SelectionContainer {
                         MuText(
