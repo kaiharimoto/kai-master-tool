@@ -113,4 +113,13 @@ class CropCaptionTest {
         assertEquals(1f, CropCaption.ease(1f), 1e-3f)
         assertTrue(CropCaption.ease(0.5f) > 0.5f) // front-loaded, as (0.2, 0, 0, 1) is
     }
+
+    @Test
+    fun overACardTheMarksAreHeavierAndLonger() {
+        assertTrue(CropCaption.arm(CursorMode.POINTER, emphasis = true) > CropCaption.arm(CursorMode.POINTER))
+        assertTrue(CropCaption.weight(true) > CropCaption.weight(false))
+        assertTrue(CropCaption.point(true) > CropCaption.point(false))
+        // At rest a card changes nothing: only framing it does.
+        assertEquals(CropCaption.arm(CursorMode.DEFAULT), CropCaption.arm(CursorMode.DEFAULT, emphasis = true))
+    }
 }

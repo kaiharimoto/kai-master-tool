@@ -84,7 +84,9 @@ fun BuilderPage(
     drag: NeueDrag,
     onSearchEffects: (Boolean) -> Unit,
 ) {
-    Row(Modifier.fillMaxSize()) {
+    // Immersive: the bar folds out when the pointer reaches the top edge, so the
+    // page keeps a strip of paper under it — the deck's first row is not the edge.
+    Row(Modifier.fillMaxSize().padding(top = if (neue.immersive) IMMERSIVE_TOP else 0.dp)) {
         if (neue.prefs.poolVisible) {
             PoolPane(state, neue, drag, onSearchEffects, Modifier.width(neue.prefs.poolWidth.dp).fillMaxHeight())
             ResizeRule("Pool", neue.prefs.poolWidth) { delta -> neue.update(debounce = true) { it.copy(poolWidth = it.poolWidth + delta) } }
@@ -96,6 +98,15 @@ fun BuilderPage(
         }
     }
 }
+
+/**
+ * The paper at the top of the page in immersive mode (kai, 1.0.12): the bar
+ * comes out at 8 px from the edge, and the lens row's buttons sat inside that
+ * reach. This strip is the baseline; the deck's spare height is then shared
+ * above and below it, so the deck is centred and a click on its own row never
+ * calls the bar.
+ */
+val IMMERSIVE_TOP = 32.dp
 
 /** The builder's part of the window's bar. [narrow] drops the words from the tools and keeps their icons and tooltips. */
 @Composable

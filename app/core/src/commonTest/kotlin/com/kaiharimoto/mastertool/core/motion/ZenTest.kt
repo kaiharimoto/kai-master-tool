@@ -97,4 +97,37 @@ class ZenTest {
         assertTrue(!ZenCorner.reaches(1900f, 500f, 1920f, 1080f))
         assertTrue(!ZenCorner.reaches(100f, 1070f, 1920f, 1080f))
     }
+
+    @Test
+    fun aBlockFloatsAsOneAndItsScalesRunDiagonally() {
+        for (step in 0 until 200) {
+            val t = step * 0.137f
+            // Every card of a block drifts the same way, so the block keeps its shape.
+            val a = ZenFloat.inBlock(4, 0, 0, t)
+            val b = ZenFloat.inBlock(4, 5, 2, t)
+            assertEquals(a.dx, b.dx, 1e-6f)
+            assertEquals(a.dy, b.dy, 1e-6f)
+            assertEquals(0f, a.spin)
+            // Cards on one diagonal flutter together; the next diagonal a step behind.
+            assertEquals(ZenFloat.scales(3, 1, t), ZenFloat.scales(2, 2, t))
+            val f = ZenFloat.scales(0, 0, t)
+            assertTrue(abs(f.rotationX) <= ZenFloat.SCALE_LEAN + 1e-4f)
+            // Leaning about the diagonal: the two axes move against each other.
+            assertEquals(f.rotationX, -f.rotationY, 1e-6f)
+        }
+        assertNotEquals(ZenFloat.scales(0, 0, 1f), ZenFloat.scales(1, 0, 1f))
+        // Two blocks do not drift in step.
+        assertNotEquals(ZenFloat.group(1, 2f), ZenFloat.group(2, 2f))
+    }
+
+    @Test
+    fun aCardPutDownHasLeftItsBlock() {
+        val a = ZenArrangement()
+        val k = ZenArrangement.key(0, 3)
+        assertTrue(!a.isMoved(k))
+        a.move(k, 4f, 0f)
+        assertTrue(a.isMoved(k))
+        a.reset()
+        assertTrue(!a.isMoved(k))
+    }
 }

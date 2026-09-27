@@ -38,6 +38,9 @@ data class CursorBox(val x: Float, val y: Float, val w: Float, val h: Float) {
  * - [value]: `data-cursor-value` / `aria-valuetext`, on a [CursorMode.DRAG] target.
  * - [fontSize], [singleLine], [focused], [readOnly]: what a text field's caret needs.
  * - [slider]: a horizontal range, whose bar sits on its middle rather than under the pointer.
+ * - [emphasis]: a card — a picture, where difference-mode marks two pixels thick
+ *   go muddy (kai, 1.0.12). Its marks are drawn heavier and longer, paper with an
+ *   ink edge, so they read on any art; see [arm] and [weight].
  */
 data class CursorTarget(
     val mode: CursorMode,
@@ -52,6 +55,7 @@ data class CursorTarget(
     val focused: Boolean = false,
     val readOnly: Boolean = false,
     val slider: Boolean = false,
+    val emphasis: Boolean = false,
 )
 
 /** `setBusy(…)`: a label and a percentage, both optional. */
@@ -74,8 +78,18 @@ object CropCaption {
     const val TICK_MS = 300
     const val BREATHE_MS = 2_400
 
-    /** The mark's arm: 6 px at rest, 8 px when it frames something. */
-    fun arm(mode: CursorMode): Float = if (mode == CursorMode.POINTER) 8f else 6f
+    /** The mark's arm: 6 px at rest, 8 px when it frames something, 12 px when it frames a card. */
+    fun arm(mode: CursorMode, emphasis: Boolean = false): Float = when {
+        mode == CursorMode.POINTER && emphasis -> 12f
+        mode == CursorMode.POINTER -> 8f
+        else -> 6f
+    }
+
+    /** The mark's weight: 2 px, or 3 over a card. */
+    fun weight(emphasis: Boolean): Float = if (emphasis) 3f else 2f
+
+    /** The point: 2 px, or 4 over a card. */
+    fun point(emphasis: Boolean): Float = if (emphasis) 4f else 2f
 
     /**
      * The target under ([x], [y]): the innermost of those containing it, which is

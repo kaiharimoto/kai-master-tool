@@ -385,9 +385,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 - **The index rail folds away and F11 is immersive mode**, both decided by
   `core/layout/EdgeReveal.kt`; bars come out *over* the page, never pushing it,
   or the deck re-fits and every card jumps. Leaving full screen must go through
-  `Floating`: Compose's `Maximized` never clears full screen.
+  `Floating`: Compose's `Maximized` never clears full screen. And full screen is
+  the JDK's exclusive mode, which on Windows minimised the window whenever
+  another monitor took focus: `sun.java2d.d3d=false` at start-up and
+  `Platform.keepFullScreen` (it removes the JDK's minimise-on-deactivate
+  listener) keep it up. Immersive keeps 32 px at the top (`IMMERSIVE_TOP`) and
+  centres the deck below it.
 - **Immersive mode has a zen**: idle three seconds and the chrome fades, ten and
-  the deck floats in the middle of the window over **its own shadows** —
+  the deck floats in the middle of the window, **each group as one block,
+  fluttering corner to corner like scales**, over **its own shadows** —
   kai's one exception to "no shadows", in `neue/zen/ZenShadows.kt` alone, which
   the law test enforces. **The cards are the garden**: in deep zen the pointer
   picks any card up and puts it down anywhere (`ZenArrangement`, a picture only

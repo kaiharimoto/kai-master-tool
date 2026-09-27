@@ -75,6 +75,11 @@ import kotlin.system.exitProcess
  */
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    // Before AWT starts: Java2D's Direct3D pipeline puts a full-screen window into
+    // D3D exclusive mode, which Windows minimises the moment focus goes to another
+    // monitor. Skiko draws with its own renderer, so the pipeline buys Neue nothing.
+    // (The JDK's other minimise-on-deactivate is removed by Platform.keepFullScreen.)
+    System.setProperty("sun.java2d.d3d", "false")
     Thread.setDefaultUncaughtExceptionHandler { _, error ->
         Platform.writeCrash(error)
         exitProcess(1)
@@ -198,6 +203,16 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
         state = windowState,
         onPreviewKeyEvent = h::onKey,
     ) {
+        // Full screen stays full screen when focus goes to another monitor (Platform.keepFullScreen).
+        // The JDK adds its listener while going full screen, so it is looked for a few times after.
+        LaunchedEffect(windowState.placement) {
+            if (windowState.placement == WindowPlacement.Fullscreen) {
+                repeat(4) {
+                    delay(120)
+                    com.kaiharimoto.neue.platform.Platform.keepFullScreen(window)
+                }
+            }
+        }
         LaunchedEffect(Unit) {
             window.minimumSize = Dimension(1024, 680)
             window.background = if (h.neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK) java.awt.Color.BLACK else java.awt.Color.WHITE

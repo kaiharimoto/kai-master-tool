@@ -192,6 +192,13 @@ worth knowing:
   toolkit cannot make that cursor (headless), the arrow stays, as the kit's
   does when its script never loads.
 
+**Over a card the marks are heavier** (kai, 1.0.12): difference-mode marks two
+pixels thick go muddy on card art, so framing a card draws them 3 px thick with
+12 px arms and a 4 px point, in paper with a 1 px ink edge — they read on any
+picture. It is `emphasis` on the target (`CropCaption.arm`, `weight`, `point`),
+set by every card and nothing else; everywhere else the kit's marks are as
+specified.
+
 Busy: the pool while the card pool syncs (a region, `Working`), the update
 download (`Downloading` and its percent) and the screenshot export
 (`Exporting`). The crash reporter's window has no family cursor: it is drawn
@@ -216,7 +223,15 @@ the rail itself). **Immersive mode** (`F11`, or the button in the title bar) is
 full screen with the title bar and the builder's bar folded over the top,
 coming out when the pointer reaches the edge —
 the deck and the panes that build it get the whole screen. `Esc`, last in its
-chain, leaves it; so does leaving full screen any other way. Leaving goes
+chain, leaves it; so does leaving full screen any other way. **It stays when
+another window takes focus** (1.0.12): Compose goes full screen through the JDK's
+exclusive mode, and on Windows the JDK both put the window into Direct3D exclusive
+mode and added a listener that minimised it on focus loss — a click on a second
+monitor minimised the builder. Neue turns Java2D's D3D pipeline off at start-up
+(skiko draws with its own) and removes that listener (`Platform.keepFullScreen`).
+In immersive mode the page keeps **32 px of paper at the top** (`IMMERSIVE_TOP`),
+so the deck's own row is out of the bar's reach, and the deck's spare height is
+shared above and below it — centred, not pushed down. Leaving goes
 through `Floating` first and re-maximises a moment later: Compose's
 `placement = Maximized` sets maximised and **never clears full screen**, which is
 how 1.0.3 left a window stuck full screen with its bars back. And a click below
@@ -358,8 +373,13 @@ In immersive mode, on the builder, doing nothing is a mode too
 - **Ten seconds**: this is zen. The pool and the inspector go too, and the deck
   comes to the middle of the window and grows into it (`ZenStage`: a transform
   about its own centre, never a re-fit, filling at most 72% of the width and 80%
-  of the height so there is table round it). Each card floats on its own slow
-  clock (`ZenFloat`) and leans, dreamily, toward the pointer.
+  of the height so there is table round it). The cards **float in their blocks**
+  — each lens group, or each section with no lens, drifting as one so it keeps
+  its shape — and **flutter like scales**: a slow lean about the diagonal runs
+  through each block corner to corner, one diagonal a moment behind the last
+  (`ZenFloat.inBlock`). A card picked up and put down has left its block and
+  floats on its own clock. Everything leans, dreamily, toward the pointer. (Until
+  1.0.12 every card drifted its own way, which kai found chaotic.)
 - **The cards are the garden.** kai scrapped the sand garden that stood behind
   the deck for six releases (spirals, rakes, a sun) — "they don't look good" —
   for the cards themselves: each floats over **its own shadow** (`ZenShadow`,

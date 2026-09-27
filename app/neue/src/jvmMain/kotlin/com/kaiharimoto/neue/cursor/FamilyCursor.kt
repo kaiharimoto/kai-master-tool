@@ -178,6 +178,7 @@ fun Modifier.cursor(
     singleLine: Boolean = true,
     focused: Boolean = false,
     slider: Boolean = false,
+    emphasis: Boolean = false,
 ): Modifier = composed {
     val cursor = LocalCursor.current ?: return@composed Modifier
     val density = LocalDensity.current
@@ -195,6 +196,7 @@ fun Modifier.cursor(
         singleLine = singleLine,
         focused = focused,
         slider = slider,
+        emphasis = emphasis,
     )
     DisposableEffect(hook) {
         onDispose {
@@ -225,12 +227,15 @@ fun Modifier.cursorPointer(
     showsWords: Boolean = false,
     enabled: Boolean = true,
     reason: String? = null,
+    /** A card: heavier marks that read on any art. */
+    emphasis: Boolean = false,
 ): Modifier = cursor(
     mode = if (enabled) CursorMode.POINTER else CursorMode.NO,
     caption = caption,
     label = label,
     showsWords = showsWords,
     reason = reason,
+    emphasis = emphasis,
 )
 
 /**
@@ -272,16 +277,27 @@ fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
         val key = "${mode.name}|${System.identityHashCode(hook)}"
         motion.ticking = mode == CursorMode.BUSY
         val box = motion.frame(key, live, clock)
-        val arm = motion.arm(CropCaption.arm(mode), clock)
+        // Over a card the marks are heavier, longer and drawn paper-on-ink rather than in
+        // difference mode, which goes muddy on art (kai, 1.0.12).
+        val emphasis = mode == CursorMode.POINTER && target?.emphasis == true
+        val arm = motion.arm(CropCaption.arm(mode, emphasis), clock)
         val s = density
 
         // The marks and the point, in difference mode: they read on paper, on ink and on pictures.
         val lit = if (mode == CursorMode.BUSY) CropCaption.litMark(clock) else -1
         val markAlpha = if (mode == CursorMode.NO) 0.3f else 1f
         val filled = cursor.pressed && mode != CursorMode.NO
-        corners(box, arm, s).forEachIndexed { i, (corner, dir) ->
+        val weight = CropCaption.weight(emphasis) * s
+        val rects = corners(box, arm, s).mapIndexed { i, (corner, dir) ->
             val alpha = markAlpha * if (lit >= 0 && lit != i) 0.25f else 1f
-            mark(corner, dir, arm * s, 2f * s, filled, Color.White.copy(alpha = alpha))
+            alpha to markRects(corner, dir, arm * s, weight, filled)
+        }
+        if (emphasis) {
+            // Every edge first, then every fill, so no edge crosses a mark where its arms meet.
+            rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(c.ink.copy(alpha = alpha), r.topLeft - Offset(s, s), Size(r.width + 2 * s, r.height + 2 * s)) } }
+            rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(c.paper.copy(alpha = alpha), r.topLeft, r.size) } }
+        } else {
+            rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(Color.White.copy(alpha = alpha), r.topLeft, r.size, blendMode = BlendMode.Difference) } }
         }
         if (mode == CursorMode.NO) {
             val cross = measurer.measure("✕", TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Bold, fontSize = 9.sp))
@@ -292,7 +308,13 @@ fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
                 blendMode = BlendMode.Difference,
             )
         } else {
-            drawRect(Color.White, Offset(at.x - s, at.y - s), Size(2f * s, 2f * s), blendMode = BlendMode.Difference)
+            val p = CropCaption.point(emphasis) * s
+            if (emphasis) {
+                drawRect(c.ink, Offset(at.x - p / 2f - s, at.y - p / 2f - s), Size(p + 2 * s, p + 2 * s))
+                drawRect(c.paper, Offset(at.x - p / 2f, at.y - p / 2f), Size(p, p))
+            } else {
+                drawRect(Color.White, Offset(at.x - p / 2f, at.y - p / 2f), Size(p, p), blendMode = BlendMode.Difference)
+            }
         }
 
         // The caption, in the slug under the frame.
@@ -355,21 +377,17 @@ private fun corners(box: CursorBox, arm: Float, s: Float): List<Pair<Offset, Pai
     )
 }
 
-/** One trim mark: an L of [weight] with arms of [arm], or the whole square when [filled] (pressed). */
-private fun DrawScope.mark(corner: Offset, dir: Pair<Float, Float>, arm: Float, weight: Float, filled: Boolean, color: Color) {
+/** One trim mark as rectangles: an L of [weight] with arms of [arm], or the whole square when [filled] (pressed). */
+private fun markRects(corner: Offset, dir: Pair<Float, Float>, arm: Float, weight: Float, filled: Boolean): List<Rect> {
     val (dx, dy) = dir
     val x0 = if (dx > 0) corner.x else corner.x - arm
     val y0 = if (dy > 0) corner.y else corner.y - arm
-    if (filled) {
-        drawRect(color, Offset(x0, y0), Size(arm, arm), blendMode = BlendMode.Difference)
-        return
-    }
+    if (filled) return listOf(Rect(Offset(x0, y0), Size(arm, arm)))
     // The horizontal arm along the edge, and the vertical one without its shared corner.
     val hy = if (dy > 0) corner.y else corner.y - weight
-    drawRect(color, Offset(x0, hy), Size(arm, weight), blendMode = BlendMode.Difference)
     val vx = if (dx > 0) corner.x else corner.x - weight
     val vy = if (dy > 0) corner.y + weight else corner.y - arm
-    drawRect(color, Offset(vx, vy), Size(weight, arm - weight), blendMode = BlendMode.Difference)
+    return listOf(Rect(Offset(x0, hy), Size(arm, weight)), Rect(Offset(vx, vy), Size(weight, arm - weight)))
 }
 
 /** The cursor's own transitions, advanced by the clock the layer is drawn at. */

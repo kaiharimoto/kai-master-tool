@@ -96,6 +96,20 @@ private val GRID_PAD = 6.dp
 private val SIDE_PAD = 16.dp
 private val RULE = 1.dp
 
+/**
+ * How card [position] floats in zen (kai, 1.0.12: "float in groups until the
+ * user breaks alignment … flutter diagonally like scales"): with its block —
+ * its lens group, or its section when there is no lens — drifting as one and
+ * fluttering corner to corner; or, once it has been picked up and put down, on
+ * its own clock.
+ */
+private fun zenFloat(section: DeckSection, position: Int, columns: Int, keyId: String?, moved: Boolean, seconds: Float): LeanPose =
+    if (moved) {
+        ZenFloat.pose(section.ordinal * 100 + position, seconds)
+    } else {
+        ZenFloat.inBlock(section.ordinal * 7_919 + (keyId?.hashCode() ?: 0), position % columns, position / columns, seconds)
+    }
+
 /** How much higher a card being carried in zen floats than its neighbours, in card widths. */
 private const val HELD_LIFT = 0.1f
 
@@ -192,6 +206,10 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         SideEffect { if (zen.deep == 0f && mainWidth > 0.dp) neue.deckCardWidth = mainWidth }
         Column(
             Modifier.fillMaxSize().let { if (!fit.fits) it.verticalScroll(rememberScrollState()) else it },
+            // Immersive: past the page's fixed strip at the top (IMMERSIVE_TOP), whatever
+            // height the deck does not need is shared above and below it, so the deck sits
+            // in the middle of the screen (kai, 1.0.12: all of it above was too much).
+            verticalArrangement = if (neue.immersive) Arrangement.Center else Arrangement.Top,
         ) {
             sections.forEachIndexed { i, section ->
                 DeckSectionPane(
@@ -402,7 +420,7 @@ private fun DeckSectionPane(
                     ids.indices.forEach { position ->
                         val key = ZenArrangement.key(section.ordinal, position)
                         val o = zen.offsetOf(key)
-                        val drift = ZenFloat.pose(section.ordinal * 100 + position, zen.time)
+                        val drift = zenFloat(section, position, fit.columns, keying.keyAt(position), zen.isMoved(key), zen.time)
                         val x = pitchX * (position % fit.columns) + o.x + drift.dx * fit.cardWidth * deep
                         val y = pitchY * (position / fit.columns) + o.y + drift.dy * fit.cardWidth * deep
                         val lift = drift.lift + if (zen.holding == key) HELD_LIFT else 0f
@@ -483,7 +501,7 @@ private fun DeckSectionPane(
                                     val lean = if (held) LeanPose.REST else motion.poseAt(Offset(o.x + left + moved.x + fit.cardWidth / 2f, o.y + top + moved.y + fit.cardHeight / 2f))
                                     val pressed = press.pose()
                                     val deep = zen.deep
-                                    val drift = if (deep > 0f) ZenFloat.pose(section.ordinal * 100 + position, zen.time).times(deep) else LeanPose.REST
+                                    val drift = if (deep > 0f) zenFloat(section, position, fit.columns, keyId, zen.isMoved(zenKey), zen.time).times(deep) else LeanPose.REST
                                     val carried = if (zen.holding == zenKey) HELD_LIFT * deep else 0f
                                     lean.copy(lift = lean.lift + pressed.lift + carried) + drift
                                 },

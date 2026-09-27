@@ -59,6 +59,9 @@ class ZenLayer {
         arranged++
     }
 
+    /** Whether card [key] has been moved out of its block. */
+    fun isMoved(key: Int): Boolean = arranged >= 0 && arrangement.isMoved(key)
+
     /** How high card [key] sits among the cards in zen: the one carried, then those put down, latest on top. */
     fun layerOf(key: Int): Float {
         if (arranged < 0 || deep <= 0f) return 0f

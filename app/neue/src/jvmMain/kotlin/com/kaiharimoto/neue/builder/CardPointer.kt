@@ -125,7 +125,7 @@ fun Modifier.cardPointer(
             size = it.size
         }
         // A click selects; in deep zen a press carries the card instead.
-        .cursorPointer(caption = if (zenKey != null && neue.zen == ZenPhase.DEEP) "Move" else "Select")
+        .cursorPointer(caption = if (zenKey != null && neue.zen == ZenPhase.DEEP) "Move" else "Select", emphasis = true)
         .onPointerEvent(PointerEventType.Enter) { neue.hovered = heldCard }
         .onPointerEvent(PointerEventType.Exit) { if (neue.hovered == heldCard) neue.hovered = null }
         .pointerInput(dragEnabled, from) {

@@ -115,6 +115,52 @@ object ZenFloat {
         )
     }
 
+    /** The most a card leans in the scales' flutter, in degrees. */
+    const val SCALE_LEAN = 3.5f
+
+    /** Seconds for the flutter to run once through a block. */
+    const val SCALE_PERIOD = 5.5
+
+    /** How far behind its neighbour, in radians, each diagonal of a block lifts. */
+    const val SCALE_STEP = 0.55
+
+    /**
+     * A block of cards floating as one (1.0.12, kai: "float in groups until the
+     * user breaks alignment"): every card of [group] shares one drift, so the
+     * block keeps its shape. No spin — a block turned about each card's own
+     * centre would come apart at its seams.
+     */
+    fun group(group: Int, seconds: Float): LeanPose {
+        val a = phase(group, 11)
+        val b = phase(group, 12)
+        val c = phase(group, 13)
+        val t = seconds.toDouble()
+        fun wave(period: Double, ph: Double) = sin(2.0 * PI * t / period + ph).toFloat()
+        return LeanPose(
+            lift = 0.02f + 0.008f * wave(9.1, c),
+            dx = DRIFT * (0.7f * wave(12.7, a) + 0.3f * wave(7.9, b)),
+            dy = DRIFT * (0.7f * wave(10.9, b) + 0.3f * wave(6.3, c)),
+        )
+    }
+
+    /**
+     * The block's idle flutter, "diagonally, like scales": each card leans about
+     * the diagonal and lifts a little, a moment after the card up and to the left
+     * of it, so a slow wave runs through the block corner to corner. Cards on one
+     * diagonal ([col] + [row]) move together.
+     */
+    fun scales(col: Int, row: Int, seconds: Float): LeanPose {
+        val w = sin(2.0 * PI * seconds / SCALE_PERIOD - (col + row) * SCALE_STEP).toFloat()
+        return LeanPose(
+            rotationX = SCALE_LEAN * w,
+            rotationY = -SCALE_LEAN * w,
+            lift = 0.006f * (w + 1f),
+        )
+    }
+
+    /** A card still in its block: the block's drift and the scales' flutter. */
+    fun inBlock(group: Int, col: Int, row: Int, seconds: Float): LeanPose = group(group, seconds) + scales(col, row, seconds)
+
     /** A phase in [0, 2π) for card [index] and channel [k], from an integer hash. */
     private fun phase(index: Int, k: Int): Double {
         var h = index * 0x27D4EB2D + k * 0x165667B1
@@ -137,6 +183,9 @@ object ZenFloat {
 class ZenArrangement {
     private val moved = HashMap<Int, Pair<Float, Float>>()
     private val order = HashMap<Int, Int>()
+
+    /** Whether card [key] has been picked up and put down: it has left its block and floats on its own. */
+    fun isMoved(key: Int): Boolean = key in moved
 
     /** How many times the arrangement has changed: a screen reads it to know to redraw. */
     var version: Int = 0
