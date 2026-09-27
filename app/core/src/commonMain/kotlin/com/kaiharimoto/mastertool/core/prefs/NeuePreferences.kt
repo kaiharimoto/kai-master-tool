@@ -63,6 +63,19 @@ data class NeuePreferences(
      * are 268 pixels wide, and a card drawn larger than that is blurred text.
      */
     val hdArt: Boolean = true,
+    /**
+     * The lens's keys — the groups with their counts and opening rates — in a
+     * row of their own over the main deck. Off, they fold away and the deck
+     * has the row.
+     */
+    val lensKeys: Boolean = true,
+    /** The inspector's sections the user has folded shut, by name ("art", "details", "deck"). */
+    val inspectorFolded: List<String> = emptyList(),
+    /**
+     * Contrast of everything that is not full ink: "standard" or "high". High
+     * darkens the grey text, the field borders and the hairlines, in both themes.
+     */
+    val contrast: String = CONTRAST_STANDARD,
     val window: WindowBounds? = null,
 ) {
     fun sanitised(): NeuePreferences = copy(
@@ -76,6 +89,7 @@ data class NeuePreferences(
         poolColumns = if (poolColumns <= 0) 0 else poolColumns.coerceIn(MIN_POOL_COLUMNS, MAX_POOL_COLUMNS),
         foil = foil.ifBlank { DEFAULT_FOIL },
         foilNames = foilNames.ifBlank { DEFAULT_FOIL_NAMES },
+        contrast = if (contrast == CONTRAST_HIGH) CONTRAST_HIGH else CONTRAST_STANDARD,
         window = window?.takeIf {
             it.x.isFinite() && it.y.isFinite() && it.width.isFinite() && it.height.isFinite() &&
                 it.width >= MIN_WINDOW_WIDTH && it.height >= MIN_WINDOW_HEIGHT
@@ -106,6 +120,8 @@ data class NeuePreferences(
         const val MIN_WINDOW_HEIGHT = 680f
         const val DEFAULT_FOIL = "holo"
         const val DEFAULT_FOIL_NAMES = "foil"
+        const val CONTRAST_STANDARD = "standard"
+        const val CONTRAST_HIGH = "high"
 
         val DEFAULT = NeuePreferences()
     }

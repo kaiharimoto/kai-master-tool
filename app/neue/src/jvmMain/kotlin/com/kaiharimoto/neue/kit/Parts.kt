@@ -208,17 +208,17 @@ fun SectionTitle(n: Int?, title: String, modifier: Modifier = Modifier, trailing
 
 /** A micro-caps strip heading a list: `Main deck … 40`. */
 @Composable
-fun Strip(label: String, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null) {
+fun Strip(label: String, modifier: Modifier = Modifier, dense: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
     val c = Mu.colors
     Row(
         modifier
             .fillMaxWidth()
             .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = if (dense) 0.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Micro(label, Modifier.weight(1f), color = c.ink45)
+        Micro(label, Modifier.weight(1f), color = c.ink70)
         trailing?.invoke()
     }
 }

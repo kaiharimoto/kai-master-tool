@@ -26,7 +26,6 @@ import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.art.LocalArt
 import com.kaiharimoto.neue.cards.LocalNameStyle
 import com.kaiharimoto.mastertool.core.model.DeckSection
-import com.kaiharimoto.neue.builder.BuilderFooter
 import com.kaiharimoto.neue.builder.BuilderHeader
 import com.kaiharimoto.neue.shot.DeckShots
 import com.kaiharimoto.neue.theme.MuShell
@@ -71,12 +70,14 @@ import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskContext
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.model.Format
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import com.kaiharimoto.mastertool.ui.configureImageLoader
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckLayoutState
 import com.kaiharimoto.neue.builder.BuilderPage
+import com.kaiharimoto.neue.builder.CardViewer
 import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.builder.NeueDrag
 import com.kaiharimoto.neue.builder.rememberCarryMotion
@@ -209,6 +210,12 @@ class NeueHolders(
                 val next = sel.index.coerceAtMost(ids.size - 1)
                 neue.selection = ids.getOrNull(next)?.let(state.index::byId)?.let { Selection.InDeck(it, sel.section, next) }
             }
+            DeskAction.VIEW_SELECTED -> neue.viewing = when (val sel = neue.selection) {
+                is Selection.InDeck -> Viewing(sel.card, sel.section, sel.index)
+                is Selection.InPool -> Viewing(sel.card, null, sel.row)
+                null -> state.results.getOrNull(neue.poolCursor)?.let { Viewing(it, null, neue.poolCursor) }
+            }
+            DeskAction.TOGGLE_KEYS -> neue.update { it.copy(lensKeys = !it.lensKeys) }
             DeskAction.TOGGLE_INSPECTOR -> neue.update { it.copy(inspectorVisible = !it.inspectorVisible) }
             DeskAction.TOGGLE_POOL -> neue.update { it.copy(poolVisible = !it.poolVisible) }
             DeskAction.TOGGLE_FILTERS -> neue.update { it.copy(filtersOpen = !it.filtersOpen, poolVisible = true) }
@@ -359,7 +366,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
 
     val base = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen) {
-        MuTheme(ink = neue.prefs.theme == NeueTheme.INK) {
+        MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             CompositionLocalProvider(LocalContextMenuRepresentation provides remember { MuContextMenuRepresentation() }) {
                 Shell(h)
             }
@@ -448,7 +455,8 @@ private fun Shell(h: NeueHolders) {
                             immersive = neue.immersive,
                             holdTop = state.textInputFocused && !neue.searchFocused,
                             suppress = h.drag.held != null || neue.menu != null || neue.zen == ZenPhase.DEEP,
-                        )
+                        // The builder has no footer since 1.0.9: nothing comes up from the bottom.
+                        ).copy(bottom = false)
                     }
                 }
             },
@@ -466,7 +474,7 @@ private fun Shell(h: NeueHolders) {
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
                             Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload)
-                            Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setFormat, h::setSearchEffects, bars = !immersive, onScreenshot = { h.run(DeskAction.SCREENSHOT) })
+                            Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setFormat, h::setSearchEffects, bars = !immersive, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) })
                             Page.ODDS -> OddsPage(state)
                             Page.STATS -> StatsPage(state)
                             Page.SETTINGS -> SettingsPage(
@@ -504,17 +512,7 @@ private fun Shell(h: NeueHolders) {
                     .background(c.paper),
             ) {
                 titleBar()
-                if (builderBars) BuilderHeader(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) })
-            }
-            if (builderBars) {
-                val bottom by animateFloatAsState(if (out.bottom) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "bottom")
-                Box(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .onSizeChanged { measured.bottom = it.height }
-                        .offset { IntOffset(0, ((1f - bottom) * (measured.bottom + 2)).toInt()) },
-                ) { BuilderFooter(state, neue) }
+                if (builderBars) BuilderHeader(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) })
             }
         }
         if (!pinned) {
@@ -575,9 +573,10 @@ private fun Shell(h: NeueHolders) {
         }
         if (h.updates.dialogOpen) UpdateDialog(h.updates)
         if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
+        CardViewer(state, neue)
         MenuLayer(neue.menu) { neue.menu = null }
 
-        Toasts(h, Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 88.dp))
+        Toasts(h, Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 24.dp))
     }
 }
 

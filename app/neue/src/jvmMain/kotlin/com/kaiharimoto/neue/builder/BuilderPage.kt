@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -42,9 +43,9 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
-import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.Drawer
@@ -55,9 +56,7 @@ import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
-import com.kaiharimoto.neue.kit.Numeral
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.VRule
@@ -71,9 +70,13 @@ import java.awt.Cursor
 private fun kbd(action: DeskAction) = DeskShortcuts.chordFor(action)?.let(DeskShortcuts::kbd)
 
 /**
- * `02 Builder`: the page header with the deck's name in it, then pool, deck
- * and inspector side by side, then the one strong rule in the page and the
- * one primary action, Save.
+ * `02 Builder`: one bar with the deck's name, its standing and every action in
+ * it, then pool, deck and inspector side by side.
+ *
+ * It was a page header 92px tall and a footer of 64 around the deck, and kai's
+ * brief for 1.0.9 was that any pixel is a win for the cards: the header's
+ * second line and the footer's counts said what the deck's own strips say, and
+ * what was left of both — the name, the legality, Save — fits one row.
  */
 @Composable
 fun BuilderPage(
@@ -84,11 +87,12 @@ fun BuilderPage(
     onSearchEffects: (Boolean) -> Unit,
     bars: Boolean = true,
     onScreenshot: () -> Unit = {},
+    onSave: () -> Unit = { state.save() },
 ) {
     Column(Modifier.fillMaxSize()) {
-        // In immersive mode the shell draws the header and footer itself, folded
-        // over the page, so the deck is fitted to the whole window.
-        if (bars) BuilderHeader(state, neue, onFormat, onScreenshot)
+        // In immersive mode the shell draws the bar itself, folded over the page,
+        // so the deck is fitted to the whole window.
+        if (bars) BuilderHeader(state, neue, onFormat, onScreenshot, onSave)
         Row(Modifier.weight(1f).fillMaxWidth()) {
             if (neue.prefs.poolVisible) {
                 PoolPane(state, neue, drag, onSearchEffects, Modifier.width(neue.prefs.poolWidth.dp).fillMaxHeight())
@@ -100,24 +104,29 @@ fun BuilderPage(
                 Inspector(state, neue, Modifier.width(neue.prefs.inspectorWidth.dp).fillMaxHeight())
             }
         }
-        if (bars) BuilderFooter(state, neue)
     }
 }
 
+/** How tall the builder's bar is: two rows of the old header and the footer, in one. */
+val BUILDER_BAR = 48.dp
+
 @Composable
-fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -> Unit, onScreenshot: () -> Unit) {
+fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -> Unit, onScreenshot: () -> Unit, onSave: () -> Unit = { state.save() }) {
     val c = Mu.colors
     val f = LocalMuFonts.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-            .padding(start = 32.dp, end = 24.dp, top = 20.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Numeral(2, Modifier.padding(bottom = 26.dp))
-        Column(Modifier.weight(1f)) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // Words on the buttons while there is room for them; below that, the icons and their tooltips.
+        val words = maxWidth >= 1500.dp
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(BUILDER_BAR)
+                .background(c.paper)
+                .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
+                .padding(start = 24.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             // The deck's name is the page's title, and editable where it stands.
             val source = remember { MutableInteractionSource() }
             val focusManager = LocalFocusManager.current
@@ -128,7 +137,9 @@ fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -
                 value = state.deckName,
                 onValueChange = state::rename,
                 singleLine = true,
-                textStyle = MuType.h1(f).copy(color = c.ink),
+                // A field clips to its line, and the type scale's display leading is
+                // tighter than a descender: the tail of a y was cut off at 1.05.
+                textStyle = MuType.h2(f).copy(color = c.ink, lineHeight = 28.sp),
                 cursorBrush = SolidColor(c.ink),
                 interactionSource = source,
                 // Enter is done: the name is kept, and the field lets go.
@@ -143,35 +154,22 @@ fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -
                             false
                         }
                     }
-                    .widthIn(min = 240.dp, max = 720.dp)
+                    .weight(1f, fill = false)
+                    .widthIn(min = 160.dp, max = 640.dp)
                     .hoverable(source)
                     .onFocusChanged { state.onTextFieldFocusChanged(it.isFocused) }
-                    .drawBehind { drawLine(line, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) },
+                    .drawBehind { drawLine(line, Offset(0f, size.height + 2.dp.toPx()), Offset(size.width, size.height + 2.dp.toPx()), 1.dp.toPx()) },
             )
-            val main = state.deck.main.size
-            val extra = state.deck.extra.size
-            val side = state.deck.side.size
-            Micro(
-                "$main main · $extra extra · $side side · ${state.groups.groups.size} groups",
-                Modifier.padding(top = 8.dp),
-                color = c.ink45,
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Standing(state, neue)
+            Box(Modifier.weight(1f))
             Tip("Undo", kbd = kbd(DeskAction.UNDO)) { IconButton(Icons.Undo, state::undo, enabled = state.canUndo, size = 32.dp) }
             Tip("Redo", kbd = kbd(DeskAction.REDO)) { IconButton(Icons.Redo, state::redo, enabled = state.canRedo, size = 32.dp) }
             Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
             Segmented(state.format, Format.entries, { it.name }, onFormat, small = true)
             Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
-            Tip("Import a .ydk or .ydkx", kbd = kbd(DeskAction.IMPORT)) {
-                MuButton("Import", state::importFromFile, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Import)
-            }
-            Tip("Export the deck", kbd = kbd(DeskAction.EXPORT)) {
-                MuButton("Export", state::exportToFile, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Export)
-            }
-            Tip("A picture of the deck, without the window around it", kbd = kbd(DeskAction.SCREENSHOT)) {
-                MuButton("Screenshot", onScreenshot, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Camera)
-            }
+            Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), words, state::importFromFile)
+            Tool("Export", "Export the deck", Icons.Export, kbd(DeskAction.EXPORT), words, state::exportToFile)
+            Tool("Screenshot", "A picture of the deck, without the window around it", Icons.Camera, kbd(DeskAction.SCREENSHOT), words, onScreenshot)
             Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
             Tip("Show or hide the pool", kbd = kbd(DeskAction.TOGGLE_POOL)) {
                 IconButton(Icons.PanelLeft, { neue.update { it.copy(poolVisible = !it.poolVisible) } }, toggled = neue.prefs.poolVisible, size = 32.dp)
@@ -179,48 +177,42 @@ fun BuilderHeader(state: DeckBuilderState, neue: NeueState, onFormat: (Format) -
             Tip("Show or hide the inspector", kbd = kbd(DeskAction.TOGGLE_INSPECTOR)) {
                 IconButton(Icons.PanelRight, { neue.update { it.copy(inspectorVisible = !it.inspectorVisible) } }, toggled = neue.prefs.inspectorVisible, size = 32.dp)
             }
+            Tip("Save the deck", kbd = kbd(DeskAction.SAVE)) {
+                MuButton("Save", onSave, variant = BtnVariant.PRIMARY, size = BtnSize.SM, icon = Icons.Save)
+            }
         }
     }
 }
 
-/** The page's one strong rule, its status in mono, and its one primary action. */
+/** A tool on the bar: a word and an icon while there is room, the icon alone when there is not. */
 @Composable
-fun BuilderFooter(state: DeckBuilderState, neue: NeueState) {
+private fun Tool(label: String, tip: String, icon: androidx.compose.ui.graphics.vector.ImageVector, chord: String?, words: Boolean, onClick: () -> Unit) {
+    Tip(tip, kbd = chord) {
+        if (words) {
+            MuButton(label, onClick, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = icon)
+        } else {
+            IconButton(icon, onClick, size = 32.dp)
+        }
+    }
+}
+
+/** Whether the deck may be played, in a word, and the way to the reasons when it may not. */
+@Composable
+private fun Standing(state: DeckBuilderState, neue: NeueState) {
     val c = Mu.colors
     val validation = state.validation
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .background(c.paper)
-            .drawBehind { drawRect(c.ink, size = androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx())) }
-            .padding(horizontal = 32.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        DeckSection.entries.forEach { section ->
-            val n = state.deck[section].size
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Micro(section.displayName, color = c.ink45)
-                Mono(n.toString(), color = c.ink, size = androidx.compose.ui.unit.TextUnit(14f, androidx.compose.ui.unit.TextUnitType.Sp))
-            }
-        }
-        Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
-        when {
-            validation.errors.isNotEmpty() -> MicroLink(
-                "✕ ${validation.errors.size} ${if (validation.errors.size == 1) "issue" else "issues"} →",
-                { neue.drawer = Drawer.ISSUES },
-                color = c.ink,
-            )
-            validation.warnings.isNotEmpty() -> MicroLink(
-                "Legal · ${validation.warnings.size} ${if (validation.warnings.size == 1) "note" else "notes"} →",
-                { neue.drawer = Drawer.ISSUES },
-            )
-            else -> Micro("Legal in ${state.format.name}", color = c.ink45)
-        }
-        Box(Modifier.weight(1f))
-        Mono("Ctrl S", color = c.ink45)
-        MuButton("Save", { state.save() }, variant = BtnVariant.PRIMARY, size = BtnSize.LG, icon = Icons.Save)
+    when {
+        validation.errors.isNotEmpty() -> MicroLink(
+            "✕ ${validation.errors.size} ${if (validation.errors.size == 1) "issue" else "issues"} →",
+            { neue.drawer = Drawer.ISSUES },
+            color = c.ink,
+        )
+        validation.warnings.isNotEmpty() -> MicroLink(
+            "Legal · ${validation.warnings.size} ${if (validation.warnings.size == 1) "note" else "notes"} →",
+            { neue.drawer = Drawer.ISSUES },
+            color = c.ink70,
+        )
+        else -> Micro("Legal in ${state.format.name}", color = c.ink70)
     }
 }
 

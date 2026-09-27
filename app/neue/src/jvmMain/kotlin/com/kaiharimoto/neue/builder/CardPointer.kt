@@ -4,7 +4,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.runtime.Composable
@@ -19,7 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
@@ -74,11 +75,17 @@ fun rememberPress(): Press {
  *   drag, which lifts the card off the page), or [DeskMouse.HOLD_MS] of
  *   stillness (a hold).
  * - A second press within [DeskMouse.DOUBLE_CLICK_MS] is a double-click.
- * - A secondary press is a right-click, with or without Shift.
+ * - A secondary press is a right-click if it comes up before [DeskMouse.HOLD_MS]
+ *   and a right-hold if it does not — so a right-click fires on release, the
+ *   one moment it is known not to be a hold. Shift is read at the press.
+ *
+ * The press is found by [awaitAnyDown], not by Compose's `awaitFirstDown`:
+ * that one answers only to the primary button, and every right-click in 1.0.3
+ * to 1.0.8 went past the card as though it were not there.
  *
  * What each of those *means* is the table's business, not this modifier's:
  * it resolves the gesture against [target] and hands [onAction] the answer,
- * with where it happened in window pixels (a menu opens there).
+ * with where it happened in window pixels.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -116,12 +123,31 @@ fun Modifier.cardPointer(
         .pointerInput(dragEnabled, from) {
             awaitEachGesture {
                 // A press something above has already spent (the click that wakes zen) is not a card's.
-                val down = awaitFirstDown(requireUnconsumed = true)
+                val down = awaitAnyDown()
                 val buttons = currentEvent.buttons
                 val shift = currentEvent.keyboardModifiers.isShiftPressed
-                if (buttons.isSecondaryPressed) {
+                if (buttons.isSecondaryPressed && !buttons.isPrimaryPressed) {
                     down.consume()
-                    fire(if (shift) MouseGesture.SHIFT_RIGHT_CLICK else MouseGesture.RIGHT_CLICK, down.position)
+                    press.down = true
+                    try {
+                        // Up before the hold, or not.
+                        val up = withTimeoutOrNull(DeskMouse.HOLD_MS) {
+                            do {
+                                val event = awaitPointerEvent()
+                                event.changes.forEach { it.consume() }
+                            } while (event.buttons.isSecondaryPressed && event.changes.any { it.pressed })
+                            true
+                        } ?: false
+                        press.down = false
+                        if (up) {
+                            fire(if (shift) MouseGesture.SHIFT_RIGHT_CLICK else MouseGesture.RIGHT_CLICK, down.position)
+                        } else {
+                            fire(MouseGesture.RIGHT_HOLD, down.position)
+                            spend()
+                        }
+                    } finally {
+                        press.down = false
+                    }
                     return@awaitEachGesture
                 }
                 if (!buttons.isPrimaryPressed) return@awaitEachGesture
@@ -166,10 +192,7 @@ fun Modifier.cardPointer(
                             last[0] = 0L
                             press.down = false
                             fire(MouseGesture.HOLD, down.position)
-                            do {
-                                val event = awaitPointerEvent()
-                                event.changes.forEach { it.consume() }
-                            } while (event.changes.any { it.pressed })
+                            spend()
                         }
                     }
                 } finally {
@@ -177,4 +200,25 @@ fun Modifier.cardPointer(
                 }
             }
         }
+}
+
+/**
+ * The next press of any button that nothing above has spent (the click that
+ * wakes zen is spent on waking).
+ */
+private suspend fun AwaitPointerEventScope.awaitAnyDown(): PointerInputChange {
+    while (true) {
+        val event = awaitPointerEvent()
+        if (event.type == PointerEventType.Press && event.changes.isNotEmpty() && event.changes.all { it.changedToDown() }) {
+            return event.changes[0]
+        }
+    }
+}
+
+/** The rest of a press that has already done its one thing: nothing under it hears the release. */
+private suspend fun AwaitPointerEventScope.spend() {
+    do {
+        val event = awaitPointerEvent()
+        event.changes.forEach { it.consume() }
+    } while (event.changes.any { it.pressed })
 }

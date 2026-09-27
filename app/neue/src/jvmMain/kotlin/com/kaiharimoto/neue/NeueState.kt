@@ -40,6 +40,13 @@ sealed interface Selection {
 }
 
 /**
+ * A card opened large in the middle of the window (a right-hold): where it was
+ * opened from, so what the viewer offers is the menu for that place — a deck
+ * position, or a pool row when [section] is null.
+ */
+data class Viewing(val card: Card, val section: DeckSection?, val index: Int)
+
+/**
  * Everything about the window that is not the deck: which page, what is open
  * on top, what the pointer is over, and the desktop's own settings.
  *
@@ -60,6 +67,9 @@ class NeueState(
     var drawer by mutableStateOf<Drawer?>(null)
     var menu by mutableStateOf<MenuSpec?>(null)
 
+    /** The card opened large, if one is. */
+    var viewing by mutableStateOf<Viewing?>(null)
+
     /** A deck the user asked to delete, waiting on the confirmation dialog. */
     var confirmDelete by mutableStateOf<Pair<String, String>?>(null)
 
@@ -68,6 +78,9 @@ class NeueState(
 
     /** The card clicked, which the inspector falls back to and `Delete` acts on. */
     var selection by mutableStateOf<Selection?>(null)
+
+    /** How wide the main deck's cards are drawn: the pool draws its own that size by default. */
+    var deckCardWidth by mutableStateOf(androidx.compose.ui.unit.Dp.Unspecified)
 
     /** The highlighted pool row, walked by ↑ and ↓. */
     var poolCursor by mutableStateOf(0)
@@ -94,7 +107,7 @@ class NeueState(
     var note by mutableStateOf<Note?>(null)
 
     val overlayOpen: Boolean
-        get() = paletteOpen || helpOpen || drawer != null || menu != null || confirmDelete != null
+        get() = paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null
 
     /** What the inspector is showing: the hover, else the selection. */
     val inspected: Card? get() = hovered ?: selection?.card
@@ -133,6 +146,7 @@ class NeueState(
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {
         menu != null -> { menu = null; true }
+        viewing != null -> { viewing = null; true }
         paletteOpen -> { paletteOpen = false; true }
         confirmDelete != null -> { confirmDelete = null; true }
         helpOpen -> { helpOpen = false; true }

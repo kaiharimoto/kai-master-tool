@@ -109,9 +109,9 @@ fun MenuLayer(spec: MenuSpec?, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun MenuColumn(entries: List<MenuEntry>, onDismiss: () -> Unit) {
+fun MenuColumn(entries: List<MenuEntry>, onDismiss: () -> Unit, modifier: Modifier = Modifier.widthIn(min = 208.dp, max = 320.dp)) {
     val c = Mu.colors
-    Column(Modifier.widthIn(min = 208.dp, max = 320.dp).background(c.paper).border(1.dp, c.ink)) {
+    Column(modifier.background(c.paper).border(1.dp, c.ink)) {
         entries.forEachIndexed { i, entry ->
             if (entry.separatorBefore && i > 0) HRule()
             val click = entry.onClick

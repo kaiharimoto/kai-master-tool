@@ -1,6 +1,16 @@
 package com.kaiharimoto.neue.builder
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +63,11 @@ import com.kaiharimoto.neue.theme.MuType
  * The card under the pointer, or the one last clicked — the desktop's answer
  * to the tablet's long-press sheet. A large display can afford to keep it open,
  * so reading a card costs a hover rather than a gesture.
+ *
+ * What a card *says* comes first, on kai's instruction: its name, its numbers
+ * and its text, before the picture of it. Everything after that is a section
+ * that folds shut and stays shut — the art, the facets, and the copies in the
+ * deck — so a reader who never uses one never scrolls past it.
  */
 @Composable
 fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
@@ -62,42 +77,78 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
         if (card == null) {
             Column(Modifier.zenQuiet().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 com.kaiharimoto.neue.kit.MuText("Nothing here.", style = MuType.h1(LocalMuFonts.current))
-                Body("Point at a card to read it. Click one to keep it here.", color = c.ink70)
+                Body("Point at a card to read it. Click one to keep it here. Hold the right button on one to open it large.", color = c.ink70)
             }
             return@Box
         }
         val scroll = rememberScrollState()
-        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            NeueCard(
-                card = card,
-                modifier = Modifier.fillMaxWidth().aspectRatio(CARD_RATIO),
-                format = state.format,
-                foil = neue.prefs.foil,
-            )
-            // In zen the card stays a moment longer than what is written about it.
-            Column(Modifier.zenQuiet(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                CardFacts(card, state)
-                HRule(color = c.ink)
-                Copies(card, state)
-                HRule()
+        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 24.dp)) {
+            Column(Modifier.zenQuiet(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                CardHeading(card)
                 SelectionContainer {
                     Body(card.description.ifBlank { "No card text." }, color = c.ink)
                 }
+            }
+            Fold("Card", "art", neue, Modifier.padding(top = 20.dp)) {
+                NeueCard(
+                    card = card,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(CARD_RATIO),
+                    format = state.format,
+                    foil = neue.prefs.foil,
+                )
+            }
+            Column(Modifier.zenQuiet()) {
+                Fold("Details", "details", neue) { CardTags(card, state) }
+                Fold("In the deck", "deck", neue) { Copies(card, state) }
             }
         }
         Box(Modifier.matchParentSize().zenQuiet()) { ScrollbarFor(scroll) }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * A section of the inspector with a rule and a name over it, which a click
+ * folds shut. Which are shut is a preference, so it stays the way it was left.
+ */
 @Composable
-private fun CardFacts(card: Card, state: DeckBuilderState) {
+private fun Fold(title: String, key: String, neue: NeueState, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val c = Mu.colors
+    val open = key !in neue.prefs.inspectorFolded
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Column(modifier.fillMaxWidth()) {
+        HRule(color = c.ink25)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .hoverable(source)
+                .pointerHoverIcon(PointerIcon.Hand)
+                .clickable(interactionSource = source, indication = null) {
+                    neue.update { p -> p.copy(inspectorFolded = if (open) p.inspectorFolded + key else p.inspectorFolded - key) }
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Micro(title, Modifier.weight(1f), color = if (hovered) c.ink else c.ink70)
+            Mono(if (open) "−" else "+", color = if (hovered) c.ink else c.ink70)
+        }
+        if (open) Box(Modifier.fillMaxWidth().padding(bottom = 20.dp)) { content() }
+    }
+}
+
+/** The card's name, what it is, and its numbers: the first thing read. */
+@Composable
+internal fun CardHeading(card: Card, large: Boolean = false) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        H2(card.name, maxLines = 3)
-        Micro(card.type, color = c.ink45, maxLines = 2)
+        if (large) {
+            com.kaiharimoto.neue.kit.MuText(card.name, style = MuType.h1(LocalMuFonts.current).copy(lineHeight = 38.sp), maxLines = 3)
+        } else {
+            H2(card.name, maxLines = 3)
+        }
+        Micro(card.type, color = c.ink70, maxLines = 2)
         if (card.category == CardCategory.MONSTER) {
-            Row(horizontalArrangement = Arrangement.spacedBy(32.dp), modifier = Modifier.padding(top = 4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(if (large) 40.dp else 28.dp), modifier = Modifier.padding(top = 4.dp)) {
                 card.level?.let { Stat(if (card.frameType.contains("xyz")) "Rank" else "Level", it.toString()) }
                 card.linkValue?.let { Stat("Link", it.toString()) }
                 Stat("ATK", card.atk?.toString() ?: "?")
@@ -105,8 +156,16 @@ private fun CardFacts(card: Card, state: DeckBuilderState) {
                 card.pendulumScale?.let { Stat("Scale", it.toString()) }
             }
         }
-        // A facet is a question: click it to search the pool by it.
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 4.dp)) {
+    }
+}
+
+/** What the card is filed under — each a question, click it to search the pool by it — and its standing on the list. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CardTags(card: Card, state: DeckBuilderState) {
+    val c = Mu.colors
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             card.race?.let { race -> Tag(race, false, { state.onFilterChange(CardFilter(races = setOf(race), format = state.format)) }) }
             if (card.category == CardCategory.MONSTER) {
                 val attribute = card.attribute
@@ -120,7 +179,7 @@ private fun CardFacts(card: Card, state: DeckBuilderState) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Badge(state.format.name)
             when (ban) {
-                BanStatus.UNLIMITED -> Mono("Unlimited", color = c.ink45)
+                BanStatus.UNLIMITED -> Mono("Unlimited", color = c.ink70)
                 BanStatus.FORBIDDEN -> Badge("✕ Forbidden", inverted = true)
                 BanStatus.LIMITED -> Badge("Limited · 1", inverted = true)
                 BanStatus.SEMI_LIMITED -> Badge("Semi-limited · 2", inverted = true)
@@ -131,15 +190,15 @@ private fun CardFacts(card: Card, state: DeckBuilderState) {
 
 /** Copies in each section it can go in, and what they buy: the chance of opening one. */
 @Composable
-private fun Copies(card: Card, state: DeckBuilderState) {
+internal fun Copies(card: Card, state: DeckBuilderState) {
     val c = Mu.colors
     val home = card.requiredSection()
     val limit = DeckEditor.copyLimit(card, state.format)
     val total = state.copiesInDeck(card.id)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Micro("In the deck", Modifier.weight(1f))
-            Mono("$total of $limit", color = if (total > limit) c.ink else c.ink45)
+            Micro("Copies", Modifier.weight(1f))
+            Mono("$total of $limit", color = if (total > limit) c.ink else c.ink70)
         }
         listOf(home, DeckSection.SIDE).forEach { section ->
             val count = state.copiesIn(card.id, section)

@@ -357,7 +357,16 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   actions. The palette and the help dialog render it. **Its mouse is
   `core/input/DeskMouse.kt`**: right-click adds to the main deck wherever the
   card is, Shift right-click removes a deck copy (or sends a pool card to the
-  side), hold is the menu everywhere. `NEUE.md` §4 has why.
+  side), holding the left button adds a copy, and holding the right opens the
+  card large with every action beside it (`CardViewer`). **Compose's
+  `awaitFirstDown` ignores every button but the primary** — it is why
+  right-click did nothing for six releases; `CardPointer.awaitAnyDown` is the
+  fix, and `tools/shoot.sh --neue --mouse=…` proves a gesture by the deck's
+  counts. `NEUE.md` §4 has why.
+- **Every pixel of chrome is a pixel off every card.** The builder is one 48px
+  bar (no page header, no footer), thin strips, flush cards, and the lens keys
+  fold away with K; `NEUE.md` §3 has the budget. The ramp is darker than the
+  kit's in both themes, with a High contrast setting.
 - **The index rail folds away and F11 is immersive mode**, both decided by
   `core/layout/EdgeReveal.kt`; bars come out *over* the page, never pushing it,
   or the deck re-fits and every card jumps. Leaving full screen must go through

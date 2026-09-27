@@ -180,6 +180,34 @@ fun neueMain(args: Array<String>) {
                 clock.run(60)
             }
 
+            // --mouse=right@0.1,0.3;left-hold@0.5,0.5: real presses, with real buttons, at fractions
+            // of the frame; after each the deck's counts and any open menu are logged, so a gesture
+            // that does nothing shows up as numbers that did not move.
+            map["mouse"]?.let { spec ->
+                fun counts() = "main ${h.builder.deck[DeckSection.MAIN].size} extra ${h.builder.deck[DeckSection.EXTRA].size} side ${h.builder.deck[DeckSection.SIDE].size}"
+                spec.split(";").filter { it.isNotBlank() }.forEachIndexed { i, step ->
+                    val (kind, where) = step.split("@")
+                    val (fx, fy) = where.split(",").map { it.toFloat() }
+                    val at = Offset(fx * width, fy * height)
+                    val secondary = kind.startsWith("right") || kind.startsWith("shift-right")
+                    val shift = kind.startsWith("shift")
+                    val hold = kind.endsWith("hold")
+                    val buttons = androidx.compose.ui.input.pointer.PointerButtons(isPrimaryPressed = !secondary, isSecondaryPressed = secondary)
+                    val button = if (secondary) androidx.compose.ui.input.pointer.PointerButton.Secondary else androidx.compose.ui.input.pointer.PointerButton.Primary
+                    val mods = androidx.compose.ui.input.pointer.PointerKeyboardModifiers(isShiftPressed = shift)
+                    val before = counts()
+                    scene.sendPointerEvent(PointerEventType.Move, at)
+                    clock.run(4)
+                    scene.sendPointerEvent(PointerEventType.Press, at, buttons = buttons, keyboardModifiers = mods, button = button)
+                    clock.run(if (hold) 50 else 3)
+                    scene.sendPointerEvent(PointerEventType.Release, at, buttons = androidx.compose.ui.input.pointer.PointerButtons(), keyboardModifiers = mods, button = button)
+                    clock.run(30)
+                    println("[neue-studio] mouse $i $kind at ($fx, $fy): $before -> ${counts()}; menu ${h.neue.menu != null}; viewing ${h.neue.viewing?.card?.name}")
+                    val still = clock.frame().encodeToData(EncodedImageFormat.PNG)
+                    if (still != null) File(out, "$name-mouse$i.png").writeBytes(still.bytes)
+                    h.neue.menu = null; h.neue.viewing = null
+                }
+            }
             if (map["deckshot"] == "true") {
                 // The shared picture, drawn by the app's own code rather than photographed off the window.
                 val (shot, missing) = h.shots.picture(h.shots.snapshot(h.builder, h.neue))

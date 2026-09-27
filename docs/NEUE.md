@@ -166,8 +166,8 @@ page.
 comes out *over* the page rather than pushing it: a rail that pushed would
 re-fit the deck, and every card would jump. It can be pinned (Settings, or on
 the rail itself). **Immersive mode** (`F11`, or the button in the title bar) is
-full screen with the title bar and the builder's header folded over the top and
-its footer over the bottom, each coming out when the pointer reaches its edge —
+full screen with the title bar and the builder's bar folded over the top,
+coming out when the pointer reaches the edge —
 the deck and the panes that build it get the whole screen. `Esc`, last in its
 chain, leaves it; so does leaving full screen any other way. Leaving goes
 through `Floating` first and re-maximises a moment later: Compose's
@@ -180,12 +180,61 @@ watcher at the root, consuming nothing, decides all of it
 once the pointer is 24 px clear of it; a deck name being typed holds the top
 out; a carried card opens nothing.
 
-**02 Builder** is three columns and a footer. The pool (search, inline
-filters, a ruled grid of cards) and the inspector are resizable and hideable;
+**02 Builder** is one bar and three columns. The pool (search, inline
+filters, a flush grid of cards) and the inspector are resizable and hideable;
 the deck between them is **fitted, never scrolled**, by the tablet's own
 `DeckFitter.plan`: row widths in (10 main, 15 extra and side), one card size
-out. On a large display the fitter simply hands back larger cards. The footer
-carries the one strong rule, the counts, legality, and the one primary action.
+out. On a large display the fitter simply hands back larger cards.
+
+**Every pixel of chrome is a pixel off every card** — kai's brief for 1.0.9,
+and the exploration behind it measured the column at 1920 × 1080: 432 px of the
+1080 went to bars, strips and padding, and the cards had 648. Where it went, and
+what it is now:
+
+| | 1.0.8 | 1.0.9 |
+|---|---|---|
+| page header (name, a line of counts) | 92 | the **builder bar**, 48: name, legality, tools, Save |
+| footer (counts, legality, Save) | 64 | gone — the counts are on the strips, the rest is on the bar |
+| main strip + lens keys | 45 + 45 | 36 + 36, and **K** (or *Keys −*) folds the keys away |
+| extra and side strips | 37 each | 28 each |
+| padding round each grid | 24 | 12 |
+| gap between cards | 2 | 0 — flush; with a lens on, 6 px of paper between *groups* only |
+
+Flush is the rule and groups are the one exception, kai's: with the lens on
+Deck the cards fit seamlessly; on any other lens, cards in the same group stay
+flush and a card pulls back only on a side that faces another group, so each
+group reads as one block with 6 px of paper between it and the next and a 3 px
+edge of its colour. The grid never moves a card to make that happen — the
+breakdown's rule — so a deck position is still a drop position.
+
+The deck's main cards went from about 85 px wide to about 103 with the pool
+and inspector out: a fifth wider, half as much again in area. And the page is
+then limited by its **width**, not its height — which is why the cuts stopped
+there: folding the keys away buys nothing at that size, and costs something on
+a short window, so it is a toggle rather than a default. The bar keeps the
+words on Import, Export and Screenshot while it is 1500 px or wider and drops
+to their icons (with their tooltips) below that. Its title field sets its own
+line height: the type scale's display leading is tighter than a descender, and
+a single-line field clips to its line — the tail of a `y` was cut off.
+
+The pool's cards are drawn **the size of the main deck's** by default
+(`DeckSized` in `PoolPane.kt`: as many columns as that width fills, rounded to
+the nearest — `GridCells.Adaptive` only rounds down, so every card came out
+larger than asked), and while the rail folds away the pool keeps **32 px of
+empty paper** at the window's edge, because the rail comes out at that edge and
+a pool running up to it put its first column where reaching for a card called
+the rail.
+
+**The inspector reads first and shows second.** The name, the numbers and the
+card's text come first; the art, the details (type, attribute, archetype,
+banlist) and the copies in the deck follow as sections that fold shut with a
+click and stay shut (`NeuePreferences.inspectorFolded`).
+
+**Contrast** is darker than the kit's ramp, in both themes, and Settings has a
+*High* setting on top of that (`MuColors.of(ink, high)`; the table of alphas and
+what each has to clear is on `MuColors`). The kit's `.60` meta text and `.25`
+field borders sat at the edge of 4.5:1 and well under the 3:1 a control's
+outline needs.
 
 ## 4. Mouse and keyboard
 
@@ -198,7 +247,8 @@ The mouse is a table too, `core/input/DeskMouse.kt`, and the help dialog
 | click | select | select |
 | right-click | **add** to the main deck (the extra, for a card that lives there) | **add another copy** |
 | Shift right-click | add to the side deck | **remove this copy** |
-| hold | everything else (the menu) | everything else (the menu) |
+| hold | **add** (as right-click) | **add another copy** |
+| hold right | **open it large** | **open it large** |
 | double-click | add (Shift: side) | — |
 | drag | pick it up | move it; drop it on the pool to remove |
 
@@ -207,9 +257,24 @@ deck, wherever the card is.** 1.0.3 had read "right-clicking it will remove it"
 as the deck's right-click, and kai meant right-click to add everywhere. Taking
 a copy out is therefore Shift + right-click, because Shift already means "the
 other way" (Shift Enter and Shift right-click in the pool both mean the side
-deck), and a hold is the menu on every card — one answer in both places. A card
-in the side deck that is right-clicked sends a copy to the main deck.
-`DeskMouseTest` holds these rows and no gesture meaning two things.
+deck). A card in the side deck that is right-clicked sends a copy to the main
+deck. `DeskMouseTest` holds these rows and no gesture meaning two things.
+
+**Right-click did nothing from 1.0.3 to 1.0.8**, and the table was never the
+reason. Compose's `awaitFirstDown` answers only to the *primary* button, so a
+right press went past the card as though it were not there; `CardPointer` now
+waits for a press of any button (`awaitAnyDown`). The studio's `--mouse` flag
+drives real presses through the real modifier and logs the deck's counts, so
+this is checked rather than read: `--mouse="right@0.06,0.3;left-hold@0.06,0.3"`.
+
+After 1.0.8 the holds changed, on kai's instruction: **holding the left button
+adds a copy**, the same answer as a right-click for a hand that never leaves the
+left button, and **holding the right button opens the card large** — the art as
+tall as the window allows, the text in 16 px beside it, the copies, and every
+action the old menu had (`builder/CardViewer.kt`). A click outside it, `Esc` or
+its ✕ closes it; `Space` opens the selected card the same way. So a right-click
+cannot fire on the press any more: it is read on release, the first moment it is
+known not to be a hold.
 
 A press selects at once, then becomes a click, a drag (past the slop) or a hold
 (450 ms still), whichever comes first; the card rises under the button while

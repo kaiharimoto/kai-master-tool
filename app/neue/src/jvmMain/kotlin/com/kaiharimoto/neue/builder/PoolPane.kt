@@ -22,7 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import com.kaiharimoto.mastertool.core.model.Attribute
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.CardCategory
@@ -75,7 +78,8 @@ fun PoolPane(
     }
 
     // Zen: the search and its controls fade with the chrome; the pool, cards and all, goes at ten seconds.
-    Column(modifier.zenDeep().onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }) {
+    val gutter = if (neue.prefs.railPinned && !neue.immersive) 0.dp else RAIL_GUTTER
+    Column(modifier.zenDeep().onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }.padding(start = gutter)) {
         Column(Modifier.zenQuiet().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MuInput(
@@ -142,13 +146,12 @@ fun PoolPane(
                 }
                 else -> {
                     val columns = neue.prefs.poolColumns
+                    val deckWidth = neue.deckCardWidth
                     LazyVerticalGrid(
-                        columns = if (columns > 0) GridCells.Fixed(columns) else GridCells.Adaptive(112.dp),
+                        columns = if (columns > 0) GridCells.Fixed(columns) else DeckSized(if (deckWidth.isSpecified) deckWidth else 96.dp),
                         state = grid,
                         modifier = Modifier.fillMaxSize().padding(end = 12.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, top = 12.dp, bottom = 16.dp, end = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         itemsIndexed(state.results, key = { _, card -> card.id.value }) { i, card ->
                             val left = state.remaining(card)
@@ -188,6 +191,27 @@ fun PoolPane(
             }
         }
     }
+}
+
+/** Empty paper between the window's edge and the pool, while the rail comes out at that edge. */
+private val RAIL_GUTTER = 32.dp
+
+/**
+ * As many columns as cards of about [target] fill, rounded to the nearest:
+ * a pool read at the deck's own scale. `Adaptive` would only ever round the
+ * count down, and so draw every card larger than asked.
+ */
+private class DeckSized(private val target: Dp) : GridCells {
+    override fun Density.calculateCrossAxisCellSizes(availableSize: Int, spacing: Int): List<Int> {
+        val want = target.roundToPx().coerceAtLeast(1)
+        val count = kotlin.math.round((availableSize + spacing).toFloat() / (want + spacing)).toInt().coerceIn(2, 12)
+        val cell = (availableSize - spacing * (count - 1)) / count
+        val extra = (availableSize - spacing * (count - 1)) % count
+        return List(count) { if (it < extra) cell + 1 else cell }
+    }
+
+    override fun equals(other: Any?) = other is DeckSized && other.target == target
+    override fun hashCode() = target.hashCode()
 }
 
 @OptIn(ExperimentalLayoutApi::class)

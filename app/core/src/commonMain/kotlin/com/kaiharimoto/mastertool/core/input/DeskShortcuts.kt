@@ -37,9 +37,15 @@ enum class DeskAction {
     POOL_ADD_TO_SIDE,
     REMOVE_SELECTED,
 
+    /** The selected card, or the highlighted result, opened large. */
+    VIEW_SELECTED,
+
     TOGGLE_INSPECTOR,
     TOGGLE_POOL,
     TOGGLE_FILTERS,
+
+    /** The lens's keys, in their own row over the main deck, or folded into its header. */
+    TOGGLE_KEYS,
     NEXT_LENS,
     PREVIOUS_LENS,
     NEW_GROUP,
@@ -133,6 +139,8 @@ object DeskShortcuts {
         DeskShortcut(ctrl("f", shift = true), DeskAction.TOGGLE_FILTERS, DeskScope.BUILDER, "Filters", allowedInTextInput = true),
         DeskShortcut(KeyChord("delete"), DeskAction.REMOVE_SELECTED, DeskScope.BUILDER, "Remove the selected card", repeatable = true),
         DeskShortcut(KeyChord("backspace"), DeskAction.REMOVE_SELECTED, DeskScope.BUILDER, "Remove the selected card", repeatable = true),
+        DeskShortcut(KeyChord("space"), DeskAction.VIEW_SELECTED, DeskScope.BUILDER, "Open the selected card large"),
+        DeskShortcut(KeyChord("k"), DeskAction.TOGGLE_KEYS, DeskScope.BUILDER, "Show or hide the lens keys"),
         DeskShortcut(KeyChord("b"), DeskAction.NEXT_LENS, DeskScope.BUILDER, "Next lens"),
         DeskShortcut(KeyChord("b", shift = true), DeskAction.PREVIOUS_LENS, DeskScope.BUILDER, "Previous lens"),
         DeskShortcut(KeyChord("n"), DeskAction.NEW_GROUP, DeskScope.BUILDER, "New group from a selection"),

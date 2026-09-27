@@ -10,13 +10,13 @@ import com.kaiharimoto.mastertool.core.input.DeskMouse
 import com.kaiharimoto.mastertool.core.input.MouseAction
 import com.kaiharimoto.mastertool.core.input.MouseTarget
 import com.kaiharimoto.neue.Selection
+import com.kaiharimoto.neue.Viewing
 import com.kaiharimoto.neue.kit.MenuEntry
-import com.kaiharimoto.neue.kit.MenuSpec
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 
 /**
- * What a card can be asked to do, written once for the context menu, the
+ * What a card can be asked to do, written once for the card viewer, the
  * palette and the keyboard, so the three cannot drift.
  */
 object CardActions {
@@ -34,7 +34,10 @@ object CardActions {
             MouseAction.SELECT -> neue.selection = Selection.InPool(card, row)
             MouseAction.ADD -> add(state, card)
             MouseAction.ADD_TO_SIDE -> add(state, card, toSide = true)
-            MouseAction.MENU -> neue.menu = MenuSpec(at, poolMenu(card, state))
+            MouseAction.VIEW -> {
+                neue.selection = Selection.InPool(card, row)
+                neue.viewing = Viewing(card, null, row)
+            }
             MouseAction.ADD_COPY, MouseAction.REMOVE, MouseAction.INSPECT, MouseAction.PICK_UP -> Unit
         }
     }
@@ -62,9 +65,9 @@ object CardActions {
                 val sel = neue.selection as? Selection.InDeck
                 if (sel != null && sel.section == section && sel.index >= index) neue.selection = null
             }
-            MouseAction.MENU -> {
+            MouseAction.VIEW -> {
                 neue.selection = Selection.InDeck(card, section, index)
-                neue.menu = MenuSpec(at, deckMenu(card, section, index, state, neue))
+                neue.viewing = Viewing(card, section, index)
             }
             MouseAction.ADD, MouseAction.ADD_TO_SIDE, MouseAction.INSPECT, MouseAction.PICK_UP -> Unit
         }

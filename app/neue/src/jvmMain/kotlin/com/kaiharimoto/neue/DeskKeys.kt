@@ -32,6 +32,7 @@ object DeskKeys {
         Key.NumPadEnter to "enter",
         Key.Delete to "delete",
         Key.Backspace to "backspace",
+        Key.Spacebar to "space",
         Key.F1 to "f1",
         Key.F11 to "f11",
         Key.Zero to "0",

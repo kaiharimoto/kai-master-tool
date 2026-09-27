@@ -24,6 +24,21 @@ import androidx.compose.ui.unit.dp
  *
  * Nothing in `neue/` may name a colour that is not black, white or an alpha of
  * one of them. `MasterUiLawTest` reads the sources and fails the build on one.
+ *
+ * **The ramp is darker than the kit's, on kai's instruction** ("make light and
+ * dark mode more accessible"). The kit's .70/.60/.25/.12 put micro-caps labels
+ * and meta text close to the 4.5:1 floor and every field border well under the
+ * 3:1 that a control's outline needs. The names keep their places in the ramp;
+ * the alphas moved so that every step clears its bar on both fills, and
+ * [MuColors.high] moves them again for anyone who wants more:
+ *
+ * | step   | standard (paper · ink) | high  | what it has to clear            |
+ * |--------|------------------------|-------|---------------------------------|
+ * | ink70  | .80                    | .92   | body text, 7:1                  |
+ * | ink45  | .66 · .62              | .82   | small text, 4.5:1 with margin   |
+ * | ink25  | .45                    | .65   | a control's outline, 3:1        |
+ * | ink12  | .16                    | .32   | a hairline that is seen         |
+ * | ink06  | .07                    | .12   | a hover wash that is seen       |
  * The two exceptions — card foil and the deck's group markers — live in files
  * the test names, because kai granted exactly those two.
  */
@@ -33,7 +48,7 @@ data class MuColors(
     val ink: Color,
     /** Secondary text, labels. */
     val ink70: Color,
-    /** Meta, hints, numerals, placeholders, field borders at rest. .60 on paper, .50 on ink, for contrast. */
+    /** Meta, hints, numerals, placeholders. */
     val ink45: Color,
     /** Field borders, scrollbar thumb. */
     val ink25: Color,
@@ -41,24 +56,27 @@ data class MuColors(
     val ink12: Color,
     /** Hover wash, skeleton base. */
     val ink06: Color,
-    /** Behind dialogs and drawers: paper at 85%, never a dark scrim. */
+    /** Behind dialogs and drawers: paper at 90%, never a dark scrim. */
     val overlay: Color,
     val isInk: Boolean,
+    /** The high-contrast ramp: the same two fills, the greys moved toward ink. */
+    val high: Boolean = false,
 ) {
     companion object {
-        fun of(ink: Boolean): MuColors {
+        fun of(ink: Boolean, high: Boolean = false): MuColors {
             val p = if (ink) Color.Black else Color.White
             val i = if (ink) Color.White else Color.Black
             return MuColors(
                 paper = p,
                 ink = i,
-                ink70 = i.copy(alpha = 0.70f),
-                ink45 = i.copy(alpha = if (ink) 0.50f else 0.60f),
-                ink25 = i.copy(alpha = 0.25f),
-                ink12 = i.copy(alpha = 0.12f),
-                ink06 = i.copy(alpha = 0.06f),
-                overlay = p.copy(alpha = 0.85f),
+                ink70 = i.copy(alpha = if (high) 0.92f else 0.80f),
+                ink45 = i.copy(alpha = if (high) 0.82f else if (ink) 0.62f else 0.66f),
+                ink25 = i.copy(alpha = if (high) 0.65f else 0.45f),
+                ink12 = i.copy(alpha = if (high) 0.32f else 0.16f),
+                ink06 = i.copy(alpha = if (high) 0.12f else 0.07f),
+                overlay = p.copy(alpha = if (high) 0.96f else 0.90f),
                 isInk = ink,
+                high = high,
             )
         }
 
@@ -110,8 +128,8 @@ object Mu {
 }
 
 @Composable
-fun MuTheme(ink: Boolean, content: @Composable () -> Unit) {
-    val colors = MuColors.of(ink)
+fun MuTheme(ink: Boolean, high: Boolean = false, content: @Composable () -> Unit) {
+    val colors = MuColors.of(ink, high)
     val type = MuType.rememberFamilies()
     CompositionLocalProvider(
         LocalMu provides colors,
@@ -139,7 +157,7 @@ fun MuTheme(ink: Boolean, content: @Composable () -> Unit) {
 fun Inverted(on: Boolean = true, content: @Composable () -> Unit) {
     if (!on) return content()
     val base = Mu.colors
-    val flipped = MuColors.of(!base.isInk)
+    val flipped = MuColors.of(!base.isInk, base.high)
     CompositionLocalProvider(
         LocalMu provides flipped,
         LocalMuText provides LocalMuText.current.copy(color = flipped.ink),

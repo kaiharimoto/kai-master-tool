@@ -72,6 +72,9 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Theme", "Paper is the default. Ink is its exact inversion.") {
                         Segmented(prefs.theme, NeueTheme.entries, { if (it == NeueTheme.PAPER) "Paper" else "Ink" }, { t -> neue.update { it.copy(theme = t) } })
                     }
+                    SettingRow("Contrast", "High darkens the grey text, the outlines of controls and the rules between rows, in both themes.") {
+                        Segmented(prefs.contrast, listOf(NeuePreferences.CONTRAST_STANDARD, NeuePreferences.CONTRAST_HIGH), { if (it == NeuePreferences.CONTRAST_HIGH) "High" else "Standard" }, { v -> neue.update { it.copy(contrast = v) } })
+                    }
                     SettingRow("Interface scale", "Everything, text and cards alike. Ctrl = and Ctrl - step through it from anywhere.") {
                         Segmented(prefs.scale, NeuePreferences.SCALES, { "${kotlin.math.round(it * 100).toInt()}%" }, { s -> neue.update { it.copy(scale = s) } }, small = true)
                     }
@@ -87,7 +90,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                 }
                 Column {
                     SectionTitle(2, "Building")
-                    SettingRow("Pool columns", "Auto fits cards of about 112 px to the pane.") {
+                    SettingRow("Pool columns", "Auto draws the pool's cards the size of the main deck's.") {
                         Segmented(prefs.poolColumns, listOf(0, 3, 4, 5, 6, 8), { if (it == 0) "Auto" else it.toString() }, { n -> neue.update { it.copy(poolColumns = n) } }, small = true)
                     }
                     SettingRow("Search card text", "Match the words printed on a card as well as its name. name: and text: in a search choose one.") {
