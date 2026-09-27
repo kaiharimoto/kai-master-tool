@@ -82,6 +82,20 @@ data class NeuePreferences(
      */
     val contrast: String = CONTRAST_STANDARD,
     val window: WindowBounds? = null,
+    /**
+     * The deck the builder opens with, by its id (1.0.14). Null, or a deck since
+     * deleted, and it opens the deck saved most recently (`StartingDeck`).
+     */
+    val defaultDeckId: String? = null,
+    /** The cards each deck is shown by in the library, by deck id: up to three passcodes, oldest choice first (`DeckCovers`). */
+    val covers: Map<String, List<Int>> = emptyMap(),
+    /** The artwork chosen for a card, by the card's own passcode: another of its passcodes (`CardArt`). */
+    val arts: Map<Int, Int> = emptyMap(),
+    /**
+     * The pool's Side switch: right-click, double-click and Enter add to the side
+     * deck, and Shift adds to the main (`DeskMouse.forPool`).
+     */
+    val poolToSide: Boolean = false,
 ) {
     fun sanitised(): NeuePreferences = copy(
         scale = if (scale.isFinite()) scale.coerceIn(SCALES.first(), SCALES.last()) else 1f,
@@ -95,6 +109,10 @@ data class NeuePreferences(
         foil = foil.ifBlank { DEFAULT_FOIL },
         foilNames = foilNames.ifBlank { DEFAULT_FOIL_NAMES },
         contrast = if (contrast == CONTRAST_HIGH) CONTRAST_HIGH else CONTRAST_STANDARD,
+        covers = covers
+            .mapValues { (_, cards) -> cards.distinct().takeLast(COVERS) }
+            .filterValues { it.isNotEmpty() },
+        arts = arts.filter { (card, art) -> card != art },
         window = window?.takeIf {
             it.x.isFinite() && it.y.isFinite() && it.width.isFinite() && it.height.isFinite() &&
                 it.width >= MIN_WINDOW_WIDTH && it.height >= MIN_WINDOW_HEIGHT
@@ -127,6 +145,7 @@ data class NeuePreferences(
         const val DEFAULT_FOIL_NAMES = "foil"
         const val CONTRAST_STANDARD = "standard"
         const val CONTRAST_HIGH = "high"
+        const val COVERS = 3
 
         val DEFAULT = NeuePreferences()
     }

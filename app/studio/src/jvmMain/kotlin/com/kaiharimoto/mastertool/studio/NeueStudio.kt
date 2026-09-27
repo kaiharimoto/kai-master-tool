@@ -95,6 +95,43 @@ fun neueMain(args: Array<String>) {
             }
             clock.run((map["settle"] ?: "150").toInt())
 
+            // --save: the deck into the library, so `01 Decks` has a row; --covers=0,1,2 puts
+            // those main-deck cards on its cover; --default marks it the deck that opens first.
+            if (map["save"] == "true") {
+                h.builder.save()
+                clock.run(20)
+                val id = h.builder.deckId
+                map["covers"]?.let { spec ->
+                    val raw = spec.split(",").mapNotNull { h.builder.deck[DeckSection.MAIN].getOrNull(it.trim().toInt())?.value }
+                    if (id != null) h.neue.update { it.copy(covers = it.covers + (id to raw)) }
+                }
+                if (map["default"] == "true" && id != null) h.neue.update { it.copy(defaultDeckId = id) }
+                println("[neue-studio] saved as $id; covers ${h.neue.prefs.covers[id]}; default ${h.neue.prefs.defaultDeckId}")
+            }
+            if (map["side"] == "true") h.neue.update { it.copy(poolToSide = true) }
+            // --art=auto: the first main-deck card printed with more than one artwork, selected,
+            // with its second artwork chosen — the inspector shows "Art 2 of n" and the deck the picture.
+            if (map["art"] == "auto") {
+                val ids = h.builder.deck[DeckSection.MAIN]
+                val at = ids.indexOfFirst { id -> (h.builder.index.byId(id)?.let { com.kaiharimoto.mastertool.core.model.CardArt.arts(it).size } ?: 0) > 1 }
+                val card = ids.getOrNull(at)?.let(h.builder.index::byId)
+                if (card != null) {
+                    val next = com.kaiharimoto.mastertool.core.model.CardArt.step(card, null, 1)
+                    h.neue.update { it.copy(arts = it.arts + (card.id.value to next.value)) }
+                    h.neue.selection = Selection.InDeck(card, DeckSection.MAIN, at)
+                }
+                println("[neue-studio] art: ${card?.name} at main $at, ${card?.let { com.kaiharimoto.mastertool.core.model.CardArt.arts(it) }}")
+            } else map["art"]?.toIntOrNull()?.let { passcode ->
+                // --art=46986414: that card, searched for in the pool and selected, on its second artwork.
+                val card = h.builder.index.byId(com.kaiharimoto.mastertool.core.model.CardId(passcode))
+                if (card != null) {
+                    val next = com.kaiharimoto.mastertool.core.model.CardArt.step(card, null, 1)
+                    h.neue.update { it.copy(arts = it.arts + (card.id.value to next.value)) }
+                    h.builder.onQueryChange(card.name)
+                    h.neue.selection = Selection.InPool(card, 0)
+                }
+                println("[neue-studio] art: ${card?.name}, ${card?.let { com.kaiharimoto.mastertool.core.model.CardArt.arts(it) }}")
+            }
             map["query"]?.let { h.builder.onQueryChange(it) }
             map["lens"]?.let { wanted -> Lens.entries.firstOrNull { it.name.equals(wanted, true) }?.let(h.builder::useLens) }
             map["select"]?.let { spec ->
@@ -138,6 +175,60 @@ fun neueMain(args: Array<String>) {
                         println("[neue-studio] zen card $n moved ($dx, $dy): $result, now at ${h.zen.arrangement.offsetOf(key)}")
                     }
                     clock.run(4)
+                }
+                // --zen-drags=drag@0.1,0.1>0.5,0.4;shift-click@0.3,0.3;dbl@0.4,0.3: real pointer
+                // gestures in deep zen, through the app's own handlers — a box over the table, a
+                // card carried, Shift, a double-click. What was picked out, and where the carried
+                // cards settled, is logged; a still mid-gesture and one after.
+                map["zen-drags"]?.let { spec ->
+                    var t = System.nanoTime() / 1_000_000
+                    suspend fun step(frames: Int) { clock.run(frames); t += frames * 16L }
+                    val primary = androidx.compose.ui.input.pointer.PointerButtons(isPrimaryPressed = true)
+                    val none = androidx.compose.ui.input.pointer.PointerButtons()
+                    spec.split(";").filter { it.isNotBlank() }.forEachIndexed { i, gesture ->
+                        val (kind, where) = gesture.split("@")
+                        // A point is a fraction of the window, or `k12` — the middle of the card keyed 12
+                        // where it is drawn now — with an optional `+dx,dy` in fractions after it.
+                        fun point(p: String): Offset {
+                            if (!p.startsWith("k")) return p.split(",").map { it.toFloat() }.let { Offset(it[0] * width, it[1] * height) }
+                            val key = p.drop(1).substringBefore("+").toInt()
+                            val r = com.kaiharimoto.mastertool.core.motion.ZenPick.rectOf(key, h.zen.homes, h.zen.arrangement, h.zen.stage, h.zen.deck.center.x, h.zen.deck.center.y)
+                                ?: error("no card keyed $key")
+                            val by = p.substringAfter("+", "").takeIf { it.isNotBlank() }?.split(",")?.map { it.toFloat() }
+                            return Offset((r[0] + r[2]) / 2f + (by?.get(0) ?: 0f) * width, (r[1] + r[3]) / 2f + (by?.get(1) ?: 0f) * height)
+                        }
+                        val points = where.split(">").map(::point)
+                        val mods = androidx.compose.ui.input.pointer.PointerKeyboardModifiers(isShiftPressed = kind.startsWith("shift"))
+                        val from = points.first()
+                        val to = points.last()
+                        scene.sendPointerEvent(PointerEventType.Move, from, timeMillis = t, keyboardModifiers = mods)
+                        step(2)
+                        val presses = if (kind == "dbl") 2 else 1
+                        repeat(presses) {
+                            scene.sendPointerEvent(PointerEventType.Press, from, timeMillis = t, buttons = primary, keyboardModifiers = mods, button = androidx.compose.ui.input.pointer.PointerButton.Primary)
+                            step(1)
+                            if (kind.endsWith("drag")) {
+                                for (k in 1..16) {
+                                    val at = from + (to - from) * (k / 16f)
+                                    scene.sendPointerEvent(PointerEventType.Move, at, timeMillis = t, buttons = primary, keyboardModifiers = mods)
+                                    step(1)
+                                    if (k == 12) {
+                                        val mid = clock.frame().encodeToData(EncodedImageFormat.PNG)
+                                        if (mid != null) File(out, "$name-zen$i-mid.png").writeBytes(mid.bytes)
+                                        println("[neue-studio] zen $i $kind mid: picked ${h.zen.selection.sorted()}, carrying ${h.zen.carrying.sorted()}, box ${h.zen.marquee}")
+                                    }
+                                }
+                            }
+                            scene.sendPointerEvent(PointerEventType.Release, to, timeMillis = t, buttons = none, keyboardModifiers = mods, button = androidx.compose.ui.input.pointer.PointerButton.Primary)
+                            step(2)
+                        }
+                        step(20)
+                        val moved = h.zen.homes.keys.filter { h.zen.arrangement.isMoved(it) }.sorted()
+                        println("[neue-studio] zen $i $kind: picked ${h.zen.selection.sorted()}; moved $moved; " +
+                            moved.joinToString { "$it@${h.zen.arrangement.offsetOf(it)}/g${h.zen.arrangement.membershipOf(it, h.zen.homes.getValue(it).membership).group}" })
+                        val still = clock.frame().encodeToData(EncodedImageFormat.PNG)
+                        if (still != null) File(out, "$name-zen$i.png").writeBytes(still.bytes)
+                    }
                 }
                 // --zen-frames=N,K: N stills, K frames apart, for a GIF of the float.
                 map["zen-frames"]?.let { spec ->

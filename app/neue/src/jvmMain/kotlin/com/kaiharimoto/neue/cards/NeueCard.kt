@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import com.kaiharimoto.mastertool.core.model.CardArt
+import com.kaiharimoto.mastertool.core.model.CardId
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -86,7 +89,6 @@ private enum class ArtState { LOADING, READY, FAILED }
  * - Selected is the double ring: 2px ink inset 2px, a 1px paper line inside
  *   it, so it reads on light art and dark art alike.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun NeueCard(
     card: Card,
@@ -100,6 +102,32 @@ fun NeueCard(
     outlined: Boolean = false,
     /** How the card is leaning this frame; read in the draw phase, so leaning never recomposes. */
     motion: (() -> LeanPose)? = null,
+) {
+    // The artwork chosen for this card (1.0.14): the same card with another picture,
+    // under that picture's passcode, so the originals and the name masks keep apart.
+    val arts = LocalArts.current
+    val drawn = remember(card, arts) { CardArt.show(card, arts[card.id.value]?.let(::CardId)) }
+    val library = LocalArt.current
+    if (drawn !== card) LaunchedEffect(drawn.id, library) { library?.want(drawn) }
+    NeueCardFace(drawn, modifier, format, copies, selected, dimmed, foil, marker, outlined, motion)
+}
+
+/** The artwork chosen for each card, by the card's own passcode (`NeuePreferences.arts`). */
+val LocalArts = compositionLocalOf<Map<Int, Int>> { emptyMap() }
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun NeueCardFace(
+    card: Card,
+    modifier: Modifier,
+    format: Format,
+    copies: Int,
+    selected: Boolean,
+    dimmed: Boolean,
+    foil: String,
+    marker: Marker?,
+    outlined: Boolean,
+    motion: (() -> LeanPose)?,
 ) {
     val c = Mu.colors
     var art by remember(card.id) { mutableStateOf(ArtState.LOADING) }

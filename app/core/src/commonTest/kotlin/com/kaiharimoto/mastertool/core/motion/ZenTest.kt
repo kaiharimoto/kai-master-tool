@@ -186,4 +186,142 @@ class ZenTest {
         assertTrue(a.isMoved(k))
         assertEquals(ZenMembership(1, 0, 0), a.membershipOf(k, ZenMembership(1, 0, 0)))
     }
+
+    // ---- 1.0.14: many cards at once --------------------------------------
+
+    private val b0 = ZenArrangement.key(0, 0)
+    private val b1 = ZenArrangement.key(0, 1)
+    private val c0 = ZenArrangement.key(0, 2)
+    private val c1 = ZenArrangement.key(0, 3)
+
+    @Test
+    fun aGroupMovesAsOneAndComesUpInTheOrderItLay() {
+        val a = ZenArrangement()
+        a.move(b1, 0f, 0f) // b1 above b0 before anything else
+        a.moveAll(listOf(b0, b1), 30f, 40f)
+        assertEquals(30f to 40f, a.offsetOf(b0))
+        assertEquals(30f to 40f, a.offsetOf(b1))
+        assertTrue(a.layerOf(b1) > a.layerOf(b0), "picking a group up does not reshuffle it")
+        assertTrue(a.layerOf(b0) > 0 && a.layerOf(c0) == 0)
+    }
+
+    @Test
+    fun aGroupLetGoNearHomeGoesHomeTogether() {
+        val a = ZenArrangement()
+        a.moveAll(listOf(b0, b1), 12f, -9f)
+        assertEquals(ZenSnap.GroupResult.Home, a.dropAll(listOf(b0, b1), b0, homes()))
+        assertTrue(!a.isMoved(b0) && !a.isMoved(b1))
+    }
+
+    @Test
+    fun aGroupPutAgainstAnotherSnapsFlushAndCombines() {
+        val a = ZenArrangement()
+        // Block 1 (x 0 and 100) carried to just right of block 2's last card (right edge 500).
+        a.moveAll(listOf(b0, b1), 506f, 7f)
+        val r = a.dropAll(listOf(b0, b1), b0, homes())
+        assertTrue(r is ZenSnap.GroupResult.Beside, "$r")
+        assertEquals(500f to 0f, a.offsetOf(b0)) // flush at 500, and its partner beside it at 600
+        assertEquals(500f to 0f, a.offsetOf(b1))
+        // Both now float with block 2, one and two cells right of its last card.
+        assertEquals(ZenMembership(2, 2, 0), a.membershipOf(b0, ZenMembership(1, 0, 0)))
+        assertEquals(ZenMembership(2, 3, 0), a.membershipOf(b1, ZenMembership(1, 1, 0)))
+        assertEquals(setOf(b0, b1, c0, c1), a.blockOf(c0, homes()))
+    }
+
+    @Test
+    fun aGroupThatWouldLandOnACardDoesNotSnapThere() {
+        val a = ZenArrangement()
+        // Block 1 carried so its first card is just left of card c0 (x 300): landing at 200
+        // would put its second card at 300, on top of c0.
+        a.moveAll(listOf(b0, b1), 204f, 0f)
+        val r = a.dropAll(listOf(b0, b1), b0, homes())
+        if (r is ZenSnap.GroupResult.Beside) {
+            val (x0, _) = a.offsetOf(b0)
+            val (x1, _) = a.offsetOf(b1)
+            val lefts = listOf(0f + x0, 100f + x1)
+            assertTrue(lefts.none { abs(it - 300f) < 50f || abs(it - 400f) < 50f }, "landed on a card: $lefts")
+        }
+    }
+
+    @Test
+    fun cardsGatheredFromTwoBlocksAndLeftInTheOpenBecomeOneBlock() {
+        val a = ZenArrangement()
+        // One card from each block, carried far below everything, side by side.
+        a.move(c0, -100f, 0f) // c0 beside b1, at x 200
+        a.moveAll(listOf(b1, c0), 0f, 900f)
+        val r = a.dropAll(listOf(b1, c0), b1, homes())
+        assertTrue(r is ZenSnap.GroupResult.Free, "$r")
+        val m1 = a.membershipOf(b1, ZenMembership(1, 1, 0))
+        val m2 = a.membershipOf(c0, ZenMembership(2, 0, 0))
+        assertEquals(m1.group, m2.group)
+        assertEquals(1, m2.col - m1.col) // measured from the card it was carried by
+        assertEquals(setOf(b0, b1, c0), a.blockOf(b1, homes()))
+    }
+
+    @Test
+    fun aGroupOfOneIsLetGoLikeOneCard() {
+        val a = ZenArrangement()
+        a.moveAll(listOf(b0), 0f, 900f)
+        assertTrue(a.dropAll(listOf(b0), b0, homes()) is ZenSnap.GroupResult.Free)
+        assertEquals(ZenMembership(1, 0, 0), a.membershipOf(b0, ZenMembership(1, 0, 0)))
+    }
+
+    @Test
+    fun aBoxTouchesWhatItCoversAndAPointFindsTheTopCard() {
+        val a = ZenArrangement()
+        val stage = ZenStage.NONE
+        // A box over the right half of b1 and the gap: b1 alone.
+        assertEquals(setOf(b1), ZenPick.within(150f, 10f, 250f, 60f, homes(), a, stage, 0f, 0f))
+        // Dragged the other way, the same box.
+        assertEquals(setOf(b1), ZenPick.within(250f, 60f, 150f, 10f, homes(), a, stage, 0f, 0f))
+        assertEquals(setOf(b0, b1, c0, c1), ZenPick.within(-10f, -10f, 600f, 200f, homes(), a, stage, 0f, 0f))
+        assertEquals(b0, ZenPick.at(50f, 50f, homes(), a, stage, 0f, 0f))
+        assertNull(ZenPick.at(250f, 50f, homes(), a, stage, 0f, 0f))
+        // c1 put down over b0: the point on both finds the one on top.
+        a.move(c1, -400f, 0f)
+        assertEquals(c1, ZenPick.at(50f, 50f, homes(), a, stage, 0f, 0f))
+    }
+
+    @Test
+    fun pickingFollowsTheCardsIntoTheMiddleOfTheWindow() {
+        val a = ZenArrangement()
+        val stage = ZenStage(scale = 2f, dx = 100f, dy = 0f)
+        // About the origin, doubled and moved right 100: b1 (100..200) is drawn at 300..500.
+        val r = ZenPick.rectOf(b1, homes(), a, stage, 0f, 0f)!!
+        assertEquals(300f, r[0], 1e-3f)
+        assertEquals(500f, r[2], 1e-3f)
+        assertEquals(b1, ZenPick.at(400f, 100f, homes(), a, stage, 0f, 0f))
+    }
+
+    @Test
+    fun shiftAddsAndABareBoxReplaces() {
+        assertEquals(setOf(1, 2, 3), ZenPick.combine(setOf(1, 2), setOf(3), additive = true))
+        assertEquals(setOf(3), ZenPick.combine(setOf(1, 2), setOf(3), additive = false))
+        assertEquals(setOf(1), ZenPick.toggle(setOf(1, 2), 2))
+        assertEquals(setOf(1, 2), ZenPick.toggle(setOf(1), 2))
+    }
+
+    @Test
+    fun theGrammarOfPickingOut() {
+        // A bare click picks out one card; again, none.
+        assertEquals(setOf(5), ZenGestures.click(setOf(1, 2), 5, shift = false))
+        assertEquals(emptySet(), ZenGestures.click(setOf(5), 5, shift = false))
+        // Shift puts in and takes out.
+        assertEquals(setOf(1, 5), ZenGestures.click(setOf(1), 5, shift = true))
+        assertEquals(setOf(1), ZenGestures.click(setOf(1, 5), 5, shift = true))
+        // A double-click takes the block; Shift adds it.
+        assertEquals(setOf(7, 8), ZenGestures.doubleClick(setOf(1), setOf(7, 8), shift = false))
+        assertEquals(setOf(1, 7, 8), ZenGestures.doubleClick(setOf(1), setOf(7, 8), shift = true))
+        // Dragging a picked-out card carries them all, and they stay picked out.
+        assertEquals(setOf(1, 2, 3), ZenGestures.carried(setOf(1, 2, 3), 2, shift = false))
+        assertEquals(setOf(1, 2, 3), ZenGestures.selectionWhileCarrying(setOf(1, 2, 3), 2, shift = false))
+        // Dragging one that is not carries it alone, and lets go of the rest.
+        assertEquals(setOf(9), ZenGestures.carried(setOf(1, 2), 9, shift = false))
+        assertEquals(emptySet(), ZenGestures.selectionWhileCarrying(setOf(1, 2), 9, shift = false))
+        // Shift-dragging one that is not adds it and carries them all.
+        assertEquals(setOf(1, 2, 9), ZenGestures.carried(setOf(1, 2), 9, shift = true))
+        // The table lets go, unless Shift is held.
+        assertEquals(emptySet(), ZenGestures.tableClick(setOf(1), shift = false))
+        assertEquals(setOf(1), ZenGestures.tableClick(setOf(1), shift = true))
+    }
 }

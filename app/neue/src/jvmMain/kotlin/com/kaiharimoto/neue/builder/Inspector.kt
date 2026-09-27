@@ -42,6 +42,10 @@ import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.zen.zenDeep
 import com.kaiharimoto.neue.zen.zenQuiet
 import com.kaiharimoto.neue.kit.Badge
+import com.kaiharimoto.neue.kit.IconButton
+import com.kaiharimoto.neue.kit.Icons
+import com.kaiharimoto.mastertool.core.model.CardArt
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.H2
 import com.kaiharimoto.neue.kit.HRule
@@ -89,6 +93,7 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
                 format = state.format,
                 foil = neue.prefs.foil,
             )
+            ArtSwitch(card, neue, Modifier.zenQuiet().padding(top = 8.dp))
             // In zen the card stays a moment longer than what is written about it.
             Column(Modifier.zenQuiet().padding(top = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 CardHeading(card)
@@ -102,6 +107,30 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
             }
         }
         Box(Modifier.matchParentSize().zenQuiet()) { ScrollbarFor(scroll) }
+    }
+}
+
+/**
+ * Which of a card's artworks is drawn, for a card printed with more than one
+ * (kai, 1.0.14): `Art 2 of 3` and a step either way, wrapping. The choice is
+ * the card's everywhere — pool, deck, library, screenshot — and is only ever a
+ * picture: the deck keeps the passcode it was built with (`CardArt`).
+ */
+@Composable
+internal fun ArtSwitch(card: Card, neue: NeueState, modifier: Modifier = Modifier) {
+    val arts = remember(card) { CardArt.arts(card) }
+    if (arts.size < 2) return
+    val c = Mu.colors
+    val chosen = neue.prefs.arts[card.id.value]?.let(::CardId)?.takeIf { it in arts } ?: card.id
+    fun step(by: Int) = neue.update { p ->
+        val next = CardArt.step(card, p.arts[card.id.value]?.let(::CardId), by)
+        p.copy(arts = if (next == card.id) p.arts - card.id.value else p.arts + (card.id.value to next.value))
+    }
+    Row(modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
+        Micro("Art", color = c.ink70)
+        Mono("  ${arts.indexOf(chosen) + 1} of ${arts.size}", Modifier.weight(1f), color = c.ink)
+        IconButton(Icons.ChevronLeft, { step(-1) }, label = "Previous art")
+        IconButton(Icons.ChevronRight, { step(1) }, label = "Next art")
     }
 }
 

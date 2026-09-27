@@ -362,6 +362,20 @@ A press selects at once, then becomes a click, a drag (past the slop) or a hold
 (450 ms still), whichever comes first; the card rises under the button while
 the hold counts down, so the press says what it is about to do.
 
+**The pool's Side switch** (1.0.14, beside Text over the results): kai's "Add to
+Side" toggle, for siding a list in without holding a key. On, the pool's two adds
+trade places — right-click, double-click, a held right button and `Enter` send a
+card to the side deck, and Shift, still "the other way", sends it to the main
+(`DeskMouse.forPool`, one function, so the table the help dialog shows stays the
+off state). It is a setting (`NeuePreferences.poolToSide`), and the empty side
+deck's hint follows it.
+
+**Three clicks select a field's whole line** (1.0.14), so the search is cleared
+for the next card by typing over it. `MuInput` counts presses on the way down
+without consuming them — the field's own click and double-click are untouched —
+and selects everything a frame after the third release, once the field has put
+its own caret down. Every field in the kit has it, not only the search.
+
 The keyboard is `DeskShortcuts`, one table resolved in one place, rendered by
 the help dialog (`F1`) and reachable by name from the palette (`Ctrl K`).
 `DeskShortcutsTest` holds every action bound and no chord meaning two things at
@@ -404,6 +418,39 @@ In immersive mode, on the builder, doing nothing is a mode too
   every card home; the next zen puts them back where they were left.
 - **Only a key wakes it.** In deep zen the pointer is for arranging, so neither
   moving it nor clicking ends zen; any key does, and that key does nothing else.
+- **Many cards at once** (1.0.14, kai: "drag boxes to select multiple cards, and
+  hold shift to select multiple cards and be able to drag them as a group. I can
+  also combine groups"). The grammar is `ZenGestures`, in core with a test on
+  every row:
+
+  | on | bare | with Shift |
+  |---|---|---|
+  | the table, dragged | a box: picks out every card it touches | adds them |
+  | a card | picks out that card alone (again: none) | puts it in, or takes it out |
+  | a card, twice | picks out its whole block | adds the block |
+  | a card, dragged | carries everything picked out if it is, else it alone | adds it, carries them all |
+  | the table | lets go of everything | nothing |
+
+  Picked-out cards wear the selection's double ring, the cursor reads "Move 5",
+  and a group is carried as one — every card up to the top of the pile in the
+  order it already lay (`ZenArrangement.moveAll`) — and let go as one
+  (`ZenSnap.snapAll`): home if every card is near its own slot; flush against a
+  card outside it if one of its cards is near a free slot there *and* the whole
+  group, moved that much, lands on nothing — joining that card's block, which is
+  **how two groups combine**; otherwise where it was put, as **one block**, the
+  block of the card it was carried by, so cards gathered from several groups float
+  on together. Every card's cell is measured from the card it snapped against, so
+  the scales keep running corner to corner across the new block. Waking forgets
+  what was picked out.
+
+  The box is drawn by the window's pointer watcher, not by the cards: a press is
+  on the table when `ZenPick.at` finds no card where the cards are *drawn*
+  (their rest slot, their offset, then `ZenStage` about the deck's centre), and
+  that press is spent there, on the way down, so the pool and the inspector —
+  faded out, not gone — never hear it. A section's pane rises with its highest
+  card, so a group carried out of the main deck is drawn over the extra deck.
+- **An empty deck has no zen** (1.0.14): with nothing to float, the builder
+  stays awake.
 - **"Put the cards back"** comes out, faintly, when the pointer goes into the
   window's bottom-right corner (`ZenCorner`, 240 × 140) and something has been
   moved; it draws every card home over a slow beat and forgets the arrangement.
@@ -412,8 +459,11 @@ The shadow is **kai's exception to Master UI's "no shadows"**, and it is one
 file: `MasterUiLawTest` refuses a blur or a mask filter anywhere else in
 `neue/`. In Ink it is the exact inversion — a faint light under each card —
 because a black shadow on black says nothing and dark is paper and ink swapped.
-The studio photographs it with `--zen=deep --zen-move=dx,dy`, which carries two
-cards before the still.
+The studio photographs it with `--zen=deep`, and `--zen-drags` drives real
+presses through the real handlers — `drag@0.05,0.1>k12` (a box from a point on
+the table to the middle of main-deck card 12), `shift-click@k25`,
+`drag@k11>k11+0,0.5`, `dbl@k5` — logging what was picked out and where the
+carried cards settled, with a still mid-gesture and one after.
 
 ### 4a. Groups
 
@@ -439,7 +489,39 @@ costs one picture. A card draws the original the moment it is on disk, over the
 small render until it has decoded, so arriving never flashes. Settings has the
 switch, the count, the size and the folder.
 
-### 4c. The screenshot
+### 4c. The deck it opens with, and the deck's covers
+
+**The builder opens a deck** (1.0.14): the one marked **Make default** in `01
+Decks` ("Opens first" on its row, **Not default** to take it off), else the one
+saved most recently — `StartingDeck.pick`, which treats a default since deleted as
+no default. It opens only onto an empty builder, once the settings have been read,
+so an import made while the library was opening wins. Deleting the deck on the
+builder opens the next one the same way rather than leaving an empty builder,
+and clears it from the default and the covers.
+
+**Covers**: every row in the library shows up to three cards the person chose
+(`DeckCovers`), flush like the deck's own mosaic, in three places whether or not
+they are filled so every name starts on one line. A deck card's menu (hold it)
+has **Put on the deck's cover** / **Take off the deck's cover** with the count;
+a fourth lets go of the first rather than refusing. They are kept by the
+passcode in the deck, so an alternate artwork the deck holds is the picture on
+its cover; a cover that has left the deck is not drawn; none, and the row shows
+the most-played main-deck card as it always did. An unsaved deck has no id to
+hang covers on, and the entry says so ("Save the deck first").
+
+### 4d. Alternate artworks
+
+A card printed with more than one picture shows **Art 2 of 3** and a step either
+way under its art in the inspector, and in the card viewer (1.0.14). The choice is
+the card's everywhere — pool, deck, library, screenshot, the card in the air —
+because `NeueCard` applies it itself (`LocalArts`, `NeuePreferences.arts`). It
+is only ever a picture: `CardArt.show` hands the drawing the same card under the
+other passcode, with that picture's addresses — YGOPRODeck serves every artwork
+at the same path under its own passcode, and the pool stores only the first — so
+the originals library and the foil's name masks keep the two apart, and the
+deck, the rules and the banlist never see it.
+
+### 4e. The screenshot
 
 `Ctrl Shift S`, or Screenshot in the header: main, extra and side as they stand,
 with none of the window — and with the lens's colours and a legend if a lens was

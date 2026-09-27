@@ -64,6 +64,8 @@ object Icons {
         "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z",
         circle(12f, 13f, 3f),
     )
+    val ChevronLeft = icon("chevron-left", "m15 18-6-6 6-6")
+    val ChevronRight = icon("chevron-right", "m9 18 6-6-6-6")
     val ArrowUp = icon("arrow-up", "m5 12 7-7 7 7", "M12 19V5")
     val ArrowDown = icon("arrow-down", "M12 5v14", "m19 12-7 7-7-7")
     val Pencil = icon("pencil", "M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z", "m15 5 4 4")

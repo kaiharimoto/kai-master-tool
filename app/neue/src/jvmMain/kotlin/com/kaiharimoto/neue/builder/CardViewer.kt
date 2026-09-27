@@ -105,6 +105,7 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                         )
                     }
                     HRule(color = c.ink)
+                    ArtSwitch(card, neue)
                     CardTags(card, state)
                     HRule()
                     Copies(card, state)

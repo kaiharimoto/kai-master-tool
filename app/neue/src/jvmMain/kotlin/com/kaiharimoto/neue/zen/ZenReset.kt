@@ -44,6 +44,7 @@ fun ZenReset(zen: ZenLayer, modifier: Modifier = Modifier) {
                     home.snapTo(1f)
                     home.animateTo(0f, tween(MuMotion.SLOW * 2, easing = MuMotion.ease)) { zen.gather = value }
                     zen.arrangement.reset()
+                    zen.selection = emptySet()
                     zen.arranged++
                     zen.gather = 1f
                 }

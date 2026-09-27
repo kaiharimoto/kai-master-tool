@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.kaiharimoto.mastertool.core.motion.ZenArrangement
 import com.kaiharimoto.mastertool.core.motion.ZenHome
 import com.kaiharimoto.mastertool.core.motion.ZenMembership
+import com.kaiharimoto.mastertool.core.motion.ZenPick
 import com.kaiharimoto.mastertool.core.motion.ZenStage
 
 /**
@@ -43,8 +44,18 @@ class ZenLayer {
     /** Bumped whenever [arrangement] changes, so layers that read it redraw. */
     var arranged by mutableIntStateOf(0)
 
-    /** The card being carried in zen, by its [ZenArrangement.key], or null. */
-    var holding by mutableStateOf<Int?>(null)
+    /** The cards being carried in zen, by their [ZenArrangement.key]: one, or the whole selection. */
+    var carrying by mutableStateOf<Set<Int>>(emptySet())
+
+    /**
+     * The cards picked out in deep zen (1.0.14): by a box dragged over the table,
+     * a Shift-click, or a double-click on a block. Pressing any of them carries
+     * all of them. Cleared when zen ends.
+     */
+    var selection by mutableStateOf<Set<Int>>(emptySet())
+
+    /** The box being dragged over the table, in window pixels, or null. */
+    var marquee by mutableStateOf<Rect?>(null)
 
     /**
      * How far home the arrangement is drawn from: 1 where it was left, 0 back in
@@ -70,6 +81,36 @@ class ZenLayer {
         arranged++
     }
 
+    /** Every card of [keys] moved as one. */
+    fun moveAll(keys: Collection<Int>, dx: Float, dy: Float) {
+        arrangement.moveAll(keys, dx, dy)
+        arranged++
+    }
+
+    /** The cards of [keys], carried by [anchor], let go together (`ZenSnap.snapAll`). */
+    fun dropAll(keys: Collection<Int>, anchor: Int) {
+        arrangement.dropAll(keys, anchor, homes)
+        arranged++
+    }
+
+    /** The card drawn on top at a window point, or null for the table. */
+    fun pickAt(point: Offset): Int? = ZenPick.at(point.x, point.y, homes, arrangement, stage, deck.center.x, deck.center.y)
+
+    /** Every card a box over the window touches. */
+    fun within(box: Rect): Set<Int> = ZenPick.within(box.left, box.top, box.right, box.bottom, homes, arrangement, stage, deck.center.x, deck.center.y)
+
+    /** Card [key]'s whole block, as the garden has it now. */
+    fun blockOf(key: Int): Set<Int> = arrangement.blockOf(key, homes)
+
+    fun isSelected(key: Int): Boolean = key in selection
+
+    /** Zen has ended, or the cards have gone home: nothing is picked out any more. */
+    fun forget() {
+        selection = emptySet()
+        marquee = null
+        carrying = emptySet()
+    }
+
     /** The block card [key] floats with, and its cell there. */
     fun membershipOf(key: Int, home: ZenMembership): ZenMembership = if (arranged < 0) home else arrangement.membershipOf(key, home)
 
@@ -79,8 +120,9 @@ class ZenLayer {
     /** How high card [key] sits among the cards in zen: the one carried, then those put down, latest on top. */
     fun layerOf(key: Int): Float {
         if (arranged < 0 || deep <= 0f) return 0f
-        if (holding == key) return 1_000_000f
         val layer = arrangement.layerOf(key)
+        // Carried cards over everything, in the order they lie among themselves.
+        if (key in carrying) return 1_000_000f + layer
         return if (layer == 0) 0f else 2f + layer
     }
 

@@ -35,6 +35,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
+import com.kaiharimoto.mastertool.core.library.DeckCovers
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
@@ -99,7 +100,13 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
                             stored = stored,
                             state = state,
                             current = stored.entry.id == state.deckId,
+                            default = stored.entry.id == neue.prefs.defaultDeckId,
+                            covers = neue.prefs.covers[stored.entry.id].orEmpty(),
                             now = now,
+                            onDefault = {
+                                val id = stored.entry.id
+                                neue.update { it.copy(defaultDeckId = if (it.defaultDeckId == id) null else id) }
+                            },
                             onOpen = {
                                 state.load(stored.entry.id)
                                 neue.go(Page.BUILDER)
@@ -120,7 +127,10 @@ private fun DeckRow(
     stored: StoredDeck,
     state: DeckBuilderState,
     current: Boolean,
+    default: Boolean,
+    covers: List<Int>,
     now: Long,
+    onDefault: () -> Unit,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -128,10 +138,9 @@ private fun DeckRow(
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val deck = stored.entry.deck
-    // The deck's face is its most-played main-deck card: a picture, so it keeps its colour (§17).
-    val face = remember(deck, state.index) {
-        deck.main.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key?.let(state.index::byId)
-    }
+    // The deck's faces: up to three cards chosen for it, else its most-played main-deck
+    // card (DeckCovers). Pictures, so they keep their colour (§17).
+    val faces = remember(deck, covers, state.index) { DeckCovers.shown(covers, deck).mapNotNull(state.index::byId) }
     val actions by animateFloatAsState(if (hovered) 1f else 0f, label = "actions")
     Inverted(current) {
         val inner = Mu.colors
@@ -148,9 +157,10 @@ private fun DeckRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Numeral(n, color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45)
-            Box(Modifier.size(44.dp, 64.dp)) {
-                if (face != null) NeueCard(face, Modifier.fillMaxSize(), foil = "off")
-                else Box(Modifier.fillMaxSize().background(inner.ink06))
+            // Three places, flush like the deck's own mosaic, so every name starts on one line.
+            Row(Modifier.width(COVER_W * DeckCovers.MAX)) {
+                if (faces.isEmpty()) Box(Modifier.size(COVER_W, COVER_H).background(inner.ink06))
+                faces.forEach { face -> NeueCard(face, Modifier.size(COVER_W, COVER_H), foil = "off") }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 MuText(stored.entry.name, style = MuType.body(LocalMuFonts.current).copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = inner.ink, maxLines = 1)
@@ -160,10 +170,16 @@ private fun DeckRow(
                 )
             }
             if (current) Small("On the builder", color = inner.ink.copy(alpha = 0.7f))
+            if (default) Small("Opens first", color = inner.ink.copy(alpha = 0.7f))
             Row(Modifier.alpha(actions), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuButton("✕ Delete", onDelete, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                MuButton(if (default) "Not default" else "Make default", onDefault, variant = BtnVariant.GHOST, size = BtnSize.SM)
                 MuButton("Open", onOpen, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
             }
         }
     }
 }
+
+/** One cover in a library row. */
+private val COVER_W = 44.dp
+private val COVER_H = 64.dp

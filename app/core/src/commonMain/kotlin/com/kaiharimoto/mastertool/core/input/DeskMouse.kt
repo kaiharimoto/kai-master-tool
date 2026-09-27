@@ -106,6 +106,20 @@ object DeskMouse {
     fun resolve(target: MouseTarget, gesture: MouseGesture): MouseAction? =
         all.firstOrNull { it.target == target && it.gesture == gesture }?.action
 
+    /**
+     * What an add from the pool means with the pool's **Side** switch on (kai,
+     * 1.0.14: "a toggle in the card database so I can directly add cards to side
+     * deck with right click"): the two adds trade places, so every gesture that
+     * adds — right-click, double-click, a held right button, Enter — sends the
+     * card to the side, and Shift, still "the other way", sends it to the main.
+     */
+    fun forPool(action: MouseAction, sideFirst: Boolean): MouseAction = when {
+        !sideFirst -> action
+        action == MouseAction.ADD -> MouseAction.ADD_TO_SIDE
+        action == MouseAction.ADD_TO_SIDE -> MouseAction.ADD
+        else -> action
+    }
+
     /** The gesture that does [action] on [target], for a hint beside a menu row. */
     fun gestureFor(target: MouseTarget, action: MouseAction): MouseGesture? =
         all.firstOrNull { it.target == target && it.action == action }?.gesture

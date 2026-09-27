@@ -37,6 +37,15 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -219,9 +228,43 @@ fun MuInput(
     val line = animatedColor(if (focused || hovered) c.ink else c.ink25)
     val style = (textStyle ?: if (mono) MuType.mono(f, if (dense) 11.sp else 13.sp) else if (dense) MuType.help(f) else MuType.body(f))
         .copy(color = c.ink)
+    // The field keeps its own selection; the text is the caller's. A text changed from
+    // outside (a cleared search) puts the caret at its end.
+    var field by remember { mutableStateOf(TextFieldValue(value, TextRange(value.length))) }
+    val shown = if (field.text == value) field else TextFieldValue(value, TextRange(value.length))
+    val scope = rememberCoroutineScope()
+    val latest by rememberUpdatedState(value)
     Box(
         modifier
             .height(if (dense) 28.dp else 36.dp)
+            // Three clicks select everything (kai, 1.0.14: "so I can delete it and search
+            // for the next card"). Counted on the way down and never consumed, so the
+            // field's own click and double-click are untouched; the whole line is selected
+            // a frame after the third release, once the field has placed its own caret.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    var count = 0
+                    var lastAt = 0L
+                    var lastPos = Offset.Zero
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull() ?: continue
+                        if (event.type == PointerEventType.Press && event.buttons.isPrimaryPressed) {
+                            val near = (change.position - lastPos).getDistance() < TRIPLE_SLOP
+                            count = if (change.uptimeMillis - lastAt < TRIPLE_MS && near) count + 1 else 1
+                            lastAt = change.uptimeMillis
+                            lastPos = change.position
+                        } else if (event.type == PointerEventType.Release && count >= 3) {
+                            count = 0
+                            scope.launch {
+                                withFrameNanos { }
+                                val text = latest
+                                field = TextFieldValue(text, TextRange(0, text.length))
+                            }
+                        }
+                    }
+                }
+            }
             .cursor(CursorMode.TEXT, fontSize = style.fontSize, focused = focused)
             .hoverable(source)
             .drawBehind {
@@ -234,8 +277,11 @@ fun MuInput(
             MuText(placeholder, style = style, color = c.ink45, maxLines = 1)
         }
         BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = shown,
+            onValueChange = {
+                field = it
+                if (it.text != value) onValueChange(it.text)
+            },
             singleLine = true,
             textStyle = style,
             cursorBrush = SolidColor(c.ink),
@@ -249,6 +295,10 @@ fun MuInput(
         )
     }
 }
+
+/** Three presses this close together in time, and this close on the screen, select a field's whole line. */
+private const val TRIPLE_MS = 500L
+private const val TRIPLE_SLOP = 8f
 
 /** Select (§6): a bordered trigger with a `▼` caret, a ruled popup, the highlighted row inverted. */
 @Composable

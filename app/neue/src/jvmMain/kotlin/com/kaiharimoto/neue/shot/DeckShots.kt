@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.remote.CardSetRelease
@@ -102,7 +103,10 @@ class DeckShots(
             sections = DeckSection.entries.map { section ->
                 ShotSection(
                     section = section,
-                    cards = state.deck[section].map(state.index::byId),
+                    // Each card with the artwork chosen for it, as the builder draws it.
+                    cards = state.deck[section].map { id ->
+                        state.index.byId(id)?.let { card -> com.kaiharimoto.mastertool.core.model.CardArt.show(card, neue.prefs.arts[card.id.value]?.let(::CardId)) }
+                    },
                     keying = if (showing) state.keying(section).takeIf { !it.isEmpty } else null,
                 )
             },

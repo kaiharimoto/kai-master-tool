@@ -122,6 +122,13 @@ fun PoolPane(
                         MuSwitch(state.searchEffects, onSearchEffects)
                     }
                 }
+                // kai, 1.0.14: a pool that adds to the side deck, for siding a whole list in.
+                Tip(if (neue.prefs.poolToSide) "Adding to the side deck. Shift adds to the main" else "Add to the side deck with right-click and Enter. Shift adds to the main") {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Micro("Side", color = if (neue.prefs.poolToSide) c.ink else c.ink45)
+                        MuSwitch(neue.prefs.poolToSide, { on -> neue.update { it.copy(poolToSide = on) } })
+                    }
+                }
                 val facets = state.filter.activeFacetCount
                 MicroLink(
                     if (facets > 0) "Filters ($facets)" else "Filters",

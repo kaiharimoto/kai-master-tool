@@ -53,4 +53,14 @@ class NeuePreferencesTest {
         // A window smaller than the minimum is a window that cannot be used, so it is forgotten.
         assertNull(broken.window)
     }
+
+    @Test
+    fun coversKeepTheLastThreeAndAnArtThatIsTheCardIsDropped() {
+        val p = NeuePreferences(
+            covers = mapOf("a" to listOf(1, 2, 2, 3, 4), "b" to emptyList()),
+            arts = mapOf(10 to 10, 11 to 12),
+        ).sanitised()
+        assertEquals(mapOf("a" to listOf(2, 3, 4)), p.covers)
+        assertEquals(mapOf(11 to 12), p.arts)
+    }
 }

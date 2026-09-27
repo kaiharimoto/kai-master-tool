@@ -113,6 +113,10 @@ class NeueState(
     val inspected: Card? get() = hovered ?: selection?.card
 
     private var loaded = false
+
+    /** Whether the stored settings have been read: what the builder waits on to know which deck to open. */
+    var ready by mutableStateOf(false)
+        private set
     private var saveJob: Job? = null
     private val flushScope = CoroutineScope(SupervisorJob())
 
@@ -122,6 +126,7 @@ class NeueState(
             // Whatever the user changed while the database was opening wins.
             if (!loaded) prefs = stored
             loaded = true
+            ready = true
         }
     }
 

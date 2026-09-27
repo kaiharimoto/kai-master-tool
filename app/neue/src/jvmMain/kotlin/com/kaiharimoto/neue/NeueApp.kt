@@ -56,6 +56,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import com.kaiharimoto.mastertool.core.motion.ZenPick
+import com.kaiharimoto.mastertool.core.motion.ZenGestures
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.pointer.isPrimaryPressed
+import com.kaiharimoto.mastertool.core.library.StartingDeck
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -155,6 +163,7 @@ class NeueHolders(
         lastInput = System.nanoTime()
         val was = neue.zen
         if (was != ZenPhase.AWAKE) neue.zen = ZenPhase.AWAKE
+        if (was == ZenPhase.DEEP) zen.forget()
         return was
     }
     var decksReload by mutableStateOf(0)
@@ -217,7 +226,7 @@ class NeueHolders(
             DeskAction.POOL_PREVIOUS -> neue.poolCursor = (neue.poolCursor - 1).coerceAtLeast(0)
             DeskAction.POOL_NEXT -> neue.poolCursor = (neue.poolCursor + 1).coerceAtMost((state.results.size - 1).coerceAtLeast(0))
             DeskAction.POOL_ADD, DeskAction.POOL_ADD_TO_SIDE -> state.results.getOrNull(neue.poolCursor)?.let { card ->
-                CardActions.add(state, card, toSide = action == DeskAction.POOL_ADD_TO_SIDE)
+                CardActions.add(state, card, toSide = (action == DeskAction.POOL_ADD_TO_SIDE) != neue.prefs.poolToSide)
             }
             DeskAction.REMOVE_SELECTED -> (neue.selection as? Selection.InDeck)?.let { sel ->
                 state.removeAt(sel.card, sel.section, sel.index)
@@ -371,6 +380,14 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     }
 
     if (launchEffects) {
+        // The deck to open with (kai, 1.0.14): the default, else the one saved last — and
+        // only onto an empty builder, so an import made while the library was opening wins.
+        LaunchedEffect(Unit) {
+            snapshotFlow { neue.ready }.first { it }
+            if (state.deckId != null || !state.deck.isEmpty) return@LaunchedEffect
+            val id = StartingDeck.pick(h.deps.deckRepository.all().map { it.entry }, neue.prefs.defaultDeckId)
+            if (id != null && state.deckId == null && state.deck.isEmpty) state.load(id)
+        }
         // The art library takes the pool in its own order, and what is on screen first.
         LaunchedEffect(state.index) { if (state.index.size > 0) h.art.catalogue(state.index.cards) }
         LaunchedEffect(state.deck, state.index) {
@@ -382,7 +399,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     }
 
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             CompositionLocalProvider(LocalContextMenuRepresentation provides remember { MuContextMenuRepresentation() }) {
                 Shell(h)
@@ -446,6 +463,11 @@ private fun Shell(h: NeueHolders) {
                 // nothing: every bar that folds away comes out from here.
                 awaitPointerEventScope {
                     var still = Offset.Unspecified
+                    // A box being dragged over the table in deep zen: where it started, and what
+                    // was picked out before it when Shift added to that.
+                    var boxFrom: Offset? = null
+                    var boxBase = emptySet<Int>()
+                    var boxShift = false
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val at = event.changes.firstOrNull()?.position
@@ -471,6 +493,44 @@ private fun Shell(h: NeueHolders) {
                         // The corner where "put the cards back" comes out.
                         h.zen.corner = deepZen && at != null && !gone &&
                             ZenCorner.reaches(at.x, at.y, size.width.toFloat(), size.height.toFloat())
+                        // Deep zen, 1.0.14: a press on the table rather than on a card draws a box,
+                        // and the cards it touches are picked out to move together (ZenGestures).
+                        // The press is spent here, on the way down, so the pool and the inspector
+                        // — faded out, not gone — never hear it.
+                        val zen = h.zen
+                        val from = boxFrom
+                        when {
+                            from == null && deepZen && event.type == PointerEventType.Press && at != null &&
+                                event.buttons.isPrimaryPressed && zen.deck.width > 0f &&
+                                !(zen.corner && !zen.arrangement.isEmpty) && zen.pickAt(at) == null -> {
+                                boxFrom = at
+                                boxShift = event.keyboardModifiers.isShiftPressed
+                                boxBase = zen.selection
+                                zen.marquee = Rect(at, at)
+                                event.changes.forEach { it.consume() }
+                            }
+                            from != null && at != null && event.type == PointerEventType.Move -> {
+                                val box = Rect(minOf(from.x, at.x), minOf(from.y, at.y), maxOf(from.x, at.x), maxOf(from.y, at.y))
+                                zen.marquee = box
+                                if (box.width > ZenPick.BOX_SLOP || box.height > ZenPick.BOX_SLOP) {
+                                    zen.selection = ZenPick.combine(boxBase, zen.within(box), boxShift)
+                                }
+                                event.changes.forEach { it.consume() }
+                            }
+                            from != null && (event.type == PointerEventType.Release || !event.buttons.areAnyPressed) -> {
+                                val box = zen.marquee
+                                if (box == null || (box.width <= ZenPick.BOX_SLOP && box.height <= ZenPick.BOX_SLOP)) {
+                                    zen.selection = ZenGestures.tableClick(boxBase, boxShift)
+                                }
+                                zen.marquee = null
+                                boxFrom = null
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                        if (boxFrom != null && !deepZen) {
+                            zen.marquee = null
+                            boxFrom = null
+                        }
                         // A click anywhere below the folded-out header lets go of the deck name:
                         // on a desktop nothing else takes focus from a text field, so the bar
                         // that is held out while you type would otherwise never fold away.
@@ -593,7 +653,14 @@ private fun Shell(h: NeueHolders) {
                         neue.confirmDelete = null
                         scope.launch {
                             h.deps.deckRepository.delete(id)
-                            if (state.deckId == id) state.newDeck()
+                            if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
+                                neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
+                            }
+                            // The builder is never left empty while the library has a deck to open.
+                            if (state.deckId == id) {
+                                val next = StartingDeck.pick(h.deps.deckRepository.all().map { it.entry }, neue.prefs.defaultDeckId)
+                                if (next != null) state.load(next) else state.newDeck()
+                            }
                             h.decksReload++
                         }
                     }, variant = BtnVariant.PRIMARY)
@@ -603,6 +670,13 @@ private fun Shell(h: NeueHolders) {
         if (h.updates.dialogOpen) UpdateDialog(h.updates)
         if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
         if (immersive) ZenReset(h.zen, Modifier.align(Alignment.BottomEnd))
+        // The box being dragged over the table in deep zen: a hairline and the faintest wash.
+        h.zen.marquee?.let { box ->
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(c.ink06, box.topLeft, box.size)
+                drawRect(c.ink, box.topLeft, box.size, style = Stroke(1.dp.toPx()))
+            }
+        }
         CardViewer(state, neue)
         MenuLayer(neue.menu) { neue.menu = null }
         OverlayLayer(h.overlays)
@@ -631,7 +705,8 @@ private fun Shell(h: NeueHolders) {
 @Composable
 private fun ZenClockwork(h: NeueHolders) {
     val neue = h.neue
-    val eligible = neue.immersive && neue.page == Page.BUILDER
+    // An empty deck has nothing to float (kai, 1.0.14): zen waits for a card.
+    val eligible = neue.immersive && neue.page == Page.BUILDER && h.builder.deck.totalCards > 0
     LaunchedEffect(eligible, h.zenAuto) {
         if (!eligible) {
             neue.zen = ZenPhase.AWAKE

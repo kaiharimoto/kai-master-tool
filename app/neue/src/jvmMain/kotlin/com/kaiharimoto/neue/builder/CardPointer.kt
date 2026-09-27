@@ -40,6 +40,7 @@ import com.kaiharimoto.mastertool.core.motion.LeanPose
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.zen.LocalZen
 import com.kaiharimoto.mastertool.core.motion.ZenPhase
+import com.kaiharimoto.mastertool.core.motion.ZenGestures
 import androidx.compose.ui.input.pointer.positionChange
 
 /**
@@ -128,7 +129,11 @@ fun Modifier.cardPointer(
         // In deep zen the cursor stays on the card it is carrying: hovers from the cards it
         // passes over snapped the frame back and forth between them (the jitter kai saw).
         .cursorPointer(
-            caption = if (zenKey != null && neue.zen == ZenPhase.DEEP) "Move" else "Select",
+            caption = when {
+                zenKey == null || neue.zen != ZenPhase.DEEP -> "Select"
+                zenKey in zen.selection && zen.selection.size > 1 -> "Move ${zen.selection.size}"
+                else -> "Move"
+            },
             emphasis = true,
             holdOnPress = zenKey != null && neue.zen == ZenPhase.DEEP,
         )
@@ -140,28 +145,52 @@ fun Modifier.cardPointer(
                 val down = awaitAnyDown()
                 val buttons = currentEvent.buttons
                 val shift = currentEvent.keyboardModifiers.isShiftPressed
-                // Deep zen: the cards are the garden. A press picks one up and puts it
-                // down wherever it is let go; nothing about the deck changes.
+                // Deep zen: the cards are the garden. A press picks one up — or every card
+                // picked out with it — and puts it down wherever it is let go; nothing
+                // about the deck changes (1.0.14 for the picking out: see ZenGestures).
                 if (zenKey != null && neue.zen == ZenPhase.DEEP) {
                     down.consume()
                     if (!buttons.isPrimaryPressed) {
                         spend()
                         return@awaitEachGesture
                     }
-                    zen.holding = zenKey
+                    // A double-click picks out the card's whole block; with Shift, adds it.
+                    val now = down.uptimeMillis
+                    if (now - last[0] < DeskMouse.DOUBLE_CLICK_MS) {
+                        last[0] = 0L
+                        zen.selection = ZenGestures.doubleClick(zen.selection, zen.blockOf(zenKey), shift)
+                        spend()
+                        return@awaitEachGesture
+                    }
+                    last[0] = now
+                    // Past the slop it is a carry; up before it, a click.
+                    val crossed = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() }
+                    if (crossed == null) {
+                        zen.selection = ZenGestures.click(zen.selection, zenKey, shift)
+                        return@awaitEachGesture
+                    }
+                    last[0] = 0L
+                    val group = ZenGestures.carried(zen.selection, zenKey, shift)
+                    zen.selection = ZenGestures.selectionWhileCarrying(zen.selection, zenKey, shift)
+                    zen.carrying = group
+                    // The move is drawn at deep × gather, so it is stored divided by it:
+                    // the card stays under the pointer while zen is still arriving.
+                    fun carry(d: Offset) {
+                        val k = (zen.deep * zen.gather).coerceAtLeast(0.2f)
+                        zen.moveAll(group, d.x / k, d.y / k)
+                    }
                     try {
-                        drag(down.id) { change ->
+                        // The slop itself is part of the move: the card was under the pointer when it was pressed.
+                        carry(crossed.position - down.position)
+                        drag(crossed.id) { change ->
                             val d = change.positionChange()
                             change.consume()
-                            // The move is drawn at deep × gather, so it is stored divided by it:
-                            // the card stays under the pointer while zen is still arriving.
-                            val k = (zen.deep * zen.gather).coerceAtLeast(0.2f)
-                            zen.move(zenKey, d.x / k, d.y / k)
+                            carry(d)
                         }
                     } finally {
-                        zen.holding = null
-                        // Let go: back into its slot, flush beside another card, or where it is.
-                        zen.drop(zenKey)
+                        zen.carrying = emptySet()
+                        // Let go: back into their slots, flush beside another card, or where they are.
+                        zen.dropAll(group, zenKey)
                     }
                     return@awaitEachGesture
                 }

@@ -54,4 +54,12 @@ class DeskMouseTest {
             assertTrue(it.description.first().isUpperCase() && !it.description.endsWith("."), it.description)
         }
     }
+
+    @Test
+    fun theSideSwitchTradesThePoolsTwoAdds() {
+        assertEquals(MouseAction.ADD_TO_SIDE, DeskMouse.forPool(MouseAction.ADD, sideFirst = true))
+        assertEquals(MouseAction.ADD, DeskMouse.forPool(MouseAction.ADD_TO_SIDE, sideFirst = true))
+        assertEquals(MouseAction.VIEW, DeskMouse.forPool(MouseAction.VIEW, sideFirst = true))
+        MouseAction.entries.forEach { assertEquals(it, DeskMouse.forPool(it, sideFirst = false)) }
+    }
 }

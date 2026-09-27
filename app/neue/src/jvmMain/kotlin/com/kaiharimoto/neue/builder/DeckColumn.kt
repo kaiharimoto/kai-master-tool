@@ -51,6 +51,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import com.kaiharimoto.mastertool.core.motion.ZenFloat
+import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.neue.zen.LocalZen
 import com.kaiharimoto.neue.zen.zenQuiet
 import com.kaiharimoto.mastertool.core.input.MouseTarget
@@ -353,8 +354,12 @@ private fun DeckSectionPane(
         publish()
     }
 
+    // In zen a card carried out of this section, or put down beyond it, is drawn over
+    // the sections below it: the pane is as high as its highest card.
+    val paneLayer = if (zen.deep > 0f) ids.indices.maxOfOrNull { zen.layerOf(ZenArrangement.key(section.ordinal, it)) } ?: 0f else 0f
     Column(
         Modifier
+            .zIndex(paneLayer)
             .fillMaxWidth()
             .onGloballyPositioned { coords ->
                 laid.pane = coords.boundsInWindow()
@@ -442,7 +447,7 @@ private fun DeckSectionPane(
                         val drift = zenFloat(zen, section, position, fit.columns, keying.keyAt(position), zen.time)
                         val x = pitchX * (position % fit.columns) + o.x + drift.dx * fit.cardWidth * deep
                         val y = pitchY * (position / fit.columns) + o.y + drift.dy * fit.cardWidth * deep
-                        val lift = drift.lift + if (zen.holding == key) HELD_LIFT else 0f
+                        val lift = drift.lift + if (key in zen.carrying) HELD_LIFT else 0f
                         zenShadow(Rect(x, y, x + fit.cardWidth, y + fit.cardHeight), lift, deep, c.ink)
                     }
                 }
@@ -521,11 +526,12 @@ private fun DeckSectionPane(
                                     val pressed = press.pose()
                                     val deep = zen.deep
                                     val drift = if (deep > 0f) zenFloat(zen, section, position, fit.columns, keyId, zen.time).times(deep) else LeanPose.REST
-                                    val carried = if (zen.holding == zenKey) HELD_LIFT * deep else 0f
+                                    val carried = if (zenKey in zen.carrying) HELD_LIFT * deep else 0f
                                     lean.copy(lift = lean.lift + pressed.lift + carried) + drift
                                 },
                                 format = state.format,
-                                selected = selected,
+                                // In deep zen, the cards picked out to move together.
+                                selected = selected && neue.zen != ZenPhase.DEEP || zen.isSelected(zenKey),
                                 foil = neue.prefs.foil,
                                 marker = key?.let { Marker(it.mark, GroupMarkers.paint(it.paint, c.ink)) },
                             )
@@ -549,7 +555,7 @@ private fun DeckSectionPane(
                 if (ids.isEmpty()) {
                     Box(Modifier.fillMaxSize().zenQuiet(), contentAlignment = Alignment.Center) {
                         Help(
-                            if (section == DeckSection.SIDE) "Shift right-click a card in the pool, or drag it here" else "Right-click a card in the pool, or drag it here",
+                            if ((section == DeckSection.SIDE) != neue.prefs.poolToSide) "Shift right-click a card in the pool, or drag it here" else "Right-click a card in the pool, or drag it here",
                         )
                     }
                 }

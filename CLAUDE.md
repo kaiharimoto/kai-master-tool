@@ -401,7 +401,18 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   another card's edge it snaps flush and joins that block (`ZenSnap`), only a key wakes it, and "Put the cards
   back" comes out in the bottom-right corner. The sand garden that stood behind
   the deck for six releases (spirals, rakes, a sun, `SpiralGarden`) is deleted,
-  on kai's word that it did not look good. `NEUE.md` §3a.
+  on kai's word that it did not look good. **Many cards move as one** (1.0.14):
+  a box dragged over the table, Shift-click and a double-click on a block pick
+  cards out, and a group let go against another card joins its block — the
+  grammar is `ZenGestures`, the arithmetic `ZenPick` and `ZenSnap.snapAll`, all
+  in core with tests. The box is the window's pointer watcher's, and it spends
+  the press so the faded-out pool never hears it. An empty deck has no zen.
+  `NEUE.md` §3a.
+- **The builder opens a deck**: the library's default, else the one saved last
+  (`StartingDeck`). A library row shows up to three chosen covers
+  (`DeckCovers`), and a card's alternate artworks are a picture choice applied
+  inside `NeueCard` (`CardArt`, `LocalArts`) — never a change to the deck.
+  `NEUE.md` §4c–§4d.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
   falling back to the small render. **Card names are stamped in the foil**

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.library.DeckCovers
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
@@ -30,7 +31,8 @@ object CardActions {
 
     /** A mouse gesture on a pool card, as `DeskMouse` resolved it. */
     fun onPool(action: MouseAction, at: Offset, card: Card, row: Int, state: DeckBuilderState, neue: NeueState) {
-        when (action) {
+        // The pool's Side switch trades its two adds.
+        when (DeskMouse.forPool(action, neue.prefs.poolToSide)) {
             MouseAction.SELECT -> neue.selection = Selection.InPool(card, row)
             MouseAction.ADD -> add(state, card)
             MouseAction.ADD_TO_SIDE -> add(state, card, toSide = true)
@@ -70,6 +72,29 @@ object CardActions {
                 neue.viewing = Viewing(card, section, index)
             }
             MouseAction.ADD, MouseAction.ADD_TO_SIDE, MouseAction.INSPECT, MouseAction.PICK_UP -> Unit
+        }
+    }
+
+    /**
+     * The card as one of the deck's covers in the library, or off them (kai,
+     * 1.0.14: up to three, `DeckCovers`). By the passcode in the deck, so an
+     * alternate artwork the deck holds is the picture on its cover.
+     */
+    private fun coverEntry(section: DeckSection, index: Int, state: DeckBuilderState, neue: NeueState): MenuEntry {
+        val deckId = state.deckId
+        val raw = state.deck[section].getOrNull(index)?.value
+        val covers = deckId?.let { neue.prefs.covers[it] }.orEmpty()
+        val on = raw != null && raw in covers
+        return MenuEntry(
+            if (on) "Take off the deck's cover" else "Put on the deck's cover",
+            hint = "${covers.size} of ${DeckCovers.MAX}",
+            enabled = deckId != null && raw != null,
+            separatorBefore = true,
+            reason = "Save the deck first",
+        ) {
+            if (deckId != null && raw != null) {
+                neue.update { p -> p.copy(covers = p.covers + (deckId to DeckCovers.toggle(p.covers[deckId].orEmpty(), raw))) }
+            }
         }
     }
 
@@ -121,6 +146,7 @@ object CardActions {
                 }
             }
             add(MenuEntry("Manage groups", hint = "G") { neue.drawer = Drawer.GROUPS })
+            add(coverEntry(section, index, state, neue))
             add(MenuEntry("Copy name", separatorBefore = true) { copyName(card) })
             add(MenuEntry("Remove this copy", hint = hint(MouseTarget.DECK, MouseAction.REMOVE), danger = true, separatorBefore = true) { state.removeAt(card, section, index) })
             if (state.copiesIn(card.id, section) > 1) {
