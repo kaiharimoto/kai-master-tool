@@ -894,6 +894,19 @@ class DeckBuilderState(
         }
     }
 
+    /**
+     * The deck to a file of the kind asked for: a plain `.ydk`, or a `.ydkx` with
+     * the groups, goals and anything else the deck carries (desktop's Export menu).
+     */
+    fun exportFile(withGroups: Boolean) {
+        scope.launch {
+            val payload = if (withGroups) extendedForWrite() else null
+            val text = YdkCodec.write(deck, createdBy = "kai's master tool", extended = payload)
+            val name = "${deckName.ifBlank { "deck" }}.${if (withGroups) "ydkx" else "ydk"}"
+            if (deps.fileAccess.exportDeck(name, text)) showToast("Exported $name.")
+        }
+    }
+
     fun shareDeck() {
         scope.launch {
             val payload = extendedForWrite()

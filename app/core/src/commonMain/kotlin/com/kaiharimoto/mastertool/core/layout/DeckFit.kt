@@ -22,6 +22,13 @@ data class SectionFitRequest(
     val spacing: Float,
     val collapsed: Boolean = false,
     val chromeHeight: Float = 0f,
+    /**
+     * Width the grid spends on something other than cards and even spacing —
+     * the gaps between a deck's pieces (`GroupPieces`) — taken off the cards
+     * across the row, and height likewise added under them.
+     */
+    val extraWidth: Float = 0f,
+    val extraHeight: Float = 0f,
 )
 
 /** A section's grid, in pixels: what to draw and how much room it takes. */
@@ -119,7 +126,7 @@ object DeckFitter {
             val columns = request.columns.coerceAtLeast(1)
             val perRow = rows[i] / (columns * aspectRatio.toDouble())
             slope += perRow
-            offset += request.spacing * (rows[i] - 1) - perRow * request.spacing * (columns - 1)
+            offset += request.spacing * (rows[i] - 1) - perRow * (request.spacing * (columns - 1) + request.extraWidth) + request.extraHeight
         }
 
         val solved = when {
@@ -131,13 +138,13 @@ object DeckFitter {
 
         val sections = requests.mapIndexed { i, request ->
             val columns = request.columns.coerceAtLeast(1)
-            val cardWidth = ((contentWidth - request.spacing * (columns - 1)) / columns)
+            val cardWidth = ((contentWidth - request.spacing * (columns - 1) - request.extraWidth) / columns)
                 .coerceAtLeast(0f)
             val cardHeight = cardWidth / aspectRatio
             val gridHeight = if (rows[i] <= 0) {
                 0f
             } else {
-                rows[i] * cardHeight + request.spacing * (rows[i] - 1)
+                rows[i] * cardHeight + request.spacing * (rows[i] - 1) + request.extraHeight
             }
             SectionFit(
                 columns = columns,
@@ -200,10 +207,10 @@ object DeckFitter {
             } else {
                 ceil(maxOf(request.count, request.baselineCount).toDouble() / columns).toInt()
             }
-            val cardWidth = ((availableWidth - request.spacing * (columns - 1)) / columns)
+            val cardWidth = ((availableWidth - request.spacing * (columns - 1) - request.extraWidth) / columns)
                 .coerceAtLeast(0f)
             val cardHeight = cardWidth / aspectRatio
-            val gridHeight = if (rows <= 0) 0f else rows * cardHeight + request.spacing * (rows - 1)
+            val gridHeight = if (rows <= 0) 0f else rows * cardHeight + request.spacing * (rows - 1) + request.extraHeight
             SectionFit(
                 columns = columns,
                 rows = rows,

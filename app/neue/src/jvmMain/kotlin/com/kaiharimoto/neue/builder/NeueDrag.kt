@@ -25,10 +25,16 @@ data class GridGeometry(
     val cardHeight: Float,
     val spacing: Float,
     val count: Int,
+    /**
+     * Where each card sits from [origin], when the grid is not even — the deck
+     * in pieces (`GroupPieces`). Null for the plain grid.
+     */
+    val placed: List<Offset>? = null,
 ) {
     fun boxes(): List<ItemBox> = List(count) { i ->
-        val left = origin.x + (i % columns) * (cardWidth + spacing)
-        val top = origin.y + (i / columns) * (cardHeight + spacing)
+        val at = placed?.getOrNull(i)
+        val left = origin.x + (at?.x ?: ((i % columns) * (cardWidth + spacing)))
+        val top = origin.y + (at?.y ?: ((i / columns) * (cardHeight + spacing)))
         ItemBox(i, left, top, left + cardWidth, top + cardHeight)
     }
 }
@@ -62,6 +68,10 @@ class NeueDrag(private val state: DeckBuilderState) {
 
     fun register(section: DeckSection, geometry: GridGeometry) {
         grids[section] = geometry
+    }
+
+    fun unregister(section: DeckSection) {
+        grids.remove(section)
     }
 
     fun registerPool(bounds: Rect) {
@@ -114,7 +124,8 @@ class NeueDrag(private val state: DeckBuilderState) {
                 items = grid.boxes(),
                 cursorX = point.x,
                 cursorY = point.y,
-                rowTolerance = grid.spacing + 8f,
+                // Rows of a deck in pieces sit up to a few gaps apart; a row is still a row.
+                rowTolerance = if (grid.placed != null) grid.cardHeight * 0.45f else grid.spacing + 8f,
                 hysteresis = 12f,
                 previous = previous,
             )

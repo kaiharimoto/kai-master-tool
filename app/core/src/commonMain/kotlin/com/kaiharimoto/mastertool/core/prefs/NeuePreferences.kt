@@ -96,6 +96,8 @@ data class NeuePreferences(
      * deck, and Shift adds to the main (`DeskMouse.forPool`).
      */
     val poolToSide: Boolean = false,
+    /** The extra and side decks under the main deck; off, the main deck has the whole column (1.0.15). */
+    val extraSideVisible: Boolean = true,
 ) {
     fun sanitised(): NeuePreferences = copy(
         scale = if (scale.isFinite()) scale.coerceIn(SCALES.first(), SCALES.last()) else 1f,

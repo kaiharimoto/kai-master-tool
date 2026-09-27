@@ -26,7 +26,7 @@ enum class Page(val numeral: Int?, val title: String) {
     SETTINGS(null, "Settings"),
 }
 
-enum class Drawer { ISSUES, GROUPS }
+enum class Drawer { ISSUES }
 
 /** A toast the shell owns, with at most one action. */
 data class Note(val message: String, val action: String? = null, val id: Long = System.nanoTime(), val onAction: () -> Unit = {})
@@ -102,6 +102,9 @@ class NeueState(
 
     /** Which folded bars the pointer has brought out (`EdgeReveal`). */
     var revealed by mutableStateOf(Revealed.NONE)
+
+    /** Where the Export button is, in the window, so the keyboard opens its menu there too. Plain. */
+    var exportAnchor: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset(640f, 48f)
 
     /** A line at the bottom right that is the app's rather than the deck's: "Saved", "Copied". */
     var note by mutableStateOf<Note?>(null)

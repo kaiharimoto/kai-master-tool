@@ -378,10 +378,17 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   both ways and keeps the larger card. The Groups panel stands beside the deck.
   `NEUE.md` §3 has the budget. The ramp is darker than the kit's in both
   themes, with a High contrast setting.
-- **Groups are tetris blocks** (`GroupBlocks`): with a lens on, one even seam
-  between every card, each group filling its own seams with its colour, paper
-  only between groups. No card moves or shrinks — 1.0.9 shrank cards facing
-  another group and the blocks came out ragged.
+- **Groups break the deck into pieces** (`GroupPieces`, 1.0.15): cards of one
+  group that touch are a piece, flush inside and aligned across rows; each piece
+  shifts as one rigid shape by whole gaps, so there is a gap between any two
+  pieces and none inside one. Pieces are *grown* from row runs, joining upward
+  only where that keeps the shifts solvable — ungrouped cards in a U round a
+  grouped one are the ordinary case, and a whole-deck fallback broke every
+  column. The gaps are declared to `DeckFitter` (`extraWidth`/`extraHeight`), and
+  drops resolve against the placed cards. **The Groups button is the Roles lens
+  and the panel together**; off, the deck is plain. The Roles tab is gone from the
+  lens, and groups are edited on their rows in the panel — the Groups drawer is
+  deleted. `NEUE.md` §3.
 - **The index rail folds away and F11 is immersive mode**, both decided by
   `core/layout/EdgeReveal.kt`; bars come out *over* the page, never pushing it,
   or the deck re-fits and every card jumps. Leaving full screen must go through
@@ -389,6 +396,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   is **a borderless window over the monitor**, swapped in for the decorated one:
   Compose's full screen there is the JDK's exclusive mode, which with Direct3D
   minimised on focus loss and without it kept the title bar (1.0.12, reverted).
+  That window is **not resizable**: Compose puts an invisible resize border on a
+  resizable undecorated window, and it swallowed the reach for the rail.
   Immersive keeps 32 px at the top (`IMMERSIVE_TOP`) and
   centres the deck below it.
 - **Immersive mode has a zen**: idle three seconds and the chrome fades, ten and
@@ -407,7 +416,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   grammar is `ZenGestures`, the arithmetic `ZenPick` and `ZenSnap.snapAll`, all
   in core with tests. The box is the window's pointer watcher's, and it spends
   the press so the faded-out pool never hears it. An empty deck has no zen.
+  `Z` is zen at once. **Groups** in the zen corner breaks the deck into its
+  Roles pieces with a faint prismatic glow round each (`zenGlow`, in
+  `ZenShadows.kt` because it blurs). **Faded is not gone**: in deep zen the pool
+  and inspector are shielded (`ZenShield`) and the deck lifted over them, or the
+  invisible panes answer the pointer. The corner always offers Leave zen.
   `NEUE.md` §3a.
+- **Export is a menu**: `.ydk`, `.ydkx` with groups, a `ydke://` code or a text
+  decklist to the clipboard (`YdkeCodec`, `DeckText` in core). A tip at the
+  bottom of the window opens `above`, or it covers its own control.
 - **The builder opens a deck**: the library's default, else the one saved last
   (`StartingDeck`). A library row shows up to three chosen covers
   (`DeckCovers`), and a card's alternate artworks are a picture choice applied

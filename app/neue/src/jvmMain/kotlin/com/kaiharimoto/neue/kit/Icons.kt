@@ -64,6 +64,13 @@ object Icons {
         "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z",
         circle(12f, 13f, 3f),
     )
+    val Sun = icon(
+        "sun",
+        circle(12f, 12f, 4f),
+        "M12 2v2", "M12 20v2", "m4.93 4.93 1.41 1.41", "m17.66 17.66 1.41 1.41",
+        "M2 12h2", "M20 12h2", "m6.34 17.66-1.41 1.41", "m19.07 4.93-1.41 1.41",
+    )
+    val Moon = icon("moon", "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z")
     val ChevronLeft = icon("chevron-left", "m15 18-6-6 6-6")
     val ChevronRight = icon("chevron-right", "m9 18 6-6-6-6")
     val ArrowUp = icon("arrow-up", "m5 12 7-7 7 7", "M12 19V5")
@@ -71,6 +78,7 @@ object Icons {
     val Pencil = icon("pencil", "M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z", "m15 5 4 4")
     val PanelLeft = icon("panel-left", ROUNDED_SQUARE, "M9 3v18")
     val PanelRight = icon("panel-right", ROUNDED_SQUARE, "M15 3v18")
+    val PanelBottom = icon("panel-bottom", ROUNDED_SQUARE, "M3 15h18")
     val Trash = icon(
         "trash-2",
         "M3 6h18", "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6", "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2", "M10 11v6", "M14 11v6",

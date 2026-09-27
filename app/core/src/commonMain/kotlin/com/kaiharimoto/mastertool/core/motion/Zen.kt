@@ -599,12 +599,13 @@ data class ZenShadow(val dx: Float, val dy: Float, val blur: Float, val alpha: F
 }
 
 /**
- * The bottom-right corner of the window in deep zen, where "put the cards back"
- * comes out: [WIDTH] by [HEIGHT] pixels, which a pointer reaches only on purpose.
+ * The bottom-right corner of the window in deep zen, where "Leave zen", "Groups"
+ * and "put the cards back" come out: [WIDTH] by [HEIGHT] pixels, which a pointer reaches only on purpose.
  */
 object ZenCorner {
-    const val WIDTH = 240f
-    const val HEIGHT = 140f
+    /** Wide enough for its three buttons side by side (1.0.15), and a reach, not a pixel hunt. */
+    const val WIDTH = 440f
+    const val HEIGHT = 180f
 
     fun reaches(x: Float, y: Float, windowWidth: Float, windowHeight: Float): Boolean =
         windowWidth > 0f && windowHeight > 0f && x >= windowWidth - WIDTH && y >= windowHeight - HEIGHT && x <= windowWidth && y <= windowHeight

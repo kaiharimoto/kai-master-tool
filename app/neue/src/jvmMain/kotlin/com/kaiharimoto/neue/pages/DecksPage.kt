@@ -27,6 +27,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
+import com.kaiharimoto.neue.kit.MuDialog
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -72,6 +75,8 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
         decks = deps.deckRepository.all().sortedByDescending { it.entry.updatedAtEpochMs }
     }
     val shown = decks?.filter { filter.isBlank() || it.entry.name.contains(filter.trim(), ignoreCase = true) }
+    // The deck whose covers are being picked (kai, 1.0.15: click the thumbnails).
+    var picking by remember { mutableStateOf<StoredDeck?>(null) }
 
     Column(Modifier.fillMaxSize()) {
         PageHeader(
@@ -112,11 +117,73 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
                                 neue.go(Page.BUILDER)
                             },
                             onDelete = { neue.confirmDelete = stored.entry.id to stored.entry.name },
+                            onCovers = { picking = stored },
                         )
                     }
                 }
                 ScrollbarFor(list)
             }
+        }
+    }
+    picking?.let { stored -> CoverPicker(stored, state, neue) { picking = null } }
+}
+
+/**
+ * Picking a deck's covers (kai, 1.0.15: "select the 3 main cards … using a card
+ * picker by clicking on the thumbnails"): every card in the deck once, main then
+ * extra then side; a click puts it on the cover or takes it off, numbered in the
+ * order it will stand. A fourth lets go of the first (`DeckCovers.toggle`).
+ */
+@Composable
+private fun CoverPicker(stored: StoredDeck, state: DeckBuilderState, neue: NeueState, onDismiss: () -> Unit) {
+    val c = Mu.colors
+    val id = stored.entry.id
+    val deck = stored.entry.deck
+    val cards = remember(deck) { (deck.main + deck.extra + deck.side).distinct() }
+    val chosen = neue.prefs.covers[id].orEmpty()
+    MuDialog(
+        title = "Covers for “${stored.entry.name}”",
+        onDismiss = onDismiss,
+        width = 880.dp,
+        description = "Pick up to three, in the order they should stand. With none, the deck shows its most-played card.",
+        footer = {
+            MuButton("Clear", { neue.update { it.copy(covers = it.covers - id) } }, variant = BtnVariant.GHOST, enabled = chosen.isNotEmpty(), reason = "No covers picked")
+            MuButton("Done", onDismiss, variant = BtnVariant.PRIMARY)
+        },
+    ) {
+        val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+        Box(Modifier.fillMaxWidth().height(460.dp)) {
+            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(96.dp),
+                state = grid,
+                modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(cards.size) { i ->
+                    val raw = cards[i]
+                    val card = state.index.byId(raw)
+                    val order = chosen.indexOf(raw.value)
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(com.kaiharimoto.neue.cards.CARD_RATIO)
+                            .cursorPointer(caption = if (order >= 0) "Take off" else "Cover")
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                                neue.update { p -> p.copy(covers = p.covers + (id to DeckCovers.toggle(p.covers[id].orEmpty(), raw.value))) }
+                            },
+                    ) {
+                        if (card != null) NeueCard(card, Modifier.fillMaxSize(), foil = "off", selected = order >= 0)
+                        else Box(Modifier.fillMaxSize().background(c.ink06))
+                        if (order >= 0) {
+                            Box(Modifier.align(Alignment.TopStart).padding(6.dp).background(c.ink).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                Mono("${order + 1}", color = c.paper)
+                            }
+                        }
+                    }
+                }
+            }
+            ScrollbarFor(grid)
         }
     }
 }
@@ -133,6 +200,7 @@ private fun DeckRow(
     onDefault: () -> Unit,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
+    onCovers: () -> Unit,
 ) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
@@ -158,7 +226,12 @@ private fun DeckRow(
         ) {
             Numeral(n, color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45)
             // Three places, flush like the deck's own mosaic, so every name starts on one line.
-            Row(Modifier.width(COVER_W * DeckCovers.MAX)) {
+            Row(
+                Modifier
+                    .width(COVER_W * DeckCovers.MAX)
+                    .cursorPointer(caption = "Covers")
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onCovers),
+            ) {
                 if (faces.isEmpty()) Box(Modifier.size(COVER_W, COVER_H).background(inner.ink06))
                 faces.forEach { face -> NeueCard(face, Modifier.size(COVER_W, COVER_H), foil = "off") }
             }

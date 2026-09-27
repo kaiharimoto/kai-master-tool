@@ -86,3 +86,22 @@ fun DrawScope.drawFoilName(mask: NameMask, light: Offset, outlined: Boolean) {
         canvas.restore()
     }
 }
+
+/**
+ * The foil switch's symbol (kai, 1.0.15: "a foil border toggle by the groups
+ * button with a shiny symbol in the same foil texture"): a small card, paper
+ * inside an ink edge, with the very foil a card face wears round it when [on] —
+ * its light following [feel], the pointer over the button — and a bare outline
+ * when off.
+ */
+@androidx.compose.runtime.Composable
+fun FoilGlyph(on: Boolean, feel: Offset?, ink: Color, paper: Color, modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier) {
+    androidx.compose.foundation.Canvas(modifier) {
+        drawRect(paper)
+        // The whole glyph is foil — the sheet the stamped names are cut from — because a
+        // card's border band is a pixel wide on a card this small.
+        if (on) with(Holo) { if (!drawHoloSheet(Rect(Offset.Zero, size), feel ?: Offset(-0.4f, -0.6f))) drawFoil(Foils.CLASSIC, feel) }
+        // A 1 dp edge, inside the glyph.
+        drawRect(ink, topLeft = Offset(density / 2f, density / 2f), size = androidx.compose.ui.geometry.Size(size.width - density, size.height - density), style = androidx.compose.ui.graphics.drawscope.Stroke(density))
+    }
+}

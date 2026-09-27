@@ -142,4 +142,19 @@ class DeckFitterTest {
         assertFalse(fit.fits)
         assertTrue(fit.sections.all { it.cardWidth == 0f })
     }
+
+    @Test
+    fun widthAndHeightSpentOnPiecesComeOffTheCardsAndStillFit() {
+        val plain = SectionFitRequest(count = 40, columns = 10, baselineCount = 40, spacing = 0f)
+        val gapped = plain.copy(extraWidth = 30f, extraHeight = 20f)
+        val a = DeckFitter.plan(listOf(plain), 1000f, 600f, 0.686f)
+        val b = DeckFitter.plan(listOf(gapped), 1000f, 600f, 0.686f)
+        val s = b.sections.single()
+        assertTrue(s.cardWidth < a.sections.single().cardWidth)
+        // The row is the cards and the gaps, exactly; the height is spent.
+        assertEquals(b.contentWidth, s.cardWidth * 10 + 30f, 0.01f)
+        assertEquals(s.rows * s.cardHeight + 20f, s.gridHeight, 0.01f)
+        assertTrue(b.fits)
+        assertTrue(b.totalHeight <= 600.5f)
+    }
 }

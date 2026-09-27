@@ -235,6 +235,10 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
             icon = painterResource("icons/neue.png"),
             state = shownState,
             undecorated = full != null,
+            // A borderless window that is resizable gets Compose's own resize border — an
+            // invisible band round the edge that takes the pointer and drags the window.
+            // In immersive that band sat exactly where the rail is revealed from (1.0.15).
+            resizable = full == null,
             onPreviewKeyEvent = h::onKey,
         ) {
             LaunchedEffect(Unit) {

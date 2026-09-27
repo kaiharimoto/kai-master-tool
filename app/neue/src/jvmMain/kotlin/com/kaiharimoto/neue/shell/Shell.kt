@@ -225,10 +225,14 @@ fun Rail(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            MicroLink(if (neue.prefs.theme == NeueTheme.PAPER) "Ink" else "Paper", neue::toggleTheme)
+            // Light and dark, as a light: the sun on paper, the moon on ink (kai, 1.0.15).
+            val paper = neue.prefs.theme == NeueTheme.PAPER
+            Tip(if (paper) "Switch to ink, the dark theme" else "Switch to paper, the light theme", kbd = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.TOGGLE_THEME)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd), above = true) {
+                IconButton(if (paper) Icons.Sun else Icons.Moon, neue::toggleTheme, size = 24.dp, label = if (paper) "Ink" else "Paper")
+            }
             MicroLink("Keys", { neue.helpOpen = true })
             if (!neue.immersive) {
-                Tip(if (neue.prefs.railPinned) "Fold the index away until the pointer reaches the left edge" else "Keep the index out") {
+                Tip(if (neue.prefs.railPinned) "Fold the index away until the pointer reaches the left edge" else "Keep the index out", above = true) {
                     MicroLink(if (neue.prefs.railPinned) "Unpin" else "Pin", { neue.update { it.copy(railPinned = !it.railPinned) } })
                 }
             }

@@ -35,6 +35,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.kaiharimoto.neue.zen.LocalZen
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -86,17 +93,50 @@ fun BuilderPage(
 ) {
     // Immersive: the bar folds out when the pointer reaches the top edge, so the
     // page keeps a strip of paper under it — the deck's first row is not the edge.
+    // Deep zen: the pool and the inspector are faded out, not gone, and a hover, a
+    // click or a wheel on them must not reach them (kai, 1.0.15). Each is shielded,
+    // and the deck is lifted over both, so a card floated over where they were is
+    // still a card under the pointer.
+    val zen = LocalZen.current
+    val asleep by remember { derivedStateOf { zen.deep > 0.5f } }
     Row(Modifier.fillMaxSize().padding(top = if (neue.immersive) IMMERSIVE_TOP else 0.dp)) {
         if (neue.prefs.poolVisible) {
-            PoolPane(state, neue, drag, onSearchEffects, Modifier.width(neue.prefs.poolWidth.dp).fillMaxHeight())
-            ResizeRule("Pool", neue.prefs.poolWidth) { delta -> neue.update(debounce = true) { it.copy(poolWidth = it.poolWidth + delta) } }
+            Box(Modifier.width(neue.prefs.poolWidth.dp).fillMaxHeight()) {
+                PoolPane(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
+                ZenShield(asleep)
+            }
+            Box(Modifier.fillMaxHeight()) {
+                ResizeRule("Pool", neue.prefs.poolWidth) { delta -> neue.update(debounce = true) { it.copy(poolWidth = it.poolWidth + delta) } }
+                ZenShield(asleep)
+            }
         }
-        DeckColumn(state, neue, drag, Modifier.weight(1f).fillMaxHeight())
+        DeckColumn(state, neue, drag, Modifier.weight(1f).fillMaxHeight().zIndex(if (asleep) 1f else 0f))
         if (neue.prefs.inspectorVisible) {
-            ResizeRule("Inspector", neue.prefs.inspectorWidth) { delta -> neue.update(debounce = true) { it.copy(inspectorWidth = it.inspectorWidth - delta) } }
-            Inspector(state, neue, Modifier.width(neue.prefs.inspectorWidth.dp).fillMaxHeight())
+            Box(Modifier.fillMaxHeight()) {
+                ResizeRule("Inspector", neue.prefs.inspectorWidth) { delta -> neue.update(debounce = true) { it.copy(inspectorWidth = it.inspectorWidth - delta) } }
+                ZenShield(asleep)
+            }
+            Box(Modifier.width(neue.prefs.inspectorWidth.dp).fillMaxHeight()) {
+                Inspector(state, neue, Modifier.fillMaxSize())
+                ZenShield(asleep)
+            }
         }
     }
+}
+
+/** Over a pane faded out by deep zen: takes every pointer event, so nothing under it hears one. */
+@Composable
+private fun BoxScope.ZenShield(on: Boolean) {
+    if (!on) return
+    Box(
+        Modifier
+            .matchParentSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) awaitPointerEvent().changes.forEach { it.consume() }
+                }
+            },
+    )
 }
 
 /**
@@ -162,7 +202,11 @@ fun RowScope.BuilderBar(
     Segmented(state.format, Format.entries, { it.name }, onFormat, small = true)
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), !narrow, state::importFromFile)
-    Tool("Export", "Export the deck", Icons.Export, kbd(DeskAction.EXPORT), !narrow, state::exportToFile)
+    Box(Modifier.onGloballyPositioned { neue.exportAnchor = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+        Tool("Export", "Export: a .ydk or .ydkx file, or a YDKe code or a text list to paste", Icons.Export, kbd(DeskAction.EXPORT), !narrow) {
+            neue.menu = com.kaiharimoto.neue.kit.MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
+        }
+    }
     Tool("Screenshot", "A picture of the deck, without the window around it", Icons.Camera, kbd(DeskAction.SCREENSHOT), !narrow, onScreenshot)
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     Tip("Show or hide the pool", kbd = kbd(DeskAction.TOGGLE_POOL)) {

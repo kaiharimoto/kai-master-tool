@@ -61,7 +61,7 @@ import com.kaiharimoto.neue.theme.MuMotion
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Tip(text: String, modifier: Modifier = Modifier, kbd: String? = null, content: @Composable () -> Unit) {
+fun Tip(text: String, modifier: Modifier = Modifier, kbd: String? = null, above: Boolean = false, content: @Composable () -> Unit) {
     TooltipArea(
         tooltip = {
             Inverted {
@@ -79,7 +79,13 @@ fun Tip(text: String, modifier: Modifier = Modifier, kbd: String? = null, conten
         delayMillis = 300,
         // Under the component, below the slot where the family cursor writes its caption
         // (5 px frame + 6 px gap + 20 px caption), so the two never sit on each other.
-        tooltipPlacement = TooltipPlacement.ComponentRect(anchor = Alignment.BottomStart, alignment = Alignment.BottomEnd, offset = DpOffset(0.dp, 36.dp)),
+        // [above], for something at the bottom of the window: below it there is no room,
+        // and a tip pushed back up onto its own button covers it (the rail's Pin, 1.0.15).
+        tooltipPlacement = if (above) {
+            TooltipPlacement.ComponentRect(anchor = Alignment.TopStart, alignment = Alignment.TopEnd, offset = DpOffset(0.dp, (-8).dp))
+        } else {
+            TooltipPlacement.ComponentRect(anchor = Alignment.BottomStart, alignment = Alignment.BottomEnd, offset = DpOffset(0.dp, 36.dp))
+        },
         content = content,
     )
 }

@@ -235,7 +235,11 @@ frame's decorations cannot change while it is showing (`JFrame.setUndecorated`
 throws), so entering and leaving swap windows (`key(full != null)` in `Main.kt`);
 everything the builder knows lives in `NeueHolders`, outside the window, and
 carries across. macOS and Linux keep the window's own full screen, which does
-neither.
+neither. **The borderless window is not resizable** (1.0.15): Compose gives an
+undecorated window that is resizable its own resize border
+(`UndecoratedWindowResizer`), an invisible band round the edge that takes the
+pointer — and at the left edge that band was exactly where the rail comes out,
+so reaching for the rail dragged the window instead.
 In immersive mode the page keeps **32 px of paper at the top** (`IMMERSIVE_TOP`),
 so the deck's own row is out of the bar's reach, and the deck's spare height is
 shared above and below it — centred, not pushed down. Leaving goes
@@ -267,7 +271,7 @@ again for 1.0.10. The exploration behind it measured the column at 1920 × 1080:
 | main strip + lens keys | 45 + 45 | 36 + 36 | **one row, 40**: Groups button, name, count, lens |
 | extra and side strips | 37 each | 28 each | **none** — the names go where the deck has room to spare |
 | padding round each grid | 24 | 12 | 12 |
-| gap between cards | 2 | 0 | 0; with a lens on, tetris blocks |
+| gap between cards | 2 | 0 | 0; with a lens on, the deck in pieces (1.0.15) |
 
 **The section names go in the deck's own empty space** (`core/layout/DeckLabels.kt`).
 A fitted deck is limited by one side and has room along the other: limited by
@@ -277,24 +281,66 @@ the left of their cards, or in a 24 px row over them — and the arrangement tha
 draws the larger card wins. With the pool and the inspector out at 1920 × 1080
 the deck is width-limited, the names take rows, and the rows cost nothing.
 
-**Groups are tetris blocks** (`core/layout/GroupBlocks.kt`, `builder/Regions.kt`),
-kai's picture: "cards in groups flush with no gaps between them, and the groups
-themselves separated from other groups." Every card keeps its place and its size
-— the breakdown never moves a card, and 1.0.9's crack, which shrank a card on
-any side facing another group, left the cards of one block different sizes and
-out of line. Instead, with a lens on, the grid opens one even 6 px seam between
-every pair of cards, and each group fills the seams *inside itself* with its
-colour and reaches 1 px past its edge. The seams between two groups stay paper.
-A group reads as one solid piece, cells and all, and the pieces stand apart.
-With the lens on Deck there are no seams at all and the deck is flush. The
-screenshot export draws the same blocks.
+**Groups break the deck into pieces** (1.0.15, `core/layout/GroupPieces.kt`,
+`builder/Pieces.kt`), kai's picture: "have cards of one group together with no
+gaps, and have it separate from the next group … if cards are in the same group
+across rows, have them be close together with no gap vertically. The end result
+should be a deck broken apart and split into pieces." A **piece** is a set of
+cards of one group that touch in the grid (ungrouped cards are a group of their
+own, so they stay flush with each other). Every card keeps its size and its
+cell; a piece moves as one rigid shape — right by some number of 10 px gaps and
+down by some number — so inside it every card is flush and its rows are aligned,
+and between two pieces there is always at least one gap, along rows and along
+columns. Each piece's shift is the least that keeps it a gap clear of every
+piece to its left and above: the longest path through two orderings.
 
-**The Groups panel stands beside the deck, not over it.** The boxed **Groups**
-button in the deck's top-left corner (or `K`) opens `GroupsPanel` down the
-right: each key of the lens with its count and opening rate, click to isolate,
-right-click a group to edit or delete it, and while a group is being drawn up,
-the draft. It is closed by default (`NeuePreferences.groupsPanel`), because the
-232 px it takes comes off every card when the deck is width-limited.
+Two things about it are load-bearing:
+
+- **Pieces are grown, not found.** The one arrangement no shift can satisfy is a
+  piece on both sides of another — and ungrouped cards in a U round a grouped
+  card are the *ordinary* case, not a rare one (the first version fell back to
+  one-row pieces for the whole deck, and every ungrouped column came apart). So
+  every run along a row starts as a piece, and a run joins the run of its group
+  above it unless that makes such a loop. Only the arm that would close a U
+  stands apart. `GroupPiecesTest` sweeps four hundred random decks: flush inside
+  a piece, a gap between two, and no card over another.
+- **The fitter is told.** The gaps are width and height the cards pay for, so
+  they go to `DeckFitter` as `extraWidth`/`extraHeight` — the same contract as
+  the chrome — and the deck still fits. A drop resolves against where the cards
+  really are (`GridGeometry.placed`), and the insert bar stands at the left of the
+  card it names.
+
+Each piece is outlined 2 px in its group's colour, in the gap round it, so it
+reads as one shape with its colour on it. The lens opens and closes the pieces
+over 320 ms; closing, they close from where they were. The screenshot export
+draws the same pieces.
+
+**The Groups button is the groups** (1.0.15): the Roles lens, the pieces and the
+panel beside the deck, all one switch — kai: "untoggling the groups button
+should hide the groups and gaps between the cards." Off, the deck is plain. The
+Roles tab is gone from the lens, because the user's own groups are what the
+button is for; the tabs — Deck, Archetype, Type, Copies, Legality — are the other
+ways to see the deck in pieces, and `b` walks them. `K` is the button; `G` turns
+it on.
+
+**Beside Groups, the foil switch** (1.0.15): a boxed button the same size carrying
+a small card in the holographic foil itself (`FoilGlyph`, drawn by the same
+`drawFoil` a card face uses, its light following the pointer over the button);
+off, every card face is plain and the glyph is a bare outline. Beside it, a
+panel icon hides the extra and side decks, and the main deck has the whole
+column (`NeuePreferences.extraSideVisible`); a hidden section takes no drops and
+leaves no slots in zen. The row is the deck's and never clips a tab: narrower
+than 720 px it drops the words "Main deck", narrower than 600 px it shortens
+Archetype and Legality and keeps the count only when it is out of range.
+
+**The Groups panel is where groups are edited** (`GroupsPanel`, 288 px beside the
+deck). Every group is a row that can be changed where it stands: its name is a
+field (written on Enter or on leaving it, so one rename is one undo), its colour
+six swatches, its count and opening rate beside the name, and **Edit cards**, up,
+down and **Delete** as buttons on the row. The colour square isolates the group.
+Right-click a row for the same and more. The Groups drawer that used to hold all
+this — a sidebar over the deck — is deleted: kai, "there's no need for a pop up
+sidebar … we have so much space in the roles column."
 
 The bar keeps the words on Import, Export and Screenshot while it is 1500 px or
 wider and drops to their icons (with their tooltips) below that; the wordmark
@@ -320,6 +366,12 @@ fold shut with a click and stay shut (`NeuePreferences.inspectorFolded`).
 what each has to clear is on `MuColors`). The kit's `.60` meta text and `.25`
 field borders sat at the edge of 4.5:1 and well under the 3:1 a control's
 outline needs.
+
+**The rail's foot** (1.0.15): light and dark is a sun on paper and a moon on ink
+rather than the word; and its tips open *above* it. A tip normally opens under
+its control, clear of the cursor's caption — at the bottom of the window there is
+no room under it, the tip was pushed back up over its own button, and Pin could
+not be clicked (`Tip(above = true)`).
 
 ## 4. Mouse and keyboard
 
@@ -369,6 +421,17 @@ card to the side deck, and Shift, still "the other way", sends it to the main
 (`DeskMouse.forPool`, one function, so the table the help dialog shows stays the
 off state). It is a setting (`NeuePreferences.poolToSide`), and the empty side
 deck's hint follows it.
+
+**Export is a menu** (1.0.15, kai: "a sub option between YDK, YDKX, YDKe Code,
+and a Copied Text list"): the bar's Export, or `Ctrl E`, opens it under the
+button. **YDK file** is the plain list; **YDKX file, with groups** carries the
+groups, goals and anything else the deck holds; **YDKe code** copies the
+`ydke://` line EDOPro and the deck sites paste (`YdkeCodec`: each section's
+passcodes as little-endian 32-bit integers, Base64'd, `!` after each); **Text
+list** copies the decklist as it is posted — `Main Deck (40)`, then `3 Ash
+Blossom & Joyous Spring`, each card once in the order it first appears
+(`DeckText`). Both codecs are in core with tests, the YDKe one round-tripped.
+The palette has all four.
 
 **Three clicks select a field's whole line** (1.0.14), so the search is cleared
 for the next card by typing over it. `MuInput` counts presses on the way down
@@ -451,6 +514,31 @@ In immersive mode, on the builder, doing nothing is a mode too
   card, so a group carried out of the main deck is drawn over the extra deck.
 - **An empty deck has no zen** (1.0.14): with nothing to float, the builder
   stays awake.
+- **Faded out is shielded** (1.0.15). In deep zen the pool and the inspector are
+  still laid out, only transparent — and kai found them still answering the
+  pointer: a hover filled the invisible inspector, a wheel scrolled the invisible
+  pool. Each is now covered by a shield that takes every pointer event, and the
+  deck is lifted above both, so a card floated over where they were is still a
+  card under the pointer. The corner is 440 × 180 and **always** offers
+  **Leave zen**, beside **Groups** and "Put the cards back" when they apply — it
+  used to show nothing at all until a card had been moved, which read as broken.
+- **`Z` is zen, now** (1.0.15, kai: "instantly start zen mode with a one button
+  hotkey"): immersive if it was not — a moment later, so the deck is laid out
+  full screen before it is measured for the middle — and deep at once. Any key
+  brings the builder back, as ever.
+- **The groups, in zen** (1.0.15). **Groups** comes out in the bottom-right
+  corner beside "Put the cards back" when the deck has groups; it breaks the deck
+  into its Roles pieces — the same `GroupPieces` as the builder — over 900 ms,
+  and each piece's outline glows, faintly and prismatically, in its group's
+  colour: a soft band along every edge on the outline, its hue swung up to 22°
+  either way by where it is and by the clock (`GroupMarkers.shimmer`, drawn by
+  `zenGlow` beside the shadows, the one file allowed a blur). Pressed again, the
+  pieces close back into the deck. It starts on when the builder had its groups
+  on. The pieces are centred in the deck's own box whichever way they are, so
+  the deck does not slide when they open, and with them out each card floats with
+  its Roles group. A card carried away leaves its piece: the outline opens where
+  it stood, and closes round the card wherever it is put. Picking and snapping in
+  zen measure the pieces as they are drawn (`ZenLayer.homesNow`).
 - **"Put the cards back"** comes out, faintly, when the pointer goes into the
   window's bottom-right corner (`ZenCorner`, 240 × 140) and something has been
   moved; it draws every card home over a slow beat and forgets the arrangement.
@@ -467,13 +555,10 @@ carried cards settled, with a still mid-gesture and one after.
 
 ### 4a. Groups
 
-Every row of the Groups drawer (`G`) says what can be done to it: the name is a
-field (written on Enter or on leaving it, so one rename is one undo), the colour
-is six swatches, and **Edit cards**, up, down and **Delete** are buttons on the
-row. Delete keeps the cards and offers Undo. On the Roles lens, right-click a key
-in the Groups panel for the same; `Edit groups` sits under `+ New group`. Before this, deleting a
-group meant opening it and finding a link in the lens strip, and kai could not
-tell it was possible.
+Edited in the Groups panel beside the deck (§3), not in a drawer. Delete keeps
+the cards and offers Undo. Before 1.0.9, deleting a group meant opening it and
+finding a link in the lens strip, and kai could not tell it was possible; since
+1.0.15 every control a group has is on its row.
 
 ### 4b. High-resolution art
 
@@ -503,7 +588,10 @@ and clears it from the default and the covers.
 (`DeckCovers`), flush like the deck's own mosaic, in three places whether or not
 they are filled so every name starts on one line. A deck card's menu (hold it)
 has **Put on the deck's cover** / **Take off the deck's cover** with the count;
-a fourth lets go of the first rather than refusing. They are kept by the
+a fourth lets go of the first rather than refusing. **Click the thumbnails** on a
+library row (1.0.15) and a picker opens with every card in the deck once: a
+click puts one on the cover or takes it off, numbered 1–3 in the order they will
+stand, and **Clear** goes back to the most-played card. They are kept by the
 passcode in the deck, so an alternate artwork the deck holds is the picture on
 its cover; a cover that has left the deck is not drawn; none, and the row shows
 the most-played main-deck card as it always did. An unsaved deck has no id to

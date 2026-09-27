@@ -57,6 +57,13 @@ enum class DeskAction {
     ZOOM_RESET,
     TOGGLE_THEME,
 
+    /**
+     * Straight into zen (kai, 1.0.15: "instantly start zen mode with a one button
+     * hotkey"): immersive if it was not, and deep at once rather than after ten
+     * idle seconds. Any key brings the builder back, as ever.
+     */
+    ZEN,
+
     /** Full screen, with every bar folded away until the pointer reaches for it. */
     IMMERSIVE,
     /** A picture of the deck — main, extra and side — with none of the window around it. */
@@ -144,7 +151,8 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("b"), DeskAction.NEXT_LENS, DeskScope.BUILDER, "Next lens"),
         DeskShortcut(KeyChord("b", shift = true), DeskAction.PREVIOUS_LENS, DeskScope.BUILDER, "Previous lens"),
         DeskShortcut(KeyChord("n"), DeskAction.NEW_GROUP, DeskScope.BUILDER, "New group from a selection"),
-        DeskShortcut(KeyChord("g"), DeskAction.GROUPS, DeskScope.BUILDER, "Groups"),
+        DeskShortcut(KeyChord("g"), DeskAction.GROUPS, DeskScope.BUILDER, "Open the groups"),
+        DeskShortcut(KeyChord("z"), DeskAction.ZEN, DeskScope.BUILDER, "Zen, now"),
         DeskShortcut(KeyChord("i"), DeskAction.ISSUES, DeskScope.BUILDER, "Issues"),
 
         DeskShortcut(KeyChord("up"), DeskAction.POOL_PREVIOUS, DeskScope.POOL, "Previous result", allowedInTextInput = true, repeatable = true),

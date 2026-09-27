@@ -55,7 +55,7 @@ import com.kaiharimoto.neue.kit.Strip
 import com.kaiharimoto.neue.theme.Inverted
 import com.kaiharimoto.neue.theme.Mu
 
-/** The right-hand drawers: what is wrong with the deck, and its groups. */
+/** The right-hand drawer: what is wrong with the deck. (The groups are edited beside the deck since 1.0.15.) */
 @Composable
 fun BoxScope.Drawers(state: DeckBuilderState, neue: NeueState) {
     val open = neue.drawer
@@ -63,20 +63,11 @@ fun BoxScope.Drawers(state: DeckBuilderState, neue: NeueState) {
         visible = open != null,
         onDismiss = { neue.drawer = null },
         header = {
-            when (open) {
-                Drawer.GROUPS -> {
-                    H2("Groups")
-                    Small("The roles you drew. They travel with the deck in the .ydkx file.", Modifier.padding(top = 4.dp))
-                }
-                else -> {
-                    H2("Issues")
-                    Small("What stops the deck being legal, then what is worth a look.", Modifier.padding(top = 4.dp))
-                }
-            }
+            H2("Issues")
+            Small("What stops the deck being legal, then what is worth a look.", Modifier.padding(top = 4.dp))
         },
     ) {
         when (open) {
-            Drawer.GROUPS -> Groups(state, neue)
             Drawer.ISSUES -> Issues(state, neue)
             null -> Unit
         }
@@ -126,108 +117,6 @@ private fun Issues(state: DeckBuilderState, neue: NeueState) {
                     }
                 }
             }
-        }
-        ScrollbarFor(scroll)
-    }
-}
-
-/**
- * The groups, where each one can be seen to be editable: its name is a field,
- * its colour is six swatches, and "Edit cards", the arrows and "Delete" are
- * written out on every row rather than hidden behind a menu. Before this, the
- * only way to delete a group was to open it for editing and find a link in the
- * lens strip — kai could not tell it was possible.
- */
-@Composable
-private fun Groups(state: DeckBuilderState, neue: NeueState) {
-    val c = Mu.colors
-    val groups = state.groups.ordered()
-    val scroll = rememberScrollState()
-    Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Small(if (groups.isEmpty()) "No groups yet." else "${groups.size} ${if (groups.size == 1) "group" else "groups"}", Modifier.weight(1f), color = c.ink70)
-                MuButton("New group", {
-                    neue.drawer = null
-                    state.startGroupDraft()
-                }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, icon = Icons.Plus)
-            }
-            Strip("Group") { Micro("In the main deck", color = c.ink45) }
-            groups.forEachIndexed { i, group ->
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.size(14.dp).background(GroupMarkers.hue(group.color)).border(1.dp, c.ink))
-                        // Renamed where it stands: typed freely, written once on Enter or on leaving the field,
-                        // so a name is one step of undo rather than one per letter.
-                        var text by remember(group.id, group.name) { mutableStateOf(group.name) }
-                        fun commit() {
-                            val name = text.trim()
-                            if (name.isNotEmpty() && name != group.name) state.updateGroups { it.upsert(group.copy(name = name)) }
-                            if (name.isEmpty()) text = group.name
-                        }
-                        MuInput(
-                            value = text,
-                            onValueChange = { text = it },
-                            placeholder = "Name it",
-                            dense = true,
-                            onFocusChange = { focused ->
-                                state.onTextFieldFocusChanged(focused)
-                                if (!focused) commit()
-                            },
-                            onSubmit = ::commit,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Mono(state.groups.countIn(state.deck[DeckSection.MAIN], group.id).toString(), color = c.ink)
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // Recolour in place: six swatches, the current one framed.
-                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                            GroupMarkers.hues.forEachIndexed { h, hue ->
-                                Tip("Colour ${h + 1}") {
-                                    Box(
-                                        Modifier
-                                            .size(16.dp)
-                                            .background(hue)
-                                            .border(if (group.color == h) 2.dp else 0.dp, if (group.color == h) c.ink else Color.Transparent)
-                                            .cursorPointer(caption = "Pick")
-                                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                                                state.updateGroups { it.upsert(group.copy(color = h)) }
-                                            },
-                                    )
-                                }
-                            }
-                        }
-                        Box(Modifier.weight(1f))
-                        Tip("Choose its cards on the deck: click to add or remove, then Save group") {
-                            MuButton("Edit cards", {
-                                neue.drawer = null
-                                state.editGroup(group)
-                            }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = Icons.Pencil)
-                        }
-                        Tip("Move up") {
-                            IconButton(Icons.ArrowUp, { state.updateGroups { it.reorder(group.id, i - 1) } }, enabled = i > 0, size = 32.dp, label = "Move up", reason = "Already first")
-                        }
-                        Tip("Move down") {
-                            IconButton(Icons.ArrowDown, { state.updateGroups { it.reorder(group.id, i + 1) } }, enabled = i < groups.lastIndex, size = 32.dp, label = "Move down", reason = "Already last")
-                        }
-                        Tip("Delete the group. Its cards stay in the deck") {
-                            MuButton("Delete", { deleteGroup(state, group.id) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Trash)
-                        }
-                    }
-                }
-            }
-            Help(
-                "A group is a role you draw on the deck. Edit cards opens it on the main deck, where a click adds or removes a card. " +
-                    "Hold a card in the deck to put it in a group, and the Roles lens shows them all with their opening odds.",
-                Modifier.padding(24.dp),
-                color = c.ink45,
-            )
         }
         ScrollbarFor(scroll)
     }

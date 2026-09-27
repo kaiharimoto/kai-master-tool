@@ -58,6 +58,38 @@ class ZenLayer {
     var marquee by mutableStateOf<Rect?>(null)
 
     /**
+     * The deck in pieces by its Roles groups, in deep zen (kai, 1.0.15): asked for
+     * from the corner, and on from the start when the builder had its groups on.
+     */
+    var groups by mutableStateOf(false)
+
+    /** How far the pieces have opened, 0..1, following [groups]. Read in layers and draw blocks. */
+    var groupsAmount by mutableFloatStateOf(0f)
+
+    /**
+     * How far each card is from its rest place once zen is deep, by its key: the
+     * part that is always so, and the part the pieces add at full [groupsAmount].
+     * In the deck's pixels. Plain: written by the deck, read when a card is let go.
+     */
+    val pieceBase = HashMap<Int, Offset>()
+    val pieceShift = HashMap<Int, Offset>()
+
+    /**
+     * Every slot as it is in deep zen, with the pieces as open as they are now:
+     * what a card is picked out and snapped against. The deck's pixels are the
+     * window's at rest; the pieces move inside the zen transform, so they go in
+     * before it, as the arrangement's own offsets do.
+     */
+    fun homesNow(): Map<Int, ZenHome> {
+        val k = groupsAmount
+        return homes.mapValues { (key, h) ->
+            val base = pieceBase[key] ?: Offset.Zero
+            val shift = pieceShift[key] ?: Offset.Zero
+            h.copy(x = h.x + base.x + shift.x * k, y = h.y + base.y + shift.y * k)
+        }
+    }
+
+    /**
      * How far home the arrangement is drawn from: 1 where it was left, 0 back in
      * the deck. "Put the cards back" runs it down before it clears the arrangement,
      * so the cards glide home rather than jump.
@@ -77,7 +109,7 @@ class ZenLayer {
 
     /** Card [key] is let go: home, beside another card, or where it is (`ZenSnap`). */
     fun drop(key: Int) {
-        arrangement.drop(key, homes)
+        arrangement.drop(key, homesNow())
         arranged++
     }
 
@@ -89,18 +121,18 @@ class ZenLayer {
 
     /** The cards of [keys], carried by [anchor], let go together (`ZenSnap.snapAll`). */
     fun dropAll(keys: Collection<Int>, anchor: Int) {
-        arrangement.dropAll(keys, anchor, homes)
+        arrangement.dropAll(keys, anchor, homesNow())
         arranged++
     }
 
     /** The card drawn on top at a window point, or null for the table. */
-    fun pickAt(point: Offset): Int? = ZenPick.at(point.x, point.y, homes, arrangement, stage, deck.center.x, deck.center.y)
+    fun pickAt(point: Offset): Int? = ZenPick.at(point.x, point.y, homesNow(), arrangement, stage, deck.center.x, deck.center.y)
 
     /** Every card a box over the window touches. */
-    fun within(box: Rect): Set<Int> = ZenPick.within(box.left, box.top, box.right, box.bottom, homes, arrangement, stage, deck.center.x, deck.center.y)
+    fun within(box: Rect): Set<Int> = ZenPick.within(box.left, box.top, box.right, box.bottom, homesNow(), arrangement, stage, deck.center.x, deck.center.y)
 
     /** Card [key]'s whole block, as the garden has it now. */
-    fun blockOf(key: Int): Set<Int> = arrangement.blockOf(key, homes)
+    fun blockOf(key: Int): Set<Int> = arrangement.blockOf(key, homesNow())
 
     fun isSelected(key: Int): Boolean = key in selection
 

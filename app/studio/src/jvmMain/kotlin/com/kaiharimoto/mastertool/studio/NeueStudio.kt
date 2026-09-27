@@ -109,6 +109,7 @@ fun neueMain(args: Array<String>) {
                 println("[neue-studio] saved as $id; covers ${h.neue.prefs.covers[id]}; default ${h.neue.prefs.defaultDeckId}")
             }
             if (map["side"] == "true") h.neue.update { it.copy(poolToSide = true) }
+            if (map["extraside"] == "false") h.neue.update { it.copy(extraSideVisible = false) }
             // --art=auto: the first main-deck card printed with more than one artwork, selected,
             // with its second artwork chosen — the inspector shows "Art 2 of n" and the deck the picture.
             if (map["art"] == "auto") {
@@ -151,9 +152,10 @@ fun neueMain(args: Array<String>) {
                 h.neue.revealed = com.kaiharimoto.mastertool.core.layout.Revealed(left = "left" in parts, top = "top" in parts, bottom = "bottom" in parts)
             }
             if (map["palette"] == "true") h.neue.paletteOpen = true
-            if (map["groups"] == "true") h.neue.update { it.copy(groupsPanel = true) }
+            // --groups: the Groups button pressed — the Roles lens, the deck in pieces, the panel.
+            if (map["groups"] == "true") h.setGroups(true)
             if (map["help"] == "true") h.neue.helpOpen = true
-            map["drawer"]?.let { h.neue.drawer = if (it == "groups") Drawer.GROUPS else Drawer.ISSUES }
+            map["drawer"]?.let { h.neue.drawer = Drawer.ISSUES }
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())
             map["zen"]?.let { phase ->
@@ -162,6 +164,12 @@ fun neueMain(args: Array<String>) {
                 h.neue.zen = if (phase == "quiet") com.kaiharimoto.mastertool.core.motion.ZenPhase.QUIET else com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
                 // The fades take under three seconds; then the float runs for as long as asked.
                 clock.run(((map["zen-seconds"] ?: "4").toFloat() * 60).toInt())
+                // --zen-groups=true|false: the corner's Groups toggle, pressed, and time for the pieces to open.
+                map["zen-groups"]?.let { on ->
+                    h.zen.groups = on == "true"
+                    clock.run(90)
+                    println("[neue-studio] zen groups ${h.zen.groups}, amount ${h.zen.groupsAmount}")
+                }
                 // --zen-moves=0:12,6;1:1150,15: carry main-deck card N by dx,dy (window pixels, at
                 // rest scale) and let it go, as a hand would; where it settled is logged.
                 map["zen-moves"]?.let { spec ->

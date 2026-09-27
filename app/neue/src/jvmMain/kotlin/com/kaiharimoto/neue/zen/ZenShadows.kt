@@ -36,3 +36,37 @@ fun DrawScope.zenShadow(card: Rect, lift: Float, amount: Float, ink: Color) {
     }
     paint.close()
 }
+
+/**
+ * A Roles piece's outline in deep zen, glowing (kai, 1.0.15: "have the color
+ * slightly glow in a prismatic way in the assigned color around the border of
+ * the card group subtly"): along each of [card]'s [sides] that is on the outline
+ * — left, top, right, bottom — a soft band of the group's [color], its hue
+ * swung a little either way by where it is and by [time]
+ * (`GroupMarkers.shimmer`), so the light runs round a piece rather than sitting
+ * on it. A blur, so it lives here with the shadows, the one file allowed one.
+ */
+fun DrawScope.zenGlow(card: Rect, sides: BooleanArray, color: Color, amount: Float, time: Float, cardWidth: Float) {
+    if (amount <= 0.001f || card.width <= 0f) return
+    val band = (cardWidth * 0.035f).coerceAtLeast(2f)
+    val paint = Paint().apply {
+        isAntiAlias = true
+        maskFilter = MaskFilter.makeBlur(FilterBlurMode.NORMAL, band * 1.4f)
+    }
+    val strips = arrayOf(
+        org.jetbrains.skia.Rect.makeLTRB(card.left - band, card.top - band, card.left, card.bottom + band),
+        org.jetbrains.skia.Rect.makeLTRB(card.left - band, card.top - band, card.right + band, card.top),
+        org.jetbrains.skia.Rect.makeLTRB(card.right, card.top - band, card.right + band, card.bottom + band),
+        org.jetbrains.skia.Rect.makeLTRB(card.left - band, card.bottom, card.right + band, card.bottom + band),
+    )
+    drawIntoCanvas { canvas ->
+        for (s in 0..3) {
+            if (!sides[s]) continue
+            val r = strips[s]
+            val phase = time * 1.3f + (r.left + r.top) / (cardWidth * 1.7f)
+            paint.color = com.kaiharimoto.neue.cards.GroupMarkers.shimmer(color, phase).copy(alpha = 0.62f * amount).toArgb()
+            canvas.nativeCanvas.drawRect(r, paint)
+        }
+    }
+    paint.close()
+}

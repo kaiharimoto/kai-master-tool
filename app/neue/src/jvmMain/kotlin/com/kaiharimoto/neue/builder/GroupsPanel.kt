@@ -49,6 +49,7 @@ import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Icons
+import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.Micro
@@ -63,16 +64,13 @@ import com.kaiharimoto.neue.kit.percent
 import com.kaiharimoto.neue.theme.Mu
 
 /** How wide the Groups panel is, beside the deck: declared to the fitter, which takes it off the cards. */
-val GROUPS_PANEL: Dp = 232.dp
+val GROUPS_PANEL: Dp = 288.dp
 
 /**
- * The lens's keys, down the right of the deck: each group (or archetype, or
- * type — whatever the lens partitions by) with its count and its opening rate.
- * Click one to isolate it.
- *
- * It was a row over the main deck until kai asked for it to take no row at all:
- * opened by the boxed **Groups** button in the deck's corner (or K), it stands
- * beside the cards, where the deck has width to spare more often than height.
+ * The user's groups, down the right of the deck, each editable where it stands:
+ * name, colour, count and opening rate, and Edit cards, reorder and Delete on the
+ * row (1.0.15). Opened with the deck's pieces by the boxed **Groups** button (or
+ * K): the Roles lens and this panel are one switch.
  *
  * While a group is being drawn up the panel becomes the draft: its name, its
  * colour, how many cards are in it, and Save. Clicks on the main deck add and
@@ -128,73 +126,130 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
             return@Column
         }
 
-        Micro(state.lens.displayName, color = c.ink70)
+        // The groups themselves, each editable where it stands (kai, 1.0.15: "editing the
+        // groups should be more accessible because that's what the roles tab is primarily
+        // for"): its name is a field, its colour six swatches, and Edit cards, the arrows
+        // and Delete are on the row. The drawer that used to hold all this is gone.
+        val groups = state.groups.ordered()
         val keying = state.keying(DeckSection.MAIN)
         val odds = LensOdds.atLeastOne(keying, state.deck.main.size)
-        if (keying.keys.isEmpty()) {
-            Small(
-                when (state.lens) {
-                    Lens.ROLES -> "No groups yet. Press N, or hold a card in the deck."
-                    Lens.DECK -> "Choose a lens to see the deck in parts: your groups, archetypes, types."
-                    else -> "Nothing to show."
-                },
-                color = c.ink70,
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Micro("Groups", Modifier.weight(1f), color = c.ink70)
+            MicroLink("+ New group", { state.startGroupDraft() })
+        }
+        if (groups.isEmpty()) {
+            Small("No groups yet. Press N, or hold a card in the deck and choose New group from this card.", color = c.ink70)
+        }
+        groups.forEachIndexed { i, group ->
+            GroupRow(
+                state = state,
+                neue = neue,
+                group = group,
+                count = keying.countOf(group.id),
+                odds = odds[group.id],
+                first = i == 0,
+                last = i == groups.lastIndex,
+                index = i,
             )
         }
-        keying.keys.forEach { key ->
-            val isolated = state.isolatedKey == key.id
-            val source = remember(key.id) { MutableInteractionSource() }
-            val hovered by source.collectIsHoveredAsState()
-            // A key on the Roles lens is a group the user drew, and can be changed from here.
-            val group = if (state.lens == Lens.ROLES) state.groups.byId(key.id) else null
-            var at by remember(key.id) { mutableStateOf(Offset.Zero) }
-            Tip(
-                "Isolate ${key.label.lowercase()}. Chance of opening at least one in five cards" +
-                    if (group != null) ". Right-click to edit or delete it" else "",
-            ) {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(32.dp)
-                        .onGloballyPositioned { at = it.positionInWindow() }
-                        .background(animatedColor(if (isolated) c.ink else Color.Transparent))
-                        .border(1.dp, if (isolated || hovered) c.ink else c.ink25)
-                        .hoverable(source)
-                        .cursorPointer(caption = if (isolated) "Show all" else "Isolate")
-                        .onPointerEvent(PointerEventType.Press) { event ->
-                            if (group != null && event.buttons.isSecondaryPressed) {
-                                val p = event.changes.first().position
-                                neue.menu = MenuSpec(
-                                    at + p,
-                                    listOf(
-                                        MenuEntry("Edit cards in “${group.name}”") { state.editGroup(group) },
-                                        MenuEntry("Rename or recolour", hint = "G") { neue.drawer = Drawer.GROUPS },
-                                        MenuEntry("Delete group", danger = true, separatorBefore = true) {
-                                            com.kaiharimoto.neue.shell.deleteGroup(state, group.id)
-                                        },
-                                    ),
-                                )
-                            }
-                        }
-                        .clickable(interactionSource = source, indication = null) { state.toggleIsolation(key.id) }
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Box(Modifier.size(12.dp).background(GroupMarkers.paint(key.paint, c.ink)).border(1.dp, if (isolated) c.paper else c.ink))
-                    Small(key.label, Modifier.weight(1f), color = if (isolated) c.paper else c.ink, maxLines = 1)
-                    Mono(keying.countOf(key.id).toString(), color = if (isolated) c.paper else c.ink70)
-                    odds[key.id]?.let { Mono(percent(it), color = if (isolated) c.paper else c.ink) }
+        if (groups.isNotEmpty()) {
+            Small("Click a colour square to see that group alone. Right-click a group for the rest.", Modifier.padding(top = 4.dp), color = c.ink45)
+        }
+    }
+}
+
+/** One group, editable where it stands. */
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class)
+@Composable
+private fun GroupRow(
+    state: DeckBuilderState,
+    neue: NeueState,
+    group: com.kaiharimoto.mastertool.core.deck.DeckGroup,
+    count: Int,
+    odds: Double?,
+    first: Boolean,
+    last: Boolean,
+    index: Int,
+) {
+    val c = Mu.colors
+    val isolated = state.isolatedKey == group.id
+    val source = remember(group.id) { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    var at by remember(group.id) { mutableStateOf(Offset.Zero) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .onGloballyPositioned { at = it.positionInWindow() }
+            .border(1.dp, if (isolated || hovered) c.ink else c.ink25)
+            .hoverable(source)
+            .onPointerEvent(PointerEventType.Press) { event ->
+                if (event.buttons.isSecondaryPressed) {
+                    neue.menu = MenuSpec(
+                        at + event.changes.first().position,
+                        listOf(
+                            MenuEntry("Edit cards in “${group.name}”") { state.editGroup(group) },
+                            MenuEntry(if (isolated) "Show every group" else "See it alone") { state.toggleIsolation(group.id) },
+                            MenuEntry("Delete group", danger = true, separatorBefore = true) { com.kaiharimoto.neue.shell.deleteGroup(state, group.id) },
+                        ),
+                    )
                 }
             }
+            .padding(start = 8.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // The colour square isolates: the one place on the row that is not an edit.
+            Tip(if (isolated) "Show every group" else "See this group alone. Chance of opening at least one in five cards is on the right") {
+                Box(
+                    Modifier
+                        .size(16.dp)
+                        .background(GroupMarkers.hue(group.color))
+                        .border(if (isolated) 2.dp else 1.dp, c.ink)
+                        .cursorPointer(caption = if (isolated) "Show all" else "Isolate")
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.toggleIsolation(group.id) },
+                )
+            }
+            // Renamed where it stands: written once on Enter or on leaving the field,
+            // so a name is one step of undo rather than one per letter.
+            var text by remember(group.id, group.name) { mutableStateOf(group.name) }
+            fun commit() {
+                val name = text.trim()
+                if (name.isNotEmpty() && name != group.name) state.updateGroups { it.upsert(group.copy(name = name)) }
+                if (name.isEmpty()) text = group.name
+            }
+            MuInput(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = "Name it",
+                dense = true,
+                onFocusChange = { focused ->
+                    state.onTextFieldFocusChanged(focused)
+                    if (!focused) commit()
+                },
+                onSubmit = ::commit,
+                modifier = Modifier.weight(1f),
+            )
+            Mono(count.toString(), color = c.ink70)
+            odds?.let { Mono(percent(it), color = c.ink) }
         }
-        Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (state.lens == Lens.ROLES || state.lens == Lens.DECK) {
-                MicroLink("+ New group", { state.startGroupDraft() })
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            GroupMarkers.hues.forEachIndexed { h, hue ->
+                Box(
+                    Modifier
+                        .size(14.dp)
+                        .background(hue)
+                        .border(if (group.color == h) 2.dp else 0.dp, if (group.color == h) c.ink else Color.Transparent)
+                        .cursorPointer(caption = "Colour")
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                            state.updateGroups { it.upsert(group.copy(color = h)) }
+                        },
+                )
             }
-            if (state.lens == Lens.ROLES && state.groups.groups.isNotEmpty()) {
-                MicroLink("Edit groups", { neue.drawer = Drawer.GROUPS })
-            }
+            Box(Modifier.weight(1f))
+            IconButton(Icons.Pencil, { state.editGroup(group) }, size = 24.dp, label = "Edit cards")
+            IconButton(Icons.ArrowUp, { state.updateGroups { it.reorder(group.id, index - 1) } }, enabled = !first, size = 24.dp, label = "Move up", reason = "Already first")
+            IconButton(Icons.ArrowDown, { state.updateGroups { it.reorder(group.id, index + 1) } }, enabled = !last, size = 24.dp, label = "Move down", reason = "Already last")
+            IconButton(Icons.Trash, { com.kaiharimoto.neue.shell.deleteGroup(state, group.id) }, size = 24.dp, label = "Delete")
         }
     }
 }

@@ -56,6 +56,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
+import com.kaiharimoto.mastertool.core.deck.Lens
+import com.kaiharimoto.neue.builder.LENS_TABS
+import com.kaiharimoto.neue.builder.groupsOn
 import com.kaiharimoto.mastertool.core.motion.ZenPick
 import com.kaiharimoto.mastertool.core.motion.ZenGestures
 import androidx.compose.ui.geometry.Rect
@@ -152,6 +157,10 @@ class NeueHolders(
     /** Anchored surfaces in the window's own layer (a select's list), under the cursor. */
     val overlays = Overlays()
 
+    /** Bumped by the Z key: zen, now (`ZenClockwork` carries it out). */
+    var zenRequest by mutableStateOf(0)
+    var zenWaitsForLayout = false
+
     /** When the person last did anything, in `System.nanoTime`. */
     var lastInput = System.nanoTime()
 
@@ -221,7 +230,7 @@ class NeueHolders(
             DeskAction.REDO -> state.redo()
             DeskAction.NEW_DECK -> { state.newDeck(); neue.go(Page.BUILDER) }
             DeskAction.IMPORT -> { state.importFromFile(); neue.go(Page.BUILDER) }
-            DeskAction.EXPORT -> state.exportToFile()
+            DeskAction.EXPORT -> neue.menu = MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
             DeskAction.FOCUS_SEARCH -> neue.focusSearch()
             DeskAction.POOL_PREVIOUS -> neue.poolCursor = (neue.poolCursor - 1).coerceAtLeast(0)
             DeskAction.POOL_NEXT -> neue.poolCursor = (neue.poolCursor + 1).coerceAtMost((state.results.size - 1).coerceAtLeast(0))
@@ -240,14 +249,24 @@ class NeueHolders(
                 is Selection.InPool -> Viewing(sel.card, null, sel.row)
                 null -> state.results.getOrNull(neue.poolCursor)?.let { Viewing(it, null, neue.poolCursor) }
             }
-            DeskAction.TOGGLE_KEYS -> neue.update { it.copy(groupsPanel = !it.groupsPanel) }
+            DeskAction.TOGGLE_KEYS -> setGroups(!groupsOn(state))
             DeskAction.TOGGLE_INSPECTOR -> neue.update { it.copy(inspectorVisible = !it.inspectorVisible) }
             DeskAction.TOGGLE_POOL -> neue.update { it.copy(poolVisible = !it.poolVisible) }
             DeskAction.TOGGLE_FILTERS -> neue.update { it.copy(filtersOpen = !it.filtersOpen, poolVisible = true) }
-            DeskAction.NEXT_LENS -> state.nextLens()
-            DeskAction.PREVIOUS_LENS -> state.previousLens()
+            DeskAction.NEXT_LENS -> stepLens(1)
+            DeskAction.PREVIOUS_LENS -> stepLens(-1)
             DeskAction.NEW_GROUP -> state.startGroupDraft(seed = (neue.selection as? Selection.InDeck)?.card?.id)
-            DeskAction.GROUPS -> neue.drawer = if (neue.drawer == Drawer.GROUPS) null else Drawer.GROUPS
+            DeskAction.GROUPS -> setGroups(true)
+            DeskAction.ZEN -> if (state.deck.totalCards > 0) {
+                neue.dismissTop()
+                neue.page = Page.BUILDER
+                if (!neue.immersive) {
+                    neue.immersive = true
+                    neue.revealed = Revealed.NONE
+                    zenWaitsForLayout = true
+                }
+                zenRequest++
+            }
             DeskAction.ISSUES -> neue.drawer = if (neue.drawer == Drawer.ISSUES) null else Drawer.ISSUES
             DeskAction.ZOOM_IN -> neue.update { it.zoomedIn() }
             DeskAction.ZOOM_OUT -> neue.update { it.zoomedOut() }
@@ -259,6 +278,31 @@ class NeueHolders(
             }
             DeskAction.SCREENSHOT -> shots.export(builder, neue)
         }
+    }
+
+    /**
+     * The Groups button (1.0.15): the Roles lens and the panel beside the deck,
+     * together — on, the deck breaks into its groups and they can be edited; off,
+     * it is the plain deck again, with no gaps and no colour.
+     */
+    fun setGroups(on: Boolean) {
+        val state = builder
+        if (on) {
+            state.useLens(Lens.ROLES)
+        } else {
+            state.cancelGroupDraft()
+            state.useLens(Lens.DECK)
+        }
+    }
+
+    /** The foil on every card face, on or off (the shiny button beside Groups, 1.0.15). */
+    fun toggleFoil() = neue.update { it.copy(foil = if (it.foil == com.kaiharimoto.neue.cards.Foils.OFF) com.kaiharimoto.neue.cards.Foils.HOLO else com.kaiharimoto.neue.cards.Foils.OFF) }
+
+    /** `b` and Shift `b`: the lens tabs in turn — the Roles lens is the Groups button's, not a tab. */
+    private fun stepLens(by: Int) {
+        val tabs = LENS_TABS
+        val at = tabs.indexOf(builder.lens).coerceAtLeast(0)
+        builder.useLens(tabs[((at + by) % tabs.size + tabs.size) % tabs.size])
     }
 
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
@@ -291,10 +335,17 @@ class NeueHolders(
             cmd("Deck", "New deck", DeskAction.NEW_DECK),
             cmd("Deck", "Import a .ydk or .ydkx", DeskAction.IMPORT),
             cmd("Deck", "Export", DeskAction.EXPORT),
+            Command("Deck", "Export as a .ydk file") { CardActions.export(DeckExportFormat.YDK, builder, neue) },
+            Command("Deck", "Export as a .ydkx file, with groups") { CardActions.export(DeckExportFormat.YDKX, builder, neue) },
+            Command("Deck", "Copy the YDKe code") { CardActions.export(DeckExportFormat.YDKE, builder, neue) },
+            Command("Deck", "Copy the decklist as text") { CardActions.export(DeckExportFormat.TEXT, builder, neue) },
+            Command("Deck", if (neue.prefs.extraSideVisible) "Hide the extra and side decks" else "Show the extra and side decks") { neue.update { it.copy(extraSideVisible = !it.extraSideVisible) } },
+            Command("Deck", if (neue.prefs.foil == com.kaiharimoto.neue.cards.Foils.OFF) "Foil on" else "Foil off") { toggleFoil() },
             cmd("Deck", "Undo", DeskAction.UNDO),
             cmd("Deck", "Redo", DeskAction.REDO),
             cmd("Deck", "Issues", DeskAction.ISSUES),
             cmd("Deck", "Groups", DeskAction.GROUPS),
+            cmd("App", "Zen, now", DeskAction.ZEN),
             cmd("Deck", "New group", DeskAction.NEW_GROUP),
             cmd("Deck", "Next lens", DeskAction.NEXT_LENS),
             Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}") {
@@ -502,7 +553,7 @@ private fun Shell(h: NeueHolders) {
                         when {
                             from == null && deepZen && event.type == PointerEventType.Press && at != null &&
                                 event.buttons.isPrimaryPressed && zen.deck.width > 0f &&
-                                !(zen.corner && !zen.arrangement.isEmpty) && zen.pickAt(at) == null -> {
+                                !zen.corner && zen.pickAt(at) == null -> {
                                 boxFrom = at
                                 boxShift = event.keyboardModifiers.isShiftPressed
                                 boxBase = zen.selection
@@ -669,7 +720,7 @@ private fun Shell(h: NeueHolders) {
         }
         if (h.updates.dialogOpen) UpdateDialog(h.updates)
         if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
-        if (immersive) ZenReset(h.zen, Modifier.align(Alignment.BottomEnd))
+        if (immersive) ZenReset(h.zen, hasGroups = state.groups.groups.isNotEmpty(), onLeave = { h.wake() }, modifier = Modifier.align(Alignment.BottomEnd))
         // The box being dragged over the table in deep zen: a hairline and the faintest wash.
         h.zen.marquee?.let { box ->
             Canvas(Modifier.fillMaxSize()) {
@@ -744,6 +795,34 @@ private fun ZenClockwork(h: NeueHolders) {
             }
         }
     }
+    // Zen's pieces (1.0.15): on from the start when the builder had its groups on, so
+    // the pieces the person was looking at stay open; asked for from the corner otherwise.
+    LaunchedEffect(phase) {
+        if (phase == ZenPhase.DEEP) {
+            val on = h.builder.lens == Lens.ROLES
+            h.zen.groups = on
+            h.zen.groupsAmount = if (on) 1f else 0f
+        } else {
+            h.zen.groups = false
+        }
+    }
+    val pieces = remember { Animatable(0f) }
+    LaunchedEffect(h.zen.groups) {
+        pieces.snapTo(h.zen.groupsAmount)
+        pieces.animateTo(if (h.zen.groups) 1f else 0f, tween(ZEN_PIECES, easing = MuMotion.ease)) { h.zen.groupsAmount = value }
+    }
+    // The Z key (1.0.15): immersive if it was not, and deep at once. A moment first when
+    // immersive is only now coming on, so the deck has been laid out full screen before it
+    // is measured for the middle of it.
+    LaunchedEffect(h.zenRequest) {
+        if (h.zenRequest == 0) return@LaunchedEffect
+        delay(if (h.zenWaitsForLayout) 450 else 0)
+        h.zenWaitsForLayout = false
+        if (neue.immersive && neue.page == Page.BUILDER && h.builder.deck.totalCards > 0) {
+            h.lastInput = System.nanoTime()
+            neue.zen = ZenPhase.DEEP
+        }
+    }
     val floating by remember { derivedStateOf { h.zen.deep > 0f } }
     LaunchedEffect(floating) {
         var last = 0L
@@ -760,6 +839,9 @@ private fun ZenClockwork(h: NeueHolders) {
 private const val ZEN_IN = 1400
 private const val ZEN_DEEP_IN = 2600
 private const val ZEN_OUT = 1600
+
+/** The pieces opening or closing in zen: slow enough to watch the deck come apart. */
+private const val ZEN_PIECES = 900
 
 /** How tall the folded bars were when last laid out, in pixels. Plain fields: only the pointer watcher reads them. */
 private class FoldedBars {

@@ -14,6 +14,9 @@ import com.kaiharimoto.neue.Selection
 import com.kaiharimoto.neue.Viewing
 import com.kaiharimoto.neue.kit.MenuEntry
 import java.awt.Toolkit
+import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
+import com.kaiharimoto.mastertool.core.ydk.DeckText
+import com.kaiharimoto.mastertool.core.ydk.YdkeCodec
 import java.awt.datatransfer.StringSelection
 
 /**
@@ -98,8 +101,42 @@ object CardActions {
         }
     }
 
-    fun copyName(card: Card) {
-        runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(card.name), null) }
+    fun copyName(card: Card) = copy(card.name)
+
+    fun copy(text: String) {
+        runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null) }
+    }
+
+    /**
+     * Export, as kai asked for it in 1.0.15: a file — plain `.ydk`, or `.ydkx` with
+     * the groups — or a line for the clipboard: the `ydke://` code the simulators
+     * and deck sites paste, or the decklist as text.
+     */
+    fun exportMenu(state: DeckBuilderState, neue: NeueState): List<MenuEntry> = DeckExportFormat.entries.map { format ->
+        MenuEntry(
+            format.label,
+            hint = when (format) {
+                DeckExportFormat.YDK -> ".ydk"
+                DeckExportFormat.YDKX -> ".ydkx"
+                else -> "Copies"
+            },
+            separatorBefore = format == DeckExportFormat.YDKE,
+        ) { export(format, state, neue) }
+    }
+
+    fun export(format: DeckExportFormat, state: DeckBuilderState, neue: NeueState) {
+        when (format) {
+            DeckExportFormat.YDK -> state.exportFile(withGroups = false)
+            DeckExportFormat.YDKX -> state.exportFile(withGroups = true)
+            DeckExportFormat.YDKE -> {
+                copy(YdkeCodec.encode(state.deck))
+                neue.note = com.kaiharimoto.neue.Note("YDKe code copied")
+            }
+            DeckExportFormat.TEXT -> {
+                copy(DeckText.write(state.deck) { state.index.byId(it)?.name })
+                neue.note = com.kaiharimoto.neue.Note("Decklist copied as text")
+            }
+        }
     }
 
     fun poolMenu(card: Card, state: DeckBuilderState): List<MenuEntry> {
@@ -145,7 +182,7 @@ object CardActions {
                     add(MenuEntry("Edit “${group.name}”") { state.editGroup(group) })
                 }
             }
-            add(MenuEntry("Manage groups", hint = "G") { neue.drawer = Drawer.GROUPS })
+            add(MenuEntry("Manage groups", hint = "G") { state.useLens(com.kaiharimoto.mastertool.core.deck.Lens.ROLES) })
             add(coverEntry(section, index, state, neue))
             add(MenuEntry("Copy name", separatorBefore = true) { copyName(card) })
             add(MenuEntry("Remove this copy", hint = hint(MouseTarget.DECK, MouseAction.REMOVE), danger = true, separatorBefore = true) { state.removeAt(card, section, index) })

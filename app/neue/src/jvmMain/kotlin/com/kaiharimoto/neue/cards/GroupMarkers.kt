@@ -30,6 +30,22 @@ object GroupMarkers {
     fun hue(index: Int): Color = hues[((index % hues.size) + hues.size) % hues.size]
 
     /**
+     * [color] turned a little way round the colour wheel and back as [phase] runs:
+     * a group's own colour, catching the light the way the foil does (zen's piece
+     * outlines, 1.0.15). At most [SHIMMER] degrees either side, so it never reads
+     * as another group's colour.
+     */
+    fun shimmer(color: Color, phase: Float): Color {
+        val hsv = FloatArray(3)
+        java.awt.Color.RGBtoHSB((color.red * 255).toInt(), (color.green * 255).toInt(), (color.blue * 255).toInt(), hsv)
+        val turn = SHIMMER / 360f * kotlin.math.sin(phase)
+        val rgb = java.awt.Color.HSBtoRGB(((hsv[0] + turn) % 1f + 1f) % 1f, hsv[1], hsv[2])
+        return Color(rgb).copy(alpha = color.alpha)
+    }
+
+    const val SHIMMER = 22f
+
+    /**
      * A lens key's paint. Hues are nominal (the user's roles, archetypes) and
      * take colour; tones and greys are facts, and take an alpha of the ink.
      */
