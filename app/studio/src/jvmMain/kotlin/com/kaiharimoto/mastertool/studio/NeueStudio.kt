@@ -125,12 +125,18 @@ fun neueMain(args: Array<String>) {
                 h.neue.zen = if (phase == "quiet") com.kaiharimoto.mastertool.core.motion.ZenPhase.QUIET else com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
                 // The fades take under three seconds; then the float runs for as long as asked.
                 clock.run(((map["zen-seconds"] ?: "4").toFloat() * 60).toInt())
-                // --zen-move=dx,dy: carry the first main-deck card that far (window pixels, in the
-                // deck's scale) before the still, as a hand arranging the cards would.
-                map["zen-move"]?.let { spec ->
-                    val (dx, dy) = spec.split(",").map { it.toFloat() }
-                    h.zen.move(com.kaiharimoto.mastertool.core.motion.ZenArrangement.key(0, 0), dx, dy)
-                    h.zen.move(com.kaiharimoto.mastertool.core.motion.ZenArrangement.key(0, 11), -dx, dy * 0.5f)
+                // --zen-moves=0:12,6;1:1150,15: carry main-deck card N by dx,dy (window pixels, at
+                // rest scale) and let it go, as a hand would; where it settled is logged.
+                map["zen-moves"]?.let { spec ->
+                    spec.split(";").filter { it.isNotBlank() }.forEach { step ->
+                        val (n, d) = step.split(":")
+                        val (dx, dy) = d.split(",").map { it.toFloat() }
+                        val key = com.kaiharimoto.mastertool.core.motion.ZenArrangement.key(0, n.toInt())
+                        h.zen.move(key, dx, dy)
+                        val result = h.zen.arrangement.drop(key, h.zen.homes)
+                        h.zen.arranged++
+                        println("[neue-studio] zen card $n moved ($dx, $dy): $result, now at ${h.zen.arrangement.offsetOf(key)}")
+                    }
                     clock.run(4)
                 }
                 // --zen-frames=N,K: N stills, K frames apart, for a GIF of the float.

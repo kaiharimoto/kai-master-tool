@@ -122,7 +122,7 @@ class FamilyCursor {
         if (buttonsDown && !pressed) {
             pressed = true
             val (mode, hook) = resolve()
-            if (mode == CursorMode.DRAG || mode == CursorMode.TEXT) locked = hook
+            if (mode == CursorMode.DRAG || mode == CursorMode.TEXT || hook?.holdOnPress == true) locked = hook
         } else if (!buttonsDown && pressed) {
             pressed = false
             locked = null
@@ -146,6 +146,7 @@ class FamilyCursor {
 
 /** A target the cursor knows about: what it is, and where it is. */
 internal class CursorHook {
+    var holdOnPress = false
     var spec by mutableStateOf(CursorTarget(CursorMode.DEFAULT, CursorBox(0f, 0f, 0f, 0f)))
     var bounds by mutableStateOf(Rect.Zero)
 
@@ -179,6 +180,8 @@ fun Modifier.cursor(
     focused: Boolean = false,
     slider: Boolean = false,
     emphasis: Boolean = false,
+    /** Keep the cursor on this target while the button is held, as a drag does: a thing carried under the pointer. */
+    holdOnPress: Boolean = false,
 ): Modifier = composed {
     val cursor = LocalCursor.current ?: return@composed Modifier
     val density = LocalDensity.current
@@ -198,6 +201,7 @@ fun Modifier.cursor(
         slider = slider,
         emphasis = emphasis,
     )
+    hook.holdOnPress = holdOnPress
     DisposableEffect(hook) {
         onDispose {
             cursor.hovered.remove(hook)
@@ -229,6 +233,7 @@ fun Modifier.cursorPointer(
     reason: String? = null,
     /** A card: heavier marks that read on any art. */
     emphasis: Boolean = false,
+    holdOnPress: Boolean = false,
 ): Modifier = cursor(
     mode = if (enabled) CursorMode.POINTER else CursorMode.NO,
     caption = caption,
@@ -236,6 +241,7 @@ fun Modifier.cursorPointer(
     showsWords = showsWords,
     reason = reason,
     emphasis = emphasis,
+    holdOnPress = holdOnPress,
 )
 
 /**

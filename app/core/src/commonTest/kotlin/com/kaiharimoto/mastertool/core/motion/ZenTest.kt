@@ -130,4 +130,60 @@ class ZenTest {
         a.reset()
         assertTrue(!a.isMoved(k))
     }
+
+    private fun homes(): Map<Int, ZenHome> {
+        // Two blocks of two cards, 100 × 146, side by side: block 1 at x 0 and 100, block 2 at 300 and 400.
+        fun at(x: Float, group: Int, col: Int) = ZenHome(x, 0f, 100f, 146f, ZenMembership(group, col, 0))
+        return mapOf(
+            ZenArrangement.key(0, 0) to at(0f, 1, 0),
+            ZenArrangement.key(0, 1) to at(100f, 1, 1),
+            ZenArrangement.key(0, 2) to at(300f, 2, 0),
+            ZenArrangement.key(0, 3) to at(400f, 2, 1),
+        )
+    }
+
+    @Test
+    fun aCardLetGoNearItsSlotGoesBackIn() {
+        val a = ZenArrangement()
+        val k = ZenArrangement.key(0, 0)
+        a.move(k, 20f, 10f)
+        assertEquals(ZenSnap.Result.Home, a.drop(k, homes()))
+        assertTrue(!a.isMoved(k))
+        assertEquals(0, a.layerOf(k))
+    }
+
+    @Test
+    fun aCardLetGoBesideAnotherSnapsFlushAndJoinsItsBlock() {
+        val a = ZenArrangement()
+        val k = ZenArrangement.key(0, 0)
+        // Carried to just right of card 3 (whose right edge is at 500): lands at 510.
+        a.move(k, 510f, 8f)
+        val r = a.drop(k, homes())
+        assertTrue(r is ZenSnap.Result.Beside)
+        assertEquals(500f to 0f, a.offsetOf(k)) // flush: home 0 + 500
+        val m = a.membershipOf(k, ZenMembership(1, 0, 0))
+        assertEquals(ZenMembership(2, 2, 0), m) // block 2, one cell right of card 3
+    }
+
+    @Test
+    fun aSlotAlreadyFilledIsSkipped() {
+        val a = ZenArrangement()
+        val k = ZenArrangement.key(0, 3)
+        // Right of card 1 (x 200) — empty; left of card 2 would be 200 too. Both fine; now fill it.
+        a.move(ZenArrangement.key(0, 2), -100f, 0f) // card 2 now sits at 200
+        a.drop(ZenArrangement.key(0, 2), homes())
+        a.move(k, -200f, 0f) // card 3 carried to 200, onto card 2
+        val r = a.drop(k, homes())
+        assertTrue(r !is ZenSnap.Result.Beside || (r.dx + 400f) != 200f)
+    }
+
+    @Test
+    fun aCardLetGoInTheOpenStaysAndKeepsItsBlock() {
+        val a = ZenArrangement()
+        val k = ZenArrangement.key(0, 0)
+        a.move(k, 0f, 900f)
+        assertEquals(ZenSnap.Result.Free, a.drop(k, homes()))
+        assertTrue(a.isMoved(k))
+        assertEquals(ZenMembership(1, 0, 0), a.membershipOf(k, ZenMembership(1, 0, 0)))
+    }
 }

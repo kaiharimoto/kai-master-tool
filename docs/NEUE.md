@@ -384,8 +384,14 @@ In immersive mode, on the builder, doing nothing is a mode too
   — each lens group, or each section with no lens, drifting as one so it keeps
   its shape — and **flutter like scales**: a slow lean about the diagonal runs
   through each block corner to corner, one diagonal a moment behind the last
-  (`ZenFloat.inBlock`). A card picked up and put down has left its block and
-  floats on its own clock. Everything leans, dreamily, toward the pointer. (Until
+  (`ZenFloat.inBlock`). **A card let go snaps** (`ZenSnap`, 1.0.13): near its
+  own slot it goes back in and rejoins its block; near the edge of another card
+  (left, right, above, below, the slot empty) it snaps flush beside it and joins
+  *that* card's block, one cell over, so cards can be grouped by hand; anywhere
+  else it stays where it was put and keeps floating with its own block, so picking
+  a card up never makes it jump. While a card is carried the family cursor stays
+  on it (`holdOnPress`): the hovers of the cards it passed over used to snap the
+  frame between them, which was the jitter. Everything leans, dreamily, toward the pointer. (Until
   1.0.12 every card drifted its own way, which kai found chaotic.)
 - **The cards are the garden.** kai scrapped the sand garden that stood behind
   the deck for six releases (spirals, rakes, a sun) — "they don't look good" —

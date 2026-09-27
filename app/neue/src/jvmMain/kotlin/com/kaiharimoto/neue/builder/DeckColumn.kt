@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.width
 import com.kaiharimoto.mastertool.core.layout.DeckLabels
 import com.kaiharimoto.mastertool.core.layout.LabelPlace
 import com.kaiharimoto.mastertool.core.motion.ZenArrangement
+import com.kaiharimoto.mastertool.core.motion.ZenHome
+import com.kaiharimoto.mastertool.core.motion.ZenMembership
+import com.kaiharimoto.neue.zen.ZenLayer
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.zen.zenShadow
 import kotlin.math.round
@@ -97,18 +100,20 @@ private val SIDE_PAD = 16.dp
 private val RULE = 1.dp
 
 /**
- * How card [position] floats in zen (kai, 1.0.12: "float in groups until the
- * user breaks alignment … flutter diagonally like scales"): with its block —
- * its lens group, or its section when there is no lens — drifting as one and
- * fluttering corner to corner; or, once it has been picked up and put down, on
- * its own clock.
+ * How card [position] floats in zen (kai, 1.0.12: "float in groups … flutter
+ * diagonally like scales"): with its block — its lens group, or its section
+ * when there is no lens — drifting as one and fluttering corner to corner. A
+ * card put down beside another joins that card's block (1.0.14, `ZenSnap`); one
+ * set down on its own keeps floating with its own, so it never jumps.
  */
-private fun zenFloat(section: DeckSection, position: Int, columns: Int, keyId: String?, moved: Boolean, seconds: Float): LeanPose =
-    if (moved) {
-        ZenFloat.pose(section.ordinal * 100 + position, seconds)
-    } else {
-        ZenFloat.inBlock(section.ordinal * 7_919 + (keyId?.hashCode() ?: 0), position % columns, position / columns, seconds)
-    }
+private fun zenFloat(zen: ZenLayer, section: DeckSection, position: Int, columns: Int, keyId: String?, seconds: Float): LeanPose {
+    val m = zen.membershipOf(ZenArrangement.key(section.ordinal, position), homeBlock(section, position, columns, keyId))
+    return ZenFloat.inBlock(m.group, m.col, m.row, seconds)
+}
+
+/** The block a card floats with in its own slot, and its cell there. */
+private fun homeBlock(section: DeckSection, position: Int, columns: Int, keyId: String?): ZenMembership =
+    ZenMembership(section.ordinal * 7_919 + (keyId?.hashCode() ?: 0), position % columns, position / columns)
 
 /** How much higher a card being carried in zen floats than its neighbours, in card widths. */
 private const val HELD_LIFT = 0.1f
@@ -397,7 +402,21 @@ private fun DeckSectionPane(
                     .size(contentWidth, gridHeight)
                     .onGloballyPositioned { coords ->
                         val at = coords.positionInWindow()
-                        if (zen.deep == 0f) laid.restOrigin = at
+                        if (zen.deep == 0f) {
+                            laid.restOrigin = at
+                            // Every card's slot at rest, for a card let go in zen to snap back to or beside.
+                            val keysHere = zen.homes.keys.filter { it / 1_000 == section.ordinal }
+                            keysHere.forEach { zen.homes.remove(it) }
+                            ids.indices.forEach { p ->
+                                zen.homes[ZenArrangement.key(section.ordinal, p)] = ZenHome(
+                                    x = at.x + pitchX * (p % fit.columns),
+                                    y = at.y + pitchY * (p / fit.columns),
+                                    width = fit.cardWidth,
+                                    height = fit.cardHeight,
+                                    membership = homeBlock(section, p, fit.columns, keying.keyAt(p)),
+                                )
+                            }
+                        }
                         // Only the cards: an empty side deck is not part of the stone.
                         if (ids.isNotEmpty()) onGrid(Rect(at.x, at.y, at.x + coords.size.width, at.y + fit.gridHeight)) else onGrid(Rect.Zero)
                         laid.grid = GridGeometry(
@@ -420,7 +439,7 @@ private fun DeckSectionPane(
                     ids.indices.forEach { position ->
                         val key = ZenArrangement.key(section.ordinal, position)
                         val o = zen.offsetOf(key)
-                        val drift = zenFloat(section, position, fit.columns, keying.keyAt(position), zen.isMoved(key), zen.time)
+                        val drift = zenFloat(zen, section, position, fit.columns, keying.keyAt(position), zen.time)
                         val x = pitchX * (position % fit.columns) + o.x + drift.dx * fit.cardWidth * deep
                         val y = pitchY * (position / fit.columns) + o.y + drift.dy * fit.cardWidth * deep
                         val lift = drift.lift + if (zen.holding == key) HELD_LIFT else 0f
@@ -501,7 +520,7 @@ private fun DeckSectionPane(
                                     val lean = if (held) LeanPose.REST else motion.poseAt(Offset(o.x + left + moved.x + fit.cardWidth / 2f, o.y + top + moved.y + fit.cardHeight / 2f))
                                     val pressed = press.pose()
                                     val deep = zen.deep
-                                    val drift = if (deep > 0f) zenFloat(section, position, fit.columns, keyId, zen.isMoved(zenKey), zen.time).times(deep) else LeanPose.REST
+                                    val drift = if (deep > 0f) zenFloat(zen, section, position, fit.columns, keyId, zen.time).times(deep) else LeanPose.REST
                                     val carried = if (zen.holding == zenKey) HELD_LIFT * deep else 0f
                                     lean.copy(lift = lean.lift + pressed.lift + carried) + drift
                                 },

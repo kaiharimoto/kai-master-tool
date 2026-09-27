@@ -397,7 +397,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   kai's one exception to "no shadows", in `neue/zen/ZenShadows.kt` alone, which
   the law test enforces. **The cards are the garden**: in deep zen the pointer
   picks any card up and puts it down anywhere (`ZenArrangement`, a picture only
-  — the deck's order never changes), only a key wakes it, and "Put the cards
+  — the deck's order never changes); let go near its slot it goes back, near
+  another card's edge it snaps flush and joins that block (`ZenSnap`), only a key wakes it, and "Put the cards
   back" comes out in the bottom-right corner. The sand garden that stood behind
   the deck for six releases (spirals, rakes, a sun, `SpiralGarden`) is deleted,
   on kai's word that it did not look good. `NEUE.md` §3a.

@@ -125,7 +125,13 @@ fun Modifier.cardPointer(
             size = it.size
         }
         // A click selects; in deep zen a press carries the card instead.
-        .cursorPointer(caption = if (zenKey != null && neue.zen == ZenPhase.DEEP) "Move" else "Select", emphasis = true)
+        // In deep zen the cursor stays on the card it is carrying: hovers from the cards it
+        // passes over snapped the frame back and forth between them (the jitter kai saw).
+        .cursorPointer(
+            caption = if (zenKey != null && neue.zen == ZenPhase.DEEP) "Move" else "Select",
+            emphasis = true,
+            holdOnPress = zenKey != null && neue.zen == ZenPhase.DEEP,
+        )
         .onPointerEvent(PointerEventType.Enter) { neue.hovered = heldCard }
         .onPointerEvent(PointerEventType.Exit) { if (neue.hovered == heldCard) neue.hovered = null }
         .pointerInput(dragEnabled, from) {
@@ -154,6 +160,8 @@ fun Modifier.cardPointer(
                         }
                     } finally {
                         zen.holding = null
+                        // Let go: back into its slot, flush beside another card, or where it is.
+                        zen.drop(zenKey)
                     }
                     return@awaitEachGesture
                 }

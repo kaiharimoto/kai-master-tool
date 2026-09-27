@@ -13,6 +13,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import com.kaiharimoto.mastertool.core.motion.ZenArrangement
+import com.kaiharimoto.mastertool.core.motion.ZenHome
+import com.kaiharimoto.mastertool.core.motion.ZenMembership
 import com.kaiharimoto.mastertool.core.motion.ZenStage
 
 /**
@@ -58,6 +60,18 @@ class ZenLayer {
         arrangement.move(key, dx, dy)
         arranged++
     }
+
+    /** Every card's slot at rest, in window pixels, and the block it floats with there: what a drop snaps to. Plain. */
+    val homes = HashMap<Int, ZenHome>()
+
+    /** Card [key] is let go: home, beside another card, or where it is (`ZenSnap`). */
+    fun drop(key: Int) {
+        arrangement.drop(key, homes)
+        arranged++
+    }
+
+    /** The block card [key] floats with, and its cell there. */
+    fun membershipOf(key: Int, home: ZenMembership): ZenMembership = if (arranged < 0) home else arrangement.membershipOf(key, home)
 
     /** Whether card [key] has been moved out of its block. */
     fun isMoved(key: Int): Boolean = arranged >= 0 && arrangement.isMoved(key)

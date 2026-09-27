@@ -183,6 +183,37 @@ object ZenFloat {
 class ZenArrangement {
     private val moved = HashMap<Int, Pair<Float, Float>>()
     private val order = HashMap<Int, Int>()
+    private val joined = HashMap<Int, ZenMembership>()
+
+    /**
+     * Which block card [key] floats with and where in it: the one it was put
+     * down beside, else [home] — its own block, which it keeps floating with even
+     * when set down on its own, so picking a card up never makes it jump.
+     */
+    fun membershipOf(key: Int, home: ZenMembership): ZenMembership = joined[key] ?: home
+
+    /**
+     * Card [key] is let go: back into its own slot if it is near it, flush beside
+     * another card if it is near one of that card's edges (and floating with that
+     * card's block from then on), or left where it is ([ZenSnap]).
+     */
+    fun drop(key: Int, homes: Map<Int, ZenHome>): ZenSnap.Result {
+        val result = ZenSnap.snap(key, this, homes)
+        when (result) {
+            ZenSnap.Result.Home -> {
+                moved.remove(key)
+                order.remove(key)
+                joined.remove(key)
+            }
+            is ZenSnap.Result.Beside -> {
+                moved[key] = result.dx to result.dy
+                joined[key] = result.membership
+            }
+            ZenSnap.Result.Free -> joined.remove(key)
+        }
+        version++
+        return result
+    }
 
     /** Whether card [key] has been picked up and put down: it has left its block and floats on its own. */
     fun isMoved(key: Int): Boolean = key in moved
@@ -212,12 +243,80 @@ class ZenArrangement {
         if (moved.isEmpty()) return
         moved.clear()
         order.clear()
+        joined.clear()
         version++
     }
 
     companion object {
         /** The key for card [index] of section [section] (its ordinal): unique while a section holds under a thousand. */
         fun key(section: Int, index: Int): Int = section * 1_000 + index
+    }
+}
+
+/** Where card sits in the deck at rest (window pixels, before zen's transform), and the block it floats with there. */
+data class ZenHome(val x: Float, val y: Float, val width: Float, val height: Float, val membership: ZenMembership)
+
+/** A block to float with ([group], as `ZenFloat.group` takes it) and a card's cell in it, for the scales' flutter. */
+data class ZenMembership(val group: Int, val col: Int, val row: Int)
+
+/**
+ * Where a card let go in deep zen settles (kai, 1.0.14: "allow me to snap it
+ * back in and group cards together"). In order:
+ *
+ * 1. **Home**: within [RADIUS] of a card width of its own slot, it goes back in,
+ *    flush, and floats with its block again.
+ * 2. **Beside**: within [RADIUS] of the slot flush against another card's edge
+ *    — left, right, above, below, the slot empty — it snaps there and joins that
+ *    card's block, one cell over, so the two float and flutter as one.
+ * 3. **Free**: anywhere else it stays where it was put.
+ */
+object ZenSnap {
+    /** How near, as a fraction of the card's width, counts as reaching a slot. */
+    const val RADIUS = 0.35f
+
+    sealed interface Result {
+        data object Home : Result
+        data object Free : Result
+        data class Beside(val target: Int, val dx: Float, val dy: Float, val membership: ZenMembership) : Result
+    }
+
+    fun snap(key: Int, arrangement: ZenArrangement, homes: Map<Int, ZenHome>): Result {
+        val home = homes[key] ?: return Result.Free
+        val (ox, oy) = arrangement.offsetOf(key)
+        val reach = RADIUS * home.width
+        if (kotlin.math.hypot(ox, oy) < reach) return Result.Home
+        val px = home.x + ox
+        val py = home.y + oy
+        // Where every other card is drawn now.
+        val drawn = homes.filterKeys { it != key }.mapValues { (k, h) ->
+            val (dx, dy) = arrangement.offsetOf(k)
+            (h.x + dx) to (h.y + dy)
+        }
+        var best: Result.Beside? = null
+        var bestDistance = reach
+        for ((other, spot) in drawn) {
+            val target = homes.getValue(other)
+            val (qx, qy) = spot
+            val slots = listOf(
+                Triple(qx + target.width, qy, 1 to 0),
+                Triple(qx - home.width, qy, -1 to 0),
+                Triple(qx, qy + target.height, 0 to 1),
+                Triple(qx, qy - home.height, 0 to -1),
+            )
+            for ((sx, sy, step) in slots) {
+                val d = kotlin.math.hypot(px - sx, py - sy)
+                if (d >= bestDistance) continue
+                // A slot another card already fills is not a slot.
+                val taken = drawn.any { (k, at) ->
+                    k != other && kotlin.math.abs(at.first - sx) < home.width / 2f && kotlin.math.abs(at.second - sy) < home.height / 2f
+                }
+                if (taken) continue
+                val their = arrangement.membershipOf(other, target.membership)
+                bestDistance = d
+                best = Result.Beside(other, sx - home.x, sy - home.y, ZenMembership(their.group, their.col + step.first, their.row + step.second))
+            }
+        }
+        return best ?: Result.Free
     }
 }
 
