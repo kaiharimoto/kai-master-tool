@@ -50,7 +50,12 @@ class MasterUiLawTest {
 
     @Test
     fun noDepth() = assertNone(
-        scan("§1 law 3 · no shadows or blur", Regex("""\.shadow\(|shadowElevation|\.blur\(|BlurEffect|elevation\s*=""")),
+        // kai's one exception: a card floating in zen casts a shadow, drawn in that file alone.
+        scan(
+            "§1 law 3 · no shadows or blur",
+            Regex("""\.shadow\(|shadowElevation|\.blur\(|BlurEffect|MaskFilter\.makeBlur|elevation\s*="""),
+            allowIn = setOf("ZenShadows.kt"),
+        ),
     )
 
     @Test

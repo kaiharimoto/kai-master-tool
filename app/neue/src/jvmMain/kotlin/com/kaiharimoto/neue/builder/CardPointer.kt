@@ -39,6 +39,9 @@ import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.motion.DeskLean
 import com.kaiharimoto.mastertool.core.motion.LeanPose
 import com.kaiharimoto.neue.NeueState
+import com.kaiharimoto.neue.zen.LocalZen
+import com.kaiharimoto.mastertool.core.motion.ZenPhase
+import androidx.compose.ui.input.pointer.positionChange
 
 /**
  * A card being pressed: how far through a hold it is, 0..1, so the card can
@@ -75,6 +78,8 @@ fun rememberPress(): Press {
  *   drag, which lifts the card off the page), or [DeskMouse.HOLD_MS] of
  *   stillness (a hold).
  * - A second press within [DeskMouse.DOUBLE_CLICK_MS] is a double-click.
+ * - In deep zen a primary press on a card with a [zenKey] is none of these: it
+ *   carries the card, freely, and puts it down where it is let go.
  * - A secondary press is a right-click if it comes up before [DeskMouse.HOLD_MS]
  *   and a right-hold if it does not — so a right-click fires on release, the
  *   one moment it is known not to be a hold. Shift is read at the press.
@@ -99,7 +104,10 @@ fun Modifier.cardPointer(
     press: Press,
     onAction: (MouseAction, Offset) -> Unit,
     dragEnabled: Boolean = true,
+    /** The card's name in zen's arrangement, for a card that may be moved freely in deep zen. */
+    zenKey: Int? = null,
 ): Modifier {
+    val zen = LocalZen.current
     var origin by remember { mutableStateOf(Offset.Zero) }
     var size by remember { mutableStateOf(IntSize.Zero) }
     val last = remember { longArrayOf(0L) }
@@ -126,6 +134,29 @@ fun Modifier.cardPointer(
                 val down = awaitAnyDown()
                 val buttons = currentEvent.buttons
                 val shift = currentEvent.keyboardModifiers.isShiftPressed
+                // Deep zen: the cards are the garden. A press picks one up and puts it
+                // down wherever it is let go; nothing about the deck changes.
+                if (zenKey != null && neue.zen == ZenPhase.DEEP) {
+                    down.consume()
+                    if (!buttons.isPrimaryPressed) {
+                        spend()
+                        return@awaitEachGesture
+                    }
+                    zen.holding = zenKey
+                    try {
+                        drag(down.id) { change ->
+                            val d = change.positionChange()
+                            change.consume()
+                            // The move is drawn at deep × gather, so it is stored divided by it:
+                            // the card stays under the pointer while zen is still arriving.
+                            val k = (zen.deep * zen.gather).coerceAtLeast(0.2f)
+                            zen.move(zenKey, d.x / k, d.y / k)
+                        }
+                    } finally {
+                        zen.holding = null
+                    }
+                    return@awaitEachGesture
+                }
                 if (buttons.isSecondaryPressed && !buttons.isPrimaryPressed) {
                     down.consume()
                     press.down = true

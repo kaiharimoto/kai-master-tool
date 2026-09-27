@@ -7,8 +7,10 @@ import kotlin.math.sin
 /**
  * How far into zen the builder is. kai's brief, for immersive mode: after three
  * seconds of nothing, the interface fades and the cards stay; after ten, the pool
- * and the card details go too, the deck comes to the middle and floats, and a
- * sand garden is raked around it. Any movement brings everything back.
+ * and the card details go too, and the deck comes to the middle and floats over
+ * its own shadows. **The cards are the garden** (1.0.10): in deep zen the pointer
+ * picks them up and puts them down anywhere, and only a key brings the builder
+ * back. A sand garden was drawn behind them for six releases and is gone.
  */
 enum class ZenPhase {
     AWAKE,
@@ -16,7 +18,7 @@ enum class ZenPhase {
     /** Three seconds idle: everything but the cards fades. */
     QUIET,
 
-    /** Ten seconds idle: the pool and the inspector go, the deck floats in the middle, the garden is raked. */
+    /** Ten seconds idle: the pool and the inspector go, the deck floats in the middle, and the cards are free to arrange. */
     DEEP,
 }
 
@@ -43,8 +45,8 @@ object ZenClock {
  * The transform that brings the deck front and centre: a uniform scale about
  * the deck's own centre and a move that puts that centre in the middle of the
  * window, sized so the deck fills [fillWidth] of the window's width or
- * [fillHeight] of its height, whichever is reached first — leaving the sides for
- * the garden, with room to breathe between the two.
+ * [fillHeight] of its height, whichever is reached first — leaving room round it
+ * to put cards down in.
  */
 data class ZenStage(val scale: Float, val dx: Float, val dy: Float) {
     companion object {
@@ -57,7 +59,7 @@ data class ZenStage(val scale: Float, val dx: Float, val dy: Float) {
             deckHeight: Float,
             windowWidth: Float,
             windowHeight: Float,
-            fillWidth: Float = 0.52f,
+            fillWidth: Float = 0.72f,
             fillHeight: Float = 0.8f,
         ): ZenStage {
             if (deckWidth <= 0f || deckHeight <= 0f || windowWidth <= 0f || windowHeight <= 0f) return NONE
@@ -121,4 +123,89 @@ object ZenFloat {
         h = h xor (h ushr 12)
         return ((h ushr 1) % 10_000) / 10_000.0 * 2.0 * PI
     }
+}
+
+/**
+ * Where the cards have been put in deep zen: an offset from its place in the
+ * deck for each card that has been moved, in the deck's own pixels (inside the
+ * zen transform, so a card follows the pointer at whatever scale the deck is
+ * drawn). A card is named by a key the screen chooses — section and position.
+ *
+ * Only a picture: nothing here touches the deck's order. Leaving zen draws every
+ * card home and coming back puts them where they were left, until [reset].
+ */
+class ZenArrangement {
+    private val moved = HashMap<Int, Pair<Float, Float>>()
+    private val order = HashMap<Int, Int>()
+
+    /** How many times the arrangement has changed: a screen reads it to know to redraw. */
+    var version: Int = 0
+        private set
+
+    val isEmpty: Boolean get() = moved.isEmpty()
+
+    fun offsetOf(key: Int): Pair<Float, Float> = moved[key] ?: (0f to 0f)
+
+    /**
+     * Where card [key] lies in the pile: 0 for a card never moved, and higher for
+     * one put down later — a card put down lands on top of what it is put on.
+     */
+    fun layerOf(key: Int): Int = order[key] ?: 0
+
+    fun move(key: Int, dx: Float, dy: Float) {
+        val (x, y) = offsetOf(key)
+        moved[key] = (x + dx) to (y + dy)
+        version++
+        order[key] = version
+    }
+
+    fun reset() {
+        if (moved.isEmpty()) return
+        moved.clear()
+        order.clear()
+        version++
+    }
+
+    companion object {
+        /** The key for card [index] of section [section] (its ordinal): unique while a section holds under a thousand. */
+        fun key(section: Int, index: Int): Int = section * 1_000 + index
+    }
+}
+
+/**
+ * The shadow a floating card casts on the table under it, from a light up and
+ * to the left: the higher the card, the further the shadow falls away down and
+ * to the right, the softer its edge and the fainter it is. In card widths, so
+ * it is the same shadow at every size a card is drawn.
+ *
+ * kai's exception to Master UI's "no shadows", for zen alone: a shadow is the
+ * one thing that says a card is off the page rather than on it.
+ */
+data class ZenShadow(val dx: Float, val dy: Float, val blur: Float, val alpha: Float) {
+    companion object {
+        /** A card resting at the float's own height. */
+        const val REST_LIFT = 0.02f
+
+        fun of(lift: Float): ZenShadow {
+            val h = (0.10f + lift * 3.2f).coerceIn(0.06f, 0.6f)
+            return ZenShadow(
+                dx = h * 0.35f,
+                dy = h * 0.55f,
+                blur = 0.04f + h * 0.35f,
+                alpha = (0.34f - h * 0.28f).coerceIn(0.12f, 0.34f),
+            )
+        }
+    }
+}
+
+/**
+ * The bottom-right corner of the window in deep zen, where "put the cards back"
+ * comes out: [WIDTH] by [HEIGHT] pixels, which a pointer reaches only on purpose.
+ */
+object ZenCorner {
+    const val WIDTH = 240f
+    const val HEIGHT = 140f
+
+    fun reaches(x: Float, y: Float, windowWidth: Float, windowHeight: Float): Boolean =
+        windowWidth > 0f && windowHeight > 0f && x >= windowWidth - WIDTH && y >= windowHeight - HEIGHT && x <= windowWidth && y <= windowHeight
 }

@@ -24,16 +24,14 @@ class DeskMouseTest {
 
     @Test
     fun kaisBrief() {
-        // Right-click adds, wherever the card is: into the deck from the pool,
-        // another copy on a deck card.
+        // 1.0.10: "hold left click should open the inspector, hold right click
+        // duplicates. just right click removes the card from the deck."
+        MouseTarget.entries.forEach { assertEquals(MouseAction.VIEW, DeskMouse.resolve(it, MouseGesture.HOLD)) }
+        assertEquals(MouseAction.ADD, DeskMouse.resolve(MouseTarget.POOL, MouseGesture.RIGHT_HOLD))
+        assertEquals(MouseAction.ADD_COPY, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.RIGHT_HOLD))
+        assertEquals(MouseAction.REMOVE, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.RIGHT_CLICK))
+        // A right-click from the pool still adds.
         assertEquals(MouseAction.ADD, DeskMouse.resolve(MouseTarget.POOL, MouseGesture.RIGHT_CLICK))
-        assertEquals(MouseAction.ADD_COPY, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.RIGHT_CLICK))
-        // Holding left adds a copy, as a right-click does: into the deck from the
-        // pool, another copy on a deck card.
-        assertEquals(MouseAction.ADD, DeskMouse.resolve(MouseTarget.POOL, MouseGesture.HOLD))
-        assertEquals(MouseAction.ADD_COPY, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.HOLD))
-        // Holding right opens the card, large, on every card.
-        MouseTarget.entries.forEach { assertEquals(MouseAction.VIEW, DeskMouse.resolve(it, MouseGesture.RIGHT_HOLD)) }
         // Left drag picks up, both places.
         MouseTarget.entries.forEach { assertEquals(MouseAction.PICK_UP, DeskMouse.resolve(it, MouseGesture.DRAG)) }
     }
@@ -41,7 +39,7 @@ class DeskMouseTest {
     @Test
     fun shiftMeansTheSideOrTheOtherWay() {
         assertEquals(MouseAction.ADD_TO_SIDE, DeskMouse.resolve(MouseTarget.POOL, MouseGesture.SHIFT_RIGHT_CLICK))
-        assertEquals(MouseAction.REMOVE, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.SHIFT_RIGHT_CLICK))
+        assertEquals(MouseAction.ADD_COPY, DeskMouse.resolve(MouseTarget.DECK, MouseGesture.SHIFT_RIGHT_CLICK))
     }
 
     @Test

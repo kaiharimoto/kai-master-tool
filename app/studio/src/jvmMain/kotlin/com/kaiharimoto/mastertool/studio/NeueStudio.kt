@@ -114,6 +114,7 @@ fun neueMain(args: Array<String>) {
                 h.neue.revealed = com.kaiharimoto.mastertool.core.layout.Revealed(left = "left" in parts, top = "top" in parts, bottom = "bottom" in parts)
             }
             if (map["palette"] == "true") h.neue.paletteOpen = true
+            if (map["groups"] == "true") h.neue.update { it.copy(groupsPanel = true) }
             if (map["help"] == "true") h.neue.helpOpen = true
             map["drawer"]?.let { h.neue.drawer = if (it == "groups") Drawer.GROUPS else Drawer.ISSUES }
             if (map["goal"] == "true") h.builder.newGoal()
@@ -122,50 +123,22 @@ fun neueMain(args: Array<String>) {
                 h.neue.immersive = true
                 clock.run(30)
                 h.neue.zen = if (phase == "quiet") com.kaiharimoto.mastertool.core.motion.ZenPhase.QUIET else com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
-                // The fades take under three seconds; the garden is raked for as long as asked.
+                // The fades take under three seconds; then the float runs for as long as asked.
                 clock.run(((map["zen-seconds"] ?: "4").toFloat() * 60).toInt())
-                // --garden-plan: how long a layer of spirals takes, for choosing --garden-times.
-                if (map["garden-plan"] == "true") {
-                    val d = h.zen.deckInZen
-                    val g = com.kaiharimoto.mastertool.core.layout.SpiralGarden(width.toFloat(), height.toFloat(), d.center.x, d.center.y)
-                    println("[neue-studio] a layer of spirals every %.1fs".format(g.layerTime))
+                // --zen-move=dx,dy: carry the first main-deck card that far (window pixels, in the
+                // deck's scale) before the still, as a hand arranging the cards would.
+                map["zen-move"]?.let { spec ->
+                    val (dx, dy) = spec.split(",").map { it.toFloat() }
+                    h.zen.move(com.kaiharimoto.mastertool.core.motion.ZenArrangement.key(0, 0), dx, dy)
+                    h.zen.move(com.kaiharimoto.mastertool.core.motion.ZenArrangement.key(0, 11), -dx, dy * 0.5f)
+                    clock.run(4)
                 }
-                // --garden-mattes: the deck over plain white and plain black, for lifting it off the garden.
-                if (map["garden-mattes"] == "true") {
-                    h.zen.time = 30f
-                    listOf(true to "white", false to "black").forEach { (white, label) ->
-                        h.zen.gardenMatte = white
-                        clock.run(2)
-                        val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
-                        File(out, "$name-$label.png").writeBytes(still.bytes)
-                    }
-                    h.zen.gardenMatte = null
-                    println("[neue-studio] mattes written")
-                }
-                // --garden-times=a,b,c: one still per garden time, in seconds. The garden's clock
-                // started with zen's, so setting zen's sets the garden's.
-                map["garden-times"]?.let { spec ->
-                    spec.split(",").forEach { at ->
-                        h.zen.time = at.toFloat()
-                        clock.run(2)
-                        val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
-                        File(out, "$name-t$at.png").writeBytes(still.bytes)
-                    }
-                    println("[neue-studio] garden stills at $spec")
-                }
-                // --zen-frames=N,K: N stills, K frames apart, for a GIF of the garden being raked.
+                // --zen-frames=N,K: N stills, K frames apart, for a GIF of the float.
                 map["zen-frames"]?.let { spec ->
                     val (n, k) = spec.split(",").map { it.toInt() }
                     val dir = File(out, "$name-frames").apply { mkdirs() }
-                    // --garden-step=S: each still is S garden-seconds on, rather than K frames.
-                    val step = map["garden-step"]?.toFloat()
                     repeat(n) { i ->
-                        if (step != null) {
-                            h.zen.time += step
-                            clock.run(1)
-                        } else {
-                            clock.run(k)
-                        }
+                        clock.run(k)
                         val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
                         File(dir, "%03d.png".format(i)).writeBytes(still.bytes)
                     }

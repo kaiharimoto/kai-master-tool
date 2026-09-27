@@ -111,7 +111,7 @@ object MuMotion {
 
 /** Shell dimensions (§4). */
 object MuShell {
-    val top = 40.dp
+    val top = 48.dp
     val rail = 232.dp
     val railRow = 56.dp
     val footer = 56.dp

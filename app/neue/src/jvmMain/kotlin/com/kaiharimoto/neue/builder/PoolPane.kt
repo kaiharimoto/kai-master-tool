@@ -104,7 +104,9 @@ fun PoolPane(
                     append(if (shown < state.matchCount) "$shown of ${"%,d".format(state.matchCount)}" else "%,d".format(state.matchCount))
                     if (state.searchEffects && state.effectMatchCount > 0) append(" · ${state.effectMatchCount} by text")
                 }
-                Mono(meta, Modifier.weight(1f))
+                // The pool's size lives here since the title bar gave it up, and so does its sync.
+                if (state.isSyncing) com.kaiharimoto.neue.kit.Breathe(running = true)
+                Mono(meta, Modifier.weight(1f), color = c.ink70)
                 Tip("Also match the words printed on the card. Prefix name: or text: to choose one") {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Micro("Text", color = c.ink45)

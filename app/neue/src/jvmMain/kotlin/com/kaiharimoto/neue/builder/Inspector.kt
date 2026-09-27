@@ -64,10 +64,10 @@ import com.kaiharimoto.neue.theme.MuType
  * to the tablet's long-press sheet. A large display can afford to keep it open,
  * so reading a card costs a hover rather than a gesture.
  *
- * What a card *says* comes first, on kai's instruction: its name, its numbers
- * and its text, before the picture of it. Everything after that is a section
- * that folds shut and stays shut — the art, the facets, and the copies in the
- * deck — so a reader who never uses one never scrolls past it.
+ * The picture first, then what the card says — its name, its numbers and its
+ * text — then two sections that fold shut and stay shut: the facets, and the
+ * copies in the deck. (1.0.9 put the words above the picture; kai moved the
+ * picture back.)
  */
 @Composable
 fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
@@ -77,25 +77,24 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
         if (card == null) {
             Column(Modifier.zenQuiet().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 com.kaiharimoto.neue.kit.MuText("Nothing here.", style = MuType.h1(LocalMuFonts.current))
-                Body("Point at a card to read it. Click one to keep it here. Hold the right button on one to open it large.", color = c.ink70)
+                Body("Point at a card to read it. Click one to keep it here. Hold the button down on one to open it large.", color = c.ink70)
             }
             return@Box
         }
         val scroll = rememberScrollState()
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 24.dp)) {
-            Column(Modifier.zenQuiet(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            NeueCard(
+                card = card,
+                modifier = Modifier.fillMaxWidth().aspectRatio(CARD_RATIO),
+                format = state.format,
+                foil = neue.prefs.foil,
+            )
+            // In zen the card stays a moment longer than what is written about it.
+            Column(Modifier.zenQuiet().padding(top = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 CardHeading(card)
                 SelectionContainer {
                     Body(card.description.ifBlank { "No card text." }, color = c.ink)
                 }
-            }
-            Fold("Card", "art", neue, Modifier.padding(top = 20.dp)) {
-                NeueCard(
-                    card = card,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(CARD_RATIO),
-                    format = state.format,
-                    foil = neue.prefs.foil,
-                )
             }
             Column(Modifier.zenQuiet()) {
                 Fold("Details", "details", neue) { CardTags(card, state) }
@@ -136,7 +135,7 @@ private fun Fold(title: String, key: String, neue: NeueState, modifier: Modifier
     }
 }
 
-/** The card's name, what it is, and its numbers: the first thing read. */
+/** The card's name, what it is, and its numbers. */
 @Composable
 internal fun CardHeading(card: Card, large: Boolean = false) {
     val c = Mu.colors

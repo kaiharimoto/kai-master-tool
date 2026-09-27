@@ -157,10 +157,13 @@ light together. Holographic foil only; the screenshot carries it too.
 
 ## 3. The window
 
-A 40 px title bar (mark, wordmark, the page you are on, update pill,
-`Search Ctrl K`, immersive mode, status), the 232 px index rail —
-`01 Decks · 02 Builder · 03 Odds · 04 Stats`, Settings below the rule — and the
-page.
+**One 48 px bar** — the mark, the page you are on, then whatever the page puts
+there (the builder puts the deck's name, its legality, its tools and Save), the
+update pill and immersive mode — the 232 px index rail —
+`01 Decks · 02 Builder · 03 Odds · 04 Stats`; below the rule, what is being
+fetched, `Search Ctrl K` and Settings — and the page. Until 1.0.10 the app and
+the builder each had a bar; kai merged them, moved search to the rail beside
+Settings, and let the card count go to the pool, where it is read.
 
 **The rail folds away** until the pointer reaches the window's left edge, and
 comes out *over* the page rather than pushing it: a rail that pushed would
@@ -180,42 +183,58 @@ watcher at the root, consuming nothing, decides all of it
 once the pointer is 24 px clear of it; a deck name being typed holds the top
 out; a carried card opens nothing.
 
-**02 Builder** is one bar and three columns. The pool (search, inline
-filters, a flush grid of cards) and the inspector are resizable and hideable;
-the deck between them is **fitted, never scrolled**, by the tablet's own
-`DeckFitter.plan`: row widths in (10 main, 15 extra and side), one card size
+**02 Builder** is three columns under the window's one bar. The pool (search,
+inline filters, a flush grid of cards) and the inspector are resizable and
+hideable; the deck between them is **fitted, never scrolled**, by the tablet's
+own `DeckFitter.plan`: row widths in (10 main, 15 extra and side), one card size
 out. On a large display the fitter simply hands back larger cards.
 
-**Every pixel of chrome is a pixel off every card** — kai's brief for 1.0.9,
-and the exploration behind it measured the column at 1920 × 1080: 432 px of the
-1080 went to bars, strips and padding, and the cards had 648. Where it went, and
-what it is now:
+**Every pixel of chrome is a pixel off every card** — kai's brief for 1.0.9 and
+again for 1.0.10. The exploration behind it measured the column at 1920 × 1080:
+432 px of the 1080 went to bars, strips and padding, and the cards had 648.
 
-| | 1.0.8 | 1.0.9 |
-|---|---|---|
-| page header (name, a line of counts) | 92 | the **builder bar**, 48: name, legality, tools, Save |
-| footer (counts, legality, Save) | 64 | gone — the counts are on the strips, the rest is on the bar |
-| main strip + lens keys | 45 + 45 | 36 + 36, and **K** (or *Keys −*) folds the keys away |
-| extra and side strips | 37 each | 28 each |
-| padding round each grid | 24 | 12 |
-| gap between cards | 2 | 0 — flush; with a lens on, 6 px of paper between *groups* only |
+| | 1.0.8 | 1.0.9 | 1.0.10 |
+|---|---|---|---|
+| app bar | 40 | 40 | **one bar, 48** — the app's and the builder's merged |
+| page header | 92 | builder bar, 48 | (in the one bar) |
+| footer | 64 | gone | gone |
+| main strip + lens keys | 45 + 45 | 36 + 36 | **one row, 40**: Groups button, name, count, lens |
+| extra and side strips | 37 each | 28 each | **none** — the names go where the deck has room to spare |
+| padding round each grid | 24 | 12 | 12 |
+| gap between cards | 2 | 0 | 0; with a lens on, tetris blocks |
 
-Flush is the rule and groups are the one exception, kai's: with the lens on
-Deck the cards fit seamlessly; on any other lens, cards in the same group stay
-flush and a card pulls back only on a side that faces another group, so each
-group reads as one block with 6 px of paper between it and the next and a 3 px
-edge of its colour. The grid never moves a card to make that happen — the
-breakdown's rule — so a deck position is still a drop position.
+**The section names go in the deck's own empty space** (`core/layout/DeckLabels.kt`).
+A fitted deck is limited by one side and has room along the other: limited by
+its height, there is paper beside the grids; by its width, paper under them. So
+the deck is fitted both ways — the extra and side decks' names in a gutter to
+the left of their cards, or in a 24 px row over them — and the arrangement that
+draws the larger card wins. With the pool and the inspector out at 1920 × 1080
+the deck is width-limited, the names take rows, and the rows cost nothing.
 
-The deck's main cards went from about 85 px wide to about 103 with the pool
-and inspector out: a fifth wider, half as much again in area. And the page is
-then limited by its **width**, not its height — which is why the cuts stopped
-there: folding the keys away buys nothing at that size, and costs something on
-a short window, so it is a toggle rather than a default. The bar keeps the
-words on Import, Export and Screenshot while it is 1500 px or wider and drops
-to their icons (with their tooltips) below that. Its title field sets its own
-line height: the type scale's display leading is tighter than a descender, and
-a single-line field clips to its line — the tail of a `y` was cut off.
+**Groups are tetris blocks** (`core/layout/GroupBlocks.kt`, `builder/Regions.kt`),
+kai's picture: "cards in groups flush with no gaps between them, and the groups
+themselves separated from other groups." Every card keeps its place and its size
+— the breakdown never moves a card, and 1.0.9's crack, which shrank a card on
+any side facing another group, left the cards of one block different sizes and
+out of line. Instead, with a lens on, the grid opens one even 6 px seam between
+every pair of cards, and each group fills the seams *inside itself* with its
+colour and reaches 1 px past its edge. The seams between two groups stay paper.
+A group reads as one solid piece, cells and all, and the pieces stand apart.
+With the lens on Deck there are no seams at all and the deck is flush. The
+screenshot export draws the same blocks.
+
+**The Groups panel stands beside the deck, not over it.** The boxed **Groups**
+button in the deck's top-left corner (or `K`) opens `GroupsPanel` down the
+right: each key of the lens with its count and opening rate, click to isolate,
+right-click a group to edit or delete it, and while a group is being drawn up,
+the draft. It is closed by default (`NeuePreferences.groupsPanel`), because the
+232 px it takes comes off every card when the deck is width-limited.
+
+The bar keeps the words on Import, Export and Screenshot while it is 1500 px or
+wider and drops to their icons (with their tooltips) below that; the wordmark
+goes first. Its title field sets its own line height: the type scale's display
+leading is tighter than a descender, and a single-line field clips to its line
+— the tail of a `y` was cut off.
 
 The pool's cards are drawn **the size of the main deck's** by default
 (`DeckSized` in `PoolPane.kt`: as many columns as that width fills, rounded to
@@ -225,10 +244,10 @@ empty paper** at the window's edge, because the rail comes out at that edge and
 a pool running up to it put its first column where reaching for a card called
 the rail.
 
-**The inspector reads first and shows second.** The name, the numbers and the
-card's text come first; the art, the details (type, attribute, archetype,
-banlist) and the copies in the deck follow as sections that fold shut with a
-click and stay shut (`NeuePreferences.inspectorFolded`).
+**The inspector**: the picture on top (1.0.9 put the words first; kai moved the
+picture back), then the name, the numbers and the card's text, then the details
+(type, attribute, archetype, banlist) and the copies in the deck as sections that
+fold shut with a click and stay shut (`NeuePreferences.inspectorFolded`).
 
 **Contrast** is darker than the kit's ramp, in both themes, and Settings has a
 *High* setting on top of that (`MuColors.of(ink, high)`; the table of alphas and
@@ -245,36 +264,33 @@ The mouse is a table too, `core/input/DeskMouse.kt`, and the help dialog
 |---|---|---|
 | hover | the inspector shows it | the inspector shows it |
 | click | select | select |
-| right-click | **add** to the main deck (the extra, for a card that lives there) | **add another copy** |
-| Shift right-click | add to the side deck | **remove this copy** |
-| hold | **add** (as right-click) | **add another copy** |
-| hold right | **open it large** | **open it large** |
+| right-click | **add** to the main deck (the extra, for a card that lives there) | **remove this copy** |
+| Shift right-click | add to the side deck | add another copy |
+| hold | **open it large** | **open it large** |
+| hold right | **add** | **add another copy** |
 | double-click | add (Shift: side) | — |
 | drag | pick it up | move it; drop it on the pool to remove |
 
-That is kai's brief as it settled after 1.0.3: **right-click adds, to the main
-deck, wherever the card is.** 1.0.3 had read "right-clicking it will remove it"
-as the deck's right-click, and kai meant right-click to add everywhere. Taking
-a copy out is therefore Shift + right-click, because Shift already means "the
-other way" (Shift Enter and Shift right-click in the pool both mean the side
-deck). A card in the side deck that is right-clicked sends a copy to the main
-deck. `DeskMouseTest` holds these rows and no gesture meaning two things.
+That is kai's brief for 1.0.10, in their words: **"hold left click should open
+the inspector, hold right click duplicates. just right click removes the card
+from the deck."** A right-click is the quick edit in both places — in from the
+pool, out of the deck — a held right button is one more copy, and a held left
+button opens the card large: the art as tall as the window allows, the text in
+16 px beside it, the copies, and every action the old menu had
+(`builder/CardViewer.kt`). A click outside it, `Esc` or its ✕ closes it; `Space`
+opens the selected card the same way. Shift is still "the other way". A
+right-click is read on release, the first moment it is known not to be a hold.
+`DeskMouseTest` holds these rows and no gesture meaning two things.
 
-**Right-click did nothing from 1.0.3 to 1.0.8**, and the table was never the
-reason. Compose's `awaitFirstDown` answers only to the *primary* button, so a
-right press went past the card as though it were not there; `CardPointer` now
+The table moved three times before this (1.0.3: right-click removes; 1.0.4:
+right-click adds everywhere, hold is the menu; 1.0.9: hold left adds, hold right
+opens). **Right-click did nothing from 1.0.3 to 1.0.8**, and the table was never
+the reason: Compose's `awaitFirstDown` answers only to the *primary* button, so
+a right press went past the card as though it were not there. `CardPointer`
 waits for a press of any button (`awaitAnyDown`). The studio's `--mouse` flag
-drives real presses through the real modifier and logs the deck's counts, so
-this is checked rather than read: `--mouse="right@0.06,0.3;left-hold@0.06,0.3"`.
-
-After 1.0.8 the holds changed, on kai's instruction: **holding the left button
-adds a copy**, the same answer as a right-click for a hand that never leaves the
-left button, and **holding the right button opens the card large** — the art as
-tall as the window allows, the text in 16 px beside it, the copies, and every
-action the old menu had (`builder/CardViewer.kt`). A click outside it, `Esc` or
-its ✕ closes it; `Space` opens the selected card the same way. So a right-click
-cannot fire on the press any more: it is read on release, the first moment it is
-known not to be a hold.
+drives real presses through the real modifier and logs the deck's counts, so a
+gesture is checked rather than read:
+`--mouse="right@0.3,0.25;left-hold@0.3,0.25;right-hold@0.3,0.25"`.
 
 A press selects at once, then becomes a click, a drag (past the slop) or a hold
 (450 ms still), whichever comes first; the card rises under the button while
@@ -292,87 +308,35 @@ field* and nowhere else, so confirming a deck name never adds a card.
 In immersive mode, on the builder, doing nothing is a mode too
 (`core/motion/Zen.kt`, `neue/zen/`):
 
-- **Three seconds** idle: everything that is not a card fades — the strips, the
+- **Three seconds** idle: everything that is not a card fades — the rows, the
   rules, the search and its controls, the inspector's text, the scrollbars. The
   cards stay exactly where they are. Any movement brings it back.
 - **Ten seconds**: this is zen. The pool and the inspector go too, and the deck
-  comes to the middle of the window and grows into it, leaving the sides free
-  (`ZenStage`: a transform about its own centre, never a re-fit), each card
-  floating on its own slow clock (`ZenFloat`). Under it, a raked garden.
-- **In zen the pointer is free.** Moving it wakes nothing; the deck turns toward
-  it on a slower, wider lean (`DeskLean.dreamy`, followed by `LeanField.dreamy`
-  over a quarter of a second and faded over most of one) — floating, not
-  handled. **Only a click or a key ends zen**, and that click or key is spent on
-  waking: it lands on no card and runs no shortcut. The deck floats home and the
-  chrome returns a little slower than it left.
+  comes to the middle of the window and grows into it (`ZenStage`: a transform
+  about its own centre, never a re-fit, filling at most 72% of the width and 80%
+  of the height so there is table round it). Each card floats on its own slow
+  clock (`ZenFloat`) and leans, dreamily, toward the pointer.
+- **The cards are the garden.** kai scrapped the sand garden that stood behind
+  the deck for six releases (spirals, rakes, a sun) — "they don't look good" —
+  for the cards themselves: each floats over **its own shadow** (`ZenShadow`,
+  drawn by `ZenShadows.kt` with Skia's analytic rect blur; the higher a card,
+  the further, softer and fainter its shadow), and **the pointer picks them up
+  and puts them down anywhere** (`ZenArrangement`). A card put down lands on top
+  of what it is put on; one being carried floats higher and casts further. The
+  arrangement is only a picture: the deck's order never changes. Waking draws
+  every card home; the next zen puts them back where they were left.
+- **Only a key wakes it.** In deep zen the pointer is for arranging, so neither
+  moving it nor clicking ends zen; any key does, and that key does nothing else.
+- **"Put the cards back"** comes out, faintly, when the pointer goes into the
+  window's bottom-right corner (`ZenCorner`, 240 × 140) and something has been
+  moved; it draws every card home over a slow beat and forgets the arrangement.
 
-**The garden is Fibonacci spirals, drawn over each other forever**
-(`core/layout/SpiralGarden.kt`, `neue/zen/SandGarden.kt`). It is the fifth: kai
-turned down a raked garden that crowded the deck, two balls looping at the
-sides, five hand-drawn samon, and a gardener's composition of stones; a
-research run over eleven mathematically defined patterns
-(`tools/zen/patterns.py`, which draws any of them under the real deck in
-seconds) ended in *"Fibonacci spirals that draw on top of each other
-infinitely … it should really feel like a background texture rather than moiré"*.
-
-- **The spirals are a sunflower's.** Two families of golden spirals —
-  logarithmic, growing by φ every quarter turn (θ = b·ln r, b = π / 2 ln φ) —
-  34 turning one way and 55 the other, the counts of a large sunflower head.
-  They are centred on the floating deck, which sits where the flower's head
-  would be; the arms come out from under the cards, and where they crowd toward
-  the middle (below twelve pixels apart) the gravel is smoothed rather than drawn
-  as a shimmer. Out where they can be seen they are 14–70 px apart, which reads
-  as a grain.
-- **The sand blooms.** kai found the finished garden "too simple", and chose,
-  of five prototypes (`tools/zen/ideas.py`), the endless bloom and the travelling
-  light. A golden spiral zoomed is a golden spiral turned, so the whole garden
-  flows outward from under the deck forever at 3.5% of its radius a second,
-  without a seam — a zoom of e^(2π/b) is exactly one turn. Every layer flows, and
-  since zooming a spiral turns it, each family seems to turn its own way: the new
-  one against the one it is drawn over. The flow a layer is born into is folded
-  into its turn, so the shader only sees the flow since it began, and
-  `SpiralGardenTest` holds the folded phase to the unfolded one hours into zen.
-- **The algorithm.** Each arm is drawn outward by its own rake, in the flowing
-  sand's own frame — measured on the screen, a groove would flicker as it flowed
-  past the edge of an arm half drawn. The rake gains 0.085 in log-radius a
-  second, so like the spiral it follows it opens out as it goes, and on screen it
-  gathers speed. Arm k sets off at 8·frac(k/φ) seconds — the golden-ratio
-  sequence, whose three-gap property keeps the arms under way evenly spread
-  round the circle however many have started (`SpiralGardenTest` holds it). A new
-  groove settles in over 0.6 s behind its rake, and where a drawn arm lies
-  beside one not yet drawn the two strips meet at the mean of their weights, so
-  nothing is ever cut with a step.
-- **Forever.** When every arm has passed the far corner and five seconds have
-  passed, the other family is drawn over the top — 55 after 34, the opposite
-  way round, set round by the golden angle from the last so it never lies along
-  the one it covers. Its arms cross the old ones as they grow and replace them.
-  A layer takes about 23 s; there is no wipe, and the first layer is drawn over
-  straight lines.
-- **The sun goes round.** The gravel is lit from a direction that circles the
-  garden once every 90 seconds, at the height it has always been lit from and
-  starting where it always was, so the grooves' light and shade turn slowly
-  while the pattern flows. kai turned down the other two prototypes: the
-  pointer parting the sand, and phyllotaxis seeding.
-- **Subtle.** The grooves are shallow (relief 0.45, against 0.8 for the garden
-  before), the grains of sand drawn twice as large, no colour anywhere; the rakes
-  are invisible, as kai asked of the garden before this one.
-
-Everything is a pure function of position and time, and the SkSL is a
-line-for-line copy of `SpiralGarden.phase`, `spacing`, `start`, `past` and
-`weight`; a layer travels to it as (arms, hand, turn), with the flow since each
-layer began and the sun's azimuth beside it. The grain is a normal map and an
-albedo **baked in Blender** (`tools/zen/garden.py`, tileable). White gravel on
-paper, black on ink. `GardenShaderTest` fails the build if the SkSL stops
-compiling, which in the app is only a log line and an empty zen.
-
-Nothing idles: the phase clock sleeps until the next boundary, and the float,
-the lean and the garden run only while zen is deep. Fades are read in layers, so
-zen redraws and never recomposes. `tools/shoot.sh --neue --zen=deep
---zen-seconds=20 --hover=x,y` photographs it, `--garden-plan` prints how long a layer
-of spirals takes, `--garden-times=20,30,36` takes a still at each garden time,
-and `--garden-mattes` photographs the deck over plain white and plain black, which
-`tools/zen/patterns.py` lifts it off with. `GardenReel` (in `:neue`'s tests) draws the garden alone,
-a second a frame instead of a minute a still, and renders a reel.
+The shadow is **kai's exception to Master UI's "no shadows"**, and it is one
+file: `MasterUiLawTest` refuses a blur or a mask filter anywhere else in
+`neue/`. In Ink it is the exact inversion — a faint light under each card —
+because a black shadow on black says nothing and dark is paper and ink swapped.
+The studio photographs it with `--zen=deep --zen-move=dx,dy`, which carries two
+cards before the still.
 
 ### 4a. Groups
 
@@ -380,7 +344,7 @@ Every row of the Groups drawer (`G`) says what can be done to it: the name is a
 field (written on Enter or on leaving it, so one rename is one undo), the colour
 is six swatches, and **Edit cards**, up, down and **Delete** are buttons on the
 row. Delete keeps the cards and offers Undo. On the Roles lens, right-click a key
-for the same; `Edit groups` sits beside `+ New group`. Before this, deleting a
+in the Groups panel for the same; `Edit groups` sits under `+ New group`. Before this, deleting a
 group meant opening it and finding a link in the lens strip, and kai could not
 tell it was possible.
 

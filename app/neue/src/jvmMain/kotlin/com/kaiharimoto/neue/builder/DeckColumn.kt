@@ -5,6 +5,23 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import com.kaiharimoto.mastertool.core.layout.DeckLabels
+import com.kaiharimoto.mastertool.core.layout.LabelPlace
+import com.kaiharimoto.mastertool.core.motion.ZenArrangement
+import com.kaiharimoto.neue.kit.animatedColor
+import com.kaiharimoto.neue.zen.zenShadow
+import kotlin.math.round
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -46,12 +63,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.deck.Lens
-import com.kaiharimoto.mastertool.core.layout.BreakdownLayout
-import com.kaiharimoto.mastertool.core.layout.BreakdownPlan
-import com.kaiharimoto.mastertool.core.layout.CardPlacement
-import com.kaiharimoto.mastertool.core.layout.CellEdges
-import com.kaiharimoto.mastertool.core.layout.DeckFitter
-import com.kaiharimoto.mastertool.core.layout.GridRegion
 import com.kaiharimoto.mastertool.core.layout.SectionFit
 import com.kaiharimoto.mastertool.core.layout.SectionFitRequest
 import com.kaiharimoto.mastertool.core.model.DeckSection
@@ -67,28 +78,27 @@ import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.Segmented
-import com.kaiharimoto.neue.kit.Strip
-import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuMotion
 
 /**
- * Flush: kai asked for no gap between cards. Groups are the exception, and the
- * only one: with a lens on, cards in one group stay flush with each other and
- * pull back only on a side that faces another group ([CRACK]). Of that crack,
- * [CELL_INSET] is left as paper — a real gap between the groups — and the rest
- * is the group's colour along its block's edge.
+ * Flush: kai asked for no gap between cards. While a lens is on, the grid opens
+ * one even [SEAM] between every pair and each group fills its own seams with its
+ * colour — tetris blocks (`GroupBlocks`, [drawBlocks]) — leaving paper only
+ * between groups. [FRAME] is how far a block's colour reaches past its edge.
  */
-private val SPACING = 0.dp
-private val CRACK = 6.dp
-private val CELL_INSET = 3.dp
-private val STRIP = 28.dp
-private val MAIN_STRIP = 36.dp
-private val LENS_STRIP = 36.dp
+private val SEAM = 6.dp
+private val FRAME = 1.dp
+private val LENS_ROW = 40.dp
+private val LABEL_ROW = 24.dp
+private val LABEL_GUTTER = 104.dp
 private val GRID_PAD = 6.dp
 private val SIDE_PAD = 16.dp
 private val RULE = 1.dp
+
+/** How much higher a card being carried in zen floats than its neighbours, in card widths. */
+private const val HELD_LIFT = 0.1f
 
 /** Row widths: the tablet's, because a decklist is quoted in tens and fifteens whatever the screen. */
 private fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 10 else 15
@@ -98,20 +108,28 @@ private fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 1
  *
  * Sized by the tablet's own `DeckFitter.plan` — row widths in, one card size
  * out, every section the same width — because "layout is solved, not
- * negotiated" is as true of a 27-inch monitor as of a tablet. On a large
- * display the fitter simply hands back bigger cards. Sections are divided by
- * rules, not gaps (law 6); the main deck carries the lens.
+ * negotiated" is as true of a 27-inch monitor as of a tablet. Sections are
+ * divided by rules, not gaps (law 6).
  *
- * Every pixel of chrome here is a pixel off every card, so there is as little
- * as reads (1.0.9): one 36px strip over the main deck with the lens in it, the
- * lens's keys in a row that K folds away, 28px over the extra and side decks,
- * 6px around each grid, and cards flush against each other. At 1920 × 1080 with
- * the pool and the inspector out the deck is then limited by its width rather
- * than its height — the vertical is spent.
+ * Every pixel of chrome is a pixel off every card, so there is as little as
+ * reads. The main deck has one row: the **Groups** button in its corner, its
+ * name and count, and the lens. The extra and side decks have none of their
+ * own: their names go in whatever the deck has to spare (`DeckLabels`) — beside
+ * the cards when the deck is limited by its height, over them when it is limited
+ * by its width. The lens's keys stand down the right in [GroupsPanel] when asked for.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifier: Modifier = Modifier) {
+    val panel = neue.prefs.groupsPanel || state.groupDraft != null
+    Row(modifier) {
+        DeckBody(state, neue, drag, Modifier.weight(1f).fillMaxHeight())
+        if (panel) GroupsPanel(state, neue, Modifier.zenQuiet())
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifier: Modifier) {
     val density = LocalDensity.current
     val lensOn = state.lens != Lens.DECK || state.groupDraft != null
     val crack by animateFloatAsState(if (lensOn) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "crack")
@@ -119,7 +137,6 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
     val motion = rememberDeckMotion(drag, zen)
     val origin = remember { floatArrayOf(0f, 0f) }
     val grids = remember { mutableMapOf<DeckSection, Rect>() }
-    val keysRow = neue.prefs.lensKeys || state.groupDraft != null
 
     BoxWithConstraints(
         modifier
@@ -146,23 +163,30 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
             },
     ) {
         val sections = DeckSection.entries
-        val fit = with(density) {
-            DeckFitter.plan(
-                requests = sections.map { section ->
+        val seams = sections.map { section -> if (!state.keying(section).isEmpty) SEAM * crack else 0.dp }
+        val placed = with(density) {
+            DeckLabels.place(
+                availableWidth = (maxWidth - SIDE_PAD * 2).toPx(),
+                availableHeight = maxHeight.toPx(),
+                aspectRatio = CARD_RATIO,
+                gutter = LABEL_GUTTER.toPx(),
+                rowHeight = LABEL_ROW.toPx(),
+                requests = sections.mapIndexed { i, section ->
                     SectionFitRequest(
                         count = state.deck[section].size,
                         columns = columnsOf(section),
                         baselineCount = if (section == DeckSection.MAIN) section.minSize else section.maxSize,
-                        spacing = SPACING.toPx(),
-                        chromeHeight = (GRID_PAD * 2 + RULE + if (section == DeckSection.MAIN) MAIN_STRIP + (if (keysRow) LENS_STRIP else 0.dp) else STRIP).toPx(),
+                        spacing = seams[i].toPx(),
+                        chromeHeight = (GRID_PAD * 2 + RULE + if (section == DeckSection.MAIN) LENS_ROW else 0.dp).toPx(),
                     )
                 },
-                availableWidth = (maxWidth - SIDE_PAD * 2).toPx(),
-                availableHeight = maxHeight.toPx(),
-                aspectRatio = CARD_RATIO,
+                labelled = sections.map { it != DeckSection.MAIN },
             )
         }
+        val fit = placed.fit
         val contentWidth = with(density) { fit.contentWidth.toDp() }
+        // Where the grids start, from the column's left edge: every section is the same width and centred.
+        val gridLeft = (maxWidth - contentWidth) / 2
         motion.cardWidth = fit.sections.firstOrNull()?.cardWidth ?: 100f
         // The pool draws its cards the size of these, unless told otherwise.
         val mainWidth = with(density) { (fit.sections.firstOrNull()?.cardWidth ?: 0f).toDp() }
@@ -178,9 +202,10 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
                     section = section,
                     fit = fit.sections[i],
                     contentWidth = contentWidth,
+                    gridLeft = gridLeft,
+                    labels = placed.place,
+                    seam = seams[i],
                     crack = crack,
-                    lensStrip = section == DeckSection.MAIN,
-                    keysRow = keysRow,
                     motion = motion,
                     onGrid = { rect ->
                         // Measured at rest only: in zen the grids are inside the transform, and a
@@ -196,6 +221,68 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
     }
 }
 
+/** The main deck's one row: the Groups button in the deck's corner, its name and count, and the lens. */
+@Composable
+private fun LensRow(state: DeckBuilderState, neue: NeueState, count: String, outOfRange: Boolean, refused: Boolean, inset: Dp) {
+    val c = Mu.colors
+    Row(
+        Modifier
+            .zenQuiet()
+            .fillMaxWidth()
+            .height(LENS_ROW)
+            .padding(start = inset, end = inset),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        val open = neue.prefs.groupsPanel || state.groupDraft != null
+        Tip(if (open) "Close the groups" else "The groups beside the deck: each with its count and its opening rate", kbd = "K") {
+            BoxToggle("Groups", open) { neue.update { it.copy(groupsPanel = !it.groupsPanel) } }
+        }
+        Micro("Main deck", color = c.ink70)
+        Mono(if (outOfRange) "✕ $count" else count, color = if (outOfRange) c.ink else c.ink70)
+        Box(Modifier.weight(1f))
+        if (refused) Micro("✕ Not allowed here", color = c.ink)
+        Segmented(state.lens, Lens.entries, { it.displayName }, state::useLens, small = true)
+    }
+}
+
+/** A boxed button that stays pressed: ink when on, a ruled box when off. */
+@Composable
+private fun BoxToggle(label: String, on: Boolean, onClick: () -> Unit) {
+    val c = Mu.colors
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Box(
+        Modifier
+            .height(28.dp)
+            .background(animatedColor(if (on) c.ink else if (hovered) c.ink06 else Color.Transparent))
+            .border(1.dp, c.ink)
+            .hoverable(source)
+            .pointerHoverIcon(PointerIcon.Hand)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Micro(label, color = if (on) c.paper else c.ink)
+    }
+}
+
+/** A section's name and count, for the extra and side decks, wherever `DeckLabels` put it. */
+@Composable
+private fun SectionLabel(section: DeckSection, count: String, outOfRange: Boolean, refused: Boolean, modifier: Modifier, stacked: Boolean) {
+    val c = Mu.colors
+    val parts: @Composable () -> Unit = {
+        Micro("${section.displayName} deck", color = c.ink70)
+        Mono(if (outOfRange) "✕ $count" else count, color = if (outOfRange) c.ink else c.ink70)
+        if (refused) Micro("✕ Not allowed", color = c.ink)
+    }
+    if (stacked) {
+        Column(modifier.zenQuiet(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) { parts() }
+    } else {
+        Row(modifier.zenQuiet(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { parts() }
+    }
+}
+
 @Composable
 private fun DeckSectionPane(
     state: DeckBuilderState,
@@ -204,9 +291,10 @@ private fun DeckSectionPane(
     section: DeckSection,
     fit: SectionFit,
     contentWidth: Dp,
+    gridLeft: Dp,
+    labels: LabelPlace,
+    seam: Dp,
     crack: Float,
-    lensStrip: Boolean,
-    keysRow: Boolean,
     motion: DeckMotion,
     onGrid: (Rect) -> Unit,
 ) {
@@ -218,8 +306,10 @@ private fun DeckSectionPane(
     val count = ids.size
     val rangeText = if (section == DeckSection.MAIN) "${section.minSize}–${section.maxSize}" else "0–${section.maxSize}"
     val outOfRange = count > section.maxSize || count < section.minSize
+    val refused = hover != null && !hover.accepted
+    val seamPx = with(density) { seam.toPx() }
 
-    // The whole pane accepts a drop, header included: aiming at a strip is
+    // The whole pane accepts a drop, label included: aiming at a label is
     // aiming at the section. The grid's own geometry is measured separately,
     // and the two are joined whenever either moves.
     val laid = remember(section) { PaneLayout() }
@@ -236,6 +326,7 @@ private fun DeckSectionPane(
             columns = fit.columns,
             cardWidth = fit.cardWidth,
             cardHeight = fit.cardHeight,
+            spacing = seamPx,
         )
         publish()
     }
@@ -248,39 +339,25 @@ private fun DeckSectionPane(
                 publish()
             },
     ) {
-        Strip(
-            label = "${section.displayName} deck",
-            modifier = Modifier.zenQuiet().height(if (lensStrip) MAIN_STRIP else STRIP),
-            dense = true,
-        ) {
-            if (hover != null && !hover.accepted) Micro("✕ Not allowed here", color = c.ink)
-            Mono(
-                if (outOfRange) "✕ $count · $rangeText" else "$count · $rangeText",
-                color = if (outOfRange) c.ink else c.ink70,
+        if (section == DeckSection.MAIN) {
+            LensRow(state, neue, "$count · $rangeText", outOfRange, refused, inset = maxOf(gridLeft, SIDE_PAD))
+        } else if (labels == LabelPlace.ROWS) {
+            SectionLabel(
+                section, "$count · $rangeText", outOfRange, refused,
+                Modifier.fillMaxWidth().height(LABEL_ROW).padding(start = maxOf(gridLeft, SIDE_PAD)),
+                stacked = false,
             )
-            if (lensStrip) {
-                Tip(if (neue.prefs.lensKeys) "Fold the keys away: the deck gets their row" else "Show the keys: each group with its count and its opening rate", kbd = "K") {
-                    MicroLink(
-                        if (neue.prefs.lensKeys) "Keys −" else "Keys +",
-                        { neue.update { it.copy(lensKeys = !it.lensKeys) } },
-                        color = c.ink70,
-                    )
-                }
-                Segmented(state.lens, Lens.entries, { it.displayName }, state::useLens, small = true)
-            }
         }
-        if (lensStrip && keysRow) LensStrip(state, neue, Modifier.zenQuiet().height(LENS_STRIP))
 
         val keying = state.keying(section)
-        val plan: BreakdownPlan? = if (crack > 0.01f && !keying.isEmpty) BreakdownLayout.plan(keying, fit.columns) else null
         val cardW = with(density) { fit.cardWidth.toDp() }
         val cardH = with(density) { fit.cardHeight.toDp() }
         val gridHeight = with(density) { fit.gridHeight.toDp() }
-        val pitchX = fit.cardWidth + with(density) { SPACING.toPx() }
-        val pitchY = fit.cardHeight + with(density) { SPACING.toPx() }
+        val pitchX = fit.cardWidth + seamPx
+        val pitchY = fit.cardHeight + seamPx
         // The card the bump is over is drawn above its neighbours, so its lift is never
         // tucked under the next card along. Recomposes when the pointer crosses a card, not every frame.
-        val onTop by remember(section, fit.columns, ids.size) {
+        val onTop by remember(section, fit.columns, ids.size, pitchX, pitchY) {
             derivedStateOf {
                 val p = motion.point() ?: return@derivedStateOf -1
                 val o = laid.grid?.origin ?: return@derivedStateOf -1
@@ -291,6 +368,13 @@ private fun DeckSectionPane(
         }
 
         Box(Modifier.fillMaxWidth().padding(vertical = GRID_PAD), contentAlignment = Alignment.TopCenter) {
+            if (section != DeckSection.MAIN && labels == LabelPlace.GUTTER) {
+                SectionLabel(
+                    section, "$count · $rangeText", outOfRange, refused,
+                    Modifier.align(Alignment.TopStart).width((gridLeft - 16.dp).coerceAtLeast(0.dp)),
+                    stacked = true,
+                )
+            }
             Box(
                 Modifier
                     .size(contentWidth, gridHeight)
@@ -305,29 +389,40 @@ private fun DeckSectionPane(
                             columns = fit.columns,
                             cardWidth = fit.cardWidth,
                             cardHeight = fit.cardHeight,
-                            spacing = with(density) { SPACING.toPx() },
+                            spacing = seamPx,
                             count = ids.size,
                         )
                         publish()
                     }
                     .let { if (hover?.accepted == true) it.border(1.dp, c.ink) else it },
             ) {
-                if (plan != null) {
+                // Zen: every card's shadow on the table, under all of them.
+                Canvas(Modifier.matchParentSize()) {
+                    val deep = zen.deep
+                    if (deep <= 0f) return@Canvas
+                    ids.indices.forEach { position ->
+                        val key = ZenArrangement.key(section.ordinal, position)
+                        val o = zen.offsetOf(key)
+                        val drift = ZenFloat.pose(section.ordinal * 100 + position, zen.time)
+                        val x = pitchX * (position % fit.columns) + o.x + drift.dx * fit.cardWidth * deep
+                        val y = pitchY * (position / fit.columns) + o.y + drift.dy * fit.cardWidth * deep
+                        val lift = drift.lift + if (zen.holding == key) HELD_LIFT else 0f
+                        zenShadow(Rect(x, y, x + fit.cardWidth, y + fit.cardHeight), lift, deep, c.ink)
+                    }
+                }
+                if (!keying.isEmpty && crack > 0.01f) {
                     Canvas(Modifier.matchParentSize()) {
-                        plan.pieces.forEach { piece ->
-                            val key = keying.keyById(piece.keyId) ?: return@forEach
-                            val muted = state.isolatedKey != null && state.isolatedKey != piece.keyId
-                            drawRegion(
-                                cells = piece.cells,
-                                columns = fit.columns,
-                                pitchX = fit.cardWidth + SPACING.toPx(),
-                                pitchY = fit.cardHeight + SPACING.toPx(),
-                                spacing = SPACING.toPx(),
-                                inset = CELL_INSET.toPx(),
-                                color = GroupMarkers.paint(key.paint, c.ink),
-                                alpha = crack * if (muted) 0.18f else 1f,
-                            )
-                        }
+                        val fade = (1f - zen.deep).coerceIn(0f, 1f)
+                        drawBlocks(
+                            keys = List(ids.size) { keying.keyAt(it) },
+                            columns = fit.columns,
+                            cardWidth = fit.cardWidth,
+                            cardHeight = fit.cardHeight,
+                            seam = seamPx,
+                            frame = FRAME.toPx() * crack,
+                            colorOf = { id -> keying.keyById(id)?.let { GroupMarkers.paint(it.paint, c.ink) } ?: c.ink },
+                            alphaOf = { id -> crack * fade * if (state.isolatedKey != null && state.isolatedKey != id) 0.18f else 1f },
+                        )
                     }
                 }
 
@@ -335,29 +430,26 @@ private fun DeckSectionPane(
                     val card = state.index.byId(id)
                     val keyId = keying.keyAt(position)
                     val key = keying.keyById(keyId)
-                    val place = CardPlacement.place(
-                        cellWidth = fit.cardWidth,
-                        cellHeight = fit.cardHeight,
-                        edges = plan?.edgesAt(position) ?: NO_EDGES,
-                        crack = with(density) { CRACK.toPx() } * crack,
-                        aspectRatio = CARD_RATIO,
-                    )
                     val held = drag.held?.let { it.from == section && it.index == position } == true
                     val covered = state.isolatedKey != null && state.isolatedKey != keyId
-                    val left = pitchX * (position % fit.columns) + place.left
-                    val top = pitchY * (position / fit.columns) + place.top
+                    val left = pitchX * (position % fit.columns)
+                    val top = pitchY * (position / fit.columns)
                     // Both edges snapped to the pixel, not the corner and the size apart:
                     // truncating one and rounding the other opened a one-pixel seam
                     // between flush cards wherever the pitch was fractional.
-                    val l = kotlin.math.round(left).toInt()
-                    val t = kotlin.math.round(top).toInt()
-                    val r = kotlin.math.round(left + place.width).toInt()
-                    val b = kotlin.math.round(top + place.height).toInt()
+                    val l = round(left).toInt()
+                    val t = round(top).toInt()
+                    val r = round(left + fit.cardWidth).toInt()
+                    val b = round(top + fit.cardHeight).toInt()
+                    val zenKey = ZenArrangement.key(section.ordinal, position)
                     Box(
                         Modifier
-                            .offset { IntOffset(l, t) }
+                            .offset {
+                                val o = zen.offsetOf(zenKey)
+                                IntOffset(l + o.x.roundToInt(), t + o.y.roundToInt())
+                            }
                             .size(with(density) { (r - l).toDp() }, with(density) { (b - t).toDp() })
-                            .zIndex(if (position == onTop) 1f else 0f)
+                            .zIndex(zen.layerOf(zenKey).takeIf { it > 0f } ?: if (position == onTop) 1f else 0f)
                             .alpha(if (held) 0.4f else if (covered) 0.3f else 1f),
                     ) {
                         if (card == null) {
@@ -383,17 +475,20 @@ private fun DeckSectionPane(
                                         target = MouseTarget.DECK,
                                         press = press,
                                         onAction = { action, at -> CardActions.onDeck(action, at, card, section, position, state, neue) },
+                                        zenKey = zenKey,
                                     ),
                                 motion = {
                                     // Where the card is at rest: zen's lean works out from there where it has gone.
                                     val o = laid.restOrigin ?: laid.grid?.origin ?: Offset.Zero
-                                    val lean = if (held) LeanPose.REST else motion.poseAt(Offset(o.x + left + place.width / 2f, o.y + top + place.height / 2f))
+                                    val moved = zen.offsetOf(zenKey)
+                                    val lean = if (held) LeanPose.REST else motion.poseAt(Offset(o.x + left + moved.x + fit.cardWidth / 2f, o.y + top + moved.y + fit.cardHeight / 2f))
                                     val pressed = press.pose()
                                     val deep = zen.deep
                                     val drift = if (deep > 0f) ZenFloat.pose(section.ordinal * 100 + position, zen.time).times(deep) else LeanPose.REST
-                                    lean.copy(lift = lean.lift + pressed.lift) + drift
+                                    val carried = if (zen.holding == zenKey) HELD_LIFT * deep else 0f
+                                    lean.copy(lift = lean.lift + pressed.lift + carried) + drift
                                 },
-                format = state.format,
+                                format = state.format,
                                 selected = selected,
                                 foil = neue.prefs.foil,
                                 marker = key?.let { Marker(it.mark, GroupMarkers.paint(it.paint, c.ink)) },
@@ -409,7 +504,7 @@ private fun DeckSectionPane(
                     val row = if (at == ids.size && at > 0) (at - 1) / fit.columns else at / fit.columns
                     Box(
                         Modifier
-                            .offset(x = (cardW + SPACING) * col - SPACING - 1.dp, y = (cardH + SPACING) * row)
+                            .offset(x = (cardW + seam) * col - seam / 2 - 1.dp, y = (cardH + seam) * row)
                             .size(2.dp, cardH)
                             .background(c.ink),
                     )
@@ -437,4 +532,3 @@ private class PaneLayout {
     var restOrigin: Offset? = null
 }
 
-private val NO_EDGES = CellEdges(start = false, top = false, end = false, bottom = false)

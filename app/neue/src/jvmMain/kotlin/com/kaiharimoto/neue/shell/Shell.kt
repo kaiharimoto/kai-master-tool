@@ -11,6 +11,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -61,72 +63,66 @@ import com.kaiharimoto.neue.theme.MuType
 data class ShellStatus(val text: String, val running: Boolean)
 
 /**
- * The 40px title bar (§4): wordmark left; the update pill and the search
- * trigger right; system status last. The window keeps its native frame, so
- * this is the app's own first row rather than a replacement for it.
+ * The window's one bar (§4, bent by kai for 1.0.10): the mark and the page you
+ * are on on the left, then whatever the page puts in it — the builder puts the
+ * deck's name, its standing, its tools and Save — then the update pill and
+ * immersive mode. It was two bars, the app's and the page's, and the app's
+ * carried a search trigger and a card count: search lives on the rail now,
+ * beside Settings, and the count is the pool's, where it is read.
  */
 @Composable
 fun TitleBar(
     neue: NeueState,
-    status: ShellStatus,
     update: String?,
     onUpdate: () -> Unit,
-    art: String? = null,
     onImmersive: () -> Unit = {},
     modifier: Modifier = Modifier,
+    content: @Composable RowScope.(narrow: Boolean) -> Unit = {},
 ) {
     val c = Mu.colors
-    Row(
-        modifier
-            .fillMaxWidth()
-            .height(MuShell.top)
-            .background(c.paper)
-            .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val narrow = maxWidth < 1500.dp
         Row(
             Modifier
-                .pointerHoverIcon(PointerIcon.Hand)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { neue.go(Page.DECKS) },
+                .fillMaxWidth()
+                .height(MuShell.top)
+                .background(c.paper)
+                .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
+                .padding(start = 16.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Mark(20.dp, ink = c.ink, paper = c.paper)
-            MuText("NEUE MASTER TOOL", style = MuType.wordmark(LocalMuFonts.current))
-        }
-        // Where you are, because the rail that says so is folded away.
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Micro("/", color = c.ink25)
-            neue.page.numeral?.let { Mono(it.toString().padStart(2, '0'), color = c.ink45) }
-            Micro(neue.page.title, color = c.ink70)
-        }
-        Box(Modifier.weight(1f))
-        if (update != null) {
-            Tip("A newer build is ready. Click to read what changed and install it") {
-                Pill(onUpdate) {
-                    Breathe(color = Mu.colors.ink)
-                    Micro("Update · ", color = Mu.colors.ink)
-                    Mono(update, color = Mu.colors.ink)
+            Row(
+                Modifier
+                    .pointerHoverIcon(PointerIcon.Hand)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { neue.go(Page.DECKS) },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Mark(20.dp, ink = c.ink, paper = c.paper)
+                // The wordmark gives way before anything that does something.
+                if (!narrow) MuText("NEUE MASTER TOOL", style = MuType.wordmark(LocalMuFonts.current))
+            }
+            // Where you are, because the rail that says so is folded away.
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Micro("/", color = c.ink25)
+                neue.page.numeral?.let { Mono(it.toString().padStart(2, '0'), color = c.ink70) }
+                Micro(neue.page.title, color = c.ink70)
+                Micro("/", color = c.ink25)
+            }
+            content(narrow)
+            if (update != null) {
+                Tip("A newer build is ready. Click to read what changed and install it") {
+                    Pill(onUpdate) {
+                        Breathe(color = Mu.colors.ink)
+                        Micro("Update · ", color = Mu.colors.ink)
+                        Mono(update, color = Mu.colors.ink)
+                    }
                 }
             }
-        }
-        SearchTrigger { neue.paletteOpen = true }
-        Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, bars out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
-            IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 28.dp)
-        }
-        if (art != null) {
-            Tip("High-resolution card art, downloading. Settings has the details") {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Breathe(running = true)
-                    Micro(art, color = c.ink70)
-                }
+            Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, bars out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
+                IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 32.dp)
             }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Breathe(running = status.running)
-            Micro(status.text, color = c.ink70)
         }
     }
 }
@@ -153,14 +149,14 @@ private fun Pill(onClick: () -> Unit, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun SearchTrigger(onClick: () -> Unit) {
+private fun SearchTrigger(modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val tone = animatedColor(if (hovered) c.ink else c.ink45)
     Row(
-        Modifier
-            .height(28.dp)
+        modifier
+            .height(32.dp)
             .border(1.dp, animatedColor(if (hovered) c.ink else c.ink25))
             .hoverable(source)
             .pointerHoverIcon(PointerIcon.Hand)
@@ -170,18 +166,26 @@ private fun SearchTrigger(onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         MuIcon(Icons.Search, tone, Modifier.width(14.dp).height(14.dp))
-        Micro("Search", color = tone)
+        Micro("Search", Modifier.weight(1f), color = tone)
         Kbd(DeskShortcuts.chordFor(DeskAction.PALETTE)?.let(DeskShortcuts::kbd) ?: "Ctrl K")
     }
 }
 
 /**
  * The index rail (§4): 232px, numbered rows 56 high with a hairline between
- * them, the active one inverted, a `→` that slides in on hover. Settings and
- * the theme sit below the rule at the bottom.
+ * them, the active one inverted, a `→` that slides in on hover. What is being
+ * fetched, search and Settings sit below the rule at the bottom, and the theme
+ * under them.
  */
 @Composable
-fun Rail(neue: NeueState, version: String, counts: Map<Page, String>, modifier: Modifier = Modifier) {
+fun Rail(
+    neue: NeueState,
+    version: String,
+    counts: Map<Page, String>,
+    modifier: Modifier = Modifier,
+    status: ShellStatus? = null,
+    art: String? = null,
+) {
     val c = Mu.colors
     Column(
         modifier
@@ -195,7 +199,26 @@ fun Rail(neue: NeueState, version: String, counts: Map<Page, String>, modifier: 
             HRule()
         }
         Box(Modifier.weight(1f))
+        if (status != null) {
+            // What the app is fetching, when it is: the card pool, the full-size art.
+            Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Breathe(running = status.running)
+                    Micro(status.text, color = c.ink70)
+                }
+                if (art != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Breathe(running = true)
+                        Micro(art, color = c.ink70)
+                    }
+                }
+            }
+        }
         HRule(color = c.ink)
+        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {
+            SearchTrigger(Modifier.fillMaxWidth()) { neue.paletteOpen = true }
+        }
+        HRule()
         RailRow(Page.SETTINGS, neue.page == Page.SETTINGS, null) { neue.go(Page.SETTINGS) }
         HRule(color = c.ink)
         Row(

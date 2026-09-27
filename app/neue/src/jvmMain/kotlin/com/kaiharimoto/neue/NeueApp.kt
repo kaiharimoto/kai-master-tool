@@ -8,9 +8,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.isSpecified
 import com.kaiharimoto.mastertool.core.motion.ZenClock
+import com.kaiharimoto.mastertool.core.motion.ZenCorner
 import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.neue.zen.LocalZen
-import com.kaiharimoto.neue.zen.SandGarden
+import com.kaiharimoto.neue.zen.ZenReset
 import com.kaiharimoto.neue.zen.ZenLayer
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
@@ -26,7 +27,7 @@ import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.art.LocalArt
 import com.kaiharimoto.neue.cards.LocalNameStyle
 import com.kaiharimoto.mastertool.core.model.DeckSection
-import com.kaiharimoto.neue.builder.BuilderHeader
+import com.kaiharimoto.neue.builder.BuilderBar
 import com.kaiharimoto.neue.shot.DeckShots
 import com.kaiharimoto.neue.theme.MuShell
 import androidx.compose.animation.core.tween
@@ -215,7 +216,7 @@ class NeueHolders(
                 is Selection.InPool -> Viewing(sel.card, null, sel.row)
                 null -> state.results.getOrNull(neue.poolCursor)?.let { Viewing(it, null, neue.poolCursor) }
             }
-            DeskAction.TOGGLE_KEYS -> neue.update { it.copy(lensKeys = !it.lensKeys) }
+            DeskAction.TOGGLE_KEYS -> neue.update { it.copy(groupsPanel = !it.groupsPanel) }
             DeskAction.TOGGLE_INSPECTOR -> neue.update { it.copy(inspectorVisible = !it.inspectorVisible) }
             DeskAction.TOGGLE_POOL -> neue.update { it.copy(poolVisible = !it.poolVisible) }
             DeskAction.TOGGLE_FILTERS -> neue.update { it.copy(filtersOpen = !it.filtersOpen, poolVisible = true) }
@@ -383,23 +384,35 @@ private fun Shell(h: NeueHolders) {
     val density = LocalDensity.current
     val immersive = neue.immersive
     val pinned = neue.prefs.railPinned && !immersive
-    val builderBars = neue.page == Page.BUILDER
     // How tall the folded bars are when out, measured, so the pointer knows when it has left them.
     val measured = remember { FoldedBars() }
 
     val status = when {
         state.isSyncing -> ShellStatus("Syncing card pool", running = true)
         state.index.size == 0 -> ShellStatus("No card pool", running = false)
-        else -> ShellStatus("${"%,d".format(state.index.size)} cards · ${state.format.name}", running = false)
+        else -> null
     }
     val titleBar: @Composable () -> Unit = {
         TitleBar(
             neue = neue,
-            status = status,
             update = h.updates.available?.versionName,
             onUpdate = { h.updates.dialogOpen = true },
-            art = h.art.progressLine,
             onImmersive = { h.run(DeskAction.IMMERSIVE) },
+        ) { narrow ->
+            if (neue.page == Page.BUILDER) {
+                BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow)
+            } else {
+                Box(Modifier.weight(1f))
+            }
+        }
+    }
+    val rail: @Composable () -> Unit = {
+        Rail(
+            neue = neue,
+            version = Platform.version,
+            counts = mapOf(Page.BUILDER to state.deck.main.size.toString()),
+            status = status,
+            art = h.art.progressLine,
         )
     }
 
@@ -422,12 +435,11 @@ private fun Shell(h: NeueHolders) {
                         if (neue.immersive) h.zen.pointer = if (gone) null else at
                         // Waking. Before zen is deep, any real movement, press or scroll brings
                         // the builder back (a pointer that twitches a pixel on a desk does not).
-                        // Once it is deep, only a click or a key does: the pointer is free to
-                        // wander and the deck follows it, and the click that wakes it is spent
-                        // on waking — it does not also land on a card.
+                        // Once it is deep, nothing the pointer does wakes it — the pointer is for
+                        // arranging the cards, which are the garden — and only a key ends it.
                         val deepZen = neue.zen == ZenPhase.DEEP
                         when (event.type) {
-                            PointerEventType.Press -> if (h.wake() == ZenPhase.DEEP) event.changes.forEach { it.consume() }
+                            PointerEventType.Press -> if (!deepZen) h.wake()
                             PointerEventType.Scroll -> if (!deepZen) h.wake()
                             PointerEventType.Move -> if (at != null && !deepZen) {
                                 if (!still.isSpecified || (at - still).getDistance() > 3f) {
@@ -436,6 +448,9 @@ private fun Shell(h: NeueHolders) {
                                 }
                             }
                         }
+                        // The corner where "put the cards back" comes out.
+                        h.zen.corner = deepZen && at != null && !gone &&
+                            ZenCorner.reaches(at.x, at.y, size.width.toFloat(), size.height.toFloat())
                         // A click anywhere below the folded-out header lets go of the deck name:
                         // on a desktop nothing else takes focus from a text field, so the bar
                         // that is held out while you type would otherwise never fold away.
@@ -464,17 +479,12 @@ private fun Shell(h: NeueHolders) {
         Column(Modifier.fillMaxSize()) {
             if (!immersive) titleBar()
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                if (pinned) Rail(neue = neue, version = Platform.version, counts = mapOf(Page.BUILDER to state.deck.main.size.toString()))
+                if (pinned) rail()
                 Box(Modifier.weight(1f)) {
-                    // Zen's garden, under the page: it shows where the pool and the inspector were.
-                    val gardening by remember { derivedStateOf { h.zen.deep > 0f } }
-                    if (immersive && neue.page == Page.BUILDER && gardening) {
-                        SandGarden(h.zen, ink = neue.prefs.theme == NeueTheme.INK, modifier = Modifier.matchParentSize())
-                    }
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
                             Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload)
-                            Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setFormat, h::setSearchEffects, bars = !immersive, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) })
+                            Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
                             Page.ODDS -> OddsPage(state)
                             Page.STATS -> StatsPage(state)
                             Page.SETTINGS -> SettingsPage(
@@ -512,7 +522,6 @@ private fun Shell(h: NeueHolders) {
                     .background(c.paper),
             ) {
                 titleBar()
-                if (builderBars) BuilderHeader(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) })
             }
         }
         if (!pinned) {
@@ -525,7 +534,7 @@ private fun Shell(h: NeueHolders) {
                         .fillMaxHeight()
                         .offset { IntOffset((-(1f - left) * (railPx + 2)).toInt(), 0) },
                 ) {
-                    Rail(neue = neue, version = Platform.version, counts = mapOf(Page.BUILDER to state.deck.main.size.toString()))
+                    rail()
                 }
             }
         }
@@ -573,6 +582,7 @@ private fun Shell(h: NeueHolders) {
         }
         if (h.updates.dialogOpen) UpdateDialog(h.updates)
         if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
+        if (immersive) ZenReset(h.zen, Modifier.align(Alignment.BottomEnd))
         CardViewer(state, neue)
         MenuLayer(neue.menu) { neue.menu = null }
 
@@ -585,7 +595,7 @@ private fun Shell(h: NeueHolders) {
  * amounts follow the phase — slowly in, and back "slowly" as kai asked, a little
  * slower than they went. They are written into [ZenLayer] frame by frame and read
  * only in layers and draw blocks, so nothing recomposes while they move. The
- * clock that floats the cards and rolls the balls runs only while zen is deep.
+ * clock that floats the cards runs only while zen is deep.
  */
 @Composable
 private fun ZenClockwork(h: NeueHolders) {

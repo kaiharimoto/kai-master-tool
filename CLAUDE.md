@@ -355,41 +355,37 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 - **Its keyboard is `core/input/DeskShortcuts.kt`**, a second table beside
   `ShortcutTable`, so the tablet's exhaustive `when`s never carry desktop
   actions. The palette and the help dialog render it. **Its mouse is
-  `core/input/DeskMouse.kt`**: right-click adds to the main deck wherever the
-  card is, Shift right-click removes a deck copy (or sends a pool card to the
-  side), holding the left button adds a copy, and holding the right opens the
-  card large with every action beside it (`CardViewer`). **Compose's
-  `awaitFirstDown` ignores every button but the primary** — it is why
-  right-click did nothing for six releases; `CardPointer.awaitAnyDown` is the
-  fix, and `tools/shoot.sh --neue --mouse=…` proves a gesture by the deck's
-  counts. `NEUE.md` §4 has why.
-- **Every pixel of chrome is a pixel off every card.** The builder is one 48px
-  bar (no page header, no footer), thin strips, flush cards, and the lens keys
-  fold away with K; `NEUE.md` §3 has the budget. The ramp is darker than the
-  kit's in both themes, with a High contrast setting.
+  `core/input/DeskMouse.kt`**, kai's 1.0.10 wording: right-click adds from the
+  pool and **removes** from the deck, holding the left button opens the card
+  large with every action beside it (`CardViewer`), holding the right button
+  duplicates. **Compose's `awaitFirstDown` ignores every button but the
+  primary** — it is why right-click did nothing for six releases;
+  `CardPointer.awaitAnyDown` is the fix, and `tools/shoot.sh --neue --mouse=…`
+  proves a gesture by the deck's counts. `NEUE.md` §4 has why.
+- **Every pixel of chrome is a pixel off every card.** One 48px bar for the
+  window and the builder together (search is on the rail), one row over the
+  main deck (the boxed Groups button, the name, the lens), and the extra and
+  side decks' names wherever the deck has room to spare — `DeckLabels` fits it
+  both ways and keeps the larger card. The Groups panel stands beside the deck.
+  `NEUE.md` §3 has the budget. The ramp is darker than the kit's in both
+  themes, with a High contrast setting.
+- **Groups are tetris blocks** (`GroupBlocks`): with a lens on, one even seam
+  between every card, each group filling its own seams with its colour, paper
+  only between groups. No card moves or shrinks — 1.0.9 shrank cards facing
+  another group and the blocks came out ragged.
 - **The index rail folds away and F11 is immersive mode**, both decided by
   `core/layout/EdgeReveal.kt`; bars come out *over* the page, never pushing it,
   or the deck re-fits and every card jumps. Leaving full screen must go through
   `Floating`: Compose's `Maximized` never clears full screen.
 - **Immersive mode has a zen**: idle three seconds and the chrome fades, ten and
-  the deck floats in the middle over a garden of **Fibonacci spirals in blooming
-  sand, drawn over each other forever** (`core/layout/SpiralGarden.kt`,
-  `neue/zen/`). Golden spirals, 34 one way then 55 the other — a sunflower's two
-  families — centred on the deck as the flower's head. The sand flows outward
-  forever (a golden spiral zoomed is a golden spiral turned, so there is no
-  seam); into it, each arm is drawn outward by its own invisible rake, in the
-  flowing sand's frame, the arms setting off in golden-ratio order so they are
-  always evenly spread; each finished layer is drawn over by the next, turned by
-  the golden angle; and the sun circles the garden once every 90 s. No wipe.
-  Shallow on purpose: kai wants a background texture, not a moiré. The shader is
-  a line-for-line copy of `SpiralGarden`'s `phase`, `spacing`, `start`, `past`
-  and `weight`; change one, change both. In zen the pointer is free and the deck
-  leans toward it dreamily; only a click or a key ends it. kai rejected four
-  gardens before this one (too busy; balls looping at the sides; hand-drawn
-  samon; a gardener's stones), and of five ways to take it further chose the
-  bloom and the sun — not the pointer in the sand, not seeding.
-  `tools/zen/patterns.py` and `ideas.py` prototype any of it under the real deck
-  in seconds. `NEUE.md` §3a.
+  the deck floats in the middle of the window over **its own shadows** —
+  kai's one exception to "no shadows", in `neue/zen/ZenShadows.kt` alone, which
+  the law test enforces. **The cards are the garden**: in deep zen the pointer
+  picks any card up and puts it down anywhere (`ZenArrangement`, a picture only
+  — the deck's order never changes), only a key wakes it, and "Put the cards
+  back" comes out in the bottom-right corner. The sand garden that stood behind
+  the deck for six releases (spirals, rakes, a sun, `SpiralGarden`) is deleted,
+  on kai's word that it did not look good. `NEUE.md` §3a.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
   falling back to the small render. **Card names are stamped in the foil**

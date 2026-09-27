@@ -21,13 +21,13 @@ class ZenTest {
     }
 
     @Test
-    fun theStagePutsTheDeckInTheMiddleAndLeavesTheSides() {
+    fun theStagePutsTheDeckInTheMiddleWithRoomRoundIt() {
         val stage = ZenStage.of(deckLeft = 400f, deckTop = 100f, deckWidth = 1000f, deckHeight = 800f, windowWidth = 1920f, windowHeight = 1080f)
         val (cx, cy) = stage.apply(900f, 500f, 900f, 500f, 1f)
         assertEquals(960f, cx, 0.5f)
         assertEquals(540f, cy, 0.5f)
         // The deck takes no more than its share of the width, or of the height.
-        assertTrue(1000f * stage.scale <= 1920f * 0.52f + 0.5f)
+        assertTrue(1000f * stage.scale <= 1920f * 0.72f + 0.5f)
         assertTrue(800f * stage.scale <= 1080f * 0.8f + 0.5f)
         // At zero it is where it was.
         assertEquals(400f to 100f, stage.apply(400f, 100f, 900f, 500f, 0f))
@@ -54,5 +54,47 @@ class ZenTest {
         // Two cards away the builder's bump has all but gone; zen's has not.
         assertTrue(abs(DeskLean.dreamy(2f, 0f).rotationY) > abs(DeskLean.toward(2f, 0f).rotationY))
         assertTrue(abs(DeskLean.dreamy(0.45f, 0f).rotationY) < abs(DeskLean.toward(0.45f, 0f).rotationY))
+    }
+
+    @Test
+    fun anArrangementIsOffsetsThatAddUpAndReset() {
+        val a = ZenArrangement()
+        assertTrue(a.isEmpty)
+        val k = ZenArrangement.key(section = 0, index = 7)
+        a.move(k, 10f, -4f)
+        a.move(k, 5f, 4f)
+        assertEquals(15f to 0f, a.offsetOf(k))
+        assertEquals(0f to 0f, a.offsetOf(ZenArrangement.key(1, 7)))
+        val before = a.version
+        a.reset()
+        assertTrue(a.isEmpty && a.version > before)
+        assertEquals(0f to 0f, a.offsetOf(k))
+        assertEquals(0, a.layerOf(k))
+        // A card put down lands on top of what it is put on.
+        val first = ZenArrangement.key(0, 1)
+        val second = ZenArrangement.key(0, 2)
+        a.move(second, 1f, 1f)
+        a.move(first, 1f, 1f)
+        assertTrue(a.layerOf(first) > a.layerOf(second) && a.layerOf(second) > 0)
+        // Keys do not collide between sections of a legal deck.
+        assertNotEquals(ZenArrangement.key(0, 59), ZenArrangement.key(1, 0))
+    }
+
+    @Test
+    fun aHigherCardCastsAFurtherSofterFainterShadow() {
+        val low = ZenShadow.of(ZenShadow.REST_LIFT)
+        val high = ZenShadow.of(0.12f)
+        assertTrue(high.dy > low.dy && high.dx > low.dx)
+        assertTrue(high.blur > low.blur)
+        assertTrue(high.alpha < low.alpha)
+        // Down and to the right: the light is up and to the left.
+        assertTrue(low.dx > 0f && low.dy > 0f)
+    }
+
+    @Test
+    fun theResetCornerIsTheBottomRightOnly() {
+        assertTrue(ZenCorner.reaches(1900f, 1070f, 1920f, 1080f))
+        assertTrue(!ZenCorner.reaches(1900f, 500f, 1920f, 1080f))
+        assertTrue(!ZenCorner.reaches(100f, 1070f, 1920f, 1080f))
     }
 }

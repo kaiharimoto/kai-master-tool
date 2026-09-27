@@ -64,11 +64,16 @@ data class NeuePreferences(
      */
     val hdArt: Boolean = true,
     /**
-     * The lens's keys — the groups with their counts and opening rates — in a
-     * row of their own over the main deck. Off, they fold away and the deck
-     * has the row.
+     * The lens's keys in a row over the main deck, 1.0.9 only. Read by nothing
+     * since: kept so a document that carries it still reads.
      */
     val lensKeys: Boolean = true,
+    /**
+     * The Groups panel down the right of the deck — each group with its count
+     * and opening rate. Closed by default, because the width it takes comes off
+     * every card.
+     */
+    val groupsPanel: Boolean = false,
     /** The inspector's sections the user has folded shut, by name ("art", "details", "deck"). */
     val inspectorFolded: List<String> = emptyList(),
     /**

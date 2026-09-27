@@ -12,12 +12,16 @@ package com.kaiharimoto.mastertool.core.input
  * is Shift + right-click on a deck card — Shift is "the other way" throughout,
  * as Shift Enter and Shift right-click in the pool send a card to the side.
  *
- * And after 1.0.8, the two holds: **holding the left button adds a copy**, the
- * same answer as a right-click and the one a hand that never leaves the left
- * button can reach; **holding the right button opens the card**, large, in the
- * middle of the window, with everything the old menu offered beside it. A
- * right-click is therefore read on release rather than on press — it cannot know
- * it is not a hold until the button comes up.
+ * 1.0.10 settled the rest, in kai's words: **"hold left click should open the
+ * inspector, hold right click duplicates. just right click removes the card from
+ * the deck."** So a right-click is the quick edit in both places — in from the
+ * pool, out of the deck — a held right button is one more copy, and a held left
+ * button opens the card large, in the middle of the window, with everything the
+ * old menu offered beside it. Shift is still "the other way": Shift right-click
+ * sends a pool card to the side and puts another copy of a deck card in.
+ *
+ * A right-click is read on release rather than on press — it cannot know it is
+ * not a hold until the button comes up.
  */
 enum class MouseTarget(val heading: String) {
     POOL("A card in the pool"),
@@ -86,16 +90,16 @@ object DeskMouse {
         MouseBinding(MouseTarget.POOL, MouseGesture.SHIFT_RIGHT_CLICK, MouseAction.ADD_TO_SIDE, "Add it to the side deck"),
         MouseBinding(MouseTarget.POOL, MouseGesture.DOUBLE_CLICK, MouseAction.ADD, "Add it to the deck"),
         MouseBinding(MouseTarget.POOL, MouseGesture.SHIFT_DOUBLE_CLICK, MouseAction.ADD_TO_SIDE, "Add it to the side deck"),
-        MouseBinding(MouseTarget.POOL, MouseGesture.HOLD, MouseAction.ADD, "Add it to the deck"),
-        MouseBinding(MouseTarget.POOL, MouseGesture.RIGHT_HOLD, MouseAction.VIEW, "Open it large, with everything else"),
+        MouseBinding(MouseTarget.POOL, MouseGesture.HOLD, MouseAction.VIEW, "Open it large, with everything else"),
+        MouseBinding(MouseTarget.POOL, MouseGesture.RIGHT_HOLD, MouseAction.ADD, "Add it to the deck"),
         MouseBinding(MouseTarget.POOL, MouseGesture.DRAG, MouseAction.PICK_UP, "Pick it up and place it"),
 
         MouseBinding(MouseTarget.DECK, MouseGesture.HOVER, MouseAction.INSPECT, "Read it in the inspector"),
         MouseBinding(MouseTarget.DECK, MouseGesture.CLICK, MouseAction.SELECT, "Select it"),
-        MouseBinding(MouseTarget.DECK, MouseGesture.RIGHT_CLICK, MouseAction.ADD_COPY, "Add another copy to the deck"),
-        MouseBinding(MouseTarget.DECK, MouseGesture.SHIFT_RIGHT_CLICK, MouseAction.REMOVE, "Remove this copy"),
-        MouseBinding(MouseTarget.DECK, MouseGesture.HOLD, MouseAction.ADD_COPY, "Add another copy to the deck"),
-        MouseBinding(MouseTarget.DECK, MouseGesture.RIGHT_HOLD, MouseAction.VIEW, "Open it large, with everything else"),
+        MouseBinding(MouseTarget.DECK, MouseGesture.RIGHT_CLICK, MouseAction.REMOVE, "Remove this copy"),
+        MouseBinding(MouseTarget.DECK, MouseGesture.SHIFT_RIGHT_CLICK, MouseAction.ADD_COPY, "Add another copy to the deck"),
+        MouseBinding(MouseTarget.DECK, MouseGesture.HOLD, MouseAction.VIEW, "Open it large, with everything else"),
+        MouseBinding(MouseTarget.DECK, MouseGesture.RIGHT_HOLD, MouseAction.ADD_COPY, "Add another copy to the deck"),
         MouseBinding(MouseTarget.DECK, MouseGesture.DRAG, MouseAction.PICK_UP, "Move it, or drop it on the pool to remove it"),
     )
 

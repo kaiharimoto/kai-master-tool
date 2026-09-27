@@ -32,15 +32,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.deck.LensKeying
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
-import com.kaiharimoto.mastertool.core.layout.BreakdownLayout
-import com.kaiharimoto.mastertool.core.layout.CardPlacement
-import com.kaiharimoto.mastertool.core.layout.CellEdges
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.remote.CardSetRelease
-import com.kaiharimoto.neue.builder.drawRegion
+import com.kaiharimoto.neue.builder.drawBlocks
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.cards.Marker
@@ -99,7 +96,8 @@ data class ShotModel(
 object DeckShot {
     val WIDTH = 1600.dp
     private val PAD = 48.dp
-    private val GAP = 4.dp
+    /** The seam a lens opens between cards, as the builder draws it: flush otherwise. */
+    private val SEAM = 6.dp
     private val HEADER = 196.dp
     private val STRIP = 44.dp
     private val LEGEND = 40.dp
@@ -111,16 +109,18 @@ object DeckShot {
 
     private fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 10 else 15
 
-    private fun cardWidth(section: DeckSection): Dp {
-        val cols = columnsOf(section)
-        return (WIDTH - PAD * 2 - GAP * (cols - 1)) / cols
+    private fun gapOf(s: ShotSection): Dp = if (legendShown(s)) SEAM else 0.dp
+
+    private fun cardWidth(s: ShotSection): Dp {
+        val cols = columnsOf(s.section)
+        return (WIDTH - PAD * 2 - gapOf(s) * (cols - 1)) / cols
     }
 
     private fun gridHeight(s: ShotSection): Dp {
         val cols = columnsOf(s.section)
         val rows = (s.cards.size + cols - 1) / cols
-        val h = cardWidth(s.section) / CARD_RATIO
-        return if (rows == 0) 0.dp else h * rows + GAP * (rows - 1)
+        val h = cardWidth(s) / CARD_RATIO
+        return if (rows == 0) 0.dp else h * rows + gapOf(s) * (rows - 1)
     }
 
     private fun legendShown(s: ShotSection) = s.keying?.let { !it.isEmpty } == true
@@ -202,8 +202,9 @@ object DeckShot {
     private fun SectionBlock(s: ShotSection, model: ShotModel, images: Map<Int, ImageBitmap>, masks: Map<Int, NameMask>) {
         val c = Mu.colors
         val cols = columnsOf(s.section)
-        val w = cardWidth(s.section)
+        val w = cardWidth(s)
         val h = w / CARD_RATIO
+        val gap = gapOf(s)
         Column(Modifier.fillMaxWidth()) {
             Row(Modifier.fillMaxWidth().height(STRIP), verticalAlignment = Alignment.CenterVertically) {
                 Micro("${s.section.displayName} deck", color = c.ink)
@@ -233,41 +234,26 @@ object DeckShot {
                 if (s.cards.isEmpty()) {
                     Small("Empty", Modifier.align(Alignment.CenterStart), color = c.ink45)
                 }
-                val plan = keying?.let { BreakdownLayout.plan(it, cols) }
-                if (plan != null) {
+                if (keying != null) {
                     Canvas(Modifier.size(WIDTH - PAD * 2, gridHeight(s))) {
-                        plan.pieces.forEach { piece ->
-                            val key = keying.keyById(piece.keyId) ?: return@forEach
-                            drawRegion(
-                                cells = piece.cells,
-                                columns = cols,
-                                pitchX = (w + GAP).toPx(),
-                                pitchY = (h + GAP).toPx(),
-                                spacing = GAP.toPx(),
-                                inset = 1.dp.toPx(),
-                                color = GroupMarkers.paint(key.paint, c.ink),
-                                alpha = 1f,
-                            )
-                        }
+                        drawBlocks(
+                            keys = List(s.cards.size) { keying.keyAt(it) },
+                            columns = cols,
+                            cardWidth = w.toPx(),
+                            cardHeight = h.toPx(),
+                            seam = gap.toPx(),
+                            frame = 1.dp.toPx(),
+                            colorOf = { id -> keying.keyById(id)?.let { GroupMarkers.paint(it.paint, c.ink) } ?: c.ink },
+                            alphaOf = { 1f },
+                        )
                     }
                 }
                 s.cards.forEachIndexed { i, card ->
-                    val x = (w + GAP) * (i % cols)
-                    val y = (h + GAP) * (i / cols)
-                    val cellW = w.value * DENSITY
-                    val cellH = h.value * DENSITY
-                    val place = CardPlacement.place(
-                        cellWidth = cellW,
-                        cellHeight = cellH,
-                        edges = plan?.edgesAt(i) ?: NO_EDGES,
-                        crack = 6f * DENSITY,
-                        aspectRatio = CARD_RATIO,
-                    )
                     val key = keying?.keyById(keying.keyAt(i))
                     Box(
                         Modifier
-                            .offset(x + (place.left / DENSITY).dp, y + (place.top / DENSITY).dp)
-                            .size((place.width / DENSITY).dp, (place.height / DENSITY).dp),
+                            .offset((w + gap) * (i % cols), (h + gap) * (i / cols))
+                            .size(w, h),
                     ) {
                         ShotCard(card, images[card?.id?.value], masks[card?.id?.value], model, key?.let { Marker(it.mark, GroupMarkers.paint(it.paint, c.ink)) })
                     }
@@ -322,5 +308,4 @@ object DeckShot {
         }
     }
 
-    private val NO_EDGES = CellEdges(start = false, top = false, end = false, bottom = false)
 }
