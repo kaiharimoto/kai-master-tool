@@ -123,7 +123,7 @@ class GoldenVectorExportTest {
 
     @Test
     fun `board layout solve`() {
-        // Both 3DS screens, both tablet ends of docs/DEVICES.md's matrix, and
+        // Both 3DS screens, both tablet ends of docs/classic/DEVICES.md's matrix, and
         // the degenerate inputs the solver is documented to survive: a zero
         // width, an aspect ratio of zero, a growth below one and a roomAbove
         // past its own clamp.

@@ -5,15 +5,16 @@ The deck builder for a desk: mouse, keyboard, a large display, and the
 `kit/MASTER-UI.md`) — paper and ink, zero radius, no shadows, Inter, numbered
 pages, a quiet voice.
 
-It is a **separate application** from the tablet app and from the older
-`:desktopApp`. It installs on its own, keeps its own data, updates itself from
-its own release track, and shares only the rules: `:core` (every deck rule,
-fitter, lens and odds calculation) and `:ui`'s state holders
-(`DeckBuilderState`, whose behaviour is the tablet's by construction). None of
-its look comes from `:ui`.
+**It is the app.** It began as a separate desktop application beside the tablet
+app; kai has since made it the one this repository is about, to be ported fully
+and faithfully to the Android tablet — where it replaces the tablet app in place
+— and to a proper Mac app. It is built on `:core` (every deck rule, fitter, lens
+and odds calculation) and `:builder` (the state holders, `DeckBuilderState`
+first, moved out of the tablet's `:ui` with their packages intact). None of its
+look comes from anywhere else. The port's phases are in `CLAUDE.md`, "The port".
 
-![The builder, paper](neue/neue-builder-paper.png)
-![The builder, ink, at 2560 × 1440](neue/neue-builder-ink.png)
+![The builder, paper](shots/neue-builder.png)
+![The builder, ink](shots/neue-builder-ink.png)
 
 Play mode is not in it. kai will rebuild play from scratch later; Neue is the
 builder, its odds and its statistics.
@@ -24,7 +25,8 @@ builder, its odds and its statistics.
 
 | | |
 |---|---|
-| `app/neue/` | the module: UI and `main`, JVM only |
+| `app/neue/` | the module: UI and `main`; JVM today, Android being added |
+| `app/builder/` | `DeckBuilderState` and the plumbing Neue shares with the APK |
 | `app/neue/VERSION` | the version a local build carries; releases pass `-Pneue.versionName` |
 | `app/neue/icons/` | installer icons, drawn by `tools/neue/mark.py` |
 | `core/input/DeskShortcuts.kt` | the keyboard, as data |
@@ -34,7 +36,7 @@ builder, its odds and its statistics.
 | `studio/.../NeueStudio.kt` | headless screenshots: `tools/shoot.sh --neue` |
 
 ```
-cd app && ./gradlew :neue:run                  # run it (needs the Android SDK, like :ui)
+cd app && ./gradlew :neue:run                  # run it (needs Google Maven, like every module but :core)
 ./gradlew :neue:jvmTest                         # the Master UI law test and the key map
 tools/shoot.sh --neue --page=builder --theme=ink --width=2560 --height=1440 --name=b
 ```

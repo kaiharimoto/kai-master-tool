@@ -22,7 +22,7 @@ import com.kaiharimoto.mastertool.ui.update.UpdateState
  * enough that almost everything on it has to be behind the one control. They
  * had better offer the same menu, and the only way to be sure of that is for
  * there to be one menu. A second copy is how a setting ends up reachable on a
- * tablet and not on a phone, which is exactly the failure `docs/DEVICES.md` was
+ * tablet and not on a phone, which is exactly the failure `docs/classic/DEVICES.md` was
  * written after.
  */
 

@@ -13,7 +13,7 @@ import kotlin.math.pow
  *
  * ## Why a tonemap at all, when this codebase refused one
  *
- * The refusal in `docs/FIDELITY.md` was correct and it was about **ACES**. A
+ * The refusal in `docs/classic/FIDELITY.md` was correct and it was about **ACES**. A
  * filmic curve that crushes the bottom of the range is a catastrophe on a stage
  * whose whole identity is true black and whose shadow edges, pile sides and felt
  * fall-off all live in the bottom hundredth. Measured at a linear 0.002 — a
@@ -54,7 +54,7 @@ import kotlin.math.pow
  *
  * ## And the grade that was planned and is not here
  *
- * `docs/PHOTOREAL.md` asked for **+2 EV with a post-power of 1.2**, which is the
+ * `docs/classic/PHOTOREAL.md` asked for **+2 EV with a post-power of 1.2**, which is the
  * "punchy" finish every implementation of this ships some form of. Measured, it
  * is the ACES mistake in miniature. A power above one applies to the *display*
  * value, so it costs most exactly where the value is smallest: at a linear 0.002
@@ -71,7 +71,7 @@ import kotlin.math.pow
  * ## One definition, two languages
  *
  * [sksl] emits the same arithmetic as [tonemap] from the same constants, which
- * is `docs/PHOTOREAL.md` §0's answer to the one structural hole in this
+ * is `docs/classic/PHOTOREAL.md` §0's answer to the one structural hole in this
  * project's fidelity discipline: shader text is unreachable from `commonTest`
  * on either platform, so a shader is the only lighting in the app with no test
  * under it. A generator does not fix that in general. It fixes it for anything

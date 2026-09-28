@@ -467,9 +467,11 @@ private fun applyDrop(
             if (stacked) stackIndexToListIndex(state.deck[target], landed.index) else landed.index,
         )
 
+        // `DragSession` lives in `:builder` now, so the compiler will not smart-cast
+        // across the module boundary; the branch above has already ruled out null.
         else -> state.moveCardTo(
             card = session.card,
-            from = session.section,
+            from = session.section!!,
             fromIndex = session.index,
             to = target,
             insertBefore = if (stacked) {

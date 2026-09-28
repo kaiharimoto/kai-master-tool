@@ -8,7 +8,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
  * Pointing at the table, for a harness that until now could only type at it.
  *
  * [Keys] was the whole of the studio's hand, and that turned out to bound what
- * the loop could ever look at. Two of the things `docs/LOOP.md` §6 has been
+ * the loop could ever look at. Two of the things `docs/classic/LOOP.md` §6 has been
  * asking for are the same missing mechanism: **a foil cannot be photographed**,
  * because `CardStock.of` foils face-up extra-deck cards and nothing in the
  * shortcut table opens the extra deck — spreading a pile is a tap; and

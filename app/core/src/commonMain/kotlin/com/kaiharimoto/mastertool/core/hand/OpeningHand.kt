@@ -17,7 +17,7 @@ import kotlin.random.Random
  * builder: the consistency question is answered exactly by [HandOdds] rather
  * than sampled, so a dealt hand would be an illustration of a number the app
  * already knows. It is kept, tested, because a scrubbable practice hand is a
- * queued piece of work (`docs/TABLE.md` §5) and this is the half of it that is
+ * queued piece of work (`docs/classic/TABLE.md` §5) and this is the half of it that is
  * hard to get right. Until then, do not describe it in the README as a feature.
  */
 data class OpeningHand(

@@ -17,14 +17,14 @@ layout solving, hand odds, the renderer's arithmetic, the gesture state machines
 — with no Compose and no platform code, so it compiles and its tests run with no
 Android SDK installed.
 
-`:ui`, `:androidApp` and `:desktopApp` are a different story: every Android
+`:builder`, `:neue`, `:androidApp` and `:ui` are a different story: every Android
 artifact is served only from Google's Maven, so they need network access to it.
 `settings.gradle.kts` detects whether an SDK is present and **skips those modules
 when it is not**, which is why the command above works in a bare container.
 Force it either way with `-Pmastertool.android=true|false`.
 
 If you cannot build the UI locally, push a branch: `.github/workflows/build-app.yml`
-compiles all three modules on every push and is the real compile check.
+compiles every module on every push and is the real compile check.
 
 ## The rules that are not negotiable
 
@@ -33,9 +33,10 @@ stated without mentioning the screen, it belongs in `:core` and it belongs in a
 `commonTest`. There are ~89 test files there and that is the reason the app can
 be changed quickly.
 
-**Every gesture ships with two idioms.** One for a finger, one for a pointer or
-a key. Keyboard shortcuts are *data* in `core/input/ShortcutTable.kt` and the
-in-app help sheet renders that table, so the two cannot drift apart.
+**Every gesture ships with two idioms.** One for a pointer or a key, one for a
+finger. Neue's keyboard is *data* in `core/input/DeskShortcuts.kt` and its mouse
+in `core/input/DeskMouse.kt`; the palette and the help dialog render the tables,
+so the two cannot drift apart.
 
 **`versionCode` may only ever go up.** It is derived from the version name as
 `100000 + major*10000 + minor*100 + patch`. The floor exists because an earlier
@@ -51,15 +52,20 @@ shipped — the failure is invisible on a fresh install and fatal on every real
 device.
 
 **Preferences are one JSON document, not a schema.** Adding a preference is a
-field with a default (`UiPreferences`). It is never a migration.
+field with a default (`NeuePreferences`; `UiPreferences` for the classic tablet
+app). It is never a migration.
 
 ## Before you touch the UI
 
-Read **[`docs/DESIGN.md`](docs/DESIGN.md)** first. It is the handbook — palette,
-type scale, spacing, motion, component rules, anti-patterns — with the reasoning
-attached, and it will save you writing something that gets reverted. The play
-stage has its own additions in [`docs/TUNING.md`](docs/TUNING.md) and
-[`docs/DESIGN.md` §11](docs/DESIGN.md).
+Neue is drawn in **Master UI**, and the language is a test: read
+**[`docs/NEUE.md`](docs/NEUE.md)** §2 first. `MasterUiLawTest` fails the build on a
+radius, a shadow, a gradient, a colour literal, a Material import, a font weight
+of 600 or a spring anywhere in `app/neue`, except in the handful of files where
+kai asked for one — the card foil, the group markers, zen's shadows. Every
+clickable declares its cursor (`Modifier.cursor(…)`/`cursorPointer(…)`), and every
+pixel of chrome over the deck is declared to the fitter or the cards pay for it.
+
+The classic tablet app's handbook is [`docs/classic/DESIGN.md`](docs/classic/DESIGN.md).
 
 Two Compose facts have each cost this repo more than one debugging round, and
 both are written on the files they bit:

@@ -81,7 +81,7 @@ class StageTuningTest {
         //
         // Only the aspect ratio matters — `reach` and `governing` both scale
         // linearly with the surface — so densities are left out rather than
-        // forgotten, and these are the dp boxes from `docs/DEVICES.md`.
+        // forgotten, and these are the dp boxes from `docs/classic/DEVICES.md`.
         val boxes = listOf(
             "tab-s11" to (1480f to 924f),
             "tab-a9" to (1280f to 800f),

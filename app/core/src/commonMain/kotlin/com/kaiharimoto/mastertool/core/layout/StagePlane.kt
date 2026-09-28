@@ -468,7 +468,7 @@ data class StagePlane(
      * It is not a small error. A spread pile floats at about half a card height;
      * at the table seat that is tens of mat pixels, against a fan whose cards may
      * sit a third of a card width apart. The card you got was reliably not the
-     * card you pointed at, and `docs/TABLE.md` §4's whole feature was the worse
+     * card you pointed at, and `docs/classic/TABLE.md` §4's whole feature was the worse
      * for it.
      *
      * ## What it does and does not promise
@@ -652,7 +652,7 @@ data class StagePlane(
      * overhead, 0.124 at the table seat and 0.209 seated** on a sixteen-by-ten
      * stage — so between three quarters and nineteen twentieths of the focus
      * knob's travel moved a plane that was already past every card on the table,
-     * and the dial read as broken because it very nearly was. `docs/LOOP.md`:
+     * and the dial read as broken because it very nearly was. `docs/classic/LOOP.md`:
      * *a constraint nobody has re-derived is a constraint that has started
      * guessing.*
      *

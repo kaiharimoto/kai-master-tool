@@ -4,7 +4,7 @@ package com.kaiharimoto.mastertool.core.layout
  * A thing on the table you can press that is not a card.
  *
  * There is exactly one kind, and adding a second should be an argument rather
- * than an edit. `docs/DESIGN.md` §10 says the table has no affordances drawn on
+ * than an edit. `docs/classic/DESIGN.md` §10 says the table has no affordances drawn on
  * it, because a table does not do that either, and that stance is why the guide
  * exists at all — so every control here is spent against it.
  *

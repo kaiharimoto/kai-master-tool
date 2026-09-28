@@ -24,7 +24,7 @@ package com.kaiharimoto.mastertool.core.layout
  * ## What it is measured in
  *
  * Density-independent pixels, like everything else compared against a size in
- * this app (`docs/DEVICES.md` §2). It happens not to matter for a ratio, since
+ * this app (`docs/classic/DEVICES.md` §2). It happens not to matter for a ratio, since
  * the density cancels, but taking pixels here would be the one place in the
  * layout where a number means something different on a phone — and that is
  * exactly the habit that put a pixel floor in `BoardLayouter`.

@@ -696,15 +696,15 @@ object StageRig {
      * [gleam] the only Blinn-Phong in this app was `Shading.of`, which takes a
      * card's pose and a `CardMaterial` and is asked about nothing else. So brass
      * and cloth and painted timber differ in *colour* and in nothing else, which
-     * is exactly why `docs/LOOP.md` §6 recorded the lamp as a "flat fill" and
-     * `docs/AAA.md` #67 records the material half of a surface as unfinished.
+     * is exactly why `docs/classic/LOOP.md` §6 recorded the lamp as a "flat fill" and
+     * `docs/classic/AAA.md` #67 records the material half of a surface as unfinished.
      *
      * This is deliberately **not** a fifth term inside [lit]. `GoldenStageTest`
      * records what [lit] returns for every face of a slab at three seats, and
-     * `docs/LOOP.md` §3 forbids re-recording a golden and changing behaviour in
+     * `docs/classic/LOOP.md` §3 forbids re-recording a golden and changing behaviour in
      * one release. So the highlight arrives beside it, additively, in the same
      * register [pool] and [wash] established — and the day the rig grows a
-     * proper specular (`docs/PHOTOREAL.md` stage 2) this is the shape of the
+     * proper specular (`docs/classic/PHOTOREAL.md` stage 2) this is the shape of the
      * thing that gets absorbed into it.
      */
     data class Gloss(
@@ -810,7 +810,7 @@ object StageRig {
         }
 
         // A *gradient* rather than one value per face, for the reason
-        // `docs/LOOP.md` iteration 9 gives about the wall: a facet is not a
+        // `docs/classic/LOOP.md` iteration 9 gives about the wall: a facet is not a
         // point, and a correct number evaluated at its centre comes out as one
         // flat tone stepping to another at the seam. On a twenty-sided lamp
         // base that is not a subtle artefact — it is a starburst, because the

@@ -589,7 +589,7 @@ internal class MatPilot(
      *
      * ## And a flick keeps its momentum
      *
-     * `docs/AAA.md` #7, and the rest of what a release means now. The rate has
+     * `docs/classic/AAA.md` #7, and the rest of what a release means now. The rate has
      * been accumulating all through the gesture (see [sample]); below
      * `CameraRig.COAST_FLOOR` this does nothing at all, which is what keeps a
      * slow drag that merely ended from drifting on afterwards.

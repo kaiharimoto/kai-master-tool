@@ -10,7 +10,7 @@ body:
         and will be redesigned from scratch rather than ported, so a request to
         "bring them back" is already on the list. Everything else is open.
 
-        `docs/TABLE.md` §5 is the ordered backlog if you want to see what is
+        `docs/classic/TABLE.md` §5 is the ordered backlog if you want to see what is
         already queued.
 
   - type: textarea

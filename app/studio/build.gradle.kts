@@ -50,7 +50,7 @@ tasks.register<JavaExec>("spikeShader") {
 
 tasks.register<JavaExec>("spikeSeam") {
     group = "verification"
-    description = "Asks the three questions docs/PHOTOREAL.md's widened seam rests on."
+    description = "Asks the three questions docs/classic/PHOTOREAL.md's widened seam rests on."
     dependsOn("jvmMainClasses")
     mainClass.set("com.kaiharimoto.mastertool.studio.SeamSpikeKt")
     classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +

@@ -515,7 +515,7 @@ internal fun DrawScope.drawCardSurface(
      * Zero everywhere until somebody turns the dial, and zero on
      * `Scene.MINIMAL` whatever the dial says — the caller decides both, because
      * the depth is a fact about where the camera is and this function is about
-     * what the lamp is doing. See `Defocus`, and `docs/DESIGN.md` §7 for why
+     * what the lamp is doing. See `Defocus`, and `docs/classic/DESIGN.md` §7 for why
      * this is allowed to argue with "the brightness does not".
      */
     haze: Float = 0f,
@@ -544,7 +544,7 @@ internal fun DrawScope.drawCardSurface(
     // and the blacks *up* by the same alpha, so nothing gets darker on average
     // and the card simply stops having as much to say — which is what looking
     // at something through air does. Black here would be a card fading out,
-    // which is the animation `docs/DESIGN.md` §7 refuses.
+    // which is the animation `docs/classic/DESIGN.md` §7 refuses.
     //
     // Over the veil, because the veil is the light on the card and this is the
     // air in front of it, and under the specular, because a highlight seen
@@ -574,7 +574,7 @@ internal fun DrawScope.drawCardSurface(
         )
 
         // A round pool everywhere but foil, and on foil an ellipse — which is
-        // the whole of `docs/AAA.md` #21 at the drawing end. The stretch is
+        // the whole of `docs/classic/AAA.md` #21 at the drawing end. The stretch is
         // along the draw scope's own x, and that is already the card's width,
         // because this runs inside the homography the card is drawn through:
         // the card's rotation reaches the screen out there, so nothing in here
@@ -656,7 +656,7 @@ private val ControlColour = Color(0xFF1A1A21)
  * turns it, which is the whole point of it being *on* the table.
  *
  * This is the first thing ever drawn on this felt that is not a card, and
- * `docs/DESIGN.md` §10 says there should be nothing. The exception is argued for
+ * `docs/classic/DESIGN.md` §10 says there should be nothing. The exception is argued for
  * where the geometry lives, in `MatControls`.
  */
 internal fun DrawScope.drawMatControls(layout: BoardLayout, field: PlayField) {

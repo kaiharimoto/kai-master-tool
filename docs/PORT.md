@@ -5,7 +5,7 @@ the touchscreen, with the fishbowl as the demo — and then, on being told the
 outer cameras are a stereo pair, for **marker AR**: point the console at a real
 desk and the duel table is on it.
 
-This document is what `docs/LOOP.md` is for the play stage: the shape of the
+This document is what `docs/classic/LOOP.md` is for the play stage: the shape of the
 work, the decisions already taken, and a ledger of what has been tried. Read it
 before touching anything under `3ds/`.
 
@@ -188,7 +188,7 @@ else. Nothing else in the list is a destination.
 **While the stylus holds a card the shoulders are modifiers, not camera.** L
 sets it face-down, R lays it sideways, ZR tucks it under as material — and that
 last one makes `DropIntent.Attach` reachable on the console before it is
-reachable on the tablet, where `docs/TABLE.md` still records it as a domain
+reachable on the tablet, where `docs/classic/TABLE.md` still records it as a domain
 operation waiting for an idiom that is not already spoken for. On a 3DS one is
 not: a stylus cannot be a second finger, so the shoulders are free the moment
 the drag owns the gesture.
@@ -243,7 +243,7 @@ without taking the whole conformance suite down with it. Rebinding a button in
 
 `Scene` is already a persisted enum with a room contract. AR is a third room, and
 **the room is reality** — a cheerful shortcut through the eleven phases of
-`docs/PHOTOREAL.md`.
+`docs/classic/PHOTOREAL.md`.
 
 A printable ArUco-style sheet lives in `3ds/marker/`; its printed size is a
 setting, because it is what sets the table's real-world scale. The pipeline is

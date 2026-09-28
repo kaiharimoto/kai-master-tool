@@ -46,7 +46,7 @@ data class Ring(val radius: Float, val height: Float)
  * the *stage's* z whatever the pose is pointing at, because that is a fact about
  * the felt a card is resting on rather than about the card. Every vertex here
  * goes through [Rot3.place] instead, so this shape may be turned about any axis
- * without shearing. `docs/DESIGN.md` §11 says a tumble "would buy a posed box in
+ * without shearing. `docs/classic/DESIGN.md` §11 says a tumble "would buy a posed box in
  * core with its own eight corners, and nothing has yet needed one" — this is
  * that box, arriving for a different reason. Nothing tips anything yet, and the
  * handbook clause is the place to argue it when something wants to.

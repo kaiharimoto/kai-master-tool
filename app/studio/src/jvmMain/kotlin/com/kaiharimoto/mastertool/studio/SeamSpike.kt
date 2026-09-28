@@ -28,7 +28,7 @@ import java.io.File
 /**
  * The three things the widened seam rests on, asked rather than assumed.
  *
- * `docs/PHOTOREAL.md` §0 names them as spikes because each is a premise several
+ * `docs/classic/PHOTOREAL.md` §0 names them as spikes because each is a premise several
  * later stages are built on, each is undocumented on at least one backend, and
  * each fails *silently* — a shader that quietly degrades produces a picture, and
  * a picture nobody compared is a premise nobody checked. This is the run that

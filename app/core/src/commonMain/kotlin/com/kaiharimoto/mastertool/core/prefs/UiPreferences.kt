@@ -163,7 +163,7 @@ data class UiPreferences(
      * The foil edge every card wears, in the builder and on the play stage.
      *
      * **On by default**, which is a deliberate exception to the handbook. The
-     * prismatic ramp is spent sparingly everywhere else — `docs/DESIGN.md` says
+     * prismatic ramp is spent sparingly everywhere else — `docs/classic/DESIGN.md` says
      * fringing everything reads as decoration and fringing the thing under your
      * finger reads as light, and that rule stands for the *fringe*. This is the
      * other effect: the original tool put it on every card in the deck grid, it
@@ -182,7 +182,7 @@ data class UiPreferences(
      * Which room the play stage is in.
      *
      * [Scene.MINIMAL] by default, and that is a decision rather than caution.
-     * The minimal stage is what `docs/DESIGN.md` describes and it is what the
+     * The minimal stage is what `docs/classic/DESIGN.md` describes and it is what the
      * app *is*; a desk is a thing you go and choose, the way you choose a card
      * back. A build that arrived one morning with a bedroom in it would have
      * changed the tool on somebody who had not asked.
@@ -222,7 +222,7 @@ data class UiPreferences(
     /**
      * Whether the tablet's own tilt moves the camera a degree or two.
      *
-     * `docs/AAA.md` #8, and the strongest "this is a place rather than a
+     * `docs/classic/AAA.md` #8, and the strongest "this is a place rather than a
      * picture" cue a handheld screen has: things at different depths move by
      * different amounts when you tip the device, which is what a window does and
      * what a photograph cannot.

@@ -17,7 +17,7 @@ import com.kaiharimoto.mastertool.core.motion.HeadTilt
  * Android reads `TYPE_GAME_ROTATION_VECTOR`. Desktop returns **nothing, ever**,
  * and that is a decision rather than a gap: `:studio` runs the real `PlayScreen`
  * headlessly on the desktop target, and two runs of it being bit-identical is
- * the loop's whole eye (`docs/LOOP.md` §3). A sensor that reported anything at
+ * the loop's whole eye (`docs/classic/LOOP.md` §3). A sensor that reported anything at
  * all there would end that, so the guarantee is structural — there is no code
  * path on desktop that can produce a sample.
  *

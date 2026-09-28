@@ -10,7 +10,7 @@ import kotlin.math.abs
  * There is no blur on this stage and there is not going to be one:
  * `BlurEffect` is API 31 against a `minSdk` of 26 and degrades to a silent
  * no-op below it, and a `renderEffect` per card is the one shape of change
- * `docs/PHOTOREAL.md` measured and named fatal.
+ * `docs/classic/PHOTOREAL.md` measured and named fatal.
  *
  * A blur would also buy less than it costs. The board's whole depth span is 55
  * mat pixels at the reading seat and 425 at the seated one, so a

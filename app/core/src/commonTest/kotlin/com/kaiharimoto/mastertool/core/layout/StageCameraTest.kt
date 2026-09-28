@@ -303,7 +303,7 @@ class StageCameraTest {
     }
 
     /**
-     * The table in `docs/TUNING.md`, cell for cell.
+     * The table in `docs/classic/TUNING.md`, cell for cell.
      *
      * A table of numbers in prose with nothing under it is worth what the last
      * one was: the lamp's height read "five to one" for two releases and

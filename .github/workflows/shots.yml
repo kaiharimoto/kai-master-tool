@@ -1,4 +1,10 @@
-name: Shoot the play stage
+name: Shoot the classic tablet app
+
+# CLASSIC. This renders the tablet app and its play stage, retired as Neue
+# becomes the APK (CLAUDE.md, "The port"), into docs/classic/shots. The README's
+# pictures are Neue's, rendered with `tools/shoot.sh --neue` into
+# docs/shots/neue-*.png; this workflow moves to Neue when :ui is deleted.
+#
 
 # The pictures at the top of the root README. `:studio` composes the real
 # PlayScreen into an ImageComposeScene - real theme, real dependencies, real
@@ -121,11 +127,11 @@ jobs:
       # first is expensive.
       #
       # The stage keeps the studio's own 1600x1000: it is the reference every
-      # before/after number in docs/LOOP.md is measured against, and layout is
+      # before/after number in docs/classic/LOOP.md is measured against, and layout is
       # dp-driven, so a narrower render is a differently laid out scene rather
       # than a smaller picture. The builder is sized deliberately instead -
       # 1480dp wide clears the 1400dp cutoff below which the header starts
-      # dropping controls (docs/DEVICES.md), and the TALL shot is a phone.
+      # dropping controls (docs/classic/DEVICES.md), and the TALL shot is a phone.
       - name: Render
         run: |
           set -euo pipefail
@@ -167,7 +173,7 @@ jobs:
         run: |
           python3 tools/contact.py \
             --raw "$RUNNER_TEMP/shots" \
-            --out docs/shots \
+            --out docs/classic/shots \
             --shots "$STAGE_SHOTS,$BUILDER_SHOTS" \
             --log "$RUNNER_TEMP/shoot.log" \
             --scale '${{ inputs.scale }}' \
@@ -177,7 +183,7 @@ jobs:
         if: ${{ inputs.commit }}
         run: |
           set -euo pipefail
-          git add -- docs/shots
+          git add -- docs/classic/shots
           if git diff --cached --quiet; then
             echo "Nothing moved. The deal is seeded, so this is the expected result of a re-run."
             exit 0

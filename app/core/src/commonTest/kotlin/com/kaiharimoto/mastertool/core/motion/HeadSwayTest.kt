@@ -67,7 +67,7 @@ class HeadSwayTest {
 
     @Test
     fun aDeviceLyingOnATableCostsTheFrameLoopNothing() {
-        // The claim `docs/LOOP.md`'s "nothing idles" reduces to here. `step`
+        // The claim `docs/classic/LOOP.md`'s "nothing idles" reduces to here. `step`
         // returning false is what stops the play stage writing its plane, and a
         // plane written every frame re-projects sixty cards.
         val sway = HeadSway()

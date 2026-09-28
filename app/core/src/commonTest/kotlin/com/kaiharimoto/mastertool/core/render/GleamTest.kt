@@ -103,7 +103,7 @@ class GleamTest {
         // A facet is not a point. A correct value evaluated at its centre comes
         // out as one flat tone stepping to another at the seam, which on a
         // twenty-sided lamp base is a starburst — the same defect
-        // `docs/LOOP.md` iteration 9 found one level up, on the wall.
+        // `docs/classic/LOOP.md` iteration 9 found one level up, on the wall.
         val curved = Turned.solid(
             pose = Pose3(position = Vec3(800f, 400f, 0f)),
             profile = listOf(Ring(60f, 0f), Ring(20f, 90f)),

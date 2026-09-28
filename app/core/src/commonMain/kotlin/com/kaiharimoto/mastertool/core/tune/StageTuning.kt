@@ -210,7 +210,7 @@ data class CardTune(
  * **It is not a blur and it does not become one by being turned up.** No blur
  * primitive is reachable here: `BlurEffect` is API 31 against a `minSdk` of 26
  * and degrades to a silent no-op below it, and a `renderEffect` per card is the
- * one shape of change `docs/PHOTOREAL.md` measured and called fatal — an
+ * one shape of change `docs/classic/PHOTOREAL.md` measured and called fatal — an
  * offscreen layer and a tile flush per card, per frame.
  *
  * It is also worth far less than it sounds. Measured on this board at
@@ -289,7 +289,7 @@ data class FocusTune(
  *
  * The derived distance is floored rather than trusted — see `Scenery.wallAt` —
  * because the two knobs can subtract, and a wall at or in front of the mat's far
- * edge would stand over the cards, which is the one thing `docs/DESIGN.md` §11
+ * edge would stand over the cards, which is the one thing `docs/classic/DESIGN.md` §11
  * says nothing in a scene may do.
  */
 @Serializable
@@ -574,7 +574,7 @@ object StageKnobs {
  *
  * Exported so a paste-back is a complete picture rather than fifteen sliders out
  * of context. Everything here either re-solves a layout, is pinned by a named
- * test, or both — `docs/TUNING.md` says which. They are read straight off the
+ * test, or both — `docs/classic/TUNING.md` says which. They are read straight off the
  * live constants rather than typed again, so this cannot drift from the build it
  * came out of; a reference table that lies is worse than none.
  */

@@ -125,7 +125,7 @@ internal data class StageLook(
      * What a shadow takes the mat down to — never black.
      *
      * A shadow darker than the surface behind it is not a shadow, it is a hole.
-     * `docs/AAA.md` #18 says what it should be instead and says it better: a
+     * `docs/classic/AAA.md` #18 says what it should be instead and says it better: a
      * shadow on lit felt is the felt, darker and a little cooler.
      */
     val shadow: Color,
@@ -231,7 +231,7 @@ internal data class StageLook(
          * The wood is dark, and that is the one place this scene argues with
          * itself. A real desk in a bright room is a large light surface, and a
          * large light surface beside a deck of cards is the anti-pattern
-         * `docs/DESIGN.md` §12 lists first — chrome that competes with the
+         * `docs/classic/DESIGN.md` §12 lists first — chrome that competes with the
          * cards. So the stock is a dark walnut rather than a pine, the light
          * does the brightening, and the mat stays the darkest thing in frame.
          *
@@ -494,7 +494,7 @@ private val Seam = Stroke(width = 1f)
  *
  * Closing the seam also grows a solid's own outline by half a pixel, which on
  * `Scene.MINIMAL` — one slab, four seams nobody has ever seen — is a change to
- * the handbook's stage in exchange for nothing. `docs/LOOP.md`'s mandate is not
+ * the handbook's stage in exchange for nothing. `docs/classic/LOOP.md`'s mandate is not
  * a preference about that: minimal is the **control** the room is judged
  * against, and iteration 7's own note is that it "comes out bit-identical,
  * which is the mandate's requirement and is checked rather than assumed". A
@@ -612,7 +612,7 @@ private fun DrawScope.drawSolid(
             //
             // Additive, and beside the rig rather than inside it. Inside, it
             // would move all three of `GoldenStageTest`'s dumps, and
-            // `docs/LOOP.md` §3 forbids re-recording a golden and changing
+            // `docs/classic/LOOP.md` §3 forbids re-recording a golden and changing
             // behaviour in one release. Beside, it is the same shape as the
             // pool and the wash, it cannot darken anything, and a bug in it
             // cannot blank a surface.
@@ -722,7 +722,7 @@ private fun washBrush(wash: FaceWash, stage: StagePlane, surface: Color): Brush 
  * that is at 232, at every seat the camera can reach. Bringing the sun's disc
  * into the opening would need light arriving from *below* the eye. So what the
  * window shows is sky, graded, and the sun stays outside the frame where the
- * arithmetic puts it. `docs/LOOP.md` iteration 8 carries the numbers.
+ * arithmetic puts it. `docs/classic/LOOP.md` iteration 8 carries the numbers.
  *
  * The axis is the pane's own: the midpoint of its bottom edge to the midpoint of
  * its top, both flattened, so the gradient turns with the room and needs no

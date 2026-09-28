@@ -16,7 +16,7 @@ kotlin {
 
     sourceSets {
         jvmMain.dependencies {
-            implementation(project(":ui"))
+            implementation(project(":builder"))
             implementation(project(":core"))
 
             implementation(compose.desktop.currentOs)

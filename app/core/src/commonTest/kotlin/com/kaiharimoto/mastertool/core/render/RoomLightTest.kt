@@ -350,7 +350,7 @@ class RoomLightTest {
 
     @Test
     fun aShadowIsCoolerThanWhatSurroundsItRatherThanJustDarker() {
-        // `docs/AAA.md` #18. With the key's direct term gone its warmth goes
+        // `docs/classic/AAA.md` #18. With the key's direct term gone its warmth goes
         // with it, so what is left is the bounce and the player's rim — which
         // is the physics rather than a colour anybody chose.
         val up = Vec3(0f, 0f, 1f)

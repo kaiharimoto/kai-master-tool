@@ -46,7 +46,7 @@ import com.kaiharimoto.mastertool.ui.gpu.effect
  * the film's own grain, so it is after.
  *
  * It landed here rather than in `Tone` on purpose, and that is a correction to
- * the plan. `docs/PHOTOREAL.md` made AgX wait for `Tone.veil` to die, because it
+ * the plan. `docs/classic/PHOTOREAL.md` made AgX wait for `Tone.veil` to die, because it
  * assumed the curve would be applied per surface — where a veil that has to
  * compensate for it goes negative, and a black overlay can only darken. A grade
  * over the finished picture has no such problem: it never meets `Tone` at all.

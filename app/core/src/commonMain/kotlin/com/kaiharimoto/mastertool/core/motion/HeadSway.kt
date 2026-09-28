@@ -17,7 +17,7 @@ import kotlin.math.exp
 data class HeadTilt(val pitchDegrees: Float, val rollDegrees: Float)
 
 /**
- * The tablet's own tilt, moving the camera a degree or two. `docs/AAA.md` #8:
+ * The tablet's own tilt, moving the camera a degree or two. `docs/classic/AAA.md` #8:
  * *"the cheapest three-dimensional tell that exists on a handheld… one sensor
  * listener and a low-pass filter."*
  *

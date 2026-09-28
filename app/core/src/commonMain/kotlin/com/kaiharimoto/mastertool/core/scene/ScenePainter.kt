@@ -89,7 +89,7 @@ import com.kaiharimoto.mastertool.core.motion.Vec3
  * made of that is beneath discussion against a budget of eight thousand
  * microseconds.
  *
- * This is `docs/AAA.md` #93's cheap ancestor and it is honest about being one.
+ * This is `docs/classic/AAA.md` #93's cheap ancestor and it is honest about being one.
  * A real depth sort across the composable tree is still the work that would let
  * a mug stand on the felt.
  */

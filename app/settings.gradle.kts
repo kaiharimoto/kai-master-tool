@@ -77,8 +77,8 @@ val androidEnabled: Boolean =
 include(":core")
 
 if (androidEnabled) {
+    include(":builder")
     include(":ui")
-    include(":desktopApp")
     include(":androidApp")
     // Neue Master Tool, the desktop builder. Needs :ui, so it shares the gate.
     include(":neue")

@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
  * What the film may do to the picture.
  *
  * The one lighting change in this app whose arithmetic runs on a GPU, so this
- * is also the first half of `docs/PHOTOREAL.md` §0's answer to that: the Kotlin
+ * is also the first half of `docs/classic/PHOTOREAL.md` §0's answer to that: the Kotlin
  * is tested here and [AgX.sksl] is generated from the same constants, which is
  * the only form of parity available when the shader text cannot be evaluated
  * from `commonTest` on either platform.
@@ -49,7 +49,7 @@ class AgXTest {
 
     @Test
     fun nothingInTheBottomOfTheRangeIsCrushedTheWayACinematicCurveWouldCrushIt() {
-        // The measurement the refusal in `docs/FIDELITY.md` was written from,
+        // The measurement the refusal in `docs/classic/FIDELITY.md` was written from,
         // now stated as the reason the refusal does not extend to this curve.
         // At a linear 0.002 — a shadow edge, a pile side — plain sRGB is code
         // 6.16 and ACES is 1.63. Asked at unity exposure, because the claim is

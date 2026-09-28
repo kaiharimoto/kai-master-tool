@@ -10,7 +10,7 @@ import com.kaiharimoto.mastertool.core.motion.HeadTilt
  * sample at all, so `HeadSway` never takes a reference and never leaves its
  * settled state, so the frame loop is never asked to write a plane. `:studio`
  * draws the real `PlayScreen` on this target, and two runs of it being
- * bit-identical is the loop's only instrument (`docs/LOOP.md` §3). A seam that
+ * bit-identical is the loop's only instrument (`docs/classic/LOOP.md` §3). A seam that
  * *could* report something would put that guarantee in a runtime condition
  * rather than in the type system.
  *

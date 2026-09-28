@@ -23,11 +23,11 @@ import kotlinx.serialization.Serializable
 /**
  * Which room the table is in.
  *
- * A preference rather than a constant, on exactly the argument `docs/AAA.md`
+ * A preference rather than a constant, on exactly the argument `docs/classic/AAA.md`
  * #67 makes: rubber playmats are matte and a bare table is not, and which one
  * you are playing on is the user's decision rather than the renderer's.
  *
- * [MINIMAL] is the stage `docs/DESIGN.md` describes and it does not change. The
+ * [MINIMAL] is the stage `docs/classic/DESIGN.md` describes and it does not change. The
  * desk scenes are a *different contract*, written down in that handbook's
  * "Scenes" section: they may hold objects that are there because they are nice
  * rather than because they are needed, which is decoration, which minimal mode
@@ -320,7 +320,7 @@ data class SceneModel(
  *
  * **Nothing in here overlaps the mat.** Not a preference — the reason the play
  * stage can hold a room at all without the foundation-sized work in
- * `docs/AAA.md` #92 and #93. Cards are one composable each, sorted into
+ * `docs/classic/AAA.md` #92 and #93. Cards are one composable each, sorted into
  * `PlayScreen`'s `ordered` list; the room is painted in the single canvas
  * underneath all of them. Those are two orderings, and the only thing that
  * keeps them from contradicting each other is that no object in the second one
@@ -349,7 +349,7 @@ object Scenery {
      *
      * Moved here from the renderer without changing either number. They are
      * geometry, they were solved once by eye and argued for in
-     * `docs/DESIGN.md` §10, and the composable that used to hold them had no
+     * `docs/classic/DESIGN.md` §10, and the composable that used to hold them had no
      * business being the only place they existed. The argument, kept: a table
      * margin of a whole card width put a broad grey border round every side of
      * the mat, and on a stage whose premise is sharp white on true black that is
@@ -396,7 +396,7 @@ object Scenery {
      * **Floored, and the floor is load-bearing.** The two knobs subtract, so a
      * shallow desk under a near wall drives this negative — and a wall at or in
      * front of the mat's far edge stands *over the cards*, which is the one rule
-     * `docs/DESIGN.md` §11 says nothing in a scene may break: the room is painted
+     * `docs/classic/DESIGN.md` §11 says nothing in a scene may break: the room is painted
      * beneath every card, so a piece that reaches over the mat is a piece the
      * cards are drawn through.
      */
@@ -414,7 +414,7 @@ object Scenery {
      * for [Scene.MINIMAL], which has no room to see.
      *
      * This is the number that makes the second half of the list in
-     * `docs/LOOP.md` reachable at all. Everything in this room is placed
+     * `docs/classic/LOOP.md` reachable at all. Everything in this room is placed
      * relative to the mat and scaled by a card, so the wall's base landed
      * wherever the board's far edge landed — which was the top of the screen —
      * and the wall, the window and the sky behind it were geometry nobody could
@@ -669,7 +669,7 @@ object Scenery {
      * **It may not stand on the playing surface**, and that is a clamp rather
      * than a range on the slider, because the mat's width in card widths depends
      * on the board and a static range could not promise it on every device.
-     * `docs/DESIGN.md` §11: the room is painted beneath every card, so anything
+     * `docs/classic/DESIGN.md` §11: the room is painted beneath every card, so anything
      * of it that reaches over the felt is a thing the cards are drawn *through*.
      *
      * The clamp is by its own widest radius and toward whichever side of the mat
@@ -957,7 +957,7 @@ object Scenery {
      *   because the wall's tall front-top corner outruns the desk's near edge
      *   below about twenty-seven degrees of pitch. It ate thirty pixels of the
      *   forty-pixel band of bare wood between the wall and the mat — most of the
-     *   thing `docs/AAA.md` #61 asks for. Sitting the wall on z = 0 and running
+     *   thing `docs/classic/AAA.md` #61 asks for. Sitting the wall on z = 0 and running
      *   the desk back under it leaves the two sharing exactly one face.
      * - **The four wall pieces and the pane tile the old single wall exactly.**
      *   No gap and no overlap, which is one line of test and the reason a window

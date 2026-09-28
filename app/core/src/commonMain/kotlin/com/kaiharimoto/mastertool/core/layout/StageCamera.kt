@@ -974,7 +974,7 @@ class CameraRig(
     /**
      * Let go of a turn and let it run down.
      *
-     * `docs/AAA.md` #7: *"Flick it and it coasts to rest on the same damping.
+     * `docs/classic/AAA.md` #7: *"Flick it and it coasts to rest on the same damping.
      * This is most of what makes a camera feel like it weighs something."*
      *
      * ## Why this is not the spring already here
@@ -1191,7 +1191,7 @@ class CameraRig(
          *
          * Two and a half, so a flick keeps about eight per cent of its speed after
          * a second and is under the floor shortly after — the same order as the
-         * springs the cards use, which is the point. `docs/DESIGN.md` §12's
+         * springs the cards use, which is the point. `docs/classic/DESIGN.md` §12's
          * complaint about a scene reading as assembled rather than as a place is
          * about exactly this: two things on one screen easing on two different
          * curves.

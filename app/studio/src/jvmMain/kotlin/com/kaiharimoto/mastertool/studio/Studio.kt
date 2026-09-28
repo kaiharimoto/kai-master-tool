@@ -447,7 +447,7 @@ private object NoUpdates : AppUpdater {
  * Which of the four seats a shot is taken from, and the digit that reaches it.
  *
  * [POV] is the one that matters most and was the one the eye could not reach:
- * `docs/LOOP.md` §6 recorded that every unparameterised shot came back at five,
+ * `docs/classic/LOOP.md` §6 recorded that every unparameterised shot came back at five,
  * twenty-one or thirty-four degrees, so the seat a head at a desk actually sits
  * at had never been in a contact sheet. It is the seat the stage opens at now.
  */
@@ -470,7 +470,7 @@ private class Shot(val name: String, val scene: Scene, val light: DeskLight, val
  * `--pitch=80`, `--yaw=45`: aim the whole run, rather than one shot.
  *
  * The envelope runs to eighty degrees of pitch and can be spun all the way
- * round, and `docs/LOOP.md` §6 records that neither has ever been in a contact
+ * round, and `docs/classic/LOOP.md` §6 records that neither has ever been in a contact
  * sheet — eighty in particular, because it is where a procedural surface
  * aliases worst *and* where the table's horizon comes onto the glass. Before
  * this the only way there was to write a tuning file by hand.
@@ -554,7 +554,7 @@ private class Options(
          * `desk-night-pov` is the newest and is the one to read first — it is
          * the seat the stage opens at, so it is the picture kai actually gets.
          * The other three are the room seen from above it, which is what the
-         * sheet was entirely made of while `docs/LOOP.md` §6 was complaining
+         * sheet was entirely made of while `docs/classic/LOOP.md` §6 was complaining
          * that the eye could only reach three seats by digit.
          */
         private val CONTACT = listOf(

@@ -7,7 +7,7 @@ import com.kaiharimoto.mastertool.core.render.Shadows
 /**
  * A shadow the room throws on itself, solved with the furniture.
  *
- * `docs/AAA.md` #61d was a *decision* rather than a gap for a long time, and the
+ * `docs/classic/AAA.md` #61d was a *decision* rather than a gap for a long time, and the
  * argument for it was good: one object throwing a shadow onto a desk where
  * nothing else does does not read as better lighting, it reads as the one thing
  * that got special treatment. kai has now asked for the set, so the reason it

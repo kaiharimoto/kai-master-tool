@@ -16,6 +16,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":core"))
+            api(project(":builder"))
 
             implementation(compose.runtime)
             implementation(compose.foundation)

@@ -445,7 +445,7 @@ class ShadingTest {
 
     @Test
     fun everyStockCatchesTheLightInEveryRoomItIsSeenIn() {
-        // `docs/LOOP.md` carried *"nothing on a card catches the light"* as an
+        // `docs/classic/LOOP.md` carried *"nothing on a card catches the light"* as an
         // impression from iteration 0, with a note that it was worth measuring
         // before assuming it needed to be stronger. Measured, it was worse than
         // an impression: a foil lying flat came to **0.0005** under the day rig
@@ -538,7 +538,7 @@ class ShadingTest {
 
     @Test
     fun onlyAFoilStretchesItsHighlightAndItStretchesByItsOwnExponents() {
-        // `docs/AAA.md` #21: a foil is not a shinier card, it is a combed one,
+        // `docs/classic/AAA.md` #21: a foil is not a shinier card, it is a combed one,
         // and what says so is the *shape* of the pool rather than its size.
         //
         // The number is not chosen. Splitting one `shininess` about the
@@ -562,7 +562,7 @@ class ShadingTest {
 
     @Test
     fun theStreakChangesTheShapeOfTheHighlightAndNothingAboutItsStrength() {
-        // `docs/DESIGN.md` §7 is that the pool *moves* rather than brightens,
+        // `docs/classic/DESIGN.md` §7 is that the pool *moves* rather than brightens,
         // and an anisotropic lobe that also got brighter would be that
         // anti-pattern wearing a physics argument. It is also what keeps
         // `GoldenStageTest` still: it records diff, spec, rim and hot, and this

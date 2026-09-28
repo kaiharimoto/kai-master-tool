@@ -59,13 +59,13 @@ data class CardMaterial(
      * Foil is not a shinier card, it is a *combed* one — a holographic stock is
      * ruled with parallel grooves, and a ruled surface answers the light with a
      * **streak across the grooves** rather than with a round pool. That is the
-     * whole read, and `docs/AAA.md` #21 calls it the single change that would
+     * whole read, and `docs/classic/AAA.md` #21 calls it the single change that would
      * make foils look like foil. Two cards with the same `shininess` and the
      * same `specular` and different values here are two materials; today they
      * were two copies of one.
      *
      * It changes the highlight's *shape* and deliberately not its brightness —
-     * `docs/DESIGN.md` §7 is that the pool moves rather than brightens, and an
+     * `docs/classic/DESIGN.md` §7 is that the pool moves rather than brightens, and an
      * anisotropic lobe that also got brighter would be the anti-pattern wearing
      * a physics argument. [Shade.streak] carries the shape out.
      *

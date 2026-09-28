@@ -630,7 +630,7 @@ fun PlayScreen(
             // moves is geometry that can change under a gesture.
             //
             // The room's tuning is a key, and that is what makes it tunable at
-            // all. `docs/TUNING.md` bars anything that re-solves the *layout*,
+            // all. `docs/classic/TUNING.md` bars anything that re-solves the *layout*,
             // because the mat is one `pointerInput(layout)` and a re-solve tears
             // the gesture arbiter's event stream down mid-drag. This is one
             // `remember` below that: the layout above is untouched, so the board,
@@ -922,7 +922,7 @@ fun PlayScreen(
                         // that were parked.
                         var moving = 0
                         cards.values.forEach { if (it.step(SpringSpec.Bouncy, step)) moving++ }
-                        // Nothing in the room itself moves — see `docs/DESIGN.md`
+                        // Nothing in the room itself moves — see `docs/classic/DESIGN.md`
                         // §11, which grants the desk scenes decoration and refuses
                         // them ambience. The only springs on this stage belong to
                         // the cards and to the camera, and both are here.
@@ -970,7 +970,7 @@ fun PlayScreen(
             // One layer above the mat and never the mat's own: that one carries
             // the yaw, the tilt and the camera distance, so a vignette drawn on
             // it is an ellipse whose centre walks off the optical axis as the
-            // table turns. `docs/DESIGN.md` §6 has the rule and the cost — one
+            // table turns. `docs/classic/DESIGN.md` §6 has the rule and the cost — one
             // full-screen composite, affordable exactly once.
             //
             // Desk scenes only. `Scene.MINIMAL` is the handbook's stage and
@@ -2500,7 +2500,7 @@ private fun hasMenu(origin: DragOrigin): Boolean = when (origin) {
     // A card in a spread pile is somewhere you are passing through, not somewhere
     // it lives. Everything the menu could offer it — the graveyard, banished, the
     // hand — is a place on the table it can be dragged to instead, which is one
-    // gesture rather than two and is the argument `docs/TABLE.md` §6 makes
+    // gesture rather than two and is the argument `docs/classic/TABLE.md` §6 makes
     // against the drawer in the first place.
     is DragOrigin.Buried -> false
 }

@@ -1,23 +1,24 @@
-# kai's master tool — cross-platform app
+# kai's master tool — the app
 
-A clean-room rebuild of the deck builder as a single Kotlin codebase targeting
-Android and desktop. Not a port of the HTML tool: the domain rules were
-rewritten from the rulebook up, with tests, and the UI was designed for touch
-rather than adapted to it.
+One Kotlin codebase. Its front is **Neue Master Tool** (`neue`), the deck builder
+in Master UI, on Windows, macOS and Linux today and on Android tablets next. The
+tablet app that came before it (`ui`) is *classic*: it still builds the current
+APK until Neue replaces it in place, and is then retired.
 
 The root [`README.md`](../README.md) is the front page - what the app does and
-how to install it. This file is how it is put together. The reasoning behind the
-decisions is in [`docs/`](../docs).
+how to install it. This file is how it is put together.
+[`docs/NEUE.md`](../docs/NEUE.md) is the authority on the app itself.
 
 ## Modules
 
 | Module | What it is | Depends on Google Maven |
 |---|---|---|
-| `core` | Pure Kotlin: models, YDK/YDKX codec, deck rules, search, API client, SQLite | No |
-| `ui` | Compose Multiplatform screens shared by every platform | Yes |
-| `androidApp` | The APK. Built for a Tab S11 Ultra; runs on phones too | Yes |
-| `desktopApp` | JVM app, packaged as `.dmg` / `.msi` / `.deb` | Yes |
-| `studio` | Draws the play stage to PNG headlessly. Opt-in with `-Pmastertool.studio=true`, ships in nothing | Yes |
+| `core` | Pure Kotlin: models, YDK/YDKX codec, deck rules, search and filters, hand odds, layout, the keyboard and mouse tables, API client, SQLite | No |
+| `builder` | What the builder is, not how it looks: `DeckBuilderState`, `AppDependencies`, the updater seam, the image loader, the shader seam, the card foil. Files keep the `ui.*` packages they had in `ui` | Yes |
+| `neue` | **Neue Master Tool**: every screen, in Master UI; packaged as `.msi` / `.dmg` / `.deb` | Yes |
+| `androidApp` | The APK. Classic today; Neue from v1.3.0 | Yes |
+| `ui` | *Classic*: the tablet app's screens and play stage | Yes |
+| `studio` | Draws the app to PNG headlessly (`tools/shoot.sh --neue`). Opt-in with `-Pmastertool.studio=true`, ships in nothing | Yes |
 
 `core` deliberately has no Compose and no platform code, so it compiles and its
 tests run anywhere — including environments with no Android SDK.
@@ -31,9 +32,10 @@ tests run anywhere — including environments with no Android SDK.
 # Debug APK -> androidApp/build/outputs/apk/debug/
 ./gradlew :androidApp:assembleDebug
 
-# Desktop app
-./gradlew :desktopApp:run
-./gradlew :desktopApp:packageDistributionForCurrentOS
+# Neue Master Tool
+./gradlew :neue:jvmTest
+./gradlew :neue:run
+./gradlew :neue:packageDistributionForCurrentOS
 ```
 
 ### The Android toggle
@@ -51,9 +53,12 @@ need a Mac and are enabled with `-Pmastertool.ios=true`.
 
 `.github/workflows/build-app.yml` runs on every push to `main` or a `claude/**`
 branch that touches `app/`. Three jobs: `:core` tests with Android switched off
-(so a failure there is the rules, not the SDK), the debug APK, and a desktop
-build that catches genuinely platform-specific code the Android job cannot see.
-The APK is uploaded as a run artifact.
+(so a failure there is the rules, not the SDK), the debug APK, and Neue — its
+tests, the Master UI law among them, and a `.deb`. The APK and the `.deb` are
+uploaded as run artifacts.
+
+`.github/workflows/release-neue.yml` publishes Neue's installers on the `neue-v*`
+track, always as a pre-release; `docs/NEUE.md` §5 has why.
 
 `.github/workflows/shots.yml` is the play stage drawn to PNG on a runner, for
 the pictures in the root README. Dispatch only, and on a `claude/**` branch -
@@ -124,7 +129,7 @@ manifest was `userLandscape` until the app met a phone; it is `fullUser` now.
 is `TALL`, everything else is `WIDE` - with no dp threshold, because a threshold
 has to be re-chosen for every new device and the aspect ratio is what the two
 arrangements actually turn on. A portrait tablet gets `TALL` too, which is right
-rather than incidental. `docs/DEVICES.md` §6 is the authority.
+rather than incidental. `docs/classic/DEVICES.md` §6 is the authority.
 
 Rotation therefore *does* recreate the activity, and the app still uses plain
 remembered state holders rather than ViewModels: what survives a rotation is the
@@ -173,5 +178,5 @@ survive it in `core/layout/BoardLayout.kt`, which still solves all ten of them.
 
 Not yet built: siding patterns and shootout mode (both deliberately deferred, to
 be redesigned from scratch rather than ported), PDF export, the deck showcase
-stage, and autoscrolling a pane while dragging over its edge. `docs/TABLE.md` §5
+stage, and autoscrolling a pane while dragging over its edge. `docs/classic/TABLE.md` §5
 is the ordered list.

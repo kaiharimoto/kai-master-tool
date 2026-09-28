@@ -79,7 +79,7 @@ class SceneryTest {
         // room is painted in one canvas underneath them, so a piece of room that
         // needed to be *in front of* a card could not be — and would silently be
         // painted behind it instead, on some frames and not others. Until there
-        // is a retained scene and a real depth sort (docs/AAA.md #92, #93), the
+        // is a retained scene and a real depth sort (docs/classic/AAA.md #92, #93), the
         // felt is the boundary and this is what holds it.
         val felt = SceneBox.standing(mat.left, mat.top, mat.right, mat.bottom, 0f, 0f)
         everyRoom().forEach { (name, model) ->
@@ -153,7 +153,7 @@ class SceneryTest {
     @Test
     fun theRoomIsAHandfulOfObjectsRatherThanAScene() {
         // The play stage already holds about sixty cards against a ceiling
-        // docs/AAA.md #92 puts somewhere north of eighty. Whatever the room
+        // docs/classic/AAA.md #92 puts somewhere north of eighty. Whatever the room
         // spends comes out of that, and it is the one budget nobody notices
         // going until the frame readout says so.
         everyRoom().forEach { (name, model) ->
@@ -327,7 +327,7 @@ class SceneryTest {
 
     @Test
     fun thereIsBareDeskAroundTheMatOnEverySideTheCameraCanSee() {
-        // This is what actually answers docs/AAA.md #61 — "where the felt stops
+        // This is what actually answers docs/classic/AAA.md #61 — "where the felt stops
         // and the wood starts" — and it is worth a test because it is a
         // consequence of `BoardLayouter` centring the field rather than of
         // anything this file chose. A layout that grew to fill the surface would
@@ -722,7 +722,7 @@ class SceneryTest {
         // The room has three walls and no ceiling: past about fifty degrees the
         // top corner of the glass looks over the wall, and past about ninety you
         // are looking at where the fourth wall would be. Those are objects to
-        // build, not a sweep to widen — `docs/PHOTOREAL.md`'s phase 8. Turning
+        // build, not a sweep to widen — `docs/classic/PHOTOREAL.md`'s phase 8. Turning
         // the table a quarter turn either way is every angle a player plays
         // from, and it is the whole of what these five pieces promise.
         val opening = StageTuning.DEFAULT.camera.pose()
@@ -1011,7 +1011,7 @@ class SceneryTest {
          * `standing` a partition.
          *
          * Raised deliberately and on the record rather than bumped: the room
-         * comes out of the same budget the sixty cards do, and `docs/AAA.md`
+         * comes out of the same budget the sixty cards do, and `docs/classic/AAA.md`
          * #92's retained scene is what buys the next increase.
          */
         const val BUDGET = 24
@@ -1024,7 +1024,7 @@ class SceneryTest {
 
     @Test
     fun everyFixtureOnTheDeskThrowsAShadowAndTheRoomItselfDoesNot() {
-        // `docs/AAA.md` #61d's "as a set", checkable. The argument for having no
+        // `docs/classic/AAA.md` #61d's "as a set", checkable. The argument for having no
         // room shadows at all was that one object throwing one reads as the
         // thing that got special treatment — so the answer is not one lamp with
         // a shadow, it is every fixture or none.
