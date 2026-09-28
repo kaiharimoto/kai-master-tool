@@ -141,9 +141,8 @@ fixes the frame:
 - **The Decks rows** show **More** on touch, and a hold opens the same menu; the
   desk's hover-revealed buttons are not composed there, so nothing invisible is
   tappable.
-- **A deck is never lost**: auto save starts on for a tablet
-  (`NeuePreferences.seededFor`, a seed, not a migration), leaving the app saves,
-  and opening another deck saves or asks first.
+- **A deck is never lost**: auto save is on by default (1.0.22, everywhere),
+  leaving the app saves, and opening another deck saves or asks first.
 - **Every kit text field reports its focus** (`LocalTextFocus`), so a keyboard
   cover's typing never reaches the shortcut table.
 - **A draft's double-tap is two votes**, never a removal

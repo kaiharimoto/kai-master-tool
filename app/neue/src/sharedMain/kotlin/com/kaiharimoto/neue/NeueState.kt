@@ -66,7 +66,7 @@ class NeueState(
 ) {
     var page by mutableStateOf(Page.BUILDER)
 
-    var prefs by mutableStateOf(NeuePreferences.seededFor(touchFirst))
+    var prefs by mutableStateOf(NeuePreferences.DEFAULT)
         private set
 
     var paletteOpen by mutableStateOf(false)
@@ -151,7 +151,7 @@ class NeueState(
 
     fun start() {
         scope.launch {
-            val stored = repository.loadNeue(NeuePreferences.seededFor(touchFirst))
+            val stored = repository.loadNeue()
             // Whatever the user changed while the database was opening wins.
             if (!loaded) prefs = stored
             loaded = true
