@@ -80,6 +80,9 @@ class NeueSmokeTest {
         )
         runBlocking { app.deckRepository.save("touch-deck", "Touch deck", deck, null) }
         val instrumentation = InstrumentationRegistry.getInstrumentation()
+        // Android's own "Viewing full screen" note appears the first time any app goes
+        // immersive and takes the first Back for itself; it is the system's, not Neue's.
+        instrumentation.uiAutomation.executeShellCommand("settings put secure immersive_mode_confirmations confirmed").close()
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             fun <T> on(read: (MainActivity) -> T): T {
