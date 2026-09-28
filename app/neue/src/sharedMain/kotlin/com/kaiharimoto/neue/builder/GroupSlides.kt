@@ -48,7 +48,8 @@ import kotlinx.coroutines.delay
 /** One slide: a title, and a bar per group with the number it stands for. */
 private class Slide(val title: String, val note: String, val rows: (GroupReport) -> List<Bar>)
 
-private class Bar(val label: String, val color: Color?, val share: Float, val value: String)
+/** A group's bar; [second], when there is one, is drawn under it, fainter: the same group going second. */
+private class Bar(val label: String, val color: Color?, val share: Float, val value: String, val second: Float? = null)
 
 /**
  * The deck's groups in numbers, as slides (kai, 1.0.18: "data analysis visuals
@@ -113,6 +114,11 @@ private fun BarRow(bar: Bar) {
         Box(Modifier.fillMaxWidth().height(6.dp).background(c.ink06)) {
             Box(Modifier.fillMaxWidth(bar.share.coerceIn(0f, 1f)).height(6.dp).background(bar.color ?: c.ink25))
         }
+        bar.second?.let { second ->
+            Box(Modifier.fillMaxWidth().height(6.dp).background(c.ink06)) {
+                Box(Modifier.fillMaxWidth(second.coerceIn(0f, 1f)).height(6.dp).background((bar.color ?: c.ink25).copy(alpha = 0.45f)))
+            }
+        }
     }
 }
 
@@ -147,11 +153,15 @@ private val SLIDES = listOf(
         r.groups.map { Bar(it.name, hueOf(it), it.main.toFloat() / n, "${it.main} · ${percent(it.main.toDouble() / n)}") } +
             Bar("Ungrouped", null, r.ungroupedMain.toFloat() / n, "${r.ungroupedMain} · ${percent(r.ungroupedMain.toDouble() / n)}")
     },
-    Slide("Opening hand", "The chance of at least one in five cards.") { r ->
-        r.groups.map { Bar(it.name, hueOf(it), it.opening.toFloat(), percent(it.opening)) }
+    // kai's picks for 1.0.24, in place of card types and the spread across the deck.
+    Slide("Going first and second", "The chance of at least one: five cards going first, six going second (the fainter bar).") { r ->
+        r.groups.map { Bar(it.name, hueOf(it), it.opening.toFloat(), "${percent(it.opening)} · ${percent(it.openingSecond)}", it.openingSecond.toFloat()) }
     },
     Slide("Expected in a hand", "How many of each a five-card hand holds, on average.") { r ->
         val most = r.groups.maxOfOrNull { it.expected }?.toFloat()?.coerceAtLeast(1f) ?: 1f
         r.groups.map { Bar(it.name, hueOf(it), it.expected.toFloat() / most, "%.2f".format(it.expected)) }
+    },
+    Slide("Too many", "The chance of two or more in five cards: flooding on hand traps, bricks or garnets.") { r ->
+        r.groups.map { Bar(it.name, hueOf(it), it.flood.toFloat(), percent(it.flood)) }
     },
 )

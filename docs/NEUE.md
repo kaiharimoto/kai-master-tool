@@ -463,9 +463,11 @@ choosing one recolours every group at once and changes nothing in the deck file
 
 **Slides** (1.0.18, kai: "add some data analysis visuals in a box that changes
 like slides, with an auto play slide feature that can be toggled"): between the
-groups and the palettes, a box of slides — share of the main deck (and what is
-ungrouped), the chance to open each group, and how many of it a hand holds on
-average. Bars in each group's colour; the numbers are `GroupStats.of`, in
+groups and the palettes, a box of four slides — share of the main deck (and what
+is ungrouped); the chance to open each group going first (five cards) and, in a
+fainter bar under it, going second (six); how many of it a hand holds on
+average; and **too many**, the chance of two or more in five — flooding on hand
+traps, bricks or garnets. The second and fourth are kai's picks for 1.0.24. Bars in each group's colour; the numbers are `GroupStats.of`, in
 core, from the same `LensOdds` the rows use. ‹ › step, **Auto** turns every six
 seconds (`slidesAutoplay`, on by default) and the pointer over the box pauses it.
 In 1.0.24 the controls took a row of their own and the title and each group's
