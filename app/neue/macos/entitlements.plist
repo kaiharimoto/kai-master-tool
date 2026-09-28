@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Read only when the Mac build is signed (the switch in build.gradle.kts, off
+  until kai has an Apple Developer account). A signed build runs under the
+  hardened runtime, and a JVM needs these to run at all under it: HotSpot's JIT
+  writes executable memory, and Skiko and the JDK load native libraries that are
+  not signed by the same team. The app is not sandboxed, so it needs no
+  entitlement to reach the network or its own data folder.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+</dict>
+</plist>

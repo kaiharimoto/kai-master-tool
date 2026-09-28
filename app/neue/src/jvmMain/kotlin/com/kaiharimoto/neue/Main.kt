@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.update.CpuArch
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -81,6 +82,7 @@ import kotlin.system.exitProcess
  */
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    if (Platform.os == DesktopOs.MAC) MacChrome.prepare()
     Thread.setDefaultUncaughtExceptionHandler { _, error ->
         Platform.writeCrash(error)
         exitProcess(1)
@@ -118,7 +120,12 @@ fun main() {
 private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
     val h = rememberHolders(deps) { scope ->
         NeueUpdates(
-            NeueUpdateChecker(GitHubReleaseApi(HttpClientFactory.create()), Platform.version, Platform.os),
+            NeueUpdateChecker(
+                GitHubReleaseApi(HttpClientFactory.create()),
+                Platform.version,
+                Platform.os,
+                CpuArch.of(System.getProperty("os.arch").orEmpty()),
+            ),
             scope,
         )
     }
@@ -228,6 +235,15 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
         }
     }
 
+    val mac = Platform.os == DesktopOs.MAC
+    if (mac) {
+        LaunchedEffect(Unit) {
+            MacChrome.handleAppMenu(h) {
+                h.neue.flush()
+                exit()
+            }
+        }
+    }
     key(full != null) {
         Window(
             onCloseRequest = {
@@ -248,6 +264,10 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
                 host = window
                 window.minimumSize = Dimension(1024, 680)
                 window.background = if (h.neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK) java.awt.Color.BLACK else java.awt.Color.WHITE
+            }
+            if (mac) {
+                MacMenuBar(h)
+                MacTitleBar(h.neue.prefs.theme)
             }
             NeueRoot(h)
         }

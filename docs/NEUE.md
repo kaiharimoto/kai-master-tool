@@ -908,9 +908,10 @@ filter decks by those with the card in it"):
 
 ## 5. Releases, updates and feedback — the permanent numbers
 
-`release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), a
-`.dmg` (macOS) and a `.deb` (Linux) and publishes them as
-`neue-master-tool-<version>.<ext>` under the tag **`neue-v<version>`**.
+`release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two
+`.dmg`s (macOS: `-arm64` for Apple silicon, `-x64` for Intel, from 1.0.21) and a
+`.deb` (Linux) and publishes them as `neue-master-tool-<version>[-<arch>].<ext>`
+under the tag **`neue-v<version>`**.
 
 - **Every Neue release is a pre-release, and its tag is never `v*`.**
   `/releases/latest`, which every installed APK asks, returns the newest
@@ -924,10 +925,56 @@ filter decks by those with the card in it"):
   under 256 — an MSI constraint. The workflow refuses anything else.
 - The MSI is **per-user**, so an update needs no administrator. On Windows the
   app downloads the installer, starts a small script that runs `msiexec
-  /passive` and reopens the new build, and quits. On macOS it opens the
-  `.dmg`; on Linux it hands the `.deb` to the package installer.
+  /passive` and reopens the new build, and quits. On macOS it installs over
+  itself (§5a); on Linux it hands the `.deb` to the package installer.
 - The installers are **not code-signed**. Windows SmartScreen and macOS
-  Gatekeeper will warn once; the release notes say how to get past it.
+  Gatekeeper will warn once; the release notes say how to get past it. The Mac
+  has a switch for that (§5a), off until kai has an Apple Developer account.
+
+### 5a. The Mac (1.0.21)
+
+On kai's word the Mac is ported "fully and faithfully" and stays unsigned for
+now. What that is:
+
+- **Two builds.** A bundled JDK is native code, so the release has an Apple
+  silicon leg (`macos-latest`) and an Intel one (`macos-15-intel`), and each
+  checks `uname -m` so a runner label that changed processor fails the release
+  rather than a Mac. `NeueReleaseTrack.installerFor` takes the `.dmg` for the
+  machine's `os.arch` (`CpuArch`); a release with one unsuffixed `.dmg` — every
+  one before 1.0.21 — still answers.
+- **The menu bar is the table.** `core/input/DeskMenuBar.kt` lays out File,
+  Edit, View and Help from `DeskAction`s, so the menus cannot disagree with the
+  keyboard. An item carries its accelerator only when the chord has a modifier
+  *and* the table lets it fire while typing: a Mac menu takes its key before any
+  text field, and Undo belongs to the deck name while you type it. Chosen from
+  the menu, an action obeys the table's scopes (`DeskMenuBar.enabled`), and one
+  press heard twice — by the accelerator and by the window — runs once
+  (`ActionEcho`). The application menu's About and Settings open Settings; Quit
+  saves the settings document first. `neue/MacChrome.kt` is all of it.
+- **`⌘` in every label.** `DeskShortcuts.kbd` writes the Mac's way on a Mac —
+  `⌘K`, `⇧⌘F`, modifiers in Apple's order and run together, as every menu on the
+  machine prints them. The kit's "never ⌘" is a rule for a web page, which cannot
+  know the keyboard; the glyphs live in `:core`, so the law test still refuses
+  one in `neue/`. Prose that names a chord reads it from the table too.
+- **A title bar in the theme's light** (`apple.awt.windowAppearance`): dark
+  over ink, light over paper.
+- **An update installs itself.** The app writes a script (`MacInstall`, in core
+  with a test), starts it and quits; the script waits for the process to go,
+  mounts the image, `ditto`s the new bundle beside the old one, swaps them —
+  putting the old one back if the swap fails half-way — clears the quarantine
+  flag and reopens the app. Its log is `neue-update.log` in the temporary folder.
+  A development run, or a bundle this user cannot write, falls back to opening
+  the image for a drag.
+- **The signing switch, off.** With five repository secrets — `MAC_CERT_P12`
+  (a base64 Developer ID Application `.p12`), `MAC_CERT_PASSWORD`, `APPLE_ID`,
+  `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` (an app-specific password) — the Mac legs
+  import the certificate into a throwaway keychain, set `MAC_SIGN_IDENTITY`, and
+  the `macOS { signing; notarization }` block in `app/neue/build.gradle.kts`
+  turns on with the hardened runtime's entitlements
+  (`app/neue/macos/entitlements.plist`: a JVM's JIT and Skiko's unsigned
+  libraries); the workflow then notarises and staples. Without them, nothing
+  about the `.dmg` changes. It has never run: the first signed release is its
+  test, and worth a re-publish if it fails.
 
 A crash is written to `<data>/crash.txt` and shown on the next launch in a
 window with no theme (so it renders when the theme was what broke), with
@@ -944,7 +991,7 @@ move between Neue and the other builds by `.ydk`/`.ydkx`.
 The same discipline as the APK, on its own track: push to the `claude/**`
 branch, wait for `build-app.yml` (its `neue` job runs the law test and
 packages the `.deb`), fast-forward `main`, dispatch `release-neue.yml` on
-`main` with the next patch, and confirm the tag and **all three** installers
+`main` with the next patch, and confirm the tag and **all four** installers
 are on the release before calling it shipped. A change that touches only
 `neue/` is on the tablet too from v1.3.0, so a change the tablet would see
 ships on both tracks: `release-neue.yml` for the desktop, `release.yml` for the

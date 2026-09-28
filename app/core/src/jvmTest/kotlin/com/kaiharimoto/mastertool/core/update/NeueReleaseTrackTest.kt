@@ -129,4 +129,28 @@ class NeueReleaseTrackTest {
         assertNull(NeueReleaseTrack.apkUpdate(release("v1.3.1", apk = false), "1.3.0"))
         assertNull(NeueReleaseTrack.apkUpdate(null, "1.3.0"))
     }
+
+    @Test
+    fun aMacTakesTheDmgBuiltForItsProcessor() {
+        val two = release("neue-v1.0.21", true, "neue-master-tool-1.0.21-arm64.dmg", "neue-master-tool-1.0.21-x64.dmg", "neue-master-tool-1.0.21.msi")
+        assertEquals("neue-master-tool-1.0.21-arm64.dmg", NeueReleaseTrack.installerFor(two, DesktopOs.MAC, CpuArch.ARM64)?.name)
+        assertEquals("neue-master-tool-1.0.21-x64.dmg", NeueReleaseTrack.installerFor(two, DesktopOs.MAC, CpuArch.X64)?.name)
+        assertEquals("neue-master-tool-1.0.21.msi", NeueReleaseTrack.installerFor(two, DesktopOs.WINDOWS, CpuArch.X64)?.name)
+        // Before 1.0.21 there was one .dmg, with no processor in its name.
+        val one = release("neue-v1.0.20", true, "neue-master-tool-1.0.20.dmg")
+        assertEquals("neue-master-tool-1.0.20.dmg", NeueReleaseTrack.installerFor(one, DesktopOs.MAC, CpuArch.X64)?.name)
+        // An Intel-only release still answers an Apple silicon Mac: Rosetta runs it.
+        val intel = release("neue-v1.0.22", true, "neue-master-tool-1.0.22-x64.dmg")
+        assertEquals("neue-master-tool-1.0.22-x64.dmg", NeueReleaseTrack.installerFor(intel, DesktopOs.MAC, CpuArch.ARM64)?.name)
+    }
+
+    @Test
+    fun theProcessorIsReadFromItsJavaName() {
+        assertEquals(CpuArch.ARM64, CpuArch.of("aarch64"))
+        assertEquals(CpuArch.X64, CpuArch.of("x86_64"))
+        assertEquals(CpuArch.X64, CpuArch.of("amd64"))
+        assertNull(CpuArch.of("riscv64"))
+        assertEquals("neue-master-tool-1.0.21-arm64.dmg", NeueReleaseTrack.installerName("1.0.21", DesktopOs.MAC, CpuArch.ARM64))
+        assertEquals("neue-master-tool-1.0.21.deb", NeueReleaseTrack.installerName("1.0.21", DesktopOs.LINUX))
+    }
 }

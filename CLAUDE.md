@@ -84,8 +84,8 @@ is granted for all of it — do not stop to ask.
 There are two tracks, and a change ships on whichever it reaches:
 
 - **The desktop** (`app/neue/`, and `:core`/`:builder` changes it uses):
-  `release-neue.yml`, tagged `neue-v*`, always a pre-release, with a `.msi`, a
-  `.dmg` and a `.deb`.
+  `release-neue.yml`, tagged `neue-v*`, always a pre-release, with a `.msi`, two
+  `.dmg`s (`-arm64`, `-x64`) and a `.deb`.
 - **The APK** (`app/androidApp/`, and — since v1.3.0 — everything in `neue/`'s
   `sharedMain` and `androidMain`, `:builder` and `:core`): `release.yml`, tagged
   `v*`. A change to Neue that the tablet would see ships on **both** tracks; a
@@ -102,7 +102,7 @@ Every time, in this order:
    newest `neue-v*` tag, or `get_latest_release` for the APK). Bump the minor
    only when the user asks, or when the patch would reach 100.
 4. Confirm the release actually published — the tag exists and every asset is
-   attached (three installers, or `kai-master-tool-<version>.apk`) — before
+   attached (four installers, or `kai-master-tool-<version>.apk`) — before
    telling the user it is ready. "Dispatched" is not "shipped".
 
 Note in the release notes when a build changes stored preferences, the schema,
@@ -280,13 +280,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   too, kai's pick — the letters found in the render's pixels by `NameInk`,
   the ink's polarity decided by the frame type (`NEUE.md` §2c).
 - **Releases are `neue-v*`, always published as pre-releases**, by
-  `release-neue.yml` (`.msi`, `.dmg`, `.deb`). Never tag one `v*`, and never
+  `release-neue.yml` (`.msi`, two `.dmg`s, `.deb`). Never tag one `v*`, and never
   publish one as a full release: `/releases/latest` is what every APK reads.
   `windows.upgradeUuid` in `app/neue/build.gradle.kts` and the rule that the
   version only rises are permanent, like the `versionCode` floor.
 - **Ship a Neue change on its own track**: green `build-app.yml` (its `neue`
   job), fast-forward `main`, dispatch `release-neue.yml` with the next patch,
-  confirm all three installers attached — and the APK's track too when the
+  confirm all four installers attached — and the APK's track too when the
   tablet would see the change.
 - **On the tablet** (v1.3.0, `NEUE.md` §1b): a finger's grammar is
   `core/input/DeskTouch.kt` — tap reads, double-tap is the right-click,
@@ -321,10 +321,15 @@ The plan, phased, one shipped release per phase:
    `DeskMouse`, and every hover-only affordance a touch equivalent; `:ui` and the
    studio's tablet task are deleted; an emulator smoke test runs in CI. A phone
    layout for Neue is a later phase.
-4. **The Mac, faithfully** — still unsigned, on kai's word: Apple Silicon and
-   Intel `.dmg`s, the native menu bar, `⌘` in every shortcut label, an updater
-   that installs over itself, and a signing/notarization switch that turns on
-   when Apple Developer secrets are added.
+4. **The Mac, faithfully** (1.0.21, done) — still unsigned, on kai's word: Apple
+   silicon and Intel `.dmg`s, the native menu bar read off the tables
+   (`DeskMenuBar`, with `ActionEcho` so an accelerator and the window never both
+   run one press), `⌘` in every shortcut label (`DeskShortcuts.kbd(…, mac)`), an
+   updater that installs over itself (`MacInstall`), and a signing/notarization
+   switch that turns on when the five Apple secrets are added. `NEUE.md` §5a.
+
+Next: a phone layout for the APK (portrait, `docs/classic/DEVICES.md` §6 is the
+classic app's answer to the same question), and play mode rebuilt inside Neue.
 
 ## Classic — the tablet app and its play stage
 

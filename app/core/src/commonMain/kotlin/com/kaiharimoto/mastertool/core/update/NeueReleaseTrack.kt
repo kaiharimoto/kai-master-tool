@@ -27,6 +27,26 @@ enum class DesktopOs(val extension: String) {
     }
 }
 
+/**
+ * The processor a Mac build is for (Phase 4). From 1.0.21 the Mac has two
+ * `.dmg`s, `-arm64` and `-x64`, because a JDK is native code and a bundled
+ * runtime built for one will not start on the other.
+ */
+enum class CpuArch(val suffix: String) {
+    ARM64("arm64"),
+    X64("x64"),
+    ;
+
+    companion object {
+        /** From `System.getProperty("os.arch")`: `aarch64` and `arm64`, `x86_64` and `amd64`; anything else is unknown. */
+        fun of(osArch: String): CpuArch? = when (osArch.lowercase()) {
+            "aarch64", "arm64" -> ARM64
+            "x86_64", "amd64", "x64" -> X64
+            else -> null
+        }
+    }
+}
+
 /** A newer build of Neue Master Tool, and the installer for this machine if it has one. */
 data class NeueUpdate(
     val versionName: String,
@@ -57,7 +77,7 @@ object NeueReleaseTrack {
             ?.takeIf { AppVersion.parse(it) != AppVersion.UNKNOWN }
 
     /** The newest release on the track strictly newer than [currentVersion], or null. */
-    fun newest(releases: List<Release>, currentVersion: String, os: DesktopOs): NeueUpdate? =
+    fun newest(releases: List<Release>, currentVersion: String, os: DesktopOs, arch: CpuArch? = null): NeueUpdate? =
         releases
             .mapNotNull { release -> versionOf(release.tagName)?.let { it to release } }
             .filter { (version, _) -> AppVersion.isNewer(currentVersion, version) }
@@ -66,12 +86,24 @@ object NeueReleaseTrack {
                 NeueUpdate(
                     versionName = version,
                     release = release,
-                    installer = installerFor(release, os),
+                    installer = installerFor(release, os, arch),
                 )
             }
 
-    fun installerFor(release: Release, os: DesktopOs): ReleaseAsset? =
-        release.assets.firstOrNull { it.name.endsWith(".${os.extension}", ignoreCase = true) }
+    /**
+     * This machine's installer on [release]. On a Mac with a known [arch], the
+     * `.dmg` built for it; failing that one built for no processor in particular
+     * (every release before 1.0.21 had exactly one, for Apple silicon); and only
+     * then any `.dmg` at all, since a build under Rosetta beats none.
+     */
+    fun installerFor(release: Release, os: DesktopOs, arch: CpuArch? = null): ReleaseAsset? {
+        val all = release.assets.filter { it.name.endsWith(".${os.extension}", ignoreCase = true) }
+        if (arch == null) return all.firstOrNull()
+        fun built(asset: ReleaseAsset, a: CpuArch) = asset.name.endsWith("-${a.suffix}.${os.extension}", ignoreCase = true)
+        return all.firstOrNull { built(it, arch) }
+            ?: all.firstOrNull { asset -> CpuArch.entries.none { built(asset, it) } }
+            ?: all.firstOrNull()
+    }
 
     /**
      * Neue on a tablet updates on the APK's track, not this one (1.0.20): the
@@ -87,7 +119,8 @@ object NeueReleaseTrack {
     }
 
     /** The file name the release workflow gives an installer. */
-    fun installerName(version: String, os: DesktopOs): String = "neue-master-tool-$version.${os.extension}"
+    fun installerName(version: String, os: DesktopOs, arch: CpuArch? = null): String =
+        "neue-master-tool-$version${arch?.let { "-${it.suffix}" } ?: ""}.${os.extension}"
 }
 
 /** The outcome of asking GitHub, in the words the title bar needs. */
@@ -101,6 +134,7 @@ class NeueUpdateChecker(
     private val api: GitHubReleaseApi,
     private val currentVersionName: String,
     private val os: DesktopOs,
+    private val arch: CpuArch? = null,
 ) {
     suspend fun check(): NeueUpdateStatus {
         if (os == DesktopOs.ANDROID) {
@@ -114,7 +148,7 @@ class NeueUpdateChecker(
         val releases = api.releases().getOrElse { error ->
             return NeueUpdateStatus.Failed(error.message ?: "Could not reach GitHub")
         }
-        return NeueReleaseTrack.newest(releases, currentVersionName, os)
+        return NeueReleaseTrack.newest(releases, currentVersionName, os, arch)
             ?.let { NeueUpdateStatus.Available(it) }
             ?: NeueUpdateStatus.UpToDate
     }

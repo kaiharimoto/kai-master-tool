@@ -1,8 +1,17 @@
 name: Release Neue Master Tool
 
 # Publishes Neue Master Tool — the desktop builder in Master UI — as a GitHub
-# release with a Windows .msi, a macOS .dmg and a Linux .deb attached. The app's
-# own updater (`NeueReleaseTrack`) finds it there.
+# release with a Windows .msi, two macOS .dmgs (Apple silicon `-arm64`, Intel
+# `-x64`, from 1.0.21) and a Linux .deb attached. The app's own updater
+# (`NeueReleaseTrack`) finds it there, and a Mac takes the one for its processor.
+#
+# ## The Mac signing switch, off
+#
+# With the five secrets MAC_CERT_P12 (a base64 Developer ID Application .p12),
+# MAC_CERT_PASSWORD, APPLE_ID, APPLE_TEAM_ID and APPLE_APP_PASSWORD (an
+# app-specific password) in the repository, the Mac legs import the certificate,
+# build signed with the hardened runtime (`app/neue/macos/entitlements.plist`),
+# notarise and staple. Without them — today — nothing about the .dmg changes.
 #
 # ## A third track, kept apart the way the 3DS one is
 #
@@ -97,7 +106,7 @@ jobs:
           echo "Releasing neue-v$NAME (previous: ${PREV:-none})"
 
   package:
-    name: Package (${{ matrix.os }})
+    name: Package (${{ matrix.os }}${{ matrix.arch && format(' {0}', matrix.arch) || '' }})
     needs: version
     strategy:
       fail-fast: true
@@ -106,9 +115,18 @@ jobs:
           - os: windows-latest
             task: packageMsi
             ext: msi
+          # Apple silicon and Intel: a bundled JDK is native code, so each Mac
+          # needs a build made on its own kind of processor.
           - os: macos-latest
             task: packageDmg
             ext: dmg
+            arch: arm64
+            uname: arm64
+          - os: macos-15-intel
+            task: packageDmg
+            ext: dmg
+            arch: x64
+            uname: x86_64
           - os: ubuntu-latest
             task: packageDeb
             ext: deb
@@ -136,9 +154,55 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get install -y -qq fakeroot
 
+      # A runner label that quietly changed processor would ship an arm64 build
+      # named x64. Refuse it here rather than on somebody's Mac.
+      - name: The processor is the one this leg is for
+        if: matrix.uname
+        run: |
+          test "$(uname -m)" = "${{ matrix.uname }}" || { echo "::error::expected ${{ matrix.uname }}, runner is $(uname -m)"; exit 1; }
+
+      - name: Signing identity (only with the Apple secrets)
+        if: runner.os == 'macOS'
+        env:
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MAC_CERT_P12:-}" ]; then
+            echo "No MAC_CERT_P12: the .dmg is built unsigned, as always."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/neue-signing.keychain-db"
+          KEYPASS="$(openssl rand -hex 16)"
+          echo "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYPASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYPASS" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYPASS" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          # Compose wants the name after "Developer ID Application: ".
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | sed -n 's/.*"Developer ID Application: \(.*\)"/\1/p' | head -1)"
+          test -n "$IDENTITY" || { echo "::error::no Developer ID Application identity in MAC_CERT_P12"; exit 1; }
+          echo "MAC_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "MAC_SIGN_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
       - name: Package
         working-directory: app
         run: ./gradlew :neue:${{ matrix.task }} -Pmastertool.android=true -Pneue.versionName=${{ needs.version.outputs.name }} --stacktrace
+
+      - name: Notarise (only when signed)
+        if: runner.os == 'macOS' && env.MAC_SIGN_IDENTITY != ''
+        working-directory: app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          ./gradlew :neue:notarizeDmg -Pmastertool.android=true -Pneue.versionName=${{ needs.version.outputs.name }} --stacktrace
+          xcrun stapler staple "$(find neue/build/compose/binaries -type f -name '*.dmg' | head -1)"
 
       - name: Name the installer
         run: |
@@ -149,12 +213,13 @@ jobs:
             exit 1
           fi
           # The name NeueReleaseTrack.installerName expects, so the updater finds it.
-          cp "$FOUND" "neue-master-tool-${{ needs.version.outputs.name }}.${{ matrix.ext }}"
+          ARCH="${{ matrix.arch }}"
+          cp "$FOUND" "neue-master-tool-${{ needs.version.outputs.name }}${ARCH:+-$ARCH}.${{ matrix.ext }}"
           ls -l neue-master-tool-*
 
       - uses: actions/upload-artifact@v4
         with:
-          name: neue-${{ matrix.ext }}
+          name: neue-${{ matrix.ext }}${{ matrix.arch && format('-{0}', matrix.arch) || '' }}
           path: neue-master-tool-*.${{ matrix.ext }}
           if-no-files-found: error
 
@@ -178,8 +243,8 @@ jobs:
         run: |
           set -euo pipefail
           ls -l neue-master-tool-*
-          for ext in msi dmg deb; do
-            test -f "neue-master-tool-$NAME.$ext" || { echo "::error::missing .$ext"; exit 1; }
+          for file in "$NAME.msi" "$NAME-arm64.dmg" "$NAME-x64.dmg" "$NAME.deb"; do
+            test -f "neue-master-tool-$file" || { echo "::error::missing neue-master-tool-$file"; exit 1; }
           done
 
           NOTES=$(mktemp)
@@ -187,7 +252,7 @@ jobs:
             echo "Neue Master Tool $NAME — the deck builder for the desktop, in Master UI."
             echo
             echo "- **Windows:** \`neue-master-tool-$NAME.msi\`. Installs for your user, no administrator needed. Windows may warn that the publisher is unknown; the installer is not code-signed yet."
-            echo "- **macOS:** \`neue-master-tool-$NAME.dmg\`. Drag it into Applications. The first time, right-click the app and choose Open, because it is not notarised."
+            echo "- **macOS:** \`neue-master-tool-$NAME-arm64.dmg\` for Apple silicon (M1 and later), \`neue-master-tool-$NAME-x64.dmg\` for an Intel Mac. Drag it into Applications. The first time, right-click the app and choose Open, because it is not notarised. After that, updates install themselves."
             echo "- **Linux:** \`neue-master-tool-$NAME.deb\`."
             echo
             echo "Once installed, Neue checks here on launch and offers the next version itself."

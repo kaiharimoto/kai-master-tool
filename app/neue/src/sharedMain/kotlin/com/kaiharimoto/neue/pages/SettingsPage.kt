@@ -75,7 +75,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Contrast", "High darkens the grey text, the outlines of controls and the rules between rows, in both themes.") {
                         Segmented(prefs.contrast, listOf(NeuePreferences.CONTRAST_STANDARD, NeuePreferences.CONTRAST_HIGH), { if (it == NeuePreferences.CONTRAST_HIGH) "High" else "Standard" }, { v -> neue.update { it.copy(contrast = v) } })
                     }
-                    SettingRow("Interface scale", "Everything, text and cards alike. Ctrl = and Ctrl - step through it from anywhere.") {
+                    SettingRow("Interface scale", "Everything, text and cards alike. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.ZOOM_IN)} and ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.ZOOM_OUT)} step through it from anywhere.") {
                         Segmented(prefs.scale, NeuePreferences.SCALES, { "${kotlin.math.round(it * 100).toInt()}%" }, { s -> neue.update { it.copy(scale = s) } }, small = true)
                     }
                     SettingRow("Foil", "The light on a card's face. It follows the pointer across the card.") {
@@ -84,7 +84,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Card names", "The name printed across the top of a card, stamped in the same foil as its border. Holographic foil only.") {
                         Segmented(prefs.foilNames, NameStyles.all, NameStyles::label, { n -> neue.update { it.copy(foilNames = n) } })
                     }
-                    SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. Ctrl 1 to 4 reach the pages either way.") {
+                    SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DECKS)} to ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_STATS)} reach the pages either way.") {
                         Segmented(prefs.railPinned, listOf(false, true), { if (it) "Pinned" else "Auto-hide" }, { p -> neue.update { it.copy(railPinned = p) } })
                     }
                 }
@@ -177,3 +177,8 @@ private fun SettingRow(label: String, help: String, control: @Composable () -> U
         Box(Modifier.weight(1f)) { control() }
     }
 }
+
+/** A chord as this machine writes it, for the settings' own sentences. */
+private fun chord(action: com.kaiharimoto.mastertool.core.input.DeskAction): String =
+    com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(action)
+        ?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd).orEmpty()

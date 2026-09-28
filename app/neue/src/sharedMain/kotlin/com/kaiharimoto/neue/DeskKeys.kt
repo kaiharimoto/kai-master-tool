@@ -58,6 +58,9 @@ object DeskKeys {
         Key.Z to "z",
     )
 
+    /** The key a chord's name stands for — the first listed, so `=` rather than `+` — for a menu's accelerator. */
+    fun keyFor(name: String): Key? = names.entries.firstOrNull { it.value == name }?.key
+
     fun chord(event: KeyEvent): KeyChord? {
         val name = names[event.key] ?: return null
         return KeyChord(

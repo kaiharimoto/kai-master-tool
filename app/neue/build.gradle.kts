@@ -124,6 +124,30 @@ compose.desktop {
             macOS {
                 bundleID = "com.kaiharimoto.neue"
                 iconFile.set(project.file("icons/neue.icns"))
+                dockName = "Neue Master Tool"
+                appCategory = "public.app-category.games"
+
+                // The signing switch (Phase 4), off. release-neue.yml turns it on
+                // only when the five Apple secrets are in the repository — see
+                // docs/NEUE.md §5 — by importing the certificate and setting
+                // MAC_SIGN_IDENTITY. Without them this block adds nothing and the
+                // .dmg is built exactly as it always was: unsigned, and opened the
+                // first time with right-click → Open.
+                val identity = providers.environmentVariable("MAC_SIGN_IDENTITY").orNull
+                if (!identity.isNullOrBlank()) {
+                    signing {
+                        sign.set(true)
+                        this.identity.set(identity)
+                        providers.environmentVariable("MAC_SIGN_KEYCHAIN").orNull?.let { keychain.set(it) }
+                    }
+                    notarization {
+                        appleID.set(providers.environmentVariable("APPLE_ID"))
+                        password.set(providers.environmentVariable("APPLE_APP_PASSWORD"))
+                        teamID.set(providers.environmentVariable("APPLE_TEAM_ID"))
+                    }
+                    entitlementsFile.set(project.file("macos/entitlements.plist"))
+                    runtimeEntitlementsFile.set(project.file("macos/entitlements.plist"))
+                }
             }
             linux {
                 packageName = "neue-master-tool"

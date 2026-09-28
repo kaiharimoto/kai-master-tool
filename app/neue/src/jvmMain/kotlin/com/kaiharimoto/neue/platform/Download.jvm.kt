@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.platform
 
 import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.mastertool.core.update.MacInstall
 import java.io.File
 import java.net.ProxySelector
 import java.net.URI
@@ -69,6 +70,29 @@ internal actual fun handOffInstaller(installer: File): String? = when (Platform.
         exitProcess(0)
     }
     DesktopOs.MAC -> {
+        // In place (Phase 4): a script swaps the bundle once this process is
+        // gone, then reopens it — `MacInstall`. A bundle that cannot be found
+        // (a development run) or written (an Applications folder this user
+        // does not own) falls back to opening the image for a drag.
+        val bundle = ProcessHandle.current().info().command().orElse(null)?.let(MacInstall::bundleOf)
+        val writable = bundle != null && File(bundle).parentFile?.canWrite() == true && File(bundle).canWrite()
+        if (bundle != null && writable) {
+            val script = File(installer.parentFile, "neue-update.sh")
+            script.writeText(
+                MacInstall.script(
+                    dmg = installer.absolutePath,
+                    bundle = bundle,
+                    pid = ProcessHandle.current().pid(),
+                    log = File(installer.parentFile, "neue-update.log").absolutePath,
+                ),
+            )
+            script.setExecutable(true)
+            ProcessBuilder("/usr/bin/nohup", "/bin/sh", script.absolutePath)
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start()
+            exitProcess(0)
+        }
         ProcessBuilder("open", installer.absolutePath).start()
         "Drag Neue Master Tool into Applications to replace this one, then reopen it"
     }

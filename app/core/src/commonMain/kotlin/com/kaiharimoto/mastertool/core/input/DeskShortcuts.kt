@@ -214,15 +214,54 @@ object DeskShortcuts {
     }
 
     /**
-     * How a chord is written in the family's `Kbd`: `Ctrl K`, `Shift Enter`, `Esc`.
-     * Space-separated, never a plus and never `⌘` (Master UI §9).
+     * Whether [kbd] writes chords the Mac's way. Set once, before the first frame,
+     * by the desktop entry point on macOS (Phase 4) — a fact about the machine,
+     * like the path separator, which is why it is not threaded through every tip.
      */
-    fun kbd(chord: KeyChord): String = buildList {
-        if (chord.ctrl) add("Ctrl")
-        if (chord.alt) add("Alt")
-        if (chord.shift) add("Shift")
-        add(keyName(chord.key))
-    }.joinToString(" ")
+    var macLabels: Boolean = false
+
+    /** [kbd] in this machine's own words: see [macLabels]. */
+    fun kbd(chord: KeyChord): String = kbd(chord, macLabels)
+
+    /**
+     * How a chord is written in the family's `Kbd`: `Ctrl K`, `Shift Enter`, `Esc`.
+     * Space-separated and never a plus (Master UI §9).
+     *
+     * On a Mac, [mac], it is written as the Mac writes it, because that is the
+     * keyboard in front of the reader: `⌘K`, `⇧⌘F`, modifiers in Apple's order
+     * (⌥ ⇧ ⌘) and run together, as every menu on the machine prints them. The
+     * kit's "never ⌘" is a rule for a web page that cannot know the keyboard; kai
+     * chose the Mac's glyphs for the Mac app (Phase 4), and they are written here,
+     * in core, so no file in `neue/` spells one — the law test still refuses it
+     * there. `Ctrl` in the table *is* ⌘ on a Mac: `DeskKeys` reads either.
+     */
+    fun kbd(chord: KeyChord, mac: Boolean): String {
+        if (!mac) {
+            return buildList {
+                if (chord.ctrl) add("Ctrl")
+                if (chord.alt) add("Alt")
+                if (chord.shift) add("Shift")
+                add(keyName(chord.key))
+            }.joinToString(" ")
+        }
+        val modifiers = buildString {
+            if (chord.alt) append(MAC_OPTION)
+            if (chord.shift) append(MAC_SHIFT)
+            if (chord.ctrl) append(MAC_COMMAND)
+        }
+        return modifiers + macKeyName(chord.key)
+    }
+
+    const val MAC_COMMAND = "\u2318"
+    const val MAC_SHIFT = "\u21E7"
+    const val MAC_OPTION = "\u2325"
+
+    private fun macKeyName(key: String): String = when (key) {
+        "enter" -> "\u21A9"
+        "delete" -> "\u2326"
+        "backspace" -> "\u232B"
+        else -> keyName(key)
+    }
 
     private fun keyName(key: String): String = when (key) {
         "escape" -> "Esc"

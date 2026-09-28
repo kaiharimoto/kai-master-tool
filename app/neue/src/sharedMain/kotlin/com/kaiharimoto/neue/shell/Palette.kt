@@ -57,6 +57,7 @@ import com.kaiharimoto.mastertool.core.input.DeskMouse
 import com.kaiharimoto.mastertool.core.input.DeskScope
 import com.kaiharimoto.mastertool.core.input.MouseTarget
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Kbd
 import com.kaiharimoto.neue.kit.Micro
@@ -195,7 +196,7 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
 @Composable
 fun HelpDialog(onDismiss: () -> Unit) {
     val c = Mu.colors
-    MuDialog("Keyboard and mouse", onDismiss, width = 896.dp, description = "Every shortcut in Neue Master Tool, and what the mouse does to a card. The palette, Ctrl K, reaches every shortcut by name.") {
+    MuDialog("Keyboard and mouse", onDismiss, width = 896.dp, description = "Every shortcut in Neue Master Tool, and what the mouse does to a card. The palette, ${DeskShortcuts.chordFor(DeskAction.PALETTE)?.let(DeskShortcuts::kbd)}, reaches every shortcut by name.") {
         val scroll = androidx.compose.foundation.rememberScrollState()
         Box(Modifier.heightIn(max = 420.dp)) {
             Row(

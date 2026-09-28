@@ -97,6 +97,8 @@ import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskContext
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.input.DeskMenuBar
+import com.kaiharimoto.mastertool.core.input.ActionEcho
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
@@ -209,17 +211,32 @@ class NeueHolders(
         }
         val repeat = !held.add(event.key)
         val chord = DeskKeys.chord(event) ?: return false
-        val context = DeskContext(
-            textInputFocused = builder.textInputFocused || neue.searchFocused,
-            searchFocused = neue.searchFocused,
-            overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen,
-            onBuilder = neue.page == Page.BUILDER,
-        )
-        val shortcut = DeskShortcuts.resolveShortcut(chord, context) ?: return false
+        val shortcut = DeskShortcuts.resolveShortcut(chord, deskContext()) ?: return false
         if (repeat && !shortcut.repeatable) return true
-        run(shortcut.action)
+        if (echo.admit(shortcut.action, System.currentTimeMillis())) run(shortcut.action)
         return true
     }
+
+    /** What is on screen, as the shortcut table reads it. */
+    fun deskContext() = DeskContext(
+        textInputFocused = builder.textInputFocused || neue.searchFocused,
+        searchFocused = neue.searchFocused,
+        overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen,
+        onBuilder = neue.page == Page.BUILDER,
+    )
+
+    /**
+     * The Mac's menu bar choosing [action] (`DeskMenuBar`): only where its key
+     * would have worked, and once per press — the menu's accelerator and
+     * [onKey] may both hear the same Command chord, and [echo] keeps the second out.
+     */
+    fun runFromMenu(action: DeskAction) {
+        wake()
+        if (!DeskMenuBar.enabled(action, deskContext())) return
+        if (echo.admit(action, System.currentTimeMillis())) run(action)
+    }
+
+    private val echo = ActionEcho()
 
     fun run(action: DeskAction) {
         val state = builder

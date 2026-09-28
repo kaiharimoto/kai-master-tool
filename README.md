@@ -41,7 +41,7 @@ Download from the newest **`neue-v*`** release on the
 | | |
 |---|---|
 | **Windows** | `neue-master-tool-<version>.msi` — installs for your user, no administrator. |
-| **macOS** | `neue-master-tool-<version>.dmg` — drag it into Applications; the first time, right-click the app and choose **Open** (it is not notarised yet). |
+| **macOS** | `neue-master-tool-<version>-arm64.dmg` (Apple silicon) or `-x64.dmg` (Intel) — drag it into Applications; the first time, right-click the app and choose **Open** (it is not notarised yet). After that it updates itself in place. |
 | **Linux** | `neue-master-tool-<version>.deb` |
 
 Once installed it checks for the next version on launch and offers to install it.
@@ -121,7 +121,7 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
 |---|---|
 | **`app/core`** | Pure Kotlin: models, YDK/YDKX codec, deck rules, search and filters, hand odds, layout solving, the keyboard and mouse tables, SQLite. No Compose, no platform code; compiles and tests with no Android SDK. |
 | **`app/builder`** | The builder's state and plumbing that is not a look: `DeckBuilderState`, the app's dependencies, the updater seam, the image loader, the shader seam, the card foil. |
-| **`app/neue`** | **Neue Master Tool** — every screen, in Master UI. Packaged as `.msi` / `.dmg` / `.deb`. |
+| **`app/neue`** | **Neue Master Tool** — every screen, in Master UI. Packaged as `.msi` / `.dmg` (Apple silicon and Intel) / `.deb`. |
 | **`app/androidApp`** | The APK: Neue on an Android tablet, from v1.3.0. |
 | **`app/studio`** | Draws the app to PNG headlessly — every picture above. Opt-in, ships in nothing. |
 | **`3ds/`** | A separate C rewrite for the New 3DS. Shares no code — shares the arithmetic, and proves it. |
