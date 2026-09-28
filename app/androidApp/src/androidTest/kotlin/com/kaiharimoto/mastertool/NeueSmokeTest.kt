@@ -104,8 +104,12 @@ class NeueSmokeTest {
                 val x = xDp * density
                 val y = yDp * density
                 val t = SystemClock.uptimeMillis()
+                // A finger's, said so: the short MotionEvent.obtain leaves the tool type
+                // unknown, and the app tells a finger from a mouse by it.
+                val finger = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_FINGER }
                 listOf(MotionEvent.ACTION_DOWN to t, MotionEvent.ACTION_UP to t + 60).forEach { (action, at) ->
-                    val e = MotionEvent.obtain(t, at, action, x, y, 0).apply { source = InputDevice.SOURCE_TOUCHSCREEN }
+                    val coords = MotionEvent.PointerCoords().apply { this.x = x; this.y = y; pressure = 1f; size = 1f }
+                    val e = MotionEvent.obtain(t, at, action, 1, arrayOf(finger), arrayOf(coords), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
                     instrumentation.uiAutomation.injectInputEvent(e, true)
                     e.recycle()
                 }

@@ -64,8 +64,11 @@ jobs:
           working-directory: app
           # Left installed, or the run uninstalls the app and its screenshot with it.
           script: |
-            ./gradlew :androidApp:connectedDebugAndroidTest -Pmastertool.android=true -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --stacktrace
+            # The pictures are pulled whether the test passed or not: a failing step is
+            # exactly when they are wanted.
+            ./gradlew :androidApp:connectedDebugAndroidTest -Pmastertool.android=true -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --stacktrace || touch smoke-failed
             mkdir -p smoke && adb pull /sdcard/Android/data/com.kaiharimoto.mastertool/files/. smoke/ || true
+            test ! -f smoke-failed
 
       - name: Keep the picture and the report
         if: always()
