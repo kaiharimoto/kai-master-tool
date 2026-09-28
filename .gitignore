@@ -12,3 +12,6 @@
 # its own arithmetic, and CPython writes this beside it.
 __pycache__/
 *.pyc
+
+# Claude Code agents' working copies (git worktrees), never part of the tree.
+/.claude/worktrees/
