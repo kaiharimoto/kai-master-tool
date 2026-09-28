@@ -28,6 +28,13 @@ class NeuePreferencesTest {
     }
 
     @Test
+    fun thePictureIsTheDefaultScreenshotAndAnUnknownShapeFallsBackToIt() {
+        assertEquals(NeuePreferences.SHOT_PICTURE, NeuePreferences.DEFAULT.shotStyle)
+        assertEquals(NeuePreferences.SHOT_LIST, NeuePreferences.DEFAULT.copy(shotStyle = NeuePreferences.SHOT_LIST).sanitised().shotStyle)
+        assertEquals(NeuePreferences.SHOT_PICTURE, NeuePreferences.DEFAULT.copy(shotStyle = "stacks").sanitised().shotStyle)
+    }
+
+    @Test
     fun paperIsTheDefaultTheme() {
         // Master UI §1 law 7: light is default; dark is the exact inversion.
         assertEquals(NeueTheme.PAPER, NeuePreferences.DEFAULT.theme)

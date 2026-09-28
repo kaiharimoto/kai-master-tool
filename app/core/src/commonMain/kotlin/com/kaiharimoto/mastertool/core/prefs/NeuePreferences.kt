@@ -147,6 +147,11 @@ data class NeuePreferences(
     /** Save the deck by itself a moment after every change (1.0.18, beside Save). */
     @kotlinx.serialization.SerialName("autoSaveOn")
     val autoSave: Boolean = true,
+    /**
+     * The shape of the deck's picture (`Ctrl Shift S`, 1.0.23): [SHOT_PICTURE], the
+     * cards as the builder draws them, or [SHOT_LIST], a decklist of art, counts and names.
+     */
+    val shotStyle: String = SHOT_PICTURE,
     /** Lists of cards kept for consideration (1.0.19), in the order they were made. */
     val cardLists: List<CardList> = emptyList(),
     /** The list the pool is showing instead of the whole database, by id; null is the database. */
@@ -172,6 +177,7 @@ data class NeuePreferences(
         foilNames = foilNames.ifBlank { DEFAULT_FOIL_NAMES },
         contrast = if (contrast == CONTRAST_HIGH) CONTRAST_HIGH else CONTRAST_STANDARD,
         groupPalette = groupPalette.ifBlank { DEFAULT_PALETTE },
+        shotStyle = if (shotStyle == SHOT_LIST) SHOT_LIST else SHOT_PICTURE,
         deckZoom = if (deckZoom.isFinite()) deckZoom.coerceIn(MIN_ZOOM, 1f) else 1f,
         groupGap = if (groupGap.isFinite()) groupGap.coerceIn(MIN_GAP, MAX_GAP) else 1f,
         covers = covers
@@ -212,6 +218,8 @@ data class NeuePreferences(
         const val CONTRAST_HIGH = "high"
         const val COVERS = 3
         const val DEFAULT_PALETTE = "prism"
+        const val SHOT_PICTURE = "picture"
+        const val SHOT_LIST = "list"
         const val MIN_ZOOM = 0.4f
         const val MIN_GAP = 0.4f
         const val MAX_GAP = 3f

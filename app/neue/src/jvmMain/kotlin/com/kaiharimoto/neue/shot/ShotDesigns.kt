@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -22,11 +21,13 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
+import com.kaiharimoto.mastertool.core.layout.DeckList
 import com.kaiharimoto.mastertool.core.layout.GroupPieces
 import com.kaiharimoto.mastertool.core.layout.PieceLayout
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.neue.builder.Labels
 import com.kaiharimoto.neue.builder.drawPieces
 import com.kaiharimoto.neue.cards.CARD_RATIO
@@ -38,33 +39,22 @@ import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.MuColors
 import com.kaiharimoto.neue.theme.MuType
 
-/** The shapes the shared picture can take (the 1.0.22 exploration): kai picks one. */
-enum class ShotStyle(val title: String) {
-    /** The builder's picture, fixed: every copy, ten across, the pieces with their name tabs. */
-    BUILDER("Builder"),
+/**
+ * The shapes the deck's picture takes (1.0.23). Four were explored — the
+ * builder's picture, copies stacked with a count, groups as packed blocks, and a
+ * decklist — and kai kept the first as the default and the last as the option.
+ */
+enum class ShotStyle(val pref: String) {
+    /** The builder's picture: every copy, ten across, in the groups' pieces with their name tabs. The default. */
+    PICTURE(NeuePreferences.SHOT_PICTURE),
 
-    /** Copies stacked into one card with a count, in the builder's pieces, sized for a phone. */
-    STACKS("Stacks"),
+    /** A decklist: each card's art, count and name in rows under its group, in two columns. */
+    LIST(NeuePreferences.SHOT_LIST),
+    ;
 
-    /** Each group a labelled block of its stacks, the blocks packed into lines. */
-    BLOCKS("Blocks"),
-
-    /** A decklist: each card's art, count and name in rows under its group, two columns. */
-    LIST("List"),
-}
-
-/** [count] copies of [card], the stack a run of copies collapses into, in group [key]. */
-internal data class Stack(val card: Card?, val count: Int, val key: String?)
-
-/** A section's cards with the copies of each collapsed into one, in the order each first appears. */
-internal fun stacksOf(cards: List<Card?>, keys: List<String?>): List<Stack> {
-    val order = LinkedHashMap<Pair<Int, String?>, Stack>()
-    cards.forEachIndexed { i, card ->
-        val id = card?.id?.value ?: -(i + 1)
-        val k = id to keys.getOrNull(i)
-        order[k] = order[k]?.let { it.copy(count = it.count + 1) } ?: Stack(card, 1, keys.getOrNull(i))
+    companion object {
+        fun of(pref: String) = entries.firstOrNull { it.pref == pref } ?: PICTURE
     }
-    return order.values.toList()
 }
 
 // ---- The plan: everything the picture draws, placed, in dp, before anything is drawn ----
@@ -78,7 +68,7 @@ internal sealed interface Placed {
     val h: Float
 }
 
-internal data class PCard(override val x: Float, override val y: Float, override val w: Float, override val h: Float, val card: Card?, val count: Int, val badge: Float) : Placed
+internal data class PCard(override val x: Float, override val y: Float, override val w: Float, override val h: Float, val card: Card?) : Placed
 internal data class PText(
     override val x: Float, override val y: Float, override val w: Float, override val h: Float,
     val text: String, val face: Face, val size: Float, val color: Color, val align: TextAlign = TextAlign.Start,
@@ -94,8 +84,8 @@ internal data class PPieces(
 
 internal class Plan(val width: Float, val height: Float, val items: List<Placed>)
 
-/** A group as the picture shows it: its name, its colour, and whether that colour is the user's (else ink). */
-private data class Group(val id: String?, val name: String, val color: Color)
+/** A group as the picture shows it: its name and its colour (ink for the kinds a deck without groups is split by). */
+private data class Group(val name: String, val color: Color)
 
 private class Builder(val width: Float, val model: ShotModel) {
     val c = MuColors.of(model.ink)
@@ -148,41 +138,33 @@ private class Builder(val width: Float, val model: ShotModel) {
 
     fun plan() = Plan(width, y, items)
 
-    /** The section's groups, by its lens when it has one, else by the kind of card. */
+    /**
+     * The section's groups, by its lens when it has one, else by kind: Monsters,
+     * Spells and Traps, the way every decklist is quoted (kai, 1.0.23).
+     */
     fun groupsOf(s: ShotSection): Pair<List<String?>, Map<String, Group>> {
         val keying = s.keying?.takeIf { !it.isEmpty }
         if (keying != null) {
             val keys = List(s.cards.size) { keying.keyAt(it) }
-            val groups = keying.keys.associate { it.id to Group(it.id, it.label, GroupMarkers.paint(it.paint, c.ink)) }
+            val groups = keying.keys.associate { it.id to Group(it.label, GroupMarkers.paint(it.paint, c.ink)) }
             return keys to groups
         }
-        val keys = s.cards.map { kindOf(it) }
-        val kinds = listOf("Monsters", "Spells", "Traps", "Fusion", "Synchro", "Xyz", "Link")
-        return keys to keys.filterNotNull().distinct().sortedBy { kinds.indexOf(it) }.associateWith { Group(null, it, c.ink) }
+        val keys = s.cards.map { card -> card?.let { DeckList.kindOf(it.type).name } }
+        val present = keys.toSet()
+        return keys to DeckList.Kind.entries.filter { it.name in present }.associate { it.name to Group(it.label, c.ink) }
     }
 
-    /** Monster, Spell, Trap in the main and side decks; Fusion, Synchro, Xyz, Link in the extra. */
-    fun kindOf(card: Card?): String? {
-        card ?: return null
-        val t = card.type.lowercase()
-        return when {
-            "spell" in t -> "Spells"
-            "trap" in t -> "Traps"
-            "fusion" in t -> "Fusion"
-            "synchro" in t -> "Synchro"
-            "xyz" in t -> "Xyz"
-            "link" in t -> "Link"
-            else -> "Monsters"
-        }
-    }
+    /** A section's cards with the copies collapsed, each with its card. */
+    fun stacksOf(s: ShotSection, keys: List<String?>): List<Pair<Card?, DeckList.Stack>> =
+        DeckList.stacks(s.cards.map { it?.id?.value }, keys).map { s.cards[it.first] to it }
 }
 
 private fun labelInk(color: Color) = if (color.luminance() > 0.5f) Color.Black else Color.White
 
-/** Lays [plan]'s cards out as the builder does: in rows of [columns], broken into pieces by [keys]. */
+/** Lays [cells] out as the builder does: in rows of [columns], broken into pieces by [keys] when there are any. */
 private fun Builder.grid(
-    cells: List<Pair<Card?, Int>>, keys: List<String?>?, columns: Int, cardW: Float, gap: Float, frame: Float, tab: Float,
-    labelSize: Float, colors: Map<String, Color>, names: Map<String, String>, badge: Float,
+    cells: List<Card?>, keys: List<String?>?, columns: Int, cardW: Float, gap: Float, frame: Float, tab: Float,
+    labelSize: Float, colors: Map<String, Color>, names: Map<String, String>,
 ) {
     val pieces = if (keys != null && keys.any { it != null }) GroupPieces.of(keys, columns) else null
     val cardH = cardW / CARD_RATIO
@@ -199,25 +181,24 @@ private fun Builder.grid(
     if (pieces != null && keys != null) {
         items += PPieces(0f, 0f, width, y + h + gap, keys, pieces, offsets, cardW, cardH, frame, tab, labelSize, colors, names)
     }
-    cells.forEachIndexed { i, (card, count) -> items += PCard(offsets[i].x, offsets[i].y, cardW, cardH, card, count, badge) }
+    cells.forEachIndexed { i, card -> items += PCard(offsets[i].x, offsets[i].y, cardW, cardH, card) }
     y += h
 }
 
 internal object ShotDesigns {
 
-    fun plan(style: ShotStyle, model: ShotModel): Plan = when (style) {
-        ShotStyle.BUILDER -> builder(model)
-        ShotStyle.STACKS -> stacks(model)
-        ShotStyle.BLOCKS -> blocks(model)
+    fun plan(model: ShotModel): Plan = when (model.style) {
+        ShotStyle.PICTURE -> picture(model)
         ShotStyle.LIST -> list(model)
     }
 
-    /** Pixels per dp each is drawn at: every one comes out a little over 3000 pixels wide. */
-    fun density(style: ShotStyle) = if (style == ShotStyle.BUILDER) 2f else 3f
+    /** Pixels per dp each is drawn at: both come out a little over 3000 pixels wide. */
+    fun density(style: ShotStyle) = if (style == ShotStyle.PICTURE) 2f else 3f
 
     private fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 10 else 15
 
-    private fun builder(model: ShotModel): Plan {
+    /** The builder's picture, 1600 wide: every copy, the groups' pieces and name tabs, the builder's proportions. */
+    private fun picture(model: ShotModel): Plan {
         val b = Builder(1600f, model)
         b.header()
         val mainW = b.inner / 10f
@@ -237,102 +218,19 @@ internal object ShotDesigns {
                 b.text(b.pad, b.y, b.inner, 40f, "Empty", Face.ROW, 22f * b.u, b.c.ink45)
                 b.y += 40f
             }
-            b.grid(s.cards.map { it to 1 }, keys, cols, cardW, gap, mainW * 0.035f, tab, tab * 0.6f, colors, names, 0f)
+            b.grid(s.cards, keys, cols, cardW, gap, mainW * 0.035f, tab, tab * 0.6f, colors, names)
             b.y += 36f * b.u
         }
         b.footer()
         return b.plan()
     }
 
-    /** Copies stacked, in the builder's pieces, with as many columns as puts the whole deck on one phone screen. */
-    private fun stacks(model: ShotModel): Plan {
-        fun build(cols: Int): Plan {
-            val b = Builder(1080f, model)
-            b.header()
-            val gap = 34f
-            val tab = 30f
-            val sections = DeckShot.shown(model).map { s ->
-                val keying = s.keying?.takeIf { !it.isEmpty }
-                val keys = keying?.let { k -> List(s.cards.size) { k.keyAt(it) } } ?: List(s.cards.size) { null }
-                // Each group's stacks together, in the groups' order, so every group is one clean piece.
-                val order = keying?.keys?.map { it.id }.orEmpty()
-                Triple(s, keying, stacksOf(s.cards, keys).sortedBy { st -> order.indexOf(st.key).let { if (it < 0) order.size else it } })
-            }
-            // One card size for every section: the narrowest the pieces leave.
-            val cardW = sections.minOf { (_, keying, st) ->
-                val span = if (keying != null) GroupPieces.of(st.map { it.key }, cols).spanX else 0
-                (b.inner - gap * span) / cols
-            }
-            sections.forEach { (s, keying, st) ->
-                b.heading(b.pad, b.inner, s.section, s.cards.size)
-                b.y += 42f
-                val colors = keying?.keys?.associate { it.id to GroupMarkers.paint(it.paint, b.c.ink) }.orEmpty()
-                val names = keying?.keys?.associate { it.id to it.label }.orEmpty()
-                b.grid(st.map { it.card to it.count }, if (keying != null) st.map { it.key } else null, cols, cardW, gap, 5f, tab, 19f, colors, names, 30f)
-                b.y += 34f
-            }
-            b.footer()
-            return b.plan()
-        }
-        // A phone held upright is about 9 by 19; aim a little shorter so it sits whole with the chrome round it.
-        return (5..9).map(::build).minBy { kotlin.math.abs(it.height / it.width - 1.7f) }
-    }
-
-    /** Each group a block: its name on a bar in its colour, its stacks flush beneath, the blocks packed into lines. */
-    private fun blocks(model: ShotModel): Plan {
-        val b = Builder(1080f, model)
-        b.header()
-        val perLine = 7
-        val cardW = b.inner / perLine
-        val cardH = cardW / CARD_RATIO
-        val gap = 22f
-        val bar = 38f
-        DeckShot.shown(model).forEach { s ->
-            b.heading(b.pad, b.inner, s.section, s.cards.size)
-            b.y += 42f
-            val (keys, groups) = b.groupsOf(s)
-            val st = stacksOf(s.cards, keys)
-            val order = groups.keys.toList() + listOf<String?>(null)
-            val blocks = order.mapNotNull { k ->
-                val mine = st.filter { it.key == k }
-                if (mine.isEmpty()) null else Triple(k, mine, groups[k] ?: Group(null, "Other", b.c.ink))
-            }
-            // First fit: a block goes into the first line with room, so a short one fills a gap left above.
-            data class Line(var used: Float, var height: Float, val placed: MutableList<Pair<Float, Int>>)
-            val lines = ArrayList<Line>()
-            blocks.forEachIndexed { i, (_, mine, _) ->
-                val cols = minOf(mine.size, perLine)
-                val w = cols * cardW
-                val h = bar + ((mine.size + perLine - 1) / perLine) * cardH
-                val line = lines.firstOrNull { it.used + gap + w <= b.inner + 0.5f && it.placed.isNotEmpty() }
-                    ?: Line(-gap, 0f, ArrayList()).also { lines += it }
-                line.placed += (line.used + gap) to i
-                line.used += gap + w
-                line.height = maxOf(line.height, h)
-            }
-            lines.forEach { line ->
-                line.placed.forEach { (x0, i) ->
-                    val (_, mine, group) = blocks[i]
-                    val x = b.pad + x0
-                    val cols = minOf(mine.size, perLine)
-                    b.fill(x, b.y, cols * cardW, bar, group.color)
-                    val ink = labelInk(group.color)
-                    val count = mine.sumOf { it.count }.toString()
-                    b.text(x + 10f, b.y, cols * cardW - 64f, bar, group.name.uppercase(), Face.MICRO, 18f, ink)
-                    b.text(x + cols * cardW - 54f, b.y, 44f, bar, count, Face.MONO, 20f, ink, TextAlign.End)
-                    mine.forEachIndexed { j, stack ->
-                        b.items += PCard(x + (j % perLine) * cardW, b.y + bar + (j / perLine) * cardH, cardW, cardH, stack.card, stack.count, 28f)
-                    }
-                }
-                b.y += line.height + gap
-            }
-            b.y += 16f
-        }
-        b.footer()
-        return b.plan()
-    }
-
-    /** A decklist: art, count and name, under each group's bar, the main deck in two columns and extra beside side. */
+    /**
+     * A decklist, 1080 wide so its words read on a phone: each card once with its art
+     * (the art window, squared), its count and its name, under its group's bar — or,
+     * without groups, under Monsters, Spells and Traps. The main deck in two columns,
+     * then the extra deck beside the side deck.
+     */
     private fun list(model: ShotModel): Plan {
         val b = Builder(1080f, model)
         b.header()
@@ -342,16 +240,17 @@ internal object ShotDesigns {
         val bar = 40f
         val between = 14f
 
-        class Block(val group: Group, val stacks: List<Stack>) {
+        class Block(val group: Group, val stacks: List<Pair<Card?, DeckList.Stack>>) {
             val height get() = bar + stacks.size * row + between
         }
 
         fun blocksOf(s: ShotSection): List<Block> {
             val (keys, groups) = b.groupsOf(s)
-            val st = stacksOf(s.cards, keys)
+            val st = b.stacksOf(s, keys)
+            // The groups in their order, then any card in none.
             return (groups.keys.toList() + listOf<String?>(null)).mapNotNull { k ->
-                val mine = st.filter { it.key == k }
-                if (mine.isEmpty()) null else Block(groups[k] ?: Group(null, "Other", b.c.ink), mine)
+                val mine = st.filter { it.second.key == k }
+                if (mine.isEmpty()) null else Block(groups[k] ?: Group("Other", b.c.ink), mine)
             }
         }
 
@@ -361,14 +260,14 @@ internal object ShotDesigns {
                 val ink = labelInk(block.group.color)
                 b.fill(x, y, colW, bar, block.group.color)
                 b.text(x + 12f, y, colW - 80f, bar, block.group.name.uppercase(), Face.MICRO, 19f, ink)
-                b.text(x + colW - 68f, y, 56f, bar, block.stacks.sumOf { it.count }.toString(), Face.MONO, 21f, ink, TextAlign.End)
+                b.text(x + colW - 68f, y, 56f, bar, block.stacks.sumOf { it.second.count }.toString(), Face.MONO, 21f, ink, TextAlign.End)
                 y += bar
-                block.stacks.forEach { st ->
-                    b.items += PArt(x, y, row, row, st.card)
+                block.stacks.forEach { (card, st) ->
+                    b.items += PArt(x, y, row, row, card)
                     b.text(x + row + 12f, y, 44f, row, "${st.count}", Face.MONO, 26f, b.c.ink)
-                    val ban = st.card?.banStatus(model.format)
+                    val ban = card?.banStatus(model.format)
                     val banned = ban != null && ban != BanStatus.UNLIMITED
-                    b.text(x + row + 56f, y, colW - row - 56f - (if (banned) 40f else 0f), row, st.card?.name ?: "Unknown card", Face.ROW, 22f, b.c.ink)
+                    b.text(x + row + 56f, y, colW - row - 56f - (if (banned) 40f else 0f), row, card?.name ?: "Unknown card", Face.ROW, 22f, b.c.ink)
                     if (banned) {
                         b.fill(x + colW - 30f, y + (row - 30f) / 2f, 30f, 30f, b.c.ink)
                         b.text(x + colW - 30f, y + (row - 30f) / 2f, 30f, 30f, ban!!.maxCopies.toString(), Face.MONO, 18f, b.c.paper, TextAlign.Center)
@@ -387,14 +286,7 @@ internal object ShotDesigns {
         b.y += 42f
         // The main deck's blocks split into two columns as evenly as whole blocks allow.
         val mb = blocksOf(main)
-        val total = mb.sumOf { it.height.toDouble() }.toFloat()
-        var best = mb.size
-        var bestH = Float.MAX_VALUE
-        for (k in 0..mb.size) {
-            val left = mb.take(k).sumOf { it.height.toDouble() }.toFloat()
-            val h = maxOf(left, total - left)
-            if (h < bestH) { bestH = h; best = k }
-        }
+        val best = DeckList.split(mb.map { it.height })
         val top = b.y
         val l = draw(b.pad, top, mb.take(best))
         val r = draw(b.pad + colW + colGap, top, mb.drop(best))
@@ -438,15 +330,6 @@ internal object ShotDesigns {
                     }
                     is PCard -> Box(at) {
                         DeckShot.ShotCard(item.card, images[item.card?.id?.value], masks[item.card?.id?.value], model, null)
-                        if (item.count > 1 && item.badge > 0f) {
-                            val side = item.badge
-                            Box(
-                                Modifier.align(Alignment.BottomEnd).size((side * 1.5f).dp, side.dp).background(c.ink),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                MuText("×${item.count}", style = MuType.mono(f).copy(fontSize = (side * 0.7f).sp, fontWeight = FontWeight.Bold), color = c.paper, maxLines = 1, align = TextAlign.Center)
-                            }
-                        }
                     }
                     is PArt -> Canvas(at) {
                         val card = item.card

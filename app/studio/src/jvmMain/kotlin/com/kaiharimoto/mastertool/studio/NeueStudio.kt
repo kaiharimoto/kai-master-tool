@@ -338,7 +338,7 @@ fun neueMain(args: Array<String>) {
                 // Every shape the picture can take, from the one snapshot.
                 val model = h.shots.snapshot(h.builder, h.neue)
                 com.kaiharimoto.neue.shot.ShotStyle.entries.forEach { style ->
-                    val (shot, missing) = h.shots.picture(model, style)
+                    val (shot, missing) = h.shots.picture(model.copy(style = style))
                     val file = File(out, "$name-deckshot-${style.name.lowercase()}.png")
                     file.writeBytes(shot)
                     println("[neue-studio] ${file.name}  ${shot.size / 1024} KiB  $missing without a picture")
