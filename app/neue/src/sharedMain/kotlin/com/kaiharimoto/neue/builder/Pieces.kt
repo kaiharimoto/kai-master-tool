@@ -125,10 +125,11 @@ internal fun DrawScope.drawPieces(
 internal class Labels(val measurer: TextMeasurer, val style: TextStyle, val tab: Float, val nameOf: (String) -> String)
 
 /**
- * [key]'s name on a tab rising from the top edge of its largest piece, at its
- * top-left card, as wide as the name — or as the piece's top row, whichever is
- * less — in the group's colour with the lettering in black or white, whichever
- * reads on it. Once per group: a name on every card was noise (kai, 1.0.18).
+ * [key]'s name on a tab rising from a top edge of its pieces — the longest there
+ * is, or any the name fits on whole (`PieceLayout.labelEdge`) — as wide as the
+ * name, or as the edge, whichever is less, in the group's colour with the
+ * lettering in black or white, whichever reads on it. Once per group: a name on
+ * every card was noise (kai, 1.0.18).
  */
 private fun DrawScope.drawLabel(
     key: String,
@@ -140,17 +141,16 @@ private fun DrawScope.drawLabel(
     color: Color,
     labels: Labels,
 ) {
-    val columns = pieces.columns
-    val largest = keys.indices.filter { keys[it] == key }.groupBy { pieces.piece[it] }.maxByOrNull { it.value.size }?.value ?: return
-    val first = largest.minWith(compareBy<Int> { it / columns }.thenBy { it % columns })
-    var run = 1
-    while (first + run < keys.size && (first + run) % columns != 0 && pieces.piece[first + run] == pieces.piece[first]) run++
-    val o = at(first)
-    val room = run * cardWidth + frame * 2
     val pad = labels.tab * 0.4f
+    val name = labels.nameOf(key).uppercase()
+    val style = labels.style.copy(color = if (color.luminance() > 0.5f) Color.Black else Color.White)
+    val whole = labels.measurer.measure(name, style, maxLines = 1).size.width + pad * 2 - frame * 2
+    val edge = pieces.labelEdge(keys, key, need = whole / cardWidth.coerceAtLeast(1f)) ?: return
+    val o = at(edge.first)
+    val room = edge.cells * cardWidth + frame * 2
     val text = labels.measurer.measure(
-        labels.nameOf(key).uppercase(),
-        labels.style.copy(color = if (color.luminance() > 0.5f) Color.Black else Color.White),
+        name,
+        style,
         overflow = TextOverflow.Ellipsis,
         maxLines = 1,
         constraints = Constraints(maxWidth = (room - pad * 2).toInt().coerceAtLeast(1)),

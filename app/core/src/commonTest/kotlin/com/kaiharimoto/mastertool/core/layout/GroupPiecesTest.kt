@@ -115,4 +115,38 @@ class GroupPiecesTest {
             }
         }
     }
+
+    /** kai's example: one card of a group in a row, three under it; the name goes over the three, not the one. */
+    @Test
+    fun aNameStandsOnTheLongestEdgeOfItsPiece() {
+        val k = keys("..a..", "..aaa")
+        val l = GroupPieces.of(k, 5)
+        // The lone card is one card wide; under it, the two cards with nothing of theirs above.
+        assertEquals(LabelEdge(8, 2), l.labelEdge(k, "a", need = 1.8f))
+    }
+
+    @Test
+    fun aNameThatFitsStaysAtTheTopLeft() {
+        val k = keys("..a..", "..aaa")
+        val l = GroupPieces.of(k, 5)
+        assertEquals(LabelEdge(2, 1), l.labelEdge(k, "a", need = 0.8f))
+    }
+
+    @Test
+    fun aNameGoesToTheLargestPieceWhenEdgesTie() {
+        val k = keys("a.aa.", "...a.")
+        val l = GroupPieces.of(k, 5)
+        assertEquals(LabelEdge(2, 2), l.labelEdge(k, "a", need = 1.5f))
+        // A name that fits on one card still prefers the larger piece.
+        assertEquals(LabelEdge(2, 2), l.labelEdge(k, "a", need = 0.5f))
+    }
+
+    @Test
+    fun anEdgeUnderItsOwnPieceIsNoPlaceForAName() {
+        // Row 1's a's are all under row 0's, so the only edge is row 0's.
+        val k = keys(".aaa.", ".aaa.", ".aaaa")
+        val l = GroupPieces.of(k, 5)
+        assertEquals(LabelEdge(1, 3), l.labelEdge(k, "a", need = 5f))
+        assertEquals(null, l.labelEdge(k, "b", need = 1f))
+    }
 }
