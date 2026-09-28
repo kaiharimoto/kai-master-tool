@@ -154,6 +154,21 @@ object DeckShot {
         }
     }
 
+    /** Draws [model] in [style] to a PNG. */
+    fun render(style: ShotStyle, model: ShotModel, images: Map<Int, ImageBitmap>, masks: Map<Int, NameMask> = emptyMap()): ByteArray {
+        val plan = ShotDesigns.plan(style, model)
+        val density = ShotDesigns.density(style)
+        val scene = ImageComposeScene((plan.width * density).toInt(), (plan.height * density).toInt(), Density(density)) {
+            MuTheme(ink = model.ink) { ShotDesigns.Picture(plan, model, images, masks) }
+        }
+        try {
+            val image = scene.render(0L)
+            return image.encodeToData(EncodedImageFormat.PNG)?.bytes ?: error("The picture could not be encoded")
+        } finally {
+            scene.close()
+        }
+    }
+
     @Composable
     fun Picture(model: ShotModel, images: Map<Int, ImageBitmap>, masks: Map<Int, NameMask> = emptyMap()) {
         val c = Mu.colors
@@ -271,7 +286,7 @@ object DeckShot {
     }
 
     @Composable
-    private fun ShotCard(card: Card?, image: ImageBitmap?, mask: NameMask?, model: ShotModel, marker: Marker?) {
+    internal fun ShotCard(card: Card?, image: ImageBitmap?, mask: NameMask?, model: ShotModel, marker: Marker?) {
         val c = Mu.colors
         Box(Modifier.fillMaxSize().background(c.ink06).clipToBounds()) {
             if (image == null || card == null) {

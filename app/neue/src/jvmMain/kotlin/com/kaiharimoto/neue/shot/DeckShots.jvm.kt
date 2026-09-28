@@ -83,7 +83,7 @@ actual class DeckShots actual constructor(
     }
 
     /** The PNG, and how many cards had no picture to put in it. Drawn on the calling thread; call it from the UI thread. */
-    suspend fun picture(model: ShotModel): Pair<ByteArray, Int> {
+    suspend fun picture(model: ShotModel, style: ShotStyle? = null): Pair<ByteArray, Int> {
         val cards = model.sections.flatMap { it.cards }.filterNotNull().distinctBy { it.id }
         val loaded = withContext(Dispatchers.IO) { load(cards) }
         val images = loaded.mapValues { it.value.first.toComposeImageBitmap() }
@@ -91,7 +91,9 @@ actual class DeckShots actual constructor(
             loaded.mapNotNull { (id, pair) -> runCatching { NameMasks.read(pair.first, pair.second) }.getOrNull()?.let { id to it } }.toMap()
         }
         val latest = withContext(Dispatchers.IO) { latestSet(model.date) }
-        return DeckShot.render(model.copy(latestSet = latest), images, masks) to (cards.size - images.size)
+        val dated = model.copy(latestSet = latest)
+        val png = if (style == null) DeckShot.render(dated, images, masks) else DeckShot.render(style, dated, images, masks)
+        return png to (cards.size - images.size)
     }
 
     fun snapshot(state: DeckBuilderState, neue: NeueState): ShotModel {

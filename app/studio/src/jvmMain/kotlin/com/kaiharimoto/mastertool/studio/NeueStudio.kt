@@ -334,6 +334,16 @@ fun neueMain(args: Array<String>) {
                     h.neue.menu = null; h.neue.viewing = null
                 }
             }
+            if (map["deckshot"] == "all") {
+                // Every shape the picture can take, from the one snapshot.
+                val model = h.shots.snapshot(h.builder, h.neue)
+                com.kaiharimoto.neue.shot.ShotStyle.entries.forEach { style ->
+                    val (shot, missing) = h.shots.picture(model, style)
+                    val file = File(out, "$name-deckshot-${style.name.lowercase()}.png")
+                    file.writeBytes(shot)
+                    println("[neue-studio] ${file.name}  ${shot.size / 1024} KiB  $missing without a picture")
+                }
+            }
             if (map["deckshot"] == "true") {
                 // The shared picture, drawn by the app's own code rather than photographed off the window.
                 val (shot, missing) = h.shots.picture(h.shots.snapshot(h.builder, h.neue))
