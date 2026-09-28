@@ -15,7 +15,7 @@
      GX_TRANSFER_OUT_FORMAT(GX_TRANSFER_FMT_RGB8) | \
      GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO))
 
-/* True black, per docs/DESIGN.md. The room comes later; the void is the
+/* True black, per docs/classic/DESIGN.md. The room comes later; the void is the
  * handbook's own stage and is what MINIMAL looks like. */
 #define CLEAR_COLOR 0x000000FF
 

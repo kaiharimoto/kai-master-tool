@@ -3,7 +3,7 @@
 
     tools/crop.py shots/before/desk-night-table.png 1260,290,1500,520 out.png [scale]
 
-`docs/LOOP.md` iteration 3: a contact sheet says whether the room reads; a 4x
+`docs/classic/LOOP.md` iteration 3: a contact sheet says whether the room reads; a 4x
 crop of one object is what says whether the object does. Two of the first three
 defects the loop found were invisible at 1:1.
 """

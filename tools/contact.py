@@ -18,7 +18,7 @@ are the other silent failure: it means the seat keypresses did not land and ever
 picture is of one camera.
 
 **Resample.** The studio's 1600x1000 is the reference stage every before/after
-number in `docs/LOOP.md` is measured against, so a shot is always taken at it and
+number in `docs/classic/LOOP.md` is measured against, so a shot is always taken at it and
 shrunk afterwards - never rendered small, because layout is dp-driven and a
 narrower scene is a differently *laid out* scene. GitHub renders a README about
 850px wide, so half size is a 1:1 fit at a quarter of the bytes.
