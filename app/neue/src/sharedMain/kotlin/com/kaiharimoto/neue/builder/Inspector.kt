@@ -87,11 +87,20 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
     Box(modifier.zenDeep()) {
         // Hidden from where it stands (kai, 1.0.19), rather than from the window's bar.
         // Drawn last, in the corner, so it costs the picture nothing.
+        val touch = neue.touchFirst
         val hide = @Composable {
-            Box(Modifier.fillMaxSize().zenQuiet(), contentAlignment = Alignment.TopEnd) {
+            // On a tablet the top-right corner is Full screen's, and the screen's edge the
+            // system's (touch swarm, rec 16): the button stands at the bottom left, 32 wide.
+            Box(Modifier.fillMaxSize().zenQuiet(), contentAlignment = if (touch) Alignment.BottomStart else Alignment.TopEnd) {
                 Tip("Hide the inspector", kbd = DeskShortcuts.chordFor(DeskAction.TOGGLE_INSPECTOR)?.let(DeskShortcuts::kbd)) {
                     // 20 px, 2 in from the corner: inside the 24 px margin, clear of the art.
-                    IconButton(Icons.PanelRightClose, { neue.update { it.copy(inspectorVisible = false) } }, Modifier.padding(2.dp), size = 20.dp, label = "Hide inspector")
+                    IconButton(
+                        Icons.PanelRightClose,
+                        { neue.update { it.copy(inspectorVisible = false) } },
+                        Modifier.padding(if (touch) 8.dp else 2.dp),
+                        size = if (touch) 32.dp else 20.dp,
+                        label = "Hide inspector",
+                    )
                 }
             }
         }
@@ -100,11 +109,7 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
             Column(Modifier.zenQuiet().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 com.kaiharimoto.neue.kit.MuText("Nothing here.", style = MuType.h1(LocalMuFonts.current))
                 Body(
-                    if (LocalTouchFirst.current) {
-                        "Tap a card to read it here. Press and hold one to open it large."
-                    } else {
-                        "Point at a card to read it. Click one to keep it here. Hold the button down on one to open it large."
-                    },
+                    com.kaiharimoto.mastertool.core.input.DeskWords.inspectorEmpty(LocalTouchFirst.current),
                     color = c.ink70,
                 )
             }

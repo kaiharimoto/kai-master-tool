@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.kit
 
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -65,7 +66,7 @@ fun Tip(text: String, modifier: Modifier = Modifier, kbd: String? = null, above:
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Small(text, color = Mu.colors.ink)
-                    if (kbd != null) Mono(kbd, color = Mu.colors.ink70)
+                    if (kbd != null && LocalHardwareKeyboard.current) Mono(kbd, color = Mu.colors.ink70)
                 }
             }
         },
@@ -224,7 +225,9 @@ fun MuDialog(
     val c = Mu.colors
     Box(
         Modifier.fillMaxSize().background(c.overlay)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+            // A dialog's field stays above the soft keyboard (touch swarm, rec 10).
+            .imePadding(),
         contentAlignment = Alignment.Center,
     ) {
         Column(

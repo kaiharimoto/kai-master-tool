@@ -1,9 +1,11 @@
 package com.kaiharimoto.neue.shell
 
+import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.mastertool.core.input.DeskTouch
+import com.kaiharimoto.mastertool.core.input.DeskWords
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.reportsTextFocus
 import androidx.compose.animation.core.RepeatMode
@@ -125,7 +127,8 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
 
     Box(
         Modifier.fillMaxSize().background(c.overlay)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+            .imePadding(),
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             Column(
@@ -156,6 +159,10 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                             singleLine = true,
                             textStyle = MuType.body(LocalMuFonts.current).copy(fontSize = 15.sp, color = c.ink),
                             cursorBrush = SolidColor(c.ink),
+                            // The palette is a command line: the soft keyboard's key reads Go and runs
+                            // the highlighted row, as a hardware Enter does (touch swarm, rec 9).
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { rows.getOrNull(highlighted)?.let { run(it, false) } }),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .cursor(CursorMode.TEXT, fontSize = 15.sp, focused = true)
@@ -241,72 +248,90 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
 @Composable
 fun HelpDialog(onDismiss: () -> Unit) {
     val c = Mu.colors
-    MuDialog("Keyboard and mouse", onDismiss, width = 896.dp, description = "Every shortcut in Neue Master Tool, and what the mouse does to a card. The palette, ${DeskShortcuts.chordFor(DeskAction.PALETTE)?.let(DeskShortcuts::kbd)}, reaches every shortcut by name.") {
+    val touch = LocalTouchFirst.current
+    val keyboard = com.kaiharimoto.neue.kit.LocalHardwareKeyboard.current
+    // On a tablet (touch swarm, rec 20) the finger's table leads, and the keyboard's is
+    // there only when a keyboard is: the dialog is "Fingers", and tells what it is.
+    val title = if (touch) "Fingers" else "Keyboard and mouse"
+    val description = if (touch) {
+        "What a finger does to a card, and the rest of the tablet's gestures." + if (keyboard) " A keyboard's shortcuts are below." else ""
+    } else {
+        "Every shortcut in Neue Master Tool, and what the mouse does to a card. The palette, ${DeskShortcuts.chordFor(DeskAction.PALETTE)?.let(DeskShortcuts::kbd)}, reaches every shortcut by name."
+    }
+    MuDialog(title, onDismiss, width = 896.dp, description = description) {
         val scroll = androidx.compose.foundation.rememberScrollState()
-        Box(Modifier.heightIn(max = 420.dp)) {
-            Row(
-                Modifier.fillMaxWidth().padding(end = 12.dp).verticalScroll(scroll),
-                horizontalArrangement = Arrangement.spacedBy(40.dp),
-            ) {
-                DeskScope.entries.chunked(2).forEach { pair ->
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-                        pair.forEach { scope ->
-                            Column {
-                                SectionTitle(null, scope.heading)
-                                DeskShortcuts.all.filter { it.scope == scope }.distinctBy { it.action to it.description }.forEach { row ->
-                                    Row(
-                                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                    ) {
-                                        RowText(row.description, Modifier.weight(1f))
-                                        Kbd(DeskShortcuts.kbd(row.chord))
-                                    }
-                                    HRule()
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            ScrollbarFor(scroll)
-        }
-        // The mouse, from its own table: the two places a card can be, side by
-        // side. On a touch screen the finger's table stands in its place — a
-        // mouse plugged into the tablet still does everything the desk's does.
-        val touch = LocalTouchFirst.current
-        Row(Modifier.fillMaxWidth().padding(top = 24.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-            MouseTarget.entries.forEach { target ->
-                Column(Modifier.weight(1f)) {
-                    SectionTitle(null, target.heading)
-                    val rows = if (touch) {
-                        DeskTouch.all.filter { it.target == target }.map { it.description to it.gesture.label }
-                    } else {
-                        DeskMouse.all.filter { it.target == target }.map { it.description to it.gesture.label }
-                    }
-                    rows.forEach { (description, gesture) ->
-                        Row(
-                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            RowText(description, Modifier.weight(1f))
-                            Kbd(gesture)
-                        }
-                        HRule()
-                    }
-                }
-            }
-        }
-        MuText(
+        Box(Modifier.heightIn(max = 520.dp)) {
+        Column(Modifier.padding(end = 12.dp).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             if (touch) {
-                "Two fingers pinch the deck larger or smaller. A mouse and a keyboard work as they do on the desktop."
-            } else {
-                "The index folds away: move to the left edge of the window to bring it out. F11 is immersive mode, where the top and bottom bars fold away too."
-            },
-            Modifier.padding(top = 20.dp),
-            MuType.help(LocalMuFonts.current),
-            color = c.ink45,
-        )
+                GestureTable(touch = true)
+                MuText(DeskWords.TOUCH_FOOTER, style = MuType.help(LocalMuFonts.current), color = c.ink45)
+            }
+            if (!touch || keyboard) KeyTable()
+            if (!touch) {
+                GestureTable(touch = false)
+                MuText(
+                    "The index folds away: move to the left edge of the window to bring it out. F11 is immersive mode, where the top and bottom bars fold away too.",
+                    style = MuType.help(LocalMuFonts.current),
+                    color = c.ink45,
+                )
+            }
+        }
+        ScrollbarFor(scroll)
+        }
+    }
+}
+
+/** The keyboard, from its own table: every scope, two to a column. */
+@Composable
+private fun KeyTable() {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+        DeskScope.entries.chunked(2).forEach { pair ->
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                pair.forEach { scope ->
+                    Column {
+                        SectionTitle(null, scope.heading)
+                        DeskShortcuts.all.filter { it.scope == scope }.distinctBy { it.action to it.description }.forEach { row ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                RowText(row.description, Modifier.weight(1f))
+                                Kbd(DeskShortcuts.kbd(row.chord))
+                            }
+                            HRule()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A card's two places side by side, from the finger's table or the mouse's. */
+@Composable
+private fun GestureTable(touch: Boolean) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+        MouseTarget.entries.forEach { target ->
+            Column(Modifier.weight(1f)) {
+                SectionTitle(null, target.heading)
+                val rows = if (touch) {
+                    DeskTouch.all.filter { it.target == target }.map { it.description to it.gesture.label }
+                } else {
+                    DeskMouse.all.filter { it.target == target }.map { it.description to it.gesture.label }
+                }
+                rows.forEach { (description, gesture) ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        RowText(description, Modifier.weight(1f))
+                        Kbd(gesture, always = true)
+                    }
+                    HRule()
+                }
+            }
+        }
     }
 }

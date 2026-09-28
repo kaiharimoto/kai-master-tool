@@ -30,6 +30,7 @@
             android:theme="@style/Theme.MasterTool"
             android:screenOrientation="userLandscape"
             android:resizeableActivity="true"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode">
 
             <intent-filter>

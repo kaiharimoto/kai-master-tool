@@ -47,6 +47,9 @@ object DeskTouch {
      */
     const val CHIP_DELAY_MS = DOUBLE_TAP_MS + 20
 
+    /** How long a control's name stays after the finger that held it lifts (touch swarm, rec 8). */
+    const val LABEL_LINGER_MS = 1500L
+
     /** The chip only on cards drawn at least this wide, in dp: below it, it covers what a finger aims at. */
     const val CHIP_MIN_CARD_DP = 48f
 

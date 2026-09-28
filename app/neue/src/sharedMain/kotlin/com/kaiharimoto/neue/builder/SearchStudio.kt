@@ -102,9 +102,11 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
     val studio = neue.studio ?: return
     val c = Mu.colors
     val list = neue.list(studio.listId)
-    var query by remember { mutableStateOf(state.query) }
-    var filter by remember { mutableStateOf(state.filter.copy(onlyIds = null)) }
-    var onlyList by remember { mutableStateOf(false) }
+    val memory = neue.studioMemory
+    var query by remember { mutableStateOf(memory?.query ?: state.query) }
+    var filter by remember { mutableStateOf(memory?.filter ?: state.filter.copy(onlyIds = null)) }
+    var onlyList by remember { mutableStateOf(memory?.onlyList ?: false) }
+    LaunchedEffect(query, filter, onlyList) { neue.studioMemory = com.kaiharimoto.neue.StudioMemory(query, filter, onlyList) }
     var outcome by remember { mutableStateOf(SearchOutcome.EMPTY) }
     val listIds = list?.ids
     LaunchedEffect(query, filter, onlyList, listIds, state.index, state.format, state.searchEffects) {
@@ -117,7 +119,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
     var picked by remember { mutableStateOf<Card?>(null) }
     val reading = hovered ?: picked ?: outcome.cards.firstOrNull()
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { if (studio.focus) runCatching { focus.requestFocus() } }
 
     // What a double-click and Enter do: into the deck, or onto the list.
     fun primary(card: Card) {
@@ -147,6 +149,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                     onFocusChange = { neue.searchFocused = it },
                     onSubmit = { outcome.cards.firstOrNull()?.let(::primary) },
                     textStyle = MuType.h2(LocalMuFonts.current),
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search,
                 )
                 Mono(
                     if (outcome.truncated) "${outcome.cards.size} of ${"%,d".format(outcome.matchCount)}" else "%,d".format(outcome.matchCount),

@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
@@ -136,3 +137,60 @@ fun Modifier.reportsTextFocus(): Modifier = composed {
         }
     }
 }
+
+/** Where a disabled control's reason goes when a finger taps it (touch swarm, rec 8): the window's note. */
+val LocalReasonNote = androidx.compose.runtime.staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/**
+ * On a touch screen, a tap on a disabled control that knows why it is disabled
+ * says why — the desk shows the reason in the cursor's caption, and a finger has
+ * no cursor. Everywhere else, nothing.
+ */
+fun Modifier.explainsWhenDisabled(enabled: Boolean, reason: String?): Modifier = composed {
+    val note = LocalReasonNote.current
+    if (enabled || reason == null || note == null || !LocalTouchFirst.current) {
+        Modifier
+    } else {
+        this.then(
+            Modifier.clickable(
+                interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = null,
+            ) { note(reason) },
+        )
+    }
+}
+
+/**
+ * On a touch screen, a finger's press here lets go of the text field that has the
+ * keyboard (touch swarm, rec 10): the deck and the inspector are where a hand goes
+ * when typing is done, and the soft keyboard otherwise stays up over half the
+ * window through everything that follows. Nothing is consumed, so the press still
+ * does what it does. The pool's cards are not wrapped — a tap there keeps typing,
+ * so a query can be refined.
+ */
+fun Modifier.releasesTypingOnFinger(): Modifier = composed {
+    val touch = LocalTouchFirst.current
+    val typing = LocalTextFocus.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    if (!touch) {
+        Modifier
+    } else {
+        this.then(
+            Modifier.pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        if (event.type == androidx.compose.ui.input.pointer.PointerEventType.Press &&
+                            event.changes.any { it.byFinger } && typing?.any == true
+                        ) {
+                            focus.clearFocus()
+                        }
+                    }
+                }
+            },
+        )
+    }
+}
+
+/** Whether a keyboard is attached: always on the desk; on a tablet, only with a keyboard cover or a paired one. */
+val LocalHardwareKeyboard = androidx.compose.runtime.compositionLocalOf { true }

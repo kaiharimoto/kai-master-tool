@@ -220,9 +220,9 @@ private fun Range(range: IntRange?, onChange: (IntRange?) -> Unit) {
         onChange(if (a == null && b == null) null else (a ?: 0)..(b ?: MAX_STAT))
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        MuInput(low, { low = it.filter(Char::isDigit).take(5); push() }, Modifier.width(72.dp), placeholder = "From", mono = true, dense = true)
+        MuInput(low, { low = it.filter(Char::isDigit).take(5); push() }, Modifier.width(72.dp), placeholder = "From", mono = true, dense = true, keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
         Mono("–", color = Mu.colors.ink45)
-        MuInput(high, { high = it.filter(Char::isDigit).take(5); push() }, Modifier.width(72.dp), placeholder = "To", mono = true, dense = true)
+        MuInput(high, { high = it.filter(Char::isDigit).take(5); push() }, Modifier.width(72.dp), placeholder = "To", mono = true, dense = true, keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
     }
 }
 

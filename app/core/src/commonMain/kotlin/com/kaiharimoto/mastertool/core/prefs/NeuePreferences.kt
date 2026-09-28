@@ -152,6 +152,8 @@ data class NeuePreferences(
      * cards as the builder draws them, or [SHOT_LIST], a decklist of art, counts and names.
      */
     val shotStyle: String = SHOT_PICTURE,
+    /** The tablet's first-run note has been shown (touch swarm, rec 20): a field with a default, no migration. */
+    val touchIntroSeen: Boolean = false,
     /** Lists of cards kept for consideration (1.0.19), in the order they were made. */
     val cardLists: List<CardList> = emptyList(),
     /** The list the pool is showing instead of the whole database, by id; null is the database. */

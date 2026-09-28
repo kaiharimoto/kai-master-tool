@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.kit.byFinger
 import com.kaiharimoto.neue.kit.isPrimaryPress
 import com.kaiharimoto.neue.platform.reportIssue
@@ -628,7 +629,7 @@ private fun NeueWindowContent(h: NeueHolders) {
     // The groups' palette: read wherever a group is coloured, so set once here.
     SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             com.kaiharimoto.neue.kit.ProvideTextMenus {
                 Shell(h)
@@ -687,6 +688,24 @@ private fun Shell(h: NeueHolders) {
             status = status,
             art = h.art.progressLine,
         )
+    }
+
+    // The soft keyboard put away by its own key or a swipe: typing is over, so the
+    // field lets go too, and the keys go back to the deck (touch swarm, rec 10).
+    val imeOpen = com.kaiharimoto.neue.kit.softKeyboardVisible()
+    var imeWas by remember { mutableStateOf(false) }
+    LaunchedEffect(imeOpen) {
+        if (imeWas && !imeOpen && neue.touchFirst) h.focus?.clearFocus()
+        imeWas = imeOpen
+    }
+
+    // The tablet's first run (touch swarm, rec 20): the three things a finger does to a
+    // card, once, with the way to the rest.
+    LaunchedEffect(neue.ready) {
+        if (neue.ready && neue.touchFirst && !neue.prefs.touchIntroSeen) {
+            neue.note = Note(com.kaiharimoto.mastertool.core.input.DeskWords.TOUCH_INTRO, "All gestures", lastsMs = 12_000) { neue.helpOpen = true }
+            neue.update { it.copy(touchIntroSeen = true) }
+        }
     }
 
     ZenClockwork(h)
@@ -989,7 +1008,7 @@ private fun Shell(h: NeueHolders) {
         MenuLayer(neue.menu) { neue.menu = null }
         OverlayLayer(h.overlays)
 
-        Toasts(h, Modifier.align(Alignment.BottomEnd).padding(end = 24.dp, bottom = 24.dp))
+        Toasts(h, Modifier.align(Alignment.BottomEnd).imePadding().padding(end = 24.dp, bottom = 24.dp))
 
         // Long jobs the whole window waits on: the cursor ticks and says so.
         val job = when {
@@ -1167,7 +1186,7 @@ private fun Toasts(h: NeueHolders, modifier: Modifier) {
             ToastBox(note, null, {})
         }
         if (own != null) {
-            LaunchedEffect(own.id) { delay(6000); if (h.neue.note?.id == own.id) h.neue.note = null }
+            LaunchedEffect(own.id) { delay(own.lastsMs); if (h.neue.note?.id == own.id) h.neue.note = null }
             ToastBox(own.message, own.action, {
                 own.onAction()
                 h.neue.note = null

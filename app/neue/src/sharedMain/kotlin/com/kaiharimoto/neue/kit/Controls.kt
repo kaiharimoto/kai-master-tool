@@ -69,6 +69,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
@@ -137,6 +140,7 @@ fun MuButton(
             .hoverable(source, enabled)
             .cursorPointer(label = label, showsWords = true, enabled = enabled, reason = reason)
             .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
+            .explainsWhenDisabled(enabled, reason)
             .padding(horizontal = size.padding),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
@@ -181,7 +185,8 @@ fun IconButton(
             .border(1.dp, animatedColor(edge))
             .hoverable(source, enabled)
             .cursorPointer(label = label, enabled = enabled, reason = reason)
-            .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick),
+            .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
+            .explainsWhenDisabled(enabled, reason),
         contentAlignment = Alignment.Center,
     ) {
         MuIcon(icon, animatedColor(fg), Modifier.size(if (size >= 36.dp) 16.dp else 14.dp))
@@ -219,9 +224,19 @@ fun MuInput(
     onFocusChange: (Boolean) -> Unit = {},
     onSubmit: (() -> Unit)? = null,
     textStyle: TextStyle? = null,
+    /**
+     * The soft keyboard's action key (touch swarm, rec 9). It always ends editing —
+     * the keyboard goes and the field lets go — whatever it is labelled; a search
+     * field's reads Search and only hides the keyboard, since its results are live.
+     * [onSubmit] is a hardware Enter's, as on the desk.
+     */
+    imeAction: ImeAction = ImeAction.Done,
+    keyboardType: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
 ) {
     val c = Mu.colors
     val f = LocalMuFonts.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     val hovered by source.collectIsHoveredAsState()
@@ -286,10 +301,22 @@ fun MuInput(
             textStyle = style,
             cursorBrush = SolidColor(c.ink),
             interactionSource = source,
-            keyboardOptions = KeyboardOptions(imeAction = if (onSubmit != null) ImeAction.Done else ImeAction.Default),
-            keyboardActions = KeyboardActions(onDone = { onSubmit?.invoke() }),
+            keyboardOptions = KeyboardOptions(imeAction = imeAction, keyboardType = keyboardType),
+            keyboardActions = KeyboardActions(onAny = {
+                focusManager.clearFocus()
+                keyboard?.hide()
+            }),
             modifier = Modifier
                 .fillMaxWidth()
+                .onPreviewKeyEvent { e ->
+                    val enter = e.key == androidx.compose.ui.input.key.Key.Enter || e.key == androidx.compose.ui.input.key.Key.NumPadEnter
+                    if (onSubmit != null && enter && e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                        onSubmit()
+                        true
+                    } else {
+                        false
+                    }
+                }
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                 .reportsTextFocus()
                 .onFocusChanged { onFocusChange(it.isFocused) },

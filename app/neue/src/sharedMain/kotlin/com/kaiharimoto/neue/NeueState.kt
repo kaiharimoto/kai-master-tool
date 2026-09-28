@@ -33,7 +33,14 @@ enum class Page(val numeral: Int?, val title: String) {
 enum class Drawer { ISSUES }
 
 /** A toast the shell owns, with at most one action. */
-data class Note(val message: String, val action: String? = null, val id: Long = System.nanoTime(), val onAction: () -> Unit = {})
+data class Note(
+    val message: String,
+    val action: String? = null,
+    val id: Long = System.nanoTime(),
+    /** How long it stays: six seconds, longer for a note with something to read. */
+    val lastsMs: Long = 6000,
+    val onAction: () -> Unit = {},
+)
 
 /** A card picked out on the builder: a deck position, or a pool row. */
 sealed interface Selection {
@@ -51,7 +58,20 @@ sealed interface Selection {
 data class Viewing(val card: Card, val section: DeckSection?, val index: Int)
 
 /** The search pop-out, open (1.0.19). [listId] is the list it adds to, or null for the deck. */
-data class Studio(val listId: String? = null)
+/**
+ * The search pop-out, open. [focus]: whether it takes the keyboard as it opens —
+ * a key or the palette asked for it, so typing is next; a finger's tap on the
+ * pool's button did not, and a soft keyboard over half the pop-out is not an
+ * answer to a tap (touch swarm, rec 10).
+ */
+data class Studio(val listId: String? = null, val focus: Boolean = true)
+
+/** What the search pop-out was searching when it closed, so reopening it carries on (touch swarm, rec 10). */
+data class StudioMemory(
+    val query: String,
+    val filter: com.kaiharimoto.mastertool.core.search.CardFilter,
+    val onlyList: Boolean,
+)
 
 /**
  * Everything about the window that is not the deck: which page, what is open
@@ -205,6 +225,12 @@ class NeueState(
     fun artChoices(card: Card): List<Int> = customArt?.choices(card) ?: CardArt.arts(card).map { it.value }
 
     fun toggleTheme() = update { it.copy(theme = if (it.theme == NeueTheme.PAPER) NeueTheme.INK else NeueTheme.PAPER) }
+
+    /** A keyboard is attached to the tablet (set by the activity); the desk always has one. */
+    var hardwareKeyboard by mutableStateOf(false)
+
+    /** The search pop-out's last search, kept while it is closed. */
+    var studioMemory by mutableStateOf<StudioMemory?>(null)
 
     /** The Decks page's cover picker, here rather than in the page so Back can close it (touch swarm, rec 2). */
     var coverPicking by mutableStateOf<com.kaiharimoto.mastertool.core.data.StoredDeck?>(null)

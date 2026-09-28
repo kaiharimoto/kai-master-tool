@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import androidx.compose.foundation.layout.Arrangement
@@ -101,6 +102,8 @@ fun PoolPane(
     Column(
         modifier
             .zenDeep()
+            // The soft keyboard pads the pool, never the deck (touch swarm, rec 10).
+            .imePadding()
             .onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }
             // aria-busy: the pool is the region that is working while the card pool syncs.
             .let { if (state.isSyncing) it.cursor(CursorMode.BUSY) else it }
@@ -121,11 +124,12 @@ fun PoolPane(
                         state.onTextFieldFocusChanged(it)
                     },
                     modifier = Modifier.weight(1f),
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search,
                 )
                 Kbd("/")
                 // The search pop-out (1.0.19): the window given over to finding cards.
                 Tip("Advanced search: every filter, and the card read large", kbd = DeskShortcuts.chordFor(DeskAction.ADVANCED_SEARCH)?.let(DeskShortcuts::kbd)) {
-                    IconButton(Icons.Search, { neue.studio = Studio() }, label = "Advanced search")
+                    IconButton(Icons.Search, { neue.studio = Studio(focus = !neue.touchFirst) }, label = "Advanced search")
                 }
                 // Hidden from where it stands (kai, 1.0.19), rather than from the window's bar.
                 Tip("Hide the pool", kbd = DeskShortcuts.chordFor(DeskAction.TOGGLE_POOL)?.let(DeskShortcuts::kbd)) {
@@ -176,6 +180,11 @@ fun PoolPane(
         HRule(Modifier.zenQuiet(), color = c.ink)
 
         val grid = rememberLazyGridState()
+        // A finger scrolling the results is done typing (touch swarm, rec 10).
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+        LaunchedEffect(grid.isScrollInProgress) {
+            if (grid.isScrollInProgress && neue.touchFirst && neue.searchFocused) focusManager.clearFocus()
+        }
         val cursor = neue.poolCursor.coerceIn(0, (state.results.size - 1).coerceAtLeast(0))
         // How many cards a row holds as drawn, for the arrow keys; and a selection the
         // arrows moved off the visible rows is scrolled back into view.
@@ -207,7 +216,7 @@ fun PoolPane(
                     if (list != null && list.ids.isEmpty()) {
                         com.kaiharimoto.neue.kit.MuText("Nothing on it yet.", style = MuType.h1(LocalMuFonts.current))
                         Small("Press L on any card, or use its menu, to put it on ${list.name}. Or search for cards to add.", color = c.ink70)
-                        MicroLink("Add cards", { neue.studio = Studio(list.id) }, color = c.ink)
+                        MicroLink("Add cards", { neue.studio = Studio(list.id, focus = !neue.touchFirst) }, color = c.ink)
                     } else {
                         com.kaiharimoto.neue.kit.MuText("No matches.", style = MuType.h1(LocalMuFonts.current))
                         Small("Try fewer words, or turn off a filter.", color = c.ink70)
@@ -315,7 +324,7 @@ private fun ListsRow(neue: NeueState) {
                                 neue.menu = MenuSpec(
                                     at,
                                     listOf(
-                                        MenuEntry("Add cards…") { neue.studio = Studio(list.id) },
+                                        MenuEntry("Add cards…") { neue.studio = Studio(list.id, focus = !neue.touchFirst) },
                                         MenuEntry(if (showing?.id == list.id) "Show every card" else "Show in the pool", hint = "Shift L") { neue.showList(if (showing?.id == list.id) null else list.id) },
                                         MenuEntry("Delete “${list.name}”", danger = true, separatorBefore = true) { neue.deleteList(list.id) },
                                     ),
@@ -328,6 +337,6 @@ private fun ListsRow(neue: NeueState) {
             }
         }
         MicroLink("+ List", { neue.showList(neue.newList()) }, Modifier.padding(horizontal = 6.dp), color = c.ink45)
-        if (showing != null) MicroLink("Add cards →", { neue.studio = Studio(showing.id) }, Modifier.padding(start = 6.dp), color = c.ink)
+        if (showing != null) MicroLink("Add cards →", { neue.studio = Studio(showing.id, focus = !neue.touchFirst) }, Modifier.padding(start = 6.dp), color = c.ink)
     }
 }

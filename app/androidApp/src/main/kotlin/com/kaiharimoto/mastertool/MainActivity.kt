@@ -243,7 +243,10 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                 val h = rememberHolders(deps) { scope ->
                     NeueUpdates(NeueUpdateChecker(GitHubReleaseApi(app.httpClient), Platform.version, DesktopOs.ANDROID), scope)
                 }
-                SideEffect { holders = h }
+                SideEffect {
+                    holders = h
+                    h.neue.hardwareKeyboard = hasHardwareKeyboard(resources.configuration)
+                }
                 LaunchedEffect(h) {
                     androidx.compose.runtime.snapshotFlow { h.canGoBack() }.collect { backCallback.isEnabled = it }
                 }
@@ -277,6 +280,16 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             }
         }
     }
+
+    /** A keyboard cover or a paired keyboard came or went: key hints follow it (touch swarm, rec 16). */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        holders?.neue?.hardwareKeyboard = hasHardwareKeyboard(newConfig)
+    }
+
+    private fun hasHardwareKeyboard(config: android.content.res.Configuration) =
+        config.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY &&
+            config.hardKeyboardHidden == android.content.res.Configuration.HARDKEYBOARDHIDDEN_NO
 
     /**
      * Leaving the app saves the deck (touch swarm, rec 5): a tablet is put down,

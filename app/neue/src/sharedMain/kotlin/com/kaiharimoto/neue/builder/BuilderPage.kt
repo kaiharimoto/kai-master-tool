@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.releasesTypingOnFinger
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -154,7 +155,7 @@ fun BuilderPage(
                 ResizeRule("Inspector", panes.inspector, scale, neue.touchFirst) { delta -> neue.update(debounce = true) { it.copy(inspectorWidth = it.inspectorWidth - delta) } }
                 ZenShield(asleep)
             }
-            Box(Modifier.width(physical(panes.inspector)).fillMaxHeight()) {
+            Box(Modifier.width(physical(panes.inspector)).fillMaxHeight().releasesTypingOnFinger()) {
                 Inspector(state, neue, Modifier.fillMaxSize())
                 ZenShield(asleep)
             }
@@ -292,19 +293,25 @@ fun RowScope.BuilderBar(
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     Segmented(state.format, Format.entries, { it.name }, onFormat, small = true)
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
-    Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), !narrow, state::importFromFile)
+    // On a tablet (touch swarm, rec 16) Import and Export keep their words — an icon
+    // with no hover to name it is a guess — and the deck picture, which has no
+    // Android half yet, is not offered.
+    val touch = neue.touchFirst
+    Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), touch || !narrow, state::importFromFile)
     Box(Modifier.onGloballyPositioned { neue.exportAnchor = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
-        Tool("Export", "Export: a .ydk or .ydkx file, or a YDKe code or a text list to paste", Icons.Export, kbd(DeskAction.EXPORT), !narrow) {
+        Tool("Export", "Export: a .ydk or .ydkx file, or a YDKe code or a text list to paste", Icons.Export, kbd(DeskAction.EXPORT), touch || !narrow) {
             neue.menu = com.kaiharimoto.neue.kit.MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
         }
     }
-    Tool("Screenshot", "A picture of the deck, without the window around it", Icons.Camera, kbd(DeskAction.SCREENSHOT), !narrow, onScreenshot)
+    if (!touch) Tool("Screenshot", "A picture of the deck, without the window around it", Icons.Camera, kbd(DeskAction.SCREENSHOT), !narrow, onScreenshot)
     // The pool's and the inspector's switches moved into the panes themselves (1.0.19).
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     // Auto save (kai, 1.0.18): beside Save, and while it is on the deck is written a moment after each change.
     Tip(if (neue.prefs.autoSave) "Auto save: on. Every change is saved a moment after it is made. Click to turn off" else "Auto save: off. Click to save every change by itself") {
-        com.kaiharimoto.neue.kit.WordToggle(if (narrow) "Auto" else "Auto save", neue.prefs.autoSave) { neue.update { it.copy(autoSave = !it.autoSave) } }
+        com.kaiharimoto.neue.kit.WordToggle(if (narrow && !touch) "Auto" else "Auto save", neue.prefs.autoSave) { neue.update { it.copy(autoSave = !it.autoSave) } }
     }
+    // Unlike neighbours a finger could take one for the other stand apart.
+    if (touch) Box(Modifier.width(12.dp))
     Tip(if (state.dirty) "Save the deck" else "Saved", kbd = kbd(DeskAction.SAVE)) {
         MuButton(if (neue.prefs.autoSave && !state.dirty) "Saved" else "Save", onSave, variant = BtnVariant.PRIMARY, size = BtnSize.SM, icon = Icons.Save)
     }

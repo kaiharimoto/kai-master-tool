@@ -140,6 +140,8 @@ fun TitleBar(
             ) {
                 WordToggle("Auto zen", neue.prefs.autoZen) { neue.update { it.copy(autoZen = !it.autoZen) } }
             }
+            // A finger reaching for Full screen must not find Auto zen (touch swarm, rec 16).
+            if (neue.touchFirst) Box(Modifier.width(12.dp))
             Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, bars out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
                 IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 32.dp, label = if (neue.immersive) "Leave full screen" else "Full screen")
             }
@@ -368,6 +370,11 @@ private fun IndexStrip(neue: NeueState, counts: Map<Page, String>, modifier: Mod
             Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) { Breathe(running = status.running) }
         }
         HRule(color = c.ink)
+        // The gestures, one tap away (touch swarm, rec 20): the desk's rail has its Keys link.
+        StripCell("Gestures", neue.helpOpen, onClick = { neue.helpOpen = true }) { active ->
+            Mono("?", color = if (active) Mu.colors.ink else c.ink70)
+        }
+        HRule()
         StripCell("Search", false, onClick = { neue.paletteOpen = true }) { MuIcon(Icons.Search, c.ink, Modifier.width(18.dp).height(18.dp)) }
         HRule()
         StripCell(Page.SETTINGS.title, neue.page == Page.SETTINGS, onClick = { neue.go(Page.SETTINGS) }) { active ->

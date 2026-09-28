@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -217,7 +218,7 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             title = "Decks",
             subtitle = decks?.let { "${it.size} saved" } ?: "Loading",
         ) {
-            MuInput(filter, { filter = it }, Modifier.width(320.dp), placeholder = "A deck, a card in one, or a tag")
+            MuInput(filter, { filter = it }, Modifier.width(320.dp), placeholder = "A deck, a card in one, or a tag", imeAction = androidx.compose.ui.text.input.ImeAction.Search)
             MuButton("Import", { state.importFromFile(); neue.go(Page.BUILDER) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Import)
             MuButton("New deck", { state.newDeck(); neue.go(Page.BUILDER) }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = Icons.Plus)
         }
@@ -244,7 +245,7 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             else -> Box(Modifier.fillMaxSize()) {
                 val list = rememberLazyListState()
                 val now = remember(decks) { System.currentTimeMillis() }
-                LazyColumn(state = list) {
+                LazyColumn(state = list, modifier = Modifier.imePadding()) {
                     itemsIndexed(shown, key = { _, d -> d.first.entry.id }) { i, (stored, match) ->
                         DeckRow(
                             n = i + 1,

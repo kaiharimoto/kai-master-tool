@@ -93,7 +93,11 @@ fun Tag(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier
 
 /** Kbd (§6): `Ctrl K` in mono 10 inside a hairline frame. */
 @Composable
-fun Kbd(text: String, modifier: Modifier = Modifier) {
+fun Kbd(text: String, modifier: Modifier = Modifier, always: Boolean = false) {
+    // A key hint is a promise a keyboard keeps: on a tablet with none attached it is
+    // noise, so it is drawn only when one is (touch swarm, rec 16). A gesture's name
+    // in the same box ([always]) is a finger's, and is always drawn.
+    if (!always && !LocalHardwareKeyboard.current) return
     val c = Mu.colors
     Box(modifier.border(1.dp, c.ink25).padding(horizontal = 6.dp, vertical = 2.dp)) {
         Mono(text, color = c.ink70, size = 10.sp)

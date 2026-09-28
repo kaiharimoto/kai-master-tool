@@ -165,6 +165,18 @@ class NeueSmokeTest {
             back()
             assertTrue("Back did not leave immersive", until { !on { it.neue!!.neue.immersive } })
 
+            // v1.3.2: the pool's search takes a finger's tap and raises the keyboard, over the
+            // pool and never over the deck; a tap on the deck lets it go again.
+            Thread.sleep(800)
+            tap(200f, 102f)
+            Thread.sleep(1200)
+            shoot("05-keyboard.png")
+            assertTrue("the search field did not take the tap", until { on { it.neue!!.textFocus.any } })
+            // High on the deck: the keyboard covers the lower half, and a tap there is the keyboard's.
+            tap(760f, 180f)
+            Thread.sleep(800)
+            assertTrue("a tap on the deck kept the keyboard", until { !on { it.neue!!.textFocus.any } })
+
             assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
         }
     }

@@ -148,6 +148,34 @@ fixes the frame:
 - **A draft's double-tap is two votes**, never a removal
   (`DeskTouch.resolve(…, drafting)`), and the art chip comes only after
   `CHIP_DELAY_MS` and only on cards at least 48dp wide.
+
+#### Words and the keyboard (1.3.2)
+
+- **Hold any control to read its name.** Android's `PlatformTip` is a finger's
+  hold (the card's hold time), shown clear of the finger; the rest of the press is
+  spent, so the lift does not click, and the name lingers
+  `DeskTouch.LABEL_LINGER_MS`. A pen's hover shows it too. A tap on a disabled
+  control that knows why says why (`explainsWhenDisabled`, `LocalReasonNote`).
+- **The soft keyboard's key ends editing.** `MuInput` splits a hardware Enter
+  (`onSubmit`, as on the desk) from the IME action, which always hides the
+  keyboard and lets go; searches read **Search**, number fields get the number
+  pad, and the palette's key reads **Go** and runs the highlighted row.
+- **The keyboard pushes panes, never the deck** (`imePadding` on the pool, the
+  Groups panel, the Decks list, dialogs, the palette and toasts). A finger on the
+  deck or the inspector, a finger scrolling the pool, or the keyboard put away
+  lets go of the field (`releasesTypingOnFinger`). The search pop-out does not
+  raise the keyboard when a finger opened it (`Studio.focus`), and keeps its
+  search while closed (`StudioMemory`).
+- **The bar on a tablet**: Import and Export in words, no Screenshot (it has no
+  Android half yet), room between unlike neighbours, and the inspector's Hide at
+  its bottom left. **Key hints only with a keyboard** attached
+  (`LocalHardwareKeyboard`, from the activity's configuration); a gesture's name
+  in the same box is always drawn.
+- **Speaking finger**: `core/input/DeskWords` writes the empty places' hints for
+  either hand, and `DeskWordsTest` refuses a finger's sentence that says click,
+  hover or a key. The help is **Fingers** on a tablet, the finger's table first
+  and the keyboard's only with one attached; the index strip has a `?` cell for
+  it, and the first launch shows one note (`touchIntroSeen`) with the way to it.
 - **The proof is an emulator**, since the studio cannot draw Android:
   `.github/workflows/android-smoke.yml` boots a Pixel Tablet image, runs
   `NeueSmokeTest` (a saved deck survives a launch, the builder opens it, no crash

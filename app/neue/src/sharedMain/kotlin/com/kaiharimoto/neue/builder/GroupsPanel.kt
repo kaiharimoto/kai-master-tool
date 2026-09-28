@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.background
@@ -103,7 +104,9 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
             .width(GROUPS_PANEL)
             .fillMaxHeight()
             .onGloballyPositioned { neue.groupsPanel = it.boundsInWindow() }
-            .drawBehind { drawLine(c.ink, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx()) },
+            .drawBehind { drawLine(c.ink, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx()) }
+            // A group's name being typed stays above the soft keyboard (touch swarm, rec 10).
+            .imePadding(),
     ) {
     Column(
         Modifier
@@ -179,11 +182,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         }
         if (groups.isNotEmpty()) {
             Small(
-                if (LocalTouchFirst.current) {
-                    "Tap a colour square to see that group alone. Press and hold a group for the rest."
-                } else {
-                    "Click a colour square to see that group alone. Right-click a group for the rest."
-                },
+                com.kaiharimoto.mastertool.core.input.DeskWords.groupsHelp(LocalTouchFirst.current),
                 Modifier.padding(top = 4.dp),
                 color = c.ink45,
             )
