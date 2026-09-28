@@ -19,6 +19,11 @@ on:
         required: false
         default: false
         type: boolean
+      notes:
+        description: 'Release notes (Markdown). Empty generates them from the commits.'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -122,17 +127,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
           APK: ${{ steps.apk.outputs.path }}
+          # Through the environment, never pasted into the script: notes are prose.
+          NOTES: ${{ inputs.notes }}
         run: |
           set -euo pipefail
           PRERELEASE=""
           if [ "${{ inputs.prerelease }}" = "true" ]; then PRERELEASE="--prerelease"; fi
+          # A release that changes what is stored on the device says so in its
+          # notes (CLAUDE.md, "Ship Every Change"); those are written by hand.
+          if [ -n "${NOTES:-}" ]; then
+            printf '%s\n' "$NOTES" > "$RUNNER_TEMP/notes.md"
+            NOTES_ARGS=(--notes-file "$RUNNER_TEMP/notes.md")
+          else
+            NOTES_ARGS=(--generate-notes)
+          fi
 
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK" --clobber
+            if [ -n "${NOTES:-}" ]; then gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"; fi
           else
             gh release create "$TAG" "$APK" \
               --title "kai's master tool $TAG" \
-              --generate-notes \
+              "${NOTES_ARGS[@]}" \
               $PRERELEASE
           fi
 
