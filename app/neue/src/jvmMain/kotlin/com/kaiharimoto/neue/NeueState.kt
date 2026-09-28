@@ -10,6 +10,8 @@ import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardArt
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.prefs.CardList
+import com.kaiharimoto.mastertool.core.prefs.CardLists
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.neue.kit.MenuSpec
@@ -47,6 +49,9 @@ sealed interface Selection {
  * position, or a pool row when [section] is null.
  */
 data class Viewing(val card: Card, val section: DeckSection?, val index: Int)
+
+/** The search pop-out, open (1.0.19). [listId] is the list it adds to, or null for the deck. */
+data class Studio(val listId: String? = null)
 
 /**
  * Everything about the window that is not the deck: which page, what is open
@@ -114,8 +119,14 @@ class NeueState(
     /** A line at the bottom right that is the app's rather than the deck's: "Saved", "Copied". */
     var note by mutableStateOf<Note?>(null)
 
+    /**
+     * The search pop-out (1.0.19), when it is open: the window given over to
+     * finding cards, adding to the deck or to a list.
+     */
+    var studio by mutableStateOf<Studio?>(null)
+
     val overlayOpen: Boolean
-        get() = paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null
+        get() = paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || studio != null
 
     /** What the inspector is showing: the hover, else the selection. */
     val inspected: Card? get() = hovered ?: selection?.card
@@ -183,8 +194,47 @@ class NeueState(
         confirmDelete != null -> { confirmDelete = null; true }
         helpOpen -> { helpOpen = false; true }
         drawer != null -> { drawer = null; true }
+        studio != null -> { studio = null; true }
         else -> false
     }
+
+    // ---- lists of cards kept for consideration (1.0.19) ----------------------
+
+    fun list(id: String?): CardList? = id?.let { wanted -> prefs.cardLists.firstOrNull { it.id == wanted } }
+
+    /** The list a card goes onto: the one last used, else the one showing, else the first. */
+    val activeList: CardList? get() = list(prefs.activeList) ?: list(prefs.poolList) ?: prefs.cardLists.firstOrNull()
+
+    /** A new, empty list, made the active one; its id. */
+    fun newList(name: String? = null): String {
+        val id = CardLists.newId(prefs.cardLists)
+        update { p -> p.copy(cardLists = p.cardLists + CardList(id, name ?: CardLists.newName(p.cardLists)), activeList = id) }
+        return id
+    }
+
+    fun renameList(id: String, name: String) = update { p ->
+        p.copy(cardLists = p.cardLists.map { if (it.id == id) it.copy(name = name.ifBlank { it.name }) else it })
+    }
+
+    fun deleteList(id: String) = update { p ->
+        p.copy(
+            cardLists = p.cardLists.filterNot { it.id == id },
+            poolList = p.poolList?.takeIf { it != id },
+            activeList = p.activeList?.takeIf { it != id },
+        )
+    }
+
+    /** [card] onto list [id] — a new one when null — or off it; the list becomes the active one. */
+    fun toggleOnList(card: Card, id: String? = activeList?.id) {
+        val listId = id ?: newList()
+        val before = list(listId) ?: return
+        val on = card.id.value in before.ids
+        update { p -> p.copy(cardLists = CardLists.replace(p.cardLists, CardLists.toggle(before, card.id.value)), activeList = listId) }
+        note = Note(if (on) "Took ${card.name} off ${before.name}" else "Put ${card.name} on ${before.name}")
+    }
+
+    /** The pool showing list [id], or every card when null. */
+    fun showList(id: String?) = update { it.copy(poolList = id, activeList = id ?: it.activeList) }
 
     fun go(to: Page) {
         dismissTop()

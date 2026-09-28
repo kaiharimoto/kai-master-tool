@@ -72,6 +72,18 @@ enum class DeskAction {
     SELECT_LEFT,
     SELECT_RIGHT,
 
+    /**
+     * The search pop-out (1.0.19): the window given over to finding cards, with
+     * every filter and the card read large beside the results.
+     */
+    ADVANCED_SEARCH,
+
+    /** The selected card, or the one being read, onto the active list — or off it (1.0.19). */
+    LIST_CARD,
+
+    /** The pool between the whole database and the active list. */
+    SHOW_LIST,
+
     /** The artwork of the card being read — the inspector's card — one along, or one back (1.0.16). */
     NEXT_ART,
     PREVIOUS_ART,
@@ -155,7 +167,10 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("slash"), DeskAction.FOCUS_SEARCH, DeskScope.BUILDER, "Search the pool"),
         DeskShortcut(ctrl("j"), DeskAction.TOGGLE_INSPECTOR, DeskScope.BUILDER, "Show or hide the inspector", allowedInTextInput = true),
         DeskShortcut(ctrl("b"), DeskAction.TOGGLE_POOL, DeskScope.BUILDER, "Show or hide the pool", allowedInTextInput = true),
-        DeskShortcut(ctrl("f", shift = true), DeskAction.TOGGLE_FILTERS, DeskScope.BUILDER, "Filters", allowedInTextInput = true),
+        DeskShortcut(ctrl("f", shift = true), DeskAction.ADVANCED_SEARCH, DeskScope.BUILDER, "Advanced search", allowedInTextInput = true),
+        DeskShortcut(KeyChord("f"), DeskAction.TOGGLE_FILTERS, DeskScope.BUILDER, "Filters"),
+        DeskShortcut(KeyChord("l"), DeskAction.LIST_CARD, DeskScope.BUILDER, "Put the card on the list, or take it off"),
+        DeskShortcut(KeyChord("l", shift = true), DeskAction.SHOW_LIST, DeskScope.BUILDER, "Show the list in the pool, or every card"),
         DeskShortcut(KeyChord("delete"), DeskAction.REMOVE_SELECTED, DeskScope.BUILDER, "Remove the selected card", repeatable = true),
         DeskShortcut(KeyChord("backspace"), DeskAction.REMOVE_SELECTED, DeskScope.BUILDER, "Remove the selected card", repeatable = true),
         DeskShortcut(KeyChord("space"), DeskAction.VIEW_SELECTED, DeskScope.BUILDER, "Open the selected card large"),

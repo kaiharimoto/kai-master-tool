@@ -79,6 +79,10 @@ object Icons {
     val Pencil = icon("pencil", "M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z", "m15 5 4 4")
     val PanelLeft = icon("panel-left", ROUNDED_SQUARE, "M9 3v18")
     val PanelRight = icon("panel-right", ROUNDED_SQUARE, "M15 3v18")
+    val PanelLeftClose = icon("panel-left-close", ROUNDED_SQUARE, "M9 3v18", "m16 15-3-3 3-3")
+    val PanelRightClose = icon("panel-right-close", ROUNDED_SQUARE, "M15 3v18", "m8 9 3 3-3 3")
+    val PanelLeftOpen = icon("panel-left-open", ROUNDED_SQUARE, "M9 3v18", "m14 9 3 3-3 3")
+    val PanelRightOpen = icon("panel-right-open", ROUNDED_SQUARE, "M15 3v18", "m10 15-3-3 3-3")
     val PanelBottom = icon("panel-bottom", ROUNDED_SQUARE, "M3 15h18")
     val Trash = icon(
         "trash-2",

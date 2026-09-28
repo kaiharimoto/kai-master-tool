@@ -29,10 +29,25 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
-import com.kaiharimoto.mastertool.core.model.Attribute
-import com.kaiharimoto.mastertool.core.model.BanStatus
-import com.kaiharimoto.mastertool.core.model.CardCategory
-import com.kaiharimoto.mastertool.core.search.CardFilter
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.onPointerEvent
+import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.neue.Studio
+import com.kaiharimoto.neue.kit.IconButton
+import com.kaiharimoto.neue.kit.Icons
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.mastertool.core.input.MouseAction
 import com.kaiharimoto.mastertool.core.input.MouseTarget
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
@@ -107,7 +122,16 @@ fun PoolPane(
                     modifier = Modifier.weight(1f),
                 )
                 Kbd("/")
+                // The search pop-out (1.0.19): the window given over to finding cards.
+                Tip("Advanced search: every filter, and the card read large", kbd = DeskShortcuts.chordFor(DeskAction.ADVANCED_SEARCH)?.let(DeskShortcuts::kbd)) {
+                    IconButton(Icons.Search, { neue.studio = Studio() }, label = "Advanced search")
+                }
+                // Hidden from where it stands (kai, 1.0.19), rather than from the window's bar.
+                Tip("Hide the pool", kbd = DeskShortcuts.chordFor(DeskAction.TOGGLE_POOL)?.let(DeskShortcuts::kbd)) {
+                    IconButton(Icons.PanelLeftClose, { neue.update { it.copy(poolVisible = false) } }, label = "Hide pool")
+                }
             }
+            ListsRow(neue)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 val shown = state.results.size
                 val meta = buildString {
@@ -140,7 +164,13 @@ fun PoolPane(
         }
         if (neue.prefs.filtersOpen) {
             HRule(Modifier.zenQuiet())
-            FilterPanel(state, Modifier.zenQuiet().padding(16.dp))
+            // Every facet is a long panel: it scrolls within the upper part of the pool,
+            // and the results keep the rest.
+            val scroll = rememberScrollState()
+            Box(Modifier.zenQuiet().fillMaxWidth().heightIn(max = 380.dp)) {
+                FilterPanel(state.filter, state::onFilterChange, state.index, Modifier.verticalScroll(scroll).padding(16.dp))
+                ScrollbarFor(scroll)
+            }
         }
         HRule(Modifier.zenQuiet(), color = c.ink)
 
@@ -172,8 +202,15 @@ fun PoolPane(
                     Small(if (state.isSyncing) "Fetching the card pool" else state.syncMessage ?: "No card pool yet", color = c.ink70)
                 }
                 state.results.isEmpty() -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    com.kaiharimoto.neue.kit.MuText("No matches.", style = MuType.h1(LocalMuFonts.current))
-                    Small("Try fewer words, or turn off a filter.", color = c.ink70)
+                    val list = neue.list(neue.prefs.poolList)
+                    if (list != null && list.ids.isEmpty()) {
+                        com.kaiharimoto.neue.kit.MuText("Nothing on it yet.", style = MuType.h1(LocalMuFonts.current))
+                        Small("Press L on any card, or use its menu, to put it on ${list.name}. Or search for cards to add.", color = c.ink70)
+                        MicroLink("Add cards", { neue.studio = Studio(list.id) }, color = c.ink)
+                    } else {
+                        com.kaiharimoto.neue.kit.MuText("No matches.", style = MuType.h1(LocalMuFonts.current))
+                        Small("Try fewer words, or turn off a filter.", color = c.ink70)
+                    }
                 }
                 else -> {
                     val columns = neue.prefs.poolColumns
@@ -246,44 +283,50 @@ private class DeckSized(private val target: Dp) : GridCells {
     override fun hashCode() = target.hashCode()
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * What the pool is drawn from (kai, 1.0.19: "a custom list of cards … for
+ * consideration and toggle the custom list"): every card, or one of the lists.
+ * Each list is a tag with its count; a click shows it, a right-click edits or
+ * deletes it, and **+ List** starts one. **Add cards** opens the search pop-out
+ * adding to the list showing.
+ */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalComposeUiApi::class)
 @Composable
-private fun FilterPanel(state: DeckBuilderState, modifier: Modifier = Modifier) {
-    val f = state.filter
-    fun <T> Set<T>.toggle(item: T) = if (item in this) this - item else this + item
-
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FacetRow("Kind") {
-            listOf(CardCategory.MONSTER to "Monster", CardCategory.SPELL to "Spell", CardCategory.TRAP to "Trap").forEach { (value, label) ->
-                Tag(label, value in f.categories, { state.onFilterChange(f.copy(categories = f.categories.toggle(value))) })
+private fun ListsRow(neue: NeueState) {
+    val c = Mu.colors
+    val lists = neue.prefs.cardLists
+    val showing = neue.list(neue.prefs.poolList)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        Tag("All cards", showing == null, { neue.showList(null) }, Modifier.height(24.dp), caption = "Every card")
+        lists.forEach { list ->
+            var at by remember { mutableStateOf(Offset.Zero) }
+            Tip("Right-click to edit, rename or delete. L puts the card you are reading on it") {
+                Tag(
+                    list.name,
+                    showing?.id == list.id,
+                    { neue.showList(if (showing?.id == list.id) null else list.id) },
+                    Modifier
+                        .height(24.dp)
+                        .onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }
+                        .onPointerEvent(PointerEventType.Press) { e ->
+                            if (e.buttons.isSecondaryPressed) {
+                                neue.menu = MenuSpec(
+                                    at,
+                                    listOf(
+                                        MenuEntry("Add cards…") { neue.studio = Studio(list.id) },
+                                        MenuEntry(if (showing?.id == list.id) "Show every card" else "Show in the pool", hint = "Shift L") { neue.showList(if (showing?.id == list.id) null else list.id) },
+                                        MenuEntry("Delete “${list.name}”", danger = true, separatorBefore = true) { neue.deleteList(list.id) },
+                                    ),
+                                )
+                                e.changes.forEach { it.consume() }
+                            }
+                        },
+                    count = "${list.ids.size}",
+                    caption = if (showing?.id == list.id) "Every card" else "Show",
+                )
             }
-            Tag("Main deck", f.extraDeckOnly == false, { state.onFilterChange(f.copy(extraDeckOnly = if (f.extraDeckOnly == false) null else false)) })
-            Tag("Extra deck", f.extraDeckOnly == true, { state.onFilterChange(f.copy(extraDeckOnly = if (f.extraDeckOnly == true) null else true)) })
         }
-        FacetRow("Attribute") {
-            Attribute.entries.filter { it != Attribute.UNKNOWN }.forEach { a ->
-                Tag(a.name.lowercase().replaceFirstChar { it.uppercase() }, a in f.attributes, { state.onFilterChange(f.copy(attributes = f.attributes.toggle(a))) })
-            }
-        }
-        FacetRow("Level or rank") {
-            (1..12).forEach { level ->
-                Tag(level.toString(), level in f.levels, { state.onFilterChange(f.copy(levels = f.levels.toggle(level))) })
-            }
-        }
-        FacetRow("Banlist") {
-            listOf(BanStatus.FORBIDDEN to "Forbidden", BanStatus.LIMITED to "Limited", BanStatus.SEMI_LIMITED to "Semi-limited").forEach { (s, label) ->
-                Tag(label, s in f.banStatuses, { state.onFilterChange(f.copy(banStatuses = f.banStatuses.toggle(s))) })
-            }
-        }
-        if (f.isActive) MicroLink("Clear filters", { state.onFilterChange(CardFilter(format = f.format)) })
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun FacetRow(label: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Micro(label, color = Mu.colors.ink45)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { content() }
+        MicroLink("+ List", { neue.showList(neue.newList()) }, Modifier.padding(horizontal = 6.dp), color = c.ink45)
+        if (showing != null) MicroLink("Add cards →", { neue.studio = Studio(showing.id) }, Modifier.padding(start = 6.dp), color = c.ink)
     }
 }

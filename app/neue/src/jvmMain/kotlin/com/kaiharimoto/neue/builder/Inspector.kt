@@ -59,7 +59,10 @@ import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.Stat
 import com.kaiharimoto.neue.kit.Stepper
 import com.kaiharimoto.neue.kit.Tag
+import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.percent
+import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
@@ -79,7 +82,18 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
     val c = Mu.colors
     val card = neue.inspected
     Box(modifier.zenDeep()) {
+        // Hidden from where it stands (kai, 1.0.19), rather than from the window's bar.
+        // Drawn last, in the corner, so it costs the picture nothing.
+        val hide = @Composable {
+            Box(Modifier.fillMaxSize().zenQuiet(), contentAlignment = Alignment.TopEnd) {
+                Tip("Hide the inspector", kbd = DeskShortcuts.chordFor(DeskAction.TOGGLE_INSPECTOR)?.let(DeskShortcuts::kbd)) {
+                    // 20 px, 2 in from the corner: inside the 24 px margin, clear of the art.
+                    IconButton(Icons.PanelRightClose, { neue.update { it.copy(inspectorVisible = false) } }, Modifier.padding(2.dp), size = 20.dp, label = "Hide inspector")
+                }
+            }
+        }
         if (card == null) {
+            hide()
             Column(Modifier.zenQuiet().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 com.kaiharimoto.neue.kit.MuText("Nothing here.", style = MuType.h1(LocalMuFonts.current))
                 Body("Point at a card to read it. Click one to keep it here. Hold the button down on one to open it large.", color = c.ink70)
@@ -108,6 +122,7 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
             }
         }
         Box(Modifier.matchParentSize().zenQuiet()) { ScrollbarFor(scroll) }
+        hide()
     }
 }
 

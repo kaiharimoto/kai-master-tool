@@ -150,6 +150,22 @@ object CardActions {
         return MenuEntry("Next artwork · $at of ${all.size}", hint = "A", separatorBefore = true) { neue.stepArt(card, 1) }
     }
 
+    /**
+     * The card onto a list of cards kept for consideration, or off it (1.0.19):
+     * the active list first, marked `L`; with no list yet, one is made.
+     */
+    fun listEntries(card: Card, neue: NeueState): List<MenuEntry> {
+        val lists = neue.prefs.cardLists
+        if (lists.isEmpty()) return listOf(MenuEntry("Put on a new list", hint = "L", separatorBefore = true) { neue.toggleOnList(card, null) })
+        val active = neue.activeList
+        return lists.sortedByDescending { it.id == active?.id }.mapIndexed { i, list ->
+            val on = card.id.value in list.ids
+            MenuEntry(if (on) "Take off ${list.name}" else "Put on ${list.name}", hint = if (list.id == active?.id) "L" else null, separatorBefore = i == 0) {
+                neue.toggleOnList(card, list.id)
+            }
+        }
+    }
+
     fun poolMenu(card: Card, state: DeckBuilderState, neue: NeueState? = null): List<MenuEntry> {
         val home = card.requiredSection()
         val left = state.remaining(card)
@@ -168,7 +184,7 @@ object CardActions {
             ) { add(state, card, toSide = true) },
             neue?.let { artEntry(card, it) },
             MenuEntry("Copy name", separatorBefore = true) { copyName(card) },
-        )
+        ) + (neue?.let { listEntries(card, it) } ?: emptyList())
     }
 
     fun deckMenu(card: Card, section: DeckSection, index: Int, state: DeckBuilderState, neue: NeueState): List<MenuEntry> {
@@ -197,6 +213,7 @@ object CardActions {
             add(MenuEntry("Manage groups", hint = "G") { state.useLens(com.kaiharimoto.mastertool.core.deck.Lens.ROLES) })
             artEntry(card, neue)?.let(::add)
             add(coverEntry(section, index, state, neue))
+            addAll(listEntries(card, neue))
             add(MenuEntry("Copy name", separatorBefore = true) { copyName(card) })
             add(MenuEntry("Remove this copy", hint = hint(MouseTarget.DECK, MouseAction.REMOVE), danger = true, separatorBefore = true) { state.removeAt(card, section, index) })
             if (state.copiesIn(card.id, section) > 1) {

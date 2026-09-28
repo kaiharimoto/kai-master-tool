@@ -167,6 +167,24 @@ fun neueMain(args: Array<String>) {
             // --groups: the Groups button pressed — the Roles lens, the deck in pieces, the panel.
             if (map["groups"] == "true") h.setGroups(true)
             if (map["help"] == "true") h.neue.helpOpen = true
+            // --list=N: a list of the first N main-deck cards, shown in the pool (1.0.19).
+            map["list"]?.toIntOrNull()?.let { n ->
+                val id = h.neue.newList()
+                val ids = h.builder.deck[DeckSection.MAIN].distinct().take(n).map { it.value }
+                h.neue.update { p -> p.copy(cardLists = p.cardLists.map { if (it.id == id) it.copy(ids = ids) else it }) }
+                h.neue.showList(id)
+                println("[neue-studio] list $id with ${ids.size} cards")
+            }
+            // --filters=true: the pool's filter panel open; --effect=SEARCH,NEGATE picks effect kinds.
+            if (map["filters"] == "true") h.neue.update { it.copy(filtersOpen = true) }
+            map["effect"]?.let { spec ->
+                val kinds = spec.split(",").mapNotNull { k -> com.kaiharimoto.mastertool.core.search.EffectKind.entries.firstOrNull { it.name.equals(k.trim(), true) } }.toSet()
+                h.builder.onFilterChange(h.builder.filter.copy(effects = kinds))
+            }
+            if (map["nopool"] == "true") h.neue.update { it.copy(poolVisible = false) }
+            if (map["noinspector"] == "true") h.neue.update { it.copy(inspectorVisible = false) }
+            // --studio=deck|list: the search pop-out, adding to the deck or to the list made by --list.
+            map["studio"]?.let { mode -> h.neue.studio = com.kaiharimoto.neue.Studio(if (mode == "list") h.neue.prefs.poolList else null) }
             map["drawer"]?.let { h.neue.drawer = Drawer.ISSUES }
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())

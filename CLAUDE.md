@@ -448,6 +448,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   results only in the search field or with nothing selected. Each group's name
   is written once on its largest piece (`NAME_TAB`, declared to the fitter), and
   the lens row stays put when the wheel shrinks the deck. `NEUE.md` §3, §4, §4f.
+- **Finding cards** (1.0.19): the pool and inspector hide from their own
+  buttons and leave a strip to bring them back. `FilterPanel` is shared by the
+  pool and the **search pop-out** (`SearchStudio`, `Ctrl Shift F`), and carries
+  DuelingBook-, Master Duel- and Neuron-style facets. The new `CardFilter` fields
+  are trailing and empty by default, so the tablet is unchanged. Effect
+  categories are read off the text (`EffectKinds`). **Lists of cards** are in
+  `NeuePreferences.cardLists`; the pool shows one through the filter's `onlyIds`,
+  `L` puts a card on the active list, and the pop-out opened on a list adds to it.
+  `NEUE.md` §4g.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
   falling back to the small render. **Card names are stamped in the foil**

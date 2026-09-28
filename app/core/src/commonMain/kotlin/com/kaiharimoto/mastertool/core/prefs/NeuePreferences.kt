@@ -10,6 +10,41 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class NeueTheme { PAPER, INK }
 
+/**
+ * A list of cards kept for consideration (kai, 1.0.19: "a custom list of cards in
+ * the database for consideration"): a name and passcodes, in the order they were
+ * put on it. Not a deck — no copies, no sections, no limits.
+ */
+@Serializable
+data class CardList(val id: String, val name: String, val ids: List<Int> = emptyList())
+
+/** The arithmetic of [CardList]s, kept here so the menus, the keys and the pop-out agree. */
+object CardLists {
+    /** [list] with [id] on it, at the end, or taken off if it was there. */
+    fun toggle(list: CardList, id: Int): CardList =
+        if (id in list.ids) list.copy(ids = list.ids - id) else list.copy(ids = list.ids + id)
+
+    fun add(list: CardList, id: Int): CardList = if (id in list.ids) list else list.copy(ids = list.ids + id)
+
+    /** A new list's id, unused by [lists]. */
+    fun newId(lists: List<CardList>): String {
+        var n = lists.size + 1
+        while (lists.any { it.id == "list-$n" }) n++
+        return "list-$n"
+    }
+
+    /** A new list's name: "Considering", then "List 2", "List 3"… — never one already taken. */
+    fun newName(lists: List<CardList>): String {
+        if (lists.none { it.name == "Considering" }) return "Considering"
+        var n = 2
+        while (lists.any { it.name == "List $n" }) n++
+        return "List $n"
+    }
+
+    /** [lists] with [changed] in the place of the list with its id. */
+    fun replace(lists: List<CardList>, changed: CardList): List<CardList> = lists.map { if (it.id == changed.id) changed else it }
+}
+
 /** Where the window was, so it opens there again. */
 @Serializable
 data class WindowBounds(
@@ -111,6 +146,12 @@ data class NeuePreferences(
     val slidesAutoplay: Boolean = true,
     /** Save the deck by itself a moment after every change (1.0.18, beside Save). */
     val autoSave: Boolean = false,
+    /** Lists of cards kept for consideration (1.0.19), in the order they were made. */
+    val cardLists: List<CardList> = emptyList(),
+    /** The list the pool is showing instead of the whole database, by id; null is the database. */
+    val poolList: String? = null,
+    /** The list a card goes onto with `L` and the menus: the last one shown or edited. */
+    val activeList: String? = null,
     /**
      * Zen comes by itself after idle seconds in immersive mode (1.0.16: a switch on
      * the bar). Off, it comes only when asked for with Z.

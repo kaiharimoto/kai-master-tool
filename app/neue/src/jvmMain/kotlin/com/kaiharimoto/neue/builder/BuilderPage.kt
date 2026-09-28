@@ -102,6 +102,19 @@ fun BuilderPage(
     val zen = LocalZen.current
     val asleep by remember { derivedStateOf { zen.deep > 0.5f } }
     Row(Modifier.fillMaxSize().padding(top = if (neue.immersive) IMMERSIVE_TOP else 0.dp)) {
+        if (!neue.prefs.poolVisible) {
+            // A hidden pane leaves its handle where it stood (kai, 1.0.19): a narrow strip
+            // at its edge with the one button that brings it back — past the rail's gutter,
+            // so reaching for it does not bring the rail out instead.
+            val gutter = if (neue.prefs.railPinned && !neue.immersive) 0.dp else 32.dp
+            HiddenPane(
+                Modifier.zenQuiet().padding(start = gutter),
+                Icons.PanelLeftOpen,
+                "Show the pool",
+                kbd(DeskAction.TOGGLE_POOL),
+            ) { neue.update { it.copy(poolVisible = true) } }
+            VRule(Modifier.zenQuiet(), color = Mu.colors.ink12)
+        }
         if (neue.prefs.poolVisible) {
             Box(Modifier.width(neue.prefs.poolWidth.dp).fillMaxHeight()) {
                 PoolPane(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
@@ -122,7 +135,20 @@ fun BuilderPage(
                 Inspector(state, neue, Modifier.fillMaxSize())
                 ZenShield(asleep)
             }
+        } else {
+            VRule(Modifier.zenQuiet(), color = Mu.colors.ink12)
+            HiddenPane(Modifier.zenQuiet(), Icons.PanelRightOpen, "Show the inspector", kbd(DeskAction.TOGGLE_INSPECTOR)) {
+                neue.update { it.copy(inspectorVisible = true) }
+            }
         }
+    }
+}
+
+/** What a hidden side pane leaves behind: a 36 px strip with the button that brings it back. */
+@Composable
+private fun HiddenPane(modifier: Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector, tip: String, chord: String?, onShow: () -> Unit) {
+    Box(modifier.width(36.dp).fillMaxHeight().padding(top = 10.dp), contentAlignment = Alignment.TopCenter) {
+        Tip(tip, kbd = chord) { IconButton(icon, onShow, size = 28.dp, label = tip.removePrefix("Show the ").replaceFirstChar { it.uppercase() }) }
     }
 }
 
@@ -224,13 +250,8 @@ fun RowScope.BuilderBar(
         }
     }
     Tool("Screenshot", "A picture of the deck, without the window around it", Icons.Camera, kbd(DeskAction.SCREENSHOT), !narrow, onScreenshot)
+    // The pool's and the inspector's switches moved into the panes themselves (1.0.19).
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
-    Tip("Show or hide the pool", kbd = kbd(DeskAction.TOGGLE_POOL)) {
-        IconButton(Icons.PanelLeft, { neue.update { it.copy(poolVisible = !it.poolVisible) } }, toggled = neue.prefs.poolVisible, size = 32.dp, label = if (neue.prefs.poolVisible) "Hide pool" else "Show pool")
-    }
-    Tip("Show or hide the inspector", kbd = kbd(DeskAction.TOGGLE_INSPECTOR)) {
-        IconButton(Icons.PanelRight, { neue.update { it.copy(inspectorVisible = !it.inspectorVisible) } }, toggled = neue.prefs.inspectorVisible, size = 32.dp, label = if (neue.prefs.inspectorVisible) "Hide inspector" else "Show inspector")
-    }
     // Auto save (kai, 1.0.18): beside Save, and while it is on the deck is written a moment after each change.
     Tip(if (neue.prefs.autoSave) "Auto save: on. Every change is saved a moment after it is made. Click to turn off" else "Auto save: off. Click to save every change by itself") {
         com.kaiharimoto.neue.kit.WordToggle(if (narrow) "Auto" else "Auto save", neue.prefs.autoSave) { neue.update { it.copy(autoSave = !it.autoSave) } }

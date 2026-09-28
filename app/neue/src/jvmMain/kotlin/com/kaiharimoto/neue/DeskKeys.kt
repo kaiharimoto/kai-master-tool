@@ -50,6 +50,7 @@ object DeskKeys {
         Key.I to "i",
         Key.J to "j",
         Key.K to "k",
+        Key.L to "l",
         Key.N to "n",
         Key.O to "o",
         Key.S to "s",

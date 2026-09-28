@@ -265,6 +265,17 @@ class NeueHolders(
             DeskAction.PREVIOUS_LENS -> stepLens(-1)
             DeskAction.NEW_GROUP -> state.startGroupDraft(seed = (neue.selection as? Selection.InDeck)?.card?.id)
             DeskAction.GROUPS -> setGroups(true)
+            DeskAction.ADVANCED_SEARCH -> {
+                neue.page = Page.BUILDER
+                neue.studio = com.kaiharimoto.neue.Studio()
+            }
+            DeskAction.LIST_CARD -> (neue.inspected ?: state.results.getOrNull(neue.poolCursor))?.let { neue.toggleOnList(it) }
+            DeskAction.SHOW_LIST -> if (neue.prefs.poolList != null) {
+                neue.showList(null)
+            } else {
+                neue.showList(neue.activeList?.id ?: neue.newList())
+                neue.update { it.copy(poolVisible = true) }
+            }
             DeskAction.SELECT_LEFT -> moveSelection(StepDirection.LEFT)
             DeskAction.SELECT_RIGHT -> moveSelection(StepDirection.RIGHT)
             DeskAction.NEXT_ART, DeskAction.PREVIOUS_ART -> neue.inspected?.let { card ->
@@ -416,6 +427,10 @@ class NeueHolders(
             cmd("App", "Zen, now", DeskAction.ZEN),
             Command("App", if (neue.prefs.autoZen) "Zen by itself: off" else "Zen by itself: on") { neue.update { it.copy(autoZen = !it.autoZen) } },
             cmd("Card", "Next artwork", DeskAction.NEXT_ART),
+            cmd("Cards", "Advanced search", DeskAction.ADVANCED_SEARCH),
+            cmd("Cards", "Put the card on the list, or take it off", DeskAction.LIST_CARD),
+            cmd("Cards", if (neue.prefs.poolList != null) "Show every card in the pool" else "Show the list in the pool", DeskAction.SHOW_LIST),
+            Command("Cards", "New list of cards") { neue.showList(neue.newList()) },
             cmd("Deck", "New group", DeskAction.NEW_GROUP),
             cmd("Deck", "Next lens", DeskAction.NEXT_LENS),
             Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}") {
@@ -574,6 +589,7 @@ private fun Shell(h: NeueHolders) {
 
     ZenClockwork(h)
     AutoSave(h)
+    PoolSource(h)
     Box(
         Modifier
             .fillMaxSize()
@@ -815,6 +831,7 @@ private fun Shell(h: NeueHolders) {
                 drawRect(c.ink, box.topLeft, box.size, style = Stroke(1.dp.toPx()))
             }
         }
+        com.kaiharimoto.neue.builder.SearchStudio(state, neue)
         CardViewer(state, neue)
         MenuLayer(neue.menu) { neue.menu = null }
         OverlayLayer(h.overlays)
@@ -830,6 +847,20 @@ private fun Shell(h: NeueHolders) {
         LaunchedEffect(job) { if (job == null) h.cursor.clearBusy() else h.cursor.setBusy(job.first, job.second) }
         // Last in the window, over everything in it.
         CursorLayer(h.cursor)
+    }
+}
+
+/**
+ * The pool shows the list it was switched to (1.0.19): the list is the filter's
+ * `onlyIds`, kept in step here — so a list changed from a menu, or a filter
+ * replaced whole by a click in the inspector, still leaves the pool on the list.
+ */
+@Composable
+private fun PoolSource(h: NeueHolders) {
+    val state = h.builder
+    val wanted = h.neue.list(h.neue.prefs.poolList)?.ids?.toSet()
+    LaunchedEffect(wanted, state.filter.onlyIds) {
+        if (state.filter.onlyIds != wanted) state.onFilterChange(state.filter.copy(onlyIds = wanted))
     }
 }
 

@@ -103,7 +103,7 @@ class CardIndex private constructor(
             // happened to return first.
             val matches = cards.filter(filter::matches)
             return SearchOutcome(
-                cards = matches.sortedBy { it.name }.take(limit),
+                cards = filter.sort.apply(matches.sortedBy { it.name }, filter.reverse).take(limit),
                 matchCount = matches.size,
             )
         }
@@ -139,7 +139,7 @@ class CardIndex private constructor(
 
         // Every match is already in `hits`, so the total costs nothing extra.
         return SearchOutcome(
-            cards = hits.take(limit).map { it.card },
+            cards = filter.sort.apply(hits.map { it.card }, filter.reverse).take(limit),
             matchCount = hits.size,
             effectMatchCount = byText,
         )

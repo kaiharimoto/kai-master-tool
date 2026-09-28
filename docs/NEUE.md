@@ -735,6 +735,74 @@ sets too). Drawn by `shot/DeckShot.kt` offscreen at 2× from the originals, 1600
 dp wide, in the theme you are in. `tools/shoot.sh --neue --deckshot` renders it
 headlessly.
 
+### 4g. Finding cards (1.0.19)
+
+**The panes hide themselves.** kai: "let me toggle to hide the card database
+sidebar and inspector sidebar within the sidebar themselves rather than the top
+bar so it's more intuitive". The pool's hide button is at the end of its search
+row, and the inspector's is a 20 px button in its top-right corner, inside the
+24 px margin so it costs the picture nothing. A hidden pane leaves a 36 px strip
+where it stood with the one button that brings it back; the pool's strip starts
+past the rail's gutter, so reaching for it never brings the rail out instead.
+`Ctrl B` and `Ctrl J` still work. The two buttons on the window's bar are gone.
+
+**Filters, as the deck builders people use have them** (kai: "refer to …
+duelingbook, master duel, and neuron"). One `FilterPanel` for the pool and the
+pop-out, facets that cannot apply hidden (pick Spell and the monster rows go):
+order (best match, name, ATK, DEF, level, reversible); card; monster type
+(Normal, Effect, Ritual, Fusion, Synchro, Xyz, Pendulum, Link); ability (Tuner,
+Flip, Gemini, Spirit, Toon, Union); attribute; type; spell and trap property;
+level or rank 0–13; link rating; pendulum scale; link arrows as the card's own
+compass; ATK and DEF between two numbers; effect; archetype found by typing; and
+the banlist. `CardFilter` carries the new facets as trailing fields with empty
+defaults, so the tablet's filter does not change. Within a facet any value
+passes, except the link arrows and the effects, where every one chosen is
+required: that is how every deck builder reads arrows, and "searches *and*
+special summons" is the question an effect filter is asked. A monster type and a
+spell property are one choice (`races` or `properties`), because YGOPRODeck keeps
+both in one field. `f` opens the pool's panel. It scrolls inside the top of the
+pool, so the results keep the rest.
+
+**Effects are read off the text** (`EffectKinds`, in core with a test on real
+card texts). Search, Special Summon, Draw, Negate, Destroy, Banish, Send to GY,
+Return to hand, Set, Gain LP, Burn, Token, Protection, Hand trap and Floodgate:
+Neuron's and Master Duel's categories. Konami files them by hand and YGOPRODeck
+does not carry them, so each is one pattern over the printed phrasing, erring
+toward a player's reading: "cannot be destroyed" is protection, not destruction,
+and "must be Special Summoned" is a condition, not a summon.
+
+**The search pop-out** (`SearchStudio`; kai: "an advanced card search pop out that
+focuses the screen on searching with a dedicated layout. it should incorporate
+elements from the inspector as well"). `Ctrl Shift F`, the search icon beside the
+pool's field, or the palette. The window is given over to it in three columns:
+every filter, always open; the results, a thousand deep rather than the pool's
+150; and the card being read, large — the inspector's picture, artwork switch,
+heading, text and copies, plus what it is filed under and what it does, each a
+click that filters by it, and the actions. It keeps its own query and filter,
+starting from the pool's, so it does not disturb the pool. A double-click or
+Enter adds, and a right-click is the card's whole menu. Esc or **Done** closes it.
+
+**Lists of cards kept for consideration** (kai: "a custom list of cards in the
+database for consideration and toggle the custom list … intuitive and easy to
+get cards into"). They are stored as `NeuePreferences.cardLists`: a name and
+passcodes, with no copies, sections or limits. Under the pool's search, **All
+cards** and a tag for each list with its count; a click shows the list in the
+pool, where every search and filter still applies (it is the filter's `onlyIds`,
+kept in step by `PoolSource`). Right-click a list to add cards, show it or delete
+it. **+ List** makes one. Getting a card onto a list:
+
+- `L` on the card being read, or the highlighted result, puts it on the active
+  list or takes it off. With no list yet, `L` makes "Considering".
+- Every card's menu, in the pool, the deck and the pop-out, has **Put on …** for
+  each list.
+- **Add cards** opens the search pop-out adding to that list. There a
+  double-click puts a card on or takes it off, a ✓ marks what is on it, and
+  **On the list** shows only those.
+
+`Shift L` switches the pool between the list and every card. The studio photographs
+all of it: `--filters=true --effect=SEARCH`, `--list=12`, `--nopool=true
+--noinspector=true`, `--studio=deck|list`.
+
 ### 4f. The library
 
 `01 Decks` (1.0.18, kai: "let me duplicate decks, export them, a tagging system
