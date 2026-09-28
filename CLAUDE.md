@@ -263,7 +263,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **Auto save** waits on `DeckBuilderState.dirty`. The arrow keys walk the
   selection (`GridStep`); `↑`/`↓` are the pool's results keys too, and walk the
   results only in the search field or with nothing selected. Each group's name
-  is written once on its largest piece (`NAME_TAB`, declared to the fitter), and
+  is written once, on the longest top edge of its pieces (`labelEdge`, 1.0.22;
+  `NAME_TAB`, declared to the fitter), and
   the lens row stays put when the wheel shrinks the deck. `NEUE.md` §3, §4, §4f.
 - **Finding cards** (1.0.19): the pool and inspector hide from their own
   buttons and leave a strip to bring them back. `FilterPanel` is shared by the

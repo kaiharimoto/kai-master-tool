@@ -2,6 +2,8 @@ package com.kaiharimoto.mastertool.core.prefs
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.assertNull
 
 class NeuePreferencesTest {
@@ -9,6 +11,20 @@ class NeuePreferencesTest {
     @Test
     fun defaultsAreAlreadySanitised() {
         assertEquals(NeuePreferences.DEFAULT, NeuePreferences.DEFAULT.sanitised())
+    }
+
+    /**
+     * Auto save is on by default (1.0.22), and on once for everyone: the switch is
+     * stored under a new name, so the `false` every document carried from when off
+     * was the default is not read back.
+     */
+    @Test
+    fun autoSaveIsOnByDefaultEvenForAnOldDocument() {
+        assertTrue(NeuePreferences.DEFAULT.autoSave)
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        assertTrue(json.decodeFromString(NeuePreferences.serializer(), """{"autoSave":false}""").autoSave)
+        val off = json.encodeToString(NeuePreferences.serializer(), NeuePreferences.DEFAULT.copy(autoSave = false))
+        assertFalse(json.decodeFromString(NeuePreferences.serializer(), off).autoSave)
     }
 
     @Test

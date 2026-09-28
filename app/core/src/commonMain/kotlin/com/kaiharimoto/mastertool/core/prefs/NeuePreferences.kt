@@ -145,7 +145,8 @@ data class NeuePreferences(
     /** The Groups column's slides turn by themselves (1.0.18). */
     val slidesAutoplay: Boolean = true,
     /** Save the deck by itself a moment after every change (1.0.18, beside Save). */
-    val autoSave: Boolean = false,
+    @kotlinx.serialization.SerialName("autoSaveOn")
+    val autoSave: Boolean = true,
     /** Lists of cards kept for consideration (1.0.19), in the order they were made. */
     val cardLists: List<CardList> = emptyList(),
     /** The list the pool is showing instead of the whole database, by id; null is the database. */

@@ -395,11 +395,15 @@ Two things about it are load-bearing:
 The gap is 28 px and each piece is outlined 5 px in its group's colour (1.0.18;
 18 and 4 in 1.0.17, 10 and 2 in 1.0.15 — kai asked for wider twice), in the gap
 round it, so it reads as one shape with its colour on it. **The group's name is
-written once**, on a tab in its colour rising from the top edge of its largest
-piece, at that piece's top-left card — kai: "have it instead just write the name
+written once**, on a tab in its colour rising from a top edge of its pieces — kai: "have it instead just write the name
 of the group in the border once instead of abbreviation symbol on every card"
-(1.0.18). The tab is as wide as the name or the piece's top row, whichever is
-less, lettered black or white by the colour's luminance; the room it needs over
+(1.0.18). The edge is the longest there is (`PieceLayout.labelEdge`, 1.0.22): a
+top edge is a run of cards along a row with nothing of their own piece above,
+and the name is cut short to what it stands on, so a lone card over three in
+the next row is named over the three — kai: "prefer the longest edge, instead of
+the first card". An edge the name already fits is as long as any, so a short
+name stays at the largest piece's top-left. The tab is as wide as the name or
+the edge, whichever is less, lettered black or white by the colour's luminance; the room it needs over
 the grid (`NAME_TAB`, 17 px) is declared to the fitter with the gaps. The lens opens and closes the pieces
 over 320 ms; closing, they close from where they were. The screenshot export
 draws the same pieces.
@@ -570,7 +574,10 @@ the selection. The inspector follows, because a key clears the hover.
 half after the last change, quietly — no toast — and Save reads **Saved** while
 nothing is waiting. An empty deck that was never saved is left alone.
 `DeckBuilderState.dirty` is what it waits on: set by every edit, cleared by a
-load and by a save no edit overtook (`autoSave`, off by default).
+load and by a save no edit overtook (`autoSave`). **On by default** since 1.0.22 —
+kai: "have auto-save on as default" — and turned on once for everyone: the switch
+is stored as `autoSaveOn`, so the `false` every document carried from when off was
+the default is not read back.
 
 **History** (1.0.17, beside undo and redo): every step undo can take back and
 redo can put back, newest first, in words — "+ Ash Blossom", "Moved Nibiru to

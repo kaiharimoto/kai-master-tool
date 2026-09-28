@@ -67,10 +67,46 @@ data class PieceLayout(
         )
     }
 
+    /**
+     * Where [key]'s name is written (1.0.18, moved in 1.0.22): on a tab over a
+     * stretch of a piece's top edge — a run of cards along one row with nothing
+     * of their own piece above them, so the tab stands in a gap. The longest
+     * stretch wins, because the name is cut short to fit what it stands on: a
+     * lone card in one row atop three in the next is named over the next row,
+     * not squeezed onto the one card. A stretch the name already fits ([need],
+     * in card widths) is as long as any, so a name that fits stays where it
+     * always was: the largest piece's top-left, then reading order.
+     */
+    fun labelEdge(keys: List<String?>, key: String, need: Float): LabelEdge? {
+        if (keys.size != piece.size) return null
+        val sizes = HashMap<Int, Int>()
+        keys.indices.filter { keys[it] == key }.forEach { sizes[piece[it]] = (sizes[piece[it]] ?: 0) + 1 }
+        fun top(p: Int) = keys[p] == key && outerSides(p)[1]
+        var best: LabelEdge? = null
+        var bestScore = -1f
+        var bestSize = -1
+        for (p in keys.indices) {
+            if (!top(p) || (p % columns != 0 && top(p - 1) && piece[p - 1] == piece[p])) continue
+            var run = 1
+            while ((p + run) % columns != 0 && p + run < keys.size && top(p + run) && piece[p + run] == piece[p]) run++
+            val score = minOf(run.toFloat(), need)
+            val size = sizes[piece[p]] ?: 0
+            if (score > bestScore + 1e-4f || (score > bestScore - 1e-4f && size > bestSize)) {
+                best = LabelEdge(p, run)
+                bestScore = score
+                bestSize = size
+            }
+        }
+        return best
+    }
+
     companion object {
         val EMPTY = PieceLayout(1, emptyList(), emptyList(), emptyList())
     }
 }
+
+/** A group's name tab: over [cells] cards along one row, from position [first]. */
+data class LabelEdge(val first: Int, val cells: Int)
 
 object GroupPieces {
 
