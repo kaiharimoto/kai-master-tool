@@ -58,6 +58,9 @@ import com.kaiharimoto.mastertool.ui.update.AppUpdater
 import com.kaiharimoto.mastertool.ui.update.InstallOutcome
 import com.kaiharimoto.neue.platform.NeueFileAccess
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.platform.crashFile
+import com.kaiharimoto.neue.platform.reportIssue
+import com.kaiharimoto.neue.platform.writeCrash
 import com.kaiharimoto.neue.update.NeueUpdates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

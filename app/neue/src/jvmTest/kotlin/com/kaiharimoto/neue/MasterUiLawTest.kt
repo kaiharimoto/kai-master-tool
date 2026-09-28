@@ -16,18 +16,23 @@ import kotlin.test.fail
  */
 class MasterUiLawTest {
 
-    private val root = File("src/jvmMain/kotlin")
+    // Every source set's Kotlin: the shared code and each platform's own (1.0.20).
+    private val root = File("src")
     private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt")
 
     private val sources: List<File> =
-        root.walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        root.listFiles().orEmpty().filter { it.isDirectory && it.name.endsWith("Main") }
+            .flatMap { File(it, "kotlin").walkTopDown().filter { f -> f.isFile && f.extension == "kt" }.toList() }
+
+    /** A file's name for the allow-lists: a platform's half of `ZenShadows.kt` (`ZenShadows.jvm.kt`) is still that file. */
+    private val File.unit: String get() = name.substringBefore('.') + ".kt"
 
     private data class Breach(val file: File, val line: Int, val text: String, val law: String) {
         override fun toString() = "${file.relativeTo(File("."))}:$line · $law · ${text.trim()}"
     }
 
     private fun scan(law: String, pattern: Regex, allowIn: Set<String> = emptySet()): List<Breach> =
-        sources.filter { it.name !in allowIn }.flatMap { file ->
+        sources.filter { it.unit !in allowIn }.flatMap { file ->
             file.readLines().mapIndexedNotNull { i, line ->
                 val code = line.substringBefore("//")
                 if (pattern.containsMatchIn(code)) Breach(file, i + 1, line, law) else null
@@ -53,7 +58,7 @@ class MasterUiLawTest {
         // kai's one exception: a card floating in zen casts a shadow, drawn in that file alone.
         scan(
             "§1 law 3 · no shadows or blur",
-            Regex("""\.shadow\(|shadowElevation|\.blur\(|BlurEffect|MaskFilter\.makeBlur|elevation\s*="""),
+            Regex("""\.shadow\(|shadowElevation|\.blur\(|BlurEffect|MaskFilter\.makeBlur|BlurMaskFilter|elevation\s*="""),
             allowIn = setOf("ZenShadows.kt"),
         ),
     )
@@ -67,7 +72,7 @@ class MasterUiLawTest {
     fun twoFillsOnly() {
         // Black, white, and alphas of them — written as copies of Color.Black / Color.White.
         val literal = Regex("""Color\(\s*0x([0-9A-Fa-f]{8})\s*\)""")
-        val breaches = sources.filter { it.name !in colourAllowed }.flatMap { file ->
+        val breaches = sources.filter { it.unit !in colourAllowed }.flatMap { file ->
             file.readLines().mapIndexedNotNull { i, line ->
                 literal.findAll(line.substringBefore("//")).map { it.groupValues[1].uppercase().drop(2) }
                     .firstOrNull { it != "000000" && it != "FFFFFF" }

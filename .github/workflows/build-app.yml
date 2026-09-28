@@ -100,15 +100,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       # The Master UI law test runs here (MasterUiLawTest): a colour, a radius or
-      # a shadow in the desktop app fails the build, the way `check.mjs` fails a
-      # web project in the family. Packaging the .deb as well catches a missing
-      # JVM module or resource before a release does.
+      # a shadow anywhere in Neue fails the build, the way `check.mjs` fails a web
+      # project in the family — and SharedPortabilityTest refuses a desktop-only
+      # API in the code Android shares. Packaging the .deb as well catches a
+      # missing JVM module or resource before a release does; the Android library
+      # build is Neue compiled for the tablet.
       - name: Packaging tools
         run: sudo apt-get install -y -qq fakeroot
 
       - name: Test and package
         working-directory: app
-        run: ./gradlew :neue:jvmTest :neue:packageDeb -Pmastertool.android=true --stacktrace
+        run: ./gradlew :neue:jvmTest :neue:packageDeb :neue:assembleDebug -Pmastertool.android=true --stacktrace
 
       - name: Upload the package
         uses: actions/upload-artifact@v4

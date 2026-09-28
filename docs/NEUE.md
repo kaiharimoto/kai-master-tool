@@ -41,6 +41,37 @@ cd app && ./gradlew :neue:run                  # run it (needs Google Maven, lik
 tools/shoot.sh --neue --page=builder --theme=ink --width=2560 --height=1440 --name=b
 ```
 
+### 1a. One app, two targets (1.0.20)
+
+`:neue` compiles for the desktop (`jvm`, packaged as the installers) and for
+Android (`android`, a library the APK hosts). Nearly all of it is in
+**`src/sharedMain`**, a source set between the two: both targets are JVM, so the
+JDK is there (`java.io.File`, `java.time`, `String.format`), and only what really
+is one platform's lives in `src/jvmMain` or `src/androidMain`. The compiler cannot
+tell those apart — Android's build resolves `java.awt` too, and it dies on the
+device — so **`SharedPortabilityTest`** reads `sharedMain` and refuses AWT, Swing,
+`java.net.http`, Skia, desktop windows, `ProcessBuilder` and the desktop-only
+Compose APIs. Each has one seam:
+
+| Desktop-only | The seam, in `sharedMain` |
+|---|---|
+| the machine: data folder, version, browser, clipboard, a file picker | `expect object Platform` (`platform/Platform.kt`); the crash file and the issue report are shared extensions on it |
+| `Modifier.onPointerEvent` | `Modifier.onPointer` (`kit/Pointer.kt`), the same behaviour on the common `pointerInput` |
+| `TooltipArea`, the text fields' context menu | `PlatformTip`, `ProvideTextMenus` (`kit/Overlays.kt`) |
+| `VerticalScrollbar` | `expect fun BoxScope.ScrollbarFor` |
+| the AWT blank cursor | `blankPointerIcon()` |
+| Skia pixel reads for the name masks | `coil3.Image.argb`, `alphaBitmap` — the letter-finding is shared (`NameMasks.compute`) |
+| Skia's blur for zen's shadows | `DrawScope.blurRect` — `ZenShadows.kt` and its platform halves are still the one place a blur is allowed |
+| `java.net.http` (the originals, the updater) | `httpDownload` (`platform/Download.kt`) — `java.net.http` on the desktop as ever, `HttpURLConnection` on Android |
+| launching an installer | `handOffInstaller` |
+| AWT's HSB arithmetic (group shimmer) | `core/model/Hsb.kt`, swept bit for bit against `java.awt.Color` by `HsbTest` |
+| classpath fonts | Compose resources (`src/commonMain/composeResources/font`) |
+| the deck picture (Skia offscreen) | `expect class DeckShots`; the desktop keeps `DeckShot` |
+
+The desktop entry point (`Main.kt`), its JDBC driver and its file dialogs
+(`Files.kt`) are `jvmMain`'s alone. The desktop is unchanged by any of it; the
+studio's shots before and after are the proof.
+
 ---
 
 ## 2. Master UI, and the two exceptions

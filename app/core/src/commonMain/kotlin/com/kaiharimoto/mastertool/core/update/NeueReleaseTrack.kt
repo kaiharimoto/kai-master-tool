@@ -5,6 +5,13 @@ enum class DesktopOs(val extension: String) {
     WINDOWS("msi"),
     MAC("dmg"),
     LINUX("deb"),
+
+    /**
+     * Neue on a tablet (1.0.20). Never answered by [of] — Android says what it is
+     * itself — and its installer is the APK, which updates on the Android track
+     * (`v*`, `/releases/latest`) rather than this one.
+     */
+    ANDROID("apk"),
     ;
 
     companion object {

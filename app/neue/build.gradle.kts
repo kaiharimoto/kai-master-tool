@@ -2,39 +2,87 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
     id("org.jetbrains.kotlin.multiplatform")
+    id("com.android.library")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
-// Neue Master Tool: the desktop builder, in Master UI. A separate application
-// with its own release track (`neue-v*`, see release-neue.yml) and its own
-// data directory; it borrows :ui's state holders and nothing of its look.
+// Neue Master Tool, in Master UI: the app. Its own release track (`neue-v*`,
+// release-neue.yml) and data directory; built on :core and :builder alone.
+//
+// Two targets. `jvm` is the desktop app (packaged below); `android` is the same
+// app as a library the APK (`:androidApp`) hosts. Almost all of it lives in
+// `sharedMain`, a source set between the two: both targets are JVM, so the JDK
+// (java.io, java.time, String.format) is there, and only what is truly one
+// platform's — a window, an AWT dialog, Skia, an Intent — is in `jvmMain` or
+// `androidMain`.
 kotlin {
     jvm()
+    androidTarget()
     jvmToolchain(libs.versions.jdk.get().toInt())
 
     sourceSets {
-        jvmMain.dependencies {
-            implementation(project(":builder"))
-            implementation(project(":core"))
+        val sharedMain by creating {
+            dependsOn(commonMain.get())
+            dependencies {
+                implementation(project(":builder"))
+                implementation(project(":core"))
 
-            implementation(compose.desktop.currentOs)
-            implementation(compose.foundation)
-            implementation(compose.ui)
-            implementation(compose.runtime)
-            implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.kotlinx.coroutines.swing)
-            implementation(libs.kotlinx.serialization.json)
-            implementation(libs.sqldelight.driver.jvm)
-            implementation(libs.ktor.client.okhttp)
-            implementation(libs.coil.compose)
-            implementation(libs.coil.network.ktor)
+                implementation(compose.foundation)
+                implementation(compose.ui)
+                implementation(compose.runtime)
+                implementation(compose.components.resources)
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlinx.serialization.json)
+                implementation(libs.ktor.client.okhttp)
+                implementation(libs.coil.compose)
+                implementation(libs.coil.network.ktor)
+            }
+        }
+        jvmMain {
+            dependsOn(sharedMain)
+            dependencies {
+                implementation(compose.desktop.currentOs)
+                implementation(libs.kotlinx.coroutines.swing)
+                implementation(libs.sqldelight.driver.jvm)
+            }
+        }
+        androidMain {
+            dependsOn(sharedMain)
+            dependencies {
+                implementation(libs.sqldelight.driver.android)
+                implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.core.ktx)
+            }
         }
         jvmTest.dependencies {
             implementation(kotlin("test"))
         }
     }
+}
+
+android {
+    namespace = "com.kaiharimoto.neue"
+    compileSdk = libs.versions.compileSdk.get().toInt()
+
+    defaultConfig {
+        minSdk = libs.versions.minSdk.get().toInt()
+    }
+
+    compileOptions {
+        val java = JavaVersion.toVersion(libs.versions.jdk.get())
+        sourceCompatibility = java
+        targetCompatibility = java
+    }
+}
+
+// The fonts and the mark, for both targets (Compose resources, not the JVM
+// classpath, which Android does not have).
+compose.resources {
+    publicResClass = false
+    packageOfResClass = "com.kaiharimoto.neue.res"
+    generateResClass = always
 }
 
 // One file, so the release workflow and a local build agree on what they are.
