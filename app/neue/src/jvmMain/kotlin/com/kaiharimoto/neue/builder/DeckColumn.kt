@@ -69,6 +69,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.kaiharimoto.neue.theme.LocalMuFonts
+import com.kaiharimoto.neue.theme.MuType
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.deck.DeckLenses
 import com.kaiharimoto.mastertool.core.layout.GroupPieces
@@ -103,8 +107,11 @@ import com.kaiharimoto.neue.theme.MuMotion
  * a piece, [PIECE_GAP] between two, each piece outlined [FRAME] wide in its
  * group's colour in the gap round it ([drawPieces]).
  */
-private val PIECE_GAP = 18.dp
-private val FRAME = 4.dp
+private val PIECE_GAP = 28.dp
+private val FRAME = 5.dp
+
+/** The tab a group's name is written on, rising from its piece's top edge (1.0.18). Fits inside a gap. */
+private val NAME_TAB = 17.dp
 private val LENS_ROW = 40.dp
 private val LABEL_ROW = 24.dp
 private val LABEL_GUTTER = 104.dp
@@ -133,7 +140,7 @@ private fun homeBlock(section: DeckSection, position: Int, columns: Int, keyId: 
 private const val HELD_LIFT = 0.1f
 
 /** Row widths: the tablet's, because a decklist is quoted in tens and fifteens whatever the screen. */
-private fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 10 else 15
+internal fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 10 else 15
 
 /**
  * The deck: main, extra and side, all on screen at once and never scrolled.
@@ -250,10 +257,13 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
             kept[section] = used
             used
         }
-        val placed = with(density) {
+        // The lens row stands still over the deck whatever the wheel does (kai, 1.0.18):
+        // it is laid out once at the top, and the deck is fitted to what is below it.
+        val deckHeight = maxHeight - LENS_ROW
+        fun fitAt(z: Float) = with(density) {
             DeckLabels.place(
-                availableWidth = (maxWidth - SIDE_PAD * 2).toPx() * zoom,
-                availableHeight = maxHeight.toPx() * zoom,
+                availableWidth = (maxWidth - SIDE_PAD * 2).toPx() * z,
+                availableHeight = deckHeight.toPx() * z,
                 aspectRatio = CARD_RATIO,
                 gutter = LABEL_GUTTER.toPx(),
                 rowHeight = LABEL_ROW.toPx(),
@@ -263,14 +273,19 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                         columns = columnsOf(section),
                         baselineCount = if (section == DeckSection.MAIN) section.minSize else section.maxSize,
                         spacing = 0f,
-                        chromeHeight = (GRID_PAD * 2 + RULE + if (section == DeckSection.MAIN) LENS_ROW else 0.dp).toPx(),
+                        chromeHeight = (GRID_PAD * 2 + RULE).toPx(),
                         extraWidth = pieces[i].spanX * gapPx * crack,
-                        extraHeight = pieces[i].spanY * gapPx * crack,
+                        extraHeight = pieces[i].spanY * gapPx * crack + (if (pieces[i].pieces > 1) NAME_TAB.toPx() * crack else 0f),
                     )
                 },
                 labelled = sections.map { it != DeckSection.MAIN },
             )
         }
+        val placed = fitAt(zoom)
+        // The row's inset is the deck's edge at the size that fills the column, so it
+        // does not creep inward as the wheel shrinks the cards.
+        val fullWidth = with(density) { (if (zoom < 0.999f) fitAt(1f) else placed).fit.contentWidth.toDp() }
+        val rowInset = maxOf((maxWidth - fullWidth) / 2, SIDE_PAD)
         val fit = placed.fit
         val contentWidth = with(density) { fit.contentWidth.toDp() }
         // Where the grids start, from the column's left edge: every section is the same width and centred.
@@ -280,8 +295,12 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         val mainWidth = with(density) { (fit.sections.firstOrNull()?.cardWidth ?: 0f).toDp() }
         // At the size that fills the column, whatever the wheel has made of the deck.
         SideEffect { if (zen.deep == 0f && mainWidth > 0.dp) neue.deckCardWidth = mainWidth / zoom }
+        val mainIds = state.deck[DeckSection.MAIN]
+        val mainRefused = drag.hover?.let { it.section == DeckSection.MAIN && drag.held != null && !it.accepted } == true
+        val mainOut = mainIds.size > DeckSection.MAIN.maxSize || mainIds.size < DeckSection.MAIN.minSize
+        LensRow(state, neue, "${mainIds.size} · ${DeckSection.MAIN.minSize}–${DeckSection.MAIN.maxSize}", mainOut, mainRefused, inset = rowInset)
         Column(
-            Modifier.fillMaxSize().let { if (!fit.fits) it.verticalScroll(rememberScrollState()) else it },
+            Modifier.padding(top = LENS_ROW).fillMaxSize().let { if (!fit.fits) it.verticalScroll(rememberScrollState()) else it },
             // Immersive: past the page's fixed strip at the top (IMMERSIVE_TOP), whatever
             // height the deck does not need is shared above and below it, so the deck sits
             // in the middle of the screen (kai, 1.0.12: all of it above was too much).
@@ -486,7 +505,10 @@ private fun DeckSectionPane(
     val outOfRange = count > section.maxSize || count < section.minSize
     val refused = hover != null && !hover.accepted
     val keying = state.keying(section)
-    val placer = PiecePlacer(fit.columns, fit.cardWidth, fit.cardHeight, gapPx, pieces, crack, rolePieces, zenGapPx, zenAbove)
+    val labelRoom = if (pieces.pieces > 1) with(density) { NAME_TAB.toPx() } else 0f
+    val placer = PiecePlacer(fit.columns, fit.cardWidth, fit.cardHeight, gapPx, pieces, crack, rolePieces, zenGapPx, zenAbove, labelRoom)
+    val measurer = rememberTextMeasurer()
+    val tabStyle = MuType.micro(LocalMuFonts.current).copy(fontSize = 10.sp)
     val restPlaces = List(ids.size) { placer.rest(it) }
 
     // The whole pane accepts a drop, label included: aiming at a label is
@@ -538,9 +560,7 @@ private fun DeckSectionPane(
                 publish()
             },
     ) {
-        if (section == DeckSection.MAIN) {
-            LensRow(state, neue, "$count · $rangeText", outOfRange, refused, inset = maxOf(gridLeft, SIDE_PAD))
-        } else if (labels == LabelPlace.ROWS) {
+        if (section != DeckSection.MAIN && labels == LabelPlace.ROWS) {
             SectionLabel(
                 section, "$count · $rangeText", outOfRange, refused,
                 Modifier.fillMaxWidth().height(LABEL_ROW).padding(start = maxOf(gridLeft, SIDE_PAD)),
@@ -653,6 +673,7 @@ private fun DeckSectionPane(
                             frame = FRAME.toPx(),
                             colorOf = { id -> keying.keyById(id)?.let { GroupMarkers.paint(it.paint, c.ink) } ?: c.ink },
                             alphaOf = { id -> crack * fade * if (state.isolatedKey != null && state.isolatedKey != id) 0.18f else 1f },
+                            labels = Labels(measurer, tabStyle, NAME_TAB.toPx()) { id -> keying.keyById(id)?.label.orEmpty() },
                         )
                     }
                 }
@@ -729,7 +750,8 @@ private fun DeckSectionPane(
                                 // In deep zen, the cards picked out to move together.
                                 selected = selected && neue.zen != ZenPhase.DEEP || zen.isSelected(zenKey),
                                 foil = neue.prefs.foil,
-                                marker = key?.let { Marker(it.mark, GroupMarkers.paint(it.paint, c.ink)) },
+                                // The group's name is on its piece's tab now (1.0.18), not a mark on every card.
+                                marker = null,
                             )
                         }
                     }

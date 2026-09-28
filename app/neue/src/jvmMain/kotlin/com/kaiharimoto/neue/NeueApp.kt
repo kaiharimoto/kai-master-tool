@@ -56,6 +56,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import com.kaiharimoto.mastertool.core.layout.GridStep
+import com.kaiharimoto.mastertool.core.layout.StepDirection
 import androidx.compose.runtime.SideEffect
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
@@ -152,6 +154,9 @@ class NeueHolders(
     /** Zen's amounts and clock, shared with everything that fades or floats. */
     val zen = ZenLayer()
 
+    /** Pictures the person added to cards themselves (1.0.18). */
+    val customArt = com.kaiharimoto.neue.art.CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
+
     /** The family pointer, Crop caption: one per window. */
     val cursor = FamilyCursor()
 
@@ -233,8 +238,10 @@ class NeueHolders(
             DeskAction.IMPORT -> { state.importFromFile(); neue.go(Page.BUILDER) }
             DeskAction.EXPORT -> neue.menu = MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
             DeskAction.FOCUS_SEARCH -> neue.focusSearch()
-            DeskAction.POOL_PREVIOUS -> neue.poolCursor = (neue.poolCursor - 1).coerceAtLeast(0)
-            DeskAction.POOL_NEXT -> neue.poolCursor = (neue.poolCursor + 1).coerceAtMost((state.results.size - 1).coerceAtLeast(0))
+            // ↑ and ↓ are one pair of keys with two jobs (1.0.18): in the search field, or with
+            // nothing selected, they walk the results; with a card selected, the selection.
+            DeskAction.POOL_PREVIOUS -> moveSelection(StepDirection.UP)
+            DeskAction.POOL_NEXT -> moveSelection(StepDirection.DOWN)
             DeskAction.POOL_ADD, DeskAction.POOL_ADD_TO_SIDE -> state.results.getOrNull(neue.poolCursor)?.let { card ->
                 CardActions.add(state, card, toSide = (action == DeskAction.POOL_ADD_TO_SIDE) != neue.prefs.poolToSide)
             }
@@ -258,8 +265,10 @@ class NeueHolders(
             DeskAction.PREVIOUS_LENS -> stepLens(-1)
             DeskAction.NEW_GROUP -> state.startGroupDraft(seed = (neue.selection as? Selection.InDeck)?.card?.id)
             DeskAction.GROUPS -> setGroups(true)
+            DeskAction.SELECT_LEFT -> moveSelection(StepDirection.LEFT)
+            DeskAction.SELECT_RIGHT -> moveSelection(StepDirection.RIGHT)
             DeskAction.NEXT_ART, DeskAction.PREVIOUS_ART -> neue.inspected?.let { card ->
-                if (com.kaiharimoto.mastertool.core.model.CardArt.arts(card).size > 1) {
+                if (neue.artChoices(card).size > 1) {
                     neue.stepArt(card, if (action == DeskAction.NEXT_ART) 1 else -1)
                 } else {
                     neue.note = Note("${card.name} has one artwork")
@@ -301,6 +310,56 @@ class NeueHolders(
             state.cancelGroupDraft()
             state.useLens(Lens.DECK)
         }
+    }
+
+    /**
+     * The arrow keys (kai, 1.0.18): the selected card's neighbour becomes the
+     * selection, and the inspector shows it — the hover is let go of, since it
+     * outranks the selection there. In the deck, up past a section's top row and
+     * down past its bottom carry on into the section above or below, in the same
+     * column where it can. With nothing selected, up and down walk the pool.
+     */
+    private fun moveSelection(direction: StepDirection) {
+        val state = builder
+        when (val sel = if (neue.searchFocused) null else neue.selection) {
+            is Selection.InDeck -> {
+                val ids = state.deck[sel.section]
+                val columns = com.kaiharimoto.neue.builder.columnsOf(sel.section)
+                GridStep.move(sel.index, ids.size, columns, direction)?.let { next ->
+                    state.index.byId(ids[next])?.let { neue.selection = Selection.InDeck(it, sel.section, next) }
+                } ?: run {
+                    if (direction != StepDirection.UP && direction != StepDirection.DOWN) return@run
+                    val shown = buildList {
+                        add(DeckSection.MAIN)
+                        if (neue.prefs.extraVisible) add(DeckSection.EXTRA)
+                        if (neue.prefs.sideVisible) add(DeckSection.SIDE)
+                    }.filter { state.deck[it].isNotEmpty() }
+                    val at = shown.indexOf(sel.section)
+                    val target = shown.getOrNull(if (direction == StepDirection.DOWN) at + 1 else at - 1) ?: return@run
+                    val there = state.deck[target]
+                    val cols = com.kaiharimoto.neue.builder.columnsOf(target)
+                    val column = (sel.index % columns).coerceAtMost(cols - 1)
+                    val index = if (direction == StepDirection.DOWN) {
+                        column.coerceAtMost(there.lastIndex)
+                    } else {
+                        (((there.size - 1) / cols) * cols + column).coerceAtMost(there.lastIndex)
+                    }
+                    state.index.byId(there[index])?.let { neue.selection = Selection.InDeck(it, target, index) }
+                }
+            }
+            is Selection.InPool -> {
+                GridStep.move(sel.row, state.results.size, neue.poolColumns.coerceAtLeast(1), direction)?.let { next ->
+                    neue.selection = Selection.InPool(state.results[next], next)
+                    neue.poolCursor = next
+                }
+            }
+            null -> when (direction) {
+                StepDirection.UP -> neue.poolCursor = (neue.poolCursor - 1).coerceAtLeast(0)
+                StepDirection.DOWN -> neue.poolCursor = (neue.poolCursor + 1).coerceAtMost((state.results.size - 1).coerceAtLeast(0))
+                else -> Unit
+            }
+        }
+        neue.hovered = null
     }
 
     /** The foil on every card face, on or off (the shiny button beside Groups, 1.0.15). */
@@ -463,7 +522,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     // The groups' palette: read wherever a group is coloured, so set once here.
     SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             CompositionLocalProvider(LocalContextMenuRepresentation provides remember { MuContextMenuRepresentation() }) {
                 Shell(h)
@@ -514,6 +573,7 @@ private fun Shell(h: NeueHolders) {
     }
 
     ZenClockwork(h)
+    AutoSave(h)
     Box(
         Modifier
             .fillMaxSize()
@@ -770,6 +830,24 @@ private fun Shell(h: NeueHolders) {
         LaunchedEffect(job) { if (job == null) h.cursor.clearBusy() else h.cursor.setBusy(job.first, job.second) }
         // Last in the window, over everything in it.
         CursorLayer(h.cursor)
+    }
+}
+
+/**
+ * Auto save (kai, 1.0.18): while it is on, a deck that has changed is saved a
+ * second and a half after the last change — quietly, because a toast after every
+ * edit would be noise. An empty deck that was never saved is left alone, or
+ * starting a new deck would put an empty one in the library.
+ */
+@Composable
+private fun AutoSave(h: NeueHolders) {
+    val state = h.builder
+    val on = h.neue.prefs.autoSave
+    LaunchedEffect(on, state.dirty, state.deck, state.deckName, state.groups, state.goals) {
+        if (!on || !state.dirty) return@LaunchedEffect
+        if (state.deckId == null && state.deck.totalCards == 0) return@LaunchedEffect
+        delay(1_500)
+        state.save(quiet = true) { h.decksReload++ }
     }
 }
 

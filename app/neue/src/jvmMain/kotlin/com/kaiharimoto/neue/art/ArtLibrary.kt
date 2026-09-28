@@ -172,7 +172,8 @@ class ArtLibrary(
         if (cards.isEmpty()) return
         synchronized(queueLock) {
             cards.reversed().forEach { card ->
-                if (card.id.value !in present && card.id.value !in missing) urgent.addFirst(card)
+                // A picture the person added (a negative id, `CustomArt`) is already on disk.
+                if (card.id.value > 0 && card.id.value !in present && card.id.value !in missing) urgent.addFirst(card)
             }
             while (urgent.size > 400) urgent.removeLast()
         }

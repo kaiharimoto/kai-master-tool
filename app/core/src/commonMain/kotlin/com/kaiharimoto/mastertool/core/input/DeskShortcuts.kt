@@ -64,6 +64,14 @@ enum class DeskAction {
      */
     ZEN,
 
+    /**
+     * The selection one card along, or one row up or down (kai, 1.0.18), in the
+     * deck or the pool; the inspector follows it. With nothing selected, up and
+     * down walk the pool's results as they always have.
+     */
+    SELECT_LEFT,
+    SELECT_RIGHT,
+
     /** The artwork of the card being read — the inspector's card — one along, or one back (1.0.16). */
     NEXT_ART,
     PREVIOUS_ART,
@@ -157,12 +165,14 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("n"), DeskAction.NEW_GROUP, DeskScope.BUILDER, "New group from a selection"),
         DeskShortcut(KeyChord("g"), DeskAction.GROUPS, DeskScope.BUILDER, "Open the groups"),
         DeskShortcut(KeyChord("z"), DeskAction.ZEN, DeskScope.BUILDER, "Zen, now"),
+        DeskShortcut(KeyChord("left"), DeskAction.SELECT_LEFT, DeskScope.BUILDER, "Select the card to the left", repeatable = true),
+        DeskShortcut(KeyChord("right"), DeskAction.SELECT_RIGHT, DeskScope.BUILDER, "Select the card to the right", repeatable = true),
         DeskShortcut(KeyChord("a"), DeskAction.NEXT_ART, DeskScope.BUILDER, "Next artwork of the card being read"),
         DeskShortcut(KeyChord("a", shift = true), DeskAction.PREVIOUS_ART, DeskScope.BUILDER, "Previous artwork"),
         DeskShortcut(KeyChord("i"), DeskAction.ISSUES, DeskScope.BUILDER, "Issues"),
 
-        DeskShortcut(KeyChord("up"), DeskAction.POOL_PREVIOUS, DeskScope.POOL, "Previous result", allowedInTextInput = true, repeatable = true),
-        DeskShortcut(KeyChord("down"), DeskAction.POOL_NEXT, DeskScope.POOL, "Next result", allowedInTextInput = true, repeatable = true),
+        DeskShortcut(KeyChord("up"), DeskAction.POOL_PREVIOUS, DeskScope.POOL, "Previous result, or the card above the selected one", allowedInTextInput = true, repeatable = true),
+        DeskShortcut(KeyChord("down"), DeskAction.POOL_NEXT, DeskScope.POOL, "Next result, or the card below the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter"), DeskAction.POOL_ADD, DeskScope.POOL, "Add the result to the deck", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter", shift = true), DeskAction.POOL_ADD_TO_SIDE, DeskScope.POOL, "Add the result to the side deck", allowedInTextInput = true, repeatable = true),
     )

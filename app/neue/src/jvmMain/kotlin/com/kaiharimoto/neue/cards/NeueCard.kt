@@ -49,6 +49,7 @@ import kotlinx.coroutines.withContext
 import com.kaiharimoto.mastertool.core.motion.DeskLean
 import com.kaiharimoto.mastertool.core.motion.LeanPose
 import com.kaiharimoto.neue.art.LocalArt
+import com.kaiharimoto.neue.art.LocalCustomArt
 import coil3.compose.AsyncImagePainter
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
 import com.kaiharimoto.mastertool.core.model.BanStatus
@@ -116,12 +117,20 @@ fun NeueCard(
     // The artwork chosen for this card (1.0.14): the same card with another picture,
     // under that picture's passcode, so the originals and the name masks keep apart.
     val arts = LocalArts.current
-    val drawn = remember(card, arts) { CardArt.show(card, arts[card.id.value]?.let(::CardId)) }
+    val custom = LocalCustomArt.current
+    val own = custom?.version
+    val choice = arts[card.id.value]
+    // The pool's artwork (`CardArt`), or one of the person's own pictures (`CustomArt`).
+    val drawn = remember(card, choice, own) { custom?.drawn(card, choice) ?: CardArt.show(card, choice?.let(::CardId)) }
     val library = LocalArt.current
-    if (drawn !== card) LaunchedEffect(drawn.id, library) { library?.want(drawn) }
+    if (drawn !== card && drawn.id.value > 0) LaunchedEffect(drawn.id, library) { library?.want(drawn) }
     val step = LocalArtStep.current
-    val all = remember(card) { CardArt.arts(card) }
-    val chip = if (artChip && step != null && all.size > 1) ArtChip(all.indexOf(drawn.id).coerceAtLeast(0) + 1, all.size) { by -> step(card, by) } else null
+    val all = remember(card, own) { custom?.choices(card) ?: CardArt.arts(card).map { it.value } }
+    val chip = if (artChip && step != null && all.size > 1) {
+        ArtChip(all.indexOf(choice ?: card.id.value).coerceAtLeast(0) + 1, all.size) { by -> step(card, by) }
+    } else {
+        null
+    }
     NeueCardFace(drawn, modifier, format, copies, selected, dimmed, foil, marker, outlined, motion, chip)
 }
 
@@ -323,7 +332,12 @@ private fun NeueCardFace(
                         .cursorPointer(caption = "Next art")
                         .pointerInput(artChip.at, artChip.of) {
                             awaitEachGesture {
-                                val down = awaitPointerEvent()
+                                // A press, not any event: a hover over the chip is a stream of
+                                // moves, and 1.0.16 stepped the artwork on every one of them.
+                                var down: androidx.compose.ui.input.pointer.PointerEvent
+                                do {
+                                    down = awaitPointerEvent()
+                                } while (down.type != androidx.compose.ui.input.pointer.PointerEventType.Press || down.changes.none { it.pressed })
                                 val back = down.buttons.isSecondaryPressed
                                 down.changes.forEach { it.consume() }
                                 do {

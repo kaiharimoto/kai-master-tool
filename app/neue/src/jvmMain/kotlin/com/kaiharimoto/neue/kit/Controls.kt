@@ -421,6 +421,27 @@ fun <T> Segmented(
     }
 }
 
+/** A boxed word that stays pressed (inverted) while it is on: "Auto zen", "Auto save". */
+@Composable
+fun WordToggle(label: String, on: Boolean, onClick: () -> Unit) {
+    val c = Mu.colors
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Box(
+        Modifier
+            .height(28.dp)
+            .background(animatedColor(if (on) c.ink else if (hovered) c.ink06 else androidx.compose.ui.graphics.Color.Transparent))
+            .border(1.dp, c.ink)
+            .hoverable(source)
+            .cursorPointer(showsWords = true)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Micro(label, color = if (on) c.paper else c.ink)
+    }
+}
+
 /** Switch (§6): a square thumb in a ruled track, 120 ms. */
 @Composable
 fun MuSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {

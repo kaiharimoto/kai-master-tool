@@ -39,6 +39,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.library.DeckCovers
+import com.kaiharimoto.mastertool.core.library.DeckSearch
+import com.kaiharimoto.mastertool.core.library.DeckTags
+import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
+import com.kaiharimoto.mastertool.core.ydk.DeckText
+import com.kaiharimoto.mastertool.core.ydk.YdkCodec
+import com.kaiharimoto.mastertool.core.ydk.YdkeCodec
+import com.kaiharimoto.neue.builder.CardActions
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.kit.Tag
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import kotlinx.coroutines.launch
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
@@ -65,18 +82,90 @@ import com.kaiharimoto.neue.theme.MuType
  * `01 Decks`: every saved deck as a ruled list, newest first. The deck on the
  * builder is the inverted row. Click opens; the delete asks first, because it
  * is the one thing here that cannot be undone.
+ *
+ * 1.0.18 (kai: "duplicate decks, export them, a tagging system based on the card
+ * type in the deck, and … type the name of a card and it will filter decks by
+ * those with the card in it"): each row can be duplicated and exported; each
+ * deck carries tags read off its cards (`DeckTags`), which filter the list from
+ * a strip under the header; and the search matches a deck's name, the name of
+ * any card in it, or a tag (`DeckSearch`) — a row found by its cards says which.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, reload: Int) {
     val c = Mu.colors
+    val scope = rememberCoroutineScope()
     var decks by remember { mutableStateOf<List<StoredDeck>?>(null) }
     var filter by remember { mutableStateOf("") }
-    LaunchedEffect(reload, state.deckId) {
+    var tagFilter by remember { mutableStateOf<String?>(null) }
+    var bump by remember { mutableStateOf(0) }
+    LaunchedEffect(reload, state.deckId, bump) {
         decks = deps.deckRepository.all().sortedByDescending { it.entry.updatedAtEpochMs }
     }
-    val shown = decks?.filter { filter.isBlank() || it.entry.name.contains(filter.trim(), ignoreCase = true) }
+    // Tags follow the card pool: until it has loaded, a deck's cards have no types.
+    val tags = remember(decks, state.index) {
+        decks.orEmpty().associate { it.entry.id to DeckTags.of(it.entry.deck, state.index::byId) }
+    }
+    val allTags = remember(tags) {
+        tags.values.flatten().groupingBy { it }.eachCount().entries.sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+    }
+    val shown = remember(decks, tags, filter, tagFilter, state.index) {
+        decks?.mapNotNull { stored ->
+            val own = tags[stored.entry.id].orEmpty()
+            if (tagFilter != null && tagFilter !in own) return@mapNotNull null
+            DeckSearch.match(stored.entry.name, stored.entry.deck, own, filter, state.index::byId)?.let { stored to it }
+        }
+    }
     // The deck whose covers are being picked (kai, 1.0.15: click the thumbnails).
     var picking by remember { mutableStateOf<StoredDeck?>(null) }
+
+    fun duplicate(stored: StoredDeck) {
+        scope.launch {
+            val id = deps.newDeckId()
+            deps.deckRepository.save(id, "${stored.entry.name} copy", stored.entry.deck, stored.extended, stored.entry.notes)
+            neue.prefs.covers[stored.entry.id]?.let { own -> neue.update { it.copy(covers = it.covers + (id to own)) } }
+            neue.note = com.kaiharimoto.neue.Note("Duplicated “${stored.entry.name}”")
+            bump++
+        }
+    }
+
+    fun export(stored: StoredDeck, format: DeckExportFormat) {
+        val deck = stored.entry.deck
+        val name = stored.entry.name.ifBlank { "deck" }
+        when (format) {
+            DeckExportFormat.YDK, DeckExportFormat.YDKX -> scope.launch {
+                val groups = format == DeckExportFormat.YDKX
+                val text = YdkCodec.write(deck, createdBy = "kai's master tool", extended = if (groups) stored.extended else null)
+                val file = "$name.${if (groups) "ydkx" else "ydk"}"
+                if (deps.fileAccess.exportDeck(file, text)) neue.note = com.kaiharimoto.neue.Note("Exported $file")
+            }
+            DeckExportFormat.YDKE -> {
+                CardActions.copy(YdkeCodec.encode(deck))
+                neue.note = com.kaiharimoto.neue.Note("YDKe code copied")
+            }
+            DeckExportFormat.TEXT -> {
+                CardActions.copy(DeckText.write(deck) { state.index.byId(it)?.name })
+                neue.note = com.kaiharimoto.neue.Note("Decklist copied as text")
+            }
+        }
+    }
+
+    fun exportMenu(stored: StoredDeck, at: Offset) {
+        neue.menu = MenuSpec(
+            at,
+            DeckExportFormat.entries.map { format ->
+                MenuEntry(
+                    format.label,
+                    hint = when (format) {
+                        DeckExportFormat.YDK -> ".ydk"
+                        DeckExportFormat.YDKX -> ".ydkx"
+                        else -> "Copies"
+                    },
+                    separatorBefore = format == DeckExportFormat.YDKE,
+                ) { export(stored, format) }
+            },
+        )
+    }
 
     Column(Modifier.fillMaxSize()) {
         PageHeader(
@@ -84,9 +173,22 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             title = "Decks",
             subtitle = decks?.let { "${it.size} saved" } ?: "Loading",
         ) {
-            MuInput(filter, { filter = it }, Modifier.width(288.dp), placeholder = "Find a deck")
+            MuInput(filter, { filter = it }, Modifier.width(320.dp), placeholder = "A deck, a card in one, or a tag")
             MuButton("Import", { state.importFromFile(); neue.go(Page.BUILDER) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Import)
             MuButton("New deck", { state.newDeck(); neue.go(Page.BUILDER) }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = Icons.Plus)
+        }
+        // Every tag in the library, most used first: one click keeps the decks carrying it.
+        if (allTags.isNotEmpty()) {
+            FlowRow(
+                Modifier.fillMaxWidth().padding(horizontal = 32.dp).padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Tag("All", tagFilter == null, { tagFilter = null }, caption = "Every deck")
+                allTags.forEach { (tag, n) ->
+                    Tag(tag, tagFilter == tag, { tagFilter = if (tagFilter == tag) null else tag }, count = "$n", caption = if (tagFilter == tag) "Clear" else "Filter")
+                }
+            }
         }
         when {
             shown == null -> Unit
@@ -94,12 +196,12 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
                 "Nothing yet.",
                 "Build a deck and save it, or import a .ydk file, and it is kept here.",
             ) { MuButton("New deck", { state.newDeck(); neue.go(Page.BUILDER) }, variant = BtnVariant.PRIMARY, arrow = true) }
-            shown.isEmpty() -> EmptyState("No matches.", "No saved deck has that in its name.")
+            shown.isEmpty() -> EmptyState("No matches.", "No saved deck has that in its name, in its cards or in its tags.")
             else -> Box(Modifier.fillMaxSize()) {
                 val list = rememberLazyListState()
                 val now = remember(decks) { System.currentTimeMillis() }
                 LazyColumn(state = list) {
-                    itemsIndexed(shown, key = { _, d -> d.entry.id }) { i, stored ->
+                    itemsIndexed(shown, key = { _, d -> d.first.entry.id }) { i, (stored, match) ->
                         DeckRow(
                             n = i + 1,
                             stored = stored,
@@ -108,6 +210,10 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
                             default = stored.entry.id == neue.prefs.defaultDeckId,
                             covers = neue.prefs.covers[stored.entry.id].orEmpty(),
                             now = now,
+                            tags = tags[stored.entry.id].orEmpty(),
+                            tagFilter = tagFilter,
+                            matched = match.cards.takeIf { filter.isNotBlank() }.orEmpty(),
+                            onTag = { tag -> tagFilter = if (tagFilter == tag) null else tag },
                             onDefault = {
                                 val id = stored.entry.id
                                 neue.update { it.copy(defaultDeckId = if (it.defaultDeckId == id) null else id) }
@@ -118,6 +224,8 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
                             },
                             onDelete = { neue.confirmDelete = stored.entry.id to stored.entry.name },
                             onCovers = { picking = stored },
+                            onDuplicate = { duplicate(stored) },
+                            onExport = { at -> exportMenu(stored, at) },
                         )
                     }
                 }
@@ -197,10 +305,17 @@ private fun DeckRow(
     default: Boolean,
     covers: List<Int>,
     now: Long,
+    tags: List<String>,
+    tagFilter: String?,
+    /** The names of the cards the search found in this deck, when it found any. */
+    matched: List<String>,
+    onTag: (String) -> Unit,
     onDefault: () -> Unit,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
     onCovers: () -> Unit,
+    onDuplicate: () -> Unit,
+    onExport: (Offset) -> Unit,
 ) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
@@ -237,19 +352,56 @@ private fun DeckRow(
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 MuText(stored.entry.name, style = MuType.body(LocalMuFonts.current).copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = inner.ink, maxLines = 1)
-                Mono(
-                    "${deck.main.size} main · ${deck.extra.size} extra · ${deck.side.size} side · ${ago(stored.entry.updatedAtEpochMs, now)}",
-                    color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Mono(
+                        "${deck.main.size} main · ${deck.extra.size} extra · ${deck.side.size} side · ${ago(stored.entry.updatedAtEpochMs, now)}",
+                        color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45,
+                    )
+                    tags.forEach { tag -> TagChip(tag, tag == tagFilter) { onTag(tag) } }
+                }
+                // Found by a card in it rather than by its name: which ones.
+                if (matched.isNotEmpty()) {
+                    Small(
+                        "With " + matched.take(3).joinToString(", ") + if (matched.size > 3) " and ${matched.size - 3} more" else "",
+                        color = inner.ink.copy(alpha = 0.7f),
+                        maxLines = 1,
+                    )
+                }
             }
             if (current) Small("On the builder", color = inner.ink.copy(alpha = 0.7f))
             if (default) Small("Opens first", color = inner.ink.copy(alpha = 0.7f))
             Row(Modifier.alpha(actions), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuButton("✕ Delete", onDelete, variant = BtnVariant.GHOST, size = BtnSize.SM)
                 MuButton(if (default) "Not default" else "Make default", onDefault, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                MuButton("Duplicate", onDuplicate, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                var exportAt by remember { mutableStateOf(Offset.Zero) }
+                Box(Modifier.onGloballyPositioned { exportAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+                    MuButton("Export", { onExport(exportAt) }, variant = BtnVariant.GHOST, size = BtnSize.SM, icon = Icons.Export)
+                }
                 MuButton("Open", onOpen, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
             }
         }
+    }
+}
+
+/** A deck's tag in its row: a small ruled word, inverted while it is the filter. */
+@Composable
+private fun TagChip(text: String, on: Boolean, onClick: () -> Unit) {
+    val c = Mu.colors
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Box(
+        Modifier
+            .height(18.dp)
+            .background(animatedColor(if (on) c.ink else if (hovered) c.ink06 else Color.Transparent))
+            .border(1.dp, if (on || hovered) c.ink else c.ink25)
+            .hoverable(source)
+            .cursorPointer(caption = if (on) "Clear" else "Filter")
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        com.kaiharimoto.neue.kit.Micro(text, color = if (on) c.paper else c.ink70)
     }
 }
 

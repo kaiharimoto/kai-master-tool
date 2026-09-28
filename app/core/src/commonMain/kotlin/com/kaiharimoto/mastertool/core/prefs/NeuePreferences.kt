@@ -107,6 +107,10 @@ data class NeuePreferences(
     val deckZoom: Float = 1f,
     /** How wide the gaps between groups are, as a multiple of the standard gap (Shift and the wheel). */
     val groupGap: Float = 1f,
+    /** The Groups column's slides turn by themselves (1.0.18). */
+    val slidesAutoplay: Boolean = true,
+    /** Save the deck by itself a moment after every change (1.0.18, beside Save). */
+    val autoSave: Boolean = false,
     /**
      * Zen comes by itself after idle seconds in immersive mode (1.0.16: a switch on
      * the bar). Off, it comes only when asked for with Z.

@@ -231,8 +231,12 @@ fun RowScope.BuilderBar(
     Tip("Show or hide the inspector", kbd = kbd(DeskAction.TOGGLE_INSPECTOR)) {
         IconButton(Icons.PanelRight, { neue.update { it.copy(inspectorVisible = !it.inspectorVisible) } }, toggled = neue.prefs.inspectorVisible, size = 32.dp, label = if (neue.prefs.inspectorVisible) "Hide inspector" else "Show inspector")
     }
-    Tip("Save the deck", kbd = kbd(DeskAction.SAVE)) {
-        MuButton("Save", onSave, variant = BtnVariant.PRIMARY, size = BtnSize.SM, icon = Icons.Save)
+    // Auto save (kai, 1.0.18): beside Save, and while it is on the deck is written a moment after each change.
+    Tip(if (neue.prefs.autoSave) "Auto save: on. Every change is saved a moment after it is made. Click to turn off" else "Auto save: off. Click to save every change by itself") {
+        com.kaiharimoto.neue.kit.WordToggle(if (narrow) "Auto" else "Auto save", neue.prefs.autoSave) { neue.update { it.copy(autoSave = !it.autoSave) } }
+    }
+    Tip(if (state.dirty) "Save the deck" else "Saved", kbd = kbd(DeskAction.SAVE)) {
+        MuButton(if (neue.prefs.autoSave && !state.dirty) "Saved" else "Save", onSave, variant = BtnVariant.PRIMARY, size = BtnSize.SM, icon = Icons.Save)
     }
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
 }

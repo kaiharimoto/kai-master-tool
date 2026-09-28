@@ -105,7 +105,10 @@ class DeckShots(
                     section = section,
                     // Each card with the artwork chosen for it, as the builder draws it.
                     cards = state.deck[section].map { id ->
-                        state.index.byId(id)?.let { card -> com.kaiharimoto.mastertool.core.model.CardArt.show(card, neue.prefs.arts[card.id.value]?.let(::CardId)) }
+                        state.index.byId(id)?.let { card ->
+                            val choice = neue.prefs.arts[card.id.value]
+                            neue.customArt?.drawn(card, choice) ?: com.kaiharimoto.mastertool.core.model.CardArt.show(card, choice?.let(::CardId))
+                        }
                     },
                     keying = if (showing) state.keying(section).takeIf { !it.isEmpty } else null,
                 )

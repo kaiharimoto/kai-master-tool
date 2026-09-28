@@ -27,6 +27,8 @@ object DeskKeys {
         Key.Minus to "minus",
         Key.NumPadSubtract to "minus",
         Key.DirectionUp to "up",
+        Key.DirectionLeft to "left",
+        Key.DirectionRight to "right",
         Key.DirectionDown to "down",
         Key.Enter to "enter",
         Key.NumPadEnter to "enter",

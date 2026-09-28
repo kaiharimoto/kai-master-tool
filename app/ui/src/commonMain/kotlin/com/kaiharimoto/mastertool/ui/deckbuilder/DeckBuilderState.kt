@@ -292,6 +292,10 @@ class DeckBuilderState(
     private var toastCounter = 0L
     private var editSerial = 0L
 
+    /** Whether the deck has changed since it was last loaded or saved: what an autosave waits on. */
+    var dirty by mutableStateOf(false)
+        private set
+
     /**
      * Recomputed only when the deck, pool or format actually changes.
      *
@@ -830,6 +834,7 @@ class DeckBuilderState(
 
     private fun stamp(): UndoToken {
         editSerial++
+        dirty = true
         canUndo = undoStack.isNotEmpty()
         canRedo = redoStack.isNotEmpty()
         return UndoToken(editSerial)
@@ -862,7 +867,9 @@ class DeckBuilderState(
         showToast("Started a new deck.", undo = { undoIfCurrent(token) })
     }
 
-    fun save(onSaved: (String) -> Unit = {}) {
+    /** Saves the deck; [quiet] is an autosave, which says nothing. */
+    fun save(quiet: Boolean = false, onSaved: (String) -> Unit = {}) {
+        val serial = editSerial
         scope.launch {
             val id = deckId ?: deps.newDeckId().also { deckId = it }
             deps.deckRepository.save(
@@ -871,7 +878,9 @@ class DeckBuilderState(
                 deck,
                 extendedForWrite(),
             )
-            showToast("Saved \"$deckName\".")
+            // An edit made while the write was in flight is still unsaved.
+            if (editSerial == serial) dirty = false
+            if (!quiet) showToast("Saved \"$deckName\".")
             onSaved(id)
         }
     }
@@ -887,6 +896,7 @@ class DeckBuilderState(
             undoStack.clear()
             redoStack.clear()
             stamp()
+            dirty = false
         }
     }
 

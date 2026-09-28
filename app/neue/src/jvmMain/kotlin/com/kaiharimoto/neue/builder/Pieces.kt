@@ -6,6 +6,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import com.kaiharimoto.mastertool.core.layout.PieceLayout
 
 /**
@@ -36,6 +42,8 @@ internal class PiecePlacer(
     val zenGap: Float = gap,
     /** How far down this section's zen pieces start: the growth of the sections above it, at one gap. */
     val zenAbove: Float = 0f,
+    /** Room over the grid for the name tabs of the pieces in its top row (1.0.18), at full crack. */
+    val labelRoom: Float = 0f,
 ) {
     private val reservedX = builder.spanX * gap * crack
     private val reservedY = builder.spanY * gap * crack
@@ -49,7 +57,7 @@ internal class PiecePlacer(
     // Zen's pieces open downward rather than about the middle, and each section starts
     // below the growth of those above it, so the sections never open into each other.
     fun y(p: Int, deep: Float = 0f, zenAmount: Float = 0f): Float =
-        (p / columns) * cardHeight + reservedY / 2f + gy(builder, p) * gap * crack * (1f - deep) +
+        (p / columns) * cardHeight + reservedY / 2f + labelRoom * crack * (1f - deep) + gy(builder, p) * gap * crack * (1f - deep) +
             (zen.shiftY.getOrElse(p) { 0 } * zenGap + zenAbove) * zenAmount * deep
 
     /** Card [p] at rest, in the builder. */
@@ -89,6 +97,8 @@ internal fun DrawScope.drawPieces(
     frame: Float,
     colorOf: (String) -> Color,
     alphaOf: (String) -> Float,
+    /** A group's name, written once on a tab of its largest piece's border (1.0.18); null draws no names. */
+    labels: Labels? = null,
 ) {
     if (keys.none { it != null } || pieces.piece.size != keys.size) return
     keys.filterNotNull().distinct().forEach { key ->
@@ -106,6 +116,46 @@ internal fun DrawScope.drawPieces(
             if (top) drawRect(color, Offset(o.x - frame, o.y - frame), Size(cardWidth + frame * 2, frame))
             if (bottom) drawRect(color, Offset(o.x - frame, o.y + cardHeight), Size(cardWidth + frame * 2, frame))
         }
+        labels?.let { drawLabel(key, keys, pieces, at, cardWidth, frame, color, it) }
         canvas.restore()
     }
+}
+
+/** What the name tabs need: how to measure text, in what style, how tall a tab is, and each key's name. */
+internal class Labels(val measurer: TextMeasurer, val style: TextStyle, val tab: Float, val nameOf: (String) -> String)
+
+/**
+ * [key]'s name on a tab rising from the top edge of its largest piece, at its
+ * top-left card, as wide as the name — or as the piece's top row, whichever is
+ * less — in the group's colour with the lettering in black or white, whichever
+ * reads on it. Once per group: a name on every card was noise (kai, 1.0.18).
+ */
+private fun DrawScope.drawLabel(
+    key: String,
+    keys: List<String?>,
+    pieces: PieceLayout,
+    at: (Int) -> Offset,
+    cardWidth: Float,
+    frame: Float,
+    color: Color,
+    labels: Labels,
+) {
+    val columns = pieces.columns
+    val largest = keys.indices.filter { keys[it] == key }.groupBy { pieces.piece[it] }.maxByOrNull { it.value.size }?.value ?: return
+    val first = largest.minWith(compareBy<Int> { it / columns }.thenBy { it % columns })
+    var run = 1
+    while (first + run < keys.size && (first + run) % columns != 0 && pieces.piece[first + run] == pieces.piece[first]) run++
+    val o = at(first)
+    val room = run * cardWidth + frame * 2
+    val pad = labels.tab * 0.4f
+    val text = labels.measurer.measure(
+        labels.nameOf(key).uppercase(),
+        labels.style.copy(color = if (color.luminance() > 0.5f) Color.Black else Color.White),
+        overflow = TextOverflow.Ellipsis,
+        maxLines = 1,
+        constraints = Constraints(maxWidth = (room - pad * 2).toInt().coerceAtLeast(1)),
+    )
+    val width = (text.size.width + pad * 2).coerceAtMost(room)
+    drawRect(color, Offset(o.x - frame, o.y - labels.tab), Size(width, labels.tab))
+    drawText(text, topLeft = Offset(o.x - frame + pad, o.y - labels.tab + (labels.tab - text.size.height) / 2f))
 }

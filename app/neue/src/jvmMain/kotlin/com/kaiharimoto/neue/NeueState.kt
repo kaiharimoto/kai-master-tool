@@ -84,6 +84,9 @@ class NeueState(
     /** How wide the main deck's cards are drawn: the pool draws its own that size by default. */
     var deckCardWidth by mutableStateOf(androidx.compose.ui.unit.Dp.Unspecified)
 
+    /** How many cards a row of the pool holds as it is drawn now: the arrow keys' row. Plain. */
+    var poolColumns: Int = 1
+
     /** The highlighted pool row, walked by ↑ and ↓. */
     var poolCursor by mutableStateOf(0)
 
@@ -153,9 +156,22 @@ class NeueState(
 
     /** Card [card]'s artwork, [by] along from the one showing, wrapping; its own art is stored as no choice. */
     fun stepArt(card: Card, by: Int) = update { p ->
-        val next = CardArt.step(card, p.arts[card.id.value]?.let(::CardId), by)
-        p.copy(arts = if (next == card.id) p.arts - card.id.value else p.arts + (card.id.value to next.value))
+        val all = artChoices(card)
+        val at = all.indexOf(p.arts[card.id.value] ?: card.id.value).coerceAtLeast(0)
+        val next = all[((at + by) % all.size + all.size) % all.size]
+        p.copy(arts = if (next == card.id.value) p.arts - card.id.value else p.arts + (card.id.value to next))
     }
+
+    /** Draws [card] with artwork [choice] from now on: a passcode, or `-k` for its k-th own picture. */
+    fun chooseArt(card: Card, choice: Int) = update { p ->
+        p.copy(arts = if (choice == card.id.value) p.arts - card.id.value else p.arts + (card.id.value to choice))
+    }
+
+    /** The pictures the person added to cards (1.0.18). Set by the window. */
+    var customArt: com.kaiharimoto.neue.art.CustomArt? = null
+
+    /** Every artwork [card] can be drawn with: the pool's, then its own pictures. */
+    fun artChoices(card: Card): List<Int> = customArt?.choices(card) ?: CardArt.arts(card).map { it.value }
 
     fun toggleTheme() = update { it.copy(theme = if (it.theme == NeueTheme.PAPER) NeueTheme.INK else NeueTheme.PAPER) }
 

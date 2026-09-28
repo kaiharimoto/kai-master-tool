@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -145,6 +146,18 @@ fun PoolPane(
 
         val grid = rememberLazyGridState()
         val cursor = neue.poolCursor.coerceIn(0, (state.results.size - 1).coerceAtLeast(0))
+        // How many cards a row holds as drawn, for the arrow keys; and a selection the
+        // arrows moved off the visible rows is scrolled back into view.
+        LaunchedEffect(grid) {
+            snapshotFlow { grid.layoutInfo.visibleItemsInfo.maxOfOrNull { it.column } }
+                .collect { max -> if (max != null) neue.poolColumns = max + 1 }
+        }
+        val selectedRow = (neue.selection as? Selection.InPool)?.row
+        LaunchedEffect(selectedRow) {
+            val row = selectedRow ?: return@LaunchedEffect
+            val visible = grid.layoutInfo.visibleItemsInfo
+            if (visible.isNotEmpty() && (row < visible.first().index || row > visible.last().index)) grid.scrollToItem(row)
+        }
         LaunchedEffect(cursor, state.results) {
             val visible = grid.layoutInfo.visibleItemsInfo
             if (visible.isNotEmpty() && (cursor < visible.first().index || cursor > visible.last().index)) {

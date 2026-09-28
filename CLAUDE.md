@@ -438,7 +438,16 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   inside `NeueCard` (`CardArt`, `LocalArts`) — never a change to the deck. The
   switch is **on the card** (a `2/9` chip on hover, `A`), because the
   inspector follows the pointer and lets go of a card before you reach it.
-  `NEUE.md` §4c–§4d.
+  YGOPRODeck has no picture for an alternate sharing its passcode (Nibiru,
+  Lady Labrynth), so **+ Your own** in the inspector imports one (`CustomArt`;
+  a choice is a passcode, or −k for an own picture). `NEUE.md` §4c–§4d.
+- **The library** duplicates and exports a deck from its row, tags each deck from
+  its cards (`DeckTags`) and finds a deck by a card in it (`DeckSearch`).
+  **Auto save** waits on `DeckBuilderState.dirty`. The arrow keys walk the
+  selection (`GridStep`); `↑`/`↓` are the pool's results keys too, and walk the
+  results only in the search field or with nothing selected. Each group's name
+  is written once on its largest piece (`NAME_TAB`, declared to the fitter), and
+  the lens row stays put when the wheel shrinks the deck. `NEUE.md` §3, §4, §4f.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),
   falling back to the small render. **Card names are stamped in the foil**

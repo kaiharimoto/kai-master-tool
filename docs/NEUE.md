@@ -310,10 +310,15 @@ Two things about it are load-bearing:
   really are (`GridGeometry.placed`), and the insert bar stands at the left of the
   card it names.
 
-The gap is 18 px and each piece is outlined 4 px in its group's colour (1.0.17,
-kai: "widen the gaps … and increase the size of the border so it's more apparent";
-10 and 2 in 1.0.15), in the gap round it, so it
-reads as one shape with its colour on it. The lens opens and closes the pieces
+The gap is 28 px and each piece is outlined 5 px in its group's colour (1.0.18;
+18 and 4 in 1.0.17, 10 and 2 in 1.0.15 — kai asked for wider twice), in the gap
+round it, so it reads as one shape with its colour on it. **The group's name is
+written once**, on a tab in its colour rising from the top edge of its largest
+piece, at that piece's top-left card — kai: "have it instead just write the name
+of the group in the border once instead of abbreviation symbol on every card"
+(1.0.18). The tab is as wide as the name or the piece's top row, whichever is
+less, lettered black or white by the colour's luminance; the room it needs over
+the grid (`NAME_TAB`, 17 px) is declared to the fitter with the gaps. The lens opens and closes the pieces
 over 320 ms; closing, they close from where they were. The screenshot export
 draws the same pieces.
 
@@ -333,7 +338,11 @@ paper round it; up, back to the size that fills the column. It is a re-fit, not 
 transform, so every rule of the layout — the pieces, the labels, the drop targets —
 holds at any size. With the groups on, **Shift and the wheel** open and close the
 gaps between them (`groupGap`, 0.4–3 standard gaps). The pool's cards keep the
-size the deck *would* be, not what the wheel made of it.
+size the deck *would* be, not what the wheel made of it. **The lens row stands
+still** (1.0.18, kai: "have the ui elements like buttons stay in fixed
+positions"): it is laid out once at the top of the column, inset to the deck's
+edge at full size, and only the deck below it is re-fitted and centred — the
+buttons no longer ride inward and downward with the cards.
 
 **Beside Groups, the foil switch** (1.0.15): a boxed button the same size carrying
 a small card in the holographic foil itself (`FoilGlyph`, drawn by the same
@@ -359,15 +368,27 @@ dropped its extra- and side-deck cards when it was saved again.
 
 **Palettes** (1.0.17, kai: "more choices in color palettes … from designer
 choices"). Under the groups, seven palettes of six — Prism (the tablet's), Bauhaus,
-Pastel, Earth, Ocean, Neon, Vintage — each a row of its colours under its name.
+Pastel, Earth, Ocean, Neon, Vintage. Since 1.0.18 they are a dropdown: the
+closed header is the palette in use, its name and its colours, and a click opens
+the other six; choosing one closes it.
 A group's colour is stored as an index, so a palette is only a reading of it:
 choosing one recolours every group at once and changes nothing in the deck file
 (`GroupMarkers.palettes`, the one file with colour in it; `groupPalette`).
 
+**Slides** (1.0.18, kai: "add some data analysis visuals in a box that changes
+like slides, with an auto play slide feature that can be toggled"): between the
+groups and the palettes, a box of five — share of the main deck (and what is
+ungrouped), the chance to open each group, how many of it a hand holds on
+average, each group's monsters, spells and traps, and its cards across main,
+extra and side. Bars in each group's colour; the numbers are `GroupStats.of`, in
+core, from the same `LensOdds` the rows use. ‹ › step, **Auto** turns every six
+seconds (`slidesAutoplay`, on by default) and the pointer over the box pauses it.
+
 **The Groups panel is where groups are edited** (`GroupsPanel`, 288 px beside the
 deck). Every group is a row that can be changed where it stands: its name is a
 field (written on Enter or on leaving it, so one rename is one undo), its colour
-six swatches, its count and opening rate beside the name, and **Edit cards**, up,
+square, whose six swatches come out only while the pointer is on it or on them
+(1.0.18: all of them on every row was "a bit distracting"), its count and opening rate beside the name, and **Edit cards**, up,
 down and **Delete** as buttons on the row. The colour square isolates the group.
 Right-click a row for the same and more. The Groups drawer that used to hold all
 this — a sidebar over the deck — is deleted: kai, "there's no need for a pop up
@@ -452,6 +473,22 @@ card to the side deck, and Shift, still "the other way", sends it to the main
 (`DeskMouse.forPool`, one function, so the table the help dialog shows stays the
 off state). It is a setting (`NeuePreferences.poolToSide`), and the empty side
 deck's hint follows it.
+
+**The arrow keys walk the selection** (1.0.18, kai: "once a player selects a card
+in the normal deck builder, let them move the selection with the arrow keys, which
+will reflect in the inspector"). `←` `→` run along a row and through its ends;
+`↑` `↓` go a row up or down, and past the top or bottom row of a section into the
+next section on show, keeping the column. A pool card walks the pool the same way,
+by the columns the pool is really drawn in (`GridStep`, in core with a test). `↑`
+and `↓` were already the pool's results keys, so they are one pair with two jobs:
+in the search field, or with nothing selected, the results; with a card selected,
+the selection. The inspector follows, because a key clears the hover.
+
+**Auto save** (1.0.18, beside Save): on, a changed deck is written a second and a
+half after the last change, quietly — no toast — and Save reads **Saved** while
+nothing is waiting. An empty deck that was never saved is left alone.
+`DeckBuilderState.dirty` is what it waits on: set by every edit, cleared by a
+load and by a save no edit overtook (`autoSave`, off by default).
 
 **History** (1.0.17, beside undo and redo): every step undo can take back and
 redo can put back, newest first, in words — "+ Ash Blossom", "Moved Nibiru to
@@ -673,6 +710,20 @@ the chip spends its own press, so it never also selects, adds or drags the card
 artwork · 2 of 9**. The studio drives it: `--art=46986414 --mouse=left@…` on the
 chip, and the inspector reads `Art 3 of 9`.
 
+**The chip turned by itself** under a resting pointer (reported against 1.0.16):
+its handler took any pointer event for a press, and hover sends a stream of them.
+It now waits for a real press (1.0.18).
+
+**Some alternate artworks are not in the pool, and cannot be** (kai, 1.0.18:
+Nibiru, the Primal Being; Lady Labrynth of the Silver Castle). YGOPRODeck lists
+an artwork only when it has a passcode of its own; reprints that share one —
+most newer alternates — are a single image there, so no switch can find them.
+The remedy is **+ Your own** under the inspector's art: pick a picture from disk
+and it is copied into `<data>/custom-art/<passcode>/` and becomes one more
+choice on the chip, the keys and the switch, drawn like any other (`CustomArt`;
+a choice is a passcode, or −k for the card's k-th own picture), with **Remove**
+beside it while it is showing.
+
 ### 4e. The screenshot
 
 `Ctrl Shift S`, or Screenshot in the header: main, extra and side as they stand,
@@ -683,6 +734,25 @@ that date (`cardsets.php`, `CardSetReleases.latest` — the feed lists announced
 sets too). Drawn by `shot/DeckShot.kt` offscreen at 2× from the originals, 1600
 dp wide, in the theme you are in. `tools/shoot.sh --neue --deckshot` renders it
 headlessly.
+
+### 4f. The library
+
+`01 Decks` (1.0.18, kai: "let me duplicate decks, export them, a tagging system
+based on the card type in the deck, and … type the name of a card and it will
+filter decks by those with the card in it"):
+
+- **Duplicate** on a row saves a copy as "<name> copy", with its groups and its
+  covers.
+- **Export** on a row is the builder's Export menu for that deck, without opening
+  it: `.ydk`, `.ydkx` with its groups, a YDKe code or a text list.
+- **Tags** are read off the cards (`DeckTags.of`, in core with a test): up to two
+  archetypes with six or more cards, the summoning mechanics the extra deck (or
+  the rituals) lean on, and a lean — Monster-, Spell- or Trap-heavy. They stand
+  on each row, and every tag in the library is a strip under the header; a click
+  on either keeps the decks carrying it.
+- **The search** matches a deck's name, the name of any card in it, or a tag
+  (`DeckSearch.match`). A row found by its cards says which: "With Ash Blossom &
+  Joyous Spring".
 
 ---
 

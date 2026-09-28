@@ -51,6 +51,7 @@ import com.kaiharimoto.neue.kit.H2
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.RowText
@@ -118,16 +119,30 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
  */
 @Composable
 internal fun ArtSwitch(card: Card, neue: NeueState, modifier: Modifier = Modifier) {
-    val arts = remember(card) { CardArt.arts(card) }
-    if (arts.size < 2) return
     val c = Mu.colors
-    val chosen = neue.prefs.arts[card.id.value]?.let(::CardId)?.takeIf { it in arts } ?: card.id
-    fun step(by: Int) = neue.stepArt(card, by)
-    Row(modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
+    val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+    // Read, so adding or removing a picture redraws the count.
+    val own = custom?.version
+    val arts = remember(card, own) { neue.artChoices(card) }
+    val chosen = neue.prefs.arts[card.id.value]?.takeIf { it in arts } ?: card.id.value
+    Row(modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro("Art", color = c.ink70)
-        Mono("  ${arts.indexOf(chosen) + 1} of ${arts.size}", Modifier.weight(1f), color = c.ink)
-        IconButton(Icons.ChevronLeft, { step(-1) }, label = "Previous art")
-        IconButton(Icons.ChevronRight, { step(1) }, label = "Next art")
+        Mono(if (arts.size > 1) "${arts.indexOf(chosen) + 1} of ${arts.size}" else "1", Modifier.weight(1f), color = c.ink)
+        // A card whose reprints share its passcode has one picture in the pool; the
+        // person may add their own (1.0.18, `CustomArt`).
+        if (custom != null) {
+            if (chosen < 0) {
+                MicroLink("Remove", {
+                    neue.chooseArt(card, card.id.value)
+                    custom.remove(card.id.value, -chosen)
+                })
+            }
+            MicroLink("+ Your own", { custom.pickAndAdd(card.id.value)?.let { neue.chooseArt(card, it) } })
+        }
+        if (arts.size > 1) {
+            IconButton(Icons.ChevronLeft, { neue.stepArt(card, -1) }, label = "Previous art")
+            IconButton(Icons.ChevronRight, { neue.stepArt(card, 1) }, label = "Next art")
+        }
     }
 }
 

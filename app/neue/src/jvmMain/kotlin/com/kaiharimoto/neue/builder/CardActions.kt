@@ -144,9 +144,9 @@ object CardActions {
 
     /** "Next artwork · 2 of 9", for a card printed with more than one picture (1.0.16); else nothing. */
     private fun artEntry(card: Card, neue: NeueState): MenuEntry? {
-        val all = CardArt.arts(card)
+        val all = neue.artChoices(card)
         if (all.size < 2) return null
-        val at = all.indexOf(neue.prefs.arts[card.id.value]?.let(::CardId) ?: card.id).coerceAtLeast(0) + 1
+        val at = all.indexOf(neue.prefs.arts[card.id.value] ?: card.id.value).coerceAtLeast(0) + 1
         return MenuEntry("Next artwork · $at of ${all.size}", hint = "A", separatorBefore = true) { neue.stepArt(card, 1) }
     }
 

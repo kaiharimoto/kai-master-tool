@@ -24,6 +24,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -167,7 +169,8 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         if (groups.isNotEmpty()) {
             Small("Click a colour square to see that group alone. Right-click a group for the rest.", Modifier.padding(top = 4.dp), color = c.ink45)
         }
-        PalettePicker(neue, Modifier.padding(top = 16.dp))
+        GroupSlides(state, neue, Modifier.padding(top = 16.dp))
+        PalettePicker(neue, Modifier.padding(top = 8.dp))
     }
 }
 }
@@ -190,6 +193,17 @@ private fun GroupRow(
     val source = remember(group.id) { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     var at by remember(group.id) { mutableStateOf(Offset.Zero) }
+    // The swatches stay out while the pointer is on the square or on them, and a
+    // moment after, so crossing the gap between the two does not put them away.
+    val squareSource = remember(group.id) { MutableInteractionSource() }
+    val swatchSource = remember(group.id) { MutableInteractionSource() }
+    val onSquare by squareSource.collectIsHoveredAsState()
+    val onSwatches by swatchSource.collectIsHoveredAsState()
+    var lingering by remember(group.id) { mutableStateOf(false) }
+    LaunchedEffect(onSquare, onSwatches) {
+        if (onSquare || onSwatches) lingering = true else { delay(450); lingering = false }
+    }
+    val swatchesOut = onSquare || onSwatches || lingering
     Column(
         Modifier
             .fillMaxWidth()
@@ -212,17 +226,19 @@ private fun GroupRow(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            // The colour square isolates: the one place on the row that is not an edit.
-            Tip(if (isolated) "Show every group" else "See this group alone. Chance of opening at least one in five cards is on the right") {
-                Box(
-                    Modifier
-                        .size(16.dp)
-                        .background(GroupMarkers.hue(group.color))
-                        .border(if (isolated) 2.dp else 1.dp, c.ink)
-                        .cursorPointer(caption = if (isolated) "Show all" else "Isolate")
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.toggleIsolation(group.id) },
-                )
-            }
+            // The colour square isolates on a click, and on a hover brings out the six
+            // colours to choose from (kai, 1.0.18: all six on every row all the time was
+            // a distraction). No tip over it: a tip is a window of its own, and moving
+            // onto it would count as leaving the square.
+            Box(
+                Modifier
+                    .size(16.dp)
+                    .background(GroupMarkers.hue(group.color))
+                    .border(if (isolated) 2.dp else 1.dp, c.ink)
+                    .hoverable(squareSource)
+                    .cursorPointer(caption = if (isolated) "Show all" else "Isolate")
+                    .clickable(interactionSource = squareSource, indication = null) { state.toggleIsolation(group.id) },
+            )
             // Renamed where it stands: written once on Enter or on leaving the field,
             // so a name is one step of undo rather than one per letter.
             var text by remember(group.id, group.name) { mutableStateOf(group.name) }
@@ -247,6 +263,7 @@ private fun GroupRow(
             odds?.let { Mono(percent(it), color = c.ink) }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            if (swatchesOut) Row(Modifier.hoverable(swatchSource), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             GroupMarkers.hues.forEachIndexed { h, hue ->
                 Box(
                     Modifier
@@ -258,6 +275,7 @@ private fun GroupRow(
                             state.updateGroups { it.upsert(group.copy(color = h)) }
                         },
                 )
+            }
             }
             Box(Modifier.weight(1f))
             IconButton(Icons.Pencil, { state.editGroup(group) }, size = 24.dp, label = "Edit cards")
@@ -277,9 +295,29 @@ private fun GroupRow(
 @Composable
 private fun PalettePicker(neue: NeueState, modifier: Modifier = Modifier) {
     val c = Mu.colors
+    // Folded to the one in use (kai, 1.0.18): the others come out on a click.
+    var open by remember { mutableStateOf(false) }
+    val current = GroupMarkers.byId(neue.prefs.groupPalette)
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Micro("Palette", color = c.ink70)
-        GroupMarkers.palettes.forEach { palette ->
+        val headSource = remember { MutableInteractionSource() }
+        val headHovered by headSource.collectIsHoveredAsState()
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, if (open || headHovered) c.ink else c.ink25)
+                .hoverable(headSource)
+                .cursorPointer(caption = if (open) "Fold" else "Palettes")
+                .clickable(interactionSource = headSource, indication = null) { open = !open }
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Micro("Palette", color = c.ink70)
+            Small(current.name, Modifier.weight(1f), color = c.ink, maxLines = 1)
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) { current.colors.forEach { Box(Modifier.size(10.dp).background(it)) } }
+            Mono(if (open) "−" else "▾", color = c.ink70)
+        }
+        if (open) GroupMarkers.palettes.forEach { palette ->
             val chosen = neue.prefs.groupPalette == palette.id
             val source = remember(palette.id) { MutableInteractionSource() }
             val hovered by source.collectIsHoveredAsState()
@@ -289,7 +327,10 @@ private fun PalettePicker(neue: NeueState, modifier: Modifier = Modifier) {
                     .border(1.dp, if (chosen) c.ink else if (hovered) c.ink45 else c.ink12)
                     .hoverable(source)
                     .cursorPointer(caption = if (chosen) "In use" else "Use")
-                    .clickable(interactionSource = source, indication = null) { neue.update { it.copy(groupPalette = palette.id) } }
+                    .clickable(interactionSource = source, indication = null) {
+                        neue.update { it.copy(groupPalette = palette.id) }
+                        open = false
+                    }
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
