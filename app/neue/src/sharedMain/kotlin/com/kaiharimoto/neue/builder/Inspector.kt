@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
@@ -98,7 +99,14 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
             hide()
             Column(Modifier.zenQuiet().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 com.kaiharimoto.neue.kit.MuText("Nothing here.", style = MuType.h1(LocalMuFonts.current))
-                Body("Point at a card to read it. Click one to keep it here. Hold the button down on one to open it large.", color = c.ink70)
+                Body(
+                    if (LocalTouchFirst.current) {
+                        "Tap a card to read it here. Press and hold one to open it large."
+                    } else {
+                        "Point at a card to read it. Click one to keep it here. Hold the button down on one to open it large."
+                    },
+                    color = c.ink70,
+                )
             }
             return@Box
         }

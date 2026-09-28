@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -812,7 +813,12 @@ private fun DeckSectionPane(
                 if (ids.isEmpty()) {
                     Box(Modifier.fillMaxSize().zenQuiet(), contentAlignment = Alignment.Center) {
                         Help(
-                            if ((section == DeckSection.SIDE) != neue.prefs.poolToSide) "Shift right-click a card in the pool, or drag it here" else "Right-click a card in the pool, or drag it here",
+                            when {
+                                LocalTouchFirst.current && (section == DeckSection.SIDE) != neue.prefs.poolToSide -> "Press and hold a card in the pool for the side deck, or drag it here"
+                                LocalTouchFirst.current -> "Double-tap a card in the pool, or drag it here"
+                                (section == DeckSection.SIDE) != neue.prefs.poolToSide -> "Shift right-click a card in the pool, or drag it here"
+                                else -> "Right-click a card in the pool, or drag it here"
+                            },
                         )
                     }
                 }

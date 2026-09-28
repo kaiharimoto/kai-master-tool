@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -168,7 +169,15 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
             MuButton("New group", { state.startGroupDraft() }, variant = BtnVariant.SECONDARY, size = BtnSize.MD, icon = Icons.Plus, modifier = Modifier.fillMaxWidth())
         }
         if (groups.isNotEmpty()) {
-            Small("Click a colour square to see that group alone. Right-click a group for the rest.", Modifier.padding(top = 4.dp), color = c.ink45)
+            Small(
+                if (LocalTouchFirst.current) {
+                    "Tap a colour square to see that group alone. Press and hold a group for the rest."
+                } else {
+                    "Click a colour square to see that group alone. Right-click a group for the rest."
+                },
+                Modifier.padding(top = 4.dp),
+                color = c.ink45,
+            )
         }
         GroupSlides(state, neue, Modifier.padding(top = 16.dp))
         PalettePicker(neue, Modifier.padding(top = 8.dp))

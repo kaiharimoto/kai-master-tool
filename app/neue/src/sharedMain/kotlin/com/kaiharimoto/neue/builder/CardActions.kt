@@ -30,7 +30,14 @@ object CardActions {
         state.addCard(card, if (toSide) DeckSection.SIDE else card.requiredSection())
     }
 
-    private fun hint(target: MouseTarget, action: MouseAction) = DeskMouse.gestureFor(target, action)?.label
+    /** The gesture beside a menu entry: a finger's on the tablet (`DeskTouch`), where there is one, else the mouse's. */
+    private fun hint(target: MouseTarget, action: MouseAction): String? =
+        if (com.kaiharimoto.neue.platform.Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
+            com.kaiharimoto.mastertool.core.input.DeskTouch.all
+                .firstOrNull { it.target == target && it.action == action }?.gesture?.label
+        } else {
+            DeskMouse.gestureFor(target, action)?.label
+        }
 
     /** A mouse gesture on a pool card, as `DeskMouse` resolved it. */
     fun onPool(action: MouseAction, at: Offset, card: Card, row: Int, state: DeckBuilderState, neue: NeueState) {
