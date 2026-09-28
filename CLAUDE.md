@@ -244,6 +244,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   wheel sets zen's gaps, and zen fits the deck *as drawn* (`stageRect`, grown by
   its pieces) so the cards shrink as the gaps widen.
   `NEUE.md` §3a.
+- **The screenshot has two shapes** (1.0.23, kai's pick of four): **Picture**, the
+  default — the builder's pieces and name tabs, every copy — and **List**, a
+  decklist of art, counts and names made to read on a phone, split into
+  Monsters, Spells and Traps when there are no groups. Settings → Screenshot;
+  `ShotDesigns` plans both, `DeckList` (core) is the list's arithmetic. `NEUE.md` §4e.
 - **History** beside undo/redo lists each step in words (`DeckHistory`, read off
   the decks either side, since the undo stack keeps decks, not edits).
 - **Export is a menu**: `.ydk`, `.ydkx` with groups, a `ydke://` code or a text

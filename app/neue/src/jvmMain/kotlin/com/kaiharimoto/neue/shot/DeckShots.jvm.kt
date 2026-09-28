@@ -119,6 +119,7 @@ actual class DeckShots actual constructor(
             ink = neue.prefs.theme == NeueTheme.INK,
             foil = neue.prefs.foil,
             names = neue.prefs.foilNames,
+            style = ShotStyle.of(neue.prefs.shotStyle),
         )
     }
 

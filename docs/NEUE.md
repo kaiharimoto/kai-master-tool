@@ -848,13 +848,33 @@ beside it while it is showing.
 ### 4e. The screenshot
 
 `Ctrl Shift S`, or Screenshot in the header: main, extra and side as they stand,
-with none of the window — and with the lens's colours and a legend if a lens was
-on, because that is the part of a deck its builder drew. Above them, the deck's
-name, its counts, its format, the date, and the newest TCG set already out on
-that date (`cardsets.php`, `CardSetReleases.latest` — the feed lists announced
-sets too). Drawn by `shot/DeckShot.kt` offscreen at 2× from the originals, 1600
-dp wide, in the theme you are in. `tools/shoot.sh --neue --deckshot` renders it
-headlessly.
+with none of the window. Above them, the deck's name, its counts, its format, the
+date, and the newest TCG set already out on that date (`cardsets.php`,
+`CardSetReleases.latest` — the feed lists announced sets too). Drawn by
+`shot/DeckShot.kt` offscreen from the originals, in the theme you are in.
+
+**Two shapes** (1.0.23), chosen under Settings → Building → Screenshot. kai asked
+for the picture to be rethought for where it is looked at — "most of time it will
+be shown on mobile phones, meaning the 'at a glance' factor is really important" —
+and chose these two of four explored (the others: copies stacked with a count, and
+groups as packed blocks):
+
+- **Picture**, the default: the deck as the builder draws it, every copy, ten
+  across. With the groups on it is in their pieces, outlined in each group's
+  colour, with each name on its tab (`drawPieces`, the builder's own code) — the
+  screenshot had fallen behind the builder, still drawing 1.0.15's thin gaps, a
+  code on every card and a legend. 1600 dp wide at 2×.
+- **List**: a decklist, 1080 dp wide at 3× so its words read on a phone (the
+  names come out near 8 pt there; the picture's header, at 1600, near 11). Each
+  card once, its art window squared beside its count and name, under its group's
+  bar, the main deck in two columns balanced by whole groups
+  (`DeckList`, in core). Without groups the rows are split into Monsters, Spells
+  and Traps (kai). Cards in no group, when there are groups, are **Other**.
+
+Both are laid out by arithmetic into a plan before anything is drawn
+(`ShotDesigns`), so the image is exactly as tall as its contents.
+`tools/shoot.sh --deckshot=true` renders the chosen shape headlessly, and
+`--deckshot=all` every shape.
 
 ### 4g. Finding cards (1.0.19)
 

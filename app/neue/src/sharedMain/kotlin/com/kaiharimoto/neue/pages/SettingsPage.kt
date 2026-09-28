@@ -93,6 +93,12 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Pool columns", "Auto draws the pool's cards the size of the main deck's.") {
                         Segmented(prefs.poolColumns, listOf(0, 3, 4, 5, 6, 8), { if (it == 0) "Auto" else it.toString() }, { n -> neue.update { it.copy(poolColumns = n) } }, small = true)
                     }
+                    // The deck's picture is the desktop's: the tablet has no screenshot yet.
+                    if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
+                        SettingRow("Screenshot", "Picture is the deck as the builder draws it, groups and all. List is a decklist, each card once with its count and name, made to be read on a phone.") {
+                            Segmented(prefs.shotStyle, listOf(NeuePreferences.SHOT_PICTURE, NeuePreferences.SHOT_LIST), { if (it == NeuePreferences.SHOT_LIST) "List" else "Picture" }, { v -> neue.update { it.copy(shotStyle = v) } })
+                        }
+                    }
                     SettingRow("Search card text", "Match the words printed on a card as well as its name. name: and text: in a search choose one.") {
                         MuSwitch(state.searchEffects, host.onSearchEffects)
                     }
