@@ -257,6 +257,13 @@ class NeueHolders(
             DeskAction.PREVIOUS_LENS -> stepLens(-1)
             DeskAction.NEW_GROUP -> state.startGroupDraft(seed = (neue.selection as? Selection.InDeck)?.card?.id)
             DeskAction.GROUPS -> setGroups(true)
+            DeskAction.NEXT_ART, DeskAction.PREVIOUS_ART -> neue.inspected?.let { card ->
+                if (com.kaiharimoto.mastertool.core.model.CardArt.arts(card).size > 1) {
+                    neue.stepArt(card, if (action == DeskAction.NEXT_ART) 1 else -1)
+                } else {
+                    neue.note = Note("${card.name} has one artwork")
+                }
+            }
             DeskAction.ZEN -> if (state.deck.totalCards > 0) {
                 neue.dismissTop()
                 neue.page = Page.BUILDER
@@ -346,6 +353,8 @@ class NeueHolders(
             cmd("Deck", "Issues", DeskAction.ISSUES),
             cmd("Deck", "Groups", DeskAction.GROUPS),
             cmd("App", "Zen, now", DeskAction.ZEN),
+            Command("App", if (neue.prefs.autoZen) "Zen by itself: off" else "Zen by itself: on") { neue.update { it.copy(autoZen = !it.autoZen) } },
+            cmd("Card", "Next artwork", DeskAction.NEXT_ART),
             cmd("Deck", "New group", DeskAction.NEW_GROUP),
             cmd("Deck", "Next lens", DeskAction.NEXT_LENS),
             Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}") {
@@ -450,7 +459,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     }
 
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             CompositionLocalProvider(LocalContextMenuRepresentation provides remember { MuContextMenuRepresentation() }) {
                 Shell(h)
@@ -758,12 +767,13 @@ private fun ZenClockwork(h: NeueHolders) {
     val neue = h.neue
     // An empty deck has nothing to float (kai, 1.0.14): zen waits for a card.
     val eligible = neue.immersive && neue.page == Page.BUILDER && h.builder.deck.totalCards > 0
-    LaunchedEffect(eligible, h.zenAuto) {
+    LaunchedEffect(eligible, h.zenAuto, neue.prefs.autoZen) {
         if (!eligible) {
             neue.zen = ZenPhase.AWAKE
             return@LaunchedEffect
         }
-        if (!h.zenAuto) return@LaunchedEffect
+        // The bar's Zen switch (1.0.16): off, zen comes only when asked for (Z).
+        if (!h.zenAuto || !neue.prefs.autoZen) return@LaunchedEffect
         h.lastInput = System.nanoTime()
         while (true) {
             // A menu, a dialog or a card in the hand is someone doing something.

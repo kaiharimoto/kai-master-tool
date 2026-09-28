@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import com.kaiharimoto.neue.cursor.cursorPointer
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.runtime.compositionLocalOf
 import com.kaiharimoto.mastertool.core.model.CardArt
 import com.kaiharimoto.mastertool.core.model.CardId
@@ -102,6 +106,12 @@ fun NeueCard(
     outlined: Boolean = false,
     /** How the card is leaning this frame; read in the draw phase, so leaning never recomposes. */
     motion: (() -> LeanPose)? = null,
+    /**
+     * Show the artwork chip on hover, for a card printed with more than one
+     * picture (1.0.16): `2/9` in the corner, a click the next art, a right-click
+     * the one before.
+     */
+    artChip: Boolean = false,
 ) {
     // The artwork chosen for this card (1.0.14): the same card with another picture,
     // under that picture's passcode, so the originals and the name masks keep apart.
@@ -109,8 +119,17 @@ fun NeueCard(
     val drawn = remember(card, arts) { CardArt.show(card, arts[card.id.value]?.let(::CardId)) }
     val library = LocalArt.current
     if (drawn !== card) LaunchedEffect(drawn.id, library) { library?.want(drawn) }
-    NeueCardFace(drawn, modifier, format, copies, selected, dimmed, foil, marker, outlined, motion)
+    val step = LocalArtStep.current
+    val all = remember(card) { CardArt.arts(card) }
+    val chip = if (artChip && step != null && all.size > 1) ArtChip(all.indexOf(drawn.id).coerceAtLeast(0) + 1, all.size) { by -> step(card, by) } else null
+    NeueCardFace(drawn, modifier, format, copies, selected, dimmed, foil, marker, outlined, motion, chip)
 }
+
+/** Steps a card's artwork: provided by the window, which owns the choice (`NeueState.stepArt`). */
+val LocalArtStep = compositionLocalOf<((Card, Int) -> Unit)?> { null }
+
+/** Which artwork is showing, [at] of [of], and how to step it. */
+class ArtChip(val at: Int, val of: Int, val onStep: (Int) -> Unit)
 
 /** The artwork chosen for each card, by the card's own passcode (`NeuePreferences.arts`). */
 val LocalArts = compositionLocalOf<Map<Int, Int>> { emptyMap() }
@@ -128,6 +147,7 @@ private fun NeueCardFace(
     marker: Marker?,
     outlined: Boolean,
     motion: (() -> LeanPose)?,
+    artChip: ArtChip? = null,
 ) {
     val c = Mu.colors
     var art by remember(card.id) { mutableStateOf(ArtState.LOADING) }
@@ -289,6 +309,35 @@ private fun NeueCardFace(
         }
         if (marker != null) {
             MarkerChip(marker, Modifier.align(Alignment.BottomStart).padding(3.dp))
+        }
+        // The artwork chip, on hover (1.0.16): on the card, where the pointer already is,
+        // because the inspector's arrows were a journey across other cards away. Its press
+        // is spent here, so it never also selects, drags or opens the card under it.
+        if (artChip != null && hovered) {
+            Inverted {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(3.dp)
+                        .background(Mu.colors.paper)
+                        .cursorPointer(caption = "Next art")
+                        .pointerInput(artChip.at, artChip.of) {
+                            awaitEachGesture {
+                                val down = awaitPointerEvent()
+                                val back = down.buttons.isSecondaryPressed
+                                down.changes.forEach { it.consume() }
+                                do {
+                                    val e = awaitPointerEvent()
+                                    e.changes.forEach { it.consume() }
+                                } while (e.changes.any { it.pressed })
+                                artChip.onStep(if (back) -1 else 1)
+                            }
+                        }
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                ) {
+                    Mono("${artChip.at}/${artChip.of}", color = Mu.colors.ink, size = 10.sp)
+                }
+            }
         }
 
         // Rings are drawn last and inside the card, so they never change its size.

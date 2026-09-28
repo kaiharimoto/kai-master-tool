@@ -2,6 +2,8 @@ package com.kaiharimoto.neue.builder
 
 import com.kaiharimoto.mastertool.core.library.DeckCovers
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardArt
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.Drawer
@@ -139,10 +141,18 @@ object CardActions {
         }
     }
 
-    fun poolMenu(card: Card, state: DeckBuilderState): List<MenuEntry> {
+    /** "Next artwork · 2 of 9", for a card printed with more than one picture (1.0.16); else nothing. */
+    private fun artEntry(card: Card, neue: NeueState): MenuEntry? {
+        val all = CardArt.arts(card)
+        if (all.size < 2) return null
+        val at = all.indexOf(neue.prefs.arts[card.id.value]?.let(::CardId) ?: card.id).coerceAtLeast(0) + 1
+        return MenuEntry("Next artwork · $at of ${all.size}", hint = "A", separatorBefore = true) { neue.stepArt(card, 1) }
+    }
+
+    fun poolMenu(card: Card, state: DeckBuilderState, neue: NeueState? = null): List<MenuEntry> {
         val home = card.requiredSection()
         val left = state.remaining(card)
-        return listOf(
+        return listOfNotNull(
             MenuEntry(
                 "Add to ${home.displayName.lowercase()} deck",
                 hint = hint(MouseTarget.POOL, MouseAction.ADD),
@@ -155,6 +165,7 @@ object CardActions {
                 enabled = left > 0 && state.canDrop(card, null, DeckSection.SIDE),
                 reason = if (left <= 0) "No copies left" else "Side deck is full",
             ) { add(state, card, toSide = true) },
+            neue?.let { artEntry(card, it) },
             MenuEntry("Copy name", separatorBefore = true) { copyName(card) },
         )
     }
@@ -183,6 +194,7 @@ object CardActions {
                 }
             }
             add(MenuEntry("Manage groups", hint = "G") { state.useLens(com.kaiharimoto.mastertool.core.deck.Lens.ROLES) })
+            artEntry(card, neue)?.let(::add)
             add(coverEntry(section, index, state, neue))
             add(MenuEntry("Copy name", separatorBefore = true) { copyName(card) })
             add(MenuEntry("Remove this copy", hint = hint(MouseTarget.DECK, MouseAction.REMOVE), danger = true, separatorBefore = true) { state.removeAt(card, section, index) })

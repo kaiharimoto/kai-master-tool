@@ -98,6 +98,11 @@ data class NeuePreferences(
     val poolToSide: Boolean = false,
     /** The extra and side decks under the main deck; off, the main deck has the whole column (1.0.15). */
     val extraSideVisible: Boolean = true,
+    /**
+     * Zen comes by itself after idle seconds in immersive mode (1.0.16: a switch on
+     * the bar). Off, it comes only when asked for with Z.
+     */
+    val autoZen: Boolean = true,
 ) {
     fun sanitised(): NeuePreferences = copy(
         scale = if (scale.isFinite()) scale.coerceIn(SCALES.first(), SCALES.last()) else 1f,

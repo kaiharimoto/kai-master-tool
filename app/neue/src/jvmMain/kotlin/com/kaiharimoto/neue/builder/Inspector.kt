@@ -122,10 +122,7 @@ internal fun ArtSwitch(card: Card, neue: NeueState, modifier: Modifier = Modifie
     if (arts.size < 2) return
     val c = Mu.colors
     val chosen = neue.prefs.arts[card.id.value]?.let(::CardId)?.takeIf { it in arts } ?: card.id
-    fun step(by: Int) = neue.update { p ->
-        val next = CardArt.step(card, p.arts[card.id.value]?.let(::CardId), by)
-        p.copy(arts = if (next == card.id) p.arts - card.id.value else p.arts + (card.id.value to next.value))
-    }
+    fun step(by: Int) = neue.stepArt(card, by)
     Row(modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically) {
         Micro("Art", color = c.ink70)
         Mono("  ${arts.indexOf(chosen) + 1} of ${arts.size}", Modifier.weight(1f), color = c.ink)

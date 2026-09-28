@@ -9,6 +9,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -81,14 +83,22 @@ val GROUPS_PANEL: Dp = 288.dp
 @Composable
 fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
     val c = Mu.colors
-    Column(
+    // Centred down the column (kai, 1.0.16): the column is taller than its groups, and
+    // their top edge under the window's bar is where a reach for a row brought the bar
+    // out instead. A list taller than the column still starts at the top and scrolls.
+    BoxWithConstraints(
         modifier
             .width(GROUPS_PANEL)
             .fillMaxHeight()
-            .drawBehind { drawLine(c.ink, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx()) }
+            .drawBehind { drawLine(c.ink, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx()) },
+    ) {
+    Column(
+        Modifier
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .heightIn(min = maxHeight)
+            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
     ) {
         val draft = state.groupDraft
         if (draft != null) {
@@ -133,10 +143,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         val groups = state.groups.ordered()
         val keying = state.keying(DeckSection.MAIN)
         val odds = LensOdds.atLeastOne(keying, state.deck.main.size)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Micro("Groups", Modifier.weight(1f), color = c.ink70)
-            MicroLink("+ New group", { state.startGroupDraft() })
-        }
+        Micro("Groups", color = c.ink70)
         if (groups.isEmpty()) {
             Small("No groups yet. Press N, or hold a card in the deck and choose New group from this card.", color = c.ink70)
         }
@@ -152,10 +159,15 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
                 index = i,
             )
         }
+        // A button, not a link (kai, 1.0.16): making a group is what this column is for.
+        Tip("Name a group, then click its cards in the main deck", kbd = "N") {
+            MuButton("New group", { state.startGroupDraft() }, variant = BtnVariant.SECONDARY, size = BtnSize.MD, icon = Icons.Plus, modifier = Modifier.fillMaxWidth())
+        }
         if (groups.isNotEmpty()) {
             Small("Click a colour square to see that group alone. Right-click a group for the rest.", Modifier.padding(top = 4.dp), color = c.ink45)
         }
     }
+}
 }
 
 /** One group, editable where it stands. */

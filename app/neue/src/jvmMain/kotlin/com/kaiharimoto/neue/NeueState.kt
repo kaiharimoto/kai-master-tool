@@ -7,6 +7,8 @@ import com.kaiharimoto.mastertool.core.data.PreferencesRepository
 import com.kaiharimoto.mastertool.core.layout.Revealed
 import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardArt
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
@@ -147,6 +149,12 @@ class NeueState(
     fun flush() {
         val last = prefs
         flushScope.launch { repository.saveNeue(last) }
+    }
+
+    /** Card [card]'s artwork, [by] along from the one showing, wrapping; its own art is stored as no choice. */
+    fun stepArt(card: Card, by: Int) = update { p ->
+        val next = CardArt.step(card, p.arts[card.id.value]?.let(::CardId), by)
+        p.copy(arts = if (next == card.id) p.arts - card.id.value else p.arts + (card.id.value to next.value))
     }
 
     fun toggleTheme() = update { it.copy(theme = if (it.theme == NeueTheme.PAPER) NeueTheme.INK else NeueTheme.PAPER) }

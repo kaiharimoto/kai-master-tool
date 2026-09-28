@@ -196,6 +196,7 @@ fun PoolPane(
                                         dragEnabled = left > 0,
                                     ),
                                 motion = press::pose,
+                                artChip = true,
                                 format = state.format,
                                 copies = state.copiesInDeck(card.id),
                                 selected = selected,

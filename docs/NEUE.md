@@ -333,6 +333,11 @@ leaves no slots in zen. The row is the deck's and never clips a tab: narrower
 than 720 px it drops the words "Main deck", narrower than 600 px it shortens
 Archetype and Legality and keeps the count only when it is out of range.
 
+**The Groups panel is centred down its column** (1.0.16) — the column is taller
+than its groups, and a reach for the first row at the top brought the window's bar
+out — and **New group** is a full-width button under the groups rather than a
+link over them. A list taller than the column still starts at the top and scrolls.
+
 **The Groups panel is where groups are edited** (`GroupsPanel`, 288 px beside the
 deck). Every group is a row that can be changed where it stands: its name is a
 field (written on Enter or on leaving it, so one rename is one undo), its colour
@@ -522,6 +527,9 @@ In immersive mode, on the builder, doing nothing is a mode too
   card under the pointer. The corner is 440 × 180 and **always** offers
   **Leave zen**, beside **Groups** and "Put the cards back" when they apply — it
   used to show nothing at all until a card had been moved, which read as broken.
+- **Auto zen is a switch on the bar** (1.0.16, `NeuePreferences.autoZen`, on by
+  default): off, immersive mode never drifts into zen by itself, and `Z` is the
+  only way in.
 - **`Z` is zen, now** (1.0.15, kai: "instantly start zen mode with a one button
   hotkey"): immersive if it was not — a moment later, so the deck is laid out
   full screen before it is measured for the middle — and deep at once. Any key
@@ -608,6 +616,19 @@ other passcode, with that picture's addresses — YGOPRODeck serves every artwor
 at the same path under its own passcode, and the pool stores only the first — so
 the originals library and the foil's name masks keep the two apart, and the
 deck, the rules and the banlist never see it.
+
+**Reaching the switch** (1.0.16). kai reported that alternate arts did not
+work. They did — the picture changed — but the only switch was under the
+inspector's art, and the inspector follows the pointer: moving from a card to its
+arrows crossed other cards or left the card, and the inspector let go of it
+first. So the switch is now on the card itself: hover a card printed with more
+than one picture, in the pool or the deck, and a `2/9` chip comes out in its
+top-right corner — a click is the next artwork, a right-click the one before, and
+the chip spends its own press, so it never also selects, adds or drags the card
+(`NeueCard(artChip = true)`, not in deep zen, where a press carries the card).
+`A` and `Shift A` step the card being read, and the card's menu has **Next
+artwork · 2 of 9**. The studio drives it: `--art=46986414 --mouse=left@…` on the
+chip, and the inspector reads `Art 3 of 9`.
 
 ### 4e. The screenshot
 

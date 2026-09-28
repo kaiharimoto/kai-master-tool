@@ -428,7 +428,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 - **The builder opens a deck**: the library's default, else the one saved last
   (`StartingDeck`). A library row shows up to three chosen covers
   (`DeckCovers`), and a card's alternate artworks are a picture choice applied
-  inside `NeueCard` (`CardArt`, `LocalArts`) — never a change to the deck.
+  inside `NeueCard` (`CardArt`, `LocalArts`) — never a change to the deck. The
+  switch is **on the card** (a `2/9` chip on hover, `A`), because the
+  inspector follows the pointer and lets go of a card before you reach it.
   `NEUE.md` §4c–§4d.
 - **Card art comes from a local library of originals** (`art/ArtLibrary.kt`,
   about 2 GB, downloaded in the background under YGOPRODeck's rate limit),

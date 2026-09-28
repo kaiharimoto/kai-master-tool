@@ -119,10 +119,39 @@ fun TitleBar(
                     }
                 }
             }
+            // Auto zen (kai, 1.0.16): whether immersive mode drifts into zen by itself when idle.
+            // Z still starts it either way.
+            Tip(
+                if (neue.prefs.autoZen) "Zen by itself: on. In immersive mode, idle ten seconds and the deck floats. Click to turn off" else "Zen by itself: off. Zen comes only when asked for. Click to turn on",
+                kbd = DeskShortcuts.chordFor(DeskAction.ZEN)?.let { "Zen now " + DeskShortcuts.kbd(it) },
+            ) {
+                ZenSwitch(neue.prefs.autoZen) { neue.update { it.copy(autoZen = !it.autoZen) } }
+            }
             Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, bars out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
                 IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 32.dp, label = if (neue.immersive) "Leave full screen" else "Full screen")
             }
         }
+    }
+}
+
+/** "Auto zen": a boxed word that stays pressed while zen comes by itself. */
+@Composable
+private fun ZenSwitch(on: Boolean, onClick: () -> Unit) {
+    val c = Mu.colors
+    val source = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Box(
+        Modifier
+            .height(28.dp)
+            .background(animatedColor(if (on) c.ink else if (hovered) c.ink06 else androidx.compose.ui.graphics.Color.Transparent))
+            .border(1.dp, c.ink)
+            .hoverable(source)
+            .cursorPointer(showsWords = true)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Micro("Auto zen", color = if (on) c.paper else c.ink)
     }
 }
 

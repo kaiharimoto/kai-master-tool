@@ -64,6 +64,10 @@ enum class DeskAction {
      */
     ZEN,
 
+    /** The artwork of the card being read — the inspector's card — one along, or one back (1.0.16). */
+    NEXT_ART,
+    PREVIOUS_ART,
+
     /** Full screen, with every bar folded away until the pointer reaches for it. */
     IMMERSIVE,
     /** A picture of the deck — main, extra and side — with none of the window around it. */
@@ -153,6 +157,8 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("n"), DeskAction.NEW_GROUP, DeskScope.BUILDER, "New group from a selection"),
         DeskShortcut(KeyChord("g"), DeskAction.GROUPS, DeskScope.BUILDER, "Open the groups"),
         DeskShortcut(KeyChord("z"), DeskAction.ZEN, DeskScope.BUILDER, "Zen, now"),
+        DeskShortcut(KeyChord("a"), DeskAction.NEXT_ART, DeskScope.BUILDER, "Next artwork of the card being read"),
+        DeskShortcut(KeyChord("a", shift = true), DeskAction.PREVIOUS_ART, DeskScope.BUILDER, "Previous artwork"),
         DeskShortcut(KeyChord("i"), DeskAction.ISSUES, DeskScope.BUILDER, "Issues"),
 
         DeskShortcut(KeyChord("up"), DeskAction.POOL_PREVIOUS, DeskScope.POOL, "Previous result", allowedInTextInput = true, repeatable = true),
