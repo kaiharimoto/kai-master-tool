@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.kit
 
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -57,7 +58,7 @@ val PointerEvent.isPrimaryPress: Boolean
 
 /**
  * A context menu's gesture, both idioms (1.3.0): a right-click, or a finger held
- * still for [com.kaiharimoto.mastertool.core.input.DeskMouse.HOLD_MS]. [onOpen]
+ * still for the system's hold (`DeskTouch.holdMs`). [onOpen]
  * hears where, in the element's own pixels. The rest of a held finger is spent,
  * so the tap under it does not fire as it lifts.
  */
@@ -76,7 +77,8 @@ fun Modifier.onContextMenu(onOpen: (Offset) -> Unit): Modifier = composed {
             }
             if (!change.byFinger) return@awaitEachGesture
             val slop = viewConfiguration.touchSlop
-            val held = withTimeoutOrNull(com.kaiharimoto.mastertool.core.input.DeskMouse.HOLD_MS) {
+            // The platform's hold, as the cards use (touch swarm, rec 11).
+            val held = withTimeoutOrNull(com.kaiharimoto.mastertool.core.input.DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis)) {
                 var total = Offset.Zero
                 while (true) {
                     val next = awaitPointerEvent()
@@ -194,3 +196,46 @@ fun Modifier.releasesTypingOnFinger(): Modifier = composed {
 
 /** Whether a keyboard is attached: always on the desk; on a tablet, only with a keyboard cover or a paired one. */
 val LocalHardwareKeyboard = androidx.compose.runtime.compositionLocalOf { true }
+
+/**
+ * `clickable` for the kit, with one rule a finger needs (touch swarm, rec 23):
+ * a finger's click must be a tap. Compose fires a click on the lift however long
+ * the press lasted, so a left thumb gripping the tablet's corner rested on the
+ * rail's Search, Settings and theme, and fired one of them when it let go; a thumb
+ * on a dialog's scrim cancelled the dialog. Here a finger that stayed down longer
+ * than the hold and a little more, or travelled past the slop, fires nothing —
+ * [DeskTouch.isTap], the rule the cards use, so chrome and cards agree on what a
+ * tap is. A mouse is unchanged.
+ */
+fun Modifier.muClickable(
+    enabled: Boolean = true,
+    interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource? = null,
+    onClick: () -> Unit,
+): Modifier = composed {
+    val source = interactionSource ?: androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    this
+        .restingFingerFiresNothing()
+        .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
+}
+
+/** The lift of a finger that rested rather than tapped is spent before anything below hears it (rec 23). */
+fun Modifier.restingFingerFiresNothing(): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        if (!down.byFinger) return@awaitEachGesture
+        val hold = com.kaiharimoto.mastertool.core.input.DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis)
+        var travel = 0f
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            travel = maxOf(travel, (change.position - down.position).getDistance())
+            if (!change.pressed) {
+                val tap = com.kaiharimoto.mastertool.core.input.DeskTouch.isTap(
+                    down.uptimeMillis, change.uptimeMillis, travel, viewConfiguration.touchSlop, hold,
+                )
+                if (!tap) change.consume()
+                break
+            }
+        }
+    }
+}

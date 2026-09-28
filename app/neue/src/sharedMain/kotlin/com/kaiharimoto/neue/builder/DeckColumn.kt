@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.input.TwoFinger
+import com.kaiharimoto.mastertool.core.haptics.DeskEvent
+import com.kaiharimoto.neue.kit.collectIsHotAsState
+import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.releasesTypingOnFinger
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import androidx.compose.ui.input.pointer.pointerInput
@@ -241,37 +245,87 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                 }
                 e.changes.forEach { it.consume() }
             }
-            // Two fingers are the wheel on a tablet (1.3.0): pinched, the cards shrink toward
-            // the middle and grow back; in deep zen the gaps between the groups open and close,
-            // as the wheel does there. A card under one of the fingers lets the gesture go.
+            // Two fingers are the wheel on a tablet (1.3.0), and say which over their first
+            // 12dp (touch swarm, rec 21: `TwoFinger`): apart or together is the size, the cards
+            // shrinking toward the middle and growing back; slid up or down with the groups on
+            // is the gap between them, the desk's Shift-wheel; spread at full size hides the
+            // pool and the inspector, and pinched at full size with them hidden brings them
+            // back. The size is held while the fingers are down and written once, as they lift.
+            // In deep zen the gaps between the groups open and close, as the wheel does there.
+            // A card being carried is the gesture's, never the pinch's.
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val first = awaitFirstDown(requireUnconsumed = false)
                     if (!first.byFinger) return@awaitEachGesture
                     var from = 0f
-                    var start = 0f
+                    var centre = Offset.Zero
+                    var startZoom = 1f
+                    var startGap = 1f
+                    var kind = TwoFinger.Kind.NONE
+                    var atLimit = false
                     while (true) {
                         val event = awaitPointerEvent()
                         val fingers = event.changes.filter { it.pressed }
                         if (fingers.isEmpty()) break
-                        if (fingers.size < 2) continue
+                        if (fingers.size < 2 || drag.held != null) continue
                         val apart = (fingers[0].position - fingers[1].position).getDistance()
+                        val middle = (fingers[0].position + fingers[1].position) / 2f
                         val deep = neue.zen == ZenPhase.DEEP
                         if (from == 0f) {
                             from = apart
-                            start = if (deep) zen.gapScale else glide.shown.takeUnless { it.isNaN() } ?: neue.prefs.deckZoom
-                        } else if (from > 0f) {
-                            val ratio = apart / from
-                            if (deep) {
-                                zen.groups = true
-                                zen.gapScale = (start * ratio).coerceIn(com.kaiharimoto.neue.ZEN_GAP_MIN, com.kaiharimoto.neue.ZEN_GAP_MAX)
-                            } else {
+                            centre = middle
+                            startZoom = if (deep) zen.gapScale else glide.shown.takeUnless { it.isNaN() } ?: neue.prefs.deckZoom
+                            startGap = neue.prefs.groupGap
+                            continue
+                        }
+                        val ratio = if (from > 0f) apart / from else 1f
+                        if (deep) {
+                            zen.groups = true
+                            zen.gapScale = (startZoom * ratio).coerceIn(com.kaiharimoto.neue.ZEN_GAP_MIN, com.kaiharimoto.neue.ZEN_GAP_MAX)
+                            event.changes.forEach { it.consume() }
+                            continue
+                        }
+                        // Decided over the first 12dp; a zoom may still become a spread past full size.
+                        if (kind == TwoFinger.Kind.NONE || kind == TwoFinger.Kind.ZOOM) {
+                            val slid = (middle - centre) / this.density
+                            val next = TwoFinger.classify(
+                                startApart = from / this.density,
+                                apart = apart / this.density,
+                                centroidDx = slid.x,
+                                centroidDy = slid.y,
+                                groupsOn = lensOn,
+                                zoomAtOne = startZoom >= 1f - 1e-3f,
+                                panesHidden = !neue.prefs.poolVisible && !neue.prefs.inspectorVisible,
+                            )
+                            if (next != TwoFinger.Kind.NONE) kind = next
+                        }
+                        when (kind) {
+                            TwoFinger.Kind.ZOOM -> {
+                                val wanted = startZoom * ratio
                                 // The fingers are the size: no glide behind them.
                                 glide.shown = Float.NaN
-                                neue.update(debounce = true) { it.copy(deckZoom = start * ratio) }
+                                neue.update(persist = false) { it.copy(deckZoom = wanted) }
+                                // The size stops at its ends; the finger feels the stop once.
+                                val stopped = neue.prefs.deckZoom != wanted
+                                if (stopped && !atLimit && ratio < 1f) neue.actingBy(finger = true) { neue.felt(DeskEvent.ZOOM_LIMIT) }
+                                atLimit = stopped
                             }
+                            TwoFinger.Kind.GAP -> {
+                                val dy = (middle.y - centre.y) / this.density
+                                neue.update(persist = false) { it.copy(groupGap = startGap + dy / TwoFinger.GAP_STEP_DP * TwoFinger.GAP_STEP) }
+                            }
+                            // Undone while the fingers are down; the panes answer as they lift.
+                            TwoFinger.Kind.HIDE_PANES, TwoFinger.Kind.SHOW_PANES ->
+                                if (neue.prefs.deckZoom != startZoom) neue.update(persist = false) { it.copy(deckZoom = startZoom) }
+                            TwoFinger.Kind.NONE -> Unit
                         }
                         event.changes.forEach { it.consume() }
+                    }
+                    when (kind) {
+                        TwoFinger.Kind.HIDE_PANES -> neue.update { it.copy(poolVisible = false, inspectorVisible = false) }
+                        TwoFinger.Kind.SHOW_PANES -> neue.update { it.copy(poolVisible = true, inspectorVisible = true) }
+                        TwoFinger.Kind.ZOOM, TwoFinger.Kind.GAP -> neue.update { it }
+                        TwoFinger.Kind.NONE -> Unit
                     }
                 }
             }
@@ -471,11 +525,14 @@ private fun LensRow(state: DeckBuilderState, neue: NeueState, count: String, out
         FoilToggle(neue)
         // The extra and the side deck, each on its own switch (kai, 1.0.17): the main deck
         // has whatever they give up. Short words when the row is tight.
+        // A card a finger put into a hidden section flashes that section's box instead (rec 15).
+        val ring by rememberRing(state)
+        fun flashed(section: DeckSection, visible: Boolean) = visible != (!visible && ring?.section == section)
         Tip(if (neue.prefs.extraVisible) "Hide the extra deck" else "Show the extra deck") {
-            BoxToggle(if (tight) "Ex" else "Extra", neue.prefs.extraVisible) { neue.update { it.copy(extraVisible = !it.extraVisible) } }
+            BoxToggle(if (tight) "Ex" else "Extra", flashed(DeckSection.EXTRA, neue.prefs.extraVisible)) { neue.update { it.copy(extraVisible = !it.extraVisible) } }
         }
         Tip(if (neue.prefs.sideVisible) "Hide the side deck" else "Show the side deck") {
-            BoxToggle(if (tight) "Si" else "Side", neue.prefs.sideVisible) { neue.update { it.copy(sideVisible = !it.sideVisible) } }
+            BoxToggle(if (tight) "Si" else "Side", flashed(DeckSection.SIDE, neue.prefs.sideVisible)) { neue.update { it.copy(sideVisible = !it.sideVisible) } }
         }
         if (!narrow) Micro("Main deck", color = c.ink70)
         // At its tightest the row keeps the count only when it is something to act on.
@@ -516,7 +573,7 @@ private fun FoilToggle(neue: NeueState) {
     val c = Mu.colors
     val on = neue.prefs.foil != Foils.OFF
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     var feel by remember { mutableStateOf<Offset?>(null) }
     Tip(if (on) "Foil off: plain card faces" else "Foil on: the holographic border on every card") {
         Box(
@@ -531,7 +588,7 @@ private fun FoilToggle(neue: NeueState) {
                 }
                 .onPointer(PointerEventType.Exit) { feel = null }
                 .cursorPointer(caption = if (on) "Foil off" else "Foil on")
-                .clickable(interactionSource = source, indication = null) {
+                .muClickable(interactionSource = source) {
                     neue.update { it.copy(foil = if (on) Foils.OFF else Foils.HOLO) }
                 },
             contentAlignment = Alignment.Center,
@@ -541,12 +598,31 @@ private fun FoilToggle(neue: NeueState) {
     }
 }
 
+/**
+ * The card the builder was last asked to reveal, for [DeskTouch.REVEAL_MS] (touch
+ * swarm, rec 15): the add or drop a finger made, which the finger itself covers.
+ */
+@Composable
+private fun rememberRing(state: DeckBuilderState): androidx.compose.runtime.State<com.kaiharimoto.mastertool.ui.deckbuilder.RevealRequest?> {
+    val ring = remember { mutableStateOf<com.kaiharimoto.mastertool.ui.deckbuilder.RevealRequest?>(null) }
+    val request = state.revealRequest
+    // One that was asked for before this deck was drawn (another page, a moment ago) is spent.
+    val spent = remember { request }
+    androidx.compose.runtime.LaunchedEffect(request) {
+        if (request == null || request == spent) return@LaunchedEffect
+        ring.value = request
+        kotlinx.coroutines.delay(com.kaiharimoto.mastertool.core.input.DeskTouch.REVEAL_MS)
+        if (ring.value == request) ring.value = null
+    }
+    return ring
+}
+
 /** A boxed button that stays pressed: ink when on, a ruled box when off. */
 @Composable
 private fun BoxToggle(label: String, on: Boolean, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Box(
         Modifier
             .height(28.dp)
@@ -554,7 +630,7 @@ private fun BoxToggle(label: String, on: Boolean, onClick: () -> Unit) {
             .border(1.dp, c.ink)
             .hoverable(source)
             .cursorPointer(showsWords = true)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .muClickable(interactionSource = source, onClick = onClick)
             .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -611,6 +687,9 @@ private fun DeckSectionPane(
     val outOfRange = count > section.maxSize || count < section.minSize
     val refused = hover != null && !hover.accepted
     val keying = state.keying(section)
+    val ring by rememberRing(state)
+    // A section's taps are counted together (rec 11): a double-tap that drifts is still the first card's.
+    val taps = rememberTapSurface(repeats = false, key = section)
     val labelRoom = if (pieces.pieces > 1) with(density) { NAME_TAB.toPx() } else 0f
     val placer = PiecePlacer(fit.columns, fit.cardWidth, fit.cardHeight, gapPx, pieces, crack, rolePieces, zenGapPx, zenAbove, labelRoom)
     // Room for every group's name twice over: zen measures them on every frame it floats.
@@ -867,6 +946,7 @@ private fun DeckSectionPane(
                                         onAction = { action, at -> CardActions.onDeck(action, at, card, section, position, state, neue) },
                                         zenKey = zenKey,
                                         drafting = state.groupDraft != null,
+                                        taps = taps,
                                     ),
                                 motion = {
                                     // Where the card is at rest: zen's lean works out from there where it has gone.
@@ -888,6 +968,11 @@ private fun DeckSectionPane(
                                 // The group's name is on its piece's tab now (1.0.18), not a mark on every card.
                                 marker = null,
                             )
+                            // Where a finger's add or drop landed (touch swarm, rec 15): a ring inside the
+                            // card for a moment, then gone at once — nothing moves, nothing is re-fitted.
+                            if (ring?.let { it.section == section && it.position == position } == true) {
+                                Box(Modifier.fillMaxSize().border(2.dp, c.ink))
+                            }
                         }
                     }
                 }

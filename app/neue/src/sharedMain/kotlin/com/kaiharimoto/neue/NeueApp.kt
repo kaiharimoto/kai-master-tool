@@ -629,7 +629,11 @@ private fun NeueWindowContent(h: NeueHolders) {
     // The groups' palette: read wherever a group is coloured, so set once here.
     SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+        neue.stepArt(card, by)
+        // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
+        neue.actingBy(finger = neue.touchFirst) { neue.felt(com.kaiharimoto.mastertool.core.haptics.DeskEvent.ART_STEPPED) }
+    }, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             com.kaiharimoto.neue.kit.ProvideTextMenus {
                 Shell(h)
@@ -646,6 +650,8 @@ private fun Shell(h: NeueHolders) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val immersive = neue.immersive
+    // The tablet's haptics: nothing on the desk (touch swarm, rec 13).
+    neue.feel = com.kaiharimoto.neue.kit.rememberFeel()
     val pinned = neue.railPinned && !immersive
     // How tall the folded bars are when out, measured, so the pointer knows when it has left them.
     val measured = remember { FoldedBars() }
@@ -732,6 +738,11 @@ private fun Shell(h: NeueHolders) {
                     // A finger's press, for telling a tap from a swipe (touch swarm, rec 3).
                     var fingerFrom: Offset? = null
                     var fingerAt = 0L
+                    // Every finger of the gesture in hand: when each went down and came up, and how
+                    // far the furthest travelled — two together are undo, three redo (rec 22).
+                    val tapDowns = mutableMapOf<androidx.compose.ui.input.pointer.PointerId, Pair<Long, Offset>>()
+                    val tapUps = mutableMapOf<androidx.compose.ui.input.pointer.PointerId, Long>()
+                    var tapTravel = 0f
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val at = event.changes.firstOrNull()?.position
@@ -841,6 +852,31 @@ private fun Shell(h: NeueHolders) {
                             suppress = h.drag.held != null || neue.menu != null || neue.zen == ZenPhase.DEEP,
                         // The builder has no footer since 1.0.9: nothing comes up from the bottom.
                         ).copy(bottom = false)
+                        // Two fingers tapped together undo, three redo, anywhere in the window (rec 22,
+                        // `MultiTap`): a pinch travels, so it is never one. Watched on the way down,
+                        // and never consumed: a card under the first finger has already let it go.
+                        event.changes.filter { it.byFinger }.forEach { change ->
+                            if (change.pressed && !change.previousPressed) {
+                                if (tapDowns.isEmpty()) {
+                                    tapUps.clear()
+                                    tapTravel = 0f
+                                }
+                                tapDowns[change.id] = change.uptimeMillis to change.position
+                            }
+                            tapDowns[change.id]?.let { (_, from) -> tapTravel = maxOf(tapTravel, (change.position - from).getDistance()) }
+                            if (!change.pressed && change.previousPressed && change.id in tapDowns) tapUps[change.id] = change.uptimeMillis
+                        }
+                        if (tapDowns.isNotEmpty() && tapUps.size == tapDowns.size) {
+                            val gesture = com.kaiharimoto.mastertool.core.input.MultiTap.classify(
+                                downs = tapDowns.values.map { it.first },
+                                ups = tapDowns.keys.map { tapUps.getValue(it) },
+                                travel = tapTravel,
+                                slop = viewConfiguration.touchSlop,
+                            )
+                            tapDowns.clear()
+                            tapUps.clear()
+                            com.kaiharimoto.mastertool.core.input.DeskTouch.window.firstOrNull { it.gesture == gesture }?.let { h.run(it.action) }
+                        }
                         // A finger cannot reach an edge the system does not take, so in immersive a
                         // tap on the paper strip along the top, or in the gutter down the left,
                         // brings that bar out; a tap anywhere else folds it (EdgeReveal.onTap).
@@ -937,12 +973,15 @@ private fun Shell(h: NeueHolders) {
         // The card in the air: drawn where the pointer is, lifted off the page and
         // leaning back against the motion (DeskLean.carried) — kai's one
         // exception to Master UI's stillness, and only ever on a card.
+        // A finger's card rides above the finger, where it can be seen, and lands where it
+        // is drawn (touch swarm, rec 12: CarryOffset); a mouse's is centred on the pointer.
         val carry = rememberCarryMotion(h.drag)
         h.drag.held?.let { held ->
+            val drawn = h.drag.drawn() ?: return@let
             Box(
                 Modifier
-                    .offset { IntOffset((h.drag.pointer.x - held.size.width / 2f).toInt(), (h.drag.pointer.y - held.size.height / 2f).toInt()) }
-                    .size(with(density) { held.size.width.toDp() }, with(density) { held.size.height.toDp() }),
+                    .offset { IntOffset(drawn.left.toInt(), drawn.top.toInt()) }
+                    .size(with(density) { drawn.width.toDp() }, with(density) { drawn.height.toDp() }),
             ) {
                 NeueCard(
                     held.card,
@@ -950,8 +989,15 @@ private fun Shell(h: NeueHolders) {
                     format = state.format,
                     foil = neue.prefs.foil,
                     outlined = true,
-                    motion = { carry.pose(held.size.width.toFloat()) },
+                    motion = { carry.pose(drawn.width) },
                 )
+                // A drop that would be refused says so on the card itself, where the eye is.
+                if (h.drag.refused) {
+                    com.kaiharimoto.neue.kit.Hatch(Modifier.matchParentSize(), color = c.ink25)
+                    Box(Modifier.align(Alignment.Center).background(c.paper).padding(horizontal = 4.dp)) {
+                        com.kaiharimoto.neue.kit.Micro("✕", color = c.ink)
+                    }
+                }
             }
         }
 

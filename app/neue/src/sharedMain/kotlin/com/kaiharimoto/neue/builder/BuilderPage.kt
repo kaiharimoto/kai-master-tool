@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.releasesTypingOnFinger
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -241,7 +242,7 @@ fun RowScope.BuilderBar(
     val source = remember { MutableInteractionSource() }
     val focusManager = LocalFocusManager.current
     val focused by source.collectIsFocusedAsState()
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     val line = animatedColor(if (focused) c.ink else if (hovered) c.ink25 else c.paper)
     BasicTextField(
         value = state.deckName,
@@ -282,7 +283,7 @@ fun RowScope.BuilderBar(
         Box(Modifier.onGloballyPositioned { historyAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
             IconButton(
                 Icons.History,
-                { neue.menu = com.kaiharimoto.neue.kit.MenuSpec(historyAt, historyMenu(state)) },
+                { neue.menu = com.kaiharimoto.neue.kit.MenuSpec(historyAt, historyMenu(state, touch = neue.touchFirst)) },
                 enabled = state.canUndo || state.canRedo,
                 size = 32.dp,
                 label = "History",
@@ -392,16 +393,18 @@ private fun ResizeRule(name: String, width: Float, scale: Float, touch: Boolean,
  * back, newest first, each in words (`DeckHistory`). A click on a step goes to the
  * deck as it was just after it — undoing or redoing everything in between.
  */
-fun historyMenu(state: DeckBuilderState): List<com.kaiharimoto.neue.kit.MenuEntry> {
+fun historyMenu(state: DeckBuilderState, touch: Boolean = false): List<com.kaiharimoto.neue.kit.MenuEntry> {
     val view = state.history()
     return buildList {
+        // On the tablet the step a finger reaches for is the mistake, and says so (touch swarm, rec 22).
+        if (touch && view.done.isNotEmpty()) add(com.kaiharimoto.neue.kit.MenuEntry("Undo: ${view.done[0]}") { state.travel(1) })
         if (view.undone.isNotEmpty()) {
             add(com.kaiharimoto.neue.kit.MenuEntry("Undone"))
             view.undone.take(HISTORY_SHOWN).forEachIndexed { i, text ->
                 add(com.kaiharimoto.neue.kit.MenuEntry(text, hint = "Redo ${i + 1}") { state.travel(-(i + 1)) })
             }
         }
-        add(com.kaiharimoto.neue.kit.MenuEntry("Done", separatorBefore = view.undone.isNotEmpty()))
+        add(com.kaiharimoto.neue.kit.MenuEntry("Done", separatorBefore = view.undone.isNotEmpty() || touch && view.done.isNotEmpty()))
         if (view.done.isEmpty()) add(com.kaiharimoto.neue.kit.MenuEntry("Nothing yet", enabled = false))
         view.done.take(HISTORY_SHOWN).forEachIndexed { i, text ->
             // The newest is the deck as it is: going back to it is going nowhere.

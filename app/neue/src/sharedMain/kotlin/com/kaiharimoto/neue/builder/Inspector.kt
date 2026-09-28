@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -186,7 +187,7 @@ private fun Fold(title: String, key: String, neue: NeueState, modifier: Modifier
     val c = Mu.colors
     val open = key !in neue.prefs.inspectorFolded
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Column(modifier.fillMaxWidth()) {
         HRule(color = c.ink25)
         Row(

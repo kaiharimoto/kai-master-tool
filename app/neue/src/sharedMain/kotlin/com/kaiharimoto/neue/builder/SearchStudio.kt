@@ -1,7 +1,6 @@
 package com.kaiharimoto.neue.builder
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -185,6 +184,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                             Small(if (onlyList) "Show every card, find one, and double-click it to put it on the list." else "Try fewer words, or turn off a filter.", color = c.ink70)
                         }
                     } else {
+                        val taps = rememberTapSurface(repeats = false)
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(132.dp),
                             state = grid,
@@ -203,9 +203,10 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                                         .onPointer(PointerEventType.Enter) { hovered = card }
                                         .onPointer(PointerEventType.Exit) { if (hovered == card) hovered = null }
                                         .onContextMenu { local -> neue.menu = MenuSpec(origin + local, CardActions.poolMenu(card, state, neue)) }
-                                        .pointerInput(card, list?.id) {
-                                            detectTapGestures(onTap = { picked = card }, onDoubleTap = { primary(card) })
-                                        }
+                                        .surfaceTaps(taps, onTap = { picked = card }, onDoubleTap = {
+                                            picked = card
+                                            primary(card)
+                                        })
                                         .cursorPointer(caption = if (list != null) (if (onList) "Take off" else "Put on") else "Read"),
                                 ) {
                                     NeueCard(

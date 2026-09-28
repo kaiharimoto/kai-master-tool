@@ -119,7 +119,7 @@ fun MuButton(
 ) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     val hot = (hovered && enabled) || toggled
     val (bg, fg, edge) = when (variant) {
         BtnVariant.PRIMARY -> if (hot) Triple(c.paper, c.ink, c.ink) else Triple(c.ink, c.paper, c.ink)
@@ -139,7 +139,7 @@ fun MuButton(
             .border(1.dp, animatedColor(edge))
             .hoverable(source, enabled)
             .cursorPointer(label = label, showsWords = true, enabled = enabled, reason = reason)
-            .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
+            .muClickable(enabled = enabled, interactionSource = source, onClick = onClick)
             .explainsWhenDisabled(enabled, reason)
             .padding(horizontal = size.padding),
         verticalAlignment = Alignment.CenterVertically,
@@ -169,7 +169,7 @@ fun IconButton(
 ) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     val (bg, fg, edge) = when {
         toggled -> Triple(c.ink, c.paper, c.ink)
         variant == BtnVariant.SECONDARY && hovered && enabled -> Triple(c.ink, c.paper, c.ink)
@@ -185,7 +185,7 @@ fun IconButton(
             .border(1.dp, animatedColor(edge))
             .hoverable(source, enabled)
             .cursorPointer(label = label, enabled = enabled, reason = reason)
-            .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
+            .muClickable(enabled = enabled, interactionSource = source, onClick = onClick)
             .explainsWhenDisabled(enabled, reason),
         contentAlignment = Alignment.Center,
     ) {
@@ -197,13 +197,13 @@ fun IconButton(
 @Composable
 fun MicroLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, color: Color = Mu.colors.ink45) {
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Micro(
         text,
         modifier
             .hoverable(source)
             .cursorPointer(showsWords = true)
-            .clickable(interactionSource = source, indication = null, onClick = onClick),
+            .muClickable(interactionSource = source, onClick = onClick),
         color = animatedColor(if (hovered) Mu.colors.ink else color),
     )
 }
@@ -341,7 +341,7 @@ fun <T> MuSelect(
     val c = Mu.colors
     var open by remember { mutableStateOf(false) }
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     var widthPx by remember { mutableStateOf(0) }
     val height = if (small) 32.dp else 36.dp
     val density = LocalDensity.current
@@ -374,7 +374,7 @@ fun <T> MuSelect(
                 .border(1.dp, animatedColor(if (open || hovered) c.ink else c.ink25))
                 .hoverable(source)
                 .cursorPointer(showsWords = true)
-                .clickable(interactionSource = source, indication = null) {
+                .muClickable(interactionSource = source) {
                     if (overlays != null) {
                         // In the window's own layer, under the family cursor.
                         open = true
@@ -432,14 +432,14 @@ fun <T> Segmented(
             if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(c.ink))
             val selected = option == value
             val source = remember { MutableInteractionSource() }
-            val hovered by source.collectIsHoveredAsState()
+            val hovered by source.collectIsHotAsState()
             Box(
                 Modifier
                     .fillMaxHeight()
                     .background(animatedColor(if (selected) c.ink else if (hovered) c.ink06 else Color.Transparent))
                     .hoverable(source)
                     .cursorPointer(showsWords = true)
-                    .clickable(interactionSource = source, indication = null) { onSelect(option) }
+                    .muClickable(interactionSource = source) { onSelect(option) }
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -454,7 +454,7 @@ fun <T> Segmented(
 fun WordToggle(label: String, on: Boolean, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Box(
         Modifier
             .height(28.dp)
@@ -462,7 +462,7 @@ fun WordToggle(label: String, on: Boolean, onClick: () -> Unit) {
             .border(1.dp, c.ink)
             .hoverable(source)
             .cursorPointer(showsWords = true)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .muClickable(interactionSource = source, onClick = onClick)
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -481,7 +481,7 @@ fun MuSwitch(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier =
             .background(animatedColor(if (checked) c.ink else c.paper))
             .border(1.dp, c.ink)
             .cursorPointer(caption = if (checked) "Turn off" else "Turn on")
-            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onChange(!checked) },
+            .muClickable { onChange(!checked) },
     ) {
         Box(
             Modifier
@@ -502,7 +502,7 @@ fun MuCheckbox(checked: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier
             .background(if (checked) c.ink else c.paper)
             .border(1.dp, c.ink)
             .cursorPointer(caption = if (checked) "Clear" else "Tick")
-            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onChange(!checked) },
+            .muClickable { onChange(!checked) },
     )
 }
 
@@ -587,12 +587,12 @@ fun <T> MuTabs(value: T, options: List<T>, label: (T) -> String, onSelect: (T) -
         options.forEach { option ->
             val active = option == value
             val source = remember { MutableInteractionSource() }
-            val hovered by source.collectIsHoveredAsState()
+            val hovered by source.collectIsHotAsState()
             Box(
                 Modifier
                     .hoverable(source)
                     .cursorPointer(showsWords = true)
-                    .clickable(interactionSource = source, indication = null) { onSelect(option) }
+                    .muClickable(interactionSource = source) { onSelect(option) }
                     .drawBehind {
                         if (active) drawRect(c.ink, Offset(0f, size.height - 2.dp.toPx()), androidx.compose.ui.geometry.Size(size.width, 2.dp.toPx()))
                     }
@@ -620,7 +620,7 @@ fun MenuRow(
 ) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Inverted(hovered && enabled) {
         val inner = Mu.colors
         Row(
@@ -630,7 +630,7 @@ fun MenuRow(
                 .background(if (hovered && enabled) inner.paper else Color.Transparent)
                 .hoverable(source, enabled)
                 .cursorPointer(showsWords = true, enabled = enabled, reason = reason)
-                .clickable(enabled = enabled, interactionSource = source, indication = null, onClick = onClick)
+                .muClickable(enabled = enabled, interactionSource = source, onClick = onClick)
                 .drawBehind {
                     if (!last) drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
                 }

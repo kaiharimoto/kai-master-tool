@@ -26,7 +26,19 @@ enum class TouchGesture(val label: String) {
     DOUBLE_TAP("Double-tap"),
     LONG_PRESS("Press and hold"),
     DRAG("Drag"),
+
+    /** Two fingers down and up together, anywhere in the window: undo (touch swarm, rec 22). */
+    TWO_FINGER_TAP("Two-finger tap"),
+
+    /** Three: redo. */
+    THREE_FINGER_TAP("Three-finger tap"),
+
+    /** The S Pen's side button held while the pen taps: the right-click (touch swarm, rec 29). */
+    PEN_BUTTON_TAP("Pen button tap"),
 }
+
+/** A gesture that belongs to the window rather than to a card. */
+data class WindowTouch(val gesture: TouchGesture, val action: DeskAction, val description: String)
 
 data class TouchBinding(
     val target: MouseTarget,
@@ -58,12 +70,41 @@ object DeskTouch {
         TouchBinding(MouseTarget.POOL, TouchGesture.DOUBLE_TAP, MouseAction.ADD, "Add it to the deck"),
         TouchBinding(MouseTarget.POOL, TouchGesture.LONG_PRESS, MouseAction.VIEW, "Open it large, with everything else"),
         TouchBinding(MouseTarget.POOL, TouchGesture.DRAG, MouseAction.PICK_UP, "Drag it across onto the deck; up and down scrolls the pool"),
+        TouchBinding(MouseTarget.POOL, TouchGesture.PEN_BUTTON_TAP, MouseAction.ADD, "With the pen, its button held: add it"),
 
         TouchBinding(MouseTarget.DECK, TouchGesture.TAP, MouseAction.SELECT, "Select it, and read it in the inspector"),
         TouchBinding(MouseTarget.DECK, TouchGesture.DOUBLE_TAP, MouseAction.REMOVE, "Remove this copy"),
         TouchBinding(MouseTarget.DECK, TouchGesture.LONG_PRESS, MouseAction.VIEW, "Open it large, with everything else"),
         TouchBinding(MouseTarget.DECK, TouchGesture.DRAG, MouseAction.PICK_UP, "Move it, or drop it on the pool to remove it"),
+        TouchBinding(MouseTarget.DECK, TouchGesture.PEN_BUTTON_TAP, MouseAction.REMOVE, "With the pen, its button held: remove this copy"),
     )
+
+    /** The window's own gestures: undo and redo, the help renders them (touch swarm, rec 22). */
+    val window: List<WindowTouch> = listOf(
+        WindowTouch(TouchGesture.TWO_FINGER_TAP, DeskAction.UNDO, "Undo"),
+        WindowTouch(TouchGesture.THREE_FINGER_TAP, DeskAction.REDO, "Redo"),
+    )
+
+    /** How long a pressed control keeps its pressed look after a quick tap, so the tap is seen (rec 14). */
+    const val PRESS_ECHO_MS = 100L
+
+    /** How long a card a finger just added or dropped is ringed where it landed (rec 15). */
+    const val REVEAL_MS = 700L
+
+    /** The shortest hold a finger is asked for: the system's long-press delay, but never under this. */
+    const val MIN_HOLD_MS = 400L
+
+    /** A finger's hold, from the system's long-press delay (rec 11): the platform's feel, not the desk's 450. */
+    fun holdMs(systemLongPressMs: Long): Long = maxOf(MIN_HOLD_MS, systemLongPressMs)
+
+    /**
+     * Whether a finger's press and lift were a tap (rec 23): lifted within the hold
+     * and a little more, and not travelled past the slop. A longer press is a
+     * resting thumb, and the chrome under it hears nothing — the same rule the
+     * cards use, so chrome and cards agree on what a tap is.
+     */
+    fun isTap(downMs: Long, upMs: Long, travel: Float, slop: Float, holdMs: Long): Boolean =
+        upMs - downMs <= holdMs + 150 && travel <= slop
 
     /**
      * What [gesture] on [target] does. While a group is being drawn up ([drafting])
@@ -71,7 +112,8 @@ object DeskTouch {
      * second vote is two votes, never the double-tap's removal (touch swarm, rec 7).
      */
     fun resolve(target: MouseTarget, gesture: TouchGesture, drafting: Boolean = false): MouseAction? {
-        if (drafting && target == MouseTarget.DECK && gesture == TouchGesture.DOUBLE_TAP) return MouseAction.SELECT
+        val removes = gesture == TouchGesture.DOUBLE_TAP || gesture == TouchGesture.PEN_BUTTON_TAP
+        if (drafting && target == MouseTarget.DECK && removes) return MouseAction.SELECT
         return all.firstOrNull { it.target == target && it.gesture == gesture }?.action
     }
 
@@ -80,6 +122,13 @@ object DeskTouch {
      * [target]: always in the deck, and in the scrolling pool only when it runs
      * more across than along.
      */
-    fun picksUp(target: MouseTarget, dx: Float, dy: Float): Boolean =
-        target != MouseTarget.POOL || kotlin.math.abs(dx) >= kotlin.math.abs(dy)
+    fun picksUp(target: MouseTarget, dx: Float, dy: Float, finger: Boolean = true): Boolean =
+        target != MouseTarget.POOL || kotlin.math.abs(dx) >= (if (finger) PICK_UP_RATIO else 1f) * kotlin.math.abs(dy)
+
+    /**
+     * A finger picks a pool card up when it runs at least this much across for its
+     * run along (rec 12): about a 55 degree cone, since a finger's drag is rarely
+     * level, and a steeper one is the pool scrolling.
+     */
+    const val PICK_UP_RATIO = 0.7f
 }

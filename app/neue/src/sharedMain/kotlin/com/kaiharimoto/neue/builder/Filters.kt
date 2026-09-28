@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.collectIsHotAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -184,7 +185,7 @@ private fun ArrowCompass(chosen: Set<String>, onToggle: (String) -> Unit) {
 private fun ArrowSquare(glyph: String, on: Boolean, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Box(
         Modifier
             .size(26.dp)

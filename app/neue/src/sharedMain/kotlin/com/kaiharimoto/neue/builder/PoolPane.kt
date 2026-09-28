@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.mastertool.core.input.CursorMode
@@ -105,6 +106,8 @@ fun PoolPane(
             // The soft keyboard pads the pool, never the deck (touch swarm, rec 10).
             .imePadding()
             .onGloballyPositioned { drag.registerPool(it.boundsInWindow()) }
+            // A deck card carried over the pool is let go here: the pool says so (touch swarm, rec 12).
+            .then(if (drag.overPool) Modifier.border(2.dp, c.ink) else Modifier)
             // aria-busy: the pool is the region that is working while the card pool syncs.
             .let { if (state.isSyncing) it.cursor(CursorMode.BUSY) else it }
             .padding(start = gutter),
@@ -145,7 +148,7 @@ fun PoolPane(
                 }
                 // The pool's size lives here since the title bar gave it up, and so does its sync.
                 if (state.isSyncing) com.kaiharimoto.neue.kit.Breathe(running = true)
-                Mono(meta, Modifier.weight(1f), color = c.ink70)
+                Mono(if (drag.overPool) "Let go to remove" else meta, Modifier.weight(1f), color = if (drag.overPool) c.ink else c.ink70)
                 Tip("Also match the words printed on the card. Prefix name: or text: to choose one") {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Micro("Text", color = c.ink45)
@@ -224,6 +227,8 @@ fun PoolPane(
                 }
                 else -> {
                     val columns = neue.prefs.poolColumns
+                    // The pool's taps are counted together: a double-tap adds, each tap after it adds again (rec 11).
+                    val taps = rememberTapSurface(repeats = true)
                     val deckWidth = neue.deckCardWidth
                     LazyVerticalGrid(
                         columns = if (columns > 0) GridCells.Fixed(columns) else DeckSized(if (deckWidth.isSpecified) deckWidth else 96.dp),
@@ -254,6 +259,7 @@ fun PoolPane(
                                             CardActions.onPool(action, at, card, i, state, neue)
                                         },
                                         dragEnabled = left > 0,
+                                        taps = taps,
                                     ),
                                 motion = press::pose,
                                 artChip = true,

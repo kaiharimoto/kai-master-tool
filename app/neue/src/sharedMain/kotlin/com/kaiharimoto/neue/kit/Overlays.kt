@@ -225,7 +225,7 @@ fun MuDialog(
     val c = Mu.colors
     Box(
         Modifier.fillMaxSize().background(c.overlay)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss)
+            .muClickable(onClick = onDismiss)
             // A dialog's field stays above the soft keyboard (touch swarm, rec 10).
             .imePadding(),
         contentAlignment = Alignment.Center,
@@ -271,7 +271,7 @@ fun BoxScope.MuDrawer(
     AnimatedVisibility(visible, enter = fadeIn(tween(MuMotion.FAST)), exit = fadeOut(tween(MuMotion.FAST))) {
         Box(
             Modifier.fillMaxSize().background(c.overlay)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+                .muClickable(onClick = onDismiss),
         )
     }
     AnimatedVisibility(

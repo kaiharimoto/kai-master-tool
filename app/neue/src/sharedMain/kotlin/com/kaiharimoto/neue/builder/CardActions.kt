@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.deck.DeckHistory
+import com.kaiharimoto.mastertool.core.haptics.DeskEvent
 import com.kaiharimoto.mastertool.core.library.DeckCovers
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardArt
@@ -26,8 +28,16 @@ import com.kaiharimoto.mastertool.core.ydk.YdkeCodec
 object CardActions {
 
     /** Where a card from the pool goes when it is simply "added": the extra deck for extra-deck cards, else the main. */
-    fun add(state: DeckBuilderState, card: Card, toSide: Boolean = false) {
-        state.addCard(card, if (toSide) DeckSection.SIDE else card.requiredSection())
+    fun add(state: DeckBuilderState, card: Card, toSide: Boolean = false, neue: NeueState? = null) {
+        val section = if (toSide) DeckSection.SIDE else card.requiredSection()
+        val before = state.deck[section]
+        val added = state.addCard(card, section)
+        if (neue == null) return
+        // A finger's add is felt, and ringed where it landed (touch swarm, rec 13 and 15).
+        neue.felt(if (added) DeskEvent.ADDED else DeskEvent.ADD_REFUSED)
+        if (added && neue.fingerActing) {
+            DeckHistory.addedAt(before, state.deck[section])?.let { state.revealAt(section, it) }
+        }
     }
 
     /** The gesture beside a menu entry: a finger's on the tablet (`DeskTouch`), where there is one, else the mouse's. */
@@ -44,11 +54,12 @@ object CardActions {
         // The pool's Side switch trades its two adds.
         when (DeskMouse.forPool(action, neue.prefs.poolToSide)) {
             MouseAction.SELECT -> neue.selection = Selection.InPool(card, row)
-            MouseAction.ADD -> add(state, card)
-            MouseAction.ADD_TO_SIDE -> add(state, card, toSide = true)
+            MouseAction.ADD -> add(state, card, neue = neue)
+            MouseAction.ADD_TO_SIDE -> add(state, card, toSide = true, neue = neue)
             MouseAction.VIEW -> {
                 neue.selection = Selection.InPool(card, row)
                 neue.viewing = Viewing(card, null, row)
+                neue.felt(DeskEvent.HOLD_OPENED)
             }
             MouseAction.ADD_COPY, MouseAction.REMOVE, MouseAction.INSPECT, MouseAction.PICK_UP -> Unit
         }
@@ -76,13 +87,18 @@ object CardActions {
             // Drawing up a group, the deck is being chosen from, not edited — a right-click
             // there as much as a finger's double-tap (touch swarm, rec 7).
             MouseAction.REMOVE -> if (state.groupDraft == null) {
-                state.removeAt(card, section, index)
+                if (state.removeAt(card, section, index)) {
+                    neue.felt(DeskEvent.REMOVED)
+                    // The card that closed the gap is ringed, so a finger sees where the copy went from.
+                    if (neue.fingerActing) state.revealAt(section, index)
+                }
                 val sel = neue.selection as? Selection.InDeck
                 if (sel != null && sel.section == section && sel.index >= index) neue.selection = null
             }
             MouseAction.VIEW -> {
                 neue.selection = Selection.InDeck(card, section, index)
                 neue.viewing = Viewing(card, section, index)
+                neue.felt(DeskEvent.HOLD_OPENED)
             }
             MouseAction.ADD, MouseAction.ADD_TO_SIDE, MouseAction.INSPECT, MouseAction.PICK_UP -> Unit
         }

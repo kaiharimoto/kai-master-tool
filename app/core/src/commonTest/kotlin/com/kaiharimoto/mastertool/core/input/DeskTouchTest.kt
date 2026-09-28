@@ -60,4 +60,31 @@ class DeskTouchTest {
     fun theChipWaitsOutTheDoubleTap() {
         assertTrue(DeskTouch.CHIP_DELAY_MS > DeskTouch.DOUBLE_TAP_MS)
     }
+
+    @Test
+    fun thePensButtonIsTheRightClick() {
+        for (target in MouseTarget.entries) {
+            assertEquals(DeskMouse.resolve(target, MouseGesture.RIGHT_CLICK), DeskTouch.resolve(target, TouchGesture.PEN_BUTTON_TAP))
+        }
+    }
+
+    @Test
+    fun aFingersDiagonalPicksUpWhereAMouseWouldScroll() {
+        // 50 degrees off the horizontal: more along than across.
+        val dx = 0.643f
+        val dy = 0.766f
+        assertTrue(DeskTouch.picksUp(MouseTarget.POOL, dx, dy, finger = true))
+        assertFalse(DeskTouch.picksUp(MouseTarget.POOL, dx, dy, finger = false))
+    }
+
+    @Test
+    fun chromeAndCardsAgreeOnATap() {
+        val hold = DeskTouch.holdMs(systemLongPressMs = 300)
+        assertEquals(DeskTouch.MIN_HOLD_MS, hold, "never quicker than the minimum")
+        assertEquals(500L, DeskTouch.holdMs(500))
+        assertTrue(DeskTouch.isTap(0, 120, travel = 3f, slop = 8f, holdMs = hold))
+        assertFalse(DeskTouch.isTap(0, 900, travel = 3f, slop = 8f, holdMs = hold), "a resting thumb")
+        assertFalse(DeskTouch.isTap(0, 120, travel = 30f, slop = 8f, holdMs = hold), "a swipe")
+        assertEquals(setOf(DeskAction.UNDO, DeskAction.REDO), DeskTouch.window.map { it.action }.toSet())
+    }
 }

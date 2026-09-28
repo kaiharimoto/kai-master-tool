@@ -80,6 +80,10 @@ class NeueSmokeTest {
             side = emptyList(),
         )
         runBlocking { app.deckRepository.save("touch-deck", "Touch deck", deck, null) }
+        // The walk's cards in the pool before the app opens: on a slow emulator the pool's
+        // download can outlast the walk, and a card missing from the pool is a placeholder
+        // that no gesture reaches. The app's own sync replaces these when it lands.
+        seedPool(app, listOf(14558127, 23434538, 27204311, 81497285))
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         // Android's own "Viewing full screen" note appears the first time any app goes
         // immersive and takes the first Back for itself; it is the system's, not Neue's.
@@ -131,6 +135,27 @@ class NeueSmokeTest {
                     e.recycle()
                 }
                 Thread.sleep(400)
+            }
+
+            // Several fingers at once, each a finger's: down one by one, up in reverse, [holdMs] apart.
+            fun fingers(points: List<Pair<Float, Float>>, holdMs: Long = 60, settle: Boolean = true) {
+                val density = app.resources.displayMetrics.density
+                val t = SystemClock.uptimeMillis()
+                val props = points.indices.map { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
+                val coords = points.map { (x, y) -> MotionEvent.PointerCoords().apply { this.x = x * density; this.y = y * density; pressure = 1f; size = 1f } }
+                fun send(action: Int, at: Long, count: Int) {
+                    val e = MotionEvent.obtain(t, at, action, count, props.take(count).toTypedArray(), coords.take(count).toTypedArray(), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+                    instrumentation.uiAutomation.injectInputEvent(e, true)
+                    e.recycle()
+                }
+                val n = points.size
+                send(MotionEvent.ACTION_DOWN, t, 1)
+                for (i in 1 until n) send(MotionEvent.ACTION_POINTER_DOWN or (i shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), t + i * 10L, i + 1)
+                for (i in n - 1 downTo 1) send(MotionEvent.ACTION_POINTER_UP or (i shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), t + holdMs + (n - i) * 10L, i + 1)
+                send(MotionEvent.ACTION_UP, t + holdMs + n * 10L, 1)
+                if (settle) {
+                    Thread.sleep(400)
+                }
             }
 
             repeat(120) {
@@ -190,6 +215,32 @@ class NeueSmokeTest {
             Thread.sleep(800)
             assertTrue("a tap on the deck kept the keyboard", until { !on { it.neue!!.textFocus.any } })
 
+            // v1.3.3: a double-tap that drifts onto the neighbour is still the first card's, and
+            // removes a copy; two fingers tapped together undo it, and three redo it.
+            fun mainCount() = on { it.neue!!.builder.deck.main.size }
+            // The count the app should reach, given three seconds to reach it.
+            fun countBecomes(expected: Int): Int {
+                repeat(30) {
+                    if (mainCount() == expected) return expected
+                    Thread.sleep(100)
+                }
+                return mainCount()
+            }
+            val before = mainCount()
+            fingers(listOf(760f to 420f), settle = false)
+            Thread.sleep(120)
+            fingers(listOf(772f to 424f))
+            assertEquals("a drifting double-tap did not remove a copy", before - 1, countBecomes(before - 1))
+            // Clear of the double-tap's window, so the next fingers start a gesture of their own.
+            Thread.sleep(500)
+            fingers(listOf(700f to 400f, 820f to 400f))
+            assertEquals("a two-finger tap did not undo", before, countBecomes(before))
+            fingers(listOf(660f to 400f, 760f to 400f, 860f to 400f))
+            assertEquals("a three-finger tap did not redo", before - 1, countBecomes(before - 1))
+            fingers(listOf(700f to 400f, 820f to 400f))
+            assertEquals(before, countBecomes(before))
+            shoot("06-undone.png")
+
             assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
         }
     }
@@ -210,4 +261,20 @@ private fun <T> readActivity(read: (MainActivity) -> T): T? {
         if (activity != null) out = read(activity)
     }
     return out
+}
+
+/** Plain effect monsters under [ids], written into the card pool the way a sync writes them. */
+private fun seedPool(app: MasterToolApplication, ids: List<Int>) {
+    val database = com.kaiharimoto.mastertool.core.data.DatabaseFactory.create(AndroidDatabaseDriverFactory(app))
+    database.transaction {
+        ids.forEach { id ->
+            database.cardQueries.insert(
+                id = id.toLong(), name = "Card $id", type = "Effect Monster", frameType = "effect",
+                description = "", race = "Spellcaster", attribute = "DARK", atk = 0L, def = 0L, level = 4L,
+                linkValue = null, linkMarkers = "", pendulumScale = null, archetype = null,
+                imageUrl = null, imageUrlSmall = null, tcgBanStatus = "UNLIMITED", ocgBanStatus = "UNLIMITED",
+                alternateIds = "$id",
+            )
+        }
+    }
 }

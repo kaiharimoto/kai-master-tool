@@ -176,6 +176,47 @@ fixes the frame:
   hover or a key. The help is **Fingers** on a tablet, the finger's table first
   and the keyboard's only with one attached; the index strip has a `?` cell for
   it, and the first launch shows one note (`touchIntroSeen`) with the way to it.
+#### Fingers that are sure (1.3.3)
+
+- **Taps are counted by surface, the platform's way** (`core/input/TapBurst`).
+  The pool's grid, each deck section and the search pop-out's grid own one burst:
+  a second press within `DOUBLE_TAP_MS` of the first **lift**, and within 24 dp of
+  the first press, is a double-tap on the **first** card wherever it landed; in
+  the pool every further tap adds again. The hold is the system's long-press
+  delay, at least `DeskTouch.MIN_HOLD_MS` (`holdMs`), which honours Android's
+  "touch and hold delay"; the pop-out's grid answers a tap at once.
+- **The carried card rides above the finger** (`core/input/CarryOffset`): at least
+  64 dp wide, its bottom 12 dp over the fingertip, and the drop resolves at the
+  **drawn** card's centre — the classic rule, "a drop lands where the card is
+  drawn". Hysteresis and a deck card's pick-up are 12 dp, not pixels; the pool
+  picks up at `PICK_UP_RATIO` across for its run along. Over the pool a deck card
+  frames the pool in ink and its line reads **Let go to remove**; a drop that would
+  be refused hatches the carried card with a ✕. A second finger lets it go home.
+- **Haptics, one vocabulary, hand events only** (`core/haptics/DeskFeel`, played by
+  `kit/Feel` through `View.performHapticFeedback`: no permission, the system's
+  switch honoured, nothing on the desk). Hold, pick-up, a slot change, a drop, an
+  add, a removal, an art step, a zen snap and a pinch's stop; a select, a refused
+  add and a refused drop are nothing, so "no buzz" means "not in the deck". The
+  edits report whether they applied (`addCard`, `removeAt`, `moveCardTo`).
+  `NeueState.actingBy` marks a finger's gesture, so the desk never buzzes or rings.
+- **A press shows itself**: every kit control's hot look is `collectIsHotAsState`,
+  hovered *or pressed*, held `PRESS_ECHO_MS` after the lift.
+- **A finger's add or drop is ringed where it landed** for `REVEAL_MS` (a 2 dp
+  ink ring inside the card, `DeckBuilderState.revealAt`, `DeckHistory.addedAt`);
+  into a hidden section, that section's Ex or Si box flashes instead.
+- **Two fingers on the deck** (`TwoFinger`): apart or together sizes the deck;
+  slid up or down with the groups on sets their gap; spread past full size hides
+  the pool and the inspector, pinched at full size brings them back. The size is
+  held and written once, on release (`NeueState.update(persist = false)`).
+- **Two fingers tapped undo, three redo**, anywhere (`MultiTap`, `DeskTouch.window`,
+  in the help's **Anywhere** column). On a tablet the History menu leads with
+  **Undo: …**, and a goal edit is named as one (`goalsChanged`).
+- **A resting thumb fires nothing** (`muClickable`): a finger's click must be a
+  tap by `DeskTouch.isTap`, the cards' own rule; the kit's controls and the
+  dialog scrims use it.
+- **The S Pen's side button is the right-click** on cards (`PEN_BUTTON_TAP`),
+  tested before the finger's grammar; drawing up a group it is still a vote.
+
 - **The proof is an emulator**, since the studio cannot draw Android:
   `.github/workflows/android-smoke.yml` boots a Pixel Tablet image, runs
   `NeueSmokeTest` (a saved deck survives a launch, the builder opens it, no crash

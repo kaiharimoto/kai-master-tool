@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.collectIsHotAsState
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -126,7 +127,7 @@ private fun BarRow(bar: Bar) {
 private fun AutoToggle(on: Boolean, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Box(
         Modifier
             .height(20.dp)

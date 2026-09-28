@@ -73,7 +73,7 @@ fun Badge(text: String, modifier: Modifier = Modifier, inverted: Boolean = false
 fun Tag(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, count: String? = null, caption: String? = null) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Row(
         modifier
             .height(28.dp)
@@ -81,7 +81,7 @@ fun Tag(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier
             .border(1.dp, animatedColor(if (selected || hovered) c.ink else c.ink25))
             .hoverable(source)
             .cursorPointer(caption = caption, showsWords = true)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .muClickable(interactionSource = source, onClick = onClick)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),

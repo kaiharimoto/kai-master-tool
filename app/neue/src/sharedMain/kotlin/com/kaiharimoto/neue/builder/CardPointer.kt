@@ -4,6 +4,9 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.composed
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.runtime.Composable
@@ -26,7 +29,10 @@ import androidx.compose.ui.input.pointer.isShiftPressed
 import com.kaiharimoto.neue.kit.onPointer
 import com.kaiharimoto.neue.kit.byFinger
 import com.kaiharimoto.neue.kit.isPrimaryPress
+import com.kaiharimoto.mastertool.core.haptics.DeskEvent
+import com.kaiharimoto.mastertool.core.input.CarryOffset
 import com.kaiharimoto.mastertool.core.input.DeskTouch
+import com.kaiharimoto.mastertool.core.input.TapBurst
 import com.kaiharimoto.mastertool.core.input.TouchGesture
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -55,6 +61,10 @@ import androidx.compose.ui.input.pointer.positionChange
 class Press {
     var down by mutableStateOf(false)
         internal set
+
+    /** How long this press's hold is: the desk's, or a finger's from the system (rec 11). */
+    var holdMs by mutableStateOf(DeskMouse.HOLD_MS)
+        internal set
     internal var rise: State<Float>? = null
 
     /** The lift the press contributes, read in the draw phase. */
@@ -67,11 +77,27 @@ fun rememberPress(): Press {
     // Rises over the hold's own length, and settles back at the family's pace.
     press.rise = animateFloatAsState(
         if (press.down) 1f else 0f,
-        if (press.down) tween(DeskMouse.HOLD_MS.toInt(), easing = LinearEasing) else tween(120),
+        if (press.down) tween(press.holdMs.toInt(), easing = LinearEasing) else tween(120),
         label = "press",
     )
     return press
 }
+
+/**
+ * One surface's taps (touch swarm, rec 11): the pool's grid, or one deck section.
+ * A double-tap belongs to the surface, not to the card, so one that drifts onto the
+ * neighbour is still a double-tap on the first card — and in the pool each further
+ * tap is another add. `TapBurst` has the rules.
+ */
+class TapSurface(repeats: Boolean) {
+    internal val burst = TapBurst(repeats)
+
+    /** The first card's own answer to the burst, run again for its double-tap and repeats. */
+    internal var anchor: ((TouchGesture) -> Unit)? = null
+}
+
+@Composable
+fun rememberTapSurface(repeats: Boolean, key: Any? = Unit): TapSurface = remember(key) { TapSurface(repeats) }
 
 /**
  * Everything a mouse can do to a card, on one modifier, read off `DeskMouse`.
@@ -112,6 +138,8 @@ fun Modifier.cardPointer(
     zenKey: Int? = null,
     /** A group is being drawn up: a finger's double-tap on the deck is two votes, never a removal (touch swarm, rec 7). */
     drafting: Boolean = false,
+    /** The surface whose taps this card's are counted with (rec 11); null counts them on the card alone. */
+    taps: TapSurface? = null,
 ): Modifier {
     val zen = LocalZen.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -122,6 +150,8 @@ fun Modifier.cardPointer(
     val heldCard by rememberUpdatedState(card)
     val on by rememberUpdatedState(target)
     val voting by rememberUpdatedState(drafting)
+    val ownTaps = remember { TapSurface(repeats = target == MouseTarget.POOL) }
+    val surface = taps ?: ownTaps
 
     fun fire(gesture: MouseGesture, at: Offset) {
         DeskMouse.resolve(on, gesture)?.let { act(it, origin + at) }
@@ -198,28 +228,54 @@ fun Modifier.cardPointer(
                         zen.carrying = emptySet()
                         // Let go: back into their slots, flush beside another card, or where they are.
                         zen.dropAll(group, zenKey)
+                        // Joining a block is felt by a finger (touch swarm, rec 13).
+                        if (down.byFinger && zen.blockOf(zenKey).size > group.size) {
+                            neue.actingBy(finger = true) { neue.felt(DeskEvent.SNAPPED) }
+                        }
                     }
                     return@awaitEachGesture
                 }
+                // The S Pen's side button is the right-click (touch swarm, rec 29): tested before
+                // the finger's grammar, which a pen otherwise takes, so a pen with its button held
+                // adds and removes in one press, as a mouse's right button does.
+                val penButton = down.byFinger && buttons.isSecondaryPressed
                 // A finger (1.3.0): `DeskTouch` rather than `DeskMouse`.
-                if (down.byFinger) {
-                    touch(down, on, dragEnabled, press, last,
+                if (down.byFinger && !penButton) {
+                    touch(down, origin, on, dragEnabled, press, surface,
                         onGesture = { gesture, at ->
                             if (gesture == TouchGesture.TAP) neue.hovered = null
-                            DeskTouch.resolve(on, gesture, voting)?.let { act(it, origin + at) }
+                            DeskTouch.resolve(on, gesture, voting)?.let { action ->
+                                neue.actingBy(finger = true) { act(action, origin + at) }
+                            }
                         },
                         onDrag = { start ->
-                            drag.start(Held(heldCard, from, heldIndex, size), origin + start.position)
-                            val completed = drag(start.id) { change ->
+                            neue.actingBy(finger = true) { neue.felt(DeskEvent.PICKED_UP) }
+                            drag.start(Held(heldCard, from, heldIndex, size, finger = true, density = density), origin + start.position)
+                            // A second finger landing lets the card go home: two fingers are a pinch (rec 21).
+                            var completed = false
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (event.changes.count { it.pressed } > 1) break
+                                val change = event.changes.firstOrNull { it.id == start.id } ?: break
                                 change.consume()
-                                drag.moveTo(origin + change.position)
+                                if (!change.pressed) {
+                                    completed = true
+                                    break
+                                }
+                                if (drag.moveTo(origin + change.position)) {
+                                    neue.actingBy(finger = true) { neue.felt(DeskEvent.SLOT_CHANGED) }
+                                }
                             }
-                            if (completed) drag.drop() else drag.cancel()
+                            if (completed) {
+                                neue.actingBy(finger = true) { neue.felt(drag.drop()) }
+                            } else {
+                                drag.cancel()
+                            }
                         },
                     )
                     return@awaitEachGesture
                 }
-                if (buttons.isSecondaryPressed && !buttons.isPrimaryPressed) {
+                if (penButton || buttons.isSecondaryPressed && !buttons.isPrimaryPressed) {
                     down.consume()
                     press.down = true
                     try {
@@ -228,16 +284,19 @@ fun Modifier.cardPointer(
                             do {
                                 val event = awaitPointerEvent()
                                 event.changes.forEach { it.consume() }
-                            } while (event.buttons.isSecondaryPressed && event.changes.any { it.pressed })
+                            } while ((penButton || event.buttons.isSecondaryPressed) && event.changes.any { it.pressed })
                             true
                         } ?: false
                         press.down = false
-                        if (up) {
-                            fire(if (shift) MouseGesture.SHIFT_RIGHT_CLICK else MouseGesture.RIGHT_CLICK, down.position)
-                        } else {
-                            fire(MouseGesture.RIGHT_HOLD, down.position)
-                            spend()
+                        neue.actingBy(finger = penButton) {
+                            when {
+                                // A group being drawn up is chosen from, never edited: the pen's row says so.
+                                penButton && up -> DeskTouch.resolve(on, TouchGesture.PEN_BUTTON_TAP, voting)?.let { act(it, origin + down.position) }
+                                up -> fire(if (shift) MouseGesture.SHIFT_RIGHT_CLICK else MouseGesture.RIGHT_CLICK, down.position)
+                                else -> fire(MouseGesture.RIGHT_HOLD, down.position)
+                            }
                         }
+                        if (!up) spend()
                     } finally {
                         press.down = false
                     }
@@ -272,7 +331,7 @@ fun Modifier.cardPointer(
                             press.down = false
                             // A drag is not the second half of a double-click.
                             last[0] = 0L
-                            drag.start(Held(heldCard, from, heldIndex, size), origin + start.position)
+                            drag.start(Held(heldCard, from, heldIndex, size, density = density), origin + start.position)
                             val completed = drag(start.id) { change ->
                                 change.consume()
                                 drag.moveTo(origin + change.position)
@@ -299,35 +358,48 @@ fun Modifier.cardPointer(
 private enum class TouchEnd { UP, HOLD, DRAG, SCROLL, CANCEL }
 
 /**
- * A finger on a card (`DeskTouch`): up before the hold is a tap — or, soon after
- * another, a double-tap; still for [DeskMouse.HOLD_MS] is a long press; past the
- * slop is a drag, unless it runs along a scrolling pool, when the finger is the
- * pool's and the card lets it go. A second finger is a pinch, never the card's.
+ * A finger on a card (`DeskTouch`): up before the hold is a tap — counted with the
+ * surface's other taps, so that soon after another it is a double-tap on the first
+ * card (`TapBurst`); still for the system's hold is a long press; past the slop is a
+ * drag, unless it runs along a scrolling pool, when the finger is the pool's and the
+ * card lets it go. A second finger is a pinch, never the card's.
  */
 private suspend fun AwaitPointerEventScope.touch(
     down: PointerInputChange,
+    origin: Offset,
     target: MouseTarget,
     dragEnabled: Boolean,
     press: Press,
-    last: LongArray,
+    taps: TapSurface,
     onGesture: (TouchGesture, Offset) -> Unit,
     onDrag: suspend AwaitPointerEventScope.(PointerInputChange) -> Unit,
 ) {
     val slop = viewConfiguration.touchSlop
+    // A deck card is picked up only past 12dp: a rolled tap moved cards a slot (rec 12).
+    val pickUp = if (target == MouseTarget.DECK) maxOf(slop, CarryOffset.PICKUP_DP * density) else slop
+    // The platform's hold, which honours the accessibility "touch and hold delay" (rec 11).
+    val hold = DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis)
     var moved: PointerInputChange? = null
+    var upAt = down.uptimeMillis
+    press.holdMs = hold
     press.down = true
     val end = try {
-        withTimeoutOrNull(DeskMouse.HOLD_MS) {
+        withTimeoutOrNull(hold) {
             var total = Offset.Zero
             while (true) {
                 val event = awaitPointerEvent()
                 if (event.changes.count { it.pressed } > 1) return@withTimeoutOrNull TouchEnd.CANCEL
                 val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull TouchEnd.CANCEL
-                if (!change.pressed) return@withTimeoutOrNull TouchEnd.UP
+                if (!change.pressed) {
+                    upAt = change.uptimeMillis
+                    return@withTimeoutOrNull TouchEnd.UP
+                }
                 if (change.isConsumed) return@withTimeoutOrNull TouchEnd.CANCEL
                 total += change.positionChange()
-                if (total.getDistance() > slop) {
-                    return@withTimeoutOrNull if (dragEnabled && DeskTouch.picksUp(target, total.x, total.y)) {
+                val distance = total.getDistance()
+                if (distance > slop && !DeskTouch.picksUp(target, total.x, total.y)) return@withTimeoutOrNull TouchEnd.SCROLL
+                if (distance > pickUp) {
+                    return@withTimeoutOrNull if (dragEnabled) {
                         change.consume()
                         moved = change
                         TouchEnd.DRAG
@@ -344,25 +416,28 @@ private suspend fun AwaitPointerEventScope.touch(
     }
     when (end) {
         TouchEnd.UP -> {
-            val now = down.uptimeMillis
-            if (now - last[0] < DeskTouch.DOUBLE_TAP_MS) {
-                last[0] = 0L
-                onGesture(TouchGesture.DOUBLE_TAP, down.position)
+            val at = (origin + down.position) / density
+            taps.burst.press(down.uptimeMillis, at.x, at.y, 0)
+            val result = taps.burst.release(upAt)
+            if (result.kind == TapBurst.Kind.TAP) {
+                val first: (TouchGesture) -> Unit = { gesture -> onGesture(gesture, down.position) }
+                taps.anchor = first
+                first(TouchGesture.TAP)
             } else {
-                last[0] = now
-                onGesture(TouchGesture.TAP, down.position)
+                // A double-tap, or in the pool another add: the first card's, wherever this one landed.
+                (taps.anchor ?: { gesture -> onGesture(gesture, down.position) })(TouchGesture.DOUBLE_TAP)
             }
         }
         TouchEnd.HOLD -> {
-            last[0] = 0L
+            taps.burst.reset()
             onGesture(TouchGesture.LONG_PRESS, down.position)
             spend()
         }
         TouchEnd.DRAG -> {
-            last[0] = 0L
+            taps.burst.reset()
             moved?.let { onDrag(it) }
         }
-        TouchEnd.SCROLL, TouchEnd.CANCEL -> last[0] = 0L
+        TouchEnd.SCROLL, TouchEnd.CANCEL -> taps.burst.reset()
     }
 }
 
@@ -385,4 +460,38 @@ private suspend fun AwaitPointerEventScope.spend() {
         val event = awaitPointerEvent()
         event.changes.forEach { it.consume() }
     } while (event.changes.any { it.pressed })
+}
+
+/**
+ * Taps counted with [taps]' surface, for a grid that only reads and adds — the
+ * search pop-out's (touch swarm, rec 11). A tap answers at once, where Compose's
+ * double-tap detector held every tap back for the double-tap's window; a second tap
+ * soon after the first lift, near it, is the first card's double-tap.
+ */
+fun Modifier.surfaceTaps(taps: TapSurface, onTap: () -> Unit, onDoubleTap: () -> Unit): Modifier = composed {
+    val tap by rememberUpdatedState(onTap)
+    val double by rememberUpdatedState(onDoubleTap)
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    this
+        .onGloballyPositioned { origin = it.positionInWindow() }
+        .pointerInput(taps) {
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                val up = waitForUpOrCancellation()
+                if (up == null) {
+                    taps.burst.reset()
+                    return@awaitEachGesture
+                }
+                val at = (origin + down.position) / density
+                taps.burst.press(down.uptimeMillis, at.x, at.y, 0)
+                if (taps.burst.release(up.uptimeMillis).kind == TapBurst.Kind.TAP) {
+                    val mine = tap
+                    val mineDouble = double
+                    taps.anchor = { gesture -> if (gesture == TouchGesture.DOUBLE_TAP) mineDouble() else mine() }
+                    mine()
+                } else {
+                    taps.anchor?.invoke(TouchGesture.DOUBLE_TAP)
+                }
+            }
+        }
 }

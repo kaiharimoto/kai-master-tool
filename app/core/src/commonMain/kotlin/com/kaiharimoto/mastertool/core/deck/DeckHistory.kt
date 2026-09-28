@@ -18,6 +18,8 @@ object DeckHistory {
         after: Deck,
         groupsChanged: Boolean,
         deckChanged: Boolean,
+        /** Only the hand goals moved (touch swarm, rec 22): they travel with the groups' snapshot. */
+        goalsChanged: Boolean = false,
         name: (CardId) -> String?,
     ): String {
         fun n(id: CardId) = name(id) ?: id.value.toString()
@@ -51,9 +53,21 @@ object DeckHistory {
             parts.size == 1 -> parts[0]
             parts.size > 1 -> "${parts[0]}, and ${parts.size - 1} more"
             DeckSection.entries.any { before[it] != after[it] } -> "Reordered the ${DeckSection.entries.first { before[it] != after[it] }.displayName.lowercase()} deck"
+            goalsChanged -> "Changed the hand goals"
             groupsChanged -> "Changed the groups"
             else -> "No change"
         }
+    }
+
+    /**
+     * Where the copy an add put into [section] landed (touch swarm, rec 15): the
+     * first slot at which [before] and [after] disagree, or the end. Null when the
+     * section did not grow, which is an add the deck refused.
+     */
+    fun addedAt(before: List<CardId>, after: List<CardId>): Int? {
+        if (after.size != before.size + 1) return null
+        val i = before.indices.firstOrNull { before[it] != after[it] }
+        return i ?: before.size
     }
 
     private fun count(n: Int) = if (n > 1) "$n× " else ""

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -119,7 +120,7 @@ private fun Goals(state: DeckBuilderState) {
         state.goals.goals.forEachIndexed { i, goal ->
             val p = state.oddsOf(goal)
             val source = remember(goal.id) { MutableInteractionSource() }
-            val hovered by source.collectIsHoveredAsState()
+            val hovered by source.collectIsHotAsState()
             Row(
                 Modifier
                     .fillMaxWidth()

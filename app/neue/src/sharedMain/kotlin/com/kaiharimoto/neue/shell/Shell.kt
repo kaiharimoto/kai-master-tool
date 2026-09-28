@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.shell
 
+import com.kaiharimoto.neue.kit.collectIsHotAsState
+import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -104,7 +106,7 @@ fun TitleBar(
             Row(
                 Modifier
                     .cursorPointer(caption = "Decks →")
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { neue.go(Page.DECKS) },
+                    .muClickable { neue.go(Page.DECKS) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -179,7 +181,7 @@ private fun WorkChip(work: WorkReadout, narrow: Boolean, onClick: () -> Unit) {
 private fun Pill(onClick: () -> Unit, content: @Composable () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Inverted(hovered) {
         Row(
             Modifier
@@ -188,7 +190,7 @@ private fun Pill(onClick: () -> Unit, content: @Composable () -> Unit) {
                 .border(1.dp, c.ink)
                 .hoverable(source)
                 .cursorPointer(showsWords = true)
-                .clickable(interactionSource = source, indication = null, onClick = onClick)
+                .muClickable(interactionSource = source, onClick = onClick)
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -200,7 +202,7 @@ private fun Pill(onClick: () -> Unit, content: @Composable () -> Unit) {
 private fun SearchTrigger(modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     val tone = animatedColor(if (hovered) c.ink else c.ink45)
     Row(
         modifier
@@ -208,7 +210,7 @@ private fun SearchTrigger(modifier: Modifier = Modifier, onClick: () -> Unit) {
             .border(1.dp, animatedColor(if (hovered) c.ink else c.ink25))
             .hoverable(source)
             .cursorPointer(showsWords = true)
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .muClickable(interactionSource = source, onClick = onClick)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -303,7 +305,7 @@ fun Rail(
 private fun RailRow(page: Page, active: Boolean, count: String?, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     val arrow by animateFloatAsState(if (hovered || active) 1f else 0f, tween(MuMotion.FAST, easing = MuMotion.ease), label = "arrow")
     val shift by animateDpAsState(if (hovered || active) 0.dp else (-4).dp, tween(MuMotion.FAST, easing = MuMotion.ease), label = "shift")
     val chord = when (page) {
@@ -323,7 +325,7 @@ private fun RailRow(page: Page, active: Boolean, count: String?, onClick: () -> 
                     .background(animatedColor(if (active) inner.paper else if (hovered) c.ink06 else Color.Transparent))
                     .hoverable(source)
                     .cursorPointer(showsWords = true)
-                    .clickable(interactionSource = source, indication = null, onClick = onClick)
+                    .muClickable(interactionSource = source, onClick = onClick)
                     .padding(horizontal = 20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -399,7 +401,7 @@ private fun StripCell(name: String, active: Boolean, onClick: () -> Unit, conten
                     .height(MuShell.railRow)
                     .background(if (active) Mu.colors.paper else Color.Transparent)
                     .cursorPointer(caption = name)
-                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick),
+                    .muClickable(onClick = onClick),
                 contentAlignment = Alignment.Center,
             ) { content(active) }
         }

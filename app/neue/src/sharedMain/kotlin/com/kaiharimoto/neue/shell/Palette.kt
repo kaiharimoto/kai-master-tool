@@ -333,5 +333,22 @@ private fun GestureTable(touch: Boolean) {
                 }
             }
         }
+        // The window's own: two fingers undo, three redo (touch swarm, rec 22).
+        if (touch) {
+            Column(Modifier.weight(1f)) {
+                SectionTitle(null, "Anywhere")
+                DeskTouch.window.forEach { row ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        RowText(row.description, Modifier.weight(1f))
+                        Kbd(row.gesture.label, always = true)
+                    }
+                    HRule()
+                }
+            }
+        }
     }
 }

@@ -462,9 +462,9 @@ class DeckBuilderState(
 
     // ---- editing -----------------------------------------------------------
 
-    fun addCard(card: Card, section: DeckSection = card.requiredSection()) {
+    /** Whether the copy went in: what a finger's haptic and ring wait on (touch swarm, rec 13). */
+    fun addCard(card: Card, section: DeckSection = card.requiredSection()): Boolean =
         applyEdit(DeckEditor.add(deck, card, section, format), card)
-    }
 
     fun removeOne(card: Card, section: DeckSection) {
         when (val result = DeckEditor.remove(deck, card.id, section)) {
@@ -490,9 +490,8 @@ class DeckBuilderState(
     // Every one of these goes through the same `applyEdit` as tapping does, so a
     // drop is undoable and a rejected drop explains itself in the same words.
 
-    fun addCardAt(card: Card, section: DeckSection, index: Int) {
+    fun addCardAt(card: Card, section: DeckSection, index: Int): Boolean =
         applyEdit(DeckEditor.addAt(deck, card, section, index, format), card)
-    }
 
     fun moveCardTo(
         card: Card,
@@ -500,21 +499,19 @@ class DeckBuilderState(
         fromIndex: Int,
         to: DeckSection,
         insertBefore: Int,
-    ) {
-        applyEdit(DeckEditor.moveAt(deck, card, from, fromIndex, to, insertBefore, format), card)
-    }
+    ): Boolean = applyEdit(DeckEditor.moveAt(deck, card, from, fromIndex, to, insertBefore, format), card)
 
     /** Drag-out: the copy at [index] leaves the deck. */
-    fun removeAt(card: Card, section: DeckSection, index: Int) {
+    fun removeAt(card: Card, section: DeckSection, index: Int): Boolean =
         when (val result = DeckEditor.removeAt(deck, section, index)) {
             is DeckEdit.Applied -> {
                 val token = pushUndo(deck)
                 deck = result.deck
                 showToast("Removed ${card.name}.", undo = { undoIfCurrent(token) })
+                true
             }
-            is DeckEdit.Rejected -> Unit
+            is DeckEdit.Rejected -> false
         }
-    }
 
     /**
      * Whether a drop would be accepted, for live feedback during a drag.
@@ -569,17 +566,20 @@ class DeckBuilderState(
 
     fun copiesIn(id: CardId, section: DeckSection): Int = deck[section].count { it == id }
 
-    private fun applyEdit(edit: DeckEdit, card: Card) {
+    private fun applyEdit(edit: DeckEdit, card: Card): Boolean =
         when (edit) {
             is DeckEdit.Applied -> {
                 if (edit.deck != deck) {
                     pushUndo(deck)
                     deck = edit.deck
                 }
+                true
             }
-            is DeckEdit.Rejected -> showToast(explain(edit.reason, card))
+            is DeckEdit.Rejected -> {
+                showToast(explain(edit.reason, card))
+                false
+            }
         }
-    }
 
     private fun explain(reason: RejectionReason, card: Card): String = when (reason) {
         RejectionReason.SECTION_FULL -> "That section is full."
@@ -666,15 +666,21 @@ class DeckBuilderState(
      */
     fun history(): HistoryView {
         val name: (com.kaiharimoto.mastertool.core.model.CardId) -> String? = { index.byId(it)?.name }
+        // Every change to the groups or the goals snapshots them, so the state after an
+        // entry's is the next snapshot along, or now.
+        fun goalsOnly(was: StoredGroups?, now: StoredGroups): Boolean =
+            was != null && was.goals != now.goals && was.groups == now.groups
         val done = undoStack.mapIndexed { i, entry ->
             val after = undoStack.getOrNull(i + 1)?.deck ?: deck
-            DeckHistory.describe(entry.deck, after, entry.groups != null, entry.identity != null, name)
+            val afterGroups = undoStack.drop(i + 1).firstOrNull { it.groups != null }?.groups ?: currentStoredGroups()
+            DeckHistory.describe(entry.deck, after, entry.groups != null, entry.identity != null, goalsOnly(entry.groups, afterGroups), name)
         }.asReversed()
         // The redo stack's last entry is the next redo; the deck before it is now.
         val redoOrder = redoStack.asReversed()
         val undone = redoOrder.mapIndexed { i, entry ->
             val before = if (i == 0) deck else redoOrder[i - 1].deck
-            DeckHistory.describe(before, entry.deck, entry.groups != null, entry.identity != null, name)
+            val beforeGroups = redoOrder.take(i).lastOrNull { it.groups != null }?.groups ?: currentStoredGroups()
+            DeckHistory.describe(before, entry.deck, entry.groups != null, entry.identity != null, entry.groups?.let { goalsOnly(beforeGroups, it) } ?: false, name)
         }
         return HistoryView(done, undone)
     }
@@ -1027,6 +1033,12 @@ class DeckBuilderState(
     fun remaining(card: Card): Int = DeckEditor.remainingCopies(deck, card, format)
 
     /** Asks the owning pane to scroll [id] into view and flash it. */
+    /** Asks the deck to ring the card at [position] in [section] (touch swarm, rec 15: an add a finger made, where it landed). */
+    fun revealAt(section: DeckSection, position: Int) {
+        val id = deck[section].getOrNull(position) ?: return
+        revealRequest = RevealRequest(section, position, id, ++toastCounter)
+    }
+
     fun reveal(section: DeckSection, id: CardId) {
         val position = deck[section].indexOfFirst { it == id }
         if (position < 0) return

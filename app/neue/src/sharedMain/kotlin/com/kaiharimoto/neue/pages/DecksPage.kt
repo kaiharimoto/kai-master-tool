@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.neue.kit.collectIsHotAsState
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.animation.core.animateFloatAsState
@@ -388,7 +389,7 @@ private fun DeckRow(
     val touch = LocalTouchFirst.current
     var rowAt by remember { mutableStateOf(Offset.Zero) }
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     val deck = stored.entry.deck
     // The deck's faces: up to three cards chosen for it, else its most-played main-deck
     // card (DeckCovers). Pictures, so they keep their colour (§17).
@@ -475,7 +476,7 @@ private fun DeckRow(
 private fun TagChip(text: String, on: Boolean, onClick: (() -> Unit)?) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+    val hovered by source.collectIsHotAsState()
     Box(
         Modifier
             .height(18.dp)

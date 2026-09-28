@@ -111,6 +111,29 @@ class NeueState(
     var confirmDelete by mutableStateOf<Pair<String, String>?>(null)
 
     /** The card under the pointer, which the inspector shows. Hover is the desktop's cheapest question. */
+    /** The window's haptics (touch swarm, rec 13): set by the window, nothing on the desk. */
+    var feel: (com.kaiharimoto.mastertool.core.haptics.Haptic) -> Unit = {}
+
+    /** Whether the gesture being acted on is a finger's or a pen's: the only hands the tablet answers with a buzz or a ring. */
+    var fingerActing = false
+        private set
+
+    /** Runs [block] as [finger]'s gesture: what it adds, drops or removes is felt and ringed only for a finger. */
+    fun <T> actingBy(finger: Boolean, block: () -> T): T {
+        val was = fingerActing
+        fingerActing = finger
+        try {
+            return block()
+        } finally {
+            fingerActing = was
+        }
+    }
+
+    /** Plays [event] for a finger's gesture; "no buzz" always means "not in the deck" (DeskFeel). */
+    fun felt(event: com.kaiharimoto.mastertool.core.haptics.DeskEvent?) {
+        if (fingerActing && event != null) com.kaiharimoto.mastertool.core.haptics.DeskFeel.of(event)?.let(feel)
+    }
+
     var hovered by mutableStateOf<Card?>(null)
 
     /** The card clicked, which the inspector falls back to and `Delete` acts on. */
@@ -189,9 +212,11 @@ class NeueState(
         }
     }
 
-    fun update(debounce: Boolean = false, transform: (NeuePreferences) -> NeuePreferences) {
+    fun update(debounce: Boolean = false, persist: Boolean = true, transform: (NeuePreferences) -> NeuePreferences) {
         loaded = true
         prefs = transform(prefs).sanitised()
+        // A pinch in flight re-fits the deck on every event, and is written once, on release (rec 21).
+        if (!persist) return
         saveJob?.cancel()
         saveJob = scope.launch {
             if (debounce) delay(400)

@@ -16,8 +16,10 @@ object DeskWords {
     const val TOUCH_INTRO = "Tap reads a card. Double-tap adds it, or takes it out. Press and hold opens it large."
 
     /** What the help says of the rest: pinch, zen, and how to learn a button's name. */
-    val TOUCH_FOOTER = "Pinch in to see the whole deck smaller; pinch out to fit it again. " +
-        "In deep zen a pinch breaks the deck into its groups and sets their gaps. Hold any button to read its name."
+    val TOUCH_FOOTER = "Pinch in to see the whole deck smaller; pinch out to fit it again, and out once more " +
+        "to hide the pool and the inspector. With the groups on, slide two fingers up or down to set the gaps " +
+        "between them. In deep zen a pinch breaks the deck into its groups and sets their gaps. " +
+        "Hold any button to read its name."
 
     /** The empty inspector. */
     fun inspectorEmpty(touch: Boolean): String =

@@ -40,4 +40,22 @@ class DeckHistoryTest {
         assertEquals("Started a new deck", say(Deck(main = listOf(ash)), Deck(), deck = true))
         assertEquals("Opened a deck of 1", say(Deck(), Deck(main = listOf(ash)), deck = true))
     }
+
+    @Test
+    fun aGoalEditIsNamedAsOne() {
+        // touch swarm, rec 22: goals travel in the groups' snapshot, and were listed as "Changed the groups".
+        val same = Deck(main = listOf(ash))
+        assertEquals(
+            "Changed the hand goals",
+            DeckHistory.describe(same, same, groupsChanged = true, deckChanged = false, name = { null }, goalsChanged = true),
+        )
+    }
+
+    @Test
+    fun anAddLandsWhereTheSectionFirstDiffers() {
+        assertEquals(1, DeckHistory.addedAt(listOf(ash, nib), listOf(ash, ash, nib)))
+        assertEquals(2, DeckHistory.addedAt(listOf(ash, nib), listOf(ash, nib, nib)))
+        assertEquals(0, DeckHistory.addedAt(emptyList(), listOf(ash)))
+        assertEquals(null, DeckHistory.addedAt(listOf(ash), listOf(ash)))
+    }
 }

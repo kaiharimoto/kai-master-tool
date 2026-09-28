@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.collectIsHotAsState
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.cursor.cursorPointer
@@ -350,7 +351,7 @@ private fun PalettePicker(neue: NeueState, modifier: Modifier = Modifier) {
         if (open) GroupMarkers.palettes.forEach { palette ->
             val chosen = neue.prefs.groupPalette == palette.id
             val source = remember(palette.id) { MutableInteractionSource() }
-            val hovered by source.collectIsHoveredAsState()
+            val hovered by source.collectIsHotAsState()
             Row(
                 Modifier
                     .fillMaxWidth()
