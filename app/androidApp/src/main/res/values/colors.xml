@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="obsidian">#FF0E1116</color>
-    <color name="gold">#FFE0A82E</color>
+    <!-- Master UI's two fills. Paper is Neue's default theme, so launch opens on it. -->
+    <color name="paper">#FFFFFFFF</color>
+    <color name="ink">#FF000000</color>
 </resources>

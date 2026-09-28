@@ -106,7 +106,7 @@ fun BuilderPage(
             // A hidden pane leaves its handle where it stood (kai, 1.0.19): a narrow strip
             // at its edge with the one button that brings it back — past the rail's gutter,
             // so reaching for it does not bring the rail out instead.
-            val gutter = if (neue.prefs.railPinned && !neue.immersive) 0.dp else 32.dp
+            val gutter = if (neue.railPinned && !neue.immersive) 0.dp else 32.dp
             HiddenPane(
                 Modifier.zenQuiet().padding(start = gutter),
                 Icons.PanelLeftOpen,

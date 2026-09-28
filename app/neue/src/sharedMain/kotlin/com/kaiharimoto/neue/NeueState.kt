@@ -128,6 +128,16 @@ class NeueState(
     val overlayOpen: Boolean
         get() = paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || studio != null
 
+    /**
+     * A touch screen first (Neue on a tablet): no hover to bring the rail out or
+     * to read a card by, so the rail stays out and the inspector follows the
+     * selection. A mouse plugged into the tablet still works as a mouse.
+     */
+    val touchFirst: Boolean get() = com.kaiharimoto.neue.platform.Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID
+
+    /** The index rail stays out: pinned, or on a touch screen, where nothing can reach for it. */
+    val railPinned: Boolean get() = prefs.railPinned || touchFirst
+
     /** What the inspector is showing: the hover, else the selection. */
     val inspected: Card? get() = hovered ?: selection?.card
 

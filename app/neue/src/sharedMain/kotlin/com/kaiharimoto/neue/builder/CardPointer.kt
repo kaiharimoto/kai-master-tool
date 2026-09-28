@@ -24,6 +24,10 @@ import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import com.kaiharimoto.neue.kit.onPointer
+import com.kaiharimoto.neue.kit.byFinger
+import com.kaiharimoto.neue.kit.isPrimaryPress
+import com.kaiharimoto.mastertool.core.input.DeskTouch
+import com.kaiharimoto.mastertool.core.input.TouchGesture
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -150,7 +154,7 @@ fun Modifier.cardPointer(
                 // about the deck changes (1.0.14 for the picking out: see ZenGestures).
                 if (zenKey != null && neue.zen == ZenPhase.DEEP) {
                     down.consume()
-                    if (!buttons.isPrimaryPressed) {
+                    if (!currentEvent.isPrimaryPress) {
                         spend()
                         return@awaitEachGesture
                     }
@@ -192,6 +196,24 @@ fun Modifier.cardPointer(
                         // Let go: back into their slots, flush beside another card, or where they are.
                         zen.dropAll(group, zenKey)
                     }
+                    return@awaitEachGesture
+                }
+                // A finger (1.3.0): `DeskTouch` rather than `DeskMouse`.
+                if (down.byFinger) {
+                    touch(down, on, dragEnabled, press, last,
+                        onGesture = { gesture, at ->
+                            if (gesture == TouchGesture.TAP) neue.hovered = null
+                            DeskTouch.resolve(on, gesture)?.let { act(it, origin + at) }
+                        },
+                        onDrag = { start ->
+                            drag.start(Held(heldCard, from, heldIndex, size), origin + start.position)
+                            val completed = drag(start.id) { change ->
+                                change.consume()
+                                drag.moveTo(origin + change.position)
+                            }
+                            if (completed) drag.drop() else drag.cancel()
+                        },
+                    )
                     return@awaitEachGesture
                 }
                 if (buttons.isSecondaryPressed && !buttons.isPrimaryPressed) {
@@ -268,6 +290,77 @@ fun Modifier.cardPointer(
                 }
             }
         }
+}
+
+/** How a finger's press ended, before it became a drag. */
+private enum class TouchEnd { UP, HOLD, DRAG, SCROLL, CANCEL }
+
+/**
+ * A finger on a card (`DeskTouch`): up before the hold is a tap — or, soon after
+ * another, a double-tap; still for [DeskMouse.HOLD_MS] is a long press; past the
+ * slop is a drag, unless it runs along a scrolling pool, when the finger is the
+ * pool's and the card lets it go. A second finger is a pinch, never the card's.
+ */
+private suspend fun AwaitPointerEventScope.touch(
+    down: PointerInputChange,
+    target: MouseTarget,
+    dragEnabled: Boolean,
+    press: Press,
+    last: LongArray,
+    onGesture: (TouchGesture, Offset) -> Unit,
+    onDrag: suspend AwaitPointerEventScope.(PointerInputChange) -> Unit,
+) {
+    val slop = viewConfiguration.touchSlop
+    var moved: PointerInputChange? = null
+    press.down = true
+    val end = try {
+        withTimeoutOrNull(DeskMouse.HOLD_MS) {
+            var total = Offset.Zero
+            while (true) {
+                val event = awaitPointerEvent()
+                if (event.changes.count { it.pressed } > 1) return@withTimeoutOrNull TouchEnd.CANCEL
+                val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull TouchEnd.CANCEL
+                if (!change.pressed) return@withTimeoutOrNull TouchEnd.UP
+                if (change.isConsumed) return@withTimeoutOrNull TouchEnd.CANCEL
+                total += change.positionChange()
+                if (total.getDistance() > slop) {
+                    return@withTimeoutOrNull if (dragEnabled && DeskTouch.picksUp(target, total.x, total.y)) {
+                        change.consume()
+                        moved = change
+                        TouchEnd.DRAG
+                    } else {
+                        TouchEnd.SCROLL
+                    }
+                }
+            }
+            @Suppress("UNREACHABLE_CODE")
+            TouchEnd.CANCEL
+        } ?: TouchEnd.HOLD
+    } finally {
+        press.down = false
+    }
+    when (end) {
+        TouchEnd.UP -> {
+            val now = down.uptimeMillis
+            if (now - last[0] < DeskTouch.DOUBLE_TAP_MS) {
+                last[0] = 0L
+                onGesture(TouchGesture.DOUBLE_TAP, down.position)
+            } else {
+                last[0] = now
+                onGesture(TouchGesture.TAP, down.position)
+            }
+        }
+        TouchEnd.HOLD -> {
+            last[0] = 0L
+            onGesture(TouchGesture.LONG_PRESS, down.position)
+            spend()
+        }
+        TouchEnd.DRAG -> {
+            last[0] = 0L
+            moved?.let { onDrag(it) }
+        }
+        TouchEnd.SCROLL, TouchEnd.CANCEL -> last[0] = 0L
+    }
 }
 
 /**

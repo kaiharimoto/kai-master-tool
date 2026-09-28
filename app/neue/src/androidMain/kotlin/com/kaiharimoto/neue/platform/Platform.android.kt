@@ -17,7 +17,8 @@ import java.io.File
  * activity results, and only the activity can register those.
  */
 actual object Platform {
-    private lateinit var context: Context
+    internal lateinit var context: Context
+        private set
 
     /** The activity's document picker: MIME types in, the chosen file out. */
     private var picker: (suspend (Array<String>) -> PickedFile?)? = null

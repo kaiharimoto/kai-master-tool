@@ -1,8 +1,8 @@
 # Neue Master Tool
 
 **kai's master tool — a Yu-Gi-Oh! deck builder that answers the questions a deck
-list cannot.** For Windows, macOS and Linux today; for Android tablets next, from
-the same code.
+list cannot.** For Windows, macOS and Linux, and for Android tablets, from the
+same code.
 
 Build the deck, then ask it things. What are the *exact* odds this opens? Which
 cards are the engine and which are the twelve you keep drawing alongside it?
@@ -48,10 +48,13 @@ Once installed it checks for the next version on launch and offers to install it
 
 ### Android
 
-Neue is becoming the Android app: the next APK, **v1.3.0**, replaces the tablet
-app in place — same app, same signing key, your saved decks kept. Until then the
-[latest release](https://github.com/kaiharimoto/kai-master-tool/releases/latest)
-is the tablet app, which updates itself onto Neue when it arrives.
+Neue is the Android app from **v1.3.0**, for landscape tablets: install
+`kai-master-tool-<version>.apk` from the
+[latest release](https://github.com/kaiharimoto/kai-master-tool/releases/latest).
+It replaced the tablet app in place — same app, same signing key — so a tablet
+that had it updates itself onto Neue and keeps its saved decks. Tap reads a card,
+double-tap adds or removes it, press and hold opens it large, drag moves it; a
+mouse and a keyboard work exactly as on the desktop.
 
 ### New 3DS
 
@@ -119,8 +122,7 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
 | **`app/core`** | Pure Kotlin: models, YDK/YDKX codec, deck rules, search and filters, hand odds, layout solving, the keyboard and mouse tables, SQLite. No Compose, no platform code; compiles and tests with no Android SDK. |
 | **`app/builder`** | The builder's state and plumbing that is not a look: `DeckBuilderState`, the app's dependencies, the updater seam, the image loader, the shader seam, the card foil. |
 | **`app/neue`** | **Neue Master Tool** — every screen, in Master UI. Packaged as `.msi` / `.dmg` / `.deb`. |
-| **`app/androidApp`** | The APK. Becoming Neue on Android. |
-| **`app/ui`** | The tablet app's screens and play stage — *classic*, retired when the APK becomes Neue. |
+| **`app/androidApp`** | The APK: Neue on an Android tablet, from v1.3.0. |
 | **`app/studio`** | Draws the app to PNG headlessly — every picture above. Opt-in, ships in nothing. |
 | **`3ds/`** | A separate C rewrite for the New 3DS. Shares no code — shares the arithmetic, and proves it. |
 

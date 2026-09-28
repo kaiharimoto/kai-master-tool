@@ -124,7 +124,10 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                                     Breathe()
                                     Mono(art.percent(), color = Mu.colors.ink)
                                 }
-                                MuButton("Open folder", { com.kaiharimoto.neue.platform.Platform.open(art.dir) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+                                // A folder is a desktop's to open; Android has nothing to hand one to.
+                                if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
+                                    MuButton("Open folder", { com.kaiharimoto.neue.platform.Platform.open(art.dir) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+                                }
                             }
                         }
                     }
@@ -142,7 +145,9 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         MuButton("Report", host.onReportIssue, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
                     }
                     SettingRow("Data folder", host.dataDir) {
-                        MuButton("Open", host.onOpenDataDir, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+                        if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
+                            MuButton("Open", host.onOpenDataDir, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+                        }
                     }
                 }
                 Column {

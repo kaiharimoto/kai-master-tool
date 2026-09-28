@@ -48,6 +48,7 @@ import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.kit.onContextMenu
 import com.kaiharimoto.mastertool.core.input.MouseAction
 import com.kaiharimoto.mastertool.core.input.MouseTarget
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
@@ -96,7 +97,7 @@ fun PoolPane(
     }
 
     // Zen: the search and its controls fade with the chrome; the pool, cards and all, goes at ten seconds.
-    val gutter = if (neue.prefs.railPinned && !neue.immersive) 0.dp else RAIL_GUTTER
+    val gutter = if (neue.railPinned && !neue.immersive) 0.dp else RAIL_GUTTER
     Column(
         modifier
             .zenDeep()
@@ -308,8 +309,9 @@ private fun ListsRow(neue: NeueState) {
                     Modifier
                         .height(24.dp)
                         .onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }
-                        .onPointer(PointerEventType.Press) { e ->
-                            if (e.buttons.isSecondaryPressed) {
+                        // Right-click, or a finger held on the tag (1.3.0).
+                        .onContextMenu {
+                            run {
                                 neue.menu = MenuSpec(
                                     at,
                                     listOf(
@@ -318,7 +320,6 @@ private fun ListsRow(neue: NeueState) {
                                         MenuEntry("Delete “${list.name}”", danger = true, separatorBefore = true) { neue.deleteList(list.id) },
                                     ),
                                 )
-                                e.changes.forEach { it.consume() }
                             }
                         },
                     count = "${list.ids.size}",

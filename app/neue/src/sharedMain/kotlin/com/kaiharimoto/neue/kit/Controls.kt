@@ -249,7 +249,7 @@ fun MuInput(
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val change = event.changes.firstOrNull() ?: continue
-                        if (event.type == PointerEventType.Press && event.buttons.isPrimaryPressed) {
+                        if (event.type == PointerEventType.Press && event.isPrimaryPress) {
                             val near = (change.position - lastPos).getDistance() < TRIPLE_SLOP
                             count = if (change.uptimeMillis - lastAt < TRIPLE_MS && near) count + 1 else 1
                             lastAt = change.uptimeMillis

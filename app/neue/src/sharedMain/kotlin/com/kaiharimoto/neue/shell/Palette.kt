@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.shell
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.mastertool.core.input.CursorMode
+import com.kaiharimoto.mastertool.core.input.DeskTouch
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -223,19 +225,27 @@ fun HelpDialog(onDismiss: () -> Unit) {
             }
             ScrollbarFor(scroll)
         }
-        // The mouse, from its own table: the two places a card can be, side by side.
+        // The mouse, from its own table: the two places a card can be, side by
+        // side. On a touch screen the finger's table stands in its place — a
+        // mouse plugged into the tablet still does everything the desk's does.
+        val touch = LocalTouchFirst.current
         Row(Modifier.fillMaxWidth().padding(top = 24.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
             MouseTarget.entries.forEach { target ->
                 Column(Modifier.weight(1f)) {
                     SectionTitle(null, target.heading)
-                    DeskMouse.all.filter { it.target == target }.forEach { row ->
+                    val rows = if (touch) {
+                        DeskTouch.all.filter { it.target == target }.map { it.description to it.gesture.label }
+                    } else {
+                        DeskMouse.all.filter { it.target == target }.map { it.description to it.gesture.label }
+                    }
+                    rows.forEach { (description, gesture) ->
                         Row(
                             Modifier.fillMaxWidth().padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            RowText(row.description, Modifier.weight(1f))
-                            Kbd(row.gesture.label)
+                            RowText(description, Modifier.weight(1f))
+                            Kbd(gesture)
                         }
                         HRule()
                     }
@@ -243,7 +253,11 @@ fun HelpDialog(onDismiss: () -> Unit) {
             }
         }
         MuText(
-            "The index folds away: move to the left edge of the window to bring it out. F11 is immersive mode, where the top and bottom bars fold away too.",
+            if (touch) {
+                "Two fingers pinch the deck larger or smaller. A mouse and a keyboard work as they do on the desktop."
+            } else {
+                "The index folds away: move to the left edge of the window to bring it out. F11 is immersive mode, where the top and bottom bars fold away too."
+            },
             Modifier.padding(top = 20.dp),
             MuType.help(LocalMuFonts.current),
             color = c.ink45,

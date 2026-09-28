@@ -6,9 +6,6 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Lets the app install the release APK it downloads from GitHub. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- The haptic half of card feel. Normal permission: no prompt, and the
-         one in-app toggle already governs whether it is ever used. -->
-    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".MasterToolApplication"
@@ -19,20 +16,21 @@
         android:hardwareAccelerated="true"
         android:theme="@style/Theme.MasterTool">
 
-        <!-- screenOrientation was userLandscape, which is what "built on one
-             tablet" looked like as a policy. The deck builder now has a
-             portrait arrangement (ui/deckbuilder/TallBuilder.kt), so the app
-             follows the device instead: fullUser rotates freely and still
-             respects the user's own rotation lock. -->
+        <!-- Neue is laid out for a wide window: a landscape tablet, rotating
+             between its two landscapes and respecting the rotation lock. A
+             portrait (phone) arrangement is its own later phase. The config
+             changes listed are the ones Neue lays itself out for rather than
+             being recreated — a keyboard attached or detached included, or its
+             state would go with it. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTask"
             android:theme="@style/Theme.MasterTool"
-            android:screenOrientation="fullUser"
+            android:screenOrientation="userLandscape"
             android:resizeableActivity="true"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|density|uiMode">
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

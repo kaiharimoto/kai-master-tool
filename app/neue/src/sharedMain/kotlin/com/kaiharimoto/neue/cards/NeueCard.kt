@@ -319,7 +319,8 @@ private fun NeueCardFace(
         // The artwork chip, on hover (1.0.16): on the card, where the pointer already is,
         // because the inspector's arrows were a journey across other cards away. Its press
         // is spent here, so it never also selects, drags or opens the card under it.
-        if (artChip != null && hovered) {
+        // On a touch screen, where nothing hovers, the chip is on the selected card.
+        if (artChip != null && (hovered || selected && com.kaiharimoto.neue.kit.LocalTouchFirst.current)) {
             Inverted {
                 Box(
                     Modifier

@@ -1,0 +1,79 @@
+name: Neue on an Android tablet
+
+# The APK is Neue Master Tool from v1.3.0, replacing the tablet app in place.
+# This boots a tablet emulator and runs androidApp's instrumented smoke test
+# (NeueSmokeTest): a deck written the way the tablet app wrote one, into the same
+# database, must be what Neue opens onto — and nothing may crash on the way. The
+# screen is photographed and kept as the run's artifact, because this is the
+# only picture of Neue on Android anything in CI can take.
+#
+# Before a v1.3.x release, this must be green on the commit being released.
+
+on:
+  push:
+    branches:
+      - main
+      - 'claude/**'
+    paths:
+      - 'app/**'
+      - '.github/workflows/android-smoke.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: android-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Tablet emulator smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: ''
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Hardware acceleration for the emulator; without it an x86_64 image does not boot in time.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Build the app and the test
+        working-directory: app
+        run: ./gradlew :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest -Pmastertool.android=true --stacktrace
+
+      - name: Run on a tablet
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_tablet
+          disable-animations: true
+          working-directory: app
+          # Left installed, or the run uninstalls the app and its screenshot with it.
+          script: |
+            ./gradlew :androidApp:connectedDebugAndroidTest -Pmastertool.android=true -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --stacktrace
+            adb pull /sdcard/Android/data/com.kaiharimoto.mastertool/files/neue-smoke.png neue-smoke.png || true
+
+      - name: Keep the picture and the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neue-android-smoke
+          path: |
+            app/neue-smoke.png
+            app/androidApp/build/reports/androidTests/
+            app/androidApp/build/outputs/androidTest-results/
+          if-no-files-found: warn

@@ -17,7 +17,7 @@ layout solving, hand odds, the renderer's arithmetic, the gesture state machines
 — with no Compose and no platform code, so it compiles and its tests run with no
 Android SDK installed.
 
-`:builder`, `:neue`, `:androidApp` and `:ui` are a different story: every Android
+`:builder`, `:neue`, `:androidApp` and `:studio` are a different story: every Android
 artifact is served only from Google's Maven, so they need network access to it.
 `settings.gradle.kts` detects whether an SDK is present and **skips those modules
 when it is not**, which is why the command above works in a bare container.

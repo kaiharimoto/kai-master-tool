@@ -52,6 +52,7 @@ import com.kaiharimoto.mastertool.core.search.SearchScope
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.cursor.cursorPointer
+import com.kaiharimoto.neue.kit.onContextMenu
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.kit.Body
@@ -198,13 +199,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                                         .onGloballyPositioned { origin = it.positionInWindow() }
                                         .onPointer(PointerEventType.Enter) { hovered = card }
                                         .onPointer(PointerEventType.Exit) { if (hovered == card) hovered = null }
-                                        .onPointer(PointerEventType.Press) { e ->
-                                            if (e.buttons.isSecondaryPressed) {
-                                                val at = origin + (e.changes.firstOrNull()?.position ?: Offset.Zero)
-                                                neue.menu = MenuSpec(at, CardActions.poolMenu(card, state, neue))
-                                                e.changes.forEach { it.consume() }
-                                            }
-                                        }
+                                        .onContextMenu { local -> neue.menu = MenuSpec(origin + local, CardActions.poolMenu(card, state, neue)) }
                                         .pointerInput(card, list?.id) {
                                             detectTapGestures(onTap = { picked = card }, onDoubleTap = { primary(card) })
                                         }

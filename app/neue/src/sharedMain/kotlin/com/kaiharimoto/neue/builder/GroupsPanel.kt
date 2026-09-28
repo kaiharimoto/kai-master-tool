@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import com.kaiharimoto.neue.kit.onPointer
+import com.kaiharimoto.neue.kit.onContextMenu
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Dp
@@ -203,17 +204,21 @@ private fun GroupRow(
     LaunchedEffect(onSquare, onSwatches) {
         if (onSquare || onSwatches) lingering = true else { delay(450); lingering = false }
     }
-    val swatchesOut = onSquare || onSwatches || lingering
+    // A finger cannot hover: on a touch screen a tap on the square brings the colours
+    // out (and a second puts them away); isolating is on the row's held-finger menu.
+    var tapped by remember(group.id) { mutableStateOf(false) }
+    val swatchesOut = onSquare || onSwatches || lingering || tapped
     Column(
         Modifier
             .fillMaxWidth()
             .onGloballyPositioned { at = it.positionInWindow() }
             .border(1.dp, if (isolated || hovered) c.ink else c.ink25)
             .hoverable(source)
-            .onPointer(PointerEventType.Press) { event ->
-                if (event.buttons.isSecondaryPressed) {
+            // Right-click, or a finger held on the row (1.3.0).
+            .onContextMenu { local ->
+                run {
                     neue.menu = MenuSpec(
-                        at + event.changes.first().position,
+                        at + local,
                         listOf(
                             MenuEntry("Edit cards in “${group.name}”") { state.editGroup(group) },
                             MenuEntry(if (isolated) "Show every group" else "See it alone") { state.toggleIsolation(group.id) },
@@ -237,7 +242,9 @@ private fun GroupRow(
                     .border(if (isolated) 2.dp else 1.dp, c.ink)
                     .hoverable(squareSource)
                     .cursorPointer(caption = if (isolated) "Show all" else "Isolate")
-                    .clickable(interactionSource = squareSource, indication = null) { state.toggleIsolation(group.id) },
+                    .clickable(interactionSource = squareSource, indication = null) {
+                        if (neue.touchFirst) tapped = !tapped else state.toggleIsolation(group.id)
+                    },
             )
             // Renamed where it stands: written once on Enter or on leaving the field,
             // so a name is one step of undo rather than one per letter.
@@ -273,6 +280,7 @@ private fun GroupRow(
                         .cursorPointer(caption = "Colour")
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                             state.updateGroups { it.upsert(group.copy(color = h)) }
+                            tapped = false
                         },
                 )
             }

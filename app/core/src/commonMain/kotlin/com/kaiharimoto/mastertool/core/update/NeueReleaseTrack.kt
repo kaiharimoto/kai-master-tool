@@ -73,6 +73,19 @@ object NeueReleaseTrack {
     fun installerFor(release: Release, os: DesktopOs): ReleaseAsset? =
         release.assets.firstOrNull { it.name.endsWith(".${os.extension}", ignoreCase = true) }
 
+    /**
+     * Neue on a tablet updates on the APK's track, not this one (1.0.20): the
+     * newest full release (`/releases/latest`, `v1.3.0`), when it is newer than
+     * [currentVersion] and carries an APK. That is the endpoint every tablet
+     * already reads, and the path a classic tablet takes onto Neue.
+     */
+    fun apkUpdate(latest: Release?, currentVersion: String): NeueUpdate? {
+        val release = latest?.takeIf { !it.isPreRelease } ?: return null
+        if (!AppVersion.isNewer(currentVersion, release.versionName)) return null
+        val apk = release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) } ?: return null
+        return NeueUpdate(versionName = release.versionName, release = release, installer = apk)
+    }
+
     /** The file name the release workflow gives an installer. */
     fun installerName(version: String, os: DesktopOs): String = "neue-master-tool-$version.${os.extension}"
 }
@@ -90,6 +103,14 @@ class NeueUpdateChecker(
     private val os: DesktopOs,
 ) {
     suspend fun check(): NeueUpdateStatus {
+        if (os == DesktopOs.ANDROID) {
+            val latest = api.latestRelease().getOrElse { error ->
+                return NeueUpdateStatus.Failed(error.message ?: "Could not reach GitHub")
+            }
+            return NeueReleaseTrack.apkUpdate(latest, currentVersionName)
+                ?.let { NeueUpdateStatus.Available(it) }
+                ?: NeueUpdateStatus.UpToDate
+        }
         val releases = api.releases().getOrElse { error ->
             return NeueUpdateStatus.Failed(error.message ?: "Could not reach GitHub")
         }

@@ -15,6 +15,7 @@ android {
     compileSdk = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         applicationId = "com.kaiharimoto.mastertool"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
@@ -56,6 +57,7 @@ android {
     }
 
     sourceSets["main"].java.srcDir("src/main/kotlin")
+    sourceSets["androidTest"].java.srcDir("src/androidTest/kotlin")
 
     packaging {
         resources.excludes += setOf(
@@ -71,12 +73,14 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":ui"))
+    // The APK is Neue Master Tool (v1.3.0): its screens, and the builder state
+    // and plumbing beneath them. The tablet's `:ui` is no longer in it.
+    implementation(project(":neue"))
+    implementation(project(":builder"))
     implementation(project(":core"))
 
     implementation(compose.runtime)
     implementation(compose.foundation)
-    implementation(compose.material3)
     implementation(compose.ui)
 
     implementation(libs.androidx.activity.compose)
@@ -85,4 +89,11 @@ dependencies {
     // Each application picks its own SQL driver and HTTP engine; :core ships none.
     implementation(libs.sqldelight.driver.android)
     implementation(libs.ktor.client.okhttp)
+
+    // The emulator smoke test (.github/workflows/android-smoke.yml): Neue opens on
+    // a tablet, finds the deck the tablet app left, and is photographed doing it.
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit-ktx:1.2.1")
+    androidTestImplementation(libs.kotlinx.coroutines.core)
 }

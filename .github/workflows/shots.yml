@@ -1,41 +1,16 @@
-name: Shoot the classic tablet app
+name: Shoot Neue for the README
 
-# CLASSIC. This renders the tablet app and its play stage, retired as Neue
-# becomes the APK (CLAUDE.md, "The port"), into docs/classic/shots. The README's
-# pictures are Neue's, rendered with `tools/shoot.sh --neue` into
-# docs/shots/neue-*.png; this workflow moves to Neue when :ui is deleted.
+# The pictures in the root README: Neue Master Tool drawn by `:studio` into an
+# ImageComposeScene — real theme, real dependencies, real card art — with no
+# window and no GPU. `tools/shoot.sh` is the same command a developer runs.
 #
-
-# The pictures at the top of the root README. `:studio` composes the real
-# PlayScreen into an ImageComposeScene - real theme, real dependencies, real
-# card art - with no window and no GPU, so the only thing it needs that a laptop
-# might not have is an Android SDK, because `:ui` has an androidTarget. CI has
-# one. That is the whole reason this workflow exists rather than a line in a
-# contributing guide.
-#
-# Dispatch only, on the claude/** branch. Two reasons, and the second one bites:
-#
-#  - The deal is seeded, so two runs are bit-identical. A run per push would
-#    rewrite binaries to say nothing, and a PNG has no useful delta - every
-#    regeneration is a whole new blob in the history, forever.
-#  - `main` is a strict fast-forward of the working branch. A workflow that
-#    commits to `main` puts a commit there that is not on the branch, and the
-#    next fast-forward in the shipping ritual is rejected - at the worst
-#    possible moment. Shoot on the branch and let `main` catch up.
+# Dispatch only, on the claude/** branch, never on `main`: `main` is a strict
+# fast-forward of the working branch, and a commit this workflow put on `main`
+# would be one the next fast-forward is rejected by.
 
 on:
   workflow_dispatch:
     inputs:
-      scale:
-        description: 'Percent of the rendered size to commit. GitHub renders a README about 850px wide.'
-        required: false
-        default: '50'
-        type: string
-      settle:
-        description: 'Frames to run before the first shot. The card art arrives during these.'
-        required: false
-        default: '300'
-        type: string
       commit:
         description: 'Commit the result. Off renders, checks and uploads the artifact only.'
         required: false
@@ -44,13 +19,6 @@ on:
 
 permissions:
   contents: write
-
-# Defined once: the render step shoots these and the check step asserts exactly
-# these came back, so a row added to one and not the other is a red build rather
-# than a missing picture.
-env:
-  STAGE_SHOTS: desk-night-pov,desk-day-table,minimal-day-table
-  BUILDER_SHOTS: builder-wide,builder-lens,builder-odds,builder-stats,builder-check,builder-tall
 
 concurrency:
   group: shots-${{ github.ref }}
@@ -62,7 +30,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      # Refuse before spending fifteen minutes, not after.
       - name: Refuse to commit to the default branch
         if: ${{ inputs.commit && github.ref_name == 'main' }}
         run: |
@@ -78,140 +45,75 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # `packages: ''` because the action's default is `tools platform-tools`,
-      # and `tools` was removed from Google's repository - sdkmanager now exits 1
-      # with "Failed to find package 'tools'" and takes the whole job with it. The
-      # runner image already ships an SDK; what is wanted from this action is the
-      # accepted licences and ANDROID_HOME, not a download.
       - uses: android-actions/setup-android@v3
         with:
           packages: ''
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # Without this, tools/shoot.sh silently skips writing local.properties,
-      # -Pmastertool.android=true forces :ui in anyway, and AGP fails a hundred
-      # lines later with an unrelated message.
-      - name: Assert there is an SDK
-        run: |
-          test -d "${ANDROID_HOME:-/nonexistent}" || {
-            echo "::error::no Android SDK - :ui cannot be configured"
-            exit 1
-          }
-          echo "ANDROID_HOME=$ANDROID_HOME"
-
-      # Studio.kt's --data default: the SQLite card pool and Coil's art cache.
-      # Warm, CardRepository.sync returns UpToDate without touching the network
-      # and the art is on disk before the first frame - which is the difference
-      # between a table with cards on it and a table without.
-      - name: Cache the studio's card pool and art
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/mastertool-studio
-          key: studio-data-${{ hashFiles('lab.ydkx', 'ydk/lab.ydkx') }}-${{ github.run_id }}
-          restore-keys: |
-            studio-data-${{ hashFiles('lab.ydkx', 'ydk/lab.ydkx') }}-
-            studio-data-
-
       - name: Install Pillow
         run: python3 -m pip install --quiet --disable-pip-version-check pillow
 
-      # The script, never a hand-rolled gradlew line, so this and a developer's
-      # terminal cannot drift.
-      #
-      # One invocation per row, because `--screen`, `--keys` and the frame size
-      # are per-*run* rather than per-shot: the studio composes once and then
-      # takes every `--shots` name off that one composition. So a strip that
-      # wants the builder and the stage, or two builder panels, is that many
-      # runs. They share a warm Gradle daemon and a warm card pool, so only the
-      # first is expensive.
-      #
-      # The stage keeps the studio's own 1600x1000: it is the reference every
-      # before/after number in docs/classic/LOOP.md is measured against, and layout is
-      # dp-driven, so a narrower render is a differently laid out scene rather
-      # than a smaller picture. The builder is sized deliberately instead -
-      # 1480dp wide clears the 1400dp cutoff below which the header starts
-      # dropping controls (docs/classic/DEVICES.md), and the TALL shot is a phone.
+      # One page per run: the studio composes once and photographs it.
       - name: Render
         run: |
           set -euo pipefail
+          out="$RUNNER_TEMP/shots"
+          shoot() { tools/shoot.sh --out="$out" "$@" 2>&1 | tee -a "$RUNNER_TEMP/shoot.log"; }
+          shoot --page=builder --name=neue-builder --groups=true
+          shoot --page=builder --name=neue-builder-ink --theme=ink --groups=true
+          shoot --page=builder --name=neue-search --studio=deck --query=labrynth
+          shoot --page=decks --name=neue-decks --save=true --default=true
+          shoot --page=odds --name=neue-odds
+          shoot --page=builder --name=neue-zen --zen=deep --zen-seconds=4 --groups=true --zen-groups=true
 
-          shoot() {
-            local name="$1"; shift
-            echo "::group::$name"
-            set -o pipefail
-            tools/shoot.sh --out="$RUNNER_TEMP/shots" --shots="$name" \
-              --settle='${{ inputs.settle }}' "$@" 2>&1 | tee -a "$RUNNER_TEMP/shoot.log"
-            echo "::endgroup::"
-          }
-
-          # The builder rows all share these. `ydk/lab.ydkx` rather than the
-          # root `lab.ydkx` on purpose: it is the copy carrying roles and hand
-          # goals, and leaving the studio's default deck untouched is what keeps
-          # the three stage renders bit-identical across this change.
-          builder=(--screen=builder --deck=../ydk/lab.ydkx --width=2960 --height=1848 --density=2)
-
-          # The play stage: three rooms, one moment, off one composition.
-          shoot "$STAGE_SHOTS" --keys=f
-
-          shoot builder-wide  "${builder[@]}"
-          shoot builder-lens  "${builder[@]}" --keys=b
-          shoot builder-odds  "${builder[@]}" --keys=c
-          shoot builder-stats "${builder[@]}" --keys=s
-          shoot builder-check "${builder[@]}" --keys=i
-
-          # A phone, which is a different arrangement rather than a smaller one:
-          # taller than wide is all `Posture.of` looks at.
-          shoot builder-tall --screen=builder --deck=../ydk/lab.ydkx \
-            --width=1080 --height=2340 --density=3
-
-      # Reads the log as well as the pixels, because the studio is cheerful
-      # about failure: a card pool that did not sync and a deck that did not
-      # import both render a pretty, empty, perfectly well-formed table and
-      # exit 0. See the docstring in tools/contact.py.
-      - name: Check the run and resample into docs/shots
+      # The studio is cheerful about failure: a pool that did not sync renders a
+      # pretty, empty page and exits 0. A page of card art has thousands of
+      # colours; an empty one has a handful, so that is what is refused.
+      - name: Check and resample into docs/shots
         run: |
-          python3 tools/contact.py \
-            --raw "$RUNNER_TEMP/shots" \
-            --out docs/classic/shots \
-            --shots "$STAGE_SHOTS,$BUILDER_SHOTS" \
-            --log "$RUNNER_TEMP/shoot.log" \
-            --scale '${{ inputs.scale }}' \
-            | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PY'
+          import os, sys
+          from PIL import Image
+          raw = os.path.join(os.environ["RUNNER_TEMP"], "shots")
+          names = ["neue-builder", "neue-builder-ink", "neue-search", "neue-decks", "neue-odds", "neue-zen"]
+          bad = []
+          for n in names:
+              path = os.path.join(raw, n + ".png")
+              if not os.path.isfile(path):
+                  bad.append(f"{n}: missing"); continue
+              im = Image.open(path).convert("RGB")
+              colours = len(im.getcolors(maxcolors=1 << 20) or [])
+              floor = 64 if n in ("neue-decks", "neue-odds") else 2000
+              if colours < floor:
+                  bad.append(f"{n}: {colours} colours, an empty page")
+                  continue
+              im.resize((1600, round(im.height * 1600 / im.width)), Image.LANCZOS).save(f"docs/shots/{n}.png", optimize=True)
+              print(f"{n}: {colours} colours")
+          if bad:
+              print("\n".join(bad)); sys.exit(1)
+          PY
 
       - name: Commit if any pixels moved
         if: ${{ inputs.commit }}
         run: |
           set -euo pipefail
-          git add -- docs/classic/shots
+          git add -- docs/shots
           if git diff --cached --quiet; then
-            echo "Nothing moved. The deal is seeded, so this is the expected result of a re-run."
+            echo "Nothing moved."
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit \
-            -m "The contact strip is re-shot from ${GITHUB_SHA:0:7}" \
-            -m "Shots: $STAGE_SHOTS, $BUILDER_SHOTS at settle=${{ inputs.settle }}, resampled to ${{ inputs.scale }}% by tools/contact.py. Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
-
-          # A render takes a quarter of an hour, and a branch somebody is
-          # working on moves inside one. Rebasing is safe here and only here:
-          # this commit touches docs/shots and nothing else does, so there is
-          # nothing for it to conflict with. Never --force - if the rebase
-          # cannot replay cleanly, something is wrong that a push should not
-          # paper over.
+          git commit -m "The README's pictures are re-shot from ${GITHUB_SHA:0:7}" \
+            -m "Rendered by .github/workflows/shots.yml run ${GITHUB_RUN_ID}."
           for attempt in 1 2 3; do
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-              exit 0
-            fi
-            echo "push $attempt rejected - the branch moved under the render, replaying onto it"
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then exit 0; fi
             git pull --rebase origin "${GITHUB_REF_NAME}"
           done
-          echo "::error::could not push the contact strip after three attempts"
+          echo "::error::could not push the pictures after three attempts"
           exit 1
 
-      # The committed strip is documentation; the full-size originals are the
-      # instrument. Somebody reviewing a binary diff will want them.
       - name: Upload the originals
         if: always()
         uses: actions/upload-artifact@v4

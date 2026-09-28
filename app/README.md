@@ -1,9 +1,9 @@
 # kai's master tool — the app
 
-One Kotlin codebase. Its front is **Neue Master Tool** (`neue`), the deck builder
-in Master UI, on Windows, macOS and Linux today and on Android tablets next. The
-tablet app that came before it (`ui`) is *classic*: it still builds the current
-APK until Neue replaces it in place, and is then retired.
+One Kotlin codebase, one app: **Neue Master Tool** (`neue`), the deck builder in
+Master UI, on Windows, macOS and Linux and — from v1.3.0 — as the Android APK.
+The tablet app that came before it (`ui`, with its play stage) is *classic* and
+retired: it is at commit `c2fc8d8` (`neue-v1.0.19`) and in `docs/classic/`.
 
 The root [`README.md`](../README.md) is the front page - what the app does and
 how to install it. This file is how it is put together.
@@ -14,10 +14,9 @@ how to install it. This file is how it is put together.
 | Module | What it is | Depends on Google Maven |
 |---|---|---|
 | `core` | Pure Kotlin: models, YDK/YDKX codec, deck rules, search and filters, hand odds, layout, the keyboard and mouse tables, API client, SQLite | No |
-| `builder` | What the builder is, not how it looks: `DeckBuilderState`, `AppDependencies`, the updater seam, the image loader, the shader seam, the card foil. Files keep the `ui.*` packages they had in `ui` | Yes |
+| `builder` | What the builder is, not how it looks: `DeckBuilderState`, `AppDependencies`, the updater seam, the image loader, the shader seam, the card foil. Files keep the `ui.*` packages they had in the old `ui` module | Yes |
 | `neue` | **Neue Master Tool**: every screen, in Master UI; packaged as `.msi` / `.dmg` / `.deb` | Yes |
-| `androidApp` | The APK. Classic today; Neue from v1.3.0 | Yes |
-| `ui` | *Classic*: the tablet app's screens and play stage | Yes |
+| `androidApp` | The APK: hosts `neue` in one activity, with the crash reporter and the emulator smoke test | Yes |
 | `studio` | Draws the app to PNG headlessly (`tools/shoot.sh --neue`). Opt-in with `-Pmastertool.studio=true`, ships in nothing | Yes |
 
 `core` deliberately has no Compose and no platform code, so it compiles and its
@@ -55,14 +54,14 @@ need a Mac and are enabled with `-Pmastertool.ios=true`.
 branch that touches `app/`. Three jobs: `:core` tests with Android switched off
 (so a failure there is the rules, not the SDK), the debug APK, and Neue — its
 tests, the Master UI law among them, and a `.deb`. The APK and the `.deb` are
-uploaded as run artifacts.
+uploaded as run artifacts. `.github/workflows/android-smoke.yml` boots a tablet
+emulator and runs `NeueSmokeTest` against the APK, uploading its screenshot.
 
 `.github/workflows/release-neue.yml` publishes Neue's installers on the `neue-v*`
 track, always as a pre-release; `docs/NEUE.md` §5 has why.
 
-`.github/workflows/shots.yml` is the play stage drawn to PNG on a runner, for
-the pictures in the root README. Dispatch only, and on a `claude/**` branch -
-see `tools/contact.py`.
+`.github/workflows/shots.yml` is Neue drawn to PNG on a runner, for the pictures
+in the root README. Dispatch only, and on a `claude/**` branch.
 
 `.github/workflows/release.yml` publishes a signed release. Trigger it by
 pushing a `v*` tag, or from the Actions tab with a version number:
@@ -85,8 +84,8 @@ and keep the patch digit under 100 - 1.2.100 and 1.3.0 collide.
 
 ## Updating from GitHub
 
-The Android app checks this repository's latest release on launch and whenever
-you tap the version in the top bar. If a newer version has an APK attached, it
+The Android app checks this repository's latest release on launch, as the
+desktop builds check theirs. If a newer version has an APK attached, it
 downloads it and hands it to Android's package installer.
 
 - The first update asks you to allow the app to install unknown apps. That is a
@@ -94,7 +93,7 @@ downloads it and hands it to Android's package installer.
 - Pre-releases are ignored by stable builds, so a test release cannot push
   itself onto a normal install.
 - An unparseable or older tag never counts as an update.
-- The desktop build does not self-update; it opens the release page instead.
+- The desktop builds follow the `neue-v*` track instead; `docs/NEUE.md` §5.
 
 This only works because every build is signed with the same **deliberately
 public** keystore — Android rejects an update whose signature changed. See
@@ -123,19 +122,10 @@ cannot disagree with each other.
 **A failed card-pool refresh never clears the cache.** An outdated pool beats no
 pool at a venue with no signal.
 
-**The builder has two arrangements, and one rule picks between them.** The
-manifest was `userLandscape` until the app met a phone; it is `fullUser` now.
-`core/layout/Posture.kt` is the whole decision - a window taller than it is wide
-is `TALL`, everything else is `WIDE` - with no dp threshold, because a threshold
-has to be re-chosen for every new device and the aspect ratio is what the two
-arrangements actually turn on. A portrait tablet gets `TALL` too, which is right
-rather than incidental. `docs/classic/DEVICES.md` §6 is the authority.
-
-Rotation therefore *does* recreate the activity, and the app still uses plain
-remembered state holders rather than ViewModels: what survives a rotation is the
-SQLite database and the preferences document, both of which are read back on the
-way up. A screen's transient state is deliberately not worth preserving across a
-turn of the device.
+**The APK is landscape, for now.** Neue is laid out for a wide window, so the
+manifest is `userLandscape` until Neue has a phone arrangement of its own. The
+classic tablet app had two (`core/layout/Posture.kt`, `docs/classic/DEVICES.md`
+§6), and that decision will be re-made for Neue rather than inherited.
 
 **Sorting a deck is an edit, not a view setting.** The stored order is exactly
 what gets written back to `.ydk`, so a sort that only reordered the display would
@@ -159,24 +149,14 @@ schema changes.
 
 ## Status
 
-Shipping: deck builder with search and filters, drag and drop between the
-pool and every deck section, per-section copy steppers and moves, adjustable and
-collapsible deck panes with per-section sorting and card density, an inspector
-you can page through the results in, deck statistics with opening-hand odds, a
-deck-check panel that jumps to the card an issue names, a TCG/OCG toggle, deck
-library, YDK/YDKX import, export and share.
+Shipping, on the desktop and the tablet: the deck builder with search, advanced
+filters and card lists, drag and drop between the pool and every section, groups
+that break the deck into pieces, the lenses and their exact opening odds, deck
+statistics, the library with tags and covers, alternate and own artworks, zen,
+YDK/YDKX/`ydke://` import and export. Keyboard shortcuts throughout (`?` lists
+them, from the table that implements them), a mouse grammar and a touch grammar,
+both tables too.
 
-On desktop: keyboard shortcuts throughout (press `?` for the list, which is
-generated from the table that implements them) and a hover preview on any card.
-
-Also shipping: the freeform **play stage** - a table where cards go anywhere,
-stack, and set face-down, with ten simultaneous gesture lanes, searchable piles,
-a hold-to-read card reader, and a free-flight camera over a room drawn by
-`core/render/`. It replaced the goldfish screen. A second board - "Table", a
-zone board over a `BoardState` - was built and then cut as redundant; the zones
-survive it in `core/layout/BoardLayout.kt`, which still solves all ten of them.
-
-Not yet built: siding patterns and shootout mode (both deliberately deferred, to
-be redesigned from scratch rather than ported), PDF export, the deck showcase
-stage, and autoscrolling a pane while dragging over its edge. `docs/classic/TABLE.md` §5
-is the ordered list.
+Not yet built: play mode (the classic play stage is retired; kai will rebuild it
+inside Neue), a phone layout, siding patterns and shootout mode (deliberately
+deferred, to be redesigned rather than ported), and PDF export.

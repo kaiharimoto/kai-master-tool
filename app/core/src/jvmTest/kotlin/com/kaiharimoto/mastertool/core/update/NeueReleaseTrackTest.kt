@@ -114,4 +114,19 @@ class NeueReleaseTrackTest {
         )
         assertIs<NeueUpdateStatus.Failed>(NeueUpdateChecker(api, "1.0.0", DesktopOs.LINUX).check())
     }
+
+    @Test
+    fun aTabletUpdatesOnTheApkTrack() {
+        fun release(tag: String, pre: Boolean = false, apk: Boolean = true) = Release(
+            versionName = tag.removePrefix("v"), tagName = tag, notes = "", apkUrl = if (apk) "u" else null, apkSizeBytes = 1,
+            htmlUrl = "h", isPreRelease = pre,
+            assets = if (apk) listOf(ReleaseAsset("kai-master-tool-${tag.removePrefix("v")}.apk", "u", 1)) else emptyList(),
+        )
+        assertEquals("1.3.0", NeueReleaseTrack.apkUpdate(release("v1.3.0"), "1.2.63")?.versionName)
+        assertEquals("u", NeueReleaseTrack.apkUpdate(release("v1.3.0"), "1.2.63")?.installer?.url)
+        assertNull(NeueReleaseTrack.apkUpdate(release("v1.3.0"), "1.3.0"))
+        assertNull(NeueReleaseTrack.apkUpdate(release("v1.3.1", pre = true), "1.3.0"))
+        assertNull(NeueReleaseTrack.apkUpdate(release("v1.3.1", apk = false), "1.3.0"))
+        assertNull(NeueReleaseTrack.apkUpdate(null, "1.3.0"))
+    }
 }

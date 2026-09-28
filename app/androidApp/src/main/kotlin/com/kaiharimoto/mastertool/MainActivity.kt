@@ -5,37 +5,60 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.mastertool.core.update.GitHubReleaseApi
+import com.kaiharimoto.mastertool.core.update.NeueUpdateChecker
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import com.kaiharimoto.mastertool.ui.DeckFileAccess
 import com.kaiharimoto.mastertool.ui.ImportedFile
-import com.kaiharimoto.mastertool.ui.MasterToolApp
+import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.NeueRoot
+import com.kaiharimoto.neue.Page
+import com.kaiharimoto.neue.platform.PickedFile
+import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.rememberHolders
+import com.kaiharimoto.neue.update.NeueUpdates
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,29 +71,30 @@ private fun CrashReportScreen(trace: String, onShare: () -> Unit, onDismiss: () 
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF060608))
+            .background(Color.White)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(24.dp),
     ) {
         BasicText(
-            "The app crashed last time it ran",
-            style = TextStyle(color = Color.White, fontSize = 22.sp),
+            "Neue Master Tool crashed last time it ran",
+            style = TextStyle(color = Color.Black, fontSize = 22.sp),
         )
         BasicText(
             "Share this report so it can be fixed, then continue.",
-            style = TextStyle(color = Color(0xFF9C9CAB), fontSize = 14.sp),
+            style = TextStyle(color = Color.Black.copy(alpha = 0.7f), fontSize = 14.sp),
             modifier = Modifier.padding(top = 6.dp, bottom = 16.dp),
         )
 
         Row {
             BasicText(
                 "SHARE REPORT",
-                style = TextStyle(color = Color(0xFF35E0FF), fontSize = 16.sp),
+                style = TextStyle(color = Color.Black, fontSize = 16.sp),
                 modifier = Modifier.clickable(onClick = onShare).padding(10.dp),
             )
             Spacer(Modifier.width(20.dp))
             BasicText(
-                "CONTINUE TO APP",
-                style = TextStyle(color = Color.White, fontSize = 16.sp),
+                "CONTINUE",
+                style = TextStyle(color = Color.Black, fontSize = 16.sp),
                 modifier = Modifier.clickable(onClick = onDismiss).padding(10.dp),
             )
         }
@@ -82,23 +106,50 @@ private fun CrashReportScreen(trace: String, onShare: () -> Unit, onDismiss: () 
         ) {
             BasicText(
                 trace,
-                style = TextStyle(color = Color(0xFFFF4D4D), fontSize = 11.sp),
+                style = TextStyle(color = Color.Black, fontSize = 11.sp),
             )
         }
     }
 }
 
+/**
+ * The APK is Neue Master Tool (v1.3.0): the same app as the desktop's, built on
+ * the same `:core` and `:builder`, reading the same `kai_master_tool.db` the
+ * tablet app kept — so an installed tablet updates onto it with its decks.
+ *
+ * What the desktop's `Main.kt` does for its window, this does for the activity:
+ * the crash report, the files (the Storage Access Framework rather than a file
+ * dialog), the keyboard (a hardware keyboard's keys reach Neue's key table
+ * before anything else, as the window's do), full screen, and the back gesture
+ * (Esc: it closes what is on top, and leaves only when nothing is).
+ */
 class MainActivity : ComponentActivity(), DeckFileAccess {
+
+    private var holders: NeueHolders? = null
+
+    /** Neue's state, once it is composed: for the instrumented smoke test, which reads it. */
+    internal val neue: NeueHolders? get() = holders
 
     private var pendingImport: CompletableDeferred<ImportedFile?>? = null
     private var pendingExport: CompletableDeferred<Boolean>? = null
     private var pendingExportContent: String? = null
+    private var pendingPick: CompletableDeferred<PickedFile?>? = null
+
+    /** A deck file handed to the app from another (VIEW), waiting for the builder to ask for it. */
+    private var incoming: ImportedFile? = null
 
     private val openDocument =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             val deferred = pendingImport
             pendingImport = null
             deferred?.complete(uri?.let(::readDeckFile))
+        }
+
+    private val pickDocument =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            val deferred = pendingPick
+            pendingPick = null
+            deferred?.complete(uri?.let(::readPicked))
         }
 
     private val createDocument =
@@ -121,23 +172,12 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Said out loud rather than inherited. Targeting SDK 35 or later already
-        // forces edge-to-edge — `android:statusBarColor` in the theme is ignored
-        // from Android 15 — so the choice is not whether to draw under the
-        // system bars but whether the app knows it is doing so. Declaring it
-        // here means one behaviour on every version the app runs on, which is
-        // what `SafeArea` in the Compose tree is padding against; without it,
-        // whether the insets arrive as real numbers or as zeroes depends on the
-        // OS version, and a layout that is right on one and wrong on the other
-        // is the worst of the two.
-        //
-        // Both bars are asked for the dark style — light icons — because the
-        // scrim behind them is this app's own ink and never anything else.
-        // Fully qualified: `Color` in this file already means Compose's, which
-        // the crash screen below uses and which a `SystemBarStyle` cannot take.
+        // Edge to edge, said out loud rather than inherited (targeting SDK 35+
+        // forces it anyway); Neue pads itself against the system bars below.
+        // Paper by default, so the bars' icons are dark.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
 
         // A crash on a tablet with no adb is a crash nobody can read. Persist
@@ -146,11 +186,12 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         val crashFile = File(filesDir, "last-crash.txt")
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
-            runCatching { crashFile.writeText(error.stackTraceToString()) }
+            runCatching { crashFile.writeText(Platform.systemLine() + "\n\n" + error.stackTraceToString()) }
             previousHandler?.uncaughtException(thread, error)
         }
-
         val pendingCrash = crashFile.takeIf { it.exists() }?.readText()
+
+        Platform.attach(this) { types -> pick(types) }
 
         val app = application as MasterToolApplication
         val deps = AppDependencies(
@@ -164,6 +205,22 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             now = System::currentTimeMillis,
             imageCacheDir = cacheDir.resolve("card_art").absolutePath,
         )
+
+        // Back is Esc: whatever is on top closes; with nothing open, the app goes.
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    val neue = holders?.neue
+                    if (neue != null && neue.dismissTop()) return
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            },
+        )
+
+        incoming = intent?.data?.let(::readDeckFile)
 
         setContent {
             var showCrash by remember { mutableStateOf(pendingCrash != null) }
@@ -185,14 +242,79 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                     },
                 )
             } else {
-                MasterToolApp(deps)
+                val h = rememberHolders(deps) { scope ->
+                    NeueUpdates(NeueUpdateChecker(GitHubReleaseApi(app.httpClient), Platform.version, DesktopOs.ANDROID), scope)
+                }
+                SideEffect { holders = h }
+                // Immersive mode is the system bars hidden, swiped back in from an edge.
+                LaunchedEffect(h.neue.immersive) { showImmersive(h.neue.immersive) }
+                // The bars' icons follow the theme: dark on Paper, light on Ink.
+                val paper = h.neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.PAPER
+                LaunchedEffect(paper) {
+                    WindowCompat.getInsetsController(window, window.decorView).apply {
+                        isAppearanceLightStatusBars = paper
+                        isAppearanceLightNavigationBars = paper
+                    }
+                }
+                // A deck opened from another app, once the builder is there to take it.
+                LaunchedEffect(h) {
+                    if (incoming != null) {
+                        h.neue.page = Page.BUILDER
+                        h.builder.importFromFile()
+                    }
+                }
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        // The system bars and a camera cutout, but not the soft keyboard: the
+                        // search fields are at the top, and a window that shrank under the
+                        // keyboard would re-fit the deck and move every card.
+                        .let { if (h.neue.immersive) it else it.windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout)) },
+                ) {
+                    NeueRoot(h)
+                }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val file = intent.data?.let(::readDeckFile) ?: return
+        incoming = file
+        holders?.let { h ->
+            h.neue.page = Page.BUILDER
+            h.builder.importFromFile()
+        }
+    }
+
+    /**
+     * A hardware keyboard's keys go to Neue's key table first, as a window's do on
+     * the desktop (`Window(onPreviewKeyEvent = …)`), whatever has focus.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val h = holders
+        if (h != null && h.onKey(KeyEvent(event))) return true
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun showImmersive(on: Boolean) {
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        if (on) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 
     // ---- DeckFileAccess ----------------------------------------------------
 
     override suspend fun importDeck(): ImportedFile? {
+        // A file handed over by another app is the answer the first time it is asked.
+        incoming?.let { file ->
+            incoming = null
+            return file
+        }
         // Only one picker may be open at a time; abandon any previous request.
         pendingImport?.complete(null)
 
@@ -229,6 +351,15 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         startActivity(Intent.createChooser(intent, "Share deck"))
     }
 
+    /** Neue's file picker (a picture for a card): the system's document picker. */
+    private suspend fun pick(types: Array<String>): PickedFile? {
+        pendingPick?.complete(null)
+        val deferred = CompletableDeferred<PickedFile?>()
+        pendingPick = deferred
+        pickDocument.launch(types)
+        return deferred.await()
+    }
+
     // ---- helpers -----------------------------------------------------------
 
     private fun readDeckFile(uri: Uri): ImportedFile? = runCatching {
@@ -238,6 +369,12 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             ?.use { it.readText() }
             ?: return null
         ImportedFile(name, content)
+    }.getOrNull()
+
+    private fun readPicked(uri: Uri): PickedFile? = runCatching {
+        val name = displayName(uri) ?: "picture.${contentResolver.getType(uri)?.substringAfter('/') ?: "jpg"}"
+        val bytes = contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        PickedFile(name, bytes)
     }.getOrNull()
 
     private fun displayName(uri: Uri): String? =

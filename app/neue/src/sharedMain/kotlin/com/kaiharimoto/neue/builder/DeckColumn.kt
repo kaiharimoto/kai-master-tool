@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.builder
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import com.kaiharimoto.neue.kit.byFinger
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -198,6 +202,38 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                     neue.update(debounce = true) { it.copy(deckZoom = it.deckZoom - step * 0.04f) }
                 }
                 e.changes.forEach { it.consume() }
+            }
+            // Two fingers are the wheel on a tablet (1.3.0): pinched, the cards shrink toward
+            // the middle and grow back; in deep zen the gaps between the groups open and close,
+            // as the wheel does there. A card under one of the fingers lets the gesture go.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    if (!first.byFinger) return@awaitEachGesture
+                    var from = 0f
+                    var start = 0f
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val fingers = event.changes.filter { it.pressed }
+                        if (fingers.isEmpty()) break
+                        if (fingers.size < 2) continue
+                        val apart = (fingers[0].position - fingers[1].position).getDistance()
+                        val deep = neue.zen == ZenPhase.DEEP
+                        if (from == 0f) {
+                            from = apart
+                            start = if (deep) zen.gapScale else neue.prefs.deckZoom
+                        } else if (from > 0f) {
+                            val ratio = apart / from
+                            if (deep) {
+                                zen.groups = true
+                                zen.gapScale = (start * ratio).coerceIn(com.kaiharimoto.neue.ZEN_GAP_MIN, com.kaiharimoto.neue.ZEN_GAP_MAX)
+                            } else {
+                                neue.update(debounce = true) { it.copy(deckZoom = start * ratio) }
+                            }
+                        }
+                        event.changes.forEach { it.consume() }
+                    }
+                }
             }
             // Zen: the deck comes to the middle of the window and grows into it, about
             // its own centre — a transform, never a re-fit, so nothing jumps on the way

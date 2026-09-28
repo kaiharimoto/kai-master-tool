@@ -6,9 +6,9 @@ This file guides Claude Code (claude.ai/code) when working with this repository.
 
 **What this is:** kai's master tool — a Yu-Gi-Oh! deck building and tournament
 preparation tool. **The app is Neue Master Tool** (`app/neue/`), drawn in Master
-UI, shipping on Windows, macOS and Linux, and being ported — fully and
-faithfully, on kai's instruction — to the Android tablet (where it replaces the
-old tablet app in place) and to a proper Mac app. **`docs/NEUE.md` is the
+UI, shipping on Windows, macOS and Linux and — from v1.3.0 — as the Android APK
+on landscape tablets, where it replaced the old tablet app in place. A proper
+Mac app is the port's next phase. **`docs/NEUE.md` is the
 authority on it; read it before changing anything in `app/neue/`.**
 
 Kotlin Multiplatform + Compose Multiplatform. `app/README.md` has the modules.
@@ -21,9 +21,9 @@ Kotlin Multiplatform + Compose Multiplatform. `app/README.md` has the modules.
   (`DeckBuilderState`, `AppDependencies`, updater seam, image loader, shader
   seam, card foil); files keep their `com.kaiharimoto.mastertool.ui.*` packages
 - `app/neue/` — **Neue Master Tool**: every screen
-- `app/androidApp/` — the APK; `app/ui/` — *classic*, the tablet app's screens
-  and play stage, which still build the APK until Neue replaces it (below)
-- `app/studio/` — the headless renderer; `tools/shoot.sh --neue`
+- `app/androidApp/` — the APK: one activity hosting Neue, the theme-free crash
+  reporter, and `NeueSmokeTest` for the emulator
+- `app/studio/` — the headless renderer; `tools/shoot.sh`
 - `docs/NEUE.md` (the app), `docs/classic/` (the tablet app and play stage),
   `docs/PORT.md` (the 3DS)
 - `legacy/` — the archived original HTML tool; `3ds/` — the New 3DS rewrite
@@ -42,8 +42,8 @@ Kotlin Multiplatform + Compose Multiplatform. `app/README.md` has the modules.
    trust a piped local exit code** — grep the Gradle output for `BUILD
    SUCCESSFUL`, and the test results for `<failure`.
 3. **Every gesture ships with its idioms**: Neue's keyboard is data in
-   `core/input/DeskShortcuts.kt`, its mouse in `core/input/DeskMouse.kt`, and on
-   Android its touch is a third table beside them. The palette and the help
+   `core/input/DeskShortcuts.kt`, its mouse in `core/input/DeskMouse.kt`, and a
+   finger's in `core/input/DeskTouch.kt`, held to the mouse's by a test. The palette and the help
    dialog render the tables, so they can never drift.
 4. **Finish by shipping it.** See *Ship Every Change* below — kai judges the app
    on their own machines, so work that is only on a branch is work they cannot
@@ -55,9 +55,9 @@ Kotlin Multiplatform + Compose Multiplatform. `app/README.md` has the modules.
 card art, a frame clock advanced by hand. Off by default and in nothing shipped:
 
 ```
-tools/shoot.sh --neue --page=builder --groups=true --name=x   # shots/x.png
-tools/shoot.sh --neue --page=builder --theme=ink
-tools/shoot.sh --neue --page=decks --save=true --default=true
+tools/shoot.sh --page=builder --groups=true --name=x   # shots/x.png
+tools/shoot.sh --page=builder --theme=ink
+tools/shoot.sh --page=decks --save=true --default=true
 tools/compare.py shots/before shots/after                     # what moved
 ```
 
@@ -68,7 +68,12 @@ handlers, logging the deck's counts), `--hovers=`, `--art=`, `--history`,
 `--noinspector`, `--save`, `--covers=`. `--palette` is the command palette;
 the groups' palette is `--group-palette=`. Each run takes about four minutes —
 run it in the background. `shots/` is gitignored scratch; `docs/shots/neue-*.png`
-are the README's pictures.
+are the README's pictures, re-shot by dispatching `.github/workflows/shots.yml`
+**on the `claude/**` branch, before the fast-forward, never on `main`** — a
+commit CI puts on `main` is one the next fast-forward is rejected by. It refuses
+a page with too few colours, which is what a pool that did not sync looks like.
+The studio cannot draw Android; `android-smoke.yml`'s emulator screenshot is
+the tablet's picture.
 
 ## Ship Every Change — standing instruction from the user
 
@@ -78,11 +83,13 @@ is granted for all of it — do not stop to ask.
 
 There are two tracks, and a change ships on whichever it reaches:
 
-- **Neue** (`app/neue/`, and `:core`/`:builder` changes it uses):
+- **The desktop** (`app/neue/`, and `:core`/`:builder` changes it uses):
   `release-neue.yml`, tagged `neue-v*`, always a pre-release, with a `.msi`, a
   `.dmg` and a `.deb`.
-- **The APK** (`app/androidApp/`, and — until Neue replaces it — `app/ui/`):
-  `release.yml`, tagged `v*`.
+- **The APK** (`app/androidApp/`, and — since v1.3.0 — everything in `neue/`'s
+  `sharedMain` and `androidMain`, `:builder` and `:core`): `release.yml`, tagged
+  `v*`. A change to Neue that the tablet would see ships on **both** tracks; a
+  change only to `neue/src/jvmMain` or the desktop packaging needs no APK.
 
 Every time, in this order:
 
@@ -100,7 +107,7 @@ Every time, in this order:
 
 Note in the release notes when a build changes stored preferences, the schema,
 or the deck-file payload. Say out loud when a change needs no release (docs,
-tests, this file; a Neue-only change needs no APK), and remember that a version
+tests, this file; a desktop-only change needs no APK), and remember that a version
 number, once published, is spent forever.
 
 ## Release Contract — numbers shipped to devices are permanent
@@ -125,11 +132,13 @@ in-app updater installs from. Two hard-learned rules:
 - Android crashes surface through the built-in crash reporter
   (`MainActivity`): the trace persists and is shown, shareable, on next
   launch. Keep that screen theme-free — it must render when the theme cannot.
-- **The APK becomes Neue in place.** kai chose it: the next APK release built
-  from Neue is **v1.3.0** (versionCode 110300, above the 110263 of v1.2.63), under
-  the same `com.kaiharimoto.mastertool`, signed with the same key, reading the
-  same `kai_master_tool.db` — so installed tablets update onto it and keep their
-  decks. Until it is ready, `v*` releases are still the classic tablet app.
+- **The APK is Neue, in place.** kai chose it: **v1.3.0** (versionCode 110300,
+  above the 110263 of v1.2.63) is the first APK built from Neue, under the same
+  `com.kaiharimoto.mastertool`, signed with the same key, reading the same
+  `kai_master_tool.db` — so installed tablets update onto it and keep their
+  decks. Its settings are Neue's `neue.ui` document; the classic
+  `UiPreferences` row stays in the database, unread. The APK updates on the `v*`
+  track (`/releases/latest`), never the `neue-v*` one.
 - **Neue's two permanent numbers** are `windows.upgradeUuid` in
   `app/neue/build.gradle.kts` and the rule that its version only rises. Neue
   releases are always pre-releases: `/releases/latest` is what every APK reads.
@@ -137,7 +146,7 @@ in-app updater installs from. Two hard-learned rules:
 ## Neue Master Tool — the app
 
 `app/neue/` is **Neue Master Tool**, the deck builder for a mouse, a keyboard
-and a large display — and, being ported, for a finger on a tablet — drawn in **Master UI** (`kaiharimoto/Master-UI`,
+and a large display — and for a finger on a tablet — drawn in **Master UI** (`kaiharimoto/Master-UI`,
 `kit/MASTER-UI.md`): paper and ink, zero radius, no shadows, Inter, `01`
 numerals. **`docs/NEUE.md` is the authority.** The short version:
 
@@ -277,9 +286,18 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   version only rises are permanent, like the `versionCode` floor.
 - **Ship a Neue change on its own track**: green `build-app.yml` (its `neue`
   job), fast-forward `main`, dispatch `release-neue.yml` with the next patch,
-  confirm all three installers attached. A change only to `neue/` needs no APK
-  release; say so.
-- `tools/shoot.sh --neue --page=builder --theme=ink` photographs it headlessly.
+  confirm all three installers attached — and the APK's track too when the
+  tablet would see the change.
+- **On the tablet** (v1.3.0, `NEUE.md` §1b): a finger's grammar is
+  `core/input/DeskTouch.kt` — tap reads, double-tap is the right-click,
+  press-and-hold opens the card large, drag moves it (in the pool only a drag
+  *across*, since the pool scrolls). **Android reports no button for a finger**,
+  so a "primary press" is `isPrimaryPress` and a finger is `byFinger`
+  (`kit/Pointer.kt`); a right-click menu is `onContextMenu`, which a held finger
+  opens too. Every hover-only affordance has a finger's form (the art chip on the
+  selected card, swatches on a tap, the rail pinned, a pinch for the wheel), and
+  a mouse and keyboard plugged into the tablet keep the desk's idioms.
+- `tools/shoot.sh --page=builder --theme=ink` photographs it headlessly.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 
@@ -298,11 +316,11 @@ The plan, phased, one shipped release per phase:
    `TooltipArea`, the desktop scrollbar, the AWT cursor, `java.net.http`, Skia
    in the name masks, zen's blur and the screenshot, classpath fonts.
    `MasterUiLawTest` scans every source set.
-3. **Neue is the APK** (v1.3.0), tablet landscape first: `MainActivity` renders
-   `NeueRoot` on the same database; touch gets its own table beside `DeskMouse`
-   (tap reads, double-tap is the right-click, long-press is the hold), and every
-   hover-only affordance a touch equivalent; `:ui` and the studio's tablet task
-   are deleted. A phone layout for Neue is a later phase.
+3. **Neue is the APK** (v1.3.0, done), tablet landscape first: `MainActivity`
+   renders `NeueRoot` on the same database; touch has its own table beside
+   `DeskMouse`, and every hover-only affordance a touch equivalent; `:ui` and the
+   studio's tablet task are deleted; an emulator smoke test runs in CI. A phone
+   layout for Neue is a later phase.
 4. **The Mac, faithfully** — still unsigned, on kai's word: Apple Silicon and
    Intel `.dmg`s, the native menu bar, `⌘` in every shortcut label, an updater
    that installs over itself, and a signing/notarization switch that turns on
@@ -310,13 +328,12 @@ The plan, phased, one shipped release per phase:
 
 ## Classic — the tablet app and its play stage
 
-Until v1.3.0 ships, `app/ui/` still builds the APK, and its rules still hold for
-any fix made to it. They were written here at length; they now live at commit
-`c2fc8d8` (the tag `neue-v1.0.19`) — `git show c2fc8d8:CLAUDE.md` — and in
+The tablet app (`app/ui/`) and its play stage are deleted from the tree; the
+APK is Neue from v1.3.0. They live at commit `c2fc8d8` (the tag
+`neue-v1.0.19`) — `git show c2fc8d8:CLAUDE.md` has their rules at length — and in
 `docs/classic/`: `DESIGN.md` (the tablet's handbook), `TUNING.md`, `DEVICES.md`,
 `TABLE.md`, `AAA.md`, `FIDELITY.md`, `PHOTOREAL.md`, `LOOP.md`. Read them before
-touching `app/ui/`, and before rebuilding play mode inside Neue, which kai will
-ask for: the play stage's six load-bearing rules (one arbiter for the mat, the
+rebuilding play mode inside Neue, which kai will ask for: the play stage's six load-bearing rules (one arbiter for the mat, the
 finger on the felt and the card in the air, a gesture holds a card not a place…)
 were each a bug first, and will be again in a new renderer that forgets them.
 
@@ -412,7 +429,8 @@ subtasks, spawn 2-3 general-purpose teammates, coordinate, report back.
 - Core logic: write a failing commonTest first; `./gradlew :core:jvmTest`.
 - Neue: `./gradlew -Pmastertool.android=true :neue:run`; the studio for
   pictures; a crash is written to `<data>/crash.txt` and shown on next launch.
-- Android: the in-app crash reporter shows and shares the trace.
-- Preferences are one JSON document in SQLite (`NeuePreferences`, and the
-  classic `UiPreferences`); adding a preference is a field with a default, never
+- Android: the in-app crash reporter shows and shares the trace (`last-crash.txt`
+  in the app's files); `android-smoke.yml` runs the APK on an emulator and
+  uploads a screenshot, since no emulator runs in this sandbox (no KVM).
+- Preferences are one JSON document in SQLite (`NeuePreferences`); adding a preference is a field with a default, never
   a schema migration.

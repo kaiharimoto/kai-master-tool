@@ -78,9 +78,8 @@ include(":core")
 
 if (androidEnabled) {
     include(":builder")
-    include(":ui")
     include(":androidApp")
-    // Neue Master Tool, the desktop builder. Needs :ui, so it shares the gate.
+    // Neue Master Tool: the app, on the desktop and (hosted by :androidApp) Android.
     include(":neue")
 }
 

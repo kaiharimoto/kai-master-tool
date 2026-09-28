@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.kit.byFinger
+import com.kaiharimoto.neue.kit.isPrimaryPress
 import com.kaiharimoto.neue.platform.reportIssue
 import com.kaiharimoto.neue.cursor.CursorLayer
 import com.kaiharimoto.neue.cursor.FamilyCursor
@@ -536,7 +538,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     // The groups' palette: read wherever a group is coloured, so set once here.
     SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             com.kaiharimoto.neue.kit.ProvideTextMenus {
                 Shell(h)
@@ -553,7 +555,7 @@ private fun Shell(h: NeueHolders) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val immersive = neue.immersive
-    val pinned = neue.prefs.railPinned && !immersive
+    val pinned = neue.railPinned && !immersive
     // How tall the folded bars are when out, measured, so the pointer knows when it has left them.
     val measured = remember { FoldedBars() }
 
@@ -611,7 +613,10 @@ private fun Shell(h: NeueHolders) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val at = event.changes.firstOrNull()?.position
                         val gone = event.type == PointerEventType.Exit
-                        h.cursor.moved(if (gone) null else at, event.buttons.areAnyPressed)
+                        // The family cursor is a mouse's: a finger (or a tablet, where the system
+                        // draws its own pointer) leaves it hidden.
+                        val mouse = event.changes.none { it.byFinger } && !neue.touchFirst
+                        h.cursor.moved(if (gone || !mouse) null else at, mouse && event.buttons.areAnyPressed)
                         // Where the pointer is, for the deck to turn toward in zen.
                         if (neue.immersive) h.zen.pointer = if (gone) null else at
                         // Waking. Before zen is deep, any real movement, press or scroll brings
@@ -644,8 +649,9 @@ private fun Shell(h: NeueHolders) {
                             }
                         }
                         // The corner where "put the cards back" comes out.
-                        h.zen.corner = deepZen && at != null && !gone &&
-                            ZenCorner.reaches(at.x, at.y, size.width.toFloat(), size.height.toFloat())
+                        // On a touch screen nothing can reach for the corner, so in deep zen it stays out.
+                        h.zen.corner = deepZen && (neue.touchFirst || at != null && !gone &&
+                            ZenCorner.reaches(at.x, at.y, size.width.toFloat(), size.height.toFloat()))
                         // Deep zen, 1.0.14: a press on the table rather than on a card draws a box,
                         // and the cards it touches are picked out to move together (ZenGestures).
                         // The press is spent here, on the way down, so the pool and the inspector
@@ -654,7 +660,7 @@ private fun Shell(h: NeueHolders) {
                         val from = boxFrom
                         when {
                             from == null && deepZen && event.type == PointerEventType.Press && at != null &&
-                                event.buttons.isPrimaryPressed && zen.deck.width > 0f &&
+                                event.isPrimaryPress && zen.deck.width > 0f &&
                                 !zen.corner && zen.pickAt(at) == null -> {
                                 boxFrom = at
                                 boxShift = event.keyboardModifiers.isShiftPressed
@@ -822,7 +828,7 @@ private fun Shell(h: NeueHolders) {
         }
         if (h.updates.dialogOpen) UpdateDialog(h.updates)
         if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
-        if (immersive) ZenReset(h.zen, hasGroups = state.groups.groups.isNotEmpty(), onLeave = { h.wake() }, modifier = Modifier.align(Alignment.BottomEnd))
+        if (immersive) ZenReset(h.zen, hasGroups = state.groups.groups.isNotEmpty(), onLeave = { h.wake() }, modifier = Modifier.align(Alignment.BottomEnd), always = neue.touchFirst)
         // The box being dragged over the table in deep zen: a hairline and the faintest wash.
         h.zen.marquee?.let { box ->
             Canvas(Modifier.fillMaxSize()) {
@@ -977,8 +983,8 @@ private const val ZEN_DEEP_IN = 2600
 private const val ZEN_OUT = 1600
 
 /** How far the wheel may close and open zen's gaps, as multiples of the standard gap. */
-private const val ZEN_GAP_MIN = 0.3f
-private const val ZEN_GAP_MAX = 5f
+internal const val ZEN_GAP_MIN = 0.3f
+internal const val ZEN_GAP_MAX = 5f
 
 /** The pieces opening or closing in zen: slow enough to watch the deck come apart. */
 private const val ZEN_PIECES = 900

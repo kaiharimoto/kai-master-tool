@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.platform
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import androidx.core.content.FileProvider
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -48,9 +52,28 @@ internal actual fun httpDownload(
     }
 }
 
-internal actual val downloadDir: File get() = File(Platform.dataDir.parentFile, "cache/updates").apply { mkdirs() }
+// Under the cache's `updates/`, which the APK's FileProvider shares (res/xml/file_paths.xml).
+internal actual val downloadDir: File get() = File(Platform.context.cacheDir, "updates").apply { mkdirs() }
 
+/**
+ * The package installer, with the APK. Android asks once, per app, whether it
+ * may install others; until it has been allowed, the settings page for that is
+ * opened instead and the person comes back to press Install again.
+ */
 internal actual fun handOffInstaller(installer: File): String? {
-    Platform.open(installer)
+    val context = Platform.context
+    if (!context.packageManager.canRequestPackageInstalls()) {
+        context.startActivity(
+            Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        return "Allow installing updates for Neue Master Tool, then press Install again"
+    }
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", installer)
+    context.startActivity(
+        Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
     return null
 }

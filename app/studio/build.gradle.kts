@@ -16,7 +16,7 @@ kotlin {
         all { languageSettings.optIn("androidx.compose.ui.InternalComposeUiApi") }
 
         jvmMain.dependencies {
-            implementation(project(":ui"))
+            implementation(project(":builder"))
             implementation(project(":core"))
             // Neue Master Tool, the desktop builder, is photographed by `shootNeue`.
             implementation(project(":neue"))
@@ -65,34 +65,11 @@ tasks.register<JavaExec>("spikeSeam") {
     )
 }
 
-// A plain JVM entry point rather than `compose.desktop.application`: the studio
+// Plain JVM entry points rather than `compose.desktop.application`: the studio
 // never opens a window, and the packaging DSL would drag installer tooling into
 // a module whose only output is PNG files.
-tasks.register<JavaExec>("shoot") {
-    group = "verification"
-    description = "Renders the play stage offscreen to PNG files."
-    dependsOn("jvmMainClasses")
-    mainClass.set("com.kaiharimoto.mastertool.studio.StudioKt")
-    // `app/`, so the sample deck at the repository root is one `..` away and
-    // the default needs no absolute path in it.
-    workingDir = rootProject.projectDir
-    classpath = kotlin.jvm().compilations.getByName("main").runtimeDependencyFiles +
-        kotlin.jvm().compilations.getByName("main").output.allOutputs
-    // Skia has no GPU here and never needs one: every frame lands on a raster
-    // surface. Saying so up front stops Skiko probing for a GL context that a
-    // headless container does not have.
-    jvmArgs("-Djava.awt.headless=true", "-Dskiko.renderApi=SOFTWARE")
-    // Args come through as `-Pshot.args="..."` so the whole thing is one Gradle
-    // invocation from a script.
-    argumentProviders.add(
-        CommandLineArgumentProvider {
-            providers.gradleProperty("shot.args").orNull?.split(" ")?.filter { it.isNotBlank() }
-                ?: emptyList()
-        }
-    )
-}
-
-// Neue Master Tool, one picture per run. Same headless raster as `shoot`.
+//
+// Neue Master Tool, one picture per run. Headless: Skia on a raster surface, no GPU.
 tasks.register<JavaExec>("shootNeue") {
     group = "verification"
     description = "Renders a page of Neue Master Tool offscreen to a PNG file."

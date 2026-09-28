@@ -10,7 +10,7 @@ app; kai has since made it the one this repository is about, to be ported fully
 and faithfully to the Android tablet — where it replaces the tablet app in place
 — and to a proper Mac app. It is built on `:core` (every deck rule, fitter, lens
 and odds calculation) and `:builder` (the state holders, `DeckBuilderState`
-first, moved out of the tablet's `:ui` with their packages intact). None of its
+first, moved out of the old tablet app's `:ui` with their packages intact). None of its
 look comes from anywhere else. The port's phases are in `CLAUDE.md`, "The port".
 
 ![The builder, paper](shots/neue-builder.png)
@@ -25,7 +25,7 @@ builder, its odds and its statistics.
 
 | | |
 |---|---|
-| `app/neue/` | the module: UI and `main`; JVM today, Android being added |
+| `app/neue/` | the module: every screen; the desktop's `main` in `jvmMain`, the APK hosts the rest |
 | `app/builder/` | `DeckBuilderState` and the plumbing Neue shares with the APK |
 | `app/neue/VERSION` | the version a local build carries; releases pass `-Pneue.versionName` |
 | `app/neue/icons/` | installer icons, drawn by `tools/neue/mark.py` |
@@ -71,6 +71,55 @@ Compose APIs. Each has one seam:
 The desktop entry point (`Main.kt`), its JDBC driver and its file dialogs
 (`Files.kt`) are `jvmMain`'s alone. The desktop is unchanged by any of it; the
 studio's shots before and after are the proof.
+
+### 1b. The tablet (1.3.0)
+
+From **v1.3.0** the APK *is* Neue: `app/androidApp`'s `MainActivity` builds
+`rememberHolders` on the same `kai_master_tool.db` the tablet app used, so an
+installed tablet updates onto it and keeps its decks. Its settings are Neue's
+own document (`neue.ui`); the tablet app's `UiPreferences` are left in the
+database, unread. The tablet UI and the play stage are gone from the APK — they
+are at `c2fc8d8` (`neue-v1.0.19`) and in `docs/classic/`.
+
+- **Landscape first** (`userLandscape`). A phone's portrait layout is its own
+  later phase.
+- **A mouse and a keyboard on the tablet are the desk's.** Compose reports a
+  pointer's type and buttons, so a mouse gets every `DeskMouse` idiom and a
+  hardware keyboard every `DeskShortcuts` chord (`dispatchKeyEvent` hands keys
+  to the same `onKey`). Only a *finger* reads the touch table.
+- **Touch is a third table, `core/input/DeskTouch.kt`**, beside the keyboard's
+  and the mouse's, and `DeskTouchTest` holds it to the mouse's — nothing a mouse
+  can do to a card is out of a finger's reach:
+
+  | Finger | Pool | Deck |
+  |---|---|---|
+  | Tap | select, read in the inspector | select, read in the inspector |
+  | Double-tap | add (the right-click) | remove this copy (the right-click) |
+  | Press and hold | open large, every action beside it | the same |
+  | Drag | across picks it up; up and down scrolls | picks it up |
+
+- **Android reports no button for a finger**, so every "primary button" test is
+  `isPrimaryPress` and a finger is told apart by `byFinger` (`kit/Pointer.kt`).
+  A right-click menu is `Modifier.onContextMenu`: the secondary button, or a
+  finger held for `HOLD_MS`.
+- **Hover-only affordances have a finger's form**: the art chip shows on the
+  *selected* card (`LocalTouchFirst`), a group's swatches open on a tap of its
+  square, the rail stays pinned (`NeueState.railPinned`) because no edge can be
+  reached for, two fingers pinch the deck's zoom (and zen's gaps in deep zen),
+  and deep zen always shows its corner — nothing else wakes it without a key.
+- **Back** is `dismissTop()`: the topmost sheet, menu or pop-out, as `Esc` is.
+- **The family cursor is a mouse's only.** It is drawn when a mouse moves and
+  never for a finger.
+- **Updates** read `/releases/latest` — the `v*` track every tablet already
+  reads (`apkUpdate`, `DesktopOs.ANDROID`) — download to the cache and hand the
+  APK to the package installer through the `FileProvider`, asking once for the
+  install-unknown-apps permission.
+- **Not yet on the tablet**: the deck picture (a note says so), tooltips (no
+  hover), and Settings' "open the data folder".
+- **The proof is an emulator**, since the studio cannot draw Android:
+  `.github/workflows/android-smoke.yml` boots a Pixel Tablet image, runs
+  `NeueSmokeTest` (a saved deck survives a launch, the builder opens it, no crash
+  is written) and uploads its screenshot.
 
 ---
 
@@ -897,5 +946,6 @@ branch, wait for `build-app.yml` (its `neue` job runs the law test and
 packages the `.deb`), fast-forward `main`, dispatch `release-neue.yml` on
 `main` with the next patch, and confirm the tag and **all three** installers
 are on the release before calling it shipped. A change that touches only
-`neue/` does not need an APK release; one that changes `:core` or `:ui`
-behaviour does, as always.
+`neue/` is on the tablet too from v1.3.0, so a change the tablet would see
+ships on both tracks: `release-neue.yml` for the desktop, `release.yml` for the
+APK.

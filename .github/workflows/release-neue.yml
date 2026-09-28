@@ -124,9 +124,8 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # :neue borrows :ui's state holders, and :ui applies the Android library
-      # plugin, so an SDK has to be present to configure it even for a desktop
-      # build. `packages: ''` for the reason given in build-app.yml.
+      # :neue and :builder apply the Android library plugin, so an SDK has to
+      # be present to configure them even for a desktop build. `packages: ''` for the reason given in build-app.yml.
       - uses: android-actions/setup-android@v3
         with:
           packages: ''

@@ -35,11 +35,12 @@ import kotlinx.coroutines.launch
  *   wakes the builder; this is the pointer's way.
  */
 @Composable
-fun ZenReset(zen: ZenLayer, hasGroups: Boolean, onLeave: () -> Unit, modifier: Modifier = Modifier) {
+fun ZenReset(zen: ZenLayer, hasGroups: Boolean, onLeave: () -> Unit, modifier: Modifier = Modifier, always: Boolean = false) {
     // Read through the counter, so the button hears the first card moved.
     val moved = zen.arranged >= 0 && !zen.arrangement.isEmpty
     val shown by animateFloatAsState(
-        if (zen.corner) 1f else 0f,
+        // [always] on a touch screen, where nothing can reach for the corner.
+        if (zen.corner || always && zen.deep > 0.5f) 1f else 0f,
         tween(MuMotion.BASE, easing = MuMotion.ease),
         label = "reset",
     )
