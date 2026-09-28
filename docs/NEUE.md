@@ -310,7 +310,9 @@ Two things about it are load-bearing:
   really are (`GridGeometry.placed`), and the insert bar stands at the left of the
   card it names.
 
-Each piece is outlined 2 px in its group's colour, in the gap round it, so it
+The gap is 18 px and each piece is outlined 4 px in its group's colour (1.0.17,
+kai: "widen the gaps … and increase the size of the border so it's more apparent";
+10 and 2 in 1.0.15), in the gap round it, so it
 reads as one shape with its colour on it. The lens opens and closes the pieces
 over 320 ms; closing, they close from where they were. The screenshot export
 draws the same pieces.
@@ -323,20 +325,44 @@ button is for; the tabs — Deck, Archetype, Type, Copies, Legality — are the 
 ways to see the deck in pieces, and `b` walks them. `K` is the button; `G` turns
 it on.
 
+**The wheel sizes the deck** (1.0.17, kai: "let the user adjust the card sizes
+using the scroll wheel. cards will stay center of screen with more negative space
+around them"). Down, the fitter is handed a smaller share of the column
+(`NeuePreferences.deckZoom`, 40–100%) and the deck, re-fitted, stays centred with
+paper round it; up, back to the size that fills the column. It is a re-fit, not a
+transform, so every rule of the layout — the pieces, the labels, the drop targets —
+holds at any size. With the groups on, **Shift and the wheel** open and close the
+gaps between them (`groupGap`, 0.4–3 standard gaps). The pool's cards keep the
+size the deck *would* be, not what the wheel made of it.
+
 **Beside Groups, the foil switch** (1.0.15): a boxed button the same size carrying
 a small card in the holographic foil itself (`FoilGlyph`, drawn by the same
 `drawFoil` a card face uses, its light following the pointer over the button);
-off, every card face is plain and the glyph is a bare outline. Beside it, a
-panel icon hides the extra and side decks, and the main deck has the whole
-column (`NeuePreferences.extraSideVisible`); a hidden section takes no drops and
-leaves no slots in zen. The row is the deck's and never clips a tab: narrower
-than 720 px it drops the words "Main deck", narrower than 600 px it shortens
-Archetype and Legality and keeps the count only when it is out of range.
+off, every card face is plain and the glyph is a bare outline. Beside it,
+**Extra** and **Side** are a switch each (1.0.17; one switch for both in 1.0.15),
+and the main deck has whatever they give up (`extraVisible`, `sideVisible`); a
+hidden section takes no drops and leaves no slots in zen. The row is the deck's and never clips a tab: narrower
+than 860 px it drops the words "Main deck", narrower than 720 px it shortens
+Archetype, Legality, Extra and Side and keeps the count only when it is out of range.
 
 **The Groups panel is centred down its column** (1.0.16) — the column is taller
 than its groups, and a reach for the first row at the top brought the window's bar
 out — and **New group** is a full-width button under the groups rather than a
 link over them. A list taller than the column still starts at the top and scrolls.
+
+**A group may hold any card of the deck** (1.0.17): drawing one up, a click on
+the extra or the side deck adds the card as a click on the main deck does, and a
+group's count is its cards in all three. Assignment was always per passcode, so
+this was two small refusals — the draft listened to the main deck alone, and a
+group reopened for editing was seeded from the main deck alone, which quietly
+dropped its extra- and side-deck cards when it was saved again.
+
+**Palettes** (1.0.17, kai: "more choices in color palettes … from designer
+choices"). Under the groups, seven palettes of six — Prism (the tablet's), Bauhaus,
+Pastel, Earth, Ocean, Neon, Vintage — each a row of its colours under its name.
+A group's colour is stored as an index, so a palette is only a reading of it:
+choosing one recolours every group at once and changes nothing in the deck file
+(`GroupMarkers.palettes`, the one file with colour in it; `groupPalette`).
 
 **The Groups panel is where groups are edited** (`GroupsPanel`, 288 px beside the
 deck). Every group is a row that can be changed where it stands: its name is a
@@ -426,6 +452,13 @@ card to the side deck, and Shift, still "the other way", sends it to the main
 (`DeskMouse.forPool`, one function, so the table the help dialog shows stays the
 off state). It is a setting (`NeuePreferences.poolToSide`), and the empty side
 deck's hint follows it.
+
+**History** (1.0.17, beside undo and redo): every step undo can take back and
+redo can put back, newest first, in words — "+ Ash Blossom", "Moved Nibiru to
+side", "Changed the groups" — and a click goes to the deck as it was just after
+that step. The undo stack keeps whole decks rather than edits, so each step is
+read back off the decks either side of it (`DeckHistory.describe`, in core with a
+test; `DeckBuilderState.history`, `travel`).
 
 **Export is a menu** (1.0.15, kai: "a sub option between YDK, YDKX, YDKe Code,
 and a Copied Text list"): the bar's Export, or `Ctrl E`, opens it under the
@@ -527,6 +560,16 @@ In immersive mode, on the builder, doing nothing is a mode too
   card under the pointer. The corner is 440 × 180 and **always** offers
   **Leave zen**, beside **Groups** and "Put the cards back" when they apply — it
   used to show nothing at all until a card had been moved, which read as broken.
+- **The wheel opens and closes zen's gaps** (1.0.17, kai: "let the scroll wheel
+  expand the gaps further and tighten, card sizes adjust automatically"). Up
+  opens the Roles pieces if they are closed, and then widens them; down narrows
+  them, from a third of a gap to five (`ZenLayer.gapScale`). Zen fits the deck
+  *as it is drawn* to the window (`ZenLayer.stageRect`): the rest rectangle grown
+  sideways by the widest section's gaps and downward by all of them, because each
+  section's pieces open below the growth of the sections above it
+  (`PiecePlacer.zenAbove`) — about the middle, the main deck opened into the
+  extra. So the wider the gaps, the smaller the cards, and the whole stays in the
+  middle of the window.
 - **Auto zen is a switch on the bar** (1.0.16, `NeuePreferences.autoZen`, on by
   default): off, immersive mode never drifts into zen by itself, and `Z` is the
   only way in.

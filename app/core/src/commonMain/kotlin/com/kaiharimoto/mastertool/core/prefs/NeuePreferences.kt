@@ -96,8 +96,17 @@ data class NeuePreferences(
      * deck, and Shift adds to the main (`DeskMouse.forPool`).
      */
     val poolToSide: Boolean = false,
-    /** The extra and side decks under the main deck; off, the main deck has the whole column (1.0.15). */
+    /** 1.0.15's one switch for both; read by nothing since 1.0.17, kept so a document that carries it still reads. */
     val extraSideVisible: Boolean = true,
+    /** The extra deck, and the side deck, under the main deck: a switch each (1.0.17). */
+    val extraVisible: Boolean = true,
+    val sideVisible: Boolean = true,
+    /** The palette the groups are coloured from, by name (1.0.17, `GroupMarkers`). */
+    val groupPalette: String = DEFAULT_PALETTE,
+    /** How large the deck is drawn, as a share of the size that fills its column (the wheel, 1.0.17). */
+    val deckZoom: Float = 1f,
+    /** How wide the gaps between groups are, as a multiple of the standard gap (Shift and the wheel). */
+    val groupGap: Float = 1f,
     /**
      * Zen comes by itself after idle seconds in immersive mode (1.0.16: a switch on
      * the bar). Off, it comes only when asked for with Z.
@@ -116,6 +125,9 @@ data class NeuePreferences(
         foil = foil.ifBlank { DEFAULT_FOIL },
         foilNames = foilNames.ifBlank { DEFAULT_FOIL_NAMES },
         contrast = if (contrast == CONTRAST_HIGH) CONTRAST_HIGH else CONTRAST_STANDARD,
+        groupPalette = groupPalette.ifBlank { DEFAULT_PALETTE },
+        deckZoom = if (deckZoom.isFinite()) deckZoom.coerceIn(MIN_ZOOM, 1f) else 1f,
+        groupGap = if (groupGap.isFinite()) groupGap.coerceIn(MIN_GAP, MAX_GAP) else 1f,
         covers = covers
             .mapValues { (_, cards) -> cards.distinct().takeLast(COVERS) }
             .filterValues { it.isNotEmpty() },
@@ -153,6 +165,10 @@ data class NeuePreferences(
         const val CONTRAST_STANDARD = "standard"
         const val CONTRAST_HIGH = "high"
         const val COVERS = 3
+        const val DEFAULT_PALETTE = "prism"
+        const val MIN_ZOOM = 0.4f
+        const val MIN_GAP = 0.4f
+        const val MAX_GAP = 3f
 
         val DEFAULT = NeuePreferences()
     }

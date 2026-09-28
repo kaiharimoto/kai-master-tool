@@ -109,7 +109,11 @@ fun neueMain(args: Array<String>) {
                 println("[neue-studio] saved as $id; covers ${h.neue.prefs.covers[id]}; default ${h.neue.prefs.defaultDeckId}")
             }
             if (map["side"] == "true") h.neue.update { it.copy(poolToSide = true) }
-            if (map["extraside"] == "false") h.neue.update { it.copy(extraSideVisible = false) }
+            if (map["extra"] == "false") h.neue.update { it.copy(extraVisible = false) }
+            if (map["sideshown"] == "false") h.neue.update { it.copy(sideVisible = false) }
+            map["zoom"]?.toFloatOrNull()?.let { z -> h.neue.update { it.copy(deckZoom = z) } }
+            map["gap"]?.toFloatOrNull()?.let { g -> h.neue.update { it.copy(groupGap = g) } }
+            map["group-palette"]?.let { id -> h.neue.update { it.copy(groupPalette = id) } }
             // --art=auto: the first main-deck card printed with more than one artwork, selected,
             // with its second artwork chosen — the inspector shows "Art 2 of n" and the deck the picture.
             if (map["art"] == "auto") {
@@ -152,6 +156,14 @@ fun neueMain(args: Array<String>) {
                 h.neue.revealed = com.kaiharimoto.mastertool.core.layout.Revealed(left = "left" in parts, top = "top" in parts, bottom = "bottom" in parts)
             }
             if (map["palette"] == "true") h.neue.paletteOpen = true
+            // --history: a few edits, then the history menu open, to see it list them.
+            if (map["history"] == "true") {
+                val deck = h.builder.deck
+                deck.main.firstOrNull()?.let(h.builder.index::byId)?.let { c -> h.builder.addCard(c, DeckSection.MAIN) }
+                deck.side.firstOrNull()?.let(h.builder.index::byId)?.let { c -> h.builder.removeAt(c, DeckSection.SIDE, 0) }
+                clock.run(10)
+                h.neue.menu = com.kaiharimoto.neue.kit.MenuSpec(androidx.compose.ui.geometry.Offset(width * 0.5f, 48f), com.kaiharimoto.neue.builder.historyMenu(h.builder))
+            }
             // --groups: the Groups button pressed — the Roles lens, the deck in pieces, the panel.
             if (map["groups"] == "true") h.setGroups(true)
             if (map["help"] == "true") h.neue.helpOpen = true
@@ -167,6 +179,7 @@ fun neueMain(args: Array<String>) {
                 // --zen-groups=true|false: the corner's Groups toggle, pressed, and time for the pieces to open.
                 map["zen-groups"]?.let { on ->
                     h.zen.groups = on == "true"
+                    map["zen-gap"]?.toFloatOrNull()?.let { h.zen.gapScale = it }
                     clock.run(90)
                     println("[neue-studio] zen groups ${h.zen.groups}, amount ${h.zen.groupsAmount}")
                 }
@@ -200,7 +213,7 @@ fun neueMain(args: Array<String>) {
                         fun point(p: String): Offset {
                             if (!p.startsWith("k")) return p.split(",").map { it.toFloat() }.let { Offset(it[0] * width, it[1] * height) }
                             val key = p.drop(1).substringBefore("+").toInt()
-                            val r = com.kaiharimoto.mastertool.core.motion.ZenPick.rectOf(key, h.zen.homes, h.zen.arrangement, h.zen.stage, h.zen.deck.center.x, h.zen.deck.center.y)
+                            val r = com.kaiharimoto.mastertool.core.motion.ZenPick.rectOf(key, h.zen.homes, h.zen.arrangement, h.zen.stage, h.zen.pivot.x, h.zen.pivot.y)
                                 ?: error("no card keyed $key")
                             val by = p.substringAfter("+", "").takeIf { it.isNotBlank() }?.split(",")?.map { it.toFloat() }
                             return Offset((r[0] + r[2]) / 2f + (by?.get(0) ?: 0f) * width, (r[1] + r[3]) / 2f + (by?.get(1) ?: 0f) * height)

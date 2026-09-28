@@ -63,4 +63,13 @@ class NeuePreferencesTest {
         assertEquals(mapOf("a" to listOf(2, 3, 4)), p.covers)
         assertEquals(mapOf(11 to 12), p.arts)
     }
+
+    @Test
+    fun theWheelsNumbersStayInTheirRanges() {
+        val p = NeuePreferences(deckZoom = 5f, groupGap = 0f, groupPalette = "").sanitised()
+        assertEquals(1f, p.deckZoom)
+        assertEquals(NeuePreferences.MIN_GAP, p.groupGap)
+        assertEquals(NeuePreferences.DEFAULT_PALETTE, p.groupPalette)
+        assertEquals(NeuePreferences.MIN_ZOOM, NeuePreferences(deckZoom = 0.01f).sanitised().deckZoom)
+    }
 }

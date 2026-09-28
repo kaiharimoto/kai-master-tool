@@ -33,6 +33,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.kaiharimoto.neue.zen.LocalZen
@@ -198,6 +200,20 @@ fun RowScope.BuilderBar(
     Box(Modifier.weight(1f))
     Tip("Undo", kbd = kbd(DeskAction.UNDO)) { IconButton(Icons.Undo, state::undo, enabled = state.canUndo, size = 32.dp, label = "Undo", reason = "Nothing to undo") }
     Tip("Redo", kbd = kbd(DeskAction.REDO)) { IconButton(Icons.Redo, state::redo, enabled = state.canRedo, size = 32.dp, label = "Redo", reason = "Nothing to redo") }
+    // The history (kai, 1.0.17): every step undo can take back and redo put back, in words.
+    var historyAt by remember { mutableStateOf(Offset.Zero) }
+    Tip("History: every change, and a click goes back to it") {
+        Box(Modifier.onGloballyPositioned { historyAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+            IconButton(
+                Icons.History,
+                { neue.menu = com.kaiharimoto.neue.kit.MenuSpec(historyAt, historyMenu(state)) },
+                enabled = state.canUndo || state.canRedo,
+                size = 32.dp,
+                label = "History",
+                reason = "Nothing changed yet",
+            )
+        }
+    }
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     Segmented(state.format, Format.entries, { it.name }, onFormat, small = true)
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
@@ -281,3 +297,29 @@ private fun ResizeRule(name: String, width: Float, onDrag: (Float) -> Unit) {
         VRule(Modifier.width(if (hovered) 2.dp else 1.dp), color = c.ink)
     }
 }
+
+/**
+ * The history menu: the steps redo would put back, then the steps undo would take
+ * back, newest first, each in words (`DeckHistory`). A click on a step goes to the
+ * deck as it was just after it — undoing or redoing everything in between.
+ */
+fun historyMenu(state: DeckBuilderState): List<com.kaiharimoto.neue.kit.MenuEntry> {
+    val view = state.history()
+    return buildList {
+        if (view.undone.isNotEmpty()) {
+            add(com.kaiharimoto.neue.kit.MenuEntry("Undone"))
+            view.undone.take(HISTORY_SHOWN).forEachIndexed { i, text ->
+                add(com.kaiharimoto.neue.kit.MenuEntry(text, hint = "Redo ${i + 1}") { state.travel(-(i + 1)) })
+            }
+        }
+        add(com.kaiharimoto.neue.kit.MenuEntry("Done", separatorBefore = view.undone.isNotEmpty()))
+        if (view.done.isEmpty()) add(com.kaiharimoto.neue.kit.MenuEntry("Nothing yet", enabled = false))
+        view.done.take(HISTORY_SHOWN).forEachIndexed { i, text ->
+            // The newest is the deck as it is: going back to it is going nowhere.
+            add(com.kaiharimoto.neue.kit.MenuEntry(text, hint = if (i == 0) "Now" else "Undo $i", enabled = i > 0) { state.travel(i) })
+        }
+        if (view.done.size > HISTORY_SHOWN) add(com.kaiharimoto.neue.kit.MenuEntry("${view.done.size - HISTORY_SHOWN} earlier", enabled = false))
+    }
+}
+
+private const val HISTORY_SHOWN = 14

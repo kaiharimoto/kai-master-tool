@@ -53,8 +53,9 @@ object CardActions {
     fun onDeck(action: MouseAction, at: Offset, card: Card, section: DeckSection, index: Int, state: DeckBuilderState, neue: NeueState) {
         when (action) {
             MouseAction.SELECT -> {
-                // While a group is being drawn up, a click on the main deck is a vote, not a selection.
-                if (state.groupDraft != null && section == DeckSection.MAIN) {
+                // While a group is being drawn up, a click on the deck is a vote, not a selection —
+                // on the extra and side decks too (1.0.17: a group may hold any card of the deck).
+                if (state.groupDraft != null) {
                     state.toggleDraftSelection(card.id)
                 } else {
                     neue.selection = Selection.InDeck(card, section, index)

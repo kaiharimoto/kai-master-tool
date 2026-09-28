@@ -388,7 +388,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   drops resolve against the placed cards. **The Groups button is the Roles lens
   and the panel together**; off, the deck is plain. The Roles tab is gone from the
   lens, and groups are edited on their rows in the panel — the Groups drawer is
-  deleted. `NEUE.md` §3.
+  deleted. A group may hold extra- and side-deck cards; its colour is an index
+  read through one of seven palettes (`GroupMarkers.palettes`). **The wheel
+  re-fits the deck** smaller (`deckZoom`) — a re-fit, not a transform, so every
+  layout rule holds — and Shift-wheel sets the groups' gap. `NEUE.md` §3.
 - **The index rail folds away and F11 is immersive mode**, both decided by
   `core/layout/EdgeReveal.kt`; bars come out *over* the page, never pushing it,
   or the deck re-fits and every card jumps. Leaving full screen must go through
@@ -420,8 +423,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   Roles pieces with a faint prismatic glow round each (`zenGlow`, in
   `ZenShadows.kt` because it blurs). **Faded is not gone**: in deep zen the pool
   and inspector are shielded (`ZenShield`) and the deck lifted over them, or the
-  invisible panes answer the pointer. The corner always offers Leave zen.
+  invisible panes answer the pointer. The corner always offers Leave zen. The
+  wheel sets zen's gaps, and zen fits the deck *as drawn* (`stageRect`, grown by
+  its pieces) so the cards shrink as the gaps widen.
   `NEUE.md` §3a.
+- **History** beside undo/redo lists each step in words (`DeckHistory`, read off
+  the decks either side, since the undo stack keeps decks, not edits).
 - **Export is a menu**: `.ydk`, `.ydkx` with groups, a `ydke://` code or a text
   decklist to the clipboard (`YdkeCodec`, `DeckText` in core). A tip at the
   bottom of the window opens `above`, or it covers its own control.

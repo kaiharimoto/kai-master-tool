@@ -67,6 +67,22 @@ class ZenLayer {
     var groupsAmount by mutableFloatStateOf(0f)
 
     /**
+     * How wide zen's gaps are, as a multiple of the standard gap: the wheel's, in
+     * deep zen (kai, 1.0.17: "let the scroll wheel expand the gaps further and
+     * tighten, card sizes adjust automatically").
+     */
+    var gapScale by mutableFloatStateOf(1f)
+
+    /** How far apart the pieces are drawn: open or not, times how wide the gaps are. */
+    val pieceAmount: Float get() = groupsAmount * gapScale
+
+    /**
+     * How much wider and taller the deck is with its pieces fully apart at one
+     * standard gap, in the deck's pixels at rest. Plain: the deck writes it.
+     */
+    var pieceGrowth: Size = Size.Zero
+
+    /**
      * How far each card is from its rest place once zen is deep, by its key: the
      * part that is always so, and the part the pieces add at full [groupsAmount].
      * In the deck's pixels. Plain: written by the deck, read when a card is let go.
@@ -81,7 +97,7 @@ class ZenLayer {
      * before it, as the arrangement's own offsets do.
      */
     fun homesNow(): Map<Int, ZenHome> {
-        val k = groupsAmount
+        val k = pieceAmount
         return homes.mapValues { (key, h) ->
             val base = pieceBase[key] ?: Offset.Zero
             val shift = pieceShift[key] ?: Offset.Zero
@@ -126,10 +142,10 @@ class ZenLayer {
     }
 
     /** The card drawn on top at a window point, or null for the table. */
-    fun pickAt(point: Offset): Int? = ZenPick.at(point.x, point.y, homesNow(), arrangement, stage, deck.center.x, deck.center.y)
+    fun pickAt(point: Offset): Int? = ZenPick.at(point.x, point.y, homesNow(), arrangement, stage, pivot.x, pivot.y)
 
     /** Every card a box over the window touches. */
-    fun within(box: Rect): Set<Int> = ZenPick.within(box.left, box.top, box.right, box.bottom, homesNow(), arrangement, stage, deck.center.x, deck.center.y)
+    fun within(box: Rect): Set<Int> = ZenPick.within(box.left, box.top, box.right, box.bottom, homesNow(), arrangement, stage, pivot.x, pivot.y)
 
     /** Card [key]'s whole block, as the garden has it now. */
     fun blockOf(key: Int): Set<Int> = arrangement.blockOf(key, homesNow())
@@ -176,15 +192,33 @@ class ZenLayer {
     /** Where the deck's cards are, at rest, in window pixels; and where they go in zen. */
     var deck: Rect = Rect.Zero
 
+    /**
+     * The deck as zen fits it to the window: its rest rectangle grown by its pieces
+     * — out to either side, since each section's pieces open about its middle, and
+     * downward, since the sections stack — so the wider the gaps, the smaller the
+     * cards, and the whole still sits in the middle of the window.
+     */
+    val stageRect: Rect
+        get() {
+            val k = pieceAmount
+            val w = pieceGrowth.width * k
+            val h = pieceGrowth.height * k
+            return Rect(deck.left - w / 2f, deck.top, deck.right + w / 2f, deck.bottom + h)
+        }
+
+    /** The point zen's transform scales about: the middle of [stageRect]. */
+    val pivot: Offset get() = stageRect.center
+
     val stage: ZenStage
-        get() = ZenStage.of(deck.left, deck.top, deck.width, deck.height, window.width, window.height)
+        get() = stageRect.let { ZenStage.of(it.left, it.top, it.width, it.height, window.width, window.height) }
 
     /** The deck's rectangle once it has come to the middle. */
     val deckInZen: Rect
         get() {
             val s = stage
-            val w = deck.width * s.scale
-            val h = deck.height * s.scale
+            val r = stageRect
+            val w = r.width * s.scale
+            val h = r.height * s.scale
             return Rect(window.width / 2f - w / 2f, window.height / 2f - h / 2f, window.width / 2f + w / 2f, window.height / 2f + h / 2f)
         }
 

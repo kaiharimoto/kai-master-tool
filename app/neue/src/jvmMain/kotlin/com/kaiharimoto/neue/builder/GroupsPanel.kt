@@ -125,7 +125,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
                 }
             }
             Mono("${draft.selection.size} cards", color = c.ink70)
-            Small("Click cards in the main deck to add or remove them", color = c.ink70)
+            Small("Click cards in the deck — main, extra or side — to add or remove them", color = c.ink70)
             MuButton("Save group", state::saveGroupDraft, variant = BtnVariant.PRIMARY, size = BtnSize.SM, modifier = Modifier.fillMaxWidth())
             MuButton("Cancel", state::cancelGroupDraft, variant = BtnVariant.GHOST, size = BtnSize.SM, modifier = Modifier.fillMaxWidth())
             if (!draft.isNew) {
@@ -152,7 +152,8 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
                 state = state,
                 neue = neue,
                 group = group,
-                count = keying.countOf(group.id),
+                // Every section's cards: a group may hold extra- and side-deck cards (1.0.17).
+                count = DeckSection.entries.sumOf { state.groups.countIn(state.deck[it], group.id) },
                 odds = odds[group.id],
                 first = i == 0,
                 last = i == groups.lastIndex,
@@ -166,6 +167,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         if (groups.isNotEmpty()) {
             Small("Click a colour square to see that group alone. Right-click a group for the rest.", Modifier.padding(top = 4.dp), color = c.ink45)
         }
+        PalettePicker(neue, Modifier.padding(top = 16.dp))
     }
 }
 }
@@ -262,6 +264,41 @@ private fun GroupRow(
             IconButton(Icons.ArrowUp, { state.updateGroups { it.reorder(group.id, index - 1) } }, enabled = !first, size = 24.dp, label = "Move up", reason = "Already first")
             IconButton(Icons.ArrowDown, { state.updateGroups { it.reorder(group.id, index + 1) } }, enabled = !last, size = 24.dp, label = "Move down", reason = "Already last")
             IconButton(Icons.Trash, { com.kaiharimoto.neue.shell.deleteGroup(state, group.id) }, size = 24.dp, label = "Delete")
+        }
+    }
+}
+
+/**
+ * The groups' palette (kai, 1.0.17: "more choices in color palettes with the
+ * empty space we have in the groups column"): every palette as a row of its six
+ * colours under its name, the one in use ruled in ink. Choosing one recolours
+ * every group at once and changes nothing in the deck (`GroupMarkers.palettes`).
+ */
+@Composable
+private fun PalettePicker(neue: NeueState, modifier: Modifier = Modifier) {
+    val c = Mu.colors
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Micro("Palette", color = c.ink70)
+        GroupMarkers.palettes.forEach { palette ->
+            val chosen = neue.prefs.groupPalette == palette.id
+            val source = remember(palette.id) { MutableInteractionSource() }
+            val hovered by source.collectIsHoveredAsState()
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, if (chosen) c.ink else if (hovered) c.ink45 else c.ink12)
+                    .hoverable(source)
+                    .cursorPointer(caption = if (chosen) "In use" else "Use")
+                    .clickable(interactionSource = source, indication = null) { neue.update { it.copy(groupPalette = palette.id) } }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Small(palette.name, Modifier.weight(1f), color = if (chosen) c.ink else c.ink70, maxLines = 1)
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    palette.colors.forEach { Box(Modifier.size(14.dp).background(it)) }
+                }
+            }
         }
     }
 }

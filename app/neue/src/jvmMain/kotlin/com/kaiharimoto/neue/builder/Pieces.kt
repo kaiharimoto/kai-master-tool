@@ -16,7 +16,8 @@ import com.kaiharimoto.mastertool.core.layout.PieceLayout
  *
  * - the builder's, [builder], by the lens, at [crack] — and the fitter has
  *   reserved its width and height, so at rest the pieces fill the grid's box;
- * - zen's, [zen], by the Roles groups, when the pieces are asked for in deep zen.
+ * - zen's, [zen], by the Roles groups, when the pieces are asked for in deep zen,
+ *   by [zenGap] times the wheel's amount (1.0.17), opening downward below [zenAbove].
  *
  * As zen deepens the builder's gives way ([deep]) and zen's takes over ([zenAmount]);
  * whichever is showing is centred in the box the fitter reserved, so the deck
@@ -31,6 +32,10 @@ internal class PiecePlacer(
     val builder: PieceLayout,
     val crack: Float,
     val zen: PieceLayout,
+    /** Zen's own standard gap: the wheel scales it there, through the amount. */
+    val zenGap: Float = gap,
+    /** How far down this section's zen pieces start: the growth of the sections above it, at one gap. */
+    val zenAbove: Float = 0f,
 ) {
     private val reservedX = builder.spanX * gap * crack
     private val reservedY = builder.spanY * gap * crack
@@ -39,10 +44,13 @@ internal class PiecePlacer(
     private fun gy(layout: PieceLayout, p: Int) = layout.shiftY.getOrElse(p) { 0 } - layout.spanY / 2f
 
     fun x(p: Int, deep: Float = 0f, zenAmount: Float = 0f): Float =
-        (p % columns) * cardWidth + reservedX / 2f + gx(builder, p) * gap * crack * (1f - deep) + gx(zen, p) * gap * zenAmount * deep
+        (p % columns) * cardWidth + reservedX / 2f + gx(builder, p) * gap * crack * (1f - deep) + gx(zen, p) * zenGap * zenAmount * deep
 
+    // Zen's pieces open downward rather than about the middle, and each section starts
+    // below the growth of those above it, so the sections never open into each other.
     fun y(p: Int, deep: Float = 0f, zenAmount: Float = 0f): Float =
-        (p / columns) * cardHeight + reservedY / 2f + gy(builder, p) * gap * crack * (1f - deep) + gy(zen, p) * gap * zenAmount * deep
+        (p / columns) * cardHeight + reservedY / 2f + gy(builder, p) * gap * crack * (1f - deep) +
+            (zen.shiftY.getOrElse(p) { 0 } * zenGap + zenAbove) * zenAmount * deep
 
     /** Card [p] at rest, in the builder. */
     fun rest(p: Int): Offset = Offset(x(p), y(p))

@@ -70,6 +70,7 @@ object Icons {
         "M12 2v2", "M12 20v2", "m4.93 4.93 1.41 1.41", "m17.66 17.66 1.41 1.41",
         "M2 12h2", "M20 12h2", "m6.34 17.66-1.41 1.41", "m19.07 4.93-1.41 1.41",
     )
+    val History = icon("history", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5", "M12 7v5l4 2")
     val Moon = icon("moon", "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z")
     val ChevronLeft = icon("chevron-left", "m15 18-6-6 6-6")
     val ChevronRight = icon("chevron-right", "m9 18 6-6-6-6")

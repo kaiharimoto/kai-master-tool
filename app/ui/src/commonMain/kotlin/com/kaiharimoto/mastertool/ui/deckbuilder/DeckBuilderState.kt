@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.deck.DeckEdit
 import com.kaiharimoto.mastertool.core.deck.DeckEditor
 import com.kaiharimoto.mastertool.core.deck.DeckGroup
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
+import com.kaiharimoto.mastertool.core.deck.DeckHistory
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.deck.DeckLenses
 import com.kaiharimoto.mastertool.core.deck.Lens
@@ -609,6 +610,31 @@ class DeckBuilderState(
         return stamp()
     }
 
+    /**
+     * The undo history in words, newest first (desktop's history menu): each step
+     * the stack could take back, then each it could put back again. Read off the
+     * decks either side of every entry, since the stack keeps decks, not edits.
+     */
+    fun history(): HistoryView {
+        val name: (com.kaiharimoto.mastertool.core.model.CardId) -> String? = { index.byId(it)?.name }
+        val done = undoStack.mapIndexed { i, entry ->
+            val after = undoStack.getOrNull(i + 1)?.deck ?: deck
+            DeckHistory.describe(entry.deck, after, entry.groups != null, entry.identity != null, name)
+        }.asReversed()
+        // The redo stack's last entry is the next redo; the deck before it is now.
+        val redoOrder = redoStack.asReversed()
+        val undone = redoOrder.mapIndexed { i, entry ->
+            val before = if (i == 0) deck else redoOrder[i - 1].deck
+            DeckHistory.describe(before, entry.deck, entry.groups != null, entry.identity != null, name)
+        }
+        return HistoryView(done, undone)
+    }
+
+    /** Takes back [steps] edits at once, or puts back [steps] undone ones when negative. */
+    fun travel(steps: Int) {
+        if (steps > 0) repeat(steps) { undo() } else repeat(-steps) { redo() }
+    }
+
     fun undo() {
         val entry = undoStack.removeLastOrNull() ?: return
         // Symmetric: only an entry that restores identity or groups captures
@@ -747,7 +773,9 @@ class DeckBuilderState(
     fun editGroup(group: DeckGroup) {
         lens = Lens.ROLES
         isolatedKey = null
-        groupDraft = GroupDrafts.edit(groups, group, deck.main)
+        // Every section: a group may hold extra- and side-deck cards too, and a draft
+        // opened on the main deck alone dropped them from the group when it was saved.
+        groupDraft = GroupDrafts.edit(groups, group, deck.main + deck.extra + deck.side)
     }
 
     fun setDraftName(value: String) {
@@ -975,3 +1003,6 @@ data class RevealRequest(
     val cardId: CardId,
     val id: Long,
 )
+
+/** The history menu's two lists, newest first: steps [done] (undo takes them back) and [undone] (redo puts them back). */
+data class HistoryView(val done: List<String>, val undone: List<String>)

@@ -56,6 +56,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.mastertool.core.deck.Lens
@@ -346,7 +347,8 @@ class NeueHolders(
             Command("Deck", "Export as a .ydkx file, with groups") { CardActions.export(DeckExportFormat.YDKX, builder, neue) },
             Command("Deck", "Copy the YDKe code") { CardActions.export(DeckExportFormat.YDKE, builder, neue) },
             Command("Deck", "Copy the decklist as text") { CardActions.export(DeckExportFormat.TEXT, builder, neue) },
-            Command("Deck", if (neue.prefs.extraSideVisible) "Hide the extra and side decks" else "Show the extra and side decks") { neue.update { it.copy(extraSideVisible = !it.extraSideVisible) } },
+            Command("Deck", if (neue.prefs.extraVisible) "Hide the extra deck" else "Show the extra deck") { neue.update { it.copy(extraVisible = !it.extraVisible) } },
+            Command("Deck", if (neue.prefs.sideVisible) "Hide the side deck" else "Show the side deck") { neue.update { it.copy(sideVisible = !it.sideVisible) } },
             Command("Deck", if (neue.prefs.foil == com.kaiharimoto.neue.cards.Foils.OFF) "Foil on" else "Foil off") { toggleFoil() },
             cmd("Deck", "Undo", DeskAction.UNDO),
             cmd("Deck", "Redo", DeskAction.REDO),
@@ -458,6 +460,8 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
         LaunchedEffect(neue.prefs.hdArt) { h.art.enable(neue.prefs.hdArt) }
     }
 
+    // The groups' palette: read wherever a group is coloured, so set once here.
+    SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
@@ -542,7 +546,21 @@ private fun Shell(h: NeueHolders) {
                         val deepZen = neue.zen == ZenPhase.DEEP
                         when (event.type) {
                             PointerEventType.Press -> if (!deepZen) h.wake()
-                            PointerEventType.Scroll -> if (!deepZen) h.wake()
+                            // In deep zen the wheel opens and closes the gaps between the groups
+                            // (kai, 1.0.17); up past closed opens them, and zen re-fits the cards.
+                            PointerEventType.Scroll -> if (!deepZen) {
+                                h.wake()
+                            } else {
+                                val d = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
+                                val step = if (d.y != 0f) d.y else d.x
+                                if (step != 0f && state.groups.groups.isNotEmpty()) {
+                                    if (!h.zen.groups && step < 0f) {
+                                        h.zen.groups = true
+                                    } else if (h.zen.groups) {
+                                        h.zen.gapScale = (h.zen.gapScale - step * 0.15f).coerceIn(ZEN_GAP_MIN, ZEN_GAP_MAX)
+                                    }
+                                }
+                            }
                             PointerEventType.Move -> if (at != null && !deepZen) {
                                 if (!still.isSpecified || (at - still).getDistance() > 3f) {
                                     still = at
@@ -849,6 +867,10 @@ private fun ZenClockwork(h: NeueHolders) {
 private const val ZEN_IN = 1400
 private const val ZEN_DEEP_IN = 2600
 private const val ZEN_OUT = 1600
+
+/** How far the wheel may close and open zen's gaps, as multiples of the standard gap. */
+private const val ZEN_GAP_MIN = 0.3f
+private const val ZEN_GAP_MAX = 5f
 
 /** The pieces opening or closing in zen: slow enough to watch the deck come apart. */
 private const val ZEN_PIECES = 900
