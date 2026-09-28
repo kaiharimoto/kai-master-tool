@@ -66,7 +66,7 @@ class NeueState(
 ) {
     var page by mutableStateOf(Page.BUILDER)
 
-    var prefs by mutableStateOf(NeuePreferences.DEFAULT)
+    var prefs by mutableStateOf(NeuePreferences.seededFor(touchFirst))
         private set
 
     var paletteOpen by mutableStateOf(false)
@@ -151,7 +151,7 @@ class NeueState(
 
     fun start() {
         scope.launch {
-            val stored = repository.loadNeue()
+            val stored = repository.loadNeue(NeuePreferences.seededFor(touchFirst))
             // Whatever the user changed while the database was opening wins.
             if (!loaded) prefs = stored
             loaded = true
@@ -195,6 +195,13 @@ class NeueState(
     fun artChoices(card: Card): List<Int> = customArt?.choices(card) ?: CardArt.arts(card).map { it.value }
 
     fun toggleTheme() = update { it.copy(theme = if (it.theme == NeueTheme.PAPER) NeueTheme.INK else NeueTheme.PAPER) }
+
+    /** The Decks page's cover picker, here rather than in the page so Back can close it (touch swarm, rec 2). */
+    var coverPicking by mutableStateOf<com.kaiharimoto.mastertool.core.data.StoredDeck?>(null)
+
+    /** Whether [dismissTop] has something to close. */
+    val hasTop: Boolean
+        get() = menu != null || viewing != null || paletteOpen || confirmDelete != null || helpOpen || drawer != null || studio != null
 
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {

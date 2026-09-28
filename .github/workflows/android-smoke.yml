@@ -65,7 +65,7 @@ jobs:
           # Left installed, or the run uninstalls the app and its screenshot with it.
           script: |
             ./gradlew :androidApp:connectedDebugAndroidTest -Pmastertool.android=true -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true --stacktrace
-            adb pull /sdcard/Android/data/com.kaiharimoto.mastertool/files/neue-smoke.png neue-smoke.png || true
+            mkdir -p smoke && adb pull /sdcard/Android/data/com.kaiharimoto.mastertool/files/. smoke/ || true
 
       - name: Keep the picture and the report
         if: always()
@@ -73,7 +73,7 @@ jobs:
         with:
           name: neue-android-smoke
           path: |
-            app/neue-smoke.png
+            app/smoke/*.png
             app/androidApp/build/reports/androidTests/
             app/androidApp/build/outputs/androidTest-results/
           if-no-files-found: warn

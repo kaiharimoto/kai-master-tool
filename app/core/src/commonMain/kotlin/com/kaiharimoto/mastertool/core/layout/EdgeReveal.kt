@@ -76,4 +76,33 @@ object EdgeReveal {
         }
         return Revealed(left = left, top = top, bottom = bottom)
     }
+
+    /**
+     * A finger's way to the bars (touch swarm, rec 3). A finger cannot come near
+     * an edge without the system taking the swipe, so in immersive a **tap** on
+     * the strip of paper along the top ([topStrip]) brings the title bar out, and
+     * a tap in the gutter down the left ([leftStrip]) brings the index out. A tap
+     * inside a bar that is out leaves it; a tap anywhere else folds both. Called
+     * only for a tap — a press and a lift that did not travel — so a finger
+     * dragging past an edge reveals nothing.
+     */
+    fun onTap(
+        current: Revealed,
+        x: Float,
+        y: Float,
+        topStrip: Float,
+        leftStrip: Float,
+        topHeight: Float,
+        railWidth: Float,
+        immersive: Boolean,
+    ): Revealed {
+        if (!immersive) return current
+        return when {
+            current.top && y <= topHeight -> current
+            current.left && x <= railWidth -> current
+            y <= topStrip -> Revealed(top = true)
+            x <= leftStrip -> Revealed(left = true)
+            else -> Revealed.NONE
+        }
+    }
 }

@@ -113,6 +113,8 @@ object MuMotion {
 object MuShell {
     val top = 48.dp
     val rail = 232.dp
+    /** The index on a tablet: numerals only (touch swarm, rec 1; `PaneBudget.TOUCH_RAIL`). */
+    val strip = 56.dp
     val railRow = 56.dp
     val footer = 56.dp
 }

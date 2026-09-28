@@ -40,6 +40,16 @@ object DeskTouch {
     /** Two taps this close together, on the same card, are a double-tap. */
     const val DOUBLE_TAP_MS = 300L
 
+    /**
+     * How long a card must have been selected before a finger's art chip appears on
+     * it (touch swarm, rec 7): past the double-tap window, so a double-tap's second
+     * tap lands on the card and never on a chip that appeared under it at the first.
+     */
+    const val CHIP_DELAY_MS = DOUBLE_TAP_MS + 20
+
+    /** The chip only on cards drawn at least this wide, in dp: below it, it covers what a finger aims at. */
+    const val CHIP_MIN_CARD_DP = 48f
+
     val all: List<TouchBinding> = listOf(
         TouchBinding(MouseTarget.POOL, TouchGesture.TAP, MouseAction.SELECT, "Select it, and read it in the inspector"),
         TouchBinding(MouseTarget.POOL, TouchGesture.DOUBLE_TAP, MouseAction.ADD, "Add it to the deck"),
@@ -52,8 +62,15 @@ object DeskTouch {
         TouchBinding(MouseTarget.DECK, TouchGesture.DRAG, MouseAction.PICK_UP, "Move it, or drop it on the pool to remove it"),
     )
 
-    fun resolve(target: MouseTarget, gesture: TouchGesture): MouseAction? =
-        all.firstOrNull { it.target == target && it.gesture == gesture }?.action
+    /**
+     * What [gesture] on [target] does. While a group is being drawn up ([drafting])
+     * the deck is being chosen from, not edited, and a tap there is a vote: a quick
+     * second vote is two votes, never the double-tap's removal (touch swarm, rec 7).
+     */
+    fun resolve(target: MouseTarget, gesture: TouchGesture, drafting: Boolean = false): MouseAction? {
+        if (drafting && target == MouseTarget.DECK && gesture == TouchGesture.DOUBLE_TAP) return MouseAction.SELECT
+        return all.firstOrNull { it.target == target && it.gesture == gesture }?.action
+    }
 
     /**
      * Whether a drag that has crossed the slop by ([dx], [dy]) picks a card up on

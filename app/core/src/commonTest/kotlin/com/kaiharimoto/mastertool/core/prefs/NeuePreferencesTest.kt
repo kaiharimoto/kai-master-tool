@@ -72,4 +72,12 @@ class NeuePreferencesTest {
         assertEquals(NeuePreferences.DEFAULT_PALETTE, p.groupPalette)
         assertEquals(NeuePreferences.MIN_ZOOM, NeuePreferences(deckZoom = 0.01f).sanitised().deckZoom)
     }
+
+    @Test
+    fun aTabletStartsWithAutoSaveOnAndTheDeskAsItWas() {
+        assertEquals(NeuePreferences.DEFAULT, NeuePreferences.seededFor(touch = false))
+        assertEquals(false, NeuePreferences.DEFAULT.autoSave)
+        assertEquals(true, NeuePreferences.seededFor(touch = true).autoSave)
+        assertEquals(NeuePreferences.DEFAULT.copy(autoSave = true), NeuePreferences.seededFor(touch = true))
+    }
 }

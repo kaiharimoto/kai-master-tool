@@ -187,6 +187,22 @@ private fun NeueCardFace(
     // The frame round the artwork moves with the card's template, so the foil lands on it.
     val artFrame = remember(card.frameType) { ArtFrame.of(card.frameType) }
     val light by animateOffsetAsState(feel ?: Offset.Zero, tween(MuMotion.BASE, easing = MuMotion.ease), label = "light")
+    // A finger's art chip (touch swarm, rec 7): it comes only once the selection has
+    // stood past a double-tap, so the second tap lands on the card, and only on a
+    // card wide enough for the chip not to be most of what the finger aims at.
+    val touch = com.kaiharimoto.neue.kit.LocalTouchFirst.current
+    var widthDp by remember { mutableStateOf(0f) }
+    var chipReady by remember { mutableStateOf(false) }
+    if (touch) {
+        LaunchedEffect(selected) {
+            chipReady = false
+            if (selected) {
+                kotlinx.coroutines.delay(com.kaiharimoto.mastertool.core.input.DeskTouch.CHIP_DELAY_MS)
+                chipReady = true
+            }
+        }
+    }
+    val density = androidx.compose.ui.platform.LocalDensity.current
 
     Box(
         modifier
@@ -210,6 +226,7 @@ private fun NeueCardFace(
                 }
             }
             .onSizeChanged { px ->
+                widthDp = with(density) { px.width.toDp().value }
                 // Drawn wider than the small render: ask for the original now, not in its turn.
                 if (px.width > SMALL_WIDTH && hd == null) library?.want(card)
             }
@@ -320,7 +337,8 @@ private fun NeueCardFace(
         // because the inspector's arrows were a journey across other cards away. Its press
         // is spent here, so it never also selects, drags or opens the card under it.
         // On a touch screen, where nothing hovers, the chip is on the selected card.
-        if (artChip != null && (hovered || selected && com.kaiharimoto.neue.kit.LocalTouchFirst.current)) {
+        val fingerChip = touch && selected && chipReady && widthDp >= com.kaiharimoto.mastertool.core.input.DeskTouch.CHIP_MIN_CARD_DP
+        if (artChip != null && (hovered || fingerChip)) {
             Inverted {
                 Box(
                     Modifier

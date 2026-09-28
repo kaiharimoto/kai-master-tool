@@ -10,6 +10,10 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.layout.layout
+import com.kaiharimoto.mastertool.core.layout.PaneBudget
+import com.kaiharimoto.neue.kit.reportsTextFocus
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -101,6 +105,23 @@ fun BuilderPage(
     // still a card under the pointer.
     val zen = LocalZen.current
     val asleep by remember { derivedStateOf { zen.deep > 0.5f } }
+    // The page's width, shared by PaneBudget (touch swarm, rec 1). Widths there are
+    // physical — dp at a scale of one — so the interface scale grows what is in the
+    // panes, never the panes; the tablet's pool and inspector are 320 and yield to
+    // the deck's floor, and with Groups on the Groups panel takes the inspector's place.
+    val scale = neue.prefs.scale
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val panes = PaneBudget.solve(
+        window = maxWidth.value * scale,
+        touch = neue.touchFirst,
+        railOut = false,
+        groupsOn = groupsOn(state),
+        poolVisible = neue.prefs.poolVisible,
+        inspectorVisible = neue.prefs.inspectorVisible,
+        poolPref = neue.prefs.poolWidth,
+        inspectorPref = neue.prefs.inspectorWidth,
+    )
+    fun physical(w: Float) = (w / scale).dp
     Row(Modifier.fillMaxSize().padding(top = if (neue.immersive) IMMERSIVE_TOP else 0.dp)) {
         if (!neue.prefs.poolVisible) {
             // A hidden pane leaves its handle where it stood (kai, 1.0.19): a narrow strip
@@ -116,31 +137,35 @@ fun BuilderPage(
             VRule(Modifier.zenQuiet(), color = Mu.colors.ink12)
         }
         if (neue.prefs.poolVisible) {
-            Box(Modifier.width(neue.prefs.poolWidth.dp).fillMaxHeight()) {
+            Box(Modifier.width(physical(panes.pool)).fillMaxHeight()) {
                 PoolPane(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
                 ZenShield(asleep)
             }
-            Box(Modifier.fillMaxHeight()) {
-                ResizeRule("Pool", neue.prefs.poolWidth) { delta -> neue.update(debounce = true) { it.copy(poolWidth = it.poolWidth + delta) } }
+            Box(Modifier.fillMaxHeight().zIndex(1f)) {
+                ResizeRule("Pool", panes.pool, scale, neue.touchFirst) { delta -> neue.update(debounce = true) { it.copy(poolWidth = it.poolWidth + delta) } }
                 ZenShield(asleep)
             }
         }
         DeckColumn(state, neue, drag, Modifier.weight(1f).fillMaxHeight().zIndex(if (asleep) 1f else 0f))
-        if (neue.prefs.inspectorVisible) {
-            Box(Modifier.fillMaxHeight()) {
-                ResizeRule("Inspector", neue.prefs.inspectorWidth) { delta -> neue.update(debounce = true) { it.copy(inspectorWidth = it.inspectorWidth - delta) } }
+        if (panes.inspector > 0f) {
+            Box(Modifier.fillMaxHeight().zIndex(1f)) {
+                ResizeRule("Inspector", panes.inspector, scale, neue.touchFirst) { delta -> neue.update(debounce = true) { it.copy(inspectorWidth = it.inspectorWidth - delta) } }
                 ZenShield(asleep)
             }
-            Box(Modifier.width(neue.prefs.inspectorWidth.dp).fillMaxHeight()) {
+            Box(Modifier.width(physical(panes.inspector)).fillMaxHeight()) {
                 Inspector(state, neue, Modifier.fillMaxSize())
                 ZenShield(asleep)
             }
+        } else if (panes.inspectorYielded) {
+            // On touch the inspector gave its room to the Groups panel or to the
+            // deck's floor; reading a card is the hold's job there (the viewer).
         } else {
             VRule(Modifier.zenQuiet(), color = Mu.colors.ink12)
             HiddenPane(Modifier.zenQuiet(), Icons.PanelRightOpen, "Show the inspector", kbd(DeskAction.TOGGLE_INSPECTOR)) {
                 neue.update { it.copy(inspectorVisible = true) }
             }
         }
+    }
     }
 }
 
@@ -219,6 +244,7 @@ fun RowScope.BuilderBar(
             .widthIn(min = 140.dp, max = 560.dp)
             .cursor(CursorMode.TEXT, caption = "Rename", fontSize = 20.sp, focused = focused)
             .hoverable(source)
+            .reportsTextFocus()
             .onFocusChanged { state.onTextFieldFocusChanged(it.isFocused) }
             .drawBehind { drawLine(line, Offset(0f, size.height + 2.dp.toPx()), Offset(size.width, size.height + 2.dp.toPx()), 1.dp.toPx()) },
     )
@@ -300,26 +326,34 @@ private fun Standing(state: DeckBuilderState, neue: NeueState) {
  * the interface is zoomed.
  */
 @Composable
-private fun ResizeRule(name: String, width: Float, onDrag: (Float) -> Unit) {
+private fun ResizeRule(name: String, width: Float, scale: Float, touch: Boolean, onDrag: (Float) -> Unit) {
     val density = LocalDensity.current
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val c = Mu.colors
-    Box(
-        Modifier
-            .zenQuiet()
-            .width(7.dp)
-            .fillMaxHeight()
-            .hoverable(source)
-            // A drag: the family cursor names the pane and reads its width as it moves.
-            .cursor(CursorMode.DRAG, caption = name, value = "${kotlin.math.round(width).toInt()} px")
-            .draggable(
-                rememberDraggableState { px -> onDrag(with(density) { px.toDp().value }) },
-                Orientation.Horizontal,
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
+    // A finger needs more than 7dp to find the edge (rec 1): on touch the grip is
+    // 32dp wide, centred on the rule, with no layout width of its own — it lies
+    // over the paper at the pane's and the deck's edges, never over a card.
+    val grip = if (touch) 32.dp else 7.dp
+    Box(Modifier.width(7.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
         VRule(Modifier.width(if (hovered) 2.dp else 1.dp), color = c.ink)
+        Box(
+            Modifier
+                .zenQuiet()
+                .layout { measurable, constraints ->
+                    val p = measurable.measure(constraints.copy(minWidth = grip.roundToPx(), maxWidth = grip.roundToPx()))
+                    layout(7.dp.roundToPx(), p.height) { p.place((7.dp.roundToPx() - p.width) / 2, 0) }
+                }
+                .fillMaxHeight()
+                .hoverable(source)
+                // A drag: the family cursor names the pane and reads its width as it moves.
+                .cursor(CursorMode.DRAG, caption = name, value = "${kotlin.math.round(width).toInt()} px")
+                .draggable(
+                    // Widths are physical (at a scale of one), so a drag's dp is multiplied back by the scale.
+                    rememberDraggableState { px -> onDrag(with(density) { px.toDp().value } * scale) },
+                    Orientation.Horizontal,
+                ),
+        )
     }
 }
 

@@ -39,6 +39,7 @@ import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.art.LocalArt
 import com.kaiharimoto.neue.cards.LocalNameStyle
 import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.neue.builder.IMMERSIVE_TOP
 import com.kaiharimoto.neue.builder.BuilderBar
 import com.kaiharimoto.neue.shot.DeckShots
 import com.kaiharimoto.neue.theme.MuShell
@@ -98,6 +99,9 @@ import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskContext
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.input.DeskMenuBar
+import com.kaiharimoto.mastertool.core.input.BackChain
+import com.kaiharimoto.mastertool.core.input.BackFlags
+import com.kaiharimoto.mastertool.core.input.Unwind
 import com.kaiharimoto.mastertool.core.input.ActionEcho
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
@@ -218,8 +222,11 @@ class NeueHolders(
     }
 
     /** What is on screen, as the shortcut table reads it. */
+    /** Every kit text field's focus, reported by the fields themselves (touch swarm, rec 6). */
+    val textFocus = com.kaiharimoto.neue.kit.TextFocus()
+
     fun deskContext() = DeskContext(
-        textInputFocused = builder.textInputFocused || neue.searchFocused,
+        textInputFocused = textFocus.any || builder.textInputFocused || neue.searchFocused,
         searchFocused = neue.searchFocused,
         overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen,
         onBuilder = neue.page == Page.BUILDER,
@@ -401,19 +408,51 @@ class NeueHolders(
         builder.useLens(tabs[((at + by) % tabs.size + tabs.size) % tabs.size])
     }
 
+    /** What is open, as `BackChain` reads it (touch swarm, rec 2): Esc and Android's Back share one chain. */
+    private fun backFlags() = BackFlags(
+        updateDialog = updates.dialogOpen,
+        overlay = overlays.isOpen,
+        top = neue.hasTop,
+        coverPicker = neue.coverPicking != null,
+        goal = builder.editingGoal != null,
+        draft = builder.groupDraft != null,
+        focus = textFocus.any || builder.textInputFocused || neue.searchFocused,
+        isolation = builder.isolatedKey != null,
+        selection = neue.selection != null,
+        immersive = neue.immersive,
+        offBuilder = neue.page != Page.BUILDER,
+    )
+
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
     private fun dismiss() {
+        BackChain.esc(backFlags())?.let(::unwind)
+    }
+
+    /** Whether Back has anything to close; with nothing, the system's own back (and its predictive preview) is right. */
+    fun canGoBack(): Boolean = BackChain.back(backFlags()) != null
+
+    /** Android's Back: one layer, as Esc — never focus or the selection. Returns false when there was nothing. */
+    fun back(): Boolean {
+        wake()
+        val step = BackChain.back(backFlags()) ?: return false
+        unwind(step)
+        return true
+    }
+
+    private fun unwind(step: Unwind) {
         val state = builder
-        when {
-            updates.dialogOpen -> updates.dialogOpen = false
-            overlays.dismiss() -> Unit
-            neue.dismissTop() -> Unit
-            state.editingGoal != null -> state.cancelGoal()
-            state.groupDraft != null -> state.cancelGroupDraft()
-            state.textInputFocused || neue.searchFocused -> focus?.clearFocus()
-            state.isolatedKey != null -> state.isolatedKey?.let(state::toggleIsolation)
-            neue.selection != null -> neue.selection = null
-            neue.immersive -> run(DeskAction.IMMERSIVE)
+        when (step) {
+            Unwind.UPDATE_DIALOG -> updates.dialogOpen = false
+            Unwind.OVERLAY -> overlays.dismiss()
+            Unwind.TOP -> neue.dismissTop()
+            Unwind.COVER_PICKER -> neue.coverPicking = null
+            Unwind.GOAL -> state.cancelGoal()
+            Unwind.DRAFT -> state.cancelGroupDraft()
+            Unwind.FOCUS -> focus?.clearFocus()
+            Unwind.ISOLATION -> state.isolatedKey?.let(state::toggleIsolation)
+            Unwind.SELECTION -> neue.selection = null
+            Unwind.IMMERSIVE -> run(DeskAction.IMMERSIVE)
+            Unwind.TO_BUILDER -> neue.go(Page.BUILDER)
         }
     }
 
@@ -555,7 +594,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     // The groups' palette: read wherever a group is coloured, so set once here.
     SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides neue::stepArt, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             com.kaiharimoto.neue.kit.ProvideTextMenus {
                 Shell(h)
@@ -626,6 +665,9 @@ private fun Shell(h: NeueHolders) {
                     var boxFrom: Offset? = null
                     var boxBase = emptySet<Int>()
                     var boxShift = false
+                    // A finger's press, for telling a tap from a swipe (touch swarm, rec 3).
+                    var fingerFrom: Offset? = null
+                    var fingerAt = 0L
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         val at = event.changes.firstOrNull()?.position
@@ -720,7 +762,7 @@ private fun Shell(h: NeueHolders) {
                             x = if (gone) null else at?.x,
                             y = if (gone) null else at?.y,
                             height = size.height.toFloat(),
-                            railWidth = MuShell.rail.toPx(),
+                            railWidth = (if (neue.touchFirst) MuShell.strip else MuShell.rail).toPx(),
                             topHeight = measured.top.toFloat(),
                             bottomHeight = measured.bottom.toFloat(),
                             immersive = neue.immersive,
@@ -728,6 +770,32 @@ private fun Shell(h: NeueHolders) {
                             suppress = h.drag.held != null || neue.menu != null || neue.zen == ZenPhase.DEEP,
                         // The builder has no footer since 1.0.9: nothing comes up from the bottom.
                         ).copy(bottom = false)
+                        // A finger cannot reach an edge the system does not take, so in immersive a
+                        // tap on the paper strip along the top, or in the gutter down the left,
+                        // brings that bar out; a tap anywhere else folds it (EdgeReveal.onTap).
+                        val finger = event.changes.firstOrNull()?.takeIf { it.byFinger }
+                        if (finger != null && event.type == PointerEventType.Press) {
+                            fingerFrom = finger.position
+                            fingerAt = finger.uptimeMillis
+                        } else if (finger != null && event.type == PointerEventType.Release) {
+                            val from0 = fingerFrom
+                            fingerFrom = null
+                            if (from0 != null && neue.immersive && neue.zen != ZenPhase.DEEP && h.drag.held == null &&
+                                (finger.position - from0).getDistance() < viewConfiguration.touchSlop &&
+                                finger.uptimeMillis - fingerAt < com.kaiharimoto.mastertool.core.input.DeskTouch.DOUBLE_TAP_MS
+                            ) {
+                                neue.revealed = EdgeReveal.onTap(
+                                    current = neue.revealed,
+                                    x = finger.position.x,
+                                    y = finger.position.y,
+                                    topStrip = IMMERSIVE_TOP.toPx(),
+                                    leftStrip = 32.dp.toPx(),
+                                    topHeight = measured.top.toFloat(),
+                                    railWidth = MuShell.strip.toPx(),
+                                    immersive = true,
+                                )
+                            }
+                        }
                     }
                 }
             },
@@ -782,7 +850,7 @@ private fun Shell(h: NeueHolders) {
         }
         if (!pinned) {
             val left by animateFloatAsState(if (out.left) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "rail")
-            val railPx = with(density) { MuShell.rail.roundToPx() }
+            val railPx = with(density) { (if (neue.touchFirst) MuShell.strip else MuShell.rail).roundToPx() }
             if (left > 0.001f) {
                 Box(
                     Modifier
@@ -845,7 +913,14 @@ private fun Shell(h: NeueHolders) {
         }
         if (h.updates.dialogOpen) UpdateDialog(h.updates)
         if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
-        if (immersive) ZenReset(h.zen, hasGroups = state.groups.groups.isNotEmpty(), onLeave = { h.wake() }, modifier = Modifier.align(Alignment.BottomEnd), always = neue.touchFirst)
+        if (immersive) ZenReset(
+            h.zen,
+            hasGroups = state.groups.groups.isNotEmpty(),
+            onLeave = { h.wake() },
+            modifier = Modifier.align(Alignment.BottomEnd),
+            always = neue.touchFirst,
+            onLeaveFullScreen = if (neue.touchFirst) ({ h.wake(); h.run(DeskAction.IMMERSIVE) }) else null,
+        )
         // The box being dragged over the table in deep zen: a hairline and the faintest wash.
         h.zen.marquee?.let { box ->
             Canvas(Modifier.fillMaxSize()) {

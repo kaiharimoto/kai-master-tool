@@ -5,6 +5,7 @@ import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.mastertool.core.input.DeskTouch
 import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.neue.kit.reportsTextFocus
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -141,6 +142,7 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                                 .fillMaxWidth()
                                 .cursor(CursorMode.TEXT, fontSize = 15.sp, focused = true)
                                 .focusRequester(focus)
+                                .reportsTextFocus()
                                 .onPreviewKeyEvent { e ->
                                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                     when (e.key) {

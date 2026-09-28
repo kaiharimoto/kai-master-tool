@@ -216,5 +216,14 @@ data class NeuePreferences(
         const val MAX_GAP = 3f
 
         val DEFAULT = NeuePreferences()
+
+        /**
+         * The settings a device starts from, before it has stored any (touch swarm,
+         * rec 5). On a touch screen auto save is on: a tablet is put down, swiped
+         * away and killed in the background with nothing to warn you first. A
+         * seed, not a migration — a device that has written `neue.ui` keeps what
+         * it wrote — and the desk's start is the plain default, unchanged.
+         */
+        fun seededFor(touch: Boolean): NeuePreferences = if (touch) DEFAULT.copy(autoSave = true) else DEFAULT
     }
 }

@@ -47,6 +47,8 @@ import com.kaiharimoto.mastertool.core.ydk.YdkCodec
 import com.kaiharimoto.mastertool.core.ydk.YdkeCodec
 import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.neue.kit.onContextMenu
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.Tag
 import androidx.compose.foundation.border
@@ -117,7 +119,6 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
         }
     }
     // The deck whose covers are being picked (kai, 1.0.15: click the thumbnails).
-    var picking by remember { mutableStateOf<StoredDeck?>(null) }
 
     fun duplicate(stored: StoredDeck) {
         scope.launch {
@@ -150,6 +151,25 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
         }
     }
 
+    /**
+     * Opening a deck replaces the one on the builder, and used to throw its unsaved
+     * edits away without a word (touch swarm, rec 5). With auto save off, a deck
+     * that has been saved before is saved first; a new one asks.
+     */
+    var unsavedBeforeOpen by remember { mutableStateOf<String?>(null) }
+    fun openDeck(id: String) {
+        fun go() {
+            state.load(id)
+            neue.go(Page.BUILDER)
+        }
+        when {
+            id == state.deckId || !state.dirty || neue.prefs.autoSave -> go()
+            state.deckId != null -> state.save(quiet = true) { go() }
+            state.deck.totalCards == 0 -> go()
+            else -> unsavedBeforeOpen = id
+        }
+    }
+
     fun exportMenu(stored: StoredDeck, at: Offset) {
         neue.menu = MenuSpec(
             at,
@@ -166,6 +186,30 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             },
         )
     }
+
+    /**
+     * Everything a row can do, in one menu (touch swarm, rec 4): the row's hidden
+     * buttons on a desk wait for a hover a finger cannot make, and were still there
+     * to be tapped by accident — Delete included. On a tablet the row shows "More"
+     * instead, and holding the row opens the same list.
+     */
+    fun rowMenu(stored: StoredDeck, at: Offset, default: Boolean, open: () -> Unit) {
+        neue.menu = MenuSpec(
+            at,
+            listOf(
+                MenuEntry("Open", onClick = open),
+                MenuEntry("Duplicate") { duplicate(stored) },
+                MenuEntry(if (default) "Not default" else "Make default") {
+                    val id = stored.entry.id
+                    neue.update { it.copy(defaultDeckId = if (it.defaultDeckId == id) null else id) }
+                },
+                MenuEntry("Choose covers…") { neue.coverPicking = stored },
+                MenuEntry("Export…") { exportMenu(stored, at) },
+                MenuEntry("✕ Delete", danger = true, separatorBefore = true) { neue.confirmDelete = stored.entry.id to stored.entry.name },
+            ),
+        )
+    }
+
 
     Column(Modifier.fillMaxSize()) {
         PageHeader(
@@ -218,14 +262,14 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
                                 val id = stored.entry.id
                                 neue.update { it.copy(defaultDeckId = if (it.defaultDeckId == id) null else id) }
                             },
-                            onOpen = {
-                                state.load(stored.entry.id)
-                                neue.go(Page.BUILDER)
-                            },
+                            onOpen = { openDeck(stored.entry.id) },
                             onDelete = { neue.confirmDelete = stored.entry.id to stored.entry.name },
-                            onCovers = { picking = stored },
+                            onCovers = { neue.coverPicking = stored },
                             onDuplicate = { duplicate(stored) },
                             onExport = { at -> exportMenu(stored, at) },
+                            onMenu = { at ->
+                                rowMenu(stored, at, stored.entry.id == neue.prefs.defaultDeckId) { openDeck(stored.entry.id) }
+                            },
                         )
                     }
                 }
@@ -233,7 +277,28 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             }
         }
     }
-    picking?.let { stored -> CoverPicker(stored, state, neue) { picking = null } }
+    neue.coverPicking?.let { stored -> CoverPicker(stored, state, neue) { neue.coverPicking = null } }
+    unsavedBeforeOpen?.let { id ->
+        MuDialog(
+            title = "Keep the unsaved deck?",
+            onDismiss = { unsavedBeforeOpen = null },
+            description = "“${state.deckName.ifBlank { "Untitled Deck" }}” has never been saved. Opening another deck replaces it on the builder.",
+            footer = {
+                MuButton("Discard", {
+                    unsavedBeforeOpen = null
+                    state.load(id)
+                    neue.go(Page.BUILDER)
+                }, variant = BtnVariant.GHOST)
+                MuButton("Save", {
+                    unsavedBeforeOpen = null
+                    state.save(quiet = true) {
+                        state.load(id)
+                        neue.go(Page.BUILDER)
+                    }
+                }, variant = BtnVariant.PRIMARY)
+            },
+        ) {}
+    }
 }
 
 /**
@@ -316,8 +381,11 @@ private fun DeckRow(
     onCovers: () -> Unit,
     onDuplicate: () -> Unit,
     onExport: (Offset) -> Unit,
+    onMenu: (Offset) -> Unit,
 ) {
     val c = Mu.colors
+    val touch = LocalTouchFirst.current
+    var rowAt by remember { mutableStateOf(Offset.Zero) }
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
     val deck = stored.entry.deck
@@ -331,8 +399,11 @@ private fun DeckRow(
             Modifier
                 .fillMaxWidth()
                 .background(animatedColor(if (current) inner.paper else if (hovered) c.ink06 else Color.Transparent))
+                .onGloballyPositioned { rowAt = it.boundsInWindow().topLeft }
                 .hoverable(source)
                 .cursorPointer(caption = "Open")
+                // A hold, or a right-click on the desk, opens everything the row can do.
+                .onContextMenu { local -> onMenu(rowAt + local) }
                 .clickable(interactionSource = source, indication = null, onClick = onOpen)
                 .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
                 .padding(horizontal = 32.dp, vertical = 12.dp),
@@ -341,11 +412,19 @@ private fun DeckRow(
         ) {
             Numeral(n, color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45)
             // Three places, flush like the deck's own mosaic, so every name starts on one line.
+            // On a tablet the covers open the deck like the rest of the row; choosing them is in More.
             Row(
                 Modifier
                     .width(COVER_W * DeckCovers.MAX)
-                    .cursorPointer(caption = "Covers")
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onCovers),
+                    .then(
+                        if (touch) {
+                            Modifier
+                        } else {
+                            Modifier
+                                .cursorPointer(caption = "Covers")
+                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onCovers)
+                        },
+                    ),
             ) {
                 if (faces.isEmpty()) Box(Modifier.size(COVER_W, COVER_H).background(inner.ink06))
                 faces.forEach { face -> NeueCard(face, Modifier.size(COVER_W, COVER_H), foil = "off") }
@@ -357,7 +436,8 @@ private fun DeckRow(
                         "${deck.main.size} main · ${deck.extra.size} extra · ${deck.side.size} side · ${ago(stored.entry.updatedAtEpochMs, now)}",
                         color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45,
                     )
-                    tags.forEach { tag -> TagChip(tag, tag == tagFilter) { onTag(tag) } }
+                    // A finger filters by tag from the page's own tag strip; here they are words.
+                    tags.forEach { tag -> TagChip(tag, tag == tagFilter, if (touch) null else ({ onTag(tag) })) }
                 }
                 // Found by a card in it rather than by its name: which ones.
                 if (matched.isNotEmpty()) {
@@ -370,7 +450,12 @@ private fun DeckRow(
             }
             if (current) Small("On the builder", color = inner.ink.copy(alpha = 0.7f))
             if (default) Small("Opens first", color = inner.ink.copy(alpha = 0.7f))
-            Row(Modifier.alpha(actions), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (touch) {
+                var moreAt by remember { mutableStateOf(Offset.Zero) }
+                Box(Modifier.onGloballyPositioned { moreAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+                    MuButton("More", { onMenu(moreAt) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.More)
+                }
+            } else Row(Modifier.alpha(actions), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuButton("✕ Delete", onDelete, variant = BtnVariant.GHOST, size = BtnSize.SM)
                 MuButton(if (default) "Not default" else "Make default", onDefault, variant = BtnVariant.GHOST, size = BtnSize.SM)
                 MuButton("Duplicate", onDuplicate, variant = BtnVariant.GHOST, size = BtnSize.SM)
@@ -386,7 +471,7 @@ private fun DeckRow(
 
 /** A deck's tag in its row: a small ruled word, inverted while it is the filter. */
 @Composable
-private fun TagChip(text: String, on: Boolean, onClick: () -> Unit) {
+private fun TagChip(text: String, on: Boolean, onClick: (() -> Unit)?) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()
@@ -395,9 +480,16 @@ private fun TagChip(text: String, on: Boolean, onClick: () -> Unit) {
             .height(18.dp)
             .background(animatedColor(if (on) c.ink else if (hovered) c.ink06 else Color.Transparent))
             .border(1.dp, if (on || hovered) c.ink else c.ink25)
-            .hoverable(source)
-            .cursorPointer(caption = if (on) "Clear" else "Filter")
-            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .then(
+                if (onClick == null) {
+                    Modifier
+                } else {
+                    Modifier
+                        .hoverable(source)
+                        .cursorPointer(caption = if (on) "Clear" else "Filter")
+                        .clickable(interactionSource = source, indication = null, onClick = onClick)
+                },
+            )
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center,
     ) {

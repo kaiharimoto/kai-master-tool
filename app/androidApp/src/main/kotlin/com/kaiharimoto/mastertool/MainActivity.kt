@@ -127,6 +127,12 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
 
     private var holders: NeueHolders? = null
 
+    private val backCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            holders?.back()
+        }
+    }
+
     /** Neue's state, once it is composed: for the instrumented smoke test, which reads it. */
     internal val neue: NeueHolders? get() = holders
 
@@ -206,19 +212,11 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             imageCacheDir = cacheDir.resolve("card_art").absolutePath,
         )
 
-        // Back is Esc: whatever is on top closes; with nothing open, the app goes.
-        onBackPressedDispatcher.addCallback(
-            this,
-            object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    val neue = holders?.neue
-                    if (neue != null && neue.dismissTop()) return
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
-                    isEnabled = true
-                }
-            },
-        )
+        // Back is Esc (touch swarm, rec 2): one layer at a time, through the same chain
+        // (`BackChain`). The callback is enabled only while there is something to
+        // close, so with nothing open the system's own back — and its predictive
+        // preview of going home — plays, rather than the app vanishing.
+        onBackPressedDispatcher.addCallback(this, backCallback)
 
         incoming = intent?.data?.let(::readDeckFile)
 
@@ -246,6 +244,9 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                     NeueUpdates(NeueUpdateChecker(GitHubReleaseApi(app.httpClient), Platform.version, DesktopOs.ANDROID), scope)
                 }
                 SideEffect { holders = h }
+                LaunchedEffect(h) {
+                    androidx.compose.runtime.snapshotFlow { h.canGoBack() }.collect { backCallback.isEnabled = it }
+                }
                 // Immersive mode is the system bars hidden, swiped back in from an edge.
                 LaunchedEffect(h.neue.immersive) { showImmersive(h.neue.immersive) }
                 // The bars' icons follow the theme: dark on Paper, light on Ink.
@@ -275,6 +276,17 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                 }
             }
         }
+    }
+
+    /**
+     * Leaving the app saves the deck (touch swarm, rec 5): a tablet is put down,
+     * swiped away and killed in the background, and nothing warns you first.
+     */
+    override fun onStop() {
+        super.onStop()
+        val h = holders ?: return
+        val state = h.builder
+        if (state.dirty && (state.deckId != null || state.deck.totalCards > 0)) state.save(quiet = true)
     }
 
     override fun onNewIntent(intent: Intent) {

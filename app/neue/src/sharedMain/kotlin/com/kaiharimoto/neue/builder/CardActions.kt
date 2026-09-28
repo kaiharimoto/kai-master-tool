@@ -73,7 +73,9 @@ object CardActions {
                 val home = card.requiredSection()
                 if (section == home) state.addCardAt(card, section, index + 1) else state.addCard(card, home)
             }
-            MouseAction.REMOVE -> {
+            // Drawing up a group, the deck is being chosen from, not edited — a right-click
+            // there as much as a finger's double-tap (touch swarm, rec 7).
+            MouseAction.REMOVE -> if (state.groupDraft == null) {
                 state.removeAt(card, section, index)
                 val sel = neue.selection as? Selection.InDeck
                 if (sel != null && sel.section == section && sel.index >= index) neue.selection = null

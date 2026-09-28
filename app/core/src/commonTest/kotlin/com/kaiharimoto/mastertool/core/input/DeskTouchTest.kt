@@ -44,4 +44,20 @@ class DeskTouchTest {
         assertTrue(DeskTouch.picksUp(MouseTarget.POOL, dx = 20f, dy = 4f))
         assertTrue(DeskTouch.picksUp(MouseTarget.DECK, dx = 4f, dy = 20f))
     }
+
+    @Test
+    fun draftingNeverResolvesARemoval() {
+        assertEquals(MouseAction.REMOVE, DeskTouch.resolve(MouseTarget.DECK, TouchGesture.DOUBLE_TAP))
+        TouchGesture.entries.forEach { g ->
+            assertTrue(DeskTouch.resolve(MouseTarget.DECK, g, drafting = true) != MouseAction.REMOVE, "$g removes while drafting")
+        }
+        assertEquals(MouseAction.SELECT, DeskTouch.resolve(MouseTarget.DECK, TouchGesture.DOUBLE_TAP, drafting = true))
+        // The pool is not being drafted from: its double-tap still adds.
+        assertEquals(MouseAction.ADD, DeskTouch.resolve(MouseTarget.POOL, TouchGesture.DOUBLE_TAP, drafting = true))
+    }
+
+    @Test
+    fun theChipWaitsOutTheDoubleTap() {
+        assertTrue(DeskTouch.CHIP_DELAY_MS > DeskTouch.DOUBLE_TAP_MS)
+    }
 }

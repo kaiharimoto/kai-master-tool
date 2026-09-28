@@ -194,6 +194,10 @@ fun Rail(
     status: ShellStatus? = null,
     art: String? = null,
 ) {
+    if (neue.touchFirst) {
+        IndexStrip(neue, counts, modifier, status)
+        return
+    }
     val c = Mu.colors
     Column(
         modifier
@@ -290,6 +294,65 @@ private fun RailRow(page: Page, active: Boolean, count: String?, onClick: () -> 
                     color = inner.ink,
                 )
             }
+        }
+    }
+}
+
+/**
+ * The index on a tablet (touch swarm, rec 1): a strip of numerals, [MuShell.strip]
+ * wide, in place of the 232dp rail — which on a 1280dp tablet took the deck's
+ * width for four rows of words. Every row is still a 56dp square to tap, in the
+ * same order as the rail's, so nothing moved but the words: the page's own name
+ * is in the window's bar, and holding a numeral reads its name (rec 8).
+ */
+@Composable
+private fun IndexStrip(neue: NeueState, counts: Map<Page, String>, modifier: Modifier, status: ShellStatus?) {
+    val c = Mu.colors
+    Column(
+        modifier
+            .width(MuShell.strip)
+            .fillMaxHeight()
+            .background(c.paper)
+            .drawBehind { drawLine(c.ink, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) },
+    ) {
+        Page.entries.filter { it.numeral != null }.forEach { page ->
+            StripCell(page.title, neue.page == page, onClick = { neue.go(page) }) { active ->
+                Mono(page.numeral!!.toString().padStart(2, '0'), color = if (active) Mu.colors.ink else c.ink70)
+            }
+            HRule()
+        }
+        Box(Modifier.weight(1f))
+        if (status != null) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) { Breathe(running = status.running) }
+        }
+        HRule(color = c.ink)
+        StripCell("Search", false, onClick = { neue.paletteOpen = true }) { MuIcon(Icons.Search, c.ink, Modifier.width(18.dp).height(18.dp)) }
+        HRule()
+        StripCell(Page.SETTINGS.title, neue.page == Page.SETTINGS, onClick = { neue.go(Page.SETTINGS) }) { active ->
+            MuIcon(Icons.Settings, if (active) Mu.colors.ink else c.ink, Modifier.width(18.dp).height(18.dp))
+        }
+        HRule(color = c.ink)
+        val paper = neue.prefs.theme == NeueTheme.PAPER
+        StripCell(if (paper) "Ink, the dark theme" else "Paper, the light theme", false, onClick = neue::toggleTheme) {
+            MuIcon(if (paper) Icons.Sun else Icons.Moon, c.ink, Modifier.width(18.dp).height(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun StripCell(name: String, active: Boolean, onClick: () -> Unit, content: @Composable (Boolean) -> Unit) {
+    val c = Mu.colors
+    Inverted(active) {
+        Tip(name) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(MuShell.railRow)
+                    .background(if (active) Mu.colors.paper else Color.Transparent)
+                    .cursorPointer(caption = name)
+                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick),
+                contentAlignment = Alignment.Center,
+            ) { content(active) }
         }
     }
 }

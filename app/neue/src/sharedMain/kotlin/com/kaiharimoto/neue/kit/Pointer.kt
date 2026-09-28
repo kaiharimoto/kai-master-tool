@@ -5,6 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -98,3 +100,39 @@ fun Modifier.onContextMenu(onOpen: (Offset) -> Unit): Modifier = composed {
 
 /** Whether this window is a touch screen first (a tablet), for what would otherwise wait on a hover. */
 val LocalTouchFirst = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/**
+ * How many text fields have focus, anywhere in the window (touch swarm, rec 6).
+ *
+ * A keyboard cover on a tablet types into the window like a desk's keyboard,
+ * and the shortcut table stays out of the way of a focused field — but only of
+ * the fields that remembered to say so. Fields said so one by one, and the ones
+ * that forgot let "n" open a group draft and Backspace delete a card while a
+ * name was being typed. Every kit field reports here instead, so none can forget.
+ */
+class TextFocus {
+    var count by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+    val any: Boolean get() = count > 0
+
+    internal fun changed(focused: Boolean) {
+        count = (count + if (focused) 1 else -1).coerceAtLeast(0)
+    }
+}
+
+val LocalTextFocus = androidx.compose.runtime.staticCompositionLocalOf<TextFocus?> { null }
+
+/** Reports this text field's focus to [LocalTextFocus], once per change, and lets go of it if the field leaves while focused. */
+fun Modifier.reportsTextFocus(): Modifier = composed {
+    val sink = LocalTextFocus.current
+    val was = androidx.compose.runtime.remember { booleanArrayOf(false) }
+    androidx.compose.runtime.DisposableEffect(sink) {
+        onDispose { if (was[0]) sink?.changed(false); was[0] = false }
+    }
+    onFocusChanged { state ->
+        if (state.isFocused != was[0]) {
+            was[0] = state.isFocused
+            sink?.changed(state.isFocused)
+        }
+    }
+}

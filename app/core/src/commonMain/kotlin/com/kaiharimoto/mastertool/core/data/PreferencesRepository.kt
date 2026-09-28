@@ -52,9 +52,9 @@ class PreferencesRepository(
      * The desktop builder's own document, under its own key in the same table —
      * a new row, not a new schema. Unreadable reads as the defaults, as above.
      */
-    suspend fun loadNeue(): NeuePreferences = withContext(ioDispatcher) {
+    suspend fun loadNeue(seed: NeuePreferences = NeuePreferences.DEFAULT): NeuePreferences = withContext(ioDispatcher) {
         val stored = database.preferenceQueries.selectByKey(NeuePreferences.KEY).executeAsOneOrNull()
-            ?: return@withContext NeuePreferences.DEFAULT
+            ?: return@withContext seed
 
         runCatching { json.decodeFromString(NeuePreferences.serializer(), stored) }
             .getOrElse { NeuePreferences.DEFAULT }

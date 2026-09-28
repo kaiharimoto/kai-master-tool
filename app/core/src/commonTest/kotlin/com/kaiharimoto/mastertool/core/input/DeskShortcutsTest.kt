@@ -99,4 +99,18 @@ class DeskShortcutsTest {
             assertTrue(!row.description.endsWith("!") && !row.description.endsWith("."), row.description)
         }
     }
+
+    @Test
+    fun typingNeverRunsALetterOrDeletesACard() {
+        // A keyboard cover on a tablet types into a field while the table listens
+        // (touch swarm, rec 6): nothing it types may act on the deck.
+        for (context in listOf(typingName, searching)) {
+            DeskShortcuts.live(context).forEach { row ->
+                val chord = row.chord
+                val bare = !chord.ctrl && !chord.alt
+                assertTrue(!(bare && chord.key.length == 1 && chord.key[0].isLetterOrDigit()), "${row.action} fires on a typed ${chord.key}")
+                assertTrue(!(bare && chord.key in setOf("backspace", "delete", "space", "slash")), "${row.action} fires on ${chord.key} while typing")
+            }
+        }
+    }
 }

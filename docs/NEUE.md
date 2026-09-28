@@ -116,6 +116,39 @@ are at `c2fc8d8` (`neue-v1.0.19`) and in `docs/classic/`.
   install-unknown-apps permission.
 - **Not yet on the tablet**: the deck picture (a note says so), tooltips (no
   hover), and Settings' "open the data folder".
+
+#### Room and ways out (1.3.1, the touch swarm's first release)
+
+The touch swarm (seven agents walking three tablet sessions through the code)
+found the finger's grammar sound and the frame round it broken. The first release
+fixes the frame:
+
+- **`core/layout/PaneBudget`** shares the page's width. On touch the index is a
+  56dp strip of numerals (`IndexStrip`), the pool and inspector are 320, the
+  deck keeps a 520 floor (the inspector yields first, then the pool narrows), and
+  with Groups on the Groups panel takes the inspector's place. The deck went from
+  194dp to 570. Widths are **physical** — dp at a scale of one — on the desk too,
+  so the interface scale grows what is in the panes and never the panes, as
+  `NeuePreferences` always said. A `ResizeRule` has a 32dp grip on touch, laid
+  over paper, with no width of its own.
+- **`core/input/BackChain`** is Esc's chain and Android's Back, one list. Back
+  never drops focus or the selection, and from another page goes to the builder
+  before it leaves the app. `MainActivity`'s callback is enabled only while there
+  is something to close, so the system's predictive back-to-home plays.
+- **Immersive by finger**: a tap on the 32dp paper strip along the top brings the
+  bar out, a tap in the left gutter the index (`EdgeReveal.onTap`), and deep zen's
+  corner offers **Leave full screen** beside Leave zen.
+- **The Decks rows** show **More** on touch, and a hold opens the same menu; the
+  desk's hover-revealed buttons are not composed there, so nothing invisible is
+  tappable.
+- **A deck is never lost**: auto save starts on for a tablet
+  (`NeuePreferences.seededFor`, a seed, not a migration), leaving the app saves,
+  and opening another deck saves or asks first.
+- **Every kit text field reports its focus** (`LocalTextFocus`), so a keyboard
+  cover's typing never reaches the shortcut table.
+- **A draft's double-tap is two votes**, never a removal
+  (`DeskTouch.resolve(…, drafting)`), and the art chip comes only after
+  `CHIP_DELAY_MS` and only on cards at least 48dp wide.
 - **The proof is an emulator**, since the studio cannot draw Android:
   `.github/workflows/android-smoke.yml` boots a Pixel Tablet image, runs
   `NeueSmokeTest` (a saved deck survives a launch, the builder opens it, no crash

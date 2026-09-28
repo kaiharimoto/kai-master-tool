@@ -769,6 +769,7 @@ private fun DeckSectionPane(
                                         press = press,
                                         onAction = { action, at -> CardActions.onDeck(action, at, card, section, position, state, neue) },
                                         zenKey = zenKey,
+                                        drafting = state.groupDraft != null,
                                     ),
                                 motion = {
                                     // Where the card is at rest: zen's lean works out from there where it has gone.

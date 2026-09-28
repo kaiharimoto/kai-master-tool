@@ -291,6 +291,7 @@ fun MuInput(
             modifier = Modifier
                 .fillMaxWidth()
                 .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
+                .reportsTextFocus()
                 .onFocusChanged { onFocusChange(it.isFocused) },
         )
     }

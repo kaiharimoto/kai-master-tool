@@ -110,6 +110,8 @@ fun Modifier.cardPointer(
     dragEnabled: Boolean = true,
     /** The card's name in zen's arrangement, for a card that may be moved freely in deep zen. */
     zenKey: Int? = null,
+    /** A group is being drawn up: a finger's double-tap on the deck is two votes, never a removal (touch swarm, rec 7). */
+    drafting: Boolean = false,
 ): Modifier {
     val zen = LocalZen.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -119,6 +121,7 @@ fun Modifier.cardPointer(
     val heldIndex by rememberUpdatedState(index)
     val heldCard by rememberUpdatedState(card)
     val on by rememberUpdatedState(target)
+    val voting by rememberUpdatedState(drafting)
 
     fun fire(gesture: MouseGesture, at: Offset) {
         DeskMouse.resolve(on, gesture)?.let { act(it, origin + at) }
@@ -203,7 +206,7 @@ fun Modifier.cardPointer(
                     touch(down, on, dragEnabled, press, last,
                         onGesture = { gesture, at ->
                             if (gesture == TouchGesture.TAP) neue.hovered = null
-                            DeskTouch.resolve(on, gesture)?.let { act(it, origin + at) }
+                            DeskTouch.resolve(on, gesture, voting)?.let { act(it, origin + at) }
                         },
                         onDrag = { start ->
                             drag.start(Held(heldCard, from, heldIndex, size), origin + start.position)

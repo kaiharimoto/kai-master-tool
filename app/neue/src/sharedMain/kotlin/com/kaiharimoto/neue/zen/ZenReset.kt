@@ -35,7 +35,14 @@ import kotlinx.coroutines.launch
  *   wakes the builder; this is the pointer's way.
  */
 @Composable
-fun ZenReset(zen: ZenLayer, hasGroups: Boolean, onLeave: () -> Unit, modifier: Modifier = Modifier, always: Boolean = false) {
+fun ZenReset(
+    zen: ZenLayer,
+    hasGroups: Boolean,
+    onLeave: () -> Unit,
+    modifier: Modifier = Modifier,
+    always: Boolean = false,
+    onLeaveFullScreen: (() -> Unit)? = null,
+) {
     // Read through the counter, so the button hears the first card moved.
     val moved = zen.arranged >= 0 && !zen.arrangement.isEmpty
     val shown by animateFloatAsState(
@@ -54,6 +61,9 @@ fun ZenReset(zen: ZenLayer, hasGroups: Boolean, onLeave: () -> Unit, modifier: M
     ) {
         // Always there, so the corner always answers: the one pointer way out of zen.
         MuButton("Leave zen", onLeave, variant = BtnVariant.GHOST, size = BtnSize.SM)
+        // On a tablet a key is not there to leave full screen with, and the bars that
+        // hold its button are folded away (touch swarm, rec 3): the corner offers it.
+        if (onLeaveFullScreen != null) MuButton("Leave full screen", onLeaveFullScreen, variant = BtnVariant.GHOST, size = BtnSize.SM)
         if (hasGroups) {
             MuButton(
                 "Groups",
