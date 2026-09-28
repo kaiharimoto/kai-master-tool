@@ -59,7 +59,8 @@ enum class ShotStyle(val pref: String) {
 
 // ---- The plan: everything the picture draws, placed, in dp, before anything is drawn ----
 
-internal enum class Face { DISPLAY, ROW, MICRO, MONO, WORDMARK }
+/** The picture's type faces: the kit's, sized by the plan. [HEADING] is a section's name, set without the micro caps' tracking. */
+internal enum class Face { DISPLAY, HEADING, ROW, MICRO, MONO, WORDMARK }
 
 internal sealed interface Placed {
     val x: Float
@@ -121,7 +122,8 @@ private class Builder(val width: Float, val model: ShotModel) {
     }
 
     fun heading(x: Float, w: Float, section: DeckSection, count: Int) {
-        text(x, y, w * 0.7f, 32f * u, "${section.displayName} deck", Face.MICRO, 22f * u)
+        // kai (1.0.24): micro caps' tracking spread "Main deck" too wide, so the heading face.
+        text(x, y, w * 0.7f, 32f * u, "${section.displayName} deck", Face.HEADING, 24f * u)
         text(x + w * 0.7f, y, w * 0.3f, 32f * u, count.toString(), Face.MONO, 22f * u, c.ink45, TextAlign.End)
     }
 
@@ -321,6 +323,7 @@ internal object ShotDesigns {
                     is PText -> Box(at, contentAlignment = Alignment.CenterStart) {
                         val style = when (item.face) {
                             Face.DISPLAY -> MuType.display(f)
+                            Face.HEADING -> MuType.h2(f)
                             Face.ROW -> MuType.row(f)
                             Face.MICRO -> MuType.micro(f)
                             Face.MONO -> MuType.mono(f)

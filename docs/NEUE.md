@@ -463,12 +463,15 @@ choosing one recolours every group at once and changes nothing in the deck file
 
 **Slides** (1.0.18, kai: "add some data analysis visuals in a box that changes
 like slides, with an auto play slide feature that can be toggled"): between the
-groups and the palettes, a box of five — share of the main deck (and what is
-ungrouped), the chance to open each group, how many of it a hand holds on
-average, each group's monsters, spells and traps, and its cards across main,
-extra and side. Bars in each group's colour; the numbers are `GroupStats.of`, in
+groups and the palettes, a box of slides — share of the main deck (and what is
+ungrouped), the chance to open each group, and how many of it a hand holds on
+average. Bars in each group's colour; the numbers are `GroupStats.of`, in
 core, from the same `LensOdds` the rows use. ‹ › step, **Auto** turns every six
 seconds (`slidesAutoplay`, on by default) and the pointer over the box pauses it.
+In 1.0.24 the controls took a row of their own and the title and each group's
+name the box's whole width, wrapping rather than cut short (kai: "sometimes the
+text is truncated"), and the slides of card types and of cards across main, extra
+and side were dropped — kai: "basically useless to players".
 
 **The Groups panel is where groups are edited** (`GroupsPanel`, 288 px beside the
 deck). Every group is a row that can be changed where it stands: its name is a

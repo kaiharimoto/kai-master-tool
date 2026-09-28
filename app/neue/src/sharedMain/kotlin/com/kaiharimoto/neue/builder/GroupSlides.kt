@@ -48,14 +48,16 @@ import kotlinx.coroutines.delay
 /** One slide: a title, and a bar per group with the number it stands for. */
 private class Slide(val title: String, val note: String, val rows: (GroupReport) -> List<Bar>)
 
-private class Bar(val label: String, val color: Color?, val share: Float, val value: String, val parts: List<Float>? = null)
+private class Bar(val label: String, val color: Color?, val share: Float, val value: String)
 
 /**
  * The deck's groups in numbers, as slides (kai, 1.0.18: "data analysis visuals
  * in a box that changes like slides, with an auto play slide feature that can be
- * toggled"). Five views of `GroupStats`, a bar per group in its own colour — the
- * group markers are the colour this app is allowed — turning every [TURN_MS] when
- * autoplay is on and the pointer is not resting on them.
+ * toggled"). Views of `GroupStats`, a bar per group in its own colour — the group
+ * markers are the colour this app is allowed — turning every [TURN_MS] when
+ * autoplay is on and the pointer is not resting on them. Card types and the
+ * spread across main, extra and side were dropped in 1.0.24, kai: "basically
+ * useless to players".
  */
 @Composable
 fun GroupSlides(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
@@ -80,16 +82,18 @@ fun GroupSlides(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
             .padding(start = 8.dp, end = 4.dp, top = 6.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // The controls have a row of their own and the words the panel's whole width
+        // (1.0.24): sharing one row, the title was cut short ("Across the de…").
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Micro(slides[at].title, Modifier.weight(1f), color = c.ink)
-            Mono("${at + 1}/${slides.size}", color = c.ink70)
+            Mono("${at + 1}/${slides.size}", Modifier.weight(1f), color = c.ink70)
             IconButton(Icons.ChevronLeft, { at = (at - 1 + slides.size) % slides.size }, size = 24.dp, label = "Previous")
             IconButton(Icons.ChevronRight, { at = (at + 1) % slides.size }, size = 24.dp, label = "Next")
             AutoToggle(auto) { neue.update { it.copy(slidesAutoplay = !it.slidesAutoplay) } }
         }
         Crossfade(at, animationSpec = tween(MuMotion.SLOW, easing = MuMotion.ease), label = "slide") { i ->
             val slide = slides[i]
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Column(Modifier.padding(end = 4.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Micro(slide.title, color = c.ink, maxLines = 2)
                 slide.rows(report).forEach { BarRow(it) }
                 Small(slide.note, color = c.ink45)
             }
@@ -101,23 +105,13 @@ fun GroupSlides(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
 private fun BarRow(bar: Bar) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Small(bar.label, Modifier.weight(1f), color = c.ink, maxLines = 1)
+        // A long group name wraps rather than ending in an ellipsis; the number keeps its line.
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Small(bar.label, Modifier.weight(1f), color = c.ink, maxLines = 3)
             Mono(bar.value, color = c.ink70)
         }
         Box(Modifier.fillMaxWidth().height(6.dp).background(c.ink06)) {
-            val parts = bar.parts
-            if (parts == null) {
-                Box(Modifier.fillMaxWidth(bar.share.coerceIn(0f, 1f)).height(6.dp).background(bar.color ?: c.ink25))
-            } else {
-                // Monsters, spells, traps: the same ink at three weights, as the Type lens draws them.
-                Row(Modifier.fillMaxWidth(bar.share.coerceIn(0f, 1f))) {
-                    val total = parts.sum().coerceAtLeast(0.0001f)
-                    parts.forEachIndexed { k, part ->
-                        if (part > 0f) Box(Modifier.weight(part / total).height(6.dp).background(c.ink.copy(alpha = TYPE_ALPHA[k])))
-                    }
-                }
-            }
+            Box(Modifier.fillMaxWidth(bar.share.coerceIn(0f, 1f)).height(6.dp).background(bar.color ?: c.ink25))
         }
     }
 }
@@ -142,8 +136,6 @@ private fun AutoToggle(on: Boolean, onClick: () -> Unit) {
     }
 }
 
-private val TYPE_ALPHA = listOf(1f, 0.55f, 0.25f)
-
 /** How long a slide stands before the next, with autoplay on. */
 private const val TURN_MS = 6_000L
 
@@ -161,15 +153,5 @@ private val SLIDES = listOf(
     Slide("Expected in a hand", "How many of each a five-card hand holds, on average.") { r ->
         val most = r.groups.maxOfOrNull { it.expected }?.toFloat()?.coerceAtLeast(1f) ?: 1f
         r.groups.map { Bar(it.name, hueOf(it), it.expected.toFloat() / most, "%.2f".format(it.expected)) }
-    },
-    Slide("Card types", "Monsters, spells and traps, darkest first.") { r ->
-        val most = r.groups.maxOfOrNull { it.main }?.coerceAtLeast(1) ?: 1
-        r.groups.map {
-            Bar(it.name, null, it.main.toFloat() / most, "${it.monsters} · ${it.spells} · ${it.traps}", listOf(it.monsters.toFloat(), it.spells.toFloat(), it.traps.toFloat()))
-        }
-    },
-    Slide("Across the deck", "Main, extra and side.") { r ->
-        val most = r.groups.maxOfOrNull { it.main + it.extra + it.side }?.coerceAtLeast(1) ?: 1
-        r.groups.map { Bar(it.name, hueOf(it), (it.main + it.extra + it.side).toFloat() / most, "${it.main} · ${it.extra} · ${it.side}") }
     },
 )
