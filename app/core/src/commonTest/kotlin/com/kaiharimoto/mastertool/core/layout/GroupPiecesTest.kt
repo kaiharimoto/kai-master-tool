@@ -11,7 +11,7 @@ class GroupPiecesTest {
 
     /** Where each card is drawn, in a grid of unit cards with gaps of [gap]. */
     private fun rects(layout: PieceLayout, gap: Float): List<FloatArray> = layout.piece.indices.map { p ->
-        val x = (p % layout.columns) + layout.shiftX[p] * gap
+        val x = layout.col(p) + layout.shiftX[p] * gap
         val y = (p / layout.columns) * 1.5f + layout.shiftY[p] * gap
         floatArrayOf(x, y, x + 1f, y + 1.5f)
     }
@@ -94,20 +94,24 @@ class GroupPiecesTest {
             val gap = 0.25f
             val r = rects(l, gap)
             for (p in k.indices) {
-                // Flush inside a piece, at least a gap between pieces, along rows and columns.
-                if (p % columns != columns - 1 && p + 1 < n) {
-                    val d = r[p + 1][0] - r[p][2]
-                    if (l.piece[p] == l.piece[p + 1]) assertEquals(0f, d, 1e-4f) else assertTrue(d >= gap - 1e-4f, "row gap $d")
+                // Flush inside a piece, at least a gap between pieces, along rows and columns —
+                // between the cards that stand beside each other, which in a last row slid under
+                // its groups (1.0.33) are not always the next index.
+                l.at(l.row(p), l.col(p) + 1)?.let { q ->
+                    val d = r[q][0] - r[p][2]
+                    if (l.piece[p] == l.piece[q]) assertEquals(0f, d, 1e-4f) else assertTrue(d >= gap - 1e-4f, "row gap $d")
                 }
-                if (p + columns < n) {
-                    val d = r[p + columns][1] - r[p][3]
-                    if (l.piece[p] == l.piece[p + columns]) {
+                l.at(l.row(p) + 1, l.col(p))?.let { q ->
+                    val d = r[q][1] - r[p][3]
+                    if (l.piece[p] == l.piece[q]) {
                         assertEquals(0f, d, 1e-4f)
-                        assertEquals(r[p][0], r[p + columns][0], 1e-4f)
+                        assertEquals(r[p][0], r[q][0], 1e-4f)
                     } else {
                         assertTrue(d >= gap - 1e-4f, "column gap $d")
                     }
                 }
+                // Every card stands in its row, in reading order.
+                if (p > 0 && l.row(p - 1) == l.row(p)) assertTrue(l.col(p - 1) < l.col(p), "order in $k")
             }
             for (a in k.indices) for (b in a + 1 until n) {
                 val overlap = r[a][0] < r[b][2] - 1e-4f && r[b][0] < r[a][2] - 1e-4f && r[a][1] < r[b][3] - 1e-4f && r[b][1] < r[a][3] - 1e-4f

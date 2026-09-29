@@ -175,7 +175,7 @@ private fun Builder.grid(
     val top = y + room
     val offsets = cells.indices.map { i ->
         Offset(
-            pad + (i % columns) * cardW + (pieces?.shiftX?.get(i) ?: 0) * gap,
+            pad + (pieces?.column?.getOrNull(i) ?: (i % columns)) * cardW + (pieces?.shiftX?.get(i) ?: 0) * gap,
             top + (i / columns) * cardH + (pieces?.shiftY?.get(i) ?: 0) * gap,
         )
     }

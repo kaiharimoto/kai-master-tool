@@ -31,8 +31,13 @@ package com.kaiharimoto.mastertool.core.layout
  * such a loop. The arm of the U that would close it stays a piece of its own, a
  * gap from the rest — and everything else stays flush.
  *
- * Nothing here moves a card between cells: a grid index is still a deck
- * position, so a drop still means insert.
+ * Nothing here moves a card out of its row, or changes the deck's order: a grid
+ * index is still a deck position, so a drop still means insert. **The last row is
+ * the one exception to "every card in its own column"** (kai, 1.0.33: "cards in a
+ * group overhang past a row and aren't grouped together in the last row… have the
+ * straggler cards join their group"): it is short, so its runs can stand anywhere
+ * along it, in order, and each is placed under its own group in the row above where
+ * that makes more of them touch ([column]; [StragglerSlide]).
  */
 data class PieceLayout(
     val columns: Int,
@@ -42,7 +47,20 @@ data class PieceLayout(
     val shiftX: List<Int>,
     /** How many gaps down. */
     val shiftY: List<Int>,
+    /** The column each position stands in: its index's, except in a last row slid under its groups. */
+    val column: List<Int> = List(piece.size) { it % columns.coerceAtLeast(1) },
 ) {
+    /** Position [p]'s column. */
+    fun col(p: Int): Int = column.getOrElse(p) { p % columns }
+
+    /** Position [p]'s row: always its index's. */
+    fun row(p: Int): Int = p / columns
+
+    private val cells: Map<Int, Int> by lazy { piece.indices.associateBy { row(it) * columns + col(it) } }
+
+    /** The position standing at [row], [col], or null for an empty cell or off the grid. */
+    fun at(row: Int, col: Int): Int? = if (col !in 0 until columns || row < 0) null else cells[row * columns + col]
+
     /** The most gaps any row gained: what the grid is wider by, in gaps. */
     val spanX: Int get() = shiftX.maxOrNull() ?: 0
 
@@ -56,14 +74,14 @@ data class PieceLayout(
      * grid — as left, top, right, bottom: where the piece's outline runs.
      */
     fun outerSides(p: Int): BooleanArray {
-        val n = piece.size
-        val c = p % columns
-        fun other(q: Int) = q !in 0 until n || piece[q] != piece[p]
+        val r = row(p)
+        val c = col(p)
+        fun other(q: Int?) = q == null || piece[q] != piece[p]
         return booleanArrayOf(
-            c == 0 || other(p - 1),
-            other(p - columns),
-            c == columns - 1 || other(p + 1),
-            other(p + columns),
+            other(at(r, c - 1)),
+            other(at(r - 1, c)),
+            other(at(r, c + 1)),
+            other(at(r + 1, c)),
         )
     }
 
@@ -86,9 +104,14 @@ data class PieceLayout(
         var bestScore = -1f
         var bestSize = -1
         for (p in keys.indices) {
-            if (!top(p) || (p % columns != 0 && top(p - 1) && piece[p - 1] == piece[p])) continue
+            val left = at(row(p), col(p) - 1)
+            if (!top(p) || (left != null && top(left) && piece[left] == piece[p])) continue
             var run = 1
-            while ((p + run) % columns != 0 && p + run < keys.size && top(p + run) && piece[p + run] == piece[p]) run++
+            while (true) {
+                val next = at(row(p), col(p) + run) ?: break
+                if (!top(next) || piece[next] != piece[p]) break
+                run++
+            }
             val score = minOf(run.toFloat(), need)
             val size = sizes[piece[p]] ?: 0
             if (score > bestScore + 1e-4f || (score > bestScore - 1e-4f && size > bestSize)) {
@@ -105,6 +128,70 @@ data class PieceLayout(
     }
 }
 
+/**
+ * Where the last row's cards stand (1.0.33). A row cut short at the end of a
+ * section is the only place a card can be moved sideways without moving another,
+ * so its runs — each group's cards, kept together and in deck order — are placed
+ * along it where the most of them stand under a card of their own group in the row
+ * above: a straggler touches its group, and joins its piece. The row stays as it
+ * was when nothing gains, and among placements that gain as much, the one nearest
+ * the row as read wins. Every other card keeps its index's column.
+ */
+object StragglerSlide {
+
+    fun columns(keys: List<String?>, columns: Int): IntArray {
+        val n = keys.size
+        val col = IntArray(n) { it % columns.coerceAtLeast(1) }
+        if (columns <= 1) return col
+        val first = (n / columns) * columns
+        if (n % columns == 0 || first == 0) return col
+        // The last row's runs, in order: start position, length, group.
+        val runs = mutableListOf<Triple<Int, Int, String?>>()
+        var p = first
+        while (p < n) {
+            var q = p
+            while (q + 1 < n && keys[q + 1] == keys[p]) q++
+            runs += Triple(p, q - p + 1, keys[p])
+            p = q + 1
+        }
+        val above = first - columns
+        fun score(run: Triple<Int, Int, String?>, start: Int) =
+            (0 until run.second).count { keys[above + start + it] == run.third }
+        val tail = IntArray(runs.size + 1)
+        for (i in runs.indices.reversed()) tail[i] = tail[i + 1] + runs[i].second
+        // Best placement of runs i.. with run i starting at or after [from]: score, then least moved.
+        val memo = HashMap<Long, Pair<Int, Int>>()
+        val choice = HashMap<Long, Int>()
+        fun best(i: Int, from: Int): Pair<Int, Int> {
+            if (i == runs.size) return 0 to 0
+            val key = i.toLong() * 1024 + from
+            memo[key]?.let { return it }
+            var top = Int.MIN_VALUE to Int.MIN_VALUE
+            var at = from
+            for (start in from..(columns - tail[i])) {
+                val rest = best(i + 1, start + runs[i].second)
+                val here = (score(runs[i], start) + rest.first) to (rest.second - kotlin.math.abs(start - (runs[i].first - first)))
+                if (here.first > top.first || (here.first == top.first && here.second > top.second)) {
+                    top = here
+                    at = start
+                }
+            }
+            memo[key] = top
+            choice[key] = at
+            return top
+        }
+        val asRead = runs.sumOf { score(it, it.first - first) }
+        if (best(0, 0).first <= asRead) return col
+        var from = 0
+        runs.forEachIndexed { i, run ->
+            val start = choice.getValue(i.toLong() * 1024 + from)
+            for (k in 0 until run.second) col[run.first + k] = start + k
+            from = start + run.second
+        }
+        return col
+    }
+}
+
 /** A group's name tab: over [cells] cards along one row, from position [first]. */
 data class LabelEdge(val first: Int, val cells: Int)
 
@@ -114,18 +201,20 @@ object GroupPieces {
     fun of(keys: List<String?>, columns: Int): PieceLayout {
         if (keys.isEmpty() || columns <= 0) return PieceLayout(columns.coerceAtLeast(1), emptyList(), emptyList(), emptyList())
         val n = keys.size
+        val col = StragglerSlide.columns(keys, columns)
+        val grid = Grid(columns, col)
         // Start from runs one row long, which can always be ordered, and join a run to
         // the one above it wherever they share a group — unless the join would make a
         // piece both left and right of another (or above and below), which no shift
         // can satisfy. Joined in reading order, so the top of the deck is kept whole first.
-        val parent = rowRuns(keys, columns)
+        val parent = rowRuns(keys, grid)
         fun find(x: Int): Int {
             var r = x
             while (parent[r] != r) r = parent[r]
             return r
         }
-        for (p in 0 until n - columns) {
-            val q = p + columns
+        for (p in 0 until n) {
+            val q = grid.below(p) ?: continue
             if (keys[p] != keys[q]) continue
             val a = find(p)
             val b = find(q)
@@ -133,17 +222,27 @@ object GroupPieces {
             val low = minOf(a, b)
             val high = maxOf(a, b)
             parent[high] = low
-            if (solve(keys, columns, IntArray(n) { find(it) }) == null) parent[high] = high
+            if (solve(keys, grid, IntArray(n) { find(it) }) == null) parent[high] = high
         }
-        return solve(keys, columns, number(IntArray(n) { find(it) }))
-            ?: PieceLayout(columns, List(n) { 0 }, List(n) { 0 }, List(n) { 0 })
+        return solve(keys, grid, number(IntArray(n) { find(it) }))
+            ?: PieceLayout(columns, List(n) { 0 }, List(n) { 0 }, List(n) { 0 }, col.toList())
+    }
+
+    /** Where each position stands: its row by its index, its column by [col]; who stands beside it. */
+    private class Grid(val columns: Int, val col: IntArray) {
+        private val cells = HashMap<Int, Int>().apply { col.indices.forEach { put((it / columns) * columns + col[it], it) } }
+        private fun at(row: Int, c: Int): Int? = if (c !in 0 until columns) null else cells[row * columns + c]
+        fun right(p: Int): Int? = at(p / columns, col[p] + 1)
+        fun left(p: Int): Int? = at(p / columns, col[p] - 1)
+        fun below(p: Int): Int? = at(p / columns + 1, col[p])
     }
 
     /** Every cell pointing at the first cell of its run along its row: the pieces nothing can stop. */
-    private fun rowRuns(keys: List<String?>, columns: Int): IntArray {
+    private fun rowRuns(keys: List<String?>, grid: Grid): IntArray {
         val parent = IntArray(keys.size) { it }
         for (p in keys.indices) {
-            if (p % columns != 0 && keys[p] == keys[p - 1]) parent[p] = parent[p - 1]
+            val left = grid.left(p) ?: continue
+            if (keys[p] == keys[left]) parent[p] = parent[left]
         }
         return parent
     }
@@ -154,19 +253,19 @@ object GroupPieces {
         return IntArray(roots.size) { p -> seen.getOrPut(roots[p]) { seen.size } }
     }
 
-    private fun solve(keys: List<String?>, columns: Int, roots: IntArray): PieceLayout? {
+    private fun solve(keys: List<String?>, grid: Grid, roots: IntArray): PieceLayout? {
         val piece = number(roots)
         val n = keys.size
         val count = (piece.maxOrNull() ?: -1) + 1
         val right = Array(count) { HashSet<Int>() }
         val down = Array(count) { HashSet<Int>() }
         for (p in 0 until n) {
-            if (p % columns != columns - 1 && p + 1 < n && piece[p + 1] != piece[p]) right[piece[p]] += piece[p + 1]
-            if (p + columns < n && piece[p + columns] != piece[p]) down[piece[p]] += piece[p + columns]
+            grid.right(p)?.let { q -> if (piece[q] != piece[p]) right[piece[p]] += piece[q] }
+            grid.below(p)?.let { q -> if (piece[q] != piece[p]) down[piece[p]] += piece[q] }
         }
         val x = longest(right, count) ?: return null
         val y = longest(down, count) ?: return null
-        return PieceLayout(columns, piece.toList(), List(n) { x[piece[it]] }, List(n) { y[piece[it]] })
+        return PieceLayout(grid.columns, piece.toList(), List(n) { x[piece[it]] }, List(n) { y[piece[it]] }, grid.col.toList())
     }
 
     /** The longest path to every node of a graph, or null when it loops. */

@@ -1385,6 +1385,22 @@ step (`--frames=2`, so it has not finished).
 
 ---
 
+### 4h½. Stragglers join their group (1.0.33)
+
+kai: "sometimes cards in a group overhang past a row and aren't grouped together
+in the last row (this happens most when decks go over 40 cards)… have the straggler
+cards join their group." The last row of a section is short, so it is the one row
+whose cards can stand in other columns without moving another card:
+`StragglerSlide` (core) places its runs — each group's cards, kept together and in
+deck order — along it where the most of them stand under a card of their own group
+in the row above, so they touch it and `GroupPieces` makes them one piece. Nothing
+changes when nothing gains; among equal placements, the nearest to the row as read.
+`PieceLayout.column` says where each card stands (its index's column everywhere
+else), neighbours are found by cell (`at`), and `PiecePlacer` slides the stragglers
+with the gaps (`crack`), so turning Groups off takes them home. The screenshot uses
+the same columns. A group that wraps from the end of a full row to the start of the
+next still breaks there: only a last row has room.
+
 ### 4i. Format: webs of decks (1.0.33)
 
 kai: "format web (expected decks at a tournament to play against)… the user can

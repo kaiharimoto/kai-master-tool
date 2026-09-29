@@ -52,8 +52,16 @@ internal class PiecePlacer(
     private fun gx(layout: PieceLayout, p: Int) = layout.shiftX.getOrElse(p) { 0 } - layout.spanX / 2f
     private fun gy(layout: PieceLayout, p: Int) = layout.shiftY.getOrElse(p) { 0 } - layout.spanY / 2f
 
+    /**
+     * How far card [p] stands from its index's column in [layout]: nothing, except in a
+     * last row slid under its groups (1.0.33, `StragglerSlide`) — which slides with the
+     * gaps, so the stragglers go home as the pieces close.
+     */
+    private fun slide(layout: PieceLayout, p: Int) = (layout.column.getOrNull(p) ?: (p % columns)) - p % columns
+
     fun x(p: Int, deep: Float = 0f, zenAmount: Float = 0f): Float =
-        (p % columns) * cardWidth + reservedX / 2f + gx(builder, p) * gap * crack * (1f - deep) + gx(zen, p) * zenGap * zenAmount * deep
+        (p % columns + slide(builder, p) * crack * (1f - deep) + slide(zen, p) * zenAmount * deep) * cardWidth +
+            reservedX / 2f + gx(builder, p) * gap * crack * (1f - deep) + gx(zen, p) * zenGap * zenAmount * deep
 
     // Zen's pieces open downward rather than about the middle, and each section starts
     // below the growth of those above it, so the sections never open into each other.
