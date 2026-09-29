@@ -37,16 +37,39 @@ class CustomArt(private val dir: File) {
         }
     }
 
-    /** Asks for an image file and keeps a copy for [card]; the new picture's choice (`-k`), or null if none was picked. */
-    suspend fun pickAndAdd(card: Int): Int? {
+    /**
+     * Asks for an image file and keeps a copy for [card]; the new picture's choice
+     * (`-k`), or null if none was picked. A pick that could not be kept says so
+     * through [onFailed] (touch swarm, rec 24) — cancelling the picker is not a failure.
+     */
+    suspend fun pickAndAdd(card: Int, onFailed: () -> Unit = {}): Int? {
         val picked = Platform.pick("Choose a picture for this card", EXTENSIONS) ?: return null
-        val extension = picked.extension.takeIf { it in EXTENSIONS } ?: return null
+        // Android's providers often name a file without its extension: the bytes say what it is.
+        val extension = picked.extension.takeIf { it in EXTENSIONS } ?: sniff(picked.bytes)
+        if (extension == null) {
+            onFailed()
+            return null
+        }
         val into = File(dir, card.toString()).apply { mkdirs() }
         val target = File(into, "${System.currentTimeMillis()}.$extension")
-        runCatching { target.writeBytes(picked.bytes) }.getOrElse { return null }
+        runCatching { target.writeBytes(picked.bytes) }.getOrElse {
+            onFailed()
+            return null
+        }
         cache.remove(card)
         version++
         return -files(card).indexOf(target).plus(1)
+    }
+
+    /** A picture's kind from its first bytes: PNG, JPEG or WebP, else null. */
+    private fun sniff(bytes: ByteArray): String? {
+        fun at(i: Int) = bytes.getOrNull(i)?.toInt()?.and(0xFF)
+        return when {
+            at(0) == 0x89 && at(1) == 0x50 && at(2) == 0x4E && at(3) == 0x47 -> "png"
+            at(0) == 0xFF && at(1) == 0xD8 -> "jpg"
+            bytes.size > 12 && String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP" -> "webp"
+            else -> null
+        }
     }
 
     /** Deletes this card's k-th own picture. */

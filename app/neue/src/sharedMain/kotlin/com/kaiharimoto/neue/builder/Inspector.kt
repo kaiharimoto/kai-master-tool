@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.BtnSize
+import com.kaiharimoto.neue.kit.BtnVariant
+import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import androidx.compose.foundation.background
@@ -156,24 +159,32 @@ internal fun ArtSwitch(card: Card, neue: NeueState, modifier: Modifier = Modifie
     val own = custom?.version
     val arts = remember(card, own) { neue.artChoices(card) }
     val chosen = neue.prefs.arts[card.id.value]?.takeIf { it in arts } ?: card.id.value
-    Row(modifier.fillMaxWidth().height(32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(modifier.fillMaxWidth().height(if (neue.touchFirst) 40.dp else 32.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro("Art", color = c.ink70)
         Mono(if (arts.size > 1) "${arts.indexOf(chosen) + 1} of ${arts.size}" else "1", Modifier.weight(1f), color = c.ink)
         // A card whose reprints share its passcode has one picture in the pool; the
         // person may add their own (1.0.18, `CustomArt`).
+        // On a tablet Remove is on the card's hold menu, not beside the arrows; either way
+        // it asks first, since it deletes the file (touch swarm, rec 24).
+        val touch = neue.touchFirst
         if (custom != null) {
-            if (chosen < 0) {
-                MicroLink("Remove", {
-                    neue.chooseArt(card, card.id.value)
-                    custom.remove(card.id.value, -chosen)
-                })
+            if (chosen < 0 && !touch) {
+                MicroLink("Remove", { neue.confirmRemoveArt = card to -chosen })
             }
             val scope = rememberCoroutineScope()
-            MicroLink("+ Your own", { scope.launch { custom.pickAndAdd(card.id.value)?.let { neue.chooseArt(card, it) } } })
+            val add = {
+                scope.launch {
+                    custom.pickAndAdd(card.id.value, onFailed = { neue.note = com.kaiharimoto.neue.Note("That picture could not be added.") })
+                        ?.let { neue.chooseArt(card, it) }
+                }
+                Unit
+            }
+            if (touch) MuButton("+ Your own", add, variant = BtnVariant.GHOST, size = BtnSize.SM) else MicroLink("+ Your own", add)
         }
         if (arts.size > 1) {
-            IconButton(Icons.ChevronLeft, { neue.stepArt(card, -1) }, label = "Previous art")
-            IconButton(Icons.ChevronRight, { neue.stepArt(card, 1) }, label = "Next art")
+            val arrow = if (touch) com.kaiharimoto.mastertool.core.input.TouchMetrics.ICON.dp else 28.dp
+            IconButton(Icons.ChevronLeft, { neue.stepArt(card, -1) }, size = arrow, label = "Previous art")
+            IconButton(Icons.ChevronRight, { neue.stepArt(card, 1) }, size = arrow, label = "Next art")
         }
     }
 }

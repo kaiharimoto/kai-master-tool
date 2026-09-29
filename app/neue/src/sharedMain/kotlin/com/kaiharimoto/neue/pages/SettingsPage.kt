@@ -1,6 +1,9 @@
 package com.kaiharimoto.neue.pages
 
 import androidx.compose.foundation.background
+import com.kaiharimoto.neue.kit.muClickable
+import com.kaiharimoto.neue.cursor.cursorPointer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -64,8 +67,9 @@ class SettingsHost(
 fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
     val prefs = neue.prefs
     val scroll = rememberScrollState()
+    val touch = neue.touchFirst
     Column(Modifier.fillMaxSize()) {
-        PageHeader(null, "Settings", "Stored on this computer · v${host.version}")
+        PageHeader(null, "Settings", "Stored on this ${if (touch) "tablet" else "computer"} · v${host.version}")
         Box(Modifier.fillMaxSize()) {
             Column(
                 Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 32.dp, end = 32.dp, top = 32.dp, bottom = 64.dp).widthIn(max = 960.dp),
@@ -79,16 +83,25 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Contrast", "High darkens the grey text, the outlines of controls and the rules between rows, in both themes.") {
                         Segmented(prefs.contrast, listOf(NeuePreferences.CONTRAST_STANDARD, NeuePreferences.CONTRAST_HIGH), { if (it == NeuePreferences.CONTRAST_HIGH) "High" else "Standard" }, { v -> neue.update { it.copy(contrast = v) } })
                     }
-                    SettingRow("Interface scale", "Everything, text and cards alike. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.ZOOM_IN)} and ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.ZOOM_OUT)} step through it from anywhere.") {
+                    SettingRow(
+                        "Interface scale",
+                        if (touch) "Everything, text and cards alike. For larger text alone, use Text size." else
+                            "Everything, text and cards alike. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.ZOOM_IN)} and ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.ZOOM_OUT)} step through it from anywhere.",
+                    ) {
                         Segmented(prefs.scale, NeuePreferences.SCALES, { "${kotlin.math.round(it * 100).toInt()}%" }, { s -> neue.update { it.copy(scale = s) } }, small = true)
                     }
-                    SettingRow("Foil", "The light on a card's face. It follows the pointer across the card.") {
+                    // The type alone (touch swarm, rec 26): panes, cards and targets keep their size.
+                    SettingRow("Text size", "The type alone; the panes and the cards keep their size.") {
+                        Segmented(prefs.textScaleOn(touch), NeuePreferences.TEXT_SCALES, { "${kotlin.math.round(it * 100).toInt()}%" }, { t -> neue.update { it.copy(textScale = t) } }, small = true)
+                    }
+                    SettingRow("Foil", if (touch) "The light on a card's face." else "The light on a card's face. It follows the pointer across the card.") {
                         Segmented(prefs.foil, Foils.all.map { it.id }, Foils::label, { f -> neue.update { it.copy(foil = f) } })
                     }
                     SettingRow("Card names", "The name printed across the top of a card, stamped in the same foil as its border. Holographic foil only.") {
                         Segmented(prefs.foilNames, NameStyles.all, NameStyles::label, { n -> neue.update { it.copy(foilNames = n) } })
                     }
-                    SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DECKS)} to ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_STATS)} reach the pages either way.") {
+                    // A tablet's index is always out (the strip): there is nothing to choose.
+                    if (!touch) SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DECKS)} to ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_STATS)} reach the pages either way.") {
                         Segmented(prefs.railPinned, listOf(false, true), { if (it) "Pinned" else "Auto-hide" }, { p -> neue.update { it.copy(railPinned = p) } })
                     }
                 }
@@ -103,7 +116,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                             Segmented(prefs.shotStyle, listOf(NeuePreferences.SHOT_PICTURE, NeuePreferences.SHOT_LIST), { if (it == NeuePreferences.SHOT_LIST) "List" else "Picture" }, { v -> neue.update { it.copy(shotStyle = v) } })
                         }
                     }
-                    SettingRow("Search card text", "Match the words printed on a card as well as its name. name: and text: in a search choose one.") {
+                    SettingRow("Search card text", "Match the words printed on a card as well as its name. name: and text: in a search choose one.", onToggle = { host.onSearchEffects(!state.searchEffects) }) {
                         MuSwitch(state.searchEffects, host.onSearchEffects)
                     }
                 }
@@ -143,7 +156,11 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         val count = art.count
                         SettingRow(
                             "High-resolution art",
-                            "${art.describe()}. Every card's full-size picture, about 2 GB, downloaded while you work, the deck and the card you are reading first.",
+                            (if (prefs.hdArt && neue.waitingForWifi) "Waiting for Wi-Fi. " else "") +
+                                "${art.describe()}. Every card's full-size picture, about 2 GB, downloaded while you work, the deck and the card you are reading first.",
+                            // The live status is the point of the help here: none of it is cut off.
+                            helpLines = 6,
+                            onToggle = { neue.update { it.copy(hdArt = !it.hdArt) } },
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 MuSwitch(prefs.hdArt, { on -> neue.update { it.copy(hdArt = on) } })
@@ -214,11 +231,17 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
     }
 }
 
+/**
+ * A setting: its label and help beside its control. A switch's row is one target on a
+ * tablet (touch swarm, rec 27, [onToggle]): the words beside a 36×18 track were dead.
+ */
 @Composable
-private fun SettingRow(label: String, help: String, control: @Composable () -> Unit) {
+private fun SettingRow(label: String, help: String, helpLines: Int = 3, onToggle: (() -> Unit)? = null, control: @Composable () -> Unit) {
     val c = Mu.colors
+    val whole = onToggle != null && com.kaiharimoto.neue.kit.LocalTouchFirst.current
     Row(
         Modifier.fillMaxWidth()
+            .let { if (whole) it.defaultMinSize(minHeight = com.kaiharimoto.mastertool.core.input.TouchMetrics.SETTING_ROW.dp).muClickable(onClick = onToggle!!).cursorPointer(showsWords = true) else it }
             .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -226,7 +249,7 @@ private fun SettingRow(label: String, help: String, control: @Composable () -> U
     ) {
         Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             RowText(label)
-            Help(help, maxLines = 3)
+            Help(help, maxLines = helpLines)
         }
         Box(Modifier.weight(1f)) { control() }
     }

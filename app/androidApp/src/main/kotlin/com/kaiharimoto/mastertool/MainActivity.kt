@@ -252,6 +252,16 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                 }
                 // Immersive mode is the system bars hidden, swiped back in from an edge.
                 LaunchedEffect(h.neue.immersive) { showImmersive(h.neue.immersive) }
+                // Deep zen is a picture to be looked at: the screen stays on for it (touch swarm,
+                // rec 30), and the system's timeout returns when zen wakes or immersive ends.
+                val keepOn = h.neue.immersive && h.neue.zen == com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
+                LaunchedEffect(keepOn) {
+                    if (keepOn) {
+                        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
                 // The bars' icons follow the theme: dark on Paper, light on Ink.
                 val paper = h.neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.PAPER
                 LaunchedEffect(paper) {
@@ -297,6 +307,7 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
      */
     override fun onStop() {
         super.onStop()
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val h = holders ?: return
         val state = h.builder
         if (state.dirty && (state.deckId != null || state.deck.totalCards > 0)) state.save(quiet = true)

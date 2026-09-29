@@ -128,7 +128,7 @@ private fun LevelBars(byLevel: Map<Int, Int>) {
     Column(Modifier.padding(top = 12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             levels.forEach { level ->
-                Mono((byLevel[level] ?: 0).takeIf { it > 0 }?.toString() ?: "", Modifier.weight(1f), size = 9.sp, align = TextAlign.Center)
+                Mono((byLevel[level] ?: 0).takeIf { it > 0 }?.toString() ?: "", Modifier.weight(1f), size = 11.sp, align = TextAlign.Center)
             }
         }
         Canvas(Modifier.fillMaxWidth().height(120.dp).padding(top = 4.dp)) {
@@ -143,7 +143,7 @@ private fun LevelBars(byLevel: Map<Int, Int>) {
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-            levels.forEach { Mono(it.toString(), Modifier.weight(1f), size = 9.sp, align = TextAlign.Center) }
+            levels.forEach { Mono(it.toString(), Modifier.weight(1f), size = 11.sp, align = TextAlign.Center) }
         }
     }
 }

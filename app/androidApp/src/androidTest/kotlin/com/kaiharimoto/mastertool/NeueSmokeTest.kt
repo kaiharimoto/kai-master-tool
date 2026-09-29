@@ -241,6 +241,27 @@ class NeueSmokeTest {
             assertEquals(before, countBecomes(before))
             shoot("06-undone.png")
 
+            // v1.3.4: the pool's filters at a finger's size, and Settings with whole-row switches.
+            on { it.neue!!.neue.update { p -> p.copy(filtersOpen = true) } }
+            shoot("07-filters.png")
+            on { it.neue!!.neue.update { p -> p.copy(filtersOpen = false) } }
+            on { it.neue!!.neue.go(Page.SETTINGS) }
+            shoot("08-settings.png")
+            on { it.neue!!.neue.go(Page.BUILDER) }
+
+            // Deep zen keeps the screen on, and waking lets the system's timeout back.
+            on { it.neue!!.neue.immersive = true }
+            Thread.sleep(800)
+            on { it.neue!!.run(com.kaiharimoto.mastertool.core.input.DeskAction.ZEN) }
+            var kept = false
+            repeat(40) {
+                if (kept) return@repeat
+                Thread.sleep(250)
+                kept = on { (it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0 }
+            }
+            assertTrue("deep zen did not keep the screen on", kept)
+            shoot("09-zen.png")
+
             assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
         }
     }

@@ -106,4 +106,15 @@ class NeuePreferencesTest {
         assertEquals(NeuePreferences.MIN_ZOOM, NeuePreferences(deckZoom = 0.01f).sanitised().deckZoom)
     }
 
+    @Test
+    fun textSizeSnapsToItsStepsAndATabletReadsOneUp() {
+        // touch swarm, rec 26: out-of-range values land on the nearest step; none stored is the platform's.
+        assertEquals(1.3f, NeuePreferences(textScale = 4f).sanitised().textScale)
+        assertEquals(1f, NeuePreferences(textScale = 0.2f).sanitised().textScale)
+        assertEquals(1.15f, NeuePreferences(textScale = 1.12f).sanitised().textScale)
+        assertEquals(null, NeuePreferences(textScale = Float.NaN).sanitised().textScale)
+        assertEquals(NeuePreferences.TABLET_TEXT_SCALE, NeuePreferences.DEFAULT.textScaleOn(touch = true))
+        assertEquals(1f, NeuePreferences.DEFAULT.textScaleOn(touch = false))
+        assertEquals(1.3f, NeuePreferences(textScale = 1.3f).textScaleOn(touch = false))
+    }
 }

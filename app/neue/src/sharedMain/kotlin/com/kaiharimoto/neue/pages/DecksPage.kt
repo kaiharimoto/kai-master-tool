@@ -185,7 +185,21 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
                     },
                     separatorBefore = format == DeckExportFormat.YDKE,
                 ) { export(stored, format) }
-            },
+            } + CardActions.shareEntries(
+                code = { YdkeCodec.encode(if (stored.entry.id == state.deckId) state.deck else stored.entry.deck) },
+                name = stored.entry.name,
+                file = {
+                    // The live deck when it is the one on the builder, else the stored one.
+                    if (stored.entry.id == state.deckId) {
+                        state.shareDeck()
+                    } else {
+                        scope.launch {
+                            val text = YdkCodec.write(stored.entry.deck, createdBy = "kai's master tool", extended = stored.extended)
+                            deps.fileAccess.shareDeck("${stored.entry.name.ifBlank { "deck" }}.${if (stored.extended != null) "ydkx" else "ydk"}", text)
+                        }
+                    }
+                },
+            ),
         )
     }
 

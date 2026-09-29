@@ -146,6 +146,24 @@ object CardActions {
             },
             separatorBefore = format == DeckExportFormat.YDKE,
         ) { export(format, state, neue) }
+    } + shareEntries(
+        code = { YdkeCodec.encode(state.deck) },
+        name = state.deckName,
+        file = { state.shareDeck() },
+    )
+
+    /**
+     * Sharing the Android way (touch swarm, rec 25): the code to a chat, or the file
+     * to anything that takes one, through the system's share sheet — where copying
+     * meant leaving the app, finding the chat and pasting. Nothing on the desk.
+     */
+    fun shareEntries(code: () -> String, name: String, file: () -> Unit): List<MenuEntry> {
+        val platform = com.kaiharimoto.neue.platform.Platform
+        if (!platform.canShare) return emptyList()
+        return listOf(
+            MenuEntry("Share YDKe code…", separatorBefore = true) { platform.shareText(code(), name.ifBlank { "Deck" }) },
+            MenuEntry("Share .ydkx file…", onClick = file),
+        )
     }
 
     fun export(format: DeckExportFormat, state: DeckBuilderState, neue: NeueState) {
@@ -169,6 +187,12 @@ object CardActions {
         if (all.size < 2) return null
         val at = all.indexOf(neue.prefs.arts[card.id.value] ?: card.id.value).coerceAtLeast(0) + 1
         return MenuEntry("Next artwork · $at of ${all.size}", hint = "A", separatorBefore = true) { neue.stepArt(card, 1) }
+    }
+
+    /** Your own picture off the card, behind a confirm: on a tablet it lives here, not in the inspector's row (rec 24). */
+    private fun removeArtEntry(card: Card, neue: NeueState): MenuEntry? {
+        val chosen = neue.prefs.arts[card.id.value]?.takeIf { it < 0 } ?: return null
+        return MenuEntry("Remove your picture", danger = true) { neue.confirmRemoveArt = card to -chosen }
     }
 
     /**
@@ -204,6 +228,7 @@ object CardActions {
                 reason = if (left <= 0) "No copies left" else "Side deck is full",
             ) { add(state, card, toSide = true) },
             neue?.let { artEntry(card, it) },
+            neue?.let { removeArtEntry(card, it) },
             MenuEntry("Copy name", separatorBefore = true) { copyName(card) },
         ) + (neue?.let { listEntries(card, it) } ?: emptyList())
     }
@@ -233,6 +258,7 @@ object CardActions {
             }
             add(MenuEntry("Manage groups", hint = "G") { state.useLens(com.kaiharimoto.mastertool.core.deck.Lens.ROLES) })
             artEntry(card, neue)?.let(::add)
+            removeArtEntry(card, neue)?.let(::add)
             add(coverEntry(section, index, state, neue))
             addAll(listEntries(card, neue))
             add(MenuEntry("Copy name", separatorBefore = true) { copyName(card) })

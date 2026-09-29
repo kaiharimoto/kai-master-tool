@@ -146,14 +146,19 @@ fun FilterPanel(filter: CardFilter, onChange: (CardFilter) -> Unit, index: CardI
 private fun Facet(label: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Micro(label, color = Mu.colors.ink45)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { content() }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(chipGap()), verticalArrangement = Arrangement.spacedBy(chipGap())) { content() }
     }
 }
 
-/** A facet's value: the kit's Tag, a size down, since a facet row holds a dozen. */
+/** Chips 12dp apart both ways for a finger, 4 on the desk (touch swarm, rec 18). */
+@Composable
+private fun chipGap() = if (com.kaiharimoto.neue.kit.LocalTouchFirst.current) com.kaiharimoto.mastertool.core.input.TouchMetrics.CHIP_GAP.dp else 4.dp
+
+/** A facet's value: the kit's Tag, a size down on the desk, since a facet row holds a dozen; a finger's full size. */
 @Composable
 private fun Chip(label: String, on: Boolean, onClick: () -> Unit) {
-    Tag(label, on, onClick, Modifier.height(24.dp), caption = if (on) "Clear" else "Filter")
+    val touch = com.kaiharimoto.neue.kit.LocalTouchFirst.current
+    Tag(label, on, onClick, if (touch) Modifier else Modifier.height(24.dp), caption = if (on) "Clear" else "Filter")
 }
 
 /**
@@ -240,7 +245,7 @@ private fun Archetypes(chosen: Set<String>, index: CardIndex, onChange: (Set<Str
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         MuInput(typed, { typed = it }, Modifier.width(220.dp), placeholder = "Type an archetype", dense = true)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(chipGap()), verticalArrangement = Arrangement.spacedBy(chipGap())) {
             chosen.sorted().forEach { a -> Chip(a, true) { onChange(chosen - a) } }
             matches.filter { it !in chosen }.forEach { a -> Chip(a, false) { onChange(chosen + a) } }
         }

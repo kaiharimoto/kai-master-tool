@@ -34,6 +34,18 @@ expect object Platform {
 
     /** Asks the person for a file with one of [extensions]; its name and bytes, or null. */
     suspend fun pick(title: String, extensions: Set<String>): PickedFile?
+
+    /** Whether there is a system share sheet (touch swarm, rec 25): a tablet's, not the desk's. */
+    val canShare: Boolean
+
+    /** [text] to another app through the system's share sheet. */
+    fun shareText(text: String, title: String)
+
+    /**
+     * Whether the network costs nothing to use (rec 27): the ~2 GB art library waits
+     * for Wi-Fi on a tablet. The desk is always on one.
+     */
+    fun onUnmeteredNetwork(): Boolean
 }
 
 /** A file the person picked: its name, for the extension, and what is in it. */

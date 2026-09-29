@@ -74,4 +74,10 @@ actual object Platform {
         if (!source.isFile) return null
         return runCatching { PickedFile(source.name, source.readBytes()) }.getOrNull()
     }
+
+    actual val canShare: Boolean = false
+
+    actual fun shareText(text: String, title: String) = copy(text)
+
+    actual fun onUnmeteredNetwork(): Boolean = true
 }

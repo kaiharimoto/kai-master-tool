@@ -69,6 +69,24 @@ actual object Platform {
         return picker?.invoke(types)
     }
 
+    actual val canShare: Boolean = true
+
+    actual fun shareText(text: String, title: String) {
+        runCatching {
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                putExtra(Intent.EXTRA_TITLE, title)
+            }
+            context.startActivity(Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
+
+    actual fun onUnmeteredNetwork(): Boolean = runCatching {
+        val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
+        connectivity.isActiveNetworkMetered.not()
+    }.getOrDefault(false)
+
     private val MIME = mapOf(
         "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "png" to "image/png", "webp" to "image/webp",
         "ydk" to "*/*", "ydkx" to "*/*",

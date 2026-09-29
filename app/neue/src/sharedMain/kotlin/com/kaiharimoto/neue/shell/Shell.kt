@@ -290,7 +290,8 @@ fun Rail(
                 IconButton(if (paper) Icons.Sun else Icons.Moon, neue::toggleTheme, size = 24.dp, label = if (paper) "Ink" else "Paper")
             }
             MicroLink("Keys", { neue.helpOpen = true })
-            if (!neue.immersive) {
+            // A tablet's index is always out: pinning means nothing there (touch swarm, rec 27).
+            if (!neue.immersive && !neue.touchFirst) {
                 Tip(if (neue.prefs.railPinned) "Fold the index away until the pointer reaches the left edge" else "Keep the index out", above = true) {
                     MicroLink(if (neue.prefs.railPinned) "Unpin" else "Pin", { neue.update { it.copy(railPinned = !it.railPinned) } })
                 }

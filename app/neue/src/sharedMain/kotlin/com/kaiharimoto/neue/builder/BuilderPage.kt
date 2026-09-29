@@ -292,7 +292,7 @@ fun RowScope.BuilderBar(
         }
     }
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
-    Segmented(state.format, Format.entries, { it.name }, onFormat, small = true)
+    Segmented(state.format, Format.entries, { it.name }, onFormat, small = true, compact = true)
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     // On a tablet (touch swarm, rec 16) Import and Export keep their words — an icon
     // with no hover to name it is a guess — and the deck picture, which has no

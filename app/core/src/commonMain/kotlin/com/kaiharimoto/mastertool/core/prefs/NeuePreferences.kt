@@ -170,7 +170,17 @@ data class NeuePreferences(
      * labels for the groups"), the corner's Labels switch. On unless turned off.
      */
     val zenLabels: Boolean = true,
+    /**
+     * Text size apart from Interface scale (touch swarm, rec 26): one of
+     * [TEXT_SCALES], multiplying the type alone — pane widths, card fits and targets
+     * are untouched. Null is the platform's own choice ([textScaleOn]), so a tablet
+     * reads a size up without a stored seed; a field with a default, no migration.
+     */
+    val textScale: Float? = null,
 ) {
+    /** The text size in force: the chosen one, else a size up on a tablet held at arm's length. */
+    fun textScaleOn(touch: Boolean): Float = textScale ?: if (touch) TABLET_TEXT_SCALE else 1f
+
     fun sanitised(): NeuePreferences = copy(
         scale = if (scale.isFinite()) scale.coerceIn(SCALES.first(), SCALES.last()) else 1f,
         poolWidth = if (poolWidth.isFinite()) poolWidth.coerceIn(MIN_POOL_WIDTH, MAX_POOL_WIDTH) else DEFAULT_POOL_WIDTH,
@@ -191,6 +201,7 @@ data class NeuePreferences(
             .mapValues { (_, cards) -> cards.distinct().takeLast(COVERS) }
             .filterValues { it.isNotEmpty() },
         arts = arts.filter { (card, art) -> card != art },
+        textScale = textScale?.takeIf { it.isFinite() }?.let { t -> TEXT_SCALES.minBy { kotlin.math.abs(it - t) } },
         window = window?.takeIf {
             it.x.isFinite() && it.y.isFinite() && it.width.isFinite() && it.height.isFinite() &&
                 it.width >= MIN_WINDOW_WIDTH && it.height >= MIN_WINDOW_HEIGHT
@@ -230,6 +241,10 @@ data class NeuePreferences(
         const val MIN_ZOOM = 0.4f
         const val MIN_GAP = 0.4f
         const val MAX_GAP = 3f
+
+        /** Text size's steps (rec 26): 100, 115 and 130%. */
+        val TEXT_SCALES = listOf(1f, 1.15f, 1.3f)
+        const val TABLET_TEXT_SCALE = 1.15f
 
         val DEFAULT = NeuePreferences()
     }

@@ -74,15 +74,17 @@ fun Tag(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
+    // A chip is 32dp to a finger, whatever height its row asked for (touch swarm, rec 18).
+    val touch = LocalTouchFirst.current
     Row(
         modifier
-            .height(28.dp)
+            .let { if (touch) it.height(com.kaiharimoto.mastertool.core.input.TouchMetrics.CHIP.dp) else it.height(28.dp) }
             .background(animatedColor(if (selected) c.ink else Color.Transparent))
             .border(1.dp, animatedColor(if (selected || hovered) c.ink else c.ink25))
             .hoverable(source)
             .cursorPointer(caption = caption, showsWords = true)
             .muClickable(interactionSource = source, onClick = onClick)
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = if (touch) com.kaiharimoto.mastertool.core.input.TouchMetrics.CHIP_PAD.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {

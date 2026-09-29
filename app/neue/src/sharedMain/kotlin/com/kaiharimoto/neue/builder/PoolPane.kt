@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import com.kaiharimoto.neue.kit.muClickable
+import com.kaiharimoto.neue.kit.Gap
+import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.cursor.cursor
@@ -94,6 +98,8 @@ fun PoolPane(
 ) {
     val c = Mu.colors
     val focus = remember { FocusRequester() }
+    val touch = neue.touchFirst
+    val keyboard = com.kaiharimoto.neue.kit.LocalHardwareKeyboard.current
     LaunchedEffect(neue.focusSearchTick) {
         if (neue.focusSearchTick > 0) runCatching { focus.requestFocus() }
     }
@@ -114,6 +120,14 @@ fun PoolPane(
     ) {
         Column(Modifier.zenQuiet().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // On a tablet the field stands between the two icons, so a tap beside
+                // Advanced search never hides the pool (touch swarm, rec 17).
+                if (touch) {
+                    Tip("Hide the pool") {
+                        IconButton(Icons.PanelLeftClose, { neue.update { it.copy(poolVisible = false) } }, size = TouchMetrics.ICON.dp, label = "Hide pool")
+                    }
+                    Gap(width = 12.dp)
+                }
                 MuInput(
                     value = state.query,
                     onValueChange = {
@@ -132,11 +146,13 @@ fun PoolPane(
                 Kbd("/")
                 // The search pop-out (1.0.19): the window given over to finding cards.
                 Tip("Advanced search: every filter, and the card read large", kbd = DeskShortcuts.chordFor(DeskAction.ADVANCED_SEARCH)?.let(DeskShortcuts::kbd)) {
-                    IconButton(Icons.Search, { neue.studio = Studio(focus = !neue.touchFirst) }, label = "Advanced search")
+                    IconButton(Icons.Search, { neue.studio = Studio(focus = !neue.touchFirst) }, size = if (touch) TouchMetrics.ICON.dp else 28.dp, label = "Advanced search")
                 }
                 // Hidden from where it stands (kai, 1.0.19), rather than from the window's bar.
-                Tip("Hide the pool", kbd = DeskShortcuts.chordFor(DeskAction.TOGGLE_POOL)?.let(DeskShortcuts::kbd)) {
-                    IconButton(Icons.PanelLeftClose, { neue.update { it.copy(poolVisible = false) } }, label = "Hide pool")
+                if (!touch) {
+                    Tip("Hide the pool", kbd = DeskShortcuts.chordFor(DeskAction.TOGGLE_POOL)?.let(DeskShortcuts::kbd)) {
+                        IconButton(Icons.PanelLeftClose, { neue.update { it.copy(poolVisible = false) } }, label = "Hide pool")
+                    }
                 }
             }
             ListsRow(neue)
@@ -145,20 +161,31 @@ fun PoolPane(
                 val meta = buildString {
                     append(if (shown < state.matchCount) "$shown of ${"%,d".format(state.matchCount)}" else "%,d".format(state.matchCount))
                     if (state.searchEffects && state.effectMatchCount > 0) append(" · ${state.effectMatchCount} by text")
+                    // Side mode can be seen, not only the word's shade (rec 17).
+                    if (touch && neue.prefs.poolToSide) append(" · double-tap adds to side")
                 }
                 // The pool's size lives here since the title bar gave it up, and so does its sync.
                 if (state.isSyncing) com.kaiharimoto.neue.kit.Breathe(running = true)
                 Mono(if (drag.overPool) "Let go to remove" else meta, Modifier.weight(1f), color = if (drag.overPool) c.ink else c.ink70)
                 Tip("Also match the words printed on the card. Prefix name: or text: to choose one") {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // On a tablet the word and its switch are one target (rec 17).
+                    Row(
+                        Modifier.let { if (touch) it.muClickable { onSearchEffects(!state.searchEffects) }.cursorPointer(showsWords = true).padding(vertical = 12.dp) else it },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Micro("Text", color = c.ink45)
                         MuSwitch(state.searchEffects, onSearchEffects)
                     }
                 }
                 // kai, 1.0.14: a pool that adds to the side deck, for siding a whole list in.
                 Tip(if (neue.prefs.poolToSide) "Adding to the side deck. Shift adds to the main" else "Add to the side deck with right-click and Enter. Shift adds to the main") {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Micro("Side", color = if (neue.prefs.poolToSide) c.ink else c.ink45)
+                    Row(
+                        Modifier.let { if (touch) it.muClickable { neue.update { p -> p.copy(poolToSide = !p.poolToSide) } }.cursorPointer(showsWords = true).padding(vertical = 12.dp) else it },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Micro(if (touch && neue.prefs.poolToSide) "To side" else "Side", color = if (neue.prefs.poolToSide) c.ink else c.ink45)
                         MuSwitch(neue.prefs.poolToSide, { on -> neue.update { it.copy(poolToSide = on) } })
                     }
                 }
@@ -238,8 +265,11 @@ fun PoolPane(
                     ) {
                         itemsIndexed(state.results, key = { _, card -> card.id.value }) { i, card ->
                             val left = state.remaining(card)
-                            val selected = (neue.selection as? Selection.InPool)?.card?.id == card.id ||
-                                (neue.searchFocused && i == cursor)
+                            // The keyboard's cursor in the results: on a tablet only with a keyboard, and
+                            // then an outline, never a second selection (rec 17).
+                            val cursorHere = neue.searchFocused && i == cursor
+                            val selected = (neue.selection as? Selection.InPool)?.card?.id == card.id || cursorHere && !touch
+                            val outlined = cursorHere && touch && keyboard
                             val held = drag.held?.let { it.from == null && it.card.id == card.id } == true
                             val press = rememberPress()
                             NeueCard(
@@ -266,6 +296,7 @@ fun PoolPane(
                                 format = state.format,
                                 copies = state.copiesInDeck(card.id),
                                 selected = selected,
+                                outlined = outlined,
                                 dimmed = left <= 0 || held,
                                 foil = neue.prefs.foil,
                             )
@@ -312,17 +343,20 @@ private fun ListsRow(neue: NeueState) {
     val c = Mu.colors
     val lists = neue.prefs.cardLists
     val showing = neue.list(neue.prefs.poolList)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-        Tag("All cards", showing == null, { neue.showList(null) }, Modifier.height(24.dp), caption = "Every card")
+    // A finger's tags are 32dp and 12dp apart (touch swarm, rec 18); the desk's a size down.
+    val touch = neue.touchFirst
+    val gap = if (touch) TouchMetrics.CHIP_GAP.dp else 4.dp
+    val tag = if (touch) Modifier else Modifier.height(24.dp)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap), itemVerticalAlignment = Alignment.CenterVertically) {
+        Tag("All cards", showing == null, { neue.showList(null) }, tag, caption = "Every card")
         lists.forEach { list ->
             var at by remember { mutableStateOf(Offset.Zero) }
-            Tip("Right-click to edit, rename or delete. L puts the card you are reading on it") {
+            Tip(if (touch) "Hold to edit, rename or delete" else "Right-click to edit, rename or delete. L puts the card you are reading on it") {
                 Tag(
                     list.name,
                     showing?.id == list.id,
                     { neue.showList(if (showing?.id == list.id) null else list.id) },
-                    Modifier
-                        .height(24.dp)
+                    tag
                         .onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }
                         // Right-click, or a finger held on the tag (1.3.0).
                         .onContextMenu {

@@ -110,6 +110,12 @@ class NeueState(
     /** A deck the user asked to delete, waiting on the confirmation dialog. */
     var confirmDelete by mutableStateOf<Pair<String, String>?>(null)
 
+    /**
+     * Removing a card's own picture asks first (touch swarm, rec 24): it deletes the
+     * imported file, and nothing undoes that. The card, and which of its own it is (k).
+     */
+    var confirmRemoveArt by mutableStateOf<Pair<Card, Int>?>(null)
+
     /** The card under the pointer, which the inspector shows. Hover is the desktop's cheapest question. */
     /** The window's haptics (touch swarm, rec 13): set by the window, nothing on the desk. */
     var feel: (com.kaiharimoto.mastertool.core.haptics.Haptic) -> Unit = {}
@@ -133,6 +139,9 @@ class NeueState(
     fun felt(event: com.kaiharimoto.mastertool.core.haptics.DeskEvent?) {
         if (fingerActing && event != null) com.kaiharimoto.mastertool.core.haptics.DeskFeel.of(event)?.let(feel)
     }
+
+    /** The art library is on and waiting for a network that costs nothing (touch swarm, rec 27). */
+    var waitingForWifi by mutableStateOf(false)
 
     var hovered by mutableStateOf<Card?>(null)
 
@@ -179,7 +188,7 @@ class NeueState(
     var studio by mutableStateOf<Studio?>(null)
 
     val overlayOpen: Boolean
-        get() = paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || studio != null
+        get() = paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || studio != null
 
     /**
      * A touch screen first (Neue on a tablet): no hover to bring the rail out or
@@ -262,7 +271,7 @@ class NeueState(
 
     /** Whether [dismissTop] has something to close. */
     val hasTop: Boolean
-        get() = menu != null || viewing != null || paletteOpen || confirmDelete != null || helpOpen || drawer != null || studio != null
+        get() = menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || helpOpen || drawer != null || studio != null
 
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {
@@ -270,6 +279,7 @@ class NeueState(
         viewing != null -> { viewing = null; true }
         paletteOpen -> { paletteOpen = false; true }
         confirmDelete != null -> { confirmDelete = null; true }
+        confirmRemoveArt != null -> { confirmRemoveArt = null; true }
         helpOpen -> { helpOpen = false; true }
         drawer != null -> { drawer = null; true }
         studio != null -> { studio = null; true }

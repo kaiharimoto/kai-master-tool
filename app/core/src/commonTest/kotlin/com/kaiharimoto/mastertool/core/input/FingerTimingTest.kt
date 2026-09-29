@@ -100,3 +100,14 @@ class FingerTimingTest {
         assertNull(MultiTap.classify(listOf(0, 40), listOf(500, 520), travel = 2f, slop = 8f), "a rest is not a tap")
     }
 }
+
+class TouchMetricsTest {
+    @kotlin.test.Test
+    fun packedTargetsAreAFingerApart() {
+        // Chips pack in rows and columns: the pitch is the chip and its gap.
+        kotlin.test.assertTrue(TouchMetrics.CHIP + TouchMetrics.CHIP_GAP >= TouchMetrics.MIN_PITCH)
+        kotlin.test.assertTrue(TouchMetrics.MENU_ROW >= TouchMetrics.MIN_PITCH)
+        kotlin.test.assertTrue(TouchMetrics.ICON + 8 >= TouchMetrics.MIN_PITCH)
+        kotlin.test.assertTrue(TouchMetrics.SETTING_ROW >= TouchMetrics.MIN_PITCH)
+    }
+}

@@ -217,6 +217,38 @@ fixes the frame:
 - **The S Pen's side button is the right-click** on cards (`PEN_BUTTON_TAP`),
   tested before the finger's grammar; drawing up a group it is still a vote.
 
+#### Targets and type (1.3.4)
+
+- **Touch metrics** (`core/input/TouchMetrics`, held by a test to a 44 dp pitch):
+  chips and list tags 32 dp tall and 12 dp apart, links that act boxed 32 dp tall,
+  menu rows 44 dp, small segments outside the deck 36 dp at 11 sp. The lens row
+  and the bar's format keep 28 dp (`Segmented(compact)`): that is deck budget.
+- **The pool's header**: Hide pool and Advanced search 40 dp with the field
+  between them; the Text and Side switches are each one target with their word;
+  Side reads **To side**, the pool's line says a double-tap adds to side, and the
+  side deck's name is inverted. The keyboard's cursor in the results is an outline,
+  and only with a keyboard attached.
+- **A Groups row**: a 32 dp colour square, 32 dp swatches on their own line, 40 dp
+  Edit, Up and Down; Delete is on the row's hold menu only.
+- **Your own art**: on a tablet Remove is on the card's hold menu, and on either it
+  asks first (`confirmRemoveArt`); + Your own is a button, the arrows 40 dp; a pick
+  that fails says so, and a picture named without its extension is known by its bytes.
+- **Share** (`Platform.canShare`): the builder's Export menu and a Decks row's gain
+  **Share YDKe code…** and **Share .ydkx file…**, through the system's share sheet.
+- **Text size** (`NeuePreferences.textScale`, 100 / 115 / 130%): the type alone,
+  multiplying the font scale, never the panes or the cards. Unset is the platform's
+  own choice (`textScaleOn`): 115% on a tablet, 100% on the desk, so nothing is
+  seeded. The group-name tab is measured off its type (`nameTab()`), 17 dp at 100%.
+  No type is under 11 sp any more (Stats' level labels, a missing card's number).
+- **Settings on a tablet**: a switch's whole row is its target, 48 dp; the HD art
+  help is not cut off; the art library downloads only on an unmetered network
+  (`Platform.onUnmeteredNetwork`, "Waiting for Wi-Fi"); no Index row or Pin link;
+  "Stored on this tablet".
+- **A read-only scroll thumb** on Android (`Scrollbars.android.kt`): 3 dp of ink25,
+  no track, no input, whenever a pane continues.
+- **Deep zen keeps the screen on** (`FLAG_KEEP_SCREEN_ON` while immersive and deep),
+  and lets it go on waking, leaving immersive or leaving the app.
+
 - **The proof is an emulator**, since the studio cannot draw Android:
   `.github/workflows/android-smoke.yml` boots a Pixel Tablet image, runs
   `NeueSmokeTest` (a saved deck survives a launch, the builder opens it, no crash

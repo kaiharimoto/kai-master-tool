@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.kit.LocalTouchFirst
@@ -226,6 +228,10 @@ private fun GroupRow(
     // out (and a second puts them away); isolating is on the row's held-finger menu.
     var tapped by remember(group.id) { mutableStateOf(false) }
     val swatchesOut = onSquare || onSwatches || lingering || tapped
+    // A finger's sizes (touch swarm, rec 19): a 32dp square, 32dp swatches on a line of
+    // their own, 40dp arrows 8dp apart, and Delete only on the row's hold menu.
+    val touch = neue.touchFirst
+    val square = if (touch) TouchMetrics.CHIP.dp else 16.dp
     Column(
         Modifier
             .fillMaxWidth()
@@ -255,12 +261,12 @@ private fun GroupRow(
             // onto it would count as leaving the square.
             Box(
                 Modifier
-                    .size(16.dp)
+                    .size(square)
                     .background(GroupMarkers.hue(group.color))
                     .border(if (isolated) 2.dp else 1.dp, c.ink)
                     .hoverable(squareSource)
                     .cursorPointer(caption = if (isolated) "Show all" else "Isolate")
-                    .clickable(interactionSource = squareSource, indication = null) {
+                    .muClickable(interactionSource = squareSource) {
                         if (neue.touchFirst) tapped = !tapped else state.toggleIsolation(group.id)
                     },
             )
@@ -287,27 +293,33 @@ private fun GroupRow(
             Mono(count.toString(), color = c.ink70)
             odds?.let { Mono(percent(it), color = c.ink) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            if (swatchesOut) Row(Modifier.hoverable(swatchSource), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            GroupMarkers.hues.forEachIndexed { h, hue ->
-                Box(
-                    Modifier
-                        .size(14.dp)
-                        .background(hue)
-                        .border(if (group.color == h) 2.dp else 0.dp, if (group.color == h) c.ink else Color.Transparent)
-                        .cursorPointer(caption = "Colour")
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                            state.updateGroups { it.upsert(group.copy(color = h)) }
-                            tapped = false
-                        },
-                )
+        val swatches: @Composable () -> Unit = {
+            Row(Modifier.hoverable(swatchSource), horizontalArrangement = Arrangement.spacedBy(if (touch) 8.dp else 3.dp)) {
+                GroupMarkers.hues.forEachIndexed { h, hue ->
+                    Box(
+                        Modifier
+                            .size(if (touch) TouchMetrics.CHIP.dp else 14.dp)
+                            .background(hue)
+                            .border(if (group.color == h) 2.dp else 0.dp, if (group.color == h) c.ink else Color.Transparent)
+                            .cursorPointer(caption = "Colour")
+                            .muClickable {
+                                state.updateGroups { it.upsert(group.copy(color = h)) }
+                                tapped = false
+                            },
+                    )
+                }
             }
-            }
+        }
+        val icon = if (touch) TouchMetrics.ICON.dp else 24.dp
+        if (touch && swatchesOut) swatches()
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (touch) 8.dp else 3.dp)) {
+            if (!touch && swatchesOut) swatches()
             Box(Modifier.weight(1f))
-            IconButton(Icons.Pencil, { state.editGroup(group) }, size = 24.dp, label = "Edit cards")
-            IconButton(Icons.ArrowUp, { state.updateGroups { it.reorder(group.id, index - 1) } }, enabled = !first, size = 24.dp, label = "Move up", reason = "Already first")
-            IconButton(Icons.ArrowDown, { state.updateGroups { it.reorder(group.id, index + 1) } }, enabled = !last, size = 24.dp, label = "Move down", reason = "Already last")
-            IconButton(Icons.Trash, { com.kaiharimoto.neue.shell.deleteGroup(state, group.id) }, size = 24.dp, label = "Delete")
+            IconButton(Icons.Pencil, { state.editGroup(group) }, size = icon, label = "Edit cards")
+            IconButton(Icons.ArrowUp, { state.updateGroups { it.reorder(group.id, index - 1) } }, enabled = !first, size = icon, label = "Move up", reason = "Already first")
+            IconButton(Icons.ArrowDown, { state.updateGroups { it.reorder(group.id, index + 1) } }, enabled = !last, size = icon, label = "Move down", reason = "Already last")
+            // Beside Move down a thumb could delete a group: on a tablet it is on the hold menu only.
+            if (!touch) IconButton(Icons.Trash, { com.kaiharimoto.neue.shell.deleteGroup(state, group.id) }, size = 24.dp, label = "Delete")
         }
     }
 }

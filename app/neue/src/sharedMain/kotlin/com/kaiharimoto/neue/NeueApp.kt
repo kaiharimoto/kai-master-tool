@@ -619,7 +619,16 @@ fun NeueEffects(h: NeueHolders) {
         }
         LaunchedEffect(state.results) { h.art.want(state.results.take(48)) }
         LaunchedEffect(neue.inspected) { neue.inspected?.let(h.art::want) }
-        LaunchedEffect(neue.prefs.hdArt) { h.art.enable(neue.prefs.hdArt) }
+        // The ~2 GB library waits for Wi-Fi on a tablet (touch swarm, rec 27); looked at again each half minute.
+        LaunchedEffect(neue.prefs.hdArt) {
+            while (true) {
+                val free = Platform.onUnmeteredNetwork()
+                neue.waitingForWifi = neue.prefs.hdArt && !free
+                h.art.enable(neue.prefs.hdArt && free)
+                if (!neue.prefs.hdArt) break
+                kotlinx.coroutines.delay(30_000)
+            }
+        }
     }
 }
 
@@ -629,7 +638,7 @@ private fun NeueWindowContent(h: NeueHolders) {
     // The groups' palette: read wherever a group is coloured, so set once here.
     SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
         neue.actingBy(finger = neue.touchFirst) { neue.felt(com.kaiharimoto.mastertool.core.haptics.DeskEvent.ART_STEPPED) }
@@ -1002,6 +1011,22 @@ private fun Shell(h: NeueHolders) {
         }
 
         if (neue.helpOpen) HelpDialog { neue.helpOpen = false }
+        neue.confirmRemoveArt?.let { (card, k) ->
+            MuDialog(
+                title = "Remove your picture",
+                onDismiss = { neue.confirmRemoveArt = null },
+                width = 384.dp,
+                description = "Your picture for “${card.name}” will be deleted from this ${if (neue.touchFirst) "tablet" else "computer"}. This cannot be undone.",
+                footer = {
+                    MuButton("Cancel", { neue.confirmRemoveArt = null }, variant = BtnVariant.GHOST)
+                    MuButton("Remove", {
+                        neue.confirmRemoveArt = null
+                        neue.chooseArt(card, card.id.value)
+                        h.customArt.remove(card.id.value, k)
+                    }, variant = BtnVariant.PRIMARY)
+                },
+            ) {}
+        }
         neue.confirmDelete?.let { (id, name) ->
             MuDialog(
                 title = "Delete deck",

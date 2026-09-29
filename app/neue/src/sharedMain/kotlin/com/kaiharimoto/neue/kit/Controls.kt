@@ -10,6 +10,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -198,14 +199,18 @@ fun IconButton(
 fun MicroLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, color: Color = Mu.colors.ink45) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
-    Micro(
-        text,
+    // A link that acts is a 32dp box to a finger (touch swarm, rec 18: TouchMetrics.LINK).
+    val touch = LocalTouchFirst.current
+    Box(
         modifier
+            .let { if (touch) it.heightIn(min = com.kaiharimoto.mastertool.core.input.TouchMetrics.LINK.dp) else it }
             .hoverable(source)
             .cursorPointer(showsWords = true)
             .muClickable(interactionSource = source, onClick = onClick),
-        color = animatedColor(if (hovered) Mu.colors.ink else color),
-    )
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Micro(text, color = animatedColor(if (hovered) Mu.colors.ink else color))
+    }
 }
 
 /**
@@ -425,9 +430,13 @@ fun <T> Segmented(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     small: Boolean = false,
+    /** Stays small on a tablet too: it is spent from the deck's own budget (the lens row, the bar). */
+    compact: Boolean = false,
 ) {
     val c = Mu.colors
-    Row(modifier.height(if (small) 28.dp else 36.dp).border(1.dp, c.ink)) {
+    // Outside the deck a finger gets 36dp and 11sp, where ≥ and ≤ looked alike (touch swarm, rec 18).
+    val tall = !small || LocalTouchFirst.current && !compact
+    Row(modifier.height(if (tall) com.kaiharimoto.mastertool.core.input.TouchMetrics.SEGMENT.dp else 28.dp).border(1.dp, c.ink)) {
         options.forEachIndexed { i, option ->
             if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(c.ink))
             val selected = option == value
@@ -443,7 +452,7 @@ fun <T> Segmented(
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Micro(label(option), color = if (selected) c.paper else c.ink, size = if (small) 10.sp else 11.sp)
+                Micro(label(option), color = if (selected) c.paper else c.ink, size = if (tall) 11.sp else 10.sp)
             }
         }
     }
@@ -634,7 +643,8 @@ fun MenuRow(
                 .drawBehind {
                     if (!last) drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx())
                 }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                // A finger's menu row is 44dp: the hold menus are where its actions are (rec 18).
+                .padding(horizontal = 12.dp, vertical = if (LocalTouchFirst.current) 13.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {

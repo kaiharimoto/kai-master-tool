@@ -127,8 +127,13 @@ import com.kaiharimoto.neue.theme.MuMotion
 private val PIECE_GAP = 28.dp
 private val FRAME = 5.dp
 
-/** The tab a group's name is written on, rising from its piece's top edge (1.0.18). Fits inside a gap. */
-private val NAME_TAB = 17.dp
+/**
+ * The tab a group's name is written on, rising from its piece's top edge (1.0.18). Fits
+ * inside a gap. Measured off the tab's own type, so a larger text size never clips it
+ * (touch swarm, rec 26); 17dp at the desk's text size.
+ */
+@Composable
+private fun nameTab(): Dp = with(LocalDensity.current) { maxOf(17.dp, 10.sp.toDp() * 1.3f + 4.dp) }
 private val LENS_ROW = 40.dp
 private val LABEL_ROW = 24.dp
 private val LABEL_GUTTER = 104.dp
@@ -186,6 +191,7 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifier: Modifier) {
+    val nameTab = nameTab()
     val density = LocalDensity.current
     val lensOn = state.lens != Lens.DECK || state.groupDraft != null
     val crack by animateFloatAsState(if (lensOn) 1f else 0f, tween(MuMotion.SLOW, easing = MuMotion.ease), label = "crack")
@@ -405,7 +411,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                         spacing = 0f,
                         chromeHeight = (GRID_PAD * 2 + RULE).toPx(),
                         extraWidth = pieces[i].spanX * gapPx * crack,
-                        extraHeight = pieces[i].spanY * gapPx * crack + (if (pieces[i].pieces > 1) NAME_TAB.toPx() * crack else 0f),
+                        extraHeight = pieces[i].spanY * gapPx * crack + (if (pieces[i].pieces > 1) nameTab.toPx() * crack else 0f),
                     )
                 },
                 labelled = sections.map { it != DeckSection.MAIN },
@@ -540,7 +546,7 @@ private fun LensRow(state: DeckBuilderState, neue: NeueState, count: String, out
         Box(Modifier.weight(1f))
         if (refused) Micro("✕ Not allowed here", color = c.ink)
         // The other ways to see the deck in pieces. The Roles lens is the Groups button's.
-        Segmented(state.lens, LENS_TABS, { if (tight) shortName(it) else it.displayName }, state::useLens, small = true)
+        Segmented(state.lens, LENS_TABS, { if (tight) shortName(it) else it.displayName }, state::useLens, small = true, compact = true)
     }
     }
 }
@@ -640,10 +646,17 @@ private fun BoxToggle(label: String, on: Boolean, onClick: () -> Unit) {
 
 /** A section's name and count, for the extra and side decks, wherever `DeckLabels` put it. */
 @Composable
-private fun SectionLabel(section: DeckSection, count: String, outOfRange: Boolean, refused: Boolean, modifier: Modifier, stacked: Boolean) {
+private fun SectionLabel(section: DeckSection, count: String, outOfRange: Boolean, refused: Boolean, modifier: Modifier, stacked: Boolean, aimed: Boolean = false) {
     val c = Mu.colors
     val parts: @Composable () -> Unit = {
-        Micro("${section.displayName} deck", color = c.ink70)
+        // The side deck's name inverted while the pool adds to it (touch swarm, rec 17).
+        if (aimed) {
+            com.kaiharimoto.neue.theme.Inverted {
+                Micro("${section.displayName} deck", Modifier.background(Mu.colors.paper).padding(horizontal = 4.dp), color = Mu.colors.ink)
+            }
+        } else {
+            Micro("${section.displayName} deck", color = c.ink70)
+        }
         Mono(if (outOfRange) "✕ $count" else count, color = if (outOfRange) c.ink else c.ink70)
         if (refused) Micro("✕ Not allowed", color = c.ink)
     }
@@ -676,6 +689,7 @@ private fun DeckSectionPane(
     motion: DeckMotion,
     onGrid: (Rect) -> Unit,
 ) {
+    val nameTab = nameTab()
     val c = Mu.colors
     val density = LocalDensity.current
     val zen = LocalZen.current
@@ -688,9 +702,10 @@ private fun DeckSectionPane(
     val refused = hover != null && !hover.accepted
     val keying = state.keying(section)
     val ring by rememberRing(state)
+    val aimed = section == DeckSection.SIDE && neue.touchFirst && neue.prefs.poolToSide
     // A section's taps are counted together (rec 11): a double-tap that drifts is still the first card's.
     val taps = rememberTapSurface(repeats = false, key = section)
-    val labelRoom = if (pieces.pieces > 1) with(density) { NAME_TAB.toPx() } else 0f
+    val labelRoom = if (pieces.pieces > 1) with(density) { nameTab.toPx() } else 0f
     val placer = PiecePlacer(fit.columns, fit.cardWidth, fit.cardHeight, gapPx, pieces, crack, rolePieces, zenGapPx, zenAbove, labelRoom)
     // Room for every group's name twice over: zen measures them on every frame it floats.
     val measurer = rememberTextMeasurer(cacheSize = 48)
@@ -751,6 +766,7 @@ private fun DeckSectionPane(
                 section, "$count · $rangeText", outOfRange, refused,
                 Modifier.fillMaxWidth().height(LABEL_ROW).padding(start = maxOf(gridLeft, SIDE_PAD)),
                 stacked = false,
+                aimed = aimed,
             )
         }
 
@@ -772,6 +788,7 @@ private fun DeckSectionPane(
                     section, "$count · $rangeText", outOfRange, refused,
                     Modifier.align(Alignment.TopStart).width((gridLeft - 16.dp).coerceAtLeast(0.dp)),
                     stacked = true,
+                    aimed = aimed,
                 )
             }
             Box(
@@ -851,10 +868,10 @@ private fun DeckSectionPane(
                     val named = glow * zen.labelsAmount
                     if (named > 0.01f && roleKeys.any { it != null } && rolePieces.piece.size == ids.size) {
                         val frame = FRAME.toPx()
-                        val labels = Labels(measurer, tabStyle, NAME_TAB.toPx()) { id -> roleKeying.keyById(id)?.label.orEmpty() }
+                        val labels = Labels(measurer, tabStyle, nameTab.toPx()) { id -> roleKeying.keyById(id)?.label.orEmpty() }
                         val gapNow = zenGapPx * zen.pieceAmount
                         val between = (GRID_PAD * 2 + RULE).toPx()
-                        val least = NAME_TAB.toPx() * 0.55f
+                        val least = nameTab.toPx() * 0.55f
                         roleKeys.filterNotNull().distinct().forEach { id ->
                             val key = roleKeying.keyById(id) ?: return@forEach
                             drawGroupLabel(
@@ -886,7 +903,7 @@ private fun DeckSectionPane(
                             frame = FRAME.toPx(),
                             colorOf = { id -> keying.keyById(id)?.let { GroupMarkers.paint(it.paint, c.ink) } ?: c.ink },
                             alphaOf = { id -> crack * fade * if (state.isolatedKey != null && state.isolatedKey != id) 0.18f else 1f },
-                            labels = Labels(measurer, tabStyle, NAME_TAB.toPx()) { id -> keying.keyById(id)?.label.orEmpty() },
+                            labels = Labels(measurer, tabStyle, nameTab.toPx()) { id -> keying.keyById(id)?.label.orEmpty() },
                         )
                     }
                 }
@@ -925,7 +942,7 @@ private fun DeckSectionPane(
                             Box(Modifier.fillMaxSize().background(c.ink06)) {
                                 Hatch(Modifier.fillMaxSize(), color = c.ink25)
                                 Box(Modifier.align(Alignment.Center).background(c.paper).padding(2.dp)) {
-                                    Mono(id.value.toString(), color = c.ink, size = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp))
+                                    Mono(id.value.toString(), color = c.ink, size = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp))
                                 }
                             }
                         } else {
