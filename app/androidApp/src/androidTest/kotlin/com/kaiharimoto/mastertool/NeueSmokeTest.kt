@@ -149,9 +149,12 @@ class NeueSmokeTest {
             }
 
             // Several fingers at once, each a finger's: down one by one, up in reverse, [holdMs] apart.
-            fun fingers(points: List<Pair<Float, Float>>, holdMs: Long = 60, settle: Boolean = true) {
+            // [startAt]: when the gesture began, for a gesture timed against another one — a
+            // double-tap's second tap is stamped from the first's clock, so a busy emulator that
+            // is slow to take the injection cannot stretch the gap past the double-tap window.
+            fun fingers(points: List<Pair<Float, Float>>, holdMs: Long = 60, settle: Boolean = true, startAt: Long? = null) {
                 val density = app.resources.displayMetrics.density
-                val t = SystemClock.uptimeMillis()
+                val t = startAt ?: SystemClock.uptimeMillis()
                 val props = points.indices.map { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
                 val coords = points.map { (x, y) -> MotionEvent.PointerCoords().apply { this.x = x * density; this.y = y * density; pressure = 1f; size = 1f } }
                 fun send(action: Int, at: Long, count: Int) {
@@ -238,9 +241,9 @@ class NeueSmokeTest {
                 return mainCount()
             }
             val before = mainCount()
-            fingers(listOf(760f to 420f), settle = false)
-            Thread.sleep(120)
-            fingers(listOf(772f to 424f))
+            val tapped = SystemClock.uptimeMillis()
+            fingers(listOf(760f to 420f), settle = false, startAt = tapped)
+            fingers(listOf(772f to 424f), startAt = tapped + 180)
             assertEquals("a drifting double-tap did not remove a copy", before - 1, countBecomes(before - 1))
             // Clear of the double-tap's window, so the next fingers start a gesture of their own.
             Thread.sleep(500)
@@ -338,9 +341,12 @@ class NeueSmokeTest {
                 val d = a.resources.displayMetrics.density
                 (a.window.decorView.width / d) to (a.window.decorView.height / d)
             }
-            fun fingers(points: List<Pair<Float, Float>>, holdMs: Long = 60, settle: Boolean = true) {
+            // [startAt]: when the gesture began, for a gesture timed against another one — a
+            // double-tap's second tap is stamped from the first's clock, so a busy emulator that
+            // is slow to take the injection cannot stretch the gap past the double-tap window.
+            fun fingers(points: List<Pair<Float, Float>>, holdMs: Long = 60, settle: Boolean = true, startAt: Long? = null) {
                 val density = app.resources.displayMetrics.density
-                val t = SystemClock.uptimeMillis()
+                val t = startAt ?: SystemClock.uptimeMillis()
                 val props = points.indices.map { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
                 val coords = points.map { (x, y) -> MotionEvent.PointerCoords().apply { this.x = x * density; this.y = y * density; pressure = 1f; size = 1f } }
                 fun send(action: Int, at: Long, count: Int) {
@@ -383,9 +389,9 @@ class NeueSmokeTest {
             val deckY = top + 48f + 40f + 6f + card / 0.686f * 1.5f
             val deckX = w / 2f
             val before = mainCount()
-            fingers(listOf(deckX to deckY), settle = false)
-            Thread.sleep(120)
-            fingers(listOf(deckX to deckY))
+            val tapped = SystemClock.uptimeMillis()
+            fingers(listOf(deckX to deckY), settle = false, startAt = tapped)
+            fingers(listOf(deckX to deckY), startAt = tapped + 180)
             assertEquals("a double-tap on a phone's deck did not remove a copy", before - 1, countBecomes(before - 1))
             Thread.sleep(500)
             fingers(listOf(deckX - 60f to deckY, deckX + 60f to deckY))
