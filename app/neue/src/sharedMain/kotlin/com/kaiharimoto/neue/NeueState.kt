@@ -254,9 +254,17 @@ class NeueState(
                 return@launch
             }
             trace("open ${v.card.id.value}@${v.index}")
-            if (menu == null && studio == null) viewing = v
+            if (menu == null && studio == null) {
+                viewing = v
+                softOpened = v
+                softOpenedAt = System.nanoTime() / 1_000_000
+            }
         }
     }
+
+    /** The viewer this timer opened, and when: a double-tap's second tap arriving late closes it (1.0.32). Plain. */
+    private var softOpened: Viewing? = null
+    private var softOpenedAt = 0L
 
     /**
      * The last few things the phone's tap-to-open did, for the emulator's walk to report
@@ -275,11 +283,25 @@ class NeueState(
     /** When more than one finger was last down in the window, in ms of `System.nanoTime`. Plain. */
     var fingersAt = 0L
 
-    /** A double-tap (or any other gesture) arrived: the tap before it opens nothing. */
-    fun cancelViewSoon() {
+    /**
+     * A double-tap (or any other gesture) arrived: the tap before it opens nothing.
+     * [secondTap] is a double-tap's add or remove: on a phone busy enough to hand it
+     * over after the timer has already opened the viewer (the emulator's walk, 1.0.32,
+     * a second tap 180 ms after the first by its own clock but 550 ms later by the
+     * main thread's), it closes the viewer the timer just opened.
+     */
+    fun cancelViewSoon(secondTap: Boolean = false) {
         if (viewJob?.isActive == true) trace("cancel")
         viewJob?.cancel()
         viewJob = null
+        val opened = softOpened
+        softOpened = null
+        if (secondTap && opened != null && viewing === opened &&
+            System.nanoTime() / 1_000_000 - softOpenedAt < com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS
+        ) {
+            trace("close, a second tap")
+            viewing = null
+        }
     }
 
     /** The index rail stays out: pinned, or on a touch screen, where nothing can reach for it. */

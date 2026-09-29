@@ -59,7 +59,7 @@ object CardActions {
     /** A mouse gesture on a pool card, as `DeskMouse` resolved it. */
     fun onPool(action: MouseAction, at: Offset, card: Card, row: Int, state: DeckBuilderState, neue: NeueState) {
         // On a phone a finger's tap opens the card large, once no second tap follows (v1.3.5).
-        neue.cancelViewSoon()
+        neue.cancelViewSoon(secondTap = neue.fingerActing && action != MouseAction.SELECT && action != MouseAction.VIEW)
         // The pool's Side switch trades its two adds.
         when (DeskMouse.forPool(action, neue.prefs.poolToSide)) {
             MouseAction.SELECT -> {
@@ -80,7 +80,7 @@ object CardActions {
     /** A mouse gesture on a deck card, as `DeskMouse` resolved it. */
     fun onDeck(action: MouseAction, at: Offset, card: Card, section: DeckSection, index: Int, state: DeckBuilderState, neue: NeueState) {
         neue.noteAction("deck $action ${card.id.value}@$index finger=${neue.fingerActing}")
-        neue.cancelViewSoon()
+        neue.cancelViewSoon(secondTap = neue.fingerActing && action != MouseAction.SELECT && action != MouseAction.VIEW)
         when (action) {
             MouseAction.SELECT -> {
                 // While a group is being drawn up, a click on the deck is a vote, not a selection —
