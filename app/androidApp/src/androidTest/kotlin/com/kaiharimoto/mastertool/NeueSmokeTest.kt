@@ -394,9 +394,17 @@ class NeueSmokeTest {
             fingers(listOf(deckX to deckY), startAt = tapped + 180)
             assertEquals("a double-tap on a phone's deck did not remove a copy", before - 1, countBecomes(before - 1))
             Thread.sleep(500)
+            assertTrue(
+                "the double-tap opened the viewer before the undo: " + on { it.neue!!.neue.viewTrace.joinToString(" | ") },
+                on { it.neue!!.neue.viewing == null },
+            )
+            Thread.sleep(500)
             fingers(listOf(deckX - 60f to deckY, deckX + 60f to deckY))
             assertEquals("a two-finger tap did not undo", before, countBecomes(before))
-            assertTrue("the double-tap opened the viewer", on { it.neue!!.neue.viewing == null })
+            assertTrue(
+                "the double-tap opened the viewer: " + on { it.neue!!.neue.viewTrace.joinToString(" | ") },
+                on { it.neue!!.neue.viewing == null },
+            )
 
             // One tap opens the card large; Back closes it.
             Thread.sleep(500)

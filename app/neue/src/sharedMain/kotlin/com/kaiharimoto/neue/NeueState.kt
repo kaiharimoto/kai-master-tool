@@ -234,14 +234,33 @@ class NeueState(
      */
     fun viewSoon(v: Viewing) {
         viewJob?.cancel()
+        trace("soon ${v.card.id.value}@${v.index}")
         viewJob = scope.launch {
             delay(com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS)
             // A two- or three-finger tap is undo or redo, and each finger is also a card's tap:
             // none of them opens the card.
             val sinceFingers = System.nanoTime() / 1_000_000 - fingersAt
-            if (sinceFingers < com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS * 2) return@launch
+            if (sinceFingers < com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS * 2) {
+                trace("skip, fingers ${sinceFingers}ms ago")
+                return@launch
+            }
+            trace("open ${v.card.id.value}@${v.index}")
             if (menu == null && studio == null) viewing = v
         }
+    }
+
+    /**
+     * The last few things the phone's tap-to-open did, for the emulator's walk to report
+     * when it finds the viewer where it should not be. Plain, bounded.
+     */
+    var viewTrace: List<String> = emptyList()
+        private set
+
+    /** A card's gesture, as the actions saw it, into [viewTrace]. */
+    fun noteAction(line: String) = trace(line)
+
+    private fun trace(line: String) {
+        viewTrace = (viewTrace + "${System.nanoTime() / 1_000_000 % 100_000} $line").takeLast(12)
     }
 
     /** When more than one finger was last down in the window, in ms of `System.nanoTime`. Plain. */
@@ -249,6 +268,7 @@ class NeueState(
 
     /** A double-tap (or any other gesture) arrived: the tap before it opens nothing. */
     fun cancelViewSoon() {
+        if (viewJob?.isActive == true) trace("cancel")
         viewJob?.cancel()
         viewJob = null
     }

@@ -72,6 +72,7 @@ object CardActions {
 
     /** A mouse gesture on a deck card, as `DeskMouse` resolved it. */
     fun onDeck(action: MouseAction, at: Offset, card: Card, section: DeckSection, index: Int, state: DeckBuilderState, neue: NeueState) {
+        neue.noteAction("deck $action ${card.id.value}@$index finger=${neue.fingerActing}")
         neue.cancelViewSoon()
         when (action) {
             MouseAction.SELECT -> {
