@@ -95,6 +95,12 @@ class NeueSmokeTest {
                 File(app.getExternalFilesDir(null), name).outputStream().use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
             }
             fun back() {
+                // Every Back here has something to close: wait for the app to have seen it open
+                // (its Back handler follows what is open a frame later), up to three seconds.
+                repeat(30) {
+                    if (on { it.onBackPressedDispatcher.hasEnabledCallbacks() }) return@repeat
+                    Thread.sleep(100)
+                }
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                 Thread.sleep(400)
             }
