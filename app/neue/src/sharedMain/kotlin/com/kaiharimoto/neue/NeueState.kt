@@ -243,6 +243,16 @@ class NeueState(
      */
     fun viewSoon(v: Viewing) {
         viewJob?.cancel()
+        // A finger of a two- or three-finger tap schedules this right after the tap is
+        // classified: skipped now, by the clock of the tap itself (1.0.32). Checked only
+        // when the timer fired, a busy phone's late timer let the second finger's tap
+        // outlive the mark and open the card after the undo.
+        val sinceFingersNow = System.nanoTime() / 1_000_000 - fingersAt
+        if (sinceFingersNow < com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS) {
+            trace("skip ${v.card.id.value}@${v.index}, fingers ${sinceFingersNow}ms ago")
+            viewJob = null
+            return
+        }
         trace("soon ${v.card.id.value}@${v.index}")
         viewJob = scope.launch {
             delay(com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS)
