@@ -197,6 +197,55 @@ class NeueState(
      */
     val touchFirst: Boolean get() = com.kaiharimoto.neue.platform.Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID
 
+    /**
+     * What the app is running on (the phone, v1.3.5): read off the window in physical dp
+     * by `NeueWindowContent`. The desk is always [FormFactor.DESK].
+     */
+    var form by mutableStateOf(com.kaiharimoto.mastertool.core.layout.FormFactor.DESK)
+
+    /** The studio's way to draw a phone on the desk (`--form=phone`); null reads the window. */
+    var formOverride: com.kaiharimoto.mastertool.core.layout.FormFactor? = null
+
+    /** Which way round the window is: on a phone, which builder is drawn. */
+    var posture by mutableStateOf(com.kaiharimoto.mastertool.core.layout.Posture.WIDE)
+
+    /** A phone: the tab bar, the slim bar and its overflow, the docked pool, no inspector. */
+    val phone: Boolean get() = form == com.kaiharimoto.mastertool.core.layout.FormFactor.PHONE
+
+    /** The deck's row width on a phone (`DeckFitter.phoneColumns`), set by the deck as it fits; null elsewhere. */
+    var phoneColumns by mutableStateOf<Int?>(null)
+
+    /** Which way the screen may turn, the stored choice or the device's default. */
+    val orientation: com.kaiharimoto.mastertool.core.layout.ScreenOrientation
+        get() = com.kaiharimoto.mastertool.core.layout.ScreenOrientation.resolve(prefs.orientation, form)
+
+    /** The one-tap toggle: Portrait → Landscape → Auto (kai, v1.3.5). */
+    fun rotate() {
+        val next = orientation.next()
+        update { it.copy(orientation = next.key) }
+        note = Note("Screen: ${next.label}")
+    }
+
+    private var viewJob: Job? = null
+
+    /**
+     * On a phone a tap opens the card large (v1.3.5) — once the double-tap window has
+     * passed, so a double-tap adds or removes and never opens the viewer under itself.
+     */
+    fun viewSoon(v: Viewing) {
+        viewJob?.cancel()
+        viewJob = scope.launch {
+            delay(com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS)
+            if (menu == null && studio == null) viewing = v
+        }
+    }
+
+    /** A double-tap (or any other gesture) arrived: the tap before it opens nothing. */
+    fun cancelViewSoon() {
+        viewJob?.cancel()
+        viewJob = null
+    }
+
     /** The index rail stays out: pinned, or on a touch screen, where nothing can reach for it. */
     val railPinned: Boolean get() = prefs.railPinned || touchFirst
 

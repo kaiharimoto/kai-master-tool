@@ -177,9 +177,24 @@ data class NeuePreferences(
      * reads a size up without a stored seed; a field with a default, no migration.
      */
     val textScale: Float? = null,
+    /**
+     * Which way the screen may turn (the phone, v1.3.5): a `ScreenOrientation` key —
+     * `portrait`, `landscape` or `auto`. Null is the device's own default, upright on
+     * a phone and lying down on a tablet. A field with a default, no migration.
+     */
+    val orientation: String? = null,
+    /**
+     * Where the phone's pool dock rests (v1.3.5): a `PoolStop` name. Its own field
+     * rather than a pane width, because the tall builder keeps its own settings
+     * (`docs/classic/DEVICES.md` §6).
+     */
+    val phoneDockStop: String = DEFAULT_DOCK_STOP,
 ) {
-    /** The text size in force: the chosen one, else a size up on a tablet held at arm's length. */
-    fun textScaleOn(touch: Boolean): Float = textScale ?: if (touch) TABLET_TEXT_SCALE else 1f
+    /**
+     * The text size in force: the chosen one, else a size up on a tablet held at arm's
+     * length — and not on a phone, held close, where every letter is a letter off a card.
+     */
+    fun textScaleOn(touch: Boolean, phone: Boolean = false): Float = textScale ?: if (touch && !phone) TABLET_TEXT_SCALE else 1f
 
     fun sanitised(): NeuePreferences = copy(
         scale = if (scale.isFinite()) scale.coerceIn(SCALES.first(), SCALES.last()) else 1f,
@@ -201,6 +216,8 @@ data class NeuePreferences(
             .mapValues { (_, cards) -> cards.distinct().takeLast(COVERS) }
             .filterValues { it.isNotEmpty() },
         arts = arts.filter { (card, art) -> card != art },
+        orientation = orientation?.takeIf { it in ORIENTATIONS },
+        phoneDockStop = phoneDockStop.takeIf { it in DOCK_STOPS } ?: DEFAULT_DOCK_STOP,
         textScale = textScale?.takeIf { it.isFinite() }?.let { t -> TEXT_SCALES.minBy { kotlin.math.abs(it - t) } },
         window = window?.takeIf {
             it.x.isFinite() && it.y.isFinite() && it.width.isFinite() && it.height.isFinite() &&
@@ -245,6 +262,9 @@ data class NeuePreferences(
         /** Text size's steps (rec 26): 100, 115 and 130%. */
         val TEXT_SCALES = listOf(1f, 1.15f, 1.3f)
         const val TABLET_TEXT_SCALE = 1.15f
+        val ORIENTATIONS = setOf("portrait", "landscape", "auto")
+        val DOCK_STOPS = setOf("PEEK", "HALF", "FULL")
+        const val DEFAULT_DOCK_STOP = "HALF"
 
         val DEFAULT = NeuePreferences()
     }

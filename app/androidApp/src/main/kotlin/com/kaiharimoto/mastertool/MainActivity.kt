@@ -197,6 +197,10 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         }
         val pendingCrash = crashFile.takeIf { it.exists() }?.readText()
 
+        // Upright on a phone, lying down on a tablet, before the first frame: the stored
+        // choice replaces it once the settings are read (v1.3.5).
+        applyOrientation(null)
+
         Platform.attach(this) { types -> pick(types) }
 
         val app = application as MasterToolApplication
@@ -249,6 +253,10 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                 }
                 LaunchedEffect(h) {
                     androidx.compose.runtime.snapshotFlow { h.canGoBack() }.collect { backCallback.isEnabled = it }
+                }
+                // The Screen setting (v1.3.5): Portrait, Landscape or Auto, one tap from the bar's menu.
+                LaunchedEffect(h.neue.ready, h.neue.prefs.orientation) {
+                    if (h.neue.ready) applyOrientation(h.neue.prefs.orientation)
                 }
                 // Immersive mode is the system bars hidden, swiped back in from an edge.
                 LaunchedEffect(h.neue.immersive) { showImmersive(h.neue.immersive) }
@@ -338,6 +346,23 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         }
         if (h != null && h.onKey(KeyEvent(event))) return true
         return super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * Which way the screen may turn (v1.3.5): the stored `ScreenOrientation`, else the
+     * device's default — a phone (smallest width under 600dp) upright, a tablet lying
+     * down. Each respects the rotation lock: the user-flavoured orientations do.
+     */
+    private fun applyOrientation(stored: String?) {
+        val form = com.kaiharimoto.mastertool.core.layout.FormFactor.ofSmallestWidth(
+            resources.configuration.smallestScreenWidthDp.toFloat(),
+            touch = true,
+        )
+        requestedOrientation = when (com.kaiharimoto.mastertool.core.layout.ScreenOrientation.resolve(stored, form)) {
+            com.kaiharimoto.mastertool.core.layout.ScreenOrientation.PORTRAIT -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+            com.kaiharimoto.mastertool.core.layout.ScreenOrientation.LANDSCAPE -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
+            com.kaiharimoto.mastertool.core.layout.ScreenOrientation.AUTO -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+        }
     }
 
     private fun showImmersive(on: Boolean) {

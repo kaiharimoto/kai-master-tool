@@ -90,7 +90,7 @@ val GROUPS_PANEL: Dp = 288.dp
  */
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
+fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier, fillWidth: Boolean = false) {
     val c = Mu.colors
     // Centred down the column (kai, 1.0.16): the column is taller than its groups, and
     // their top edge under the window's bar is where a reach for a row brought the bar
@@ -104,10 +104,11 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
     }
     BoxWithConstraints(
         modifier
-            .width(GROUPS_PANEL)
+            // On a phone (v1.3.5) the panel is the dock's second tab, the width of the window.
+            .let { if (fillWidth) it.fillMaxWidth() else it.width(GROUPS_PANEL) }
             .fillMaxHeight()
             .onGloballyPositioned { neue.groupsPanel = it.boundsInWindow() }
-            .drawBehind { drawLine(c.ink, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx()) }
+            .drawBehind { if (!fillWidth) drawLine(c.ink, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx()) }
             // A group's name being typed stays above the soft keyboard (touch swarm, rec 10).
             .imePadding(),
     ) {

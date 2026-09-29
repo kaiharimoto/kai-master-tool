@@ -258,7 +258,7 @@ fun HelpDialog(onDismiss: () -> Unit) {
     } else {
         "Every shortcut in Neue Master Tool, and what the mouse does to a card. The palette, ${DeskShortcuts.chordFor(DeskAction.PALETTE)?.let(DeskShortcuts::kbd)}, reaches every shortcut by name."
     }
-    MuDialog(title, onDismiss, width = 896.dp, description = description) {
+    MuDialog(title, onDismiss, width = 896.dp, description = description, scrolls = false) {
         val scroll = androidx.compose.foundation.rememberScrollState()
         Box(Modifier.heightIn(max = 520.dp)) {
         Column(Modifier.padding(end = 12.dp).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(24.dp)) {

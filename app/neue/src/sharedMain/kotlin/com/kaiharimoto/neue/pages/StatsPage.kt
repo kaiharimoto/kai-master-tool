@@ -53,8 +53,10 @@ fun StatsPage(state: DeckBuilderState) {
         }
         val scroll = rememberScrollState()
         Box(Modifier.fillMaxSize()) {
-            Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(32.dp), verticalArrangement = Arrangement.spacedBy(40.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+            Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(if (phone) 16.dp else 32.dp), verticalArrangement = Arrangement.spacedBy(if (phone) 32.dp else 40.dp)) {
+                // On a phone the two columns stand one over the other (v1.3.5).
+                SideBySide {
                     Column(Modifier.weight(1f)) {
                         SectionTitle(1, "Kind")
                         Table(
@@ -69,7 +71,7 @@ fun StatsPage(state: DeckBuilderState) {
                         LevelBars(stats.byLevel)
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+                SideBySide {
                     Column(Modifier.weight(1f)) {
                         SectionTitle(3, "Attribute")
                         Table(
@@ -107,7 +109,7 @@ private fun Table(rows: List<Pair<String, Int>>, total: Int) {
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             RowText(label, Modifier.weight(1f))
-            Box(Modifier.width(160.dp).height(3.dp).background(c.ink12)) {
+            Box(Modifier.width(if (com.kaiharimoto.neue.kit.LocalPhone.current) 88.dp else 160.dp).height(3.dp).background(c.ink12)) {
                 Box(Modifier.fillMaxHeight().fillMaxWidth((n.toFloat() / total.coerceAtLeast(1)).coerceIn(0f, 1f)).background(c.ink))
             }
             Mono(n.toString(), Modifier.width(40.dp), color = c.ink, size = 12.sp, align = TextAlign.End)
@@ -145,5 +147,25 @@ private fun LevelBars(byLevel: Map<Int, Int>) {
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             levels.forEach { Mono(it.toString(), Modifier.weight(1f), size = 11.sp, align = TextAlign.Center) }
         }
+    }
+}
+
+/**
+ * Two sections side by side on the desk, one over the other on a phone (v1.3.5). The
+ * sections are laid out with `weight(1f)`, which a Column reads as sharing its height:
+ * so the phone's is a Column of unbounded children, each given the whole width.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun SideBySide(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    if (com.kaiharimoto.neue.kit.LocalPhone.current) {
+        androidx.compose.foundation.layout.FlowRow(
+            Modifier.fillMaxWidth(),
+            maxItemsInEachRow = 1,
+            verticalArrangement = Arrangement.spacedBy(32.dp),
+            content = content,
+        )
+    } else {
+        Row(horizontalArrangement = Arrangement.spacedBy(40.dp), content = content)
     }
 }

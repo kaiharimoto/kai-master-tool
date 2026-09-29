@@ -88,6 +88,17 @@ object DeskTouch {
     /** How long a pressed control keeps its pressed look after a quick tap, so the tap is seen (rec 14). */
     const val PRESS_ECHO_MS = 100L
 
+    /**
+     * On a phone a tap on a card opens it large (v1.3.5): there is no inspector to
+     * read it in. The viewer waits this long after the tap — past the double-tap
+     * window — so a double-tap still adds or removes and never opens the viewer
+     * under its own second tap.
+     */
+    const val PHONE_VIEW_MS = DOUBLE_TAP_MS + 20
+
+    /** What a tap says it does, where the tap is a phone's (v1.3.5). */
+    const val PHONE_TAP = "Open it large, with everything else"
+
     /** How long a card a finger just added or dropped is ringed where it landed (rec 15). */
     const val REVEAL_MS = 700L
 

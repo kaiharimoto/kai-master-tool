@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -89,7 +90,8 @@ fun OddsPage(state: DeckBuilderState) {
         val scroll = rememberScrollState()
         Box(Modifier.fillMaxSize()) {
             Column(
-                Modifier.fillMaxSize().verticalScroll(scroll).padding(32.dp).widthIn(max = 1280.dp),
+                // A phone keeps 16 at its edges (v1.3.5).
+                Modifier.fillMaxSize().verticalScroll(scroll).padding(if (com.kaiharimoto.neue.kit.LocalPhone.current) 16.dp else 32.dp).widthIn(max = 1280.dp),
                 verticalArrangement = Arrangement.spacedBy(40.dp),
             ) {
                 Goals(state)
@@ -133,13 +135,16 @@ private fun Goals(state: DeckBuilderState) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Numeral(i + 1)
-                Column(Modifier.weight(1f)) {
+                val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+                if (!phone) Numeral(i + 1)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     RowText(goal.name.ifBlank { "Untitled goal" })
                     Mono(describe(goal, state) + " · in ${goal.handSize} cards")
+                    // On a phone the bar goes under the words, the width of the row (v1.3.5).
+                    if (phone) Ratio(p, Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
-                Ratio(p, Modifier.width(240.dp))
-                MuText(percent(p), style = MuType.h2(LocalMuFonts.current), modifier = Modifier.width(96.dp), align = TextAlign.End)
+                if (!phone) Ratio(p, Modifier.width(240.dp))
+                MuText(percent(p), style = MuType.h2(LocalMuFonts.current), modifier = Modifier.width(if (phone) 72.dp else 96.dp), align = TextAlign.End)
             }
         }
     }
@@ -161,7 +166,14 @@ private fun Keys(state: DeckBuilderState) {
     val six = LensOdds.atLeastOne(keying, state.deck.main.size, 6)
     val c = Mu.colors
     Column {
-        SectionTitle(2, "At least one, by ${lens.displayName.lowercase()}") {
+        val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+        if (phone) {
+            // No room beside the title for five tabs on a phone: they go under it, and scroll.
+            SectionTitle(2, "At least one, by ${lens.displayName.lowercase()}")
+            Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
+                Segmented(lens, Lens.entries.filter { it != Lens.DECK }, { it.displayName }, state::useLens, small = true)
+            }
+        } else SectionTitle(2, "At least one, by ${lens.displayName.lowercase()}") {
             Segmented(lens, Lens.entries.filter { it != Lens.DECK }, { it.displayName }, state::useLens, small = true)
         }
         TableHead("Key", "Cards", "Going first · 5", "Going second · 6")
@@ -175,7 +187,7 @@ private fun Keys(state: DeckBuilderState) {
             ) {
                 Box(Modifier.size(10.dp).background(GroupMarkers.paint(key.paint, c.ink)).border(1.dp, c.ink))
                 RowText(key.label, Modifier.weight(1f))
-                Mono(keying.countOf(key.id).toString(), Modifier.width(64.dp), color = c.ink, align = TextAlign.End)
+                Mono(keying.countOf(key.id).toString(), Modifier.width(countWidth()), color = c.ink, align = TextAlign.End)
                 RateCell(five[key.id] ?: 0.0)
                 RateCell(six[key.id] ?: 0.0)
             }
@@ -203,7 +215,7 @@ private fun Cards(state: DeckBuilderState) {
             ) {
                 Box(Modifier.size(10.dp))
                 RowText(card?.name ?: stack.id.value.toString(), Modifier.weight(1f))
-                Mono("×${stack.count}", Modifier.width(64.dp), color = c.ink, align = TextAlign.End)
+                Mono("×${stack.count}", Modifier.width(countWidth()), color = c.ink, align = TextAlign.End)
                 RateCell(stats.openingHandOdds(stack.count, 5))
                 RateCell(stats.openingHandOdds(stack.count, 6))
             }
@@ -220,19 +232,28 @@ private fun TableHead(a: String, b: String, d: String, e: String) {
     ) {
         Box(Modifier.size(10.dp))
         Micro(a, Modifier.weight(1f), color = c.ink45)
-        Micro(b, Modifier.width(64.dp), color = c.ink45)
-        Micro(d, Modifier.width(260.dp), color = c.ink45)
-        Micro(e, Modifier.width(260.dp), color = c.ink45)
+        val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+        Micro(if (phone) "#" else b, Modifier.width(countWidth()), color = c.ink45)
+        Micro(if (phone) "First" else d, Modifier.width(rateWidth()), color = c.ink45)
+        Micro(if (phone) "Second" else e, Modifier.width(rateWidth()), color = c.ink45)
     }
 }
 
 @Composable
 private fun RateCell(p: Double) {
-    Row(Modifier.width(260.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+    Row(Modifier.width(rateWidth()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (phone) 6.dp else 12.dp)) {
         Ratio(p, Modifier.weight(1f))
-        Mono(percent(p), Modifier.width(56.dp), color = Mu.colors.ink, size = 12.sp, align = TextAlign.End)
+        Mono(percent(p), Modifier.width(if (phone) 44.dp else 56.dp), color = Mu.colors.ink, size = 12.sp, align = TextAlign.End)
     }
 }
+
+/** A table's rate column: 260 on the desk, and on a phone what two fit beside a name (v1.3.5). */
+@Composable
+private fun rateWidth() = if (com.kaiharimoto.neue.kit.LocalPhone.current) 84.dp else 260.dp
+
+@Composable
+private fun countWidth() = if (com.kaiharimoto.neue.kit.LocalPhone.current) 28.dp else 64.dp
 
 /** A ratio (§12): a 3px ink-12 track with an ink fill. */
 @Composable

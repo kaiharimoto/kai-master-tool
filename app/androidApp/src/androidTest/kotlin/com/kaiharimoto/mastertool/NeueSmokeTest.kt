@@ -74,6 +74,8 @@ class NeueSmokeTest {
     @Test(timeout = 600_000)
     fun aFingerFindsRoomAndWaysOut() {
         val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
+        // The tablet's walk taps where a tablet's controls are; a phone has its own walk.
+        org.junit.Assume.assumeFalse("a phone: see aPhoneHeldUpright", isPhone(app))
         val deck = Deck(
             main = List(40) { CardId(listOf(14558127, 23434538, 27204311, 81497285)[it % 4]) },
             extra = emptyList(),
@@ -277,7 +279,196 @@ class NeueSmokeTest {
           }
         }
     }
+
+    /**
+     * The phone (v1.3.5), walked by a finger: Neue stands upright with the tabs along
+     * the bottom and the pool docked under the deck; a double-tap on the deck removes a
+     * copy and two fingers undo it; a tap opens the card large and Back closes it; the
+     * overflow opens; the update dialog's Download is on the screen (it was off it, and a
+     * phone could not update); the screen turns when told to. Photographed at each step.
+     */
+    @Test(timeout = 600_000)
+    fun aPhoneHeldUpright() {
+        val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
+        org.junit.Assume.assumeTrue("a tablet: see aFingerFindsRoomAndWaysOut", isPhone(app))
+        val deck = Deck(
+            main = List(40) { CardId(listOf(14558127, 23434538, 27204311, 81497285)[it % 4]) },
+            extra = emptyList(),
+            side = emptyList(),
+        )
+        runBlocking { app.deckRepository.save("phone-deck", "Phone deck", deck, null) }
+        seedPool(app, listOf(14558127, 23434538, 27204311, 81497285))
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.uiAutomation.executeShellCommand("settings put global hide_error_dialogs 1").close()
+
+        ActivityScenario.launch(MainActivity::class.java).let { scenario ->
+          try {
+            fun <T> on(read: (MainActivity) -> T): T = readActivity(read) ?: error("no resumed activity to read")
+            fun until(tries: Int = 40, cond: () -> Boolean): Boolean {
+                repeat(tries) {
+                    if (cond()) return true
+                    Thread.sleep(100)
+                }
+                return cond()
+            }
+            fun shoot(name: String) {
+                Thread.sleep(1200)
+                val shot = instrumentation.uiAutomation.takeScreenshot() ?: return
+                File(app.getExternalFilesDir(null), "phone-$name").outputStream().use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            fun back() {
+                repeat(30) {
+                    if (on { it.neue!!.canGoBack() && it.onBackPressedDispatcher.hasEnabledCallbacks() }) return@repeat
+                    Thread.sleep(100)
+                }
+                instrumentation.uiAutomation.executeShellCommand("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS").close()
+                Thread.sleep(300)
+                instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+                Thread.sleep(400)
+            }
+            // Where Neue's window starts and ends, in dp: under the status bar, over the navigation bar.
+            fun insets(): Pair<Float, Float> = on { a ->
+                val d = a.resources.displayMetrics.density
+                val i = androidx.core.view.ViewCompat.getRootWindowInsets(a.window.decorView)
+                    ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                ((i?.top ?: 0) / d) to ((i?.bottom ?: 0) / d)
+            }
+            // The whole window, bars and all: Neue draws edge to edge and pads itself.
+            fun screenDp(): Pair<Float, Float> = on { a ->
+                val d = a.resources.displayMetrics.density
+                (a.window.decorView.width / d) to (a.window.decorView.height / d)
+            }
+            fun fingers(points: List<Pair<Float, Float>>, holdMs: Long = 60, settle: Boolean = true) {
+                val density = app.resources.displayMetrics.density
+                val t = SystemClock.uptimeMillis()
+                val props = points.indices.map { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
+                val coords = points.map { (x, y) -> MotionEvent.PointerCoords().apply { this.x = x * density; this.y = y * density; pressure = 1f; size = 1f } }
+                fun send(action: Int, at: Long, count: Int) {
+                    val e = MotionEvent.obtain(t, at, action, count, props.take(count).toTypedArray(), coords.take(count).toTypedArray(), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_TOUCHSCREEN, 0)
+                    instrumentation.uiAutomation.injectInputEvent(e, true)
+                    e.recycle()
+                }
+                val n = points.size
+                send(MotionEvent.ACTION_DOWN, t, 1)
+                for (i in 1 until n) send(MotionEvent.ACTION_POINTER_DOWN or (i shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), t + i * 10L, i + 1)
+                for (i in n - 1 downTo 1) send(MotionEvent.ACTION_POINTER_UP or (i shl MotionEvent.ACTION_POINTER_INDEX_SHIFT), t + holdMs + (n - i) * 10L, i + 1)
+                send(MotionEvent.ACTION_UP, t + holdMs + n * 10L, 1)
+                if (settle) Thread.sleep(400)
+            }
+            fun tap(x: Float, y: Float) = fingers(listOf(x to y))
+            fun mainCount() = on { it.neue!!.builder.deck.main.size }
+            fun countBecomes(expected: Int): Int {
+                until(30) { mainCount() == expected }
+                return mainCount()
+            }
+
+            repeat(120) {
+                if (on { it.neue?.builder?.deckName } == "Phone deck") return@repeat
+                Thread.sleep(250)
+            }
+            // Upright, and drawn as a phone.
+            assertEquals(
+                "a phone did not stand upright",
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT,
+                on { it.requestedOrientation },
+            )
+            assertTrue("Neue did not see a phone", until { on { it.neue!!.neue.phone && it.neue!!.neue.posture.isTall } })
+            Thread.sleep(4000)
+            shoot("01-builder.png")
+
+            // The deck's second row, the middle card: under the bar (48), the lens row (40) and a row of cards.
+            val (top, bottom) = insets()
+            val (w, h) = screenDp()
+            val card = (w - 16f) / 5f
+            val deckY = top + 48f + 40f + 6f + card / 0.686f * 1.5f
+            val deckX = w / 2f
+            val before = mainCount()
+            fingers(listOf(deckX to deckY), settle = false)
+            Thread.sleep(120)
+            fingers(listOf(deckX to deckY))
+            assertEquals("a double-tap on a phone's deck did not remove a copy", before - 1, countBecomes(before - 1))
+            Thread.sleep(500)
+            fingers(listOf(deckX - 60f to deckY, deckX + 60f to deckY))
+            assertEquals("a two-finger tap did not undo", before, countBecomes(before))
+            assertTrue("the double-tap opened the viewer", on { it.neue!!.neue.viewing == null })
+
+            // One tap opens the card large; Back closes it.
+            Thread.sleep(500)
+            tap(deckX, deckY)
+            assertTrue("a tap on a phone did not open the card", until { on { it.neue!!.neue.viewing != null } })
+            shoot("02-viewer.png")
+            back()
+            assertTrue("Back did not close the viewer", until { on { it.neue!!.neue.viewing == null } })
+            assertFalse("Back left the app from the viewer", on { it.isFinishing })
+
+            // The overflow, top right.
+            tap(w - 24f, top + 24f)
+            assertTrue("the overflow did not open", until { on { it.neue!!.neue.menu != null } })
+            shoot("03-menu.png")
+            back()
+            assertTrue("Back did not close the overflow", until { on { it.neue!!.neue.menu == null } })
+
+            // The update dialog: its Download must be on the screen, and Later must close it.
+            on { it.neue!!.updates.offer(it.neue!!.updates.sample()) }
+            Thread.sleep(1500)
+            shoot("04-update.png")
+            val density = app.resources.displayMetrics.density
+            val screen = android.graphics.Rect(0, 0, (w * density).toInt(), (h * density).toInt())
+            fun find(label: String): android.graphics.Rect? {
+                val root = instrumentation.uiAutomation.rootInActiveWindow ?: return null
+                val queue = ArrayDeque(listOf(root))
+                while (queue.isNotEmpty()) {
+                    val node = queue.removeFirst()
+                    val text = (node.text ?: node.contentDescription)?.toString().orEmpty()
+                    if (text.equals(label, ignoreCase = true)) return android.graphics.Rect().also(node::getBoundsInScreen)
+                    for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
+                }
+                return null
+            }
+            var download: android.graphics.Rect? = null
+            until(50) { download = find("Download"); download != null }
+            assertNotNull("the update dialog has no Download a finger can find", download)
+            assertTrue("the update's Download is off the screen: $download in $screen", screen.contains(download!!))
+            var later: android.graphics.Rect? = null
+            until(20) { later = find("Later"); later != null }
+            assertNotNull("the update dialog has no Later", later)
+            tap(later!!.exactCenterX() / density, later!!.exactCenterY() / density)
+            assertTrue("Later did not close the update dialog", until { !on { it.neue!!.updates.dialogOpen } })
+
+            // The tabs along the bottom: Decks, first of five.
+            tap(w / 10f, h - bottom - 28f)
+            assertTrue("the Decks tab did not open Decks", until { on { it.neue!!.neue.page } == Page.DECKS })
+            shoot("05-decks.png")
+            on { it.neue!!.neue.go(Page.SETTINGS) }
+            shoot("06-settings.png")
+            on { it.neue!!.neue.go(Page.ODDS) }
+            shoot("07-odds.png")
+            on { it.neue!!.neue.go(Page.BUILDER) }
+
+            // Turned: Landscape asks the screen to lie down, and Neue lays itself out for it.
+            on { it.neue!!.neue.update { p -> p.copy(orientation = "landscape") } }
+            assertTrue(
+                "Landscape did not turn the screen",
+                until(60) { on { it.requestedOrientation } == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE },
+            )
+            until(60) { on { !it.neue!!.neue.posture.isTall } }
+            shoot("08-landscape.png")
+            on { it.neue!!.neue.update { p -> p.copy(orientation = null) } }
+            assertTrue(
+                "the phone did not stand up again",
+                until(60) { on { it.requestedOrientation } == android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT },
+            )
+
+            assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
+          } finally {
+            readActivity { it.finish() }
+          }
+        }
+    }
 }
+
+/** A phone, as Android draws the line: a smallest width under 600dp. */
+private fun isPhone(app: MasterToolApplication) = app.resources.configuration.smallestScreenWidthDp < 600
 
 /**
  * Reads the resumed activity on its own thread. `ActivityScenario.onActivity` first

@@ -1,4 +1,4 @@
-name: Neue on an Android tablet
+name: Neue on an Android tablet and phone
 
 # The APK is Neue Master Tool from v1.3.0, replacing the tablet app in place.
 # This boots a tablet emulator and runs androidApp's instrumented smoke test
@@ -6,6 +6,9 @@ name: Neue on an Android tablet
 # database, must be what Neue opens onto — and nothing may crash on the way. The
 # screen is photographed and kept as the run's artifact, because this is the
 # only picture of Neue on Android anything in CI can take.
+#
+# From v1.3.5 it runs twice, on a tablet and on a phone (pixel_7): the phone runs
+# its own walk (NeueSmokeTest.aPhoneHeldUpright), the tablet the tablet's.
 #
 # Before a v1.3.x release, this must be green on the commit being released.
 
@@ -25,9 +28,13 @@ concurrency:
 
 jobs:
   smoke:
-    name: Tablet emulator smoke test
+    name: Emulator smoke test (${{ matrix.profile }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [pixel_tablet, pixel_7]
     steps:
       - uses: actions/checkout@v4
 
@@ -53,13 +60,13 @@ jobs:
         working-directory: app
         run: ./gradlew :androidApp:assembleDebug :androidApp:assembleDebugAndroidTest -Pmastertool.android=true --stacktrace
 
-      - name: Run on a tablet
+      - name: Run on the emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
-          profile: pixel_tablet
+          profile: ${{ matrix.profile }}
           disable-animations: true
           working-directory: app
           # Left installed, or the run uninstalls the app and its screenshot with it.
@@ -74,7 +81,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: neue-android-smoke
+          name: neue-android-smoke-${{ matrix.profile }}
           path: |
             app/smoke/*.png
             app/androidApp/build/reports/androidTests/

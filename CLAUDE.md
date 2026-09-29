@@ -7,7 +7,8 @@ This file guides Claude Code (claude.ai/code) when working with this repository.
 **What this is:** kai's master tool — a Yu-Gi-Oh! deck building and tournament
 preparation tool. **The app is Neue Master Tool** (`app/neue/`), drawn in Master
 UI, shipping on Windows, macOS and Linux and — from v1.3.0 — as the Android APK
-on landscape tablets, where it replaced the old tablet app in place. A proper
+on landscape tablets, where it replaced the old tablet app in place, and from
+v1.3.5 on phones, upright or lying down. A proper
 Mac app is the port's next phase. **`docs/NEUE.md` is the
 authority on it; read it before changing anything in `app/neue/`.**
 
@@ -321,6 +322,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`CarryOffset`), haptics for hand events only (`DeskFeel`), two- and
   three-finger undo and redo (`MultiTap`), `muClickable` (a resting thumb fires
   nothing) and `TouchMetrics` for chrome outside the deck.
+- **On a phone** (v1.3.5, `NEUE.md` §1c): `FormFactor` (smallest width under
+  600 dp and touch) is `NeueState.form`/`LocalPhone`; the screen turns by
+  `NeuePreferences.orientation` (Portrait/Landscape/Auto, `MainActivity.applyOrientation`,
+  manifest `fullUser`); `PhoneBar` with its ⋯ overflow (`phoneMenu`) and the Update
+  chip that never overflows; `TabBar` along the bottom; `TallBuilder` — deck on top
+  (`DeckLabels.stack`, `DeckFitter.phoneColumns`), pool in a `PoolDock` with Cards and
+  Groups tabs; a tap opens the viewer (`viewSoon`). **`MuDialog` fits any window** and
+  keeps its footer on screen — the phone could not reach Install before. New chrome
+  must work at 360 dp wide: `tools/shoot.sh --form=phone --width=1080 --height=2400 --density=2.625`.
 - **The emulator walk** (`NeueSmokeTest`) waits by the clock and polls for state,
   never `waitForIdleSync` or `ActivityScenario.onActivity`: a caret blinks for
   ever, and on the CI emulator the main thread never falls idle. It seeds its
@@ -357,8 +367,8 @@ The plan, phased, one shipped release per phase:
    updater that installs over itself (`MacInstall`), and a signing/notarization
    switch that turns on when the five Apple secrets are added. `NEUE.md` §5a.
 
-Next: a phone layout for the APK (portrait, `docs/classic/DEVICES.md` §6 is the
-classic app's answer to the same question), and play mode rebuilt inside Neue.
+A phone layout for the APK shipped in v1.3.5 (`NEUE.md` §1c). Next: play mode
+rebuilt inside Neue.
 
 ## Classic — the tablet app and its play stage
 

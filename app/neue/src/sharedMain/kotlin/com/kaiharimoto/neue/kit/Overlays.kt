@@ -15,6 +15,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -176,7 +182,8 @@ fun MenuLayer(spec: MenuSpec?, onDismiss: () -> Unit) {
     if (spec == null) return
     // In the window's own layer rather than a Popup, so the family cursor is drawn over it.
     // Esc reaches it through the window's key handler (NeueState.dismissTop).
-    AnchoredBox(spec.at, onDismiss) { MenuColumn(spec.entries, onDismiss) }
+    // Taller than the window (a phone lying down, v1.3.5), the menu scrolls inside it.
+    AnchoredBox(spec.at, onDismiss) { Box(Modifier.verticalScroll(rememberScrollState())) { MenuColumn(spec.entries, onDismiss) } }
 }
 
 @Composable
@@ -211,7 +218,16 @@ private fun Modifier.blockClicks() = pointerInput(Unit) {
 /**
  * Dialog (§6): paper at 85% behind, never blurred; a 1px ink frame, 24 in. Only
  * destruction asks for confirmation.
+ *
+ * It fits any window (the phone, v1.3.5): never wider than the window less a
+ * 16dp margin each side, never taller than it; the body scrolls between the
+ * title and the footer, which always stay on screen, and the footer's buttons
+ * wrap onto a second line rather than run off the edge. On a phone the update's
+ * Install button was off the screen, so the app could not update itself.
+ * [scrolls] is false for a body that scrolls itself (a lazy grid) at a height
+ * it sets; that height is capped by the window all the same.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MuDialog(
     title: String,
@@ -220,35 +236,44 @@ fun MuDialog(
     width: Dp = 512.dp,
     description: String? = null,
     footer: (@Composable RowScope.() -> Unit)? = null,
+    scrolls: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = Mu.colors
-    Box(
+    BoxWithConstraints(
         Modifier.fillMaxSize().background(c.overlay)
             .muClickable(onClick = onDismiss)
             // A dialog's field stays above the soft keyboard (touch swarm, rec 10).
             .imePadding(),
         contentAlignment = Alignment.Center,
     ) {
+        val margin = if (maxWidth < 600.dp) 12.dp else 16.dp
+        val fitted = minOf(width, maxWidth - margin * 2)
+        val pad = if (maxWidth < 600.dp) 16.dp else 24.dp
         Column(
             modifier
-                .width(width)
+                .width(fitted)
+                .heightIn(max = (maxHeight - margin * 2).coerceAtLeast(120.dp))
                 .background(c.paper)
                 .border(1.dp, c.ink)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                .padding(24.dp),
+                .padding(pad),
         ) {
             Row(verticalAlignment = Alignment.Top) {
                 H2(title, Modifier.weight(1f).padding(end = 32.dp), maxLines = 2)
                 IconButton(Icons.X, onDismiss, size = 24.dp, label = "Close")
             }
-            if (description != null) RowText(description, Modifier.padding(top = 4.dp), color = c.ink70, maxLines = 4)
-            Column(Modifier.padding(top = 20.dp), content = content)
+            Column(
+                Modifier.weight(1f, fill = false).let { if (scrolls) it.verticalScroll(rememberScrollState()) else it },
+            ) {
+                if (description != null) RowText(description, Modifier.padding(top = 4.dp), color = c.ink70, maxLines = 6)
+                Column(Modifier.padding(top = 20.dp), content = content)
+            }
             if (footer != null) {
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 24.dp),
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(top = pad),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) { footer() }
             }
         }

@@ -46,4 +46,26 @@ object DeckLabels {
         val b = over.sections.firstOrNull()?.cardWidth ?: 0f
         return if (a >= b - 0.01f) LabeledFit(LabelPlace.GUTTER, beside) else LabeledFit(LabelPlace.ROWS, over)
     }
+
+    /**
+     * A phone's deck (v1.3.5): fitted width first by [DeckFitter.stack], and scrolling.
+     * There is no paper beside a deck the width of the screen, so every labelled section
+     * carries its name in a [rowHeight] row over it.
+     */
+    fun stack(
+        availableWidth: Float,
+        availableHeight: Float,
+        aspectRatio: Float,
+        rowHeight: Float,
+        requests: List<SectionFitRequest>,
+        labelled: List<Boolean>,
+    ): LabeledFit = LabeledFit(
+        LabelPlace.ROWS,
+        DeckFitter.stack(
+            requests.mapIndexed { i, r -> if (labelled.getOrElse(i) { false }) r.copy(chromeHeight = r.chromeHeight + rowHeight) else r },
+            availableWidth,
+            availableHeight,
+            aspectRatio,
+        ),
+    )
 }

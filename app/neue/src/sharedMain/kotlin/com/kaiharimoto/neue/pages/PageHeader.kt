@@ -21,6 +21,7 @@ import com.kaiharimoto.neue.theme.Mu
  * Page anatomy (§4): numeral and title on a baseline, a micro-caps line under
  * them, actions to the right, a structural rule below.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PageHeader(
     numeral: Int?,
@@ -29,21 +30,43 @@ fun PageHeader(
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Mu.colors
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-            .padding(start = 32.dp, end = 32.dp, top = 32.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                if (numeral != null) Numeral(numeral, Modifier.padding(bottom = 6.dp))
-                H1(title)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // A phone (v1.3.5): the bar already names the page, so the header is its line and
+        // its actions, wrapping under each other, 16 from the edges.
+        if (maxWidth < 600.dp) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (subtitle != null) Micro(subtitle, color = c.ink45)
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                    content = actions,
+                )
             }
-            if (subtitle != null) Micro(subtitle, Modifier.padding(top = 8.dp), color = c.ink45)
+            return@BoxWithConstraints
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
+                .padding(start = 32.dp, end = 32.dp, top = 32.dp, bottom = 16.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (numeral != null) Numeral(numeral, Modifier.padding(bottom = 6.dp))
+                    H1(title)
+                }
+                if (subtitle != null) Micro(subtitle, Modifier.padding(top = 8.dp), color = c.ink45)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically, content = actions)
+        }
     }
 }
 

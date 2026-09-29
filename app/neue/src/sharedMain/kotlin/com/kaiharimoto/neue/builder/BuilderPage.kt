@@ -114,6 +114,14 @@ fun BuilderPage(
     // panes, never the panes; the tablet's pool and inspector are 320 and yield to
     // the deck's floor, and with Groups on the Groups panel takes the inspector's place.
     val scale = neue.prefs.scale
+    // An upright phone (v1.3.5): the deck on top and the pool docked under the thumbs.
+    if (neue.phone && neue.posture.isTall) {
+        Box(Modifier.fillMaxSize().padding(top = if (neue.immersive) IMMERSIVE_TOP else 0.dp)) {
+            TallBuilder(state, neue, drag, onSearchEffects)
+        }
+        return
+    }
+    val phone = neue.phone
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val panes = PaneBudget.solve(
         window = maxWidth.value * scale,
@@ -124,6 +132,8 @@ fun BuilderPage(
         inspectorVisible = neue.prefs.inspectorVisible,
         poolPref = neue.prefs.poolWidth,
         inspectorPref = neue.prefs.inspectorWidth,
+        // A phone lying down: the pool and the deck, no inspector, the groups a tab of the pool's.
+        phone = phone,
     )
     fun physical(w: Float) = (w / scale).dp
     Row(Modifier.fillMaxSize().padding(top = if (neue.immersive) IMMERSIVE_TOP else 0.dp)) {
@@ -142,7 +152,8 @@ fun BuilderPage(
         }
         if (neue.prefs.poolVisible) {
             Box(Modifier.width(physical(panes.pool)).fillMaxHeight()) {
-                PoolPane(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
+                if (phone) PhonePool(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
+                else PoolPane(state, neue, drag, onSearchEffects, Modifier.fillMaxSize())
                 ZenShield(asleep)
             }
             Box(Modifier.fillMaxHeight().zIndex(1f)) {
@@ -160,7 +171,8 @@ fun BuilderPage(
                 Inspector(state, neue, Modifier.fillMaxSize())
                 ZenShield(asleep)
             }
-        } else if (panes.inspectorYielded) {
+        } else if (panes.inspectorYielded || phone) {
+            // A phone has no inspector: a tap opens the card large (v1.3.5).
             // On touch the inspector gave its room to the Groups panel or to the
             // deck's floor; reading a card is the hold's job there (the viewer).
         } else {
@@ -237,42 +249,7 @@ fun RowScope.BuilderBar(
     narrow: Boolean,
 ) {
     val c = Mu.colors
-    val f = LocalMuFonts.current
-    // The deck's name is the page's title, and editable where it stands.
-    val source = remember { MutableInteractionSource() }
-    val focusManager = LocalFocusManager.current
-    val focused by source.collectIsFocusedAsState()
-    val hovered by source.collectIsHotAsState()
-    val line = animatedColor(if (focused) c.ink else if (hovered) c.ink25 else c.paper)
-    BasicTextField(
-        value = state.deckName,
-        onValueChange = state::rename,
-        singleLine = true,
-        // A field clips to its line, and the type scale's display leading is
-        // tighter than a descender: the tail of a y was cut off at 1.05.
-        textStyle = MuType.h2(f).copy(color = c.ink, lineHeight = 28.sp),
-        cursorBrush = SolidColor(c.ink),
-        interactionSource = source,
-        // Enter is done: the name is kept, and the field lets go.
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
-        modifier = Modifier
-            .onPreviewKeyEvent { e ->
-                if (e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.NumPadEnter)) {
-                    focusManager.clearFocus()
-                    true
-                } else {
-                    false
-                }
-            }
-            .weight(1f, fill = false)
-            .widthIn(min = 140.dp, max = 560.dp)
-            .cursor(CursorMode.TEXT, caption = "Rename", fontSize = 20.sp, focused = focused)
-            .hoverable(source)
-            .reportsTextFocus()
-            .onFocusChanged { state.onTextFieldFocusChanged(it.isFocused) }
-            .drawBehind { drawLine(line, Offset(0f, size.height + 2.dp.toPx()), Offset(size.width, size.height + 2.dp.toPx()), 1.dp.toPx()) },
-    )
+    DeckNameField(state, Modifier.weight(1f, fill = false).widthIn(min = 140.dp, max = 560.dp))
     Standing(state, neue)
     Box(Modifier.weight(1f))
     Tip("Undo", kbd = kbd(DeskAction.UNDO)) { IconButton(Icons.Undo, state::undo, enabled = state.canUndo, size = 32.dp, label = "Undo", reason = "Nothing to undo") }
@@ -319,6 +296,48 @@ fun RowScope.BuilderBar(
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
 }
 
+/**
+ * The deck's name: the page's title, and editable where it stands. The desk's bar
+ * and the phone's (v1.3.5) both write it; [small] is the phone's size.
+ */
+@Composable
+fun DeckNameField(state: DeckBuilderState, modifier: Modifier = Modifier, small: Boolean = false) {
+    val c = Mu.colors
+    val f = LocalMuFonts.current
+    val source = remember { MutableInteractionSource() }
+    val focusManager = LocalFocusManager.current
+    val focused by source.collectIsFocusedAsState()
+    val hovered by source.collectIsHotAsState()
+    val line = animatedColor(if (focused) c.ink else if (hovered) c.ink25 else c.paper)
+    BasicTextField(
+        value = state.deckName,
+        onValueChange = state::rename,
+        singleLine = true,
+        // A field clips to its line, and the type scale's display leading is
+        // tighter than a descender: the tail of a y was cut off at 1.05.
+        textStyle = if (small) MuType.h2(f).copy(color = c.ink, fontSize = 17.sp, lineHeight = 24.sp) else MuType.h2(f).copy(color = c.ink, lineHeight = 28.sp),
+        cursorBrush = SolidColor(c.ink),
+        interactionSource = source,
+        // Enter is done: the name is kept, and the field lets go.
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+        modifier = modifier
+            .onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.NumPadEnter)) {
+                    focusManager.clearFocus()
+                    true
+                } else {
+                    false
+                }
+            }
+            .cursor(CursorMode.TEXT, caption = "Rename", fontSize = 20.sp, focused = focused)
+            .hoverable(source)
+            .reportsTextFocus()
+            .onFocusChanged { state.onTextFieldFocusChanged(it.isFocused) }
+            .drawBehind { drawLine(line, Offset(0f, size.height + 2.dp.toPx()), Offset(size.width, size.height + 2.dp.toPx()), 1.dp.toPx()) },
+    )
+}
+
 /** A tool on the bar: a word and an icon while there is room, the icon alone when there is not. */
 @Composable
 private fun Tool(label: String, tip: String, icon: androidx.compose.ui.graphics.vector.ImageVector, chord: String?, words: Boolean, onClick: () -> Unit) {
@@ -333,7 +352,7 @@ private fun Tool(label: String, tip: String, icon: androidx.compose.ui.graphics.
 
 /** Whether the deck may be played, in a word, and the way to the reasons when it may not. */
 @Composable
-private fun Standing(state: DeckBuilderState, neue: NeueState) {
+internal fun Standing(state: DeckBuilderState, neue: NeueState) {
     val c = Mu.colors
     val validation = state.validation
     when {

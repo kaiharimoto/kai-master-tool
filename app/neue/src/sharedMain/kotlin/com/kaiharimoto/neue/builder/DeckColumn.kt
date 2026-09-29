@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import com.kaiharimoto.mastertool.core.layout.DeckLabels
+import com.kaiharimoto.mastertool.core.layout.DeckFitter
 import com.kaiharimoto.mastertool.core.layout.LabelPlace
 import com.kaiharimoto.mastertool.core.motion.ZenArrangement
 import com.kaiharimoto.mastertool.core.motion.ZenHome
@@ -184,7 +185,8 @@ fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifie
     val panel = groupsOn(state)
     Row(modifier) {
         DeckBody(state, neue, drag, Modifier.weight(1f).fillMaxHeight().releasesTypingOnFinger())
-        if (panel) GroupsPanel(state, neue, Modifier.zenQuiet())
+        // On a phone the panel is a tab of the pool's (v1.3.5): beside the deck it would be the deck.
+        if (panel && !neue.phone) GroupsPanel(state, neue, Modifier.zenQuiet())
     }
 }
 
@@ -360,6 +362,12 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
             if (neue.prefs.extraVisible) add(DeckSection.EXTRA)
             if (neue.prefs.sideVisible) add(DeckSection.SIDE)
         }
+        // A phone (v1.3.5): every section the same few cards across, each a finger wide,
+        // and the deck fitted to the width and scrolled rather than shrunk to the height.
+        val sidePad = if (neue.phone) 8.dp else SIDE_PAD
+        val phoneCols = if (neue.phone) DeckFitter.phoneColumns((maxWidth - sidePad * 2).value) else null
+        SideEffect { neue.phoneColumns = phoneCols }
+        fun cols(section: DeckSection) = phoneCols ?: columnsOf(section)
         // The deck in pieces by the lens (GroupPieces): what width and height the gaps
         // between them take, declared to the fitter so the cards pay for them honestly.
         val gapPx = with(density) { PIECE_GAP.toPx() } * neue.prefs.groupGap
@@ -370,7 +378,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
             val roleKeying = remember(ids, state.groupsWithDraft, state.index) {
                 DeckLenses.key(Lens.ROLES, ids, state.index::byId, state.groupsWithDraft, state.format)
             }
-            roleKeying to remember(roleKeying.keyOfCell) { GroupPieces.of(roleKeying.keyOfCell, columnsOf(section)) }
+            roleKeying to remember(roleKeying.keyOfCell, phoneCols) { GroupPieces.of(roleKeying.keyOfCell, cols(section)) }
         }
         // How far down each section's zen pieces start, and how much the whole deck grows
         // with them fully apart at one gap: zen fits that grown deck to the window.
@@ -387,7 +395,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         val kept = remember { HashMap<DeckSection, PieceLayout>() }
         val pieces = sections.map { section ->
             val keys = state.keying(section).keyOfCell
-            val live = remember(keys, columnsOf(section)) { GroupPieces.of(keys, columnsOf(section)) }
+            val live = remember(keys, cols(section)) { GroupPieces.of(keys, cols(section)) }
             val previous = kept[section]
             val used = if (lensOn || previous == null || previous.piece.size != keys.size) live else previous
             kept[section] = used
@@ -397,32 +405,45 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         // it is laid out once at the top, and the deck is fitted to what is below it.
         val deckHeight = maxHeight - LENS_ROW
         fun fitAt(z: Float) = with(density) {
-            DeckLabels.place(
-                availableWidth = (maxWidth - SIDE_PAD * 2).toPx() * z,
-                availableHeight = deckHeight.toPx() * z,
-                aspectRatio = CARD_RATIO,
-                gutter = LABEL_GUTTER.toPx(),
-                rowHeight = LABEL_ROW.toPx(),
-                requests = sections.mapIndexed { i, section ->
-                    SectionFitRequest(
-                        count = state.deck[section].size,
-                        columns = columnsOf(section),
-                        baselineCount = if (section == DeckSection.MAIN) section.minSize else section.maxSize,
-                        spacing = 0f,
-                        chromeHeight = (GRID_PAD * 2 + RULE).toPx(),
-                        extraWidth = pieces[i].spanX * gapPx * crack,
-                        extraHeight = pieces[i].spanY * gapPx * crack + (if (pieces[i].pieces > 1) nameTab.toPx() * crack else 0f),
-                    )
-                },
-                labelled = sections.map { it != DeckSection.MAIN },
-            )
+            val requests = sections.mapIndexed { i, section ->
+                SectionFitRequest(
+                    count = state.deck[section].size,
+                    columns = cols(section),
+                    baselineCount = if (section == DeckSection.MAIN) section.minSize else section.maxSize,
+                    spacing = 0f,
+                    chromeHeight = (GRID_PAD * 2 + RULE).toPx(),
+                    extraWidth = pieces[i].spanX * gapPx * crack,
+                    extraHeight = pieces[i].spanY * gapPx * crack + (if (pieces[i].pieces > 1) nameTab.toPx() * crack else 0f),
+                )
+            }
+            val labelled = sections.map { it != DeckSection.MAIN }
+            if (phoneCols != null) {
+                DeckLabels.stack(
+                    availableWidth = (maxWidth - sidePad * 2).toPx() * z,
+                    availableHeight = deckHeight.toPx(),
+                    aspectRatio = CARD_RATIO,
+                    rowHeight = LABEL_ROW.toPx(),
+                    requests = requests,
+                    labelled = labelled,
+                )
+            } else {
+                DeckLabels.place(
+                    availableWidth = (maxWidth - SIDE_PAD * 2).toPx() * z,
+                    availableHeight = deckHeight.toPx() * z,
+                    aspectRatio = CARD_RATIO,
+                    gutter = LABEL_GUTTER.toPx(),
+                    rowHeight = LABEL_ROW.toPx(),
+                    requests = requests,
+                    labelled = labelled,
+                )
+            }
         }
         val placed = fitAt(zoom)
         // The row's inset is the deck's edge at the size that fills the column, so it
         // does not creep inward as the wheel shrinks the cards.
         val full = if (zoom < 0.999f) fitAt(1f) else placed
         val fullWidth = with(density) { full.fit.contentWidth.toDp() }
-        val rowInset = maxOf((maxWidth - fullWidth) / 2, SIDE_PAD)
+        val rowInset = maxOf((maxWidth - fullWidth) / 2, sidePad)
         val fit = placed.fit
         val contentWidth = with(density) { fit.contentWidth.toDp() }
         // Where the grids start, from the column's left edge: every section is the same width and centred.
@@ -546,8 +567,36 @@ private fun LensRow(state: DeckBuilderState, neue: NeueState, count: String, out
         Box(Modifier.weight(1f))
         if (refused) Micro("✕ Not allowed here", color = c.ink)
         // The other ways to see the deck in pieces. The Roles lens is the Groups button's.
+        // On a phone (v1.3.5) there is no row for five tabs: one button, and the lenses in its menu.
+        if (neue.phone) LensMenu(state, neue) else
         Segmented(state.lens, LENS_TABS, { if (tight) shortName(it) else it.displayName }, state::useLens, small = true, compact = true)
     }
+    }
+}
+
+/** The lens on a phone (v1.3.5): the one in use, and the others a tap away in a menu. */
+@Composable
+private fun LensMenu(state: DeckBuilderState, neue: NeueState) {
+    val c = Mu.colors
+    var at by remember { mutableStateOf(Offset.Zero) }
+    val shown = if (state.lens in LENS_TABS) state.lens else Lens.DECK
+    Row(
+        Modifier
+            .height(32.dp)
+            .border(1.dp, c.ink)
+            .onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }
+            .cursorPointer(caption = "Lens")
+            .muClickable {
+                neue.menu = com.kaiharimoto.neue.kit.MenuSpec(at, LENS_TABS.map { lens ->
+                    com.kaiharimoto.neue.kit.MenuEntry(lens.displayName, hint = if (lens == state.lens) "Now" else null) { state.useLens(lens) }
+                })
+            }
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Micro(shortName(shown), color = c.ink)
+        Micro("▾", color = c.ink70)
     }
 }
 

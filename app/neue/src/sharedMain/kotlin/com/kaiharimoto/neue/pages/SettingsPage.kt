@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,16 +70,22 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
     val scroll = rememberScrollState()
     val touch = neue.touchFirst
     Column(Modifier.fillMaxSize()) {
-        PageHeader(null, "Settings", "Stored on this ${if (touch) "tablet" else "computer"} · v${host.version}")
-        Box(Modifier.fillMaxSize()) {
+        PageHeader(null, "Settings", "Stored on this ${if (neue.phone) "phone" else if (touch) "tablet" else "computer"} · v${host.version}")
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            // A phone's page keeps 16 at its edges, not 32: the words need the width (v1.3.5).
+            val edge = if (maxWidth < 600.dp) 16.dp else 32.dp
             Column(
-                Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 32.dp, end = 32.dp, top = 32.dp, bottom = 64.dp).widthIn(max = 960.dp),
+                Modifier.fillMaxSize().verticalScroll(scroll).padding(start = edge, end = edge, top = edge, bottom = 64.dp).widthIn(max = 960.dp),
                 verticalArrangement = Arrangement.spacedBy(32.dp),
             ) {
                 Column {
                     SectionTitle(1, "Appearance")
                     SettingRow("Theme", "Paper is the default. Ink is its exact inversion.") {
                         Segmented(prefs.theme, NeueTheme.entries, { if (it == NeueTheme.PAPER) "Paper" else "Ink" }, { t -> neue.update { it.copy(theme = t) } })
+                    }
+                    // Which way the screen turns (kai, v1.3.5): also one tap in the bar's menu.
+                    if (touch) SettingRow("Screen", "Portrait stands the phone up, Landscape lays it down, Auto follows how it is held. The rotation lock is respected.") {
+                        Segmented(neue.orientation, com.kaiharimoto.mastertool.core.layout.ScreenOrientation.entries, { it.label }, { o -> neue.update { it.copy(orientation = o.key) } })
                     }
                     SettingRow("Contrast", "High darkens the grey text, the outlines of controls and the rules between rows, in both themes.") {
                         Segmented(prefs.contrast, listOf(NeuePreferences.CONTRAST_STANDARD, NeuePreferences.CONTRAST_HIGH), { if (it == NeuePreferences.CONTRAST_HIGH) "High" else "Standard" }, { v -> neue.update { it.copy(contrast = v) } })
@@ -88,11 +95,14 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         if (touch) "Everything, text and cards alike. For larger text alone, use Text size." else
                             "Everything, text and cards alike. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.ZOOM_IN)} and ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.ZOOM_OUT)} step through it from anywhere.",
                     ) {
-                        Segmented(prefs.scale, NeuePreferences.SCALES, { "${kotlin.math.round(it * 100).toInt()}%" }, { s -> neue.update { it.copy(scale = s) } }, small = true)
+                        // Seven steps are wider than a phone: they scroll sideways there (v1.3.5).
+                        Box(Modifier.horizontalScroll(rememberScrollState())) {
+                            Segmented(prefs.scale, NeuePreferences.SCALES, { "${kotlin.math.round(it * 100).toInt()}%" }, { s -> neue.update { it.copy(scale = s) } }, small = true)
+                        }
                     }
                     // The type alone (touch swarm, rec 26): panes, cards and targets keep their size.
                     SettingRow("Text size", "The type alone; the panes and the cards keep their size.") {
-                        Segmented(prefs.textScaleOn(touch), NeuePreferences.TEXT_SCALES, { "${kotlin.math.round(it * 100).toInt()}%" }, { t -> neue.update { it.copy(textScale = t) } }, small = true)
+                        Segmented(prefs.textScaleOn(touch, neue.phone), NeuePreferences.TEXT_SCALES, { "${kotlin.math.round(it * 100).toInt()}%" }, { t -> neue.update { it.copy(textScale = t) } }, small = true)
                     }
                     SettingRow("Foil", if (touch) "The light on a card's face." else "The light on a card's face. It follows the pointer across the card.") {
                         Segmented(prefs.foil, Foils.all.map { it.id }, Foils::label, { f -> neue.update { it.copy(foil = f) } })
@@ -239,19 +249,35 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
 private fun SettingRow(label: String, help: String, helpLines: Int = 3, onToggle: (() -> Unit)? = null, control: @Composable () -> Unit) {
     val c = Mu.colors
     val whole = onToggle != null && com.kaiharimoto.neue.kit.LocalTouchFirst.current
-    Row(
-        Modifier.fillMaxWidth()
-            .let { if (whole) it.defaultMinSize(minHeight = com.kaiharimoto.mastertool.core.input.TouchMetrics.SETTING_ROW.dp).muClickable(onClick = onToggle!!).cursorPointer(showsWords = true) else it }
-            .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            RowText(label)
-            Help(help, maxLines = helpLines)
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+    // Narrow (a phone, v1.3.5), the label and its help stand over the control rather than
+    // in a 260 column beside it, which left the control a sliver.
+    val stacked = maxWidth < 600.dp
+    val row = Modifier.fillMaxWidth()
+        .let { if (whole) it.defaultMinSize(minHeight = com.kaiharimoto.mastertool.core.input.TouchMetrics.SETTING_ROW.dp).muClickable(onClick = onToggle!!).cursorPointer(showsWords = true) else it }
+        .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
+        .padding(vertical = 12.dp)
+    if (stacked) {
+        Column(row, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                RowText(label)
+                Help(help, maxLines = helpLines + 3)
+            }
+            Box(Modifier.fillMaxWidth()) { control() }
         }
-        Box(Modifier.weight(1f)) { control() }
+    } else {
+        Row(
+            row,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                RowText(label)
+                Help(help, maxLines = helpLines)
+            }
+            Box(Modifier.weight(1f)) { control() }
+        }
+    }
     }
 }
 

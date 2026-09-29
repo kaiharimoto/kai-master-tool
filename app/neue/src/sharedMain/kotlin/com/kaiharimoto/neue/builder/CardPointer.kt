@@ -249,6 +249,7 @@ fun Modifier.cardPointer(
                             }
                         },
                         onDrag = { start ->
+                            neue.cancelViewSoon()
                             neue.actingBy(finger = true) { neue.felt(DeskEvent.PICKED_UP) }
                             drag.start(Held(heldCard, from, heldIndex, size, finger = true, density = density), origin + start.position)
                             // A second finger landing lets the card go home: two fingers are a pinch (rec 21).

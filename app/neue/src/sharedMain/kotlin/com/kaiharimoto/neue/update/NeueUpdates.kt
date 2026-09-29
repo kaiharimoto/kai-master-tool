@@ -71,6 +71,23 @@ class NeueUpdates(
         }
     }
 
+    /**
+     * The update dialog opened on [update] without asking GitHub: how the studio draws it
+     * and the emulator walk proves its Install button is on a phone's screen (v1.3.5).
+     */
+    fun offer(update: NeueUpdate) {
+        available = update
+        dialogOpen = true
+    }
+
+    /** A made-up release with a page of notes, for [offer]. */
+    fun sample(): NeueUpdate {
+        val asset = com.kaiharimoto.mastertool.core.update.ReleaseAsset("kai-master-tool-9.9.9.apk", "https://example.invalid/app.apk", 40_000_000)
+        val notes = (1..24).joinToString("\n") { "- Line $it of the notes, long enough to wrap on a phone held upright." }
+        val release = com.kaiharimoto.mastertool.core.update.Release("9.9.9", "v9.9.9", notes, asset.url, asset.sizeBytes, "https://example.invalid", false, listOf(asset))
+        return NeueUpdate("9.9.9", release, asset)
+    }
+
     fun openReleasePage() {
         available?.release?.htmlUrl?.let(Platform::browse)
     }

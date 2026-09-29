@@ -31,6 +31,11 @@ object PaneBudget {
     const val GROUPS = 288f
     const val DECK_FLOOR = 520f
     const val POOL_MIN = 280f
+    /** A phone lying down (v1.3.5): the pool's share of the width, and its least. */
+    const val PHONE_POOL_SHARE = 0.4f
+    const val PHONE_POOL_MIN = 240f
+    /** The least a phone's deck keeps: under it the pool gives way, since a deck is the point. */
+    const val PHONE_DECK_MIN = 280f
 
     data class Panes(
         /** The index when it takes room from the page; zero when it folds away or comes out over it. */
@@ -56,7 +61,9 @@ object PaneBudget {
         inspectorVisible: Boolean,
         poolPref: Float,
         inspectorPref: Float,
+        phone: Boolean = false,
     ): Panes {
+        if (phone) return phone(window, railOut, poolVisible)
         val rail = if (!railOut) 0f else if (touch) TOUCH_RAIL else DESK_RAIL
         var pool = if (!poolVisible) 0f else if (touch) TOUCH_PANE else poolPref
         var inspector = if (!inspectorVisible) 0f else if (touch) TOUCH_PANE else inspectorPref
@@ -78,6 +85,26 @@ object PaneBudget {
             }
         }
         return Panes(rail, pool, inspector, groups, deck().coerceAtLeast(0f), yielded)
+    }
+
+    /**
+     * A phone lying down (v1.3.5): the index strip, the pool at [PHONE_POOL_SHARE]
+     * of the width, and the deck the rest. No inspector — a tap opens the card
+     * large — and no Groups panel in the row: on a phone it is a sheet over the
+     * page. There is no [DECK_FLOOR]; a phone is narrower than it. The pool gives
+     * way before the deck falls under [PHONE_DECK_MIN].
+     */
+    private fun phone(window: Float, railOut: Boolean, poolVisible: Boolean): Panes {
+        val rail = if (railOut) TOUCH_RAIL else 0f
+        val room = (window - rail).coerceAtLeast(0f)
+        val pool = if (!poolVisible) {
+            0f
+        } else {
+            (room * PHONE_POOL_SHARE).coerceAtLeast(PHONE_POOL_MIN)
+                .coerceAtMost((room - RULE - PHONE_DECK_MIN).coerceAtLeast(0f))
+        }
+        val deck = (room - pool - (if (pool > 0f) RULE else 0f)).coerceAtLeast(0f)
+        return Panes(rail, pool, 0f, 0f, deck, inspectorYielded = false)
     }
 
     private fun rules(pool: Float, inspector: Float) =

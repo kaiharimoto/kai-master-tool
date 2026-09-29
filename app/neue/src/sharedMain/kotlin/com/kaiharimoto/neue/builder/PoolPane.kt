@@ -59,6 +59,7 @@ import com.kaiharimoto.mastertool.core.input.MouseAction
 import com.kaiharimoto.mastertool.core.input.MouseTarget
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
+import androidx.compose.ui.layout.onSizeChanged
 import com.kaiharimoto.neue.Selection
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
@@ -95,6 +96,8 @@ fun PoolPane(
     drag: NeueDrag,
     onSearchEffects: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /** The height of everything above the results, for a phone's dock to rest on at its lowest (v1.3.5). */
+    onHeader: ((Int) -> Unit)? = null,
 ) {
     val c = Mu.colors
     val focus = remember { FocusRequester() }
@@ -118,11 +121,17 @@ fun PoolPane(
             .let { if (state.isSyncing) it.cursor(CursorMode.BUSY) else it }
             .padding(start = gutter),
     ) {
-        Column(Modifier.zenQuiet().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            Modifier.zenQuiet()
+                .let { m -> if (onHeader != null) m.onSizeChanged { onHeader(it.height) } else m }
+                .padding(start = if (neue.phone) 12.dp else 16.dp, end = if (neue.phone) 12.dp else 16.dp, top = if (neue.phone) 4.dp else 12.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 // On a tablet the field stands between the two icons, so a tap beside
                 // Advanced search never hides the pool (touch swarm, rec 17).
-                if (touch) {
+                // A phone's dock is put away by its grabber, not hidden (v1.3.5).
+                if (touch && !neue.phone) {
                     Tip("Hide the pool") {
                         IconButton(Icons.PanelLeftClose, { neue.update { it.copy(poolVisible = false) } }, size = TouchMetrics.ICON.dp, label = "Hide pool")
                     }

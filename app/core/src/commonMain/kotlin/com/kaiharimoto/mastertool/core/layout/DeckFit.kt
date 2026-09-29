@@ -230,6 +230,20 @@ object DeckFitter {
         )
     }
 
+    /** The narrowest card a phone's deck draws, in dp: a finger's target and a name you can read. */
+    const val PHONE_CARD_MIN_DP = 72f
+
+    /**
+     * How many cards across a phone's deck is drawn (v1.3.5), every section alike:
+     * as many as keep each card at least [PHONE_CARD_MIN_DP] wide, between four and
+     * ten. Five on an upright phone of 412dp — a decklist's tens halved, so a row of
+     * the desk's main deck is two of the phone's — four on a narrow one, and seven
+     * or more on one lying down.
+     * The deck is then fitted width-first by [stack] and scrolls.
+     */
+    fun phoneColumns(widthDp: Float): Int =
+        if (!widthDp.isFinite() || widthDp <= 0f) 4 else (widthDp / PHONE_CARD_MIN_DP).toInt().coerceIn(4, 10)
+
     private val EMPTY_SECTION = SectionFit(
         columns = 1,
         rows = 0,

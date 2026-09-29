@@ -233,14 +233,14 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             title = "Decks",
             subtitle = decks?.let { "${it.size} saved" } ?: "Loading",
         ) {
-            MuInput(filter, { filter = it }, Modifier.width(320.dp), placeholder = "A deck, a card in one, or a tag", imeAction = androidx.compose.ui.text.input.ImeAction.Search)
+            MuInput(filter, { filter = it }, if (com.kaiharimoto.neue.kit.LocalPhone.current) Modifier.fillMaxWidth() else Modifier.width(320.dp), placeholder = "A deck, a card in one, or a tag", imeAction = androidx.compose.ui.text.input.ImeAction.Search)
             MuButton("Import", { state.importFromFile(); neue.go(Page.BUILDER) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Import)
             MuButton("New deck", { state.newDeck(); neue.go(Page.BUILDER) }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = Icons.Plus)
         }
         // Every tag in the library, most used first: one click keeps the decks carrying it.
         if (allTags.isNotEmpty()) {
             FlowRow(
-                Modifier.fillMaxWidth().padding(horizontal = 32.dp).padding(bottom = 12.dp),
+                Modifier.fillMaxWidth().padding(horizontal = if (com.kaiharimoto.neue.kit.LocalPhone.current) 16.dp else 32.dp).padding(vertical = if (com.kaiharimoto.neue.kit.LocalPhone.current) 8.dp else 0.dp).padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -334,6 +334,7 @@ private fun CoverPicker(stored: StoredDeck, state: DeckBuilderState, neue: NeueS
         title = "Covers for “${stored.entry.name}”",
         onDismiss = onDismiss,
         width = 880.dp,
+        scrolls = false,
         description = "Pick up to three, in the order they should stand. With none, the deck shows its most-played card.",
         footer = {
             MuButton("Clear", { neue.update { it.copy(covers = it.covers - id) } }, variant = BtnVariant.GHOST, enabled = chosen.isNotEmpty(), reason = "No covers picked")
@@ -401,6 +402,8 @@ private fun DeckRow(
 ) {
     val c = Mu.colors
     val touch = LocalTouchFirst.current
+    // A phone's row (v1.3.5): one cover, the name and its line, and More — no numeral, no gaps to spare.
+    val phone = com.kaiharimoto.neue.kit.LocalPhone.current
     var rowAt by remember { mutableStateOf(Offset.Zero) }
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
@@ -422,16 +425,16 @@ private fun DeckRow(
                 .onContextMenu { local -> onMenu(rowAt + local) }
                 .clickable(interactionSource = source, indication = null, onClick = onOpen)
                 .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-                .padding(horizontal = 32.dp, vertical = 12.dp),
+                .padding(horizontal = if (phone) 16.dp else 32.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (phone) 12.dp else 16.dp),
         ) {
-            Numeral(n, color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45)
+            if (!phone) Numeral(n, color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45)
             // Three places, flush like the deck's own mosaic, so every name starts on one line.
             // On a tablet the covers open the deck like the rest of the row; choosing them is in More.
             Row(
                 Modifier
-                    .width(COVER_W * DeckCovers.MAX)
+                    .width(COVER_W * (if (phone) 1 else DeckCovers.MAX))
                     .then(
                         if (touch) {
                             Modifier
@@ -443,11 +446,20 @@ private fun DeckRow(
                     ),
             ) {
                 if (faces.isEmpty()) Box(Modifier.size(COVER_W, COVER_H).background(inner.ink06))
-                faces.forEach { face -> NeueCard(face, Modifier.size(COVER_W, COVER_H), foil = "off") }
+                faces.take(if (phone) 1 else DeckCovers.MAX).forEach { face -> NeueCard(face, Modifier.size(COVER_W, COVER_H), foil = "off") }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 MuText(stored.entry.name, style = MuType.body(LocalMuFonts.current).copy(fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium), color = inner.ink, maxLines = 1)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (phone) {
+                    Mono(
+                        "${deck.main.size} · ${deck.extra.size} · ${deck.side.size} · ${ago(stored.entry.updatedAtEpochMs, now)}",
+                        color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45,
+                    )
+                    if (current || default) Small(listOfNotNull("On the builder".takeIf { current }, "Opens first".takeIf { default }).joinToString(" · "), color = inner.ink.copy(alpha = 0.7f))
+                    if (tags.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        tags.forEach { tag -> TagChip(tag, tag == tagFilter, null) }
+                    }
+                } else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Mono(
                         "${deck.main.size} main · ${deck.extra.size} extra · ${deck.side.size} side · ${ago(stored.entry.updatedAtEpochMs, now)}",
                         color = if (current) inner.ink.copy(alpha = 0.6f) else c.ink45,
@@ -464,12 +476,14 @@ private fun DeckRow(
                     )
                 }
             }
-            if (current) Small("On the builder", color = inner.ink.copy(alpha = 0.7f))
-            if (default) Small("Opens first", color = inner.ink.copy(alpha = 0.7f))
-            if (touch) {
+            if (current && !phone) Small("On the builder", color = inner.ink.copy(alpha = 0.7f))
+            if (default && !phone) Small("Opens first", color = inner.ink.copy(alpha = 0.7f))
+            // A phone's row has no width for five buttons, a mouse plugged in or not: More holds them.
+            if (touch || phone) {
                 var moreAt by remember { mutableStateOf(Offset.Zero) }
                 Box(Modifier.onGloballyPositioned { moreAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
-                    MuButton("More", { onMenu(moreAt) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.More)
+                    if (phone) com.kaiharimoto.neue.kit.IconButton(Icons.More, { onMenu(moreAt) }, size = 40.dp, label = "More")
+                    else MuButton("More", { onMenu(moreAt) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.More)
                 }
             } else Row(Modifier.alpha(actions), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuButton("✕ Delete", onDelete, variant = BtnVariant.GHOST, size = BtnSize.SM)

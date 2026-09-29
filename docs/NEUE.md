@@ -254,6 +254,67 @@ fixes the frame:
   `NeueSmokeTest` (a saved deck survives a launch, the builder opens it, no crash
   is written) and uploads its screenshot.
 
+### 1c. The phone (1.3.5)
+
+kai tried the APK on a phone and it was unusable. The manifest locked it lying
+down; the desk's 48 dp bar ran off a 412 dp screen and took the **Update** pill
+with it; and the update dialog, 672 dp wide with a 360 dp box of notes and one row
+of buttons, was taller and wider than the phone, so **Install could not be reached**
+and the app could not update itself. kai's four choices are what follows.
+
+- **What it is running on** is `core/layout/FormFactor`: a touch screen whose
+  *smallest* width is under 600 dp is a PHONE (Android's own line, so turning it
+  round never makes it a tablet), any other touch screen a TABLET, the desk always
+  DESK. `NeueWindowContent` reads it off the window in physical dp, before the
+  interface scale, into `NeueState.form` and `posture` (`Posture`, TALL or WIDE);
+  `LocalPhone` carries it to the pages. The studio draws one with `--form=phone`.
+- **The screen turns by a setting** (`ScreenOrientation`, `NeuePreferences.orientation`:
+  Portrait, Landscape or Auto; null is the device's default, upright on a phone and
+  lying down on a tablet). The manifest says `fullUser`; `MainActivity.applyOrientation`
+  sets the user-flavoured `requestedOrientation` before the first frame and again
+  when the setting moves, so the rotation lock is respected. The one-tap toggle is
+  **Rotate** in the bar's menu (Portrait → Landscape → Auto), and Settings → Screen.
+- **Dialogs fit any window**, desk included (`MuDialog`): never wider than the window
+  less 12–16 dp a side, never taller; the body scrolls between the title and the
+  footer, which always stay on screen, and the footer's buttons wrap (`FlowRow`). A
+  body that scrolls itself passes `scrolls = false`. The menu layer scrolls a menu
+  taller than the window. The emulator walk proves the update's Download is on the
+  phone's screen.
+- **The shell** (`shell/PhoneShell.kt`): `PhoneBar`, one 48 dp line — the deck's
+  name (editable, `DeckNameField`) and its standing, undo, redo, a filled **Update**
+  chip whenever there is one (never in the overflow), and ⋯, the overflow, which
+  holds every tool of the desk's bar (`NeueHolders.phoneMenu`: search, advanced
+  search, groups, history, format, save, auto save, new, import, export, rotate,
+  full screen, theme, gestures, check for updates). The pages are `TabBar`, five tabs
+  along the bottom, hidden while the soft keyboard is up; lying down they are a
+  strip down the left, where the height is the deck's.
+- **The builder upright** (`builder/TallBuilder.kt`): the deck on top, the pool docked
+  along the bottom (`PoolDock`: PEEK is the grabber and the pool's header, measured;
+  HALF keeps 200 dp of deck; FULL is the screen). Typing is FULL; letting go of the
+  field never drops below HALF (`PoolDock.afterTyping`); the stop is
+  `NeuePreferences.phoneDockStop`; a drag or a flick on the grabber chooses one, a
+  tap steps it. `imePadding` is outside the dock's height, so the keyboard lifts the
+  dock rather than eating its field. The deck is fitted width first and scrolls
+  (`DeckLabels.stack` over `DeckFitter.stack`), every section `DeckFitter.phoneColumns`
+  across — five on a 412 dp phone, each card at least 72 dp — and `NeueState.phoneColumns`
+  keeps the arrow keys' grid the same. The lens tabs are one **Lens ▾** button.
+  While the groups are out the dock has two tabs, **Cards** and **Groups**
+  (`PhonePool`); the Groups panel is never beside the deck on a phone.
+- **No inspector on a phone**: a finger's tap opens the card large
+  (`NeueState.viewSoon`) once `DeskTouch.PHONE_VIEW_MS` has passed without a second
+  tap, so a double-tap still adds or removes. The viewer stacks the art over the
+  actions and the text when the window is taller than wide.
+- **Lying down** a phone uses `PaneBudget.solve(phone = true)`: the strip, the pool at
+  40% (at least 240), no inspector, and the deck the rest, with no 520 floor.
+- **The pages** lay themselves out below 600 dp: `PageHeader` drops the title the bar
+  already says and wraps its actions; `SettingRow` stands its label over its control;
+  a library row is one cover, the name and More; Odds' rates are 84 dp and Stats'
+  columns stand one over the other; the search pop-out's filters and reading pane are
+  sheets over the results. The phone's text size defaults to 100%, not the tablet's 115%.
+- **The emulator** runs twice (`android-smoke.yml`, a matrix of `pixel_tablet` and
+  `pixel_7`); the phone runs `NeueSmokeTest.aPhoneHeldUpright` and the tablet walk
+  assumes it is not on one.
+
 ---
 
 ## 2. Master UI, and the two exceptions

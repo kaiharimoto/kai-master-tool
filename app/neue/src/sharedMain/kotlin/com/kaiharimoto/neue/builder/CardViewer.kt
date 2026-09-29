@@ -70,12 +70,54 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = close),
         contentAlignment = Alignment.Center,
     ) {
+        val card = viewing.card
+        // Taller than wide (a phone, v1.3.5): the art over the details, and the whole sheet
+        // scrolls; there is no width for the two side by side.
+        if (maxHeight > maxWidth) {
+            val pad = 16.dp
+            val artWidth = min(maxWidth - pad * 4, (maxHeight * 0.5f) * CARD_RATIO)
+            val scroll = rememberScrollState()
+            Box(
+                Modifier
+                    .padding(12.dp)
+                    .fillMaxWidth()
+                    .background(c.paper)
+                    .border(1.dp, c.ink)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+            ) {
+                Column(Modifier.fillMaxWidth().verticalScroll(scroll).padding(pad), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(Modifier.weight(1f).padding(end = 12.dp)) { CardHeading(card) }
+                        IconButton(Icons.X, close, size = 40.dp, label = "Close")
+                    }
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        NeueCard(card = card, modifier = Modifier.size(artWidth, artWidth / CARD_RATIO), format = state.format, foil = neue.prefs.foil)
+                    }
+                    Micro("Do", color = c.ink70)
+                    MenuColumn(entriesFor(viewing, state, neue), onDismiss = close, modifier = Modifier.fillMaxWidth())
+                    HRule(color = c.ink)
+                    SelectionContainer {
+                        MuText(
+                            card.description.ifBlank { "No card text." },
+                            style = MuType.body(LocalMuFonts.current).copy(fontSize = 15.sp, lineHeight = 23.sp),
+                            color = c.ink,
+                        )
+                    }
+                    HRule()
+                    ArtSwitch(card, neue)
+                    CardTags(card, state)
+                    HRule()
+                    Copies(card, state)
+                }
+                ScrollbarFor(scroll)
+            }
+            return@BoxWithConstraints
+        }
         val pad = 32.dp
         val details = min(480.dp, maxWidth * 0.4f)
         // As tall as the window allows, unless the window is too narrow for that and the details beside it.
         val artHeight = min(maxHeight * 0.88f - pad * 2, (maxWidth * 0.94f - details - pad * 3) / CARD_RATIO)
         val artWidth = artHeight * CARD_RATIO
-        val card = viewing.card
         Row(
             Modifier
                 .background(c.paper)

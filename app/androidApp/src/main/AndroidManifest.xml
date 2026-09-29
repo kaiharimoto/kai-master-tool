@@ -16,19 +16,20 @@
         android:hardwareAccelerated="true"
         android:theme="@style/Theme.MasterTool">
 
-        <!-- Neue is laid out for a wide window: a landscape tablet, rotating
-             between its two landscapes and respecting the rotation lock. A
-             portrait (phone) arrangement is its own later phase. The config
-             changes listed are the ones Neue lays itself out for rather than
-             being recreated — a keyboard attached or detached included, or its
-             state would go with it. -->
+        <!-- Neue turns as its Screen setting says (v1.3.5): Portrait, Landscape or
+             Auto, a phone upright and a tablet lying down by default. The
+             activity sets that at runtime (MainActivity.applyOrientation) before
+             its first frame; fullUser here only means nothing is locked before
+             it does. The config changes listed are the ones Neue lays itself out
+             for rather than being recreated — a turn and a keyboard attached or
+             detached included, or the deck being edited would go with them. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTask"
             android:theme="@style/Theme.MasterTool"
-            android:screenOrientation="userLandscape"
+            android:screenOrientation="fullUser"
             android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode">

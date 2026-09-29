@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.kit.Icons
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -95,7 +97,7 @@ import kotlinx.coroutines.withContext
  * search and add cards to the list") — to that list: a double-click is the add,
  * a right-click the card's whole menu. Esc or Done closes it.
  */
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
     val studio = neue.studio ?: return
@@ -125,15 +127,59 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
         if (list != null) neue.toggleOnList(card, list.id) else CardActions.add(state, card)
     }
 
-    Box(
+    // Narrower than a filter column, the results and a reading pane side by side (a phone,
+    // v1.3.5): the results alone, the filters a sheet over them, and a tapped card read
+    // in a sheet of its own.
+    var filtersOut by remember { mutableStateOf(false) }
+    var readingOut by remember { mutableStateOf(false) }
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(c.paper)
             // The page under it hears nothing while this is up.
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
     ) {
+        val narrow = maxWidth < 760.dp
         Column(Modifier.fillMaxSize()) {
-            Row(
+            if (narrow) {
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    MuInput(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.weight(1f),
+                        placeholder = if (list != null) "Add to ${list.name}" else "A name, or text:",
+                        focusRequester = focus,
+                        onFocusChange = { neue.searchFocused = it },
+                        onSubmit = { outcome.cards.firstOrNull()?.let(::primary) },
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                    )
+                    MuButton("Done", { neue.studio = null }, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
+                }
+                FlowRow(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    itemVerticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Mono(
+                        if (outcome.truncated) "${outcome.cards.size} of ${"%,d".format(outcome.matchCount)}" else "%,d".format(outcome.matchCount),
+                        color = c.ink70,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Micro("Text", color = c.ink45)
+                        MuSwitch(state.searchEffects, state::onSearchEffectsChange)
+                    }
+                    val facets = filter.activeFacetCount
+                    MuButton(if (facets > 0) "Filters ($facets)" else "Filters", { filtersOut = true }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Filters)
+                    if (list != null) {
+                        Segmented(onlyList, listOf(false, true), { if (it) "On the list · ${list.ids.size}" else "Every card" }, { onlyList = it }, small = true)
+                    }
+                }
+            } else Row(
                 Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 32.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
@@ -169,11 +215,13 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 // The filters, always open.
                 val filterScroll = rememberScrollState()
-                Box(Modifier.width(340.dp).fillMaxHeight()) {
-                    FilterPanel(filter, { filter = it }, state.index, Modifier.verticalScroll(filterScroll).padding(24.dp))
-                    ScrollbarFor(filterScroll)
+                if (!narrow) {
+                    Box(Modifier.width(340.dp).fillMaxHeight()) {
+                        FilterPanel(filter, { filter = it }, state.index, Modifier.verticalScroll(filterScroll).padding(24.dp))
+                        ScrollbarFor(filterScroll)
+                    }
+                    VRule(color = c.ink12)
                 }
-                VRule(color = c.ink12)
                 // The results.
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     val grid = rememberLazyGridState()
@@ -186,10 +234,10 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                     } else {
                         val taps = rememberTapSurface(repeats = false)
                         LazyVerticalGrid(
-                            columns = GridCells.Adaptive(132.dp),
+                            columns = GridCells.Adaptive(if (narrow) 96.dp else 132.dp),
                             state = grid,
-                            modifier = Modifier.fillMaxSize().padding(end = 12.dp),
-                            contentPadding = PaddingValues(24.dp),
+                            modifier = Modifier.fillMaxSize().padding(end = if (narrow) 0.dp else 12.dp),
+                            contentPadding = PaddingValues(if (narrow) 12.dp else 24.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
@@ -203,7 +251,10 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                                         .onPointer(PointerEventType.Enter) { hovered = card }
                                         .onPointer(PointerEventType.Exit) { if (hovered == card) hovered = null }
                                         .onContextMenu { local -> neue.menu = MenuSpec(origin + local, CardActions.poolMenu(card, state, neue)) }
-                                        .surfaceTaps(taps, onTap = { picked = card }, onDoubleTap = {
+                                        .surfaceTaps(taps, onTap = {
+                                            picked = card
+                                            if (narrow) readingOut = true
+                                        }, onDoubleTap = {
                                             picked = card
                                             primary(card)
                                         })
@@ -230,10 +281,35 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                         ScrollbarFor(grid)
                     }
                 }
-                VRule(color = c.ink12)
-                // The card, read large.
-                Box(Modifier.width(420.dp).fillMaxHeight()) {
-                    reading?.let { card -> Reading(card, state, neue, list?.id, { filter = it }, filter) }
+                if (!narrow) {
+                    VRule(color = c.ink12)
+                    // The card, read large.
+                    Box(Modifier.width(420.dp).fillMaxHeight()) {
+                        reading?.let { card -> Reading(card, state, neue, list?.id, { filter = it }, filter) }
+                    }
+                }
+            }
+        }
+        // Narrow: the filters and the card read each come up as a sheet over the results.
+        if (narrow && (filtersOut || readingOut && picked != null)) {
+            Column(Modifier.fillMaxSize().background(c.paper)) {
+                Row(
+                    Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Micro(if (filtersOut) "Filters" else "Card", Modifier.weight(1f), color = c.ink45)
+                    MuButton("Results", { filtersOut = false; readingOut = false }, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
+                }
+                HRule(strong = true)
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    if (filtersOut) {
+                        val sheetScroll = rememberScrollState()
+                        FilterPanel(filter, { filter = it }, state.index, Modifier.verticalScroll(sheetScroll).padding(16.dp))
+                        ScrollbarFor(sheetScroll)
+                    } else {
+                        picked?.let { card -> Reading(card, state, neue, list?.id, { filter = it; readingOut = false }, filter) }
+                    }
                 }
             }
         }

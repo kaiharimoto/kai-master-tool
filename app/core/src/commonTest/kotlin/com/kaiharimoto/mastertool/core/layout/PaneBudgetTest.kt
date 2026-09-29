@@ -63,4 +63,30 @@ class PaneBudgetTest {
         assertEquals(1280f - 56f, p.deck)
         assertEquals(false, p.inspectorYielded)
     }
+
+    private fun phone(window: Float, pool: Boolean = true, rail: Boolean = true) =
+        PaneBudget.solve(window, touch = true, railOut = rail, groupsOn = true, poolVisible = pool, inspectorVisible = true, poolPref = 440f, inspectorPref = 400f, phone = true)
+
+    @Test
+    fun aPhoneLyingDownHasNoInspectorAndNoFloor() {
+        for (w in 640..960 step 40) {
+            val p = phone(w.toFloat())
+            assertEquals(0f, p.inspector, "at $w")
+            assertEquals(0f, p.groups, "at $w: groups are a sheet on a phone")
+            assertEquals(PaneBudget.TOUCH_RAIL, p.rail)
+            assertTrue(p.pool >= PaneBudget.PHONE_POOL_MIN || p.deck <= PaneBudget.PHONE_DECK_MIN + 0.01f, "at $w")
+            assertTrue(p.deck >= PaneBudget.PHONE_DECK_MIN, "at $w the deck is ${p.deck}")
+            assertEquals(w.toFloat(), p.rail + p.pool + PaneBudget.RULE + p.deck, 0.01f)
+        }
+        // A 915dp phone: the pool takes 40% of what the strip leaves.
+        val p = phone(915f)
+        assertEquals((915f - 56f) * 0.4f, p.pool, 0.01f)
+        // The pool hidden, the deck has it all.
+        assertEquals(915f - 56f, phone(915f, pool = false).deck, 0.01f)
+    }
+
+    @Test
+    fun thePhoneBranchLeavesTheTabletAlone() {
+        assertEquals(touch(), PaneBudget.solve(1280f, touch = true, railOut = true, groupsOn = false, poolVisible = true, inspectorVisible = true, poolPref = 440f, inspectorPref = 400f, phone = false))
+    }
 }

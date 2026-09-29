@@ -104,6 +104,9 @@ fun Modifier.onContextMenu(onOpen: (Offset) -> Unit): Modifier = composed {
 /** Whether this window is a touch screen first (a tablet), for what would otherwise wait on a hover. */
 val LocalTouchFirst = androidx.compose.runtime.staticCompositionLocalOf { false }
 
+/** A phone (v1.3.5, `FormFactor.PHONE`): pages lay themselves out for a narrow screen held close. */
+val LocalPhone = androidx.compose.runtime.compositionLocalOf { false }
+
 /**
  * How many text fields have focus, anywhere in the window (touch swarm, rec 6).
  *

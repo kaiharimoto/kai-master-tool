@@ -114,6 +114,10 @@ import com.kaiharimoto.mastertool.ui.deckbuilder.DeckLayoutState
 import com.kaiharimoto.neue.builder.BuilderPage
 import com.kaiharimoto.neue.builder.CardViewer
 import com.kaiharimoto.neue.builder.CardActions
+import com.kaiharimoto.neue.builder.historyMenu
+import com.kaiharimoto.neue.shell.PhoneBar
+import com.kaiharimoto.neue.shell.TabBar
+import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.builder.NeueDrag
 import com.kaiharimoto.neue.builder.rememberCarryMotion
 import com.kaiharimoto.neue.cards.NeueCard
@@ -368,7 +372,7 @@ class NeueHolders(
         when (val sel = if (neue.searchFocused) null else neue.selection) {
             is Selection.InDeck -> {
                 val ids = state.deck[sel.section]
-                val columns = com.kaiharimoto.neue.builder.columnsOf(sel.section)
+                val columns = (neue.phoneColumns ?: com.kaiharimoto.neue.builder.columnsOf(sel.section))
                 GridStep.move(sel.index, ids.size, columns, direction)?.let { next ->
                     state.index.byId(ids[next])?.let { neue.selection = Selection.InDeck(it, sel.section, next) }
                 } ?: run {
@@ -381,7 +385,7 @@ class NeueHolders(
                     val at = shown.indexOf(sel.section)
                     val target = shown.getOrNull(if (direction == StepDirection.DOWN) at + 1 else at - 1) ?: return@run
                     val there = state.deck[target]
-                    val cols = com.kaiharimoto.neue.builder.columnsOf(target)
+                    val cols = (neue.phoneColumns ?: com.kaiharimoto.neue.builder.columnsOf(target))
                     val column = (sel.index % columns).coerceAtMost(cols - 1)
                     val index = if (direction == StepDirection.DOWN) {
                         column.coerceAtMost(there.lastIndex)
@@ -466,6 +470,51 @@ class NeueHolders(
         }
     }
 
+    /**
+     * The phone's overflow (v1.3.5): every tool of the desk's bar, which a phone has no
+     * room to lay out, in one menu under the thumb. [at] is where it opened, so its
+     * second menus (Export, History) open in the same place.
+     */
+    fun phoneMenu(at: Offset): List<MenuEntry> {
+        val state = builder
+        val onBuilder = neue.page == Page.BUILDER
+        val next = neue.orientation.next()
+        return buildList {
+            add(MenuEntry("Search cards and commands", hint = "Search") { neue.paletteOpen = true })
+            add(MenuEntry("Advanced search") { run(DeskAction.ADVANCED_SEARCH) })
+            if (onBuilder) {
+                add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
+                add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
+                    neue.menu = MenuSpec(at, historyMenu(state, touch = true))
+                })
+                add(MenuEntry("Format: ${state.format.name}", hint = "Switch to ${if (state.format == Format.TCG) "OCG" else "TCG"}") {
+                    setFormat(if (state.format == Format.TCG) Format.OCG else Format.TCG)
+                })
+                if (state.validation.errors.isNotEmpty() || state.validation.warnings.isNotEmpty()) {
+                    add(MenuEntry("Issues", hint = "${state.validation.errors.size + state.validation.warnings.size}") { neue.drawer = Drawer.ISSUES })
+                }
+            }
+            add(MenuEntry(if (state.dirty) "Save" else "Saved", separatorBefore = true, enabled = state.dirty || !neue.prefs.autoSave) { run(DeskAction.SAVE) })
+            add(MenuEntry("Auto save: ${if (neue.prefs.autoSave) "on" else "off"}", hint = "Turn ${if (neue.prefs.autoSave) "off" else "on"}") {
+                neue.update { it.copy(autoSave = !it.autoSave) }
+            })
+            add(MenuEntry("New deck") { run(DeskAction.NEW_DECK) })
+            add(MenuEntry("Import a .ydk or .ydkx") { run(DeskAction.IMPORT) })
+            add(MenuEntry("Export…", hint = "File, code, text") { neue.menu = MenuSpec(at, CardActions.exportMenu(state, neue)) })
+            add(MenuEntry("Rotate: ${next.label}", hint = "Now ${neue.orientation.label}", separatorBefore = true) { neue.rotate() })
+            add(MenuEntry(if (neue.immersive) "Leave full screen" else "Full screen") { run(DeskAction.IMMERSIVE) })
+            add(MenuEntry(if (neue.prefs.theme == NeueTheme.PAPER) "Ink, the dark theme" else "Paper, the light theme") { neue.toggleTheme() })
+            add(MenuEntry("Gestures") { neue.helpOpen = true })
+            add(MenuEntry(
+                if (updates.available != null) "Update to ${updates.available?.versionName}" else "Check for updates",
+                hint = "v${Platform.version}",
+                separatorBefore = true,
+            ) {
+                if (updates.available != null) updates.dialogOpen = true else updates.check(userInitiated = true)
+            })
+        }
+    }
+
     fun commands(query: String): List<Command> {
         val q = query.trim().lowercase()
         fun kbd(a: DeskAction) = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
@@ -512,6 +561,8 @@ class NeueHolders(
             cmd("App", "Smaller interface", DeskAction.ZOOM_OUT),
             cmd("App", "Keyboard shortcuts", DeskAction.HELP),
             Command("App", "Check for updates") { updates.check(userInitiated = true) },
+            // The phone's and the tablet's screen, the one-tap toggle in words (v1.3.5).
+            *(if (neue.touchFirst) arrayOf(Command("App", "Rotate the screen: ${neue.orientation.next().label}") { neue.rotate() }) else emptyArray()),
             Command("App", "Refresh the card pool") { builder.refreshCardPool(force = true) },
             Command("App", "Report an issue →") { Platform.reportIssue() },
         ).filter { q.isEmpty() || it.label.lowercase().contains(q) || it.group.lowercase().startsWith(q) }
@@ -638,7 +689,17 @@ private fun NeueWindowContent(h: NeueHolders) {
     // The groups' palette: read wherever a group is coloured, so set once here.
     SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+    // What the app is running on and which way round (the phone, v1.3.5): the window's size
+    // in physical dp, before the interface scale — a phone does not become a tablet by zoom.
+    Box(
+        Modifier.fillMaxSize().onSizeChanged { px ->
+            val w = px.width / base.density
+            val h2 = px.height / base.density
+            neue.form = neue.formOverride ?: com.kaiharimoto.mastertool.core.layout.FormFactor.of(w, h2, neue.touchFirst)
+            neue.posture = com.kaiharimoto.mastertool.core.layout.Posture.of(w, h2)
+        },
+    ) {
+    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalPhone provides neue.phone, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
         neue.actingBy(finger = neue.touchFirst) { neue.felt(com.kaiharimoto.mastertool.core.haptics.DeskEvent.ART_STEPPED) }
@@ -648,6 +709,7 @@ private fun NeueWindowContent(h: NeueHolders) {
                 Shell(h)
             }
         }
+    }
     }
 }
 
@@ -680,7 +742,16 @@ private fun Shell(h: NeueHolders) {
             artRunning = h.art.running && neue.prefs.hdArt,
             problem = h.art.problem,
         )
-        TitleBar(
+        if (neue.phone) {
+            PhoneBar(
+                neue = neue,
+                state = state,
+                update = h.updates.available?.versionName,
+                onUpdate = { h.updates.dialogOpen = true },
+                menu = { h.phoneMenu(it) },
+                working = work != null,
+            )
+        } else TitleBar(
             neue = neue,
             update = h.updates.available?.versionName,
             onUpdate = { h.updates.dialogOpen = true },
@@ -916,10 +987,16 @@ private fun Shell(h: NeueHolders) {
                 }
             },
     ) {
+        // A phone (v1.3.5): the slim bar, and the pages as tabs along the bottom — or,
+        // lying down, as a strip down the left, where the height is the deck's.
+        val phone = neue.phone
+        val phoneTall = phone && neue.posture.isTall
         Column(Modifier.fillMaxSize()) {
             if (!immersive) titleBar()
             Row(Modifier.weight(1f).fillMaxWidth()) {
-                if (pinned) rail()
+                if (phone && !phoneTall && !immersive) {
+                    TabBar(neue, vertical = true, onSearch = { neue.paletteOpen = true })
+                } else if (pinned && !phone) rail()
                 Box(Modifier.weight(1f)) {
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
@@ -947,6 +1024,8 @@ private fun Shell(h: NeueHolders) {
                     Drawers(state, neue)
                 }
             }
+            // Put away while the keyboard is up: the dock's field sits on the keyboard, not on the tabs.
+            if (phoneTall && !immersive && !imeOpen) TabBar(neue)
         }
 
         // The bars that fold away slide over the page rather than pushing it:
@@ -1286,6 +1365,8 @@ private fun UpdateDialog(updates: NeueUpdates) {
         title = "Neue Master Tool ${update.versionName}",
         onDismiss = { updates.dialogOpen = false },
         width = 672.dp,
+        // The notes scroll themselves, so the footer's Install is never scrolled away.
+        scrolls = false,
         description = "You have ${Platform.version}. " + when {
             update.installer == null -> "This release has no installer for this system yet."
             inPlace -> "It installs over this one and reopens."

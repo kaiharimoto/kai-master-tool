@@ -86,6 +86,13 @@ fun neueMain(args: Array<String>) {
                     poolWidth = map["pool"]?.toFloat() ?: it.poolWidth,
                 )
             }
+            // --form=phone: Neue as a phone draws itself (v1.3.5), whatever the desk is.
+            if (map["form"] == "phone") {
+                h.neue.formOverride = com.kaiharimoto.mastertool.core.layout.FormFactor.PHONE
+                h.neue.form = com.kaiharimoto.mastertool.core.layout.FormFactor.PHONE
+            }
+            // --lens=roles etc. is below; --dock=PEEK|HALF|FULL sets the phone's pool dock.
+            map["dock"]?.let { d -> h.neue.update { it.copy(phoneDockStop = d.uppercase()) } }
             h.neue.page = when (map["page"]) {
                 "decks" -> Page.DECKS
                 "odds" -> Page.ODDS
@@ -188,6 +195,15 @@ fun neueMain(args: Array<String>) {
                 h.neue.revealed = com.kaiharimoto.mastertool.core.layout.Revealed(left = "left" in parts, top = "top" in parts, bottom = "bottom" in parts)
             }
             if (map["palette"] == "true") h.neue.paletteOpen = true
+            // --updatedialog: the update dialog on a made-up release, as a phone must be able to reach its Install.
+            if (map["updatedialog"] == "true") h.updates.offer(h.updates.sample())
+            // --phonemenu: the phone's overflow menu, open.
+            if (map["phonemenu"] == "true") h.neue.menu = com.kaiharimoto.neue.kit.MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.phoneMenu(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f)))
+            // --view=N: main deck card N opened large.
+            map["view"]?.toIntOrNull()?.let { i ->
+                val id = h.builder.deck[DeckSection.MAIN].getOrNull(i)
+                h.builder.index.byId(id ?: return@let)?.let { card -> h.neue.viewing = com.kaiharimoto.neue.Viewing(card, DeckSection.MAIN, i) }
+            }
             // --group-palettes=true: the Groups panel's palettes opened out (with --groups).
             if (map["group-palettes"] == "true") h.neue.groupPalettesOpen = true
             // --history: a few edits, then the history menu open, to see it list them.
