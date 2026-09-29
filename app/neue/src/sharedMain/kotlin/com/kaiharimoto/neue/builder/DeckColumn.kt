@@ -144,6 +144,12 @@ private val GRID_PAD = 6.dp
 private val SIDE_PAD = 16.dp
 private val RULE = 1.dp
 
+/** The narrowest the main deck's row is drawn, whatever the deck's width: room for every button (1.0.38). */
+private val ROW_LEAST = 720.dp
+
+/** The most of a section's width its pieces' gaps may take before they give way (1.0.38). */
+private const val GAP_SHARE = 0.25f
+
 /**
  * How card [position] floats in zen (kai, 1.0.12: "float in groups … flutter
  * diagonally like scales"): with its block — its lens group, or its section
@@ -377,21 +383,29 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         // The main deck in bands of group blocks (1.0.37, `GroupBands`) while the groups are out
         // Fitted or Separate. As the groups close the last bands are kept, so the cards go back
         // into their reading order on the bands' width before the deck is plain again.
-        val liveBands = with(density) { mainBands(state, neue, phoneCols, (maxWidth - sidePad * 2).toPx(), deckHeight.toPx()) }
-        val keptBands = remember { arrayOfNulls<BandLayout>(1) }
-        val bands = liveBands ?: keptBands[0]?.takeIf { !lensOn && crack > 0.01f && it.row.size == state.deck[DeckSection.MAIN].size }
-        keptBands[0] = bands
-        val separate = neue.prefs.arrangement == GroupArrangement.SEPARATE
-        fun cols(section: DeckSection) = if (section == DeckSection.MAIN && bands != null) bands.columns else phoneCols ?: columnsOf(section)
         // The deck in pieces by the lens (GroupPieces): what width and height the gaps
         // between them take, declared to the fitter so the cards pay for them honestly.
         val gapPx = with(density) { PIECE_GAP.toPx() } * neue.prefs.groupGap
         // Fitted blocks touch (kai, 1.0.37): across, room for their two outlines; down, for
         // the outlines and the name tab. Separate blocks stand a whole gap apart both ways.
+        val separate = neue.prefs.arrangement == GroupArrangement.SEPARATE
         val bandGapX = if (separate) gapPx else with(density) { FRAME.toPx() * 2 }
         val bandGapY = if (separate) gapPx else with(density) { nameTab.toPx() + FRAME.toPx() }
-        fun gapX(section: DeckSection) = if (section == DeckSection.MAIN && bands != null) bandGapX else gapPx
-        fun gapY(section: DeckSection) = if (section == DeckSection.MAIN && bands != null) bandGapY else gapPx
+        // The pane less what is drawn over and between the sections whatever the cards: each
+        // section's padding and rule, the other sections' names, the name tabs over the top
+        // band — or a tall deck is chosen for room it will not have (1.0.38).
+        val chrome = (GRID_PAD * 2 + RULE) * sections.size + LABEL_ROW * (sections.size - 1) + nameTab
+        val liveBands = with(density) { mainBands(state, neue, phoneCols, (maxWidth - sidePad * 2).toPx(), (deckHeight - chrome).toPx(), bandGapX, bandGapY) }
+        val keptBands = remember { arrayOfNulls<BandLayout>(1) }
+        val bands = liveBands ?: keptBands[0]?.takeIf { !lensOn && crack > 0.01f && it.row.size == state.deck[DeckSection.MAIN].size }
+        keptBands[0] = bands
+        fun cols(section: DeckSection) = if (section == DeckSection.MAIN && bands != null) bands.columns else phoneCols ?: columnsOf(section)
+        // The extra and side decks are drawn the main deck's width; where their pieces' gaps
+        // would take more than a quarter of it, the gaps give way rather than the cards
+        // (kai, 1.0.38: a narrow deck left the side deck nothing but its gaps).
+        val squeeze = remember { HashMap<DeckSection, Float>() }
+        fun gapX(section: DeckSection) = if (section == DeckSection.MAIN && bands != null) bandGapX else gapPx * (squeeze[section] ?: 1f)
+        fun gapY(section: DeckSection) = if (section == DeckSection.MAIN && bands != null) bandGapY else gapPx * (squeeze[section] ?: 1f)
         val zenGapPx = with(density) { PIECE_GAP.toPx() }
         // Zen's pieces are always the Roles groups (kai, 1.0.15): the ones the user draws.
         val rolePieces = sections.map { section ->
@@ -460,12 +474,20 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                 )
             }
         }
-        val placed = fitAt(zoom)
+        squeeze.clear()
+        val loose = fitAt(zoom)
+        sections.forEachIndexed { i, section ->
+            val spent = pieces[i].spanX * gapX(section) * crack
+            val room = loose.fit.contentWidth * GAP_SHARE
+            if (section != DeckSection.MAIN && spent > room) squeeze[section] = room / spent
+        }
+        val placed = if (squeeze.isEmpty()) loose else fitAt(zoom)
         // The row's inset is the deck's edge at the size that fills the column, so it
         // does not creep inward as the wheel shrinks the cards.
         val full = if (zoom < 0.999f) fitAt(1f) else placed
         val fullWidth = with(density) { full.fit.contentWidth.toDp() }
-        val rowInset = maxOf((maxWidth - fullWidth) / 2, sidePad)
+        // Never so far in that the row gives up its buttons: a fitted deck can be narrow.
+        val rowInset = minOf(maxOf((maxWidth - fullWidth) / 2, sidePad), maxOf((maxWidth - ROW_LEAST) / 2, sidePad))
         val fit = placed.fit
         val contentWidth = with(density) { fit.contentWidth.toDp() }
         // Where the grids start, from the column's left edge: every section is the same width and centred.
@@ -543,8 +565,10 @@ internal fun naturalDeckHeight(state: DeckBuilderState, neue: NeueState, width: 
     return with(density) {
         val gapPx = PIECE_GAP.toPx() * neue.prefs.groupGap
         // The same bands the deck is laid out in, asked with the same width (`mainBands`).
-        val bands = mainBands(state, neue, null, (width - (if (neue.phone) 8.dp else SIDE_PAD) * 2).toPx(), 0f)
         val separate = neue.prefs.arrangement == GroupArrangement.SEPARATE
+        val bandGapX = if (separate) gapPx else FRAME.toPx() * 2
+        val bandGapY = if (separate) gapPx else nameTab.toPx() + FRAME.toPx()
+        val bands = mainBands(state, neue, null, (width - (if (neue.phone) 8.dp else SIDE_PAD) * 2).toPx(), 0f, bandGapX, bandGapY)
         val placed = DeckLabels.stack(
             availableWidth = (width - SIDE_PAD * 2).toPx(),
             availableHeight = Float.MAX_VALUE,
@@ -553,8 +577,8 @@ internal fun naturalDeckHeight(state: DeckBuilderState, neue: NeueState, width: 
             requests = sections.map { section ->
                 val banded = if (section == DeckSection.MAIN) bands else null
                 val pieces = banded?.pieces() ?: if (lensOn) GroupPieces.of(state.keying(section).keyOfCell, columnsOf(section)) else null
-                val gapX = if (banded == null || separate) gapPx else FRAME.toPx() * 2
-                val gapY = if (banded == null || separate) gapPx else nameTab.toPx() + FRAME.toPx()
+                val gapX = if (banded == null) gapPx else bandGapX
+                val gapY = if (banded == null) gapPx else bandGapY
                 SectionFitRequest(
                     count = banded?.let { it.columns * it.rows } ?: state.deck[section].size,
                     columns = banded?.columns ?: columnsOf(section),

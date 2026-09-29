@@ -1462,9 +1462,25 @@ The layout is `GroupBands` (core, `GroupBandsTest`), and each of its rules was k
   and a dynamic program over the groups picks the bands; the deck's width is tried
   across a range and scored by the card size it leaves in the pane, so a wide pane
   takes a wide deck and a phone upright a narrow one.
+- **Space comes first** (1.0.38, kai: "as is is a lot better at managing space than
+  fitted, and I can't see the side deck cards anymore"). Their deck on a phone came out
+  six wide and seven rows tall, and the side deck, drawn at the main deck's width, was
+  left nothing but its gaps. Three things were wrong in the scoring: shape could
+  outweigh size, the gaps between bands were not counted, and the extra and side decks
+  were costed as rows of main-deck cards rather than fifteen across. Now each width is
+  scored by the card it really leaves room for (`gapX`/`gapY`, the other sections at
+  their own width), and a layout whose cards fall below nine tenths of the plain ten-wide
+  deck's pays heavily for every step short (`AS_IS_SHARE`, `SHORT`) — more than any
+  shape saves or any memory holds. The floor is measured in fractional rows, so it
+  moves smoothly with the count. A phone upright sizes its deck to the width, so its
+  pane is the plain deck's own height there: Fitted keeps full-width cards. And in the
+  builder, where the extra or side deck's pieces would spend more than a quarter of the
+  width on gaps, the gaps give way rather than the cards (`GAP_SHARE`); the row over the
+  deck keeps at least 720 dp, so a narrow deck never costs it a button.
 - **An edit does not reshuffle the deck** (`BandMemory`): the last layout's width
   and each block's shape are preferred, so adding a card changes its own block and
-  seldom anything else. The memory is for edits only: a new pane — the window
+  seldom anything else — unless the edit lets the cards grow by a tenth or more, when
+  space wins. The memory is for edits only: a new pane — the window
   resized, the tablet turned, the extra deck shown — is laid out afresh, or the size
   of the first frame would hold for ever.
 

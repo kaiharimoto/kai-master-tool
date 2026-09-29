@@ -211,7 +211,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   As is, Fitted or Separate** (1.0.37, `NeuePreferences.groupArrangement`, `Shift K`):
   As is is the pieces above; Fitted and Separate lay the main deck out in bands of
   group blocks (`GroupBands`) — copy sets kept whole, blocks at most four rows,
-  groups in order, ungrouped last, an edit holding the last shapes (`BandMemory`) —
+  groups in order, ungrouped last, an edit holding the last shapes (`BandMemory`),
+  and never much smaller cards than As is (1.0.38: a layout below nine tenths of the
+  plain deck's card pays heavily; gaps and the other sections are counted) —
   handed on as a `PieceLayout` with `rowOf`, so outlines, tabs, drops and zen read
   it unchanged. `NEUE.md` §4h¾. **The wheel
   re-fits the deck** smaller (`deckZoom`) — a re-fit, not a transform, so every

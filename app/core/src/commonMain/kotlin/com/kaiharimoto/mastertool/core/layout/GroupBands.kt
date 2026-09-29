@@ -100,11 +100,30 @@ object GroupBands {
     private const val MAX_WIDTH = 17
 
     /**
+     * Fitted must manage space as well as As is (kai, 1.0.38: "as is is a lot better at
+     * managing space than fitted, and I can't see the side deck cards anymore"). A layout
+     * whose cards come out smaller than this share of the plain ten-wide deck's pays
+     * [SHORT] for every unit of log it falls short — more than any block's shape saves, and
+     * more than the memory of an earlier layout holds it by.
+     */
+    private const val AS_IS_SHARE = 0.9f
+    private const val SHORT = 300f
+
+    /** How many cards across the extra and side decks' rows are: they are drawn the deck's width. */
+    private const val OTHER_COLUMNS = 15f
+
+    /** The plain deck the fitted one is held to: ten across, sized for forty from the start. */
+    private const val PLAIN_COLUMNS = 10
+    private const val PLAIN_BASELINE = 40
+
+    /**
      * The layout for positions [ids] (each a card, by passcode) keyed [keys] (a group, or
      * null), groups in [order] (keys not in it follow in the order first met). [pane] is
      * the room the deck has, width by height, in any unit; [otherRows] the rows below it
-     * of other sections, at the same card size; [cardAspect] a card's height over width.
-     * Null when there is nothing to lay out.
+     * of other sections, fifteen across at the deck's width; [cardAspect] a card's height
+     * over width; [gapX] and [gapY] the room, in the pane's unit, between two stacks across
+     * and between two bands (or two blocks of a stack) down. Null when there is nothing to
+     * lay out.
      */
     fun layout(
         ids: List<Int>,
@@ -115,17 +134,35 @@ object GroupBands {
         cardAspect: Float = 86f / 59f,
         memory: BandMemory? = null,
         widths: IntRange? = null,
+        gapX: Float = 0f,
+        gapY: Float = 0f,
     ): BandLayout? {
         if (ids.isEmpty() || ids.size != keys.size) return null
         val groups = groupsOf(ids, keys, order)
         val n = ids.size
         val range = widths ?: (min(MIN_WIDTH, n)..min(MAX_WIDTH, max(n, 1)))
+        // The card each shape leaves room for: across, the cards and the gaps between stacks;
+        // down, the rows, the gaps between bands, and the other sections' rows at this width.
+        fun card(w: Int, rows: Float, spanX: Int, spanY: Int): Float = min(
+            (pane.first - spanX * gapX) / w,
+            (pane.second - spanY * gapY) / (rows * cardAspect + otherRows * cardAspect * w / OTHER_COLUMNS),
+        ).coerceAtLeast(1e-6f)
+        // The plain deck's rows as a fraction, so the floor moves smoothly with the count: a
+        // whole row appearing at the forty-first card would move the floor, and the deck, at once.
+        val plainRows = max(n, PLAIN_BASELINE).toFloat() / PLAIN_COLUMNS
+        val candidates = range.mapNotNull { w ->
+            Solver(groups, w, memory).solve()?.let { it to card(w, it.rows.toFloat(), it.spanX, it.spanY) }
+        }
+        val plain = card(PLAIN_COLUMNS, plainRows, 0, 0)
+        val floor = plain * AS_IS_SHARE
+        // The extra and side decks are drawn at the deck's width, so with them showing the
+        // deck is held to the plain deck's width too: a narrow one shrinks every card in them.
+        val wideFloor = if (otherRows > 0) PLAIN_COLUMNS * plain * AS_IS_SHARE else 0f
         var best: Pair<Float, Solved>? = null
-        for (w in range) {
-            val solved = Solver(groups, w, memory).solve() ?: continue
-            val rows = solved.rows
-            val scale = min(pane.first / w, pane.second / ((rows + otherRows) * cardAspect))
-            var total = solved.cost - SCALE * ln(scale.coerceAtLeast(1e-6f))
+        for ((solved, scale) in candidates) {
+            val w = solved.width
+            val wide = w * scale + solved.spanX * gapX
+            var total = solved.cost - SCALE * ln(scale) + SHORT * max(0f, ln(floor / scale)) + SHORT * max(0f, ln(wideFloor / wide))
             if (memory != null && memory.columns != w) total += KEEP_WIDTH
             if (best == null || total < best.first - 1e-4f) best = total to solved
         }
@@ -254,6 +291,10 @@ object GroupBands {
 
     private class Solved(val cost: Float, val width: Int, val bands: List<Band>) {
         val rows: Int get() = bands.sumOf { it.height }
+
+        /** The most gaps across any band (between its stacks), and down the deck (between bands and stacked blocks). */
+        val spanX: Int get() = bands.maxOfOrNull { it.stacks.size - 1 } ?: 0
+        val spanY: Int get() = bands.withIndex().maxOfOrNull { (i, b) -> i + (b.stacks.maxOfOrNull { it.size } ?: 1) - 1 } ?: 0
 
         fun toLayout(ids: List<Int>, groups: List<Group>): BandLayout {
             val row = IntArray(ids.size)

@@ -28,21 +28,21 @@ internal class BandCache {
     private var memory: BandMemory? = null
     private var room: Any? = null
 
-    fun layout(deckId: String?, ids: List<Int>, keys: List<String?>, order: List<String>, pane: Pair<Float, Float>, otherRows: Int): BandLayout? {
+    fun layout(deckId: String?, ids: List<Int>, keys: List<String?>, order: List<String>, pane: Pair<Float, Float>, otherRows: Int, gaps: Pair<Float, Float>): BandLayout? {
         if (deckId != deck) {
             deck = deckId
             memory = null
             inputs = null
         }
-        val key = listOf(ids, keys, order, pane, otherRows)
+        val key = listOf(ids, keys, order, pane, otherRows, gaps)
         if (key == inputs) return result
         inputs = key
         // The memory is for edits: a new pane (a window resized, a tablet turned, the extra
         // deck shown) is laid out afresh, or the first frame's size would hold for ever.
-        val here = pane to otherRows
+        val here = Triple(pane, otherRows, gaps)
         if (here != room) memory = null
         room = here
-        result = GroupBands.layout(ids, keys, order, pane, otherRows, memory = memory)
+        result = GroupBands.layout(ids, keys, order, pane, otherRows, memory = memory, gapX = gaps.first, gapY = gaps.second)
         result?.let { memory = it.memory }
         return result
     }
@@ -56,19 +56,34 @@ internal fun bandsOn(state: DeckBuilderState, neue: NeueState, phoneColumns: Int
 /**
  * The main deck's bands, or null to lay it out as it reads. [paneWidth] × [paneHeight] is
  * the room the deck has, in pixels; on a phone the deck is measured to its width, so
- * the pane is the width's own shape there. Quantised, so a resize does not lay the deck
- * out again every pixel.
+ * the pane is the plain deck's own height at that width there. Quantised, so a resize
+ * does not lay the deck out again every pixel. [gapX] and [gapY] are the gaps between
+ * blocks across and down, in pixels.
  */
-internal fun mainBands(state: DeckBuilderState, neue: NeueState, phoneColumns: Int?, paneWidth: Float, paneHeight: Float): BandLayout? {
+internal fun mainBands(
+    state: DeckBuilderState,
+    neue: NeueState,
+    phoneColumns: Int?,
+    paneWidth: Float,
+    paneHeight: Float,
+    gapX: Float,
+    gapY: Float,
+): BandLayout? {
     if (!bandsOn(state, neue, phoneColumns)) return null
     val keying = state.keying(DeckSection.MAIN)
     if (keying.keyOfCell.none { it != null }) return null
     val ids = state.deck[DeckSection.MAIN].map { it.value }
-    val height = if (neue.phone) paneWidth * PHONE_PANE else paneHeight
-    fun step(v: Float) = ((v / 40f).roundToInt() * 40).toFloat().coerceAtLeast(40f)
     val others = listOf(neue.prefs.extraVisible, neue.prefs.sideVisible).count { it }
-    return neue.bandCache.layout(state.deckId, ids, keying.keyOfCell, keying.keyOrder, step(paneWidth) to step(height), others)
+    // A phone upright sizes its deck to the width and gives the dock the rest (v1.3.6), so
+    // its pane is as tall as the plain deck at that width, ten across and fifteen under it,
+    // and a gap or two: Fitted is held to the plain deck's full-width cards (1.0.38).
+    val height = if (!neue.phone) paneHeight else {
+        val rows = (maxOf(ids.size, DeckSection.MAIN.minSize) + 9) / 10
+        paneWidth * (rows * CARD_TALL / 10f + others * CARD_TALL / 15f) + gapY * 2
+    }
+    fun step(v: Float) = ((v / 40f).roundToInt() * 40).toFloat().coerceAtLeast(40f)
+    return neue.bandCache.layout(state.deckId, ids, keying.keyOfCell, keying.keyOrder, step(paneWidth) to step(height), others, gapX to gapY)
 }
 
-/** A phone's deck is measured to its width, and upright it leaves the dock half the screen (v1.3.6): the pane its bands are fitted to is this much of the width tall, the decklist's 10×4 shape. */
-private const val PHONE_PANE = 0.6f
+/** A card's height over its width. */
+private const val CARD_TALL = 86f / 59f

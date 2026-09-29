@@ -90,8 +90,10 @@ class GroupBandsTest {
     fun theDesignRunsDecksComeOutAsTheyWereChosen() {
         val la = lay(a)
         holds(a, la)
-        assertEquals(14 to 3, la.columns to la.rows, "A: one band of five blocks")
-        assertEquals(listOf(3, 3, 3, 2, 3), la.blocks.map { it.width })
+        // Its three named groups the squares the design run chose; the deck no longer fourteen
+        // across, which left every card a fifth smaller than the plain deck's (1.0.38).
+        assertTrue(la.blocks.take(3).all { it.width == 3 && it.height == 3 }, "A: ${la.blocks}")
+        assertTrue(la.columns <= 12, "A: ${la.columns}x${la.rows}")
         val lb = lay(b)
         holds(b, lb)
         assertEquals(11 to 4, lb.columns to lb.rows)
@@ -100,11 +102,75 @@ class GroupBandsTest {
 
     @Test
     fun theWidthFollowsThePane() {
-        val wide = lay(a)
-        val upright = lay(a, phone)
+        val wide = lay(a, 2000f to 500f)
+        val upright = lay(a, 800f to 1400f)
         holds(a, upright)
         assertTrue(upright.columns < wide.columns, "a taller pane takes a narrower deck: ${upright.columns} vs ${wide.columns}")
     }
+
+    // kai's Angelechy Labrynth (1.0.38), which on a phone upright came out six wide and seven
+    // rows tall, every card smaller than As is and the side deck crushed under it.
+    private val angelechy = deck(
+        "Combo" to listOf(1 to 3, 2 to 3, 3 to 3, 4 to 1),
+        "Angelechy" to listOf(5 to 3, 6 to 3, 7 to 3),
+        "Non-engine" to listOf(8 to 3, 9 to 3, 10 to 3),
+        "Breakers" to listOf(11 to 2, 12 to 2),
+        "Requirements" to listOf(13 to 2, 14 to 1, 15 to 1, 16 to 2, 17 to 1, 18 to 1),
+    )
+
+    /** The card a layout leaves room for, as the chooser works it out. */
+    private fun cardIn(l: BandLayout, pane: Pair<Float, Float>, others: Int, gapX: Float, gapY: Float): Float {
+        val pieces = l.pieces()
+        val aspect = 86f / 59f
+        return minOf(
+            (pane.first - pieces.spanX * gapX) / l.columns,
+            (pane.second - pieces.spanY * gapY) / (l.rows * aspect + others * aspect * l.columns / 15f),
+        )
+    }
+
+    @Test
+    fun fittedCardsAreNeverMuchSmallerThanAsIs() {
+        // A phone upright at 2.625 dp to the pixel, the extra and side decks under the deck, and
+        // desks of two shapes: the fitted cards are at least nine tenths of the plain deck's.
+        val cases = listOf(
+            Triple(1000f to 600f, 26f, 58f), Triple(1400f to 760f, 10f, 22f), Triple(1100f to 1000f, 10f, 22f),
+            // The desk's deck column between the pool and the Groups panel.
+            Triple(750f to 870f, 10f, 22f),
+        )
+        listOf(a, b, big, singles, angelechy).forEach { d ->
+            cases.forEach { (pane, gx, gy) ->
+                listOf(0, 2).forEach { others ->
+                    val l = GroupBands.layout(d.ids, d.keys, d.order, pane, others, gapX = gx, gapY = gy)!!
+                    holds(d, l)
+                    val rows = (maxOf(d.ids.size, 40) + 9) / 10
+                    val aspect = 86f / 59f
+                    val plain = minOf(pane.first / 10, pane.second / (rows * aspect + others * aspect * 10 / 15f))
+                    val card = cardIn(l, pane, others, gx, gy)
+                    // Held to the plain deck, or, where no bands can reach it, to the best they can do.
+                    val best = (6..17).mapNotNull { w ->
+                        GroupBands.layout(d.ids, d.keys, d.order, pane, others, widths = w..w, gapX = gx, gapY = gy)?.let { cardIn(it, pane, others, gx, gy) }
+                    }.max()
+                    // With the extra and side decks drawn at its width, the deck is nearly as wide as the plain one.
+                    if (others > 0) assertTrue(card * l.columns + l.pieces().spanX * gx >= 0.85f * plain * 10, "${l.columns}x${l.rows} in $pane is narrow")
+                    assertTrue(card >= 0.85f * minOf(plain, best), "${l.columns}x${l.rows} in $pane with $others: $card against the plain $plain, the best $best")
+                }
+            }
+        }
+        // And the phone's case itself is a full-width deck again.
+        val phone = GroupBands.layout(angelechy.ids, angelechy.keys, angelechy.order, 1000f to 600f, 2, gapX = 26f, gapY = 58f)!!
+        assertTrue(phone.columns >= 9, "the phone's deck is ${phone.columns} wide")
+    }
+
+    @Test
+    fun theMemoryOfANarrowDeckDoesNotHoldIt() {
+        // Laid out once in a narrow pane, the deck is not kept narrow in a wide one by its memory.
+        val narrow = GroupBands.layout(angelechy.ids, angelechy.keys, angelechy.order, 500f to 1400f)!!
+        val l = GroupBands.layout(angelechy.ids, angelechy.keys, angelechy.order, 1000f to 600f, 2, memory = narrow.memory, gapX = 26f, gapY = 58f)!!
+        assertTrue(l.columns >= 9, "held at ${l.columns} wide by the memory of ${narrow.columns}")
+    }
+
+    /** The card a layout leaves room for in the desk's pane, with no gaps. */
+    private fun card(l: BandLayout) = minOf(desk.first / l.columns, desk.second / (l.rows * 86f / 59f))
 
     @Test
     fun anEditDoesNotReshuffleTheDeck() {
@@ -126,13 +192,18 @@ class GroupBandsTest {
                 null to listOf(17 to 2, 18 to 1, 19 to 2, 20 to 2, 21 to 1, 22 to 1),
             ),
         )
+        var before = lay(a)
         edits.forEach { d ->
             val l = lay(d, memory = memory)
             holds(d, l)
+            // An edit keeps the deck as it was — unless it lets the cards grow by a tenth or more
+            // (1.0.38): space comes first, and a reshuffle has to buy some.
+            val grew = card(l) >= card(before) * 1.1f
             val changed = l.memory.shapes.count { (k, v) -> memory.shapes[k] != null && memory.shapes[k] != v }
-            assertTrue(changed <= 1, "at most the edited block changes: $changed")
-            assertEquals(memory.columns, l.columns, "the width holds")
+            assertTrue(changed <= 1 || grew, "at most the edited block changes: $changed")
+            if (!grew) assertEquals(memory.columns, l.columns, "the width holds")
             memory = l.memory
+            before = l
         }
     }
 
