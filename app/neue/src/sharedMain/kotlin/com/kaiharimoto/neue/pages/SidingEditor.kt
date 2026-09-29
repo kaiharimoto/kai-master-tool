@@ -80,6 +80,7 @@ import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 import com.kaiharimoto.neue.web.Webs
 import kotlin.random.Random
+import kotlinx.coroutines.launch
 
 /**
  * Siding (kai, 1.0.35: "siding patterns, can use other decks in the deck web as
@@ -142,7 +143,20 @@ internal fun SidingEditor(
     fun setPlan(t: Turn, p: SidePlan) = edit { it.withPlan(t, p) }
 
     Column(Modifier.fillMaxSize()) {
-        SidingBar(webs, web, decks, me, onBack, neue)
+        val library = com.kaiharimoto.neue.art.LocalArt.current
+        val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+        val scope = androidx.compose.runtime.rememberCoroutineScope()
+        var making by remember { mutableStateOf(false) }
+        SidingBar(webs, web, decks, me, onBack, neue, making) {
+            making = true
+            scope.launch {
+                try {
+                    GuideExport.deliver(webs, web, decks, me, state, neue, library, custom)
+                } finally {
+                    making = false
+                }
+            }
+        }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
         if (opponents.isEmpty() && loose.isEmpty()) {
             com.kaiharimoto.neue.kit.EmptyState(
@@ -214,7 +228,7 @@ private fun marks(m: Matchup?): String = if (m == null) "· ·" else "${m.mark(T
 
 /** Back to the web, and which deck is being sided. */
 @Composable
-private fun SidingBar(webs: Webs, web: DeckWeb, decks: List<StoredDeck>, me: StoredDeck, onBack: () -> Unit, neue: NeueState) {
+private fun SidingBar(webs: Webs, web: DeckWeb, decks: List<StoredDeck>, me: StoredDeck, onBack: () -> Unit, neue: NeueState, making: Boolean, onGuide: () -> Unit) {
     val c = Mu.colors
     val phone = LocalPhone.current
     var asAt by remember { mutableStateOf(Offset.Zero) }
@@ -241,6 +255,7 @@ private fun SidingBar(webs: Webs, web: DeckWeb, decks: List<StoredDeck>, me: Sto
             variant = BtnVariant.SECONDARY,
             size = BtnSize.SM,
         )
+        GuideButton(making, onGuide)
         if (!phone) {
             Small(
                 if (LocalTouchFirst.current) "Tap a card in the deck to side it; tap one in a list to take it back."
@@ -249,6 +264,20 @@ private fun SidingBar(webs: Webs, web: DeckWeb, decks: List<StoredDeck>, me: Sto
             )
         }
     }
+}
+
+/** The guide as a PDF: every matchup, both turns and their plans, to print or send. */
+@Composable
+internal fun GuideButton(making: Boolean, onGuide: () -> Unit) {
+    MuButton(
+        if (making) "Making the guide…" else "Siding guide · PDF",
+        onGuide,
+        variant = BtnVariant.PRIMARY,
+        size = BtnSize.SM,
+        icon = com.kaiharimoto.neue.kit.Icons.Export,
+        enabled = !making,
+        reason = "The guide is being made",
+    )
 }
 
 /** Every opponent: the web's other decks, then any plan against a deck not in the web. */

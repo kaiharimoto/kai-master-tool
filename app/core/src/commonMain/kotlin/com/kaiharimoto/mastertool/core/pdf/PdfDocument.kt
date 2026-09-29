@@ -33,6 +33,7 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
     internal val ops = StringBuilder()
     internal val fonts = LinkedHashSet<PdfFont>()
     internal val images = LinkedHashSet<PdfImage>()
+    internal val alphas = LinkedHashSet<Int>()
 
     private fun n(v: Float): String {
         val r = kotlin.math.round(v * 100f) / 100f
@@ -72,6 +73,15 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
             hex.append(g.toString(16).padStart(4, '0'))
         }
         ops.append("BT /${font.key} ${n(size)} Tf ${n(gray)} g ${n(x)} ${n(y(baseline))} Td <$hex> Tj ET\n")
+    }
+
+    /** What [draw] puts on the page, see-through: [alpha] 0 to 1, fills, strokes and pictures alike. */
+    fun faded(alpha: Float, draw: () -> Unit) {
+        val percent = (alpha * 100).toInt().coerceIn(0, 100)
+        alphas += percent
+        ops.append("q /GA$percent gs\n")
+        draw()
+        ops.append("Q\n")
     }
 
     /** [image] drawn into the box at ([x], [top]), [w] × [h] points. */
@@ -130,10 +140,11 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
             val (pageId, contentId) = pageIds[i]
             val fontRes = page.fonts.joinToString(" ") { "/${it.key} ${fontIds.getValue(it)[0]} 0 R" }
             val imageRes = page.images.joinToString(" ") { "/${it.key} ${imageIds.getValue(it)} 0 R" }
+            val alphaRes = page.alphas.joinToString(" ") { "/GA$it << /ca ${it / 100f} /CA ${it / 100f} >>" }
             out.obj(
                 pageId,
                 "<< /Type /Page /Parent $pagesId 0 R /MediaBox [0 0 ${page.width} ${page.height}] " +
-                    "/Resources << /Font << $fontRes >> /XObject << $imageRes >> >> /Contents $contentId 0 R >>",
+                    "/Resources << /Font << $fontRes >> /XObject << $imageRes >> /ExtGState << $alphaRes >> >> /Contents $contentId 0 R >>",
             )
             out.stream(contentId, "", page.ops.toString().encodeToByteArray())
         }

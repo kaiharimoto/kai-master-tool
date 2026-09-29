@@ -144,6 +144,19 @@ fun neueMain(args: Array<String>) {
                     h.neue.page = Page.FORMAT
                     clock.run(60)
                 }
+                // --guide=path: the siding guide of the deck --siding names, written to path as a PDF (1.0.36).
+                map["guide"]?.let { path ->
+                    val web = h.webs.selected
+                    val id = h.webs.sidingDeckId
+                    if (web != null && id != null) {
+                        val decks = h.webs.decks(web)
+                        decks.firstOrNull { it.entry.id == id }?.let { me ->
+                            val bytes = com.kaiharimoto.neue.pages.GuideExport.build(h.webs, web, decks, me, h.builder, h.neue, h.art, h.customArt)
+                            java.io.File(path).writeBytes(bytes)
+                            println("[neue-studio] guide: ${bytes.size / 1024} KiB to $path")
+                        }
+                    }
+                }
                 if (map["matchups"] == "true") {
                     h.webs.showMatchups = true
                     h.neue.page = Page.FORMAT

@@ -292,7 +292,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   answering turn, as pictures. The web's page lists your matchups (`MatchupTable`).
   An edit to the builder's open deck goes into its payload too
   (`DeckBuilderState.putExtended`), or its next save would write the old plan back.
-  The PDF guide is next.
+  **The siding guide** (1.0.36) is a PDF written by our own `core/pdf` (`PdfDocument`,
+  `TrueType`: the app's Inter and JetBrains Mono embedded whole, real text with a
+  `ToUnicode` map, RGB pictures) laid out by `SidingGuide` (core, tested) to kai's
+  mockup: at a glance, then two matchups a page with both turns and **their plan**.
+  `GuideExport` gathers the pictures (the chosen artworks) and `deliverFile` saves and
+  opens it on the desk, shares it on Android. `tools/shoot.sh --guide=path` writes one.
 - **The builder opens a deck**: the library's default, else the one saved last
   (`StartingDeck`). A library row shows up to three chosen covers
   (`DeckCovers`), and a card's alternate artworks are a picture choice applied

@@ -49,6 +49,7 @@ import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 import com.kaiharimoto.neue.web.Webs
+import kotlinx.coroutines.launch
 
 /** The siding editor for deck [deckId] of [web], once the web's decks are read. */
 @Composable
@@ -97,7 +98,21 @@ internal fun MatchupTable(webs: Webs, web: DeckWeb, decks: List<StoredDeck>, sta
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                 if (mine.size > 1) mine.forEach { d -> Tag("★ ${d.entry.name}", d.entry.id == me.entry.id, { asId = d.entry.id }, caption = "Side as") }
                 else Micro("★ ${me.entry.name}", color = c.ink)
-                Small("$written of ${opponents.size * 2} plans written", Modifier.padding(start = 8.dp), color = c.ink70)
+                Small("$written of ${opponents.size * 2} plans written", Modifier.padding(start = 8.dp, end = 8.dp), color = c.ink70)
+                val library = com.kaiharimoto.neue.art.LocalArt.current
+                val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+                val scope = androidx.compose.runtime.rememberCoroutineScope()
+                var making by remember { mutableStateOf(false) }
+                GuideButton(making) {
+                    making = true
+                    scope.launch {
+                        try {
+                            GuideExport.deliver(webs, web, decks, me, state, neue, library, custom)
+                        } finally {
+                            making = false
+                        }
+                    }
+                }
             }
             if (opponents.isEmpty()) {
                 Small("There is nobody else in this web to side against yet.", color = c.ink45)

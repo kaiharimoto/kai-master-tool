@@ -1509,6 +1509,34 @@ on the mockup, "how they side against you" to be more visually intuitive.
   starred deck, a row per opponent with each turn's plan in a line.
 - Back and Esc leave the editor for its web (`Unwind.SIDING`, after a note's focus).
 
+**The siding guide** (1.0.36; kai: "export an organized and visually coherent
+siding guide… it should also include how they side against you if they have it";
+a PDF, their pick). **Siding guide · PDF** in the editor's bar and on the Matchups
+view makes it for the deck being sided:
+
+- **Written by us** (`core/pdf`): Skiko has no PDF backend and Android's would be a
+  second copy of every drawing, so `PdfDocument` writes the file itself — pages,
+  grey fills and rules, dashes, fill alpha, RGB pictures, and text set in the app's
+  own fonts: each embedded whole as a TrueType CID font (Identity-H) with its widths
+  and a `ToUnicode` map, so the guide is searchable and copies out as text.
+  `TrueType` reads `cmap`, `hmtx` and the rest for the glyphs and widths.
+- **Laid out in core** (`SidingGuide`), to the mockup kai approved: every page the
+  label (`SIDING GUIDE · SPRING REGIONAL`), the deck's name over a rule, its counts
+  and `page 2 of 4`; the first page **at a glance** (the web's notes, each matchup's
+  share and plans in a line); then a block per matchup — faces, `vs Yubel`, share,
+  note — over a box for each turn: **Out** beside **In** as pictures with counts and
+  names, why, and under a dashed line **their plan** for the answering turn (*They go
+  second*): what they bring beside what they drop (faded, struck), and their note.
+  Blocks never break; runs side by side put two matchups on a page. Every web deck
+  is listed, sided or not ("Not sided yet"), so the guide doubles as what is left.
+- **Pictures** (`GuideExport`): each card with the artwork chosen for it, own
+  pictures included, from the originals drawn down to 150 px — sharp at print size;
+  a guide of thirty cards is about 2.5 MB. Each is written once however often printed.
+- **Delivered** by `deliverFile`: saved where the person says and opened, on the
+  desk; through the share sheet (Files, Drive, a printer) on a tablet or phone.
+- `tools/shoot.sh --page=format --ydkw=… --siding=0 --guide=out.pdf` writes one
+  headlessly; `SidingGuideTest` and `PdfDocumentTest` check the structure.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two
