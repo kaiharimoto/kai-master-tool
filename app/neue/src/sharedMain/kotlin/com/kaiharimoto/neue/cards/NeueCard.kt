@@ -42,6 +42,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.LaunchedEffect
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.memory.MemoryCache
+import coil3.request.ImageRequest
+import coil3.size.Precision
+import com.kaiharimoto.mastertool.core.layout.DecodeSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.kaiharimoto.mastertool.core.motion.DeskLean
@@ -66,6 +71,9 @@ const val CARD_RATIO = 59f / 86f
 /** The width of YGOPRODeck's small render. A card drawn wider than this is an upscale of it. */
 private const val SMALL_WIDTH = 268
 
+/** The width of the full-size original. */
+private const val ORIGINAL_WIDTH = 813
+
 /** How many of its own widths the eye is from a leaning card. */
 private const val EYE_WIDTHS = 2.2f
 
@@ -84,6 +92,12 @@ private enum class ArtState { LOADING, READY, FAILED }
  * - The picture is the full-size original when the art library has it
  *   ([LocalArt]), else YGOPRODeck's small render. The small one stays
  *   underneath until the original has decoded, so arriving never flashes.
+ * - Each is decoded at the size the card is drawn, and decoded again when the
+ *   card grows ([DecodeSize]) — Coil sizes a decode to the box as first
+ *   measured and never looks again, so a card laid out small before the window
+ *   was maximised stayed blurry until Settings and back rebuilt it. The sharper
+ *   decode takes over from the softer one in place (its placeholder is the
+ *   softer one), so it never flashes either.
  *
  * - Pending art is the live hatch at the card's own ratio; failed art is the
  *   static hatch with the name in a paper block (§17.2).
@@ -164,6 +178,15 @@ private fun NeueCardFace(
     // The decoded pictures, kept so the name can be read off whichever is showing.
     var smallImage by remember(card.id) { mutableStateOf<coil3.Image?>(null) }
     var hdImage by remember(card.id) { mutableStateOf<coil3.Image?>(null) }
+    // The widest this box has been drawn, in DecodeSize's steps: 0 until it is measured,
+    // then only up — so a resize redraws the card a handful of times, not every frame. It
+    // belongs to the box, not the card, so a box that is handed another card (an artwork
+    // stepped, a deck shifting) has its size at once rather than waiting to be measured.
+    var reach by remember { mutableStateOf(0) }
+    val smallDecode = DecodeSize.width(reach, 0, SMALL_WIDTH)
+    val hdDecode = DecodeSize.width(reach, 0, ORIGINAL_WIDTH)
+    // The last decode of each, which the next one shows while it loads.
+    val shownKeys = remember(card.id) { DecodeKeys() }
     var nameMask by remember(card.id) { mutableStateOf<NameMask?>(null) }
     val nameSource = hdImage ?: smallImage
     LaunchedEffect(nameSource, names, foil) {
@@ -210,6 +233,8 @@ private fun NeueCardFace(
                 }
             }
             .onSizeChanged { px ->
+                val grown = DecodeSize.width(px.width, reach)
+                if (grown != reach) reach = grown
                 // Drawn wider than the small render: ask for the original now, not in its turn.
                 if (px.width > SMALL_WIDTH && hd == null) library?.want(card)
             }
@@ -260,14 +285,22 @@ private fun NeueCardFace(
                 },
         ) {
             val file = hd
-            if (file == null || original != ArtState.READY) {
+            val context = LocalPlatformContext.current
+            val smallUrl = card.imageUrlSmall ?: card.imageUrl
+            val smallRequest = remember(smallUrl, smallDecode) {
+                if (smallDecode == 0) null else decodeRequest(context, smallUrl, smallDecode, shownKeys.small)
+            }
+            if ((file == null || original != ArtState.READY) && smallRequest != null) {
                 AsyncImage(
-                    model = card.imageUrlSmall ?: card.imageUrl,
+                    model = smallRequest,
                     contentDescription = card.name,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier.fillMaxSize(),
                     onState = { state ->
-                        if (state is AsyncImagePainter.State.Success) smallImage = state.result.image
+                        if (state is AsyncImagePainter.State.Success) {
+                            smallImage = state.result.image
+                            shownKeys.small = state.result.memoryCacheKey
+                        }
                         art = when (state) {
                             is AsyncImagePainter.State.Success -> ArtState.READY
                             is AsyncImagePainter.State.Error -> ArtState.FAILED
@@ -276,19 +309,26 @@ private fun NeueCardFace(
                     },
                 )
             }
-            if (file != null) {
+            val hdRequest = remember(file, hdDecode) {
+                if (file == null || hdDecode == 0) null else decodeRequest(context, file, hdDecode, shownKeys.hd)
+            }
+            if (hdRequest != null) {
                 AsyncImage(
-                    model = file,
+                    model = hdRequest,
                     contentDescription = card.name,
                     contentScale = ContentScale.Fit,
                     filterQuality = FilterQuality.High,
                     modifier = Modifier.fillMaxSize(),
                     onState = { state ->
-                        if (state is AsyncImagePainter.State.Success) hdImage = state.result.image
+                        if (state is AsyncImagePainter.State.Success) {
+                            hdImage = state.result.image
+                            shownKeys.hd = state.result.memoryCacheKey
+                        }
                         original = when (state) {
                             is AsyncImagePainter.State.Success -> ArtState.READY
                             is AsyncImagePainter.State.Error -> ArtState.FAILED
-                            else -> ArtState.LOADING
+                            // A sharper decode of a picture already showing: it stays shown meanwhile.
+                            else -> if (original == ArtState.READY) ArtState.READY else ArtState.LOADING
                         }
                     },
                 )
@@ -383,6 +423,25 @@ private fun NeueCardFace(
         )
     }
 }
+
+/** The memory-cache keys of the decodes a card last showed: the placeholders for its next, sharper ones. */
+private class DecodeKeys {
+    var small: MemoryCache.Key? = null
+    var hd: MemoryCache.Key? = null
+}
+
+/**
+ * A request for [data] decoded [width] pixels wide (and the card's height), no
+ * larger than its source. [shown] is the decode on screen now, drawn until this
+ * one arrives.
+ */
+private fun decodeRequest(context: coil3.PlatformContext, data: Any?, width: Int, shown: MemoryCache.Key?): ImageRequest =
+    ImageRequest.Builder(context)
+        .data(data)
+        .size(width, DecodeSize.height(width))
+        .precision(Precision.INEXACT)
+        .placeholderMemoryCacheKey(shown)
+        .build()
 
 /** A lens or group mark on a card: the two letters of the key, in the key's colour. */
 data class Marker(val mark: String, val color: Color)

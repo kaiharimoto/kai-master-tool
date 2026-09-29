@@ -4,6 +4,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.data.PoolCheck
+import com.kaiharimoto.mastertool.core.data.PoolProgress
 import com.kaiharimoto.mastertool.core.data.SyncResult
 import com.kaiharimoto.mastertool.core.deck.DeckEdit
 import com.kaiharimoto.mastertool.core.deck.DeckEditor
@@ -122,6 +124,17 @@ class DeckBuilderState(
         private set
 
     var syncMessage by mutableStateOf<String?>(null)
+        private set
+
+    /** How far an update of the pool has got, while one runs: for the progress bars in the title bar and Settings. */
+    var poolProgress by mutableStateOf<PoolProgress?>(null)
+        private set
+
+    /** What the last check found — asked by hand in Settings, or implied by an update this session. Null until then. */
+    var poolCheck by mutableStateOf<PoolCheck?>(null)
+        private set
+
+    var checkingPool by mutableStateOf(false)
         private set
 
     /**
@@ -344,16 +357,47 @@ class DeckBuilderState(
         }
     }
 
+    /**
+     * Asks YGOPRODeck whether the pool is current, without fetching it (kai: "before
+     * they leave on a flight"). The answer stays in [poolCheck] for Settings to read.
+     */
+    fun checkCardPool() {
+        if (checkingPool || isSyncing) return
+        scope.launch {
+            checkingPool = true
+            try {
+                poolCheck = deps.cardRepository.check()
+            } finally {
+                checkingPool = false
+            }
+        }
+    }
+
     fun refreshCardPool(force: Boolean = true, silentWhenFresh: Boolean = false) {
         if (isSyncing) return
         scope.launch {
             isSyncing = true
             syncMessage = if (index.size == 0) "Downloading the card database…" else "Refreshing…"
+            // The repository reports from whichever thread is working; the state is
+            // written on the scope's, and only when the bar would move.
+            var shown = -1
+            val result = try {
+                deps.cardRepository.sync(force = force) { step ->
+                    val at = (step.fraction * 200).toInt()
+                    if (at != shown) {
+                        shown = at
+                        scope.launch { if (isSyncing) poolProgress = step }
+                    }
+                }
+            } finally {
+                poolProgress = null
+            }
 
-            when (val result = deps.cardRepository.sync(force = force)) {
+            when (result) {
                 is SyncResult.Updated -> {
                     index = deps.cardRepository.index.value
                     runSearch(immediate = true)
+                    poolCheck = PoolCheck.Current(result.version, result.cardCount, deps.now())
                     showToast("Card database updated — ${result.cardCount} cards.")
                 }
                 is SyncResult.UpToDate -> {
@@ -371,6 +415,7 @@ class DeckBuilderState(
 
             isSyncing = false
             syncMessage = null
+            poolProgress = null
         }
     }
 

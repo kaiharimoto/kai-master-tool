@@ -147,6 +147,93 @@ class RepositoryTest {
         assertNull(status.lastSyncEpochMs)
     }
 
+    /** An API that answers the version check with [version] (or fails it) and the card feed with [feed]. */
+    private fun versionedApi(version: String?, feed: String = sampleFeed, updated: String = "2026-09-28 00:05:08"): YgoProDeckApi {
+        val engine = MockEngine { request ->
+            val path = request.url.encodedPath
+            when {
+                path.endsWith("checkDBVer.php") && version == null -> respondError(HttpStatusCode.ServiceUnavailable)
+                path.endsWith("checkDBVer.php") -> respond(
+                    content = ByteReadChannel("""[{"database_version":"$version","last_update":"$updated"}]"""),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+                else -> respond(
+                    content = ByteReadChannel(feed),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                )
+            }
+        }
+        return YgoProDeckApi(HttpClientFactory.create(engine))
+    }
+
+    @Test
+    fun syncWritesDownTheVersionAndSizeItFetched() = runTest {
+        val db = database()
+        val result = CardRepository(db, versionedApi("147.20"), clock = { 1_000L }).sync(force = true)
+        assertIs<SyncResult.Updated>(result)
+        assertEquals("147.20", result.version)
+        val record = assertNotNull(CardRepository(db, versionedApi("147.20"), clock = { 1_000L }).record())
+        assertEquals("147.20", record.version)
+        assertTrue(record.bytes > 0, "the next download is measured against this one")
+    }
+
+    @Test
+    fun syncReportsEachStepInOrder() = runTest {
+        val steps = mutableListOf<PoolProgress>()
+        CardRepository(database(), versionedApi("147.20"), clock = { 1_000L }).sync(force = true) { steps += it }
+        assertEquals(PoolProgress.Asking, steps.first())
+        assertTrue(steps.any { it is PoolProgress.Downloading }, "$steps")
+        assertTrue(PoolProgress.Reading in steps)
+        assertEquals(PoolProgress.Saving(2, 2), steps.last())
+        steps.zipWithNext().forEach { (a, b) -> assertTrue(b.fraction >= a.fraction, "$a to $b") }
+    }
+
+    @Test
+    fun checkSaysCurrentForTheSameVersionAndBehindForANewer() = runTest {
+        val db = database()
+        CardRepository(db, versionedApi("147.20"), clock = { 1_000L }).sync(force = true)
+
+        val same = CardRepository(db, versionedApi("147.20"), clock = { 2_000L }).check()
+        assertIs<PoolCheck.Current>(same)
+        assertEquals(2, same.cards)
+        assertEquals(2_000L, same.checkedAt)
+
+        val newer = CardRepository(db, versionedApi("147.21"), clock = { 3_000L }).check()
+        assertIs<PoolCheck.Behind>(newer)
+        assertEquals("147.20", newer.local)
+        assertEquals("147.21", newer.remote)
+    }
+
+    @Test
+    fun checkOfflineSaysSoAndKeepsThePool() = runTest {
+        val db = database()
+        CardRepository(db, versionedApi("147.20"), clock = { 1_000L }).sync(force = true)
+        val check = CardRepository(db, versionedApi(null), clock = { 2_000L }).check()
+        assertIs<PoolCheck.Unreachable>(check)
+        assertEquals(2, check.cards)
+    }
+
+    @Test
+    fun aPoolFetchedBeforeVersionsWereKeptIsJudgedByItsAgeAndThenAdoptsTheVersion() = runTest {
+        val db = database()
+        // Fetched with no version check answering: nothing written down.
+        CardRepository(db, versionedApi(null), clock = { 1_000L }).sync(force = true)
+        val day = 24L * 60 * 60 * 1000
+        val changed = com.kaiharimoto.mastertool.core.data.PoolFreshness.parseUtc("2026-09-28 00:05:08")!!
+
+        val old = CardRepository(db, versionedApi("147.20"), clock = { changed }).check()
+        assertIs<PoolCheck.Behind>(old)
+        assertNull(old.local)
+
+        // Fetched well after the database last changed: current, and from now on compared by version.
+        val later = database()
+        CardRepository(later, versionedApi(null), clock = { changed + 2 * day }).sync(force = true)
+        assertIs<PoolCheck.Current>(CardRepository(later, versionedApi("147.20"), clock = { changed + 2 * day }).check())
+        assertEquals("147.20", CardRepository(later, versionedApi("147.20"), clock = { 0L }).record()?.version)
+    }
+
     // ---- DeckRepository ----------------------------------------------------
 
     @Test
