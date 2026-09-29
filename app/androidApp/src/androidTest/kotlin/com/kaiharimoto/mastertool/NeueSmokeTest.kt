@@ -146,7 +146,17 @@ class NeueSmokeTest {
             // raises the soft keyboard, which takes the first Back for itself.)
             on { it.neue!!.neue.helpOpen = true }
             back()
-            assertTrue("Back left the help open", until { !on { it.neue!!.neue.helpOpen } })
+            val helpClosed = until { !on { it.neue!!.neue.helpOpen } }
+            if (!helpClosed) shoot("help-stuck.png")
+            assertTrue(
+                "Back left the help open: " + on { a ->
+                    val h = a.neue!!
+                    "canGoBack=${h.canGoBack()} callbacks=${a.onBackPressedDispatcher.hasEnabledCallbacks()} " +
+                        "update=${h.updates.dialogOpen} overlays=${h.overlays.isOpen} menu=${h.neue.menu != null} " +
+                        "palette=${h.neue.paletteOpen} viewing=${h.neue.viewing != null} keyboard=${h.neue.hardwareKeyboard}"
+                },
+                helpClosed,
+            )
             assertFalse("Back closed the app with the help open", on { it.isFinishing })
 
             // From another page, Back comes home to the builder before it leaves.
