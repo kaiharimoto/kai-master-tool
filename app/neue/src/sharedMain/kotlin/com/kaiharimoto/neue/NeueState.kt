@@ -236,9 +236,16 @@ class NeueState(
         viewJob?.cancel()
         viewJob = scope.launch {
             delay(com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS)
+            // A two- or three-finger tap is undo or redo, and each finger is also a card's tap:
+            // none of them opens the card.
+            val sinceFingers = System.nanoTime() / 1_000_000 - fingersAt
+            if (sinceFingers < com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS * 2) return@launch
             if (menu == null && studio == null) viewing = v
         }
     }
+
+    /** When more than one finger was last down in the window, in ms of `System.nanoTime`. Plain. */
+    var fingersAt = 0L
 
     /** A double-tap (or any other gesture) arrived: the tap before it opens nothing. */
     fun cancelViewSoon() {

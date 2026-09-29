@@ -935,6 +935,8 @@ private fun Shell(h: NeueHolders) {
                         // Two fingers tapped together undo, three redo, anywhere in the window (rec 22,
                         // `MultiTap`): a pinch travels, so it is never one. Watched on the way down,
                         // and never consumed: a card under the first finger has already let it go.
+                        // More than one finger down: whatever each is doing to a card, it is not a tap to read it.
+                        if (event.changes.count { it.byFinger && it.pressed } > 1) neue.fingersAt = System.nanoTime() / 1_000_000
                         event.changes.filter { it.byFinger }.forEach { change ->
                             if (change.pressed && !change.previousPressed) {
                                 if (tapDowns.isEmpty()) {
