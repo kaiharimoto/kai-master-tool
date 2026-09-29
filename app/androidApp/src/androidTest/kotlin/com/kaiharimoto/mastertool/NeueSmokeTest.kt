@@ -34,7 +34,8 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 class NeueSmokeTest {
 
-    @Test
+    // A hang is a failure with a trace, not a job that runs out its hour.
+    @Test(timeout = 300_000)
     fun neueOpensOntoTheTabletsDeck() {
         val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
         val deck = Deck(
@@ -49,7 +50,7 @@ class NeueSmokeTest {
             repeat(120) {
                 if (opened == "Smoke deck") return@repeat
                 Thread.sleep(250)
-                scenario.onActivity { activity -> opened = activity.neue?.builder?.deckName }
+                opened = readActivity { activity -> activity.neue?.builder?.deckName }
             }
             // Long enough for the card pool to arrive and draw, for the picture.
             Thread.sleep(6000)
@@ -70,7 +71,7 @@ class NeueSmokeTest {
      * paper along the top brings the bar out in immersive. Each step is
      * photographed, numbered, for the run's artifacts.
      */
-    @Test
+    @Test(timeout = 300_000)
     fun aFingerFindsRoomAndWaysOut() {
         val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
         val deck = Deck(
@@ -84,22 +85,17 @@ class NeueSmokeTest {
         // immersive and takes the first Back for itself; it is the system's, not Neue's.
         instrumentation.uiAutomation.executeShellCommand("settings put secure immersive_mode_confirmations confirmed").close()
 
+        // The walk waits by the clock, never for the app to fall idle: a focused field's caret
+        // blinks forever, and on a slow emulator waitForIdleSync then never returns.
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            fun <T> on(read: (MainActivity) -> T): T {
-                var out: T? = null
-                scenario.onActivity { out = read(it) }
-                @Suppress("UNCHECKED_CAST")
-                return out as T
-            }
+            fun <T> on(read: (MainActivity) -> T): T = readActivity(read) ?: error("no resumed activity to read")
             fun shoot(name: String) {
-                instrumentation.waitForIdleSync()
                 Thread.sleep(1200)
                 val shot = instrumentation.uiAutomation.takeScreenshot() ?: return
                 File(app.getExternalFilesDir(null), name).outputStream().use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
             }
             fun back() {
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
-                instrumentation.waitForIdleSync()
                 Thread.sleep(400)
             }
             fun tap(xDp: Float, yDp: Float) {
@@ -116,7 +112,6 @@ class NeueSmokeTest {
                     instrumentation.uiAutomation.injectInputEvent(e, true)
                     e.recycle()
                 }
-                instrumentation.waitForIdleSync()
                 Thread.sleep(400)
             }
 
@@ -135,7 +130,6 @@ class NeueSmokeTest {
             // Back closes the help, and the app is still here. (Not the palette: it
             // raises the soft keyboard, which takes the first Back for itself.)
             on { it.neue!!.neue.helpOpen = true }
-            instrumentation.waitForIdleSync()
             back()
             assertFalse("Back left the help open", on { it.neue!!.neue.helpOpen })
             assertFalse("Back closed the app with the help open", on { it.isFinishing })
@@ -159,4 +153,21 @@ class NeueSmokeTest {
             assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
         }
     }
+}
+
+/**
+ * Reads the resumed activity on its own thread. `ActivityScenario.onActivity` first
+ * waits for the app to fall idle, which a blinking caret on a slow emulator never
+ * lets happen; this runs between frames instead. Null before the activity resumes.
+ */
+private fun <T> readActivity(read: (MainActivity) -> T): T? {
+    var out: T? = null
+    InstrumentationRegistry.getInstrumentation().runOnMainSync {
+        val activity = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+            .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED)
+            .filterIsInstance<MainActivity>()
+            .firstOrNull()
+        if (activity != null) out = read(activity)
+    }
+    return out
 }
