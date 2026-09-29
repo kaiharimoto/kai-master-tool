@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.ydk.DeckCodes
 import com.kaiharimoto.mastertool.core.ydk.DeckQr
+import com.kaiharimoto.mastertool.core.ydk.DeckQrParts
 import com.kaiharimoto.mastertool.core.ydk.JvmZlib
 import com.kaiharimoto.mastertool.core.ydk.YdkCodec
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
@@ -63,12 +64,13 @@ class QrTest {
     @Test
     fun theWholeDeckWithItsGroupsReadsBackOffTheScreen() {
         val code = assertNotNull(DeckQr.write("Fiendsmith", YdkDocument(fullest, extended = extended), listOf(14558127), JvmZlib))
-        val matrix = assertNotNull(QrMatrix.of(code.text))
-        println("The fullest deck with eight groups: ${code.text.length} characters, ${matrix.size} modules a side")
+        val text = code.parts.single()
+        val matrix = assertNotNull(QrMatrix.of(text))
+        println("The fullest deck with eight groups: ${text.length} characters, ${matrix.size} modules a side")
         // Version 25 or under: five pixels a module or more in the dialog on a 1080p screen.
         assertTrue(matrix.size <= 117, "a ${matrix.size}-module code")
         val read = assertNotNull(QrReader.read(picture(matrix)))
-        assertEquals(code.text, read)
+        assertEquals(text, read)
         val deck = assertNotNull(DeckCodes.read(read, JvmZlib))
         assertEquals(fullest, deck.parsed.document.deck)
         assertEquals(extended, deck.parsed.document.extended)
@@ -76,22 +78,48 @@ class QrTest {
         assertEquals(listOf(14558127), deck.covers)
     }
 
+    /** [matrices] side by side, as the dialog's grid stands them, with a white gap between. */
+    private fun grid(matrices: List<QrMatrix>, scale: Int = 4): RGBLuminanceSource {
+        val spans = matrices.map { (it.size + QrMatrix.QUIET * 2) * scale }
+        val gap = 16
+        val width = spans.sum() + gap * (matrices.size - 1)
+        val height = spans.max()
+        val pixels = IntArray(width * height) { 0xFFFFFFFF.toInt() }
+        var left = 0
+        matrices.forEachIndexed { k, matrix ->
+            for (y in 0 until matrix.size * scale) for (x in 0 until matrix.size * scale) {
+                if (matrix[x / scale, y / scale]) pixels[(y + QrMatrix.QUIET * scale) * width + left + x + QrMatrix.QUIET * scale] = 0xFF000000.toInt()
+            }
+            left += spans[k] + gap
+        }
+        return RGBLuminanceSource(width, height, pixels)
+    }
+
     @Test
-    fun theLegacyLabFileReadsBackToo() {
+    fun theLegacyLabFileIsTwoCodesAndOnePictureOfThemReadsBack() {
+        // 1.0.32: a deck past one comfortable code is several, shown all at once.
         var dir: File? = File(".").absoluteFile
         while (dir != null && !File(dir, "lab.ydkx").isFile) dir = dir.parentFile
         val document = YdkCodec.parse(File(assertNotNull(dir), "lab.ydkx").readText()).document
         val code = assertNotNull(DeckQr.write("Lab", document, emptyList(), JvmZlib))
-        val matrix = assertNotNull(QrMatrix.of(code.text))
-        println("lab.ydkx, siding patterns and all: ${code.text.length} characters, ${matrix.size} modules a side")
-        val read = assertNotNull(QrReader.read(picture(matrix, scale = 3)))
-        assertEquals(document.extended, DeckCodes.read(read, JvmZlib)?.parsed?.document?.extended)
+        val matrices = code.parts.map { assertNotNull(QrMatrix.of(it)) }
+        println("lab.ydkx, siding patterns and all: ${code.parts.size} codes of ${matrices.map { it.size }} modules")
+        assertTrue(code.parts.size >= 2)
+
+        // A screenshot of the grid: every part in one picture.
+        val found = QrReader.readAll(grid(matrices))
+        assertEquals(code.parts.toSet(), found.toSet())
+        val parts = DeckQrParts()
+        val whole = found.map { parts.offer(it) }.filterIsInstance<DeckQrParts.Offer.Whole>().single().text
+        val read = assertNotNull(DeckCodes.read(whole, JvmZlib))
+        assertEquals(document.deck, read.parsed.document.deck)
+        assertEquals(document.extended, read.parsed.document.extended)
     }
 
     @Test
     fun theLargestCodeThereIsIsDrawn() {
-        // A deck the ladder could not shrink further would still be drawn: version 40, level L.
-        val text = DeckQr.PREFIX + "0".repeat(DeckQr.MAX_CHARS - DeckQr.PREFIX.length)
+        // Version 40 at level L holds 4,296 alphanumeric characters, and no more.
+        val text = DeckQr.PREFIX + "0".repeat(4296 - DeckQr.PREFIX.length)
         assertEquals(177, assertNotNull(QrMatrix.of(text)).size)
         assertNull(QrMatrix.of(text + "0"))
     }

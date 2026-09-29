@@ -7,6 +7,7 @@ import com.google.zxing.LuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.common.GlobalHistogramBinarizer
 import com.google.zxing.common.HybridBinarizer
+import com.google.zxing.multi.qrcode.QRCodeMultiReader
 import com.google.zxing.qrcode.QRCodeReader
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.google.zxing.qrcode.encoder.Encoder
@@ -64,5 +65,26 @@ object QrReader {
             }
         }
         return null
+    }
+
+    /**
+     * Every QR code in [source] (1.0.32): a screenshot of a split deck's grid holds
+     * all its parts, and one picture brings them all. ZXing's multi reader, both
+     * binarizers and inverted, then the single reader for a lone code at an angle
+     * the multi reader's finder misses.
+     */
+    fun readAll(source: LuminanceSource): List<String> {
+        val found = LinkedHashSet<String>()
+        for (pixels in listOf(source, source.invert())) {
+            for (bitmap in listOf(BinaryBitmap(HybridBinarizer(pixels)), BinaryBitmap(GlobalHistogramBinarizer(pixels)))) {
+                try {
+                    QRCodeMultiReader().decodeMultiple(bitmap, hints).forEach { found += it.text }
+                } catch (_: ReaderException) {
+                    // None found this way.
+                }
+            }
+        }
+        if (found.isEmpty()) read(source)?.let { found += it }
+        return found.toList()
     }
 }

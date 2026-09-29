@@ -63,7 +63,11 @@ enum class QrSource { CAMERA, PICTURE }
 
 /** What a scan came back with. */
 sealed interface QrScan {
-    data class Read(val text: String) : QrScan
+    /**
+     * What was read: the camera's one code (a split deck's parts already joined,
+     * 1.0.32), or every code a picture holds.
+     */
+    data class Read(val texts: List<String>) : QrScan
 
     /** Put away without a code: says nothing. */
     data object Cancelled : QrScan

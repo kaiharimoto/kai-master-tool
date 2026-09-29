@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Needed once, to download the card database. Everything afterwards is local. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -52,14 +51,16 @@
             </intent-filter>
         </activity>
 
-        <!-- The camera screen that scans a deck's QR code (v1.3.7), from ZXing's
-             scanner, which brings the CAMERA permission and asks for it on first
-             use. Its own manifest locks it lying down; here it turns with the
-             phone, as ScanOptions.setOrientationLocked(false) expects. -->
+        <!-- The camera screen that scans a deck's QR code (v1.3.7), and every part of
+             a split one (1.0.32): ScanActivity, on ZXing's embedded scanner view,
+             which brings the CAMERA permission; the activity asks for it on first
+             use. It turns with the phone, and keeps the parts it has read across
+             the turn. -->
         <activity
-            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:name=".ScanActivity"
+            android:exported="false"
             android:screenOrientation="fullUser"
-            tools:replace="screenOrientation" />
+            android:theme="@style/Theme.MasterTool" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

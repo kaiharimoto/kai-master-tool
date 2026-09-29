@@ -881,11 +881,26 @@ the desk and Android both have) and **Base45** (RFC 9285, `Base45`) writes it in
 the 45 characters a QR code's alphanumeric mode packs at 5.5 bits each, behind
 `NMT1:` — the EU's COVID certificates travel the same way. The fullest deck, 60 ·
 15 · 15 with every card in one of eight groups, a goal and a note, is about 1,150
-characters: a version-23 code, 109 modules a side; the legacy `lab.ydkx` with its
-siding patterns and card pool fits too. A deck whose extras will not fit one code
-(4,296 characters, version 40 at level L) sheds them in order — every extended key
-but the groups, then the groups — and the dialog says what stayed behind; the
-cards and the name always fit. Covers cross as passcodes (an own picture is a file
+characters: a version-23 code, 109 modules a side, and one code.
+
+**A deck past one comfortable code is several** (1.0.32, v1.3.9, kai: "scan
+multiple QR codes when we go over the limit… don't have it show one at a time").
+Past `SINGLE_CHARS` (1,600) the Base45 is cut into even parts of at most
+`PART_CHARS` (1,200, about version 23 each), each `NMT1P:<i>/<n>/<tag>:` and its
+run, the tag an FNV-1a hash of the whole. The legacy `lab.ydkx` is two. **The
+dialog shows every part at once**, numbered, in the grid that makes each largest
+(`DeckQrGrid`, core) — nothing to page, nothing to press. On the phone
+**`ScanActivity`** (the APK's own, on the embedded scanner's `DecoratedBarcodeView`)
+stays open and reads *every* code in each frame with ZXing's `QRCodeMultiReader`,
+counting "2 of 3 codes read" with a tick for each new one, and returns once the last
+is in; the parts outlive a turn of the phone. **`DeckQrParts`** (core) collects
+them in any order, each as often as it passes, starts over on a part of another
+deck, and joins them only if the whole hashes to the tag. A screenshot of the grid
+holds them all: **A picture of a QR code** reads every code in the picture
+(`QrReader.readAll`), and asks for another picture only while parts are missing.
+Only a deck past `MAX_PARTS` (24 codes, some twenty kilobytes compressed) sheds
+anything — every extended key but the groups, then the groups — and the dialog
+says what stayed behind; the cards and the name always fit. Covers cross as passcodes (an own picture is a file
 on the machine that made the code) and are kept by the deck's id once the scanned
 deck is first saved (`DeckBuilderState.importFrom`'s `onFirstSave`).
 
@@ -897,10 +912,9 @@ dialog lists what the code carries ("the cards, the name, 5 groups, 1 hand goal
 and notes").
 
 On a phone or a tablet **Import is a menu** (the bar's, the Decks page's, the
-phone's ⋯): **A .ydk or .ydkx file**, **Scan a QR code** — ZXing's Android capture
-screen (`zxing-android-embedded`), started by `MainActivity` through
-`ScanContract`, which asks for the camera on first use and turns with the phone —
-and **A picture of a QR code**, for a screenshot someone sent (the phone cannot
+phone's ⋯): **A .ydk or .ydkx file**, **Scan a QR code** — `ScanActivity`, above,
+which asks for the camera on first use and turns with the phone — and **A picture
+of a QR code**, for a screenshot someone sent (the phone cannot
 scan its own screen), read by `QrReader` with both binarizers and the picture
 inverted. Whatever is read goes through `DeckCodes.read` (core): Neue's own code;
 a `ydke://` code anywhere in the text, a deck site's link included; or the lines
@@ -909,8 +923,8 @@ import does, under the code's name (else "Scanned deck"), groups and all, with
 Undo on the toast. The desk's Import stays one click to the file dialog, and
 `Ctrl O` is a file everywhere. `Platform.scanSources` is the seam: empty on the
 desk, the picture always on Android, the camera where there is one. `DeckQrTest`
-(core) and `QrTest` (neue, drawing the code and reading it back from its pixels)
-hold it.
+(core) and `QrTest` (neue: drawing the codes, a grid of parts included, and
+reading them back from the pixels) hold it.
 
 **Three clicks select a field's whole line** (1.0.14), so the search is cleared
 for the next card by typing over it. `MuInput` counts presses on the way down

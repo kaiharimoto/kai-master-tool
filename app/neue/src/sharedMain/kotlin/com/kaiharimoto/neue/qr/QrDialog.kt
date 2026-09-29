@@ -1,11 +1,14 @@
 package com.kaiharimoto.neue.qr
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -16,15 +19,18 @@ import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.ydk.DeckQr
 import com.kaiharimoto.mastertool.core.ydk.DeckQrCode
+import com.kaiharimoto.mastertool.core.ydk.DeckQrGrid
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 
 /**
  * A deck shown as a QR code (1.0.30): its name for the title, its counts, the
- * code ([DeckQr]: the whole deck; null only for a deck no code could hold), and
- * the `ydke://` line the Copy button gives, for the simulators.
+ * code ([DeckQr]: the whole deck, in one code or several; null only for a deck
+ * no number of codes could hold), and the `ydke://` line the Copy button gives,
+ * for the simulators.
  */
 data class QrShown(val name: String, val deck: Deck, val code: DeckQrCode?, val ydke: String)
 
@@ -33,39 +39,66 @@ data class QrShown(val name: String, val deck: Deck, val code: DeckQrCode?, val 
  * as much information as possible, including groups"): the desk's way to hand a
  * deck to a phone or a tablet, which read it with Import → Scan a QR code. It
  * carries the deck's `.ydkx` — cards, groups, goals, notes — with its name and
- * covers, and says so under the code; a deck too large for one code says what
- * it left behind.
+ * covers, and says so under the code.
  *
- * The code is black on white in both themes: most scanners read nothing else,
- * and Master UI's two fills are those two. It is as large as the window allows,
- * so a dense code still has modules a camera can see.
+ * **A deck past one code shows all its parts at once** (1.0.32, kai: "don't have
+ * it show one at a time… the user would need to click every time"), in the grid
+ * that makes each as large as the window allows (`DeckQrGrid`), numbered: the
+ * phone's camera is swept across them and collects each, in any order, and a
+ * screenshot of the grid holds them all.
+ *
+ * The codes are black on white in both themes: most scanners read nothing else,
+ * and Master UI's two fills are those two.
  */
 @Composable
 fun QrDialog(shown: QrShown, onCopy: () -> Unit, onDismiss: () -> Unit) {
-    val matrix = remember(shown.code) { shown.code?.let { QrMatrix.of(it.text) } }
+    val matrices = remember(shown.code) { shown.code?.parts?.map { QrMatrix.of(it) }.orEmpty() }
     val deck = shown.deck
+    val count = matrices.size
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // The square, and the title, the words and the buttons round it (about 300dp), inside the window.
-        val side = minOf(maxWidth - 32.dp, maxHeight - 300.dp).coerceIn(280.dp, 880.dp)
+        // The room for the codes: the window, less the dialog's margins, padding and
+        // its title, words and buttons (about 290dp down).
+        val roomAcross = (minOf(maxWidth, 1600.dp) - 32.dp - 48.dp).coerceAtLeast(240.dp)
+        val roomDown = (maxHeight - 290.dp).coerceAtLeast(240.dp)
+        val gap = 16.dp
+        val label = if (count > 1) 24.dp else 0.dp
+        val cols = DeckQrGrid.columns(count, roomAcross.value, roomDown.value, gap.value, label.value)
+        val side = DeckQrGrid.side(count, cols, roomAcross.value, roomDown.value, gap.value, label.value).dp.coerceIn(200.dp, 880.dp)
+        val gridWidth = side * cols + gap * (cols - 1).coerceAtLeast(0)
         MuDialog(
             title = shown.name,
             onDismiss = onDismiss,
-            width = side + 48.dp,
-            description = "Main ${deck.main.size} · Extra ${deck.extra.size} · Side ${deck.side.size}. " +
-                "Scan it with Neue Master Tool on a phone or tablet: Import, then Scan a QR code.",
+            width = gridWidth.coerceAtLeast(320.dp) + 48.dp,
+            description = "Main ${deck.main.size} · Extra ${deck.extra.size} · Side ${deck.side.size}. " + if (count > 1) {
+                "The deck is in $count codes. Scan them with Neue Master Tool on a phone or tablet (Import, then Scan a QR code) " +
+                    "by moving the camera across them, in any order. A screenshot of all of them imports too."
+            } else {
+                "Scan it with Neue Master Tool on a phone or tablet: Import, then Scan a QR code."
+            },
             footer = {
                 MuButton("Copy the YDKe code", onCopy, variant = BtnVariant.GHOST)
                 MuButton("Done", onDismiss, variant = BtnVariant.PRIMARY)
             },
         ) {
             val code = shown.code
-            if (code == null || matrix == null) {
-                Help("This deck is too large for one QR code. Share its .ydkx file instead.")
+            if (code == null || matrices.isEmpty() || matrices.any { it == null }) {
+                Help("This deck is too large to show as QR codes. Share its .ydkx file instead.")
             } else {
-                QrPicture(matrix, Modifier.fillMaxWidth().aspectRatio(1f))
+                Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                    matrices.chunked(cols).forEachIndexed { row, line ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                            line.forEachIndexed { i, matrix ->
+                                Column(Modifier.width(side)) {
+                                    QrPicture(matrix!!, Modifier.size(side))
+                                    if (count > 1) Micro("${row * cols + i + 1} of $count", Modifier.padding(top = 6.dp))
+                                }
+                            }
+                        }
+                    }
+                }
                 Help("Carries ${inWords(code.carries)}.", Modifier.padding(top = 12.dp))
                 if (code.leftOut.isNotEmpty()) {
-                    Help("Too much for one code: ${inWords(code.leftOut)} stayed behind. The .ydkx file carries everything.", Modifier.padding(top = 4.dp))
+                    Help("Too much even for ${DeckQr.MAX_PARTS} codes: ${inWords(code.leftOut)} stayed behind. The .ydkx file carries everything.", Modifier.padding(top = 4.dp))
                 }
             }
         }

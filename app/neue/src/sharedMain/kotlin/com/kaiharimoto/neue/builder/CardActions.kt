@@ -21,6 +21,7 @@ import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.mastertool.core.ydk.DeckText
 import com.kaiharimoto.mastertool.core.ydk.YdkeCodec
 import com.kaiharimoto.mastertool.core.ydk.DeckQr
+import com.kaiharimoto.mastertool.core.ydk.DeckQrParts
 import com.kaiharimoto.mastertool.core.ydk.DeckRead
 import com.kaiharimoto.mastertool.core.ydk.JvmZlib
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
@@ -216,21 +217,30 @@ object CardActions {
             if (read.covers.isNotEmpty()) neue.update { p -> p.copy(covers = p.covers + (id to read.covers.take(DeckCovers.MAX))) }
         }
         state.importFrom("Scanned deck", JvmZlib, keepCovers) {
-            when (val scan = com.kaiharimoto.neue.platform.Platform.scanQr(from)) {
-                is QrScan.Read -> {
-                    neue.go(com.kaiharimoto.neue.Page.BUILDER)
-                    scan.text
-                }
-                QrScan.Cancelled -> null
-                QrScan.NotFound -> {
-                    neue.note = com.kaiharimoto.neue.Note("No QR code found in that picture")
-                    null
-                }
-                QrScan.NoCamera -> {
-                    neue.note = com.kaiharimoto.neue.Note("The camera could not be opened. Allow it in the app's settings")
-                    null
+            // A split deck's parts (1.0.32): the camera joins them itself; pictures are
+            // gathered here, as many as it takes, each holding one part or all of them.
+            val parts = DeckQrParts()
+            var whole: String? = null
+            var asking = true
+            while (asking) {
+                asking = false
+                when (val scan = com.kaiharimoto.neue.platform.Platform.scanQr(from)) {
+                    is QrScan.Read -> {
+                        whole = scan.texts.map { parts.offer(it) }.filterIsInstance<DeckQrParts.Offer.Whole>().firstOrNull()?.text
+                        if (whole == null) {
+                            neue.note = com.kaiharimoto.neue.Note("${parts.have} of ${parts.of} codes read. Pick a picture of the rest", lastsMs = 12_000)
+                            asking = true
+                        }
+                    }
+                    QrScan.Cancelled -> if (parts.have > 0) {
+                        neue.note = com.kaiharimoto.neue.Note("The deck needs all ${parts.of} codes: ${parts.have} were read")
+                    }
+                    QrScan.NotFound -> neue.note = com.kaiharimoto.neue.Note("No QR code found in that picture")
+                    QrScan.NoCamera -> neue.note = com.kaiharimoto.neue.Note("The camera could not be opened. Allow it in the app's settings")
                 }
             }
+            if (whole != null) neue.go(com.kaiharimoto.neue.Page.BUILDER)
+            whole
         }
     }
 

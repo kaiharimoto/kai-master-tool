@@ -269,10 +269,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   in both themes). **The code carries everything** (1.0.31, kai: "as much
   information as possible, including groups"): `DeckQr` (core) packs the deck's
   `.ydkx` with its name and covers — zlib, then Base45 behind `NMT1:` for QR's
-  alphanumeric mode — shedding the extras, then the groups, only for a deck too
-  large for one code. On a phone or tablet **Import is a menu** that adds
-  scanning one with the camera (`zxing-android-embedded`, `ScanContract` in
-  `MainActivity`) or from a picture (v1.3.7); `DeckCodes.read` (core) turns what
+  alphanumeric mode. **A deck past one code is several** (1.0.32): parts
+  `NMT1P:i/n/tag:`, **all shown at once** in a grid (`DeckQrGrid`; kai: never
+  one at a time, nothing to click), collected in any order by `DeckQrParts`;
+  only past 24 codes does a deck shed its extras, then its groups. On a phone or
+  tablet **Import is a menu** that adds scanning with the camera (`ScanActivity`,
+  the APK's own, reading every code in each frame with ZXing's multi reader) or
+  from a picture, one screenshot holding every part (v1.3.7); `DeckCodes.read` (core) turns what
   was read into a deck. `NEUE.md` §4. A tip at the
   bottom of the window opens `above`, or it covers its own control.
 - **The builder opens a deck**: the library's default, else the one saved last

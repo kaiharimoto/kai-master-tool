@@ -111,29 +111,30 @@ actual object Platform {
             if (picture == null) {
                 QrScan.Cancelled
             } else {
-                withContext(Dispatchers.Default) { qrIn(picture.bytes) }?.let { QrScan.Read(it) } ?: QrScan.NotFound
+                withContext(Dispatchers.Default) { qrIn(picture.bytes) }.takeIf { it.isNotEmpty() }?.let { QrScan.Read(it) } ?: QrScan.NotFound
             }
         }
     }
 
     /**
-     * The QR code in a picture, or null. A photo is shrunk to about two thousand
-     * pixels a side first: a code needs far fewer, and a phone's full-size photo
-     * is fifty megabytes of pixels.
+     * The QR codes in a picture — a split deck's grid holds several (1.0.32). A
+     * photo is shrunk to at most 3,200 pixels a side first: a phone's screenshot
+     * of a grid of codes keeps every module, and a full-size photo is fifty
+     * megabytes of pixels.
      */
-    private fun qrIn(bytes: ByteArray): String? = runCatching {
+    private fun qrIn(bytes: ByteArray): List<String> = runCatching {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 2048) sample *= 2
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 3200) sample *= 2
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-            ?: return@runCatching null
+            ?: return@runCatching emptyList()
         val pixels = IntArray(bitmap.width * bitmap.height)
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
         val source = RGBLuminanceSource(bitmap.width, bitmap.height, pixels)
         bitmap.recycle()
-        QrReader.read(source)
-    }.getOrNull()
+        QrReader.readAll(source)
+    }.getOrDefault(emptyList())
 
     private val MIME = mapOf(
         "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "png" to "image/png", "webp" to "image/webp",
