@@ -952,6 +952,10 @@ private fun Shell(h: NeueHolders) {
                                     tapTravel = 0f
                                 }
                                 tapDowns[change.id] = change.uptimeMillis to change.position
+                                // A second finger in the same tap, whether or not one event ever held
+                                // both pressed (the emulator's injected pairs did not, 1.0.32): no card's
+                                // tap under it opens the viewer.
+                                if (tapDowns.size > 1) neue.fingersAt = System.nanoTime() / 1_000_000
                             }
                             tapDowns[change.id]?.let { (_, from) -> tapTravel = maxOf(tapTravel, (change.position - from).getDistance()) }
                             if (!change.pressed && change.previousPressed && change.id in tapDowns) tapUps[change.id] = change.uptimeMillis
@@ -963,6 +967,9 @@ private fun Shell(h: NeueHolders) {
                                 travel = tapTravel,
                                 slop = viewConfiguration.touchSlop,
                             )
+                            // The last finger's own tap is released after this, in the card's pass, and
+                            // schedules its open then: marked now, it is skipped when it comes due.
+                            if (tapDowns.size > 1) neue.fingersAt = System.nanoTime() / 1_000_000
                             tapDowns.clear()
                             tapUps.clear()
                             com.kaiharimoto.mastertool.core.input.DeskTouch.window.firstOrNull { it.gesture == gesture }?.let { h.run(it.action) }
