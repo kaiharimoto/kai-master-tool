@@ -88,6 +88,9 @@ class NeueSmokeTest {
         // Android's own "Viewing full screen" note appears the first time any app goes
         // immersive and takes the first Back for itself; it is the system's, not Neue's.
         instrumentation.uiAutomation.executeShellCommand("settings put secure immersive_mode_confirmations confirmed").close()
+        // A slow emulator's own apps stall ("Pixel Launcher isn't responding"), and the
+        // system's dialog for it takes the next Back; it is the emulator's, not Neue's.
+        instrumentation.uiAutomation.executeShellCommand("settings put global hide_error_dialogs 1").close()
 
         // The walk waits by the clock, never for the app to fall idle: a focused field's caret
         // blinks forever, and on a slow emulator waitForIdleSync then never returns.
@@ -116,6 +119,8 @@ class NeueSmokeTest {
                     if (on { it.neue!!.canGoBack() && it.onBackPressedDispatcher.hasEnabledCallbacks() }) return@repeat
                     Thread.sleep(100)
                 }
+                // Any system dialog that came up anyway is put away first.
+                instrumentation.uiAutomation.executeShellCommand("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS").close()
                 Thread.sleep(300)
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                 Thread.sleep(400)
