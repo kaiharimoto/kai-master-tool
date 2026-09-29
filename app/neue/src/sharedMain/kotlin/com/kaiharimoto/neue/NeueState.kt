@@ -128,6 +128,9 @@ class NeueState(
     /** The card whose own art is being cropped in, and the picture it came with (1.0.34, `ArtCropDialog`). */
     var cropping by mutableStateOf<com.kaiharimoto.neue.art.ArtCropping?>(null)
 
+    /** The main deck's bands of group blocks, and what keeps an edit from reshuffling them (1.0.37). */
+    internal val bandCache = com.kaiharimoto.neue.builder.BandCache()
+
     /** A deck shown as a QR code for a phone or a tablet to scan (1.0.30), while it is. */
     var qr by mutableStateOf<com.kaiharimoto.neue.qr.QrShown?>(null)
 

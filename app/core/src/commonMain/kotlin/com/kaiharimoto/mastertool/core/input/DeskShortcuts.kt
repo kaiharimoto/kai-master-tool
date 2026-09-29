@@ -49,6 +49,9 @@ enum class DeskAction {
 
     /** The Groups panel beside the deck, open or closed. */
     TOGGLE_KEYS,
+
+    /** The groups' layout, turned: as is, fitted, separate (1.0.37). */
+    GROUP_ARRANGEMENT,
     NEXT_LENS,
     PREVIOUS_LENS,
     NEW_GROUP,
@@ -186,6 +189,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("backspace"), DeskAction.REMOVE_SELECTED, DeskScope.BUILDER, "Remove the selected card", repeatable = true),
         DeskShortcut(KeyChord("space"), DeskAction.VIEW_SELECTED, DeskScope.BUILDER, "Open the selected card large"),
         DeskShortcut(KeyChord("k"), DeskAction.TOGGLE_KEYS, DeskScope.BUILDER, "Show or hide the groups"),
+        DeskShortcut(KeyChord("k", shift = true), DeskAction.GROUP_ARRANGEMENT, DeskScope.BUILDER, "Groups as is, fitted or separate"),
         DeskShortcut(KeyChord("b"), DeskAction.NEXT_LENS, DeskScope.BUILDER, "Next lens"),
         DeskShortcut(KeyChord("b", shift = true), DeskAction.PREVIOUS_LENS, DeskScope.BUILDER, "Previous lens"),
         DeskShortcut(KeyChord("n"), DeskAction.NEW_GROUP, DeskScope.BUILDER, "New group from a selection"),

@@ -1,6 +1,9 @@
 package com.kaiharimoto.neue.shot
 
 import com.kaiharimoto.neue.cards.read
+import com.kaiharimoto.neue.builder.bandsOn
+import com.kaiharimoto.mastertool.core.layout.BandLayout
+import com.kaiharimoto.mastertool.core.layout.GroupBands
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -94,6 +97,16 @@ actual class DeckShots actual constructor(
         return DeckShot.render(model.copy(latestSet = latest), images, masks) to (cards.size - images.size)
     }
 
+    /** The bands the builder is showing, or the same deck laid out for the picture's shape; null when it shows none. */
+    private fun bandsFor(state: DeckBuilderState, neue: NeueState): BandLayout? {
+        if (!bandsOn(state, neue, neue.phoneColumns)) return null
+        val ids = state.deck[DeckSection.MAIN]
+        val shown: BandLayout? = neue.bandCache.last
+        if (shown != null && shown.row.size == ids.size) return shown
+        val keying = state.keying(DeckSection.MAIN)
+        return GroupBands.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f)
+    }
+
     fun snapshot(state: DeckBuilderState, neue: NeueState): ShotModel {
         // The groups are in the picture when they are on screen: a lens chosen, and no draft half-drawn.
         val showing = state.lens != Lens.DECK && state.groupDraft == null
@@ -113,6 +126,9 @@ actual class DeckShots actual constructor(
                         }
                     },
                     keying = if (showing) state.keying(section).takeIf { !it.isEmpty } else null,
+                    // The bands the builder is showing, or the same deck laid out for the picture's shape.
+                    bands = if (section == DeckSection.MAIN) bandsFor(state, neue) else null,
+                    separate = neue.prefs.arrangement == com.kaiharimoto.mastertool.core.layout.GroupArrangement.SEPARATE,
                 )
             },
             lens = if (showing) state.lens.displayName else null,

@@ -193,6 +193,8 @@ fun neueMain(args: Array<String>) {
             map["zoom"]?.toFloatOrNull()?.let { z -> h.neue.update { it.copy(deckZoom = z) } }
             map["gap"]?.toFloatOrNull()?.let { g -> h.neue.update { it.copy(groupGap = g) } }
             map["group-palette"]?.let { id -> h.neue.update { it.copy(groupPalette = id) } }
+            // --arrange=as_is|fitted|separate: how the groups stand when they are out (1.0.37).
+            map["arrange"]?.let { a -> h.neue.update { it.copy(groupArrangement = a.uppercase()) } }
             // --art=auto: the first main-deck card printed with more than one artwork, selected,
             // with its second artwork chosen — the inspector shows "Art 2 of n" and the deck the picture.
             if (map["art"] == "auto") {

@@ -163,23 +163,28 @@ private class Builder(val width: Float, val model: ShotModel) {
 
 private fun labelInk(color: Color) = if (color.luminance() > 0.5f) Color.Black else Color.White
 
-/** Lays [cells] out as the builder does: in rows of [columns], broken into pieces by [keys] when there are any. */
+/**
+ * Lays [cells] out as the builder does: in rows of [columns], broken into pieces by [keys]
+ * when there are any — or in the builder's bands of group blocks ([bands], 1.0.37), [gap]
+ * across and [gapY] down between them.
+ */
 private fun Builder.grid(
     cells: List<Card?>, keys: List<String?>?, columns: Int, cardW: Float, gap: Float, frame: Float, tab: Float,
     labelSize: Float, colors: Map<String, Color>, names: Map<String, String>,
+    bands: PieceLayout? = null, gapY: Float = gap,
 ) {
-    val pieces = if (keys != null && keys.any { it != null }) GroupPieces.of(keys, columns) else null
+    val pieces = bands ?: if (keys != null && keys.any { it != null }) GroupPieces.of(keys, columns) else null
     val cardH = cardW / CARD_RATIO
     val room = if (pieces != null) tab else 0f
-    val rows = (cells.size + columns - 1) / columns
+    val rows = pieces?.rowCount ?: ((cells.size + columns - 1) / columns)
     val top = y + room
     val offsets = cells.indices.map { i ->
         Offset(
-            pad + (pieces?.column?.getOrNull(i) ?: (i % columns)) * cardW + (pieces?.shiftX?.get(i) ?: 0) * gap,
-            top + (i / columns) * cardH + (pieces?.shiftY?.get(i) ?: 0) * gap,
+            pad + (pieces?.col(i) ?: (i % columns)) * cardW + (pieces?.shiftX?.get(i) ?: 0) * gap,
+            top + (pieces?.row(i) ?: (i / columns)) * cardH + (pieces?.shiftY?.get(i) ?: 0) * gapY,
         )
     }
-    val h = room + rows * cardH + (pieces?.spanY ?: 0) * gap
+    val h = room + rows * cardH + (pieces?.spanY ?: 0) * gapY
     if (pieces != null && keys != null) {
         items += PPieces(0f, 0f, width, y + h + gap, keys, pieces, offsets, cardW, cardH, frame, tab, labelSize, colors, names)
     }
@@ -211,16 +216,21 @@ internal object ShotDesigns {
             b.y += 44f * b.u
             val keying = s.keying?.takeIf { !it.isEmpty }
             val keys = keying?.let { k -> List(s.cards.size) { k.keyAt(it) } }
-            val cols = columnsOf(s.section)
-            val span = keys?.let { GroupPieces.of(it, cols).spanX } ?: 0
-            val cardW = (b.inner - gap * span) / cols
+            val bands = s.bands?.takeIf { keys != null }?.pieces()
+            val cols = bands?.columns ?: columnsOf(s.section)
+            val frame = mainW * 0.035f
+            // Fitted blocks touch, with room for their outlines across and their names down.
+            val gapX = if (bands != null && !s.separate) frame * 2 else gap
+            val gapY = if (bands != null && !s.separate) tab + frame else gap
+            val span = bands?.spanX ?: keys?.let { GroupPieces.of(it, cols).spanX } ?: 0
+            val cardW = (b.inner - gapX * span) / cols
             val colors = keying?.keys?.associate { it.id to GroupMarkers.paint(it.paint, b.c.ink) }.orEmpty()
             val names = keying?.keys?.associate { it.id to it.label }.orEmpty()
             if (s.cards.isEmpty()) {
                 b.text(b.pad, b.y, b.inner, 40f, "Empty", Face.ROW, 22f * b.u, b.c.ink45)
                 b.y += 40f
             }
-            b.grid(s.cards, keys, cols, cardW, gap, mainW * 0.035f, tab, tab * 0.6f, colors, names)
+            b.grid(s.cards, keys, cols, cardW, gapX, frame, tab, tab * 0.6f, colors, names, bands, gapY)
             b.y += 36f * b.u
         }
         b.footer()

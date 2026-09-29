@@ -207,7 +207,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   and the panel together**; off, the deck is plain. The Roles tab is gone from the
   lens, and groups are edited on their rows in the panel — the Groups drawer is
   deleted. A group may hold extra- and side-deck cards; its colour is an index
-  read through one of seven palettes (`GroupMarkers.palettes`). **The wheel
+  read through one of seven palettes (`GroupMarkers.palettes`). **Out, the groups are
+  As is, Fitted or Separate** (1.0.37, `NeuePreferences.groupArrangement`, `Shift K`):
+  As is is the pieces above; Fitted and Separate lay the main deck out in bands of
+  group blocks (`GroupBands`) — copy sets kept whole, blocks at most four rows,
+  groups in order, ungrouped last, an edit holding the last shapes (`BandMemory`) —
+  handed on as a `PieceLayout` with `rowOf`, so outlines, tabs, drops and zen read
+  it unchanged. `NEUE.md` §4h¾. **The wheel
   re-fits the deck** smaller (`deckZoom`) — a re-fit, not a transform, so every
   layout rule holds — and Shift-wheel sets the groups' gap. `NEUE.md` §3.
 - **The index rail folds away and F11 is immersive mode**, both decided by

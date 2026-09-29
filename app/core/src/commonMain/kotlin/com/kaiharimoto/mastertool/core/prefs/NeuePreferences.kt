@@ -142,6 +142,12 @@ data class NeuePreferences(
     val deckZoom: Float = 1f,
     /** How wide the gaps between groups are, as a multiple of the standard gap (Shift and the wheel). */
     val groupGap: Float = 1f,
+    /**
+     * How the main deck is laid out while its groups are on (kai, 1.0.37): "AS_IS", the deck's
+     * own order in pieces; "FITTED", the groups as blocks in bands, touching; "SEPARATE", the
+     * same blocks apart (`GroupArrangement`, `GroupBands`).
+     */
+    val groupArrangement: String = "FITTED",
     /** The Groups column's slides turn by themselves (1.0.18). */
     val slidesAutoplay: Boolean = true,
     /** Save the deck by itself a moment after every change (1.0.18, beside Save). */
@@ -218,6 +224,7 @@ data class NeuePreferences(
         shotStyle = if (shotStyle == SHOT_LIST) SHOT_LIST else SHOT_PICTURE,
         deckZoom = if (deckZoom.isFinite()) deckZoom.coerceIn(MIN_ZOOM, 1f) else 1f,
         groupGap = if (groupGap.isFinite()) groupGap.coerceIn(MIN_GAP, MAX_GAP) else 1f,
+        groupArrangement = groupArrangement.takeIf { name -> com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries.any { it.name == name } } ?: "FITTED",
         covers = covers
             .mapValues { (_, cards) -> cards.distinct().takeLast(COVERS) }
             .filterValues { it.isNotEmpty() },
@@ -236,6 +243,12 @@ data class NeuePreferences(
 
     /** One step smaller on [SCALES], or unchanged at the bottom. */
     fun zoomedOut(): NeuePreferences = copy(scale = SCALES.lastOrNull { it < scale - 0.001f } ?: SCALES.first())
+
+
+    /** [groupArrangement], read. */
+    val arrangement: com.kaiharimoto.mastertool.core.layout.GroupArrangement
+        get() = com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries.firstOrNull { it.name == groupArrangement }
+            ?: com.kaiharimoto.mastertool.core.layout.GroupArrangement.FITTED
 
     companion object {
         const val KEY = "neue.ui"

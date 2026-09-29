@@ -650,7 +650,8 @@ should hide the groups and gaps between the cards." Off, the deck is plain. The
 Roles tab is gone from the lens, because the user's own groups are what the
 button is for; the tabs — Deck, Archetype, Type, Copies, Legality — are the other
 ways to see the deck in pieces, and `b` walks them. `K` is the button; `G` turns
-it on.
+it on. Out, the groups are **As is, Fitted or Separate** (1.0.37, §4h¾): the deck's
+own rows in pieces, or each group a block fitted together or set apart.
 
 **The wheel sizes the deck** (1.0.17, kai: "let the user adjust the card sizes
 using the scroll wheel. cards will stay center of screen with more negative space
@@ -1429,6 +1430,53 @@ else), neighbours are found by cell (`at`), and `PiecePlacer` slides the straggl
 with the gaps (`crack`), so turning Groups off takes them home. The screenshot uses
 the same columns. A group that wraps from the end of a full row to the start of the
 next still breaks there: only a last row has room.
+
+### 4h¾. The groups As is, Fitted or Separate (1.0.37)
+
+kai: "completely reengineer the way the deck builder works in group mode to be more
+intuitive and smart" — and, over a design run, what that means. With the groups out
+the Groups panel carries a three-way switch (`Shift K` walks it, the menu bar has it;
+`NeuePreferences.groupArrangement`, default **Fitted**):
+
+- **As is** — the deck in its own order, rows of ten, broken into pieces where the
+  groups fall (`GroupPieces`, above). What 1.0.36 and every release before it did.
+- **Fitted** — each group one rectangle, the rectangles fitted together like a
+  puzzle: flush across, a hairline apart for their two outlines, and room between
+  bands for the names. The deck reads as one thing.
+- **Separate** — the same blocks a whole gap apart both ways (the Shift-wheel's gap).
+
+The layout is `GroupBands` (core, `GroupBandsTest`), and each of its rules was kai's:
+
+- **We read horizontally**, so a block fills along its rows; no column snakes.
+- **A copy set is one thing to the eye**: a 3-of is a strip of three across, never
+  broken; a 2-of lies across or stands; a 1-of is a single cell.
+- **A block is a glance**: at most four rows tall (`MAX_ROWS`), about five cards wide
+  (`GLANCE`), wider only when four rows cannot hold it — so a long group is a
+  rectangle you take in at once, not a row you have to read.
+- **Order is kept**: groups in their order, the cards in no group a block of their
+  own, last; inside a block the copy sets in deck order, except that a smaller set
+  may move up into a hole the next one does not fit (it costs, so it happens only
+  when it closes one). A block's only holes are at the end of its last line.
+- **The row is not ten.** Blocks stack into bands — each a height of one to four
+  rows, its stacks side by side, a stack being blocks of one width one over another —
+  and a dynamic program over the groups picks the bands; the deck's width is tried
+  across a range and scored by the card size it leaves in the pane, so a wide pane
+  takes a wide deck and a phone upright a narrow one.
+- **An edit does not reshuffle the deck** (`BandMemory`): the last layout's width
+  and each block's shape are preferred, so adding a card changes its own block and
+  seldom anything else. The memory is for edits only: a new pane — the window
+  resized, the tablet turned, the extra deck shown — is laid out afresh, or the size
+  of the first frame would hold for ever.
+
+`BandLayout.pieces()` is a `PieceLayout` with a row per card (`rowOf`) and a shift
+per stack and band, so the outlines, the name tabs, drops, hit-testing and zen all
+read it unchanged; `PiecePlacer` moves each card from its reading-order cell into
+its block with the gaps, so the groups open into their blocks and close back into
+rows. `mainBands` (`builder/Bands.kt`) lays out the main deck only — the extra and
+side decks stay as they are — and not while a group is being drawn up, nor on a
+phone lying down, whose deck scrolls in its own columns. In zen the blocks are the
+deck's shape too, flush until zen's pieces open them. The screenshot draws the bands
+the builder shows. No schema or deck-file change: a preference with a default.
 
 ### 4i. Format: webs of decks (1.0.33)
 

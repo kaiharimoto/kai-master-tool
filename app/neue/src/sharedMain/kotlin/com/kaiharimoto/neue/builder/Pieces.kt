@@ -45,9 +45,14 @@ internal class PiecePlacer(
     val zenAbove: Float = 0f,
     /** Room over the grid for the name tabs of the pieces in its top row (1.0.18), at full crack. */
     val labelRoom: Float = 0f,
+    /**
+     * The builder's gap down, where it is not [gap] (1.0.37): fitted group blocks touch
+     * across, a hairline for their outlines, and keep room between bands for their names.
+     */
+    val gapY: Float = gap,
 ) {
     private val reservedX = builder.spanX * gap * crack
-    private val reservedY = builder.spanY * gap * crack
+    private val reservedY = builder.spanY * gapY * crack
 
     private fun gx(layout: PieceLayout, p: Int) = layout.shiftX.getOrElse(p) { 0 } - layout.spanX / 2f
     private fun gy(layout: PieceLayout, p: Int) = layout.shiftY.getOrElse(p) { 0 } - layout.spanY / 2f
@@ -59,14 +64,28 @@ internal class PiecePlacer(
      */
     private fun slide(layout: PieceLayout, p: Int) = (layout.column.getOrNull(p) ?: (p % columns)) - p % columns
 
+    /**
+     * How far card [p] stands from its index's row in [layout]: nothing, except in a deck
+     * laid out in bands of group blocks (1.0.37, `GroupBands`), where a card stands in its
+     * group's block — and goes back to its index's row as the groups close.
+     */
+    private fun drop(layout: PieceLayout, p: Int) = if (layout.rowOf == null) 0 else layout.row(p) - p / columns
+
+    /**
+     * How far zen's cells hold: with its pieces, as they open — except a deck in bands, whose
+     * blocks are its shape in zen too, flush until zen's pieces open them.
+     */
+    private fun zenCells(deep: Float, zenAmount: Float) = if (zen.rowOf != null) deep else zenAmount * deep
+
     fun x(p: Int, deep: Float = 0f, zenAmount: Float = 0f): Float =
-        (p % columns + slide(builder, p) * crack * (1f - deep) + slide(zen, p) * zenAmount * deep) * cardWidth +
+        (p % columns + slide(builder, p) * crack * (1f - deep) + slide(zen, p) * zenCells(deep, zenAmount)) * cardWidth +
             reservedX / 2f + gx(builder, p) * gap * crack * (1f - deep) + gx(zen, p) * zenGap * zenAmount * deep
 
     // Zen's pieces open downward rather than about the middle, and each section starts
     // below the growth of those above it, so the sections never open into each other.
     fun y(p: Int, deep: Float = 0f, zenAmount: Float = 0f): Float =
-        (p / columns) * cardHeight + reservedY / 2f + labelRoom * crack * (1f - deep) + gy(builder, p) * gap * crack * (1f - deep) +
+        (p / columns + drop(builder, p) * crack * (1f - deep) + drop(zen, p) * zenCells(deep, zenAmount)) * cardHeight +
+            reservedY / 2f + labelRoom * crack * (1f - deep) + gy(builder, p) * gapY * crack * (1f - deep) +
             (zen.shiftY.getOrElse(p) { 0 } * zenGap + zenAbove) * zenAmount * deep
 
     /** Card [p] at rest, in the builder. */

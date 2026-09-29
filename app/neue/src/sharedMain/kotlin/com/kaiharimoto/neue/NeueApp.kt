@@ -326,6 +326,14 @@ class NeueHolders(
                 null -> state.results.getOrNull(neue.poolCursor)?.let { Viewing(it, null, neue.poolCursor) }
             }
             DeskAction.TOGGLE_KEYS -> setGroups(!groupsOn(state))
+            DeskAction.GROUP_ARRANGEMENT -> {
+                // As is, fitted, separate, round (1.0.37); the groups come out if they were not.
+                val all = com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries
+                val next = all[(all.indexOf(neue.prefs.arrangement) + 1) % all.size]
+                neue.update { it.copy(groupArrangement = next.name) }
+                if (!groupsOn(state)) setGroups(true)
+                neue.note = Note("Groups ${arrangementWords(next).lowercase()}")
+            }
             DeskAction.TOGGLE_INSPECTOR -> neue.update { it.copy(inspectorVisible = !it.inspectorVisible) }
             DeskAction.TOGGLE_POOL -> neue.update { it.copy(poolVisible = !it.poolVisible) }
             DeskAction.TOGGLE_FILTERS -> neue.update { it.copy(filtersOpen = !it.filtersOpen, poolVisible = true) }
@@ -1506,4 +1514,11 @@ private fun UpdateDialog(updates: NeueUpdates) {
             }
         }
     }
+}
+
+/** An arrangement in the words its switch shows. */
+internal fun arrangementWords(a: com.kaiharimoto.mastertool.core.layout.GroupArrangement): String = when (a) {
+    com.kaiharimoto.mastertool.core.layout.GroupArrangement.AS_IS -> "As is"
+    com.kaiharimoto.mastertool.core.layout.GroupArrangement.FITTED -> "Fitted"
+    com.kaiharimoto.mastertool.core.layout.GroupArrangement.SEPARATE -> "Separate"
 }

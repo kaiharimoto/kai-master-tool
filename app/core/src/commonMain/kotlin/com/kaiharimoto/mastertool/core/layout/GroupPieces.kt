@@ -49,12 +49,20 @@ data class PieceLayout(
     val shiftY: List<Int>,
     /** The column each position stands in: its index's, except in a last row slid under its groups. */
     val column: List<Int> = List(piece.size) { it % columns.coerceAtLeast(1) },
+    /**
+     * The row each position stands in, when it is not its index's: a deck laid out in
+     * bands of group blocks (`GroupBands`, 1.0.37) puts cards anywhere; null reads rows off the index.
+     */
+    val rowOf: List<Int>? = null,
 ) {
     /** Position [p]'s column. */
     fun col(p: Int): Int = column.getOrElse(p) { p % columns }
 
-    /** Position [p]'s row: always its index's. */
-    fun row(p: Int): Int = p / columns
+    /** Position [p]'s row: its index's, unless [rowOf] says otherwise. */
+    fun row(p: Int): Int = rowOf?.getOrNull(p) ?: (p / columns)
+
+    /** How many rows the positions take. */
+    val rowCount: Int get() = if (piece.isEmpty()) 0 else piece.indices.maxOf { row(it) } + 1
 
     private val cells: Map<Int, Int> by lazy { piece.indices.associateBy { row(it) * columns + col(it) } }
 
