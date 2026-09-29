@@ -44,7 +44,6 @@ import androidx.compose.ui.Modifier
 import com.kaiharimoto.neue.zen.LocalZen
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -53,6 +52,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import com.kaiharimoto.neue.cursor.cursor
+import com.kaiharimoto.neue.cursor.cursorPointer
+import androidx.compose.foundation.clickable
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -102,9 +103,10 @@ fun BuilderPage(
     // Deep zen: the pool and the inspector are faded out, not gone, and a hover, a
     // click or a wheel on them must not reach them (kai, 1.0.15). Each is shielded,
     // and the deck is lifted over both, so a card floated over where they were is
-    // still a card under the pointer.
+    // still a card under the pointer. From the moment zen is deep, not halfway into
+    // its fade (1.0.24): the pointer is the garden's from then on.
     val zen = LocalZen.current
-    val asleep by remember { derivedStateOf { zen.deep > 0.5f } }
+    val asleep = zen.asleep
     // The page's width, shared by PaneBudget (touch swarm, rec 1). Widths there are
     // physical — dp at a scale of one — so the interface scale grows what is in the
     // panes, never the panes; the tablet's pool and inspector are 320 and yield to
@@ -169,11 +171,32 @@ fun BuilderPage(
     }
 }
 
-/** What a hidden side pane leaves behind: a 36 px strip with the button that brings it back. */
+/**
+ * What a hidden side pane leaves behind: a 36 px strip with the button that brings it
+ * back — and the whole strip brings it back too (kai, 1.0.24: "reopen them by clicking
+ * anywhere on the drawer rather than just the button"). Only while hidden: the panes
+ * still hide from their own buttons. The strip is framed by the family cursor with
+ * `Show`, and faintly shaded under the pointer, so it reads as the one target it is;
+ * a tap on it is the same on the tablet. [modifier] carries the pool's gutter as
+ * padding outside the strip, so the gutter itself stays paper that clicks nothing.
+ */
 @Composable
 private fun HiddenPane(modifier: Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector, tip: String, chord: String?, onShow: () -> Unit) {
-    Box(modifier.width(36.dp).fillMaxHeight().padding(top = 10.dp), contentAlignment = Alignment.TopCenter) {
-        Tip(tip, kbd = chord) { IconButton(icon, onShow, size = 28.dp, label = tip.removePrefix("Show the ").replaceFirstChar { it.uppercase() }) }
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    val name = tip.removePrefix("Show the ").replaceFirstChar { it.uppercase() }
+    Box(
+        modifier
+            .width(36.dp)
+            .fillMaxHeight()
+            .background(animatedColor(if (hovered) Mu.colors.ink06 else androidx.compose.ui.graphics.Color.Transparent))
+            .hoverable(source)
+            .cursorPointer(caption = "Show", label = name)
+            .clickable(interactionSource = source, indication = null, onClick = onShow)
+            .padding(top = 10.dp),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Tip(tip, kbd = chord) { IconButton(icon, onShow, size = 28.dp, label = name) }
     }
 }
 

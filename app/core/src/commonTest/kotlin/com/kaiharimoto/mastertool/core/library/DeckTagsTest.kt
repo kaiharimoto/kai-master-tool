@@ -61,4 +61,20 @@ class DeckTagsTest {
         assertTrue(g.opening > 0.5 && g.opening < 0.6)
         assertEquals(34, report.ungroupedMain)
     }
+
+    /** The 1.0.24 slides: going second (six cards), and too many (two or more in five). */
+    @Test
+    fun aGroupsOddsGoingSecondAndOfTooMany() {
+        val groups = DeckGroups(
+            groups = listOf(DeckGroup("g", "Engine", color = 0, order = 0)),
+            assignments = mapOf(CardId(1) to "g", CardId(2) to "g"),
+        )
+        val g = GroupStats.of(deck, groups, cards::get).groups.single()
+        fun c(n: Int, k: Int): Double = (0 until k).fold(1.0) { acc, i -> acc * (n - i) / (i + 1) }
+        // Six of forty.
+        assertEquals(1 - c(34, 5) / c(40, 5), g.opening, 1e-9)
+        assertEquals(1 - c(34, 6) / c(40, 6), g.openingSecond, 1e-9)
+        assertEquals(1 - c(34, 5) / c(40, 5) - 6 * c(34, 4) / c(40, 5), g.flood, 1e-9)
+        assertTrue(g.openingSecond > g.opening)
+    }
 }

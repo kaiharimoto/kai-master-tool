@@ -1,5 +1,8 @@
 package com.kaiharimoto.mastertool.core.deck
 
+import com.kaiharimoto.mastertool.core.hand.HandConstraint
+import com.kaiharimoto.mastertool.core.hand.HandOdds
+import com.kaiharimoto.mastertool.core.hand.HandQuery
 import com.kaiharimoto.mastertool.core.hand.LensOdds
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardCategory
@@ -21,6 +24,10 @@ data class GroupStat(
     val opening: Double,
     /** How many of it an opening hand holds, on average. */
     val expected: Double,
+    /** The chance of at least one in a six-card hand: going second (1.0.24). */
+    val openingSecond: Double = 0.0,
+    /** The chance of two or more in a five-card hand: too many of it (1.0.24). */
+    val flood: Double = 0.0,
 )
 
 data class GroupReport(val groups: List<GroupStat>, val ungroupedMain: Int, val mainSize: Int)
@@ -36,6 +43,9 @@ object GroupStats {
     fun of(deck: Deck, groups: DeckGroups, card: (CardId) -> Card?, handSize: Int = LensOdds.DEFAULT_HAND): GroupReport {
         val keying = DeckLenses.key(Lens.ROLES, deck.main, card, groups)
         val odds = LensOdds.atLeastOne(keying, deck.main.size, handSize)
+        val second = LensOdds.atLeastOne(keying, deck.main.size, handSize + 1)
+        val sizes = LensOdds.sizesOf(keying)
+        fun twoOrMore(id: String) = HandOdds.probability(sizes, deck.main.size, handSize, HandQuery(listOf(HandConstraint(id, min = 2, max = handSize))))
         val stats = groups.ordered().map { group ->
             val mine = deck.main.filter { groups.groupOf(it) == group.id }
             fun kind(k: CardCategory) = mine.count { card(it)?.category == k }
@@ -51,6 +61,8 @@ object GroupStats {
                 traps = kind(CardCategory.TRAP),
                 opening = odds[group.id] ?: 0.0,
                 expected = if (deck.main.isEmpty()) 0.0 else mine.size.toDouble() * handSize / deck.main.size,
+                openingSecond = second[group.id] ?: 0.0,
+                flood = twoOrMore(group.id),
             )
         }
         return GroupReport(stats, deck.main.count { groups.groupOf(it) == null }, deck.main.size)

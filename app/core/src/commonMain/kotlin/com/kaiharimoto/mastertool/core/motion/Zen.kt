@@ -599,14 +599,23 @@ data class ZenShadow(val dx: Float, val dy: Float, val blur: Float, val alpha: F
 }
 
 /**
- * The bottom-right corner of the window in deep zen, where "Leave zen", "Groups"
- * and "put the cards back" come out: [WIDTH] by [HEIGHT] pixels, which a pointer reaches only on purpose.
+ * The bottom-right corner of the window in deep zen, where "Leave zen", "Groups",
+ * "Labels" and "put the cards back" come out: [WIDTH] by [HEIGHT] pixels, which a
+ * pointer reaches only on purpose.
  */
 object ZenCorner {
-    /** Wide enough for its three buttons side by side (1.0.15), and a reach, not a pixel hunt. */
+    /** A reach, not a pixel hunt (1.0.15). */
     const val WIDTH = 440f
     const val HEIGHT = 180f
 
-    fun reaches(x: Float, y: Float, windowWidth: Float, windowHeight: Float): Boolean =
-        windowWidth > 0f && windowHeight > 0f && x >= windowWidth - WIDTH && y >= windowHeight - HEIGHT && x <= windowWidth && y <= windowHeight
+    /**
+     * Whether a pointer at [x], [y] is in the corner. Once its buttons are out the
+     * corner is at least as wide as they are, [row] pixels (1.0.24): a row of four
+     * on a scaled display is wider than [WIDTH], and the corner used to let go of
+     * the pointer on its way to the leftmost button, which faded under it.
+     */
+    fun reaches(x: Float, y: Float, windowWidth: Float, windowHeight: Float, row: Float = 0f): Boolean {
+        val width = maxOf(WIDTH, row)
+        return windowWidth > 0f && windowHeight > 0f && x >= windowWidth - width && y >= windowHeight - HEIGHT && x <= windowWidth && y <= windowHeight
+    }
 }

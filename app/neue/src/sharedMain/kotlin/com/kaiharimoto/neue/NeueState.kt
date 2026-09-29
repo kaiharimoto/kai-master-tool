@@ -70,6 +70,16 @@ class NeueState(
         private set
 
     var paletteOpen by mutableStateOf(false)
+
+    /**
+     * The groups' palettes, opened out under the Groups panel (1.0.24): they stay out
+     * while palettes are tried one after another, and fold when a press lands off
+     * the panel ([groupsPanel]), on `Esc`, or when the panel goes.
+     */
+    var groupPalettesOpen by mutableStateOf(false)
+
+    /** Where the Groups panel is, in the window, while it is out: a press outside it folds the palettes. Plain. */
+    var groupsPanel: androidx.compose.ui.geometry.Rect? = null
     var helpOpen by mutableStateOf(false)
     var drawer by mutableStateOf<Drawer?>(null)
     var menu by mutableStateOf<MenuSpec?>(null)

@@ -19,6 +19,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
@@ -166,6 +169,10 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
             }
     }
 
+    // The app's own lifetime — the pool, the preferences, the art library — is here,
+    // outside the windows, so a window swapped in for immersive mode starts nothing over.
+    NeueEffects(h)
+
     // Immersive mode is full screen, reached two ways.
     //
     // On Windows it is a second, borderless window laid exactly over the monitor the
@@ -177,6 +184,16 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
     // it is showing, so the swap is a new window; everything the builder knows lives
     // in NeueHolders, outside it, and carries over.
     //
+    // The swap is a handover (1.0.24, kai: "the whole app disappears for a second").
+    // It used to dispose the window on screen and then build the next, so for as long
+    // as the next took to make — a native surface, a whole tree, its first frame —
+    // there was no window at all. Now the window on screen is first frozen: its last
+    // frame is kept as a picture and its tree let go, so nothing it registered (drop
+    // targets, zen's slots) outlives it or is undone after the next has made its own.
+    // The picture stays up while the next window is built and painted (Compose draws
+    // a window's first frame before showing it), and goes only once the next is on
+    // screen over it — or after [HANDOVER_MS], whatever happens.
+    //
     // On macOS and Linux it is the window's own full screen, which does neither.
     // Leaving that goes through Floating first: Compose's `placement = Maximized`
     // only sets maximised — it never clears full screen — so a window that was
@@ -184,18 +201,36 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
     // clears both; Maximized is re-applied a frame later.
     val borderless = Platform.os == DesktopOs.WINDOWS
     var host by remember { mutableStateOf<java.awt.Window?>(null) }
-    var screen by remember { mutableStateOf<java.awt.Rectangle?>(null) }
+    // The windows on screen, the newest last: one, but for the moment of a handover.
+    var shown by remember { mutableStateOf(listOf(Shown(0, null))) }
     var before by remember { mutableStateOf(WindowPlacement.Floating) }
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(h.neue.immersive) {
         if (borderless) {
             // The monitor the builder is on now, in the same units AWT places windows in.
-            screen = if (h.neue.immersive) {
+            val target = if (h.neue.immersive) {
                 host?.graphicsConfiguration?.bounds
                     ?: java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().defaultScreenDevice.defaultConfiguration.bounds
             } else {
                 null
             }
+            val current = shown.last()
+            if (current.full == target) {
+                // Pressed again before a handover finished: stay with the newest window.
+                current.freeze = false
+                withTimeoutOrNull(HANDOVER_MS) { snapshotFlow { current.ready }.first { it } }
+                shown = listOf(current)
+                return@LaunchedEffect
+            }
+            // 1. The window on screen keeps its last frame and lets its tree go.
+            current.freeze = true
+            withTimeoutOrNull(FREEZE_MS) { snapshotFlow { current.released }.first { it } }
+            // 2. The next is built, painted and shown over it.
+            val next = Shown(current.id + 1, target)
+            shown = shown + next
+            withTimeoutOrNull(HANDOVER_MS) { snapshotFlow { next.ready }.first { it } }
+            // 3. Only then does the picture go.
+            shown = listOf(next)
             return@LaunchedEffect
         }
         if (h.neue.immersive) {
@@ -222,19 +257,6 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
             last = placement
         }
     }
-    val full = screen
-    val shownState = if (full == null) {
-        windowState
-    } else {
-        remember(full) {
-            WindowState(
-                placement = WindowPlacement.Floating,
-                position = WindowPosition(full.x.dp, full.y.dp),
-                size = DpSize(full.width.dp, full.height.dp),
-            )
-        }
-    }
-
     val mac = Platform.os == DesktopOs.MAC
     if (mac) {
         LaunchedEffect(Unit) {
@@ -244,7 +266,19 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
             }
         }
     }
-    key(full != null) {
+    for (me in shown) key(me.id) {
+        val full = me.full
+        val shownState = if (full == null) {
+            windowState
+        } else {
+            remember(full) {
+                WindowState(
+                    placement = WindowPlacement.Floating,
+                    position = WindowPosition(full.x.dp, full.y.dp),
+                    size = DpSize(full.width.dp, full.height.dp),
+                )
+            }
+        }
         Window(
             onCloseRequest = {
                 h.neue.flush()
@@ -264,12 +298,17 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
                 host = window
                 window.minimumSize = Dimension(1024, 680)
                 window.background = if (h.neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK) java.awt.Color.BLACK else java.awt.Color.WHITE
+                // On screen and painted: the window it takes over from may go.
+                while (!window.isShowing) delay(16)
+                withFrameNanos { }
+                withFrameNanos { }
+                me.ready = true
             }
             if (mac) {
                 MacMenuBar(h)
                 MacTitleBar(h.neue.prefs.theme)
             }
-            NeueRoot(h)
+            Handover(me) { NeueRoot(h, launchEffects = false) }
         }
     }
 }

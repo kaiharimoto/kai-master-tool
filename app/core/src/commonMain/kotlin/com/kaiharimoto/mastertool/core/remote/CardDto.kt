@@ -13,6 +13,13 @@ internal data class CardInfoResponse(
     val data: List<CardDto> = emptyList(),
 )
 
+/** Wire format of `checkDBVer.php`: a list of one. */
+@Serializable
+internal data class DbVersionDto(
+    @SerialName("database_version") val databaseVersion: String = "",
+    @SerialName("last_update") val lastUpdate: String = "",
+)
+
 @Serializable
 internal data class CardDto(
     val id: Int,

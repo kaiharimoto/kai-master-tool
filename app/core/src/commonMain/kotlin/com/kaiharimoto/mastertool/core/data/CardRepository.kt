@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 
 /** Outcome of a card pool refresh. */
 sealed interface SyncResult {
-    data class Updated(val cardCount: Int) : SyncResult
+    /** [version] is the database version the pool was fetched at, when YGOPRODeck said. */
+    data class Updated(val cardCount: Int, val version: String? = null) : SyncResult
 
     /** The cached pool was recent enough that nothing was fetched. */
     data class UpToDate(val cardCount: Int) : SyncResult
@@ -64,13 +66,49 @@ class CardRepository(
         )
     }
 
+    /** What was written down about the pool when it was fetched; null for a pool fetched before that was kept. */
+    suspend fun record(): PoolRecord? = withContext(ioDispatcher) {
+        val stored = database.preferenceQueries.selectByKey(PoolRecord.KEY).executeAsOneOrNull() ?: return@withContext null
+        runCatching { recordJson.decodeFromString(PoolRecord.serializer(), stored) }.getOrNull()
+    }
+
+    private suspend fun keep(record: PoolRecord) = withContext(ioDispatcher) {
+        database.preferenceQueries.upsert(PoolRecord.KEY, recordJson.encodeToString(PoolRecord.serializer(), record))
+    }
+
+    /**
+     * Asks YGOPRODeck whether the pool here is current, without fetching it:
+     * `checkDBVer.php` against the version written down at the last fetch.
+     * A pool too old to have one written down is judged by its age
+     * ([PoolFreshness.isCurrent]); a current one then adopts the version, so
+     * the next check compares versions.
+     */
+    suspend fun check(): PoolCheck {
+        val current = status()
+        val remote = api.checkVersion().getOrElse { return PoolCheck.Unreachable(current.cardCount, clock()) }
+        val record = record()
+        val local = record?.version
+        return if (!current.isEmpty && PoolFreshness.isCurrent(local, current.lastSyncEpochMs, remote)) {
+            if (local == null) keep((record ?: PoolRecord()).copy(version = remote.database))
+            PoolCheck.Current(local ?: remote.database, current.cardCount, clock())
+        } else {
+            PoolCheck.Behind(local, remote.database, current.cardCount, clock())
+        }
+    }
+
     /**
      * Refreshes the pool from the network.
      *
      * A failure is reported rather than thrown, and never clears the cache: an
      * outdated pool beats no pool when you are standing at a tournament table.
+     * [onProgress] hears each step of a fetch ([PoolProgress]), from whichever
+     * thread is doing it.
      */
-    suspend fun sync(force: Boolean = false, maxAgeMs: Long = DEFAULT_MAX_AGE_MS): SyncResult {
+    suspend fun sync(
+        force: Boolean = false,
+        maxAgeMs: Long = DEFAULT_MAX_AGE_MS,
+        onProgress: (PoolProgress) -> Unit = {},
+    ): SyncResult {
         val current = status()
 
         if (!force && !current.isEmpty) {
@@ -80,7 +118,19 @@ class CardRepository(
             }
         }
 
-        val fetched = api.fetchAllCards()
+        // The version first, so what is written down is never newer than what was fetched.
+        onProgress(PoolProgress.Asking)
+        val version = api.checkVersion().getOrNull()?.database
+        val record = record()
+        val expected = PoolProgress.expected(record, current.cardCount)
+        var received = 0L
+        val fetched = api.fetchAllCards(
+            onBytes = { bytes ->
+                received = bytes
+                onProgress(PoolProgress.Downloading(bytes, expected))
+            },
+            onRead = { onProgress(PoolProgress.Reading) },
+        )
         val cards = fetched.getOrElse { error ->
             return SyncResult.Failed(
                 error.message ?: "Could not reach the card database.",
@@ -93,15 +143,17 @@ class CardRepository(
             return SyncResult.Failed("The card database returned no cards.", current.cardCount)
         }
 
-        withContext(ioDispatcher) { replaceAll(cards) }
+        withContext(ioDispatcher) { replaceAll(cards) { done -> onProgress(PoolProgress.Saving(done, cards.size)) } }
+        keep(PoolRecord(version = version, bytes = if (received > 0) received else record?.bytes ?: 0))
         loadFromCache()
-        return SyncResult.Updated(cards.size)
+        return SyncResult.Updated(cards.size, version)
     }
 
-    private fun replaceAll(cards: List<Card>) {
+    private fun replaceAll(cards: List<Card>, onSaved: (Int) -> Unit = {}) {
         database.transaction {
             database.cardQueries.deleteAll()
-            cards.forEach { card ->
+            cards.forEachIndexed { i, card ->
+                if (i % SAVE_STEP == 0) onSaved(i)
                 database.cardQueries.insert(
                     id = card.id.value.toLong(),
                     name = card.name,
@@ -126,10 +178,16 @@ class CardRepository(
             }
             database.cardQueries.upsertSyncState(clock(), cards.size.toLong())
         }
+        onSaved(cards.size)
     }
+
+    private val recordJson = Json { ignoreUnknownKeys = true }
 
     companion object {
         /** Banlists move monthly; a week keeps the pool fresh without nagging. */
         const val DEFAULT_MAX_AGE_MS: Long = 7L * 24 * 60 * 60 * 1000
+
+        /** Cards written between two reports of the saving's progress. */
+        private const val SAVE_STEP = 500
     }
 }

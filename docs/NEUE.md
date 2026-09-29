@@ -323,8 +323,9 @@ cursor at each point and logs what it resolved to.
 ## 3. The window
 
 **One 48 px bar** — the mark, the page you are on, then whatever the page puts
-there (the builder puts the deck's name, its legality, its tools and Save), the
-update pill and immersive mode — the 232 px index rail —
+there (the builder puts the deck's name, its legality, its tools and Save), what
+is being fetched and how far (§4h), the update pill and immersive mode — the 232
+px index rail —
 `01 Decks · 02 Builder · 03 Odds · 04 Stats`; below the rule, what is being
 fetched, `Search Ctrl K` and Settings — and the page. Until 1.0.10 the app and
 the builder each had a bar; kai merged them, moved search to the rail beside
@@ -346,10 +347,30 @@ decorated and never went full screen. So on Windows immersive mode is **a second
 borderless window laid exactly over the monitor** the builder is on — which Windows
 treats as full screen, taskbar and all, and leaves alone when focus moves. A
 frame's decorations cannot change while it is showing (`JFrame.setUndecorated`
-throws), so entering and leaving swap windows (`key(full != null)` in `Main.kt`);
-everything the builder knows lives in `NeueHolders`, outside the window, and
-carries across. macOS and Linux keep the window's own full screen, which does
-neither. **The borderless window is not resizable** (1.0.15): Compose gives an
+throws), so entering and leaving swap windows (`Main.kt`); everything the builder
+knows lives in `NeueHolders`, outside the window, and carries across. macOS and
+Linux keep the window's own full screen, which does neither.
+
+**The swap is a handover** (1.0.24, kai: "the transition between entering and
+exiting immersive mode is very jarring. The whole app disappears for a second").
+Two things made the second. The window on screen was disposed first and the next
+built after it, so for as long as the next took — a native surface, a whole tree,
+its first frame — there was no window at all. And the app's own lifetime was the
+window's: every swap stopped and restarted the card pool, the preferences, the
+update check and the art library, and made the image loader afresh, so every
+card's picture was read again. Now the lifetime is `NeueEffects`, composed once
+outside the windows (the tablet's `NeueRoot` still brings it along), and the swap
+runs in three steps (`WindowHandover.kt`): the window on screen draws one more
+frame through a graphics layer, keeps it as a picture and shows that in place of
+its tree, which it lets go (`Shown.released`); then the next window is built —
+Compose paints a window's first frame before it shows it — and shown over the
+picture; and only once it is on screen and painted does the picture's window go
+(three seconds at most, whatever happens). The tree goes *before* the next is
+built, never after: two live trees register the same drop targets and zen's slots,
+and the one let go last would take them from the other. `WindowHandoverTest` holds
+the picture to the frame it replaces, pixel for pixel. A `Z` pressed long ago no
+longer reads as pressed now in a tree composed afresh (`zenHandled`), which had
+sent every trip into immersive mode after the first `Z` straight to zen. **The borderless window is not resizable** (1.0.15): Compose gives an
 undecorated window that is resizable its own resize border
 (`UndecoratedWindowResizer`), an invisible band round the edge that takes the
 pointer — and at the left edge that band was exactly where the rail comes out,
@@ -456,7 +477,28 @@ paper round it; up, back to the size that fills the column. It is a re-fit, not 
 transform, so every rule of the layout — the pieces, the labels, the drop targets —
 holds at any size. With the groups on, **Shift and the wheel** open and close the
 gaps between them (`groupGap`, 0.4–3 standard gaps). The pool's cards keep the
-size the deck *would* be, not what the wheel made of it. **The lens row stands
+size the deck *would* be, not what the wheel made of it — the fit at the full
+size itself, so nothing in the pool stirs while the deck moves.
+
+**The wheel glides** (1.0.24, kai: "more sensitive and more fluid/smooth
+feeling"; `core/layout/DeckZoom.kt`). A notch took a flat 4 % off and the deck was
+re-fitted at once, so the cards jumped a step a notch, fifteen notches end to end,
+and a touchpad's stream of small deltas came through as stutters. Now **a notch
+is a ratio**, `e^(−0.12)` — about 11 %, eight notches end to end, the same-looking
+step at any size — and the delta is taken as it comes, so a touchpad's fraction
+of a notch is that fraction of the change; a flung wheel is capped at three
+notches an event, and the last notch up lands on the full size rather than a hair
+short of it. The share the wheel sets is where the deck is going: **the deck is
+re-fitted every frame at a share closing on it exponentially** (a 45 ms time
+constant, there to the pixel in about the family's 180 ms). That is not a spring
+— it never overshoots — and a notch mid-glide only moves the target, so a spun
+wheel is one motion. The stored preference is the target, written once the wheel
+rests; a pinch on the tablet and the size read on opening are not glided. A deck
+limited by its width sat at the top at full size and in the middle below it, which
+a glide would have shown as a drop of half the spare height in its first frame; it
+now moves to the middle over the first 3 % (`DeckZoom.centring`). Re-fitting a
+frame is the fitter's arithmetic twice and one recomposition of the deck, with the
+cards' art already loaded — the same work a pinch always did per event. **The lens row stands
 still** (1.0.18, kai: "have the ui elements like buttons stay in fixed
 positions"): it is laid out once at the top of the column, inset to the deck's
 edge at full size, and only the deck below it is re-fitted and centred — the
@@ -488,19 +530,30 @@ dropped its extra- and side-deck cards when it was saved again.
 choices"). Under the groups, seven palettes of six — Prism (the tablet's), Bauhaus,
 Pastel, Earth, Ocean, Neon, Vintage. Since 1.0.18 they are a dropdown: the
 closed header is the palette in use, its name and its colours, and a click opens
-the other six; choosing one closes it.
+the other six. **Choosing one leaves them open** (1.0.24, kai: "the user is most
+likely going to choose between the palettes to their liking, so it minimizing
+upon choosing a palette makes it harder"): every group is recoloured at once and
+the next can be tried straight away. They fold at a press anywhere off the Groups
+panel — the window's one pointer watcher, consuming nothing, against the panel's
+bounds (`NeueState.groupPalettesOpen`, `groupsPanel`), so the press still does
+what it was for — at `Esc`, at the header again, or when the panel goes.
 A group's colour is stored as an index, so a palette is only a reading of it:
 choosing one recolours every group at once and changes nothing in the deck file
 (`GroupMarkers.palettes`, the one file with colour in it; `groupPalette`).
 
 **Slides** (1.0.18, kai: "add some data analysis visuals in a box that changes
 like slides, with an auto play slide feature that can be toggled"): between the
-groups and the palettes, a box of five — share of the main deck (and what is
-ungrouped), the chance to open each group, how many of it a hand holds on
-average, each group's monsters, spells and traps, and its cards across main,
-extra and side. Bars in each group's colour; the numbers are `GroupStats.of`, in
+groups and the palettes, a box of four slides — share of the main deck (and what
+is ungrouped); the chance to open each group going first (five cards) and, in a
+fainter bar under it, going second (six); how many of it a hand holds on
+average; and **too many**, the chance of two or more in five — flooding on hand
+traps, bricks or garnets. The second and fourth are kai's picks for 1.0.24. Bars in each group's colour; the numbers are `GroupStats.of`, in
 core, from the same `LensOdds` the rows use. ‹ › step, **Auto** turns every six
 seconds (`slidesAutoplay`, on by default) and the pointer over the box pauses it.
+In 1.0.24 the controls took a row of their own and the title and each group's
+name the box's whole width, wrapping rather than cut short (kai: "sometimes the
+text is truncated"), and the slides of card types and of cards across main, extra
+and side were dropped — kai: "basically useless to players".
 
 **The Groups panel is where groups are edited** (`GroupsPanel`, 288 px beside the
 deck). Every group is a row that can be changed where it stands: its name is a
@@ -635,6 +688,15 @@ without consuming them — the field's own click and double-click are untouched 
 and selects everything a frame after the third release, once the field has put
 its own caret down. Every field in the kit has it, not only the search.
 
+**The palette's list is the keys' or the hand's** (1.0.24, kai: "when I try to
+scroll down with the scroll wheel its interrupted by the auto scroll"). It scrolled
+to its highlighted row, and the pointer moves the highlight too: the wheel rolled a
+row under the still pointer, that row took the highlight, and the list scrolled
+back to it. Now only `↑` and `↓` bring the highlight into view, and once a wheel,
+a touchpad, a finger or the scrollbar has moved the list it follows nothing until
+the palette closes; opened again, it follows again (`FollowScroll`, in core). A new
+query starts its list at the top, where its highlighted first row is.
+
 The keyboard is `DeskShortcuts`, one table resolved in one place, rendered by
 the help dialog (`F1`) and reachable by name from the palette (`Ctrl K`).
 `DeskShortcutsTest` holds every action bound and no chord meaning two things at
@@ -674,7 +736,12 @@ In immersive mode, on the builder, doing nothing is a mode too
   and puts them down anywhere** (`ZenArrangement`). A card put down lands on top
   of what it is put on; one being carried floats higher and casts further. The
   arrangement is only a picture: the deck's order never changes. Waking draws
-  every card home; the next zen puts them back where they were left.
+  every card home, and **every zen begins with the cards in their slots**
+  (1.0.24, kai: "zen mode seems to remember card positions if they were moved
+  before exiting zen mode. Have it reset every time we enter zen mode"):
+  `ZenLayer.begin`, the moment the phase turns deep, forgets the last zen's
+  arrangement and what was picked out. Until then the next zen put them back
+  where they were left.
 - **Only a key wakes it.** In deep zen the pointer is for arranging, so neither
   moving it nor clicking ends zen; any key does, and that key does nothing else.
 - **Many cards at once** (1.0.14, kai: "drag boxes to select multiple cards, and
@@ -718,6 +785,27 @@ In immersive mode, on the builder, doing nothing is a mode too
   card under the pointer. The corner is 440 × 180 and **always** offers
   **Leave zen**, beside **Groups** and "Put the cards back" when they apply — it
   used to show nothing at all until a card had been moved, which read as broken.
+  Once its buttons are out it is at least as wide as they are (`ZenCorner.reaches`,
+  1.0.24): a row of four on a scaled display is wider than 440 px, and the corner
+  let go of the pointer on its way to Leave zen.
+- **Faded is not gone, all of it** (1.0.24, kai: "zen mode is accidentally trying
+  to click on objects not in zen mode which is blocking me from clicking on cards.
+  I can tell this because the tooltips are showing"). The shields covered the pool
+  and the inspector, but not the rest of the chrome that only fades: the **Groups
+  panel**, which stands beside the deck *after* it in the row, so above it for the
+  pointer — and zen grows the deck into the middle of the window, over where the
+  panel is, so every card there was under an invisible panel that took the press
+  and showed its tooltips; the **lens row**, which rides with the deck to the
+  middle (its tips, and an invisible Extra or Side switch that a click hid a deck
+  with); the section names; and the hidden panes' handles. Now `zenQuiet` itself
+  takes faded chrome off the page once zen is deep and the fade is done: still
+  measured, so nothing moves, but not placed — neither drawn nor hit, so a hover,
+  a tooltip or a press goes to the card under the pointer. It is placed again the
+  moment zen ends, still transparent, and fades in from there. The shields and the
+  deck's lift go on the moment the phase is deep (`ZenLayer.asleep`), not halfway
+  through its fade. The studio proves it: `--groups=true --zen=deep
+  --zen-groups=true --zen-drags=drag@k9>k9+0,0.25` carried nothing before and
+  carries the card now.
 - **The wheel opens and closes zen's gaps** (1.0.17, kai: "let the scroll wheel
   expand the gaps further and tighten, card sizes adjust automatically"). Up
   opens the Roles pieces if they are closed, and then widens them; down narrows
@@ -748,6 +836,19 @@ In immersive mode, on the builder, doing nothing is a mode too
   its Roles group. A card carried away leaves its piece: the outline opens where
   it stood, and closes round the card wherever it is put. Picking and snapping in
   zen measure the pieces as they are drawn (`ZenLayer.homesNow`).
+- **The groups' names, in zen** (1.0.24, kai: "let the user toggle the labels for
+  the groups as well"). **Labels** stands beside Groups in the corner — always
+  there when Groups is, so pressing Groups never slides it out from under the
+  pointer, and live only while the pieces are out, since a closed deck has nothing
+  for a name to stand on. On (the default, `NeuePreferences.zenLabels`, kept in the
+  settings), each group's name is written once on its pieces as the builder writes
+  it — the same tab, the same longest top edge (`drawGroupLabel`, `labelEdge`) —
+  floating with the cards it stands on and fading with the glow. Two things are
+  zen's own (`ZenLabels`, in core): a card carried out of its piece takes no name
+  with it, so the name stands on the cards still there; and zen reserves no room
+  for a tab, so it stands in whatever gap is over its edge — the gap between two
+  pieces as wide as the wheel has made it, the paper between two sections, or the
+  table over the top of the deck — and is not drawn where that is too short to read.
 - **"Put the cards back"** comes out, faintly, when the pointer goes into the
   window's bottom-right corner (`ZenCorner`, 240 × 140) and something has been
   moved; it draws every card home over a slow beat and forgets the arrangement.
@@ -781,7 +882,24 @@ second (YGOPRODeck allows twenty and asks that images be kept, not re-fetched);
 a file is written beside its name and moved into place, so quitting halfway
 costs one picture. A card draws the original the moment it is on disk, over the
 small render until it has decoded, so arriving never flashes. Settings has the
-switch, the count, the size and the folder.
+switch, the count, the size and the folder (§4h).
+
+**Sharp from the start.** kai reported that on opening the app the deck's
+thumbnails were blurry, and that going to Settings and back fixed them. Coil
+decodes a picture to the size of its box *as measured when the request starts*
+(`ConstraintsSizeResolver` resolves once) and never looks again. A card's box
+at first composition is rarely its last: the window opens at its default size
+and only then takes the saved bounds and Maximized, the interface scale arrives
+with the settings, the deck re-fits as the panes and the wheel settle. So each
+card kept the decode made for its first, smaller box, stretched to its final
+one — blurry until Settings and back composed it afresh, at the size it had by
+then. `NeueCard` now asks for its decode size itself, from `DecodeSize` (core,
+tested): it follows the card's measured width **up only**, in 64 px steps, and
+never past the source (268 px for the small render, 813 for the original). A
+card that grows asks again; the sharper decode's placeholder is the softer one
+(`placeholderMemoryCacheKey`), and an original already showing stays shown
+while its sharper decode loads, so the change is a crossfade from soft to sharp,
+never a flash of the hatch.
 
 ### 4c. The deck it opens with, and the deck's covers
 
@@ -885,6 +1003,12 @@ row, and the inspector's is a 20 px button in its top-right corner, inside the
 24 px margin so it costs the picture nothing. A hidden pane leaves a 36 px strip
 where it stood with the one button that brings it back; the pool's strip starts
 past the rail's gutter, so reaching for it never brings the rail out instead.
+**The whole strip brings it back** (1.0.24, kai: "reopen them by clicking anywhere
+on the drawer rather than just the button. This should only be while it's
+hidden"): it is one target, shaded under the pointer and framed by the family
+cursor with `Show`, and a tap on it does the same on the tablet. The button stays
+in it. The gutter is padding outside the strip, so it still clicks nothing, and
+hiding is still the panes' own buttons.
 `Ctrl B` and `Ctrl J` still work. The two buttons on the window's bar are gone.
 
 **Filters, as the deck builders people use have them** (kai: "refer to …
@@ -962,6 +1086,58 @@ filter decks by those with the card in it"):
 - **The search** matches a deck's name, the name of any card in it, or a tag
   (`DeckSearch.match`). A row found by its cards says which: "With Ash Blossom &
   Joyous Spring".
+
+### 4h. Ready for offline
+
+kai asked for two things together: to see when the app is downloading pictures
+or updating the card pool, and to be able to check, before a flight, that
+everything the builder needs is on the computer — and to bring it up to date
+there and then, with a bar, "so they know when they're ready to use offline".
+
+**What is being fetched is in the bar.** While the card pool updates or the
+art library sweeps, the title bar carries `CARD POOL 42%` or `CARD ART 42%` over
+a 3 px track (§6's progress), before the update pill; its tip has the whole
+sentence ("6,210 of 14,590, about 12 min left", or why it is waiting), and a
+click opens Settings. The pool's update wins the place while it runs, since it
+changes what you search. Narrow, the words give way and the figure and bar stay.
+The rail's own line for the art stood inside the pool's block, so it showed only
+while the pool synced; it stands on its own now. `Offline.readout` (core) decides
+what the bar says.
+
+**Settings → 03 Offline** has three rows, and the card pool moved there from
+Building:
+
+- **Card pool.** *Check for updates* asks YGOPRODeck's `checkDBVer.php` — a
+  few dozen bytes — which version its database is at, against the version this
+  pool was fetched at (`CardRepository.check`, `PoolFreshness`): "Up to date ·
+  14,590 cards · checked 12:04", "An update is available · 147.21, this pool is
+  147.20", or "Couldn't reach YGOPRODeck · 14,590 cards on this device". *Update
+  now* fetches the whole pool with a bar that follows it through its four steps
+  (`PoolProgress`): asking the version, downloading (about 21 MB, sent with no
+  length, so measured against the last download's size), reading, and writing
+  it into the database a few hundred cards at a time.
+- **High-resolution art**: the switch, a bar, the count, the size and how long
+  is left at the pace pictures have been arriving, and *Download all*, which
+  turns the library on if it was off and, if it was waiting out the network,
+  tries again at once. The sweep's pace is unchanged — four at a time, under a
+  dozen a second. Cards YGOPRODeck has no original for are *settled*, not
+  pending (`ArtCount.unavailable`), or the bar would sit at 99% for ever.
+- **Ready for offline**: `Ready` once the pool is known current (checked or
+  updated this session) and every card's original is here or known not to
+  exist; otherwise what is left, in order — "update the card pool, then wait for
+  7,590 more pictures". `Offline.readiness` (core, tested).
+
+**The pool's version is written down** beside the pool: one JSON row under the
+preferences table's `card.pool` key (`PoolRecord`: the database version and the
+download's size) — a new row, not a new schema, so no migration. A pool fetched
+before there was a row has no version; it counts as current if it was fetched
+more than a day after YGOPRODeck's `last_update` (which carries no time zone,
+hence the day), and adopts the version when it does. The weekly refresh on
+start is unchanged.
+
+The studio drives both: `--check=true` asks for real and prints the answer;
+`--update=downloading|saving` presses Update now and takes the picture at that
+step (`--frames=2`, so it has not finished).
 
 ---
 

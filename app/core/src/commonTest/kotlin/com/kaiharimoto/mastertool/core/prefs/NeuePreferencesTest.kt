@@ -27,6 +27,16 @@ class NeuePreferencesTest {
         assertFalse(json.decodeFromString(NeuePreferences.serializer(), off).autoSave)
     }
 
+    /** The groups' names in zen (1.0.24): on unless turned off, and on for a document written before them. */
+    @Test
+    fun zenLabelsAreOnByDefaultAndKeepTheirSwitch() {
+        assertTrue(NeuePreferences.DEFAULT.zenLabels)
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; encodeDefaults = true }
+        assertTrue(json.decodeFromString(NeuePreferences.serializer(), """{"autoZen":true}""").zenLabels)
+        val off = json.encodeToString(NeuePreferences.serializer(), NeuePreferences.DEFAULT.copy(zenLabels = false))
+        assertFalse(json.decodeFromString(NeuePreferences.serializer(), off).zenLabels)
+    }
+
     @Test
     fun thePictureIsTheDefaultScreenshotAndAnUnknownShapeFallsBackToIt() {
         assertEquals(NeuePreferences.SHOT_PICTURE, NeuePreferences.DEFAULT.shotStyle)

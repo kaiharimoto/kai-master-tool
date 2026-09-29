@@ -163,6 +163,11 @@ data class NeuePreferences(
      * the bar). Off, it comes only when asked for with Z.
      */
     val autoZen: Boolean = true,
+    /**
+     * Each group's name on its piece in zen (kai, 1.0.24: "let the user toggle the
+     * labels for the groups"), the corner's Labels switch. On unless turned off.
+     */
+    val zenLabels: Boolean = true,
 ) {
     fun sanitised(): NeuePreferences = copy(
         scale = if (scale.isFinite()) scale.coerceIn(SCALES.first(), SCALES.last()) else 1f,

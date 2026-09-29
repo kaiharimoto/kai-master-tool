@@ -93,7 +93,15 @@ fun neueMain(args: Array<String>) {
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
             }
+            // --grow=0.4: the deck drawn that small first and then full size — the cards grow
+            // after their pictures were decoded, as they do when the window is maximised on
+            // opening. Before DecodeSize they kept the small decode and looked blurry.
+            map["grow"]?.toFloatOrNull()?.let { z -> h.neue.update { it.copy(deckZoom = z) } }
             clock.run((map["settle"] ?: "150").toInt())
+            if (map["grow"] != null) {
+                h.neue.update { it.copy(deckZoom = 1f) }
+                clock.run(60)
+            }
 
             // --save: the deck into the library, so `01 Decks` has a row; --covers=0,1,2 puts
             // those main-deck cards on its cover; --default marks it the deck that opens first.
@@ -107,6 +115,30 @@ fun neueMain(args: Array<String>) {
                 }
                 if (map["default"] == "true" && id != null) h.neue.update { it.copy(defaultDeckId = id) }
                 println("[neue-studio] saved as $id; covers ${h.neue.prefs.covers[id]}; default ${h.neue.prefs.defaultDeckId}")
+            }
+            // --check: Settings → Offline → Check for updates, asked for real, and its answer.
+            if (map["check"] == "true") {
+                h.builder.checkCardPool()
+                var waited = 0
+                do {
+                    clock.run(10)
+                    waited += 10
+                } while ((h.builder.checkingPool || h.builder.poolCheck == null) && waited < 3000)
+                println("[neue-studio] check: ${h.builder.poolCheck}")
+            }
+            // --update=downloading|saving: Update now, pressed for real, and the picture taken
+            // while it is at that step — the bars in the title bar and in Settings.
+            map["update"]?.let { step ->
+                h.builder.refreshCardPool(force = true)
+                var waited = 0
+                while (waited < 6000) {
+                    clock.run(1)
+                    waited++
+                    val at = h.builder.poolProgress
+                    if (step == "saving" && at is com.kaiharimoto.mastertool.core.data.PoolProgress.Saving && at.done > 0) break
+                    if (step != "saving" && at is com.kaiharimoto.mastertool.core.data.PoolProgress.Downloading && at.bytes > 4_000_000) break
+                }
+                println("[neue-studio] update: ${h.builder.poolProgress} after $waited frames")
             }
             if (map["side"] == "true") h.neue.update { it.copy(poolToSide = true) }
             if (map["extra"] == "false") h.neue.update { it.copy(extraVisible = false) }
@@ -156,6 +188,8 @@ fun neueMain(args: Array<String>) {
                 h.neue.revealed = com.kaiharimoto.mastertool.core.layout.Revealed(left = "left" in parts, top = "top" in parts, bottom = "bottom" in parts)
             }
             if (map["palette"] == "true") h.neue.paletteOpen = true
+            // --group-palettes=true: the Groups panel's palettes opened out (with --groups).
+            if (map["group-palettes"] == "true") h.neue.groupPalettesOpen = true
             // --history: a few edits, then the history menu open, to see it list them.
             if (map["history"] == "true") {
                 val deck = h.builder.deck
@@ -308,13 +342,27 @@ fun neueMain(args: Array<String>) {
 
             // --mouse=right@0.1,0.3;left-hold@0.5,0.5: real presses, with real buttons, at fractions
             // of the frame; after each the deck's counts and any open menu are logged, so a gesture
-            // that does nothing shows up as numbers that did not move.
+            // that does nothing shows up as numbers that did not move. `wheel@x,y` (down, a notch)
+            // and `wheel-up@x,y` scroll instead, with a still mid-glide (`-mouse<i>-mid.png`).
             map["mouse"]?.let { spec ->
-                fun counts() = "main ${h.builder.deck[DeckSection.MAIN].size} extra ${h.builder.deck[DeckSection.EXTRA].size} side ${h.builder.deck[DeckSection.SIDE].size}"
+                fun counts() = "main ${h.builder.deck[DeckSection.MAIN].size} extra ${h.builder.deck[DeckSection.EXTRA].size} side ${h.builder.deck[DeckSection.SIDE].size}" +
+                    "; pool ${h.neue.prefs.poolVisible} inspector ${h.neue.prefs.inspectorVisible}; group palettes ${h.neue.groupPalettesOpen} (${h.neue.prefs.groupPalette}); zoom ${h.neue.prefs.deckZoom}"
                 spec.split(";").filter { it.isNotBlank() }.forEachIndexed { i, step ->
                     val (kind, where) = step.split("@")
                     val (fx, fy) = where.split(",").map { it.toFloat() }
                     val at = Offset(fx * width, fy * height)
+                    if (kind.startsWith("wheel")) {
+                        val before = counts()
+                        scene.sendPointerEvent(PointerEventType.Move, at)
+                        clock.run(4)
+                        scene.sendPointerEvent(PointerEventType.Scroll, at, scrollDelta = Offset(0f, if (kind == "wheel-up") -1f else 1f))
+                        clock.run(3)
+                        clock.frame().encodeToData(EncodedImageFormat.PNG)?.let { File(out, "$name-mouse$i-mid.png").writeBytes(it.bytes) }
+                        clock.run(30)
+                        println("[neue-studio] mouse $i $kind at ($fx, $fy): $before -> ${counts()}")
+                        clock.frame().encodeToData(EncodedImageFormat.PNG)?.let { File(out, "$name-mouse$i.png").writeBytes(it.bytes) }
+                        return@forEachIndexed
+                    }
                     val secondary = kind.startsWith("right") || kind.startsWith("shift-right")
                     val shift = kind.startsWith("shift")
                     val hold = kind.endsWith("hold")

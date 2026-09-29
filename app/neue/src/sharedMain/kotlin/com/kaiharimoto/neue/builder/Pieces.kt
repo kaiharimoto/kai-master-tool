@@ -12,6 +12,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import com.kaiharimoto.mastertool.core.layout.LabelEdge
 import com.kaiharimoto.mastertool.core.layout.PieceLayout
 
 /**
@@ -140,12 +141,34 @@ private fun DrawScope.drawLabel(
     frame: Float,
     color: Color,
     labels: Labels,
+) = drawGroupLabel(key, keys, pieces, at, cardWidth, frame, color, labels)
+
+/**
+ * The tab itself, for the builder and for zen (1.0.24). Zen chooses the edge
+ * itself ([edgeOf], given how many card widths the name needs: the cards still in
+ * their piece) and how tall the tab can stand there ([tabOf]; 0 draws nothing),
+ * and fades it by [alpha]; the builder takes the defaults.
+ */
+internal fun DrawScope.drawGroupLabel(
+    key: String,
+    keys: List<String?>,
+    pieces: PieceLayout,
+    at: (Int) -> Offset,
+    cardWidth: Float,
+    frame: Float,
+    color: Color,
+    labels: Labels,
+    alpha: Float = 1f,
+    edgeOf: (Float) -> LabelEdge? = { need -> pieces.labelEdge(keys, key, need) },
+    tabOf: (LabelEdge) -> Float = { labels.tab },
 ) {
     val pad = labels.tab * 0.4f
     val name = labels.nameOf(key).uppercase()
     val style = labels.style.copy(color = if (color.luminance() > 0.5f) Color.Black else Color.White)
     val whole = labels.measurer.measure(name, style, maxLines = 1).size.width + pad * 2 - frame * 2
-    val edge = pieces.labelEdge(keys, key, need = whole / cardWidth.coerceAtLeast(1f)) ?: return
+    val edge = edgeOf(whole / cardWidth.coerceAtLeast(1f)) ?: return
+    val tab = tabOf(edge)
+    if (tab <= 0f) return
     val o = at(edge.first)
     val room = edge.cells * cardWidth + frame * 2
     val text = labels.measurer.measure(
@@ -156,6 +179,6 @@ private fun DrawScope.drawLabel(
         constraints = Constraints(maxWidth = (room - pad * 2).toInt().coerceAtLeast(1)),
     )
     val width = (text.size.width + pad * 2).coerceAtMost(room)
-    drawRect(color, Offset(o.x - frame, o.y - labels.tab), Size(width, labels.tab))
-    drawText(text, topLeft = Offset(o.x - frame + pad, o.y - labels.tab + (labels.tab - text.size.height) / 2f))
+    drawRect(color, Offset(o.x - frame, o.y - tab), Size(width, tab), alpha = alpha)
+    drawText(text, topLeft = Offset(o.x - frame + pad, o.y - tab + (tab - text.size.height) / 2f), alpha = alpha)
 }

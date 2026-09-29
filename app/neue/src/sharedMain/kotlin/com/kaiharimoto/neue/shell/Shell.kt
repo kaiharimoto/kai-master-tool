@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.offline.WorkReadout
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.Page
@@ -49,6 +50,7 @@ import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuIcon
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Numeral
+import com.kaiharimoto.neue.kit.Progress
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.WordToggle
 import com.kaiharimoto.neue.kit.animatedColor
@@ -69,6 +71,11 @@ data class ShellStatus(val text: String, val running: Boolean)
  * immersive mode. It was two bars, the app's and the page's, and the app's
  * carried a search trigger and a card count: search lives on the rail now,
  * beside Settings, and the count is the pool's, where it is read.
+ *
+ * While the app fetches something in the background — the card pool, the
+ * full-size art — [work] stands before the update pill: what, how far, and a
+ * thin bar, with the whole story in its tip; a click opens Settings, where the
+ * same bars are, beside the controls.
  */
 @Composable
 fun TitleBar(
@@ -77,6 +84,8 @@ fun TitleBar(
     onUpdate: () -> Unit,
     onImmersive: () -> Unit = {},
     modifier: Modifier = Modifier,
+    work: WorkReadout? = null,
+    onWork: () -> Unit = {},
     content: @Composable RowScope.(narrow: Boolean) -> Unit = {},
 ) {
     val c = Mu.colors
@@ -111,6 +120,9 @@ fun TitleBar(
                 Micro("/", color = c.ink25)
             }
             content(narrow)
+            if (work != null) {
+                Tip(work.detail) { WorkChip(work, narrow, onWork) }
+            }
             if (update != null) {
                 Tip("A newer build is ready. Click to read what changed and install it") {
                     Pill(onUpdate) {
@@ -132,6 +144,32 @@ fun TitleBar(
                 IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 32.dp, label = if (neue.immersive) "Leave full screen" else "Full screen")
             }
         }
+    }
+}
+
+/**
+ * Background work in the bar: `CARD ART 42%` over a 3px track. Narrow, the words
+ * give way and the figure and the bar stay.
+ */
+@Composable
+private fun WorkChip(work: WorkReadout, narrow: Boolean, onClick: () -> Unit) {
+    val c = Mu.colors
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Column(
+        Modifier
+            .hoverable(source)
+            .cursorPointer(caption = "Settings →")
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Breathe(running = true)
+            if (!narrow) Micro(work.label, color = if (hovered) c.ink else c.ink70)
+            Mono(work.figure, color = c.ink)
+        }
+        Progress(work.fraction, Modifier.width(if (narrow) 72.dp else 112.dp))
     }
 }
 
@@ -211,12 +249,16 @@ fun Rail(
             HRule()
         }
         Box(Modifier.weight(1f))
-        if (status != null) {
+        // The art's line stood inside the pool's block, and so showed only while the
+        // pool synced: it stands on its own now.
+        if (status != null || art != null) {
             // What the app is fetching, when it is: the card pool, the full-size art.
             Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Breathe(running = status.running)
-                    Micro(status.text, color = c.ink70)
+                if (status != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Breathe(running = status.running)
+                        Micro(status.text, color = c.ink70)
+                    }
                 }
                 if (art != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
