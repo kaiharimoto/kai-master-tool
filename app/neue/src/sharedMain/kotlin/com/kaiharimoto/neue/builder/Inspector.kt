@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.MuButton
@@ -13,8 +14,6 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.PointerIcon
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.ui.unit.sp
@@ -121,9 +120,22 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
         }
         val scroll = rememberScrollState()
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 24.dp)) {
+            // A picture dropped on the card is its own art, cropped in (1.0.34).
+            val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+            val drop = remember(card) {
+                object : androidx.compose.ui.draganddrop.DragAndDropTarget {
+                    override fun onDrop(event: androidx.compose.ui.draganddrop.DragAndDropEvent): Boolean {
+                        val picked = com.kaiharimoto.neue.platform.droppedPicture(event) ?: return false
+                        neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card, picked)
+                        return true
+                    }
+                }
+            }
             NeueCard(
                 card = card,
-                modifier = Modifier.fillMaxWidth().aspectRatio(CARD_RATIO),
+                modifier = Modifier.fillMaxWidth().aspectRatio(CARD_RATIO).let { base ->
+                    if (custom == null) base else base.dragAndDropTarget(shouldStartDragAndDrop = { com.kaiharimoto.neue.platform.mayBePicture(it) }, target = drop)
+                },
                 format = state.format,
                 foil = neue.prefs.foil,
             )
@@ -171,14 +183,8 @@ internal fun ArtSwitch(card: Card, neue: NeueState, modifier: Modifier = Modifie
             if (chosen < 0 && !touch) {
                 MicroLink("Remove", { neue.confirmRemoveArt = card to -chosen })
             }
-            val scope = rememberCoroutineScope()
-            val add = {
-                scope.launch {
-                    custom.pickAndAdd(card.id.value, onFailed = { neue.note = com.kaiharimoto.neue.Note("That picture could not be added.") })
-                        ?.let { neue.chooseArt(card, it) }
-                }
-                Unit
-            }
+            // A picture picked, dropped or pasted, cropped into the art box or kept whole (1.0.34).
+            val add = { neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card) }
             if (touch) MuButton("+ Your own", add, variant = BtnVariant.GHOST, size = BtnSize.SM) else MicroLink("+ Your own", add)
         }
         if (arts.size > 1) {

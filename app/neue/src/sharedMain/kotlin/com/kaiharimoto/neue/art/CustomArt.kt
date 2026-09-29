@@ -7,6 +7,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardArt
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.neue.platform.PickedFile
 import com.kaiharimoto.neue.platform.Platform
 import java.io.File
 
@@ -44,18 +45,24 @@ class CustomArt(private val dir: File) {
      */
     suspend fun pickAndAdd(card: Int, onFailed: () -> Unit = {}): Int? {
         val picked = Platform.pick("Choose a picture for this card", EXTENSIONS) ?: return null
-        // Android's providers often name a file without its extension: the bytes say what it is.
-        val extension = picked.extension.takeIf { it in EXTENSIONS } ?: sniff(picked.bytes)
-        if (extension == null) {
+        return keep(card, picked) ?: run {
             onFailed()
-            return null
+            null
         }
+    }
+
+    /**
+     * [picked] kept for [card] as one more picture of its own — a whole card, or
+     * (1.0.34) the card's own render with the person's art cropped into its art
+     * box (`ArtCropDialog`). Its choice (`-k`), or null when it is not a picture
+     * or could not be written.
+     */
+    fun keep(card: Int, picked: PickedFile): Int? {
+        // Android's providers often name a file without its extension: the bytes say what it is.
+        val extension = picked.extension.takeIf { it in EXTENSIONS } ?: sniff(picked.bytes) ?: return null
         val into = File(dir, card.toString()).apply { mkdirs() }
         val target = File(into, "${System.currentTimeMillis()}.$extension")
-        runCatching { target.writeBytes(picked.bytes) }.getOrElse {
-            onFailed()
-            return null
-        }
+        runCatching { target.writeBytes(picked.bytes) }.getOrElse { return null }
         cache.remove(card)
         version++
         return -files(card).indexOf(target).plus(1)

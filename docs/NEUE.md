@@ -1207,6 +1207,35 @@ choice on the chip, the keys and the switch, drawn like any other (`CustomArt`;
 a choice is a passcode, or −k for the card's k-th own picture), with **Remove**
 beside it while it is showing.
 
+**Your own art, cropped into the card** (kai, 1.0.34: "let the user upload an
+image, drag a file from an explorer, or just paste a copied image, then … crop
+the area that they wish to be just the card art"). + Your own opens
+`ArtCropDialog`: a picture arrives by **Choose a picture**, by **dropping** one
+on the dialog (or straight on the inspector's card, which opens the dialog with
+it), or by **pasting** (`Ctrl V`/`Cmd V`, or Paste). A box of the art window's
+shape lies over it — moved by a drag, resized by a corner, the wheel or a
+pinch, never leaving the picture (`ArtCrop`, core) — and the card beside it
+shows the crop in place. **Replace art** draws the card's own original (the
+printing chosen, when the pool knows it; `ArtLibrary.ensure`) with the crop in
+its art box, and keeps *that* as one of the card's own pictures — so the foil,
+the name stamped in it, the viewer and the screenshot read it as they read any
+picture, and nothing else had to learn about crops. **Whole card** keeps the
+picture as it was, as before 1.0.34.
+
+The art box is `ArtWindow` (core, beside `ArtFrame`), measured off the same
+renders: the bevel's inside on a standard card; on a pendulum, down to the top
+of the pendulum-effect box (row 736 of 1185), whose bevel hides the seam — the
+art runs on behind that translucent box, but its text is printed on it; on a
+link card, the square with its corners cut where the arrow sockets reach in
+(`x + y < 41` from the frame's outer corner), so the sockets stay printed over
+the new art. The edge arrows sit on the bevel and need nothing. A skill card
+has no art box and offers only Whole card. The seams are `platform/Pictures.kt`:
+decoding and PNG encoding (Skia on the desk, `BitmapFactory` on Android),
+the clipboard (AWT's image and file-list flavours; the `ClipboardManager`'s
+URI), and a drop (the AWT transferable; the drag's `ClipData`, read once the
+activity has asked `requestDragAndDropPermissions`). `ArtBakeTest` holds the
+box to its pixels.
+
 ### 4e. The screenshot
 
 `Ctrl Shift S`, or Screenshot in the header: main, extra and side as they stand,

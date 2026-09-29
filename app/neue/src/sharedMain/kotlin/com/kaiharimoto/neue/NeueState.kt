@@ -125,6 +125,9 @@ class NeueState(
      */
     var confirmRemoveArt by mutableStateOf<Pair<Card, Int>?>(null)
 
+    /** The card whose own art is being cropped in, and the picture it came with (1.0.34, `ArtCropDialog`). */
+    var cropping by mutableStateOf<com.kaiharimoto.neue.art.ArtCropping?>(null)
+
     /** A deck shown as a QR code for a phone or a tablet to scan (1.0.30), while it is. */
     var qr by mutableStateOf<com.kaiharimoto.neue.qr.QrShown?>(null)
 
@@ -200,7 +203,7 @@ class NeueState(
     var studio by mutableStateOf<Studio?>(null)
 
     val overlayOpen: Boolean
-        get() = showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || qr != null || studio != null
+        get() = showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || studio != null
 
     /**
      * A touch screen first (Neue on a tablet): no hover to bring the rail out or
@@ -391,11 +394,12 @@ class NeueState(
 
     /** Whether [dismissTop] has something to close. */
     val hasTop: Boolean
-        get() = showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || qr != null || helpOpen || drawer != null || studio != null
+        get() = showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || helpOpen || drawer != null || studio != null
 
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {
         showcase != null -> { showcase = null; true }
+        cropping != null -> { cropping = null; true }
         menu != null -> { menu = null; true }
         viewing != null -> { viewing = null; true }
         paletteOpen -> { paletteOpen = false; true }

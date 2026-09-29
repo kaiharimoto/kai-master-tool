@@ -222,6 +222,12 @@ fun neueMain(args: Array<String>) {
                 val id = h.builder.deck[DeckSection.MAIN].getOrNull(i)
                 h.builder.index.byId(id ?: return@let)?.let { card -> h.neue.viewing = com.kaiharimoto.neue.Viewing(card, DeckSection.MAIN, i) }
             }
+            // --crop=N (and --crop-picture=path): your own art for main deck card N, the picture laid in (1.0.34).
+            map["crop"]?.toIntOrNull()?.let { i ->
+                val id = h.builder.deck[DeckSection.MAIN].getOrNull(i)
+                val picture = map["crop-picture"]?.let { java.io.File(it) }?.takeIf { it.isFile }?.let { com.kaiharimoto.neue.platform.PickedFile(it.name, it.readBytes()) }
+                h.builder.index.byId(id ?: return@let)?.let { card -> h.neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card, picture) }
+            }
             // --group-palettes=true: the Groups panel's palettes opened out (with --groups).
             if (map["group-palettes"] == "true") h.neue.groupPalettesOpen = true
             // --history: a few edits, then the history menu open, to see it list them.

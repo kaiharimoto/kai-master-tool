@@ -32,8 +32,16 @@ actual object Platform {
     /** The activity's camera scanner (v1.3.7), which only it can start: a QR code's text, or why there is none. */
     private var scanner: (suspend () -> QrScan)? = null
 
+    /**
+     * The activity itself, weakly: a picture dragged in from another app can only
+     * be read once the activity asks for the drop's permissions (1.0.34).
+     */
+    internal var activity: java.lang.ref.WeakReference<android.app.Activity>? = null
+        private set
+
     fun attach(context: Context, picker: suspend (Array<String>) -> PickedFile?, scanner: (suspend () -> QrScan)? = null) {
         this.context = context.applicationContext
+        activity = (context as? android.app.Activity)?.let { java.lang.ref.WeakReference(it) }
         this.picker = picker
         this.scanner = scanner
     }

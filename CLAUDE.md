@@ -294,7 +294,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   inspector follows the pointer and lets go of a card before you reach it.
   YGOPRODeck has no picture for an alternate sharing its passcode (Nibiru,
   Lady Labrynth), so **+ Your own** in the inspector imports one (`CustomArt`;
-  a choice is a passcode, or −k for an own picture). `NEUE.md` §4c–§4d.
+  a choice is a passcode, or −k for an own picture). **It crops** (1.0.34,
+  `ArtCropDialog`): a picture chosen, dropped or pasted, a box of the art
+  window's shape (`ArtWindow`, `ArtCrop` in core), and **Replace art** keeps the
+  card's own original with the crop baked into its art box — a whole picture,
+  so nothing downstream knows about crops. `NEUE.md` §4c–§4d.
 - **The library** duplicates and exports a deck from its row, tags each deck from
   its cards (`DeckTags`) and finds a deck by a card in it (`DeckSearch`).
   **Auto save** waits on `DeckBuilderState.dirty`. The arrow keys walk the

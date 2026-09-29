@@ -218,7 +218,11 @@ class ArtLibrary(
      */
     suspend fun ensure(card: Card): File? {
         fileFor(card.id.value)?.let { return it }
-        return withContext(Dispatchers.IO) { runCatching { download(card) }.getOrNull() }
+        return withContext(Dispatchers.IO) {
+            // Asked before the sweep has started (the studio, a crop opened at once), the folder may not be there yet.
+            dir.mkdirs()
+            runCatching { download(card) }.getOrNull()
+        }
     }
 
     fun stop() {

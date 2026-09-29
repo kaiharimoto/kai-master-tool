@@ -1233,6 +1233,27 @@ private fun Shell(h: NeueHolders) {
         CardViewer(state, neue)
         // Over the viewer it was opened from (v1.3.6).
         com.kaiharimoto.neue.builder.Showcase(state, neue)
+        // Over the viewer and the pop-out, whose art row opens it (1.0.34).
+        neue.cropping?.let { (card, picture) ->
+            com.kaiharimoto.neue.art.ArtCropDialog(
+                card = card,
+                initial = picture,
+                // The printing whose frame is kept: the artwork chosen, when the pool knows it.
+                base = com.kaiharimoto.mastertool.core.model.CardArt.show(
+                    card,
+                    neue.prefs.arts[card.id.value]?.takeIf { it > 0 }?.let { com.kaiharimoto.mastertool.core.model.CardId(it) },
+                ),
+                custom = h.customArt,
+                library = h.art,
+                touch = neue.touchFirst,
+                onChosen = { choice ->
+                    neue.cropping = null
+                    neue.chooseArt(card, choice)
+                },
+                onNote = { neue.note = Note(it) },
+                onDismiss = { neue.cropping = null },
+            )
+        }
         MenuLayer(neue.menu) { neue.menu = null }
         OverlayLayer(h.overlays)
 
