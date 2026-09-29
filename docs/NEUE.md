@@ -866,30 +866,51 @@ Blossom & Joyous Spring`, each card once in the order it first appears
 The palette has all four.
 
 **A deck crosses from the desk to a phone as a QR code** (1.0.30, v1.3.7, kai:
-"import deck via QR code" on Android, "export as QR code" on the desktop).
-**QR code to scan**, last in Export (the builder's and a library row's), shows
-the deck's `ydke://` code as a QR code in a dialog (`QrDialog`, `neue/qr/`), with
-Copy the code beside Done. It is drawn **black on white in both themes** —
-scanners read little else, and those are Master UI's two fills — each module a
-whole number of pixels, with the standard four-module quiet zone. ZXing
-(`com.google.zxing:core`) makes the modules at level M: the fullest deck, 60 · 15
-· 15, is 490 characters and a version-17 code, 85 modules a side — five pixels
-each in the dialog at 1x, legible from across a desk. It carries the
-cards, not the groups or the name; that is said under the code. On a phone or a
-tablet **Import is a menu** (the bar's, the Decks page's, the phone's ⋯): **A
-.ydk or .ydkx file**, **Scan a QR code** — ZXing's Android capture screen
-(`zxing-android-embedded`), started by `MainActivity` through `ScanContract`,
-which asks for the camera on first use and turns with the phone — and **A
-picture of a QR code**, for a screenshot someone sent (the phone cannot scan its
-own screen), read by `QrReader` with both binarizers and the picture inverted.
-Whatever is read goes through `DeckCodes.read` (core): a `ydke://` code anywhere
-in the text, a deck site's link included, or the lines of a `.ydk`/`.ydkx`, groups
-and all; a deck of no cards is no deck. It replaces the deck as a file import
-does, named "Scanned deck", with Undo on the toast (`DeckBuilderState.importFrom`).
-The desk's Import stays one click to the file dialog, and `Ctrl O` is a file
-everywhere. `Platform.scanSources` is the seam: empty on the desk, the picture
-always on Android, the camera where there is one. `QrTest` draws the fullest deck's
-code and reads it back.
+"import deck via QR code" on Android, "export as QR code" on the desktop; **the
+whole deck** from 1.0.31, v1.3.8: "carry as much information as possible,
+including groups"). **QR code to scan**, last in Export (the builder's and a
+library row's), shows the deck as a QR code in a dialog (`QrDialog`, `neue/qr/`),
+with Copy the YDKe code beside Done for the simulators.
+
+**What the code holds is `DeckQr`** (core): the deck's own `.ydkx` — the cards,
+the groups, the lens, the hand goals, notes, siding patterns and any key a later
+build writes, verbatim — under a `#name` line and a `#covers` line, which
+`YdkCodec` reads as comments, so the body is itself a deck file anything imports.
+zlib shrinks it (`Zlib`, `JvmZlib` in core's `jvmMain`: `java.util.zip`, which
+the desk and Android both have) and **Base45** (RFC 9285, `Base45`) writes it in
+the 45 characters a QR code's alphanumeric mode packs at 5.5 bits each, behind
+`NMT1:` — the EU's COVID certificates travel the same way. The fullest deck, 60 ·
+15 · 15 with every card in one of eight groups, a goal and a note, is about 1,150
+characters: a version-23 code, 109 modules a side; the legacy `lab.ydkx` with its
+siding patterns and card pool fits too. A deck whose extras will not fit one code
+(4,296 characters, version 40 at level L) sheds them in order — every extended key
+but the groups, then the groups — and the dialog says what stayed behind; the
+cards and the name always fit. Covers cross as passcodes (an own picture is a file
+on the machine that made the code) and are kept by the deck's id once the scanned
+deck is first saved (`DeckBuilderState.importFrom`'s `onFirstSave`).
+
+The code is drawn **black on white in both themes** — scanners read little else,
+and those are Master UI's two fills — each module a whole number of pixels, with
+the standard four-module quiet zone, **as large as the window allows** (the
+dialog is sized to it), at level M up to version 25 and level L past it. The
+dialog lists what the code carries ("the cards, the name, 5 groups, 1 hand goal
+and notes").
+
+On a phone or a tablet **Import is a menu** (the bar's, the Decks page's, the
+phone's ⋯): **A .ydk or .ydkx file**, **Scan a QR code** — ZXing's Android capture
+screen (`zxing-android-embedded`), started by `MainActivity` through
+`ScanContract`, which asks for the camera on first use and turns with the phone —
+and **A picture of a QR code**, for a screenshot someone sent (the phone cannot
+scan its own screen), read by `QrReader` with both binarizers and the picture
+inverted. Whatever is read goes through `DeckCodes.read` (core): Neue's own code;
+a `ydke://` code anywhere in the text, a deck site's link included; or the lines
+of a `.ydk`/`.ydkx`. A deck of no cards is no deck. It replaces the deck as a file
+import does, under the code's name (else "Scanned deck"), groups and all, with
+Undo on the toast. The desk's Import stays one click to the file dialog, and
+`Ctrl O` is a file everywhere. `Platform.scanSources` is the seam: empty on the
+desk, the picture always on Android, the camera where there is one. `DeckQrTest`
+(core) and `QrTest` (neue, drawing the code and reading it back from its pixels)
+hold it.
 
 **Three clicks select a field's whole line** (1.0.14), so the search is cleared
 for the next card by typing over it. `MuInput` counts presses on the way down

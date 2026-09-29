@@ -1104,7 +1104,7 @@ private fun Shell(h: NeueHolders) {
             com.kaiharimoto.neue.qr.QrDialog(
                 shown,
                 onCopy = {
-                    CardActions.copy(shown.code)
+                    CardActions.copy(shown.ydke)
                     neue.note = com.kaiharimoto.neue.Note("YDKe code copied")
                 },
                 onDismiss = { neue.qr = null },

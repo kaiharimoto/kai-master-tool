@@ -12,8 +12,8 @@ import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 import com.google.zxing.qrcode.encoder.Encoder
 
 /**
- * A QR code's modules, [size] a side, dark or light (1.0.30): the deck's YDKe
- * code drawn on the desk for a phone or a tablet to scan. ZXing makes it; the
+ * A QR code's modules, [size] a side, dark or light (1.0.30): a deck drawn on
+ * the desk for a phone or a tablet to scan (`DeckQr`, the whole deck, 1.0.31). ZXing makes it; the
  * dialog draws it, with the quiet zone round it that a scanner needs.
  */
 class QrMatrix(val size: Int, private val dark: BooleanArray) {
@@ -24,12 +24,18 @@ class QrMatrix(val size: Int, private val dark: BooleanArray) {
         const val QUIET = 4
 
         /**
-         * [text] as a QR code, or null when it is too long for one. Level M: a
-         * code on a screen is not scuffed like a printed one, and the lower level
-         * keeps a full deck's modules large enough to read from across a desk.
+         * [text] as a QR code, or null when it is too long for one. Level M while
+         * that keeps the code at version 25 or under (117 modules); past that, level
+         * L, whose smaller code a camera reads more easily off a screen, which is
+         * not scuffed like paper. A deck with its groups is usually version 20 or so.
          */
-        fun of(text: String): QrMatrix? = runCatching {
-            val m = Encoder.encode(text, ErrorCorrectionLevel.M).matrix
+        fun of(text: String): QrMatrix? {
+            val m = encode(text, ErrorCorrectionLevel.M)
+            return if (m != null && m.size <= 117) m else encode(text, ErrorCorrectionLevel.L) ?: m
+        }
+
+        private fun encode(text: String, level: ErrorCorrectionLevel): QrMatrix? = runCatching {
+            val m = Encoder.encode(text, level).matrix
             QrMatrix(m.width, BooleanArray(m.width * m.height) { i -> m.get(i % m.width, i / m.width).toInt() == 1 })
         }.getOrNull()
     }

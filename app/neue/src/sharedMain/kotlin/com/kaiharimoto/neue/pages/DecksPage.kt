@@ -153,7 +153,8 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             // The live deck when it is the one on the builder, as the share does.
             DeckExportFormat.QR -> CardActions.showQr(
                 if (stored.entry.id == state.deckId) state.deckName else stored.entry.name,
-                if (stored.entry.id == state.deckId) state.deck else deck,
+                if (stored.entry.id == state.deckId) state.document() else com.kaiharimoto.mastertool.core.ydk.YdkDocument(deck, extended = stored.extended),
+                neue.prefs.covers[stored.entry.id].orEmpty(),
                 neue,
             )
         }

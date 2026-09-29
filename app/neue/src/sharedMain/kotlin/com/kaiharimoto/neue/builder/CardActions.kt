@@ -20,6 +20,10 @@ import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.mastertool.core.ydk.DeckText
 import com.kaiharimoto.mastertool.core.ydk.YdkeCodec
+import com.kaiharimoto.mastertool.core.ydk.DeckQr
+import com.kaiharimoto.mastertool.core.ydk.DeckRead
+import com.kaiharimoto.mastertool.core.ydk.JvmZlib
+import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.neue.platform.QrScan
 import com.kaiharimoto.neue.platform.QrSource
 
@@ -170,9 +174,14 @@ object CardActions {
         onClick = onClick,
     )
 
-    /** [deck] as a QR code on the screen (1.0.30), for a phone or a tablet to scan. */
-    fun showQr(name: String, deck: com.kaiharimoto.mastertool.core.model.Deck, neue: NeueState) {
-        neue.qr = com.kaiharimoto.neue.qr.QrShown(name.ifBlank { "Untitled Deck" }, deck, YdkeCodec.encode(deck))
+    /**
+     * The whole deck as a QR code on the screen (1.0.31), for a phone or a tablet to
+     * scan: the cards, the name, the covers, and everything its `.ydkx` carries —
+     * groups, goals, notes ([DeckQr]).
+     */
+    fun showQr(name: String, document: YdkDocument, covers: List<Int>, neue: NeueState) {
+        val title = name.ifBlank { "Untitled Deck" }
+        neue.qr = com.kaiharimoto.neue.qr.QrShown(title, document.deck, DeckQr.write(title, document, covers, JvmZlib), YdkeCodec.encode(document.deck))
     }
 
     /**
@@ -202,7 +211,11 @@ object CardActions {
 
     /** A deck read off a QR code (v1.3.7) replaces the one on the builder, as a file does, with Undo on the toast. */
     fun scan(from: QrSource, state: DeckBuilderState, neue: NeueState) {
-        state.importFrom("Scanned deck") {
+        // The covers a code carried are kept by the deck's id, which it has once it is saved.
+        val keepCovers = { id: String, read: DeckRead ->
+            if (read.covers.isNotEmpty()) neue.update { p -> p.copy(covers = p.covers + (id to read.covers.take(DeckCovers.MAX))) }
+        }
+        state.importFrom("Scanned deck", JvmZlib, keepCovers) {
             when (val scan = com.kaiharimoto.neue.platform.Platform.scanQr(from)) {
                 is QrScan.Read -> {
                     neue.go(com.kaiharimoto.neue.Page.BUILDER)
@@ -247,7 +260,9 @@ object CardActions {
                 copy(DeckText.write(state.deck) { state.index.byId(it)?.name })
                 neue.note = com.kaiharimoto.neue.Note("Decklist copied as text")
             }
-            DeckExportFormat.QR -> if (!state.deck.isEmpty) showQr(state.deckName, state.deck, neue)
+            DeckExportFormat.QR -> if (!state.deck.isEmpty) {
+                showQr(state.deckName, state.document(), state.deckId?.let { neue.prefs.covers[it] }.orEmpty(), neue)
+            }
         }
     }
 

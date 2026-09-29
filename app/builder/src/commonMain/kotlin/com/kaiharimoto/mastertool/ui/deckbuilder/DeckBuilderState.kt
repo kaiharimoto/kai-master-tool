@@ -39,8 +39,11 @@ import com.kaiharimoto.mastertool.core.search.CardFilter
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.search.SearchScope
 import com.kaiharimoto.mastertool.core.ydk.DeckCodes
+import com.kaiharimoto.mastertool.core.ydk.DeckRead
 import com.kaiharimoto.mastertool.core.ydk.YdkCodec
+import com.kaiharimoto.mastertool.core.ydk.YdkDocument
 import com.kaiharimoto.mastertool.core.ydk.YdkParseResult
+import com.kaiharimoto.mastertool.core.ydk.Zlib
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -911,6 +914,7 @@ class DeckBuilderState(
     // ---- persistence -------------------------------------------------------
 
     fun newDeck() {
+        afterFirstSave = null
         val token = pushUndo(deck, currentIdentity(), currentStoredGroups())
         deck = Deck.EMPTY
         deckName = "Untitled Deck"
@@ -924,6 +928,7 @@ class DeckBuilderState(
     fun save(quiet: Boolean = false, onSaved: (String) -> Unit = {}) {
         val serial = editSerial
         scope.launch {
+            val fresh = deckId == null
             val id = deckId ?: deps.newDeckId().also { deckId = it }
             deps.deckRepository.save(
                 id,
@@ -931,6 +936,8 @@ class DeckBuilderState(
                 deck,
                 extendedForWrite(),
             )
+            if (fresh) afterFirstSave?.invoke(id)
+            afterFirstSave = null
             // An edit made while the write was in flight is still unsaved.
             if (editSerial == serial) dirty = false
             if (!quiet) showToast("Saved \"$deckName\".")
@@ -941,6 +948,7 @@ class DeckBuilderState(
     fun load(id: String) {
         scope.launch {
             val stored = deps.deckRepository.byId(id) ?: return@launch
+            afterFirstSave = null
             deck = stored.entry.deck
             deckName = stored.entry.name
             deckId = stored.entry.id
@@ -961,24 +969,37 @@ class DeckBuilderState(
     }
 
     /**
-     * A deck read from text rather than a file (v1.3.7): what a QR code held — a
+     * A deck read from text rather than a file (v1.3.7): what a QR code held —
+     * Neue's own code, the whole `.ydkx` with its name and covers ([DeckQr]), a
      * `ydke://` code, or a deck file's lines ([DeckCodes]). [read] fetches it (a
      * scan, which may take a while); null is a scan put away, and says nothing.
-     * Like a file, it replaces the deck, with Undo on the toast.
+     * Like a file, it replaces the deck, with Undo on the toast. The name is the
+     * code's, else [fallbackName]; [onFirstSave] hears the deck's id when it is
+     * first saved, with what was read — the covers are kept by the deck's id.
      */
-    fun importFrom(name: String, read: suspend () -> String?) {
+    fun importFrom(
+        fallbackName: String,
+        zlib: Zlib,
+        onFirstSave: (id: String, read: DeckRead) -> Unit = { _, _ -> },
+        read: suspend () -> String?,
+    ) {
         scope.launch {
             val text = read() ?: return@launch
-            val parsed = DeckCodes.read(text)
-            if (parsed == null) {
+            val found = DeckCodes.read(text, zlib)
+            if (found == null) {
                 showToast("That code holds no deck.")
             } else {
-                adopt(parsed, name)
+                adopt(found.parsed, found.name ?: fallbackName)
+                afterFirstSave = { id -> onFirstSave(id, found) }
             }
         }
     }
 
+    /** What a deck read from a code still owes once it has an id: its covers (1.0.31). */
+    private var afterFirstSave: ((String) -> Unit)? = null
+
     private fun adopt(parsed: YdkParseResult, name: String) {
+        afterFirstSave = null
         val token = pushUndo(deck, currentIdentity(), currentStoredGroups())
         deck = parsed.document.deck
         deckName = name
@@ -1017,6 +1038,9 @@ class DeckBuilderState(
             if (deps.fileAccess.exportDeck(name, text)) showToast("Exported $name.")
         }
     }
+
+    /** The deck as its `.ydkx` carries it: the cards, and the groups, goals and every other extended key (the QR code's, 1.0.31). */
+    fun document(): YdkDocument = YdkDocument(deck, extended = extendedForWrite())
 
     fun shareDeck() {
         scope.launch {

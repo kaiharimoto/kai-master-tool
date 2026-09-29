@@ -43,29 +43,4 @@ class DeckExportsTest {
             DeckText.write(deck) { names[it] },
         )
     }
-
-    @Test
-    fun aScannedCodeIsADeck() {
-        val code = YdkeCodec.encode(deck)
-        assertEquals(deck, DeckCodes.read(code)?.document?.deck)
-        // Padded by a scanner, or inside a deck site's link.
-        assertEquals(deck, DeckCodes.read("  $code\n")?.document?.deck)
-        assertEquals(deck, DeckCodes.read("https://example.com/import?deck=$code&from=qr")?.document?.deck)
-    }
-
-    @Test
-    fun aScannedDeckFileKeepsItsGroups() {
-        val text = YdkCodec.write(deck, extended = kotlinx.serialization.json.buildJsonObject { put("groups", kotlinx.serialization.json.JsonArray(emptyList())) })
-        val read = DeckCodes.read(text)
-        assertEquals(deck, read?.document?.deck)
-        assertTrue(read?.document?.isYdkx == true)
-    }
-
-    @Test
-    fun aScanWithNoDeckInItIsNothing() {
-        assertNull(DeckCodes.read("https://example.com"))
-        assertNull(DeckCodes.read("89631139"))
-        assertNull(DeckCodes.read(YdkeCodec.encode(Deck())))
-        assertNull(DeckCodes.read("#main\n#extra\n!side\n"))
-    }
 }

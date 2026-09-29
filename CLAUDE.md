@@ -265,8 +265,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the decks either side, since the undo stack keeps decks, not edits).
 - **Export is a menu**: `.ydk`, `.ydkx` with groups, a `ydke://` code or a text
   decklist to the clipboard (`YdkeCodec`, `DeckText` in core), or **a QR code**
-  of the `ydke://` code shown in a dialog (1.0.30, `neue/qr/`, ZXing, black on
-  white in both themes). On a phone or tablet **Import is a menu** that adds
+  of the whole deck shown in a dialog (1.0.30; `neue/qr/`, ZXing, black on white
+  in both themes). **The code carries everything** (1.0.31, kai: "as much
+  information as possible, including groups"): `DeckQr` (core) packs the deck's
+  `.ydkx` with its name and covers — zlib, then Base45 behind `NMT1:` for QR's
+  alphanumeric mode — shedding the extras, then the groups, only for a deck too
+  large for one code. On a phone or tablet **Import is a menu** that adds
   scanning one with the camera (`zxing-android-embedded`, `ScanContract` in
   `MainActivity`) or from a picture (v1.3.7); `DeckCodes.read` (core) turns what
   was read into a deck. `NEUE.md` §4. A tip at the
