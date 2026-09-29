@@ -13,6 +13,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -28,6 +29,10 @@ import kotlinx.coroutines.launch
  * - **Groups** (kai, 1.0.15) breaks the deck into its Roles groups, each piece's
  *   outline glowing faintly in its colour, and closes it back into one when
  *   pressed again. Shown when the deck has groups to break into.
+ * - **Labels** (kai, 1.0.24: "let the user toggle the labels for the groups as
+ *   well") writes each group's name on its piece, as the builder does, or takes
+ *   the names off. Beside Groups, and only live while the pieces are out: with
+ *   the deck closed there is nothing for a name to stand on. Kept in the settings.
  * - **Put the cards back** draws every moved card home over a slow beat, then
  *   forgets where they were. Shown when something has been moved.
  * - **Leave zen**, always (1.0.15): kai found the corner empty when nothing had
@@ -35,7 +40,15 @@ import kotlinx.coroutines.launch
  *   wakes the builder; this is the pointer's way.
  */
 @Composable
-fun ZenReset(zen: ZenLayer, hasGroups: Boolean, onLeave: () -> Unit, modifier: Modifier = Modifier, always: Boolean = false) {
+fun ZenReset(
+    zen: ZenLayer,
+    hasGroups: Boolean,
+    onLeave: () -> Unit,
+    labels: Boolean,
+    onLabels: () -> Unit,
+    modifier: Modifier = Modifier,
+    always: Boolean = false,
+) {
     // Read through the counter, so the button hears the first card moved.
     val moved = zen.arranged >= 0 && !zen.arrangement.isEmpty
     val shown by animateFloatAsState(
@@ -48,7 +61,10 @@ fun ZenReset(zen: ZenLayer, hasGroups: Boolean, onLeave: () -> Unit, modifier: M
     val scope = rememberCoroutineScope()
     val home = remember { Animatable(1f) }
     Row(
-        modifier.padding(32.dp).alpha(shown * 0.7f * zen.deep),
+        modifier
+            .onSizeChanged { zen.cornerRow = it.width.toFloat() }
+            .padding(32.dp)
+            .alpha(shown * 0.7f * zen.deep),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -61,6 +77,16 @@ fun ZenReset(zen: ZenLayer, hasGroups: Boolean, onLeave: () -> Unit, modifier: M
                 variant = if (zen.groups) BtnVariant.PRIMARY else BtnVariant.SECONDARY,
                 size = BtnSize.SM,
                 toggled = zen.groups,
+            )
+            // Always beside Groups, so pressing Groups never slides it out from under the pointer.
+            MuButton(
+                "Labels",
+                onLabels,
+                variant = if (labels && zen.groups) BtnVariant.PRIMARY else BtnVariant.SECONDARY,
+                size = BtnSize.SM,
+                enabled = zen.groups,
+                toggled = labels && zen.groups,
+                reason = "Open the groups first",
             )
         }
         if (moved) {

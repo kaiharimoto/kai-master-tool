@@ -98,6 +98,15 @@ class ZenTest {
         assertTrue(!ZenCorner.reaches(100f, 1070f, 1920f, 1080f))
     }
 
+    /** The corner is as wide as its buttons once they are out, so the leftmost does not fade under the pointer. */
+    @Test
+    fun theCornerHoldsTheWholeRowOfButtons() {
+        assertTrue(!ZenCorner.reaches(1920f - 600f, 1070f, 1920f, 1080f))
+        assertTrue(ZenCorner.reaches(1920f - 600f, 1070f, 1920f, 1080f, row = 700f))
+        // Never narrower than the reach itself.
+        assertTrue(ZenCorner.reaches(1920f - 400f, 1070f, 1920f, 1080f, row = 100f))
+    }
+
     @Test
     fun aBlockFloatsAsOneAndItsScalesRunDiagonally() {
         for (step in 0 until 200) {

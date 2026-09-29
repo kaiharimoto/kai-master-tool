@@ -1,6 +1,10 @@
 package com.kaiharimoto.neue.zen
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.layout.layout
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -38,6 +42,14 @@ class ZenLayer {
     var deep by mutableFloatStateOf(0f)
     var time by mutableFloatStateOf(0f)
 
+    /**
+     * Whether zen is deep: the phase, not the fade. From the moment it is, nothing
+     * but the cards and the corner answers the pointer (1.0.24): the panes are
+     * shielded and every piece of faded chrome is taken off the page ([zenQuiet]).
+     * Written by the clockwork, which knows the phase.
+     */
+    var asleep by mutableStateOf(false)
+
     /** Where the cards have been put. Plain: [arranged] is the state a reader reads to see it change. */
     val arrangement = ZenArrangement()
 
@@ -65,6 +77,12 @@ class ZenLayer {
 
     /** How far the pieces have opened, 0..1, following [groups]. Read in layers and draw blocks. */
     var groupsAmount by mutableFloatStateOf(0f)
+
+    /**
+     * How far the groups' names are drawn on their pieces, 0..1, following the
+     * corner's Labels switch (`NeuePreferences.zenLabels`, 1.0.24). Read in draw blocks.
+     */
+    var labelsAmount by mutableFloatStateOf(1f)
 
     /**
      * How wide zen's gaps are, as a multiple of the standard gap: the wheel's, in
@@ -115,6 +133,9 @@ class ZenLayer {
     /** Whether the pointer is in the window's bottom-right corner in deep zen, where "put the cards back" is. */
     var corner by mutableStateOf(false)
 
+    /** How wide the corner's row of buttons was when last out, in pixels: the corner is at least that wide. Plain. */
+    var cornerRow: Float = 0f
+
     fun move(key: Int, dx: Float, dy: Float) {
         arrangement.move(key, dx, dy)
         arranged++
@@ -157,6 +178,21 @@ class ZenLayer {
         selection = emptySet()
         marquee = null
         carrying = emptySet()
+    }
+
+    /**
+     * Zen begins (1.0.24, kai: "zen mode seems to remember card positions if they
+     * were moved before exiting zen mode. Have it reset every time we enter"): every
+     * card in its slot, nothing picked out. The last zen's cards went home as the
+     * builder woke, drawn there by the fade; this forgets where they had been.
+     */
+    fun begin() {
+        forget()
+        if (!arrangement.isEmpty) {
+            arrangement.reset()
+            arranged++
+        }
+        gather = 1f
     }
 
     /** The block card [key] floats with, and its cell there. */
@@ -230,11 +266,30 @@ class ZenLayer {
 
 val LocalZen = staticCompositionLocalOf { ZenLayer.NONE }
 
-/** Fades with the first stage of zen: chrome — anything that is not a card. */
+/**
+ * Fades with the first stage of zen: chrome — anything that is not a card.
+ *
+ * Faded is not gone, and a fade alone left every faded control answering the
+ * pointer in deep zen (kai, 1.0.24: "zen mode is accidentally trying to click on
+ * objects not in zen mode … the tooltips are showing"). So once zen is deep and
+ * the chrome has faded all the way, it is taken off the page: still measured, so
+ * nothing moves, but not placed — neither drawn nor hit, so a hover, a tooltip or
+ * a press goes to the card under the pointer instead. It comes back, still
+ * transparent, the moment zen ends, and fades in from there.
+ */
 @Composable
 fun Modifier.zenQuiet(): Modifier {
     val zen = LocalZen.current
-    return graphicsLayer { alpha = (1f - zen.quiet).coerceIn(0f, 1f) }
+    val gone = remember(zen) { derivedStateOf { zen.asleep && zen.quiet >= 0.99f } }
+    return graphicsLayer { alpha = (1f - zen.quiet).coerceIn(0f, 1f) }.unplacedWhile(gone)
+}
+
+/** Measured as ever, placed only while [gone] is false: read in the placement, so a change re-places and never re-measures. */
+private fun Modifier.unplacedWhile(gone: State<Boolean>): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    layout(placeable.width, placeable.height) {
+        if (!gone.value) placeable.place(0, 0)
+    }
 }
 
 /** Fades with the second: the pool and the inspector, cards and all. */

@@ -170,6 +170,13 @@ class NeueHolders(
     var zenRequest by mutableStateOf(0)
     var zenWaitsForLayout = false
 
+    /**
+     * The last Z carried out. Plain: the clockwork reads it when [zenRequest] moves.
+     * A tree composed afresh — a window swapped in for immersive mode on Windows —
+     * would otherwise read a Z pressed long ago as pressed now, and go straight to zen.
+     */
+    var zenHandled = 0
+
     /** When the person last did anything, in `System.nanoTime`. */
     var lastInput = System.nanoTime()
 
@@ -507,15 +514,36 @@ fun rememberHolders(deps: AppDependencies, makeUpdates: (kotlinx.coroutines.Coro
 /**
  * The window's content: title bar, rail, the page, and every layer above it —
  * drawers, dialogs, the palette, the menu, the card in the air, the toast.
+ *
+ * [launchEffects] brings the app's own lifetime with it ([NeueEffects]): right for
+ * the tablet's one activity. A host that swaps windows — the desktop, for immersive
+ * mode on Windows — composes [NeueEffects] once, outside its windows, and passes
+ * false, so a window swapped in does not start the app over.
  */
 @Composable
 fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
-    val neue = h.neue
-    val state = h.builder
     val focus = LocalFocusManager.current
     h.focus = focus
 
-    if (launchEffects) {
+    if (launchEffects) NeueEffects(h)
+
+    NeueWindowContent(h)
+}
+
+/**
+ * What lives as long as the app, not as long as a window: the database, the card
+ * pool, the preferences, the update check, the art library, and the deck to open
+ * with. Until 1.0.24 these were the window's, and on Windows every trip into or out
+ * of immersive mode — a new window — stopped them all and started them again: the
+ * image loader made afresh, so every card's picture was read again, the pool
+ * reloaded, the art library restarted. That was much of the moment in which the
+ * whole app went blank (kai: "the whole app disappears for a second").
+ */
+@Composable
+fun NeueEffects(h: NeueHolders) {
+    val neue = h.neue
+    val state = h.builder
+    run {
         DisposableEffect(Unit) {
             configureImageLoader(java.io.File(Platform.dataDir, "card-art").absolutePath)
             h.layout.start { prefs ->
@@ -534,7 +562,7 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
         }
     }
 
-    if (launchEffects) {
+    run {
         // The deck to open with (kai, 1.0.14): the default, else the one saved last — and
         // only onto an empty builder, so an import made while the library was opening wins.
         LaunchedEffect(Unit) {
@@ -552,7 +580,11 @@ fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
         LaunchedEffect(neue.inspected) { neue.inspected?.let(h.art::want) }
         LaunchedEffect(neue.prefs.hdArt) { h.art.enable(neue.prefs.hdArt) }
     }
+}
 
+@Composable
+private fun NeueWindowContent(h: NeueHolders) {
+    val neue = h.neue
     // The groups' palette: read wherever a group is coloured, so set once here.
     SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
@@ -687,7 +719,7 @@ private fun Shell(h: NeueHolders) {
                         // The corner where "put the cards back" comes out.
                         // On a touch screen nothing can reach for the corner, so in deep zen it stays out.
                         h.zen.corner = deepZen && (neue.touchFirst || at != null && !gone &&
-                            ZenCorner.reaches(at.x, at.y, size.width.toFloat(), size.height.toFloat()))
+                            ZenCorner.reaches(at.x, at.y, size.width.toFloat(), size.height.toFloat(), h.zen.cornerRow))
                         // Deep zen, 1.0.14: a press on the table rather than on a card draws a box,
                         // and the cards it touches are picked out to move together (ZenGestures).
                         // The press is spent here, on the way down, so the pool and the inspector
@@ -864,7 +896,17 @@ private fun Shell(h: NeueHolders) {
         }
         if (h.updates.dialogOpen) UpdateDialog(h.updates)
         if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
-        if (immersive) ZenReset(h.zen, hasGroups = state.groups.groups.isNotEmpty(), onLeave = { h.wake() }, modifier = Modifier.align(Alignment.BottomEnd), always = neue.touchFirst)
+        if (immersive) {
+            ZenReset(
+                h.zen,
+                hasGroups = state.groups.groups.isNotEmpty(),
+                onLeave = { h.wake() },
+                labels = neue.prefs.zenLabels,
+                onLabels = { neue.update { it.copy(zenLabels = !it.zenLabels) } },
+                modifier = Modifier.align(Alignment.BottomEnd),
+                always = neue.touchFirst,
+            )
+        }
         // The box being dragged over the table in deep zen: a hairline and the faintest wash.
         h.zen.marquee?.let { box ->
             Canvas(Modifier.fillMaxSize()) {
@@ -958,10 +1000,16 @@ private fun ZenClockwork(h: NeueHolders) {
         }
     }
 
-    val quiet = remember { Animatable(0f) }
-    val deep = remember { Animatable(0f) }
+    // From where the amounts are, so a tree composed afresh mid-fade carries on from there.
+    val quiet = remember { Animatable(h.zen.quiet) }
+    val deep = remember { Animatable(h.zen.deep) }
     val phase = if (eligible) neue.zen else ZenPhase.AWAKE
     LaunchedEffect(phase) {
+        // Deep is the pointer's: from this moment, nothing but the cards answers it.
+        val begins = phase == ZenPhase.DEEP && !h.zen.asleep
+        h.zen.asleep = phase == ZenPhase.DEEP
+        // Every zen starts with the cards in their slots (1.0.24): the last one's are forgotten.
+        if (begins) h.zen.begin()
         val q = if (phase != ZenPhase.AWAKE) 1f else 0f
         val d = if (phase == ZenPhase.DEEP) 1f else 0f
         coroutineScope {
@@ -989,13 +1037,20 @@ private fun ZenClockwork(h: NeueHolders) {
         pieces.snapTo(h.zen.groupsAmount)
         pieces.animateTo(if (h.zen.groups) 1f else 0f, tween(ZEN_PIECES, easing = MuMotion.ease)) { h.zen.groupsAmount = value }
     }
+    // The groups' names on their pieces (1.0.24): the corner's Labels switch, kept in the settings.
+    val labels = remember { Animatable(h.zen.labelsAmount) }
+    LaunchedEffect(neue.prefs.zenLabels) {
+        labels.snapTo(h.zen.labelsAmount)
+        labels.animateTo(if (neue.prefs.zenLabels) 1f else 0f, tween(MuMotion.SLOW, easing = MuMotion.ease)) { h.zen.labelsAmount = value }
+    }
     // The Z key (1.0.15): immersive if it was not, and deep at once. A moment first when
     // immersive is only now coming on, so the deck has been laid out full screen before it
     // is measured for the middle of it.
     LaunchedEffect(h.zenRequest) {
-        if (h.zenRequest == 0) return@LaunchedEffect
+        if (h.zenRequest == h.zenHandled) return@LaunchedEffect
         delay(if (h.zenWaitsForLayout) 450 else 0)
         h.zenWaitsForLayout = false
+        h.zenHandled = h.zenRequest
         if (neue.immersive && neue.page == Page.BUILDER && h.builder.deck.totalCards > 0) {
             h.lastInput = System.nanoTime()
             neue.zen = ZenPhase.DEEP

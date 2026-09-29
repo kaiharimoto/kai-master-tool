@@ -40,7 +40,6 @@ import androidx.compose.ui.Modifier
 import com.kaiharimoto.neue.zen.LocalZen
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -100,9 +99,10 @@ fun BuilderPage(
     // Deep zen: the pool and the inspector are faded out, not gone, and a hover, a
     // click or a wheel on them must not reach them (kai, 1.0.15). Each is shielded,
     // and the deck is lifted over both, so a card floated over where they were is
-    // still a card under the pointer.
+    // still a card under the pointer. From the moment zen is deep, not halfway into
+    // its fade (1.0.24): the pointer is the garden's from then on.
     val zen = LocalZen.current
-    val asleep by remember { derivedStateOf { zen.deep > 0.5f } }
+    val asleep = zen.asleep
     Row(Modifier.fillMaxSize().padding(top = if (neue.immersive) IMMERSIVE_TOP else 0.dp)) {
         if (!neue.prefs.poolVisible) {
             // A hidden pane leaves its handle where it stood (kai, 1.0.19): a narrow strip

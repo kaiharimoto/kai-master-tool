@@ -218,6 +218,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   minimised on focus loss and without it kept the title bar (1.0.12, reverted).
   That window is **not resizable**: Compose puts an invisible resize border on a
   resizable undecorated window, and it swallowed the reach for the rail.
+  **The swap is a handover** (1.0.24, `WindowHandover.kt`): the window on screen
+  keeps its last frame as a picture and lets its tree go *before* the next is
+  built, and the picture goes only once the next is on screen — two live trees
+  would fight over the drop targets and zen's slots. The app's lifetime (pool,
+  preferences, art library, image loader) is `NeueEffects`, outside the windows:
+  never put app-lifetime effects back inside `NeueRoot`'s window content.
   Immersive keeps 32 px at the top (`IMMERSIVE_TOP`) and
   centres the deck below it.
 - **Immersive mode has a zen**: idle three seconds and the chrome fades, ten and
@@ -238,9 +244,14 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the press so the faded-out pool never hears it. An empty deck has no zen.
   `Z` is zen at once. **Groups** in the zen corner breaks the deck into its
   Roles pieces with a faint prismatic glow round each (`zenGlow`, in
-  `ZenShadows.kt` because it blurs). **Faded is not gone**: in deep zen the pool
-  and inspector are shielded (`ZenShield`) and the deck lifted over them, or the
-  invisible panes answer the pointer. The corner always offers Leave zen. The
+  `ZenShadows.kt` because it blurs), and **Labels** beside it writes each group's
+  name on its piece (`ZenLabels`, `NeuePreferences.zenLabels`). Every zen begins
+  with the cards in their slots (`ZenLayer.begin`). **Faded is not gone**: in deep
+  zen the pool and inspector are shielded (`ZenShield`) and the deck lifted over
+  them, and `zenQuiet` chrome is unplaced once faded (measured, not drawn or hit)
+  — the Groups panel stands above the deck for the pointer and hid cards behind
+  its tooltips (1.0.24). New chrome that fades must use `zenQuiet`, or it answers
+  the pointer in deep zen. The corner always offers Leave zen. The
   wheel sets zen's gaps, and zen fits the deck *as drawn* (`stageRect`, grown by
   its pieces) so the cards shrink as the gaps widen.
   `NEUE.md` §3a.
