@@ -314,6 +314,18 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   opens too. Every hover-only affordance has a finger's form (the art chip on the
   selected card, swatches on a tap, the rail pinned, a pinch for the wheel), and
   a mouse and keyboard plugged into the tablet keep the desk's idioms.
+  **The touch swarm** (v1.3.1–v1.3.4, `NEUE.md` §1b) gave the tablet its deck
+  width (`PaneBudget`), Back as Esc (`BackChain` — and `MainActivity` hands Back
+  to it before Compose, which with a keyboard attached spends a Back on clearing
+  focus), taps counted per surface (`TapBurst`), a carried card above the finger
+  (`CarryOffset`), haptics for hand events only (`DeskFeel`), two- and
+  three-finger undo and redo (`MultiTap`), `muClickable` (a resting thumb fires
+  nothing) and `TouchMetrics` for chrome outside the deck.
+- **The emulator walk** (`NeueSmokeTest`) waits by the clock and polls for state,
+  never `waitForIdleSync` or `ActivityScenario.onActivity`: a caret blinks for
+  ever, and on the CI emulator the main thread never falls idle. It seeds its
+  cards into the pool, because the pool's download can outlast the walk, and it
+  taps high on the deck while the soft keyboard is up.
 - `tools/shoot.sh --page=builder --theme=ink` photographs it headlessly.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
