@@ -318,6 +318,13 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
      */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         val h = holders
+        // Back, while Neue has something open, is Neue's chain's (touch swarm, rec 2). With a
+        // keyboard attached a control can hold focus, and Compose spends a Back on clearing
+        // that focus: the help, a menu or the viewer stayed open under a pressed Back.
+        if (h != null && event.keyCode == android.view.KeyEvent.KEYCODE_BACK && h.canGoBack()) {
+            if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) h.back()
+            return true
+        }
         if (h != null && h.onKey(KeyEvent(event))) return true
         return super.dispatchKeyEvent(event)
     }
