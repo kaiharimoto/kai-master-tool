@@ -268,6 +268,7 @@ fun neueMain(args: Array<String>) {
             }
             // --groups: the Groups button pressed — the Roles lens, the deck in pieces, the panel.
             if (map["groups"] == "true") h.setGroups(true)
+            if (map["groups"] == "false") h.setGroups(false)
             if (map["help"] == "true") h.neue.helpOpen = true
             // --list=N: a list of the first N main-deck cards, shown in the pool (1.0.19).
             map["list"]?.toIntOrNull()?.let { n ->
@@ -412,6 +413,59 @@ fun neueMain(args: Array<String>) {
             // of the frame; after each the deck's counts and any open menu are logged, so a gesture
             // that does nothing shows up as numbers that did not move. `wheel@x,y` (down, a notch)
             // and `wheel-up@x,y` scroll instead, with a still mid-glide (`-mouse<i>-mid.png`).
+            // --drags=drag@m3>m7+0.3,0;hold-drag@m5>m9 — real presses through the builder's drag:
+            // a point is `m12`/`e3`/`s0` (the middle of that card of the main, extra or side deck)
+            // with an optional `+dx,dy` in the card's own widths and heights, or window fractions.
+            // `hold-drag` waits 36 frames (~600 ms) before moving. Each is logged and undone.
+            map["drags"]?.let { spec ->
+                var t = System.nanoTime() / 1_000_000
+                suspend fun step(frames: Int) { clock.run(frames); t += frames * 16L }
+                val primary = androidx.compose.ui.input.pointer.PointerButtons(isPrimaryPressed = true)
+                val none = androidx.compose.ui.input.pointer.PointerButtons()
+                fun order(section: DeckSection) = h.builder.deck[section].map { it.value }
+                fun point(p: String): Offset {
+                    val section = when (p.firstOrNull()) { 'm' -> DeckSection.MAIN; 'e' -> DeckSection.EXTRA; 's' -> DeckSection.SIDE; else -> null }
+                        ?: return p.split(",").map { it.toFloat() }.let { Offset(it[0] * width, it[1] * height) }
+                    val index = p.drop(1).substringBefore("+").toInt()
+                    val r = h.drag.boxOf(section, index) ?: error("no card $p")
+                    val by = p.substringAfter("+", "").takeIf { it.isNotBlank() }?.split(",")?.map { it.toFloat() }
+                    return Offset(r.center.x + (by?.get(0) ?: 0f) * r.width, r.center.y + (by?.get(1) ?: 0f) * r.height)
+                }
+                spec.split(";").filter { it.isNotBlank() }.forEachIndexed { i, gesture ->
+                    val (kind, where) = gesture.split("@")
+                    val (a, b) = where.split(">")
+                    val from = point(a)
+                    val to = point(b)
+                    val before = order(DeckSection.MAIN)
+                    val fittedBefore = h.builder.groups.fitted.map { it.value }
+                    scene.sendPointerEvent(PointerEventType.Move, from, timeMillis = t)
+                    step(2)
+                    scene.sendPointerEvent(PointerEventType.Press, from, timeMillis = t, buttons = primary, button = androidx.compose.ui.input.pointer.PointerButton.Primary)
+                    step(if (kind == "hold-drag") 36 else 1)
+                    var mid = ""
+                    for (k in 1..16) {
+                        val at = from + (to - from) * (k / 16f)
+                        scene.sendPointerEvent(PointerEventType.Move, at, timeMillis = t, buttons = primary)
+                        step(1)
+                    }
+                    step(2)
+                    mid = "held ${h.drag.held?.card?.name}@${h.drag.held?.from}/${h.drag.held?.index}, hover ${h.drag.hover}, mark ${h.drag.mark}, preview ${h.drag.preview}, viewing ${h.neue.viewing?.card?.name}"
+                    clock.frame().encodeToData(EncodedImageFormat.PNG)?.let { File(out, "$name-drag$i-mid.png").writeBytes(it.bytes) }
+                    scene.sendPointerEvent(PointerEventType.Release, to, timeMillis = t, buttons = none, button = androidx.compose.ui.input.pointer.PointerButton.Primary)
+                    step(20)
+                    val after = order(DeckSection.MAIN)
+                    val names = { ids: List<Int> -> ids.map { id -> h.builder.index.byId(com.kaiharimoto.mastertool.core.model.CardId(id))?.name?.take(10) ?: "$id" } }
+                    val changed = before.indices.filter { before.getOrNull(it) != after.getOrNull(it) }
+                    println("[neue-studio] drag $i $kind $a>$b: $mid")
+                    println("[neue-studio] drag $i moved: ${if (before == after) "nothing" else "positions ${changed.first()}..${changed.last()}: ${names(before.slice(changed.first()..changed.last()))} -> ${names(after.slice(changed.first()..changed.last()))}"}")
+                    clock.frame().encodeToData(EncodedImageFormat.PNG)?.let { File(out, "$name-drag$i.png").writeBytes(it.bytes) }
+                    val fittedAfter = h.builder.groups.fitted.map { it.value }
+                    if (fittedAfter != fittedBefore) println("[neue-studio] drag $i fitted: ${names(fittedBefore)} -> ${names(fittedAfter)}")
+                    if (before != after || fittedAfter != fittedBefore) { h.builder.undo(); step(10) }
+                    h.neue.viewing = null
+                    step(4)
+                }
+            }
             map["mouse"]?.let { spec ->
                 fun counts() = "main ${h.builder.deck[DeckSection.MAIN].size} extra ${h.builder.deck[DeckSection.EXTRA].size} side ${h.builder.deck[DeckSection.SIDE].size}" +
                     "; pool ${h.neue.prefs.poolVisible} inspector ${h.neue.prefs.inspectorVisible}; group palettes ${h.neue.groupPalettesOpen} (${h.neue.prefs.groupPalette}); zoom ${h.neue.prefs.deckZoom}"

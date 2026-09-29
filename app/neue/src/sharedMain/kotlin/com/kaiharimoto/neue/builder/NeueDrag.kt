@@ -8,6 +8,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.IntSize
 import com.kaiharimoto.mastertool.core.haptics.DeskEvent
 import com.kaiharimoto.mastertool.core.input.CarryOffset
+import com.kaiharimoto.mastertool.core.layout.DeckReorder
 import com.kaiharimoto.mastertool.core.layout.GridDropResolver
 import com.kaiharimoto.mastertool.core.layout.ItemBox
 import com.kaiharimoto.mastertool.core.model.Card
@@ -40,9 +41,19 @@ data class GridGeometry(
     val count: Int,
     /**
      * Where each card sits from [origin], when the grid is not even — the deck
-     * in pieces (`GroupPieces`). Null for the plain grid.
+     * in pieces (`GroupPieces`). Null for the plain grid. While a card is being
+     * reordered, where each is drawn in the preview, which is what the pointer is over.
      */
     val placed: List<Offset>? = null,
+    /** Each position's card (passcode). */
+    val ids: List<Int> = emptyList(),
+    /**
+     * Laid out in bands (Fitted, Separate): each position's group, and the Fitted order
+     * as drawn (`DeckGroups.fitted`) — a drag here moves a copy set within its group.
+     * Null for a grid of cells.
+     */
+    val bandKeys: List<String?>? = null,
+    val bandSets: List<Int>? = null,
 ) {
     fun boxes(): List<ItemBox> = List(count) { i ->
         val at = placed?.getOrNull(i)
@@ -69,6 +80,27 @@ class NeueDrag(private val state: DeckBuilderState) {
     var held by mutableStateOf<Held?>(null)
         private set
 
+    /**
+     * A card being moved within its own section, as the deck will be if it is let go now
+     * (1.0.39): the deck opens a slot where it will land and its old place closes up.
+     */
+    sealed interface Preview {
+        val section: DeckSection
+    }
+
+    /** Cells (As is): the section's positions in the order they are drawn. */
+    data class Cells(override val section: DeckSection, val order: List<Int>) : Preview
+
+    /** Bands (Fitted, Separate): the Fitted order, passcodes, each once. */
+    data class Sets(override val section: DeckSection, val sets: List<Int>) : Preview
+
+    var preview by mutableStateOf<Preview?>(null)
+        private set
+
+    /** The card an insertion bar is drawn by, and whether on its right: the end of a row keeps its bar (1.0.39). */
+    var mark by mutableStateOf<Pair<Int, Boolean>?>(null)
+        private set
+
     /** Where the pointer is, in window pixels. */
     var pointer by mutableStateOf(Offset.Zero)
         private set
@@ -86,6 +118,10 @@ class NeueDrag(private val state: DeckBuilderState) {
     fun unregister(section: DeckSection) {
         grids.remove(section)
     }
+
+    /** Where card [index] of [section] is drawn, in window pixels: for the studio's drags. */
+    fun boxOf(section: DeckSection, index: Int): Rect? =
+        grids[section]?.boxes()?.getOrNull(index)?.let { Rect(it.left, it.top, it.right, it.bottom) }
 
     fun registerPool(bounds: Rect) {
         poolBounds = bounds
@@ -128,6 +164,8 @@ class NeueDrag(private val state: DeckBuilderState) {
     fun cancel() {
         held = null
         hover = null
+        preview = null
+        mark = null
     }
 
     /**
@@ -137,11 +175,33 @@ class NeueDrag(private val state: DeckBuilderState) {
     fun drop(): DeskEvent? {
         val active = held ?: return null
         val landed = hover
+        val shown = preview
         held = null
         hover = null
+        preview = null
+        mark = null
         if (landed == null) return null
         if (!landed.accepted) return DeskEvent.DROP_REFUSED
         val target = landed.section
+        // Within its own section the drop is the preview, exactly (1.0.39).
+        if (target != null && target == active.from) {
+            return when (shown) {
+                is Cells -> {
+                    if (shown.section != target) return null
+                    val cards = state.deck[target]
+                    if (!state.reorderSection(target, shown.order.map { cards[it] })) return null
+                    if (active.finger) state.revealAt(target, shown.order.indexOf(active.index))
+                    DeskEvent.DROPPED
+                }
+                is Sets -> {
+                    if (shown.section != target) return null
+                    state.setFittedOrder(shown.sets.map { com.kaiharimoto.mastertool.core.model.CardId(it) })
+                    DeskEvent.DROPPED
+                }
+                // Let go where it started: nothing to do.
+                null -> null
+            }
+        }
         return when {
             target == null -> {
                 val from = active.from ?: return null
@@ -171,21 +231,69 @@ class NeueDrag(private val state: DeckBuilderState) {
 
     private fun resolve(point: Offset, active: Held): DropHover? {
         grids.entries.firstOrNull { it.value.bounds.contains(point) }?.let { (section, grid) ->
+            if (section == active.from && grid.count > 0) {
+                mark = null
+                return reorder(section, grid, point, active)
+            }
+            preview = null
             val previous = hover?.takeIf { it.section == section }?.index
+            val items = grid.boxes()
+            // Rows of a deck in pieces sit up to a few gaps apart; a row is still a row.
+            val rowTolerance = if (grid.placed != null) grid.cardHeight * 0.45f else grid.spacing + 8f
             val index = GridDropResolver.insertionIndex(
-                items = grid.boxes(),
+                items = items,
                 cursorX = point.x,
                 cursorY = point.y,
-                // Rows of a deck in pieces sit up to a few gaps apart; a row is still a row.
-                rowTolerance = if (grid.placed != null) grid.cardHeight * 0.45f else grid.spacing + 8f,
+                rowTolerance = rowTolerance,
                 hysteresis = CarryOffset.HYSTERESIS_DP * active.density,
                 previous = previous,
             )
+            mark = GridDropResolver.anchor(items, point.y, rowTolerance, index)
             return DropHover(section, index, state.canDrop(active.card, active.from, section))
         }
+        preview = null
+        mark = null
         // Back onto the pool: the copy leaves the deck.
         if (active.from != null && poolBounds.contains(point)) return DropHover(null, 0, true)
         return null
+    }
+
+    /**
+     * A card over its own section (1.0.39, `DeckReorder`): it takes the place of the card
+     * it is over — one copy through the cells As is; its whole copy set within its own
+     * group's block in bands, where a card of another group refuses it (kai's choice).
+     * Between cards, nothing changes.
+     */
+    private fun reorder(section: DeckSection, grid: GridGeometry, point: Offset, active: Held): DropHover {
+        val boxes = grid.boxes()
+        val over = DeckReorder.hit(boxes, point.x, point.y)
+        val keys = grid.bandKeys
+        val sets = grid.bandSets
+        if (keys != null && sets != null) {
+            val shown = (preview as? Sets)?.takeIf { it.section == section }
+            val mine = grid.ids.getOrNull(active.index)
+            fun here(sets: List<Int>) = DropHover(section, mine?.let { sets.indexOf(it) } ?: active.index, true)
+            if (over == null || mine == null) return hover?.takeIf { it.section == section && it.accepted } ?: here(shown?.sets ?: sets)
+            if (keys.getOrNull(over) != keys.getOrNull(active.index)) {
+                preview = null
+                return DropHover(section, active.index, false)
+            }
+            val next = DeckReorder.moveSet(shown?.sets ?: sets, mine, grid.ids[over])
+            preview = if (next == sets) null else Sets(section, next)
+            return here(next)
+        }
+        val identity = (0 until grid.count).toList()
+        val shown = (preview as? Cells)?.takeIf { it.section == section }
+        val base = shown?.order ?: identity
+        val slot = when {
+            over == active.index -> null
+            over != null -> base.indexOf(over)
+            DeckReorder.pastEnd(boxes, point.x, point.y) -> grid.count - 1
+            else -> null
+        } ?: return DropHover(section, base.indexOf(active.index), true)
+        val next = DeckReorder.moveCell(base, active.index, slot)
+        preview = if (next == identity) null else Cells(section, next)
+        return DropHover(section, next.indexOf(active.index), true)
     }
 
 }

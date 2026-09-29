@@ -30,6 +30,15 @@ data class DeckGroup(
 data class DeckGroups(
     val groups: List<DeckGroup>,
     val assignments: Map<CardId, String>,
+    /**
+     * The order the groups' cards are read in when they stand Fitted or Separate (1.0.39):
+     * each card once, a group's copy sets in this order in its block. Kept apart from the
+     * deck's own order, which is As is, because kai arranges the two for different eyes
+     * ("if the user edits fitted, they could be editing it with visual cohesion for fitted
+     * only in mind and not as is, and vice versa"). Empty until a card is first moved
+     * there; a card not in it follows the deck's order, after the ones that are.
+     */
+    val fitted: List<CardId> = emptyList(),
 ) {
     val isEmpty: Boolean get() = groups.isEmpty() && assignments.isEmpty()
 

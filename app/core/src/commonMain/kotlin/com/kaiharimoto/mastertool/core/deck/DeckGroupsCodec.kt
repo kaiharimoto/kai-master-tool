@@ -28,6 +28,7 @@ import kotlinx.serialization.json.intOrNull
  *   "defs": [{ "id": "g1", "name": "Handtraps", "color": 3, "order": 0 }],
  *   "cards": { "14558127": "g1" },
  *   "lens": "ROLES",
+ *   "fitted": [14558127, 23434538],
  *   "goals": [{ "id": "q1", "name": "Opens", "hand": 5, "asks": { "g1": "AT_LEAST_1" } }]
  * }
  * ```
@@ -56,7 +57,10 @@ object DeckGroupsCodec {
             CardId(passcode) to group
         }?.toMap().orEmpty()
 
-        return StoredGroups(DeckGroups(defs, cards), readLens(node), readGoals(node))
+        // The Fitted order (1.0.39): passcodes, each once; anything else in the list is skipped.
+        val fitted = (node["fitted"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content?.toIntOrNull()?.let(::CardId) }?.distinct().orEmpty()
+
+        return StoredGroups(DeckGroups(defs, cards, fitted), readLens(node), readGoals(node))
     }
 
     /**
@@ -142,6 +146,9 @@ object DeckGroupsCodec {
                 },
             )
             put("lens", JsonPrimitive(stored.lens.name))
+            if (stored.groups.fitted.isNotEmpty()) {
+                put("fitted", buildJsonArray { stored.groups.fitted.forEach { add(JsonPrimitive(it.value)) } })
+            }
 
             if (!stored.goals.isEmpty) {
                 put(

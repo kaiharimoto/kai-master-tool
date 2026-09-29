@@ -28,13 +28,22 @@ internal class BandCache {
     private var memory: BandMemory? = null
     private var room: Any? = null
 
-    fun layout(deckId: String?, ids: List<Int>, keys: List<String?>, order: List<String>, pane: Pair<Float, Float>, otherRows: Int, gaps: Pair<Float, Float>): BandLayout? {
+    fun layout(
+        deckId: String?,
+        ids: List<Int>,
+        keys: List<String?>,
+        order: List<String>,
+        pane: Pair<Float, Float>,
+        otherRows: Int,
+        gaps: Pair<Float, Float>,
+        setOrder: List<Int>,
+    ): BandLayout? {
         if (deckId != deck) {
             deck = deckId
             memory = null
             inputs = null
         }
-        val key = listOf(ids, keys, order, pane, otherRows, gaps)
+        val key = listOf(ids, keys, order, pane, otherRows, gaps, setOrder)
         if (key == inputs) return result
         inputs = key
         // The memory is for edits: a new pane (a window resized, a tablet turned, the extra
@@ -42,9 +51,30 @@ internal class BandCache {
         val here = Triple(pane, otherRows, gaps)
         if (here != room) memory = null
         room = here
-        result = GroupBands.layout(ids, keys, order, pane, otherRows, memory = memory, gapX = gaps.first, gapY = gaps.second)
+        result = GroupBands.layout(ids, keys, order, pane, otherRows, memory = memory, gapX = gaps.first, gapY = gaps.second, setOrder = setOrder)
         result?.let { memory = it.memory }
         return result
+    }
+
+    /**
+     * The bands as they would be with [setOrder] (1.0.39): a card being moved within its
+     * group, before it is let go. Laid out at the width shown now, so the deck does not
+     * re-fit under the pointer, and not kept.
+     */
+    fun preview(setOrder: List<Int>): BandLayout? {
+        val shown = result ?: return null
+        @Suppress("UNCHECKED_CAST")
+        val key = inputs as? List<Any?> ?: return null
+        val ids = key[0] as List<Int>
+        val keys = key[1] as List<String?>
+        val order = key[2] as List<String>
+        val pane = key[3] as Pair<Float, Float>
+        val otherRows = key[4] as Int
+        val gaps = key[5] as Pair<Float, Float>
+        return GroupBands.layout(
+            ids, keys, order, pane, otherRows, memory = shown.memory, widths = shown.columns..shown.columns,
+            gapX = gaps.first, gapY = gaps.second, setOrder = setOrder,
+        )
     }
 }
 
@@ -82,7 +112,10 @@ internal fun mainBands(
         paneWidth * (rows * CARD_TALL / 10f + others * CARD_TALL / 15f) + gapY * 2
     }
     fun step(v: Float) = ((v / 40f).roundToInt() * 40).toFloat().coerceAtLeast(40f)
-    return neue.bandCache.layout(state.deckId, ids, keying.keyOfCell, keying.keyOrder, step(paneWidth) to step(height), others, gapX to gapY)
+    return neue.bandCache.layout(
+        state.deckId, ids, keying.keyOfCell, keying.keyOrder, step(paneWidth) to step(height), others, gapX to gapY,
+        state.groups.fitted.map { it.value },
+    )
 }
 
 /** A card's height over its width. */

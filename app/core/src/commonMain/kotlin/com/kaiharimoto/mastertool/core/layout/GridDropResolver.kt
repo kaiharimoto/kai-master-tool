@@ -51,6 +51,23 @@ object GridDropResolver {
         return damp(items, cursorX, raw, previous, hysteresis)
     }
 
+    /**
+     * Where the marker for insertion [index] stands, in the row [cursorY] is in: at the left
+     * of the card at [index], or — when that card starts the next row — at the right of the
+     * one before it (1.0.39: a card aimed at the end of a row showed its bar on the next).
+     * The card to draw it by, and whether it is on that card's right.
+     */
+    fun anchor(items: List<ItemBox>, cursorY: Float, rowTolerance: Float, index: Int): Pair<Int, Boolean> {
+        if (items.isEmpty()) return 0 to false
+        val row = nearestRow(items, cursorY, rowTolerance).map { it.index }
+        return when {
+            index in row -> index to false
+            index - 1 in row -> index - 1 to true
+            index >= items.size -> items.size - 1 to true
+            else -> index to false
+        }
+    }
+
     private fun nearestRow(
         items: List<ItemBox>,
         cursorY: Float,

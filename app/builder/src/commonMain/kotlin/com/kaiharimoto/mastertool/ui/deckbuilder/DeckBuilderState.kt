@@ -507,6 +507,25 @@ class DeckBuilderState(
         insertBefore: Int,
     ): Boolean = applyEdit(DeckEditor.moveAt(deck, card, from, fromIndex, to, insertBefore, format), card)
 
+    /**
+     * A reorder by drag (1.0.39): [section] holds the same cards in [order], as one undo.
+     * Anything but a reordering of what is there is refused.
+     */
+    fun reorderSection(section: DeckSection, order: List<CardId>): Boolean {
+        val current = deck[section]
+        if (order == current || order.size != current.size) return false
+        if (order.groupingBy { it }.eachCount() != current.groupingBy { it }.eachCount()) return false
+        pushUndo(deck)
+        deck = deck.with(section, order)
+        return true
+    }
+
+    /**
+     * The order the groups stand in Fitted and Separate (1.0.39, `DeckGroups.fitted`): kept
+     * apart from the deck's own, which is As is, and undone like any change to the groups.
+     */
+    fun setFittedOrder(order: List<CardId>) = updateGroups { it.copy(fitted = order) }
+
     /** Drag-out: the copy at [index] leaves the deck. */
     fun removeAt(card: Card, section: DeckSection, index: Int): Boolean =
         when (val result = DeckEditor.removeAt(deck, section, index)) {

@@ -104,7 +104,7 @@ actual class DeckShots actual constructor(
         val shown: BandLayout? = neue.bandCache.last
         if (shown != null && shown.row.size == ids.size) return shown
         val keying = state.keying(DeckSection.MAIN)
-        return GroupBands.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f)
+        return GroupBands.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = state.groups.fitted.map { it.value })
     }
 
     fun snapshot(state: DeckBuilderState, neue: NeueState): ShotModel {

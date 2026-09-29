@@ -13,6 +13,8 @@ import com.kaiharimoto.neue.kit.byFinger
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -399,6 +401,11 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         val keptBands = remember { arrayOfNulls<BandLayout>(1) }
         val bands = liveBands ?: keptBands[0]?.takeIf { !lensOn && crack > 0.01f && it.row.size == state.deck[DeckSection.MAIN].size }
         keptBands[0] = bands
+        // A copy set being moved within its group (1.0.39): the bands as they will be if it is
+        // let go, drawn at the width shown now; the deck is fitted to the bands at rest.
+        val setPreview = (drag.preview as? NeueDrag.Sets)?.takeIf { it.section == DeckSection.MAIN && liveBands != null && drag.held != null }
+        val shownBands = remember(setPreview?.sets, bands) { setPreview?.let { neue.bandCache.preview(it.sets) } } ?: bands
+        val restMainPieces = remember(bands) { bands?.pieces() }
         fun cols(section: DeckSection) = if (section == DeckSection.MAIN && bands != null) bands.columns else phoneCols ?: columnsOf(section)
         // The extra and side decks are drawn the main deck's width; where their pieces' gaps
         // would take more than a quarter of it, the gaps give way rather than the cards
@@ -413,7 +420,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
             val roleKeying = remember(ids, state.groupsWithDraft, state.index) {
                 DeckLenses.key(Lens.ROLES, ids, state.index::byId, state.groupsWithDraft, state.format)
             }
-            val bandPieces = if (section == DeckSection.MAIN) bands else null
+            val bandPieces = if (section == DeckSection.MAIN) shownBands else null
             roleKeying to remember(roleKeying.keyOfCell, phoneCols, bandPieces) { bandPieces?.pieces() ?: GroupPieces.of(roleKeying.keyOfCell, cols(section)) }
         }
         // How far down each section's zen pieces start, and how much the whole deck grows
@@ -431,7 +438,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         val kept = remember { HashMap<DeckSection, PieceLayout>() }
         val pieces = sections.map { section ->
             val keys = state.keying(section).keyOfCell
-            val bandPieces = if (section == DeckSection.MAIN) bands else null
+            val bandPieces = if (section == DeckSection.MAIN) shownBands else null
             val live = remember(keys, cols(section), bandPieces) { bandPieces?.pieces() ?: GroupPieces.of(keys, cols(section)) }
             val previous = kept[section]
             val used = if (lensOn || bandPieces != null || previous == null || previous.piece.size != keys.size || crack < 0.01f) live else previous
@@ -442,14 +449,15 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
             val requests = sections.mapIndexed { i, section ->
                 // Bands are a grid of their own: every cell of it, filled or not, is room.
                 val cells = if (section == DeckSection.MAIN) bands?.let { it.columns * it.rows } else null
+                val fitted = (if (section == DeckSection.MAIN) restMainPieces else null) ?: pieces[i]
                 SectionFitRequest(
                     count = cells ?: state.deck[section].size,
                     columns = cols(section),
                     baselineCount = cells ?: if (section == DeckSection.MAIN) section.minSize else section.maxSize,
                     spacing = 0f,
                     chromeHeight = (GRID_PAD * 2 + RULE).toPx(),
-                    extraWidth = pieces[i].spanX * gapX(section) * crack,
-                    extraHeight = pieces[i].spanY * gapY(section) * crack + (if (pieces[i].pieces > 1) nameTab.toPx() * crack else 0f),
+                    extraWidth = fitted.spanX * gapX(section) * crack,
+                    extraHeight = fitted.spanY * gapY(section) * crack + (if (fitted.pieces > 1) nameTab.toPx() * crack else 0f),
                 )
             }
             val labelled = sections.map { it != DeckSection.MAIN }
@@ -524,6 +532,9 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                     pieces = pieces[i],
                     gapPx = gapX(section),
                     gapYPx = gapY(section),
+                    bandKeys = if (section == DeckSection.MAIN && bands != null) state.keying(section).keyOfCell else null,
+                    bandSets = if (section == DeckSection.MAIN) bands?.let { b -> remember(b) { b.setOrder(state.deck[section].map { it.value }) } } else null,
+                    cellOrder = (drag.preview as? NeueDrag.Cells)?.takeIf { it.section == section && drag.held != null }?.order,
                     roleKeying = rolePieces[i].first,
                     first = i == 0,
                     rolePieces = rolePieces[i].second,
@@ -823,6 +834,11 @@ private fun DeckSectionPane(
     pieces: PieceLayout,
     gapPx: Float,
     gapYPx: Float,
+    /** Laid out in bands: each position's group and the Fitted order, for a drag to move sets by (1.0.39). */
+    bandKeys: List<String?>?,
+    bandSets: List<Int>?,
+    /** A card being moved through the cells: the positions in the order they are drawn (1.0.39). */
+    cellOrder: List<Int>?,
     roleKeying: LensKeying,
     rolePieces: PieceLayout,
     /** The top section on show, with only the table above it: room for a whole name tab in zen. */
@@ -855,6 +871,15 @@ private fun DeckSectionPane(
     val measurer = rememberTextMeasurer(cacheSize = 48)
     val tabStyle = MuType.micro(LocalMuFonts.current).copy(fontSize = 10.sp)
     val restPlaces = List(ids.size) { placer.rest(it) }
+    // Where each card is drawn: its place, or — while a card is moved through the cells —
+    // the cell the preview gives it (1.0.39). The cells stay; the cards move through them.
+    val drawnPlaces = cellOrder?.takeIf { it.size == ids.size }?.let { order ->
+        val slotOf = IntArray(order.size).also { a -> order.forEachIndexed { q, p -> a[p] = q } }
+        List(ids.size) { restPlaces[slotOf[it]] }
+    } ?: restPlaces
+    // The cards glide to the preview's places while a card of this section is carried, and
+    // are simply there otherwise, so a re-fit or the groups opening never trails a frame.
+    val gliding = drag.held?.from == section
 
     // The whole pane accepts a drop, label included: aiming at a label is
     // aiming at the section. The grid's own geometry is measured separately,
@@ -874,7 +899,10 @@ private fun DeckSectionPane(
             cardWidth = fit.cardWidth,
             cardHeight = fit.cardHeight,
             spacing = 0f,
-            placed = restPlaces,
+            placed = drawnPlaces,
+            ids = ids.map { it.value },
+            bandKeys = bandKeys,
+            bandSets = bandSets,
         )
         publish()
         // Where each card goes in zen, relative to where it rests, for picking and snapping there.
@@ -965,7 +993,10 @@ private fun DeckSectionPane(
                             cardHeight = fit.cardHeight,
                             spacing = 0f,
                             count = ids.size,
-                            placed = restPlaces,
+                            placed = drawnPlaces,
+                            ids = ids.map { it.value },
+                            bandKeys = bandKeys,
+                            bandSets = bandSets,
                         )
                         publish()
                     }
@@ -1049,7 +1080,8 @@ private fun DeckSectionPane(
                             cardHeight = fit.cardHeight,
                             frame = FRAME.toPx(),
                             colorOf = { id -> keying.keyById(id)?.let { GroupMarkers.paint(it.paint, c.ink) } ?: c.ink },
-                            alphaOf = { id -> crack * fade * if (state.isolatedKey != null && state.isolatedKey != id) 0.18f else 1f },
+                            // Cards moving through the cells cross the outlines, which stay with the cells: faint meanwhile.
+                            alphaOf = { id -> crack * fade * (if (cellOrder != null) 0.3f else 1f) * if (state.isolatedKey != null && state.isolatedKey != id) 0.18f else 1f },
                             labels = Labels(measurer, tabStyle, nameTab.toPx()) { id -> keying.keyById(id)?.label.orEmpty() },
                         )
                     }
@@ -1071,19 +1103,27 @@ private fun DeckSectionPane(
                     val r = round(left + fit.cardWidth).toInt()
                     val b = round(top + fit.cardHeight).toInt()
                     val zenKey = ZenArrangement.key(section.ordinal, position)
+                    val drawnAt = drawnPlaces[position]
+                    val glide = remember(section) { Animatable(drawnAt, Offset.VectorConverter) }
+                    LaunchedEffect(drawnAt, gliding) {
+                        if (gliding) glide.animateTo(drawnAt, tween(MuMotion.BASE, easing = MuMotion.ease)) else glide.snapTo(drawnAt)
+                    }
                     Box(
                         Modifier
                             .offset {
                                 val o = zen.offsetOf(zenKey)
-                                // In zen the pieces may open or close; at rest this is exactly (l, t).
+                                // In zen the pieces may open or close; at rest this is exactly (l, t),
+                                // or where the preview is taking it while a card is carried.
                                 val d = zen.deep
-                                val x = if (d > 0f) round(placer.x(position, d, zen.pieceAmount)).toInt() else l
-                                val y = if (d > 0f) round(placer.y(position, d, zen.pieceAmount)).toInt() else t
+                                val g = if (gliding) glide.value else null
+                                val x = if (d > 0f) round(placer.x(position, d, zen.pieceAmount)).toInt() else g?.let { round(it.x).toInt() } ?: l
+                                val y = if (d > 0f) round(placer.y(position, d, zen.pieceAmount)).toInt() else g?.let { round(it.y).toInt() } ?: t
                                 IntOffset(x + o.x.roundToInt(), y + o.y.roundToInt())
                             }
                             .size(with(density) { (r - l).toDp() }, with(density) { (b - t).toDp() })
                             .zIndex(zen.layerOf(zenKey).takeIf { it > 0f } ?: if (position == onTop) 1f else 0f)
-                            .alpha(if (held) 0.4f else if (covered) 0.3f else 1f),
+                            // The carried card's own place is the slot it will land in: a faint ghost of it.
+                            .alpha(if (held) 0.3f else if (covered) 0.3f else 1f),
                     ) {
                         if (card == null) {
                             Box(Modifier.fillMaxSize().background(c.ink06)) {
@@ -1141,12 +1181,15 @@ private fun DeckSectionPane(
                     }
                 }
 
-                // Where a drop will land: a 2px ink bar in the gap, never a shifted grid.
-                if (hover?.accepted == true) {
+                // Where a card from elsewhere will land: a 2px ink bar in the gap, on the row the
+                // pointer is in (1.0.39). A card of this section opens its own slot instead, and
+                // bands place a card by its group, so they have no bar.
+                if (hover?.accepted == true && drag.held?.from != section && bandKeys == null) {
                     val at = hover.index.coerceIn(0, ids.size)
+                    val (by, after) = drag.mark ?: (at to false)
                     val mark = when {
                         ids.isEmpty() -> Offset.Zero
-                        at < ids.size -> restPlaces[at]
+                        by in ids.indices -> restPlaces[by] + Offset(if (after) fit.cardWidth else 0f, 0f)
                         else -> restPlaces[ids.size - 1] + Offset(fit.cardWidth, 0f)
                     }
                     Box(

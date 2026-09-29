@@ -53,6 +53,16 @@ data class BandLayout(
      * As the builder's pieces: one piece per block, each [BandBlock.stack] gaps right and
      * [BandBlock.band] + [BandBlock.above] gaps down, every card in its own row and column.
      */
+    /**
+     * The cards as the bands read — block by block in reading order, each block's cells row
+     * by row — each once: the Fitted order this layout shows (`DeckGroups.fitted`).
+     */
+    fun setOrder(ids: List<Int>): List<Int> {
+        val reading = blocks.indices.sortedWith(compareBy({ blocks[it].band }, { blocks[it].stack }, { blocks[it].above }))
+        val rank = IntArray(blocks.size).also { r -> reading.forEachIndexed { i, b -> r[b] = i } }
+        return ids.indices.sortedWith(compareBy({ rank[block[it]] }, { row[it] }, { col[it] })).map { ids[it] }.distinct()
+    }
+
     fun pieces(): PieceLayout = PieceLayout(
         columns = columns,
         piece = block,
@@ -136,9 +146,11 @@ object GroupBands {
         widths: IntRange? = null,
         gapX: Float = 0f,
         gapY: Float = 0f,
+        /** The Fitted order (`DeckGroups.fitted`): a group's copy sets in this order, any not in it after, as the deck reads. */
+        setOrder: List<Int> = emptyList(),
     ): BandLayout? {
         if (ids.isEmpty() || ids.size != keys.size) return null
-        val groups = groupsOf(ids, keys, order)
+        val groups = groupsOf(ids, keys, order, setOrder)
         val n = ids.size
         val range = widths ?: (min(MIN_WIDTH, n)..min(MAX_WIDTH, max(n, 1)))
         // The card each shape leaves room for: across, the cards and the gaps between stacks;
@@ -176,7 +188,8 @@ object GroupBands {
         val size: Int get() = positions.size
     }
 
-    internal fun groupsOf(ids: List<Int>, keys: List<String?>, order: List<String>): List<Group> {
+    internal fun groupsOf(ids: List<Int>, keys: List<String?>, order: List<String>, setOrder: List<Int> = emptyList()): List<Group> {
+        val placed = setOrder.withIndex().associate { it.value to it.index }
         val byKey = LinkedHashMap<String?, MutableList<Int>>()
         keys.indices.forEach { p -> byKey.getOrPut(keys[p]) { mutableListOf() } += p }
         val rank = order.withIndex().associate { it.value to it.index }
@@ -187,7 +200,11 @@ object GroupBands {
                 val positions = byKey.getValue(key)
                 val counts = LinkedHashMap<Int, Int>()
                 positions.forEach { counts[ids[it]] = (counts[ids[it]] ?: 0) + 1 }
-                Group(key, counts.map { it.key to it.value }, positions)
+                // The Fitted order first, where it names a card; the rest as the deck reads, after.
+                val sets = counts.map { it.key to it.value }.withIndex()
+                    .sortedWith(compareBy({ placed[it.value.first] ?: Int.MAX_VALUE }, { it.index }))
+                    .map { it.value }
+                Group(key, sets, positions)
             }
     }
 

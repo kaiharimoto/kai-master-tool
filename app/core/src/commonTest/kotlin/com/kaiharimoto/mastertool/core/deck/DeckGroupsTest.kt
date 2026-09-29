@@ -84,6 +84,16 @@ class DeckGroupsTest {
     // ---- codec -------------------------------------------------------------
 
     @Test
+    fun theFittedOrderIsSavedAndReopenedAndAbsentWhenNeverSet() {
+        val fitted = listOf(CardId(3), CardId(1), CardId(2))
+        val stored = StoredGroups(groups().copy(fitted = fitted), Lens.ROLES)
+        assertEquals(fitted, DeckGroupsCodec.read(DeckGroupsCodec.write(null, stored)).groups.fitted)
+        // Never set, never written: a deck that has not used it round-trips as before.
+        val plain = DeckGroupsCodec.write(null, StoredGroups(groups(), Lens.ROLES))
+        assertEquals(null, (plain?.get("groups") as? kotlinx.serialization.json.JsonObject)?.get("fitted"))
+    }
+
+    @Test
     fun codecRoundTripsThroughTheExtendedPayload() {
         val stored = StoredGroups(groups(), Lens.ROLES)
         val written = DeckGroupsCodec.write(extended = null, stored = stored)

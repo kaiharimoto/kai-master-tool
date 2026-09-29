@@ -626,7 +626,8 @@ Two things about it are load-bearing:
   they go to `DeckFitter` as `extraWidth`/`extraHeight` — the same contract as
   the chrome — and the deck still fits. A drop resolves against where the cards
   really are (`GridGeometry.placed`), and the insert bar stands at the left of the
-  card it names.
+  card it names — or, at the end of a row, at the right of its last card (1.0.39). A
+  card moved within its own section opens a slot instead (§4h⅞).
 
 The gap is 28 px and each piece is outlined 5 px in its group's colour (1.0.18;
 18 and 4 in 1.0.17, 10 and 2 in 1.0.15 — kai asked for wider twice), in the gap
@@ -1493,6 +1494,57 @@ side decks stay as they are — and not while a group is being drawn up, nor on 
 phone lying down, whose deck scrolls in its own columns. In zen the blocks are the
 deck's shape too, flush until zen's pieces open them. The screenshot draws the bands
 the builder shows. No schema or deck-file change: a preference with a default.
+
+### 4h⅞. Reordering by drag (1.0.39)
+
+kai: "dragging and dropping cards to adjust card order is finnicky and isn't quite
+where I want it to be." Replaying real drags through the studio (`--drags=`, below)
+found why:
+
+- **In Fitted a drop went nowhere you could see.** It was resolved as "before the card
+  to the right in this row of the picture", but a fitted row mixes groups and places in
+  the deck, so the card landed at an arbitrary position in the list and then flowed back
+  into its group's block — usually no visible change, sometimes an odd one.
+- **The bar at the end of a row stood on the next row**, because "after the last card
+  of row 1" and "before the first of row 2" are one index; the pointer said one thing
+  and the bar another.
+- **A press, a pause and then a drag opened the viewer**: past `DeskMouse.HOLD_MS`
+  (450 ms) still, the hold fired and the rest of the press was spent.
+
+Now, with kai's two choices:
+
+- **The deck makes room** ("cards slide apart"). A card carried over its own section
+  takes the place of the card it is over — sortable's rule, `DeckReorder` in core — and
+  the others glide aside (`MuMotion.BASE`, a tween: only cards move) while its own slot
+  shows a faint ghost where it will land. Once it has taken a place it is the card under
+  the pointer, so nothing changes again until the pointer reaches another; a pointer on
+  the line between two cards moves nothing (`hit`'s inset), and past the last card is
+  the end (`pastEnd`). The drop is the preview, exactly (`NeueDrag.Preview`). **As is**
+  (and with no groups) the grid's cells stay put and one copy moves through them
+  (`Cells`); the group outlines stay with the cells, faint while a card crosses them.
+- **Fitted and Separate reorder within a group only** (kai's choice). A card moves its
+  whole copy set among its group's sets (`Sets`, `moveSet`); over another group's card
+  it is refused, hatched with ✕. The preview is the bands laid out at the width shown
+  (`BandCache.preview`), so the deck never re-fits under the pointer.
+- **Fitted keeps its own order** (kai: "if the user edits fitted, they could be editing
+  it with visual cohesion for fitted only in mind and not as is, and vice versa").
+  `DeckGroups.fitted` is the Fitted order — passcodes, each once, in the bands' reading
+  order (`BandLayout.setOrder`) — saved in the deck's `groups` payload as `"fitted"`,
+  so it travels in `.ydkx`, `.ydkw` and the QR codes. A drag in Fitted or Separate
+  writes it and never the deck's own order; a drag As is writes the deck's order and
+  never it. A card it has never met follows the ones it has, as the deck reads. Both
+  are undone like any edit.
+- **A bar still marks a card arriving from elsewhere** (the pool, another section),
+  on the row the pointer is in (`GridDropResolver.anchor`); bands place such a card by
+  its group, so they show none.
+- **Held, then moved, is a drag**: the viewer the hold opened gives way and the card
+  is picked up (`awaitMoveOrUp`) — for a finger too, which is Android's own "hold to
+  drag".
+
+`tools/shoot.sh --drags=drag@m3>m7;hold-drag@m4>m8+0.3,0` drives real presses through
+the builder's drag — a point is `m12`/`e3`/`s0`, the middle of that card, plus an
+offset in card widths and heights — logging the hover, the preview and what moved, a
+frame mid-drag and after, then undoing it.
 
 ### 4i. Format: webs of decks (1.0.33)
 

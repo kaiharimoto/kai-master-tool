@@ -215,7 +215,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   and never much smaller cards than As is (1.0.38: a layout below nine tenths of the
   plain deck's card pays heavily; gaps and the other sections are counted) —
   handed on as a `PieceLayout` with `rowOf`, so outlines, tabs, drops and zen read
-  it unchanged. `NEUE.md` §4h¾. **The wheel
+  it unchanged. `NEUE.md` §4h¾. **Reordering by drag** (1.0.39, `DeckReorder`): a card
+  over its own section takes the place of the card it is over and the rest glide aside —
+  one copy through fixed cells As is; its whole copy set within its own group in Fitted
+  and Separate, which keep **their own order** (`DeckGroups.fitted`, saved as the groups
+  payload's `"fitted"`), never the deck's. `NEUE.md` §4h⅞. **The wheel
   re-fits the deck** smaller (`deckZoom`) — a re-fit, not a transform, so every
   layout rule holds — and Shift-wheel sets the groups' gap. `NEUE.md` §3.
 - **The index rail folds away and F11 is immersive mode**, both decided by

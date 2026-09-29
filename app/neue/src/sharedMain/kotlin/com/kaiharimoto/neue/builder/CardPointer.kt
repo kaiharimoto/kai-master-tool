@@ -250,6 +250,8 @@ fun Modifier.cardPointer(
                         },
                         onDrag = { start ->
                             neue.cancelViewSoon()
+                            // Picked up after a hold: the card opened large gives way to the drag.
+                            neue.viewing = null
                             neue.actingBy(finger = true) { neue.felt(DeskEvent.PICKED_UP) }
                             drag.start(Held(heldCard, from, heldIndex, size, finger = true, density = density), origin + start.position)
                             // A second finger landing lets the card go home: two fingers are a pinch (rec 21).
@@ -327,25 +329,34 @@ fun Modifier.cardPointer(
                         if (slop == null) released = true
                     }
                     val start = moved
+                    suspend fun AwaitPointerEventScope.carry(start: PointerInputChange) {
+                        drag.start(Held(heldCard, from, heldIndex, size, density = density), origin + start.position)
+                        val completed = drag(start.id) { change ->
+                            change.consume()
+                            drag.moveTo(origin + change.position)
+                        }
+                        if (completed) drag.drop() else drag.cancel()
+                    }
                     when {
                         start != null && dragEnabled -> {
                             press.down = false
                             // A drag is not the second half of a double-click.
                             last[0] = 0L
-                            drag.start(Held(heldCard, from, heldIndex, size, density = density), origin + start.position)
-                            val completed = drag(start.id) { change ->
-                                change.consume()
-                                drag.moveTo(origin + change.position)
-                            }
-                            if (completed) drag.drop() else drag.cancel()
+                            carry(start)
                         }
                         released || start != null -> Unit
                         else -> {
-                            // Held still: the hold fires once, and the rest of the press is spent.
+                            // Held still: the hold fires once. Moved after it, the card is picked
+                            // up after all and the viewer gives way (1.0.39: a press, a pause and
+                            // then a drag opened the viewer and went nowhere); let go, it is spent.
                             last[0] = 0L
                             press.down = false
                             fire(MouseGesture.HOLD, down.position)
-                            spend()
+                            val late = if (dragEnabled) awaitMoveOrUp(down, viewConfiguration.touchSlop * 2f) else null.also { spend() }
+                            if (late != null) {
+                                neue.viewing = null
+                                carry(late)
+                            }
                         }
                     }
                 } finally {
@@ -432,7 +443,9 @@ private suspend fun AwaitPointerEventScope.touch(
         TouchEnd.HOLD -> {
             taps.burst.reset()
             onGesture(TouchGesture.LONG_PRESS, down.position)
-            spend()
+            // Held, then moved: picked up after all, Android's own "hold to drag" (1.0.39).
+            val late = if (dragEnabled) awaitMoveOrUp(down, maxOf(viewConfiguration.touchSlop, CarryOffset.PICKUP_DP * density)) else null.also { spend() }
+            late?.let { onDrag(it) }
         }
         TouchEnd.DRAG -> {
             taps.burst.reset()
@@ -452,6 +465,23 @@ private suspend fun AwaitPointerEventScope.awaitAnyDown(): PointerInputChange {
         if (event.type == PointerEventType.Press && event.changes.isNotEmpty() && event.changes.all { it.changedToDown() }) {
             return event.changes[0]
         }
+    }
+}
+
+/**
+ * After a hold: the press moved [slop] from where it went down (the change that crossed it),
+ * or null once it lets go. Everything it sees is spent, so nothing under it hears the release.
+ */
+private suspend fun AwaitPointerEventScope.awaitMoveOrUp(down: PointerInputChange, slop: Float): PointerInputChange? {
+    while (true) {
+        val event = awaitPointerEvent()
+        val change = event.changes.firstOrNull { it.id == down.id }
+        event.changes.forEach { it.consume() }
+        if (change == null || !change.pressed) {
+            if (event.changes.any { it.pressed }) spend()
+            return null
+        }
+        if ((change.position - down.position).getDistance() > slop) return change
     }
 }
 
