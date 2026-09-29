@@ -52,7 +52,7 @@ private val GRABBER = 24.dp
 /** The Cards and Groups tabs over the pool, when the groups are out. */
 private val DOCK_TABS = 40.dp
 
-/** How much of the deck survives the dock at half: a row and its label, read at a glance. */
+/** The least of the deck the dock at half leaves, when the deck is taller than the window allows. */
 private val MIN_DECK = 200.dp
 
 /** How far ahead of a released flick the dock aims, so a short fast throw reaches its stop. */
@@ -82,8 +82,13 @@ fun TallBuilder(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, onSear
         var header by remember { mutableIntStateOf(0) }
         val groups = groupsOn(state)
         val chrome = with(density) { (GRABBER + (if (groups) DOCK_TABS else 0.dp)).toPx() } + header
+        // The deck at its own height, 10×4 at the width of the screen (kai, v1.3.6): at HALF the
+        // pool has everything under it.
+        val natural = naturalDeckHeight(state, neue, maxWidth)
         val metrics = with(density) {
-            DockMetrics(windowHeight = maxHeight.toPx(), chrome = chrome, minDeck = MIN_DECK.toPx())
+            val window = maxHeight.toPx()
+            val deck = natural.toPx().coerceAtMost((window - chrome).coerceAtLeast(0f))
+            DockMetrics(windowHeight = window, chrome = chrome, minDeck = minOf(MIN_DECK.toPx(), deck), deck = deck)
         }
         val stored = PoolStop.entries.firstOrNull { it.name == neue.prefs.phoneDockStop } ?: PoolStop.HALF
         // Typing is a stop the dock is in, never one it is set to: a process killed with the

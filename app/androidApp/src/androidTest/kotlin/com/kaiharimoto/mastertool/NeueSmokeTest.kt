@@ -385,12 +385,13 @@ class NeueSmokeTest {
             Thread.sleep(4000)
             shoot("01-builder.png")
 
-            // The deck's second row, the middle card: under the bar (48), the lens row (40) and a row of cards.
+            // The deck's second row, its fifth card: under the bar (48), the lens row (40) and a row of
+            // cards, ten across the width less 16 each side (v1.3.6: the decklist's 10×4).
             val (top, bottom) = insets()
             val (w, h) = screenDp()
-            val card = (w - 16f) / 5f
+            val card = (w - 32f) / 10f
             val deckY = top + 48f + 40f + 6f + card / 0.686f * 1.5f
-            val deckX = w / 2f
+            val deckX = w / 2f - card / 2f
             val before = mainCount()
             val tapped = SystemClock.uptimeMillis()
             fingers(listOf(deckX to deckY), settle = false, startAt = tapped)
@@ -407,7 +408,7 @@ class NeueSmokeTest {
                 on { it.neue!!.neue.viewing == null },
             )
             Thread.sleep(500)
-            fingers(listOf(deckX - 60f to deckY, deckX + 60f to deckY))
+            fingers(listOf(deckX - 3 * card to deckY, deckX + 3 * card to deckY))
             assertEquals("a two-finger tap did not undo", before, countBecomes(before))
             assertTrue(
                 "the double-tap opened the viewer: " + on { it.neue!!.neue.viewTrace.joinToString(" | ") },
@@ -419,6 +420,16 @@ class NeueSmokeTest {
             tap(deckX, deckY)
             assertTrue("a tap on a phone did not open the card", until { on { it.neue!!.neue.viewing != null } })
             shoot("02-viewer.png")
+            // v1.3.6: full screen from the viewer, the screen kept on for it, and Back back to the viewer.
+            on { it.neue!!.neue.showcase = it.neue!!.neue.viewing!!.card }
+            assertTrue(
+                "the showcase did not keep the screen on",
+                until { on { (it.window.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0 } },
+            )
+            shoot("02b-showcase.png")
+            back()
+            assertTrue("Back did not close the showcase", until { on { it.neue!!.neue.showcase == null } })
+            assertTrue("Back from the showcase closed the viewer too", on { it.neue!!.neue.viewing != null })
             back()
             assertTrue("Back did not close the viewer", until { on { it.neue!!.neue.viewing == null } })
             assertFalse("Back left the app from the viewer", on { it.isFinishing })

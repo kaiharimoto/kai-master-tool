@@ -262,7 +262,8 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                 LaunchedEffect(h.neue.immersive) { showImmersive(h.neue.immersive) }
                 // Deep zen is a picture to be looked at: the screen stays on for it (touch swarm,
                 // rec 30), and the system's timeout returns when zen wakes or immersive ends.
-                val keepOn = h.neue.immersive && h.neue.zen == com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
+                // A card shown full screen is looked at too (v1.3.6).
+                val keepOn = h.neue.immersive && h.neue.zen == com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP || h.neue.showcase != null
                 LaunchedEffect(keepOn) {
                     if (keepOn) {
                         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

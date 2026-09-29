@@ -315,6 +315,27 @@ and the app could not update itself. kai's four choices are what follows.
   `pixel_7`); the phone runs `NeueSmokeTest.aPhoneHeldUpright` and the tablet walk
   assumes it is not on one.
 
+**1.3.6, kai's three:**
+
+- **Upright, the deck is the decklist's 10×4** — the desk's rows (`columnsOf`, ten and
+  fifteen) fitted to the phone's width by `DeckLabels.place`, the whole deck on screen
+  with no scroll. `naturalDeckHeight` sums it the way `DeckBody` fits it, and the dock
+  is told (`DockMetrics.deck`): at HALF the pool has everything under the deck, where
+  it had half the window. Lying down the deck keeps `phoneColumns` and scrolls.
+- **The foil follows the phone** (`NeuePreferences.foilTilt`, on). `TiltFilter` (core)
+  turns gravity — `TYPE_GRAVITY`, else the accelerometer; no permission, no drift —
+  into the screen's tilt about a rest that follows the hand over 2.5 s, so held still
+  the light settles in the middle and it is the *turn* that moves it, sitting up or
+  lying down. `rememberDeviceTilt` listens only while the activity is resumed;
+  `LocalTilt` is read in each card's draw, so a turn redraws foil and recomposes
+  nothing. A card a finger is over keeps the finger's light.
+- **Full screen** (`NeueState.showcase`, `builder/Showcase.kt`, the viewer's ⤢): the
+  card on ink, as large as it goes (`Showcase.card`), turned against the hand as a card
+  held in the hand seems to stay put, its foil catching the light; or **Art**, the
+  artwork alone covering the screen (`Showcase.art`, from `ArtFrame`) and sliding 5% behind
+  the glass as it tilts. The screen stays on; Back returns to the viewer. On the desk
+  the pointer stands in for the tilt.
+
 ---
 
 ## 2. Master UI, and the two exceptions

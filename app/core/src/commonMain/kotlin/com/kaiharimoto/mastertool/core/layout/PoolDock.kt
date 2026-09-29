@@ -39,6 +39,13 @@ data class DockMetrics(
     val windowHeight: Float,
     val chrome: Float,
     val minDeck: Float,
+    /**
+     * The deck's own height, when it has one (v1.3.6: a phone's deck is drawn 10×4 at
+     * the width of the screen, so it is as tall as it is and no taller). Then
+     * [PoolStop.HALF] is everything under the deck — the room it does not use is the
+     * pool's — rather than half the window.
+     */
+    val deck: Float? = null,
 )
 
 /**
@@ -70,7 +77,7 @@ object PoolDock {
             PoolStop.FULL -> full
             // Half the window, but never so much that the deck is squeezed out
             // of existence and never less than the dock's own furniture.
-            PoolStop.HALF -> (full * HALF_FRACTION)
+            PoolStop.HALF -> (metrics.deck?.let { full - it } ?: (full * HALF_FRACTION))
                 .coerceAtMost((full - metrics.minDeck).coerceAtLeast(peek))
                 .coerceIn(peek, full)
         }

@@ -107,6 +107,10 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Foil", if (touch) "The light on a card's face." else "The light on a card's face. It follows the pointer across the card.") {
                         Segmented(prefs.foil, Foils.all.map { it.id }, Foils::label, { f -> neue.update { it.copy(foil = f) } })
                     }
+                    // The foil follows the phone's tilt (kai, v1.3.6).
+                    if (touch) SettingRow("Foil follows the tilt", "Turn the phone and the light on every card moves with it, as a real foil catches a lamp. Held still, it settles in the middle.", onToggle = { neue.update { it.copy(foilTilt = !it.foilTilt) } }) {
+                        com.kaiharimoto.neue.kit.MuSwitch(prefs.foilTilt, { on -> neue.update { it.copy(foilTilt = on) } })
+                    }
                     SettingRow("Card names", "The name printed across the top of a card, stamped in the same foil as its border. Holographic foil only.") {
                         Segmented(prefs.foilNames, NameStyles.all, NameStyles::label, { n -> neue.update { it.copy(foilNames = n) } })
                     }

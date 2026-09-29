@@ -699,7 +699,11 @@ private fun NeueWindowContent(h: NeueHolders) {
             neue.posture = com.kaiharimoto.mastertool.core.layout.Posture.of(w, h2)
         },
     ) {
-    CompositionLocalProvider(LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalPhone provides neue.phone, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+    // The foil follows the phone's tilt (v1.3.6), while it is on and there is foil to light.
+    val tilt = com.kaiharimoto.neue.kit.rememberDeviceTilt(
+        on = neue.touchFirst && neue.prefs.foilTilt && neue.prefs.foil != com.kaiharimoto.neue.cards.Foils.OFF,
+    )
+    CompositionLocalProvider(com.kaiharimoto.neue.kit.LocalTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalPhone provides neue.phone, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
         neue.actingBy(finger = neue.touchFirst) { neue.felt(com.kaiharimoto.mastertool.core.haptics.DeskEvent.ART_STEPPED) }
@@ -1157,6 +1161,8 @@ private fun Shell(h: NeueHolders) {
         }
         com.kaiharimoto.neue.builder.SearchStudio(state, neue)
         CardViewer(state, neue)
+        // Over the viewer it was opened from (v1.3.6).
+        com.kaiharimoto.neue.builder.Showcase(state, neue)
         MenuLayer(neue.menu) { neue.menu = null }
         OverlayLayer(h.overlays)
 

@@ -199,6 +199,10 @@ fun neueMain(args: Array<String>) {
             if (map["updatedialog"] == "true") h.updates.offer(h.updates.sample())
             // --phonemenu: the phone's overflow menu, open.
             if (map["phonemenu"] == "true") h.neue.menu = com.kaiharimoto.neue.kit.MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.phoneMenu(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f)))
+            // --showcase=N (and --showart): main deck card N full screen, the whole card or its art.
+            map["showcase"]?.toIntOrNull()?.let { i ->
+                h.builder.deck[DeckSection.MAIN].getOrNull(i)?.let(h.builder.index::byId)?.let { h.neue.showcase = it }
+            }
             // --view=N: main deck card N opened large.
             map["view"]?.toIntOrNull()?.let { i ->
                 val id = h.builder.deck[DeckSection.MAIN].getOrNull(i)

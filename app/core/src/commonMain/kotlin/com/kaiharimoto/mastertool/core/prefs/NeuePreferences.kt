@@ -189,6 +189,12 @@ data class NeuePreferences(
      * (`docs/classic/DEVICES.md` §6).
      */
     val phoneDockStop: String = DEFAULT_DOCK_STOP,
+    /**
+     * The foil follows the phone's tilt (kai, v1.3.6): the light on every card moves as
+     * the phone is turned, read off gravity (`TiltFilter`). On unless turned off; only
+     * where there is a sensor. A field with a default, no migration.
+     */
+    val foilTilt: Boolean = true,
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

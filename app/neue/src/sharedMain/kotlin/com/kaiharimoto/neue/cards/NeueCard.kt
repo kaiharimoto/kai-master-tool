@@ -226,6 +226,9 @@ private fun NeueCardFace(
         }
     }
     val density = androidx.compose.ui.platform.LocalDensity.current
+    // The phone's tilt (v1.3.6): the light on a card no finger is over follows the hand.
+    // Read in the draw below, so a turn redraws the foil and recomposes nothing.
+    val tilt = com.kaiharimoto.neue.kit.LocalTilt.current
 
     Box(
         modifier
@@ -287,7 +290,12 @@ private fun NeueCardFace(
                         // The pointer's own light on this card, plus the lean it shares with its
                         // neighbours — so a card beside the pointer catches light as it turns.
                         val lean = motion?.invoke()?.light(DeskLean.MAX_DEGREES)
-                        val own = if (foil == Foils.HOLO) light else feel
+                        val tipped = if (feel == null) tilt?.value else null
+                        val own = when {
+                            tipped != null -> Offset(tipped.x, tipped.y)
+                            foil == Foils.HOLO -> light
+                            else -> feel
+                        }
                         val lit = when {
                             lean == null -> own
                             own == null -> Offset(lean.first, lean.second)

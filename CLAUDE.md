@@ -327,9 +327,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `NeuePreferences.orientation` (Portrait/Landscape/Auto, `MainActivity.applyOrientation`,
   manifest `fullUser`); `PhoneBar` with its ⋯ overflow (`phoneMenu`) and the Update
   chip that never overflows; `TabBar` along the bottom; `TallBuilder` — deck on top
-  (`DeckLabels.stack`, `DeckFitter.phoneColumns`), pool in a `PoolDock` with Cards and
+  (10×4 upright; `DeckLabels.stack`/`DeckFitter.phoneColumns` lying down), pool in a `PoolDock` with Cards and
   Groups tabs; a tap opens the viewer (`viewSoon`). **`MuDialog` fits any window** and
-  keeps its footer on screen — the phone could not reach Install before. New chrome
+  keeps its footer on screen — the phone could not reach Install before. Upright the
+  deck is the decklist's 10×4 at full width (1.3.6, `naturalDeckHeight`, the dock gets
+  the rest); the foil follows the phone's tilt (`TiltFilter`, `LocalTilt`, read in the
+  draw only); a card can be shown full screen turning with the hand (`Showcase`). New chrome
   must work at 360 dp wide: `tools/shoot.sh --form=phone --width=1080 --height=2400 --density=2.625`.
 - **The emulator walk** (`NeueSmokeTest`) waits by the clock and polls for state,
   never `waitForIdleSync` or `ActivityScenario.onActivity`: a caret blinks for

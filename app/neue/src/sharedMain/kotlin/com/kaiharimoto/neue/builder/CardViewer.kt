@@ -88,6 +88,8 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                 Column(Modifier.fillMaxWidth().verticalScroll(scroll).padding(pad), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Box(Modifier.weight(1f).padding(end = 12.dp)) { CardHeading(card) }
+                        // Full screen, turning with the phone (v1.3.6).
+                        IconButton(Icons.Maximize, { neue.showcase = card }, size = 40.dp, label = "Full screen")
                         IconButton(Icons.X, close, size = 40.dp, label = "Close")
                     }
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -137,6 +139,9 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                 Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Box(Modifier.weight(1f).padding(end = 16.dp)) { CardHeading(card, large = true) }
+                        com.kaiharimoto.neue.kit.Tip("Full screen: the card as large as it goes, turning with the pointer or the tablet") {
+                            IconButton(Icons.Maximize, { neue.showcase = card }, size = 32.dp, label = "Full screen")
+                        }
                         IconButton(Icons.X, close, size = 32.dp, label = "Close")
                     }
                     SelectionContainer {

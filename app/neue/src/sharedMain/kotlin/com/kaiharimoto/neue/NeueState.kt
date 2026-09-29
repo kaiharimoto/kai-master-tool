@@ -107,6 +107,12 @@ class NeueState(
     /** The card opened large, if one is. */
     var viewing by mutableStateOf<Viewing?>(null)
 
+    /**
+     * A card shown full screen, turning with the phone (kai, v1.3.6): over everything,
+     * the viewer it was opened from waiting under it.
+     */
+    var showcase by mutableStateOf<Card?>(null)
+
     /** A deck the user asked to delete, waiting on the confirmation dialog. */
     var confirmDelete by mutableStateOf<Pair<String, String>?>(null)
 
@@ -188,7 +194,7 @@ class NeueState(
     var studio by mutableStateOf<Studio?>(null)
 
     val overlayOpen: Boolean
-        get() = paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || studio != null
+        get() = showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || studio != null
 
     /**
      * A touch screen first (Neue on a tablet): no hover to bring the rail out or
@@ -347,10 +353,11 @@ class NeueState(
 
     /** Whether [dismissTop] has something to close. */
     val hasTop: Boolean
-        get() = menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || helpOpen || drawer != null || studio != null
+        get() = showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || helpOpen || drawer != null || studio != null
 
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {
+        showcase != null -> { showcase = null; true }
         menu != null -> { menu = null; true }
         viewing != null -> { viewing = null; true }
         paletteOpen -> { paletteOpen = false; true }

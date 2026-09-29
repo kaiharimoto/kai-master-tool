@@ -365,7 +365,9 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         // A phone (v1.3.5): every section the same few cards across, each a finger wide,
         // and the deck fitted to the width and scrolled rather than shrunk to the height.
         val sidePad = if (neue.phone) 8.dp else SIDE_PAD
-        val phoneCols = if (neue.phone) DeckFitter.phoneColumns((maxWidth - sidePad * 2).value) else null
+        // Upright, a phone's deck is the decklist's own 10×4 (kai, v1.3.6): the desk's rows, fitted
+        // to the width; the dock takes what the deck does not need. Lying down, it scrolls.
+        val phoneCols = if (neue.phone && !neue.posture.isTall) DeckFitter.phoneColumns((maxWidth - sidePad * 2).value) else null
         SideEffect { neue.phoneColumns = phoneCols }
         fun cols(section: DeckSection) = phoneCols ?: columnsOf(section)
         // The deck in pieces by the lens (GroupPieces): what width and height the gaps
@@ -498,6 +500,47 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                 )
             }
         }
+    }
+}
+
+/**
+ * How tall a phone's upright deck is drawn at [width] (v1.3.6): the decklist's 10×4 main
+ * deck and its fifteen-wide extra and side decks at the full width, their names in rows
+ * over them, the pieces' gaps while the groups are out, and the lens row — the same
+ * sums [DeckBody] fits to, so the deck given this height fills its width exactly.
+ */
+@Composable
+internal fun naturalDeckHeight(state: DeckBuilderState, neue: NeueState, width: Dp): Dp {
+    val density = LocalDensity.current
+    val nameTab = nameTab()
+    val lensOn = state.lens != Lens.DECK || state.groupDraft != null
+    val sections = buildList {
+        add(DeckSection.MAIN)
+        if (neue.prefs.extraVisible) add(DeckSection.EXTRA)
+        if (neue.prefs.sideVisible) add(DeckSection.SIDE)
+    }
+    return with(density) {
+        val gapPx = PIECE_GAP.toPx() * neue.prefs.groupGap
+        val placed = DeckLabels.stack(
+            availableWidth = (width - SIDE_PAD * 2).toPx(),
+            availableHeight = Float.MAX_VALUE,
+            aspectRatio = CARD_RATIO,
+            rowHeight = LABEL_ROW.toPx(),
+            requests = sections.map { section ->
+                val pieces = if (lensOn) GroupPieces.of(state.keying(section).keyOfCell, columnsOf(section)) else null
+                SectionFitRequest(
+                    count = state.deck[section].size,
+                    columns = columnsOf(section),
+                    baselineCount = if (section == DeckSection.MAIN) section.minSize else section.maxSize,
+                    spacing = 0f,
+                    chromeHeight = (GRID_PAD * 2 + RULE).toPx(),
+                    extraWidth = (pieces?.spanX ?: 0) * gapPx,
+                    extraHeight = (pieces?.spanY ?: 0) * gapPx + (if ((pieces?.pieces ?: 0) > 1) nameTab.toPx() else 0f),
+                )
+            },
+            labelled = sections.map { it != DeckSection.MAIN },
+        )
+        placed.fit.totalHeight.toDp() + LENS_ROW + 2.dp
     }
 }
 
