@@ -1,9 +1,11 @@
 package com.kaiharimoto.mastertool.core.remote
 
+import com.kaiharimoto.mastertool.core.data.PoolVersion
 import com.kaiharimoto.mastertool.core.model.Card
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.onDownload
 import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
@@ -22,13 +24,33 @@ class YgoProDeckApi(
     private val baseUrl: String = DEFAULT_BASE_URL,
 ) {
 
-    /** Fetches every card. Expect this to be tens of megabytes. */
-    suspend fun fetchAllCards(): Result<List<Card>> = runCatching {
-        val response: HttpResponse = client.get("$baseUrl/cardinfo.php")
+    /**
+     * Fetches every card. Expect this to be tens of megabytes, sent with no
+     * length: [onBytes] hears how many have arrived as they do, and [onRead]
+     * when the last has and the reading begins.
+     */
+    suspend fun fetchAllCards(
+        onBytes: (suspend (Long) -> Unit)? = null,
+        onRead: (() -> Unit)? = null,
+    ): Result<List<Card>> = runCatching {
+        val response: HttpResponse = client.get("$baseUrl/cardinfo.php") {
+            if (onBytes != null) onDownload { received, _ -> onBytes(received) }
+        }
         if (!response.status.isSuccess()) {
             error("Card database request failed with ${response.status}")
         }
+        onRead?.invoke()
         response.body<CardInfoResponse>().data.map { it.toDomain() }
+    }
+
+    /** Which version the database is at, and when it last changed: a few dozen bytes, for asking "is mine current?". */
+    suspend fun checkVersion(): Result<PoolVersion> = runCatching {
+        val response: HttpResponse = client.get("$baseUrl/checkDBVer.php")
+        if (!response.status.isSuccess()) {
+            error("Version request failed with ${response.status}")
+        }
+        val row = response.body<List<DbVersionDto>>().firstOrNull() ?: error("The version request came back empty")
+        PoolVersion(row.databaseVersion.ifBlank { error("The version request named no version") }, row.lastUpdate)
     }
 
     /** Every set ever printed, with its TCG release date where it has one. A couple of hundred kilobytes. */

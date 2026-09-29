@@ -93,7 +93,15 @@ fun neueMain(args: Array<String>) {
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
             }
+            // --grow=0.4: the deck drawn that small first and then full size — the cards grow
+            // after their pictures were decoded, as they do when the window is maximised on
+            // opening. Before DecodeSize they kept the small decode and looked blurry.
+            map["grow"]?.toFloatOrNull()?.let { z -> h.neue.update { it.copy(deckZoom = z) } }
             clock.run((map["settle"] ?: "150").toInt())
+            if (map["grow"] != null) {
+                h.neue.update { it.copy(deckZoom = 1f) }
+                clock.run(60)
+            }
 
             // --save: the deck into the library, so `01 Decks` has a row; --covers=0,1,2 puts
             // those main-deck cards on its cover; --default marks it the deck that opens first.
@@ -107,6 +115,30 @@ fun neueMain(args: Array<String>) {
                 }
                 if (map["default"] == "true" && id != null) h.neue.update { it.copy(defaultDeckId = id) }
                 println("[neue-studio] saved as $id; covers ${h.neue.prefs.covers[id]}; default ${h.neue.prefs.defaultDeckId}")
+            }
+            // --check: Settings → Offline → Check for updates, asked for real, and its answer.
+            if (map["check"] == "true") {
+                h.builder.checkCardPool()
+                var waited = 0
+                do {
+                    clock.run(10)
+                    waited += 10
+                } while ((h.builder.checkingPool || h.builder.poolCheck == null) && waited < 3000)
+                println("[neue-studio] check: ${h.builder.poolCheck}")
+            }
+            // --update=downloading|saving: Update now, pressed for real, and the picture taken
+            // while it is at that step — the bars in the title bar and in Settings.
+            map["update"]?.let { step ->
+                h.builder.refreshCardPool(force = true)
+                var waited = 0
+                while (waited < 6000) {
+                    clock.run(1)
+                    waited++
+                    val at = h.builder.poolProgress
+                    if (step == "saving" && at is com.kaiharimoto.mastertool.core.data.PoolProgress.Saving && at.done > 0) break
+                    if (step != "saving" && at is com.kaiharimoto.mastertool.core.data.PoolProgress.Downloading && at.bytes > 4_000_000) break
+                }
+                println("[neue-studio] update: ${h.builder.poolProgress} after $waited frames")
             }
             if (map["side"] == "true") h.neue.update { it.copy(poolToSide = true) }
             if (map["extra"] == "false") h.neue.update { it.copy(extraVisible = false) }

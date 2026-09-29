@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.pages
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.offline.ArtCount
+import com.kaiharimoto.mastertool.core.offline.Offline
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
@@ -32,6 +35,7 @@ import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuSwitch
+import com.kaiharimoto.neue.kit.Progress
 import com.kaiharimoto.neue.kit.RowText
 import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.SectionTitle
@@ -102,33 +106,60 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Search card text", "Match the words printed on a card as well as its name. name: and text: in a search choose one.") {
                         MuSwitch(state.searchEffects, host.onSearchEffects)
                     }
-                    SettingRow("Card pool", "${"%,d".format(state.index.size)} cards${state.syncMessage?.let { " · $it" } ?: ""}") {
+                }
+                // Offline (kai, for a flight): whether the pool is current, bringing it up to
+                // date, every card's picture on this computer, and when all of it is.
+                Column {
+                    SectionTitle(3, "Offline")
+                    val check = state.poolCheck
+                    val clock = check?.let { checkedClock(it.checkedAt) }
+                    val updating = state.poolProgress ?: if (state.isSyncing) com.kaiharimoto.mastertool.core.data.PoolProgress.Asking else null
+                    SettingRow("Card pool", Offline.poolLine(check, state.index.size, clock, updating)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            if (state.isSyncing) Breathe()
-                            MuButton(
-                                if (state.isSyncing) "Refreshing" else "Refresh",
-                                { state.refreshCardPool(force = true) },
-                                variant = BtnVariant.SUBTLE,
-                                size = BtnSize.SM,
-                                icon = Icons.Refresh,
-                                enabled = !state.isSyncing,
-                            )
+                            if (updating != null) {
+                                Bar(updating.fraction, "${(updating.fraction * 100).toInt()}%")
+                            } else {
+                                if (state.checkingPool) Breathe()
+                                MuButton(
+                                    if (state.checkingPool) "Checking" else "Check for updates",
+                                    state::checkCardPool,
+                                    variant = BtnVariant.SUBTLE,
+                                    size = BtnSize.SM,
+                                    enabled = !state.checkingPool,
+                                    reason = "Asking YGOPRODeck",
+                                )
+                                MuButton(
+                                    "Update now",
+                                    { state.refreshCardPool(force = true) },
+                                    variant = if (check is com.kaiharimoto.mastertool.core.data.PoolCheck.Behind) BtnVariant.SECONDARY else BtnVariant.SUBTLE,
+                                    size = BtnSize.SM,
+                                    icon = Icons.Refresh,
+                                )
+                            }
                         }
                     }
-                }
-                host.art?.let { art ->
-                    Column {
-                        SectionTitle(3, "Card art")
+                    val art = host.art
+                    if (art != null) {
+                        val count = art.count
                         SettingRow(
                             "High-resolution art",
-                            "Downloads every card's full-size picture while you work, about 2 GB in all, and draws from it once it is here: " +
-                                "the deck and the card you are reading first. ${art.describe()}${art.problem?.let { " · $it" } ?: ""}",
+                            "${art.describe()}. Every card's full-size picture, about 2 GB, downloaded while you work, the deck and the card you are reading first.",
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 MuSwitch(prefs.hdArt, { on -> neue.update { it.copy(hdArt = on) } })
-                                if (art.running) {
-                                    Breathe()
-                                    Mono(art.percent(), color = Mu.colors.ink)
+                                if (count.total > 0 && !count.complete) {
+                                    Bar(count.fraction, "${count.percent}%", running = art.running)
+                                }
+                                if (!count.complete && !(prefs.hdArt && art.running && art.problem == null)) {
+                                    MuButton(
+                                        "Download all",
+                                        {
+                                            if (!prefs.hdArt) neue.update { it.copy(hdArt = true) }
+                                            art.downloadAll()
+                                        },
+                                        variant = BtnVariant.SUBTLE,
+                                        size = BtnSize.SM,
+                                    )
                                 }
                                 // A folder is a desktop's to open; Android has nothing to hand one to.
                                 if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
@@ -137,9 +168,26 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                             }
                         }
                     }
+                    val ready = Offline.readiness(check, state.index.size, art?.count ?: ArtCount.NONE, prefs.hdArt && art != null)
+                    SettingRow(
+                        "Ready for offline",
+                        if (ready.ready) "The card pool is current and every card's picture is on this computer: nothing here needs the network." else ready.words + ".",
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (ready.ready) {
+                                com.kaiharimoto.neue.theme.Inverted {
+                                    Box(Modifier.background(Mu.colors.paper).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                        Mono("Ready", color = Mu.colors.ink)
+                                    }
+                                }
+                            } else {
+                                Mono("Not yet", color = Mu.colors.ink45)
+                            }
+                        }
+                    }
                 }
                 Column {
-                    SectionTitle(if (host.art != null) 4 else 3, "Updates and feedback")
+                    SectionTitle(4, "Updates and feedback")
                     SettingRow("Version", host.updateStatus) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Mono(host.version, color = Mu.colors.ink)
@@ -157,7 +205,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(if (host.art != null) 5 else 4, "Licences")
+                    SectionTitle(5, "Licences")
                     Help("Inter and JetBrains Mono, SIL Open Font License 1.1. Card images and data from YGOPRODeck. Neue Master Tool is not affiliated with Konami.")
                 }
             }
@@ -183,6 +231,21 @@ private fun SettingRow(label: String, help: String, control: @Composable () -> U
         Box(Modifier.weight(1f)) { control() }
     }
 }
+
+/** A long job's bar (§6): the 3px track, its figure in mono beside it, a square breathing while it moves. */
+@Composable
+private fun Bar(fraction: Float, figure: String, running: Boolean = true) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Breathe(running = running)
+        Progress(fraction, Modifier.width(160.dp))
+        Mono(figure, color = Mu.colors.ink)
+    }
+}
+
+/** When a check was made, as this device's clock reads it: `12:04`. */
+private fun checkedClock(epochMs: Long): String =
+    java.time.Instant.ofEpochMilli(epochMs).atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
 
 /** A chord as this machine writes it, for the settings' own sentences. */
 private fun chord(action: com.kaiharimoto.mastertool.core.input.DeskAction): String =

@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.offline.ArtCount
+import com.kaiharimoto.mastertool.core.offline.Offline
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.platform.httpDownload
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +50,10 @@ val LocalArt = staticCompositionLocalOf<ArtLibrary?> { null }
  *   quitting halfway loses nothing but the file in flight.
  * - **Nothing idles.** The workers wait on a signal when the queue is empty,
  *   and the whole thing stops when the setting is turned off.
+ * - **It says how far it has got** ([count]): what is here, what YGOPRODeck
+ *   has no original for (settled, not pending — or it would sit at 99% for
+ *   ever), and how fast pictures have been arriving, for the title bar's bar
+ *   and Settings' "Ready for offline".
  */
 class ArtLibrary(
     val dir: File,
@@ -63,6 +69,14 @@ class ArtLibrary(
     var total by mutableStateOf(0)
         private set
     var bytes by mutableStateOf(0L)
+        private set
+
+    /** Of the pool's cards, how many YGOPRODeck has no original for. */
+    var unavailable by mutableStateOf(0)
+        private set
+
+    /** Originals arriving a second over the last half minute; 0 when none are. */
+    var perSecond by mutableStateOf(0.0)
         private set
 
     /** The sweep has work left and is doing it. */
@@ -90,16 +104,23 @@ class ArtLibrary(
     @Volatile private var scanned = false
     @Volatile private var dirty = false
     private val onDisk = java.util.concurrent.atomic.AtomicLong(0L)
+    /** When each of the last half minute's originals arrived, for [perSecond]. */
+    private val arrivals = java.util.concurrent.ConcurrentLinkedDeque<Long>()
+    @Volatile private var sweepStarted = 0L
 
 
     /** The original of [id], if it is on disk. */
     fun fileFor(id: Int): File? = if (id in present) File(dir, "$id.jpg") else null
 
-    /** One line for the title bar while the sweep is running, else null. */
-    val progressLine: String?
-        get() = if (enabled && running && total > 0 && have < total) "HD art ${percent()}" else null
+    /** How far the library has got, for the progress bars and "Ready for offline". */
+    val count: ArtCount
+        get() = ArtCount(have, unavailable, total, bytes, perSecond)
 
-    fun percent(): String = if (total == 0) "0%" else "${(have * 100L / total).coerceIn(0, 100)}%"
+    /** One line for the rail while the sweep is running, else null. */
+    val progressLine: String?
+        get() = if (enabled && running && !count.complete) "HD art ${percent()}" else null
+
+    fun percent(): String = "${count.percent}%"
 
     fun start() {
         scope.launch {
@@ -128,6 +149,7 @@ class ArtLibrary(
                     version++
                     recount()
                 }
+                measureRate()
                 val trouble = fault
                 if (trouble != problem) problem = trouble
             }
@@ -172,6 +194,24 @@ class ArtLibrary(
     fun want(card: Card) = want(listOf(card))
 
     /**
+     * Every card's original, now (Settings → Download all, before a flight): the
+     * sweep does this by itself while the setting is on, so this only makes
+     * sure it is running — and, when it is waiting out the network, stops
+     * waiting and tries again at once. The sweep's pace is unchanged.
+     */
+    fun downloadAll() {
+        if (!enabled) return
+        if (fault != null) {
+            stop()
+            fault = null
+            problem = null
+        }
+        synchronized(queueLock) { cursor = 0 }
+        ensureWorkers()
+        wake.trySend(Unit)
+    }
+
+    /**
      * The original of [card], now: from disk, or downloaded before returning.
      * For the screenshot, which is worth waiting a second for. Null when it
      * cannot be had (offline, or a card with no picture).
@@ -188,9 +228,20 @@ class ArtLibrary(
     }
 
     /** The folder, with its size, for Settings. */
-    fun describe(): String = "%,d of %,d · %s".format(have, total, megabytes(bytes))
+    fun describe(): String = Offline.artLine(count, enabled, problem)
 
-    private fun megabytes(n: Long): String = if (n >= 1L shl 30) "%.1f GB".format(n / (1L shl 30).toDouble()) else "${n / (1L shl 20)} MB"
+    private fun measureRate() {
+        val now = System.currentTimeMillis()
+        while (true) {
+            val first = arrivals.peekFirst() ?: break
+            if (first >= now - RATE_WINDOW_MS) break
+            arrivals.pollFirst()
+        }
+        val span = (now - sweepStarted).coerceIn(5_000L, RATE_WINDOW_MS)
+        // To a tenth, so the pages reading it redraw when the figure would change, not every tick.
+        val rate = if (!running) 0.0 else kotlin.math.round(arrivals.size * 10_000.0 / span) / 10.0
+        if (rate != perSecond) perSecond = rate
+    }
 
     @Volatile private var fault: String? = null
 
@@ -198,13 +249,16 @@ class ArtLibrary(
         val cards = synchronized(queueLock) { catalogue }
         total = cards.size
         have = if (cards.isEmpty()) 0 else cards.count { it.id.value in present }
+        unavailable = if (cards.isEmpty()) 0 else cards.count { it.id.value in missing }
         bytes = onDisk.get()
-        running = enabled && workers.any { it.isActive } && have < total
+        running = enabled && workers.any { it.isActive } && have + unavailable < total
     }
 
     private fun ensureWorkers() {
         if (!enabled || workers.any { it.isActive }) return
         fault = null
+        sweepStarted = System.currentTimeMillis()
+        arrivals.clear()
         workers = List(WORKERS) {
             scope.launch(Dispatchers.IO) {
                 while (!scanned) delay(100)
@@ -264,6 +318,7 @@ class ArtLibrary(
             if (status == 404) {
                 part.delete()
                 missing += id
+                dirty = true
                 return null
             }
             if (status !in 200..299) {
@@ -275,12 +330,14 @@ class ArtLibrary(
             if (part.length() < 1024 || head[0] != 0xFF.toByte() || head[1] != 0xD8.toByte()) {
                 part.delete()
                 missing += id
+                dirty = true
                 return null
             }
             val file = File(dir, "$id.jpg")
             Files.move(part.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
             present += id
             onDisk.addAndGet(file.length())
+            arrivals.addLast(System.currentTimeMillis())
             dirty = true
             return file
         } finally {
@@ -293,5 +350,8 @@ class ArtLibrary(
 
         /** Between request starts, across all workers: eleven or so a second, under YGOPRODeck's twenty. */
         private const val MIN_INTERVAL_MS = 90L
+
+        /** How far back [perSecond] looks. */
+        private const val RATE_WINDOW_MS = 30_000L
     }
 }

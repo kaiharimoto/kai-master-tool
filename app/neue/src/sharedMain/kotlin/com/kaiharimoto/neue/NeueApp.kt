@@ -582,11 +582,22 @@ private fun Shell(h: NeueHolders) {
         else -> null
     }
     val titleBar: @Composable () -> Unit = {
+        // What is being fetched, and how far it has got (kai: "a progress bar indicating if the
+        // program is downloading images or updating the card pool"). Read here, in the bar's
+        // own scope, so the art's arrivals redraw the bar and not the window.
+        val work = com.kaiharimoto.mastertool.core.offline.Offline.readout(
+            pool = state.poolProgress ?: if (state.isSyncing) com.kaiharimoto.mastertool.core.data.PoolProgress.Asking else null,
+            art = h.art.count,
+            artRunning = h.art.running && neue.prefs.hdArt,
+            problem = h.art.problem,
+        )
         TitleBar(
             neue = neue,
             update = h.updates.available?.versionName,
             onUpdate = { h.updates.dialogOpen = true },
             onImmersive = { h.run(DeskAction.IMMERSIVE) },
+            work = work,
+            onWork = { neue.go(Page.SETTINGS) },
         ) { narrow ->
             if (neue.page == Page.BUILDER) {
                 BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow)

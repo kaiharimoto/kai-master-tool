@@ -291,8 +291,9 @@ cursor at each point and logs what it resolved to.
 ## 3. The window
 
 **One 48 px bar** — the mark, the page you are on, then whatever the page puts
-there (the builder puts the deck's name, its legality, its tools and Save), the
-update pill and immersive mode — the 232 px index rail —
+there (the builder puts the deck's name, its legality, its tools and Save), what
+is being fetched and how far (§4h), the update pill and immersive mode — the 232
+px index rail —
 `01 Decks · 02 Builder · 03 Odds · 04 Stats`; below the rule, what is being
 fetched, `Search Ctrl K` and Settings — and the page. Until 1.0.10 the app and
 the builder each had a bar; kai merged them, moved search to the rail beside
@@ -749,7 +750,24 @@ second (YGOPRODeck allows twenty and asks that images be kept, not re-fetched);
 a file is written beside its name and moved into place, so quitting halfway
 costs one picture. A card draws the original the moment it is on disk, over the
 small render until it has decoded, so arriving never flashes. Settings has the
-switch, the count, the size and the folder.
+switch, the count, the size and the folder (§4h).
+
+**Sharp from the start.** kai reported that on opening the app the deck's
+thumbnails were blurry, and that going to Settings and back fixed them. Coil
+decodes a picture to the size of its box *as measured when the request starts*
+(`ConstraintsSizeResolver` resolves once) and never looks again. A card's box
+at first composition is rarely its last: the window opens at its default size
+and only then takes the saved bounds and Maximized, the interface scale arrives
+with the settings, the deck re-fits as the panes and the wheel settle. So each
+card kept the decode made for its first, smaller box, stretched to its final
+one — blurry until Settings and back composed it afresh, at the size it had by
+then. `NeueCard` now asks for its decode size itself, from `DecodeSize` (core,
+tested): it follows the card's measured width **up only**, in 64 px steps, and
+never past the source (268 px for the small render, 813 for the original). A
+card that grows asks again; the sharper decode's placeholder is the softer one
+(`placeholderMemoryCacheKey`), and an original already showing stays shown
+while its sharper decode loads, so the change is a crossfade from soft to sharp,
+never a flash of the hatch.
 
 ### 4c. The deck it opens with, and the deck's covers
 
@@ -930,6 +948,58 @@ filter decks by those with the card in it"):
 - **The search** matches a deck's name, the name of any card in it, or a tag
   (`DeckSearch.match`). A row found by its cards says which: "With Ash Blossom &
   Joyous Spring".
+
+### 4h. Ready for offline
+
+kai asked for two things together: to see when the app is downloading pictures
+or updating the card pool, and to be able to check, before a flight, that
+everything the builder needs is on the computer — and to bring it up to date
+there and then, with a bar, "so they know when they're ready to use offline".
+
+**What is being fetched is in the bar.** While the card pool updates or the
+art library sweeps, the title bar carries `CARD POOL 42%` or `CARD ART 42%` over
+a 3 px track (§6's progress), before the update pill; its tip has the whole
+sentence ("6,210 of 14,590, about 12 min left", or why it is waiting), and a
+click opens Settings. The pool's update wins the place while it runs, since it
+changes what you search. Narrow, the words give way and the figure and bar stay.
+The rail's own line for the art stood inside the pool's block, so it showed only
+while the pool synced; it stands on its own now. `Offline.readout` (core) decides
+what the bar says.
+
+**Settings → 03 Offline** has three rows, and the card pool moved there from
+Building:
+
+- **Card pool.** *Check for updates* asks YGOPRODeck's `checkDBVer.php` — a
+  few dozen bytes — which version its database is at, against the version this
+  pool was fetched at (`CardRepository.check`, `PoolFreshness`): "Up to date ·
+  14,590 cards · checked 12:04", "An update is available · 147.21, this pool is
+  147.20", or "Couldn't reach YGOPRODeck · 14,590 cards on this device". *Update
+  now* fetches the whole pool with a bar that follows it through its four steps
+  (`PoolProgress`): asking the version, downloading (about 21 MB, sent with no
+  length, so measured against the last download's size), reading, and writing
+  it into the database a few hundred cards at a time.
+- **High-resolution art**: the switch, a bar, the count, the size and how long
+  is left at the pace pictures have been arriving, and *Download all*, which
+  turns the library on if it was off and, if it was waiting out the network,
+  tries again at once. The sweep's pace is unchanged — four at a time, under a
+  dozen a second. Cards YGOPRODeck has no original for are *settled*, not
+  pending (`ArtCount.unavailable`), or the bar would sit at 99% for ever.
+- **Ready for offline**: `Ready` once the pool is known current (checked or
+  updated this session) and every card's original is here or known not to
+  exist; otherwise what is left, in order — "update the card pool, then wait for
+  7,590 more pictures". `Offline.readiness` (core, tested).
+
+**The pool's version is written down** beside the pool: one JSON row under the
+preferences table's `card.pool` key (`PoolRecord`: the database version and the
+download's size) — a new row, not a new schema, so no migration. A pool fetched
+before there was a row has no version; it counts as current if it was fetched
+more than a day after YGOPRODeck's `last_update` (which carries no time zone,
+hence the day), and adopts the version when it does. The weekly refresh on
+start is unchanged.
+
+The studio drives both: `--check=true` asks for real and prints the answer;
+`--update=downloading|saving` presses Update now and takes the picture at that
+step (`--frames=2`, so it has not finished).
 
 ---
 
