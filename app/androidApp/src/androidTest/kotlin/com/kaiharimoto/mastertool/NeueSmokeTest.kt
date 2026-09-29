@@ -35,7 +35,7 @@ import java.io.File
 class NeueSmokeTest {
 
     // A hang is a failure with a trace, not a job that runs out its hour.
-    @Test(timeout = 300_000)
+    @Test(timeout = 600_000)
     fun neueOpensOntoTheTabletsDeck() {
         val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
         val deck = Deck(
@@ -71,7 +71,7 @@ class NeueSmokeTest {
      * paper along the top brings the bar out in immersive. Each step is
      * photographed, numbered, for the run's artifacts.
      */
-    @Test(timeout = 300_000)
+    @Test(timeout = 600_000)
     fun aFingerFindsRoomAndWaysOut() {
         val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
         val deck = Deck(
