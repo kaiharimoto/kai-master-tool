@@ -243,6 +243,9 @@ class NeueSmokeTest {
             val before = mainCount()
             val tapped = SystemClock.uptimeMillis()
             fingers(listOf(760f to 420f), settle = false, startAt = tapped)
+            // The second tap waits for its own time as well as carrying it: sent at once, it can
+            // reach the card before the card is listening for its next press, and be lost.
+            (tapped + 180 - SystemClock.uptimeMillis()).takeIf { it > 0 }?.let(Thread::sleep)
             fingers(listOf(772f to 424f), startAt = tapped + 180)
             assertEquals("a drifting double-tap did not remove a copy", before - 1, countBecomes(before - 1))
             // Clear of the double-tap's window, so the next fingers start a gesture of their own.
@@ -391,8 +394,13 @@ class NeueSmokeTest {
             val before = mainCount()
             val tapped = SystemClock.uptimeMillis()
             fingers(listOf(deckX to deckY), settle = false, startAt = tapped)
+            (tapped + 180 - SystemClock.uptimeMillis()).takeIf { it > 0 }?.let(Thread::sleep)
             fingers(listOf(deckX to deckY), startAt = tapped + 180)
-            assertEquals("a double-tap on a phone's deck did not remove a copy", before - 1, countBecomes(before - 1))
+            assertEquals(
+                "a double-tap on a phone's deck did not remove a copy: " + on { it.neue!!.neue.viewTrace.joinToString(" | ") },
+                before - 1,
+                countBecomes(before - 1),
+            )
             Thread.sleep(500)
             assertTrue(
                 "the double-tap opened the viewer before the undo: " + on { it.neue!!.neue.viewTrace.joinToString(" | ") },
