@@ -94,7 +94,11 @@ class NeueSmokeTest {
 
         // The walk waits by the clock, never for the app to fall idle: a focused field's caret
         // blinks forever, and on a slow emulator waitForIdleSync then never returns.
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        // Not `use`: closing a scenario waits for the app to fall idle, which it never does on
+        // the CI emulator, and a failure inside the walk became a ten-minute timeout. The
+        // walk finishes the activity itself, in `finally`, so its own failure is the one reported.
+        ActivityScenario.launch(MainActivity::class.java).let { scenario ->
+          try {
             fun <T> on(read: (MainActivity) -> T): T = readActivity(read) ?: error("no resumed activity to read")
             // A slow emulator's frames run to 250 ms and more: what the app should come to,
             // given four seconds to come to it, rather than read once after a fixed sleep.
@@ -268,6 +272,9 @@ class NeueSmokeTest {
             shoot("09-zen.png")
 
             assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
+          } finally {
+            readActivity { it.finish() }
+          }
         }
     }
 }
