@@ -43,6 +43,7 @@ import com.kaiharimoto.neue.kit.onPointer
 import com.kaiharimoto.neue.kit.onContextMenu
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.deck.Lens
@@ -90,10 +91,18 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
     // Centred down the column (kai, 1.0.16): the column is taller than its groups, and
     // their top edge under the window's bar is where a reach for a row brought the bar
     // out instead. A list taller than the column still starts at the top and scrolls.
+    // Where the panel is, for the window's watcher: a press anywhere else folds the palettes.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            neue.groupsPanel = null
+            neue.groupPalettesOpen = false
+        }
+    }
     BoxWithConstraints(
         modifier
             .width(GROUPS_PANEL)
             .fillMaxHeight()
+            .onGloballyPositioned { neue.groupsPanel = it.boundsInWindow() }
             .drawBehind { drawLine(c.ink, Offset(0.5f, 0f), Offset(0.5f, size.height), 1.dp.toPx()) },
     ) {
     Column(
@@ -312,8 +321,13 @@ private fun GroupRow(
 @Composable
 private fun PalettePicker(neue: NeueState, modifier: Modifier = Modifier) {
     val c = Mu.colors
-    // Folded to the one in use (kai, 1.0.18): the others come out on a click.
-    var open by remember { mutableStateOf(false) }
+    // Folded to the one in use (kai, 1.0.18): the others come out on a click, and stay
+    // out while one is tried after another (1.0.24) — kai: "the user is most likely going
+    // to choose between the palettes to their liking". A press off the Groups panel, Esc,
+    // or the header again folds them (`NeueState.groupPalettesOpen`).
+    val open = neue.groupPalettesOpen
+    // A draft takes the picker's place: it comes back folded.
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { neue.groupPalettesOpen = false } }
     val current = GroupMarkers.byId(neue.prefs.groupPalette)
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         val headSource = remember { MutableInteractionSource() }
@@ -324,7 +338,7 @@ private fun PalettePicker(neue: NeueState, modifier: Modifier = Modifier) {
                 .border(1.dp, if (open || headHovered) c.ink else c.ink25)
                 .hoverable(headSource)
                 .cursorPointer(caption = if (open) "Fold" else "Palettes")
-                .clickable(interactionSource = headSource, indication = null) { open = !open }
+                .clickable(interactionSource = headSource, indication = null) { neue.groupPalettesOpen = !open }
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -346,7 +360,6 @@ private fun PalettePicker(neue: NeueState, modifier: Modifier = Modifier) {
                     .cursorPointer(caption = if (chosen) "In use" else "Use")
                     .clickable(interactionSource = source, indication = null) {
                         neue.update { it.copy(groupPalette = palette.id) }
-                        open = false
                     }
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,

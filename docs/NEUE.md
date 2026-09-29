@@ -424,7 +424,28 @@ paper round it; up, back to the size that fills the column. It is a re-fit, not 
 transform, so every rule of the layout — the pieces, the labels, the drop targets —
 holds at any size. With the groups on, **Shift and the wheel** open and close the
 gaps between them (`groupGap`, 0.4–3 standard gaps). The pool's cards keep the
-size the deck *would* be, not what the wheel made of it. **The lens row stands
+size the deck *would* be, not what the wheel made of it — the fit at the full
+size itself, so nothing in the pool stirs while the deck moves.
+
+**The wheel glides** (1.0.24, kai: "more sensitive and more fluid/smooth
+feeling"; `core/layout/DeckZoom.kt`). A notch took a flat 4 % off and the deck was
+re-fitted at once, so the cards jumped a step a notch, fifteen notches end to end,
+and a touchpad's stream of small deltas came through as stutters. Now **a notch
+is a ratio**, `e^(−0.12)` — about 11 %, eight notches end to end, the same-looking
+step at any size — and the delta is taken as it comes, so a touchpad's fraction
+of a notch is that fraction of the change; a flung wheel is capped at three
+notches an event, and the last notch up lands on the full size rather than a hair
+short of it. The share the wheel sets is where the deck is going: **the deck is
+re-fitted every frame at a share closing on it exponentially** (a 45 ms time
+constant, there to the pixel in about the family's 180 ms). That is not a spring
+— it never overshoots — and a notch mid-glide only moves the target, so a spun
+wheel is one motion. The stored preference is the target, written once the wheel
+rests; a pinch on the tablet and the size read on opening are not glided. A deck
+limited by its width sat at the top at full size and in the middle below it, which
+a glide would have shown as a drop of half the spare height in its first frame; it
+now moves to the middle over the first 3 % (`DeckZoom.centring`). Re-fitting a
+frame is the fitter's arithmetic twice and one recomposition of the deck, with the
+cards' art already loaded — the same work a pinch always did per event. **The lens row stands
 still** (1.0.18, kai: "have the ui elements like buttons stay in fixed
 positions"): it is laid out once at the top of the column, inset to the deck's
 edge at full size, and only the deck below it is re-fitted and centred — the
@@ -456,7 +477,13 @@ dropped its extra- and side-deck cards when it was saved again.
 choices"). Under the groups, seven palettes of six — Prism (the tablet's), Bauhaus,
 Pastel, Earth, Ocean, Neon, Vintage. Since 1.0.18 they are a dropdown: the
 closed header is the palette in use, its name and its colours, and a click opens
-the other six; choosing one closes it.
+the other six. **Choosing one leaves them open** (1.0.24, kai: "the user is most
+likely going to choose between the palettes to their liking, so it minimizing
+upon choosing a palette makes it harder"): every group is recoloured at once and
+the next can be tried straight away. They fold at a press anywhere off the Groups
+panel — the window's one pointer watcher, consuming nothing, against the panel's
+bounds (`NeueState.groupPalettesOpen`, `groupsPanel`), so the press still does
+what it was for — at `Esc`, at the header again, or when the panel goes.
 A group's colour is stored as an index, so a palette is only a reading of it:
 choosing one recolours every group at once and changes nothing in the deck file
 (`GroupMarkers.palettes`, the one file with colour in it; `groupPalette`).
@@ -602,6 +629,15 @@ for the next card by typing over it. `MuInput` counts presses on the way down
 without consuming them — the field's own click and double-click are untouched —
 and selects everything a frame after the third release, once the field has put
 its own caret down. Every field in the kit has it, not only the search.
+
+**The palette's list is the keys' or the hand's** (1.0.24, kai: "when I try to
+scroll down with the scroll wheel its interrupted by the auto scroll"). It scrolled
+to its highlighted row, and the pointer moves the highlight too: the wheel rolled a
+row under the still pointer, that row took the highlight, and the list scrolled
+back to it. Now only `↑` and `↓` bring the highlight into view, and once a wheel,
+a touchpad, a finger or the scrollbar has moved the list it follows nothing until
+the palette closes; opened again, it follows again (`FollowScroll`, in core). A new
+query starts its list at the top, where its highlighted first row is.
 
 The keyboard is `DeskShortcuts`, one table resolved in one place, rendered by
 the help dialog (`F1`) and reachable by name from the palette (`Ctrl K`).
@@ -853,6 +889,12 @@ row, and the inspector's is a 20 px button in its top-right corner, inside the
 24 px margin so it costs the picture nothing. A hidden pane leaves a 36 px strip
 where it stood with the one button that brings it back; the pool's strip starts
 past the rail's gutter, so reaching for it never brings the rail out instead.
+**The whole strip brings it back** (1.0.24, kai: "reopen them by clicking anywhere
+on the drawer rather than just the button. This should only be while it's
+hidden"): it is one target, shaded under the pointer and framed by the family
+cursor with `Show`, and a tap on it does the same on the tablet. The button stays
+in it. The gutter is padding outside the strip, so it still clicks nothing, and
+hiding is still the panes' own buttons.
 `Ctrl B` and `Ctrl J` still work. The two buttons on the window's bar are gone.
 
 **Filters, as the deck builders people use have them** (kai: "refer to …

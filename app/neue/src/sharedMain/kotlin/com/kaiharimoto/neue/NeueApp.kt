@@ -411,6 +411,7 @@ class NeueHolders(
             state.editingGoal != null -> state.cancelGoal()
             state.groupDraft != null -> state.cancelGroupDraft()
             state.textInputFocused || neue.searchFocused -> focus?.clearFocus()
+            neue.groupPalettesOpen -> neue.groupPalettesOpen = false
             state.isolatedKey != null -> state.isolatedKey?.let(state::toggleIsolation)
             neue.selection != null -> neue.selection = null
             neue.immersive -> run(DeskAction.IMMERSIVE)
@@ -641,6 +642,13 @@ private fun Shell(h: NeueHolders) {
                         // Once it is deep, nothing the pointer does wakes it — the pointer is for
                         // arranging the cards, which are the garden — and only a key ends it.
                         val deepZen = neue.zen == ZenPhase.DEEP
+                        // The groups' palettes stay out while they are tried, and fold at a press
+                        // off the Groups panel (1.0.24). Consuming nothing, so the press still does
+                        // what it was for. An overlay's press is the overlay's.
+                        if (event.type == PointerEventType.Press && neue.groupPalettesOpen && !neue.overlayOpen && at != null) {
+                            val panel = neue.groupsPanel
+                            if (panel == null || !panel.contains(at)) neue.groupPalettesOpen = false
+                        }
                         when (event.type) {
                             PointerEventType.Press -> if (!deepZen) h.wake()
                             // In deep zen the wheel opens and closes the gaps between the groups

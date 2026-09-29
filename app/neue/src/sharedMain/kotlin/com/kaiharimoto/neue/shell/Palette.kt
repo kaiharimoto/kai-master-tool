@@ -49,7 +49,11 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import com.kaiharimoto.mastertool.core.layout.FollowScroll
 import com.kaiharimoto.neue.kit.onPointer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -97,7 +101,21 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
     val rows = remember(query) { commands(query) }
     val list = rememberLazyListState()
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    LaunchedEffect(highlighted) { if (rows.isNotEmpty()) list.animateScrollToItem((highlighted - 3).coerceAtLeast(0)) }
+    // The list follows the keys' highlight only (kai, 1.0.24): the pointer's is under it
+    // already, and once a wheel, a touchpad, a finger or the scrollbar has moved the
+    // list, it is the hand's until the palette closes (`FollowScroll`).
+    val follow = remember { FollowScroll() }
+    var keyed by remember { mutableStateOf(0) }
+    LaunchedEffect(keyed) {
+        if (keyed > 0 && rows.isNotEmpty() && follow.follows(byKeys = true)) list.animateScrollToItem((highlighted - 3).coerceAtLeast(0))
+    }
+    // A new query is a new list: it starts at its top, where its first row is highlighted.
+    LaunchedEffect(query) { if (list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > 0) list.scrollToItem(0) }
+    fun step(by: Int) {
+        if (rows.isEmpty()) return
+        highlighted = (highlighted + by + rows.size) % rows.size
+        keyed++
+    }
 
     fun run(row: Command, shift: Boolean) {
         onDismiss()
@@ -144,8 +162,8 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                                 .onPreviewKeyEvent { e ->
                                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                                     when (e.key) {
-                                        Key.DirectionDown -> { if (rows.isNotEmpty()) highlighted = (highlighted + 1) % rows.size; true }
-                                        Key.DirectionUp -> { if (rows.isNotEmpty()) highlighted = (highlighted - 1 + rows.size) % rows.size; true }
+                                        Key.DirectionDown -> { step(1); true }
+                                        Key.DirectionUp -> { step(-1); true }
                                         Key.Enter, Key.NumPadEnter -> { rows.getOrNull(highlighted)?.let { run(it, e.isShiftPressed) }; true }
                                         Key.Escape -> { onDismiss(); true }
                                         else -> false
@@ -159,7 +177,32 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                 if (rows.isEmpty()) {
                     RowText("No matches.", Modifier.padding(horizontal = 16.dp, vertical = 24.dp), color = c.ink70)
                 } else {
-                    Box(Modifier.heightIn(max = 480.dp)) {
+                    Box(
+                        Modifier
+                            .heightIn(max = 480.dp)
+                            // Watched on the way down, consuming nothing: a wheel or a touchpad over
+                            // the list, or a press dragged across it (a finger, the scrollbar's thumb).
+                            .pointerInput(follow) {
+                                awaitPointerEventScope {
+                                    var pressedAt: Offset? = null
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        val change = event.changes.firstOrNull() ?: continue
+                                        when (event.type) {
+                                            PointerEventType.Scroll -> follow.scrolledByHand()
+                                            PointerEventType.Press -> pressedAt = change.position
+                                            PointerEventType.Release -> pressedAt = null
+                                            PointerEventType.Move -> {
+                                                val from = pressedAt
+                                                if (from != null && change.pressed && (change.position - from).getDistance() > viewConfiguration.touchSlop) {
+                                                    follow.scrolledByHand()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                    ) {
                         LazyColumn(state = list) {
                             itemsIndexed(rows) { i, row ->
                                 val on = i == highlighted
