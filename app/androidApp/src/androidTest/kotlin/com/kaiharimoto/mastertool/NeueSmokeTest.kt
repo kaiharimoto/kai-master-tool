@@ -127,11 +127,13 @@ class NeueSmokeTest {
                 }
                 // Any system dialog that came up anyway is put away first.
                 instrumentation.uiAutomation.executeShellCommand("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS").close()
+                answerSystemDialogs()
                 Thread.sleep(300)
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                 Thread.sleep(400)
             }
             fun tap(xDp: Float, yDp: Float) {
+                answerSystemDialogs()
                 val density = app.resources.displayMetrics.density
                 val x = xDp * density
                 val y = yDp * density
@@ -153,6 +155,8 @@ class NeueSmokeTest {
             // double-tap's second tap is stamped from the first's clock, so a busy emulator that
             // is slow to take the injection cannot stretch the gap past the double-tap window.
             fun fingers(points: List<Pair<Float, Float>>, holdMs: Long = 60, settle: Boolean = true, startAt: Long? = null) {
+                // Not between a double-tap's two taps: the first tap's clock is already running.
+                if (startAt == null) answerSystemDialogs()
                 val density = app.resources.displayMetrics.density
                 val t = startAt ?: SystemClock.uptimeMillis()
                 val props = points.indices.map { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
@@ -241,6 +245,7 @@ class NeueSmokeTest {
                 return mainCount()
             }
             val before = mainCount()
+            answerSystemDialogs()
             val tapped = SystemClock.uptimeMillis()
             fingers(listOf(760f to 420f), settle = false, startAt = tapped)
             // The second tap waits for its own time as well as carrying it: sent at once, it can
@@ -328,6 +333,7 @@ class NeueSmokeTest {
                     Thread.sleep(100)
                 }
                 instrumentation.uiAutomation.executeShellCommand("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS").close()
+                answerSystemDialogs()
                 Thread.sleep(300)
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                 Thread.sleep(400)
@@ -348,6 +354,8 @@ class NeueSmokeTest {
             // double-tap's second tap is stamped from the first's clock, so a busy emulator that
             // is slow to take the injection cannot stretch the gap past the double-tap window.
             fun fingers(points: List<Pair<Float, Float>>, holdMs: Long = 60, settle: Boolean = true, startAt: Long? = null) {
+                // Not between a double-tap's two taps: the first tap's clock is already running.
+                if (startAt == null) answerSystemDialogs()
                 val density = app.resources.displayMetrics.density
                 val t = startAt ?: SystemClock.uptimeMillis()
                 val props = points.indices.map { i -> MotionEvent.PointerProperties().apply { id = i; toolType = MotionEvent.TOOL_TYPE_FINGER } }
@@ -393,6 +401,7 @@ class NeueSmokeTest {
             val deckY = top + 48f + 40f + 6f + card / 0.686f * 1.5f
             val deckX = w / 2f - card / 2f
             val before = mainCount()
+            answerSystemDialogs()
             val tapped = SystemClock.uptimeMillis()
             fingers(listOf(deckX to deckY), settle = false, startAt = tapped)
             (tapped + 180 - SystemClock.uptimeMillis()).takeIf { it > 0 }?.let(Thread::sleep)
@@ -534,4 +543,25 @@ private fun seedPool(app: MasterToolApplication, ids: List<Int>) {
             )
         }
     }
+}
+
+/**
+ * The emulator's own launcher stalls on a slow CI machine, and Android puts up "Pixel
+ * Launcher isn't responding" over whatever is in front — it took the walk's taps and
+ * Backs while hide_error_dialogs was set. It is the emulator's, not Neue's: the walk
+ * answers it, Wait, before each gesture and each Back. True when there was one.
+ */
+private fun answerSystemDialogs(): Boolean {
+    val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+    var answered = false
+    repeat(3) {
+        val root = automation.rootInActiveWindow ?: return answered
+        if (root.packageName?.toString() == "com.kaiharimoto.mastertool") return answered
+        val wait = root.findAccessibilityNodeInfosByText("Wait").firstOrNull { it.isClickable || it.parent?.isClickable == true }
+            ?: return answered
+        (if (wait.isClickable) wait else wait.parent).performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+        answered = true
+        Thread.sleep(500)
+    }
+    return answered
 }
