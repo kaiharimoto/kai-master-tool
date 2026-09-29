@@ -97,6 +97,7 @@ fun neueMain(args: Array<String>) {
                 "decks" -> Page.DECKS
                 "odds" -> Page.ODDS
                 "stats" -> Page.STATS
+                "format" -> Page.FORMAT
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
             }
@@ -122,6 +123,19 @@ fun neueMain(args: Array<String>) {
                 }
                 if (map["default"] == "true" && id != null) h.neue.update { it.copy(defaultDeckId = id) }
                 println("[neue-studio] saved as $id; covers ${h.neue.prefs.covers[id]}; default ${h.neue.prefs.defaultDeckId}")
+            }
+            // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
+            // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
+            map["ydkw"]?.let { path ->
+                h.webs.open(java.io.File(path).readText()) { made -> println("[neue-studio] opened web ${made?.name}: ${made?.entries?.size} decks") }
+                clock.run(40)
+                map["web-deck"]?.toIntOrNull()?.let { n ->
+                    h.webs.selected?.deckIds?.getOrNull(n)?.let { id ->
+                        h.openDeck(id)
+                        h.neue.page = when (map["page"]) { "format" -> Page.FORMAT; else -> Page.BUILDER }
+                        clock.run(60)
+                    }
+                }
             }
             // --check: Settings → Offline → Check for updates, asked for real, and its answer.
             if (map["check"] == "true") {

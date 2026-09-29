@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.data
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.UiPreferences
+import com.kaiharimoto.mastertool.core.web.WebLibrary
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -66,6 +67,26 @@ class PreferencesRepository(
             database.preferenceQueries.upsert(
                 prefKey = NeuePreferences.KEY,
                 prefValue = json.encodeToString(NeuePreferences.serializer(), preferences.sanitised()),
+            )
+        }
+    }
+
+    /**
+     * Every web of decks (Format, 1.0.33), one document under its own key: a new
+     * row in the same table, never a schema change. Unreadable reads as none —
+     * the decks themselves are safe in the deck table, and show in the library.
+     */
+    suspend fun loadWebs(): WebLibrary = withContext(ioDispatcher) {
+        val stored = database.preferenceQueries.selectByKey(WebLibrary.KEY).executeAsOneOrNull()
+            ?: return@withContext WebLibrary.EMPTY
+        runCatching { json.decodeFromString(WebLibrary.serializer(), stored) }.getOrElse { WebLibrary.EMPTY }
+    }
+
+    suspend fun saveWebs(library: WebLibrary) {
+        withContext(ioDispatcher) {
+            database.preferenceQueries.upsert(
+                prefKey = WebLibrary.KEY,
+                prefValue = json.encodeToString(WebLibrary.serializer(), library),
             )
         }
     }

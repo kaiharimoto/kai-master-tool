@@ -115,7 +115,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         Segmented(prefs.foilNames, NameStyles.all, NameStyles::label, { n -> neue.update { it.copy(foilNames = n) } })
                     }
                     // A tablet's index is always out (the strip): there is nothing to choose.
-                    if (!touch) SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DECKS)} to ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_STATS)} reach the pages either way.") {
+                    if (!touch) SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DECKS)} to ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_FORMAT)} reach the pages either way.") {
                         Segmented(prefs.railPinned, listOf(false, true), { if (it) "Pinned" else "Auto-hide" }, { p -> neue.update { it.copy(railPinned = p) } })
                     }
                 }

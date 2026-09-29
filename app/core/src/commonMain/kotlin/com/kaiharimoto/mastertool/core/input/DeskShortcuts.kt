@@ -19,6 +19,9 @@ enum class DeskAction {
     GO_BUILDER,
     GO_ODDS,
     GO_STATS,
+
+    /** Format (1.0.33): the webs of decks, the fields you prepare for. */
+    GO_FORMAT,
     GO_SETTINGS,
     HELP,
     DISMISS,
@@ -92,6 +95,13 @@ enum class DeskAction {
     IMMERSIVE,
     /** A picture of the deck — main, extra and side — with none of the window around it. */
     SCREENSHOT,
+
+    /**
+     * The deck one along in its web, or one back (1.0.33: "when in a web, the user
+     * can easily change decks in the web in the deck builder"), saved first.
+     */
+    WEB_PREVIOUS,
+    WEB_NEXT,
 }
 
 /** Where a desk shortcut applies, with the heading it is listed under. Declaration order is display order. */
@@ -147,6 +157,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("2"), DeskAction.GO_BUILDER, DeskScope.APP, "Builder", allowedInTextInput = true),
         DeskShortcut(ctrl("3"), DeskAction.GO_ODDS, DeskScope.APP, "Odds", allowedInTextInput = true),
         DeskShortcut(ctrl("4"), DeskAction.GO_STATS, DeskScope.APP, "Statistics", allowedInTextInput = true),
+        DeskShortcut(ctrl("5"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),
@@ -185,6 +196,8 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("a"), DeskAction.NEXT_ART, DeskScope.BUILDER, "Next artwork of the card being read"),
         DeskShortcut(KeyChord("a", shift = true), DeskAction.PREVIOUS_ART, DeskScope.BUILDER, "Previous artwork"),
         DeskShortcut(KeyChord("i"), DeskAction.ISSUES, DeskScope.BUILDER, "Issues"),
+        DeskShortcut(KeyChord("left", alt = true), DeskAction.WEB_PREVIOUS, DeskScope.BUILDER, "Previous deck in the web"),
+        DeskShortcut(KeyChord("right", alt = true), DeskAction.WEB_NEXT, DeskScope.BUILDER, "Next deck in the web"),
 
         DeskShortcut(KeyChord("up"), DeskAction.POOL_PREVIOUS, DeskScope.POOL, "Previous result, or the card above the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("down"), DeskAction.POOL_NEXT, DeskScope.POOL, "Next result, or the card below the selected one", allowedInTextInput = true, repeatable = true),

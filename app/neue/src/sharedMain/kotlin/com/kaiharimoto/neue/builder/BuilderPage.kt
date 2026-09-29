@@ -37,6 +37,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -247,8 +248,13 @@ fun RowScope.BuilderBar(
     onScreenshot: () -> Unit,
     onSave: () -> Unit,
     narrow: Boolean,
+    webs: com.kaiharimoto.neue.web.Webs? = null,
+    onStepWeb: (Int) -> Unit = {},
+    onOpenDeck: (String) -> Unit = {},
 ) {
     val c = Mu.colors
+    // A deck of a web (1.0.33): the web, where the deck stands in it, and ‹ › through it.
+    webs?.webOf(state.deckId)?.let { web -> WebSwitch(web, webs, state, neue, onStepWeb, onOpenDeck) }
     DeckNameField(state, Modifier.weight(1f, fill = false).widthIn(min = 140.dp, max = 560.dp))
     Standing(state, neue)
     Box(Modifier.weight(1f))
@@ -444,3 +450,56 @@ fun historyMenu(state: DeckBuilderState, touch: Boolean = false): List<com.kaiha
 }
 
 private const val HISTORY_SHOWN = 14
+
+/**
+ * The web the deck on the builder belongs to (1.0.33: "when in a web, the user can
+ * easily change decks in the web in the deck builder"): its name and the deck's place
+ * in it, a list of its decks to jump to, and ‹ › — `Alt ←`/`Alt →` — one along. The
+ * deck on the builder is saved as it goes.
+ */
+@Composable
+private fun WebSwitch(
+    web: com.kaiharimoto.mastertool.core.web.DeckWeb,
+    webs: com.kaiharimoto.neue.web.Webs,
+    state: DeckBuilderState,
+    neue: NeueState,
+    onStep: (Int) -> Unit,
+    onOpen: (String) -> Unit,
+) {
+    val id = state.deckId ?: return
+    var at by remember { mutableStateOf(Offset.Zero) }
+    var names by remember(web.id) { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(web.deckIds, webs.revision, state.deckName) {
+        names = webs.decks(web).associate { it.entry.id to it.entry.name }
+    }
+    val alone = web.entries.size < 2
+    Tip("${web.name}: every deck of the web. ${kbd(DeskAction.WEB_PREVIOUS)} and ${kbd(DeskAction.WEB_NEXT)} step through them") {
+        Box(Modifier.onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+            MuButton(
+                "${web.name.ifBlank { "Web" }} · ${web.position(id) ?: 1}/${web.entries.size}",
+                {
+                    neue.menu = com.kaiharimoto.neue.kit.MenuSpec(
+                        at,
+                        web.entries.map { entry ->
+                            com.kaiharimoto.neue.kit.MenuEntry(
+                                (if (entry.mine) "★ " else "") + (names[entry.deckId] ?: "…"),
+                                hint = if (entry.deckId == id) "✓" else "${web.position(entry.deckId)}",
+                            ) { onOpen(entry.deckId) }
+                        } + com.kaiharimoto.neue.kit.MenuEntry("Open the web in Format", separatorBefore = true) {
+                            webs.selectedId = web.id
+                            neue.go(com.kaiharimoto.neue.Page.FORMAT)
+                        },
+                    )
+                },
+                variant = BtnVariant.SUBTLE,
+                size = BtnSize.SM,
+            )
+        }
+    }
+    Tip("Previous deck in the web", kbd = kbd(DeskAction.WEB_PREVIOUS)) {
+        IconButton(Icons.ChevronLeft, { onStep(-1) }, enabled = !alone, size = 32.dp, label = "Previous deck", reason = "The only deck in the web")
+    }
+    Tip("Next deck in the web", kbd = kbd(DeskAction.WEB_NEXT)) {
+        IconButton(Icons.ChevronRight, { onStep(1) }, enabled = !alone, size = 32.dp, label = "Next deck", reason = "The only deck in the web")
+    }
+}

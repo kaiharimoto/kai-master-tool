@@ -38,6 +38,7 @@ import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.search.CardFilter
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.search.SearchScope
+import com.kaiharimoto.mastertool.core.web.WebCodec
 import com.kaiharimoto.mastertool.core.ydk.DeckCodes
 import com.kaiharimoto.mastertool.core.ydk.DeckRead
 import com.kaiharimoto.mastertool.core.ydk.YdkCodec
@@ -961,9 +962,21 @@ class DeckBuilderState(
         }
     }
 
+    /**
+     * Where a `.ydkw` goes when it arrives through a deck's Import, or is handed over
+     * by another app (1.0.33): it is a web of decks, not a deck, and Neue opens it in
+     * Format. Unset, it is read as a deck file, which finds none of its decks.
+     */
+    var onWebFile: ((String) -> Unit)? = null
+
     fun importFromFile() {
         scope.launch {
             val file = deps.fileAccess.importDeck() ?: return@launch
+            val web = onWebFile
+            if (web != null && WebCodec.isWeb(file.content)) {
+                web(file.content)
+                return@launch
+            }
             adopt(YdkCodec.parse(file.content), file.name.substringBeforeLast('.').ifBlank { "Imported Deck" })
         }
     }

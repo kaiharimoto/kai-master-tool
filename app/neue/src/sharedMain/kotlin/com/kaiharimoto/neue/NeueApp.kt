@@ -159,6 +159,8 @@ class NeueHolders(
     val updates: NeueUpdates,
     val art: ArtLibrary,
     val shots: DeckShots,
+    /** The webs of decks, for Format and the builder's switcher (1.0.33). */
+    val webs: com.kaiharimoto.neue.web.Webs,
 ) {
     private val held = mutableSetOf<androidx.compose.ui.input.key.Key>()
     var focus: FocusManager? = null
@@ -257,6 +259,32 @@ class NeueHolders(
 
     private val echo = ActionEcho()
 
+    /**
+     * [id] on the builder, the deck there saved first (1.0.33: "saved as you
+     * switch"): the web's switcher and the Format page's tiles both come here. A deck
+     * never saved and holding cards is saved to the library rather than dropped.
+     */
+    fun openDeck(id: String) {
+        val state = builder
+        neue.go(Page.BUILDER)
+        if (id == state.deckId) return
+        if (state.dirty && (state.deckId != null || !state.deck.isEmpty)) {
+            state.save(quiet = true) {
+                decksReload++
+                state.load(id)
+            }
+        } else {
+            state.load(id)
+        }
+    }
+
+    /** The deck [step] along in the web of the deck on the builder: `Alt ←`/`Alt →`, and the bar's ‹ ›. */
+    fun stepWeb(step: Int) {
+        val id = builder.deckId ?: return
+        val next = webs.webOf(id)?.neighbour(id, step) ?: return
+        openDeck(next)
+    }
+
     fun run(action: DeskAction) {
         val state = builder
         when (action) {
@@ -265,6 +293,9 @@ class NeueHolders(
             DeskAction.GO_BUILDER -> neue.go(Page.BUILDER)
             DeskAction.GO_ODDS -> neue.go(Page.ODDS)
             DeskAction.GO_STATS -> neue.go(Page.STATS)
+            DeskAction.GO_FORMAT -> neue.go(Page.FORMAT)
+            DeskAction.WEB_PREVIOUS -> stepWeb(-1)
+            DeskAction.WEB_NEXT -> stepWeb(1)
             DeskAction.GO_SETTINGS -> neue.go(Page.SETTINGS)
             DeskAction.HELP -> neue.helpOpen = true
             DeskAction.DISMISS -> dismiss()
@@ -499,6 +530,11 @@ class NeueHolders(
                 neue.update { it.copy(autoSave = !it.autoSave) }
             })
             add(MenuEntry("New deck") { run(DeskAction.NEW_DECK) })
+            // A deck of a web (1.0.33): the phone's switcher, one entry each way.
+            webs.webOf(state.deckId)?.takeIf { onBuilder && it.entries.size > 1 }?.let { web ->
+                add(MenuEntry("Previous deck in ${web.name}", hint = "${web.position(state.deckId!!)}/${web.entries.size}") { stepWeb(-1) })
+                add(MenuEntry("Next deck in ${web.name}") { stepWeb(1) })
+            }
             add(MenuEntry("Import…", hint = "File, QR code") { neue.menu = MenuSpec(at, CardActions.importMenu(state, neue)) })
             add(MenuEntry("Export…", hint = "File, code, text, QR") { neue.menu = MenuSpec(at, CardActions.exportMenu(state, neue)) })
             add(MenuEntry("Rotate: ${next.label}", hint = "Now ${neue.orientation.label}", separatorBefore = true) { neue.rotate() })
@@ -524,6 +560,7 @@ class NeueHolders(
             cmd("Go", "Builder", DeskAction.GO_BUILDER),
             cmd("Go", "Odds", DeskAction.GO_ODDS),
             cmd("Go", "Stats", DeskAction.GO_STATS),
+            cmd("Go", "Format", DeskAction.GO_FORMAT),
             cmd("Go", "Settings", DeskAction.GO_SETTINGS),
             cmd("Deck", "Save", DeskAction.SAVE),
             cmd("Deck", "New deck", DeskAction.NEW_DECK),
@@ -603,6 +640,7 @@ fun rememberHolders(deps: AppDependencies, makeUpdates: (kotlinx.coroutines.Coro
             updates = makeUpdates(scope),
             art = art,
             shots = DeckShots(art, scope),
+            webs = com.kaiharimoto.neue.web.Webs(deps, scope),
         )
     }
 }
@@ -648,6 +686,16 @@ fun NeueEffects(h: NeueHolders) {
             }
             neue.start()
             state.start()
+            h.webs.load()
+            // A .ydkw opened through a deck's Import (or handed over by another app) is a web: to Format with it.
+            state.onWebFile = { text ->
+                h.webs.open(text) { made ->
+                    if (made != null) {
+                        neue.go(Page.FORMAT)
+                        neue.note = Note("Opened “${made.name}”: ${made.entries.size} decks")
+                    }
+                }
+            }
             h.updates.check(userInitiated = false)
             h.art.start()
             onDispose {
@@ -768,7 +816,7 @@ private fun Shell(h: NeueHolders) {
             onWork = { neue.go(Page.SETTINGS) },
         ) { narrow ->
             if (neue.page == Page.BUILDER) {
-                BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow)
+                BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow, webs = h.webs, onStepWeb = h::stepWeb, onOpenDeck = h::openDeck)
             } else {
                 Box(Modifier.weight(1f))
             }
@@ -1017,10 +1065,11 @@ private fun Shell(h: NeueHolders) {
                 Box(Modifier.weight(1f)) {
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
-                            Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload)
+                            Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds)
                             Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
                             Page.ODDS -> OddsPage(state)
                             Page.STATS -> StatsPage(state)
+                            Page.FORMAT -> com.kaiharimoto.neue.pages.FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
                             Page.SETTINGS -> SettingsPage(
                                 state,
                                 neue,

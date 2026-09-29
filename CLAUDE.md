@@ -278,6 +278,14 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   from a picture, one screenshot holding every part (v1.3.7); `DeckCodes.read` (core) turns what
   was read into a deck. `NEUE.md` §4. A tip at the
   bottom of the window opens `above`, or it covers its own control.
+- **Format** (1.0.33, `05`, `NEUE.md` §4i): **webs of decks** — the field expected
+  at an event, yours starred. `DeckWeb`/`WebLibrary` (core; the page is Format, the
+  type is not, since `Format` is TCG/OCG) kept as one preferences document
+  (`neue.webs`, no migration); a web's decks are ordinary decks the Decks page
+  leaves to it. **`.ydkw`** (`WebCodec`) is one text file: a `#web` header, then a
+  `#deck` block per deck, each a complete `.ydkx`. The builder bar steps through a
+  web (`WebSwitch`, `Alt ←/→`), saving as it goes. Siding patterns and the PDF
+  guide are the next two releases, on kai's mockup.
 - **The builder opens a deck**: the library's default, else the one saved last
   (`StartingDeck`). A library row shows up to three chosen covers
   (`DeckCovers`), and a card's alternate artworks are a picture choice applied

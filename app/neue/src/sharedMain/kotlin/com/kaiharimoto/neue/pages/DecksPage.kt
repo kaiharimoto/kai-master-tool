@@ -96,15 +96,16 @@ import com.kaiharimoto.neue.theme.MuType
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, reload: Int) {
+fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, reload: Int, hidden: Set<String> = emptySet()) {
     val c = Mu.colors
     val scope = rememberCoroutineScope()
     var decks by remember { mutableStateOf<List<StoredDeck>?>(null) }
     var filter by remember { mutableStateOf("") }
     var tagFilter by remember { mutableStateOf<String?>(null) }
     var bump by remember { mutableStateOf(0) }
-    LaunchedEffect(reload, state.deckId, bump) {
-        decks = deps.deckRepository.all().sortedByDescending { it.entry.updatedAtEpochMs }
+    // A web's decks are the web's (Format, 1.0.33): the library is your own.
+    LaunchedEffect(reload, state.deckId, bump, hidden) {
+        decks = deps.deckRepository.all().filter { it.entry.id !in hidden }.sortedByDescending { it.entry.updatedAtEpochMs }
     }
     // Tags follow the card pool: until it has loaded, a deck's cards have no types.
     val tags = remember(decks, state.index) {

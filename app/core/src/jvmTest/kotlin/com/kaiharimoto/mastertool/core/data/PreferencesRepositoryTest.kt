@@ -98,4 +98,23 @@ class PreferencesRepositoryTest {
     fun theDesktopDocumentDefaultsWhenAbsent() = runTest {
         assertEquals(NeuePreferences.DEFAULT, repository(testDatabase()).loadNeue())
     }
+
+    @Test
+    fun websRoundTripBesideTheOtherDocuments() = runTest {
+        val repository = repository(testDatabase())
+        assertEquals(com.kaiharimoto.mastertool.core.web.WebLibrary.EMPTY, repository.loadWebs())
+        val web = com.kaiharimoto.mastertool.core.web.DeckWeb(
+            id = "w1",
+            name = "Spring Regional",
+            notes = "Yubel is a third of the room",
+            entries = listOf(
+                com.kaiharimoto.mastertool.core.web.WebEntry("a", mine = true, share = 20),
+                com.kaiharimoto.mastertool.core.web.WebEntry("b", share = 18),
+            ),
+        )
+        val library = com.kaiharimoto.mastertool.core.web.WebLibrary(listOf(web))
+        repository.saveWebs(library)
+        repository.saveNeue(NeuePreferences.DEFAULT)
+        assertEquals(library, repository.loadWebs())
+    }
 }

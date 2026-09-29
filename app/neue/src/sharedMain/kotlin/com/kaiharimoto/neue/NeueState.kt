@@ -27,6 +27,9 @@ enum class Page(val numeral: Int?, val title: String) {
     BUILDER(2, "Builder"),
     ODDS(3, "Odds"),
     STATS(4, "Stats"),
+
+    /** The webs of decks (1.0.33): the fields you prepare for. */
+    FORMAT(5, "Format"),
     SETTINGS(null, "Settings"),
 }
 

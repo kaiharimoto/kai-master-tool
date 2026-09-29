@@ -39,7 +39,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Open .ydk / .ydkx files shared from other apps. -->
+            <!-- Open .ydk / .ydkx files shared from other apps, and .ydkw webs (1.0.33). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -48,6 +48,7 @@
                 <data android:mimeType="*/*" />
                 <data android:pathPattern=".*\\.ydk" />
                 <data android:pathPattern=".*\\.ydkx" />
+                <data android:pathPattern=".*\\.ydkw" />
             </intent-filter>
         </activity>
 

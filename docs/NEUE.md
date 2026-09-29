@@ -1385,6 +1385,49 @@ step (`--frames=2`, so it has not finished).
 
 ---
 
+### 4i. Format: webs of decks (1.0.33)
+
+kai: "format web (expected decks at a tournament to play against)… the user can
+web multiple YDKX decks together as one exportable group… sharable among people so
+they can use it to learn and simulate tournament environments. New section called
+Format… When in a web, the user can easily change decks in the web in the deck
+builder." Designed with kai on a mockup first (the Format page, the builder's
+switcher, the siding editor, a phone, the PDF guide); kai's picks: **one `.ydkw`
+text file**, **a web's decks live in their web**, **the guide is a PDF**, **any
+deck sides against any other**. Built in three releases: this one (the web, its
+file, the page, the switcher), then the siding editor, then the guide.
+
+- **The model is `DeckWeb`** (`core/web/`), not "Format": `Format` is the TCG/OCG
+  banlist everywhere. A web is a name, notes and ordered `WebEntry`s — a deck id,
+  whether it is **yours** (★, first in its lists and the decks you side as) and its
+  **share** of the field in percent, when known. `WebLibrary` holds every web as one
+  JSON document in the preferences table (`neue.webs`) — a row, not a migration,
+  so the schema stays 3. A deck belongs to one web (`put` takes it out of any other).
+- **A web's decks are ordinary saved decks**, so the builder edits them untouched,
+  groups and all. The Decks page leaves them to their web (`hidden`). **Add from
+  library** copies a deck in (the library keeps its own); **Copy to my library**
+  copies one out; **Remove** deletes it (a web's deck is nowhere else) behind a
+  confirm, as does deleting a web with its decks.
+- **`.ydkw`** (`WebCodec`): `#ydkw 1`, a `#web {json}` header (name, notes, the
+  decks' ids, stars and shares), then a `#deck <id> <name>` block per deck — each
+  block a complete `.ydkx`, so any tool opens a deck cut out of it. No line inside a
+  block can begin `#deck `. Opening one makes a new web with new deck ids (twice is
+  two webs); the file's ids are kept on read so the siding patterns that name
+  another deck of the web can be pointed at the new ids. A `.ydkw` that arrives
+  through a deck's Import, or from another app (the manifest takes `.ydkw` too), is
+  sent to Format (`DeckBuilderState.onWebFile`).
+- **The page** (`05`, `Ctrl 5`, `FormatPage`): the webs down the left (chips on a
+  phone), the open web's name and notes written where they stand, **Import deck**
+  (a file; on a phone or tablet also a deck's QR code, `CardActions.readCode`),
+  **Add from library**, **Export .ydkw** (save, or share on Android) and **Delete
+  web**; then **the field**, a tile per deck — covers, ★, share, counts — that opens
+  it in the builder; its menu (hold, right-click or More) stars it, sets its share,
+  moves it, copies it out or removes it.
+- **The builder steps through the web** (`WebSwitch` in `BuilderBar`): a chip with
+  the web's name and the deck's place (`Spring Regional · 3/6`) opening the list of
+  its decks, and ‹ › — `Alt ←`/`Alt →`, `WEB_PREVIOUS`/`WEB_NEXT`. The deck on the
+  builder is saved as it goes (`NeueHolders.openDeck`). A phone has both in ⋯.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two
