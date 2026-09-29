@@ -314,10 +314,30 @@ decorated and never went full screen. So on Windows immersive mode is **a second
 borderless window laid exactly over the monitor** the builder is on — which Windows
 treats as full screen, taskbar and all, and leaves alone when focus moves. A
 frame's decorations cannot change while it is showing (`JFrame.setUndecorated`
-throws), so entering and leaving swap windows (`key(full != null)` in `Main.kt`);
-everything the builder knows lives in `NeueHolders`, outside the window, and
-carries across. macOS and Linux keep the window's own full screen, which does
-neither. **The borderless window is not resizable** (1.0.15): Compose gives an
+throws), so entering and leaving swap windows (`Main.kt`); everything the builder
+knows lives in `NeueHolders`, outside the window, and carries across. macOS and
+Linux keep the window's own full screen, which does neither.
+
+**The swap is a handover** (1.0.24, kai: "the transition between entering and
+exiting immersive mode is very jarring. The whole app disappears for a second").
+Two things made the second. The window on screen was disposed first and the next
+built after it, so for as long as the next took — a native surface, a whole tree,
+its first frame — there was no window at all. And the app's own lifetime was the
+window's: every swap stopped and restarted the card pool, the preferences, the
+update check and the art library, and made the image loader afresh, so every
+card's picture was read again. Now the lifetime is `NeueEffects`, composed once
+outside the windows (the tablet's `NeueRoot` still brings it along), and the swap
+runs in three steps (`WindowHandover.kt`): the window on screen draws one more
+frame through a graphics layer, keeps it as a picture and shows that in place of
+its tree, which it lets go (`Shown.released`); then the next window is built —
+Compose paints a window's first frame before it shows it — and shown over the
+picture; and only once it is on screen and painted does the picture's window go
+(three seconds at most, whatever happens). The tree goes *before* the next is
+built, never after: two live trees register the same drop targets and zen's slots,
+and the one let go last would take them from the other. `WindowHandoverTest` holds
+the picture to the frame it replaces, pixel for pixel. A `Z` pressed long ago no
+longer reads as pressed now in a tree composed afresh (`zenHandled`), which had
+sent every trip into immersive mode after the first `Z` straight to zen. **The borderless window is not resizable** (1.0.15): Compose gives an
 undecorated window that is resizable its own resize border
 (`UndecoratedWindowResizer`), an invisible band round the edge that takes the
 pointer — and at the left edge that band was exactly where the rail comes out,
@@ -642,7 +662,12 @@ In immersive mode, on the builder, doing nothing is a mode too
   and puts them down anywhere** (`ZenArrangement`). A card put down lands on top
   of what it is put on; one being carried floats higher and casts further. The
   arrangement is only a picture: the deck's order never changes. Waking draws
-  every card home; the next zen puts them back where they were left.
+  every card home, and **every zen begins with the cards in their slots**
+  (1.0.24, kai: "zen mode seems to remember card positions if they were moved
+  before exiting zen mode. Have it reset every time we enter zen mode"):
+  `ZenLayer.begin`, the moment the phase turns deep, forgets the last zen's
+  arrangement and what was picked out. Until then the next zen put them back
+  where they were left.
 - **Only a key wakes it.** In deep zen the pointer is for arranging, so neither
   moving it nor clicking ends zen; any key does, and that key does nothing else.
 - **Many cards at once** (1.0.14, kai: "drag boxes to select multiple cards, and
@@ -686,6 +711,27 @@ In immersive mode, on the builder, doing nothing is a mode too
   card under the pointer. The corner is 440 × 180 and **always** offers
   **Leave zen**, beside **Groups** and "Put the cards back" when they apply — it
   used to show nothing at all until a card had been moved, which read as broken.
+  Once its buttons are out it is at least as wide as they are (`ZenCorner.reaches`,
+  1.0.24): a row of four on a scaled display is wider than 440 px, and the corner
+  let go of the pointer on its way to Leave zen.
+- **Faded is not gone, all of it** (1.0.24, kai: "zen mode is accidentally trying
+  to click on objects not in zen mode which is blocking me from clicking on cards.
+  I can tell this because the tooltips are showing"). The shields covered the pool
+  and the inspector, but not the rest of the chrome that only fades: the **Groups
+  panel**, which stands beside the deck *after* it in the row, so above it for the
+  pointer — and zen grows the deck into the middle of the window, over where the
+  panel is, so every card there was under an invisible panel that took the press
+  and showed its tooltips; the **lens row**, which rides with the deck to the
+  middle (its tips, and an invisible Extra or Side switch that a click hid a deck
+  with); the section names; and the hidden panes' handles. Now `zenQuiet` itself
+  takes faded chrome off the page once zen is deep and the fade is done: still
+  measured, so nothing moves, but not placed — neither drawn nor hit, so a hover,
+  a tooltip or a press goes to the card under the pointer. It is placed again the
+  moment zen ends, still transparent, and fades in from there. The shields and the
+  deck's lift go on the moment the phase is deep (`ZenLayer.asleep`), not halfway
+  through its fade. The studio proves it: `--groups=true --zen=deep
+  --zen-groups=true --zen-drags=drag@k9>k9+0,0.25` carried nothing before and
+  carries the card now.
 - **The wheel opens and closes zen's gaps** (1.0.17, kai: "let the scroll wheel
   expand the gaps further and tighten, card sizes adjust automatically"). Up
   opens the Roles pieces if they are closed, and then widens them; down narrows
@@ -716,6 +762,19 @@ In immersive mode, on the builder, doing nothing is a mode too
   its Roles group. A card carried away leaves its piece: the outline opens where
   it stood, and closes round the card wherever it is put. Picking and snapping in
   zen measure the pieces as they are drawn (`ZenLayer.homesNow`).
+- **The groups' names, in zen** (1.0.24, kai: "let the user toggle the labels for
+  the groups as well"). **Labels** stands beside Groups in the corner — always
+  there when Groups is, so pressing Groups never slides it out from under the
+  pointer, and live only while the pieces are out, since a closed deck has nothing
+  for a name to stand on. On (the default, `NeuePreferences.zenLabels`, kept in the
+  settings), each group's name is written once on its pieces as the builder writes
+  it — the same tab, the same longest top edge (`drawGroupLabel`, `labelEdge`) —
+  floating with the cards it stands on and fading with the glow. Two things are
+  zen's own (`ZenLabels`, in core): a card carried out of its piece takes no name
+  with it, so the name stands on the cards still there; and zen reserves no room
+  for a tab, so it stands in whatever gap is over its edge — the gap between two
+  pieces as wide as the wheel has made it, the paper between two sections, or the
+  table over the top of the deck — and is not drawn where that is too short to read.
 - **"Put the cards back"** comes out, faintly, when the pointer goes into the
   window's bottom-right corner (`ZenCorner`, 240 × 140) and something has been
   moved; it draws every card home over a slow beat and forgets the arrangement.
