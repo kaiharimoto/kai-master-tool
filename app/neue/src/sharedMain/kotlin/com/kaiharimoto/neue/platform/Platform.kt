@@ -46,6 +46,33 @@ expect object Platform {
      * for Wi-Fi on a tablet. The desk is always on one.
      */
     fun onUnmeteredNetwork(): Boolean
+
+    /**
+     * Where a deck's QR code can be read from here (v1.3.7): a phone's or a
+     * tablet's camera, where it has one, and a picture of a code. The desk reads
+     * none — it shows its decks' codes for those to scan.
+     */
+    val scanSources: Set<QrSource>
+
+    /** The text of a QR code, read by the camera or found in a picture the person picks. */
+    suspend fun scanQr(from: QrSource): QrScan
+}
+
+/** Where a QR code is read from: the camera, or a picture (a screenshot someone sent). */
+enum class QrSource { CAMERA, PICTURE }
+
+/** What a scan came back with. */
+sealed interface QrScan {
+    data class Read(val text: String) : QrScan
+
+    /** Put away without a code: says nothing. */
+    data object Cancelled : QrScan
+
+    /** A picture with no code in it that could be read. */
+    data object NotFound : QrScan
+
+    /** The camera was refused, or could not be opened. */
+    data object NoCamera : QrScan
 }
 
 /** A file the person picked: its name, for the extension, and what is in it. */

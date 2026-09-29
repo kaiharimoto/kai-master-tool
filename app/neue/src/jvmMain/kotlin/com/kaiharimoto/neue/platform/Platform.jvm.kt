@@ -80,4 +80,9 @@ actual object Platform {
     actual fun shareText(text: String, title: String) = copy(text)
 
     actual fun onUnmeteredNetwork(): Boolean = true
+
+    /** The desk shows its decks' QR codes (1.0.30); it reads none. */
+    actual val scanSources: Set<QrSource> = emptySet()
+
+    actual suspend fun scanQr(from: QrSource): QrScan = QrScan.Cancelled
 }

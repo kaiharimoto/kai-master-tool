@@ -122,6 +122,9 @@ class NeueState(
      */
     var confirmRemoveArt by mutableStateOf<Pair<Card, Int>?>(null)
 
+    /** A deck shown as a QR code for a phone or a tablet to scan (1.0.30), while it is. */
+    var qr by mutableStateOf<com.kaiharimoto.neue.qr.QrShown?>(null)
+
     /** The card under the pointer, which the inspector shows. Hover is the desktop's cheapest question. */
     /** The window's haptics (touch swarm, rec 13): set by the window, nothing on the desk. */
     var feel: (com.kaiharimoto.mastertool.core.haptics.Haptic) -> Unit = {}
@@ -194,7 +197,7 @@ class NeueState(
     var studio by mutableStateOf<Studio?>(null)
 
     val overlayOpen: Boolean
-        get() = showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || studio != null
+        get() = showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || qr != null || studio != null
 
     /**
      * A touch screen first (Neue on a tablet): no hover to bring the rail out or
@@ -353,7 +356,7 @@ class NeueState(
 
     /** Whether [dismissTop] has something to close. */
     val hasTop: Boolean
-        get() = showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || helpOpen || drawer != null || studio != null
+        get() = showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || qr != null || helpOpen || drawer != null || studio != null
 
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {
@@ -363,6 +366,7 @@ class NeueState(
         paletteOpen -> { paletteOpen = false; true }
         confirmDelete != null -> { confirmDelete = null; true }
         confirmRemoveArt != null -> { confirmRemoveArt = null; true }
+        qr != null -> { qr = null; true }
         helpOpen -> { helpOpen = false; true }
         drawer != null -> { drawer = null; true }
         studio != null -> { studio = null; true }

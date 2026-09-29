@@ -89,6 +89,8 @@ dependencies {
     // Each application picks its own SQL driver and HTTP engine; :core ships none.
     implementation(libs.sqldelight.driver.android)
     implementation(libs.ktor.client.okhttp)
+    // The camera screen that scans a deck's QR code (v1.3.7).
+    implementation(libs.zxing.android)
 
     // The emulator smoke test (.github/workflows/android-smoke.yml): Neue opens on
     // a tablet, finds the deck the tablet app left, and is photographed doing it.

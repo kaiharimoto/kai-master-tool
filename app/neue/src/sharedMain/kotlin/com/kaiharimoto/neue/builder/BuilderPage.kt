@@ -275,9 +275,19 @@ fun RowScope.BuilderBar(
     // with no hover to name it is a guess — and the deck picture, which has no
     // Android half yet, is not offered.
     val touch = neue.touchFirst
-    Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), touch || !narrow, state::importFromFile)
+    // On a phone or a tablet Import is a menu: a file, or a deck's QR code (v1.3.7).
+    var importAt by remember { mutableStateOf(Offset.Zero) }
+    Box(Modifier.onGloballyPositioned { importAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+        if (touch) {
+            Tool("Import", "Import a .ydk or .ydkx, or scan a deck's QR code", Icons.Import, kbd(DeskAction.IMPORT), true) {
+                neue.menu = com.kaiharimoto.neue.kit.MenuSpec(importAt, CardActions.importMenu(state, neue))
+            }
+        } else {
+            Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), !narrow, state::importFromFile)
+        }
+    }
     Box(Modifier.onGloballyPositioned { neue.exportAnchor = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
-        Tool("Export", "Export: a .ydk or .ydkx file, or a YDKe code or a text list to paste", Icons.Export, kbd(DeskAction.EXPORT), touch || !narrow) {
+        Tool("Export", "Export: a .ydk or .ydkx file, a YDKe code or a text list to paste, or a QR code to scan", Icons.Export, kbd(DeskAction.EXPORT), touch || !narrow) {
             neue.menu = com.kaiharimoto.neue.kit.MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
         }
     }

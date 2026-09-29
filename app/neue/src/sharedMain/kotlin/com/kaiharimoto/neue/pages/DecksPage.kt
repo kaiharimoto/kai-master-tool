@@ -150,6 +150,12 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
                 CardActions.copy(DeckText.write(deck) { state.index.byId(it)?.name })
                 neue.note = com.kaiharimoto.neue.Note("Decklist copied as text")
             }
+            // The live deck when it is the one on the builder, as the share does.
+            DeckExportFormat.QR -> CardActions.showQr(
+                if (stored.entry.id == state.deckId) state.deckName else stored.entry.name,
+                if (stored.entry.id == state.deckId) state.deck else deck,
+                neue,
+            )
         }
     }
 
@@ -176,15 +182,7 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
         neue.menu = MenuSpec(
             at,
             DeckExportFormat.entries.map { format ->
-                MenuEntry(
-                    format.label,
-                    hint = when (format) {
-                        DeckExportFormat.YDK -> ".ydk"
-                        DeckExportFormat.YDKX -> ".ydkx"
-                        else -> "Copies"
-                    },
-                    separatorBefore = format == DeckExportFormat.YDKE,
-                ) { export(stored, format) }
+                CardActions.exportEntry(format, empty = stored.entry.deck.isEmpty) { export(stored, format) }
             } + CardActions.shareEntries(
                 code = { YdkeCodec.encode(if (stored.entry.id == state.deckId) state.deck else stored.entry.deck) },
                 name = stored.entry.name,
@@ -234,7 +232,22 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             subtitle = decks?.let { "${it.size} saved" } ?: "Loading",
         ) {
             MuInput(filter, { filter = it }, if (com.kaiharimoto.neue.kit.LocalPhone.current) Modifier.fillMaxWidth() else Modifier.width(320.dp), placeholder = "A deck, a card in one, or a tag", imeAction = androidx.compose.ui.text.input.ImeAction.Search)
-            MuButton("Import", { state.importFromFile(); neue.go(Page.BUILDER) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Import)
+            // On a phone or a tablet Import is a menu: a file, or a deck's QR code (v1.3.7).
+            var importAt by remember { mutableStateOf(Offset.Zero) }
+            MuButton(
+                "Import",
+                {
+                    if (neue.touchFirst) {
+                        neue.menu = MenuSpec(importAt, CardActions.importMenu(state, neue))
+                    } else {
+                        CardActions.importFile(state, neue)
+                    }
+                },
+                Modifier.onGloballyPositioned { importAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) },
+                variant = BtnVariant.SUBTLE,
+                size = BtnSize.SM,
+                icon = Icons.Import,
+            )
             MuButton("New deck", { state.newDeck(); neue.go(Page.BUILDER) }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = Icons.Plus)
         }
         // Every tag in the library, most used first: one click keeps the decks carrying it.

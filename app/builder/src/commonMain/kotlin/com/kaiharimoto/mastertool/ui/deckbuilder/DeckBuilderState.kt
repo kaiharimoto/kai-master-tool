@@ -38,7 +38,9 @@ import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.search.CardFilter
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.search.SearchScope
+import com.kaiharimoto.mastertool.core.ydk.DeckCodes
 import com.kaiharimoto.mastertool.core.ydk.YdkCodec
+import com.kaiharimoto.mastertool.core.ydk.YdkParseResult
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -954,21 +956,41 @@ class DeckBuilderState(
     fun importFromFile() {
         scope.launch {
             val file = deps.fileAccess.importDeck() ?: return@launch
-            val parsed = YdkCodec.parse(file.content)
-
-            val token = pushUndo(deck, currentIdentity(), currentStoredGroups())
-            deck = parsed.document.deck
-            deckName = file.name.substringBeforeLast('.').ifBlank { "Imported Deck" }
-            deckId = null
-            extended = parsed.document.extended
-            applyStoredGroups(DeckGroupsCodec.read(parsed.document.extended))
-
-            val warning = parsed.warnings.size
-                .takeIf { it > 0 }
-                ?.let { " ($it line${if (it == 1) "" else "s"} skipped)" }
-                .orEmpty()
-            showToast("Imported ${deck.totalCards} cards$warning.", undo = { undoIfCurrent(token) })
+            adopt(YdkCodec.parse(file.content), file.name.substringBeforeLast('.').ifBlank { "Imported Deck" })
         }
+    }
+
+    /**
+     * A deck read from text rather than a file (v1.3.7): what a QR code held — a
+     * `ydke://` code, or a deck file's lines ([DeckCodes]). [read] fetches it (a
+     * scan, which may take a while); null is a scan put away, and says nothing.
+     * Like a file, it replaces the deck, with Undo on the toast.
+     */
+    fun importFrom(name: String, read: suspend () -> String?) {
+        scope.launch {
+            val text = read() ?: return@launch
+            val parsed = DeckCodes.read(text)
+            if (parsed == null) {
+                showToast("That code holds no deck.")
+            } else {
+                adopt(parsed, name)
+            }
+        }
+    }
+
+    private fun adopt(parsed: YdkParseResult, name: String) {
+        val token = pushUndo(deck, currentIdentity(), currentStoredGroups())
+        deck = parsed.document.deck
+        deckName = name
+        deckId = null
+        extended = parsed.document.extended
+        applyStoredGroups(DeckGroupsCodec.read(parsed.document.extended))
+
+        val warning = parsed.warnings.size
+            .takeIf { it > 0 }
+            ?.let { " ($it line${if (it == 1) "" else "s"} skipped)" }
+            .orEmpty()
+        showToast("Imported ${deck.totalCards} cards$warning.", undo = { undoIfCurrent(token) })
     }
 
     fun exportToFile() {

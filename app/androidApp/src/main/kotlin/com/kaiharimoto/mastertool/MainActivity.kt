@@ -55,8 +55,12 @@ import com.kaiharimoto.mastertool.ui.ImportedFile
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.NeueRoot
 import com.kaiharimoto.neue.Page
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
+import com.google.zxing.client.android.Intents
 import com.kaiharimoto.neue.platform.PickedFile
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.platform.QrScan
 import com.kaiharimoto.neue.rememberHolders
 import com.kaiharimoto.neue.update.NeueUpdates
 import kotlinx.coroutines.CompletableDeferred
@@ -158,6 +162,25 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             deferred?.complete(uri?.let(::readPicked))
         }
 
+    private var pendingScan: CompletableDeferred<QrScan>? = null
+
+    /**
+     * The camera, reading a deck's QR code (v1.3.7): ZXing's capture screen, which
+     * asks for the camera itself the first time. Refused, it comes back saying so.
+     */
+    private val scanCode =
+        registerForActivityResult(ScanContract()) { result ->
+            val deferred = pendingScan
+            pendingScan = null
+            deferred?.complete(
+                when {
+                    result.contents != null -> QrScan.Read(result.contents)
+                    result.originalIntent?.hasExtra(Intents.Scan.MISSING_CAMERA_PERMISSION) == true -> QrScan.NoCamera
+                    else -> QrScan.Cancelled
+                },
+            )
+        }
+
     private val createDocument =
         registerForActivityResult(ActivityResultContracts.CreateDocument(MIME_TYPE)) { uri ->
             val deferred = pendingExport
@@ -201,7 +224,7 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         // choice replaces it once the settings are read (v1.3.5).
         applyOrientation(null)
 
-        Platform.attach(this) { types -> pick(types) }
+        Platform.attach(this, picker = { types -> pick(types) }, scanner = { scan() })
 
         val app = application as MasterToolApplication
         val deps = AppDependencies(
@@ -426,6 +449,24 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         val deferred = CompletableDeferred<PickedFile?>()
         pendingPick = deferred
         pickDocument.launch(types)
+        return deferred.await()
+    }
+
+    /** A deck's QR code, off another screen: the desk's Export → QR code, or anyone's `ydke://` code. */
+    private suspend fun scan(): QrScan {
+        pendingScan?.complete(QrScan.Cancelled)
+        val deferred = CompletableDeferred<QrScan>()
+        pendingScan = deferred
+        val options = ScanOptions()
+            .setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+            .setPrompt("Hold the deck's QR code inside the frame")
+            .setBeepEnabled(false)
+            // It turns with the phone (the manifest lets it): a code is read upright or lying down.
+            .setOrientationLocked(false)
+        runCatching { scanCode.launch(options) }.onFailure {
+            pendingScan = null
+            return QrScan.NoCamera
+        }
         return deferred.await()
     }
 

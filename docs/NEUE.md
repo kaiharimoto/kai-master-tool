@@ -865,6 +865,32 @@ Blossom & Joyous Spring`, each card once in the order it first appears
 (`DeckText`). Both codecs are in core with tests, the YDKe one round-tripped.
 The palette has all four.
 
+**A deck crosses from the desk to a phone as a QR code** (1.0.30, v1.3.7, kai:
+"import deck via QR code" on Android, "export as QR code" on the desktop).
+**QR code to scan**, last in Export (the builder's and a library row's), shows
+the deck's `ydke://` code as a QR code in a dialog (`QrDialog`, `neue/qr/`), with
+Copy the code beside Done. It is drawn **black on white in both themes** —
+scanners read little else, and those are Master UI's two fills — each module a
+whole number of pixels, with the standard four-module quiet zone. ZXing
+(`com.google.zxing:core`) makes the modules at level M: the fullest deck, 60 · 15
+· 15, is 490 characters and a version-17 code, 85 modules a side — five pixels
+each in the dialog at 1x, legible from across a desk. It carries the
+cards, not the groups or the name; that is said under the code. On a phone or a
+tablet **Import is a menu** (the bar's, the Decks page's, the phone's ⋯): **A
+.ydk or .ydkx file**, **Scan a QR code** — ZXing's Android capture screen
+(`zxing-android-embedded`), started by `MainActivity` through `ScanContract`,
+which asks for the camera on first use and turns with the phone — and **A
+picture of a QR code**, for a screenshot someone sent (the phone cannot scan its
+own screen), read by `QrReader` with both binarizers and the picture inverted.
+Whatever is read goes through `DeckCodes.read` (core): a `ydke://` code anywhere
+in the text, a deck site's link included, or the lines of a `.ydk`/`.ydkx`, groups
+and all; a deck of no cards is no deck. It replaces the deck as a file import
+does, named "Scanned deck", with Undo on the toast (`DeckBuilderState.importFrom`).
+The desk's Import stays one click to the file dialog, and `Ctrl O` is a file
+everywhere. `Platform.scanSources` is the seam: empty on the desk, the picture
+always on Android, the camera where there is one. `QrTest` draws the fullest deck's
+code and reads it back.
+
 **Three clicks select a field's whole line** (1.0.14), so the search is cleared
 for the next card by typing over it. `MuInput` counts presses on the way down
 without consuming them — the field's own click and double-click are untouched —

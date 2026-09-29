@@ -38,6 +38,7 @@ kotlin {
                 implementation(libs.ktor.client.okhttp)
                 implementation(libs.coil.compose)
                 implementation(libs.coil.network.ktor)
+                implementation(libs.zxing.core)
             }
         }
         jvmMain {

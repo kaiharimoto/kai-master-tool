@@ -8,13 +8,16 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 /**
  * The ways a deck leaves the app (kai, 1.0.15: "give the user a sub option
  * between YDK, YDKX, YDKe Code, and a Copied Text list"). The first two are
- * files ([YdkCodec]); the last two go to the clipboard.
+ * files ([YdkCodec]); the next two go to the clipboard; the last is the YDKe
+ * code drawn as a QR code on the screen, for a phone or a tablet to scan
+ * ([DeckCodes] reads it back).
  */
 enum class DeckExportFormat(val label: String, val toClipboard: Boolean) {
     YDK("YDK file", false),
     YDKX("YDKX file, with groups", false),
     YDKE("YDKe code", true),
     TEXT("Text list", true),
+    QR("QR code to scan", false),
 }
 
 /**
@@ -55,6 +58,32 @@ object YdkeCodec {
             out[i * 4 + 3] = (v shr 24).toByte()
         }
         return out
+    }
+}
+
+/**
+ * A deck in text that did not come from a file: what a QR code held, a scan's
+ * or a picture's. A `ydke://` code anywhere in it — alone, as Neue's own QR
+ * codes carry it, or inside a deck site's link — or the lines of a `.ydk` or a
+ * `.ydkx`, groups and all. Null when there is no deck in it, or no card.
+ */
+object DeckCodes {
+    private val base64 = "[A-Za-z0-9+/=]*"
+    private val ydke = Regex(Regex.escape(YdkeCodec.PREFIX) + "$base64!$base64!$base64!?")
+
+    /** A deck file's section markers: a bare number is not a deck, a `#main` over it is. */
+    private val markers = setOf("#main", "#extra", "!side", "#side", "!main", "!extra")
+
+    fun read(text: String): YdkParseResult? {
+        val found = ydke.find(text)?.value
+        val parsed = if (found != null) {
+            YdkeCodec.decode(found)?.let { YdkParseResult(YdkDocument(it)) }
+        } else if (text.lineSequence().any { it.trim().lowercase() in markers }) {
+            YdkCodec.parse(text)
+        } else {
+            null
+        }
+        return parsed?.takeIf { it.document.deck.totalCards > 0 }
     }
 }
 

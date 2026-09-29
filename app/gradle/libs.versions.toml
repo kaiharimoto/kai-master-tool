@@ -7,6 +7,8 @@ sqldelight = "2.3.2"  # keep in sync with the plugin version in settings.gradle.
 coil = "3.5.0"
 androidxActivity = "1.10.1"
 androidxCore = "1.15.0"
+zxing = "3.5.4"
+zxingAndroid = "4.3.0"
 
 # JDK used for every module's toolchain and bytecode target.
 jdk = "21"
@@ -42,3 +44,8 @@ coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.re
 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+
+# QR codes (v1.3.7): ZXing draws a deck's on the desk and reads one out of a
+# picture; its Android scanner is the camera screen on a phone or a tablet.
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+zxing-android = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxingAndroid" }

@@ -4,10 +4,16 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
+import com.google.zxing.RGBLuminanceSource
 import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.neue.qr.QrReader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -23,9 +29,13 @@ actual object Platform {
     /** The activity's document picker: MIME types in, the chosen file out. */
     private var picker: (suspend (Array<String>) -> PickedFile?)? = null
 
-    fun attach(context: Context, picker: suspend (Array<String>) -> PickedFile?) {
+    /** The activity's camera scanner (v1.3.7), which only it can start: a QR code's text, or why there is none. */
+    private var scanner: (suspend () -> QrScan)? = null
+
+    fun attach(context: Context, picker: suspend (Array<String>) -> PickedFile?, scanner: (suspend () -> QrScan)? = null) {
         this.context = context.applicationContext
         this.picker = picker
+        this.scanner = scanner
     }
 
     actual val os: DesktopOs = DesktopOs.ANDROID
@@ -86,6 +96,44 @@ actual object Platform {
         val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
         connectivity.isActiveNetworkMetered.not()
     }.getOrDefault(false)
+
+    actual val scanSources: Set<QrSource>
+        get() = buildSet {
+            val camera = runCatching { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }.getOrDefault(false)
+            if (camera && scanner != null) add(QrSource.CAMERA)
+            add(QrSource.PICTURE)
+        }
+
+    actual suspend fun scanQr(from: QrSource): QrScan = when (from) {
+        QrSource.CAMERA -> scanner?.invoke() ?: QrScan.NoCamera
+        QrSource.PICTURE -> {
+            val picture = pick("A picture of a QR code", setOf("png", "jpg", "jpeg", "webp"))
+            if (picture == null) {
+                QrScan.Cancelled
+            } else {
+                withContext(Dispatchers.Default) { qrIn(picture.bytes) }?.let { QrScan.Read(it) } ?: QrScan.NotFound
+            }
+        }
+    }
+
+    /**
+     * The QR code in a picture, or null. A photo is shrunk to about two thousand
+     * pixels a side first: a code needs far fewer, and a phone's full-size photo
+     * is fifty megabytes of pixels.
+     */
+    private fun qrIn(bytes: ByteArray): String? = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 2048) sample *= 2
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return@runCatching null
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val source = RGBLuminanceSource(bitmap.width, bitmap.height, pixels)
+        bitmap.recycle()
+        QrReader.read(source)
+    }.getOrNull()
 
     private val MIME = mapOf(
         "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "png" to "image/png", "webp" to "image/webp",

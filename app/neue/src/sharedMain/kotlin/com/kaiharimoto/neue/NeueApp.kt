@@ -499,8 +499,8 @@ class NeueHolders(
                 neue.update { it.copy(autoSave = !it.autoSave) }
             })
             add(MenuEntry("New deck") { run(DeskAction.NEW_DECK) })
-            add(MenuEntry("Import a .ydk or .ydkx") { run(DeskAction.IMPORT) })
-            add(MenuEntry("Export…", hint = "File, code, text") { neue.menu = MenuSpec(at, CardActions.exportMenu(state, neue)) })
+            add(MenuEntry("Import…", hint = "File, QR code") { neue.menu = MenuSpec(at, CardActions.importMenu(state, neue)) })
+            add(MenuEntry("Export…", hint = "File, code, text, QR") { neue.menu = MenuSpec(at, CardActions.exportMenu(state, neue)) })
             add(MenuEntry("Rotate: ${next.label}", hint = "Now ${neue.orientation.label}", separatorBefore = true) { neue.rotate() })
             add(MenuEntry(if (neue.immersive) "Leave full screen" else "Full screen") { run(DeskAction.IMMERSIVE) })
             add(MenuEntry(if (neue.prefs.theme == NeueTheme.PAPER) "Ink, the dark theme" else "Paper, the light theme") { neue.toggleTheme() })
@@ -533,6 +533,7 @@ class NeueHolders(
             Command("Deck", "Export as a .ydkx file, with groups") { CardActions.export(DeckExportFormat.YDKX, builder, neue) },
             Command("Deck", "Copy the YDKe code") { CardActions.export(DeckExportFormat.YDKE, builder, neue) },
             Command("Deck", "Copy the decklist as text") { CardActions.export(DeckExportFormat.TEXT, builder, neue) },
+            Command("Deck", "Show the deck as a QR code to scan") { CardActions.export(DeckExportFormat.QR, builder, neue) },
             Command("Deck", if (neue.prefs.extraVisible) "Hide the extra deck" else "Show the extra deck") { neue.update { it.copy(extraVisible = !it.extraVisible) } },
             Command("Deck", if (neue.prefs.sideVisible) "Hide the side deck" else "Show the side deck") { neue.update { it.copy(sideVisible = !it.sideVisible) } },
             Command("Deck", if (neue.prefs.foil == com.kaiharimoto.neue.cards.Foils.OFF) "Foil on" else "Foil off") { toggleFoil() },
@@ -563,6 +564,9 @@ class NeueHolders(
             Command("App", "Check for updates") { updates.check(userInitiated = true) },
             // The phone's and the tablet's screen, the one-tap toggle in words (v1.3.5).
             *(if (neue.touchFirst) arrayOf(Command("App", "Rotate the screen: ${neue.orientation.next().label}") { neue.rotate() }) else emptyArray()),
+            // A deck's QR code, off another screen or out of a picture (v1.3.7).
+            *(if (com.kaiharimoto.neue.platform.QrSource.CAMERA in Platform.scanSources) arrayOf(Command("Deck", "Scan a deck's QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.CAMERA, builder, neue) }) else emptyArray()),
+            *(if (com.kaiharimoto.neue.platform.QrSource.PICTURE in Platform.scanSources) arrayOf(Command("Deck", "Import a picture of a QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.PICTURE, builder, neue) }) else emptyArray()),
             Command("App", "Refresh the card pool") { builder.refreshCardPool(force = true) },
             Command("App", "Report an issue →") { Platform.reportIssue() },
         ).filter { q.isEmpty() || it.label.lowercase().contains(q) || it.group.lowercase().startsWith(q) }
@@ -1096,6 +1100,16 @@ private fun Shell(h: NeueHolders) {
         }
 
         if (neue.helpOpen) HelpDialog { neue.helpOpen = false }
+        neue.qr?.let { shown ->
+            com.kaiharimoto.neue.qr.QrDialog(
+                shown,
+                onCopy = {
+                    CardActions.copy(shown.code)
+                    neue.note = com.kaiharimoto.neue.Note("YDKe code copied")
+                },
+                onDismiss = { neue.qr = null },
+            )
+        }
         neue.confirmRemoveArt?.let { (card, k) ->
             MuDialog(
                 title = "Remove your picture",

@@ -20,6 +20,8 @@ import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.mastertool.core.ydk.DeckText
 import com.kaiharimoto.mastertool.core.ydk.YdkeCodec
+import com.kaiharimoto.neue.platform.QrScan
+import com.kaiharimoto.neue.platform.QrSource
 
 /**
  * What a card can be asked to do, written once for the card viewer, the
@@ -146,20 +148,78 @@ object CardActions {
      * and deck sites paste, or the decklist as text.
      */
     fun exportMenu(state: DeckBuilderState, neue: NeueState): List<MenuEntry> = DeckExportFormat.entries.map { format ->
-        MenuEntry(
-            format.label,
-            hint = when (format) {
-                DeckExportFormat.YDK -> ".ydk"
-                DeckExportFormat.YDKX -> ".ydkx"
-                else -> "Copies"
-            },
-            separatorBefore = format == DeckExportFormat.YDKE,
-        ) { export(format, state, neue) }
+        exportEntry(format, empty = state.deck.isEmpty) { export(format, state, neue) }
     } + shareEntries(
         code = { YdkeCodec.encode(state.deck) },
         name = state.deckName,
         file = { state.shareDeck() },
     )
+
+    /** One line of an Export menu, the builder's or a library row's: what it makes, and where that goes. */
+    fun exportEntry(format: DeckExportFormat, empty: Boolean, onClick: () -> Unit) = MenuEntry(
+        format.label,
+        hint = when (format) {
+            DeckExportFormat.YDK -> ".ydk"
+            DeckExportFormat.YDKX -> ".ydkx"
+            DeckExportFormat.YDKE, DeckExportFormat.TEXT -> "Copies"
+            DeckExportFormat.QR -> "Shows"
+        },
+        separatorBefore = format == DeckExportFormat.YDKE || format == DeckExportFormat.QR,
+        enabled = format != DeckExportFormat.QR || !empty,
+        reason = "The deck is empty",
+        onClick = onClick,
+    )
+
+    /** [deck] as a QR code on the screen (1.0.30), for a phone or a tablet to scan. */
+    fun showQr(name: String, deck: com.kaiharimoto.mastertool.core.model.Deck, neue: NeueState) {
+        neue.qr = com.kaiharimoto.neue.qr.QrShown(name.ifBlank { "Untitled Deck" }, deck, YdkeCodec.encode(deck))
+    }
+
+    /**
+     * Import on a phone or a tablet (v1.3.7): a deck file, or a deck's QR code —
+     * scanned with the camera off another screen (the desk's Export → QR code), or
+     * found in a picture of one, a screenshot a friend sent. The desk imports a file
+     * at once and has no menu.
+     */
+    fun importMenu(state: DeckBuilderState, neue: NeueState): List<MenuEntry> {
+        val sources = com.kaiharimoto.neue.platform.Platform.scanSources
+        return buildList {
+            add(MenuEntry("A .ydk or .ydkx file") { importFile(state, neue) })
+            if (sources.isNotEmpty()) {
+                add(MenuEntry("Scan a QR code", hint = "Camera", separatorBefore = true, enabled = QrSource.CAMERA in sources, reason = "No camera") {
+                    scan(QrSource.CAMERA, state, neue)
+                })
+                add(MenuEntry("A picture of a QR code", enabled = QrSource.PICTURE in sources) { scan(QrSource.PICTURE, state, neue) })
+            }
+        }
+    }
+
+    /** Import, as the desk's button and `Ctrl O` do it: the file picker, then the builder. */
+    fun importFile(state: DeckBuilderState, neue: NeueState) {
+        state.importFromFile()
+        neue.go(com.kaiharimoto.neue.Page.BUILDER)
+    }
+
+    /** A deck read off a QR code (v1.3.7) replaces the one on the builder, as a file does, with Undo on the toast. */
+    fun scan(from: QrSource, state: DeckBuilderState, neue: NeueState) {
+        state.importFrom("Scanned deck") {
+            when (val scan = com.kaiharimoto.neue.platform.Platform.scanQr(from)) {
+                is QrScan.Read -> {
+                    neue.go(com.kaiharimoto.neue.Page.BUILDER)
+                    scan.text
+                }
+                QrScan.Cancelled -> null
+                QrScan.NotFound -> {
+                    neue.note = com.kaiharimoto.neue.Note("No QR code found in that picture")
+                    null
+                }
+                QrScan.NoCamera -> {
+                    neue.note = com.kaiharimoto.neue.Note("The camera could not be opened. Allow it in the app's settings")
+                    null
+                }
+            }
+        }
+    }
 
     /**
      * Sharing the Android way (touch swarm, rec 25): the code to a chat, or the file
@@ -187,6 +247,7 @@ object CardActions {
                 copy(DeckText.write(state.deck) { state.index.byId(it)?.name })
                 neue.note = com.kaiharimoto.neue.Note("Decklist copied as text")
             }
+            DeckExportFormat.QR -> if (!state.deck.isEmpty) showQr(state.deckName, state.deck, neue)
         }
     }
 
