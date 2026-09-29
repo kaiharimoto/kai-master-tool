@@ -106,10 +106,13 @@ class NeueSmokeTest {
             fun back() {
                 // Every Back here has something to close: wait for the app to have seen it open
                 // (its Back handler follows what is open a frame later), up to three seconds.
+                // Neue's own chain must have something to close, and the activity's handler must
+                // have followed it — another enabled callback is not Neue's.
                 repeat(30) {
-                    if (on { it.onBackPressedDispatcher.hasEnabledCallbacks() }) return@repeat
+                    if (on { it.neue!!.canGoBack() && it.onBackPressedDispatcher.hasEnabledCallbacks() }) return@repeat
                     Thread.sleep(100)
                 }
+                Thread.sleep(300)
                 instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
                 Thread.sleep(400)
             }
