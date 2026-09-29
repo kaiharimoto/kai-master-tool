@@ -136,6 +136,19 @@ fun neueMain(args: Array<String>) {
                         clock.run(60)
                     }
                 }
+                // --siding=N: the web's N-th deck in the siding editor (1.0.35); --against=M on its M-th deck.
+                // --matchups=true: the web's Matchups table instead.
+                map["siding"]?.toIntOrNull()?.let { n ->
+                    val ids = h.webs.selected?.deckIds.orEmpty()
+                    ids.getOrNull(n)?.let { id -> h.webs.side(id, map["against"]?.toIntOrNull()?.let(ids::getOrNull)) }
+                    h.neue.page = Page.FORMAT
+                    clock.run(60)
+                }
+                if (map["matchups"] == "true") {
+                    h.webs.showMatchups = true
+                    h.neue.page = Page.FORMAT
+                    clock.run(60)
+                }
             }
             // --check: Settings → Offline → Check for updates, asked for real, and its answer.
             if (map["check"] == "true") {

@@ -1473,6 +1473,42 @@ file, the page, the switcher), then the siding editor, then the guide.
   its decks, and ‹ › — `Alt ←`/`Alt →`, `WEB_PREVIOUS`/`WEB_NEXT`. The deck on the
   builder is saved as it goes (`NeueHolders.openDeck`). A phone has both in ⋯.
 
+
+### 4j. Siding (1.0.35)
+
+kai: "siding patterns, can use other decks in the deck web as a matchup and also
+write notes… Patterns would differ for every matchup, going first and second", and
+on the mockup, "how they side against you" to be more visually intuitive.
+
+- **The model** (`core/siding`): a deck's `DeckSiding` is its matchups, each an
+  opponent — a deck of the web by id, or only a name — a note, and a `SidePlan` per
+  `Turn` (out, in, one entry per copy, and why). It lives under the deck's own
+  `siding` key (`SidingCodec`), so it travels in the `.ydkx` and the `.ydkw`; the
+  legacy tool's `sidingPatterns` is read when there is no `siding` and never
+  written, so a file the legacy tool opens again still holds what it wrote.
+  `SidingMath` counts copies left, the balance (`even`, `2 more in`), what a plan
+  names that the deck no longer has, and the deck after siding.
+- **Ids across files**: `Webs.open` gives a `.ydkw`'s decks new ids and remaps
+  every siding link through the same map (`SidingCodec.remap`); a link to a deck
+  the file does not hold becomes a name.
+- **The editor** (`SidingEditor`, from a tile's menu, the Matchups list or the
+  builder's web menu): matchups down the left with their marks (`■` sided with a
+  reason, `□` sided, `·` not yet); the matchup's note; a column per turn — the
+  active one inverted — with Out and In lists (a click takes a copy back) and a
+  why; the deck below, main and extra to side out and side to side in, each card
+  with the copies left. **How they side against you** stands to the right (below,
+  narrower): the opponent's own plan against this deck for the answering turn —
+  you going first is them going second — what they bring in large, what they take
+  out small and struck, their note, and their deck by its groups. With no plan,
+  a link sides as them. A phone gets matchup chips and turn tabs.
+- **Saving**: every edit writes the deck's saved copy at once (`Webs.saveSiding`,
+  one write at a time), and when the deck is on the builder, its payload too
+  (`DeckBuilderState.putExtended`) — or the builder's next save writes the old plan
+  back. `Webs.sidingOf` is what every view reads, newest first.
+- **The web's page** has **The field** | **Matchups** (`MatchupTable`): for each
+  starred deck, a row per opponent with each turn's plan in a line.
+- Back and Esc leave the editor for its web (`Unwind.SIDING`, after a note's focus).
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

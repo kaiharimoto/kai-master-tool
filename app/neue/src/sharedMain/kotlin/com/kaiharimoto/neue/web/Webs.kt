@@ -4,6 +4,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.data.StoredDeck
+import com.kaiharimoto.mastertool.core.siding.DeckSiding
+import com.kaiharimoto.mastertool.core.siding.SidingCodec
+import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
+import kotlinx.coroutines.sync.withLock
 import com.kaiharimoto.mastertool.core.web.DeckWeb
 import com.kaiharimoto.mastertool.core.web.WebCodec
 import com.kaiharimoto.mastertool.core.web.WebEntry
@@ -34,6 +38,25 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
 
     /** The web open on the Format page. */
     var selectedId by mutableStateOf<String?>(null)
+
+    /** The deck being sided on the Format page (1.0.35), or null for the web itself. */
+    var sidingDeckId by mutableStateOf<String?>(null)
+
+    /** Whether the web's page shows its matchups rather than its field; kept, so the editor's Back returns to it. */
+    var showMatchups by mutableStateOf(false)
+
+    /** The opponent the siding editor opens on, when it was opened from a matchup. */
+    var sidingAgainst by mutableStateOf<String?>(null)
+
+    /** Opens the siding editor: [deckId] sided, against [against] when given. */
+    fun side(deckId: String, against: String? = null) {
+        library.webOf(deckId)?.let { selectedId = it.id }
+        sidingAgainst = against
+        sidingDeckId = deckId
+    }
+
+    /** One write at a time, in the order they were asked for: the last edit is the one kept. */
+    private val sidingLock = kotlinx.coroutines.sync.Mutex()
 
     /** Moves whenever a web's decks change in the deck table, so the page reads them again. */
     var revision by mutableStateOf(0)
@@ -126,6 +149,40 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         }
     }
 
+    /**
+     * A deck's extended payload as it stands: the builder's when the deck is open
+     * there (its groups and siding may be newer than the saved copy), else the saved one.
+     */
+    fun extendedOf(stored: StoredDeck, state: DeckBuilderState): kotlinx.serialization.json.JsonObject? =
+        if (state.deckId == stored.entry.id) state.extendedNow() else stored.extended
+
+    /** A deck's cards as they stand, by the same rule. */
+    fun deckOf(stored: StoredDeck, state: DeckBuilderState): com.kaiharimoto.mastertool.core.model.Deck =
+        if (state.deckId == stored.entry.id) state.deck else stored.entry.deck
+
+    /** Every plan written this session, by deck: newer than any copy read before it was written. */
+    private val written = androidx.compose.runtime.mutableStateMapOf<String, DeckSiding>()
+
+    /** A deck's siding as it stands: written this session, else the builder's copy or the saved one. */
+    fun sidingOf(stored: StoredDeck, state: DeckBuilderState): DeckSiding =
+        written[stored.entry.id] ?: SidingCodec.read(extendedOf(stored, state))
+
+    /**
+     * [siding] written into deck [deckId]'s saved copy — its cards and every other key
+     * left as saved — and into the builder's payload when the deck is open there, so
+     * the builder's next save carries it rather than the plan it had before.
+     */
+    fun saveSiding(deckId: String, siding: DeckSiding, state: DeckBuilderState) {
+        written[deckId] = siding
+        if (state.deckId == deckId) state.putExtended(SidingCodec.KEY, if (siding.isEmpty) null else SidingCodec.node(siding))
+        scope.launch {
+            sidingLock.withLock {
+                val stored = deps.deckRepository.byId(deckId) ?: return@withLock
+                deps.deckRepository.save(deckId, stored.entry.name, stored.entry.deck, SidingCodec.write(stored.extended, siding), stored.entry.notes)
+            }
+        }
+    }
+
     /** The web as a `.ydkw`: every deck as its `.ydkx`, groups and all. */
     suspend fun fileText(web: DeckWeb): String {
         val decks = decks(web).map { stored ->
@@ -147,9 +204,12 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
             return
         }
         scope.launch {
+            // New ids first, so a siding plan against another deck of the file follows it to its new id.
+            val ids = file.decks.associate { it.id to deps.newDeckId() }
             val entries = file.decks.map { deck ->
-                val id = deps.newDeckId()
-                deps.deckRepository.save(id, deck.name, deck.document.deck, deck.document.extended)
+                val id = ids.getValue(deck.id)
+                val extended = SidingCodec.remap(deck.document.extended, ids)
+                deps.deckRepository.save(id, deck.name, deck.document.deck, extended)
                 WebEntry(id, deck.mine, deck.share)
             }
             val web = DeckWeb(deps.newDeckId(), file.name, file.notes, entries, deps.now())

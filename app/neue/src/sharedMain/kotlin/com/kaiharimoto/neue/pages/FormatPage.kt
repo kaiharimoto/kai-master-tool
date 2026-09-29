@@ -75,6 +75,7 @@ import com.kaiharimoto.neue.kit.Tag
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.onContextMenu
+import com.kaiharimoto.neue.kit.reportsTextFocus
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.platform.QrSource
 import com.kaiharimoto.neue.theme.LocalMuFonts
@@ -201,6 +202,12 @@ fun FormatPage(
     }
 
     Column(Modifier.fillMaxSize()) {
+        // Siding takes the page: its own bar says where it is and leads back (1.0.35).
+        val siding = webs.sidingDeckId?.takeIf { web?.has(it) == true }
+        if (web != null && siding != null) {
+            SidingHost(webs, web, siding, state, neue, reload)
+            return@Column
+        }
         PageHeader(
             numeral = 5,
             title = "Format",
@@ -361,16 +368,24 @@ private fun WebBody(
             }
             NotesField(web.notes, { webs.setNotes(web.id, it) }, placeholder = "Notes about the room: what is popular, what people side, what to expect.")
         }
+        val view = if (webs.showMatchups) WebView.MATCHUPS else WebView.FIELD
         Row(Modifier.fillMaxWidth().padding(horizontal = gutter).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Micro("The field", color = c.ink70)
-            Small(
-                if (web.totalShare > 0) "Shares written down add up to ${web.totalShare}%." else "Star the decks you play; click one to open it in the builder.",
-                color = c.ink45,
-            )
+            com.kaiharimoto.neue.kit.Segmented(view, WebView.entries, { it.title }, { webs.showMatchups = it == WebView.MATCHUPS }, small = true)
+            if (!phone) {
+                Small(
+                    when {
+                        view == WebView.MATCHUPS -> "How each of your decks sides against the field."
+                        web.totalShare > 0 -> "Shares written down add up to ${web.totalShare}%."
+                        else -> "Star the decks you play; click one to open it in the builder."
+                    },
+                    color = c.ink45,
+                )
+            }
         }
         val list = decks
         when {
             list == null -> Unit
+            view == WebView.MATCHUPS -> MatchupTable(webs, web, list, state, neue, Modifier.fillMaxSize().padding(horizontal = gutter))
             list.isEmpty() -> EmptyState(
                 "No decks in this web yet.",
                 "Import the decks you expect to face, or copy yours in from the library. Each is a deck of its own, editable in the builder.",
@@ -421,6 +436,7 @@ private fun tileMenu(
         at,
         listOf(
             MenuEntry("Open in the builder") { onOpenDeck(id) },
+            MenuEntry("Side this deck", hint = "Matchups") { webs.side(id) },
             MenuEntry(if (entry.mine) "Not one of mine" else "★ One of mine") { webs.star(web.id, id, !entry.mine) },
             MenuEntry("Share of the field…", hint = entry.share?.let { "$it%" } ?: "—") {
                 neue.menu = MenuSpec(
@@ -438,6 +454,9 @@ private fun tileMenu(
         ),
     )
 }
+
+/** What the web's page shows under its notes: the decks, or how yours side against them. */
+private enum class WebView(val title: String) { FIELD("The field"), MATCHUPS("Matchups") }
 
 /** The shares offered for a deck, in percent of the field. */
 private val SHARES = listOf(5, 10, 15, 20, 25, 30, 35, 40, 50)
@@ -533,6 +552,7 @@ private fun WebNameField(value: String, onChange: (String) -> Unit) {
         cursorBrush = SolidColor(c.ink),
         modifier = Modifier
             .fillMaxWidth()
+            .reportsTextFocus()
             .cursorPointer(caption = "Rename")
             .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
             .padding(bottom = 4.dp),
@@ -541,7 +561,7 @@ private fun WebNameField(value: String, onChange: (String) -> Unit) {
 
 /** The web's notes: a few lines about the room, kept as they are typed. */
 @Composable
-private fun NotesField(value: String, onChange: (String) -> Unit, placeholder: String) {
+internal fun NotesField(value: String, onChange: (String) -> Unit, placeholder: String) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     Box(
@@ -558,7 +578,8 @@ private fun NotesField(value: String, onChange: (String) -> Unit, placeholder: S
             textStyle = MuType.body(f).copy(color = c.ink, fontSize = 13.sp),
             cursorBrush = SolidColor(c.ink),
             maxLines = 6,
-            modifier = Modifier.fillMaxWidth(),
+            // Typing is not a shortcut, and Esc lets go of the note before it closes anything (1.0.35).
+            modifier = Modifier.fillMaxWidth().reportsTextFocus(),
         )
     }
 }

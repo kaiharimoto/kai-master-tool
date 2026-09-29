@@ -8,7 +8,7 @@ class BackChainTest {
 
     private val everything = BackFlags(
         updateDialog = true, overlay = true, top = true, coverPicker = true, goal = true, draft = true,
-        focus = true, palettes = true, isolation = true, selection = true, immersive = true, offBuilder = true,
+        focus = true, siding = true, palettes = true, isolation = true, selection = true, immersive = true, offBuilder = true,
     )
 
     @Test
@@ -23,7 +23,7 @@ class BackChainTest {
         assertEquals(
             listOf(
                 Unwind.UPDATE_DIALOG, Unwind.OVERLAY, Unwind.TOP, Unwind.COVER_PICKER, Unwind.GOAL, Unwind.DRAFT,
-                Unwind.FOCUS, Unwind.PALETTES, Unwind.ISOLATION, Unwind.SELECTION, Unwind.IMMERSIVE,
+                Unwind.FOCUS, Unwind.SIDING, Unwind.PALETTES, Unwind.ISOLATION, Unwind.SELECTION, Unwind.IMMERSIVE,
             ),
             escOrder,
         )
@@ -48,6 +48,10 @@ class BackChainTest {
         assertEquals(Unwind.COVER_PICKER, BackChain.back(BackFlags(coverPicker = true)))
         // The Groups panel's palettes, left out, are something open: Back puts them away.
         assertEquals(Unwind.PALETTES, BackChain.back(BackFlags(palettes = true)))
+        // The siding editor is a page inside Format: Back returns to its web before leaving Format (1.0.35).
+        assertEquals(Unwind.SIDING, BackChain.back(BackFlags(siding = true, offBuilder = true)))
+        // Esc in one of its notes lets go of the note first.
+        assertEquals(Unwind.FOCUS, BackChain.esc(BackFlags(focus = true, siding = true)))
         // Deep zen is inside immersive: Back leaves full screen before it leaves the app.
         assertEquals(Unwind.IMMERSIVE, BackChain.back(BackFlags(immersive = true, offBuilder = true)))
         assertEquals(Unwind.TO_BUILDER, BackChain.back(BackFlags(offBuilder = true)))
@@ -64,6 +68,7 @@ class BackChainTest {
         Unwind.GOAL -> copy(goal = false)
         Unwind.DRAFT -> copy(draft = false)
         Unwind.FOCUS -> copy(focus = false)
+        Unwind.SIDING -> copy(siding = false)
         Unwind.PALETTES -> copy(palettes = false)
         Unwind.ISOLATION -> copy(isolation = false)
         Unwind.SELECTION -> copy(selection = false)

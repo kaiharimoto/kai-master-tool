@@ -23,6 +23,8 @@ enum class Unwind {
     GOAL,
     DRAFT,
     FOCUS,
+    /** The siding editor, back to its web (1.0.35). */
+    SIDING,
     /** The Groups panel's palettes, left out (1.0.24). */
     PALETTES,
     ISOLATION,
@@ -41,6 +43,7 @@ data class BackFlags(
     val goal: Boolean = false,
     val draft: Boolean = false,
     val focus: Boolean = false,
+    val siding: Boolean = false,
     val palettes: Boolean = false,
     val isolation: Boolean = false,
     val selection: Boolean = false,
@@ -52,12 +55,12 @@ object BackChain {
 
     private val ESC = listOf(
         Unwind.UPDATE_DIALOG, Unwind.OVERLAY, Unwind.TOP, Unwind.COVER_PICKER, Unwind.GOAL, Unwind.DRAFT,
-        Unwind.FOCUS, Unwind.PALETTES, Unwind.ISOLATION, Unwind.SELECTION, Unwind.IMMERSIVE,
+        Unwind.FOCUS, Unwind.SIDING, Unwind.PALETTES, Unwind.ISOLATION, Unwind.SELECTION, Unwind.IMMERSIVE,
     )
 
     private val BACK = listOf(
         Unwind.UPDATE_DIALOG, Unwind.OVERLAY, Unwind.TOP, Unwind.COVER_PICKER, Unwind.GOAL, Unwind.DRAFT,
-        Unwind.PALETTES, Unwind.IMMERSIVE, Unwind.TO_BUILDER,
+        Unwind.SIDING, Unwind.PALETTES, Unwind.IMMERSIVE, Unwind.TO_BUILDER,
     )
 
     /** What Esc closes next, or null when there is nothing. */
@@ -74,6 +77,7 @@ object BackChain {
         Unwind.GOAL -> goal
         Unwind.DRAFT -> draft
         Unwind.FOCUS -> focus
+        Unwind.SIDING -> siding
         Unwind.PALETTES -> palettes
         Unwind.ISOLATION -> isolation
         Unwind.SELECTION -> selection

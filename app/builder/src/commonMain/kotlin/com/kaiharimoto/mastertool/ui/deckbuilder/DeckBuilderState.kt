@@ -880,6 +880,21 @@ class DeckBuilderState(
 
     private fun mintGroupId(): String = "g-${Random.nextLong().toString(16)}"
 
+    /** The loaded deck's extended payload as the next save will write it: groups and every other key. */
+    fun extendedNow(): JsonObject? = extendedForWrite()
+
+    /**
+     * One key of the loaded deck's extended payload set from outside the builder —
+     * the siding editor's (1.0.35), which writes the stored deck itself and hands
+     * the builder the same key so its next save does not write the old one back.
+     * Not an edit to the deck: nothing to undo, and nothing unsaved.
+     */
+    fun putExtended(key: String, value: kotlinx.serialization.json.JsonElement?) {
+        val others = extended?.filterKeys { it != key }.orEmpty()
+        val next = if (value == null) others else others + (key to value)
+        extended = if (next.isEmpty()) null else JsonObject(next)
+    }
+
     /** The extended payload with the current breakdown written into it. */
     private fun extendedForWrite() =
         DeckGroupsCodec.write(extended, StoredGroups(groups, lens, goals))

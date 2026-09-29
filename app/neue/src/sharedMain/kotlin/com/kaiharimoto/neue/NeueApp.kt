@@ -460,6 +460,7 @@ class NeueHolders(
         goal = builder.editingGoal != null,
         draft = builder.groupDraft != null,
         focus = textFocus.any || builder.textInputFocused || neue.searchFocused,
+        siding = neue.page == Page.FORMAT && webs.sidingDeckId != null,
         palettes = neue.groupPalettesOpen,
         isolation = builder.isolatedKey != null,
         selection = neue.selection != null,
@@ -493,6 +494,10 @@ class NeueHolders(
             Unwind.GOAL -> state.cancelGoal()
             Unwind.DRAFT -> state.cancelGroupDraft()
             Unwind.FOCUS -> focus?.clearFocus()
+            Unwind.SIDING -> {
+                webs.sidingDeckId = null
+                webs.sidingAgainst = null
+            }
             Unwind.PALETTES -> neue.groupPalettesOpen = false
             Unwind.ISOLATION -> state.isolatedKey?.let(state::toggleIsolation)
             Unwind.SELECTION -> neue.selection = null

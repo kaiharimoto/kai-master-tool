@@ -284,8 +284,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`neue.webs`, no migration); a web's decks are ordinary decks the Decks page
   leaves to it. **`.ydkw`** (`WebCodec`) is one text file: a `#web` header, then a
   `#deck` block per deck, each a complete `.ydkx`. The builder bar steps through a
-  web (`WebSwitch`, `Alt ←/→`), saving as it goes. Siding patterns and the PDF
-  guide are the next two releases, on kai's mockup.
+  web (`WebSwitch`, `Alt ←/→`), saving as it goes. **Siding** (1.0.35, `SidingEditor`):
+  any deck of a web sided against any other, a plan per turn with its why, under
+  the deck's own `siding` key (`SidingCodec`, core — legacy `sidingPatterns` read,
+  never written); matchups link web decks by id, remapped when a `.ydkw` opens.
+  Beside the plan, **how they side against you**: the opponent's own plan for the
+  answering turn, as pictures. The web's page lists your matchups (`MatchupTable`).
+  An edit to the builder's open deck goes into its payload too
+  (`DeckBuilderState.putExtended`), or its next save would write the old plan back.
+  The PDF guide is next.
 - **The builder opens a deck**: the library's default, else the one saved last
   (`StartingDeck`). A library row shows up to three chosen covers
   (`DeckCovers`), and a card's alternate artworks are a picture choice applied
@@ -473,11 +480,11 @@ reads the printed text, and three decisions in it are worth keeping:
   and the trailing word is always matched as a prefix, so the list is not empty
   until you finish typing.
 
-**Explicitly deferred by the user — do not build on the legacy designs:**
-siding patterns and shootout mode will be redesigned from scratch in a future
-run. The only obligation today is that `YdkCodec` keeps round-tripping the
-opaque `#ydkx-extended` payload (it does — `DeckGroupsCodec` preserves
-unknown keys byte-for-byte).
+**Siding was redesigned from scratch** (1.0.35, Format), not built on the legacy
+designs: its own `siding` key, the legacy `sidingPatterns` only read. Shootout mode
+is still deferred. `YdkCodec` keeps round-tripping the opaque `#ydkx-extended`
+payload (`DeckGroupsCodec` and `SidingCodec` each replace only their own key and
+preserve every other byte-for-byte).
 
 ## Multi-Team Trigger
 
