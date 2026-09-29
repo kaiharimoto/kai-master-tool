@@ -89,6 +89,15 @@ class NeueSmokeTest {
         // blinks forever, and on a slow emulator waitForIdleSync then never returns.
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             fun <T> on(read: (MainActivity) -> T): T = readActivity(read) ?: error("no resumed activity to read")
+            // A slow emulator's frames run to 250 ms and more: what the app should come to,
+            // given four seconds to come to it, rather than read once after a fixed sleep.
+            fun until(cond: () -> Boolean): Boolean {
+                repeat(40) {
+                    if (cond()) return true
+                    Thread.sleep(100)
+                }
+                return cond()
+            }
             fun shoot(name: String) {
                 Thread.sleep(1200)
                 val shot = instrumentation.uiAutomation.takeScreenshot() ?: return
@@ -137,24 +146,24 @@ class NeueSmokeTest {
             // raises the soft keyboard, which takes the first Back for itself.)
             on { it.neue!!.neue.helpOpen = true }
             back()
-            assertFalse("Back left the help open", on { it.neue!!.neue.helpOpen })
+            assertTrue("Back left the help open", until { !on { it.neue!!.neue.helpOpen } })
             assertFalse("Back closed the app with the help open", on { it.isFinishing })
 
             // From another page, Back comes home to the builder before it leaves.
             on { it.neue!!.neue.go(Page.DECKS) }
             shoot("03-decks.png")
             back()
-            assertEquals(Page.BUILDER, on { it.neue!!.neue.page })
+            assertTrue("Back did not bring the Decks page home", until { on { it.neue!!.neue.page } == Page.BUILDER })
             assertFalse("Back left the app from the Decks page", on { it.isFinishing })
 
             // Immersive: a tap on the paper strip along the top brings the bar out.
             on { it.neue!!.neue.immersive = true }
             Thread.sleep(1500)
             tap(640f, 12f)
-            assertTrue("a tap on the top strip did not bring the bar out", on { it.neue!!.neue.revealed.top })
+            assertTrue("a tap on the top strip did not bring the bar out", until { on { it.neue!!.neue.revealed.top } })
             shoot("04-immersive-bar.png")
             back()
-            assertFalse("Back did not leave immersive", on { it.neue!!.neue.immersive })
+            assertTrue("Back did not leave immersive", until { !on { it.neue!!.neue.immersive } })
 
             assertFalse("the activity recorded a crash", File(app.filesDir, "last-crash.txt").exists())
         }
