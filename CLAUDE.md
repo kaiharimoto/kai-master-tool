@@ -197,7 +197,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   section. On the builder the bar drops the wordmark, a legal deck is a ✓ (its words in
   the tip; issues and notes counted) and Import, Export and Screenshot are icons, so the
   deck's name has room. A selected card stands up out of the page, framed outside its
-  edge in paper and ink, above its neighbours. The wheel's notch is 5 %. The Groups panel stands beside the deck.
+  edge in paper and ink, above its neighbours. The wheel's notch is 5 %. The lens tabs are
+  gone (1.0.42): As is, Fitted and Separate stand in their place over the main deck. The Groups panel stands beside the deck.
   `NEUE.md` §3 has the budget. The ramp is darker than the kit's in both
   themes, with a High contrast setting.
 - **Groups break the deck into pieces** (`GroupPieces`, 1.0.15): cards of one
@@ -297,7 +298,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   bottom of the window opens `above`, or it covers its own control.
 - **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format** (1.0.40, kai:
   Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by
-  anything that asks `Webs.side`). `NEUE.md` §3, §4j.
+  anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
+  a deck in no web is sided against opponents made there — a name and three cards
+  (`OpponentDialog`, `Matchup.covers`), a library decklist linked later (1.0.42).
+  `NEUE.md` §3, §4j.
 - **Format** (1.0.33, `04`, `NEUE.md` §4i): **webs of decks** — the field expected
   at an event, yours starred. `DeckWeb`/`WebLibrary` (core; the page is Format, the
   type is not, since `Format` is TCG/OCG) kept as one preferences document

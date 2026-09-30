@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,7 @@ import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.Micro
@@ -108,68 +110,130 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun SidingEditor(
     webs: Webs,
-    web: DeckWeb,
+    /** The web [me] is sided in, or null for a deck sided on its own (1.0.42): its opponents are its matchups. */
+    web: DeckWeb?,
     decks: List<StoredDeck>,
     me: StoredDeck,
     state: DeckBuilderState,
     neue: NeueState,
-    onBack: () -> Unit,
+    /** Back to the web on Format; null where there is no web to go back to. */
+    onBack: (() -> Unit)?,
+    reload: Int = 0,
 ) {
     val c = Mu.colors
     val phone = LocalPhone.current
     val myDeck = webs.deckOf(me, state)
     var siding by remember(me.entry.id) { mutableStateOf(webs.sidingOf(me, state)) }
     var turn by remember { mutableStateOf(Turn.FIRST) }
-    val opponents = decks.filter { it.entry.id != me.entry.id }
-    // Matchups against no deck of this web: a legacy plan, or one the deck brought from elsewhere.
+    val opponents = if (web == null) emptyList() else decks.filter { it.entry.id != me.entry.id }
+    // Matchups against no deck of this web: a legacy plan, one the deck brought from elsewhere,
+    // or — for a deck sided on its own — every one it has, made here by name (1.0.42).
     val loose = siding.matchups.filter { m -> opponents.none { siding.against(it.entry.id, it.entry.name) == m } }
+    // Every deck of the library: a matchup made by name may be linked to one, whose list and plan it then shows.
+    var library by remember { mutableStateOf<List<StoredDeck>>(emptyList()) }
+    LaunchedEffect(me.entry.id, reload, webs.revision) { library = webs.libraryDecks() }
+    fun linked(m: Matchup?): StoredDeck? = m?.deckId?.let { id -> decks.firstOrNull { it.entry.id == id } ?: library.firstOrNull { it.entry.id == id } }
     var selected by remember(me.entry.id) {
         mutableStateOf(webs.sidingAgainst?.takeIf { a -> opponents.any { it.entry.id == a } } ?: opponents.firstOrNull()?.entry?.id ?: loose.firstOrNull()?.let { "m:${it.id}" })
     }
     val opponent = opponents.firstOrNull { it.entry.id == selected }
     val matchup: Matchup? = opponent?.let { siding.against(it.entry.id, it.entry.name) } ?: siding.byId(selected?.removePrefix("m:"))
     val name = opponent?.entry?.name ?: matchup?.name ?: ""
+    // The deck they play: the web's, or the one a matchup made here was linked to.
+    val theirDeck = opponent ?: linked(matchup)
+
+    fun save(next: DeckSiding) {
+        siding = next
+        webs.saveSiding(me.entry.id, next, state)
+    }
 
     /** [change] to this matchup, made (and linked to the web deck) on its first edit. */
     fun edit(change: (Matchup) -> Matchup) {
         val base = matchup ?: Matchup("m-${Random.nextLong().toULong().toString(36)}", name)
-        val linked = if (opponent != null) base.copy(deckId = opponent.entry.id, name = opponent.entry.name) else base
-        val next = siding.put(change(linked))
-        siding = next
-        webs.saveSiding(me.entry.id, next, state)
+        val linkedToWeb = if (opponent != null) base.copy(deckId = opponent.entry.id, name = opponent.entry.name) else base
+        save(siding.put(change(linkedToWeb)))
     }
 
     fun plan(t: Turn) = matchup?.plan(t) ?: SidePlan()
     fun setPlan(t: Turn, p: SidePlan) = edit { it.withPlan(t, p) }
 
+    // An opponent made or changed here (1.0.42): a name and three cards, its decklist linked later.
+    var creating by remember { mutableStateOf(false) }
+    var changing by remember { mutableStateOf<Matchup?>(null) }
+    fun remove(m: Matchup) {
+        val before = siding
+        save(siding.remove(m.id))
+        selected = opponents.firstOrNull()?.entry?.id ?: siding.matchups.firstOrNull()?.let { "m:${it.id}" }
+        neue.note = com.kaiharimoto.neue.Note("Removed “${m.name}”", action = "Undo") {
+            save(before)
+            selected = "m:${m.id}"
+        }
+    }
+    fun opponentMenu(m: Matchup, at: Offset) {
+        val decklist = linked(m)
+        neue.menu = MenuSpec(at, buildList {
+            add(MenuEntry("Name and cards…") { changing = m })
+            add(MenuEntry(if (decklist == null) "Link a decklist…" else "Link another decklist…") {
+                val choices = library.filter { it.entry.id != me.entry.id }.sortedBy { it.entry.name.lowercase() }
+                neue.menu = MenuSpec(at, if (choices.isEmpty()) {
+                    listOf(MenuEntry("No other decks in the library", enabled = false) {})
+                } else {
+                    choices.map { d -> MenuEntry(d.entry.name, hint = if (d.entry.id == m.deckId) "✓" else null) { save(siding.put(m.copy(deckId = d.entry.id))) } }
+                })
+            })
+            if (decklist != null) add(MenuEntry("Unlink “${decklist.entry.name}”") { save(siding.put(m.copy(deckId = null))) })
+            add(MenuEntry("Remove this matchup", danger = true, separatorBefore = true) { remove(m) })
+        })
+    }
+
     Column(Modifier.fillMaxSize()) {
-        val library = com.kaiharimoto.neue.art.LocalArt.current
+        val art = com.kaiharimoto.neue.art.LocalArt.current
         val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         var making by remember { mutableStateOf(false) }
+        // The guide reads every deck a matchup names: the web's, and any linked from the library.
+        val named = decks + library.filter { lib -> decks.none { it.entry.id == lib.entry.id } && siding.matchups.any { it.deckId == lib.entry.id } }
         SidingBar(webs, web, decks, me, onBack, neue, making) {
             making = true
             scope.launch {
                 try {
-                    GuideExport.deliver(webs, web, decks, me, state, neue, library, custom)
+                    GuideExport.deliver(webs, web, named, me, state, neue, art, custom)
                 } finally {
                     making = false
                 }
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
+        creating.takeIf { it }?.let {
+            OpponentDialog(null, state, { creating = false }) { n, covers ->
+                val made = Matchup("m-${Random.nextLong().toULong().toString(36)}", n, covers = covers)
+                save(siding.put(made))
+                selected = "m:${made.id}"
+                creating = false
+            }
+        }
+        changing?.let { m ->
+            OpponentDialog(m, state, { changing = null }) { n, covers ->
+                save(siding.put(m.copy(name = n, covers = covers)))
+                changing = null
+            }
+        }
         if (opponents.isEmpty() && loose.isEmpty()) {
             com.kaiharimoto.neue.kit.EmptyState(
-                "Nobody to side against yet.",
-                "Add the decks you expect to face to ${web.name}; each becomes a matchup here.",
-            )
+                "No matchups yet.",
+                if (web == null) {
+                    "Add the decks you expect to face: a name and three cards to know each by. Side against it here, and link its decklist later if you get one."
+                } else {
+                    "Add the decks you expect to face to ${web.name}, or add one here by its name and three cards."
+                },
+            ) { MuButton("New opponent", { creating = true }, variant = BtnVariant.PRIMARY, icon = com.kaiharimoto.neue.kit.Icons.Plus) }
             return@Column
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= 1100.dp
             val narrow = maxWidth < 700.dp
             val theirs: @Composable (Modifier) -> Unit = { modifier ->
-                TheirPlan(webs, opponent, me, turn, state, neue, modifier) { webs.side(it, me.entry.id) }
+                TheirPlan(webs, theirDeck, me, turn, state, neue, web != null, modifier) { webs.side(it, me.entry.id) }
             }
             val body: @Composable (Modifier) -> Unit = { modifier ->
                 val scroll = rememberScrollState()
@@ -182,9 +246,10 @@ internal fun SidingEditor(
                                     Tag(o.entry.name, selected == o.entry.id, { selected = o.entry.id }, count = marks(m), caption = "Side")
                                 }
                                 loose.forEach { m -> Tag(m.name, selected == "m:${m.id}", { selected = "m:${m.id}" }, count = marks(m), caption = "Side") }
+                                Tag("+ Opponent", false, { creating = true }, caption = "New")
                             }
                         }
-                        OpponentHeader(opponent, name, state, neue)
+                        OpponentHeader(theirDeck, matchup?.covers.orEmpty(), name, state, neue, onMenu = if (opponent == null && matchup != null) { at -> opponentMenu(matchup, at) } else null)
                         PlanNote(matchup?.note.orEmpty(), { note -> edit { it.copy(note = note) } }, "The matchup: how it plays, what matters, what to hold.")
                         if (narrow) {
                             com.kaiharimoto.neue.kit.Segmented(turn, Turn.entries, { it.title }, { turn = it })
@@ -206,7 +271,7 @@ internal fun SidingEditor(
                 body(Modifier.fillMaxSize())
             } else {
                 Row(Modifier.fillMaxSize()) {
-                    MatchupList(opponents, loose, siding, selected, { selected = it }, Modifier.width(224.dp).fillMaxHeight())
+                    MatchupList(opponents, loose, siding, selected, web != null, { selected = it }, { creating = true }, Modifier.width(224.dp).fillMaxHeight())
                     Box(Modifier.width(1.dp).fillMaxHeight().background(c.ink12))
                     body(Modifier.weight(1f).fillMaxHeight())
                     if (wide) {
@@ -226,9 +291,9 @@ internal fun SidingEditor(
 /** A matchup's two marks, going first then second. */
 private fun marks(m: Matchup?): String = if (m == null) "· ·" else "${m.mark(Turn.FIRST)} ${m.mark(Turn.SECOND)}"
 
-/** Back to the web, and which deck is being sided. */
+/** Back to the web, and which deck is being sided — or, for a deck sided on its own, its name. */
 @Composable
-private fun SidingBar(webs: Webs, web: DeckWeb, decks: List<StoredDeck>, me: StoredDeck, onBack: () -> Unit, neue: NeueState, making: Boolean, onGuide: () -> Unit) {
+private fun SidingBar(webs: Webs, web: DeckWeb?, decks: List<StoredDeck>, me: StoredDeck, onBack: (() -> Unit)?, neue: NeueState, making: Boolean, onGuide: () -> Unit) {
     val c = Mu.colors
     val phone = LocalPhone.current
     var asAt by remember { mutableStateOf(Offset.Zero) }
@@ -238,23 +303,28 @@ private fun SidingBar(webs: Webs, web: DeckWeb, decks: List<StoredDeck>, me: Sto
         verticalArrangement = Arrangement.spacedBy(8.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
-        MuButton("← ${web.name.ifBlank { "The web" }}", onBack, variant = BtnVariant.GHOST, size = BtnSize.SM)
+        if (web != null && onBack != null) MuButton("← ${web.name.ifBlank { "The web" }}", onBack, variant = BtnVariant.GHOST, size = BtnSize.SM)
         Micro("Siding as", color = c.ink70)
-        val mine = web.entry(me.entry.id)?.mine == true
-        MuButton(
-            "${if (mine) "★ " else ""}${me.entry.name} ▾",
-            {
-                // Yours first: the decks you side as.
-                val ordered = decks.sortedByDescending { web.entry(it.entry.id)?.mine == true }
-                neue.menu = MenuSpec(asAt, ordered.map { d ->
-                    val star = web.entry(d.entry.id)?.mine == true
-                    MenuEntry("${if (star) "★ " else ""}${d.entry.name}", hint = if (d.entry.id == me.entry.id) "✓" else null) { webs.side(d.entry.id) }
-                })
-            },
-            Modifier.onGloballyPositioned { asAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) },
-            variant = BtnVariant.SECONDARY,
-            size = BtnSize.SM,
-        )
+        if (web != null) {
+            val mine = web.entry(me.entry.id)?.mine == true
+            MuButton(
+                "${if (mine) "★ " else ""}${me.entry.name} ▾",
+                {
+                    // Yours first: the decks you side as.
+                    val ordered = decks.sortedByDescending { web.entry(it.entry.id)?.mine == true }
+                    neue.menu = MenuSpec(asAt, ordered.map { d ->
+                        val star = web.entry(d.entry.id)?.mine == true
+                        MenuEntry("${if (star) "★ " else ""}${d.entry.name}", hint = if (d.entry.id == me.entry.id) "✓" else null) { webs.side(d.entry.id) }
+                    })
+                },
+                Modifier.onGloballyPositioned { asAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) },
+                variant = BtnVariant.SECONDARY,
+                size = BtnSize.SM,
+            )
+        } else {
+            // A deck on its own (1.0.42): the one in the builder, by name.
+            MuText(me.entry.name, style = MuType.body(LocalMuFonts.current).copy(fontWeight = FontWeight.Bold), color = c.ink, maxLines = 1)
+        }
         GuideButton(making, onGuide)
         if (!phone) {
             Small(
@@ -280,14 +350,16 @@ internal fun GuideButton(making: Boolean, onGuide: () -> Unit) {
     )
 }
 
-/** Every opponent: the web's other decks, then any plan against a deck not in the web. */
+/** Every opponent: the web's other decks, then the matchups made by name (1.0.42), and a way to make one. */
 @Composable
 private fun MatchupList(
     opponents: List<StoredDeck>,
     loose: List<Matchup>,
     siding: DeckSiding,
     selected: String?,
+    inWeb: Boolean,
     onSelect: (String) -> Unit,
+    onNew: () -> Unit,
     modifier: Modifier,
 ) {
     val c = Mu.colors
@@ -299,9 +371,10 @@ private fun MatchupList(
                 MatchupRow(o.entry.name, marks(siding.against(o.entry.id, o.entry.name)), selected == o.entry.id) { onSelect(o.entry.id) }
             }
             if (loose.isNotEmpty()) {
-                Micro("Not in this web", Modifier.padding(start = 8.dp, top = 12.dp, bottom = 6.dp), color = c.ink45)
+                if (inWeb) Micro("Not in this web", Modifier.padding(start = 8.dp, top = 12.dp, bottom = 6.dp), color = c.ink45)
                 loose.forEach { m -> MatchupRow(m.name, marks(m), selected == "m:${m.id}") { onSelect("m:${m.id}") } }
             }
+            MuButton("New opponent", onNew, Modifier.padding(top = 8.dp), variant = BtnVariant.GHOST, size = BtnSize.SM, icon = com.kaiharimoto.neue.kit.Icons.Plus)
             Help("The marks: going first, then second. ■ sided with a reason, □ sided, · not yet.", Modifier.padding(start = 8.dp, top = 12.dp, end = 8.dp))
         }
         ScrollbarFor(scroll)
@@ -329,17 +402,32 @@ private fun MatchupRow(name: String, marks: String, on: Boolean, onClick: () -> 
     }
 }
 
-/** Who this is against: their faces and their name. */
+/**
+ * Who this is against: their faces — their deck's, else the three cards the matchup was
+ * made with — and their name; for a matchup made here, its menu (1.0.42).
+ */
 @Composable
-private fun OpponentHeader(opponent: StoredDeck?, name: String, state: DeckBuilderState, neue: NeueState) {
+private fun OpponentHeader(opponent: StoredDeck?, covers: List<CardId>, name: String, state: DeckBuilderState, neue: NeueState, onMenu: ((Offset) -> Unit)?) {
+    val c = Mu.colors
+    var at by remember { mutableStateOf(Offset.Zero) }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (opponent != null) {
-            val faces = remember(opponent.entry.deck, state.index) { faces(opponent, neue, state) }
+        val faces = if (opponent != null) remember(opponent.entry.deck, state.index) { faces(opponent, neue, state) } else covers.mapNotNull(state.index::byId)
+        if (faces.isNotEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 faces.forEach { NeueCard(it, Modifier.size(34.dp, 50.dp), foil = "off") }
             }
         }
-        MuText("vs $name", style = MuType.h2(LocalMuFonts.current), color = Mu.colors.ink, maxLines = 2)
+        Column(Modifier.weight(1f, fill = false)) {
+            MuText("vs $name", style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 2)
+            if (onMenu != null) Small(if (opponent != null) "Decklist: ${opponent.entry.name}" else "No decklist linked", color = c.ink45)
+        }
+        if (onMenu != null) {
+            Box(Modifier.onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+                com.kaiharimoto.neue.kit.Tip("This opponent: its name and cards, its decklist, or remove it") {
+                    IconButton(com.kaiharimoto.neue.kit.Icons.More, { onMenu(at) }, size = 32.dp, label = "Opponent")
+                }
+            }
+        }
     }
 }
 
@@ -515,6 +603,7 @@ private fun TheirPlan(
     turn: Turn,
     state: DeckBuilderState,
     neue: NeueState,
+    inWeb: Boolean,
     modifier: Modifier,
     onSideAs: (String) -> Unit,
 ) {
@@ -522,7 +611,11 @@ private fun TheirPlan(
     Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (opponent == null) {
             Micro("How they side against you", color = c.ink70)
-            Small("Only a deck of this web can show its own plan against you.", color = c.ink45)
+            Small(
+                if (inWeb) "Only a deck of this web, or a matchup linked to a decklist, can show its own plan against you."
+                else "Link this matchup to a decklist (its ⋯ menu) to see how it sides against you.",
+                color = c.ink45,
+            )
             return@Column
         }
         val name = opponent.entry.name

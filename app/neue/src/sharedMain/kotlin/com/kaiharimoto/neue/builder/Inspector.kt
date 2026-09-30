@@ -139,7 +139,6 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
                 format = state.format,
                 foil = neue.prefs.foil,
             )
-            ArtSwitch(card, neue, Modifier.zenQuiet().padding(top = 8.dp))
             // In zen the card stays a moment longer than what is written about it.
             Column(Modifier.zenQuiet().padding(top = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 CardHeading(card)
@@ -150,6 +149,8 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
             Column(Modifier.zenQuiet()) {
                 Fold("Details", "details", neue) { CardTags(card, state) }
                 Fold("In the deck", "deck", neue) { Copies(card, state) }
+                // The artwork last (1.0.42, kai: "not vital to deckbuilding"): which picture, and your own.
+                Fold("Artwork", "art", neue) { ArtSwitch(card, neue) }
             }
         }
         Box(Modifier.matchParentSize().zenQuiet()) { ScrollbarFor(scroll) }

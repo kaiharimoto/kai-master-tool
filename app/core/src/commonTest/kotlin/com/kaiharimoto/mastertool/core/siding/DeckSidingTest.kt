@@ -43,6 +43,23 @@ class DeckSidingTest {
     }
 
     @Test
+    fun anOpponentWithNoDecklistIsANameAndThreeCardsAndSurvivesTheFile() {
+        // Made on its own (1.0.42): no deck to link to yet, three cards to know it by.
+        val made = Matchup("m-2", "Snake-Eye", covers = listOf(ash, nibiru, shifter))
+        val back = SidingCodec.read(obj(SidingCodec.write(null, DeckSiding(listOf(made)))!!.toString()))
+        assertEquals(listOf(ash, nibiru, shifter), back.matchups.single().covers)
+        assertNull(back.matchups.single().deckId)
+        // Linked to a decklist later, it keeps its cards and its plans.
+        val linked = back.put(back.matchups.single().copy(deckId = "deck-snake"))
+        assertEquals("deck-snake", SidingCodec.read(SidingCodec.write(null, linked)).matchups.single().deckId)
+        // Never more than three, and a matchup without any writes none.
+        val many = Matchup("m-3", "Too many", covers = listOf(ash, nibiru, shifter, evenly))
+        assertEquals(3, SidingCodec.read(SidingCodec.write(null, DeckSiding(listOf(many)))).matchups.single().covers.size)
+        val plain = SidingCodec.write(null, DeckSiding(listOf(yubel)))!!
+        assertTrue("covers" !in plain.toString())
+    }
+
+    @Test
     fun noSidingWritesNoKeyAndNothingWritesNothing() {
         assertNull(SidingCodec.write(null, DeckSiding.EMPTY))
         val other = obj("""{"groups":{}}""")

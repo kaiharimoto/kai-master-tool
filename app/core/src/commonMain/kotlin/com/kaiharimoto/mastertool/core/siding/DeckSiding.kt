@@ -58,11 +58,19 @@ data class SidePlan(
 data class Matchup(
     val id: String,
     val name: String,
-    /** The web deck this is against, when it is one. */
+    /**
+     * The deck this is against, when it is one: a deck of the web, or — for a deck sided
+     * on its own (1.0.42) — any deck of the library, linked when its list is to hand.
+     */
     val deckId: String? = null,
     val note: String = "",
     val first: SidePlan = SidePlan(),
     val second: SidePlan = SidePlan(),
+    /**
+     * The three cards the opponent is known by (1.0.42, kai: "create opponent decks by
+     * choosing a name and 3 main cards"), for a matchup with no decklist to show its faces.
+     */
+    val covers: List<CardId> = emptyList(),
 ) {
     fun plan(turn: Turn): SidePlan = if (turn == Turn.FIRST) first else second
 
@@ -125,7 +133,8 @@ data class DeckSiding(val matchups: List<Matchup> = emptyList()) {
  * "siding": { "matchups": [ {
  *   "id": "m-1a2b", "name": "Yubel", "deck": "<web deck id>", "note": "…",
  *   "first":  { "out": [14558127, 14558127], "in": [9822220], "note": "…" },
- *   "second": { "out": [], "in": [], "note": "" }
+ *   "second": { "out": [], "in": [], "note": "" },
+ *   "covers": [89631139, 14558127, 23434538]
  * } ] }
  * ```
  *
@@ -136,6 +145,9 @@ data class DeckSiding(val matchups: List<Matchup> = emptyList()) {
  */
 object SidingCodec {
     const val KEY = "siding"
+
+    /** How many cards an opponent is known by. */
+    const val COVERS = 3
     private const val LEGACY = "sidingPatterns"
 
     fun read(extended: JsonObject?): DeckSiding {
@@ -151,6 +163,7 @@ object SidingCodec {
                     note = obj.string("note").orEmpty(),
                     first = plan(obj["first"]),
                     second = plan(obj["second"]),
+                    covers = ids(obj["covers"]).distinct().take(COVERS),
                 )
             }.distinctBy { it.id },
         )
@@ -174,6 +187,7 @@ object SidingCodec {
                     if (m.note.isNotBlank()) put("note", m.note)
                     put("first", planNode(m.first))
                     put("second", planNode(m.second))
+                    if (m.covers.isNotEmpty()) put("covers", buildJsonArray { m.covers.forEach { add(JsonPrimitive(it.value)) } })
                 })
             }
         })

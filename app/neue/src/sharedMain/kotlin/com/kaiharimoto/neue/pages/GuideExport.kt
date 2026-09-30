@@ -54,7 +54,7 @@ object GuideExport {
     /** Makes the guide and hands it over: saved and opened on the desk, shared on a tablet or phone. */
     suspend fun deliver(
         webs: Webs,
-        web: DeckWeb,
+        web: DeckWeb?,
         decks: List<StoredDeck>,
         me: StoredDeck,
         state: DeckBuilderState,
@@ -75,7 +75,8 @@ object GuideExport {
 
     suspend fun build(
         webs: Webs,
-        web: DeckWeb,
+        /** The web [me] is sided in; null for a deck sided on its own (1.0.42), whose [decks] are the ones its matchups link. */
+        web: DeckWeb?,
         decks: List<StoredDeck>,
         me: StoredDeck,
         state: DeckBuilderState,
@@ -95,7 +96,7 @@ object GuideExport {
             val theirs = webs.sidingOf(o, state).against(me.entry.id, me.entry.name)
             GuideMatchup(
                 name = o.entry.name,
-                share = web.entry(o.entry.id)?.share,
+                share = web?.entry(o.entry.id)?.share,
                 note = m?.note.orEmpty(),
                 covers = faces(o, neue, state).map { it.id },
                 turns = Turn.entries.map { t -> GuideTurn(t, printed(m?.plan(t)), printed(theirs?.plan(t.theirs))) },
@@ -104,13 +105,13 @@ object GuideExport {
         val loose = siding.matchups
             .filter { m -> opponents.none { siding.against(it.entry.id, it.entry.name) == m } }
             .filter { it.first.sided || it.second.sided || it.note.isNotBlank() }
-            .map { m -> GuideMatchup(m.name, null, m.note, emptyList(), Turn.entries.map { t -> GuideTurn(t, printed(m.plan(t)), null) }) }
+            .map { m -> GuideMatchup(m.name, null, m.note, m.covers, Turn.entries.map { t -> GuideTurn(t, printed(m.plan(t)), null) }) }
         val content = GuideContent(
             deckName = me.entry.name,
-            webName = web.name,
+            webName = web?.name.orEmpty(),
             counts = "${deck.main.size} · ${deck.extra.size} · ${deck.side.size}",
             matchups = inWeb + loose,
-            webNotes = web.notes,
+            webNotes = web?.notes.orEmpty(),
         )
 
         val fonts = GuideFonts(

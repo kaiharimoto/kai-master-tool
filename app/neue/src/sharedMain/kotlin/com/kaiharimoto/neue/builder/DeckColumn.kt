@@ -95,6 +95,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.deck.DeckLenses
 import com.kaiharimoto.mastertool.core.layout.GroupPieces
+import com.kaiharimoto.mastertool.core.layout.GroupArrangement
 import com.kaiharimoto.mastertool.core.layout.BandLayout
 import com.kaiharimoto.mastertool.core.layout.PieceLayout
 import com.kaiharimoto.neue.zen.zenGlow
@@ -213,6 +214,8 @@ internal fun columnsOf(section: DeckSection) = if (section == DeckSection.MAIN) 
  */
 @Composable
 fun DeckColumn(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, modifier: Modifier = Modifier) {
+    // The lens tabs are gone (1.0.42): a deck saved looking through one opens plain.
+    LaunchedEffect(state.lens) { if (state.lens != Lens.DECK && state.lens != Lens.ROLES) state.useLens(Lens.DECK) }
     val panel = groupsOn(state)
     Row(modifier) {
         DeckBody(state, neue, drag, Modifier.weight(1f).fillMaxHeight().releasesTypingOnFinger())
@@ -692,45 +695,54 @@ private fun LensRow(state: DeckBuilderState, neue: NeueState, count: String, out
         if (!tight || outOfRange) Mono(if (outOfRange) "✕ $count" else count, color = if (outOfRange) c.ink else c.ink70)
         Box(Modifier.weight(1f))
         if (refused) Micro("✕ Not allowed here", color = c.ink)
-        // The other ways to see the deck in pieces. The Roles lens is the Groups button's.
-        // On a phone (v1.3.5) there is no row for five tabs: one button, and the lenses in its menu.
-        if (neue.phone) LensMenu(state, neue) else
-        Segmented(state.lens, LENS_TABS, { if (tight) shortName(it) else it.displayName }, state::useLens, small = true, compact = true)
+        // How the groups stand (1.0.42, kai: the lens tabs went unused — "repurpose that area
+        // for groups instead"): As is, Fitted or Separate, where the tabs were. Chosen with the
+        // groups off, it brings them out. On a phone, one button and the three in its menu.
+        if (neue.phone) ArrangementMenu(state, neue) else ArrangementSwitch(state, neue)
     }
     }
 }
 
-/** The lens on a phone (v1.3.5): the one in use, and the others a tap away in a menu. */
+/** The three ways the groups stand, as a switch: faint while the groups are off. */
 @Composable
-private fun LensMenu(state: DeckBuilderState, neue: NeueState) {
+private fun ArrangementSwitch(state: DeckBuilderState, neue: NeueState) {
+    Tip("As is keeps your order; Fitted fits the groups together as blocks; Separate gives each group its own rows", kbd = "Shift K") {
+        Box(Modifier.alpha(if (groupsOn(state)) 1f else 0.45f)) {
+            Segmented(neue.prefs.arrangement, GroupArrangement.entries, { com.kaiharimoto.neue.arrangementWords(it) }, { arrange(state, neue, it) }, small = true, compact = true)
+        }
+    }
+}
+
+/** The arrangement on a phone (v1.3.5's lens button, 1.0.42's use): the one in use, and the others a tap away. */
+@Composable
+private fun ArrangementMenu(state: DeckBuilderState, neue: NeueState) {
     val c = Mu.colors
     var at by remember { mutableStateOf(Offset.Zero) }
-    val shown = if (state.lens in LENS_TABS) state.lens else Lens.DECK
+    val now = neue.prefs.arrangement
     Row(
         Modifier
             .height(32.dp)
-            .border(1.dp, c.ink)
+            .border(1.dp, if (groupsOn(state)) c.ink else c.ink25)
             .onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }
-            .cursorPointer(caption = "Lens")
+            .cursorPointer(caption = "Arrange")
             .muClickable {
-                neue.menu = com.kaiharimoto.neue.kit.MenuSpec(at, LENS_TABS.map { lens ->
-                    com.kaiharimoto.neue.kit.MenuEntry(lens.displayName, hint = if (lens == state.lens) "Now" else null) { state.useLens(lens) }
+                neue.menu = com.kaiharimoto.neue.kit.MenuSpec(at, GroupArrangement.entries.map { a ->
+                    com.kaiharimoto.neue.kit.MenuEntry(com.kaiharimoto.neue.arrangementWords(a), hint = if (a == now) "Now" else null) { arrange(state, neue, a) }
                 })
             }
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Micro(shortName(shown), color = c.ink)
+        Micro(com.kaiharimoto.neue.arrangementWords(now), color = if (groupsOn(state)) c.ink else c.ink45)
         Micro("▾", color = c.ink70)
     }
 }
 
-/** A tab's name when the row is tight. */
-private fun shortName(lens: Lens): String = when (lens) {
-    Lens.ARCHETYPE -> "Arch."
-    Lens.LEGALITY -> "Legal"
-    else -> lens.displayName
+/** [a] chosen: kept, and the groups out if they were not. */
+private fun arrange(state: DeckBuilderState, neue: NeueState, a: GroupArrangement) {
+    neue.update { it.copy(groupArrangement = a.name) }
+    if (!groupsOn(state)) state.useLens(Lens.ROLES)
 }
 
 /**
@@ -740,8 +752,6 @@ private fun shortName(lens: Lens): String = when (lens) {
  */
 internal fun groupsOn(state: DeckBuilderState): Boolean = state.lens == Lens.ROLES || state.groupDraft != null
 
-/** The lens tabs over the main deck: every way to see the deck in pieces but the user's own groups. */
-internal val LENS_TABS: List<Lens> = Lens.entries - Lens.ROLES
 
 /**
  * The foil on every card face, on or off: a boxed button the size of Groups

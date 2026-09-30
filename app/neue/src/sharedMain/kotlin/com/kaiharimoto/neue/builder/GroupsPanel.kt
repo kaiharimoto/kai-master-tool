@@ -164,18 +164,6 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         val keying = state.keying(DeckSection.MAIN)
         val odds = LensOdds.atLeastOne(keying, state.deck.main.size)
         Micro("Groups", color = c.ink70)
-        // How the deck is laid out by its groups (kai, 1.0.37): the deck's own order in pieces,
-        // or its groups as blocks in bands, touching or apart (`GroupBands`).
-        com.kaiharimoto.neue.kit.Tip("As is keeps your order; Fitted fits the groups together as blocks; Separate gives each group its own rows", kbd = "Shift K") {
-            com.kaiharimoto.neue.kit.Segmented(
-                neue.prefs.arrangement,
-                com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries,
-                { com.kaiharimoto.neue.arrangementWords(it) },
-                { a -> neue.update { it.copy(groupArrangement = a.name) } },
-                Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                small = true,
-            )
-        }
         if (groups.isEmpty()) {
             Small("No groups yet. Press N, or hold a card in the deck and choose New group from this card.", color = c.ink70)
         }
