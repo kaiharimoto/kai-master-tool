@@ -18,8 +18,12 @@ package com.kaiharimoto.mastertool.core.ai.memory
  * is kept as it is. The person may edit the file by hand; this reads it back.
  */
 enum class MemoryKind(val file: String, val limit: Int, val title: String) {
-    /** What Ai learns about the person. Always in the prompt. */
-    USER("USER.md", 2500, "What %s knows about you"),
+    /**
+     * What Ai learns about the person — their profile (1.0.54, Learn About You): goals,
+     * preferences, workflow, how they play, their decks and events. Always in the prompt, so
+     * bounded; room for a profile built over many sessions.
+     */
+    USER("USER.md", 5000, "What %s knows about you"),
 
     /** What Ai learns about doing the job. Always in the prompt. */
     AGENT("MEMORY.md", 2000, "%s's notes to self"),

@@ -673,6 +673,39 @@ object AiTools {
         phase = 3,
     )
 
+    // ---- Fine Tuning's report (1.0.54) ------------------------------------------------
+
+    val sessionReport = ToolSpec(
+        "session_report",
+        "Files this Fine Tuning session's report, as its last act; the person gets it as a PDF and the deck's guide shows the scores. " +
+            "Your honest confidence, 0-100: understanding (what the deck is for and how its cards fit), playing (how well you could " +
+            "pilot it yourself, turn by turn) and mirror (the share of best-of-three matches you expect to win against a competent " +
+            "player piloting the same deck; 50 is even). Undersell rather than oversell, and say why.",
+        schema {
+            string("summary", "What the session came to, in a sentence or two", required = true)
+            strings("learned", "What you learned, one line each")
+            strings("insights", "Deckbuilding insights, as suggestions")
+            strings("open_questions", "What is still open")
+            integer("understanding", "0-100", required = true, min = 0, max = 100)
+            integer("playing", "0-100", required = true, min = 0, max = 100)
+            integer("mirror", "0-100: expected best-of-three win rate in the mirror", required = true, min = 0, max = 100)
+            string("why", "What the scores rest on, and what would raise them", required = true)
+        },
+        ToolGroup.MEMORY,
+        phase = 3,
+    )
+
+    /**
+     * Closed while a deck is learned from first principles (1.0.54, kai: "studies without looking
+     * online for guides"): the web, the community's lists and the archetype's page, and the
+     * helper that could reach them. Rulings stay open — how two cards interact under the rules,
+     * not how anyone plays them.
+     */
+    val FIRST_PRINCIPLES_BARRED: Set<String> = setOf(
+        "web_search", "web_fetch", "archetype_guide", "delegate",
+        "ygopro_tournament_decks", "ygopro_deck", "import_ygopro_deck", "ygopro_field_snapshot",
+    )
+
     /** The tools a delegated helper may use: every one that only looks. */
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
@@ -694,7 +727,7 @@ object AiTools {
         tournamentDecks, tournamentDeck, importTournamentDeck, fieldSnapshot,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
-        express,
+        express, sessionReport,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

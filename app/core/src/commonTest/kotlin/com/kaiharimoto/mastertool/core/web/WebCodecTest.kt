@@ -58,6 +58,33 @@ class WebCodecTest {
         assertFalse(read.decks.last().mine)
     }
 
+    /** A header written elsewhere, with a share as a fraction, keeps its name, notes, stars and other shares. */
+    @Test
+    fun aShareThatIsNotWholeCostsNothingElse() {
+        val original = WebCodec.write(file)
+        val header = original.lines()[1]
+        val odd = header.replace("\"share\":20", "\"share\":0.2").replace("\"share\":18", "\"share\":18.4")
+        assertTrue(odd != header, "the fixture's shares were rewritten: $odd")
+        val read = assertNotNull(WebCodec.read(original.replace(header, odd)))
+        assertEquals("Spring Regional", read.name)
+        assertEquals(file.notes, read.notes)
+        assertEquals(listOf(true, false), read.decks.map { it.mine })
+        assertEquals(listOf(20, 18), read.decks.map { it.share })
+        // Written back, it is whole again.
+        assertEquals(file, WebCodec.read(WebCodec.write(read)))
+    }
+
+    @Test
+    fun oddFieldsReadForgivinglyAndNonsenseIsSkipped() {
+        val text = "#ydkw 1\n#web {\"name\":\"Locals\",\"decks\":[{\"id\":\"a1\",\"mine\":\"true\",\"share\":\"55%\"},{\"mine\":true},{\"id\":\"b2\",\"share\":\"lots\"}]}\n\n#deck a1 Mine\n#main\n1\n\n#deck b2 Theirs\n#main\n2\n"
+        val read = assertNotNull(WebCodec.read(text))
+        assertEquals("Locals", read.name)
+        assertEquals(listOf(true to 55, false to null), read.decks.map { it.mine to it.share })
+        assertEquals(50, WebCodec.share("0.5"))
+        assertEquals(100, WebCodec.share("140"))
+        assertEquals(null, WebCodec.share("-3"))
+    }
+
     @Test
     fun onlyAWebIsAWeb() {
         assertTrue(WebCodec.isWeb("﻿  #ydkw 1\n"))

@@ -35,6 +35,9 @@ class MoodTracker {
     private var asleepAt = 0.0
     private var lastProblem: String? = null
 
+    /** Asleep now, for the hand that pets it (1.0.54, `AvatarPlay`). */
+    val sleeping: Boolean get() = asleep
+
     /** A face that passes: [e] for [seconds] from [now]. */
     fun moment(e: Expression, seconds: Double, now: Double) {
         passing = e

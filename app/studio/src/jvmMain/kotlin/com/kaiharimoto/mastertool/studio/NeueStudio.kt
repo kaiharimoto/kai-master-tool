@@ -804,6 +804,8 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
                 ),
             )
         }
+        // 1.0.54: the living guide, the session's end, the brain, quick settings, the profile, a petted face.
+        "guide", "end", "brain", "quick", "profile", "about", "petted" -> studioAi154(h, mode)
         // Fine Tuning (phase 3): the interview mid-way, a question on the table; or its review.
         "tune", "review" -> {
             val now = System.currentTimeMillis()
@@ -837,4 +839,110 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
         }
         else -> Unit
     }
+}
+
+
+/** A guide, its sessions and a profile for the studio's pictures of 1.0.54, in the studio's own data folder. */
+private fun studioAi154(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
+    val ai = h.ai
+    val deckId = h.builder.deckId ?: "studio-lab"
+    val deckName = h.builder.deckName
+    val guide = """# How $deckName plays
+
+- Goals: Resolve [[Big Welcome Labrynth]] on the opponent's turn with [[Lady Labrynth of the Silver Castle]] on the field, so every Normal Trap draws or summons.
+- Goals: Grind: each trap resolved is a card, and the Furniture keeps the traps coming back.
+- Game plan: Going first, set two traps and hold a Furniture; going second, play hand traps and set up for the next turn.
+- Lines: [[Arianna the Labrynth Servant]] alone: summon, activate a set Welcome, add [[Labrynth Labyrinth]] — two cards from one.
+- Lines: [[Labrynth Chandraglier]] to the grave returns a trap after it resolves.
+- Connections: [[Arianna the Labrynth Servant]] and [[Ariane the Labrynth Servant]] each answer a trap resolving — Arianna searches, Ariane destroys.
+- Connections: [[Lovely Labrynth of the Silver Castle]] sets any Normal Trap from the grave, so every trap spent is a trap again.
+- Card roles: [[Welcome Labrynth]] is the engine's key: a starter that is also an interruption.
+- Card roles: [[Labrynth Stovie Torbie]] and [[Labrynth Cooclock]] are the recursion; they cost nothing to keep in hand.
+- Weak points: Backrow removal before the Furniture resolve, and decks that never summon.
+- Weak points: Opening only Normal Traps and no Furniture: the traps are slow.
+- Side deck: Against Snake-Eye bring in more backrow removal; the matchup is about keeping the traps alive.
+- Insights: A third Welcome Labrynth over the second Stovie Torbie: it is both a starter and an answer.
+- Open questions: Which trap to set first when both Big Welcome and Welcome are in hand?
+- Sources: The card text and the rules primer; no guides or lists.
+"""
+    ai.files.write(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, deckId), guide)
+    val day = 86_400_000L
+    val now = System.currentTimeMillis()
+    val reports = listOf(
+        Triple(com.kaiharimoto.mastertool.core.ai.report.SessionReport.STUDIED, Triple(38, 30, 34), 9 * day),
+        Triple(com.kaiharimoto.mastertool.core.ai.report.SessionReport.TAUGHT, Triple(56, 44, 47), 4 * day),
+        Triple(com.kaiharimoto.mastertool.core.ai.report.SessionReport.PRINCIPLES, Triple(71, 55, 52), 0L),
+    ).mapIndexed { i, (m, s, ago) ->
+        com.kaiharimoto.mastertool.core.ai.report.SessionReport(
+            deckId, deckName, now - ago, m, "standard",
+            summary = listOf(
+                "Read every card and the archetype's page; the spine is Furniture into Normal Traps.",
+                "You taught it why three Ariane: the destruction answers backrow going second.",
+                "Worked out from the text alone how each trap turns into a card, and where the chain breaks.",
+            )[i],
+            learned = listOf("Arianna is a one-card starter.", "Big Welcome is the payoff, not the start.", "Lovely recycles every trap spent."),
+            insights = listOf("Run a third Welcome Labrynth.", "Cut the second Stovie Torbie."),
+            openQuestions = listOf("Which trap to set first with Big Welcome and Welcome in hand?"),
+            understanding = s.first, playing = s.second, mirror = s.third,
+            why = "The lines follow from the text and are legal; the timing against hand traps is untested, and a mirror turns on who sets first.",
+            questions = if (m == com.kaiharimoto.mastertool.core.ai.report.SessionReport.STUDIED) emptyList() else listOf(
+                com.kaiharimoto.mastertool.core.ai.report.SessionReport.Asked("You run 3 Arianna and 3 Ariane. Which is your real starter?", "Arianna, always; Ariane is for going second."),
+                com.kaiharimoto.mastertool.core.ai.report.SessionReport.Asked("What do you fear most across the table?", "Backrow removal before my Furniture resolve."),
+            ),
+            startedAt = now - ago - 1_500_000,
+        )
+    }
+    ai.files.deleteReports(deckId)
+    reports.forEach { ai.files.addReport(it) }
+    ai.files.write(
+        "USER.md",
+        """# What I know about you
+
+- Goals: Top a Regional this season with Labrynth, then a YCS.
+- Goals: Learn the deck well enough to play without notes at the table.
+- Preferences: Short answers with the cards named; tables for odds, not paragraphs.
+- Preferences: Likes going second; hates coin-flip hand-trap wars.
+- Workflow: Builds on the desk on Sunday, tests on the tablet midweek, sides on the phone at events.
+- How you play: Careful with the chain; tends to over-extend into board breakers.
+- Decks: Labrynth (main), Snake-Eye (testing).
+- Events: A Regional in three weeks, about 200 players.
+""",
+    )
+    ai.deckNames = mapOf(deckId to deckName)
+    when (mode) {
+        "guide" -> ai.docOpen = com.kaiharimoto.neue.ai.LivingDoc.Guide(deckId, deckName)
+        "profile" -> ai.docOpen = com.kaiharimoto.neue.ai.LivingDoc.Profile
+        "about" -> ai.profileAsk = true
+        "quick" -> ai.quickOpen = true
+        "brain" -> ai.memoryOpen = com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, deckId)
+        "end" -> {
+            ai.endReport = reports.last()
+            ai.previewTuning(
+                null,
+                listOf(com.kaiharimoto.mastertool.core.ai.memory.MemoryChange(
+                    com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, deckId),
+                    listOf("Connections: Lovely Labrynth of the Silver Castle sets any Normal Trap from the grave.", "Open questions: Which trap to set first?"),
+                    emptyList(),
+                )),
+            )
+        }
+        "petted" -> {
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-petted", title = "Hello", connection = "anthropic-demo",
+                    turns = listOf(com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Hi."), com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Hello — what are we building today?")),
+                    createdAt = now, updatedAt = now,
+                ),
+            )
+            ai.touched(com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.Reaction(com.kaiharimoto.mastertool.core.ai.avatar.Expression.LOVE, 600.0, "I could get used to this."))
+        }
+    }
+    // The guide and the last report as PDFs, in the real fonts and chosen art, beside the shots.
+    if (mode == "guide" || mode == "end") runCatching {
+        kotlinx.coroutines.runBlocking {
+            java.io.File("shots").mkdirs()
+            java.io.File("shots/ai-guide.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.guideBytes(h, deckId, deckName))
+            java.io.File("shots/ai-report.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.reportBytes(h, reports.last()))
+        }
+    }.onFailure { System.err.println("studio: the PDFs failed: $it") }
 }

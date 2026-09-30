@@ -24,6 +24,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -64,15 +66,15 @@ fun AiFaceClock(ai: AiState) {
 }
 
 /**
- * The bar's way to Ai (1.0.52, kai: "replace the button … with a marquee"): its glyph,
- * alive, and one line running through it at an even pace — what it is doing while it
- * works, the start of its answer for a while after, and what to ask it the rest of the
- * time. A click opens or closes the panel, and the strip is inverted while it is open,
- * as the word it replaces was. [width] is 240 dp on the desk and the tablet; a phone's
- * is shorter, so the bar never runs into its overflow.
+ * The bar's way to Ai (1.0.52, kai: "replace the button … with a marquee"; 1.0.54: "too big and
+ * distracting, needs to be just the marquee"): one line running at an even pace — what it is doing
+ * while it works, the start of its answer for a while after, and what to ask it the rest of the
+ * time — and nothing else: no box, no face (the face lives on the composer). Quiet grey at rest,
+ * ink under the pointer or while the panel is open, and a rule under it while open. A click opens
+ * or closes the panel. [width] is 200 dp on the desk and the tablet; a phone's is shorter.
  */
 @Composable
-fun AiMarquee(h: NeueHolders, width: Dp = 240.dp, height: Dp = 32.dp) {
+fun AiMarquee(h: NeueHolders, width: Dp = 200.dp, height: Dp = 32.dp) {
     val ai = h.ai
     val c = Mu.colors
     val open = ai.prefs.panelOpen
@@ -106,46 +108,48 @@ fun AiMarquee(h: NeueHolders, width: Dp = 240.dp, height: Dp = 32.dp) {
         if (open) "Close ${ai.name}" else "${ai.name}: your assistant. Ask it anything, or have it build and tune decks",
         kbd = DeskShortcuts.chordFor(DeskAction.AI_PANEL)?.let(DeskShortcuts::kbd),
     ) {
-        Row(
+        Box(
             Modifier
                 .width(width)
                 .height(height)
-                .border(1.dp, c.ink)
                 .hoverable(source)
                 .cursorPointer(caption = if (open) "Close" else "Open")
-                .muClickable(interactionSource = source) { ai.toggle() },
-            verticalAlignment = Alignment.CenterVertically,
+                .muClickable(interactionSource = source) { ai.toggle() }
+                .drawBehind { if (open) drawLine(c.ink, Offset(0f, size.height - 4.dp.toPx()), Offset(size.width, size.height - 4.dp.toPx()), 1.dp.toPx()) }
+                .clipToBounds(),
+            contentAlignment = Alignment.CenterStart,
         ) {
-            Inverted(open) {
-                val s = Mu.colors
-                Row(
-                    Modifier.fillMaxSize().background(animatedColor(if (open) s.paper else if (hot) s.ink06 else Color.Transparent)),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(height), contentAlignment = Alignment.Center) {
-                        AiAvatar(ai.face, AvatarSizes.bar, pointer = { h.cursor.position }, name = ai.name)
-                    }
-                    Box(Modifier.weight(1f).fillMaxHeight().padding(start = 4.dp, end = 10.dp).clipToBounds(), contentAlignment = Alignment.CenterStart) {
-                        // A new line starts from its beginning.
-                        key(line) {
-                            BasicText(
-                                line,
-                                Modifier.basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                    repeatDelayMillis = 0,
-                                    initialDelayMillis = 900,
-                                    spacing = MarqueeSpacing(48.dp),
-                                    velocity = 28.dp,
-                                ),
-                                style = MuType.small(LocalMuFonts.current).copy(color = s.ink),
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Clip,
-                            )
-                        }
-                    }
-                }
+            // A new line starts from its beginning.
+            key(line) {
+                BasicText(
+                    line,
+                    Modifier.basicMarquee(
+                        iterations = Int.MAX_VALUE,
+                        repeatDelayMillis = 0,
+                        initialDelayMillis = 900,
+                        spacing = MarqueeSpacing(48.dp),
+                        velocity = 24.dp,
+                    ),
+                    style = MuType.small(LocalMuFonts.current).copy(color = animatedColor(if (open || hot || ai.running) c.ink else c.ink45)),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
+                )
             }
         }
+    }
+}
+
+/**
+ * Looking into Ai (1.0.54, kai: "read Ai's brain (the MDs) and edit them in app in the top bar.
+ * The button can be just called Ai"): its name, small, beside the marquee; a click opens the brain.
+ */
+@Composable
+fun AiBrainButton(h: NeueHolders) {
+    val ai = h.ai
+    Tip("Look into ${ai.name}: read and edit what it knows and how it thinks") {
+        com.kaiharimoto.neue.kit.WordToggle(ai.name, on = ai.memoryOpen != null, onClick = {
+            ai.memoryOpen = if (ai.memoryOpen != null) null else "USER.md"
+        })
     }
 }

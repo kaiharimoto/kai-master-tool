@@ -2,6 +2,7 @@ package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.AiSettings
 import com.kaiharimoto.mastertool.core.ai.AiTools
+import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Resolved
@@ -93,6 +94,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             return result(call, fail("The input for ${spec.name} arrived cut short or was not JSON. Send it again, whole."))
         }
         ToolArgs.problem(spec, call.input)?.let { return result(call, fail(it)) }
+        // First principles (1.0.54): the web and the community's lists are closed, whatever the model tries.
+        if (ai.session?.mode == AiSession.MODE_PRINCIPLES && spec.name in AiTools.FIRST_PRINCIPLES_BARRED) {
+            return result(call, fail("${spec.name} is closed in this session: the deck is learned from its card text and the rules alone. Reason it out."))
+        }
         ai.working(describe(spec, call.input))
         ai.tool = spec.name
         val answer = try {
@@ -165,6 +170,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "skill_view" -> skillView(ToolArgs.string(i, "name")!!)
             "skill_manage" -> skillManage(i)
             "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
+            "session_report" -> sessionReport(i)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"))
             else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
@@ -939,6 +945,36 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
         }.take(limit.coerceIn(1, 40))
         return ok(if (hits.isEmpty()) "Nothing found for “$query”." else hits.joinToString("\n"), "Searched past conversations for “$query”")
+    }
+
+    /** Fine Tuning's report (1.0.54): kept beside the deck's guide, and a PDF when the session ends. */
+    private fun sessionReport(i: JsonObject): Answer {
+        val deckId = state.deckId ?: return fail("There is no saved deck open to report on.")
+        val s = ai.session ?: return fail("There is no session to report on.")
+        fun num(key: String) = (ToolArgs.element(i, key) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
+        val report = com.kaiharimoto.mastertool.core.ai.report.SessionReport(
+            deckId = deckId,
+            deckName = state.deckName,
+            at = System.currentTimeMillis(),
+            mode = s.mode.takeIf { it in AiSession.DECK_MODES } ?: AiSession.MODE_TUNE,
+            intensity = neue.prefs.ai.tuneIntensity,
+            summary = ToolArgs.string(i, "summary").orEmpty(),
+            learned = ToolArgs.strings(i, "learned"),
+            insights = ToolArgs.strings(i, "insights"),
+            openQuestions = ToolArgs.strings(i, "open_questions"),
+            understanding = com.kaiharimoto.mastertool.core.ai.report.SessionReport.score(num("understanding")),
+            playing = com.kaiharimoto.mastertool.core.ai.report.SessionReport.score(num("playing")),
+            mirror = com.kaiharimoto.mastertool.core.ai.report.SessionReport.score(num("mirror")),
+            why = ToolArgs.string(i, "why").orEmpty(),
+            questions = com.kaiharimoto.mastertool.core.ai.report.SessionQuestions.of(s.turns),
+            startedAt = s.createdAt,
+        )
+        ai.files.addReport(report)
+        ai.lastReport = report
+        return ok(
+            "Filed. The person gets it as a PDF when the session ends, and the deck's guide shows the scores.",
+            "Filed the report: understanding ${report.understanding}, playing ${report.playing}, mirror ${report.mirror}%",
+        )
     }
 
     private suspend fun askUser(question: String, options: List<String>, multiple: Boolean, cards: List<String> = emptyList()): Answer {

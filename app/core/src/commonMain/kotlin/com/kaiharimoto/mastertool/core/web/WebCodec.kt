@@ -68,6 +68,33 @@ object WebCodec {
         explicitNulls = false
     }
 
+    /**
+     * The `#web` line, read field by field so one odd value never costs the rest: a share
+     * written as a fraction (`0.5`, by hand or by another tool) is that fraction of the field,
+     * a share over 1 is a percent rounded to a whole one, a `mine` written as a string reads
+     * as one, and a deck with no id is skipped. The strict decode threw on any of these, and
+     * the whole header — name, notes, every star and every share — was lost with it.
+     */
+    private fun header(text: String): Header {
+        val obj = runCatching { json.parseToJsonElement(text) as? kotlinx.serialization.json.JsonObject }.getOrNull() ?: return Header()
+        fun str(o: kotlinx.serialization.json.JsonObject, key: String): String? = (o[key] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+        val decks = (obj["decks"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { e ->
+            val d = e as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+            val id = str(d, "id")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val mine = str(d, "mine")?.lowercase() == "true"
+            HeaderDeck(id, mine, share(str(d, "share")))
+        }
+        return Header(str(obj, "name").orEmpty(), str(obj, "notes").orEmpty(), decks)
+    }
+
+    /** A share as the app keeps it, a whole percent 0–100, from whatever number was written; null when none. */
+    internal fun share(raw: String?): Int? {
+        val v = raw?.trim()?.removeSuffix("%")?.toDoubleOrNull() ?: return null
+        if (v.isNaN() || v < 0) return null
+        val percent = if (v > 0 && v < 1) v * 100 else v
+        return kotlin.math.round(percent).toInt().coerceIn(0, 100)
+    }
+
     /** Whether [text] is a `.ydkw`, by its first line: a web opened through a deck's Import is sent to Format. */
     fun isWeb(text: String): Boolean = text.removePrefix("﻿").trimStart().startsWith(MAGIC)
 
@@ -90,8 +117,7 @@ object WebCodec {
         val blocks = mutableListOf<Pair<String, MutableList<String>>>()
         for (line in lines) {
             when {
-                blocks.isEmpty() && line.startsWith(WEB) ->
-                    header = runCatching { json.decodeFromString(Header.serializer(), line.removePrefix(WEB)) }.getOrDefault(Header())
+                blocks.isEmpty() && line.startsWith(WEB) -> header = header(line.removePrefix(WEB))
                 line.startsWith(DECK) -> blocks += line.removePrefix(DECK) to mutableListOf()
                 blocks.isNotEmpty() -> blocks.last().second += line
             }

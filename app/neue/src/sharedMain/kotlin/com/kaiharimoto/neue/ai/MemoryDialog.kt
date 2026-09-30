@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.neue.kit.MuText
+import com.kaiharimoto.neue.kit.Micro
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -45,85 +48,178 @@ import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 
 /**
- * What Ai knows (Settings → Assistant): every memory file — its voice, what it knows
- * about the person, its own notes, each deck's and web's — listed, read and edited
- * in place. The files are the memory: what is saved here is what Ai reads next.
+ * Ai's brain (1.0.54, kai: "I also want to be able to read Ai's brain (the MDs) and edit them in
+ * app in the top bar … it'll be like looking into Ai"): every markdown file it thinks with — its
+ * voice, what it knows about you, its own notes, each deck's guide and notes, each web's, the
+ * skills it wrote — grouped down the left with how full each bounded one is, and on the right the
+ * file read as a document or edited as text. The files are the memory: what is saved here is what
+ * Ai reads next. Opened from the bar's Ai button, Settings, the palette, and each document.
  */
 @Composable
 fun MemoryDialog(ai: AiState) {
     val path = ai.memoryOpen ?: return
     val c = Mu.colors
-    val files = remember(path) { ai.files.memoryFiles().map { it.relativeTo(ai.files.root).invariantSeparatorsPath } }
-    val all = (listOf(Persona.FILE) + files).distinct()
-    var text by remember(path) { mutableStateOf(ai.files.read(path) ?: if (path == Persona.FILE) ai.files.soul(ai.name) else "") }
-    var saved by remember(path) { mutableStateOf(true) }
+    val stamp = remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val groups = remember(stamp.intValue) { brainGroups(ai) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { ai.deckNames = ai.h.webs.libraryDecks().associate { it.entry.id to it.entry.name } }
+    var text by remember(path, stamp.intValue) { mutableStateOf(ai.files.read(path) ?: if (path == Persona.FILE) ai.files.soul(ai.name) else "") }
+    var saved by remember(path, stamp.intValue) { mutableStateOf(true) }
+    var editing by remember(path) { mutableStateOf(false) }
+    fun save() {
+        ai.files.write(path, text)
+        saved = true
+        stamp.intValue++
+    }
+    // Moving to another file keeps what was typed: nothing is lost to a click.
+    fun open(next: String) {
+        if (!saved) save()
+        ai.memoryOpen = next
+    }
     MuDialog(
-        title = "What ${ai.name} knows",
-        onDismiss = { ai.memoryOpen = null },
-        width = 760.dp,
+        title = "${ai.name}'s brain",
+        onDismiss = {
+            if (!saved) save()
+            ai.memoryOpen = null
+        },
+        width = 1080.dp,
         scrolls = false,
-        description = "Markdown files in ${ai.name}'s folder. Edit them freely: entries are the lines that start with a dash.",
+        description = "The markdown ${ai.name} thinks with. Read it, or edit it: entries are the lines that start with a dash, and what you save is what it reads next.",
         footer = {
-            MuButton("Close", { ai.memoryOpen = null }, variant = BtnVariant.GHOST)
-            MuButton(if (saved) "Saved" else "Save", {
-                ai.files.write(path, text)
-                saved = true
-            }, variant = BtnVariant.PRIMARY, enabled = !saved, reason = "Nothing changed")
+            if (path.startsWith("guides/")) {
+                MuButton("Open as the guide", {
+                    if (!saved) save()
+                    val id = path.removePrefix("guides/").removeSuffix(".md")
+                    ai.memoryOpen = null
+                    ai.docOpen = LivingDoc.Guide(id, deckName(ai, id))
+                }, variant = BtnVariant.GHOST)
+            }
+            if (path == "USER.md") {
+                MuButton("Open as your profile", {
+                    if (!saved) save()
+                    ai.memoryOpen = null
+                    ai.docOpen = LivingDoc.Profile
+                }, variant = BtnVariant.GHOST)
+            }
+            MuButton("Close", {
+                if (!saved) save()
+                ai.memoryOpen = null
+            }, variant = BtnVariant.GHOST)
+            MuButton(if (saved) "Saved" else "Save", { save() }, variant = BtnVariant.PRIMARY, enabled = !saved, reason = "Nothing changed")
         },
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(Modifier.width(200.dp).heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                all.forEach { file ->
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            // The files, by what they are.
+            Column(Modifier.width(260.dp).heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                groups.forEach { (group, files) ->
+                    Micro(group, Modifier.padding(start = 8.dp, top = 10.dp, bottom = 4.dp), color = c.ink45)
+                    files.forEach { file -> BrainRow(ai, file, file == path) { open(file) } }
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        MuText(label(ai, path), style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 1)
+                        Mono(path + (fullness(path, text)?.let { " · $it" } ?: ""), color = c.ink45)
+                    }
+                    com.kaiharimoto.neue.kit.Segmented(editing, listOf(false, true), { if (it) "Edit" else "Read" }, { editing = it }, small = true)
+                }
+                if (editing) {
                     val source = remember { MutableInteractionSource() }
-                    val hovered by source.collectIsHoveredAsState()
+                    val focused by source.collectIsFocusedAsState()
+                    val style = MuType.mono(LocalMuFonts.current).copy(color = c.ink)
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .background(animatedColor(if (file == path) c.ink else if (hovered) c.ink06 else Color.Transparent))
-                            .hoverable(source)
-                            .cursorPointer(caption = "Open")
-                            .muClickable(interactionSource = source) { ai.memoryOpen = file }
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                            .height(460.dp)
+                            .border(1.dp, animatedColor(if (focused) c.ink else c.ink25))
+                            .cursor(CursorMode.TEXT, fontSize = style.fontSize, singleLine = false, focused = focused)
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
                     ) {
-                        Mono(label(ai, file), color = if (file == path) c.paper else c.ink)
+                        BasicTextField(
+                            value = text,
+                            onValueChange = { text = it; saved = false },
+                            textStyle = style,
+                            cursorBrush = SolidColor(c.ink),
+                            interactionSource = source,
+                            modifier = Modifier.fillMaxWidth().reportsTextFocus(),
+                        )
+                    }
+                } else {
+                    // Read: the file as a document, the way the chat draws Ai's answers.
+                    val blocks = remember(text) { com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown.parse(text) }
+                    Column(
+                        Modifier.fillMaxWidth().height(460.dp).border(1.dp, c.ink12).verticalScroll(rememberScrollState()).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (text.isBlank()) Help("Empty: ${ai.name} writes here as it learns, or switch to Edit and write it yourself.")
+                        blocks.forEach { MarkdownBlock(ai, it) }
                     }
                 }
             }
-            val source = remember { MutableInteractionSource() }
-            val focused by source.collectIsFocusedAsState()
-            val style = MuType.mono(LocalMuFonts.current).copy(color = c.ink)
-            Box(
-                Modifier
-                    .weight(1f)
-                    .height(420.dp)
-                    .border(1.dp, animatedColor(if (focused) c.ink else c.ink25))
-                    .cursor(CursorMode.TEXT, fontSize = style.fontSize, singleLine = false, focused = focused)
-                    .verticalScroll(rememberScrollState())
-                    .padding(10.dp),
-            ) {
-                BasicTextField(
-                    value = text,
-                    onValueChange = { text = it; saved = false },
-                    textStyle = style,
-                    cursorBrush = SolidColor(c.ink),
-                    interactionSource = source,
-                    modifier = Modifier.fillMaxWidth().reportsTextFocus(),
-                )
-            }
         }
-        if (files.isEmpty()) Box(Modifier.padding(top = 12.dp)) { Help("Nothing remembered yet: ${ai.name} writes here as it learns.") }
-        Box(Modifier.padding(top = 8.dp)) { Small(path, color = c.ink45) }
     }
 }
+
+/** The brain's files, grouped: who it is, you, its notes, then each deck's, each web's, its skills. */
+private fun brainGroups(ai: AiState): List<Pair<String, List<String>>> {
+    val root = ai.files.root
+    fun list(dir: String, pattern: (java.io.File) -> Boolean = { it.extension == "md" }) =
+        java.io.File(root, dir).listFiles()?.filter(pattern)?.sortedBy { it.name }?.map { it.relativeTo(root).invariantSeparatorsPath }.orEmpty()
+    val skills = java.io.File(root, "skills").listFiles { f -> f.isDirectory }?.map { java.io.File(it, "SKILL.md") }?.filter { it.isFile }
+        ?.sortedBy { it.path }?.map { it.relativeTo(root).invariantSeparatorsPath }.orEmpty()
+    return listOf(
+        "Who it is" to listOf(Persona.FILE),
+        "You" to listOf("USER.md"),
+        "Its own notes" to listOf("MEMORY.md"),
+        "Deck guides" to list("guides"),
+        "Deck notes" to list("decks"),
+        "Webs" to list("webs"),
+        "Skills it wrote" to skills,
+    ).filter { it.second.isNotEmpty() }
+}
+
+/** How full a bounded memory file is, in characters against its limit. */
+private fun fullness(path: String, text: String): String? {
+    val kind = com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.entries.firstOrNull { k ->
+        if (k.file.contains("%s")) path.startsWith(k.file.substringBefore("%s")) else path == k.file
+    } ?: return null
+    val used = com.kaiharimoto.mastertool.core.ai.memory.AiMemory.parse(text).used
+    return "${used * 100 / kind.limit}% full"
+}
+
+@Composable
+private fun BrainRow(ai: AiState, file: String, on: Boolean, onClick: () -> Unit) {
+    val c = Mu.colors
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(animatedColor(if (on) c.ink else if (hovered) c.ink06 else Color.Transparent))
+            .hoverable(source)
+            .cursorPointer(caption = "Open")
+            .muClickable(interactionSource = source, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MuText(label(ai, file), Modifier.weight(1f), style = MuType.small(LocalMuFonts.current), color = if (on) c.paper else c.ink, maxLines = 1)
+    }
+}
+
+/** A deck's name for a guide or notes file, from the library as the app last read it. */
+private fun deckName(ai: AiState, id: String): String =
+    if (id == ai.h.builder.deckId) ai.h.builder.deckName else ai.deckNames[id] ?: id.take(12)
 
 /** A memory file's name as a person reads it. */
 private fun label(ai: AiState, path: String): String = when {
     path == Persona.FILE -> "Voice"
-    path == "USER.md" -> "About you"
+    path == "USER.md" -> "About you (your profile)"
     path == "MEMORY.md" -> "Its own notes"
     path.startsWith("webs/") -> "Web: " + (ai.h.webs.library.byId(path.removePrefix("webs/").removeSuffix(".md"))?.name ?: path.removePrefix("webs/"))
-    path.startsWith("decks/") -> "Deck: " + path.removePrefix("decks/").removeSuffix(".md").take(12)
-    path.startsWith("guides/") -> "Guide: " + path.removePrefix("guides/").removeSuffix(".md").let { id -> if (id == ai.h.builder.deckId) ai.h.builder.deckName else id.take(12) }
+    path.startsWith("decks/") -> deckName(ai, path.removePrefix("decks/").removeSuffix(".md"))
+    path.startsWith("guides/") -> deckName(ai, path.removePrefix("guides/").removeSuffix(".md"))
+    path.startsWith("skills/") -> path.removePrefix("skills/").substringBefore('/')
     else -> path
 }
 
@@ -134,21 +230,30 @@ private fun label(ai: AiState, path: String): String = when {
  */
 @Composable
 fun ReviewDialog(ai: AiState) {
-    val changes = ai.review ?: return
+    val report = ai.endReport
+    val changes = ai.review
+    if (report == null && changes == null) return
     val c = Mu.colors
-    val n = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(changes)
+    val n = changes?.let { com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(it) } ?: 0
     MuDialog(
-        title = "What ${ai.name} learned",
+        title = if (report != null) "Fine Tuning · ${report.deckName}" else "What ${ai.name} learned",
         onDismiss = { ai.keepReview() },
-        width = 560.dp,
-        description = "$n change${if (n == 1) "" else "s"} to its memory. Keep them, or put its memory back as it was.",
+        width = if (report != null) 720.dp else 560.dp,
+        description = when {
+            report != null && changes != null -> "${com.kaiharimoto.mastertool.core.ai.report.SessionReport.modeWords(report.mode)}. " +
+                "The report, then $n change${if (n == 1) "" else "s"} to ${ai.name}'s memory to keep or undo."
+            report != null -> "${com.kaiharimoto.mastertool.core.ai.report.SessionReport.modeWords(report.mode)}: the session's report."
+            else -> "$n change${if (n == 1) "" else "s"} to its memory. Keep them, or put its memory back as it was."
+        },
         footer = {
-            MuButton("Undo all", { ai.undoReview() }, variant = BtnVariant.GHOST)
-            MuButton("Keep", { ai.keepReview() }, variant = BtnVariant.PRIMARY)
+            if (changes != null) MuButton("Undo all", { ai.undoReview() }, variant = BtnVariant.GHOST)
+            MuButton(if (changes != null) "Keep" else "Done", { ai.keepReview() }, variant = BtnVariant.PRIMARY)
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            changes.forEach { change ->
+            if (report != null) EndReport(ai, report)
+            if (report != null && changes != null) Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
+            changes?.forEach { change ->
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Mono(label(ai, change.path), color = c.ink45)
                     change.added.forEach { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Mono("+", color = c.ink); Small(it, color = c.ink) } }

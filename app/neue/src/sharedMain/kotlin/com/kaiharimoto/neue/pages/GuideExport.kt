@@ -132,7 +132,7 @@ object GuideExport {
     }
 
     /** A card's picture, as the app shows it, drawn down to print size; null when there is none to be had. */
-    private suspend fun picture(id: CardId, state: DeckBuilderState, neue: NeueState, library: ArtLibrary?, custom: CustomArt?): PdfImage? {
+    internal suspend fun picture(id: CardId, state: DeckBuilderState, neue: NeueState, library: ArtLibrary?, custom: CustomArt?): PdfImage? {
         val card = state.index.byId(id) ?: return null
         val choice = neue.prefs.arts[id.value]
         val drawn = custom?.drawn(card, choice) ?: CardArt.show(card, choice?.let(::CardId))

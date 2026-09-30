@@ -71,10 +71,23 @@ class AiFiles(val root: File) {
         listOf("decks", "guides", "webs").forEach { dir -> file(dir).listFiles { f -> f.extension == "md" }?.sortedBy { it.name }?.forEach(::add) }
     }
 
+    // ---- Fine Tuning's reports (1.0.54) --------------------------------------
+
+    /** Every report filed on [deckId], oldest first. */
+    fun reports(deckId: String): List<com.kaiharimoto.mastertool.core.ai.report.SessionReport> =
+        com.kaiharimoto.mastertool.core.ai.report.ReportLog.read(read(com.kaiharimoto.mastertool.core.ai.report.ReportLog.path(deckId)))
+
+    fun addReport(report: com.kaiharimoto.mastertool.core.ai.report.SessionReport) = write(
+        com.kaiharimoto.mastertool.core.ai.report.ReportLog.path(report.deckId),
+        com.kaiharimoto.mastertool.core.ai.report.ReportLog.write(com.kaiharimoto.mastertool.core.ai.report.ReportLog.add(reports(report.deckId), report)),
+    )
+
+    fun deleteReports(deckId: String) = delete(com.kaiharimoto.mastertool.core.ai.report.ReportLog.path(deckId))
+
     /** Everything Ai remembers gone: memory, skills it wrote, conversations. The folder stays. */
     fun forgetEverything() {
         listOf(Persona.FILE, MemoryKind.USER.file, MemoryKind.AGENT.file).forEach(::delete)
-        listOf("decks", "guides", "webs", "skills", "sessions", "run", "cache").forEach { file(it).deleteRecursively() }
+        listOf("decks", "guides", "reports", "webs", "skills", "sessions", "run", "cache").forEach { file(it).deleteRecursively() }
     }
 
     // ---- skills -------------------------------------------------------------

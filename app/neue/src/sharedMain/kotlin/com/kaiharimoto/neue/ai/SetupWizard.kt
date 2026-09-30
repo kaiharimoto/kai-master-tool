@@ -468,7 +468,7 @@ private fun ServerStep(w: WizardState) {
 }
 
 /** What a provider offers, by its own list. */
-private suspend fun listModels(p: Provider, key: String, base: String?): Result<List<String>> = when (p.wire) {
+internal suspend fun listModels(p: Provider, key: String, base: String?): Result<List<String>> = when (p.wire) {
     Wire.ANTHROPIC -> AnthropicBackend(key, null).let { b -> b.models().also { b.close() } }
     else -> OpenAiChatBackend(HttpClientFactory.create(), OpenAiEndpoint(base.orEmpty(), key.takeIf { it.isNotBlank() }, p.headers)).models()
         .map { Providers.chatModels(it) }

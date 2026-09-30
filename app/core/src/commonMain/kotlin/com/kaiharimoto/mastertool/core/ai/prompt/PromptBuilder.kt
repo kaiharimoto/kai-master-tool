@@ -122,6 +122,25 @@ object PromptBuilder {
                     "Do not change their decks or settings in this conversation.",
             )
         }
+        if (s.mode == "principles") {
+            appendLine()
+            appendLine("## This conversation is Fine Tuning: you learn the deck from first principles")
+            appendLine(
+                "Read the skill first-principles with skill_view first and follow it, within the intensity in the first message. " +
+                    "Only the card text and the rules: no guides, lists or web — those tools are closed in this conversation. " +
+                    "Think out loud so the person learns with you, write the guide to memory scope guide, and end with session_report. " +
+                    "Do not change their decks or settings in this conversation.",
+            )
+        }
+        if (s.mode == "profile") {
+            appendLine()
+            appendLine("## This conversation is Learn About You: you interview the person")
+            appendLine(
+                "Read the skill learn-about-you with skill_view first and follow it: one question at a time with ask_user, " +
+                    "writing their profile to memory scope user as you go, within the intensity in the first message. " +
+                    "Do not change their decks or settings in this conversation.",
+            )
+        }
     }.trim() + "\n"
 
     /**

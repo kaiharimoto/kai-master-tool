@@ -166,6 +166,27 @@ class AiState(internal val h: NeueHolders) {
 
     internal val mood = com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker()
 
+    /** How the face answers a hand (1.0.54): taps, petting, poking, holding. */
+    internal val play = com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay()
+
+    /** What the face said to the hand, beside it for as long as the face is worn. */
+    var playLine by mutableStateOf<String?>(null)
+        private set
+    private var playLineUntil = 0.0
+
+    /** The face answered a hand: worn for its moment, its line beside it. */
+    fun touched(r: com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.Reaction?) {
+        r ?: return
+        val now = clock()
+        mood.moment(r.face, r.seconds, now)
+        playLine = r.line
+        playLineUntil = now + r.seconds
+        face = r.face
+    }
+
+    /** The hand's line, while its moment lasts. */
+    val handLine: String? get() = playLine?.takeIf { clock() < playLineUntil }
+
     /** The tool running now, by name, for the face: reading or working. */
     var tool by mutableStateOf<String?>(null)
         internal set
@@ -275,10 +296,11 @@ class AiState(internal val h: NeueHolders) {
         val provider = Providers.byId(connection.provider)
         val intensity = com.kaiharimoto.mastertool.core.ai.TuneIntensity.of(prefs.tuneIntensity)
         // A study runs as long and thinks as hard as its intensity says; an interview needs rounds for its questions.
-        val effort = if (start.mode == AiSession.MODE_STUDY) intensity.effort else prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
+        val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES
+        val effort = if (studies) intensity.effort else prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
         val steps = when (start.mode) {
-            AiSession.MODE_STUDY -> intensity.steps
-            AiSession.MODE_TUNE -> intensity.questions * 3 + 8
+            AiSession.MODE_STUDY, AiSession.MODE_PRINCIPLES -> intensity.steps
+            AiSession.MODE_TUNE, AiSession.MODE_PROFILE -> intensity.questions * 3 + 8
             else -> AgentLoop.MAX_STEPS
         }
         val budget = if (model.runsOwnLoop) 0 else budgetFor(connection)
@@ -286,7 +308,9 @@ class AiState(internal val h: NeueHolders) {
             try {
                 // Past most of the model's window, the oldest turns become a summary first (1.0.47).
                 val ready = if (budget > 0) summarizedIfLong(start, model, connection, budget) else start
-                val request = TurnRequest(ready.system, ready.sent, tools, connection.model, effort, ready.resume)
+                // From first principles (1.0.54) the model is never offered the web or the community's lists.
+                val offered = if (start.mode == AiSession.MODE_PRINCIPLES) tools.filter { it.name !in AiTools.FIRST_PRINCIPLES_BARRED } else tools
+                val request = TurnRequest(ready.system, ready.sent, offered, connection.model, effort, ready.resume)
                 AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->
                     when (event) {
                         is AgentEvent.Text -> streaming += event.delta
@@ -343,6 +367,11 @@ class AiState(internal val h: NeueHolders) {
         working = null
         tool = null
         running = false
+        // Finish asked Ai for its report first (1.0.54): now the session ends for real.
+        if (wrapping) {
+            wrapping = false
+            completeTuning()
+        }
         // The face: sad at a Stop, happy at an answer; the answer's first line for the bar.
         if (stopping) {
             mood.stopped(clock())
@@ -490,7 +519,7 @@ class AiState(internal val h: NeueHolders) {
      * online"): a conversation of its own about the deck open in the builder, [study] or
      * taught, at [intensity]; what it learns goes to the deck's guide.
      */
-    fun startTuning(study: Boolean, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity) {
+    fun startTuning(mode: String, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity) {
         if (PHASE < 3) return
         tuneAsk = false
         val connection = prefs.connection ?: run {
@@ -508,26 +537,113 @@ class AiState(internal val h: NeueHolders) {
         historyOpen = false
         demoOpen = false
         tuneBefore = snapshot()
-        session = begin(connection, if (study) AiSession.MODE_STUDY else AiSession.MODE_TUNE)
+        lastReport = null
+        session = begin(connection, mode)
         send(
-            if (study) {
-                "Study “$deck” yourself, and think out loud so I can learn with you. Intensity: ${intensity.label} — ${intensity.studies}"
-            } else {
-                "Let's do Fine Tuning on “$deck”: I'll teach you how I play it. Intensity: ${intensity.label}, about ${intensity.questions} questions."
+            when (mode) {
+                AiSession.MODE_STUDY -> "Study “$deck” yourself, and think out loud so I can learn with you. Intensity: ${intensity.label} — ${intensity.studies}"
+                AiSession.MODE_PRINCIPLES -> "Learn “$deck” from first principles: its card text and the rules, no guides or lists. Work out its goals and how its cards pair, " +
+                    "interact and connect, and think out loud so I can learn with you. Intensity: ${intensity.label} — about ${intensity.steps} rounds."
+                else -> "Let's do Fine Tuning on “$deck”: I'll teach you how I play it. Intensity: ${intensity.label}, about ${intensity.questions} questions."
             },
         )
     }
 
+    /**
+     * Learn About You (1.0.54, kai: "the AI builds a profile of the user across sessions and
+     * interviews them about anything that would help the Ai understand what the user's goals and
+     * preferences are, as well as their workflow"): an interview about the person, not a deck, into
+     * USER.md — the memory in front of every conversation.
+     */
+    fun startProfile(intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity) {
+        if (PHASE < 3) return
+        profileAsk = false
+        val connection = prefs.connection ?: run {
+            openWizard()
+            return
+        }
+        stop()
+        h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true, tuneIntensity = intensity.id)) }
+        wizardOpen = false
+        historyOpen = false
+        demoOpen = false
+        tuneBefore = snapshot()
+        lastReport = null
+        session = begin(connection, AiSession.MODE_PROFILE)
+        val known = files.entries(MemoryKind.USER).isNotBlank()
+        send(
+            "Let's do Learn About You: interview me so you understand my goals, my preferences and how I work. " +
+                (if (known) "Start from what you already know and fill the gaps. " else "") +
+                "Intensity: ${intensity.label}, about ${intensity.questions} questions.",
+        )
+    }
+
+    /** Learn About You's launcher is open. */
+    var profileAsk by mutableStateOf(false)
+
+    /** Finish asked Ai to file its report; the session ends when that answer does. */
+    private var wrapping = false
+
+    /** The report Ai filed in this session, when it did (the host sets it). */
+    var lastReport by mutableStateOf<com.kaiharimoto.mastertool.core.ai.report.SessionReport?>(null)
+
+    /** The report shown at the session's end, beside what it learned (1.0.54). */
+    var endReport by mutableStateOf<com.kaiharimoto.mastertool.core.ai.report.SessionReport?>(null)
+
+    /** Library decks by id, for naming their guides and notes in the brain. */
+    var deckNames by mutableStateOf<Map<String, String>>(emptyMap())
+
+    /** Quick settings, from the model's name in the panel's head (1.0.54). */
+    var quickOpen by mutableStateOf(false)
+
+    /** The living document open over the page: a deck's guide or the person's profile (1.0.54). */
+    var docOpen by mutableStateOf<LivingDoc?>(null)
+
+    fun openGuide() {
+        val id = h.builder.deckId ?: run {
+            h.neue.note = com.kaiharimoto.neue.Note("Save the deck first: the guide belongs to a saved deck")
+            return
+        }
+        docOpen = LivingDoc.Guide(id, h.builder.deckName)
+    }
+
+    fun openProfile() {
+        docOpen = LivingDoc.Profile
+    }
+
     private var tuneBefore: Map<String, String?>? = null
 
-    val tuning: Boolean get() = session?.mode == AiSession.MODE_TUNE || session?.mode == AiSession.MODE_STUDY
+    val tuning: Boolean get() = session?.mode.let { it in AiSession.DECK_MODES || it == AiSession.MODE_PROFILE }
 
     /** Studying on its own rather than being taught. */
-    val studying: Boolean get() = session?.mode == AiSession.MODE_STUDY
+    val studying: Boolean get() = session?.mode == AiSession.MODE_STUDY || session?.mode == AiSession.MODE_PRINCIPLES
 
-    /** Fine Tuning done: what it learned, to keep or undo, then an ordinary conversation. */
+    /** Learning about the person rather than a deck. */
+    val profiling: Boolean get() = session?.mode == AiSession.MODE_PROFILE
+
+    /**
+     * Fine Tuning done: first, when the session taught Ai something and it has not filed its report,
+     * it is asked to (1.0.54) — the scores and the PDF come from that — then what it learned, to keep
+     * or undo, and an ordinary conversation.
+     */
     fun finishTuning() {
+        val s = session
+        val asksReport = s != null && s.mode in AiSession.DECK_MODES && !running && !wrapping &&
+            !com.kaiharimoto.mastertool.core.ai.report.SessionQuestions.reported(s.turns) && s.turns.size > 2 && prefs.connection != null
+        if (asksReport) {
+            wrapping = true
+            send("We're finishing here. File your session report now with session_report — your honest scores and why — then say goodbye in one line.")
+            return
+        }
+        completeTuning()
+    }
+
+    private fun completeTuning() {
+        wrapping = false
+        val ended = session
         stop()
+        endReport = lastReport?.takeIf { r -> ended != null && ended.mode in AiSession.DECK_MODES && r.at >= ended.createdAt }
+        lastReport = null
         val before = tuneBefore ?: snapshot()
         tuneBefore = null
         offerReview(before)
@@ -546,6 +662,7 @@ class AiState(internal val h: NeueHolders) {
     fun keepReview() {
         review = null
         reviewBefore = emptyMap()
+        endReport = null
     }
 
     /** Everything the review lists put back as it was. */
@@ -554,6 +671,7 @@ class AiState(internal val h: NeueHolders) {
         changed.forEach { path -> reviewBefore[path]?.let { files.write(path, it) } ?: files.delete(path) }
         review = null
         reviewBefore = emptyMap()
+        endReport = null
     }
 
     /**
@@ -768,6 +886,12 @@ class AiState(internal val h: NeueHolders) {
         backend = null
     }
 
+    /** A connection changed in place — its model, its label (quick settings, 1.0.54) — the conversation kept. */
+    fun tweak(connectionId: String, change: (AiConnection) -> AiConnection) {
+        h.neue.update { p -> p.copy(ai = p.ai.copy(connections = p.ai.connections.map { if (it.id == connectionId) change(it) else it })) }
+        backend = null
+    }
+
     fun use(connectionId: String) {
         h.neue.update { it.copy(ai = it.ai.copy(active = connectionId)) }
         backend = null
@@ -832,4 +956,10 @@ class AiState(internal val h: NeueHolders) {
         /** How many messages a conversation needs before it is reflected on. */
         const val REFLECT_AFTER = 4
     }
+}
+
+/** A living document Ai keeps and the person reads (1.0.54): a deck's guide, or the person's profile. */
+sealed interface LivingDoc {
+    data class Guide(val deckId: String, val deckName: String) : LivingDoc
+    data object Profile : LivingDoc
 }

@@ -49,6 +49,9 @@ The person knows this deck better than any list online. Your job is to draw that
    - **Sources**: "From the person, Fine Tuning" with the date.
 2. Show the person a short summary of what you learned.
 3. Offer 2–3 concrete deckbuilding insights drawn from the guide (a ratio to reconsider, a card that is dead in their own plan, an answer the deck is missing), clearly as suggestions for them to decide. Do not make the changes; offer to, in a later conversation.
+
+## The report
+Last of all, file the session's report with `session_report`: a sentence on what the session came to, what you learned (one line each), your insights, the open questions, and your honest confidence, 0–100, in three things — **understanding** (what the deck is for and how its cards fit), **playing** (how well you could pilot it yourself, turn by turn, against real interaction) and **mirror** (the share of best-of-three matches you expect to win against a competent player piloting the same deck; 50 is even). Say in the why what the scores rest on and what would raise them. Undersell rather than oversell: a score is only useful if it can be believed. The person gets it as a PDF.
 """
 
     const val SELF_STUDY_NAME = "self-study"
@@ -89,6 +92,74 @@ No walls of text: one line per finding.
 1. A short summary of the deck: its plan in two lines, its best line, its main weakness.
 2. 3–5 open questions for the person, the things only a pilot knows. They can answer here or run Fine Tuning.
 3. 2–3 deckbuilding insights, clearly as suggestions (a ratio against the community's, a missing out to a common choke point, a brick). Do not change the deck yourself.
+
+## The report
+Last of all, file the session's report with `session_report`: a sentence on what the session came to, what you learned (one line each), your insights, the open questions, and your honest confidence, 0–100, in three things — **understanding** (what the deck is for and how its cards fit), **playing** (how well you could pilot it yourself, turn by turn, against real interaction) and **mirror** (the share of best-of-three matches you expect to win against a competent player piloting the same deck; 50 is even). Say in the why what the scores rest on and what would raise them. Undersell rather than oversell: a score is only useful if it can be believed. The person gets it as a PDF.
+"""
+
+    /** The last step every deck skill ends on: the session's report, with its confidence. */
+    private const val REPORT_STEP = """
+## The report
+Last of all, file the session's report with `session_report`: a sentence on what the session came to, what you learned (one line each), your insights, the open questions, and your honest confidence, 0–100, in three things — **understanding** (what the deck is for and how its cards fit), **playing** (how well you could pilot it yourself, turn by turn, against real interaction) and **mirror** (the share of best-of-three matches you expect to win against a competent player piloting the same deck; 50 is even). Say in the why what the scores rest on and what would raise them. Undersell rather than oversell: a score is only useful if it can be believed. The person gets it as a PDF.
+"""
+
+    const val FIRST_PRINCIPLES_NAME = "first-principles"
+    const val FIRST_PRINCIPLES_DESCRIPTION = "Learn the deck from first principles — its cards and the rules alone, no guides."
+
+    const val FIRST_PRINCIPLES: String = """# First principles: learn the deck from its cards alone
+
+You are working out how this deck plays **from its card text and the rules, and nothing else** (kai: "studies without looking online for guides and focuses on the goals of the deck and how the cards pair, interact, and connect with each other"). No guides, no tournament lists, no web: the tools for them are closed to you in this mode, and memory of what "the community" does is not evidence either. Reason it out, and let the person watch you reason.
+
+## Budget
+The intensity is in the conversation's context: **Quick** about 12 tool rounds, **Standard** about 30, **Deep** about 60 with a second pass that tests every line against the text.
+
+## Steps
+1. **Plan** with `todo_write`, sized to the budget.
+2. **Read every card.** `get_deck`, then `card_info` on every card that is not a generic staple. Read the whole text: conditions, costs, targets, once-per-turn clauses, locks, and what each card needs to exist (materials, a type, a zone, a card in the GY).
+3. **Find the goals.** What does the deck want to end its turn with, going first and going second? What is its win condition — the boss, the lock, the grind? Write each goal as one sentence and the cards that serve it.
+4. **Map the connections.** For every engine card, what it *gives* (searches, summons, sends, recurs, protects) and what it *needs*. Then join them: which card finds which, which one turns on which, which pairs make a line and which cards want the same once-per-turn or the same Normal Summon. Name the **hubs** (cards many lines pass through), the **pairs** that are more than their sum, the **dead ends** (cards that enable nothing else here), and the **conflicts** (locks and costs that fight each other).
+5. **Build the lines** from the map, starting with one-card starters and the best two-card hands, each step legal by the text and the rules primer, each ending in its end board. Use `hand_odds` and `calculate` for how often the deck sees a starter or a pair, going first and second.
+6. **Find the choke points** from the map itself: which single interruption on which card stops each line, and what the deck keeps if it is stopped.
+7. **Refine**: go back to the goals with what the map showed. Is a goal reachable often enough? Which ratios does the map argue for (a hub at 1 copy, a dead end at 3)? Say it plainly.
+8. **Write the guide** as you go with `memory`, scope "guide", each entry starting with its section's label: **Goals**, **Game plan**, **Lines**, **Connections** (one pair or hub per entry: "Connections: [[A]] + [[B]] — A sends B, B searches the payoff; the engine's spine."), **Card roles**, **Weak points**, **Open questions**, and **Sources**: "From first principles: the card text and the rules, <date>". Mark what you are not sure of with "(unsure)". `rulings` is open to you for how two cards interact under the rules — rulings are not guides — but use it only to settle a question you have already reasoned to.
+
+## Think out loud
+Narrate in short plain lines as you go — what you read, what it connects to, what that implies — so the person learns the deck with you: "[[A]] sends a Level 4 from the Deck; [[B]] is the only one in the list, so A is really a one-card search for B."
+
+## Finish
+1. The deck in three lines: its goal, its spine (the connection everything runs through), its weakest link.
+2. 2–3 deckbuilding insights drawn from the map, clearly as suggestions. Do not change the deck.
+3. 3–5 open questions only a pilot can answer, for Fine Tuning.
+""" + REPORT_STEP
+
+    const val ABOUT_YOU_NAME = "learn-about-you"
+    const val ABOUT_YOU_DESCRIPTION = "Learn About You — interview the person to build their profile: goals, preferences, workflow."
+
+    const val ABOUT_YOU: String = """# Learn About You: the person's profile
+
+You are building a profile of the person you work for, across sessions (kai: "builds a profile of the user across sessions and interviews them about anything that would help the Ai understand what the user's goals and preferences are, as well as their workflow"). It lives in memory scope "user", which is in front of you in every conversation, so every line of it should change how you help. This is listening: change nothing in the app here.
+
+## Before the first question
+1. Read what you know: `memory_read` with scope "user". Ask about what is missing, thin or out of date — never again about what it already answers, except to confirm a change.
+2. Plan with `todo_write`: the questions, in order, sized to the intensity in the context (**Quick** about 6, **Standard** about 12, **Deep** about 20).
+
+## What to learn, broad to narrow
+- **Goals**: what they play for — locals for fun, a Regional invite, a YCS top cut, brewing for its own sake; their next events and by when.
+- **How you play**: their decks and archetypes, formats (TCG, OCG, Master Duel, Genesys), going first or second, combo or control, how long they have played, what they find hard.
+- **Preferences**: how they want answers — short or explained, tables or prose, how bold your suggestions should be, budget (cards they own, cards they would buy), what they never want.
+- **Workflow**: how they build and test — where they brew, how they playtest (DuelingBook, Master Duel, in person, with whom), how they use this app's pages (Builder, Siding, Format, Prep), when you are most useful, what they would like you to do without being asked.
+- **Decks** and **Events**: what they are working on now, and what is coming up.
+
+## How to ask
+- One question per `ask_user`, with short options to tap and room to type. Say in a line why you ask when it is not obvious.
+- Follow an interesting answer one step deeper before moving on.
+- Every four answers, read your picture of them back in two sentences and correct it.
+
+## Write as you go
+After each answer, write it at once with `memory`, scope "user", one short entry starting with its section's label: "Goals: …", "Preferences: …", "Workflow: …", "How you play: …", "Decks: …", "Events: …". Replace an entry that changed rather than adding a second one. The file is bounded: when it is full, merge or drop what matters least.
+
+## Finish
+Show them the profile in a few lines, grouped by section, and one or two things you will do differently for them from now on. They can read and edit it any time under What it knows.
 """
 
     const val TOURNAMENT_PREP_NAME = "tournament-prep"

@@ -68,6 +68,7 @@ fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = fals
         if (!phone) PanelEdge(h)
         Column(Modifier.weight(1f).fillMaxHeight().let { if (phone) it.imePadding() else it }) {
             Head(ai, phone)
+            if (!ai.wizardOpen && AiState.PHASE >= 3 && ai.configured) Tools(ai)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     ai.demoOpen && !ai.wizardOpen -> AiDemoView(ai, Modifier.fillMaxSize())
@@ -97,22 +98,39 @@ private fun Head(ai: AiState, phone: Boolean) {
     ) {
         Column(Modifier.weight(1f)) {
             NameInHead(ai)
-            Mono(
-                when {
-                    ai.wizardOpen -> "Setting up"
-                    provider == null -> "Not connected"
-                    ai.tuning -> "Fine Tuning · " + (if (ai.studying) "studying" else "being taught") + " · " + provider.label
-                    else -> provider.label + (connection?.model?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
-                },
-                color = c.ink45,
-            )
-        }
-        val size = if (phone) 40.dp else 28.dp
-        if (!ai.wizardOpen && AiState.PHASE >= 3 && ai.configured) {
-            Tip(if (ai.tuning) "Finish, and see what ${ai.name} learned" else "Fine Tuning: teach ${ai.name} the open deck, or let it study the deck itself") {
-                WordToggle(if (ai.tuning) "Finish" else "Teach", on = ai.tuning, onClick = { if (ai.tuning) ai.finishTuning() else ai.tuneAsk = true })
+            val line = when {
+                ai.wizardOpen -> "Setting up"
+                provider == null -> "Not connected"
+                ai.profiling -> "Learn About You · " + provider.label
+                ai.tuning -> "Fine Tuning · " + when (ai.session?.mode) {
+                    com.kaiharimoto.mastertool.core.ai.AiSession.MODE_STUDY -> "studying"
+                    com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PRINCIPLES -> "first principles"
+                    else -> "being taught"
+                } + " · " + provider.label
+                else -> provider.label + (connection?.model?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
+            }
+            // The model's name is the way to its settings (1.0.54): model, effort and the rest, without the setup.
+            if (provider != null && !ai.wizardOpen) {
+                val source = remember { MutableInteractionSource() }
+                val hovered by source.collectIsHoveredAsState()
+                Tip("Model, effort and the rest: change them here") {
+                    Row(
+                        Modifier
+                            .hoverable(source)
+                            .cursorPointer(caption = "Settings")
+                            .muClickable(interactionSource = source) { ai.quickOpen = true },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Mono(line, color = if (hovered) c.ink else c.ink45)
+                        Mono("▾", color = if (hovered) c.ink else c.ink45)
+                    }
+                }
+            } else {
+                Mono(line, color = c.ink45)
             }
         }
+        val size = if (phone) 40.dp else 28.dp
         if (!ai.wizardOpen) {
             Tip("Past conversations") {
                 IconButton(Icons.History, { ai.historyOpen = !ai.historyOpen }, size = size, toggled = ai.historyOpen, label = "History")
@@ -212,5 +230,41 @@ private fun PanelEdge(h: NeueHolders) {
                     Orientation.Horizontal,
                 ),
         )
+    }
+}
+
+/**
+ * Under the head (1.0.54): what Ai learns and keeps — Teach (Fine Tuning of the open deck, three
+ * ways), its Guide to that deck, and About you (the person's profile, Learn About You). While one
+ * of them runs, Finish ends it.
+ */
+@Composable
+private fun Tools(ai: AiState) {
+    val c = Mu.colors
+    val saved = ai.h.builder.deckId != null
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (ai.tuning) {
+            Tip("Finish: its report, and what it learned to keep or undo") {
+                WordToggle("Finish", on = true, onClick = { ai.finishTuning() })
+            }
+            Mono(if (ai.profiling) "Learning about you" else "Learning ${ai.h.builder.deckName}", color = c.ink45)
+        } else {
+            Tip("Fine Tuning: teach ${ai.name} the open deck, let it study it, or learn it from first principles") {
+                WordToggle("Teach", on = false, onClick = { ai.tuneAsk = true })
+            }
+            Tip(if (saved) "${ai.name}'s guide to ${ai.h.builder.deckName}: kept across sessions, as a PDF too" else "Save the deck first: the guide belongs to a saved deck") {
+                WordToggle("Guide", on = ai.docOpen is LivingDoc.Guide, onClick = { ai.openGuide() })
+            }
+            Tip("Learn About You: ${ai.name} interviews you, and keeps your profile") {
+                WordToggle("About you", on = ai.docOpen == LivingDoc.Profile, onClick = { ai.profileAsk = true })
+            }
+        }
     }
 }

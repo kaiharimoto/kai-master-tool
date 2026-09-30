@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.ai
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.composed
+import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -463,6 +467,7 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
             ai.studying -> "Studying the deck"
             else -> "Thinking"
         }
+        ai.handLine != null -> ai.handLine
         ai.problem != null -> "Could not finish"
         face == com.kaiharimoto.mastertool.core.ai.avatar.Expression.DONE -> "Done"
         face == com.kaiharimoto.mastertool.core.ai.avatar.Expression.SAD -> "Stopped"
@@ -473,6 +478,7 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
         com.kaiharimoto.neue.ai.avatar.AiAvatar(
             face,
             if (phone) com.kaiharimoto.neue.ai.avatar.AvatarSizes.composerPhone else com.kaiharimoto.neue.ai.avatar.AvatarSizes.composer,
+            modifier = Modifier.avatarHand(ai),
             pointer = { ai.h.cursor.position },
             name = ai.name,
         )
@@ -586,4 +592,66 @@ private fun TodoView(items: List<String>) {
             }
         }
     }
+}
+
+/**
+ * The face answers a hand (1.0.54, kai: "let the user interact with the Ai avatar in various ways
+ * to make it feel like it's really living and there"): a tap, a double tap, poking, a press held,
+ * the pointer or a finger stroked back and forth (petting), and the pointer left resting on it —
+ * each read by `AvatarPlay` (core) into a face and a line. Nothing moves but the face itself.
+ */
+private fun Modifier.avatarHand(ai: AiState): Modifier = composed {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var hovering by remember { mutableStateOf(false) }
+    var pressed by remember { mutableStateOf(false) }
+    var dwellAnswered by remember { mutableStateOf(false) }
+    // Resting on it a while: shy of being looked at, once a visit.
+    androidx.compose.runtime.LaunchedEffect(hovering) {
+        if (!hovering) {
+            dwellAnswered = false
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay((com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.DWELL * 1000).toLong())
+        if (hovering && !pressed && !dwellAnswered) {
+            dwellAnswered = true
+            ai.touched(ai.play.dwell(com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.DWELL))
+        }
+    }
+    this
+        .cursorPointer(caption = "Pet")
+        .pointerInput(ai) {
+            // Every move over the face, hovering or dragged: back and forth is petting.
+            awaitPointerEventScope {
+                while (true) {
+                    val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    when (e.type) {
+                        androidx.compose.ui.input.pointer.PointerEventType.Enter -> hovering = true
+                        androidx.compose.ui.input.pointer.PointerEventType.Exit -> hovering = false
+                        androidx.compose.ui.input.pointer.PointerEventType.Move -> e.changes.firstOrNull()?.let { ch ->
+                            val dx = ch.position.x - ch.previousPosition.x
+                            if (dx != 0f) ai.touched(ai.play.stroke(dx / density, ai.clock(), ai.mood.sleeping))
+                        }
+                        else -> Unit
+                    }
+                }
+            }
+        }
+        .pointerInput(ai) {
+            detectTapGestures(
+                onPress = {
+                    pressed = true
+                    tryAwaitRelease()
+                    pressed = false
+                },
+                onTap = { ai.touched(ai.play.tap(ai.clock(), ai.mood.sleeping)) },
+                onDoubleTap = { ai.touched(ai.play.doubleTap(ai.clock())) },
+                onLongPress = {
+                    ai.touched(ai.play.hold(longer = false))
+                    scope.launch {
+                        kotlinx.coroutines.delay(((com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.HOLD_LONGER - com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.HOLD) * 1000).toLong())
+                        if (pressed) ai.touched(ai.play.hold(longer = true))
+                    }
+                },
+            )
+        }
 }

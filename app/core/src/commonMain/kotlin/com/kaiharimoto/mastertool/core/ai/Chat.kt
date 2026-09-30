@@ -191,5 +191,14 @@ data class AiSession(
         const val MODE_CHAT = "chat"
         const val MODE_TUNE = "tune"
         const val MODE_STUDY = "study"
+
+        /** Fine Tuning from the card text and the rules alone (1.0.54): the web's tools are closed. */
+        const val MODE_PRINCIPLES = "principles"
+
+        /** Learn About You (1.0.54): an interview that builds the person's profile in USER.md. */
+        const val MODE_PROFILE = "profile"
+
+        /** The modes that are Fine Tuning of a deck, and end on a session report. */
+        val DECK_MODES = setOf(MODE_TUNE, MODE_STUDY, MODE_PRINCIPLES)
     }
 }
