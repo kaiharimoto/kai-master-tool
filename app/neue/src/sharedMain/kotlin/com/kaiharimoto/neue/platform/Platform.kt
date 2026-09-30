@@ -62,6 +62,16 @@ expect object Platform {
 
     /** A photo taken with the device's camera app, upright, or null when there is none. */
     suspend fun takePhoto(): PickedFile?
+
+    /**
+     * Ai is at work, or has stopped (1.0.61, kai: "I want to be able to [switch apps] without the
+     * conversation cutting off"). On Android a foreground service keeps the process and its
+     * connection alive while the app is out of sight, [line] its notification; the desk needs none.
+     */
+    fun working(on: Boolean, title: String, line: String)
+
+    /** Ai finished while the app was out of sight: a notification says so (Android); nothing on the desk. */
+    fun answered(title: String, line: String)
 }
 
 /** Where a QR code is read from: the camera, or a picture (a screenshot someone sent). */

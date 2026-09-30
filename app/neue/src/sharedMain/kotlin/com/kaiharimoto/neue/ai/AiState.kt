@@ -711,6 +711,12 @@ class AiState(internal val h: NeueHolders) {
                 repliedAt = System.currentTimeMillis()
             }
         }
+        // Answered out of sight, on a phone or a tablet: a notification says so (1.0.61).
+        if (!stopping) {
+            val said = session?.turns?.lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.text?.let(::firstLine)
+            val (title, line) = com.kaiharimoto.mastertool.core.ai.WorkNotice.answered(name, said, problem?.first)
+            Platform.answered(title, line)
+        }
         val wasStopped = stopping
         stopping = false
         confirm?.reply(false)
@@ -1412,6 +1418,19 @@ class AiState(internal val h: NeueHolders) {
         stop()
         files.forgetEverything()
         session = null
+    }
+
+    init {
+        // While it works, on a phone or a tablet, a foreground service keeps the app's process and
+        // its connection alive out of sight (1.0.61): Android freezes a background app within
+        // seconds, and some phones cut its network, which ended the answer mid-sentence.
+        scope.launch {
+            androidx.compose.runtime.snapshotFlow { (running || checking) to (working ?: status) }
+                .collect { (on, doing) ->
+                    val (title, line) = com.kaiharimoto.mastertool.core.ai.WorkNotice.working(name, doing)
+                    Platform.working(on, title, line)
+                }
+        }
     }
 
     companion object {

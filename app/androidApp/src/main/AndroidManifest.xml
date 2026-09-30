@@ -16,6 +16,13 @@
     </queries>
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Ai at work out of sight (1.0.61): a foreground service keeps the answer from being cut off
+         when another app comes up, with a wake lock for a screen that goes off, and a notification
+         that says so (asked for once, the first time Ai works; the service runs without it). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Lets the app install the release APK it downloads from GitHub. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -76,6 +83,11 @@
             android:exported="false"
             android:screenOrientation="fullUser"
             android:theme="@style/Theme.MasterTool" />
+
+        <service
+            android:name=".AiWorkService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

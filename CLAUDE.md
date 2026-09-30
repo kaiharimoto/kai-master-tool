@@ -530,6 +530,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `AiBadge`** — face and name in a box, no running line; held, it opens the brain.
   **1.0.60**: a player search that matches one player is **a 303 to their page**, not a list — read
   as that player (`YgoProDeckDecks.players` keeps where a request lands); the list is capped at 25.
+  **1.0.61**: the chat follows only a reader at the end (`ChatFollow`), and a thought watched open
+  stays open when filed; **while Ai works on Android, `AiWorkService`** (a data-sync foreground
+  service with a wake lock, through `Platform.working`) keeps the answer alive out of sight, and
+  "Ai answered" is posted when it lands there; `Unreachable` words a failed lookup.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.

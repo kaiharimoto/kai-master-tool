@@ -131,9 +131,29 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
     }
     val list = rememberLazyListState()
     val tail = rows.size + (if (ai.streaming.isNotEmpty()) 1 else 0) + (if (ai.reasoning.isNotEmpty()) 1 else 0) + ai.todos.size + (if (ai.confirm != null) 1 else 0) + (if (ai.question != null) 1 else 0) + (if (ai.problem != null) 1 else 0) + ai.activity.size
+    // It keeps up with Ai only while the reader is at the end (1.0.61, `ChatFollow`): a scroll the
+    // reader lets go of elsewhere is left alone, and the end is the end, not the newest item's top.
+    val follow = remember(session?.id) { com.kaiharimoto.mastertool.core.ai.text.ChatFollow() }
+    // Which thoughts are open, by their start: one watched open as it streamed stays open when it is
+    // filed after the step, or the conversation shrinks under whoever is reading it (1.0.61).
+    val opened = remember(session?.id) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    val ours = remember { booleanArrayOf(false) }
+    LaunchedEffect(list) {
+        androidx.compose.runtime.snapshotFlow { list.isScrollInProgress }.collect { moving ->
+            if (!moving && !ours[0]) follow.readerScrolled(atEnd = !list.canScrollForward)
+        }
+    }
+    LaunchedEffect(ai.running) { if (ai.running) follow.sent() }
     LaunchedEffect(tail, ai.streaming.length / 80, ai.reasoning.length / 200) {
         val last = list.layoutInfo.totalItemsCount - 1
-        if (last >= 0) list.scrollToItem(last)
+        if (last < 0 || !follow.shouldFollow(readerScrolling = list.isScrollInProgress)) return@LaunchedEffect
+        ours[0] = true
+        try {
+            // A large offset past the last item's top: the list stops at its true end.
+            list.scrollToItem(last, 1_000_000)
+        } finally {
+            ours[0] = false
+        }
     }
     if (rows.isEmpty() && !ai.running) {
         Greeting(ai, modifier)
@@ -154,11 +174,11 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
                         row.check?.let { CheckLine(it) }
                     }
                     is Entry.Line -> ActivityLine(row.summary, row.isError)
-                    is Entry.Thought -> ReasoningView(ai, row.text, live = false)
+                    is Entry.Thought -> ReasoningView(ai, row.text, live = false, opened)
                     is Entry.Summarized -> SummaryMark(row.summary, row.carried)
                 }
             }
-            if (ai.reasoning.isNotBlank()) item { ReasoningView(ai, ai.reasoning, live = true) }
+            if (ai.reasoning.isNotBlank()) item { ReasoningView(ai, ai.reasoning, live = true, opened) }
             if (ai.todos.isNotEmpty()) item { TodoView(ai.todos) }
             items(ai.activity) { ActivityLine(it.summary.ifBlank { it.name }, it.isError) }
             if (ai.streaming.isNotEmpty()) item { ReplyView(ai, ai.streaming, live = true) }
@@ -749,12 +769,14 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
  * Reasoning), open while it streams so it can be followed as it goes.
  */
 @Composable
-private fun ReasoningView(ai: AiState, text: String, live: Boolean) {
+private fun ReasoningView(ai: AiState, text: String, live: Boolean, opened: MutableMap<String, Boolean>) {
     val c = Mu.colors
     val how = ai.prefs.showReasoning
     if (how == com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_HIDDEN) return
     val startsOpen = live || how == com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_OPEN || ai.tuning
-    var open by remember(text.length > 0, startsOpen) { mutableStateOf(startsOpen) }
+    val key = text.trim().take(200)
+    if (live) androidx.compose.runtime.SideEffect { if (key !in opened) opened[key] = true }
+    val open = opened[key] ?: startsOpen
     val source = remember { MutableInteractionSource() }
     Column(
         Modifier
@@ -767,7 +789,7 @@ private fun ReasoningView(ai: AiState, text: String, live: Boolean) {
             Modifier
                 .hoverable(source)
                 .cursorPointer(caption = if (open) "Fold" else "Read")
-                .muClickable(interactionSource = source) { open = !open },
+                .muClickable(interactionSource = source) { opened[key] = !open },
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

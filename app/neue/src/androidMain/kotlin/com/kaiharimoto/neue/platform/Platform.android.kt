@@ -46,13 +46,31 @@ actual object Platform {
     internal var permission: (suspend (String) -> Boolean)? = null
         private set
 
+    /** The APK's foreground service for Ai at work (1.0.61): on, its title and line; or off. */
+    private var work: ((Boolean, String, String) -> Unit)? = null
+
+    /** The APK's "Ai answered" notification, posted only while the app is out of sight. */
+    private var answer: ((String, String) -> Unit)? = null
+
+    actual fun working(on: Boolean, title: String, line: String) {
+        runCatching { work?.invoke(on, title, line) }
+    }
+
+    actual fun answered(title: String, line: String) {
+        runCatching { answer?.invoke(title, line) }
+    }
+
     fun attach(
         context: Context,
         picker: suspend (Array<String>) -> PickedFile?,
         scanner: (suspend () -> QrScan)? = null,
         camera: (suspend () -> PickedFile?)? = null,
         permission: (suspend (String) -> Boolean)? = null,
+        work: ((Boolean, String, String) -> Unit)? = null,
+        answer: ((String, String) -> Unit)? = null,
     ) {
+        this.work = work
+        this.answer = answer
         this.context = context.applicationContext
         activity = (context as? android.app.Activity)?.let { java.lang.ref.WeakReference(it) }
         this.picker = picker

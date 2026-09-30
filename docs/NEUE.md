@@ -2277,6 +2277,29 @@ page that is a player's is that one player; the redirected page is cached under 
 so the career is not asked for twice. The search shows at most 25 matches, and Ai says so when
 that many come back.
 
+**1.0.61, reading it while it writes, and switching apps.**
+- **The chat follows only a reader at the end** (kai: "on mobile I'm trying to scroll down Ai's
+  chatlog to read the thinking but it keeps jumping me up"). Every 80 characters of the answer and
+  200 of the thinking, the transcript used to put the *top* of the newest item at the top of the
+  panel, whoever was reading what. Now `ChatFollow` (core, tested) keeps up only while the reader
+  is at the end: a scroll let go of elsewhere is left alone, one that comes to rest at the end
+  follows again, as does a message sent; and following goes to the true end, not the newest
+  item's top. Desk and phone alike.
+- **A thought watched open stays open when it is filed.** The live thinking is shown open; when
+  the step ends it becomes a past thought, folded by default, and the chat shrank under whoever
+  was reading it. Thoughts' open state is kept by their start for the conversation.
+- **Switching apps no longer cuts the answer off** (kai: "I want to be able to do that without
+  the conversation cutting off"). Android freezes a background app's process within seconds, and
+  some phones cut its network — the answer died with "Unable to resolve host". While Ai works
+  (`running || checking`), `Platform.working` starts the APK's `AiWorkService`: a data-sync
+  foreground service with a partial wake lock (30 minutes at most), under an ongoing "Ai is
+  working" notification that says what it is doing (`WorkNotice`, core). It stops the moment Ai
+  does. An answer that lands out of sight posts "Ai answered" with its first line; coming back
+  clears it. Notifications are asked for once, the first time Ai works (Android 13); the service
+  runs without them. Nothing on the desk.
+- **A service out of reach is said plainly** (`Unreachable`, core): a name the device could not
+  look up says so, and what usually causes it, on every platform's wording.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:

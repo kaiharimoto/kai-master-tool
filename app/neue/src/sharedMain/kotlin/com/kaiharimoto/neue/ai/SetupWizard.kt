@@ -550,7 +550,7 @@ private fun ServerStep(w: WizardState) {
                     w.good = if (models.isEmpty()) "Found the server, with no models loaded." else "Found the server: ${models.size} models."
                     if (models.isNotEmpty()) w.next()
                 }.onFailure {
-                    w.message = "Could not reach ${w.baseUrl}: ${it.message ?: it::class.simpleName}" +
+                    w.message = com.kaiharimoto.mastertool.core.ai.wire.Unreachable.say(w.baseUrl, it.message ?: it::class.simpleName) +
                         if (onDevice) " — is the server listening on the network, and is this device on the same Wi-Fi?" else ""
                 }
                 w.checking = false

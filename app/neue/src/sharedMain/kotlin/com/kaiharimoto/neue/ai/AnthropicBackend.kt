@@ -174,7 +174,7 @@ class AnthropicBackend(
         } catch (e: AnthropicServiceException) {
             emit(BackendEvent.Failed("Anthropic answered ${e.statusCode()}: ${e.message}", retryable = e.statusCode() >= 500))
         } catch (t: Throwable) {
-            emit(BackendEvent.Failed("Could not reach Anthropic: ${t.message ?: t::class.simpleName}", retryable = true))
+            emit(BackendEvent.Failed(com.kaiharimoto.mastertool.core.ai.wire.Unreachable.say("https://api.anthropic.com", t.message ?: t::class.simpleName), retryable = true))
         }
     }.flowOn(Dispatchers.IO)
 

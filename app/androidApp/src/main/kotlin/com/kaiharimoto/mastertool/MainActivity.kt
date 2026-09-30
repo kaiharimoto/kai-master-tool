@@ -62,6 +62,7 @@ import com.kaiharimoto.neue.rememberHolders
 import com.kaiharimoto.neue.update.NeueUpdates
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
@@ -223,7 +224,22 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         // choice replaces it once the settings are read (v1.3.5).
         applyOrientation(null)
 
-        Platform.attach(this, picker = { types -> pick(types) }, scanner = { scan() }, camera = { photo() }, permission = { permission(it) })
+        Platform.attach(
+            this,
+            picker = { types -> pick(types) },
+            scanner = { scan() },
+            camera = { photo() },
+            permission = { permission(it) },
+            // Ai at work out of sight (1.0.61): the foreground service keeps the answer alive when
+            // another app comes up, and a notification says when it has answered.
+            work = { on, title, line ->
+                AiWorkService.set(this, on, title, line)
+                if (on) askNotificationsOnce()
+            },
+            answer = { title, line ->
+                if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) AiWorkService.answered(this, title, line)
+            },
+        )
 
         val app = application as MasterToolApplication
         val deps = AppDependencies(
@@ -336,6 +352,26 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
      * Leaving the app saves the deck (touch swarm, rec 5): a tablet is put down,
      * swiped away and killed in the background, and nothing warns you first.
      */
+    override fun onStart() {
+        super.onStart()
+        // Back in sight: the "Ai answered" notice has done its job.
+        AiWorkService.seen(this)
+    }
+
+    /**
+     * Notifications, asked for once (Android 13), the first time Ai works: they say it is working
+     * out of sight and when it has answered. The service runs whatever the answer.
+     */
+    private fun askNotificationsOnce() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        val prefs = getSharedPreferences("neue.android", MODE_PRIVATE)
+        if (prefs.getBoolean("askedNotifications", false)) return
+        prefs.edit().putBoolean("askedNotifications", true).apply()
+        asking.launch { permission(android.Manifest.permission.POST_NOTIFICATIONS) }
+    }
+
+    private val asking = kotlinx.coroutines.MainScope()
+
     override fun onStop() {
         super.onStop()
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
