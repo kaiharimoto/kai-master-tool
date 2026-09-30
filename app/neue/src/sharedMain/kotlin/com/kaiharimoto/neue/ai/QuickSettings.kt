@@ -17,6 +17,7 @@ import com.kaiharimoto.mastertool.core.ai.TuneIntensity
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.FieldLabel
 import com.kaiharimoto.neue.kit.Help
@@ -27,6 +28,7 @@ import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.theme.Mu
+import kotlinx.coroutines.launch
 
 /**
  * Quick settings (1.0.54, kai: "allow the user to change which model and effort they use, as well
@@ -124,6 +126,9 @@ fun QuickSettings(ai: AiState) {
             // Voice (1.0.57): the speech model on the desk, and talk mode's answers.
             FieldLabel("Voice", hint = if (com.kaiharimoto.neue.platform.Voice.usesModels) "written out on this computer" else "the system's recogniser")
             VoiceSettings(ai)
+            // Videos (1.0.62): a YouTube link watched by Gemini, frames and sound, with this key.
+            FieldLabel("Videos", hint = "YouTube links, watched by Gemini")
+            VideoKey(ai)
             // The fact-check pass (1.0.58).
             FieldLabel("Check its answers", hint = "claims about cards, rulings and numbers, against the card text")
             Segmented(prefs.factCheck, listOf(true, false), { if (it) "Check" else "Don't check" }, { v ->
@@ -147,3 +152,44 @@ fun QuickSettings(ai: AiState) {
         }
     }
 }
+
+/**
+ * The key Ai watches videos with (1.0.62): Gemini's, kept in the secret store under its own name,
+ * so the conversation can run on any model. A Gemini connection's key serves when there is none.
+ */
+@Composable
+private fun VideoKey(ai: AiState) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var typed by remember { mutableStateOf(SecretStore.get(AiVideo.KEY).orEmpty()) }
+    var said by remember { mutableStateOf<String?>(null) }
+    var trying by remember { mutableStateOf(false) }
+    val viaConnection = ai.prefs.connections.any { it.provider == "gemini" && !ai.secret(it).isNullOrBlank() }
+    com.kaiharimoto.neue.kit.Help(
+        when {
+            SecretStore.get(AiVideo.KEY) != null -> "Link a YouTube video — a deck profile, a combo guide — and Ai watches it with this key, whatever model it chats with."
+            viaConnection -> "Your Gemini connection's key is used to watch videos. Add one here to keep them apart."
+            else -> "Link a YouTube video and Ai watches it with Gemini, which sees the frames and hears the words. It needs a Gemini key: free from Google AI Studio."
+        },
+    )
+    SecretField(typed, { typed = it.trim(); said = null }, "Gemini API key")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        MuButton(if (trying) "Trying" else "Save", {
+            if (typed.isBlank()) {
+                SecretStore.remove(AiVideo.KEY)
+                said = "Removed."
+                return@MuButton
+            }
+            scope.launch {
+                trying = true
+                said = AiVideo.check(typed).fold(
+                    { model -> SecretStore.put(AiVideo.KEY, typed); "✓ Saved: videos will be watched with $model." },
+                    { "✕ ${it.message}" },
+                )
+                trying = false
+            }
+        }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, enabled = !trying, reason = "Trying the key")
+        com.kaiharimoto.neue.kit.MicroLink("Get a free key →", { com.kaiharimoto.neue.platform.Platform.browse(AiVideo.KEY_PAGE) })
+    }
+    said?.let { com.kaiharimoto.neue.kit.Small(it, color = Mu.colors.ink) }
+}
+

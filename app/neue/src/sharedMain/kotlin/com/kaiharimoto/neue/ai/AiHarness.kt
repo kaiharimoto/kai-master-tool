@@ -55,8 +55,12 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         "archetype_guide" -> archetype(ToolArgs.string(i, "archetype")!!, ToolArgs.strings(i, "sections"))
         "delegate" -> delegate(ToolArgs.string(i, "task")!!, ToolArgs.int(i, "steps") ?: 12)
         "express" -> express(ToolArgs.string(i, "face")!!, ToolArgs.int(i, "seconds") ?: 3)
+        "watch_video" -> video.watch(ToolArgs.string(i, "url")!!, ToolArgs.string(i, "focus"))
         else -> null
     }
+
+    /** Videos, watched by Gemini (1.0.62). */
+    internal val video by lazy { AiVideo(ai) }
 
     // ---- numbers ---------------------------------------------------------------------
 

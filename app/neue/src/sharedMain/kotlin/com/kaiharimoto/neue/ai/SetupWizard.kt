@@ -727,7 +727,7 @@ private fun CommandLine(command: String) {
 
 /** A key: dots unless shown, underline only, as the kit's fields are. */
 @Composable
-private fun SecretField(value: String, onChange: (String) -> Unit, placeholder: String) {
+internal fun SecretField(value: String, onChange: (String) -> Unit, placeholder: String) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     var shown by remember { mutableStateOf(false) }

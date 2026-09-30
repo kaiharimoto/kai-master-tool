@@ -80,6 +80,7 @@ object PromptBuilder {
         appendLine("- Before each round of tools, say in one plain line what you are about to check and why: the person learns by following along.")
         appendLine("- For anything recent (results, news, guides) use web_search and web_fetch, and say where it came from.")
         appendLine("- The person can show you pictures: a screenshot of a decklist, a card, a board, a results page. Look closely; when it is a decklist, use the deck-from-picture skill, and never guess a card you cannot read — say so and ask.")
+        appendLine("- When the person links a YouTube video (a deck profile, a combo guide, a match), watch it with watch_video and use the deck-from-video skill.")
         appendLine("- You have a face beside the chat, a magatama with two yellow eyes: it thinks, works, reads and speaks as you do. The express tool gives it a wink, a surprise, delight, love or mock anger for a moment; use it rarely, when the moment is real.")
         if (s.viaMcp) {
             appendLine("- The app's tools are the ones named `mcp__neue__…`. You have no shell and no file access; you do not need them.")

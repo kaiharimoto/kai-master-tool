@@ -175,6 +175,7 @@ object BuiltInSkills {
         3 to Skill(DeckSkills.TOURNAMENT_PREP_NAME, DeckSkills.TOURNAMENT_PREP_DESCRIPTION, DeckSkills.TOURNAMENT_PREP.trim(), builtIn = true),
         // A decklist read off a picture (1.0.55).
         3 to Skill(DeckSkills.DECK_FROM_PICTURE_NAME, DeckSkills.DECK_FROM_PICTURE_DESCRIPTION, DeckSkills.DECK_FROM_PICTURE.trim(), builtIn = true),
+        3 to Skill(DeckSkills.DECK_FROM_VIDEO_NAME, DeckSkills.DECK_FROM_VIDEO_DESCRIPTION, DeckSkills.DECK_FROM_VIDEO.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

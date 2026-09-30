@@ -120,7 +120,7 @@ class MoodTracker {
 
         /** The tools that read: a card, a ruling, a page, a list someone pasted. The rest are work. */
         val reading = setOf(
-            "card_info", "rulings", "web_fetch", "import_deck", "import_ygopro_deck", "ygopro_deck", "archetype_guide",
+            "card_info", "rulings", "web_fetch", "watch_video", "import_deck", "import_ygopro_deck", "ygopro_deck", "archetype_guide",
             "skill_view", "memory_read", "get_deck", "get_web", "get_siding", "session_search",
         )
 

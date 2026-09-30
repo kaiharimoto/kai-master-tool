@@ -124,6 +124,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         "new_deck" -> "Building ${ToolArgs.string(input, "name") ?: "a deck"}"
         "edit_deck" -> "Editing the deck"
         "resolve_cards" -> "Reading the cards off the picture"
+        "watch_video" -> "Watching the video with Gemini"
         "context_status" -> "Checking how full its memory is"
         "recall" -> "Remembering" + (ToolArgs.string(input, "query")?.let { " “$it”" } ?: "")
         else -> spec.name.replace('_', ' ').replaceFirstChar { it.uppercase() }

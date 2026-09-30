@@ -713,6 +713,20 @@ object AiTools {
 
     // ---- pictures (1.0.55) -------------------------------------------------------------
 
+    val watchVideo = ToolSpec(
+        "watch_video",
+        "Watches a YouTube video — a deck profile, a combo guide, a match — with Gemini, which sees the frames and " +
+            "hears the words, and reports: the decklist as shown on screen (count and name per line), the player and " +
+            "event, the game plan, each line and tech choice with timestamps, and the siding. Slow (up to a few " +
+            "minutes for a long video). Needs a Gemini key; the answer says so when there is none.",
+        schema {
+            string("url", "The video's YouTube address", required = true)
+            string("focus", "What to pay most attention to, if the person said (\"the side deck\", \"the combo at 8:40\")")
+        },
+        ToolGroup.META,
+        phase = 3,
+    )
+
     val resolveCards = ToolSpec(
         "resolve_cards",
         "Matches card names you read off a picture (a decklist screenshot, a photo of a list, a board) to the real cards, " +
@@ -771,6 +785,7 @@ object AiTools {
     val FIRST_PRINCIPLES_BARRED: Set<String> = setOf(
         "web_search", "web_fetch", "archetype_guide", "delegate",
         "ygopro_tournament_decks", "ygopro_deck", "import_ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
+        "watch_video",
     )
 
     /** The tools a delegated helper may use: every one that only looks. */
@@ -779,7 +794,7 @@ object AiTools {
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide",
-        "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall",
+        "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
     )
 
     /** Every tool, in the order they are offered. */
@@ -794,7 +809,7 @@ object AiTools {
         tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
-        express, sessionReport, resolveCards, contextStatus, compact, recall,
+        express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */
