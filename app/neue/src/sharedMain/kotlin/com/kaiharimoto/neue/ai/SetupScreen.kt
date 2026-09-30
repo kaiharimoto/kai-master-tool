@@ -133,7 +133,7 @@ private fun Welcome(ai: AiState) {
             color = c.ink70,
         )
         Small(
-            "It runs on an AI model you connect it to — your Claude or ChatGPT plan, an API key, or a model on your own computer. " +
+            "It thinks with a language model you connect it to — your Claude or ChatGPT plan, an API key, or a model on your own computer. " +
                 "This takes a few minutes, one step at a time, and every step checks itself as you go.",
             color = c.ink70,
         )

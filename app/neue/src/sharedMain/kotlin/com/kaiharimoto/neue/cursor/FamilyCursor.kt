@@ -246,6 +246,7 @@ fun Modifier.cursorPointer(
 fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
     val c = Mu.colors
     val fonts = LocalMuFonts.current
+    val keep = com.kaiharimoto.neue.kit.LocalKeepCase.current
     val measurer = rememberTextMeasurer()
     val motion = remember { CursorMotion() }
 
@@ -321,7 +322,8 @@ fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
         val cap = motion.lastCaption ?: return@Canvas
         if (shown <= 0.001f) return@Canvas
         val text = buildAnnotatedString {
-            if (cap.text.isNotEmpty()) append(cap.text.uppercase())
+            // Caps, but the assistant's name as it is written (MicroCaps).
+            if (cap.text.isNotEmpty()) append(com.kaiharimoto.mastertool.core.ai.text.MicroCaps.of(cap.text, keep))
             if (cap.value.isNotEmpty()) {
                 if (cap.text.isNotEmpty()) append(" ")
                 withStyle(SpanStyle(fontFamily = fonts.mono, fontWeight = FontWeight.Normal, letterSpacing = 0.em)) { append(cap.value) }

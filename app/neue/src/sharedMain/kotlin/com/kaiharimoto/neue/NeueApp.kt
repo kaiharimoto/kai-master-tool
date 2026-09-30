@@ -618,11 +618,11 @@ class NeueHolders(
             Command("App", "Refresh the card pool") { builder.refreshCardPool(force = true) },
             // The assistant's own, while it is on (1.0.43).
             *(if (neue.prefs.ai.enabled) arrayOf(
-                cmd("Ai", "${ai.name}: open or close", DeskAction.AI_PANEL),
-                Command("Ai", "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
-                Command("Ai", "${ai.name}: set up a connection") { ai.openWizard() },
-                Command("Ai", "${ai.name}: what it knows") { ai.memoryOpen = "USER.md" },
-                Command("Ai", "${ai.name}: Fine Tuning") { ai.startTuning() },
+                cmd(ai.name, "${ai.name}: open or close", DeskAction.AI_PANEL),
+                Command(ai.name, "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
+                Command(ai.name, "${ai.name}: set up a connection") { ai.openWizard() },
+                Command(ai.name, "${ai.name}: what it knows") { ai.memoryOpen = "USER.md" },
+                Command(ai.name, "${ai.name}: Fine Tuning") { ai.startTuning() },
             ) else emptyArray()),
             Command("App", "Report an issue →") { Platform.reportIssue() },
         ).filter { q.isEmpty() || it.label.lowercase().contains(q) || it.group.lowercase().startsWith(q) }
@@ -783,7 +783,7 @@ private fun NeueWindowContent(h: NeueHolders) {
     val tilt = com.kaiharimoto.neue.kit.rememberDeviceTilt(
         on = neue.touchFirst && neue.prefs.foilTilt && neue.prefs.foil != com.kaiharimoto.neue.cards.Foils.OFF,
     )
-    CompositionLocalProvider(com.kaiharimoto.neue.kit.LocalTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalPhone provides neue.phone, com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+    CompositionLocalProvider(com.kaiharimoto.neue.kit.LocalTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalPhone provides neue.phone, com.kaiharimoto.neue.kit.LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai") else emptySet()), com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
         neue.actingBy(finger = neue.touchFirst) { neue.felt(com.kaiharimoto.mastertool.core.haptics.DeskEvent.ART_STEPPED) }

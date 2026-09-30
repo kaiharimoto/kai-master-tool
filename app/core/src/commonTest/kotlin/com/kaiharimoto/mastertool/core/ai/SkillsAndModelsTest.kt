@@ -116,3 +116,20 @@ class SetupGuideTest {
         assertEquals(3, com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.choosing.size)
     }
 }
+
+class MicroCapsTest {
+    private fun caps(s: String, keep: Set<String> = setOf("Ai")) = com.kaiharimoto.mastertool.core.ai.text.MicroCaps.of(s, keep)
+
+    @Test
+    fun theNameKeepsItsSpellingAndNothingElseDoes() {
+        assertEquals("Ai", caps("Ai"))
+        assertEquals("SETTING UP Ai", caps("Setting up Ai"))
+        assertEquals("Ai's NOTES", caps("Ai's notes"))
+        assertEquals("WHAT Ai’s LEARNED", caps("What Ai’s learned"))
+        assertEquals("ASK Ai: NEW CONVERSATION", caps("Ask Ai: new conversation"))
+        assertEquals("MAIDEN AIR", caps("Maiden air"), "only the whole word, case for case")
+        assertEquals("AI", caps("AI"), "the letters, not the name")
+        assertEquals("DECKS", caps("Decks", emptySet()))
+        assertEquals("ASK Yusaku", caps("Ask Yusaku", setOf("Yusaku")), "a renamed assistant too")
+    }
+}

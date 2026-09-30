@@ -66,8 +66,14 @@ fun Micro(
     size: TextUnit = 11.sp,
     maxLines: Int = 1,
 ) {
-    MuText(text.uppercase(), modifier, MuType.micro(LocalMuFonts.current, size), color, maxLines)
+    MuText(com.kaiharimoto.mastertool.core.ai.text.MicroCaps.of(text, LocalKeepCase.current), modifier, MuType.micro(LocalMuFonts.current, size), color, maxLines)
 }
+
+/**
+ * Names that keep their own spelling inside micro caps (1.0.45): the assistant's, so
+ * "Ai" the name is never set as "AI" the letters (`MicroCaps`).
+ */
+val LocalKeepCase = androidx.compose.runtime.staticCompositionLocalOf<Set<String>> { emptySet() }
 
 /** Mono, for data: counts, percentages, keys, indexes (§3). */
 @Composable

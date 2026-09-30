@@ -1737,6 +1737,11 @@ re-fitting beside it as it does beside the Groups panel — so the deck is never
 sidebar inspector for UI space economy"): open, the inspector is gone and leaves no strip
 (`NeueState.aiDocked`, read by `PaneBudget`'s `inspectorVisible`); closed, it is back.
 Asking for the inspector (`TOGGLE_INSPECTOR`) while Ai is open puts Ai away.
+**The name is never capitals** (1.0.45, kai: "it would be easy to conflate Ai the name with
+AI meaning artificial intelligence"): micro caps — buttons, toggles, labels, the cursor's
+caption — set everything in capitals except the assistant's name and its possessive
+(`MicroCaps` in core, `LocalKeepCase` in the kit), so the bar reads "Ai", never "AI"; the
+prose says "language model", not "AI model", beside it.
 The bar's boxed name opens it (`AiToggle`), and `Ctrl I` (`DeskAction.AI_PANEL`), the
 palette, the Mac's View menu and the phone's ⋯ menu. Its left edge is dragged for its
 width (`AiPrefs.panelWidth`). Not in immersive mode. On a phone it is a full-screen

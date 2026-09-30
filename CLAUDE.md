@@ -432,6 +432,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **The first setup takes the whole window** (`AiSetupScreen`, while `NeueState.aiSetup`:
   Ai asked for with no connection), its words in `SetupGuide` (core, tested per
   provider). **On the builder Ai takes the inspector's place** (`NeueState.aiDocked`).
+  **Its name is never set in capitals** (`MicroCaps`, `LocalKeepCase`): "Ai", not "AI".
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
