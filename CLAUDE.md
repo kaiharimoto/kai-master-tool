@@ -494,7 +494,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   name in the panel's head (`QuickSettings`); **its brain** (`MemoryDialog`) from the bar's name
   button beside the marquee, which is only a line now; and **the face answers a hand**
   (`AvatarPlay`: taps, a double tap, poking, petting, holding, staring).
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted --ai-step=KEY:anthropic` photographs it.
+  **1.0.55, pictures in and cards out**: a picture attached, pasted, dropped or photographed
+  (`Attachments`, `PictureFit`) is `Part.Image`, a file under `<data>/ai/images/<session>/` whose
+  base64 is `@Transient` and put in only when sent (`AiFiles.hydrate`) — never store bytes in a
+  session; every wire sends it (Claude Code by `--input-format stream-json`, Codex by `--image=`),
+  and `Vision` guesses from the name whether a model sees. `resolve_cards` (`ReadCards`,
+  `NameMatch`) and the `deck-from-picture` skill read a decklist off a picture. Replies draw
+  ```deck, ```compare, ```line and ```board blocks as card art (`CardLayouts.kt`), and `[[Card]]`
+  in words opens the card.
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

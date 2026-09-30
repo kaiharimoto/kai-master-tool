@@ -2077,8 +2077,57 @@ app in the top bar … Let the user interact with the Ai avatar in various ways"
   (`0.5`, `"40%"`, `33.3`) is read as a percentage, and one field that cannot be read costs
   nothing else.
 
+**1.0.55, Ai sees, and answers in cards.** kai: "enable … image input, as well as have Ai respond
+more visually using card images and coherent and intuitive layouts". So:
+
+**Pictures in**
+- **Adding one:** attach (the picture button beside Send), paste (`Ctrl V` in the composer; copied
+  words still paste as words, `clipboardHasPicture` decides), drop it anywhere on the panel
+  (`takesPictures`), or on a phone or tablet take a photo (`Platform.takePhoto`: the camera app
+  through a FileProvider, turned upright by its EXIF). Up to five per message; a picture alone may
+  be sent. The composer shows them waiting, each with ×, and warns when the model probably cannot
+  see (`Vision.of`, read off the model's name: every Claude and Gemini, OpenAI's since GPT-4o,
+  the open models that say `vl`/`vision`/`llava`…).
+- **Sizing:** each is made the size a model reads (`PictureFit`: 1568 px on the long side, about
+  1.15 megapixels), kept a PNG when it came as a small one (a screenshot's text stays crisp), a
+  JPEG otherwise (`Attachments.prepare`, `encodeJpeg`).
+- **Stored beside the conversation, never in it:** `Part.Image(file, mime, width, height)` names
+  `<data>/ai/images/<session>/<sha1>.<ext>`; its base64 is `@Transient`, put in only when a turn
+  is sent (`AiFiles.hydrate`), so the list of conversations stays quick to read. Deleting the
+  conversation deletes its pictures. An older build cannot open a conversation that holds one.
+- **The wires:** Anthropic gets image blocks. OpenAI-compatible APIs get a list of parts
+  (`image_url` data URLs); a turn of words stays one string, byte for byte as before. Claude Code
+  gets one `--input-format stream-json` user message with image blocks (`ClaudeCli.userLine`).
+  Codex reads the files itself (`--image=`). A model that refuses a picture is explained in
+  words (`Vision.refused`).
+
+**Decks read off pictures**
+- The `deck-from-picture` skill reads a decklist from a screenshot (Master Duel, DuelingBook,
+  Neuron, YGOPRODeck) or a photo of a paper list.
+- It reads every card in order, marking the ones known from art alone, then calls
+  `resolve_cards` once (`ReadCards`: the pool's search first, then `NameMatch`, an edit distance on
+  normalised names that forgives a misread letter or a name cut off at a column).
+- It checks the counts, shows what it read as a `deck` block, asks about what it could not read,
+  then builds the deck or compares it with the open one.
+
+**Answers in cards.** New fenced blocks, parsed in core (`ChatMarkdown`), drawn in
+`CardLayouts.kt`:
+- `deck`: a whole list, ten across as a decklist is read, Main, Extra and Side with counts.
+- `compare`: what goes out (dimmed, marked −) over what comes in (+), and the net change. Used
+  for every suggested edit and siding plan.
+- `line`: a combo down the page, one step a row — its number, the card it turns on, what it
+  does — joined by a thread.
+- `board`: the field as Master Rule lays it out — Extra Monster Zones over columns two and four,
+  five monster zones, five spell and trap zones with the Field Zone, then the hand, GY and
+  banished. `(set)` draws a card face-down.
+- `cards` takes `## Label` lines to group what it shows.
+
+Every card in them shows in the inspector under the pointer and opens large on a click, and a
+card named in a reply's words (`[[…]]`) now opens large on a click too (`LocalCardLink`). The
+prompt teaches each block with one line, and when to use it.
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`.
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`, and from 1.0.55 `--ai=picture` (a screenshot read into a deck), `--ai=visual` (line, board, compare) and `--ai=attach` (pictures waiting in the composer).
 
 ### 4k′. Ai's face (1.0.52)
 
