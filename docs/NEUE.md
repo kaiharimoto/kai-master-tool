@@ -2024,8 +2024,61 @@ going online. The user can set the intensity … The AI should think out loud". 
   shows the change entry by entry, to keep or undo, as before. The event interview of 1.0.45
   is gone from Fine Tuning; tournament prep is its own page (1.0.50).
 
+**1.0.54, what it learns, written down.** kai: "a 'Learn this deck from first principles' which
+studies without looking online … At the end of teaching sessions, it should output a PDF
+guide/report in Master UI format … a confidence score of their ability of understanding the deck
+and the ability to play it itself and win, say, in a mirror match … a living document for each deck
+… Also build a 'Learn About You' mode … allow the user to change which model and effort they use …
+without having to go through the entire setup process … read Ai's brain (the MDs) and edit them in
+app in the top bar … Let the user interact with the Ai avatar in various ways". So:
+- **Learn it from first principles**, the launcher's third way (`MODE_PRINCIPLES`, the skill
+  `first-principles`): the card text and the rules only. The online tools
+  (`AiTools.FIRST_PRINCIPLES_BARRED`: the web, `archetype_guide`, `delegate`, YGOPRODeck's lists)
+  are neither offered nor answered in that mode — `AiHost` refuses them even if a model asks.
+  `rulings` stays, to settle a question the text leaves open. It maps the deck's goals and how the
+  cards pair, interact and connect, thinking out loud, and writes the guide's **Goals** and
+  **Connections**.
+- **Every deck session ends with a report** (`session_report`, `SessionReport`, core): what it
+  learned, insights, open questions, the questions it asked with the answers given
+  (`SessionQuestions`, read off the conversation), and three scores out of 100 — how well it
+  understands the deck, how well it could play it, and its chance to win a mirror match — with
+  **why** they are what they are. Finish asks for it when it has not been filed. Reports are kept
+  per deck (`<data>/ai/reports/<deck>.json`, the last 60, `ReportLog`) and deleted with the deck.
+  The end dialog shows the report beside the memory changes, with **Report · PDF**.
+- **The living guide** (`GuideDoc`, core: the guide's entries sorted into Goals, Game plan, Lines,
+  Connections, Card roles, Weak points, Side deck, Insights, Open questions and Sources by their
+  labels) is read in the app (`LivingDocDialog`: the scores and how they moved, the key cards in
+  their chosen art, the sections numbered) and exported as a PDF (**Guide · PDF**). Both PDFs are
+  laid out by `ReportPdf` (core, on `core/pdf`) in Master UI: a label, a 24 pt title, mono meta, a
+  heavy rule, numbered section heads, the scores as 30 pt numerals over ten-cell meters, the
+  history as grouped bars in the ink ramp, questions with their answers indented on a grey bar,
+  and the key cards eight across. `AiDocs` sets them in the app's fonts and delivers them.
+- **Learn About You** (`MODE_PROFILE`, the skill `learn-about-you`, `ProfileLauncher`): an
+  interview about the person — goals, preferences, workflow, how they play, their decks and
+  events — into `USER.md` as labelled entries (its limit raised to 5000), read in every
+  conversation. **Your profile** shows it sectioned (`GuideDoc.profile`).
+- **Quick settings** (`QuickSettings`): the model's name under Ai's in the panel's head is a
+  button — the name, the connection, the model (the provider's list, or typed), effort,
+  reasoning, intensity and the deletion asks, without the wizard.
+- **Its brain** (`MemoryDialog`, rewritten): the bar's **Ai** button — the assistant's name beside
+  the marquee, "Look into …" on a phone's ⋯ — opens every markdown file it keeps, grouped (who it
+  is, you, its own notes, deck guides, deck notes, webs, skills it wrote), read as rendered
+  markdown or edited as text, with how full each is; moving to another file saves the one left.
+- **The bar is only the marquee**: no box, no face — a line in quiet grey, ink under the pointer
+  or while the panel is open, underlined while open. The face lives on the composer.
+- **The face answers a hand** (`AvatarPlay`, core, tested): a tap is noticed, and the taps after
+  it are answered differently (surprise, a wink, a grin, listening); asleep, a tap wakes it; a
+  double tap is love; five pokes in a couple of seconds annoy it, and a tap after makes up;
+  stroking the pointer or a finger back and forth pets it, warmer the longer it goes on, even
+  asleep; holding it surprises it, then makes it shy; resting the pointer on it four seconds makes
+  it shy of being looked at. Each answer is a face worn for its moment and a line beside it on
+  the composer's strip.
+- **A `.ydkw`'s header is read field by field** (`WebCodec`): a share that is not a whole number
+  (`0.5`, `"40%"`, `33.3`) is read as a percentage, and one field that cannot be read costs
+  nothing else.
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`.
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`.
 
 ### 4k′. Ai's face (1.0.52)
 
@@ -2111,19 +2164,20 @@ wearing. Beside them is the status: the tool's line while it works, Thinking, Wr
 Waiting on you, Done or Stopped. This replaced the `Breathe` square that trailed the
 transcript. The empty conversation opens with the face at 120 dp above the name.
 
-**In the bar, a marquee** (`AiMarquee`, kai: "replace the button … with a marquee")
-holds the glyph and one line scrolling at an even pace (`basicMarquee`, 28 dp/s). The
-line shows, in order of priority:
+**In the bar, a marquee** (`AiMarquee`, kai: "replace the button … with a marquee"; 1.0.54:
+"too big and distracting, needs to be just the marquee") is one line scrolling at an even pace
+(`basicMarquee`, 24 dp/s), with no box and no face. It shows, in order of priority:
 1. what Ai is doing, while it works;
 2. what is waiting on the person, or what went wrong;
 3. the first line of the answer, for 20 s after it arrives;
 4. otherwise "Ask Ai" and the Greeting's own suggestions (`ideas`).
 
-A click opens or closes the panel, and the strip is inverted while the panel is open,
-as the word it replaced was. The tip and `Ctrl I` are unchanged.
+It is quiet grey at rest, ink under the pointer or while the panel is open, and underlined while
+open. A click opens or closes the panel. The tip and `Ctrl I` are unchanged. Beside it the
+assistant's name is a button into its brain (`AiBrainButton`, §4k).
 
-The marquee is 240 dp on the desk and the tablet. On a phone it is 112 dp in
-`PhoneBar`, and 84 dp while the Update chip is out. It never goes into the ⋯ menu.
+The marquee is 200 dp on the desk and the tablet. On a phone it is 112 dp in `PhoneBar`, and
+84 dp while the Update chip is out. It never goes into the ⋯ menu.
 
 **Moving chrome.** This is the one piece of chrome that moves by itself, at kai's
 request. Nothing about the face is stored: no preference, no schema and no deck payload

@@ -482,7 +482,18 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **On a phone or tablet a local model is on a computer across the Wi-Fi** — the APK permits
   cleartext (`network_security_config.xml`; `Providers.plainHttpAllowed` keeps it local) and the
   server step never starts from `localhost` there (`Providers.isThisDevice`).
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study --ai-step=KEY:anthropic` photographs it.
+  **1.0.54, what it learns, written down**: **Learn it from first principles** (`MODE_PRINCIPLES`,
+  skill `first-principles`: card text and rules only; `AiTools.FIRST_PRINCIPLES_BARRED` neither
+  offered nor answered); every deck session ends with `session_report` (`SessionReport`: learned,
+  insights, questions asked, and understanding / playing / mirror scores out of 100 with why),
+  kept in `<data>/ai/reports/<deck>.json` (`ReportLog`) and deleted with the deck; **the living
+  guide** (`GuideDoc` sorts the guide by its labels; `LivingDocDialog`) and each report as Master
+  UI PDFs (`ReportPdf`, core, on `core/pdf`; `AiDocs`); **Learn About You** (`MODE_PROFILE`,
+  `learn-about-you`, into `USER.md`, now 5000 characters); **quick settings** from the model's
+  name in the panel's head (`QuickSettings`); **its brain** (`MemoryDialog`) from the bar's name
+  button beside the marquee, which is only a line now; and **the face answers a hand**
+  (`AvatarPlay`: taps, a double tap, poking, petting, holding, staring).
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

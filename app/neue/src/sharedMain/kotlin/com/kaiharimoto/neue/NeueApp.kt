@@ -528,6 +528,7 @@ class NeueHolders(
         return buildList {
             add(MenuEntry("Search cards and commands", hint = "Search") { neue.paletteOpen = true })
             if (neue.prefs.ai.enabled) add(MenuEntry(ai.name, hint = "Your assistant") { ai.setOpen(true) })
+            if (neue.prefs.ai.enabled) add(MenuEntry("Look into ${ai.name}", hint = "What it knows") { ai.memoryOpen = "USER.md" })
             add(MenuEntry("Advanced search") { run(DeskAction.ADVANCED_SEARCH) })
             if (onBuilder) {
                 add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })

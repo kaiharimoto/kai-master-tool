@@ -104,9 +104,11 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   read, and connects to your Claude or ChatGPT plan through their command-line
   apps, to an API key (Anthropic, OpenAI, Gemini, OpenRouter), or to a model on
   your own machine — a wizard walks you through each. **Fine Tuning** teaches it your
-  deck — you explain it, or it studies the cards and the internet itself, thinking out
-  loud — into a guide it reads whenever the deck is open,
-  and it learns from ordinary conversations too, always with Undo. It knows the rules,
+  deck — you explain it, it studies the cards and the internet itself, or it works the
+  deck out from the card text alone, thinking out loud — into a living guide you can read
+  and export as a PDF, with a report and its confidence after every session. **Learn About
+  You** interviews you into a profile, its whole memory is readable and editable in the app,
+  and the model and effort change from the panel's head. It learns from ordinary conversations too, always with Undo. It knows the rules,
   checks a card's rulings, searches the web, draws tables and charts, and shows its
   thinking as it works. Settings can
   turn it off entirely.
