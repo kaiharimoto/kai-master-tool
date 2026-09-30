@@ -1880,6 +1880,17 @@ step what usually goes wrong and the fix. The words are `SetupGuide` (core), and
 holds every provider's every fallible step to having them. A phone drops the left column.
 "Not now", Esc and Back put it away. Later connections are made in the panel's wizard.
 
+**A model on your own machine, from a phone or tablet** (v1.3.29, kai's phone reached for
+`localhost` and Android refused it): the model runs on a computer on the same Wi-Fi, never
+on the device, so there the server step starts empty, shows the computer's address as its
+example (`Providers.examplePhoneAddress`, `http://192.168.1.20:11434/v1`), says what makes
+the server listen beyond itself (`OLLAMA_HOST=0.0.0.0`, LM Studio's Serve on Local Network),
+warns when the address is the device's own (`Providers.isThisDevice`), and `SetupGuide`'s
+needs and troubles take `onDevice`. **Android refuses plain http by default**, and every
+local server speaks it, so the APK's `network_security_config.xml` permits cleartext; the
+app's own gate (`Providers.plainHttpAllowed`: this device and private addresses only) is
+what keeps it local.
+
 **The wizard** (`SetupWizard`, `SetupSteps`, `Providers`): a name; how to connect (a
 Claude or ChatGPT plan, an API key, a model on your own machine); the provider; then its
 own steps, each checked live — a CLI found (install lines to copy, a terminal to open)

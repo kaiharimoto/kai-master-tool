@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain http is how every model server on a computer is reached (Ollama,
+     LM Studio, llama.cpp, vLLM): a phone or tablet talks to the computer's
+     address on the same Wi-Fi, http://192.168.…:11434. Android refuses
+     cleartext by default, and a domain-config cannot name an address range,
+     so it is allowed here and limited in the app instead: the Ai setup takes
+     plain http only for this device and private network addresses
+     (Providers.plainHttpAllowed); everything else the app fetches is https. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

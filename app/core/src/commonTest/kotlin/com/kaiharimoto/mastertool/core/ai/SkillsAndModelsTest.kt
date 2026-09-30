@@ -115,6 +115,33 @@ class SetupGuideTest {
         }
         assertEquals(3, com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.choosing.size)
     }
+
+    /** kai's phone reached for localhost: on a phone or tablet the model is on a computer across the Wi-Fi. */
+    @Test
+    fun onAPhoneALocalModelIsOnTheComputerNotTheDevice() {
+        val P = com.kaiharimoto.mastertool.core.ai.providers.Providers
+        val guide = com.kaiharimoto.mastertool.core.ai.providers.SetupGuide
+        val server = com.kaiharimoto.mastertool.core.ai.providers.SetupStep.SERVER
+        assertTrue(P.isThisDevice("http://localhost:8000/v1"))
+        assertTrue(P.isThisDevice("http://127.0.0.1:11434/v1"))
+        assertTrue(P.isThisDevice("http://[::1]:1234/v1"))
+        assertFalse(P.isThisDevice("http://192.168.1.20:11434/v1"))
+        assertEquals("http://192.168.1.20:11434/v1", P.examplePhoneAddress(P.ollama))
+        assertEquals("http://192.168.1.20:1234/v1", P.examplePhoneAddress(P.lmstudio))
+        assertEquals("", P.startingAddress(P.ollama, onDevice = true), "no localhost to start from on a phone")
+        assertEquals("http://localhost:11434/v1", P.startingAddress(P.ollama, onDevice = false))
+        assertTrue(P.plainHttpAllowed(P.examplePhoneAddress(P.ollama)), "the example is an address the app accepts")
+        listOf(P.ollama, P.lmstudio, P.custom).forEach { p ->
+            val needs = guide.needs(p.kind, p, onDevice = true)
+            assertTrue(needs.any { "Wi-Fi" in it }, "${p.id}: $needs")
+            val trouble = guide.trouble(server, p, onDevice = true)
+            assertTrue(trouble.any { "localhost" in it.problem }, "${p.id}: $trouble")
+        }
+        assertTrue(guide.trouble(server, P.ollama, onDevice = true).any { "OLLAMA_HOST=0.0.0.0" in it.fix })
+        assertTrue(guide.needs(P.ollama.kind, P.ollama, onDevice = true).any { "OLLAMA_HOST=0.0.0.0" in it })
+        // An API key reads the same everywhere.
+        assertEquals(guide.needs(P.anthropic.kind, P.anthropic), guide.needs(P.anthropic.kind, P.anthropic, onDevice = true))
+    }
 }
 
 class MicroCapsTest {

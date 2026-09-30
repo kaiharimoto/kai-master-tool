@@ -244,6 +244,31 @@ object Providers {
      * local network. Anything on the internet must be `https`, where a key would
      * otherwise cross it in the clear.
      */
+    /**
+     * Whether [url] names the device the app runs on (localhost, 127.x, ::1). On a phone or
+     * tablet that is the phone itself, not the computer the model server runs on — the
+     * mistake kai hit in v1.3.28's setup.
+     */
+    fun isThisDevice(url: String): Boolean {
+        val host = url.trim().lowercase().substringAfter("://").substringBefore('/').let {
+            if (it.startsWith("[")) it.substringBefore(']').removePrefix("[") else it.substringBefore(':')
+        }
+        return host == "localhost" || host == "::1" || host.startsWith("127.")
+    }
+
+    /**
+     * The address a local server's setup starts from: its own on a computer; empty on a phone
+     * or tablet ([onDevice]), where the person types the computer's, after [examplePhoneAddress].
+     */
+    fun startingAddress(provider: Provider, onDevice: Boolean): String =
+        if (onDevice && provider.kind == ConnectKind.LOCAL) "" else provider.baseUrl.orEmpty()
+
+    /** How the computer's address looks, for [provider]'s port, on a phone or tablet. */
+    fun examplePhoneAddress(provider: Provider): String {
+        val port = provider.baseUrl?.substringAfter("://")?.substringBefore('/')?.substringAfter(':', "")?.takeIf { it.isNotEmpty() } ?: "8000"
+        return "http://192.168.1.20:$port/v1"
+    }
+
     fun plainHttpAllowed(url: String): Boolean {
         val u = url.trim().lowercase()
         if (u.startsWith("https://")) return true

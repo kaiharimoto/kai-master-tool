@@ -71,6 +71,7 @@ import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.reportsTextFocus
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
@@ -105,7 +106,7 @@ class WizardState(name: String) {
         version = null
         signedIn = null
         key = ""
-        baseUrl = p.baseUrl.orEmpty()
+        baseUrl = Providers.startingAddress(p, onDevice)
         models = emptyList()
         model = ""
         effort = p.defaultEffort
@@ -171,7 +172,7 @@ internal fun Needs(w: WizardState, title: Boolean = true) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (title) com.kaiharimoto.neue.kit.Micro("You will need", color = c.ink45)
-        com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.needs(w.kind, w.provider).forEach { line ->
+        com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.needs(w.kind, w.provider, onDevice).forEach { line ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Mono("–", color = c.ink45)
                 Small(line, color = c.ink70)
@@ -184,7 +185,7 @@ internal fun Needs(w: WizardState, title: Boolean = true) {
 @Composable
 internal fun Trouble(w: WizardState) {
     val c = Mu.colors
-    val trouble = com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.trouble(w.step, w.provider)
+    val trouble = com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.trouble(w.step, w.provider, onDevice)
     if (trouble.isEmpty()) return
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         com.kaiharimoto.neue.kit.HRule()
@@ -376,18 +377,39 @@ private fun KeyStep(w: WizardState) {
     }
 }
 
+/** A phone or tablet: a local model is on a computer across the Wi-Fi, never on the device. */
+private val onDevice: Boolean get() = Platform.os == DesktopOs.ANDROID
+
 @Composable
 private fun ServerStep(w: WizardState) {
     val p = w.provider ?: return
     val scope = rememberCoroutineScope()
     Help(
-        when (p.id) {
-            "ollama" -> "Install Ollama, then pull a model that can call tools (for example `ollama pull qwen3`). Ollama listens on this computer by itself."
-            "lmstudio" -> "In LM Studio, load a model and start the local server (Developer tab). It listens on port 1234."
-            else -> "The server's address up to /v1, and a key if it asks for one."
+        if (onDevice) {
+            // A phone or tablet runs no model itself: it talks to the computer that does, over the Wi-Fi.
+            when (p.id) {
+                "ollama" -> "Ollama runs on your computer, not on this device. On the computer, set OLLAMA_HOST=0.0.0.0 and restart Ollama, then type the computer's address on your Wi-Fi."
+                "lmstudio" -> "LM Studio runs on your computer. Start its server with Serve on Local Network on (Developer tab), then type the computer's address on your Wi-Fi."
+                else -> "The address of the computer running the server, on your Wi-Fi, up to /v1, and a key if it asks for one."
+            }
+        } else {
+            when (p.id) {
+                "ollama" -> "Install Ollama, then pull a model that can call tools (for example `ollama pull qwen3`). Ollama listens on this computer by itself."
+                "lmstudio" -> "In LM Studio, load a model and start the local server (Developer tab). It listens on port 1234."
+                else -> "The server's address up to /v1, and a key if it asks for one."
+            }
         },
     )
-    MuInput(w.baseUrl, { w.baseUrl = it.trim() }, Modifier.fillMaxWidth(), placeholder = "http://localhost:8000/v1", mono = true)
+    MuInput(
+        w.baseUrl,
+        { w.baseUrl = it.trim() },
+        Modifier.fillMaxWidth(),
+        placeholder = if (onDevice) Providers.examplePhoneAddress(p) else p.baseUrl?.takeIf { it.isNotBlank() } ?: "http://localhost:8000/v1",
+        mono = true,
+    )
+    if (onDevice && w.baseUrl.isNotBlank() && Providers.isThisDevice(w.baseUrl)) {
+        Help("localhost here is this ${if (LocalPhone.current) "phone" else "tablet"}, not your computer. Use the computer's address, like ${Providers.examplePhoneAddress(p)}.", color = Mu.colors.ink)
+    }
     if (p.id == "custom") SecretField(w.key, { w.key = it.trim() }, "Key, if the server wants one")
     if (w.baseUrl.isNotBlank() && !Providers.plainHttpAllowed(w.baseUrl)) Help("Plain http only on this machine or your own network; anything further needs https.", color = Mu.colors.ink)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -400,7 +422,10 @@ private fun ServerStep(w: WizardState) {
                     w.model = models.firstOrNull().orEmpty()
                     w.good = if (models.isEmpty()) "Found the server, with no models loaded." else "Found the server: ${models.size} models."
                     if (models.isNotEmpty()) w.next()
-                }.onFailure { w.message = "Could not reach ${w.baseUrl}: ${it.message ?: it::class.simpleName}" }
+                }.onFailure {
+                    w.message = "Could not reach ${w.baseUrl}: ${it.message ?: it::class.simpleName}" +
+                        if (onDevice) " — is the server listening on the network, and is this device on the same Wi-Fi?" else ""
+                }
                 w.checking = false
             }
         }, variant = BtnVariant.PRIMARY, enabled = w.baseUrl.isNotBlank() && Providers.plainHttpAllowed(w.baseUrl) && !w.checking, reason = "An address first", arrow = true)
