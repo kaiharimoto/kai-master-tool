@@ -125,10 +125,10 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         }
     }
 
-    /** Hears a library deck copied into a web — (from deck, its name, web) — so Ai's notes on it follow (1.0.42). */
+    /** Hears a library deck copied into a web — (from deck, its name, web) — so Ai's notes on it follow (1.0.43). */
     var onJoined: (String, String, String) -> Unit = { _, _, _ -> }
 
-    /** Hears a web deleted, so Ai's notes on it go too (1.0.42). */
+    /** Hears a web deleted, so Ai's notes on it go too (1.0.43). */
     var onDeleted: (String) -> Unit = {}
 
     /** A library deck copied into the web: the web's copy is its own, the library keeps the original. */

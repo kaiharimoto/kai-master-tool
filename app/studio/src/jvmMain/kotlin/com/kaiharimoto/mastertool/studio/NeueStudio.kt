@@ -274,7 +274,7 @@ fun neueMain(args: Array<String>) {
             if (map["groups"] == "true") h.setGroups(true)
             if (map["groups"] == "false") h.setGroups(false)
             if (map["help"] == "true") h.neue.helpOpen = true
-            // Ai's panel (1.0.42): --ai=panel (a sample conversation), empty, or wizard (--ai-step=KEY:anthropic).
+            // Ai's panel (1.0.43): --ai=panel (a sample conversation), empty, or wizard (--ai-step=KEY:anthropic).
             map["ai"]?.let { mode -> studioAi(h, mode, map["ai-step"]) }
             // --list=N: a list of the first N main-deck cards, shown in the pool (1.0.19).
             map["list"]?.toIntOrNull()?.let { n ->

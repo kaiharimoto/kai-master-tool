@@ -402,7 +402,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   taps high on the deck while the soft keyboard is up.
 - `tools/shoot.sh --page=builder --theme=ink` photographs it headlessly.
 
-- **Ai, the assistant** (1.0.42, `NEUE.md` §4k): a panel docked beside every page
+- **Ai, the assistant** (1.0.43, `NEUE.md` §4k): a panel docked beside every page
   (`AiPanel`, `Ctrl I`, `AiState` in `NeueHolders` for the app's lifetime). One harness
   in `core/ai` — `AgentLoop`, the tool catalogue `AiTools`, append-only `ChatTurn`s —
   over two kinds of model: APIs the app talks to itself (Anthropic through the

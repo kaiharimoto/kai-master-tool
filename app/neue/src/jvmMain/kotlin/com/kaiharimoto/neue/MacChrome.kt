@@ -53,7 +53,7 @@ object MacChrome {
 /** `DeskMenuBar`, drawn by the Mac: every item a table action, every accelerator the table's chord. */
 @Composable
 fun FrameWindowScope.MacMenuBar(h: NeueHolders) {
-    // Read here so the menu is drawn again when Ai is turned on or off (1.0.42).
+    // Read here so the menu is drawn again when Ai is turned on or off (1.0.43).
     DeskMenuBar.aiShown = h.neue.prefs.ai.enabled
     val aiName = h.neue.prefs.ai.name
     MenuBar {

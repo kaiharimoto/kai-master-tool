@@ -65,7 +65,7 @@ data class AiConnection(
 )
 
 /**
- * The assistant's settings (Ai, 1.0.42): a field of [NeuePreferences] with a default,
+ * The assistant's settings (Ai, 1.0.43): a field of [NeuePreferences] with a default,
  * so no migration. [enabled] off hides every trace of Ai in the app.
  */
 @Serializable
@@ -264,7 +264,7 @@ data class NeuePreferences(
      * where there is a sensor. A field with a default, no migration.
      */
     val foilTilt: Boolean = true,
-    /** The assistant (1.0.42): on or off, its name, its connections, its panel. */
+    /** The assistant (1.0.43): on or off, its name, its connections, its panel. */
     val ai: AiPrefs = AiPrefs(),
 ) {
     /**

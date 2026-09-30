@@ -209,7 +209,7 @@ class NeueState(
      */
     var studio by mutableStateOf<Studio?>(null)
 
-    /** Ai's panel on a phone: a sheet over the page, closed by Back like any other (1.0.42). */
+    /** Ai's panel on a phone: a sheet over the page, closed by Back like any other (1.0.43). */
     val aiSheet: Boolean get() = phone && prefs.ai.enabled && prefs.ai.panelOpen
 
     val overlayOpen: Boolean

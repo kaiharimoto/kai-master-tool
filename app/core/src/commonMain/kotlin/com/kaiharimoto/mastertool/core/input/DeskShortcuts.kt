@@ -106,7 +106,7 @@ enum class DeskAction {
     WEB_NEXT,
 
     /**
-     * The assistant's panel, open or closed (Ai, 1.0.42): docked beside every page.
+     * The assistant's panel, open or closed (Ai, 1.0.43): docked beside every page.
      * Live only while Ai is on ([DeskContext.ai]); with it off, the key is dead and
      * no menu or palette names it.
      */

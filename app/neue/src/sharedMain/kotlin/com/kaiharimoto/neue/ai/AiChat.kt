@@ -98,7 +98,7 @@ private fun rows(turns: List<ChatTurn>): List<Entry> = buildList {
 }
 
 /**
- * The conversation (Ai, 1.0.42): the person's words set in grey on the right, Ai's in
+ * The conversation (Ai, 1.0.43): the person's words set in grey on the right, Ai's in
  * ink on the left in its own markdown, and a mono line for each thing it did —
  * "Added 3 Ash Blossom", "✕ Could not add Maxx "C"". Below the last reply, whatever
  * Ai is waiting on: a confirm card, a question with its answers, or what went wrong.

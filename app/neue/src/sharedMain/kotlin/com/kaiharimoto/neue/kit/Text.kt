@@ -35,7 +35,7 @@ fun MuText(
     )
 }
 
-/** Styled text — bold, italic, code runs — in the current surface's ink (Ai's replies, 1.0.42). */
+/** Styled text — bold, italic, code runs — in the current surface's ink (Ai's replies, 1.0.43). */
 @Composable
 fun MuText(
     text: androidx.compose.ui.text.AnnotatedString,

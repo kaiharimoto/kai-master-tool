@@ -52,7 +52,7 @@ class Question(val question: String, val options: List<String>, val multiple: Bo
 }
 
 /**
- * The assistant, for the whole app (Ai, 1.0.42): the conversation on screen, the
+ * The assistant, for the whole app (Ai, 1.0.43): the conversation on screen, the
  * model it is held with, the tools it acts through, and what it is waiting on. One
  * per app, not per window — like [NeueHolders]' other app-lifetime state — so a
  * window swapped for immersive mode keeps the conversation mid-sentence.

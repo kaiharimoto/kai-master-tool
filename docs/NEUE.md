@@ -1724,7 +1724,7 @@ view makes it for the deck being sided:
 - `tools/shoot.sh --page=format --ydkw=… --siding=0 --guide=out.pdf` writes one
   headlessly; `SidingGuideTest` and `PdfDocumentTest` check the structure.
 
-### 4k. Ai, the assistant (1.0.42)
+### 4k. Ai, the assistant (1.0.43)
 
 kai: "an AI chat harness … a Hermes-like harness with persistent memory that learns as
 it's used. You can just chat with it, or have it build a deck and do anything in the app.

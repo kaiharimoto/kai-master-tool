@@ -69,7 +69,7 @@ fun PhoneBar(
     menu: (Offset) -> List<MenuEntry>,
     modifier: Modifier = Modifier,
     working: Boolean = false,
-    /** The assistant's name while it is on, for its button (1.0.42). */
+    /** The assistant's name while it is on, for its button (1.0.43). */
     ai: String? = null,
     onAi: () -> Unit = {},
 ) {

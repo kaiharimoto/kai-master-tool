@@ -169,7 +169,7 @@ class NeueHolders(
     /** Pictures the person added to cards themselves (1.0.18). */
     val customArt = com.kaiharimoto.neue.art.CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
 
-    /** The assistant (Ai, 1.0.42): the conversation, its model and its tools, for the app's lifetime. */
+    /** The assistant (Ai, 1.0.43): the conversation, its model and its tools, for the app's lifetime. */
     val ai: com.kaiharimoto.neue.ai.AiState by lazy { com.kaiharimoto.neue.ai.AiState(this) }
 
     /** The family pointer, Crop caption: one per window. */
@@ -611,7 +611,7 @@ class NeueHolders(
             *(if (com.kaiharimoto.neue.platform.QrSource.CAMERA in Platform.scanSources) arrayOf(Command("Deck", "Scan a deck's QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.CAMERA, builder, neue) }) else emptyArray()),
             *(if (com.kaiharimoto.neue.platform.QrSource.PICTURE in Platform.scanSources) arrayOf(Command("Deck", "Import a picture of a QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.PICTURE, builder, neue) }) else emptyArray()),
             Command("App", "Refresh the card pool") { builder.refreshCardPool(force = true) },
-            // The assistant's own, while it is on (1.0.42).
+            // The assistant's own, while it is on (1.0.43).
             *(if (neue.prefs.ai.enabled) arrayOf(
                 cmd("Ai", "${ai.name}: open or close", DeskAction.AI_PANEL),
                 Command("Ai", "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
@@ -711,7 +711,7 @@ fun NeueEffects(h: NeueHolders) {
             }
             h.updates.check(userInitiated = false)
             h.art.start()
-            // Ai's notes follow a deck into a web, and go with a web that is deleted (1.0.42).
+            // Ai's notes follow a deck into a web, and go with a web that is deleted (1.0.43).
             h.webs.onJoined = { from, name, web -> if (neue.prefs.ai.enabled) h.ai.foldIntoWeb(from, name, web) }
             h.webs.onDeleted = { web -> h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.WEB, web)) }
             onDispose {
@@ -738,7 +738,7 @@ fun NeueEffects(h: NeueHolders) {
         }
         LaunchedEffect(state.results) { h.art.want(state.results.take(48)) }
         // Ai off (Settings → Assistant): every trace gone — the menu's item, the key, and
-        // anything running or listening (1.0.42).
+        // anything running or listening (1.0.43).
         LaunchedEffect(neue.prefs.ai.enabled) {
             DeskMenuBar.aiShown = neue.prefs.ai.enabled
             if (!neue.prefs.ai.enabled) h.ai.shutDown()
@@ -1119,7 +1119,7 @@ private fun Shell(h: NeueHolders) {
                     }
                     Drawers(state, neue)
                 }
-                // Ai's panel (1.0.42): docked beside every page, the page re-fitting beside it.
+                // Ai's panel (1.0.43): docked beside every page, the page re-fitting beside it.
                 // Not in immersive mode, whose whole point is the deck alone; on a phone it is a sheet.
                 if (neue.prefs.ai.enabled && neue.prefs.ai.panelOpen && !phone && !immersive) {
                     com.kaiharimoto.neue.ai.AiPanel(h, Modifier.width((neue.prefs.ai.panelWidth / neue.prefs.scale).dp).fillMaxHeight())
@@ -1190,7 +1190,7 @@ private fun Shell(h: NeueHolders) {
             }
         }
 
-        // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.42).
+        // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
         if (neue.aiSheet) com.kaiharimoto.neue.ai.AiPanel(h, Modifier.fillMaxSize(), phone = true)
         if (neue.prefs.ai.enabled) {
             com.kaiharimoto.neue.ai.MemoryDialog(h.ai)
@@ -1250,7 +1250,7 @@ private fun Shell(h: NeueHolders) {
                         neue.confirmDelete = null
                         scope.launch {
                             h.deps.deckRepository.delete(id)
-                            // Ai's notes on the deck go with it (1.0.42).
+                            // Ai's notes on the deck go with it (1.0.43).
                             h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.DECK, id))
                             if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                 neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }

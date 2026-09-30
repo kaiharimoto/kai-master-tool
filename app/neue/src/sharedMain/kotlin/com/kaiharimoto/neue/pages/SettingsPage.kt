@@ -59,7 +59,7 @@ class SettingsHost(
     val onOpenDataDir: () -> Unit,
     val onSearchEffects: (Boolean) -> Unit,
     val art: ArtLibrary? = null,
-    /** The assistant, for its section (1.0.42). */
+    /** The assistant, for its section (1.0.43). */
     val ai: com.kaiharimoto.neue.ai.AiState? = null,
 )
 
@@ -251,7 +251,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
 }
 
 /**
- * The assistant (Ai, 1.0.42): on or off — off hides every trace of it — then, while
+ * The assistant (Ai, 1.0.43): on or off — off hides every trace of it — then, while
  * on, its name, its connection, how hard it thinks, whether it asks before deleting,
  * its voice and what it knows.
  */

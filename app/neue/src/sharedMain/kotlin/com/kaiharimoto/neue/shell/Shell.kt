@@ -88,7 +88,7 @@ fun TitleBar(
     modifier: Modifier = Modifier,
     work: WorkReadout? = null,
     onWork: () -> Unit = {},
-    /** Before the bar's own switches: the assistant's (1.0.42). */
+    /** Before the bar's own switches: the assistant's (1.0.43). */
     trailing: @Composable () -> Unit = {},
     content: @Composable RowScope.(narrow: Boolean) -> Unit = {},
 ) {

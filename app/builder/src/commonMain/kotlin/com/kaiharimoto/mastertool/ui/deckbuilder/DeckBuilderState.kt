@@ -1044,7 +1044,7 @@ class DeckBuilderState(
 
     /**
      * The deck's cards replaced by [next] as one step of undo, with the toast's Undo
-     * (Ai's edits, 1.0.42: a request of many changes is taken back in one press).
+     * (Ai's edits, 1.0.43: a request of many changes is taken back in one press).
      */
     fun setCards(next: Deck, message: String? = null) {
         if (next == deck) return
@@ -1055,7 +1055,7 @@ class DeckBuilderState(
 
     /**
      * A whole new deck, unsaved, as one step of undo — cards, name and payload, as an
-     * import is (Ai's new deck, 1.0.42).
+     * import is (Ai's new deck, 1.0.43).
      */
     fun adoptDeck(next: Deck, name: String, extended: JsonObject? = null) =
         adopt(YdkParseResult(YdkDocument(next, extended = extended)), name)

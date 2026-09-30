@@ -43,7 +43,7 @@ import com.kaiharimoto.neue.kit.WordToggle
 import com.kaiharimoto.neue.theme.Mu
 
 /**
- * Ai's panel (1.0.42), docked down the right of every page on the desk and the
+ * Ai's panel (1.0.43), docked down the right of every page on the desk and the
  * tablet, the deck re-fitting beside it as it does beside the Groups panel. Its head
  * names the assistant and the model it is talking through, and holds the history,
  * a new conversation, the setup and the close; its body is the conversation, the

@@ -116,7 +116,7 @@ class WizardState(name: String) {
 }
 
 /**
- * The setup wizard (Ai, 1.0.42; kai: "guided in an intuitive way… step by step for each
+ * The setup wizard (Ai, 1.0.43; kai: "guided in an intuitive way… step by step for each
  * provider", after Hermes's `hermes model`): a name, how to connect, which provider,
  * then that provider's own steps — install and sign in a CLI, paste and try a key,
  * find a local server — then a model, what it may do on its own, and done. Every step
