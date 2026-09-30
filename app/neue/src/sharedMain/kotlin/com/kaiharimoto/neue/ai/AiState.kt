@@ -243,10 +243,133 @@ class AiState(internal val h: NeueHolders) {
     /** A new conversation, with the memory as it stands now. */
     fun newChat(mode: String = AiSession.MODE_CHAT) {
         stop()
+        session?.let(::reflect)
         problem = null
         val connection = prefs.connection
         session = if (connection != null) begin(connection, mode) else null
         historyOpen = false
+    }
+
+    // ---- learning (phase 3) ----------------------------------------------------
+
+    /** What Fine Tuning or a reflection changed in memory, waiting on the person's Keep or Undo. */
+    var review by mutableStateOf<List<com.kaiharimoto.mastertool.core.ai.memory.MemoryChange>?>(null)
+        private set
+    private var reviewBefore: Map<String, String?> = emptyMap()
+
+    /** The memory files as they stand, by path: what a review compares against. */
+    private fun snapshot(): Map<String, String?> {
+        val paths = buildSet {
+            add(MemoryKind.USER.file)
+            add(MemoryKind.AGENT.file)
+            files.memoryFiles().forEach { add(it.relativeTo(files.root).invariantSeparatorsPath) }
+            host.scope()?.path?.let(::add)
+        }
+        return paths.associateWith { files.read(it) }
+    }
+
+    /** Fine Tuning (kai): an interview about how the person prepares, written to memory as it goes. */
+    fun startTuning() {
+        if (PHASE < 3) return
+        val connection = prefs.connection ?: run {
+            openWizard()
+            return
+        }
+        stop()
+        h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true)) }
+        wizardOpen = false
+        historyOpen = false
+        tuneBefore = snapshot()
+        session = begin(connection, AiSession.MODE_TUNE)
+        send("Let's do Fine Tuning.")
+    }
+
+    private var tuneBefore: Map<String, String?>? = null
+
+    val tuning: Boolean get() = session?.mode == AiSession.MODE_TUNE
+
+    /** Fine Tuning done: what it learned, to keep or undo, then an ordinary conversation. */
+    fun finishTuning() {
+        stop()
+        val before = tuneBefore ?: snapshot()
+        tuneBefore = null
+        offerReview(before)
+        val connection = prefs.connection
+        session = if (connection != null) begin(connection) else null
+    }
+
+    private fun offerReview(before: Map<String, String?>) {
+        val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before, snapshot())
+        if (changes.isNotEmpty()) {
+            reviewBefore = before
+            review = changes
+        }
+    }
+
+    fun keepReview() {
+        review = null
+        reviewBefore = emptyMap()
+    }
+
+    /** Everything the review lists put back as it was. */
+    fun undoReview() {
+        val changed = review?.map { it.path }.orEmpty()
+        changed.forEach { path -> reviewBefore[path]?.let { files.write(path, it) } ?: files.delete(path) }
+        review = null
+        reviewBefore = emptyMap()
+    }
+
+    /**
+     * After a conversation, a short pass to keep what will matter (Hermes's nudge): the
+     * model reads the conversation back and writes durable facts to memory — and a
+     * skill, when it worked out a procedure. Quiet: a note says how many things were
+     * remembered, with Undo. Only for conversations long enough to teach something, and
+     * only on an API connection (a CLI would run a whole session for it).
+     */
+    private fun reflect(finished: AiSession) {
+        if (PHASE < 3 || finished.mode != AiSession.MODE_CHAT) return
+        if (finished.unreflected < REFLECT_AFTER) return
+        val connection = prefs.connection?.takeIf { it.id == finished.connection } ?: return
+        val model = runCatching { backendFor(connection) }.getOrNull()?.takeIf { !it.runsOwnLoop } ?: return
+        // Read once: a conversation reopened and left again is reflected on for what is new.
+        files.saveSession(finished.copy(reflected = finished.turns.size))
+        val transcript = finished.turns.drop(finished.reflected).filter { !it.isToolResults }.joinToString("\n") { t ->
+            (if (t.role == Role.USER) "Person: " else "$name: ") + t.text.take(1200)
+        }.takeLast(16_000)
+        val before = snapshot()
+        val allowed = tools.filter { it.name == "memory" || it.name == "skill_manage" || it.name == "memory_read" }
+        val request = TurnRequest(
+            finished.system,
+            listOf(
+                ChatTurn.user(
+                    "Our conversation just ended. Here it is:\n\n$transcript\n\n" +
+                        "Save to memory what will still matter next week about the person or about doing this job for them " +
+                        "(memory tool; replace what changed rather than adding duplicates). If you worked out a repeatable " +
+                        "procedure, write it as a skill (skill_manage). If nothing is worth keeping, do nothing. Then answer in one word: done.",
+                ),
+            ),
+            allowed,
+            connection.model,
+            "low",
+        )
+        scope.launch {
+            runCatching { AgentLoop(model, { call -> host.run(call) }, maxSteps = 6).run(request).collect { } }
+            val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before, snapshot())
+            if (changes.isNotEmpty()) {
+                val n = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(changes)
+                h.neue.note = com.kaiharimoto.neue.Note("$name remembered $n thing${if (n == 1) "" else "s"} from that conversation", "Undo", lastsMs = 10_000) {
+                    reviewBefore = before
+                    review = changes
+                    undoReview()
+                }
+            }
+        }
+    }
+
+    /** The studio's pictures of Fine Tuning: a question waiting, or a review to keep. */
+    fun previewTuning(asking: Question?, changes: List<com.kaiharimoto.mastertool.core.ai.memory.MemoryChange>?) {
+        question = asking
+        review = changes
     }
 
     /** A conversation put on screen as it is, unsaved: the studio's pictures of the panel. */
@@ -256,6 +379,7 @@ class AiState(internal val h: NeueHolders) {
 
     fun open(id: String) {
         if (running) return
+        session?.takeIf { it.id != id }?.let(::reflect)
         files.loadSession(id)?.let {
             session = it
             problem = null
@@ -275,7 +399,7 @@ class AiState(internal val h: NeueHolders) {
             createdAt = now,
             updatedAt = now,
             connection = connection.id,
-            system = systemPrompt(connection),
+            system = systemPrompt(connection, mode),
             mode = mode,
         )
         session = s
@@ -283,7 +407,7 @@ class AiState(internal val h: NeueHolders) {
     }
 
     /** The instructions a conversation starts with, frozen for its length. */
-    fun systemPrompt(connection: AiConnection?): String {
+    fun systemPrompt(connection: AiConnection?, mode: String = AiSession.MODE_CHAT): String {
         val wire = connection?.let { Providers.byId(it.provider)?.wire }
         return PromptBuilder.system(
             PromptBuilder.Setup(
@@ -302,6 +426,7 @@ class AiState(internal val h: NeueHolders) {
                     if (PHASE < 2) addAll(listOf("reading tournament results from YGOPRODeck", "building a web of decks from the meta by itself"))
                     if (PHASE < 3) add("Fine Tuning, the interview about how the person prepares")
                 },
+                mode = mode,
             ),
         )
     }
@@ -451,6 +576,9 @@ class AiState(internal val h: NeueHolders) {
 
     companion object {
         /** The phase this build ships: 1, the harness; 2, the meta; 3, learning. */
-        const val PHASE = 2
+        const val PHASE = 3
+
+        /** How many messages a conversation needs before it is reflected on. */
+        const val REFLECT_AFTER = 4
     }
 }

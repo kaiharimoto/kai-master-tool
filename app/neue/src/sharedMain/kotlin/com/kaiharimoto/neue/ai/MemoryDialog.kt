@@ -125,3 +125,35 @@ private fun label(ai: AiState, path: String): String = when {
     path.startsWith("decks/") -> "Deck: " + path.removePrefix("decks/").removeSuffix(".md").take(12)
     else -> path
 }
+
+/**
+ * What Fine Tuning taught Ai (phase 3), before it is kept: each memory file it wrote,
+ * the entries added and the ones gone. Keep leaves them; Undo puts every file back as
+ * it was when the interview began. Nothing is learned behind the person's back.
+ */
+@Composable
+fun ReviewDialog(ai: AiState) {
+    val changes = ai.review ?: return
+    val c = Mu.colors
+    val n = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(changes)
+    MuDialog(
+        title = "What ${ai.name} learned",
+        onDismiss = { ai.keepReview() },
+        width = 560.dp,
+        description = "$n change${if (n == 1) "" else "s"} to its memory. Keep them, or put its memory back as it was.",
+        footer = {
+            MuButton("Undo all", { ai.undoReview() }, variant = BtnVariant.GHOST)
+            MuButton("Keep", { ai.keepReview() }, variant = BtnVariant.PRIMARY)
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            changes.forEach { change ->
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Mono(label(ai, change.path), color = c.ink45)
+                    change.added.forEach { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Mono("+", color = c.ink); Small(it, color = c.ink) } }
+                    change.removed.forEach { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { Mono("−", color = c.ink45); Small(it, color = c.ink45) } }
+                }
+            }
+        }
+    }
+}

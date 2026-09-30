@@ -424,7 +424,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `FieldBuilder` clusters them into strategies by a rarity-weighted Jaccard — never a
   staple cut-off, which strips a popular deck of its own engine — and the
   `format-webs` skill builds a web from that on its own.
-  `tools/shoot.sh --ai=panel|empty|wizard --ai-step=KEY:anthropic` photographs it.
+  **Fine Tuning** (1.0.45): **Tune** in the panel's head starts an interview
+  (`AiSession.MODE_TUNE`, `ask_user` chips) that writes to memory as it goes; **Finish**
+  shows the change entry by entry (`MemoryReview`, `ReviewDialog`) to keep or undo. A
+  conversation left after four messages is reflected on once (`AiState.reflect`, API
+  connections only, `AiSession.reflected`), its memory writes undoable from a note.
+  **The first setup takes the whole window** (`AiSetupScreen`, while `NeueState.aiSetup`:
+  Ai asked for with no connection), its words in `SetupGuide` (core, tested per
+  provider). **On the builder Ai takes the inspector's place** (`NeueState.aiDocked`).
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

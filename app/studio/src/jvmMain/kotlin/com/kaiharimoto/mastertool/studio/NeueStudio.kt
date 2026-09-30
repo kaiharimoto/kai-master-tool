@@ -274,7 +274,7 @@ fun neueMain(args: Array<String>) {
             if (map["groups"] == "true") h.setGroups(true)
             if (map["groups"] == "false") h.setGroups(false)
             if (map["help"] == "true") h.neue.helpOpen = true
-            // Ai's panel (1.0.43): --ai=panel (a sample conversation), empty, or wizard (--ai-step=KEY:anthropic).
+            // Ai's panel (1.0.43): --ai=panel (a sample conversation), empty, wizard (--ai-step=KEY:anthropic), setup (the first setup, the same steps), tune or review.
             map["ai"]?.let { mode -> studioAi(h, mode, map["ai-step"]) }
             // --list=N: a list of the first N main-deck cards, shown in the pool (1.0.19).
             map["list"]?.toIntOrNull()?.let { n ->
@@ -617,8 +617,10 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
             active = "anthropic-demo",
         ))
     }
+    // --ai=setup: the first setup, the whole window (1.0.45) — Ai asked for with no connection.
+    if (mode == "setup") h.neue.update { it.copy(ai = it.ai.copy(connections = emptyList(), active = null)) }
     when (mode) {
-        "wizard" -> {
+        "wizard", "setup" -> {
             ai.openWizard()
             step?.let { spec ->
                 val (name, provider) = spec.split(':').let { it[0] to it.getOrNull(1) }
@@ -658,6 +660,37 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
                     updatedAt = now,
                 ),
             )
+        }
+        // Fine Tuning (phase 3): the interview mid-way, a question on the table; or its review.
+        "tune", "review" -> {
+            val now = System.currentTimeMillis()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-tune",
+                    title = "Fine Tuning",
+                    connection = "anthropic-demo",
+                    mode = com.kaiharimoto.mastertool.core.ai.AiSession.MODE_TUNE,
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Let's do Fine Tuning."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Good — a few questions, one at a time, and I'll remember the answers. First, the event."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("A regional in three weeks, about 200 players."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Noted. Which deck are you taking, and how well do you know it?"),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            if (mode == "tune") {
+                ai.previewTuning(com.kaiharimoto.neue.ai.Question("Going first or second — which do you choose when you win the roll?", listOf("First", "Second", "Depends on the matchup"), false), null)
+            } else {
+                ai.previewTuning(
+                    null,
+                    listOf(
+                        com.kaiharimoto.mastertool.core.ai.memory.MemoryChange("USER.md", listOf("Regional in three weeks, about 200 players.", "Plays Branded Dracotail; knows it well.", "Chooses to go second."), listOf("Plays Branded.")),
+                        com.kaiharimoto.mastertool.core.ai.memory.MemoryChange("MEMORY.md", listOf("Explain lines with the cards named, not in general."), emptyList()),
+                    ),
+                )
+            }
         }
         else -> Unit
     }

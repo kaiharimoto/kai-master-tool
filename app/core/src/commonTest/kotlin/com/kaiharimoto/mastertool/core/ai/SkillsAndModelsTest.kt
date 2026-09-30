@@ -46,3 +46,73 @@ class SkillsAndModelsTest {
         assertEquals(AnthropicModels.Id("opus", 5, 0), AnthropicModels.parse("claude-opus-5"))
     }
 }
+
+class MemoryReviewTest {
+    @Test
+    fun whatWasLearnedIsReadEntryByEntry() {
+        val before = mapOf("USER.md" to "# t\n\n- Plays Branded.\n- Goes second.\n", "MEMORY.md" to null)
+        val after = mapOf("USER.md" to "# t\n\n- Plays Branded Dracotail.\n- Goes second.\n", "MEMORY.md" to "# n\n\n- Keep answers short.\n")
+        val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before, after)
+        assertEquals(listOf("MEMORY.md", "USER.md"), changes.map { it.path })
+        assertEquals(listOf("Plays Branded Dracotail."), changes[1].added)
+        assertEquals(listOf("Plays Branded."), changes[1].removed)
+        assertEquals(3, com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(changes))
+        assertTrue(com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before, before).isEmpty())
+    }
+}
+
+class LearningTest {
+    @Test
+    fun aReflectionReadsOnlyWhatIsNew() {
+        val turns = listOf(
+            ChatTurn.user("Build me Branded."),
+            ChatTurn.assistant("Done."),
+            ChatTurn(Role.USER, listOf(Part.ToolResult("t", "get_deck", "…"))),
+            ChatTurn.user("I go second."),
+        )
+        val s = AiSession("s", turns = turns)
+        assertEquals(2, s.unreflected, "tool results are not the person speaking")
+        assertEquals(0, s.copy(reflected = turns.size).unreflected)
+        assertEquals(1, s.copy(reflected = 3).unreflected)
+    }
+
+    @Test
+    fun fineTuningIsSaidInTheFrozenPromptAndOnlyThere() {
+        val base = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.Setup("Ai", "soul", "", "", "", "desktop")
+        val chat = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.system(base)
+        val tune = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.system(base.copy(mode = AiSession.MODE_TUNE))
+        assertFalse("Fine Tuning" in chat.substringAfter("## Skills"))
+        assertTrue("## This conversation is Fine Tuning" in tune)
+        assertTrue(tune.startsWith(chat.trimEnd()), "tuning appends; the rest of the prompt is the same bytes")
+        assertEquals(tune, com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.system(base.copy(mode = AiSession.MODE_TUNE)))
+    }
+}
+
+class SetupGuideTest {
+    @Test
+    fun everyPathSaysWhatItNeedsAndWhereItGoesWrong() {
+        val providers = com.kaiharimoto.mastertool.core.ai.providers.Providers.all
+        assertTrue(providers.isNotEmpty())
+        providers.forEach { p ->
+            val guide = com.kaiharimoto.mastertool.core.ai.providers.SetupGuide
+            assertTrue(guide.needs(p.kind, p).isNotEmpty(), "${p.id} needs")
+            // Every step on the provider's path that can fail says how.
+            val steps = com.kaiharimoto.mastertool.core.ai.providers.SetupSteps.of(p)
+            listOf(
+                com.kaiharimoto.mastertool.core.ai.providers.SetupStep.INSTALL,
+                com.kaiharimoto.mastertool.core.ai.providers.SetupStep.SIGN_IN,
+                com.kaiharimoto.mastertool.core.ai.providers.SetupStep.KEY,
+                com.kaiharimoto.mastertool.core.ai.providers.SetupStep.SERVER,
+                com.kaiharimoto.mastertool.core.ai.providers.SetupStep.MODEL,
+            ).filter { it in steps }.forEach { step ->
+                val trouble = guide.trouble(step, p)
+                assertTrue(trouble.isNotEmpty(), "${p.id} at $step")
+                assertTrue(trouble.all { it.problem.isNotBlank() && it.fix.isNotBlank() })
+            }
+        }
+        com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.entries.forEach { k ->
+            assertTrue(com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.needs(k, null).isNotEmpty())
+        }
+        assertEquals(3, com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.choosing.size)
+    }
+}

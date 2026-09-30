@@ -137,6 +137,17 @@ fun SetupWizard(ai: AiState, modifier: Modifier = Modifier) {
             }
         }
         MuText(w.step.title, style = MuType.h2(LocalMuFonts.current), color = c.ink)
+        if (w.step == SetupSteps.of(w.provider).getOrNull(3)) Needs(w)
+        WizardStep(ai, w)
+        Trouble(w)
+    }
+}
+
+/** The step itself, and what its last check found: the panel's and the first setup's alike. */
+@Composable
+internal fun WizardStep(ai: AiState, w: WizardState) {
+    val c = Mu.colors
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         when (w.step) {
             SetupStep.NAME -> NameStep(ai, w)
             SetupStep.CONNECT -> ConnectStep(w)
@@ -151,6 +162,39 @@ fun SetupWizard(ai: AiState, modifier: Modifier = Modifier) {
         }
         w.message?.let { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Mono("✕", color = c.ink); Small(it, color = c.ink) } }
         w.good?.let { Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { Mono("✓", color = c.ink); Small(it, color = c.ink) } }
+    }
+}
+
+/** What to have ready for the way chosen (`SetupGuide.needs`). */
+@Composable
+internal fun Needs(w: WizardState, title: Boolean = true) {
+    val c = Mu.colors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (title) com.kaiharimoto.neue.kit.Micro("You will need", color = c.ink45)
+        com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.needs(w.kind, w.provider).forEach { line ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Mono("–", color = c.ink45)
+                Small(line, color = c.ink70)
+            }
+        }
+    }
+}
+
+/** The ways this step goes wrong, and what to do (`SetupGuide.trouble`). */
+@Composable
+internal fun Trouble(w: WizardState) {
+    val c = Mu.colors
+    val trouble = com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.trouble(w.step, w.provider)
+    if (trouble.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        com.kaiharimoto.neue.kit.HRule()
+        com.kaiharimoto.neue.kit.Micro("If something goes wrong", color = c.ink45)
+        trouble.forEach { t ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Small(t.problem, color = c.ink)
+                Help(t.fix, color = c.ink70)
+            }
+        }
     }
 }
 
@@ -174,6 +218,15 @@ private fun NameStep(ai: AiState, w: WizardState) {
 @Composable
 private fun ConnectStep(w: WizardState) {
     val desk = AiDesk.canRunCli
+    val c = Mu.colors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.choosing.forEach { line ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Mono("–", color = c.ink45)
+                Small(line, color = c.ink70)
+            }
+        }
+    }
     ConnectKind.entries.forEach { kind ->
         val enabled = kind != ConnectKind.PLAN || desk
         Choice(
@@ -441,7 +494,7 @@ private fun DoneStep(ai: AiState, w: WizardState) {
     val p = w.provider ?: return
     Help("${w.name.ifBlank { ai.name }} will talk through ${p.label}${w.model.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}.")
     Help("Open it any time with the ${ai.name} button in the bar${if (AiDesk.canRunCli) " or ${com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd).orEmpty()}" else ""}. It follows you to every page.")
-    MuButton("Start", {
+    val connect = {
         val connection = AiConnection(
             id = "${p.id}-${UUID.randomUUID().toString().take(6)}",
             provider = p.id,
@@ -453,7 +506,19 @@ private fun DoneStep(ai: AiState, w: WizardState) {
         ai.h.neue.update { it.copy(ai = it.ai.copy(effort = w.effort, alwaysAllow = w.alwaysAllow)) }
         ai.connect(connection, w.key.takeIf { p.needsKey || it.isNotBlank() })
         ai.wizard = WizardState(ai.name)
-    }, variant = BtnVariant.PRIMARY, arrow = true)
+    }
+    if (AiState.PHASE >= 3) {
+        Help("Fine Tuning is ${w.name.ifBlank { ai.name }} asking how you prepare for a tournament — the event, your deck, what you fear — and remembering it. A few minutes; you see what it kept at the end.")
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        MuButton("Start", { connect() }, variant = if (AiState.PHASE >= 3) BtnVariant.GHOST else BtnVariant.PRIMARY, arrow = AiState.PHASE < 3)
+        if (AiState.PHASE >= 3) {
+            MuButton("Start with Fine Tuning", {
+                connect()
+                ai.startTuning()
+            }, variant = BtnVariant.PRIMARY, arrow = true)
+        }
+    }
 }
 
 /** Numbered steps, `01` to `04`, one a line. */

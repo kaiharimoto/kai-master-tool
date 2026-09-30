@@ -7,17 +7,17 @@ package com.kaiharimoto.mastertool.core.ai.providers
  * local server is found. Every path ends by choosing a model, how much Ai may do
  * without asking, and a first hello.
  */
-enum class SetupStep(val title: String) {
-    NAME("Name your assistant"),
-    CONNECT("How do you want to connect?"),
-    PROVIDER("Choose a provider"),
-    INSTALL("Install"),
-    SIGN_IN("Sign in"),
-    KEY("Your API key"),
-    SERVER("Find the server"),
-    MODEL("Choose a model"),
-    PERMISSIONS("What may it do on its own?"),
-    DONE("Ready"),
+enum class SetupStep(val title: String, val short: String) {
+    NAME("Name your assistant", "Name"),
+    CONNECT("How do you want to connect?", "Connect"),
+    PROVIDER("Choose a provider", "Provider"),
+    INSTALL("Install", "Install"),
+    SIGN_IN("Sign in", "Sign in"),
+    KEY("Your API key", "Key"),
+    SERVER("Find the server", "Server"),
+    MODEL("Choose a model", "Model"),
+    PERMISSIONS("What may it do on its own?", "Permissions"),
+    DONE("Ready", "Ready"),
 }
 
 object SetupSteps {

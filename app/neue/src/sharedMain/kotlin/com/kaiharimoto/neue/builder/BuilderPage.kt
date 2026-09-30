@@ -130,7 +130,8 @@ fun BuilderPage(
         railOut = false,
         groupsOn = groupsOn(state),
         poolVisible = neue.prefs.poolVisible,
-        inspectorVisible = neue.prefs.inspectorVisible,
+        // Ai open takes the inspector's place (1.0.45).
+        inspectorVisible = neue.prefs.inspectorVisible && !neue.aiDocked,
         poolPref = neue.prefs.poolWidth,
         inspectorPref = neue.prefs.inspectorWidth,
         // A phone lying down: the pool and the deck, no inspector, the groups a tab of the pool's.
@@ -172,10 +173,11 @@ fun BuilderPage(
                 Inspector(state, neue, Modifier.fillMaxSize())
                 ZenShield(asleep)
             }
-        } else if (panes.inspectorYielded || phone) {
+        } else if (panes.inspectorYielded || phone || neue.aiDocked) {
             // A phone has no inspector: a tap opens the card large (v1.3.5).
             // On touch the inspector gave its room to the Groups panel or to the
             // deck's floor; reading a card is the hold's job there (the viewer).
+            // With Ai open the panel beside the page is in the inspector's place.
         } else {
             VRule(Modifier.zenQuiet(), color = Mu.colors.ink12)
             HiddenPane(Modifier.zenQuiet(), Icons.PanelRightOpen, "Show the inspector", kbd(DeskAction.TOGGLE_INSPECTOR)) {

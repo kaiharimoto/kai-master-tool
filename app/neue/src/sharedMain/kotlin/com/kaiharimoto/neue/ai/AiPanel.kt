@@ -89,12 +89,18 @@ private fun Head(ai: AiState, phone: Boolean) {
                 when {
                     ai.wizardOpen -> "Setting up"
                     provider == null -> "Not connected"
+                    ai.tuning -> "Fine Tuning · " + provider.label
                     else -> provider.label + (connection?.model?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
                 },
                 color = c.ink45,
             )
         }
         val size = if (phone) 40.dp else 28.dp
+        if (!ai.wizardOpen && AiState.PHASE >= 3 && ai.configured) {
+            Tip(if (ai.tuning) "Finish, and see what ${ai.name} learned" else "Fine Tuning: ${ai.name} asks how you prepare for a tournament, and remembers") {
+                WordToggle(if (ai.tuning) "Finish" else "Tune", on = ai.tuning, onClick = { if (ai.tuning) ai.finishTuning() else ai.startTuning() })
+            }
+        }
         if (!ai.wizardOpen) {
             Tip("Past conversations") {
                 IconButton(Icons.History, { ai.historyOpen = !ai.historyOpen }, size = size, toggled = ai.historyOpen, label = "History")

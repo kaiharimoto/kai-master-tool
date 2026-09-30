@@ -335,7 +335,12 @@ class NeueHolders(
                 if (!groupsOn(state)) setGroups(true)
                 neue.note = Note("Groups ${arrangementWords(next).lowercase()}")
             }
-            DeskAction.TOGGLE_INSPECTOR -> neue.update { it.copy(inspectorVisible = !it.inspectorVisible) }
+            // Ai stands in the inspector's place (1.0.45): asking for the inspector puts Ai away.
+            DeskAction.TOGGLE_INSPECTOR -> if (neue.aiDocked && neue.page == Page.BUILDER) {
+                neue.update { it.copy(inspectorVisible = true, ai = it.ai.copy(panelOpen = false)) }
+            } else {
+                neue.update { it.copy(inspectorVisible = !it.inspectorVisible) }
+            }
             DeskAction.TOGGLE_POOL -> neue.update { it.copy(poolVisible = !it.poolVisible) }
             DeskAction.TOGGLE_FILTERS -> neue.update { it.copy(filtersOpen = !it.filtersOpen, poolVisible = true) }
             DeskAction.NEW_GROUP -> state.startGroupDraft(seed = (neue.selection as? Selection.InDeck)?.card?.id)
@@ -617,6 +622,7 @@ class NeueHolders(
                 Command("Ai", "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
                 Command("Ai", "${ai.name}: set up a connection") { ai.openWizard() },
                 Command("Ai", "${ai.name}: what it knows") { ai.memoryOpen = "USER.md" },
+                Command("Ai", "${ai.name}: Fine Tuning") { ai.startTuning() },
             ) else emptyArray()),
             Command("App", "Report an issue →") { Platform.reportIssue() },
         ).filter { q.isEmpty() || it.label.lowercase().contains(q) || it.group.lowercase().startsWith(q) }
@@ -1121,7 +1127,7 @@ private fun Shell(h: NeueHolders) {
                 }
                 // Ai's panel (1.0.43): docked beside every page, the page re-fitting beside it.
                 // Not in immersive mode, whose whole point is the deck alone; on a phone it is a sheet.
-                if (neue.prefs.ai.enabled && neue.prefs.ai.panelOpen && !phone && !immersive) {
+                if (neue.aiDocked) {
                     com.kaiharimoto.neue.ai.AiPanel(h, Modifier.width((neue.prefs.ai.panelWidth / neue.prefs.scale).dp).fillMaxHeight())
                 }
             }
@@ -1192,8 +1198,11 @@ private fun Shell(h: NeueHolders) {
 
         // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
         if (neue.aiSheet) com.kaiharimoto.neue.ai.AiPanel(h, Modifier.fillMaxSize(), phone = true)
+        // Ai's first setup takes the whole window, bars and all (1.0.45).
+        if (neue.aiSetup) com.kaiharimoto.neue.ai.AiSetupScreen(h.ai, Modifier.fillMaxSize())
         if (neue.prefs.ai.enabled) {
             com.kaiharimoto.neue.ai.MemoryDialog(h.ai)
+            com.kaiharimoto.neue.ai.ReviewDialog(h.ai)
             if (h.ai.forgetAsked) {
                 MuDialog(
                     title = "Forget everything",

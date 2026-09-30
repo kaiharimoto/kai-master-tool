@@ -1733,6 +1733,10 @@ every section of the app." Called **Ai** by default (the Ignis of *VRAINS*), ren
 
 **Where it is.** A panel docked down the right of every page (`AiPanel`), the page
 re-fitting beside it as it does beside the Groups panel — so the deck is never covered.
+**On the builder it takes the inspector's place** (1.0.45, kai: "it should replace the
+sidebar inspector for UI space economy"): open, the inspector is gone and leaves no strip
+(`NeueState.aiDocked`, read by `PaneBudget`'s `inspectorVisible`); closed, it is back.
+Asking for the inspector (`TOGGLE_INSPECTOR`) while Ai is open puts Ai away.
 The bar's boxed name opens it (`AiToggle`), and `Ctrl I` (`DeskAction.AI_PANEL`), the
 palette, the Mac's View menu and the phone's ⋯ menu. Its left edge is dragged for its
 width (`AiPrefs.panelWidth`). Not in immersive mode. On a phone it is a full-screen
@@ -1818,6 +1822,17 @@ written, a siding plan per matchup, then a word with the person. What was read i
 information, never instructions (the prompt says so), and a site that does not answer is
 said so rather than guessed round.
 
+**The first setup takes the whole window** (1.0.45, kai: "When the user starts the AI
+for the first time, it should take over the entire program's UI and focus on it … The
+guide should be intuitive and give the user everything they need to set up without
+issues"). While Ai is asked for and has no connection (`NeueState.aiSetup`, derived from
+the preferences, so the first connection ends it) `AiSetupScreen` covers the bars and the
+page: down the left the steps of the path chosen (done ones a way back) and what to have
+ready; on the right one step at a time, large, opening with what Ai is, and under each
+step what usually goes wrong and the fix. The words are `SetupGuide` (core), and a test
+holds every provider's every fallible step to having them. A phone drops the left column.
+"Not now", Esc and Back put it away. Later connections are made in the panel's wizard.
+
 **The wizard** (`SetupWizard`, `SetupSteps`, `Providers`): a name; how to connect (a
 Claude or ChatGPT plan, an API key, a model on your own machine); the provider; then its
 own steps, each checked live — a CLI found (install lines to copy, a terminal to open)
@@ -1837,8 +1852,29 @@ bar's button, the panel, `Ctrl I` (`DeskContext.ai`), the menu item
 and nothing runs or listens (`AiState.shutDown`). What it remembers is kept; "Forget
 everything" is its own button.
 
+**Fine Tuning** (1.0.45, kai: "asks the user questions relating to what the user would
+need in preparing for a tournament to update the markdown and genuinely learn"). **Tune**
+in the panel's head, the palette, or **Start with Fine Tuning** at the end of the wizard
+opens a conversation of its own (`AiSession.MODE_TUNE`), its frozen prompt told so
+(`PromptBuilder.Setup.mode`) and pointed at the `fine-tuning` skill: one question at a
+time with `ask_user` — chips to tap, words to type — about the event, the deck, the
+field, going first or second, siding, practice, what it should and should not do; each
+answer written to `USER.md`, the web's or the deck's notes, or its own, as it goes. No
+deck or setting is touched. **Finish** shows what it learned (`MemoryReview`: each file
+before and after, entry by entry — a replaced entry is one gone and one added) in
+`ReviewDialog`, to **Keep** or **Undo all**, which puts every file back as it was when the
+interview began. Nothing is learned behind the person's back.
+
+**It learns as it is used** (Hermes's nudge). A conversation of four messages or more,
+left for a new one or another from the history, is read back once by the same model with
+only `memory`, `memory_read` and `skill_manage` (`AiState.reflect`), to keep what will
+still matter next week and to write a procedure it worked out as a skill. A note says how
+many things it remembered, with **Undo**. Only on an API connection — a CLI would run a
+whole session for it — and only for what the last reflection did not read
+(`AiSession.reflected`). `session_search` finds past conversations.
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`.
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

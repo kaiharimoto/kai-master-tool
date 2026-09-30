@@ -27,6 +27,8 @@ object PromptBuilder {
         val viaMcp: Boolean = false,
         /** Things this build cannot do yet, said so Ai does not promise them. */
         val missing: List<String> = emptyList(),
+        /** "tune" for Fine Tuning: the conversation is an interview (`AiSession.MODE_TUNE`). */
+        val mode: String = "chat",
     )
 
     fun system(s: Setup): String = buildString {
@@ -87,6 +89,15 @@ object PromptBuilder {
         appendLine("## Skills")
         appendLine("Step-by-step know-how for kinds of tasks. Read one with skill_view before doing its task.")
         appendLine(s.skillsIndex.trim().ifEmpty { "(none)" })
+        if (s.mode == "tune") {
+            appendLine()
+            appendLine("## This conversation is Fine Tuning")
+            appendLine(
+                "The person started Fine Tuning to teach you how they prepare for tournaments. Read the skill fine-tuning " +
+                    "with skill_view first, then interview them as it says: one question at a time with ask_user, writing " +
+                    "what you learn to memory as you go. Do not change their decks or settings in this conversation.",
+            )
+        }
     }.trim() + "\n"
 
     /**

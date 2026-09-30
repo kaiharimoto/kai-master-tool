@@ -210,10 +210,24 @@ class NeueState(
     var studio by mutableStateOf<Studio?>(null)
 
     /** Ai's panel on a phone: a sheet over the page, closed by Back like any other (1.0.43). */
-    val aiSheet: Boolean get() = phone && prefs.ai.enabled && prefs.ai.panelOpen
+    val aiSheet: Boolean get() = phone && prefs.ai.enabled && prefs.ai.panelOpen && !aiSetup
+
+    /**
+     * Ai's first setup (1.0.45, kai: "it should take over the entire program's UI and focus
+     * on it"): the whole window, while Ai is asked for and has no connection yet. Derived,
+     * not kept — the first connection made ends it, and Ai docks beside the page.
+     */
+    val aiSetup: Boolean get() = prefs.ai.enabled && prefs.ai.panelOpen && prefs.ai.connection == null
+
+    /**
+     * Ai's panel down the right of the page (desk and tablet). On the builder it stands in
+     * the inspector's place rather than beside it (1.0.45, kai: "it should replace the
+     * sidebar inspector for UI space economy"): open, the inspector goes; closed, it is back.
+     */
+    val aiDocked: Boolean get() = prefs.ai.enabled && prefs.ai.panelOpen && !phone && !immersive && !aiSetup
 
     val overlayOpen: Boolean
-        get() = aiSheet || showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || studio != null
+        get() = aiSheet || aiSetup || showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || studio != null
 
     /**
      * A touch screen first (Neue on a tablet): no hover to bring the rail out or
@@ -404,7 +418,7 @@ class NeueState(
 
     /** Whether [dismissTop] has something to close. */
     val hasTop: Boolean
-        get() = aiSheet || showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || helpOpen || drawer != null || studio != null
+        get() = aiSheet || aiSetup || showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || helpOpen || drawer != null || studio != null
 
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {
@@ -419,7 +433,7 @@ class NeueState(
         helpOpen -> { helpOpen = false; true }
         drawer != null -> { drawer = null; true }
         studio != null -> { studio = null; true }
-        aiSheet -> { update { it.copy(ai = it.ai.copy(panelOpen = false)) }; true }
+        aiSheet || aiSetup -> { update { it.copy(ai = it.ai.copy(panelOpen = false)) }; true }
         else -> false
     }
 

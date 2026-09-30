@@ -96,8 +96,10 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   YGOPRODeck and build a web of the field by itself. It remembers you in markdown files you can
   read, and connects to your Claude or ChatGPT plan through their command-line
   apps, to an API key (Anthropic, OpenAI, Gemini, OpenRouter), or to a model on
-  your own machine — a wizard walks you through each. Settings can turn it off
-  entirely.
+  your own machine — a wizard walks you through each. **Fine Tuning** has it
+  interview you about how you prepare for a tournament and remember the answers,
+  and it learns from ordinary conversations too, always with Undo. Settings can
+  turn it off entirely.
 - **The keyboard and the mouse, both whole.** Every action has a shortcut
   (`F1` lists them, `Ctrl K` finds them), and the mouse has a grammar: right-click
   adds from the pool and removes from the deck, holding opens the card large.

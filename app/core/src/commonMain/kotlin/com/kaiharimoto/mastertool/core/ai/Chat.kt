@@ -142,7 +142,12 @@ data class AiSession(
     /** "chat", or "tune" for Fine Tuning. */
     val mode: String = MODE_CHAT,
     val usage: Usage = Usage(),
+    /** How many of [turns] the reflection after a conversation has already read (phase 3). */
+    val reflected: Int = 0,
 ) {
+    /** The person's messages the reflection has not read yet. */
+    val unreflected: Int get() = turns.drop(reflected).count { it.role == Role.USER && !it.isToolResults }
+
     /** A title from the first thing the person said. */
     fun titled(): AiSession = if (title.isNotBlank()) this else copy(
         title = turns.firstOrNull { it.role == Role.USER && !it.isToolResults }?.text?.lineSequence()?.firstOrNull()?.take(60)?.trim().orEmpty(),
