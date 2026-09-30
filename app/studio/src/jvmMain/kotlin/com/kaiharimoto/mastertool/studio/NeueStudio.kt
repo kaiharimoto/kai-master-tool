@@ -940,9 +940,9 @@ private fun studioAi154(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
     // The guide and the last report as PDFs, in the real fonts and chosen art, beside the shots.
     if (mode == "guide" || mode == "end") runCatching {
         kotlinx.coroutines.runBlocking {
-            java.io.File("shots").mkdirs()
-            java.io.File("shots/ai-guide.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.guideBytes(h, deckId, deckName))
-            java.io.File("shots/ai-report.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.reportBytes(h, reports.last()))
+            val dir = java.io.File("../shots").apply { mkdirs() }
+            dir.resolve("ai-guide.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.guideBytes(h, deckId, deckName))
+            dir.resolve("ai-report.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.reportBytes(h, reports.last()))
         }
     }.onFailure { System.err.println("studio: the PDFs failed: $it") }
 }

@@ -305,8 +305,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     Ai's own choice of five.
   - `neue/ai/avatar/AiAvatar.kt` draws it. It is the third file allowed colour.
   - The face sits on the composer's top edge with its status (`FaceStrip`).
-  - The bar's `AiMarquee` replaced the boxed name: the glyph and a scrolling line of
-    status, the answer's start, and suggestions.
+  - The bar's `AiMarquee` replaced the boxed name, and since 1.0.54 is only a scrolling
+    line of status, the answer's start and suggestions — no box, no face — with the name
+    beside it as the button into Ai's brain (`AiBrainButton`).
   - Only the whole head moves; the net never distorts.
 - **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep** (1.0.40, kai:
   Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by

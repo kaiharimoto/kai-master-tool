@@ -172,8 +172,8 @@ private fun brainGroups(ai: AiState): List<Pair<String, List<String>>> {
         "Who it is" to listOf(Persona.FILE),
         "You" to listOf("USER.md"),
         "Its own notes" to listOf("MEMORY.md"),
-        "Deck guides" to list("guides"),
-        "Deck notes" to list("decks"),
+        "Deck guides" to byDeck(ai, list("guides")),
+        "Deck notes" to byDeck(ai, list("decks")),
         "Webs" to list("webs"),
         "Skills it wrote" to skills,
     ).filter { it.second.isNotEmpty() }
@@ -209,7 +209,15 @@ private fun BrainRow(ai: AiState, file: String, on: Boolean, onClick: () -> Unit
 
 /** A deck's name for a guide or notes file, from the library as the app last read it. */
 private fun deckName(ai: AiState, id: String): String =
-    if (id == ai.h.builder.deckId) ai.h.builder.deckName else ai.deckNames[id] ?: id.take(12)
+    if (id == ai.h.builder.deckId) ai.h.builder.deckName else ai.deckNames[id] ?: "Deleted deck · ${id.take(4)}"
+
+private fun known(ai: AiState, id: String) = id == ai.h.builder.deckId || id in ai.deckNames
+
+/** A deck's files by its name, the decks no longer in the library last. */
+private fun byDeck(ai: AiState, paths: List<String>): List<String> {
+    fun id(path: String) = path.substringAfter('/').removeSuffix(".md")
+    return paths.sortedWith(compareBy({ !known(ai, id(it)) }, { deckName(ai, id(it)).lowercase() }))
+}
 
 /** A memory file's name as a person reads it. */
 private fun label(ai: AiState, path: String): String = when {
