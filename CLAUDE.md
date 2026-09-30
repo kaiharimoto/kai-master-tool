@@ -305,9 +305,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     Ai's own choice of five.
   - `neue/ai/avatar/AiAvatar.kt` draws it. It is the third file allowed colour.
   - The face sits on the composer's top edge with its status (`FaceStrip`).
-  - The bar's `AiMarquee` replaced the boxed name, and since 1.0.54 is only a scrolling
-    line of status, the answer's start and suggestions — no box, no face — with the name
-    beside it as the button into Ai's brain (`AiBrainButton`).
+  - The bar's button is `AiBadge` on every platform (1.0.63): Ai's face and name in a box,
+    no running line; its brain opens from the panel's head.
   - Only the whole head moves; the net never distorts.
 - **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep** (1.0.40, kai:
   Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by
@@ -540,6 +539,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   tokens; NewPipeExtractor is GPL and this app is MIT). The key is the person's own (`video:gemini` in
   `SecretStore`) or a Gemini connection's, and with none its box stands in the chat (`VideoKeyCard`).
   The `deck-from-video` skill writes the guide from it.
+  **1.0.63**: what is typed in answer to Ai's question lives on the `Question` (never a lazy row's
+  `remember`), and a question closed unanswered hands it to the message box (`keepUnsent`); the bar's
+  Ai is `AiBadge` on every platform (the running `AiMarquee` and `AiBrainButton` are deleted), and the
+  brain opens from an icon in the panel's head.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.

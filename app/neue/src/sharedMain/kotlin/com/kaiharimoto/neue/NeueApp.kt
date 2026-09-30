@@ -869,13 +869,9 @@ private fun Shell(h: NeueHolders) {
             trailing = {
                 if (neue.prefs.ai.enabled) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // The tablet wears the phone's button, not the desk's running line (1.0.59, kai).
-                        if (com.kaiharimoto.neue.platform.Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
-                            com.kaiharimoto.neue.ai.avatar.AiBadge(h, height = 32.dp)
-                        } else {
-                            com.kaiharimoto.neue.ai.avatar.AiMarquee(h)
-                            com.kaiharimoto.neue.ai.avatar.AiBrainButton(h)
-                        }
+                        // Ai's face and name in a box on every platform (1.0.63, kai: "on desktop the app is not
+                        // the marquee"); its brain is in its panel now, not beside it in the bar.
+                        com.kaiharimoto.neue.ai.avatar.AiBadge(h, height = 32.dp)
                     }
                 }
             },

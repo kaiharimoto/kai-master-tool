@@ -75,6 +75,19 @@ object Icons {
     )
     /** The index strip's way to Settings on a tablet (touch swarm, rec 1): lucide's settings-2. */
     val Settings = icon("settings-2", "M20 7h-9", "M14 17H5", circle(17f, 17f, 3f), circle(7f, 7f, 3f))
+    /** Lucide's brain: Ai's memory, opened from the panel's head (1.0.63). */
+    val Brain = icon(
+        "brain",
+        "M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z",
+        "M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z",
+        "M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4",
+        "M17.599 6.5a3 3 0 0 0 .399-1.375",
+        "M6.003 5.125A3 3 0 0 0 6.401 6.5",
+        "M3.477 10.896a4 4 0 0 1 .585-.396",
+        "M19.938 10.5a4 4 0 0 1 .585.396",
+        "M6 18a4 4 0 0 1-1.967-.516",
+        "M19.967 17.484A4 4 0 0 1 18 18",
+    )
     val History = icon("history", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5", "M12 7v5l4 2")
     val Moon = icon("moon", "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z")
     val ChevronLeft = icon("chevron-left", "m15 18-6-6 6-6")

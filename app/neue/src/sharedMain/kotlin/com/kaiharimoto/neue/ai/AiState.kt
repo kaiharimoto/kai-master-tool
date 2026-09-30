@@ -55,6 +55,14 @@ class Question(
 ) {
     internal val answer = CompletableDeferred<String>()
     fun reply(text: String) = answer.complete(text)
+
+    /**
+     * What the person has typed and picked so far (1.0.63, kai: "i was typing it but it refreshed …
+     * and my progress of the answer was gone"): kept here, with the question, not in the chat's row,
+     * which the list drops and rebuilds as it scrolls, the keyboard opens and lines arrive above it.
+     */
+    var typed by mutableStateOf("")
+    var picked by mutableStateOf(setOf<String>())
 }
 
 /**
@@ -724,6 +732,7 @@ class AiState(internal val h: NeueHolders) {
         stopping = false
         confirm?.reply(false)
         confirm = null
+        question?.let { keepUnsent(it) }
         question?.reply("(no answer)")
         question = null
         status = null
@@ -1287,12 +1296,26 @@ class AiState(internal val h: NeueHolders) {
         }
     }
 
+    /**
+     * A question that ended before its answer was sent — the turn stopped, a connection dropped —
+     * gives what was typed to the message box, so none of it is lost (1.0.63).
+     */
+    private fun keepUnsent(q: Question) {
+        if (q.answer.isCompleted) return
+        val unsent = (q.picked + listOfNotNull(q.typed.trim().takeIf { it.isNotEmpty() })).joinToString("; ")
+        if (unsent.isBlank()) return
+        draft = listOf(draft.trim(), unsent).filter { it.isNotEmpty() }.joinToString("\n")
+        notice = "Your answer was not sent before the question closed: it is in the box below, to send."
+        focusTick++
+    }
+
     suspend fun ask(q: Question): String {
         question = q
         h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true)) }
         return try {
             q.answer.await()
         } finally {
+            keepUnsent(q)
             if (question === q) question = null
         }
     }

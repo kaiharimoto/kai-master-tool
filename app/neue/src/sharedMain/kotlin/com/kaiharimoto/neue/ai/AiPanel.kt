@@ -141,6 +141,10 @@ private fun Head(ai: AiState, phone: Boolean) {
         // How full the model's window is (1.0.56); a click shows what fills it.
         if (!ai.wizardOpen && ai.configured) ContextGauge(ai)
         if (!ai.wizardOpen) {
+            // Its brain lives here, with it (1.0.63, kai: "the Ai button to see his brain should be in the Ai panel").
+            Tip("Look into ${ai.name}: read and edit what it knows and how it thinks") {
+                IconButton(Icons.Brain, { ai.memoryOpen = if (ai.memoryOpen != null) null else "USER.md" }, size = size, toggled = ai.memoryOpen != null, label = "Brain")
+            }
             Tip("Past conversations") {
                 IconButton(Icons.History, { ai.historyOpen = !ai.historyOpen }, size = size, toggled = ai.historyOpen, label = "History")
             }

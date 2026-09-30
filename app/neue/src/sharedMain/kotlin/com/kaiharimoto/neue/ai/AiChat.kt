@@ -495,8 +495,9 @@ private fun ConfirmCard(c: Confirm) {
 @Composable
 private fun QuestionCard(ai: AiState, q: Question) {
     val c = Mu.colors
-    var picked by remember(q) { mutableStateOf(setOf<String>()) }
-    var own by remember(q) { mutableStateOf("") }
+    // Kept on the question itself (1.0.63), so the row can be rebuilt without losing a word.
+    var picked by q::picked
+    var own by q::typed
     Column(
         Modifier.fillMaxWidth().border(1.dp, c.ink).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),

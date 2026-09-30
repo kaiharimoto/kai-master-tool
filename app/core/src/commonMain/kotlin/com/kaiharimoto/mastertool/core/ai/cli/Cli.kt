@@ -73,7 +73,12 @@ object ClaudeCli {
             if (!resume.isNullOrBlank()) addAll(listOf("--resume", resume))
         },
         stdin = if (images.any { it.data != null }) userLine(prompt, images) else prompt,
+        // A question to the person (ask_user) waits on them through MCP: half an hour, not a minute (1.0.63).
+        env = mapOf("MCP_TOOL_TIMEOUT" to TOOL_WAIT_MS.toString()),
     )
+
+    /** How long a tool call through MCP may wait: a person typing an answer to Ai's question. */
+    const val TOOL_WAIT_MS = 30 * 60 * 1000L
 
     /** One stream-json user message: the words, then each picture as a base64 image block. */
     fun userLine(prompt: String, images: List<com.kaiharimoto.mastertool.core.ai.Part.Image>): String =
@@ -259,7 +264,7 @@ object CodexCli {
             "web_search=live",
             "mcp_servers.${CliNames.MCP_NAME}.url=$mcpUrl",
             "mcp_servers.${CliNames.MCP_NAME}.bearer_token_env_var=$TOKEN_ENV",
-            "mcp_servers.${CliNames.MCP_NAME}.tool_timeout_sec=900",
+            "mcp_servers.${CliNames.MCP_NAME}.tool_timeout_sec=1800",
         ) + (if (effort.isNotBlank()) listOf("model_reasoning_effort=$effort") else emptyList())
         return CliLaunch(
             args = buildList {

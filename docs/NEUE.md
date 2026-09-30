@@ -2324,6 +2324,23 @@ let the AI parse it with vision and transcription to learn about the deck").
   offer to build it), and the guide written under its labels with timestamps and the video as a
   Source. A line that looks illegal is checked before it goes in. `--ai=videokey` photographs it.
 
+**1.0.63, an answer is never lost, and Ai's button everywhere.**
+- **A typed answer to Ai's question survives** (kai: "i was typing it but it refreshed or timed
+  out … and my progress of the answer was gone"). The question card kept what was typed in its
+  row's `remember`, which the lazy list drops and rebuilds — scrolled out of view as the keyboard
+  opened, or shifted by a line arriving above it. What is typed and picked now lives on the
+  `Question` itself (`typed`, `picked`); and a question that closes before its answer was sent —
+  the turn stopped, a connection dropped — hands it to the message box with a line saying so
+  (`AiState.keepUnsent`). A question over a plan's command-line app waits half an hour for the
+  person (Claude Code's `MCP_TOOL_TIMEOUT`, Codex's `tool_timeout_sec`), not a minute.
+- **The desk wears the boxed button too** (kai: "on desktop the app is not the marquee"):
+  `AiBadge` — Ai's face and name — is the bar's way to Ai on every platform; the running line
+  (`AiMarquee`) and the bar's brain button (`AiBrainButton`) are deleted.
+- **Its brain is in its panel** (kai: "the Ai button to see his brain should be in the Ai panel,
+  not the top of the deck builder"): a brain icon in the panel's head, beside History
+  (`Icons.Brain`, Lucide's). A right-click or a held finger on `AiBadge` still opens it, and the
+  palette's command and the phone's ⋯ menu too.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:
