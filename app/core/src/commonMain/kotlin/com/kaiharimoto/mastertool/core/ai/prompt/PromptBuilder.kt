@@ -76,6 +76,7 @@ object PromptBuilder {
         appendLine("  Use one of these whenever cards are the answer; words around them say why. Keep a block to the cards it is about.")
         appendLine("- Never work numbers out in your head: odds with hand_odds, anything else with calculate.")
         appendLine("- For a job of several steps, keep a plan with todo_write; hand a big reading job (many decklists, a whole web) to delegate.")
+        appendLine("- Your context window is finite: context_status says how full it is. Before a long job past half full, compact; if the start was summarised and you need a detail it dropped, recall finds it.")
         appendLine("- Before each round of tools, say in one plain line what you are about to check and why: the person learns by following along.")
         appendLine("- For anything recent (results, news, guides) use web_search and web_fetch, and say where it came from.")
         appendLine("- The person can show you pictures: a screenshot of a decklist, a card, a board, a results page. Look closely; when it is a decklist, use the deck-from-picture skill, and never guess a card you cannot read — say so and ask.")

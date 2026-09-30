@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -88,11 +89,16 @@ private sealed interface Entry {
     data class Reply(val text: String) : Entry
     data class Line(val summary: String, val isError: Boolean) : Entry
     data class Thought(val text: String) : Entry
+
+    /** Where the summary begins (1.0.56): the turns above it are sent as the summary, not as themselves. */
+    data class Summarized(val summary: String, val carried: Boolean) : Entry
 }
 
 /** The conversation as rows: the person's words, Ai's words, and a line for each thing Ai did. */
-private fun rows(turns: List<ChatTurn>): List<Entry> = buildList {
-    turns.forEach { turn ->
+private fun rows(turns: List<ChatTurn>, summarized: Int = 0, summary: String = "", carried: Boolean = false): List<Entry> = buildList {
+    if (carried && summary.isNotBlank()) add(Entry.Summarized(summary, carried = true))
+    turns.forEachIndexed { i, turn ->
+        if (i == summarized && summarized > 0 && summary.isNotBlank()) add(Entry.Summarized(summary, carried = false))
         when {
             turn.role == Role.USER && turn.isToolResults -> turn.toolResults.forEach { add(Entry.Line(it.summary.ifBlank { it.name }, it.isError)) }
             turn.role == Role.USER -> if (turn.text.isNotBlank() || turn.images.isNotEmpty()) add(Entry.Person(turn.text, turn.images))
@@ -114,7 +120,9 @@ private fun rows(turns: List<ChatTurn>): List<Entry> = buildList {
 @Composable
 fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
     val session = ai.session
-    val rows = remember(session?.turns) { rows(session?.turns.orEmpty()) }
+    val rows = remember(session?.turns, session?.summarized, session?.summary) {
+        rows(session?.turns.orEmpty(), session?.summarized ?: 0, session?.summary.orEmpty(), session?.carriedFrom != null)
+    }
     val list = rememberLazyListState()
     val tail = rows.size + (if (ai.streaming.isNotEmpty()) 1 else 0) + (if (ai.reasoning.isNotEmpty()) 1 else 0) + ai.todos.size + (if (ai.confirm != null) 1 else 0) + (if (ai.question != null) 1 else 0) + (if (ai.problem != null) 1 else 0) + ai.activity.size
     LaunchedEffect(tail, ai.streaming.length / 80, ai.reasoning.length / 200) {
@@ -138,6 +146,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
                     is Entry.Reply -> ReplyView(ai, row.text)
                     is Entry.Line -> ActivityLine(row.summary, row.isError)
                     is Entry.Thought -> ReasoningView(ai, row.text, live = false)
+                    is Entry.Summarized -> SummaryMark(row.summary, row.carried)
                 }
             }
             if (ai.reasoning.isNotBlank()) item { ReasoningView(ai, ai.reasoning, live = true) }
@@ -214,6 +223,41 @@ private fun PersonSays(ai: AiState, text: String, images: List<Part.Image>) {
         if (text.isNotBlank()) {
             Box(Modifier.fillMaxWidth(0.88f).background(c.ink06).padding(horizontal = 12.dp, vertical = 8.dp)) {
                 SelectionContainer { MuText(text, style = MuType.row(LocalMuFonts.current), color = c.ink) }
+            }
+        }
+    }
+}
+
+/**
+ * Where the summary begins (1.0.56): a rule and a line saying what is above it is sent as a
+ * summary now; a click shows the summary itself.
+ */
+@Composable
+private fun SummaryMark(summary: String, carried: Boolean) {
+    val c = Mu.colors
+    var open by remember { mutableStateOf(false) }
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .hoverable(source)
+                .cursorPointer(caption = if (open) "Hide" else "Show")
+                .muClickable(interactionSource = source) { open = !open },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.weight(1f).height(1.dp).background(c.ink25))
+            Mono(
+                (if (carried) "Carried on from an earlier conversation" else "Above: summarised to fit") + if (open) " · Hide the summary" else " · Show the summary",
+                color = animatedColor(if (hovered) c.ink else c.ink45),
+            )
+            Box(Modifier.weight(1f).height(1.dp).background(c.ink25))
+        }
+        if (open) {
+            Box(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(10.dp)) {
+                SelectionContainer { MuText(summary, style = MuType.row(LocalMuFonts.current), color = c.ink70) }
             }
         }
     }

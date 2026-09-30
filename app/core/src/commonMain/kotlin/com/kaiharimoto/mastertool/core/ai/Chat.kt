@@ -147,6 +147,9 @@ data class Usage(
     /** What it cost, when the provider says (the CLIs do). */
     val costUsd: Double? = null,
 ) {
+    /** What the model read, all told: the new tokens and the cached ones (1.0.56). */
+    val read: Long get() = input + cacheRead + cacheWrite
+
     operator fun plus(other: Usage) = Usage(
         input + other.input,
         output + other.output,
@@ -197,14 +200,32 @@ data class AiSession(
     val summarized: Int = 0,
     /** The deck whose guide the conversation has already been given (1.0.48). */
     val guideShown: String? = null,
+    /**
+     * How many tokens the model read in the last round (1.0.56): what the conversation weighs
+     * now, as the provider counted it. 0 until it has said.
+     */
+    val context: Long = 0,
+    /** Tool results in the turns before this one are sent cut short (1.0.56, "Clear old tool results"). */
+    val clearedBefore: Int = 0,
+    /** The conversation this one carries on from, when it was started fresh with a summary (1.0.56). */
+    val carriedFrom: String? = null,
 ) {
-    /** What the model is sent: the summary in front of the turns after it, or every turn. */
+    /**
+     * What the model is sent: the summary in front of the turns after it, or every turn; the
+     * results of tools before [clearedBefore] cut short. A conversation started fresh from
+     * another carries that one's summary in front of its first turn.
+     */
     val sent: List<ChatTurn>
         get() {
-            if (summarized <= 0 || summary.isBlank()) return turns
-            val tail = turns.drop(summarized)
-            val first = tail.firstOrNull() ?: return turns
-            val note = Part.Context("Summary of the conversation before this message (the earlier turns were shortened to fit):\n$summary")
+            val cleared = if (clearedBefore > 0) Compaction.prune(turns, keep = (turns.size - clearedBefore).coerceAtLeast(0), max = CLEARED) else turns
+            if (summary.isBlank()) return cleared
+            if (summarized <= 0 && carriedFrom == null) return cleared
+            val tail = cleared.drop(summarized.coerceAtLeast(0))
+            val first = tail.firstOrNull() ?: return cleared
+            val note = Part.Context(
+                if (summarized > 0) "Summary of the conversation before this message (the earlier turns were shortened to fit):\n$summary"
+                else "Summary of an earlier conversation this one carries on from:\n$summary",
+            )
             return listOf(first.copy(parts = listOf(note) + first.parts)) + tail.drop(1)
         }
 
@@ -229,6 +250,9 @@ data class AiSession(
 
         /** Learn About You (1.0.54): an interview that builds the person's profile in USER.md. */
         const val MODE_PROFILE = "profile"
+
+        /** What an old tool result is cut to once the person clears them. */
+        const val CLEARED = 200
 
         /** The modes that are Fine Tuning of a deck, and end on a session report. */
         val DECK_MODES = setOf(MODE_TUNE, MODE_STUDY, MODE_PRINCIPLES)

@@ -627,6 +627,7 @@ class NeueHolders(
                 Command(ai.name, "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
                 Command(ai.name, "${ai.name}: set up a connection") { ai.openWizard() },
                 Command(ai.name, "${ai.name}'s brain: read and edit what it knows") { ai.memoryOpen = "USER.md" },
+                Command(ai.name, "${ai.name}'s context: how full it is, and make room") { ai.contextOpen = true },
                 Command(ai.name, "${ai.name}: settings — model, effort and the rest") { ai.quickOpen = true },
                 Command(ai.name, "${ai.name}: Fine Tuning, teach it this deck") { ai.setOpen(true); ai.tuneAsk = true },
                 Command(ai.name, "${ai.name}: learn this deck from first principles") { ai.setOpen(true); ai.tuneAsk = true },
@@ -1233,6 +1234,7 @@ private fun Shell(h: NeueHolders) {
             com.kaiharimoto.neue.ai.ProfileLauncher(h.ai)
             com.kaiharimoto.neue.ai.LivingDocDialog(h.ai)
             com.kaiharimoto.neue.ai.PictureDialog(h.ai)
+            com.kaiharimoto.neue.ai.ContextPanel(h.ai)
             com.kaiharimoto.neue.ai.QuickSettings(h.ai)
             if (h.ai.forgetAsked) {
                 MuDialog(

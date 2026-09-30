@@ -24,8 +24,14 @@ object Compaction {
     /** Any one tool result, before it joins the history: head and tail kept. */
     const val RESULT_CAP = 16_000
 
-    fun estimate(system: String, turns: List<ChatTurn>): Int =
-        (system.length + turns.sumOf { t -> t.parts.sumOf { size(it) } }) / CHARS_PER_TOKEN
+    /** Roughly how many tokens a request is: its instructions, its [tools]' specs (1.0.56) and its turns. */
+    fun estimate(system: String, turns: List<ChatTurn>, tools: List<ToolSpec> = emptyList()): Int =
+        (system.length + toolChars(tools) + turns.sumOf { t -> t.parts.sumOf { size(it) } }) / CHARS_PER_TOKEN
+
+    /** The characters tool specs take on the wire: names, descriptions and schemas. */
+    fun toolChars(tools: List<ToolSpec>): Int = tools.sumOf { it.name.length + it.description.length + it.schema.toString().length + 24 }
+
+    internal fun sizeOf(p: Part): Int = size(p)
 
     private fun size(p: Part): Int = when (p) {
         is Part.Text -> p.text.length

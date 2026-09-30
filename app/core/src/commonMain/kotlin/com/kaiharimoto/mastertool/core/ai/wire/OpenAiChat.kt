@@ -225,7 +225,10 @@ class OpenAiStream(private val newId: () -> String = { "call_" + (idCounter++).t
         }
         (chunk["usage"] as? JsonObject)?.let { u ->
             usage = Usage(
-                input = u["prompt_tokens"]?.jsonPrimitive?.longOrNull ?: 0,
+                // OpenAI counts the cached tokens inside prompt_tokens; Anthropic apart. Kept apart here
+                // (1.0.56), so input + cacheRead is what the model read on either wire.
+                input = (u["prompt_tokens"]?.jsonPrimitive?.longOrNull ?: 0) -
+                    ((u["prompt_tokens_details"] as? JsonObject)?.get("cached_tokens")?.jsonPrimitive?.longOrNull ?: 0),
                 output = u["completion_tokens"]?.jsonPrimitive?.longOrNull ?: 0,
                 cacheRead = (u["prompt_tokens_details"] as? JsonObject)?.get("cached_tokens")?.jsonPrimitive?.longOrNull ?: 0,
             )

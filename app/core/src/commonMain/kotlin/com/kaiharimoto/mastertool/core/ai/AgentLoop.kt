@@ -98,6 +98,12 @@ sealed interface AgentEvent {
     /** A tool the CLI ran or called: its line in the chat. */
     data class ToolSeen(val name: String, val summary: String) : AgentEvent
 
+    /**
+     * One call to the model is done, and what it read and wrote (1.0.56). [measured] is false when
+     * the backend runs its own loop and the numbers are the whole run's, not one call's.
+     */
+    data class Round(val usage: Usage, val measured: Boolean) : AgentEvent
+
     data class Done(val stop: StopReason, val usage: Usage) : AgentEvent
     data class Failed(val message: String, val auth: Boolean) : AgentEvent
 }
@@ -125,7 +131,7 @@ class AgentLoop(
         var pruned = false
         for (step in 0 until maxSteps) {
             // A long run of tools grows the history fast; old results are the first to go (1.0.47).
-            if (budget > 0 && !backend.runsOwnLoop && Compaction.estimate(request.system, history) > budget * 0.8) {
+            if (budget > 0 && !backend.runsOwnLoop && Compaction.estimate(request.system, history, request.tools) > budget * 0.8) {
                 val shorter = Compaction.prune(history)
                 if (shorter != history) {
                     history = shorter
@@ -186,7 +192,10 @@ class AgentLoop(
                 emit(AgentEvent.Failed("The model stopped without an answer.", auth = false))
                 return@flow
             }
-            done.usage?.let { usage += it }
+            done.usage?.let {
+                usage += it
+                emit(AgentEvent.Round(it, measured = !backend.runsOwnLoop))
+            }
             val turn = done.turn ?: done.text.takeIf { it.isNotBlank() }?.let { ChatTurn.assistant(it, now()) }
             if (turn != null) {
                 history = history + turn

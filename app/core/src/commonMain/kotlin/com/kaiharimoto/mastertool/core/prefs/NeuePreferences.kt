@@ -62,6 +62,8 @@ data class AiConnection(
     val baseUrl: String? = null,
     /** A CLI's full path, when it is not found on the PATH. */
     val program: String? = null,
+    /** How many tokens its model reads at once, when the person says (1.0.56); null is read off the name (`ContextWindows`). */
+    val window: Int? = null,
 )
 
 /**

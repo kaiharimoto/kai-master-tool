@@ -124,6 +124,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         "new_deck" -> "Building ${ToolArgs.string(input, "name") ?: "a deck"}"
         "edit_deck" -> "Editing the deck"
         "resolve_cards" -> "Reading the cards off the picture"
+        "context_status" -> "Checking how full its memory is"
+        "recall" -> "Remembering" + (ToolArgs.string(input, "query")?.let { " “$it”" } ?: "")
         else -> spec.name.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 
@@ -173,6 +175,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
             "session_report" -> sessionReport(i)
             "resolve_cards" -> resolveCards(ToolArgs.objects(i, "cards"))
+            "context_status" -> ok(ai.contextReport(), "Checked how full its memory is")
+            "compact" -> {
+                ai.compactNow(ToolArgs.string(i, "focus"))
+                ok("The start of this conversation will be summarised as soon as this answer is done.", "Asked to summarise the start of the conversation")
+            }
+            "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"))
             else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
@@ -950,6 +958,21 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     }
 
     /** Fine Tuning's report (1.0.54): kept beside the deck's guide, and a PDF when the session ends. */
+    /** Words found in this conversation's saved history, the summarised part too, or in every conversation (1.0.56). */
+    private fun recall(query: String, scope: String, limit: Int): Answer {
+        if (query.isBlank()) return fail("Say what to find.")
+        val current = ai.session
+        val pool = if (scope == "all") (ai.files.sessions().filter { it.id != current?.id } + listOfNotNull(current)) else listOfNotNull(current)
+        val hits = com.kaiharimoto.mastertool.core.ai.Recall.search(pool, query, limit.coerceIn(1, 30))
+        val day = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.withZone(java.time.ZoneId.systemDefault())
+        val said = hits.joinToString("\n") { h ->
+            val who = if (h.who == com.kaiharimoto.mastertool.core.ai.Role.USER) "the person" else "you"
+            val where = if (h.session == current?.id) "this conversation" else "“${h.title}”"
+            "${day.format(java.time.Instant.ofEpochMilli(h.at))}, $where, $who: …${h.excerpt}…"
+        }
+        return ok(if (hits.isEmpty()) "Nothing found for “$query”." else said, "Recalled “$query”" + if (scope == "all") " across conversations" else "")
+    }
+
     /** Names read off a picture, matched to cards (1.0.55). */
     private fun resolveCards(lines: List<JsonObject>): Answer {
         if (lines.isEmpty()) return fail("Give the cards you read.")

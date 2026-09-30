@@ -279,6 +279,9 @@ class AiState(internal val h: NeueHolders) {
     /** A picture of the chat opened large. */
     var pictureOpen by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
 
+    /** The system prompt a conversation on the connection in use would start with, for the studio's pictures. */
+    fun previewSystem(): String = prefs.connection?.let { systemPrompt(it) }.orEmpty()
+
     /** The studio's picture of pictures waiting in the composer. */
     fun previewAttached(list: List<Attachment>) {
         attached = list
@@ -388,6 +391,8 @@ class AiState(internal val h: NeueHolders) {
                             activity = emptyList()
                             session?.let { commit(it.copy(turns = it.turns + turn, updatedAt = System.currentTimeMillis())) }
                         }
+                        // What the model read this round is how full the window is now (1.0.56).
+                        is AgentEvent.Round -> if (event.measured) session?.let { commit(it.copy(context = event.usage.read)) }
                         is AgentEvent.Done -> session?.let { commit(it.copy(usage = it.usage + event.usage)) }
                         is AgentEvent.Failed -> problem = (
                             // A model that cannot see, sent a picture, says so in its own words; say it plainly.
@@ -446,6 +451,11 @@ class AiState(internal val h: NeueHolders) {
         question = null
         status = null
         job = null
+        // A summary asked for while it answered (1.0.56): made now the answer is done.
+        pendingCompact?.let { focus ->
+            pendingCompact = null
+            if (problem == null) compactNow(focus.ifBlank { null })
+        }
     }
 
     fun stop() {
@@ -507,46 +517,176 @@ class AiState(internal val h: NeueHolders) {
     // ---- a long conversation (1.0.47) --------------------------------------------
 
     /**
-     * How much a connection's model can read, in tokens, near enough: past most of it the
-     * oldest turns are summarised. The CLIs keep their own histories and are never asked.
+     * How much a connection's model can read, in tokens (1.0.56: read off the model's name,
+     * `ContextWindows`, unless the person said): past most of it the oldest turns are summarised.
      */
-    private fun budgetFor(connection: AiConnection): Int {
-        val p = Providers.byId(connection.provider)
-        return when {
-            p == null -> 32_000
-            p.kind == com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.LOCAL -> 32_000
-            p.id == "gemini" -> 400_000
-            p.wire == Wire.ANTHROPIC -> 200_000
-            else -> 128_000
-        }
-    }
+    fun windowOf(connection: AiConnection): Int = connection.window?.takeIf { it > 0 } ?: com.kaiharimoto.mastertool.core.ai.ContextWindows.of(
+        connection.provider,
+        connection.model,
+        local = Providers.byId(connection.provider)?.kind == com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.LOCAL,
+    )
+
+    private fun budgetFor(connection: AiConnection): Int = windowOf(connection)
+
+    /** Whether the connection in use keeps its own history — a plan's command-line app — so the app cannot compact it. */
+    val ownsContext: Boolean
+        get() = prefs.connection?.let { Providers.byId(it.provider)?.wire.let { w -> w == Wire.CLAUDE_CLI || w == Wire.CODEX_CLI } } == true
+
+    /** The model's window for the connection in use, in tokens. */
+    val window: Int get() = prefs.connection?.let(::windowOf) ?: 0
+
+    /** What fills the conversation now, in tokens: the provider's count when it gave one, else an estimate. */
+    val contextUsed: Long
+        get() = session?.let { com.kaiharimoto.mastertool.core.ai.ContextBreakdown.total(it, tools) } ?: 0
+
+    /** Whether [contextUsed] is the provider's own count rather than an estimate. */
+    val contextMeasured: Boolean get() = (session?.context ?: 0) > 0
+
+    /** The Context panel is open (1.0.56). */
+    var contextOpen by mutableStateOf(false)
+
+    /** A summary asked for (by Ai's `compact`, or while it was answering), made once the answer is done. */
+    private var pendingCompact: String? = null
 
     /**
      * [s] with its oldest turns folded into a summary the model writes, once they no longer
-     * fit; the summary is kept with the conversation, so it is written once, not every time.
+     * fit — or now, when [force]d, keeping only the last few exchanges; [focus] says what the
+     * summary must keep. The summary is kept with the conversation, so it is written once.
      */
-    private suspend fun summarizedIfLong(s: AiSession, model: ModelBackend, connection: AiConnection, budget: Int): AiSession {
-        if (com.kaiharimoto.mastertool.core.ai.Compaction.estimate(s.system, s.sent) <= budget * com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARIZE_AT) return s
-        val keep = (budget * 0.3).toInt()
+    private suspend fun summarizedIfLong(
+        s: AiSession,
+        model: ModelBackend,
+        connection: AiConnection,
+        budget: Int,
+        force: Boolean = false,
+        focus: String? = null,
+    ): AiSession {
+        val used = com.kaiharimoto.mastertool.core.ai.Compaction.estimate(s.system, s.sent, tools)
+        if (!force && used <= budget * com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARIZE_AT) return s
+        val keep = if (force) minOf((budget * 0.3).toInt(), used / 4) else (budget * 0.3).toInt()
         val cut = com.kaiharimoto.mastertool.core.ai.Compaction.cutAt(s.turns, keep, from = s.summarized) ?: return s
-        status = "Summarising the start of this conversation to fit"
-        val earlier = buildString {
-            if (s.summary.isNotBlank()) appendLine("Summary so far: ${s.summary}\n")
-            append(com.kaiharimoto.mastertool.core.ai.Compaction.transcript(s.turns.subList(s.summarized, cut)))
-        }
-        val ask = ChatTurn.user(com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARY_ASK + "\n\n" + earlier)
-        var summary = ""
-        runCatching {
-            model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).collect { e ->
-                if (e is com.kaiharimoto.mastertool.core.ai.BackendEvent.Finished) summary = e.turn?.text?.ifBlank { null } ?: e.text
-            }
-        }
-        status = null
-        if (summary.isBlank()) return s
-        val next = s.copy(summary = summary.trim(), summarized = cut)
+        if (cut <= s.summarized) return s
+        val summary = summarise(s, model, connection, cut, focus) ?: return s
+        val next = s.copy(summary = summary, summarized = cut, context = 0)
         commit(next)
         notice = null
         return next
+    }
+
+    /** The conversation's turns before [cut], with what was summarised before, in the model's own summary. */
+    private suspend fun summarise(s: AiSession, model: ModelBackend, connection: AiConnection, cut: Int, focus: String?): String? {
+        status = "Summarising the start of this conversation to fit"
+        val earlier = buildString {
+            if (s.summary.isNotBlank()) appendLine("Summary so far: ${s.summary}\n")
+            append(com.kaiharimoto.mastertool.core.ai.Compaction.transcript(s.turns.subList(s.summarized.coerceAtMost(cut), cut)))
+        }
+        val keep = focus?.trim()?.takeIf { it.isNotEmpty() }?.let { "\n\nThe person asked that the summary keep: $it" }.orEmpty()
+        val ask = ChatTurn.user(com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARY_ASK + keep + "\n\n" + earlier)
+        var summary = ""
+        runCatching {
+            model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).collect { e ->
+                if (e is com.kaiharimoto.mastertool.core.ai.BackendEvent.Finished) {
+                    summary = e.turn?.text?.ifBlank { null } ?: e.text
+                    e.usage?.let { u -> session?.let { commit(it.copy(usage = it.usage + u)) } }
+                }
+            }
+        }
+        status = null
+        return summary.trim().takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * The start of the conversation summarised now (1.0.56, the Context panel's Compact now, or
+     * Ai's own `compact`): all but the last few exchanges, keeping [focus]. Waits for an answer
+     * under way to finish first.
+     */
+    fun compactNow(focus: String? = null) {
+        if (running) {
+            pendingCompact = focus.orEmpty()
+            return
+        }
+        val s = session ?: return
+        val connection = prefs.connection ?: return
+        if (ownsContext) {
+            notice = "${Providers.byId(connection.provider)?.label ?: "The command-line app"} keeps its own history and compacts it itself."
+            return
+        }
+        val model = runCatching { backendFor(connection) }.getOrElse {
+            problem = (it.message ?: "Could not connect.") to true
+            return
+        }
+        running = true
+        job = scope.launch {
+            try {
+                val next = summarizedIfLong(s, model, connection, budgetFor(connection), force = true, focus = focus)
+                notice = if (next.summarized > s.summarized) "The start of the conversation was summarised: ${next.summarized} messages in a few paragraphs." else "There was not enough to summarise yet."
+            } finally {
+                running = false
+                status = null
+                job = null
+            }
+        }
+    }
+
+    /** Every old tool result sent cut short from now on (1.0.56): the fastest room there is, and it costs nothing. */
+    fun clearToolResults() {
+        val s = session ?: return
+        commit(s.copy(clearedBefore = s.turns.size, context = 0))
+        notice = "Old tool results are sent cut short from now on; the conversation keeps them whole."
+    }
+
+    /**
+     * A new conversation that carries this one's summary (1.0.56): the room of a fresh start
+     * without losing the thread.
+     */
+    fun startFresh() {
+        val s = session ?: return
+        val connection = prefs.connection ?: return
+        if (s.turns.isEmpty() || running) return
+        if (ownsContext) {
+            newChat()
+            return
+        }
+        val model = runCatching { backendFor(connection) }.getOrElse {
+            problem = (it.message ?: "Could not connect.") to true
+            return
+        }
+        running = true
+        job = scope.launch {
+            try {
+                val summary = summarise(s, model, connection, s.turns.size, null)
+                running = false
+                newChat()
+                if (summary != null) session?.let { commit(it.copy(summary = summary, carriedFrom = s.id)) }
+                notice = if (summary != null) "A fresh conversation, carrying a summary of the last one." else "A fresh conversation; the summary could not be written."
+            } finally {
+                running = false
+                status = null
+                job = null
+            }
+        }
+    }
+
+    /** What `context_status` tells Ai, and the Context panel shows in words. */
+    fun contextReport(): String {
+        val s = session ?: return "No conversation yet."
+        val used = contextUsed
+        val w = window
+        val words = com.kaiharimoto.mastertool.core.ai.ContextWindows::words
+        return buildString {
+            if (ownsContext) {
+                appendLine("This connection's app keeps its own history and compacts it itself; the numbers below are the app's estimate.")
+            }
+            appendLine(
+                "Context: ${words(used)} of ${words(w.toLong())} tokens" + (if (w > 0) " (${used * 100 / w}%)" else "") +
+                    if (contextMeasured) ", as the provider counted last round." else ", estimated.",
+            )
+            com.kaiharimoto.mastertool.core.ai.ContextBreakdown.of(s, tools, s.context).forEach { appendLine("- ${it.label}: ${words(it.tokens)}") }
+            if (s.summarized > 0) appendLine("The first ${s.summarized} messages are summarised (${s.summary.length} characters); recall finds their words.")
+            if (s.carriedFrom != null) appendLine("This conversation carries on from an earlier one, whose summary it holds.")
+            if (s.clearedBefore > 0) appendLine("Tool results before message ${s.clearedBefore} are sent cut short.")
+            appendLine("Spent in this conversation: ${words(s.usage.read)} read, ${words(s.usage.output)} written" + (s.usage.costUsd?.let { ", about $" + "%.2f".format(it) }.orEmpty()) + ".")
+        }.trimEnd()
     }
 
     // ---- learning (phase 3) ----------------------------------------------------

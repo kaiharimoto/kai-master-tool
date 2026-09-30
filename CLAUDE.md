@@ -502,7 +502,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `NameMatch`) and the `deck-from-picture` skill read a decklist off a picture. Replies draw
   ```deck, ```compare, ```line and ```board blocks as card art (`CardLayouts.kt`), and `[[Card]]`
   in words opens the card.
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach --ai-step=KEY:anthropic` photographs it.
+  **1.0.56, context**: the loop reports each call's usage (`AgentEvent.Round`), kept as
+  `AiSession.context`; `Usage.read` is the whole on every wire (OpenAI's cached tokens split out
+  as Anthropic's are); the window is `ContextWindows` unless `AiConnection.window` says; the gauge
+  in the panel's head opens `ContextPanel` (`ContextBreakdown`, Compact now, Clear old tool
+  results via `clearedBefore`, Start fresh via `carriedFrom`); Ai has `context_status`, `compact`
+  and `recall` (`Recall`). The estimate counts the tool specs.
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

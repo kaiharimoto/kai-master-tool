@@ -103,6 +103,17 @@ fun QuickSettings(ai: AiState) {
                         Small("Enter does the same.", color = c.ink45)
                     }
                 }
+                // How much the model reads at once (1.0.56): read off its name, unless the person knows better.
+                if (provider.wire != com.kaiharimoto.mastertool.core.ai.providers.Wire.CLAUDE_CLI && provider.wire != com.kaiharimoto.mastertool.core.ai.providers.Wire.CODEX_CLI) {
+                    val guessed = com.kaiharimoto.mastertool.core.ai.ContextWindows.of(connection.provider, connection.model, provider.kind == com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.LOCAL)
+                    var windowText by remember(connection.id) { mutableStateOf(connection.window?.toString().orEmpty()) }
+                    FieldLabel("Context window", hint = "tokens it reads at once · ${com.kaiharimoto.mastertool.core.ai.ContextWindows.words(guessed.toLong())} for this model")
+                    MuInput(windowText, { v ->
+                        windowText = v.filter { it.isDigit() }.take(8)
+                        val n = windowText.toIntOrNull()?.takeIf { it >= 2_000 }
+                        ai.tweak(connection.id) { it.copy(window = n) }
+                    }, Modifier.fillMaxWidth(), placeholder = "Leave empty for ${com.kaiharimoto.mastertool.core.ai.ContextWindows.words(guessed.toLong())}", mono = true, dense = true)
+                }
                 if (provider.efforts.isNotEmpty()) {
                     FieldLabel("Effort", hint = "how hard it thinks; higher is slower and costs more")
                     Segmented(prefs.effort, listOf("") + provider.efforts, { if (it.isBlank()) "Default" else it.replaceFirstChar { ch -> ch.uppercase() } }, { e ->

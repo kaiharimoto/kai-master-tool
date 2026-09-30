@@ -2126,8 +2126,50 @@ Every card in them shows in the inspector under the pointer and opens large on a
 card named in a reply's words (`[[…]]`) now opens large on a click too (`LocalCardLink`). The
 prompt teaches each block with one line, and when to use it.
 
+**1.0.56, context you can see and steer.** kai: "implement context management tools and
+indicators".
+
+**Knowing the numbers**
+- **What it measures:** after every call the loop reports what the model read (`AgentEvent.Round`),
+  and the conversation keeps it (`AiSession.context`). Every wire now counts alike:
+  `Usage.read = input + cacheRead + cacheWrite`. OpenAI's `prompt_tokens`, which includes the
+  cached ones, is split apart as Anthropic's already is.
+- **The window:** read off the model's name (`ContextWindows`: Claude 200k or 1M where the id
+  says so, GPT-5 400k, GPT-4.1 and Gemini 1M, a local model 32k…). The person can override it
+  per connection in quick settings (`AiConnection.window`), and it is also the budget past which
+  the start is summarised.
+- **The estimate now counts the tool specs**, fifty-odd of them, several thousand tokens that it
+  used to leave out.
+- **What fills it:** `ContextBreakdown` splits the conversation into instructions, rules,
+  memory, skills, tools, what the app showed, the conversation, tool results and pictures, scaled
+  to the provider's count.
+
+**Seeing it**
+- **The gauge:** in the panel's head, the tokens used over ten cells, hatched in ink past four
+  fifths, with a tip in words. It is marked `≈` while it is an estimate.
+- **The Context panel** (a click on the gauge, or the palette) shows:
+  - the whole and its parts as bars;
+  - the memory read every time, each with Open;
+  - what has been done already;
+  - three ways to make room: **Compact now** (all but the last few exchanges into a summary,
+    with an optional line of what it must keep), **Clear old tool results**
+    (`AiSession.clearedBefore`: sent cut to 200 characters from then on, the saved turns kept
+    whole, free) and **Start fresh with a summary** (a new conversation carrying the old one's
+    summary, `carriedFrom`);
+  - what the conversation has spent (read, written, from cache, and cost where a CLI reports it).
+- **In the transcript,** a rule marks where the summary begins, and a click shows the summary.
+- A plan's command-line app keeps its own history, and the panel says so.
+
+**Ai's own tools**
+- `context_status` returns the same report in words.
+- `compact(focus)` asks for a summary once the answer is done.
+- `recall(query, scope)` searches the saved turns — the summarised part too, tool results
+  included — of this conversation or of every one (`Recall`: most words matched, then newest).
+
+The prompt tells Ai to check before a long job and to recall what a summary dropped.
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`, and from 1.0.55 `--ai=picture` (a screenshot read into a deck), `--ai=visual` (line, board, compare) and `--ai=attach` (pictures waiting in the composer).
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`, and from 1.0.55 `--ai=picture` (a screenshot read into a deck), `--ai=visual` (line, board, compare), `--ai=attach` (pictures waiting in the composer), and from 1.0.56 `--ai=summarised` (a long conversation, its start summarised, the gauge) and `--ai=context` (the Context panel).
 
 ### 4k′. Ai's face (1.0.52)
 

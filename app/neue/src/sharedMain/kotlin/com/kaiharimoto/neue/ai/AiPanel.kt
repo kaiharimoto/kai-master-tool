@@ -138,6 +138,8 @@ private fun Head(ai: AiState, phone: Boolean) {
             }
         }
         val size = if (phone) 40.dp else 28.dp
+        // How full the model's window is (1.0.56); a click shows what fills it.
+        if (!ai.wizardOpen && ai.configured) ContextGauge(ai)
         if (!ai.wizardOpen) {
             Tip("Past conversations") {
                 IconButton(Icons.History, { ai.historyOpen = !ai.historyOpen }, size = size, toggled = ai.historyOpen, label = "History")

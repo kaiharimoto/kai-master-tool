@@ -713,6 +713,39 @@ object AiTools {
         phase = 3,
     )
 
+    // ---- context (1.0.56) ---------------------------------------------------------------
+
+    val contextStatus = ToolSpec(
+        "context_status",
+        "How full your context window is: tokens used of the model's window, what fills it (instructions, rules, memory, " +
+            "tools, the conversation, tool results, pictures), whether the start was summarised, and what memory is loaded.",
+        schema { },
+        ToolGroup.MEMORY,
+        phase = 3,
+    )
+
+    val compact = ToolSpec(
+        "compact",
+        "Asks for the start of this conversation to be summarised once your answer is done, freeing room. Use it before a " +
+            "long job when context_status says the window is past half full. focus says what the summary must keep.",
+        schema { string("focus", "What the summary must keep, in a line") },
+        ToolGroup.MEMORY,
+        phase = 3,
+    )
+
+    val recall = ToolSpec(
+        "recall",
+        "Finds words in this conversation's saved history — including the part summarised away — or in every past " +
+            "conversation (scope all). Use it when the summary lost a detail you need: a list, a number, what the person said.",
+        schema {
+            string("query", "Words to find", required = true)
+            enum("scope", "this (default) or all conversations", listOf("this", "all"))
+            integer("limit", "How many matches (default 8)", min = 1, max = 30)
+        },
+        ToolGroup.MEMORY,
+        phase = 3,
+    )
+
     /**
      * Closed while a deck is learned from first principles (1.0.54, kai: "studies without looking
      * online for guides"): the web, the community's lists and the archetype's page, and the
@@ -730,7 +763,7 @@ object AiTools {
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide",
-        "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards",
+        "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall",
     )
 
     /** Every tool, in the order they are offered. */
@@ -745,7 +778,7 @@ object AiTools {
         tournamentDecks, tournamentDeck, importTournamentDeck, fieldSnapshot,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
-        express, sessionReport, resolveCards,
+        express, sessionReport, resolveCards, contextStatus, compact, recall,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

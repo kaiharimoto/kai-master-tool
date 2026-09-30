@@ -808,6 +808,27 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
         "guide", "end", "brain", "quick", "profile", "about", "petted" -> studioAi154(h, mode)
         // 1.0.55: a picture sent and read into a deck, the new layouts, pictures waiting to go.
         "picture", "visual", "attach" -> studioAi155(h, mode)
+        // 1.0.56: a long conversation, its start summarised, the gauge; --ai=context opens the panel.
+        "context", "summarised" -> {
+            val now = System.currentTimeMillis()
+            val talk = (1..8).flatMap { i ->
+                listOf(
+                    com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Question $i about the siding against Snake-Eye.", at = now - (9 - i) * 60_000L),
+                    com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Answer $i: bring in [[Infinite Impermanence]] going second, and keep the traps for their turn.", at = now - (9 - i) * 60_000L + 1),
+                )
+            }
+            val system = ai.previewSystem()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-156", title = "Siding", connection = "anthropic-demo", system = system,
+                    turns = talk, summary = "They play Labrynth and are siding against Snake-Eye: Impermanence in going second, traps held for the opponent's turn; they fear backrow removal.",
+                    summarized = 10, context = 128_400,
+                    usage = com.kaiharimoto.mastertool.core.ai.Usage(input = 180_000, output = 9_400, cacheRead = 610_000, cacheWrite = 90_000),
+                    createdAt = now, updatedAt = now,
+                ),
+            )
+            if (mode == "context") ai.contextOpen = true
+        }
         // Fine Tuning (phase 3): the interview mid-way, a question on the table; or its review.
         "tune", "review" -> {
             val now = System.currentTimeMillis()

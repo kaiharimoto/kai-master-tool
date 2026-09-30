@@ -339,7 +339,7 @@ class CodexStream {
                 result = BackendEvent.Finished(
                     StopReason.END,
                     turn = null,
-                    usage = u?.let { Usage(input = it.long("input_tokens"), output = it.long("output_tokens"), cacheRead = it.long("cached_input_tokens")) },
+                    usage = u?.let { Usage(input = it.long("input_tokens") - it.long("cached_input_tokens"), output = it.long("output_tokens"), cacheRead = it.long("cached_input_tokens")) },
                     text = text.toString().trim(),
                 )
             }

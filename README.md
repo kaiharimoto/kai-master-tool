@@ -112,7 +112,8 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   checks a card's rulings, searches the web, draws tables and charts, and shows its
   thinking as it works. Show it a picture — paste a screenshot of a decklist and it builds
   the deck — and it answers in cards: decklists, what to side out and in, a combo step by
-  step, the end board on the field. Settings can
+  step, the end board on the field. A gauge shows how full its memory of the conversation is,
+  and one click summarises, clears or starts fresh. Settings can
   turn it off entirely.
 - **The keyboard and the mouse, both whole.** Every action has a shortcut
   (`F1` lists them, `Ctrl K` finds them), and the mouse has a grammar: right-click
