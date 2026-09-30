@@ -162,6 +162,8 @@ object BuiltInSkills {
         // Fine Tuning, about the deck (1.0.48, kai): the person teaches it, or Ai studies it itself.
         3 to Skill(DeckSkills.FINE_TUNING_NAME, DeckSkills.FINE_TUNING_DESCRIPTION, DeckSkills.FINE_TUNING.trim(), builtIn = true),
         3 to Skill(DeckSkills.SELF_STUDY_NAME, DeckSkills.SELF_STUDY_DESCRIPTION, DeckSkills.SELF_STUDY.trim(), builtIn = true),
+        // Tournament prep, its own feature (1.0.50, kai: "we can build a tournament prep feature separately").
+        3 to Skill(DeckSkills.TOURNAMENT_PREP_NAME, DeckSkills.TOURNAMENT_PREP_DESCRIPTION, DeckSkills.TOURNAMENT_PREP.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

@@ -92,6 +92,9 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   second: your deck laid out as the builder lays it, a click to side a copy out
   or in, the plans as card art (or as a list), and a PDF guide that prints the way
   you are looking at it. Name an opponent and it suggests their cards.
+- **Tournament prep.** An event's countdown and what the rules mean for it, practice
+  logged against the field with the match win to expect, siding drills against the
+  three-minute clock (no notes are allowed at the table), and a printable decklist.
 - **Zen.** Leave it alone in full screen and the deck floats to the middle of the
   window; the cards are yours to arrange.
 - **Ai, an assistant that acts.** A panel beside every page (`Ctrl I`): chat about

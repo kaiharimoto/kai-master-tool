@@ -34,6 +34,9 @@ enum class Page(val numeral: Int?, val title: String) {
 
     /** The webs of decks (1.0.33): the fields you prepare for. */
     FORMAT(4, "Format"),
+
+    /** Tournament prep (1.0.50): an event, its field, the practice, the drills and the decklist. */
+    PREP(5, "Prep"),
     SETTINGS(null, "Settings"),
 }
 

@@ -23,6 +23,9 @@ enum class DeskAction {
 
     /** Format (1.0.33): the webs of decks, the fields you prepare for. */
     GO_FORMAT,
+
+    /** Prep (1.0.50): an event and the practice for it. */
+    GO_PREP,
     GO_SETTINGS,
     HELP,
     DISMISS,
@@ -168,6 +171,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("2"), DeskAction.GO_BUILDER, DeskScope.APP, "Builder", allowedInTextInput = true),
         DeskShortcut(ctrl("3"), DeskAction.GO_SIDING, DeskScope.APP, "Siding", allowedInTextInput = true),
         DeskShortcut(ctrl("4"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true),
+        DeskShortcut(ctrl("5"), DeskAction.GO_PREP, DeskScope.APP, "Prep: an event and its practice", allowedInTextInput = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),

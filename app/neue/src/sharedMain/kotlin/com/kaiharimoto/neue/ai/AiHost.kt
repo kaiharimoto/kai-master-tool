@@ -162,7 +162,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "skill_manage" -> skillManage(i)
             "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"))
-            else -> (harness.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
+            else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
@@ -172,6 +172,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** The harness's own: numbers, a plan, the web, the rules, a helper (1.0.47). */
     private val harness = AiHarness(h, ai)
+
+    /** Tournament prep's (1.0.50): the event, the test games, the numbers, the drills. */
+    private val prepTools = AiPrep(h)
 
     /** What a destructive tool will do, for the confirm card. */
     private suspend fun consequence(spec: ToolSpec, i: JsonObject): Pair<String, String> = when (spec.name) {
@@ -194,7 +197,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     // ---- where the person is ---------------------------------------------------
 
     /** The memory scope now: the open deck's (or its web's), or the web on Format. */
-    fun scope(): MemoryScope? = MemoryScope.of(neue.page.name, state.deckId, state.deckName, webs.selected?.id, webs.library)
+    fun scope(): MemoryScope? = MemoryScope.of(
+        neue.page.name,
+        state.deckId,
+        state.deckName,
+        // On Prep, the web in view is the event's field (1.0.50).
+        if (neue.page == Page.PREP) h.prep.active?.webId ?: webs.selected?.id else webs.selected?.id,
+        webs.library,
+    )
 
     fun notes(scope: MemoryScope): String = ai.files.entries(scope.kind, scope.id)
 
@@ -214,6 +224,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         )
         neue.selection?.let { add("Selected card: ${it.card.name}") }
         if (neue.page == Page.FORMAT || neue.page == Page.SIDING) webs.selected?.let { add("Web on screen: “${it.name}” (id ${it.id}), ${it.entries.size} decks") }
+        if (neue.page == Page.PREP) h.prep.active?.let { e -> add("Event being prepared for: “${e.name}” (id ${e.id}) on ${e.date}, tab ${h.prep.tab.title}; prep_state has the rest") }
     }
 
     // ---- looking ---------------------------------------------------------------

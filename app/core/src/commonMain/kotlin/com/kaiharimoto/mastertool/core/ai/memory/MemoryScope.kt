@@ -23,7 +23,7 @@ data class MemoryScope(val kind: MemoryKind, val id: String, val name: String) {
             selectedWebId: String?,
             webs: WebLibrary,
         ): MemoryScope? {
-            if (page == "FORMAT" || page == "SIDING") {
+            if (page == "FORMAT" || page == "SIDING" || page == "PREP") {
                 webs.byId(selectedWebId)?.let { return MemoryScope(MemoryKind.WEB, it.id, it.name) }
             }
             val id = openDeckId ?: return null

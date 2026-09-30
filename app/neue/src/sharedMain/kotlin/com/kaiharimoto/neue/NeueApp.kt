@@ -159,6 +159,8 @@ class NeueHolders(
     val shots: DeckShots,
     /** The webs of decks, for Format and the builder's switcher (1.0.33). */
     val webs: com.kaiharimoto.neue.web.Webs,
+    /** Tournament prep (1.0.50): events, the test games log, drills. */
+    val prep: com.kaiharimoto.neue.prep.Prep,
 ) {
     private val held = mutableSetOf<androidx.compose.ui.input.key.Key>()
     var focus: FocusManager? = null
@@ -295,6 +297,7 @@ class NeueHolders(
             DeskAction.GO_BUILDER -> neue.go(Page.BUILDER)
             DeskAction.GO_SIDING -> neue.go(Page.SIDING)
             DeskAction.GO_FORMAT -> neue.go(Page.FORMAT)
+            DeskAction.GO_PREP -> neue.go(Page.PREP)
             DeskAction.WEB_PREVIOUS -> stepWeb(-1)
             DeskAction.WEB_NEXT -> stepWeb(1)
             DeskAction.GO_SETTINGS -> neue.go(Page.SETTINGS)
@@ -573,6 +576,7 @@ class NeueHolders(
             cmd("Go", "Builder", DeskAction.GO_BUILDER),
             cmd("Go", "Siding", DeskAction.GO_SIDING),
             cmd("Go", "Format", DeskAction.GO_FORMAT),
+            cmd("Go", "Prep", DeskAction.GO_PREP),
             cmd("Go", "Settings", DeskAction.GO_SETTINGS),
             cmd("Deck", "Save", DeskAction.SAVE),
             cmd("Deck", "New deck", DeskAction.NEW_DECK),
@@ -661,6 +665,7 @@ fun rememberHolders(deps: AppDependencies, makeUpdates: (kotlinx.coroutines.Coro
             art = art,
             shots = DeckShots(art, scope),
             webs = com.kaiharimoto.neue.web.Webs(deps, scope),
+            prep = com.kaiharimoto.neue.prep.Prep(deps, scope),
         )
     }
 }
@@ -707,6 +712,7 @@ fun NeueEffects(h: NeueHolders) {
             neue.start()
             state.start()
             h.webs.load()
+            h.prep.load()
             // A .ydkw opened through a deck's Import (or handed over by another app) is a web: to Format with it.
             state.onWebFile = { text ->
                 h.webs.open(text) { made ->
@@ -1107,6 +1113,7 @@ private fun Shell(h: NeueHolders) {
                             Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
                             Page.SIDING -> com.kaiharimoto.neue.pages.SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
                             Page.FORMAT -> com.kaiharimoto.neue.pages.FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
+                            Page.PREP -> com.kaiharimoto.neue.prep.PrepPage(h.prep, h.webs, state, neue, h.decksReload)
                             Page.SETTINGS -> SettingsPage(
                                 state,
                                 neue,

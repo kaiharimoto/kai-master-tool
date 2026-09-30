@@ -509,8 +509,8 @@ cursor at each point and logs what it resolved to.
 there (the builder puts the deck's name, its legality, its tools and Save), what
 is being fetched and how far (§4h), the update pill and immersive mode — the 232
 px index rail —
-`01 Decks · 02 Builder · 03 Siding · 04 Format` (1.0.40: Odds and Stats are gone,
-on kai's word, and Siding has a page of its own); below the rule, what is being
+`01 Decks · 02 Builder · 03 Siding · 04 Format · 05 Prep` (1.0.40: Odds and Stats are gone,
+on kai's word, and Siding has a page of its own; Prep came in 1.0.50); below the rule, what is being
 fetched, `Search Ctrl K` and Settings — and the page. Until 1.0.10 the app and
 the builder each had a bar; kai merged them, moved search to the rail beside
 Settings, and let the card count go to the pool, where it is read.
@@ -1995,6 +1995,72 @@ going online. The user can set the intensity … The AI should think out loud". 
 
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
 `--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`.
+
+### 4l. Prep: tournament preparation (1.0.50)
+
+kai: "I want you to also do a research run and design the tournament prep feature… Fine
+tuning should be for deck specific information, we can build a tournament prep feature
+separately." The research: Konami's **KDE-US Tournament Policy v2.5** (in effect 5
+September 2025), prep guides and the loggers players use. The page is shaped by the rules a
+player prepares around, each cited in `core/prep/Policy.kt` by section:
+
+- **Rounds are 50 minutes, and a match unfinished at time is a loss for both** (§V.B) — so
+  a slow matchup is a risk of its own, and the practice log records minutes.
+- **Best of three; the loser of a duel chooses who goes first** (§III.D, §IV.F) — so the
+  match win to expect is worked out duel by duel from the rates going first and second.
+- **Siding is card for card, never before Game 1, counted, in under three minutes** (§VII.C).
+- **No notes at the table, not even a siding plan** (§IV.J) — so plans are *drilled*.
+- **Decklists and sleeves from Tier 2** (§IV.D, §IV.G), and **Swiss rounds and the cut from
+  attendance** (§III.H–I's tables, `Policy.swiss`; `Policy.cutRecord` reads which record makes
+  the cut from the Swiss's binomial shape).
+
+The loggers players use keep games, but none ties them to a decklist, a field with shares
+and siding plans; this app holds all three, which is the page's reason to exist.
+
+**`05 Prep`** (`Page.PREP`, `Ctrl 5`, `prep/PrepPage.kt`), an event list on the left (chips
+on a phone) and five tabs (`PrepTab`, remembered in `Prep.tab`):
+
+- **Plan**: the event — name, date (`yyyy-mm-dd`), tier, players, the web of the field, your
+  deck (the web's starred first), how the list is handed in (paper, NEURON, online), its
+  deadline, check-in, notes. Beside it the **countdown** (`Countdown`: settle the Main Deck a
+  week out, the Side Deck three days out, the list's deadline, printing two days out, the
+  day), **what the policy means for it** (rounds, cut, the rules above in a line each), and
+  **ready to register** (`EventCheck`: the validator against today's list — the pool has no
+  historical banlist, and it says so — then every siding plan card for card, naming only
+  cards the deck holds, and no more than six swaps for three minutes).
+- **Practice**: log a game in two clicks — the web's decks as chips with their shares (or a
+  name), your turn, the game, why (bricked, interrupted, outplayed, time) and minutes, then
+  Won, Lost or Draw, undoable from its note. Under it the **expected match win** against the
+  field (`TestStats.expected`: each opponent's best of three from its first and second rates,
+  pulled toward even by four games' worth, weighted by the web's shares), the **matchup
+  table** (first, second, game 1, games 2–3, minutes, each with its n) with the matchups at
+  risk of time marked (`TestStats.timeRisk`: three games past 50 minutes), a chart of the
+  rates by turn (Ai's `ChartBlock`), and the recent games.
+- **Drills**: the plan most in need of practice (`Drill.next`, Leitner boxes: a new or
+  missed plan first, a known one a week later), its matchup and turn, the plan hidden, your
+  deck laid out as Siding lays it (`SidingBoard`) and three minutes counting down as a
+  number. **Check** scores it copy by copy (`Drill.score`), shows the plan and its why, and
+  moves its box. Each plan's box is listed under it.
+- **Decklist**: your name, CARD GAME ID and country (`PrepProfile`), the list as Monster,
+  Spell and Trap columns with Side and Extra (`Decklists.content`), **Decklist · PDF** —
+  our own sheet (`DecklistSheet`, US Letter, every field the KDE form asks for, full names
+  never abbreviated, continued on a second page when a column runs over), not a copy of
+  Konami's form, whose terms forbid it — and **Copy as text** for NEURON or an online form.
+- **The day**: the checklist by tier (`Checklist`), the rounds as they are played (2–0, 2–1,
+  1–2, 0–2, Draw, Time), the record against the rounds and the cut, and the reminders: report
+  within five minutes, restore the deck to its registered list.
+
+**Stored** as one document, `neue.prep` (`PrepDoc`, `PrepCodec` — forgiving: a broken row
+opens an empty page), in the preferences table: a row, not a schema change. Rounds played at
+an event are `TestGame`s with a `round`, kept out of the practice numbers.
+
+**Ai** (phase 3): `prep_state`, `set_event`, `log_game`, `matchup_matrix`,
+`expected_winrate` and `drill` (`ai/AiPrep.kt`, on the same `Prep` as the page), and the
+`tournament-prep` skill — the event interview that left Fine Tuning in 1.0.48 — which fills
+the event, links the field, says what the policy means for the person, and plans practice by
+share × weakness. On Prep, Ai's memory is the event's web.
+
+**Pictures**: `tools/shoot.sh --page=prep --ydkw=… --prep-demo=true --prep-tab=plan|practice|drills|decklist|day`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

@@ -297,7 +297,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   from a picture, one screenshot holding every part (v1.3.7); `DeckCodes.read` (core) turns what
   was read into a deck. `NEUE.md` §4. A tip at the
   bottom of the window opens `above`, or it covers its own control.
-- **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format** (1.0.40, kai:
+- **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep** (1.0.40, kai:
   Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
@@ -328,6 +328,17 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   mockup: at a glance, then two matchups a page with both turns and **their plan**.
   `GuideExport` gathers the pictures (the chosen artworks) and `deliverFile` saves and
   opens it on the desk, shares it on Android. `tools/shoot.sh --guide=path` writes one.
+- **Prep** (1.0.50, `05`, `NEUE.md` §4l): tournament preparation, designed from Konami's
+  KDE-US Tournament Policy v2.5 (`core/prep/Policy.kt` cites each rule by section): an event
+  (date, tier, players, the field's web, your deck), its countdown and what the policy means
+  for it, whether the deck is ready (`EventCheck`); practice logged against the field with the
+  match win to expect (`TestStats`: best of three from first and second, the loser choosing,
+  weighted by shares) and the matchups at risk of time; **siding drills** (`Drill`, Leitner
+  boxes) because no notes are allowed at the table; our own decklist sheet (`DecklistSheet`,
+  never Konami's form) and the list as text; and the day's checklist and rounds. One document,
+  `neue.prep` (`PrepDoc`), no migration. Ai reaches it through `prep_state`, `set_event`,
+  `log_game`, `matchup_matrix`, `expected_winrate`, `drill` (`AiPrep`) and the
+  `tournament-prep` skill.
 - **The builder opens a deck**: the library's default, else the one saved last
   (`StartingDeck`). A library row shows up to three chosen covers
   (`DeckCovers`), and a card's alternate artworks are a picture choice applied

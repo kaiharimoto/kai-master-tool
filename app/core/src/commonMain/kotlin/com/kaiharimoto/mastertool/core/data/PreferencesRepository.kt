@@ -91,6 +91,25 @@ class PreferencesRepository(
         }
     }
 
+    /**
+     * Tournament prep (1.0.50): events, the test games log, drills and the decklist's
+     * details, one document under its own key — a row, never a schema change. It reads
+     * forgivingly ([PrepCodec]): a broken row opens an empty page, not a crash.
+     */
+    suspend fun loadPrep(): com.kaiharimoto.mastertool.core.prep.PrepDoc = withContext(ioDispatcher) {
+        val stored = database.preferenceQueries.selectByKey(com.kaiharimoto.mastertool.core.prep.PrepDoc.KEY).executeAsOneOrNull()
+        com.kaiharimoto.mastertool.core.prep.PrepCodec.decode(stored)
+    }
+
+    suspend fun savePrep(doc: com.kaiharimoto.mastertool.core.prep.PrepDoc) {
+        withContext(ioDispatcher) {
+            database.preferenceQueries.upsert(
+                prefKey = com.kaiharimoto.mastertool.core.prep.PrepDoc.KEY,
+                prefValue = com.kaiharimoto.mastertool.core.prep.PrepCodec.encode(doc),
+            )
+        }
+    }
+
     companion object {
         const val KEY = "deckbuilder.ui"
     }

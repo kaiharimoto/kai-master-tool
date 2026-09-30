@@ -14,7 +14,7 @@ import com.kaiharimoto.mastertool.core.search.EffectKind
  * a passcode, or with a count in front, `"3 Ash Blossom"` / `"3x Ash Blossom"`.
  */
 object AiTools {
-    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "SETTINGS")
+    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "SETTINGS")
     val SECTIONS = listOf("main", "extra", "side")
     val EXPORTS = listOf("ydk", "ydkx", "ydke", "text", "qr")
 
@@ -323,7 +323,7 @@ object AiTools {
 
     val navigate = ToolSpec(
         "navigate",
-        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), SETTINGS.",
+        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), SETTINGS.",
         schema { enum("page", "The page", PAGES, required = true) },
         ToolGroup.APP,
     )
@@ -574,12 +574,97 @@ object AiTools {
         phase = 2,
     )
 
+    // ---- tournament prep (1.0.50) -----------------------------------------------------
+
+    val prepState = ToolSpec(
+        "prep_state",
+        "The Prep page: every event (id, name, date, tier, players, web, deck, how the decklist is handed in, its deadline), " +
+            "which one is being prepared for, its countdown, the policy's rounds and cut for it, whether the deck is ready " +
+            "to register, the practice record and how each siding drill is going.",
+        schema { string("event_id", "One event; omit for the one being prepared for") },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val setEvent = ToolSpec(
+        "set_event",
+        "Makes or changes an event on the Prep page and makes it the one being prepared for. Only the fields given change. " +
+            "Dates are yyyy-mm-dd. Tier: 1 locals, 2 Regional Qualifiers and WCQs, 3 YCS and nationals, 4 Worlds.",
+        schema {
+            string("event_id", "The event to change; omit to make a new one")
+            string("name", "Its name")
+            string("date", "yyyy-mm-dd")
+            integer("tier", "Konami's tier", min = 1, max = 4)
+            integer("players", "Expected players", min = 0, max = 100000)
+            string("web_id", "The web of the expected field (Format)")
+            string("deck_id", "The deck being registered")
+            enum("decklist", "How the list is handed in", listOf("paper", "neuron", "online"))
+            string("deadline", "When the decklist is due, yyyy-mm-dd")
+            string("check_in", "When check-in opens or closes, as the organiser wrote it")
+            string("notes", "Notes on the event, replacing any")
+        },
+        ToolGroup.FORMAT,
+        phase = 3,
+    )
+
+    val logGame = ToolSpec(
+        "log_game",
+        "Logs one test game on the Prep page: who against (a web deck id or a deck's name), the person's turn, " +
+            "game 1 (before siding) or 2–3 (after), the result, and optionally why and how long it took.",
+        schema {
+            string("against", "The opponent: a web deck id, or its name", required = true)
+            enum("turn", "The person's turn", listOf("first", "second"), required = true)
+            integer("game", "1 before siding, 2 or 3 after; default 1", min = 1, max = 3)
+            enum("result", "For the person", listOf("win", "loss", "draw"), required = true)
+            enum("reason", "Why it went that way", listOf("brick", "interrupted", "outplayed", "time", "other"))
+            integer("minutes", "How long the game took", min = 1, max = 120)
+            string("note", "A line on what decided it")
+            string("deck_id", "The deck played; omit for the event's deck")
+        },
+        ToolGroup.FORMAT,
+        phase = 3,
+    )
+
+    val matchupMatrix = ToolSpec(
+        "matchup_matrix",
+        "The practice record as a table: per opponent, win rates going first and second, before and after siding, " +
+            "games played (n) and the average game's minutes, with the matchups at risk of time.",
+        schema { string("deck_id", "Omit for the event's deck") },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val expectedWinrate = ToolSpec(
+        "expected_winrate",
+        "The match win rate to expect at the event: each opponent's best-of-three win rate from the logged games " +
+            "(few games pulled toward even), weighted by its share of the field's web.",
+        schema { string("event_id", "Omit for the one being prepared for") },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val drill = ToolSpec(
+        "drill",
+        "A siding drill, since no notes are allowed at the table: `next` names the matchup and turn most in need of practice " +
+            "(the plan is not shown); ask the person to say their Out and In, then `answer` with what they said to score it " +
+            "against the plan, reveal the plan and record the result. $CARD_WORDS",
+        schema {
+            enum("action", "next or answer", listOf("next", "answer"), required = true)
+            string("key", "answer: the drill's key from next")
+            strings("out", "answer: what the person would side out")
+            strings("in", "answer: what the person would bring in")
+        },
+        ToolGroup.ASK,
+        phase = 3,
+    )
+
     /** The tools a delegated helper may use: every one that only looks. */
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide",
+        "prep_state", "matchup_matrix", "expected_winrate",
     )
 
     /** Every tool, in the order they are offered. */
@@ -593,6 +678,7 @@ object AiTools {
         askUser,
         tournamentDecks, tournamentDeck, importTournamentDeck, fieldSnapshot,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
+        prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

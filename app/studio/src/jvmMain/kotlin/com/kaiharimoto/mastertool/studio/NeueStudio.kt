@@ -97,12 +97,14 @@ fun neueMain(args: Array<String>) {
                 "decks" -> Page.DECKS
                 "siding" -> Page.SIDING
                 "format" -> Page.FORMAT
+                "prep" -> Page.PREP
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
             }
             // The webs are read at the app's start, which the studio does not run: for pages that show them.
-            if (map["page"] == "siding" || map["page"] == "format") {
+            if (map["page"] == "siding" || map["page"] == "format" || map["page"] == "prep") {
                 h.webs.load()
+                h.prep.load()
                 clock.run(30)
             }
             // --grow=0.4: the deck drawn that small first and then full size — the cards grow
@@ -171,6 +173,42 @@ fun neueMain(args: Array<String>) {
                     h.neue.page = Page.FORMAT
                     clock.run(60)
                 }
+            }
+            // --prep-demo=true (with --ydkw): an event on the opened web's field, a fortnight out, with a
+            // practice log and two drills, for pictures of the Prep page (1.0.50); --prep-tab=PLAN|PRACTICE|DRILLS|DECKLIST|DAY.
+            if (map["prep-demo"] == "true") {
+                val web = h.webs.selected
+                val mine = web?.entries?.firstOrNull { it.mine }?.deckId
+                val foes = web?.entries?.filter { it.deckId != mine }.orEmpty()
+                val today = com.kaiharimoto.mastertool.core.prep.IsoDate.epochDay(h.prep.today()) ?: 0L
+                val event = com.kaiharimoto.mastertool.core.prep.PrepEvent(
+                    "ev-demo", "Regional Qualifier", com.kaiharimoto.mastertool.core.prep.IsoDate.of(today + 12), tier = 2, attendance = 96,
+                    webId = web?.id, deckId = mine, decklist = com.kaiharimoto.mastertool.core.prep.PrepEvent.DECKLIST_PAPER,
+                    deadline = com.kaiharimoto.mastertool.core.prep.IsoDate.of(today + 10), checkIn = "Saturday 9:00, closes 9:45",
+                    checked = listOf("id", "dice"),
+                )
+                var doc = h.prep.doc.put(event).copy(active = event.id, profile = com.kaiharimoto.mastertool.core.prep.PrepProfile("Kai Harimoto", "0412345678", "USA"))
+                // A week of practice: the mirror close, the loose matchup worse going second.
+                val results = listOf("W", "L", "W", "W", "L", "W", "L", "L", "W", "D", "W", "L")
+                val names = foes.map { f -> f.deckId to (h.webs.decks(web!!).firstOrNull { it.entry.id == f.deckId }?.entry?.name ?: "Opponent") } +
+                    listOf("Snake-Eye Fire King" to "Snake-Eye Fire King")
+                results.forEachIndexed { n, r ->
+                    val (key, name) = names[n % names.size]
+                    doc = doc.record(
+                        com.kaiharimoto.mastertool.core.prep.TestGame(
+                            "g$n", 1_000L * n, mine, key, name,
+                            if (n % 2 == 0) com.kaiharimoto.mastertool.core.prep.TestGame.FIRST else com.kaiharimoto.mastertool.core.prep.TestGame.SECOND,
+                            game = 1 + n % 3, result = r, minutes = if (key == names.last().first) 19 else 12,
+                            reason = if (r == "L") com.kaiharimoto.mastertool.core.prep.TestGame.REASON_INTERRUPTED else null,
+                        ),
+                    )
+                }
+                doc = doc.record(com.kaiharimoto.mastertool.core.prep.TestGame("r1", 99_000, mine, names.first().first, names.first().second, "", result = "W", note = "2–1", eventId = event.id, round = 1))
+                doc = doc.copy(drills = mapOf("m1:FIRST" to com.kaiharimoto.mastertool.core.prep.DrillStat(3, 2, 1, 2)))
+                h.prep.commit(doc)
+                map["prep-tab"]?.let { t -> h.prep.tab = com.kaiharimoto.neue.prep.PrepTab.valueOf(t.uppercase()) }
+                h.neue.page = Page.PREP
+                clock.run(60)
             }
             // --check: Settings → Offline → Check for updates, asked for real, and its answer.
             if (map["check"] == "true") {

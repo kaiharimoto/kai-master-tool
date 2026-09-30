@@ -128,6 +128,7 @@ class AiEndToEndTest {
             art = art,
             shots = DeckShots(art, scope),
             webs = Webs(deps, scope),
+            prep = com.kaiharimoto.neue.prep.Prep(deps, scope),
         )
         builder.start()
         h.webs.load()
@@ -182,6 +183,40 @@ class AiEndToEndTest {
         assertTrue("Card roles" in guide, guide)
         val read = h.tool("memory_read", "scope" to "guide")
         assertTrue("hand trap" in read.content, read.content)
+    }
+
+    @Test
+    fun tournamentPrepRunsOnItsToolsEventGamesNumbersAndDrills() = runBlocking {
+        val h = holders()
+        h.tool("new_deck", "name" to "Event deck", "main" to listOf("3 Ash Blossom & Joyous Spring", "3 Infinite Impermanence"), "side" to listOf("3 Raigeki"))
+        withTimeout(5_000) { while (h.builder.deckId == null) delay(20) }
+        val deckId = h.builder.deckId!!
+
+        assertTrue(h.tool("set_event", "name" to "Regional", "date" to "next week").isError, "a date that is not yyyy-mm-dd is refused")
+        val made = h.tool("set_event", "name" to "Regional", "date" to "2026-10-17", "tier" to 2, "players" to 96, "deck_id" to deckId)
+        assertFalse(made.isError, made.content)
+        assertEquals("Regional", h.prep.active?.name)
+        assertEquals(Page.PREP, h.neue.page)
+
+        listOf("win", "loss", "win").forEachIndexed { n, r ->
+            val g = h.tool("log_game", "against" to "Yubel", "turn" to if (n == 1) "second" else "first", "result" to r, "minutes" to 20)
+            assertFalse(g.isError, g.content)
+        }
+        assertEquals(3, h.prep.doc.games.size)
+        val table = h.tool("matchup_matrix")
+        assertTrue("| Yubel" in table.content && "time risk" in table.content, table.content)
+        assertTrue(h.tool("expected_winrate").isError, "no web of the field linked yet")
+        val state = h.tool("prep_state")
+        assertTrue("Regional" in state.content && "7 rounds of Swiss" in state.content, state.content)
+
+        assertTrue(h.tool("drill", "action" to "next").isError, "nothing to drill before a plan is written")
+        h.tool("set_siding_plan", "deck_id" to deckId, "against" to "Yubel", "turn" to "first", "out" to listOf("Ash Blossom & Joyous Spring"), "in" to listOf("Raigeki"), "why" to "They do not search.")
+        val next = h.tool("drill", "action" to "next")
+        assertFalse(next.isError, next.content)
+        val key = Regex("Drill (\\S+):").find(next.content)!!.groupValues[1]
+        val answered = h.tool("drill", "action" to "answer", "key" to key, "out" to listOf("Ash Blossom & Joyous Spring"), "in" to listOf("Raigeki"))
+        assertTrue("Exactly the plan" in answered.content, answered.content)
+        assertEquals(1, h.prep.doc.drills[key]?.box)
     }
 
     @Test
