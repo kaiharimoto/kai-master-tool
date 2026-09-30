@@ -160,13 +160,13 @@ fun QuickSettings(ai: AiState) {
  * so the conversation can run on any model. A Gemini connection's key serves when there is none.
  */
 @Composable
-internal fun VideoKey(ai: AiState, onSaved: () -> Unit = {}) {
+internal fun VideoKey(ai: AiState, explain: Boolean = true, onSaved: () -> Unit = {}) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var typed by remember { mutableStateOf(SecretStore.get(AiVideo.KEY).orEmpty()) }
     var said by remember { mutableStateOf<String?>(null) }
     var trying by remember { mutableStateOf(false) }
     val viaConnection = ai.prefs.connections.any { it.provider == "gemini" && !ai.secret(it).isNullOrBlank() }
-    com.kaiharimoto.neue.kit.Help(
+    if (explain) com.kaiharimoto.neue.kit.Help(
         when {
             SecretStore.get(AiVideo.KEY) != null -> "Link a YouTube video — a deck profile, a combo guide — and Ai watches it with this key, whatever model it chats with."
             viaConnection -> "Your Gemini connection's key is used to watch videos. Add one here to keep them apart."
@@ -216,7 +216,7 @@ internal fun VideoKeyCard(ai: AiState) {
             com.kaiharimoto.neue.kit.MicroLink("Not now", { ai.videoKeyAsked = false })
         }
         com.kaiharimoto.neue.kit.Small("1. Get a free key: a Google account, no card. 2. Paste it here and Save. 3. Ask again.", color = c.ink70)
-        VideoKey(ai, onSaved = {
+        VideoKey(ai, explain = false, onSaved = {
             ai.videoKeyAsked = false
             ai.notice = "Gemini key saved. Ask again, and ${ai.name} will watch the video."
         })
