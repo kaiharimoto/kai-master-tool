@@ -60,7 +60,7 @@ class DeskShortcutsTest {
         assertNull(DeskShortcuts.resolve(KeyChord("b"), typingName))
         assertNull(DeskShortcuts.resolve(KeyChord("i"), searching))
         assertNull(DeskShortcuts.resolve(KeyChord("delete"), searching))
-        assertEquals(DeskAction.NEXT_LENS, DeskShortcuts.resolve(KeyChord("b"), builder))
+        assertEquals(DeskAction.TOGGLE_KEYS, DeskShortcuts.resolve(KeyChord("k"), builder))
     }
 
     @Test

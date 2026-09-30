@@ -108,6 +108,12 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
     /** Its decks, in its order; a deck missing from the table (deleted elsewhere) is left out. */
     suspend fun decks(web: DeckWeb): List<StoredDeck> = web.deckIds.mapNotNull { deps.deckRepository.byId(it) }
 
+    /** One saved deck, by its id: a deck sided on its own (1.0.42). */
+    suspend fun stored(id: String): StoredDeck? = deps.deckRepository.byId(id)
+
+    /** Every saved deck, a web's or not: what a matchup made by name may be linked to (1.0.42). */
+    suspend fun libraryDecks(): List<StoredDeck> = deps.deckRepository.all()
+
     /** [document] saved as a new deck and put at the end of the web; its id, when [then] hears it. */
     fun add(webId: String, name: String, document: YdkDocument, then: (String) -> Unit = {}) {
         scope.launch {

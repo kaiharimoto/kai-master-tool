@@ -419,6 +419,20 @@ fun neueMain(args: Array<String>) {
             // of the frame; after each the deck's counts and any open menu are logged, so a gesture
             // that does nothing shows up as numbers that did not move. `wheel@x,y` (down, a notch)
             // and `wheel-up@x,y` scroll instead, with a still mid-glide (`-mouse<i>-mid.png`).
+            // --matchup=Yubel:89631139,14558127,23434538 — the builder's deck given a matchup made
+            // by name and three cards (1.0.42), and the Siding page open on it.
+            map["matchup"]?.let { spec ->
+                val (who, cards) = spec.split(":")
+                val covers = cards.split(",").mapNotNull { it.trim().toIntOrNull() }.map { com.kaiharimoto.mastertool.core.model.CardId(it) }
+                val id = h.builder.deckId
+                if (id != null) {
+                    val now = com.kaiharimoto.mastertool.core.siding.SidingCodec.read(h.builder.extendedNow())
+                    h.webs.saveSiding(id, now.put(com.kaiharimoto.mastertool.core.siding.Matchup("m-studio", who, covers = covers)), h.builder)
+                }
+                h.webs.load()
+                h.neue.page = Page.SIDING
+                clock.run(60)
+            }
             // --drags=drag@m3>m7+0.3,0;hold-drag@m5>m9 — real presses through the builder's drag:
             // a point is `m12`/`e3`/`s0` (the middle of that card of the main, extra or side deck)
             // with an optional `+dx,dy` in the card's own widths and heights, or window fractions.

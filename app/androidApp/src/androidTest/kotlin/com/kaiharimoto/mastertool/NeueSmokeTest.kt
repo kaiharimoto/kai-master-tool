@@ -214,9 +214,35 @@ class NeueSmokeTest {
 
             // Immersive: a tap on the paper strip along the top brings the bar out.
             on { it.neue!!.neue.immersive = true }
-            Thread.sleep(1500)
+            // The system bars go on the system's time, and on a slow emulator in more than a
+            // second: Neue drops its inset padding at once, so until they are gone the strip is
+            // under the status bar, and a tap there is the system's, not Neue's.
+            fun barsGone() = on { a ->
+                a.window.decorView.rootWindowInsets?.let {
+                    androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(it, a.window.decorView)
+                        .isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                } == false
+            }
+            // Not `repeat`: its `return@repeat` only skips a turn, and ten seconds idle is deep zen,
+            // where a tap is the cards' and the bar never comes.
+            var waited = 0
+            while (!barsGone() && waited < 50) {
+                Thread.sleep(100)
+                waited++
+            }
+            Thread.sleep(500)
             tap(640f, 12f)
-            assertTrue("a tap on the top strip did not bring the bar out", until { on { it.neue!!.neue.revealed.top } })
+            val barOut = until { on { it.neue!!.neue.revealed.top } }
+            if (!barOut) shoot("04-immersive-stuck.png")
+            val bars = if (barOut) true else barsGone()
+            assertTrue(
+                "a tap on the top strip did not bring the bar out: " + on { a ->
+                    val h = a.neue!!
+                    "immersive=${h.neue.immersive} barsGone=$bars zen=${h.neue.zen} revealed=${h.neue.revealed} " +
+                        "held=${h.drag.held != null} menu=${h.neue.menu != null} page=${h.neue.page} update=${h.updates.dialogOpen}"
+                },
+                barOut,
+            )
             shoot("04-immersive-bar.png")
             back()
             assertTrue("Back did not leave immersive", until { !on { it.neue!!.neue.immersive } })

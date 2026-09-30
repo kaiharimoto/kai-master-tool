@@ -67,7 +67,6 @@ import androidx.compose.runtime.SideEffect
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.mastertool.core.deck.Lens
-import com.kaiharimoto.neue.builder.LENS_TABS
 import com.kaiharimoto.neue.builder.groupsOn
 import com.kaiharimoto.mastertool.core.motion.ZenPick
 import com.kaiharimoto.mastertool.core.motion.ZenGestures
@@ -339,8 +338,6 @@ class NeueHolders(
             DeskAction.TOGGLE_INSPECTOR -> neue.update { it.copy(inspectorVisible = !it.inspectorVisible) }
             DeskAction.TOGGLE_POOL -> neue.update { it.copy(poolVisible = !it.poolVisible) }
             DeskAction.TOGGLE_FILTERS -> neue.update { it.copy(filtersOpen = !it.filtersOpen, poolVisible = true) }
-            DeskAction.NEXT_LENS -> stepLens(1)
-            DeskAction.PREVIOUS_LENS -> stepLens(-1)
             DeskAction.NEW_GROUP -> state.startGroupDraft(seed = (neue.selection as? Selection.InDeck)?.card?.id)
             DeskAction.GROUPS -> setGroups(true)
             DeskAction.ADVANCED_SEARCH -> {
@@ -454,13 +451,6 @@ class NeueHolders(
 
     /** The foil on every card face, on or off (the shiny button beside Groups, 1.0.15). */
     fun toggleFoil() = neue.update { it.copy(foil = if (it.foil == com.kaiharimoto.neue.cards.Foils.OFF) com.kaiharimoto.neue.cards.Foils.HOLO else com.kaiharimoto.neue.cards.Foils.OFF) }
-
-    /** `b` and Shift `b`: the lens tabs in turn — the Roles lens is the Groups button's, not a tab. */
-    private fun stepLens(by: Int) {
-        val tabs = LENS_TABS
-        val at = tabs.indexOf(builder.lens).coerceAtLeast(0)
-        builder.useLens(tabs[((at + by) % tabs.size + tabs.size) % tabs.size])
-    }
 
     /** What is open, as `BackChain` reads it (touch swarm, rec 2): Esc and Android's Back share one chain. */
     private fun backFlags() = BackFlags(
@@ -603,7 +593,6 @@ class NeueHolders(
             cmd("Cards", if (neue.prefs.poolList != null) "Show every card in the pool" else "Show the list in the pool", DeskAction.SHOW_LIST),
             Command("Cards", "New list of cards") { neue.showList(neue.newList()) },
             cmd("Deck", "New group", DeskAction.NEW_GROUP),
-            cmd("Deck", "Next lens", DeskAction.NEXT_LENS),
             Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}") {
                 setFormat(if (builder.format == Format.TCG) Format.OCG else Format.TCG)
             },
@@ -1102,11 +1091,13 @@ private fun Shell(h: NeueHolders) {
                     // Siding asked for from anywhere (the builder's web switch, a matchup, the editor's
                     // own deck menu) opens the Siding page (1.0.40).
                     LaunchedEffect(h.webs.sidingAsked) { if (h.webs.sidingAsked > 0) neue.go(Page.SIDING) }
+                    // Another deck on the builder: the Siding page sides it, not the one asked for before (1.0.42).
+                    LaunchedEffect(state.deckId) { if (h.webs.sidingDeckId != null && h.webs.sidingDeckId != state.deckId) h.webs.sidingDeckId = null }
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
                             Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds)
                             Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
-                            Page.SIDING -> com.kaiharimoto.neue.pages.SidingPage(h.webs, state, neue, h.decksReload)
+                            Page.SIDING -> com.kaiharimoto.neue.pages.SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
                             Page.FORMAT -> com.kaiharimoto.neue.pages.FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
                             Page.SETTINGS -> SettingsPage(
                                 state,

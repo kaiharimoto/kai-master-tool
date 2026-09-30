@@ -1459,6 +1459,13 @@ indicator be more intuitive"; and the bar was cutting off the deck's name.
   hairline, then 3 dp of ink — and drawn above its neighbours (`zIndex`), so the frame
   reads whole against any artwork. The ring inside the card, which the art swallowed,
   is gone.
+- **The lens tabs are gone** (1.0.42, kai: "I never use the deck/archetype/type/copies/
+  legality module… repurpose that area for groups instead"): As is, Fitted and Separate
+  stand where the tabs stood (a menu on a phone; faint with the groups off, and choosing
+  one brings them out), and the Groups panel no longer carries them. `b` and Shift `b`
+  are gone with the tabs; a deck saved looking through a lens opens plain.
+- **The inspector's artwork** is a fold of its own at the bottom (1.0.42, kai: "not
+  vital to deckbuilding"), under Details and In the deck.
 - **The bar on the builder**: no wordmark (the deck's name is the page's title), a
   legal deck is a ✓ with "Legal in TCG" in its tip, issues and notes a count
   (`Standing(compact = true)`; the phone keeps its words), and Import, Export and
@@ -1632,6 +1639,21 @@ file, the page, the switcher), then the siding editor, then the guide.
 
 
 ### 4j. Siding (1.0.35; its own page, `03`, from 1.0.40)
+
+**A deck on its own** (1.0.42, kai: "if the deck has no matchups yet, or isn't a part
+of a web, let the user add siding patterns to the current deck and create opponent
+decks by choosing a name and 3 main cards in a card picker/searcher. Then, the user
+can choose to assign a decklist to a matchup created in Siding later"). The page sides
+the deck asked for (`Webs.side`), else the deck on the builder — which a new deck on
+the builder resets to. A deck of a web is sided against the web's decks, as below; a
+deck on its own against the opponents it is given here: **New opponent** (the matchup
+list, the empty page, `+ Opponent` on a phone) opens `OpponentDialog`, a name and three
+cards found in the pool (`Matchup.covers`, the `siding` payload's `"covers"`, at most
+three). Each such matchup has a ⋯ menu: its name and cards, **Link a decklist…** (any
+deck of the library, `Matchup.deckId` — whose faces then head the matchup and whose own
+plan against this deck fills *how they side against you*), unlink, and remove (undone
+from its note). A web's deck may have such matchups too, under "Not in this web". The
+guide prints them with their three cards. An unsaved deck is asked to be saved first.
 
 **The page** (1.0.40, kai: "3 should be Siding and 4 should be Format"; `Ctrl 3`,
 `SidingPage`): the editor below, which stood inside Format, as a page of its own. It
