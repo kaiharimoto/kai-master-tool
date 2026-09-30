@@ -33,7 +33,11 @@ internal class AiVideo(private val ai: AiState) {
 
     suspend fun watch(url: String, focus: String?): MetaAnswer {
         val id = YouTube.id(url) ?: return fail("That is not a YouTube address: “$url”. Only YouTube videos can be watched.")
-        val key = key() ?: return fail(NEEDS_KEY)
+        val key = key() ?: run {
+            // The box for the key stands in the chat under the answer, so it is pasted where it was asked for.
+            ai.videoKeyAsked = true
+            return fail(NEEDS_KEY)
+        }
         val about = runCatching {
             val r = http.get(YouTube.oembed(id))
             if (r.status.value in 200..299) YouTube.titleOf(r.bodyAsText()) else null
@@ -85,7 +89,8 @@ internal class AiVideo(private val ai: AiState) {
         }.recoverCatching { if (it is IllegalStateException) throw it else error(com.kaiharimoto.mastertool.core.ai.wire.Unreachable.say(GeminiVideo.BASE, it.message)) }
 
         const val NEEDS_KEY = "Watching a video needs a Gemini API key: Gemini is the model that can watch a YouTube video, " +
-            "frames and sound. A free one is made at aistudio.google.com/apikey; the person adds it in Ai's quick settings " +
-            "(the model's name in the panel's head) under Videos, or connects Gemini. The conversation can stay on its own model."
+            "frames and sound. A box for the key is now shown in the chat under your answer, with a link to make a free one at " +
+            "aistudio.google.com/apikey (a Google account, no card, a minute); once it is saved, watch the video again. It is also " +
+            "in quick settings under Videos. The conversation stays on its own model. Tell the person this in a line or two."
     }
 }

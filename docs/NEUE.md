@@ -2300,6 +2300,30 @@ that many come back.
 - **A service out of reach is said plainly** (`Unreachable`, core): a name the device could not
   look up says so, and what usually causes it, on every platform's wording.
 
+**1.0.62, learning a deck from a video** (kai: "let me link a youtube video of the deck profile and
+let the AI parse it with vision and transcription to learn about the deck").
+- **Why Gemini.** No model but Gemini takes a YouTube address as a video: Google fetches it on its
+  side, frames and sound. Scraping YouTube from the app is a losing game — it asks a program to
+  sign in ("confirm you're not a bot"), wants a token per session for captions, and the one
+  library that runs on Android too (NewPipeExtractor) is GPL, which this MIT app cannot take. A
+  native desk path (yt-dlp and ffmpeg for frames, the captions or Whisper for words, fed to the
+  conversation's own model) was offered; kai chose Gemini, free, as long as setup stays simple.
+- **`watch_video`** (`AiVideo`; `YouTube`, `GeminiVideo` in core, tested): any YouTube address
+  (watch, youtu.be, shorts, embed, live) → oEmbed for the title and channel (no sign-in) →
+  `generateContent` on the key's newest Gemini Flash (`GeminiVideo.pick`, listed with the key),
+  the video as `file_data`, a brief asking for the DECKLIST read off the screen, ABOUT, PLAN,
+  LINES and CHOICES with timestamps, SIDING and TIPS. Ten minutes at most; the Android service
+  keeps it alive out of sight. Barred from first principles.
+- **The key.** The person's own for videos (`SecretStore` `video:gemini`, never the preferences),
+  else a Gemini connection's — so the chat stays on any model. Free from AI Studio: a Google
+  account, no card; the free tier allows hours of YouTube a day. **When a video is linked with no
+  key, the key's box stands in the chat** under the answer (`VideoKeyCard`: the free key's link,
+  the field, Save — which tries the key — and Not now), and quick settings has it under Videos.
+- **`deck-from-video`** (skill): watch, `resolve_cards` on the list, a deck block with the unsure
+  names asked about, a compare block against the open deck when it is the same strategy (else an
+  offer to build it), and the guide written under its labels with timestamps and the video as a
+  Source. A line that looks illegal is checked before it goes in. `--ai=videokey` photographs it.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:

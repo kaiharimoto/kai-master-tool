@@ -534,6 +534,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   stays open when filed; **while Ai works on Android, `AiWorkService`** (a data-sync foreground
   service with a wake lock, through `Platform.working`) keeps the answer alive out of sight, and
   "Ai answered" is posted when it lands there; `Unreachable` words a failed lookup.
+  **1.0.62, a deck from a video**: `watch_video` hands a YouTube address to Gemini, which watches it
+  on Google's side (frames and sound) and reports the decklist, plan, lines, choices and siding
+  (`AiVideo`; `YouTube`, `GeminiVideo` in core) — never scrape YouTube (bot checks, per-session caption
+  tokens; NewPipeExtractor is GPL and this app is MIT). The key is the person's own (`video:gemini` in
+  `SecretStore`) or a Gemini connection's, and with none its box stands in the chat (`VideoKeyCard`).
+  The `deck-from-video` skill writes the guide from it.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.

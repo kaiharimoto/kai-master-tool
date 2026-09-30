@@ -186,6 +186,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
             ai.question?.let { q -> item { QuestionCard(ai, q) } }
             ai.problem?.let { (message, connection) -> item { ProblemCard(message, connection) { ai.openWizard() } } }
             ai.notice?.takeIf { !ai.running }?.let { n -> item { ActivityLine(n, isError = false) } }
+            if (ai.videoKeyAsked && !ai.running) item { VideoKeyCard(ai) }
         }
     }
 }

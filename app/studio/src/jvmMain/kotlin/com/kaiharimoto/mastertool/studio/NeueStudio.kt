@@ -725,6 +725,31 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
                 ),
             )
         }
+        // --ai=videokey (1.0.62): a video linked with no Gemini key; the key's box stands in the chat.
+        "videokey" -> {
+            val now = System.currentTimeMillis()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-video",
+                    title = "Learn from a deck profile",
+                    connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Learn the deck from this deck profile: https://youtu.be/fE-RsenvS5I"),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn(
+                            com.kaiharimoto.mastertool.core.ai.Role.USER,
+                            listOf(com.kaiharimoto.mastertool.core.ai.Part.ToolResult("t-video", "watch_video", "{}", isError = true, summary = "Watching a video needs a Gemini API key")),
+                        ),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                            "To watch it I need a **Gemini key** — Gemini is the model that can watch a YouTube video, frames and sound. " +
+                                "It's free: make one below, paste it, and ask me again. We'll keep chatting on this model.",
+                        ),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            ai.videoKeyAsked = true
+        }
         // "What can you do?" (1.0.46): --ai=demo, with --ai-step=N for the scene (from 1), written out whole.
         "demo" -> {
             ai.demoStill = (step?.toIntOrNull() ?: 1) - 1

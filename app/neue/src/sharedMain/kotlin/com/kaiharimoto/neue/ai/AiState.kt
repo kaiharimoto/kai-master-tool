@@ -111,6 +111,9 @@ class AiState(internal val h: NeueHolders) {
     /** A line that outlives the answer (a limit reached), until the next message (1.0.46). */
     var notice by mutableStateOf<String?>(null)
 
+    /** A video was linked with no key to watch it: the key's box stands in the chat (1.0.62). */
+    var videoKeyAsked by mutableStateOf(false)
+
     /** "What can you do?" playing in the panel (1.0.46): a scripted show of Ai at work, no model called. */
     var demoOpen by mutableStateOf(false)
 

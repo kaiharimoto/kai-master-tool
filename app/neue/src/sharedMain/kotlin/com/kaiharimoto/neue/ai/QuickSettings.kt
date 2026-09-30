@@ -1,9 +1,11 @@
 package com.kaiharimoto.neue.ai
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -158,7 +160,7 @@ fun QuickSettings(ai: AiState) {
  * so the conversation can run on any model. A Gemini connection's key serves when there is none.
  */
 @Composable
-private fun VideoKey(ai: AiState) {
+internal fun VideoKey(ai: AiState, onSaved: () -> Unit = {}) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var typed by remember { mutableStateOf(SecretStore.get(AiVideo.KEY).orEmpty()) }
     var said by remember { mutableStateOf<String?>(null) }
@@ -182,7 +184,11 @@ private fun VideoKey(ai: AiState) {
             scope.launch {
                 trying = true
                 said = AiVideo.check(typed).fold(
-                    { model -> SecretStore.put(AiVideo.KEY, typed); "✓ Saved: videos will be watched with $model." },
+                    { model ->
+                        SecretStore.put(AiVideo.KEY, typed)
+                        onSaved()
+                        "✓ Saved: videos will be watched with $model."
+                    },
                     { "✕ ${it.message}" },
                 )
                 trying = false
@@ -191,5 +197,29 @@ private fun VideoKey(ai: AiState) {
         com.kaiharimoto.neue.kit.MicroLink("Get a free key →", { com.kaiharimoto.neue.platform.Platform.browse(AiVideo.KEY_PAGE) })
     }
     said?.let { com.kaiharimoto.neue.kit.Small(it, color = Mu.colors.ink) }
+}
+
+/**
+ * The key's box in the chat (1.0.62, kai: "will the setup be complicated?"): a video was linked
+ * and there is no key, so it stands under the answer — the free key's link, the field, Save —
+ * and goes once a key works; asking again then watches the video.
+ */
+@Composable
+internal fun VideoKeyCard(ai: AiState) {
+    val c = Mu.colors
+    Column(
+        Modifier.fillMaxWidth().border(1.dp, c.ink).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            com.kaiharimoto.neue.kit.Micro("Watch videos with Gemini", Modifier.weight(1f))
+            com.kaiharimoto.neue.kit.MicroLink("Not now", { ai.videoKeyAsked = false })
+        }
+        com.kaiharimoto.neue.kit.Small("1. Get a free key: a Google account, no card. 2. Paste it here and Save. 3. Ask again.", color = c.ink70)
+        VideoKey(ai, onSaved = {
+            ai.videoKeyAsked = false
+            ai.notice = "Gemini key saved. Ask again, and ${ai.name} will watch the video."
+        })
+    }
 }
 
