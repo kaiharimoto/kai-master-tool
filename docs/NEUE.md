@@ -2268,6 +2268,15 @@ pilot and filters by one (`player`), over the recent pages only. The `ygoprodeck
 skill says which to use. Pages are HTML and change without notice: `YgoProDeckLiveTest` reads a
 real player when `NEUE_LIVE_YGOPRODECK` names one. First principles bars `ygopro_player` too.
 
+**1.0.60, a search that matches one player** (kai: "I told Ai to look for kaihuang zhang and it
+couldn't find me"). When the player search matches exactly one player, the site answers with a
+**303 to that player's page** instead of a list of one. The client followed it, and the list's
+rows were then looked for on the player's page, so the more exactly a name was given, the surer
+it was to find nobody. `YgoProDeckDecks.players` now keeps the address a request lands on, and a
+page that is a player's is that one player; the redirected page is cached under both addresses,
+so the career is not asked for twice. The search shows at most 25 matches, and Ai says so when
+that many come back.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:

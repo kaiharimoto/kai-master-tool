@@ -59,6 +59,7 @@ class YgoProDeckDecks(
     private val pace = Mutex()
     private var last = 0L
     private val texts = HashMap<String, Pair<Long, String>>()
+    private val landed = HashMap<String, String>()
 
     /** One page (about twenty decks) of tier [tier]'s results, newest first; [page] 0 is the newest. */
     suspend fun page(tier: Int, page: Int): Result<List<TournamentDeck>> = runCatching {
@@ -66,24 +67,39 @@ class YgoProDeckDecks(
     }
 
     /** One address, paced and cached like every other; a refusal is an error in words. */
-    private suspend fun fetch(url: String): String {
-        texts[url]?.takeIf { clock() - it.first < CACHE_MS }?.let { return it.second }
-        val body = pace.withLock {
+    private suspend fun fetch(url: String): String = fetched(url).first
+
+    /** The page at [url], and the address it came from in the end (the site redirects). */
+    private suspend fun fetched(url: String): Pair<String, String> {
+        texts[url]?.takeIf { clock() - it.first < CACHE_MS }?.let { return it.second to (landed[url] ?: url) }
+        val (body, final) = pace.withLock {
             val wait = MIN_INTERVAL_MS - (clock() - last)
             if (wait > 0) delay(wait)
             last = clock()
             val response = http.get(url) { header("User-Agent", userAgent) }
             val text = response.bodyAsText()
             if (!response.status.isSuccess()) error("YGOPRODeck answered ${response.status.value}")
-            text
+            text to response.call.request.url.toString()
         }
         texts[url] = clock() to body
-        return body
+        landed[url] = final
+        if (final != url) texts[final] = clock() to body
+        return body to final
     }
 
-    /** Players with results whose name has [query] (a part of a name is enough), as the site's player search finds them. */
+    /**
+     * Players with results whose name has [query] (a part of a name is enough), as the site's player
+     * search finds them. When only one player matches, the site sends the browser straight to that
+     * player's page (a 303) instead of a list of one — so a page that is a player's is that player
+     * (1.0.60: "kaihuang zhang" found nobody, because the list of rows was looked for on the player's page).
+     */
     suspend fun players(query: String): Result<List<TournamentPlayer>> = runCatching {
-        PlayerPages.search(fetch("$site/tournaments/player-search/?search=" + query.trim().split(Regex("\\s+")).joinToString("+") { PlayerPages.encodeWord(it) }))
+        val (body, final) = fetched("$site/tournaments/player-search/?search=" + query.trim().split(Regex("\\s+")).joinToString("+") { PlayerPages.encodeWord(it) })
+        PlayerPages.search(body).ifEmpty {
+            val career = PlayerPages.career(body)?.takeIf { it.results.isNotEmpty() } ?: return@ifEmpty emptyList()
+            val path = final.substringAfter(site, "").takeIf { it.startsWith("/tournaments/by-player/") } ?: PlayerPages.playerPath(career.name)
+            listOf(TournamentPlayer(career.name, career.country, career.results.first().date, path))
+        }
     }
 
     /** A player's results, newest first, from their page ([path] as the search gave it, or made from the name). */

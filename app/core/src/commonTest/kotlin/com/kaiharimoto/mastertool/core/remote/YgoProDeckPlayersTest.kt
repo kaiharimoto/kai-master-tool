@@ -28,6 +28,9 @@ var extradeckjs = '["21848500","68059897","52698008","32995276","5043010","24842
 var sidedeckjs = '["84192580","84192580","84192580","27204311","27204311","72656408","72656408","93453053","4227096","4227096","4227096","24224830","6325660","6325660","8264361"]'
 var deckname = "@Ignister Maliss""""
 
+    /** A player the search matches alone, whose page the site redirects to: two tiers of tops. */
+    private val onlyOne = """<h1 class="mt-5">Kaihuang Zhang's Tournament Results</h1> <p>Tournament results and decklists from Kaihuang Zhang's Yu-Gi-Oh! tournament career.</p> <div class="container-card mb-3"> <div class="d-flex flex-column flex-lg-row p-3" style="gap: 16px;"> <span> <b>Nationality:</b> <span class="country-flag" title="United States" alt="United States">🇺🇸</span> United States </span> <span> <b><abbr title="Tier 3 events are Yu-Gi-Oh! Championship Series events, National Championships and World Championship Qualifiers.">Tier 3</abbr> events:</b> 1 tops </span> <span> <b><abbr title="Tier 2 events are Regional Qualifiers">Tier 2</abbr> events:</b> 4 tops </span> </div> </div> <div id="tournament_table" style="width: 100%" class="as-table" role="grid"> <div id="tournament_table_header" class="as-tablerow" role="row"> <span class="as-tablecell" role="columnheader">Date</span> <span class="as-tablecell" role="columnheader">Placement</span> <span class="as-tablecell" role="columnheader">Tournament</span> <span class="as-tablecell" role="columnheader">Archetypes</span> <span class="as-tablecell" role="columnheader">Deck Price</span> </div> <a class="tournament_table_row as-tablerow even" role="row" href="/deck/labrynth-711878" data-deckurl="/deck/labrynth-711878" target="_blank"> <span class="as-tablecell" role="gridcell">May 16, 2026</span> <span class="as-tablecell" role="gridcell"><b>Top 8</b></span> <span class="as-tablecell" role="gridcell">Las Vegas WCQ Regional</span> <span class="as-tablecell" role="gridcell"> <div class="d-flex align-content-start flex-wrap arch-link"> <span class="badge badge-ygoprodeck"><img class="tournament-badge-img-crop" src="https://images.ygoprodeck.com/images/cards_cropped_200/2347656.jpg">Labrynth</span> </div> </span> <span class="as-tablecell" role="gridcell"> $161.57 </span> </a> <a class="tournament_table_row as-tablerow even" role="row" href="/deck/labrynth-610922" data-deckurl="/deck/labrynth-610922" target="_blank"> <span class="as-tablecell" role="gridcell">Jun 7, 2025</span> <span class="as-tablecell" role="gridcell"><b>Top 8</b></span> <span class="as-tablecell" role="gridcell">Santa Clara WCQ Regional</span> <span class="as-tablecell" role="gridcell"> <div class="d-flex align-content-start flex-wrap arch-link"> <span class="badge badge-ygoprodeck"><img class="tournament-badge-img-crop" src="https://images.ygoprodeck.com/images/cards_cropped_200/2347656.jpg">Labrynth</span> </div> </span> <span class="as-tablecell" role="gridcell"> $104.82 </span> </a></div>"""
+
     @Test
     fun theSearchListsEachPlayerWithWhereTheyAreFrom() {
         val found = PlayerPages.search(search)
@@ -118,5 +121,37 @@ var deckname = "@Ignister Maliss""""
         assertEquals("https://ygoprodeck.com/deck/735623", asked.last())
         source.career("/tournaments/by-player/Matthew+Cane")
         assertEquals(3, asked.size, "the page is kept an hour")
+    }
+
+    @Test
+    fun aSearchThatMatchesOnePlayerIsSentToTheirPage() = runTest {
+        // kai (1.0.60): "I told Ai to look for kaihuang zhang and it couldn't find me". One match,
+        // and the site answers with a 303 to the player's page, not a list of one.
+        val asked = mutableListOf<String>()
+        val source = YgoProDeckDecks(
+            HttpClientFactory.create(
+                MockEngine { request ->
+                    val url = request.url.toString()
+                    asked += url
+                    when {
+                        "player-search" in url -> respond("", HttpStatusCode.SeeOther, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.Location, "/tournaments/by-player/Kaihuang+Zhang"))
+                        "by-player/Kaihuang+Zhang" in url -> respond(onlyOne, HttpStatusCode.OK)
+                        else -> respond("", HttpStatusCode.NotFound)
+                    }
+                },
+            ),
+            clock = { 0L },
+        )
+        val found = source.players("kaihuang zhang").getOrThrow()
+        assertEquals(1, found.size)
+        assertEquals("Kaihuang Zhang", found[0].name)
+        assertEquals("United States", found[0].country)
+        assertEquals("/tournaments/by-player/Kaihuang+Zhang", found[0].path)
+        assertEquals("May 16, 2026", found[0].lastSeen)
+        val career = source.career(found[0].path).getOrThrow()!!
+        assertEquals(listOf("Tier 3 events: 1 tops", "Tier 2 events: 4 tops"), career.tally)
+        assertEquals(listOf(711878, 610922), career.results.map { it.deckNumber })
+        assertEquals(listOf("Labrynth"), career.results[0].archetypes)
+        assertEquals(2, asked.size, "the redirect's page is kept, not asked for again")
     }
 }

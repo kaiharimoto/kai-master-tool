@@ -131,7 +131,8 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         if (found.isEmpty()) return MetaAnswer("YGOPRODeck has no tournament player named like “$name”. Try part of the name, or another spelling.", "No player “$name”")
         if (path == null) {
             return MetaAnswer(
-                "${found.size} players on YGOPRODeck match “$name”; ask again with one full name:\n" +
+                "${found.size} players on YGOPRODeck match “$name”; ask again with one full name" +
+                    (if (found.size >= 25) " (the site shows at most 25 matches, so the one meant may not be among these — use more of the name)" else "") + ":\n" +
                     found.take(30).joinToString("\n") { "- ${it.name}${it.country?.let { c -> " ($c)" }.orEmpty()}, last top ${it.lastSeen}" },
                 "${found.size} players match “$name”",
             )

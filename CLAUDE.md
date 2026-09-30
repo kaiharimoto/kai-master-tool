@@ -528,6 +528,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   a key given before is filled in, saved OpenAI-compatible services are presets under **Yours**, and a
   connection set up again replaces its twin (`SavedConnections`). **On Android the bar's Ai is
   `AiBadge`** — face and name in a box, no running line; held, it opens the brain.
+  **1.0.60**: a player search that matches one player is **a 303 to their page**, not a list — read
+  as that player (`YgoProDeckDecks.players` keeps where a request lands); the list is capped at 25.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
