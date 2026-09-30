@@ -205,7 +205,8 @@ class WireTest {
         val a = l.args
         assertEquals(listOf("codex", "exec", "--json"), a.take(3))
         assertEquals("read-only", a[a.indexOf("-s") + 1])
-        assertTrue(a.contains("approval_policy=\"never\""))
+        assertTrue(a.contains("approval_policy=never"))
+        assertTrue(a.none { '"' in it }, "no quotes for a .cmd shim to mangle")
         assertEquals(listOf("resume", "th-1", "-"), a.takeLast(3))
         assertEquals("tok", l.env[CodexCli.TOKEN_ENV])
         assertEquals(false, CodexCli.loggedIn(1, "Not logged in"))

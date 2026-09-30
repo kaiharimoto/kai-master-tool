@@ -39,6 +39,8 @@ kotlin {
                 implementation(libs.coil.compose)
                 implementation(libs.coil.network.ktor)
                 implementation(libs.zxing.core)
+                // Ai's Anthropic connection (1.0.42): the official SDK, on both targets.
+                implementation(libs.anthropic.java)
             }
         }
         jvmMain {
@@ -59,6 +61,8 @@ kotlin {
         }
         jvmTest.dependencies {
             implementation(kotlin("test"))
+            // Ai's end-to-end test answers the card pool's network with a mock (1.0.42).
+            implementation(libs.ktor.client.mock)
         }
     }
 }
@@ -106,7 +110,9 @@ compose.desktop {
             // SQLite over JDBC needs java.sql; the updater launches msiexec and
             // the file dialogs are Swing. Listing modules by hand is how an
             // installed build dies on a class the IDE run always had.
-            modules("java.sql", "java.naming", "java.desktop", "jdk.unsupported", "java.net.http", "jdk.crypto.ec")
+            // jdk.httpserver is Ai's own MCP server (1.0.42), which the Claude Code and
+            // Codex CLIs reach the app's tools through, on 127.0.0.1 only.
+            modules("java.sql", "java.naming", "java.desktop", "jdk.unsupported", "java.net.http", "jdk.crypto.ec", "jdk.httpserver")
 
             windows {
                 // PERMANENT. Windows Installer recognises an upgrade by this

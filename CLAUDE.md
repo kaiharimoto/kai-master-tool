@@ -17,7 +17,8 @@ Kotlin Multiplatform + Compose Multiplatform. `app/README.md` has the modules.
 **Key locations:**
 - `app/core/` — pure Kotlin logic (models, deck editing, groups, hand odds,
   search and filters, layout solving, the keyboard and mouse tables, motion,
-  and the classic play stage's geometry), all tested in commonTest
+  Ai's harness in `core/ai`, and the classic play stage's geometry), all tested
+  in commonTest
 - `app/builder/` — the builder's state and plumbing that is not a look
   (`DeckBuilderState`, `AppDependencies`, updater seam, image loader, shader
   seam, card foil); files keep their `com.kaiharimoto.mastertool.ui.*` packages
@@ -396,6 +397,25 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   cards into the pool, because the pool's download can outlast the walk, and it
   taps high on the deck while the soft keyboard is up.
 - `tools/shoot.sh --page=builder --theme=ink` photographs it headlessly.
+
+- **Ai, the assistant** (1.0.42, `NEUE.md` §4k): a panel docked beside every page
+  (`AiPanel`, `Ctrl I`, `AiState` in `NeueHolders` for the app's lifetime). One harness
+  in `core/ai` — `AgentLoop`, the tool catalogue `AiTools`, append-only `ChatTurn`s —
+  over two kinds of model: APIs the app talks to itself (Anthropic through the
+  **official Java SDK**, `AnthropicBackend`; anything OpenAI-compatible over Ktor) and
+  the coding-plan CLIs (Claude Code, Codex; `CliBackend`, desktop only), which reach the
+  app's tools through **the app's own MCP server** on 127.0.0.1 (`McpServerCore`,
+  `AiDesk.startMcp`). `AiHost` answers every tool on the same state the person's clicks
+  change. **`AiToolsTest` holds "complete control"**: a new `DeskAction` is reachable by
+  `run_action`, and a new `NeuePreferences` field must be described in `AiSettings` or
+  listed as internal — or the test fails. Memory is markdown in `<data>/ai` (`SOUL.md`,
+  `USER.md`, `MEMORY.md`, `webs/<id>.md`, `decks/<id>.md`), bounded (`AiMemory`), scoped
+  to the one deck or web in view (`MemoryScope`). Keys live in `SecretStore`, never the
+  database or an export. **Disable AI** (`AiPrefs.enabled`) hides every trace: the key
+  (`DeskContext.ai`), the menu (`DeskMenuBar.aiShown`), the palette, the panel. The
+  wizard (`SetupWizard`) is the only way a connection is made. `AiState.PHASE` says
+  which tools and skills a build offers (1 the harness, 2 the meta, 3 learning).
+  `tools/shoot.sh --ai=panel|empty|wizard --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

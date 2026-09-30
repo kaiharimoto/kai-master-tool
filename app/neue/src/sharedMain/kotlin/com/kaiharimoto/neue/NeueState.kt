@@ -209,8 +209,11 @@ class NeueState(
      */
     var studio by mutableStateOf<Studio?>(null)
 
+    /** Ai's panel on a phone: a sheet over the page, closed by Back like any other (1.0.42). */
+    val aiSheet: Boolean get() = phone && prefs.ai.enabled && prefs.ai.panelOpen
+
     val overlayOpen: Boolean
-        get() = showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || studio != null
+        get() = aiSheet || showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || studio != null
 
     /**
      * A touch screen first (Neue on a tablet): no hover to bring the rail out or
@@ -401,7 +404,7 @@ class NeueState(
 
     /** Whether [dismissTop] has something to close. */
     val hasTop: Boolean
-        get() = showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || helpOpen || drawer != null || studio != null
+        get() = aiSheet || showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || helpOpen || drawer != null || studio != null
 
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {
@@ -416,6 +419,7 @@ class NeueState(
         helpOpen -> { helpOpen = false; true }
         drawer != null -> { drawer = null; true }
         studio != null -> { studio = null; true }
+        aiSheet -> { update { it.copy(ai = it.ai.copy(panelOpen = false)) }; true }
         else -> false
     }
 

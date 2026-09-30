@@ -119,9 +119,18 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         }
     }
 
+    /** Hears a library deck copied into a web — (from deck, its name, web) — so Ai's notes on it follow (1.0.42). */
+    var onJoined: (String, String, String) -> Unit = { _, _, _ -> }
+
+    /** Hears a web deleted, so Ai's notes on it go too (1.0.42). */
+    var onDeleted: (String) -> Unit = {}
+
     /** A library deck copied into the web: the web's copy is its own, the library keeps the original. */
     fun addFromLibrary(webId: String, stored: StoredDeck, then: (String) -> Unit = {}) =
-        add(webId, stored.entry.name, stored.toDocument(), then)
+        add(webId, stored.entry.name, stored.toDocument()) { id ->
+            onJoined(stored.entry.id, stored.entry.name, webId)
+            then(id)
+        }
 
     /** A web's deck copied out to the library, as a deck of its own. */
     fun copyToLibrary(stored: StoredDeck, then: (String) -> Unit = {}) {
@@ -149,6 +158,7 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
             commit(library.remove(webId))
             if (selectedId == webId) selectedId = null
             web.deckIds.forEach { deps.deckRepository.delete(it) }
+            onDeleted(webId)
             revision++
             then()
         }

@@ -90,6 +90,13 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   whose alternates the database does not have.
 - **Zen.** Leave it alone in full screen and the deck floats to the middle of the
   window; the cards are yours to arrange.
+- **Ai, an assistant that acts.** A panel beside every page (`Ctrl I`): chat about
+  the game, or have it build a deck, tune and group the one that is open, write
+  siding plans, change any setting. It remembers you in markdown files you can
+  read, and connects to your Claude or ChatGPT plan through their command-line
+  apps, to an API key (Anthropic, OpenAI, Gemini, OpenRouter), or to a model on
+  your own machine — a wizard walks you through each. Settings can turn it off
+  entirely.
 - **The keyboard and the mouse, both whole.** Every action has a shortcut
   (`F1` lists them, `Ctrl K` finds them), and the mouse has a grammar: right-click
   adds from the pool and removes from the deck, holding opens the card large.

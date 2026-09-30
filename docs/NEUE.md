@@ -1702,6 +1702,99 @@ view makes it for the deck being sided:
 - `tools/shoot.sh --page=format --ydkw=… --siding=0 --guide=out.pdf` writes one
   headlessly; `SidingGuideTest` and `PdfDocumentTest` check the structure.
 
+### 4k. Ai, the assistant (1.0.42)
+
+kai: "an AI chat harness … a Hermes-like harness with persistent memory that learns as
+it's used. You can just chat with it, or have it build a deck and do anything in the app.
+It has complete access and control over all features and settings and persists through
+every section of the app." Called **Ai** by default (the Ignis of *VRAINS*), renamable.
+
+**Where it is.** A panel docked down the right of every page (`AiPanel`), the page
+re-fitting beside it as it does beside the Groups panel — so the deck is never covered.
+The bar's boxed name opens it (`AiToggle`), and `Ctrl I` (`DeskAction.AI_PANEL`), the
+palette, the Mac's View menu and the phone's ⋯ menu. Its left edge is dragged for its
+width (`AiPrefs.panelWidth`). Not in immersive mode. On a phone it is a full-screen
+sheet (`NeueState.aiSheet`), closed by Back. It lives in `NeueHolders.ai` (`AiState`),
+app lifetime, so a window swapped for immersive mode keeps the conversation.
+
+**One harness, two kinds of model** (`core/ai`):
+
+- `AgentLoop` — ask, run the tools asked for, hand every result back in one turn, ask
+  again, 24 rounds at most. Stop cancels it; a tool call left without its result gets
+  one ("stopped by the person"), so the history is never invalid.
+- **APIs** the app talks to itself (`ModelBackend`): Anthropic through the official
+  Java SDK (`AnthropicBackend`: streamed, prompt-cached, adaptive thinking and `effort`
+  where the model takes them, the refusal fallback where Anthropic offers it —
+  `AnthropicModels` decides per model), and any OpenAI-compatible endpoint over Ktor
+  (`OpenAiChatBackend`: OpenAI, Gemini's compatible door, OpenRouter, Ollama, LM
+  Studio, a custom server).
+- **The coding-plan CLIs** (`CliBackend`, desktop only): Claude Code (`claude -p
+  --output-format stream-json`) and Codex (`codex exec --json`) run their own loop and
+  reach the app's tools through **the app's own MCP server** (`McpServerCore` in core,
+  `AiDesk.startMcp` on `com.sun.net.httpserver`: 127.0.0.1 only, a bearer token per run,
+  an `Origin` refused). Their shell and file tools are never offered; web search is.
+  They run in `<data>/ai/run`, and the login shell's PATH is read once, since an app
+  opened from the Finder is handed a bare one. Codex's `-c` values carry no quotes —
+  Windows' `.cmd` shims mangle them, and Codex reads a bare value as a string.
+- **Append-only.** A turn once added is never edited (`ChatTurn`); what changes — the
+  page, the open deck, the notes in scope — goes in as `<app_context>` at the front of
+  the next message. Anthropic's replies are kept byte for byte (`Part.Opaque`) and sent
+  back exactly: the newest models refuse edited thinking, and the cache needs it too.
+
+**Its tools** (`AiTools`, one catalogue; `AiHost` answers each against `NeueHolders`,
+on the same state the person's clicks change): look (`app_state`, decks, webs,
+siding, settings), cards (`search_cards` over the whole pool with every filter,
+`card_info`, `show_in_pool`), build (`new_deck`, `edit_deck` — one undo step per call,
+`DeckBuilderState.setCards` — `set_groups`, rename, save, undo, import, export,
+delete), Format (webs, their decks, shares, stars, notes, `set_siding_plan`), the app
+(`navigate`, `run_action` for any `DeskAction`, `set_setting` for any setting),
+memory and skills. Cards are named as players write them (`CardWords`: "3 Ash
+Blossom", "Ash x2", a passcode), guessed only when sure and said so. **`AiToolsTest`
+holds the catalogue to "complete control"**: every `DeskAction` reachable through
+`run_action`, every `NeuePreferences` field described in `AiSettings` or listed as
+internal — a setting added later is either reachable by Ai or deliberately not.
+Destructive tools (delete a deck or a web, take a deck out of a web) and turning Ai
+off ask in the chat first (`Confirm`), unless Settings says never ask.
+
+**Memory** (Hermes's shape), markdown in `<data>/ai` the person can read and edit
+(Settings → Assistant → What it knows): `SOUL.md` the voice (`Persona`), `USER.md` what
+it knows about the person, `MEMORY.md` its own notes — bounded (`AiMemory`: entries,
+limits, a full memory refuses and lists what to drop) and in the prompt as a snapshot
+taken when a conversation begins. **Scoped notes** (kai: "each deck, if it's not in a
+web, and web has its own markdown"): `webs/<id>.md` for a web and every deck in it,
+`decks/<id>.md` for a deck in none. `MemoryScope` picks the one file for where the
+person is; it goes into the context only when the scope changes. A library deck copied
+into a web takes its notes with it (`AiMemory.fold`, `Webs.onJoined`); a deleted deck
+or web takes its file. Conversations are saved (`ai/sessions`), with their frozen
+system prompt and a CLI's session id.
+
+**Skills** (`BuiltInSkills`): markdown know-how, listed by name in the prompt and read
+with `skill_view` — driving the app, assessing a deck; YGOPRODeck tournaments, format
+webs and siding arrive with the meta. A skill Ai or the person writes of the same name
+replaces the app's.
+
+**The wizard** (`SetupWizard`, `SetupSteps`, `Providers`): a name; how to connect (a
+Claude or ChatGPT plan, an API key, a model on your own machine); the provider; then its
+own steps, each checked live — a CLI found (install lines to copy, a terminal to open)
+and signed in (`claude auth status`, `codex login status`), a key opened, pasted, tried
+by listing its models, a local server found and its model tried for tool use; a model
+(the recommended one first); whether to ask before deleting; done. On a phone or tablet
+the plan choice is disabled, with why. **Keys** are kept by `SecretStore`: a file only
+its owner reads on the desk, AES-GCM under an Android Keystore key on Android — never
+the database, a deck file or an export. Plain `http` only for this machine or the local
+network (`Providers.plainHttpAllowed`). The Claude Code path says plainly that it uses
+the person's own login and that Anthropic restricts third-party products from offering
+claude.ai login: personal use, at their discretion; a key is the supported way.
+
+**Disable AI** (Settings → Assistant, `AiPrefs.enabled`): off, every trace goes — the
+bar's button, the panel, `Ctrl I` (`DeskContext.ai`), the menu item
+(`DeskMenuBar.aiShown`), the palette's and the phone's entries, the help dialog's row —
+and nothing runs or listens (`AiState.shutDown`). What it remembers is kept; "Forget
+everything" is its own button.
+
+**Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
+`--ai=wizard --ai-step=KEY:anthropic`.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

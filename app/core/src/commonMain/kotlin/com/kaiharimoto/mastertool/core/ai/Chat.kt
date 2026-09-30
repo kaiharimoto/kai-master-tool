@@ -45,7 +45,17 @@ sealed interface Part {
         val name: String,
         val content: String,
         val isError: Boolean = false,
+        /** What the chat shows for it, in words ("Added 3 Ash Blossom"); the model reads [content]. */
+        val summary: String = "",
     ) : Part
+
+    /**
+     * A line of what happened, for the chat alone and never sent: a tool a CLI called
+     * through the app's MCP server, whose traffic is the CLI's own history, not ours.
+     */
+    @Serializable
+    @SerialName("activity")
+    data class Activity(val name: String, val summary: String, val isError: Boolean = false) : Part
 
     /**
      * A provider's own blocks, kept byte for byte so they can be sent back exactly
@@ -109,3 +119,37 @@ data class Usage(
 
 /** Why a model stopped talking. */
 enum class StopReason { END, TOOL_USE, MAX_TOKENS, REFUSAL, CANCELLED, ERROR }
+
+/**
+ * One conversation with Ai, as it is saved (`ai/sessions/<id>.json`): its turns, the
+ * instructions it was started with — frozen, so a resumed conversation sends the very
+ * same prompt and the cache still holds it — and a CLI's own session to resume.
+ */
+@Serializable
+data class AiSession(
+    val id: String,
+    val title: String = "",
+    val createdAt: Long = 0,
+    val updatedAt: Long = 0,
+    /** The connection it was held on, by id; a new connection starts a new conversation. */
+    val connection: String? = null,
+    val system: String = "",
+    val turns: List<ChatTurn> = emptyList(),
+    /** A CLI's session id, to carry on where it left off. */
+    val resume: String? = null,
+    /** The memory scope whose notes the conversation has already been given (`MemoryScope.path`). */
+    val scopeShown: String? = null,
+    /** "chat", or "tune" for Fine Tuning. */
+    val mode: String = MODE_CHAT,
+    val usage: Usage = Usage(),
+) {
+    /** A title from the first thing the person said. */
+    fun titled(): AiSession = if (title.isNotBlank()) this else copy(
+        title = turns.firstOrNull { it.role == Role.USER && !it.isToolResults }?.text?.lineSequence()?.firstOrNull()?.take(60)?.trim().orEmpty(),
+    )
+
+    companion object {
+        const val MODE_CHAT = "chat"
+        const val MODE_TUNE = "tune"
+    }
+}

@@ -17,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -57,6 +59,8 @@ class SettingsHost(
     val onOpenDataDir: () -> Unit,
     val onSearchEffects: (Boolean) -> Unit,
     val art: ArtLibrary? = null,
+    /** The assistant, for its section (1.0.42). */
+    val ai: com.kaiharimoto.neue.ai.AiState? = null,
 )
 
 /**
@@ -134,10 +138,11 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         MuSwitch(state.searchEffects, host.onSearchEffects)
                     }
                 }
+                host.ai?.let { ai -> Column { AssistantSection(ai, neue) } }
                 // Offline (kai, for a flight): whether the pool is current, bringing it up to
                 // date, every card's picture on this computer, and when all of it is.
                 Column {
-                    SectionTitle(3, "Offline")
+                    SectionTitle(4, "Offline")
                     val check = state.poolCheck
                     val clock = check?.let { checkedClock(it.checkedAt) }
                     val updating = state.poolProgress ?: if (state.isSyncing) com.kaiharimoto.mastertool.core.data.PoolProgress.Asking else null
@@ -218,7 +223,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(4, "Updates and feedback")
+                    SectionTitle(5, "Updates and feedback")
                     SettingRow("Version", host.updateStatus) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Mono(host.version, color = Mu.colors.ink)
@@ -236,11 +241,76 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(5, "Licences")
+                    SectionTitle(6, "Licences")
                     Help("Inter and JetBrains Mono, SIL Open Font License 1.1. Card images and data from YGOPRODeck. Neue Master Tool is not affiliated with Konami.")
                 }
             }
             ScrollbarFor(scroll)
+        }
+    }
+}
+
+/**
+ * The assistant (Ai, 1.0.42): on or off — off hides every trace of it — then, while
+ * on, its name, its connection, how hard it thinks, whether it asks before deleting,
+ * its voice and what it knows.
+ */
+@Composable
+private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueState) {
+    val prefs = neue.prefs.ai
+    SectionTitle(3, "Assistant")
+    SettingRow(
+        "Assistant",
+        if (prefs.enabled) "${prefs.name} is on: in the bar, on ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL).ifEmpty { "its button" }}, beside every page. Off hides every trace of it; what it remembers is kept."
+        else "Off: nothing of the assistant shows anywhere in the app. Turn it on to set it up.",
+        onToggle = { neue.update { it.copy(ai = it.ai.copy(enabled = !it.ai.enabled)) } },
+    ) {
+        MuSwitch(prefs.enabled, { on -> neue.update { it.copy(ai = it.ai.copy(enabled = on)) } })
+    }
+    if (!prefs.enabled) return
+    var name by androidx.compose.runtime.remember(prefs.name) { androidx.compose.runtime.mutableStateOf(prefs.name) }
+    SettingRow("Name", "What it is called. Ai by default, after the Ignis of VRAINS.") {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            com.kaiharimoto.neue.kit.MuInput(name, { name = it.take(com.kaiharimoto.mastertool.core.prefs.AiPrefs.MAX_NAME) }, Modifier.width(220.dp), placeholder = "Ai", onSubmit = { ai.rename(name) })
+            if (name.trim() != prefs.name && name.isNotBlank()) MuButton("Rename", { ai.rename(name) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+        }
+    }
+    val connection = prefs.connection
+    val provider = com.kaiharimoto.mastertool.core.ai.providers.Providers.byId(connection?.provider)
+    SettingRow(
+        "Connection",
+        if (provider == null) "Not connected yet. The wizard walks you through a Claude or ChatGPT plan, an API key, or a model on your own machine."
+        else "${provider.label}${connection?.model?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""}. ${provider.blurb}",
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MuButton(if (provider == null) "Set up" else "Change", { ai.openWizard() }, variant = if (provider == null) BtnVariant.PRIMARY else BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
+            if (prefs.connections.size > 1) {
+                com.kaiharimoto.neue.kit.MuSelect(
+                    connection,
+                    prefs.connections,
+                    { c -> (c?.label ?: "").ifBlank { c?.provider.orEmpty() } + (c?.model?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") },
+                    { c -> c?.let { ai.use(it.id) } },
+                )
+            }
+            if (connection != null) MuButton("Forget", { ai.forget(connection.id) }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+        }
+    }
+    if (provider != null && provider.efforts.isNotEmpty()) {
+        SettingRow("Thinking", "How hard it thinks before answering, where the model can be told. Higher is slower and costs more.") {
+            Segmented(prefs.effort, listOf("") + provider.efforts, { if (it.isBlank()) "Default" else it.replaceFirstChar { ch -> ch.uppercase() } }, { e -> neue.update { it.copy(ai = it.ai.copy(effort = e)) } }, small = true)
+        }
+    }
+    SettingRow("Ask before deleting", "Deleting a deck, a web, or a deck from a web waits for your OK in the chat. Every other change can be undone.", onToggle = { neue.update { it.copy(ai = it.ai.copy(alwaysAllow = !it.ai.alwaysAllow)) } }) {
+        MuSwitch(!prefs.alwaysAllow, { on -> neue.update { it.copy(ai = it.ai.copy(alwaysAllow = !on)) } })
+    }
+    SettingRow("What it knows", "Its voice, what it has learned about you, its own notes, and notes on your decks and webs: markdown files you can read and edit.") {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MuButton("Open", { ai.memoryOpen = "USER.md" }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+            MuButton("Voice", { ai.memoryOpen = com.kaiharimoto.mastertool.core.ai.memory.Persona.FILE }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+            if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
+                MuButton("Open folder", { ai.files.root.mkdirs(); com.kaiharimoto.neue.platform.Platform.open(ai.files.root) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+            }
+            MuButton("Forget everything", { ai.forgetAsked = true }, variant = BtnVariant.GHOST, size = BtnSize.SM)
         }
     }
 }

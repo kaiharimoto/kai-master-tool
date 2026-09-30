@@ -53,6 +53,9 @@ object MacChrome {
 /** `DeskMenuBar`, drawn by the Mac: every item a table action, every accelerator the table's chord. */
 @Composable
 fun FrameWindowScope.MacMenuBar(h: NeueHolders) {
+    // Read here so the menu is drawn again when Ai is turned on or off (1.0.42).
+    DeskMenuBar.aiShown = h.neue.prefs.ai.enabled
+    val aiName = h.neue.prefs.ai.name
     MenuBar {
         DeskMenuBar.menus.forEach { menu ->
             Menu(menu.title) {
@@ -60,7 +63,7 @@ fun FrameWindowScope.MacMenuBar(h: NeueHolders) {
                     val chord = DeskMenuBar.accelerated(item)
                     val key = chord?.let { DeskKeys.keyFor(it.key) }
                     Item(
-                        item.label,
+                        if (item.action == DeskAction.AI_PANEL) aiName else item.label,
                         onClick = { h.runFromMenu(item.action) },
                         shortcut = if (chord != null && key != null) {
                             KeyShortcut(key, meta = chord.ctrl, shift = chord.shift, alt = chord.alt)

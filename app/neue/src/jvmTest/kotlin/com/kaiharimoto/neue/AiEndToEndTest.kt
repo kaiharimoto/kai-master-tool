@@ -1,0 +1,318 @@
+package com.kaiharimoto.neue
+
+import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
+import com.kaiharimoto.mastertool.core.ai.AiTools
+import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.TurnRequest
+import com.kaiharimoto.mastertool.core.ai.mcp.McpServerCore
+import com.kaiharimoto.mastertool.core.data.CardRepository
+import com.kaiharimoto.mastertool.core.data.DatabaseFactory
+import com.kaiharimoto.mastertool.core.data.DeckRepository
+import com.kaiharimoto.mastertool.core.data.PreferencesRepository
+import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
+import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import com.kaiharimoto.mastertool.core.remote.YgoProDeckApi
+import com.kaiharimoto.mastertool.core.siding.SidingCodec
+import com.kaiharimoto.mastertool.core.siding.Turn
+import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.mastertool.core.update.GitHubReleaseApi
+import com.kaiharimoto.mastertool.core.update.NeueUpdateChecker
+import com.kaiharimoto.mastertool.core.update.UpdateChecker
+import com.kaiharimoto.mastertool.ui.AppDependencies
+import com.kaiharimoto.mastertool.ui.DeckFileAccess
+import com.kaiharimoto.mastertool.ui.ImportedFile
+import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
+import com.kaiharimoto.mastertool.ui.deckbuilder.DeckLayoutState
+import com.kaiharimoto.mastertool.ui.update.AppUpdater
+import com.kaiharimoto.mastertool.ui.update.InstallOutcome
+import com.kaiharimoto.neue.ai.AiDesk
+import com.kaiharimoto.neue.ai.AnthropicBackend
+import com.kaiharimoto.neue.art.ArtLibrary
+import com.kaiharimoto.neue.builder.NeueDrag
+import com.kaiharimoto.neue.shot.DeckShots
+import com.kaiharimoto.neue.update.NeueUpdates
+import com.kaiharimoto.neue.web.Webs
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respondError
+import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.nio.file.Files
+import java.util.Properties
+import java.util.UUID
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+/**
+ * Ai's tools against the real app, headless: a real [DeckBuilderState], [Webs] and
+ * [NeueState] on an in-memory database with a seeded card pool, driven through
+ * `AiHost.run` exactly as a model's tool calls are — then the deck's counts, the web,
+ * the siding plan, the memory and the settings are read back.
+ */
+class AiEndToEndTest {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    private fun holders(): NeueHolders {
+        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY, Properties(), MasterToolDatabase.Schema)
+        val database = DatabaseFactory.create { driver }
+        database.transaction {
+            listOf(
+                Seed(14558127, "Ash Blossom & Joyous Spring", "Effect Monster", "effect"),
+                Seed(27204311, "Nibiru, the Primal Being", "Effect Monster", "effect"),
+                Seed(23434538, "Maxx \"C\"", "Effect Monster", "effect", tcg = "FORBIDDEN"),
+                Seed(86066372, "Accesscode Talker", "Link Monster", "link"),
+                Seed(10045474, "Infinite Impermanence", "Trap Card", "trap"),
+                Seed(55144522, "Pot of Greed", "Spell Card", "spell", tcg = "FORBIDDEN"),
+                Seed(12580477, "Raigeki", "Spell Card", "spell"),
+            ).forEach { s ->
+                database.cardQueries.insert(
+                    id = s.id.toLong(), name = s.name, type = s.type, frameType = s.frame,
+                    description = "Text of ${s.name}.", race = if (s.frame == "spell") "Normal" else "Spellcaster", attribute = "DARK",
+                    atk = 0L, def = 0L, level = if (s.frame == "link") null else 4L,
+                    linkValue = if (s.frame == "link") 4L else null, linkMarkers = "", pendulumScale = null, archetype = null,
+                    imageUrl = null, imageUrlSmall = null, tcgBanStatus = s.tcg, ocgBanStatus = "UNLIMITED", alternateIds = "${s.id}",
+                )
+            }
+        }
+        // Nothing here may reach the network: the pool's refresh is answered with an error.
+        val offline = HttpClientFactory.create(MockEngine { respondError(HttpStatusCode.ServiceUnavailable) })
+        val deps = AppDependencies(
+            cardRepository = CardRepository(database = database, api = YgoProDeckApi(offline), clock = System::currentTimeMillis, ioDispatcher = Dispatchers.IO),
+            deckRepository = DeckRepository(database = database, clock = System::currentTimeMillis, ioDispatcher = Dispatchers.IO),
+            preferencesRepository = PreferencesRepository(database = database, ioDispatcher = Dispatchers.IO),
+            fileAccess = object : DeckFileAccess {
+                override suspend fun importDeck(): ImportedFile? = null
+                override suspend fun exportDeck(suggestedName: String, content: String) = false
+                override suspend fun shareDeck(suggestedName: String, content: String) = Unit
+            },
+            updateChecker = UpdateChecker(GitHubReleaseApi(offline), "test"),
+            updater = object : AppUpdater {
+                override val currentVersionName = "test"
+                override val canInstallInPlace = false
+                override suspend fun downloadAndInstall(release: com.kaiharimoto.mastertool.core.update.Release, onProgress: (Float?) -> Unit) = InstallOutcome.HandedToInstaller
+                override fun openReleasePage(url: String) = Unit
+            },
+            newDeckId = { UUID.randomUUID().toString() },
+            now = System::currentTimeMillis,
+        )
+        val builder = DeckBuilderState(deps, scope)
+        val art = ArtLibrary(Files.createTempDirectory("art").toFile(), scope)
+        val h = NeueHolders(
+            deps = deps,
+            builder = builder,
+            layout = DeckLayoutState(deps.preferencesRepository, scope),
+            neue = NeueState(deps.preferencesRepository, scope),
+            drag = NeueDrag(builder),
+            updates = NeueUpdates(NeueUpdateChecker(GitHubReleaseApi(offline), "test", DesktopOs.LINUX), scope),
+            art = art,
+            shots = DeckShots(art, scope),
+            webs = Webs(deps, scope),
+        )
+        builder.start()
+        h.webs.load()
+        runBlocking { withTimeout(10_000) { while (builder.index.size < 7) delay(20) } }
+        return h
+    }
+
+    private class Seed(val id: Int, val name: String, val type: String, val frame: String, val tcg: String = "UNLIMITED")
+
+    private fun input(vararg pairs: Pair<String, Any?>): JsonObject = buildJsonObject {
+        pairs.forEach { (k, v) ->
+            when (v) {
+                is String -> put(k, v)
+                is Int -> put(k, v)
+                is Boolean -> put(k, v)
+                is List<*> -> putJsonArray(k) { v.forEach { e -> add(if (e is JsonObject) e else JsonPrimitive(e.toString())) } }
+                is JsonObject -> put(k, v)
+                null -> Unit
+            }
+        }
+    }
+
+    private suspend fun NeueHolders.tool(name: String, vararg args: Pair<String, Any?>): Part.ToolResult =
+        ai.host.run(Part.ToolUse("t-" + UUID.randomUUID(), name, input(*args)))
+
+    @Test
+    fun aiBuildsEditsGroupsAndSidesADeckThroughItsTools() = runBlocking {
+        val h = holders()
+        val b = h.builder
+
+        val made = h.tool(
+            "new_deck",
+            "name" to "Test deck",
+            "main" to listOf("3 Ash Blossom & Joyous Spring", "Nibiru, the Primal Being", "3x Maxx \"C\"", "2 Infinite Impermanence"),
+            "extra" to listOf("Accesscode Talker"),
+            "side" to listOf("3 Raigeki"),
+        )
+        assertFalse(made.isError, made.content)
+        assertTrue("Left out" in made.content, "a forbidden card is left out and said so: ${made.content}")
+        assertEquals(6, b.deck.main.size)
+        assertEquals(listOf(CardId(86066372)), b.deck.extra)
+        assertEquals(3, b.deck.side.size)
+        withTimeout(5_000) { while (b.deckId == null) delay(20) }
+        val deckId = b.deckId!!
+
+        val edited = h.tool(
+            "edit_deck",
+            "ops" to listOf(
+                input("op" to "set", "card" to "Ash Blossom & Joyous Spring", "count" to 2),
+                input("op" to "remove", "card" to "Infinite Impermanence", "count" to 1),
+                input("op" to "add", "card" to "Pot of Greed"),
+            ),
+        )
+        assertEquals(4, b.deck.main.size, edited.content)
+        assertTrue("Pot of Greed" in edited.content, "the refused add is reported")
+        h.tool("undo")
+        assertEquals(6, b.deck.main.size, "the whole edit is one step of undo")
+
+        h.tool("set_groups", "groups" to listOf(input("name" to "Hand traps", "cards" to listOf("Ash Blossom & Joyous Spring", "Nibiru, the Primal Being", "Infinite Impermanence"))))
+        val group = b.groups.groups.single()
+        assertEquals("Hand traps", group.name)
+        assertEquals(3, b.groups.assignments.count { it.value == group.id })
+
+        h.tool("save_deck")
+        val web = h.tool("create_web", "name" to "YCS Test")
+        assertFalse(web.isError, web.content)
+        val webId = h.webs.library.webs.single().id
+        val added = h.tool("add_deck_to_web", "web_id" to webId, "deck_id" to deckId, "share" to 30, "mine" to true)
+        assertFalse(added.isError, added.content)
+        withTimeout(5_000) { while (h.webs.library.byId(webId)!!.entries.isEmpty()) delay(20) }
+        val entry = h.webs.library.byId(webId)!!.entries.single()
+        assertEquals(30, entry.share)
+        assertTrue(entry.mine)
+
+        val plan = h.tool("set_siding_plan", "deck_id" to entry.deckId, "against" to "Snake-Eye", "turn" to "second", "out" to listOf("Nibiru, the Primal Being"), "in" to listOf("Raigeki"), "why" to "They go first.")
+        assertFalse(plan.isError, plan.content)
+        withTimeout(5_000) {
+            while (SidingCodec.read(h.deps.deckRepository.byId(entry.deckId)?.extended).matchups.isEmpty()) delay(20)
+        }
+        val matchup = SidingCodec.read(h.deps.deckRepository.byId(entry.deckId)?.extended).matchups.single()
+        assertEquals("Snake-Eye", matchup.name)
+        assertEquals(listOf(CardId(27204311)), matchup.plan(Turn.SECOND).out)
+        assertEquals(listOf(CardId(12580477)), matchup.plan(Turn.SECOND).into)
+        assertEquals("They go first.", matchup.plan(Turn.SECOND).note)
+    }
+
+    @Test
+    fun memorySettingsAndConfirmations() = runBlocking {
+        val h = holders()
+        val remembered = h.tool("memory", "action" to "add", "scope" to "user", "text" to "Plays Branded in TCG.")
+        assertFalse(remembered.isError, remembered.content)
+        assertTrue("Plays Branded in TCG." in h.tool("memory_read", "scope" to "user").content)
+        assertTrue(h.tool("memory", "action" to "remove", "scope" to "user", "old_text" to "Branded").content.startsWith("Removed"))
+
+        h.tool("set_setting", "key" to "theme", "value" to "INK")
+        assertEquals(NeueTheme.INK, h.neue.prefs.theme)
+        h.tool("run_action", "action" to "TOGGLE_THEME")
+        assertEquals(NeueTheme.PAPER, h.neue.prefs.theme)
+        assertTrue("\"theme\"" in h.tool("get_settings").content)
+
+        // A destructive tool waits on the person: here they say no.
+        h.tool("new_deck", "name" to "Doomed", "main" to listOf("Raigeki"))
+        withTimeout(5_000) { while (h.builder.deckId == null) delay(20) }
+        val doomed = h.builder.deckId!!
+        val refuse = launch { while (h.ai.confirm == null) delay(10); h.ai.confirm!!.reply(false) }
+        val refused = h.tool("delete_deck", "deck_id" to doomed)
+        refuse.join()
+        assertTrue(refused.isError && "said no" in refused.content, refused.content)
+        assertNotNull(h.deps.deckRepository.byId(doomed))
+        val accept = launch { while (h.ai.confirm == null) delay(10); h.ai.confirm!!.reply(true) }
+        assertFalse(h.tool("delete_deck", "deck_id" to doomed).isError)
+        accept.join()
+        assertEquals(null, h.deps.deckRepository.byId(doomed))
+
+        // Turning Ai off asks too.
+        val yes = launch { while (h.ai.confirm == null) delay(10); h.ai.confirm!!.reply(true) }
+        h.tool("set_setting", "key" to "ai.enabled", "value" to false)
+        yes.join()
+        assertFalse(h.neue.prefs.ai.enabled)
+    }
+
+    @Test
+    fun badInputIsRefusedBeforeItRuns() = runBlocking {
+        val h = holders()
+        assertTrue(h.tool("rename_deck").isError)
+        assertTrue(h.tool("no_such_tool").isError)
+        assertTrue(h.tool("rename_deck", "name" to "x", "nmae" to "y").content.contains("nmae"))
+    }
+
+    @Test
+    fun theMcpServerAnswersOverHttpAndOnlyWithTheToken() {
+        val core = McpServerCore(tools = { AiTools.all.take(2) }, call = { Part.ToolResult(it.id, it.name, "ok") })
+        val server = AiDesk.startMcp { _, body -> core.handle(body) }!!
+        try {
+            val http = HttpClient.newHttpClient()
+            fun post(token: String?, body: String): HttpResponse<String> = http.send(
+                HttpRequest.newBuilder(URI(server.url)).POST(HttpRequest.BodyPublishers.ofString(body))
+                    .header("Content-Type", "application/json")
+                    .apply { if (token != null) header("Authorization", "Bearer $token") }
+                    .build(),
+                HttpResponse.BodyHandlers.ofString(),
+            )
+            assertEquals(401, post(null, "{}").statusCode())
+            assertEquals(401, post("wrong", "{}").statusCode())
+            val list = post(server.token, """{"jsonrpc":"2.0","id":1,"method":"tools/list"}""")
+            assertEquals(200, list.statusCode())
+            assertTrue(AiTools.all.first().name in list.body())
+            val call = post(server.token, """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"${AiTools.all.first().name}","arguments":{}}}""")
+            assertTrue("\"ok\"" in call.body(), call.body())
+            assertEquals(202, post(server.token, """{"jsonrpc":"2.0","method":"notifications/initialized"}""").statusCode())
+            assertTrue(server.url.startsWith("http://127.0.0.1:"))
+        } finally {
+            server.stop()
+        }
+    }
+
+    @Test
+    fun everyToolBecomesAnAnthropicToolAndAReplyIsReplayedExactly() {
+        val backend = AnthropicBackend("sk-ant-test")
+        val params = backend.params(
+            TurnRequest(
+                "system",
+                listOf(
+                    ChatTurn.user("hi", "Page: Builder"),
+                    ChatTurn(Role.ASSISTANT, listOf(Part.Text("Looking."), Part.ToolUse("toolu_1", "app_state", JsonObject(emptyMap())))),
+                    ChatTurn(Role.USER, listOf(Part.ToolResult("toolu_1", "app_state", "{}"))),
+                ),
+                AiTools.all,
+                model = "claude-opus-5-5",
+                effort = "medium",
+            ),
+            "claude-opus-5-5",
+        )
+        assertEquals(AiTools.all.size, params.tools().get().size)
+        assertEquals(3, params.messages().size)
+        // A reply's blocks, thinking and signature included, come back as they went out.
+        val thinking = com.anthropic.models.messages.ContentBlockParam.ofThinking(
+            com.anthropic.models.messages.ThinkingBlockParam.builder().thinking("hm").signature("sig-123").build(),
+        )
+        val text = com.anthropic.models.messages.ContentBlockParam.ofText(com.anthropic.models.messages.TextBlockParam.builder().text("Done.").build())
+        val opaque = backend.text(listOf(thinking, text))
+        val replayed = backend.blocks(ChatTurn(Role.ASSISTANT, listOf(Part.Text("Done."), Part.Opaque(AnthropicBackend.PROVIDER, opaque))))
+        assertEquals(2, replayed.size)
+        assertEquals("sig-123", replayed[0].asThinking().signature())
+        assertEquals("Done.", replayed[1].asText().text())
+        backend.close()
+    }
+}

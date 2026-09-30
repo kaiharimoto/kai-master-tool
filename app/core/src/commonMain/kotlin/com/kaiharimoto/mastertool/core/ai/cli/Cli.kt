@@ -208,14 +208,16 @@ object CodexCli {
         effort: String,
         resume: String?,
     ): CliLaunch {
+        // Values without quotes: Codex reads a value that is not TOML as a plain string, and
+        // a quote is the one thing Windows' .cmd shims mangle on the way to the program.
         val config = listOf(
-            "approval_policy=\"never\"",
+            "approval_policy=never",
             // `codex exec` has no --search; the setting is how live web search is turned on there.
-            "web_search=\"live\"",
-            "mcp_servers.${CliNames.MCP_NAME}.url=\"$mcpUrl\"",
-            "mcp_servers.${CliNames.MCP_NAME}.bearer_token_env_var=\"$TOKEN_ENV\"",
+            "web_search=live",
+            "mcp_servers.${CliNames.MCP_NAME}.url=$mcpUrl",
+            "mcp_servers.${CliNames.MCP_NAME}.bearer_token_env_var=$TOKEN_ENV",
             "mcp_servers.${CliNames.MCP_NAME}.tool_timeout_sec=900",
-        ) + (if (effort.isNotBlank()) listOf("model_reasoning_effort=\"$effort\"") else emptyList())
+        ) + (if (effort.isNotBlank()) listOf("model_reasoning_effort=$effort") else emptyList())
         return CliLaunch(
             args = buildList {
                 add(program)

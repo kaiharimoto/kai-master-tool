@@ -35,6 +35,25 @@ fun MuText(
     )
 }
 
+/** Styled text — bold, italic, code runs — in the current surface's ink (Ai's replies, 1.0.42). */
+@Composable
+fun MuText(
+    text: androidx.compose.ui.text.AnnotatedString,
+    modifier: Modifier = Modifier,
+    style: TextStyle = LocalMuText.current,
+    color: Color = Color.Unspecified,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    val resolved = if (color != Color.Unspecified) color else style.color.takeIf { it != Color.Unspecified } ?: Mu.colors.ink
+    BasicText(
+        text = text,
+        modifier = modifier,
+        style = style.copy(color = resolved),
+        maxLines = maxLines,
+        overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
+    )
+}
+
 /**
  * Micro caps, the label voice (§3). The source text stays sentence case and
  * is set in capitals here, because micro caps are a treatment, not a spelling.

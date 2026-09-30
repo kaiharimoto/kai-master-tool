@@ -88,6 +88,8 @@ fun TitleBar(
     modifier: Modifier = Modifier,
     work: WorkReadout? = null,
     onWork: () -> Unit = {},
+    /** Before the bar's own switches: the assistant's (1.0.42). */
+    trailing: @Composable () -> Unit = {},
     content: @Composable RowScope.(narrow: Boolean) -> Unit = {},
 ) {
     val c = Mu.colors
@@ -135,6 +137,7 @@ fun TitleBar(
                     }
                 }
             }
+            trailing()
             // Auto zen (kai, 1.0.16): whether immersive mode drifts into zen by itself when idle.
             // Z still starts it either way.
             Tip(

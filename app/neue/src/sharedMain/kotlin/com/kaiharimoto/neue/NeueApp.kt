@@ -56,6 +56,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -169,6 +170,9 @@ class NeueHolders(
     /** Pictures the person added to cards themselves (1.0.18). */
     val customArt = com.kaiharimoto.neue.art.CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
 
+    /** The assistant (Ai, 1.0.42): the conversation, its model and its tools, for the app's lifetime. */
+    val ai: com.kaiharimoto.neue.ai.AiState by lazy { com.kaiharimoto.neue.ai.AiState(this) }
+
     /** The family pointer, Crop caption: one per window. */
     val cursor = FamilyCursor()
 
@@ -242,6 +246,7 @@ class NeueHolders(
         searchFocused = neue.searchFocused,
         overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen,
         onBuilder = neue.page == Page.BUILDER,
+        ai = neue.prefs.ai.enabled,
     )
 
     /**
@@ -378,6 +383,7 @@ class NeueHolders(
                 neue.revealed = Revealed.NONE
             }
             DeskAction.SCREENSHOT -> shots.export(builder, neue)
+            DeskAction.AI_PANEL -> if (neue.prefs.ai.enabled) ai.toggle()
         }
     }
 
@@ -523,6 +529,7 @@ class NeueHolders(
         val next = neue.orientation.next()
         return buildList {
             add(MenuEntry("Search cards and commands", hint = "Search") { neue.paletteOpen = true })
+            if (neue.prefs.ai.enabled) add(MenuEntry(ai.name, hint = "Your assistant") { ai.setOpen(true) })
             add(MenuEntry("Advanced search") { run(DeskAction.ADVANCED_SEARCH) })
             if (onBuilder) {
                 add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
@@ -615,6 +622,13 @@ class NeueHolders(
             *(if (com.kaiharimoto.neue.platform.QrSource.CAMERA in Platform.scanSources) arrayOf(Command("Deck", "Scan a deck's QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.CAMERA, builder, neue) }) else emptyArray()),
             *(if (com.kaiharimoto.neue.platform.QrSource.PICTURE in Platform.scanSources) arrayOf(Command("Deck", "Import a picture of a QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.PICTURE, builder, neue) }) else emptyArray()),
             Command("App", "Refresh the card pool") { builder.refreshCardPool(force = true) },
+            // The assistant's own, while it is on (1.0.42).
+            *(if (neue.prefs.ai.enabled) arrayOf(
+                cmd("Ai", "${ai.name}: open or close", DeskAction.AI_PANEL),
+                Command("Ai", "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
+                Command("Ai", "${ai.name}: set up a connection") { ai.openWizard() },
+                Command("Ai", "${ai.name}: what it knows") { ai.memoryOpen = "USER.md" },
+            ) else emptyArray()),
             Command("App", "Report an issue →") { Platform.reportIssue() },
         ).filter { q.isEmpty() || it.label.lowercase().contains(q) || it.group.lowercase().startsWith(q) }
 
@@ -708,6 +722,9 @@ fun NeueEffects(h: NeueHolders) {
             }
             h.updates.check(userInitiated = false)
             h.art.start()
+            // Ai's notes follow a deck into a web, and go with a web that is deleted (1.0.42).
+            h.webs.onJoined = { from, name, web -> if (neue.prefs.ai.enabled) h.ai.foldIntoWeb(from, name, web) }
+            h.webs.onDeleted = { web -> h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.WEB, web)) }
             onDispose {
                 h.art.stop()
                 h.layout.flush()
@@ -731,6 +748,12 @@ fun NeueEffects(h: NeueHolders) {
             h.art.want(DeckSection.entries.flatMap { state.deck[it] }.distinct().mapNotNull(state.index::byId))
         }
         LaunchedEffect(state.results) { h.art.want(state.results.take(48)) }
+        // Ai off (Settings → Assistant): every trace gone — the menu's item, the key, and
+        // anything running or listening (1.0.42).
+        LaunchedEffect(neue.prefs.ai.enabled) {
+            DeskMenuBar.aiShown = neue.prefs.ai.enabled
+            if (!neue.prefs.ai.enabled) h.ai.shutDown()
+        }
         LaunchedEffect(neue.inspected) { neue.inspected?.let(h.art::want) }
         // The ~2 GB library waits for Wi-Fi on a tablet (touch swarm, rec 27); looked at again each half minute.
         LaunchedEffect(neue.prefs.hdArt) {
@@ -816,6 +839,8 @@ private fun Shell(h: NeueHolders) {
                 onUpdate = { h.updates.dialogOpen = true },
                 menu = { h.phoneMenu(it) },
                 working = work != null,
+                ai = if (neue.prefs.ai.enabled) h.ai.name else null,
+                onAi = { h.ai.toggle() },
             )
         } else TitleBar(
             neue = neue,
@@ -824,6 +849,7 @@ private fun Shell(h: NeueHolders) {
             onImmersive = { h.run(DeskAction.IMMERSIVE) },
             work = work,
             onWork = { neue.go(Page.SETTINGS) },
+            trailing = { if (neue.prefs.ai.enabled) com.kaiharimoto.neue.ai.AiToggle(h) },
         ) { narrow ->
             if (neue.page == Page.BUILDER) {
                 BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow, webs = h.webs, onStepWeb = h::stepWeb, onOpenDeck = h::openDeck)
@@ -1095,11 +1121,17 @@ private fun Shell(h: NeueHolders) {
                                     onOpenDataDir = { Platform.open(Platform.dataDir) },
                                     onSearchEffects = h::setSearchEffects,
                                     art = h.art,
+                                    ai = h.ai,
                                 ),
                             )
                         }
                     }
                     Drawers(state, neue)
+                }
+                // Ai's panel (1.0.42): docked beside every page, the page re-fitting beside it.
+                // Not in immersive mode, whose whole point is the deck alone; on a phone it is a sheet.
+                if (neue.prefs.ai.enabled && neue.prefs.ai.panelOpen && !phone && !immersive) {
+                    com.kaiharimoto.neue.ai.AiPanel(h, Modifier.width((neue.prefs.ai.panelWidth / neue.prefs.scale).dp).fillMaxHeight())
                 }
             }
             // Put away while the keyboard is up: the dock's field sits on the keyboard, not on the tabs.
@@ -1167,6 +1199,27 @@ private fun Shell(h: NeueHolders) {
             }
         }
 
+        // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.42).
+        if (neue.aiSheet) com.kaiharimoto.neue.ai.AiPanel(h, Modifier.fillMaxSize(), phone = true)
+        if (neue.prefs.ai.enabled) {
+            com.kaiharimoto.neue.ai.MemoryDialog(h.ai)
+            if (h.ai.forgetAsked) {
+                MuDialog(
+                    title = "Forget everything",
+                    onDismiss = { h.ai.forgetAsked = false },
+                    width = 384.dp,
+                    description = "${h.ai.name}'s memory, the skills it wrote and every conversation will be deleted. Its connections stay. This cannot be undone.",
+                    footer = {
+                        MuButton("Cancel", { h.ai.forgetAsked = false }, variant = BtnVariant.GHOST)
+                        MuButton("Forget", {
+                            h.ai.forgetAsked = false
+                            h.ai.forgetEverything()
+                            neue.note = Note("${h.ai.name} forgot everything")
+                        }, variant = BtnVariant.PRIMARY)
+                    },
+                ) {}
+            }
+        }
         if (neue.helpOpen) HelpDialog { neue.helpOpen = false }
         neue.qr?.let { shown ->
             com.kaiharimoto.neue.qr.QrDialog(
@@ -1206,6 +1259,8 @@ private fun Shell(h: NeueHolders) {
                         neue.confirmDelete = null
                         scope.launch {
                             h.deps.deckRepository.delete(id)
+                            // Ai's notes on the deck go with it (1.0.42).
+                            h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.DECK, id))
                             if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                 neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
                             }

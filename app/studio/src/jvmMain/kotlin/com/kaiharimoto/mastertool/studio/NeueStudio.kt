@@ -274,6 +274,8 @@ fun neueMain(args: Array<String>) {
             if (map["groups"] == "true") h.setGroups(true)
             if (map["groups"] == "false") h.setGroups(false)
             if (map["help"] == "true") h.neue.helpOpen = true
+            // Ai's panel (1.0.42): --ai=panel (a sample conversation), empty, or wizard (--ai-step=KEY:anthropic).
+            map["ai"]?.let { mode -> studioAi(h, mode, map["ai-step"]) }
             // --list=N: a list of the first N main-deck cards, shown in the pool (1.0.19).
             map["list"]?.toIntOrNull()?.let { n ->
                 val id = h.neue.newList()
@@ -588,4 +590,61 @@ private fun dependencies(data: File, deck: File): AppDependencies {
 object NeueStudio {
     @JvmStatic
     fun main(args: Array<String>) = neueMain(args)
+}
+
+
+/** Ai's panel as the studio draws it: open, with a sample conversation, empty, or at a wizard step. */
+private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: String?) {
+    val ai = h.ai
+    h.neue.update {
+        it.copy(ai = it.ai.copy(
+            panelOpen = true,
+            connections = listOf(com.kaiharimoto.mastertool.core.prefs.AiConnection("anthropic-demo", "anthropic", "Anthropic", "claude-opus-5-5")),
+            active = "anthropic-demo",
+        ))
+    }
+    when (mode) {
+        "wizard" -> {
+            ai.openWizard()
+            step?.let { spec ->
+                val (name, provider) = spec.split(':').let { it[0] to it.getOrNull(1) }
+                com.kaiharimoto.mastertool.core.ai.providers.Providers.byId(provider)?.let { p ->
+                    ai.wizard.kind = p.kind
+                    ai.wizard.choose(p)
+                    if (name == "MODEL") {
+                        ai.wizard.models = listOf("claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-1", "claude-haiku-4-5")
+                        ai.wizard.model = "claude-opus-5-5"
+                    }
+                }
+                com.kaiharimoto.mastertool.core.ai.providers.SetupStep.entries.firstOrNull { it.name == name }?.let { ai.wizard.step = it }
+            }
+        }
+        "panel" -> {
+            val now = System.currentTimeMillis()
+            fun result(name: String, summary: String) = com.kaiharimoto.mastertool.core.ai.Part.ToolResult("t-$name", name, "{}", summary = summary)
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio",
+                    title = "Tune for YCS",
+                    connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Tune this for a field full of Maliss and Mitsurugi, and group it."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Let me look at the list first."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(result("get_deck", "Read the open deck"), result("search_cards", "Found 12 cards for “negate”"))),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                            "## The plan\n\nYour engine is tight — the flex slots are the problem.\n\n" +
+                                "- **+1** [[Infinite Impermanence]]: Maliss lives on its link plays.\n" +
+                                "- **−1** [[Nibiru, the Primal Being]]: Mitsurugi rarely summons five times.\n\n" +
+                                "Grouped into *Starters*, *Extenders*, *Hand traps* and *Bricks*.",
+                        ),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(result("edit_deck", "+1 Infinite Impermanence, −1 Nibiru, the Primal Being"), result("set_groups", "Grouped the deck: Starters, Extenders, Hand traps, Bricks"))),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Done — one step of undo if you want it back."),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
+        else -> Unit
+    }
 }

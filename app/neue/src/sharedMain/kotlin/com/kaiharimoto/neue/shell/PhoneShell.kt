@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.shell
 
+import androidx.compose.foundation.border
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -67,6 +69,9 @@ fun PhoneBar(
     menu: (Offset) -> List<MenuEntry>,
     modifier: Modifier = Modifier,
     working: Boolean = false,
+    /** The assistant's name while it is on, for its button (1.0.42). */
+    ai: String? = null,
+    onAi: () -> Unit = {},
 ) {
     val c = Mu.colors
     var moreAt by remember { mutableStateOf(Offset.Zero) }
@@ -107,6 +112,17 @@ fun PhoneBar(
                     verticalAlignment = Alignment.CenterVertically,
                 ) { Micro("Update", color = c.paper) }
             }
+        }
+        if (ai != null) {
+            Box(
+                Modifier
+                    .height(40.dp)
+                    .border(1.dp, c.ink)
+                    .cursorPointer(caption = "Ask")
+                    .muClickable(onClick = onAi)
+                    .padding(horizontal = 10.dp),
+                contentAlignment = Alignment.Center,
+            ) { Micro(ai, color = c.ink) }
         }
         Box(Modifier.onGloballyPositioned { moreAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
             Tip("Everything else: import, export, save, search, rotate, updates") {

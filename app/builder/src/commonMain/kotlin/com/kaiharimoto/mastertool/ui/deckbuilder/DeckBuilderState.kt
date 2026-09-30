@@ -1042,6 +1042,24 @@ class DeckBuilderState(
         }
     }
 
+    /**
+     * The deck's cards replaced by [next] as one step of undo, with the toast's Undo
+     * (Ai's edits, 1.0.42: a request of many changes is taken back in one press).
+     */
+    fun setCards(next: Deck, message: String? = null) {
+        if (next == deck) return
+        val token = pushUndo(deck)
+        deck = next
+        message?.let { showToast(it, undo = { undoIfCurrent(token) }) }
+    }
+
+    /**
+     * A whole new deck, unsaved, as one step of undo — cards, name and payload, as an
+     * import is (Ai's new deck, 1.0.42).
+     */
+    fun adoptDeck(next: Deck, name: String, extended: JsonObject? = null) =
+        adopt(YdkParseResult(YdkDocument(next, extended = extended)), name)
+
     /** What a deck read from a code still owes once it has an id: its covers (1.0.31). */
     private var afterFirstSave: ((String) -> Unit)? = null
 
