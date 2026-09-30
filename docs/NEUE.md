@@ -1852,8 +1852,9 @@ own"). `YgoProDeckDecks` (core) reads YGOPRODeck's tournament decks — the site
 placement, player count and all three sections — one request a second and an hour's
 cache, filtered on our side by format (TCG, OCG, Genesys) and age, since the site ignores
 every other parameter and writes its dates as "3 days ago" (`TournamentDecks.daysAgo`).
-The tools: `ygopro_tournament_decks` lists recent results, numbered; `ygopro_deck` reads
-one whole; `import_ygopro_deck` saves it to the library or straight into a web, with a
+The tools: `ygopro_tournament_decks` lists recent results, numbered, with each pilot;
+`ygopro_deck` reads one whole — any list by its number, read off the deck's own page
+(`/deck/<number>`) when it is not among the pages already read; `import_ygopro_deck` saves it to the library or straight into a web, with a
 share; `ygopro_field_snapshot` is **the field** — `FieldBuilder` groups the lists into
 strategies by what they play, not what they are called (a weighted Jaccard over their
 cards, each card weighted by its rarity across the lists, so the format's hand traps say
@@ -1879,6 +1880,18 @@ ready; on the right one step at a time, large, opening with what Ai is, and unde
 step what usually goes wrong and the fix. The words are `SetupGuide` (core), and a test
 holds every provider's every fallible step to having them. A phone drops the left column.
 "Not now", Esc and Back put it away. Later connections are made in the panel's wizard.
+
+**Nothing asked twice** (1.0.59, kai: "if I press setup accidentally it makes me go through
+everything again and reinput the API key"). With a connection made, the wizard opens on **Your
+connections**: each one to switch to with a tap, **Add a connection**, or Close — so Setup
+pressed by mistake costs one click, and Back from the first step returns there. A key already
+given for a service is filled in again (`SavedConnections.keyFrom`: the same provider, and for
+a typed address the same address), with a line saying whose it is, until another is pasted.
+**The person's own OpenAI-compatible services are presets** (`SavedConnections.presets`): under
+**Yours**, before the known providers, a tap fills the address, the name, the key and the model
+chosen before. And a connection set up again — the same service, name and model — replaces
+its old self rather than adding a twin (`SavedConnections.replaced`). Quick settings' **New
+connection…** goes straight to adding one. No preference or schema changes.
 
 **Another provider, with a key** (1.0.53 / v1.3.30, kai: "allow me to use API keys that are
 openai compatible with different custom providers"): `Providers.compatible` sits with the API
@@ -2234,6 +2247,27 @@ computer itself (kai's choice over a cloud service), and — from the frontier l
   - a plan's command-line app runs its own loop and is not checked;
   - talk mode is not checked, as the answer is already being spoken.
 
+**1.0.59, a player's lists.** kai: "when I tell it to look for a player's list on ygoprodeck, it
+fails to find the topping list by player name". The reason: the deck API filters by deck name
+(`name=`), card, author (the uploader, not the pilot), format and date, and nothing else — every
+player parameter tried (`tournamentPlayerName`, `player`, `search`, …) is ignored, and the tool
+only ever read the last few pages of each tier. The site finds players another way, and so
+does Ai now (`PlayerPages`, core, tested on captured pages):
+- **the player search**, `/tournaments/player-search/?search=` — a part of a name is enough; one
+  row a player and nationality, with their last top;
+- **the player's page**, `/tournaments/by-player/Name+Surname` — the site's tally ("Tier 2 events:
+  13 tops (Wins: 1)") and every top, newest first: date, placement, event, archetypes, and a link
+  to `/deck/<slug>-<number>` when the list is published (many tops are recorded without one);
+- **the deck's page**, `/deck/<number>` — its three sections in the page's script
+  (`maindeckjs`…), and the pilot, event, date and placement in its description.
+
+`ygopro_player` (name, optionally an archetype) goes search → the one player meant (the only
+match, or the one whose whole name it is; otherwise the candidates, to ask again) → their page,
+and `ygopro_deck`/`import_ygopro_deck` read any number. `ygopro_tournament_decks` shows each
+pilot and filters by one (`player`), over the recent pages only. The `ygoprodeck-tournaments`
+skill says which to use. Pages are HTML and change without notice: `YgoProDeckLiveTest` reads a
+real player when `NEUE_LIVE_YGOPRODECK` names one. First principles bars `ygopro_player` too.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:
@@ -2374,8 +2408,12 @@ It is quiet grey at rest, ink under the pointer or while the panel is open, and 
 open. A click opens or closes the panel. The tip and `Ctrl I` are unchanged. Beside it the
 assistant's name is a button into its brain (`AiBrainButton`, §4k).
 
-The marquee is 200 dp on the desk and the tablet. On a phone it is 112 dp in `PhoneBar`, and
-84 dp while the Update chip is out. It never goes into the ⋯ menu.
+The marquee is 200 dp on the desk. **On a phone or a tablet there is no running line** (1.0.59,
+kai: "the android button for ai should be the Ai marquee and not the sliding text like desktop"):
+the bar wears `AiBadge` instead, the marquee as it stood in 1.0.52 — a box with Ai's live face
+and its name, inverted while the panel is open. What Ai is doing is on its face. A tap opens or
+closes the panel; a held finger (or a right-click) looks into its brain, which the desk reaches
+from `AiBrainButton` and a phone from its ⋯ menu too. It never goes into the ⋯ menu.
 
 **Moving chrome.** This is the one piece of chrome that moves by itself, at kai's
 request. Nothing about the face is stored: no preference, no schema and no deck payload

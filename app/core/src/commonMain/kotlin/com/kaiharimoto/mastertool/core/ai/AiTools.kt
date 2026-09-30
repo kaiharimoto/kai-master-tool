@@ -439,6 +439,7 @@ object AiTools {
             string("format", "TCG, OCG or Genesys (default: the app's format)")
             string("archetype", "Only decks whose name has this")
             string("event", "Only events whose name has this")
+            string("player", "Only lists this player piloted (a part of the name is enough). For a player's whole record, use ygopro_player")
             integer("days", "Only the last this many days (default 60)", min = 1, max = 365)
             integer("page", "Older results, from 0", min = 0, max = 20)
         },
@@ -448,8 +449,23 @@ object AiTools {
 
     val tournamentDeck = ToolSpec(
         "ygopro_deck",
-        "One YGOPRODeck tournament deck in full, with card names, by its deck number from ygopro_tournament_decks.",
+        "One YGOPRODeck tournament deck in full, with card names, by its deck number (from ygopro_tournament_decks, " +
+            "ygopro_player, or the number at the end of a ygoprodeck.com/deck/… address).",
         schema { integer("deck_number", "The deck's number", required = true) },
+        ToolGroup.META,
+        phase = 2,
+    )
+
+    val tournamentPlayer = ToolSpec(
+        "ygopro_player",
+        "A tournament player's results on YGOPRODeck, found by name the way the site's player search finds them " +
+            "(a part of a name is enough; accents do not matter): each top with its date, placement, event and " +
+            "archetypes, and the deck number of the list when one is published — read it with ygopro_deck. " +
+            "When several players match, lists them; ask again with the full name.",
+        schema {
+            string("name", "The player's name, or part of it", required = true)
+            string("archetype", "Only results with this archetype")
+        },
         ToolGroup.META,
         phase = 2,
     )
@@ -754,14 +770,14 @@ object AiTools {
      */
     val FIRST_PRINCIPLES_BARRED: Set<String> = setOf(
         "web_search", "web_fetch", "archetype_guide", "delegate",
-        "ygopro_tournament_decks", "ygopro_deck", "import_ygopro_deck", "ygopro_field_snapshot",
+        "ygopro_tournament_decks", "ygopro_deck", "import_ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
     )
 
     /** The tools a delegated helper may use: every one that only looks. */
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
-        "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot",
+        "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall",
     )
@@ -775,7 +791,7 @@ object AiTools {
         navigate, runAction, setSetting,
         memory, memoryRead, skillView, skillManage, sessionSearch,
         askUser,
-        tournamentDecks, tournamentDeck, importTournamentDeck, fieldSnapshot,
+        tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, contextStatus, compact, recall,

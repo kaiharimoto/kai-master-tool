@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.remote.DeckFormat
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import com.kaiharimoto.mastertool.core.remote.PlayerPages
 import com.kaiharimoto.mastertool.core.remote.TournamentDeck
 import com.kaiharimoto.mastertool.core.remote.YgoProDeckDecks
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
@@ -37,6 +38,7 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         "analyze_deck" -> analyze(ToolArgs.string(i, "deck_id"))
         "ygopro_tournament_decks" -> tournamentDecks(i)
         "ygopro_deck" -> deck(ToolArgs.int(i, "deck_number") ?: return fail("deck_number is needed."))
+        "ygopro_player" -> player(ToolArgs.string(i, "name") ?: return fail("name is needed."), ToolArgs.string(i, "archetype"))
         "import_ygopro_deck" -> import(i)
         "ygopro_field_snapshot" -> field(i)
         else -> null
@@ -61,7 +63,8 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
     }
 
     private fun line(d: TournamentDeck): String =
-        "#${d.number} | ${d.name} | ${d.placement} of ${d.players ?: "?"} at ${d.event} | ${d.format.name.lowercase()} | ${if (d.daysAgo == 0) "today" else "${d.daysAgo}d ago"}"
+        "#${d.number} | ${d.name} | ${d.placement} of ${d.players ?: "?"} at ${d.event} | ${d.pilot ?: "pilot unknown"} | ${d.format.name.lowercase()} | " +
+            (d.date ?: if (d.daysAgo == 0) "today" else if (d.daysAgo >= 999) "date unknown" else "${d.daysAgo}d ago")
 
     private suspend fun tournamentDecks(i: JsonObject): MetaAnswer {
         val tier = (ToolArgs.int(i, "tier") ?: 2).coerceIn(1, 4)
@@ -69,6 +72,7 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val days = (ToolArgs.int(i, "days") ?: 60).coerceIn(1, 365)
         val archetype = ToolArgs.string(i, "archetype")?.lowercase()
         val event = ToolArgs.string(i, "event")?.lowercase()
+        val pilot = ToolArgs.string(i, "player")
         val page = ToolArgs.int(i, "page") ?: 0
         val (decks, problems) = if (page > 0) {
             val got = (tier..4).flatMap { t -> source.page(t, page).getOrElse { emptyList() } }
@@ -77,12 +81,16 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             source.recent(tier, days, format)
         }
         decks.forEach { seen[it.number] = it }
-        val shown = decks.filter { d -> (archetype == null || archetype in d.name.lowercase()) && (event == null || event in d.event.lowercase()) }
+        val shown = decks.filter { d -> (archetype == null || archetype in d.name.lowercase()) && (event == null || event in d.event.lowercase()) && (pilot == null || PlayerPages.names(pilot, d.pilot)) }
             .sortedBy { it.daysAgo }
         if (shown.isEmpty()) {
             val why = if (problems.isNotEmpty()) " YGOPRODeck: ${problems.joinToString("; ")}." else ""
             return if (problems.isNotEmpty() && decks.isEmpty()) fail("Could not read YGOPRODeck's tournament decks.$why")
-            else MetaAnswer("No ${format.name} tournament decks match (tier $tier+, last $days days).$why", "No matching tournament decks")
+            else MetaAnswer(
+                "No ${format.name} tournament decks match (tier $tier+, last $days days).$why" +
+                    if (pilot != null) " These are only the recent pages; ygopro_player reads $pilot's whole record." else "",
+                "No matching tournament decks",
+            )
         }
         val head = "${shown.size} ${format.name} tournament decks, tier $tier and up, last $days days (YGOPRODeck):"
         return MetaAnswer(
@@ -94,20 +102,62 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
     private fun counted(ids: List<CardId>): String =
         ids.groupingBy { it }.eachCount().entries.joinToString("\n") { "${it.value} ${index.byId(it.key)?.name ?: "card ${it.key.value}"}" }
 
-    private fun deck(number: Int): MetaAnswer {
-        val d = seen[number] ?: return fail("Deck #$number is not among the lists read this session; list them first with ygopro_tournament_decks or ygopro_field_snapshot.")
+    /** A list by its number: one read this session, else the deck's own page on YGOPRODeck. */
+    private suspend fun listNumbered(number: Int): Result<TournamentDeck> {
+        seen[number]?.let { return Result.success(it) }
+        return source.deck(number).mapCatching { it ?: error("YGOPRODeck has no list numbered $number.") }
+            .onSuccess { seen[number] = it }
+    }
+
+    private suspend fun deck(number: Int): MetaAnswer {
+        val d = listNumbered(number).getOrElse { return fail("Could not read deck #$number: ${it.message ?: it::class.simpleName}") }
         return MetaAnswer(
             "${line(d)}\nPilot: ${d.pilot ?: "unknown"} · ${d.url}\n\nMain (${d.deck.main.size}):\n${counted(d.deck.main)}\n\nExtra (${d.deck.extra.size}):\n${counted(d.deck.extra)}\n\nSide (${d.deck.side.size}):\n${counted(d.deck.side)}",
             "Read #${d.number}, ${d.name}",
         )
     }
 
+    /**
+     * A player's record (1.0.59): the site's player search, then the one player it means — the
+     * only match, or the one whose whole name it is — then their page, every top with its list.
+     */
+    private suspend fun player(name: String, archetype: String?): MetaAnswer {
+        val found = source.players(name).getOrElse { return fail("Could not search YGOPRODeck's players: ${it.message ?: it::class.simpleName}") }
+        val paths = found.map { it.path }.distinct()
+        val path = when {
+            paths.size == 1 -> paths.single()
+            else -> found.filter { PlayerPages.fold(it.name) == PlayerPages.fold(name) }.map { it.path }.distinct().singleOrNull()
+        }
+        if (found.isEmpty()) return MetaAnswer("YGOPRODeck has no tournament player named like “$name”. Try part of the name, or another spelling.", "No player “$name”")
+        if (path == null) {
+            return MetaAnswer(
+                "${found.size} players on YGOPRODeck match “$name”; ask again with one full name:\n" +
+                    found.take(30).joinToString("\n") { "- ${it.name}${it.country?.let { c -> " ($c)" }.orEmpty()}, last top ${it.lastSeen}" },
+                "${found.size} players match “$name”",
+            )
+        }
+        val career = source.career(path).getOrElse { return fail("Could not read the player's page: ${it.message ?: it::class.simpleName}") }
+            ?: return MetaAnswer("YGOPRODeck lists no results for “$name”.", "No results for “$name”")
+        val results = career.results.filter { r -> archetype == null || r.archetypes.any { PlayerPages.names(archetype, it) } }
+        val text = buildString {
+            append("${career.name}${career.country?.let { " ($it)" }.orEmpty()} on YGOPRODeck")
+            if (career.tally.isNotEmpty()) append(" — ").append(career.tally.joinToString("; "))
+            appendLine(". ${results.size} results${archetype?.let { " with $it" }.orEmpty()}, newest first:")
+            results.take(60).forEach { r ->
+                append(r.date).append(" | ").append(r.placement).append(" | ").append(r.event).append(" | ").append(r.archetypes.joinToString(" / ").ifEmpty { "?" })
+                appendLine(if (r.deckNumber != null) " | list #${r.deckNumber}" else " | no list published")
+            }
+            append("Read a list with ygopro_deck and its number. Source: ${PlayerPages.absolute(path)}")
+        }
+        return MetaAnswer(text, "Read ${career.name}'s ${results.size} results")
+    }
+
     private suspend fun import(i: JsonObject): MetaAnswer {
         val number = ToolArgs.int(i, "deck_number") ?: return fail("deck_number is needed.")
-        val d = seen[number] ?: return fail("Deck #$number is not among the lists read this session; list them first.")
+        val d = listNumbered(number).getOrElse { return fail("Could not read deck #$number: ${it.message ?: it::class.simpleName}") }
         val name = ToolArgs.string(i, "name") ?: "${d.name} (${d.placement}, ${d.event})"
         val webId = ToolArgs.string(i, "web_id")
-        val notes = "From YGOPRODeck: ${d.url} — ${d.placement} of ${d.players ?: "?"} at ${d.event}, piloted by ${d.pilot ?: "?"}."
+        val notes = "From YGOPRODeck: ${d.url} — ${d.placement} of ${d.players ?: "?"} at ${d.event}${d.date?.let { " ($it)" }.orEmpty()}, piloted by ${d.pilot ?: "?"}."
         if (webId != null) {
             val web = h.webs.library.byId(webId) ?: return fail("No web $webId.")
             val id = suspendCancellableCoroutine<String> { cont -> h.webs.add(webId, name, YdkDocument(d.deck)) { if (cont.isActive) cont.resume(it) } }

@@ -123,9 +123,16 @@ class AiState(internal val h: NeueHolders) {
     /** Where the wizard is, kept while the panel closes. */
     var wizard by mutableStateOf(WizardState(AiPrefs.DEFAULT_NAME))
 
-    /** Opens the wizard in the panel, from its start unless it is part-way through. */
-    fun openWizard() {
-        if (wizard.step == com.kaiharimoto.mastertool.core.ai.providers.SetupStep.NAME) wizard.name = name
+    /**
+     * Opens the wizard in the panel, from its start unless it is part-way through. With a
+     * connection already made, the start is the connections themselves (1.0.59): use one, or add.
+     */
+    fun openWizard(adding: Boolean = false) {
+        if (wizard.step == com.kaiharimoto.mastertool.core.ai.providers.SetupStep.NAME || adding) {
+            wizard.name = name
+            wizard.saved = configured && !adding
+            if (adding && configured) wizard.step = com.kaiharimoto.mastertool.core.ai.providers.SetupStep.CONNECT
+        }
         wizardOpen = true
         historyOpen = false
         if (!prefs.panelOpen) h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true)) }

@@ -673,10 +673,20 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
     }
     // --ai=setup: the first setup, the whole window (1.0.45) — Ai asked for with no connection.
     if (mode == "setup") h.neue.update { it.copy(ai = it.ai.copy(connections = emptyList(), active = null)) }
+    // --ai=saved (1.0.59): Setup pressed with connections made opens on them; with --ai-step=KEY:compatible, the person's own presets.
+    if (mode == "saved") {
+        h.neue.update {
+            it.copy(ai = it.ai.copy(connections = it.ai.connections + listOf(
+                com.kaiharimoto.mastertool.core.prefs.AiConnection("compatible-mimo", "compatible", "Xiaomi MiMo", "mimo-v2-pro", "https://api.xiaomimimo.com/v1"),
+                com.kaiharimoto.mastertool.core.prefs.AiConnection("compatible-work", "compatible", "Work gateway", "gpt-5", "https://llm.example.com/v1"),
+            )))
+        }
+    }
     when (mode) {
-        "wizard", "setup" -> {
+        "wizard", "setup", "saved" -> {
             ai.openWizard()
             step?.let { spec ->
+                ai.wizard.saved = false
                 val (name, provider) = spec.split(':').let { it[0] to it.getOrNull(1) }
                 com.kaiharimoto.mastertool.core.ai.providers.Providers.byId(provider)?.let { p ->
                     ai.wizard.kind = p.kind

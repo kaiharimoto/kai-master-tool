@@ -22,7 +22,7 @@ import kotlin.test.fail
 class RulesTextTest {
     private val tools = setOf(
         "get_deck", "analyze_deck", "card_info", "search_cards", "memory", "memory_read", "ask_user", "rulings",
-        "archetype_guide", "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "web_search", "web_fetch",
+        "archetype_guide", "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "web_search", "web_fetch",
         "delegate", "todo_write", "calculate", "hand_odds", "skill_view", "get_web", "list_webs", "get_siding",
         "set_siding_plan", "prep_state", "log_game", "matchup_matrix", "expected_winrate", "set_event", "drill",
         "session_report", "resolve_cards", "new_deck",

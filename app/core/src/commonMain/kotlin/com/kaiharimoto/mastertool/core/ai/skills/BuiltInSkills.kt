@@ -99,6 +99,12 @@ object BuiltInSkills {
               3 nationals and YCS, 4 Worlds. Default tier 2 and up. Filter with `archetype`, `event`, `format`, `days`;
               `page` goes back further.
             - `ygopro_deck` shows one list in full with card names; `import_ygopro_deck` copies it into the library or a web.
+              Both take any deck number, including the one at the end of a ygoprodeck.com/deck/… address.
+            - **By player**: YGOPRODeck's deck lists cannot be filtered by player, so `ygopro_player` reads the site's
+              player pages: every top a player has, newest first, with the list's deck number where one is published.
+              Asked for someone's list ("Matthew Cane's Maliss"), use `ygopro_player` first, then `ygopro_deck` on the
+              number; a top without a number has no published list — say so. `player` on `ygopro_tournament_decks`
+              only filters the recent pages.
             - Always say where results come from ("YGOPRODeck, regionals and up, last 30 days") and how many decks the claim
               rests on. A handful of tops is a signal, not a meta.
             - Placement matters more than presence: a win at a 250-player event says more than a top 8 at 20 players.

@@ -36,6 +36,8 @@ data class TournamentDeck(
     val tier: Int,
     val deck: Deck,
     val url: String,
+    /** The event's date as YGOPRODeck writes it, when read off the deck's own page. */
+    val date: String? = null,
 ) {
     /** How much a result says: a win at a big event more than a top 8 at a small one. */
     val weight: Double get() = TournamentDecks.placementWeight(placement) * TournamentDecks.sizeWeight(players)
@@ -43,7 +45,7 @@ data class TournamentDeck(
 
 /**
  * YGOPRODeck's tournament decks (`/api/decks/getDecks.php?tournament=tier-N`), the
- * source of Ai's meta skills. The endpoint is the site's own, undocumented: read
+ * source of Ai's meta skills — and, since 1.0.59, its players ([PlayerPages]). The endpoint is the site's own, undocumented: read
  * leniently, asked politely (one request a second, a User-Agent that names the
  * app), kept an hour, and a failure is said as one — never papered over.
  */
@@ -51,16 +53,21 @@ class YgoProDeckDecks(
     private val http: HttpClient,
     private val userAgent: String = "NeueMasterTool",
     private val clock: () -> Long,
-    private val base: String = "https://ygoprodeck.com/api/decks/getDecks.php",
+    private val site: String = "https://ygoprodeck.com",
+    private val base: String = "$site/api/decks/getDecks.php",
 ) {
     private val pace = Mutex()
     private var last = 0L
-    private val cache = HashMap<String, Pair<Long, List<TournamentDeck>>>()
+    private val texts = HashMap<String, Pair<Long, String>>()
 
     /** One page (about twenty decks) of tier [tier]'s results, newest first; [page] 0 is the newest. */
     suspend fun page(tier: Int, page: Int): Result<List<TournamentDeck>> = runCatching {
-        val url = "$base?tournament=tier-$tier&offset=${page * PAGE}"
-        cache[url]?.takeIf { clock() - it.first < CACHE_MS }?.let { return@runCatching it.second }
+        TournamentDecks.parse(fetch("$base?tournament=tier-$tier&offset=${page * PAGE}"), tier)
+    }
+
+    /** One address, paced and cached like every other; a refusal is an error in words. */
+    private suspend fun fetch(url: String): String {
+        texts[url]?.takeIf { clock() - it.first < CACHE_MS }?.let { return it.second }
         val body = pace.withLock {
             val wait = MIN_INTERVAL_MS - (clock() - last)
             if (wait > 0) delay(wait)
@@ -70,9 +77,24 @@ class YgoProDeckDecks(
             if (!response.status.isSuccess()) error("YGOPRODeck answered ${response.status.value}")
             text
         }
-        val decks = TournamentDecks.parse(body, tier)
-        cache[url] = clock() to decks
-        decks
+        texts[url] = clock() to body
+        return body
+    }
+
+    /** Players with results whose name has [query] (a part of a name is enough), as the site's player search finds them. */
+    suspend fun players(query: String): Result<List<TournamentPlayer>> = runCatching {
+        PlayerPages.search(fetch("$site/tournaments/player-search/?search=" + query.trim().split(Regex("\\s+")).joinToString("+") { PlayerPages.encodeWord(it) }))
+    }
+
+    /** A player's results, newest first, from their page ([path] as the search gave it, or made from the name). */
+    suspend fun career(nameOrPath: String): Result<PlayerCareer?> = runCatching {
+        val path = if (nameOrPath.startsWith("/tournaments/by-player/")) nameOrPath else PlayerPages.playerPath(nameOrPath)
+        PlayerPages.career(fetch(site + path))?.takeIf { it.results.isNotEmpty() }
+    }
+
+    /** One published list by its number, from the deck's own page: any deck, not only the recent pages'. */
+    suspend fun deck(number: Int): Result<TournamentDeck?> = runCatching {
+        PlayerPages.deckPage(fetch("$site/deck/$number"), number)
     }
 
     /**

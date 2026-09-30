@@ -521,6 +521,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   under the answer, and — if a claim was wrong — a context-only turn asking for a short
   **Correction:**, never an edit to the answer. `ai.factCheck`. `NEUE.md` §4k has the roadmap
   of what would take Ai further (goldfish simulator first).
+  **1.0.59**: **a player's lists** — the deck API cannot filter by player, so `ygopro_player` reads
+  the site's player search, the player's page and `/deck/<number>` (`PlayerPages`, tested on captures;
+  `YgoProDeckLiveTest` behind `NEUE_LIVE_YGOPRODECK`), and `ygopro_deck` reads any number. **Setup asks
+  nothing twice**: with a connection made the wizard opens on Your connections (use one, add, close),
+  a key given before is filled in, saved OpenAI-compatible services are presets under **Yours**, and a
+  connection set up again replaces its twin (`SavedConnections`). **On Android the bar's Ai is
+  `AiBadge`** — face and name in a box, no running line; held, it opens the brain.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.

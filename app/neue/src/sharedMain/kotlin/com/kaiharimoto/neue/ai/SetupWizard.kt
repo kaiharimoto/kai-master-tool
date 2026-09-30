@@ -43,6 +43,7 @@ import com.kaiharimoto.mastertool.core.ai.cli.CodexCli
 import com.kaiharimoto.mastertool.core.ai.providers.ConnectKind
 import com.kaiharimoto.mastertool.core.ai.providers.Provider
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
+import com.kaiharimoto.mastertool.core.ai.providers.SavedConnections
 import com.kaiharimoto.mastertool.core.ai.providers.SetupStep
 import com.kaiharimoto.mastertool.core.ai.providers.SetupSteps
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
@@ -103,6 +104,15 @@ class WizardState(name: String) {
     var message by mutableStateOf<String?>(null)
     var good by mutableStateOf<String?>(null)
     var toolsWork by mutableStateOf<Boolean?>(null)
+    /**
+     * Opened with connections already made (1.0.59): the wizard shows them first, to use one or add
+     * another, so a press of Setup by mistake costs one click, not the whole way and a key.
+     */
+    var saved by mutableStateOf(false)
+    /** The saved connection whose key is in [key], by its name; null once the person types their own. */
+    var keyFrom by mutableStateOf<String?>(null)
+    /** The model a saved preset used, chosen again once the key lists the models. */
+    var preferModel by mutableStateOf<String?>(null)
 
     fun choose(p: Provider) {
         provider = p
@@ -113,6 +123,8 @@ class WizardState(name: String) {
         baseUrl = Providers.startingAddress(p, onDevice)
         label = if (p.id == Providers.compatible.id) "" else p.label
         keyPage = p.keyPage
+        keyFrom = null
+        preferModel = null
         models = emptyList()
         model = ""
         effort = p.defaultEffort
@@ -135,12 +147,26 @@ fun SetupWizard(ai: AiState, modifier: Modifier = Modifier) {
     val c = Mu.colors
     val scroll = rememberScrollState()
     val (at, of) = SetupSteps.position(w.step, w.provider)
+    if (w.saved && ai.configured) {
+        Column(modifier.verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { SavedStep(ai, w) }
+        return
+    }
     Column(modifier.verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Mono("${at.toString().padStart(2, '0')} / ${of.toString().padStart(2, '0')}", color = c.ink45)
             Box(Modifier.weight(1f))
             SetupSteps.back(w.step, w.provider)?.let { previous ->
-                MicroLink("← Back", { w.message = null; w.good = null; w.step = previous })
+                MicroLink("← Back", {
+                    w.message = null
+                    w.good = null
+                    // With connections made, the way back from the start is to them, not to the name.
+                    if (ai.configured && previous == SetupStep.NAME) {
+                        w.step = SetupStep.NAME
+                        w.saved = true
+                    } else {
+                        w.step = previous
+                    }
+                })
             }
         }
         MuText(w.step.title, style = MuType.h2(LocalMuFonts.current), color = c.ink)
@@ -161,7 +187,7 @@ internal fun WizardStep(ai: AiState, w: WizardState) {
             SetupStep.PROVIDER -> ProviderStep(w)
             SetupStep.INSTALL -> InstallStep(w)
             SetupStep.SIGN_IN -> SignInStep(w)
-            SetupStep.KEY -> KeyStep(w)
+            SetupStep.KEY -> KeyStep(ai, w)
             SetupStep.SERVER -> ServerStep(w)
             SetupStep.MODEL -> ModelStep(w)
             SetupStep.PERMISSIONS -> PermissionsStep(ai, w)
@@ -202,6 +228,44 @@ internal fun Trouble(w: WizardState) {
                 Help(t.fix, color = c.ink70)
             }
         }
+    }
+}
+
+/**
+ * The connections already made (1.0.59), shown first when Setup is pressed with one in place:
+ * use one, add another, or close — nothing asked again.
+ */
+@Composable
+private fun SavedStep(ai: AiState, w: WizardState) {
+    val c = Mu.colors
+    MuText("Your connections", style = MuType.h2(LocalMuFonts.current), color = c.ink)
+    Help("${ai.name} talks through the one chosen. Choose another, or add a new one: keys you gave before are kept and offered again.")
+    val active = ai.prefs.connection?.id
+    ai.prefs.connections.forEach { conn ->
+        val provider = Providers.byId(conn.provider)
+        Choice(
+            title = conn.label.ifBlank { provider?.label ?: conn.provider },
+            line = listOfNotNull(
+                conn.model.ifBlank { "Default model" },
+                provider?.label?.takeIf { it != conn.label },
+                conn.baseUrl?.let(SavedConnections::address)?.removePrefix("https://"),
+                if (conn.id == active) "in use" else null,
+            ).joinToString(" · "),
+            selected = conn.id == active,
+        ) {
+            if (conn.id != active) ai.use(conn.id)
+            ai.wizardOpen = false
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        MuButton("Add a connection", {
+            w.saved = false
+            w.name = ai.name
+            w.message = null
+            w.good = null
+            w.step = SetupStep.CONNECT
+        }, variant = BtnVariant.PRIMARY, arrow = true)
+        MuButton("Close", { ai.wizardOpen = false }, variant = BtnVariant.GHOST)
     }
 }
 
@@ -344,9 +408,17 @@ private fun SignInStep(w: WizardState) {
 private fun quoted(path: String) = if (path.contains(' ')) "\"$path\"" else path
 
 @Composable
-private fun KeyStep(w: WizardState) {
+private fun KeyStep(ai: AiState, w: WizardState) {
     val p = w.provider ?: return
     val scope = rememberCoroutineScope()
+    // A key given before for this service is offered again (1.0.59), not asked for.
+    LaunchedEffect(p.id, SavedConnections.address(w.baseUrl)) {
+        if (w.key.isEmpty() || w.keyFrom != null) {
+            val from = SavedConnections.keyFrom(ai.prefs.connections, p.id, w.baseUrl.takeIf { Providers.typedAddress(p) }) { !ai.secret(it).isNullOrBlank() }
+            w.key = from?.let { ai.secret(it) }.orEmpty()
+            w.keyFrom = from?.label?.ifBlank { p.label }
+        }
+    }
     val env = p.envVars.firstNotNullOfOrNull { name -> AiDesk.env(name)?.let { name to it } }
     Steps(
         when (p.id) {
@@ -359,12 +431,13 @@ private fun KeyStep(w: WizardState) {
         },
     )
     val compatible = p.id == Providers.compatible.id
-    if (compatible) CompatibleFields(w)
+    if (compatible) CompatibleFields(ai, w)
     w.keyPage?.let { page -> MuButton("Open the key page", { Platform.browse(page) }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, arrow = true) }
     if (env != null && w.key.isEmpty()) {
         MuButton("Use the key in ${env.first}", { w.key = env.second }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
     }
-    SecretField(w.key, { w.key = it.trim() }, "Paste the key")
+    SecretField(w.key, { w.key = it.trim(); w.keyFrom = null }, "Paste the key")
+    w.keyFrom?.let { Help("The key saved with “$it” is filled in. Paste another to change it.", color = Mu.colors.ink70) }
     Help("The key stays on this ${if (AiDesk.canRunCli) "computer" else "device"}, in a store of its own: never in a deck file, an export or a conversation.")
     Providers.keyProblem(p, w.key)?.takeIf { w.key.isNotEmpty() }?.let { Help(it, color = Mu.colors.ink) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -375,7 +448,7 @@ private fun KeyStep(w: WizardState) {
                 val listed = listModels(p, w.key, if (compatible) w.baseUrl else p.baseUrl)
                 listed.onSuccess { models ->
                     w.models = models
-                    w.model = Providers.recommended(p, models) ?: models.firstOrNull().orEmpty()
+                    w.model = w.preferModel?.takeIf { it in models } ?: Providers.recommended(p, models) ?: models.firstOrNull().orEmpty()
                     w.good = "The key works: ${models.size} models."
                     w.next()
                 }.onFailure { w.message = "That key did not work: ${it.message ?: it::class.simpleName}" }
@@ -393,13 +466,33 @@ private fun KeyStep(w: WizardState) {
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun CompatibleFields(w: WizardState) {
+private fun CompatibleFields(ai: AiState, w: WizardState) {
+    // The person's own, saved before (1.0.59): a tap fills the address, the name, the model and the key.
+    val mine = SavedConnections.presets(ai.prefs.connections)
+    if (mine.isNotEmpty()) {
+        com.kaiharimoto.neue.kit.FieldLabel("Yours", hint = "saved before")
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            mine.forEach { conn ->
+                val address = conn.baseUrl.orEmpty()
+                com.kaiharimoto.neue.kit.Tag(conn.label.ifBlank { SavedConnections.address(address) }, SavedConnections.address(w.baseUrl) == SavedConnections.address(address) && w.label == conn.label, {
+                    w.baseUrl = address
+                    w.label = conn.label
+                    w.keyPage = Providers.compatiblePresets.firstOrNull { SavedConnections.address(it.baseUrl) == SavedConnections.address(address) }?.keyPage
+                    w.preferModel = conn.model.takeIf { it.isNotBlank() }
+                    ai.secret(conn)?.takeIf { it.isNotBlank() }?.let { w.key = it; w.keyFrom = conn.label.ifBlank { null } ?: "it" }
+                    w.message = null
+                }, caption = "Fill in")
+            }
+        }
+        com.kaiharimoto.neue.kit.FieldLabel("Or a known provider")
+    }
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Providers.compatiblePresets.forEach { preset ->
             com.kaiharimoto.neue.kit.Tag(preset.name, w.baseUrl == preset.baseUrl, {
                 w.baseUrl = preset.baseUrl
                 w.label = preset.name
                 w.keyPage = preset.keyPage
+                w.preferModel = null
                 w.message = null
             }, caption = "Fill in")
         }
@@ -557,7 +650,7 @@ private fun DoneStep(ai: AiState, w: WizardState) {
     Help("${w.name.ifBlank { ai.name }} will talk through ${w.label.trim().ifBlank { p.label }}${w.model.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}.")
     Help("Open it any time with the ${ai.name} button in the bar${if (AiDesk.canRunCli) " or ${com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd).orEmpty()}" else ""}. It follows you to every page.")
     val connect = {
-        val connection = AiConnection(
+        val made = AiConnection(
             id = "${p.id}-${UUID.randomUUID().toString().take(6)}",
             provider = p.id,
             label = w.label.trim().ifBlank { p.label },
@@ -565,6 +658,8 @@ private fun DoneStep(ai: AiState, w: WizardState) {
             baseUrl = w.baseUrl.takeIf { Providers.typedAddress(p) && it.isNotBlank() },
             program = w.program,
         )
+        // The same service, name and model set up again replaces its connection, never a twin (1.0.59).
+        val connection = SavedConnections.replaced(ai.prefs.connections, made)?.let { old -> made.copy(id = old.id, window = old.window) } ?: made
         ai.h.neue.update { it.copy(ai = it.ai.copy(effort = w.effort, alwaysAllow = w.alwaysAllow)) }
         ai.connect(connection, w.key.takeIf { p.needsKey || it.isNotBlank() })
         ai.wizard = WizardState(ai.name)

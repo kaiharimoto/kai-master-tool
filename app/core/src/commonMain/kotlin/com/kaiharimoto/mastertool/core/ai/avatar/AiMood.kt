@@ -125,7 +125,7 @@ class MoodTracker {
         )
 
         /** The tools whose results are something found. */
-        val finding = setOf("search_cards", "web_search", "ygopro_tournament_decks", "list_decks")
+        val finding = setOf("search_cards", "web_search", "ygopro_tournament_decks", "ygopro_player", "list_decks")
 
         /** The faces Ai may choose for itself: the ones nothing in the app sets. */
         val expressible = listOf(Expression.WINK, Expression.SURPRISED, Expression.DELIGHTED, Expression.LOVE, Expression.ANGRY)

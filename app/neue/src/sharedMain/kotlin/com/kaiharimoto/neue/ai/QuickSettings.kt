@@ -71,7 +71,7 @@ fun QuickSettings(ai: AiState) {
             }, variant = BtnVariant.GHOST)
             MuButton("New connection…", {
                 ai.quickOpen = false
-                ai.openWizard()
+                ai.openWizard(adding = true)
             }, variant = BtnVariant.GHOST)
             MuButton("Done", {
                 if (name.isNotBlank() && name != ai.name) ai.rename(name)
