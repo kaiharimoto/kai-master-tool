@@ -125,7 +125,7 @@ fun AiMarquee(h: NeueHolders, width: Dp = 240.dp, height: Dp = 32.dp) {
                     Box(Modifier.size(height), contentAlignment = Alignment.Center) {
                         AiAvatar(ai.face, AvatarSizes.bar, pointer = { h.cursor.position }, name = ai.name)
                     }
-                    Box(Modifier.weight(1f).fillMaxHeight().clipToBounds().padding(end = 10.dp), contentAlignment = Alignment.CenterStart) {
+                    Box(Modifier.weight(1f).fillMaxHeight().padding(start = 4.dp, end = 10.dp).clipToBounds(), contentAlignment = Alignment.CenterStart) {
                         // A new line starts from its beginning.
                         key(line) {
                             BasicText(
