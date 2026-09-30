@@ -77,6 +77,7 @@ object AiSettings {
         "ai.voiceModel" to "The speech model the desktop transcribes the microphone with, on the computer: tiny.en (fast), base.en (standard), small.en (accurate) or base (any language).",
         "ai.speakReplies" to "Whether replies are spoken aloud: talk (in talk mode) or never.",
         "ai.speechRate" to "How fast replies are spoken aloud, 0.5 to 2; 1 is the voice's own pace.",
+        "ai.factCheck" to "Whether each answer's claims about cards, rulings and numbers are checked against the card text once written, and corrected if wrong.",
         FORMAT to "The banlist the builder checks against: TCG or OCG.",
         SEARCH_EFFECTS to "Card searches read the printed text as well as names.",
     )

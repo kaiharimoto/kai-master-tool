@@ -515,7 +515,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   tested. The mic (`AI_VOICE`, `Ctrl Shift Space`) fills the box; talk mode (`AI_TALK`, `Ctrl Shift
   T`) listens, sends, answers aloud, listens again. `DeskAction.AI` is never `run_action`'s.
   `VoiceProbeTest` transcribes a real recording when `NEUE_WHISPER_MODEL`/`NEUE_WHISPER_WAV` are set.
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice --ai-step=KEY:anthropic` photographs it.
+  **1.0.58, the fact-check pass**: after an answer that names cards or talks rulings or odds,
+  a look-only helper (`FactCheck.CHECKER`, tools `card_info`/`rulings`/`calculate`/`hand_odds`)
+  checks every claim; the result is `AiSession.checks` (a field, never a new `Part`), a line
+  under the answer, and — if a claim was wrong — a context-only turn asking for a short
+  **Correction:**, never an edit to the answer. `ai.factCheck`. `NEUE.md` §4k has the roadmap
+  of what would take Ai further (goldfish simulator first).
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

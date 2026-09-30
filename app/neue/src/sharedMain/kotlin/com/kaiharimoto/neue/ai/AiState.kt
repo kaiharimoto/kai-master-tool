@@ -249,6 +249,92 @@ class AiState(internal val h: NeueHolders) {
 
     // ---- talking ---------------------------------------------------------------
 
+    // ---- the fact-check pass (1.0.58) ------------------------------------------
+
+    /** An answer's claims are being checked. */
+    var checking by mutableStateOf(false)
+        private set
+
+    /** The next answer is the correction a check asked for, and is not checked itself. */
+    private var correcting = false
+
+    /**
+     * The last answer checked (1.0.58, kai's pick for "frontier level"): a helper with a fresh
+     * mind and only the tools that look up card text, rulings and numbers lists every claim and
+     * checks it. The result is kept with the conversation and drawn under the answer; if a claim
+     * was wrong, the model is told what the check found and writes a short correction. API
+     * connections only — a plan's command-line app runs its own loop.
+     */
+    private fun checkLastAnswer() {
+        if (correcting) {
+            correcting = false
+            return
+        }
+        if (!prefs.factCheck || AiState.PHASE < 3) return
+        val s = session ?: return
+        if (s.mode != AiSession.MODE_CHAT) return
+        val at = s.turns.indexOfLast { it.role == Role.ASSISTANT && it.text.isNotBlank() }
+        if (at < 0 || s.checks.any { it.turn == at }) return
+        val reply = s.turns[at].text
+        if (!com.kaiharimoto.mastertool.core.ai.check.FactCheck.worthChecking(reply)) return
+        val connection = prefs.connection ?: return
+        val model = runCatching { backendFor(connection) }.getOrNull() ?: return
+        if (model.runsOwnLoop) return
+        checking = true
+        scope.launch {
+            try {
+                val index = h.builder.index
+                val cards = com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown.cards(reply).mapNotNull { name ->
+                    (index.byName(name) ?: (com.kaiharimoto.mastertool.core.ai.CardWords.resolve(name, index) as? com.kaiharimoto.mastertool.core.ai.Resolved.Found)?.card)
+                        ?.let { it.name to it.description }
+                }
+                val look = setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
+                val runner = com.kaiharimoto.mastertool.core.ai.ToolRunner { call ->
+                    if (call.name.removePrefix("mcp__neue__") !in look) {
+                        Part.ToolResult(call.id, call.name, "A checker can only look up cards, rulings and numbers.", isError = true)
+                    } else {
+                        host.run(call)
+                    }
+                }
+                var said = ""
+                var spent = com.kaiharimoto.mastertool.core.ai.Usage()
+                AgentLoop(model, runner, maxSteps = 8, now = System::currentTimeMillis, budget = budgetFor(connection))
+                    .run(
+                        TurnRequest(
+                            com.kaiharimoto.mastertool.core.ai.check.FactCheck.CHECKER,
+                            listOf(ChatTurn.user(com.kaiharimoto.mastertool.core.ai.check.FactCheck.brief(reply, cards))),
+                            tools.filter { it.name in look },
+                            connection.model,
+                            "low",
+                        ),
+                    )
+                    .collect { e ->
+                        when (e) {
+                            is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
+                            is AgentEvent.Done -> spent = e.usage
+                            else -> Unit
+                        }
+                    }
+                val claims = com.kaiharimoto.mastertool.core.ai.check.FactCheck.parse(said)
+                if (claims.isEmpty()) return@launch
+                val check = com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check(at, claims)
+                val now = session?.takeIf { it.id == s.id } ?: return@launch
+                val next = now.copy(checks = now.checks + check, usage = now.usage + spent)
+                commit(next)
+                // Wrong: the model says so itself, briefly, in a reply of its own (the answer above is never rewritten).
+                if (check.wrong.isNotEmpty() && !running) {
+                    correcting = true
+                    val ask = ChatTurn(Role.USER, listOf(Part.Context(com.kaiharimoto.mastertool.core.ai.check.FactCheck.correction(check))), System.currentTimeMillis())
+                    val corrected = next.copy(turns = next.turns + ask, updatedAt = System.currentTimeMillis())
+                    commit(corrected)
+                    respond(corrected, connection)
+                }
+            } finally {
+                checking = false
+            }
+        }
+    }
+
     // ---- voice (1.0.57) ---------------------------------------------------------
 
     /** The microphone is open. */
@@ -629,6 +715,9 @@ class AiState(internal val h: NeueHolders) {
         // Talk mode (1.0.57): the answer said aloud, then the microphone again; a Stop or a problem ends it.
         if (talkMode) {
             if (problem == null && !wasStopped) answerAloud() else endTalk()
+        } else if (problem == null && !wasStopped && pendingCompact == null) {
+            // The fact-check pass (1.0.58): the answer's claims checked against the card text.
+            checkLastAnswer()
         }
         // A summary asked for while it answered (1.0.56): made now the answer is done.
         pendingCompact?.let { focus ->

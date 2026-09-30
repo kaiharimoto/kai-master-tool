@@ -86,7 +86,7 @@ import com.kaiharimoto.neue.theme.MuType
 /** One thing drawn in the transcript. */
 private sealed interface Entry {
     data class Person(val text: String, val images: List<Part.Image> = emptyList()) : Entry
-    data class Reply(val text: String) : Entry
+    data class Reply(val text: String, val check: com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check? = null) : Entry
     data class Line(val summary: String, val isError: Boolean) : Entry
     data class Thought(val text: String) : Entry
 
@@ -95,7 +95,13 @@ private sealed interface Entry {
 }
 
 /** The conversation as rows: the person's words, Ai's words, and a line for each thing Ai did. */
-private fun rows(turns: List<ChatTurn>, summarized: Int = 0, summary: String = "", carried: Boolean = false): List<Entry> = buildList {
+private fun rows(
+    turns: List<ChatTurn>,
+    summarized: Int = 0,
+    summary: String = "",
+    carried: Boolean = false,
+    checks: List<com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check> = emptyList(),
+): List<Entry> = buildList {
     if (carried && summary.isNotBlank()) add(Entry.Summarized(summary, carried = true))
     turns.forEachIndexed { i, turn ->
         if (i == summarized && summarized > 0 && summary.isNotBlank()) add(Entry.Summarized(summary, carried = false))
@@ -105,7 +111,7 @@ private fun rows(turns: List<ChatTurn>, summarized: Int = 0, summary: String = "
             else -> {
                 turn.parts.filterIsInstance<Part.Reasoning>().forEach { add(Entry.Thought(it.text)) }
                 turn.parts.filterIsInstance<Part.Activity>().forEach { add(Entry.Line(if (it.summary.isNotBlank()) it.summary else it.name, it.isError)) }
-                turn.text.takeIf { it.isNotBlank() }?.let { add(Entry.Reply(it)) }
+                turn.text.takeIf { it.isNotBlank() }?.let { add(Entry.Reply(it, checks.lastOrNull { c -> c.turn == i })) }
             }
         }
     }
@@ -120,8 +126,8 @@ private fun rows(turns: List<ChatTurn>, summarized: Int = 0, summary: String = "
 @Composable
 fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
     val session = ai.session
-    val rows = remember(session?.turns, session?.summarized, session?.summary) {
-        rows(session?.turns.orEmpty(), session?.summarized ?: 0, session?.summary.orEmpty(), session?.carriedFrom != null)
+    val rows = remember(session?.turns, session?.summarized, session?.summary, session?.checks) {
+        rows(session?.turns.orEmpty(), session?.summarized ?: 0, session?.summary.orEmpty(), session?.carriedFrom != null, session?.checks.orEmpty())
     }
     val list = rememberLazyListState()
     val tail = rows.size + (if (ai.streaming.isNotEmpty()) 1 else 0) + (if (ai.reasoning.isNotEmpty()) 1 else 0) + ai.todos.size + (if (ai.confirm != null) 1 else 0) + (if (ai.question != null) 1 else 0) + (if (ai.problem != null) 1 else 0) + ai.activity.size
@@ -143,7 +149,10 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
             items(rows) { row ->
                 when (row) {
                     is Entry.Person -> PersonSays(ai, row.text, row.images)
-                    is Entry.Reply -> ReplyView(ai, row.text)
+                    is Entry.Reply -> {
+                        ReplyView(ai, row.text)
+                        row.check?.let { CheckLine(it) }
+                    }
                     is Entry.Line -> ActivityLine(row.summary, row.isError)
                     is Entry.Thought -> ReasoningView(ai, row.text, live = false)
                     is Entry.Summarized -> SummaryMark(row.summary, row.carried)
@@ -223,6 +232,54 @@ private fun PersonSays(ai: AiState, text: String, images: List<Part.Image>) {
         if (text.isNotBlank()) {
             Box(Modifier.fillMaxWidth(0.88f).background(c.ink06).padding(horizontal = 12.dp, vertical = 8.dp)) {
                 SelectionContainer { MuText(text, style = MuType.row(LocalMuFonts.current), color = c.ink) }
+            }
+        }
+    }
+}
+
+/**
+ * An answer's check (1.0.58): one line under it — how many claims were checked against the card
+ * text, how many could not be confirmed, or that one was wrong and is corrected below — which
+ * opens to every claim, its verdict and where it was checked.
+ */
+@Composable
+private fun CheckLine(check: com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check) {
+    val c = Mu.colors
+    var open by remember { mutableStateOf(false) }
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    val wrong = check.wrong.isNotEmpty()
+    Column(Modifier.fillMaxWidth().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            Modifier
+                .hoverable(source)
+                .cursorPointer(caption = if (open) "Hide" else "Show")
+                .muClickable(interactionSource = source) { open = !open },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Mono(if (wrong) "✕" else if (check.unsure.isNotEmpty()) "?" else "✓", color = if (wrong) c.ink else c.ink70)
+            Mono(com.kaiharimoto.mastertool.core.ai.check.FactCheck.summary(check), color = animatedColor(if (hovered || wrong) c.ink else c.ink45))
+        }
+        if (open) {
+            Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                check.claims.forEach { claim ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Mono(
+                            when (claim.verdict) {
+                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.OK -> "✓"
+                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.WRONG -> "✕"
+                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.UNSURE -> "?"
+                            },
+                            color = c.ink,
+                        )
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Small(claim.claim, color = c.ink)
+                            if (claim.correction.isNotBlank()) Small("In fact: ${claim.correction}", color = c.ink70)
+                            if (claim.source.isNotBlank()) Mono(claim.source, color = c.ink45)
+                        }
+                    }
+                }
             }
         }
     }
@@ -607,6 +664,7 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
     val c = Mu.colors
     val face = ai.face
     val status = when {
+        ai.checking && !ai.running -> "Checking its answer against the card text"
         ai.hearing -> "Listening"
         ai.transcribing -> "Writing down what you said"
         ai.aloud -> "Speaking"

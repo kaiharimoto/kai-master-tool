@@ -209,6 +209,8 @@ data class AiSession(
     val clearedBefore: Int = 0,
     /** The conversation this one carries on from, when it was started fresh with a summary (1.0.56). */
     val carriedFrom: String? = null,
+    /** Answers checked against the card text (1.0.58, the fact-check pass): a field, so older builds read past it. */
+    val checks: List<com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check> = emptyList(),
 ) {
     /**
      * What the model is sent: the summary in front of the turns after it, or every turn; the

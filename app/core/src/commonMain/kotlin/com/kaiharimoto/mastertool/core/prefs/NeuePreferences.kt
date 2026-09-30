@@ -98,6 +98,8 @@ data class AiPrefs(
     val speakReplies: String = SPEAK_IN_TALK,
     /** How fast replies are spoken, 0.5 to 2 (1 is the voice's own pace). */
     val speechRate: Float = 1f,
+    /** Whether answers are checked against the card text once written (1.0.58, the fact-check pass). */
+    val factCheck: Boolean = true,
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()

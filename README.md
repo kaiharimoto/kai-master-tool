@@ -115,7 +115,8 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   step, the end board on the field. A gauge shows how full its memory of the conversation is,
   and one click summarises, clears or starts fresh. Speak to it instead of typing —
   on the desktop your words are written out on your own computer — or switch on talk mode for a
-  conversation out loud. Settings can
+  conversation out loud. Before you rely on an answer, it checks its own claims about cards,
+  rulings and odds against the card text, and corrects itself when it was wrong. Settings can
   turn it off entirely.
 - **The keyboard and the mouse, both whole.** Every action has a shortcut
   (`F1` lists them, `Ctrl K` finds them), and the mouse has a grammar: right-click

@@ -2210,8 +2210,73 @@ computer itself (kai's choice over a cloud service), and — from the frontier l
 - **Settings:** in quick settings — the speech model on the desk, whether talk mode answers
   aloud, and how fast (`ai.voiceModel`, `ai.speakReplies`, `ai.speechRate`).
 
+**1.0.58, it checks itself.** kai picked this from the "frontier" list: **the fact-check pass**.
+- **When it checks:** once an answer is written, if it names cards or talks rulings, rules or
+  odds at some length (`FactCheck.worthChecking`).
+- **Who checks:** a helper with a fresh mind — the same model, `FactCheck.CHECKER` as its
+  instructions, and only `card_info`, `rulings`, `calculate`, `hand_odds` and `search_cards`.
+  It is given the answer and the printed text of every card it names (`FactCheck.brief`), lists
+  each claim about a card's text, a ruling, a rule, a banlist status or a number, and checks it
+  at the source.
+- **What it answers:** JSON, read forgivingly (`FactCheck.parse`: ok, wrong or unsure, with the
+  correction and where it looked).
+- **What the person sees:**
+  - One line under the answer: "Checked 5 claims against the card text", "· 1 could not be
+    confirmed", or "1 of 3 claims was wrong — corrected below". A click opens every claim with
+    ✓, ✕ or ?, the correction and the source.
+  - When a claim was wrong, the model is told what the check found (a context-only turn, not
+    drawn) and writes a short **Correction:** of its own. The answer above is never rewritten:
+    the history stays append-only.
+- **Where it is kept:** checks travel with the conversation as `AiSession.checks`, a field, so
+  older builds read past it. The checker's tokens count in the conversation's spend.
+- **When it is off:**
+  - it is on by default for API connections, and switched in quick settings (`ai.factCheck`);
+  - a plan's command-line app runs its own loop and is not checked;
+  - talk mode is not checked, as the answer is already being spoken.
+
+#### Going further — the roadmap
+
+What else would make Ai frontier-level here, in the order it would pay off, with what each needs:
+
+1. **A goldfish simulator.** Ai draws thousands of opening hands from the real deck and plays
+   out its lines by the card text, reporting how often each line gets there and the end boards
+   it reaches.
+   - *Needs:* a rules engine over a subset of card effects — the play stage's `core/board` and
+     `scene` are the start — or Ai itself stepping through each hand with a legality checker;
+     `hand_odds` already does the counting.
+   - *Cost:* the biggest item here, and the most valuable. It turns "I think this line works"
+     into "this line gets there 63% of the time".
+2. **Art recognition for screenshots without names** (Master Duel). Perceptual hashes of every
+   card's art in the local library, matched against the art boxes found in a screenshot.
+   - *Needs:* a hash per card, computed once from `ArtLibrary` (about 14k × 8 bytes), and a
+     box-finder for a grid of cards.
+   - *Cost:* medium. It makes `deck-from-picture` exact where names are not printed.
+3. **Parallel helpers.** `delegate` fanned out: five decklists read at once, a web's matchups
+   studied side by side, the fact-check run beside the next answer.
+   - *Needs:* the loop's single-helper call made a list, with a combined report.
+   - *Cost:* small; the time saved is the gain.
+4. **Model routing.** A cheaper, faster model for look-ups, summaries and checks; the strong
+   one for plans and teaching.
+   - *Needs:* a second connection chosen per job (quick settings: "for small jobs, use…").
+   - *Cost:* small; it halves what a long session costs.
+5. **A rulings benchmark.** A fixed set of hard ruling questions with known answers (from
+   Yugipedia's rulings pages), run against a connection to score it before relying on it.
+   - *Needs:* the questions, and a runner that uses the fact-check's parser.
+   - *Cost:* small; it answers "which model should I use for this game?".
+6. **Proactive notes while building.** Ai watches deck edits and says once, quietly, when an
+   edit breaks a combo the guide depends on, or pushes a ratio past what the guide says.
+   - *Needs:* the guide's lines read as card dependencies, and a debounce.
+7. **Long-running research with a notification.** "Study the top ten lists of this weekend's
+   Regional overnight": a background job that writes to the web's notes and says when it is done.
+8. **Duel logs.** Replays from DuelingBook or Master Duel read into the Prep page's practice
+   log, with the misplays Ai finds.
+9. **Memory across conversations by meaning,** not only by words: embeddings of past turns so
+   `recall` finds "that thing about going second" without the exact words.
+10. **Live event mode.** Between rounds, the siding plan for the next opponent, spoken, with
+    the three-minute timer; results logged by voice.
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`, and from 1.0.55 `--ai=picture` (a screenshot read into a deck), `--ai=visual` (line, board, compare), `--ai=attach` (pictures waiting in the composer), and from 1.0.56 `--ai=summarised` (a long conversation, its start summarised, the gauge) and `--ai=context` (the Context panel); from 1.0.57 `--ai=listening`, `--ai=talk` and `--ai=voice` (the model's download).
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`, and from 1.0.55 `--ai=picture` (a screenshot read into a deck), `--ai=visual` (line, board, compare), `--ai=attach` (pictures waiting in the composer), and from 1.0.56 `--ai=summarised` (a long conversation, its start summarised, the gauge) and `--ai=context` (the Context panel); from 1.0.57 `--ai=listening`, `--ai=talk` and `--ai=voice` (the model's download); from 1.0.58 `--ai=checked` (an answer checked, one claim wrong, its correction).
 
 ### 4k′. Ai's face (1.0.52)
 

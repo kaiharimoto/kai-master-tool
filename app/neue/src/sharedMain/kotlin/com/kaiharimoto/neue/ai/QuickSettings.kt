@@ -124,6 +124,11 @@ fun QuickSettings(ai: AiState) {
             // Voice (1.0.57): the speech model on the desk, and talk mode's answers.
             FieldLabel("Voice", hint = if (com.kaiharimoto.neue.platform.Voice.usesModels) "written out on this computer" else "the system's recogniser")
             VoiceSettings(ai)
+            // The fact-check pass (1.0.58).
+            FieldLabel("Check its answers", hint = "claims about cards, rulings and numbers, against the card text")
+            Segmented(prefs.factCheck, listOf(true, false), { if (it) "Check" else "Don't check" }, { v ->
+                ai.h.neue.update { it.copy(ai = it.ai.copy(factCheck = v)) }
+            }, small = true)
             FieldLabel("Its thinking", hint = "in the conversation")
             Segmented(prefs.showReasoning, AiPrefs.REASONINGS, { it.replaceFirstChar { ch -> ch.uppercase() } }, { v ->
                 ai.h.neue.update { it.copy(ai = it.ai.copy(showReasoning = v)) }

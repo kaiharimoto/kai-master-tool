@@ -831,6 +831,37 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
                 else -> ai.voiceAsk = true
             }
         }
+        // 1.0.58: an answer checked against the card text, one claim wrong, and the correction under it.
+        "checked" -> {
+            val now = System.currentTimeMillis()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-158", title = "Siding", connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("What do I side in against Snake-Eye going second?"),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                            "Bring in two [[Infinite Impermanence]]: it negates their first monster's effect, and you can activate it from your hand at any time. " +
+                                "Keep [[Ash Blossom & Joyous Spring]] for [[Snake-Eye Ash]]'s search.",
+                        ),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(com.kaiharimoto.mastertool.core.ai.Part.Context("check"))),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                            "**Correction:** [[Infinite Impermanence]] can be activated from the hand only if you control no cards — so going second it works on your opponent's first turn, before you play anything. The siding advice stands.",
+                        ),
+                    ),
+                    checks = listOf(
+                        com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check(
+                            1,
+                            listOf(
+                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Claim("Infinite Impermanence negates a monster's effects", com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.OK, source = "card text"),
+                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Claim("It can be activated from the hand at any time", com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.WRONG, "only if you control no cards", "card text"),
+                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Claim("Ash Blossom negates Snake-Eye Ash's search", com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.OK, source = "rulings"),
+                            ),
+                        ),
+                    ),
+                    createdAt = now, updatedAt = now,
+                ),
+            )
+        }
         "context", "summarised" -> {
             val now = System.currentTimeMillis()
             val talk = (1..8).flatMap { i ->
