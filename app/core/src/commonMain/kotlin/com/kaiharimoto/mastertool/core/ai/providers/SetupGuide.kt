@@ -38,6 +38,7 @@ object SetupGuide {
             "openai" -> listOf("An OpenAI platform account (platform.openai.com) — not the same as ChatGPT.", "Credit on it.", "About two minutes.")
             "gemini" -> listOf("A Google account.", "Nothing else: Google AI Studio has a free tier.", "About two minutes.")
             "openrouter" -> listOf("An OpenRouter account.", "Credit on it; one key reaches many providers' models.", "About two minutes.")
+            "compatible" -> listOf("The provider's API address, up to /v1 (its docs call it the base URL), or one of the providers listed.", "A key from it, and credit if it needs some.", "A model on it that can call tools.", "About two minutes.")
             "ollama" -> listOf("Ollama installed (ollama.com).", "A model that can call tools, pulled: for example qwen3.", "A computer with 16 GB of memory or more for a useful model.")
             "lmstudio" -> listOf("LM Studio installed (lmstudio.ai).", "A model loaded that can call tools.", "Its local server started, in the Developer tab.")
             else -> listOf("The server's address, up to /v1.", "Its key, if it asks for one.", "A model on it that can call tools.")
@@ -64,7 +65,11 @@ object SetupGuide {
         SetupStep.KEY -> buildList {
             add(Trouble("401 or “invalid key”", "Copy the whole key again — it is shown once; if it is lost, make a new one."))
             if (provider?.id != "gemini") add(Trouble("402, 429 or “credit balance too low”", "Add credit to the account; a new key works only once there is some."))
-            add(Trouble("Could not connect", "Check the internet connection, and that no firewall or VPN blocks ${provider?.baseUrl?.substringAfter("://")?.substringBefore('/') ?: "the provider"}."))
+            add(Trouble("Could not connect", "Check the internet connection, and that no firewall or VPN blocks ${provider?.baseUrl?.substringAfter("://")?.substringBefore('/')?.takeIf { it.isNotBlank() } ?: "the provider's address"}."))
+            if (provider?.id == "compatible") {
+                add(Trouble("404, or “not found”", "Check the address against the provider's docs: it usually ends in /v1, and never in /chat/completions."))
+                add(Trouble("It works, but the model only chats", "Choose a model the provider says supports tools (function calling), then Try tool use."))
+            }
             provider?.keyPrefix?.let { add(Trouble("It says the key looks wrong", "A key for ${provider.label} starts with $it — a key from another provider will not work here.")) }
         }
         SetupStep.SERVER -> if (onDevice) listOf(

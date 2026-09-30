@@ -1880,7 +1880,17 @@ step what usually goes wrong and the fix. The words are `SetupGuide` (core), and
 holds every provider's every fallible step to having them. A phone drops the left column.
 "Not now", Esc and Back put it away. Later connections are made in the panel's wizard.
 
-**A model on your own machine, from a phone or tablet** (v1.3.29, kai's phone reached for
+**Another provider, with a key** (1.0.53 / v1.3.30, kai: "allow me to use API keys that are
+openai compatible with different custom providers"): `Providers.compatible` sits with the API
+keys — an OpenAI-compatible API's address, its key and a name of the person's own. A tap fills
+a known one (`Providers.compatiblePresets`: DeepSeek, Groq, Mistral, xAI, Together, Fireworks,
+Cerebras, Moonshot, each checked to answer `/models` asking for a key) — its address, name and
+key page. `Providers.addressProblem` holds the address to https, or plain http at home. The
+connection keeps its own address and label (`AiConnection.baseUrl`, `label`) and its key under
+its own id, so any number of them live side by side; the model step offers Try tool use, as for
+a local model.
+
+**A model on your own machine, from a phone or tablet** (v1.3.30, kai's phone reached for
 `localhost` and Android refused it): the model runs on a computer on the same Wi-Fi, never
 on the device, so there the server step starts empty, shows the computer's address as its
 example (`Providers.examplePhoneAddress`, `http://192.168.1.20:11434/v1`), says what makes

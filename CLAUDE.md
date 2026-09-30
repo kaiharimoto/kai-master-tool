@@ -477,6 +477,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **1.0.48, Fine Tuning is about the deck**: `TuneLauncher` — the person teaches it
   (`fine-tuning`) or it studies the deck itself (`self-study`), at a `TuneIntensity` — both
   writing the deck's guide (`MemoryKind.GUIDE`, `guides/<id>.md`), read while it is open.
+  **Any OpenAI-compatible provider with a key** (1.0.53, `Providers.compatible`, presets in
+  `compatiblePresets`): address, key and the person's own name per connection, many side by side.
+  **On a phone or tablet a local model is on a computer across the Wi-Fi** — the APK permits
+  cleartext (`network_security_config.xml`; `Providers.plainHttpAllowed` keeps it local) and the
+  server step never starts from `localhost` there (`Providers.isThisDevice`).
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.

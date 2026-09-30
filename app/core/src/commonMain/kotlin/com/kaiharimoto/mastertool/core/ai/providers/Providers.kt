@@ -158,6 +158,53 @@ object Providers {
         docs = "https://openrouter.ai/docs/quickstart",
     )
 
+    /**
+     * Any service with an OpenAI-compatible API and a key (kai: "allow me to use API keys that
+     * are openai compatible with different custom providers"): its address, typed or filled from
+     * [compatiblePresets], its key and a name of the person's own. Each is a connection of its
+     * own, with its own address and key, so several live side by side.
+     */
+    val compatible = Provider(
+        id = "compatible",
+        label = "Another provider",
+        kind = ConnectKind.KEY,
+        wire = Wire.OPENAI_COMPAT,
+        blurb = "Any service with an OpenAI-compatible API and a key: DeepSeek, Groq, Mistral, xAI, Together and more.",
+        baseUrl = "",
+        needsKey = true,
+    )
+
+    /** A service [compatible] fills in with a tap: its API's address, where its keys are made. */
+    data class Preset(val name: String, val baseUrl: String, val keyPage: String? = null)
+
+    /** Checked: each answers `GET <baseUrl>/models` asking for a key. */
+    val compatiblePresets = listOf(
+        Preset("DeepSeek", "https://api.deepseek.com/v1", "https://platform.deepseek.com/api_keys"),
+        Preset("Groq", "https://api.groq.com/openai/v1", "https://console.groq.com/keys"),
+        Preset("Mistral", "https://api.mistral.ai/v1", "https://console.mistral.ai/api-keys"),
+        Preset("xAI", "https://api.x.ai/v1", "https://console.x.ai"),
+        Preset("Together", "https://api.together.xyz/v1", "https://api.together.ai/settings/api-keys"),
+        Preset("Fireworks", "https://api.fireworks.ai/inference/v1"),
+        Preset("Cerebras", "https://api.cerebras.ai/v1", "https://cloud.cerebras.ai"),
+        Preset("Moonshot", "https://api.moonshot.ai/v1", "https://platform.moonshot.ai/console/api-keys"),
+    )
+
+    /** Whether [provider] is reached at an address the person gives (a local server, or [compatible]). */
+    fun typedAddress(provider: Provider): Boolean = provider.kind == ConnectKind.LOCAL || provider.id == compatible.id
+
+    /**
+     * What is wrong with [url] as an API's address, or null when it will do: https, or plain http
+     * to this device or a private network, and a real host.
+     */
+    fun addressProblem(url: String): String? {
+        val u = url.trim()
+        if (u.isEmpty()) return "Type the API's address, up to /v1."
+        if (!u.startsWith("https://", ignoreCase = true) && !u.startsWith("http://", ignoreCase = true)) return "The address starts with https://."
+        if (u.substringAfter("://").substringBefore('/').isBlank()) return "The address needs a host, like api.example.com."
+        if (!plainHttpAllowed(u)) return "Plain http only on this machine or your own network; anything further needs https."
+        return null
+    }
+
     val ollama = Provider(
         id = "ollama",
         label = "Ollama",
@@ -187,7 +234,7 @@ object Providers {
         baseUrl = "",
     )
 
-    val all = listOf(claudeCode, codex, anthropic, openai, gemini, openrouter, ollama, lmstudio, custom)
+    val all = listOf(claudeCode, codex, anthropic, openai, gemini, openrouter, compatible, ollama, lmstudio, custom)
 
     fun byId(id: String?): Provider? = all.firstOrNull { it.id == id }
 

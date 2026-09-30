@@ -116,6 +116,29 @@ class SetupGuideTest {
         assertEquals(3, com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.choosing.size)
     }
 
+    /** kai: "allow me to use API keys that are openai compatible with different custom providers". */
+    @Test
+    fun anyOpenAiCompatibleProviderConnectsWithItsAddressAndKey() {
+        val P = com.kaiharimoto.mastertool.core.ai.providers.Providers
+        val steps = com.kaiharimoto.mastertool.core.ai.providers.SetupSteps.of(P.compatible)
+        assertTrue(com.kaiharimoto.mastertool.core.ai.providers.SetupStep.KEY in steps, "a key, not a local server step")
+        assertTrue(P.compatible in P.of(com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.KEY), "offered with the API keys")
+        assertTrue(P.typedAddress(P.compatible) && P.typedAddress(P.ollama) && !P.typedAddress(P.openai))
+        assertTrue(P.compatiblePresets.size >= 6)
+        assertEquals(P.compatiblePresets.size, P.compatiblePresets.map { it.name }.distinct().size)
+        P.compatiblePresets.forEach { preset ->
+            assertTrue(preset.baseUrl.startsWith("https://") && preset.baseUrl.endsWith("/v1"), preset.baseUrl)
+            assertEquals(null, P.addressProblem(preset.baseUrl), preset.name)
+        }
+        assertEquals(null, P.addressProblem("http://192.168.1.20:4000/v1"), "a gateway on the home network")
+        assertTrue(P.addressProblem("http://api.example.com/v1") != null, "plain http across the internet is refused")
+        assertTrue(P.addressProblem("api.example.com/v1") != null)
+        assertTrue(P.addressProblem("") != null)
+        assertEquals(null, P.keyProblem(P.compatible, "gsk_anything"), "no prefix is assumed for a provider we do not know")
+        val keyTrouble = com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.trouble(com.kaiharimoto.mastertool.core.ai.providers.SetupStep.KEY, P.compatible)
+        assertTrue(keyTrouble.none { it.fix.contains("blocks .") }, "no empty host in the words: $keyTrouble")
+    }
+
     /** kai's phone reached for localhost: on a phone or tablet the model is on a computer across the Wi-Fi. */
     @Test
     fun onAPhoneALocalModelIsOnTheComputerNotTheDevice() {

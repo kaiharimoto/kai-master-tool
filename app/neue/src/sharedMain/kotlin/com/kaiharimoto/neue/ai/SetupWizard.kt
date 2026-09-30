@@ -91,6 +91,10 @@ class WizardState(name: String) {
     var signedIn by mutableStateOf<Boolean?>(null)
     var key by mutableStateOf("")
     var baseUrl by mutableStateOf("")
+    /** The connection's name: the provider's, or the person's own for [Providers.compatible]. */
+    var label by mutableStateOf("")
+    /** Where the key is made: the provider's page, or a preset's. */
+    var keyPage by mutableStateOf<String?>(null)
     var models by mutableStateOf<List<String>>(emptyList())
     var model by mutableStateOf("")
     var effort by mutableStateOf("")
@@ -107,6 +111,8 @@ class WizardState(name: String) {
         signedIn = null
         key = ""
         baseUrl = Providers.startingAddress(p, onDevice)
+        label = if (p.id == Providers.compatible.id) "" else p.label
+        keyPage = p.keyPage
         models = emptyList()
         model = ""
         effort = p.defaultEffort
@@ -348,10 +354,13 @@ private fun KeyStep(w: WizardState) {
             "openai" -> listOf("Open the OpenAI platform and sign in.", "Add credit under Billing, if you have not.", "Create a secret key and copy it.", "Paste it here and try it.")
             "gemini" -> listOf("Open Google AI Studio and sign in with your Google account.", "Create an API key and copy it.", "Paste it here and try it.")
             "openrouter" -> listOf("Open OpenRouter and sign in.", "Add credit.", "Create a key and copy it.", "Paste it here and try it.")
+            "compatible" -> listOf("Pick the provider below, or type its API address from its docs.", "Make a key on its site, add credit if it needs some, and paste it here.", "Name it, so you know it among your connections.", "Try it.")
             else -> listOf("Paste the key and try it.")
         },
     )
-    p.keyPage?.let { page -> MuButton("Open the key page", { Platform.browse(page) }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, arrow = true) }
+    val compatible = p.id == Providers.compatible.id
+    if (compatible) CompatibleFields(w)
+    w.keyPage?.let { page -> MuButton("Open the key page", { Platform.browse(page) }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, arrow = true) }
     if (env != null && w.key.isEmpty()) {
         MuButton("Use the key in ${env.first}", { w.key = env.second }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
     }
@@ -363,7 +372,7 @@ private fun KeyStep(w: WizardState) {
             scope.launch {
                 w.checking = true
                 w.message = null
-                val listed = listModels(p, w.key, p.baseUrl)
+                val listed = listModels(p, w.key, if (compatible) w.baseUrl else p.baseUrl)
                 listed.onSuccess { models ->
                     w.models = models
                     w.model = Providers.recommended(p, models) ?: models.firstOrNull().orEmpty()
@@ -372,9 +381,34 @@ private fun KeyStep(w: WizardState) {
                 }.onFailure { w.message = "That key did not work: ${it.message ?: it::class.simpleName}" }
                 w.checking = false
             }
-        }, variant = BtnVariant.PRIMARY, enabled = w.key.isNotBlank() && !w.checking, reason = "Paste the key first", arrow = true)
+        }, variant = BtnVariant.PRIMARY, enabled = w.key.isNotBlank() && !w.checking && (!compatible || Providers.addressProblem(w.baseUrl) == null), reason = if (compatible && Providers.addressProblem(w.baseUrl) != null) "The address first" else "Paste the key first", arrow = true)
         if (w.checking) Breathe()
     }
+}
+
+/**
+ * Another provider's own fields (kai: "API keys that are openai compatible with different custom
+ * providers"): a tap fills a known one's address, name and key page; or the address is typed from
+ * its docs. The name is the connection's, so several providers live side by side.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun CompatibleFields(w: WizardState) {
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Providers.compatiblePresets.forEach { preset ->
+            com.kaiharimoto.neue.kit.Tag(preset.name, w.baseUrl == preset.baseUrl, {
+                w.baseUrl = preset.baseUrl
+                w.label = preset.name
+                w.keyPage = preset.keyPage
+                w.message = null
+            }, caption = "Fill in")
+        }
+    }
+    com.kaiharimoto.neue.kit.FieldLabel("Name", hint = "yours, for this connection")
+    MuInput(w.label, { w.label = it }, Modifier.fillMaxWidth(), placeholder = "DeepSeek, Groq, work gateway…")
+    com.kaiharimoto.neue.kit.FieldLabel("API address", hint = "up to /v1")
+    MuInput(w.baseUrl, { w.baseUrl = it.trim(); w.keyPage = Providers.compatiblePresets.firstOrNull { p -> p.baseUrl == it.trim() }?.keyPage }, Modifier.fillMaxWidth(), placeholder = "https://api.example.com/v1", mono = true)
+    if (w.baseUrl.isNotBlank()) Providers.addressProblem(w.baseUrl)?.let { Help(it, color = Mu.colors.ink) }
 }
 
 /** A phone or tablet: a local model is on a computer across the Wi-Fi, never on the device. */
@@ -482,7 +516,7 @@ private fun ModelStep(w: WizardState) {
         // A select, not a row of buttons: six efforts are wider than the panel.
         com.kaiharimoto.neue.kit.MuSelect(w.effort, listOf("") + p.efforts, { if (it.isBlank()) "Default" else it.replaceFirstChar { ch -> ch.uppercase() } }, { w.effort = it })
     }
-    if (p.kind == ConnectKind.LOCAL) {
+    if (p.kind == ConnectKind.LOCAL || p.id == Providers.compatible.id) {
         Help("${w.name.ifBlank { "Ai" }} needs a model that can call tools to act in the app. Try it:")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             MuButton(if (w.checking) "Trying" else "Try tool use", {
@@ -520,15 +554,15 @@ private fun PermissionsStep(ai: AiState, w: WizardState) {
 @Composable
 private fun DoneStep(ai: AiState, w: WizardState) {
     val p = w.provider ?: return
-    Help("${w.name.ifBlank { ai.name }} will talk through ${p.label}${w.model.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}.")
+    Help("${w.name.ifBlank { ai.name }} will talk through ${w.label.trim().ifBlank { p.label }}${w.model.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}.")
     Help("Open it any time with the ${ai.name} button in the bar${if (AiDesk.canRunCli) " or ${com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd).orEmpty()}" else ""}. It follows you to every page.")
     val connect = {
         val connection = AiConnection(
             id = "${p.id}-${UUID.randomUUID().toString().take(6)}",
             provider = p.id,
-            label = p.label,
+            label = w.label.trim().ifBlank { p.label },
             model = w.model,
-            baseUrl = w.baseUrl.takeIf { p.kind == ConnectKind.LOCAL && it.isNotBlank() },
+            baseUrl = w.baseUrl.takeIf { Providers.typedAddress(p) && it.isNotBlank() },
             program = w.program,
         )
         ai.h.neue.update { it.copy(ai = it.ai.copy(effort = w.effort, alwaysAllow = w.alwaysAllow)) }
