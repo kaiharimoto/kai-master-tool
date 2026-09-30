@@ -223,18 +223,22 @@ class NeueSmokeTest {
                         .isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 } == false
             }
-            repeat(100) {
-                if (barsGone()) return@repeat
+            // Not `repeat`: its `return@repeat` only skips a turn, and ten seconds idle is deep zen,
+            // where a tap is the cards' and the bar never comes.
+            var waited = 0
+            while (!barsGone() && waited < 50) {
                 Thread.sleep(100)
+                waited++
             }
-            Thread.sleep(800)
+            Thread.sleep(500)
             tap(640f, 12f)
             val barOut = until { on { it.neue!!.neue.revealed.top } }
             if (!barOut) shoot("04-immersive-stuck.png")
+            val bars = if (barOut) true else barsGone()
             assertTrue(
                 "a tap on the top strip did not bring the bar out: " + on { a ->
                     val h = a.neue!!
-                    "immersive=${h.neue.immersive} barsGone=${barsGone()} zen=${h.neue.zen} revealed=${h.neue.revealed} " +
+                    "immersive=${h.neue.immersive} barsGone=$bars zen=${h.neue.zen} revealed=${h.neue.revealed} " +
                         "held=${h.drag.held != null} menu=${h.neue.menu != null} page=${h.neue.page} update=${h.updates.dialogOpen}"
                 },
                 barOut,
