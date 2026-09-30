@@ -566,7 +566,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                 else -> problems += "Unknown op $kind."
             }
         }
-        state.setCards(deck, if (done.isNotEmpty()) "Ai: ${done.take(3).joinToString(", ")}${if (done.size > 3) "…" else ""}" else null)
+        state.setCards(deck, if (done.isNotEmpty()) "${ai.name}: ${done.take(3).joinToString(", ")}${if (done.size > 3) "…" else ""}" else null)
         neue.go(Page.BUILDER)
         val text = (if (done.isEmpty()) "Nothing changed." else "Done: ${done.joinToString("; ")}. Now main ${deck.main.size}, extra ${deck.extra.size}, side ${deck.side.size}.") +
             (if (problems.isNotEmpty()) "\n" + problems.joinToString("\n") else "")
@@ -808,6 +808,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
         }
         val next = AiSettings.set(neue.prefs, key, value).getOrElse { return fail(it.message ?: "That does not fit $key.") }
+        // A new name goes through the rename, so the voice file follows it too (1.0.46).
+        if (key == "ai.name") {
+            ai.rename(next.ai.name)
+            return ok("Your name is now ${next.ai.name}.", "Renamed to ${next.ai.name}")
+        }
         if (key == "ai.enabled" && !next.ai.enabled) {
             if (!ai.ask(Confirm("Turn ${ai.name} off?", "${ai.name} and everything about it will be hidden until you turn it on again in Settings.", "set_setting"))) {
                 return fail("The person kept ${ai.name} on.")

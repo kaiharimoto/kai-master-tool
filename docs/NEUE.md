@@ -1878,8 +1878,33 @@ many things it remembered, with **Undo**. Only on an API connection — a CLI wo
 whole session for it — and only for what the last reflection did not read
 (`AiSession.reflected`). `session_search` finds past conversations.
 
+**1.0.46, kai's notes on the first week.**
+- **Tables, charts and cards.** A reply's tables are set to their columns, numbers right,
+  and scroll sideways when wider than the panel; a fenced ```chart block of small JSON
+  (`ChatChart`: bar, hbar, line, stacked; up to four series, one value per label) is drawn
+  in ink (`ChartBlock`: the ink ramp and a hatch tell the series apart — charts are content
+  Ai writes, not the two places colour lives); a ```cards block is a strip of card art,
+  every copy. The prompt teaches both, and no longer says "tables only when small".
+- **The typos.** A CLI's output lines were pushed into a 64-line buffer that dropped a
+  line when full (`trySend`), and Claude Code streams a line per delta: words went missing.
+  Every line is now kept, and Claude Code's answer is committed from its whole-message
+  snapshots, never from the deltas (`ClaudeStream.said`). Anthropic's text blocks are
+  paragraphs while streaming as after; an SSE event split over `data:` lines is read whole;
+  `<think>` spans are not the answer (`ThinkSplitter`); and while a reply streams, what is
+  half-written at its end (an unclosed `**` or `[[`, a table without its rule line, an open
+  chart) waits a moment instead of flashing raw (`ChatMarkdown.settled`).
+- **The name.** The bar's button, the menu, the help and History's lines say the name the
+  person chose; a click on the name at the top of the panel renames it in place, and the
+  conversation on screen is told its new name with the next message (its instructions are
+  never rewritten). "dueling", American English, in the voice and in voices already written.
+- **Setup ends on Start chatting**, beside **What can you do?**: a scripted conversation per
+  capability (`AiDemo`, `AiDemoView`) played in the panel — the person's line, what Ai did,
+  its answer written out with a table, a chart or card art. No model is called.
+- **Immersive mode.** The panel docks there too, and zen waits while it is open.
+- A limit reached ("Stopped after 24 rounds") stays on screen until the next message.
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`.
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

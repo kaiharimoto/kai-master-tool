@@ -49,7 +49,12 @@ class AiFiles(val root: File) {
 
     // ---- memory -------------------------------------------------------------
 
-    fun soul(name: String): String = read(Persona.FILE) ?: Persona.default(name).also { write(Persona.FILE, it) }
+    fun soul(name: String): String {
+        val stored = read(Persona.FILE) ?: return Persona.default(name).also { write(Persona.FILE, it) }
+        // 1.0.43–1.0.45 wrote the British "duelling"; kai's app speaks American English (1.0.46).
+        if ("uelling" !in stored) return stored
+        return stored.replace("duelling", "dueling").replace("Duelling", "Dueling").also { write(Persona.FILE, it) }
+    }
 
     fun memory(kind: MemoryKind, id: String? = null, name: String): MemoryDoc =
         read(AiMemory.path(kind, id))?.let(AiMemory::parse) ?: MemoryDoc.blank(AiMemory.title(kind, name))

@@ -661,6 +661,33 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
                 ),
             )
         }
+        // "What can you do?" (1.0.46): --ai=demo, with --ai-step=N for the scene (from 1), written out whole.
+        "demo" -> {
+            ai.demoStill = (step?.toIntOrNull() ?: 1) - 1
+            ai.demoOpen = true
+        }
+        // A reply with a table, a chart and a strip of cards (1.0.46).
+        "chart" -> {
+            val now = System.currentTimeMillis()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-chart",
+                    title = "Odds",
+                    connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("How likely am I to open a starter, and what do I side against Snake-Eye?"),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                            "## Your openers\n\n| Starters | Going first | Going second |\n| --- | ---: | ---: |\n| 9 | 78% | 83% |\n| 12 | 88% | 91% |\n| 15 | 94% | 96% |\n\n" +
+                                "```chart\n{\"type\": \"bar\", \"title\": \"At least one starter in the opening hand\", \"labels\": [\"9\", \"12\", \"15\"], " +
+                                "\"series\": [{\"name\": \"Going first\", \"values\": [78, 88, 94]}, {\"name\": \"Going second\", \"values\": [83, 91, 96]}], \"unit\": \"%\"}\n```\n\n" +
+                                "Against **Snake-Eye**, bring these in going second:\n\n```cards\n3 Nibiru, the Primal Being\n2 Dominus Impulse\n1 Called by the Grave\n```",
+                        ),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
         // Fine Tuning (phase 3): the interview mid-way, a question on the table; or its review.
         "tune", "review" -> {
             val now = System.currentTimeMillis()

@@ -91,11 +91,20 @@ class AnthropicBackend(
             val accumulator = MessageAccumulator.create()
             try {
                 val events = response.stream().iterator()
+                // Text blocks are paragraphs of their own once committed (ChatTurn.text), so
+                // they are while streaming too, or the words jump when the turn lands (1.0.46).
+                var lastBlock = -1L
                 while (events.hasNext()) {
                     val event = events.next()
                     accumulator.accumulate(event)
-                    val words = event.contentBlockDelta().flatMap { it.delta().text() }
-                    if (words.isPresent) emit(BackendEvent.TextDelta(words.get().text()))
+                    val delta = event.contentBlockDelta()
+                    val words = delta.flatMap { it.delta().text() }
+                    if (words.isPresent) {
+                        val block = delta.get().index()
+                        if (lastBlock >= 0 && block != lastBlock) emit(BackendEvent.TextDelta("\n\n"))
+                        lastBlock = block
+                        emit(BackendEvent.TextDelta(words.get().text()))
+                    }
                 }
             } finally {
                 handle.dispose()

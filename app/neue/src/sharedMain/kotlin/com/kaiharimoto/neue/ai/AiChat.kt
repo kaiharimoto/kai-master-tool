@@ -138,6 +138,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
             ai.confirm?.let { c -> item { ConfirmCard(c) } }
             ai.question?.let { q -> item { QuestionCard(q) } }
             ai.problem?.let { (message, connection) -> item { ProblemCard(message, connection) { ai.openWizard() } } }
+            ai.notice?.takeIf { !ai.running }?.let { n -> item { ActivityLine(n, isError = false) } }
         }
     }
 }
@@ -153,6 +154,7 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
             color = c.ink70,
         )
         Suggestions(ai)
+        com.kaiharimoto.neue.kit.MicroLink("What can you do? →", { ai.demoOpen = true })
     }
 }
 
@@ -209,11 +211,11 @@ private fun Working(line: String) {
 @Composable
 private fun ReplyView(ai: AiState, text: String, live: Boolean = false) {
     val c = Mu.colors
-    val blocks = remember(text) { ChatMarkdown.parse(text) }
+    val blocks = remember(text, live) { ChatMarkdown.parse(text, streaming = live) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro(ai.name, color = c.ink45)
         SelectionContainer {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { blocks.forEach { MarkdownBlock(it) } }
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { blocks.forEach { MarkdownBlock(ai, it) } }
         }
         if (!live) {
             val names = remember(text) { ChatMarkdown.cards(text) }
@@ -250,7 +252,7 @@ private fun CardChip(ai: AiState, card: com.kaiharimoto.mastertool.core.model.Ca
 }
 
 @Composable
-private fun MarkdownBlock(block: Block) {
+internal fun MarkdownBlock(ai: AiState, block: Block) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     when (block) {
@@ -273,24 +275,19 @@ private fun MarkdownBlock(block: Block) {
             }
         }
         is Block.Code -> Box(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(8.dp)) { Mono(block.text, color = c.ink) }
+        is Block.Chart -> ChartBlock(block.chart)
+        is Block.Cards -> CardsBlock(ai, block)
+        is Block.Pending -> PendingBlock(block)
         is Block.Quote -> Row(
             Modifier.drawBehind { drawLine(c.ink25, Offset(0f, 0f), Offset(0f, size.height), 2.dp.toPx()) }.padding(start = 10.dp),
         ) { MuText(styled(block.inlines), style = MuType.row(f), color = c.ink70) }
-        is Block.Table -> Column(Modifier.fillMaxWidth().border(1.dp, c.ink12)) {
-            (listOf(block.header) + block.rows).forEachIndexed { r, cells ->
-                Row(Modifier.fillMaxWidth().drawBehind { if (r > 0) drawLine(c.ink12, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }.padding(6.dp)) {
-                    cells.forEach { cell ->
-                        MuText(styled(cell), Modifier.weight(1f), style = if (r == 0) MuType.small(f).copy(fontWeight = FontWeight.Medium) else MuType.small(f), color = c.ink)
-                    }
-                }
-            }
-        }
+        is Block.Table -> TableBlock(block) { styled(it) }
         Block.Rule -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).drawBehind { drawLine(c.ink12, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) })
     }
 }
 
 @Composable
-private fun styled(inlines: List<Inline>): AnnotatedString {
+internal fun styled(inlines: List<Inline>): AnnotatedString {
     val f = LocalMuFonts.current
     val mono = MuType.mono(f, 12.sp).fontFamily
     return buildAnnotatedString {

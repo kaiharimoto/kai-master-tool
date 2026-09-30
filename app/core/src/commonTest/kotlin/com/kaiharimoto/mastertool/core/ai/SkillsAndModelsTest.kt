@@ -133,3 +133,92 @@ class MicroCapsTest {
         assertEquals("ASK Yusaku", caps("Ask Yusaku", setOf("Yusaku")), "a renamed assistant too")
     }
 }
+
+class ChatBlocksTest {
+    private fun md(s: String, streaming: Boolean = false) = com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown.parse(s, streaming)
+
+    @Test
+    fun tablesReadWithOrWithoutOuterPipesAndKeepPipesInCode() {
+        val t = md("Name | Count\n:--- | ---:\nAsh | 3\n`a|b` | 1").single() as com.kaiharimoto.mastertool.core.ai.text.Block.Table
+        assertEquals(2, t.header.size)
+        assertEquals(listOf(com.kaiharimoto.mastertool.core.ai.text.Align.LEFT, com.kaiharimoto.mastertool.core.ai.text.Align.RIGHT), t.align)
+        assertEquals(2, t.rows.size)
+        assertEquals(2, t.rows[1].size, "a pipe inside code is not a cell break")
+    }
+
+    @Test
+    fun aChartBlockIsAChartAndABadOneIsCode() {
+        val good = md("```chart\n{\"type\":\"bar\",\"title\":\"Odds\",\"labels\":[\"1\",\"2\"],\"series\":[{\"name\":\"first\",\"values\":[40,65.5]}],\"unit\":\"%\"}\n```").single()
+        val chart = (good as com.kaiharimoto.mastertool.core.ai.text.Block.Chart).chart
+        assertEquals(65.5, chart.max)
+        val bad = md("```chart\n{\"labels\":[\"a\",\"b\"],\"series\":[{\"values\":[1]}]}\n```").single()
+        assertTrue(bad is com.kaiharimoto.mastertool.core.ai.text.Block.Code)
+        assertTrue(com.kaiharimoto.mastertool.core.ai.text.ChatChart.parse("{\"type\":\"pie\",\"labels\":[\"a\"],\"values\":[3]}").isSuccess, "a flat single series reads")
+        assertEquals(listOf(0.0, 20.0, 40.0, 60.0, 80.0), com.kaiharimoto.mastertool.core.ai.text.ChatChart.ticks(80.0))
+        assertEquals("42%", com.kaiharimoto.mastertool.core.ai.text.ChatChart.label(42.0, "%"))
+    }
+
+    @Test
+    fun aCardsBlockReadsCountsEitherSide() {
+        val cards = (md("```cards\n3 Ash Blossom & Joyous Spring\nNibiru, the Primal Being x2\n[[Called by the Grave]]\n```").single() as com.kaiharimoto.mastertool.core.ai.text.Block.Cards).lines
+        assertEquals(listOf(3, 2, 1), cards.map { it.count })
+        assertEquals("Called by the Grave", cards[2].name)
+    }
+
+    @Test
+    fun whatIsHalfWrittenWaitsWhileItStreams() {
+        val m = com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
+        assertEquals("Play ", m.settled("Play [[Ash Blo"))
+        assertEquals("It is ", m.settled("It is **very"))
+        assertEquals("Done.", m.settled("Done.\n| a | b |"), "a table waits for its rule line")
+        assertEquals("| a | b |\n| --- | --- |\n| 1", m.settled("| a | b |\n| --- | --- |\n| 1"))
+        val pending = md("Look:\n```chart\n{\"labels\":", streaming = true).last()
+        assertTrue(pending is com.kaiharimoto.mastertool.core.ai.text.Block.Pending)
+    }
+}
+
+class StreamFixesTest {
+    @Test
+    fun thinkSpansAreNotTheAnswerEvenCutAcrossDeltas() {
+        val t = com.kaiharimoto.mastertool.core.ai.wire.ThinkSplitter()
+        val words = StringBuilder()
+        val thought = StringBuilder()
+        listOf("<th", "ink>plan it</thi", "nk>Hello ", "world<", "3").forEach {
+            val (w, r) = t.feed(it)
+            words.append(w)
+            thought.append(r)
+        }
+        val (w, r) = t.flush()
+        words.append(w)
+        thought.append(r)
+        assertEquals("Hello world<3", words.toString())
+        assertEquals("plan it", thought.toString())
+    }
+
+    @Test
+    fun anEventSplitOverDataLinesIsReadWhole() {
+        val s = com.kaiharimoto.mastertool.core.ai.wire.OpenAiStream()
+        val out = listOf(
+            "data: {\"choices\":[{\"delta\":",
+            "data: {\"content\":\"Hi \"}}]}",
+            "",
+            "data: not json",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"there\"}}]}",
+            "data: [DONE]",
+        ).flatMap { s.line(it) }
+        assertEquals("Hi there", out.filterIsInstance<BackendEvent.TextDelta>().joinToString("") { it.text })
+    }
+
+    @Test
+    fun claudeCodeCommitsWhatItsSnapshotsSayEvenIfADeltaWasLost() {
+        val s = com.kaiharimoto.mastertool.core.ai.cli.ClaudeStream()
+        listOf(
+            """{"type":"stream_event","event":{"type":"message_start"}}""",
+            """{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Ash Blo"}}}""",
+            // "ssom is a hand trap." was lost on the way.
+            """{"type":"assistant","message":{"content":[{"type":"text","text":"Ash Blossom is a hand trap."}]}}""",
+            """{"type":"result","subtype":"success","is_error":false,"result":"Ash Blossom is a hand trap."}""",
+        ).forEach { s.line(it) }
+        assertEquals("Ash Blossom is a hand trap.", (s.finished as BackendEvent.Finished).text)
+    }
+}

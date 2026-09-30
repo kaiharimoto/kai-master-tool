@@ -91,6 +91,13 @@ object ClaudeCli {
 class ClaudeStream {
     private val json = Json { ignoreUnknownKeys = true }
     private val text = StringBuilder()
+
+    /**
+     * The words as Claude Code's whole-message snapshots give them: what the answer is
+     * committed as. The deltas are only for the eye while it streams, so a delta lost on
+     * the way can show for a moment but never stays in the conversation (1.0.46).
+     */
+    private val said = StringBuilder()
     private var streamedThisMessage = false
     private var needsBreak = false
     private var result: BackendEvent? = null
@@ -120,7 +127,7 @@ class ClaudeStream {
                 val ours = servers?.mapNotNull { it as? JsonObject }?.firstOrNull { it.str("name") == CliNames.MCP_NAME }
                 val status = ours?.str("status")
                 if (ours != null && status != "connected") {
-                    out += BackendEvent.Status("The app's tools did not connect to Claude Code ($status). Ai can talk but not act.")
+                    out += BackendEvent.Status("The app's tools did not connect to Claude Code ($status). The assistant can talk but not act.")
                 }
             }
             "stream_event" -> {
@@ -143,9 +150,11 @@ class ClaudeStream {
                 val content = message?.get("content") as? JsonArray
                 content?.mapNotNull { it as? JsonObject }?.forEach { block ->
                     when (block.str("type")) {
-                        // Whole text only when it did not already stream in pieces.
-                        "text" -> if (!streamedThisMessage) {
-                            block.str("text")?.takeIf { it.isNotEmpty() }?.let { words(it, out) }
+                        "text" -> block.str("text")?.takeIf { it.isNotBlank() }?.let { whole ->
+                            if (said.isNotEmpty()) said.append("\n\n")
+                            said.append(whole.trim())
+                            // Whole text on screen only when it did not already stream in pieces.
+                            if (!streamedThisMessage) words(whole, out)
                         }
                         "tool_use" -> {
                             val name = block.str("name") ?: ""
@@ -176,7 +185,7 @@ class ClaudeStream {
                     val message = said.ifBlank { o.str("subtype") ?: "Claude Code stopped with an error." }
                     BackendEvent.Failed(message, auth = looksLikeAuth(message))
                 } else {
-                    BackendEvent.Finished(StopReason.END, turn = null, usage = usage, text = text.toString().trim().ifBlank { said })
+                    BackendEvent.Finished(StopReason.END, turn = null, usage = usage, text = this.said.toString().ifBlank { text.toString().trim() }.ifBlank { said })
                 }
             }
         }

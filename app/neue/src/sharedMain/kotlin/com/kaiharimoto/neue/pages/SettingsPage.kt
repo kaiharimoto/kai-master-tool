@@ -271,7 +271,7 @@ private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueStat
     var name by androidx.compose.runtime.remember(prefs.name) { androidx.compose.runtime.mutableStateOf(prefs.name) }
     SettingRow("Name", "What it is called. Ai by default, after the Ignis of VRAINS.") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            com.kaiharimoto.neue.kit.MuInput(name, { name = it.take(com.kaiharimoto.mastertool.core.prefs.AiPrefs.MAX_NAME) }, Modifier.width(220.dp), placeholder = "Ai", onSubmit = { ai.rename(name) })
+            com.kaiharimoto.neue.kit.MuInput(name, { name = it.take(com.kaiharimoto.mastertool.core.prefs.AiPrefs.MAX_NAME) }, Modifier.width(220.dp), placeholder = "Ai", onSubmit = { if (name.isNotBlank()) ai.rename(name) })
             if (name.trim() != prefs.name && name.isNotBlank()) MuButton("Rename", { ai.rename(name) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
         }
     }

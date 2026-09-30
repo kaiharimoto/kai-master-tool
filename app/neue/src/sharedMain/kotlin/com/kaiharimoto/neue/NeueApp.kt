@@ -623,6 +623,7 @@ class NeueHolders(
                 Command(ai.name, "${ai.name}: set up a connection") { ai.openWizard() },
                 Command(ai.name, "${ai.name}: what it knows") { ai.memoryOpen = "USER.md" },
                 Command(ai.name, "${ai.name}: Fine Tuning") { ai.startTuning() },
+                Command(ai.name, "${ai.name}: what can you do?") { ai.setOpen(true); ai.demoOpen = true },
             ) else emptyArray()),
             Command("App", "Report an issue →") { Platform.reportIssue() },
         ).filter { q.isEmpty() || it.label.lowercase().contains(q) || it.group.lowercase().startsWith(q) }
@@ -749,6 +750,7 @@ fun NeueEffects(h: NeueHolders) {
             DeskMenuBar.aiShown = neue.prefs.ai.enabled
             if (!neue.prefs.ai.enabled) h.ai.shutDown()
         }
+        LaunchedEffect(neue.prefs.ai.name) { DeskMenuBar.aiName = neue.prefs.ai.name }
         LaunchedEffect(neue.inspected) { neue.inspected?.let(h.art::want) }
         // The ~2 GB library waits for Wi-Fi on a tablet (touch swarm, rec 27); looked at again each half minute.
         LaunchedEffect(neue.prefs.hdArt) {
@@ -1125,8 +1127,8 @@ private fun Shell(h: NeueHolders) {
                     }
                     Drawers(state, neue)
                 }
-                // Ai's panel (1.0.43): docked beside every page, the page re-fitting beside it.
-                // Not in immersive mode, whose whole point is the deck alone; on a phone it is a sheet.
+                // Ai's panel (1.0.43): docked beside every page, the page re-fitting beside it —
+                // in immersive mode too (1.0.46); on a phone it is a sheet.
                 if (neue.aiDocked) {
                     com.kaiharimoto.neue.ai.AiPanel(h, Modifier.width((neue.prefs.ai.panelWidth / neue.prefs.scale).dp).fillMaxHeight())
                 }
@@ -1381,7 +1383,8 @@ private fun AutoSave(h: NeueHolders) {
 private fun ZenClockwork(h: NeueHolders) {
     val neue = h.neue
     // An empty deck has nothing to float (kai, 1.0.14): zen waits for a card.
-    val eligible = neue.immersive && neue.page == Page.BUILDER && h.builder.deck.totalCards > 0
+    // Ai open is someone at work (1.0.46): the deck does not float away from a conversation.
+    val eligible = neue.immersive && neue.page == Page.BUILDER && h.builder.deck.totalCards > 0 && !neue.aiDocked
     LaunchedEffect(eligible, h.zenAuto, neue.prefs.autoZen) {
         if (!eligible) {
             neue.zen = ZenPhase.AWAKE

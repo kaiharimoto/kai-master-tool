@@ -223,8 +223,10 @@ class NeueState(
      * Ai's panel down the right of the page (desk and tablet). On the builder it stands in
      * the inspector's place rather than beside it (1.0.45, kai: "it should replace the
      * sidebar inspector for UI space economy"): open, the inspector goes; closed, it is back.
+     * Immersive mode too (1.0.46, kai: "Ai panel doesn't work in immersive mode"): it docks
+     * there the same way, and zen waits while it is open.
      */
-    val aiDocked: Boolean get() = prefs.ai.enabled && prefs.ai.panelOpen && !phone && !immersive && !aiSetup
+    val aiDocked: Boolean get() = prefs.ai.enabled && prefs.ai.panelOpen && !phone && !aiSetup
 
     val overlayOpen: Boolean
         get() = aiSheet || aiSetup || showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || studio != null

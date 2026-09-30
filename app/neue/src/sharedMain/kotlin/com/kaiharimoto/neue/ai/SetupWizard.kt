@@ -207,8 +207,11 @@ private fun WizardState.next() {
 @Composable
 private fun NameStep(ai: AiState, w: WizardState) {
     Help("Your assistant is called ${ai.name} unless you name it something else. It answers to the name, and it remembers what you tell it.")
-    MuInput(w.name, { w.name = it.take(24) }, Modifier.fillMaxWidth(), placeholder = "Ai", onSubmit = { w.next() })
-    Help("Ai is the duelling partner from Yu-Gi-Oh! VRAINS: playful, a little cheeky, and on your side. You can change how it talks later, in Settings.")
+    MuInput(w.name, { w.name = it.take(24) }, Modifier.fillMaxWidth(), placeholder = "Ai", onSubmit = {
+        if (w.name.isNotBlank() && w.name != ai.name) ai.rename(w.name)
+        w.next()
+    })
+    Help("Ai is the dueling partner from Yu-Gi-Oh! VRAINS: playful, a little cheeky, and on your side. You can rename it any time: click its name at the top of its panel.")
     MuButton("Next", {
         if (w.name.isNotBlank() && w.name != ai.name) ai.rename(w.name)
         w.next()
@@ -455,7 +458,7 @@ private fun ModelStep(w: WizardState) {
         com.kaiharimoto.neue.kit.MuSelect(w.effort, listOf("") + p.efforts, { if (it.isBlank()) "Default" else it.replaceFirstChar { ch -> ch.uppercase() } }, { w.effort = it })
     }
     if (p.kind == ConnectKind.LOCAL) {
-        Help("Ai needs a model that can call tools to act in the app. Try it:")
+        Help("${w.name.ifBlank { "Ai" }} needs a model that can call tools to act in the app. Try it:")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             MuButton(if (w.checking) "Trying" else "Try tool use", {
                 scope.launch {
@@ -507,17 +510,13 @@ private fun DoneStep(ai: AiState, w: WizardState) {
         ai.connect(connection, w.key.takeIf { p.needsKey || it.isNotBlank() })
         ai.wizard = WizardState(ai.name)
     }
-    if (AiState.PHASE >= 3) {
-        Help("Fine Tuning is ${w.name.ifBlank { ai.name }} asking how you prepare for a tournament — the event, your deck, what you fear — and remembering it. A few minutes; you see what it kept at the end.")
-    }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        MuButton("Start", { connect() }, variant = if (AiState.PHASE >= 3) BtnVariant.GHOST else BtnVariant.PRIMARY, arrow = AiState.PHASE < 3)
-        if (AiState.PHASE >= 3) {
-            MuButton("Start with Fine Tuning", {
-                connect()
-                ai.startTuning()
-            }, variant = BtnVariant.PRIMARY, arrow = true)
-        }
+        MuButton("Start chatting", { connect() }, variant = BtnVariant.PRIMARY, arrow = true)
+        // kai (1.0.46): one way in, and a look at what it can do for anyone who wants one first.
+        MuButton("What can you do?", {
+            connect()
+            ai.demoOpen = true
+        }, variant = BtnVariant.GHOST)
     }
 }
 

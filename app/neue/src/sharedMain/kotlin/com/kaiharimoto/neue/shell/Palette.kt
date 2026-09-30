@@ -296,7 +296,7 @@ private fun KeyTable() {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                RowText(row.description, Modifier.weight(1f))
+                                RowText(if (row.action == DeskAction.AI_PANEL) "${com.kaiharimoto.mastertool.core.input.DeskMenuBar.aiName}: open or close" else row.description, Modifier.weight(1f))
                                 Kbd(DeskShortcuts.kbd(row.chord))
                             }
                             HRule()

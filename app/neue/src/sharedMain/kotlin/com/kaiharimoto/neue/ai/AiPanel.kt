@@ -21,6 +21,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.kaiharimoto.neue.kit.muClickable
+import com.kaiharimoto.neue.cursor.cursorPointer
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -59,12 +70,13 @@ fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = fals
             Head(ai, phone)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
+                    ai.demoOpen && !ai.wizardOpen -> AiDemoView(ai, Modifier.fillMaxSize())
                     ai.wizardOpen -> SetupWizard(ai, Modifier.fillMaxSize())
                     ai.historyOpen -> SessionList(ai, Modifier.fillMaxSize())
                     else -> Transcript(ai, Modifier.fillMaxSize())
                 }
             }
-            if (!ai.wizardOpen && !ai.historyOpen) Composer(ai)
+            if (!ai.wizardOpen && !ai.historyOpen && !ai.demoOpen) Composer(ai)
         }
     }
 }
@@ -84,7 +96,7 @@ private fun Head(ai: AiState, phone: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Micro(ai.name, color = c.ink)
+            NameInHead(ai)
             Mono(
                 when {
                     ai.wizardOpen -> "Setting up"
@@ -114,6 +126,63 @@ private fun Head(ai: AiState, phone: Boolean) {
         }
         Tip("Close", kbd = DeskShortcuts.chordFor(DeskAction.AI_PANEL)?.let(DeskShortcuts::kbd)) {
             IconButton(Icons.X, { ai.setOpen(false) }, size = size, label = "Close")
+        }
+    }
+}
+
+/**
+ * The name at the top of the panel, renamed in place (1.0.46, kai: "let me change the name
+ * of the AI without having to go through setup every time"): a click makes it a field,
+ * Enter or leaving it keeps the new name, Esc keeps the old one.
+ */
+@Composable
+private fun NameInHead(ai: AiState) {
+    val c = Mu.colors
+    var editing by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf(ai.name) }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    if (editing) {
+        fun keep() {
+            if (draft.isNotBlank()) ai.rename(draft)
+            editing = false
+        }
+        LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+        com.kaiharimoto.neue.kit.MuInput(
+            draft,
+            { draft = it.take(com.kaiharimoto.mastertool.core.prefs.AiPrefs.MAX_NAME) },
+            Modifier.width(180.dp).onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) {
+                    draft = ai.name
+                    editing = false
+                    true
+                } else {
+                    false
+                }
+            },
+            placeholder = ai.name,
+            dense = true,
+            focusRequester = focus,
+            onFocusChange = { focused -> if (!focused && editing) keep() },
+            onSubmit = { keep() },
+        )
+    } else {
+        val source = remember { MutableInteractionSource() }
+        val hovered by source.collectIsHoveredAsState()
+        Row(
+            Modifier
+                .hoverable(source)
+                .cursorPointer(caption = "Rename")
+                .muClickable(interactionSource = source) {
+                    draft = ai.name
+                    editing = true
+                },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Micro(ai.name, color = c.ink)
+            if (hovered || com.kaiharimoto.neue.kit.LocalTouchFirst.current) {
+                com.kaiharimoto.neue.kit.MuIcon(Icons.Pencil, c.ink45, Modifier.size(11.dp))
+            }
         }
     }
 }

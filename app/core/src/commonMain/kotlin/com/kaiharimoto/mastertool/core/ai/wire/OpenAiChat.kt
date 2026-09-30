@@ -169,13 +169,38 @@ class OpenAiStream(private val newId: () -> String = { "call_" + (idCounter++).t
     private var usage: Usage? = null
     private var error: String? = null
 
+    /** An event's `data:` lines so far: servers may split one JSON over several (SSE joins them). */
+    private val pending = StringBuilder()
+
+    /** `<think>` spans (DeepSeek, Qwen and other local models) kept out of the answer's words. */
+    private val think = ThinkSplitter()
+
     /** What one line of the stream adds, as events to pass on (text as it comes). */
     fun line(raw: String): List<BackendEvent> {
         val line = raw.trim()
+        if (line.isEmpty()) {
+            // A blank line ends an event: whatever it held is read now, or let go.
+            val held = pending.toString()
+            pending.clear()
+            return if (held.isBlank()) emptyList() else chunk(held) ?: emptyList()
+        }
         if (!line.startsWith("data:")) return emptyList()
         val data = line.removePrefix("data:").trim()
-        if (data.isEmpty() || data == "[DONE]") return emptyList()
-        val chunk = runCatching { OpenAiWire.json.parseToJsonElement(data).jsonObject }.getOrNull() ?: return emptyList()
+        if (data == "[DONE]") { pending.clear(); return emptyList() }
+        // A whole JSON on its own line wins over a stray line held before it, which a
+        // server that never sends blank lines would otherwise leave in the way forever.
+        if (pending.isNotEmpty()) chunk(data)?.let { pending.clear(); return it }
+        if (pending.isNotEmpty()) pending.append('\n')
+        pending.append(data)
+        val read = chunk(pending.toString()) ?: return emptyList()
+        pending.clear()
+        return read
+    }
+
+    /** One event's JSON, read; null while it is not whole yet. */
+    private fun chunk(data: String): List<BackendEvent>? {
+        if (data.isBlank()) return emptyList()
+        val chunk = runCatching { OpenAiWire.json.parseToJsonElement(data).jsonObject }.getOrNull() ?: return null
         chunk["error"]?.let { e ->
             error = (e as? JsonObject)?.get("message")?.jsonPrimitive?.contentOrNull ?: e.toString()
             return emptyList()
@@ -193,8 +218,11 @@ class OpenAiStream(private val newId: () -> String = { "call_" + (idCounter++).t
             (choice["finish_reason"] as? JsonPrimitive)?.contentOrNull?.let { finish = it }
             val delta = (choice["delta"] ?: choice["message"]) as? JsonObject ?: return@forEach
             (delta["content"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }?.let {
-                text.append(it)
-                out += BackendEvent.TextDelta(it)
+                val (words, _) = think.feed(it)
+                if (words.isNotEmpty()) {
+                    text.append(words)
+                    out += BackendEvent.TextDelta(words)
+                }
             }
             (delta["tool_calls"] as? JsonArray)?.forEachIndexed { position, callEl ->
                 val call = callEl as? JsonObject ?: return@forEachIndexed
@@ -217,6 +245,7 @@ class OpenAiStream(private val newId: () -> String = { "call_" + (idCounter++).t
     /** The whole answer, once the stream has ended. */
     fun finish(at: Long = 0): BackendEvent {
         error?.let { return BackendEvent.Failed(it) }
+        think.flush().first.takeIf { it.isNotEmpty() }?.let { text.append(it) }
         val uses = calls.values.filter { it.name.isNotBlank() }.map { c ->
             val input = parseArgs(c.args.toString())
             Part.ToolUse(c.id ?: newId(), c.name, input)
@@ -303,5 +332,51 @@ class OpenAiChatBackend(
     companion object {
         /** A long answer streams for minutes; nothing arriving for this long is a dead connection. */
         const val STREAM_TIMEOUT_MS = 10 * 60 * 1000L
+    }
+}
+
+/**
+ * Splits a model's words from its `<think>…</think>` reasoning as they stream (1.0.46):
+ * local reasoning models write their thinking inline, and it was shown as the answer.
+ * A tag may arrive cut across deltas ("<th", "ink>"), so a possible tag's first letters
+ * are held back until the next delta says what they are.
+ */
+class ThinkSplitter {
+    private var inside = false
+    private val held = StringBuilder()
+
+    /** The words and the reasoning in [delta], as far as they can be told apart yet. */
+    fun feed(delta: String): Pair<String, String> {
+        held.append(delta)
+        val words = StringBuilder()
+        val reasoning = StringBuilder()
+        while (true) {
+            val tag = if (inside) CLOSE else OPEN
+            val at = held.indexOf(tag)
+            if (at >= 0) {
+                (if (inside) reasoning else words).append(held, 0, at)
+                held.delete(0, at + tag.length)
+                inside = !inside
+                continue
+            }
+            // Keep back only what could still become the tag.
+            val keep = (1 until tag.length).lastOrNull { n -> held.length >= n && held.endsWith(tag.substring(0, n)) } ?: 0
+            (if (inside) reasoning else words).append(held, 0, held.length - keep)
+            held.delete(0, held.length - keep)
+            break
+        }
+        return words.toString() to reasoning.toString()
+    }
+
+    /** What is left at the end of the stream. */
+    fun flush(): Pair<String, String> {
+        val rest = held.toString()
+        held.clear()
+        return if (inside) "" to rest else rest to ""
+    }
+
+    private companion object {
+        const val OPEN = "<think>"
+        const val CLOSE = "</think>"
     }
 }

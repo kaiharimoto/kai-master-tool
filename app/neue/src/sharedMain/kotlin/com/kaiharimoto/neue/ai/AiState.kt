@@ -95,6 +95,15 @@ class AiState(internal val h: NeueHolders) {
     var question by mutableStateOf<Question?>(null)
         private set
 
+    /** A line that outlives the answer (a limit reached), until the next message (1.0.46). */
+    var notice by mutableStateOf<String?>(null)
+
+    /** "What can you do?" playing in the panel (1.0.46): a scripted show of Ai at work, no model called. */
+    var demoOpen by mutableStateOf(false)
+
+    /** The studio's picture of the demo: this scene, written out whole. */
+    var demoStill: Int? = null
+
     /** The setup wizard is open (the panel shows it in place of the chat). */
     var wizardOpen by mutableStateOf(false)
 
@@ -160,11 +169,14 @@ class AiState(internal val h: NeueHolders) {
         }
         problem = null
         status = null
+        notice = null
         draft = ""
         val current = session?.takeIf { it.connection == connection.id } ?: begin(connection)
         val scope = host.scope()
         val scopeChanged = scope?.path != current.scopeShown
-        val context = PromptBuilder.context(host.situation(), scope, scope?.let { host.notes(it) }, scopeChanged)
+        val renamed = renamedTo?.let { listOf("The person renamed you: you are $it from now on, whatever the instructions above call you.") }.orEmpty()
+        renamedTo = null
+        val context = PromptBuilder.context(renamed + host.situation(), scope, scope?.let { host.notes(it) }, scopeChanged)
         val turn = ChatTurn.user(words, context, System.currentTimeMillis())
         val next = current.copy(turns = current.turns + turn, updatedAt = System.currentTimeMillis(), scopeShown = scope?.path ?: current.scopeShown).titled()
         commit(next)
@@ -188,6 +200,7 @@ class AiState(internal val h: NeueHolders) {
                     when (event) {
                         is AgentEvent.Text -> streaming += event.delta
                         is AgentEvent.Status -> status = event.text
+                        is AgentEvent.Notice -> notice = event.text
                         is AgentEvent.Session -> session?.let { commit(it.copy(resume = event.id)) }
                         is AgentEvent.ToolRunning -> Unit // the host reports its own line as it runs
                         is AgentEvent.ToolSeen -> activity = activity + Part.Activity(event.name, event.summary)
@@ -540,9 +553,16 @@ class AiState(internal val h: NeueHolders) {
     fun rename(to: String) {
         val old = name
         val clean = to.trim().take(AiPrefs.MAX_NAME).ifBlank { AiPrefs.DEFAULT_NAME }
+        if (clean == old) return
         files.read(Persona.FILE)?.let { files.write(Persona.FILE, Persona.rename(it, old, clean)) }
         h.neue.update { it.copy(ai = it.ai.copy(name = clean)) }
+        // The conversation on screen was begun under the old name, and its instructions are
+        // never rewritten (the cache): its next message says the new one (1.0.46).
+        if (session?.turns?.isNotEmpty() == true) renamedTo = clean
     }
+
+    /** A rename the conversation on screen has not been told of yet. */
+    private var renamedTo: String? = null
 
     /** Ai off: every trace gone, nothing running, nothing listening. */
     fun shutDown() {

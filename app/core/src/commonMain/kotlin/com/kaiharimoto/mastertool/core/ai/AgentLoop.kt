@@ -79,6 +79,9 @@ fun interface ToolRunner {
 sealed interface AgentEvent {
     data class Text(val delta: String) : AgentEvent
     data class Status(val text: String) : AgentEvent
+
+    /** Something the person should still read once the answer is done: a limit reached, history shortened. */
+    data class Notice(val text: String) : AgentEvent
     data class Session(val id: String) : AgentEvent
 
     /** A turn is final and belongs in the history (Ai's, or the tool results answering it). */
@@ -162,7 +165,7 @@ class AgentLoop(
             history = history + answer
             emit(AgentEvent.Appended(answer))
         }
-        emit(AgentEvent.Status("Stopped after $maxSteps rounds of tools. Say “go on” to continue."))
+        emit(AgentEvent.Notice("Stopped after $maxSteps rounds of tools. Say “go on” to continue."))
         emit(AgentEvent.Done(StopReason.MAX_TOKENS, usage))
     }
 

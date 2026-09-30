@@ -7,7 +7,10 @@ import com.kaiharimoto.neue.platform.Platform
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runBlocking
@@ -182,12 +185,14 @@ actual object AiDesk {
         val outReader = Thread {
             runCatching {
                 p.outputStream.use { out -> stdin?.let { out.write(it.toByteArray()) } }
-                p.inputStream.bufferedReader().forEachLine { trySend(ProcessLine.Out(it)) }
+                // Every line, in order, never dropped: a CLI streams one line per delta, and a
+                // full buffer that let a line go was the "bits of typos" of 1.0.43 (1.0.46).
+                p.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { trySendBlocking(ProcessLine.Out(it)) }
             }
             val code = runCatching { p.waitFor() }.getOrDefault(-1)
             errReader.join(2000)
             val tail = synchronized(errTail) { errTail.joinToString("\n") }
-            trySend(ProcessLine.Exit(code, tail))
+            trySendBlocking(ProcessLine.Exit(code, tail))
             close()
         }.apply { isDaemon = true; start() }
         awaitClose {
@@ -197,7 +202,7 @@ actual object AiDesk {
             }
             outReader.interrupt()
         }
-    }.flowOn(Dispatchers.IO)
+    }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
     actual fun openTerminal(command: String): Boolean = runCatching {
         when (Platform.os) {

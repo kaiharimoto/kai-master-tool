@@ -433,7 +433,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   Ai asked for with no connection), its words in `SetupGuide` (core, tested per
   provider). **On the builder Ai takes the inspector's place** (`NeueState.aiDocked`).
   **Its name is never set in capitals** (`MicroCaps`, `LocalKeepCase`): "Ai", not "AI".
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review --ai-step=KEY:anthropic` photographs it.
+  **Replies draw tables, ```chart blocks (`ChatChart`, drawn in ink by `ChartBlock`) and
+  ```cards strips** (1.0.46). A CLI's output lines are never dropped (the old `trySend`
+  buffer was the "typos"), and Claude Code's answer is committed from its snapshots.
+  Setup ends on **Start chatting** and **What can you do?** (`AiDemo`); the name renames in
+  place from the panel's head; the panel docks in immersive mode too.
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

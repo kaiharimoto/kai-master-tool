@@ -42,6 +42,9 @@ object DeskMenuBar {
      */
     var aiShown: Boolean = true
 
+    /** The assistant's name, as the person chose it: its menu item and help row say it (1.0.46). */
+    var aiName: String = "Ai"
+
     private val all: List<DeskMenu> = listOf(
         DeskMenu(
             "File",

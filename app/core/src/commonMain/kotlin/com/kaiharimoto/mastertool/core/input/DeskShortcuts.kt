@@ -178,7 +178,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("minus"), DeskAction.ZOOM_OUT, DeskScope.APP, "Smaller interface", allowedInTextInput = true),
         DeskShortcut(ctrl("0"), DeskAction.ZOOM_RESET, DeskScope.APP, "Interface at 100%", allowedInTextInput = true),
         DeskShortcut(ctrl("i", shift = true), DeskAction.TOGGLE_THEME, DeskScope.APP, "Switch paper and ink", allowedInTextInput = true),
-        DeskShortcut(ctrl("i"), DeskAction.AI_PANEL, DeskScope.APP, "Ai: open or close the assistant", allowedInTextInput = true),
+        DeskShortcut(ctrl("i"), DeskAction.AI_PANEL, DeskScope.APP, "Open or close the assistant", allowedInTextInput = true),
         DeskShortcut(KeyChord("f11"), DeskAction.IMMERSIVE, DeskScope.APP, "Immersive mode", allowedInTextInput = true),
         DeskShortcut(ctrl("s", shift = true), DeskAction.SCREENSHOT, DeskScope.APP, "Screenshot of the deck", allowedInTextInput = true),
 
