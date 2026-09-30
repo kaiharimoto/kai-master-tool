@@ -302,6 +302,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
   (`OpponentDialog`, `Matchup.covers`), a library decklist linked later (1.0.42).
+  **Siding is visual** (1.0.49): the deck to side from is laid out like the builder
+  (`SidingBoard`, every copy, marked OUT/IN on itself), **Art | List**
+  (`NeuePreferences.sidingView`) shows the plans as a picture per copy or as counted rows,
+  and the PDF guide follows it (`GuideStyle`); a new opponent's name suggests its cards
+  (`OpponentGuess`), and a matchup's actions are buttons, not a ⋯ menu.
   `NEUE.md` §3, §4j.
 - **Format** (1.0.33, `04`, `NEUE.md` §4i): **webs of decks** — the field expected
   at an event, yours starred. `DeckWeb`/`WebLibrary` (core; the page is Format, the

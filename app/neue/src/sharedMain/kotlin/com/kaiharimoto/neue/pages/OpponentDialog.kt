@@ -21,7 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.siding.Matchup
+import com.kaiharimoto.mastertool.core.siding.OpponentGuess
 import com.kaiharimoto.mastertool.core.siding.SidingCodec
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.cards.CARD_RATIO
@@ -40,31 +42,41 @@ import com.kaiharimoto.neue.theme.Mu
  * An opponent made by hand (1.0.42, kai: "let the user add siding patterns to the current
  * deck and create opponent decks by choosing a name and 3 main cards in a card
  * picker/searcher"): a name, and three cards to know the deck by, found in the card pool.
- * Its decklist, when there is one, is linked later from the matchup's menu. [start] is
- * the matchup being changed, or null for a new one.
+ * Its decklist, when there is one, is linked later with the matchup's Link a decklist. [start]
+ * is the matchup being changed, or null for a new one.
+ *
+ * The name comes first, so it does the searching (1.0.49, kai: "it would be nice if it
+ * suggested cards based on the name of the deck"): the cards of the archetypes it spells
+ * ([OpponentGuess]) are offered under it as it is typed, and a new opponent added with
+ * none picked takes the first three.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun OpponentDialog(start: Matchup?, state: DeckBuilderState, onDismiss: () -> Unit, onSave: (String, List<CardId>) -> Unit) {
+internal fun OpponentDialog(start: Matchup?, state: DeckBuilderState, onDismiss: () -> Unit, typed: String = "", onSave: (String, List<CardId>) -> Unit) {
     val c = Mu.colors
-    var name by remember { mutableStateOf(start?.name.orEmpty()) }
+    var name by remember { mutableStateOf(start?.name ?: typed) }
     var covers by remember { mutableStateOf(start?.covers.orEmpty()) }
     var query by remember { mutableStateOf("") }
     val results = remember(query, state.index) {
         if (query.isBlank()) emptyList() else state.index.search(query, limit = 24).cards
     }
     val full = covers.size >= SidingCodec.COVERS
+    val suggested = remember(name.trim(), state.index) {
+        if (name.isBlank()) emptyList() else OpponentGuess.suggest(name.trim(), state.index, limit = 12)
+    }
+    // Nothing picked on a new opponent: the first suggestions stand for it.
+    val taken = if (covers.isEmpty() && start == null) suggested.take(SidingCodec.COVERS).map { it.id } else covers
     val width = if (LocalTouchFirst.current) 64.dp else 56.dp
     MuDialog(
         title = if (start == null) "New opponent" else "Edit opponent",
         onDismiss = onDismiss,
         width = 640.dp,
-        description = "A name, and three cards to know the deck by. Link its decklist later, from the matchup's menu, if you get one.",
+        description = "A name, and three cards to know the deck by: the name suggests them. Link its decklist later, if you get one.",
         footer = {
             MuButton("Cancel", onDismiss, variant = BtnVariant.GHOST)
             MuButton(
                 if (start == null) "Add" else "Save",
-                { onSave(name.trim(), covers) },
+                { onSave(name.trim(), taken) },
                 variant = BtnVariant.PRIMARY,
                 enabled = name.isNotBlank(),
                 reason = "Name the deck first",
@@ -73,6 +85,12 @@ internal fun OpponentDialog(start: Matchup?, state: DeckBuilderState, onDismiss:
     ) {
         FieldLabel("Name")
         MuInput(name, { name = it }, Modifier.fillMaxWidth(), placeholder = "Snake-Eye, Yubel, Ryzeal…")
+        if (suggested.isNotEmpty()) {
+            FieldLabel("Suggested for “${name.trim()}”", hint = "click to pick")
+            CardChoices(suggested, covers, full, width) { covers = it }
+        } else if (name.isNotBlank()) {
+            Small("No archetype in that name: search the pool below.", color = c.ink45)
+        }
         FieldLabel("Its cards", hint = "${covers.size} of ${SidingCodec.COVERS}")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             repeat(SidingCodec.COVERS) { i ->
@@ -94,26 +112,36 @@ internal fun OpponentDialog(start: Matchup?, state: DeckBuilderState, onDismiss:
                 }
             }
         }
-        MuInput(query, { query = it }, Modifier.fillMaxWidth(), placeholder = "Search the pool for its cards", imeAction = androidx.compose.ui.text.input.ImeAction.Search)
+        if (covers.isEmpty() && taken.isNotEmpty()) {
+            Small("Nothing picked: Add takes the first three suggestions.", color = c.ink45)
+        }
+        MuInput(query, { query = it }, Modifier.fillMaxWidth(), placeholder = "Or search the pool for its cards", imeAction = androidx.compose.ui.text.input.ImeAction.Search)
         if (query.isNotBlank() && results.isEmpty()) Small("No card by that name.", color = c.ink45)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            results.forEach { card ->
-                val chosen = card.id in covers
-                Box(
-                    Modifier
-                        .width(width)
-                        .aspectRatio(CARD_RATIO)
-                        .cursorPointer(
-                            caption = if (chosen) "Remove" else "Add",
-                            enabled = chosen || !full,
-                            reason = "Three cards already: take one out first",
-                        )
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = chosen || !full) {
-                            covers = if (chosen) covers - card.id else covers + card.id
-                        },
-                ) {
-                    NeueCard(card, Modifier.fillMaxSize(), foil = "off", selected = chosen, dimmed = !chosen && full)
-                }
+        CardChoices(results, covers, full, width) { covers = it }
+    }
+}
+
+/** Cards to pick from: a click picks one, or puts it back. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CardChoices(cards: List<Card>, covers: List<CardId>, full: Boolean, width: androidx.compose.ui.unit.Dp, onCovers: (List<CardId>) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        cards.forEach { card ->
+            val chosen = card.id in covers
+            Box(
+                Modifier
+                    .width(width)
+                    .aspectRatio(CARD_RATIO)
+                    .cursorPointer(
+                        caption = if (chosen) "Remove" else "Add",
+                        enabled = chosen || !full,
+                        reason = "Three cards already: take one out first",
+                    )
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = chosen || !full) {
+                        onCovers(if (chosen) covers - card.id else covers + card.id)
+                    },
+            ) {
+                NeueCard(card, Modifier.fillMaxSize(), foil = "off", selected = chosen, dimmed = !chosen && full)
             }
         }
     }

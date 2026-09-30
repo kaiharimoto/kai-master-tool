@@ -40,6 +40,13 @@ data class GuideContent(
     val webNotes: String = "",
 )
 
+/**
+ * How the guide shows a plan's cards (1.0.49, kai: "it will respect which toggle the user has at
+ * the moment"): [ART], a picture per copy and nothing else, as the Siding page's art view; or
+ * [LIST], names with their counts, as its list view.
+ */
+enum class GuideStyle { ART, LIST }
+
 /** The fonts the guide is set in: the app's own, read from its files. */
 class GuideFonts(val regular: TrueType, val bold: TrueType, val mono: TrueType)
 
@@ -76,7 +83,7 @@ object SidingGuide {
     private const val INK12 = 0.88f
     private const val INK06 = 0.95f
 
-    fun write(content: GuideContent, fonts: GuideFonts, image: (CardId) -> PdfImage?, zlib: Zlib?): ByteArray {
+    fun write(content: GuideContent, fonts: GuideFonts, image: (CardId) -> PdfImage?, zlib: Zlib?, style: GuideStyle = GuideStyle.ART): ByteArray {
         val doc = PdfDocument(zlib, title = "Siding guide · ${content.deckName}", author = "Neue Master Tool")
         val f = Fonts(doc.font(fonts.regular), doc.font(fonts.bold), doc.font(fonts.mono))
         // One picture per card, however often it is printed: the file carries it once.
@@ -84,7 +91,7 @@ object SidingGuide {
         val image = { id: CardId -> if (id in pictures) pictures[id] else image(id).also { pictures[id] = it } }
         val blocks = buildList {
             add(Glance(content, f))
-            content.matchups.forEach { add(Section(it, f, image)) }
+            content.matchups.forEach { add(Section(it, f, image, style)) }
         }
         // Pages: blocks in order, a new page when the next does not fit.
         val pages = mutableListOf<MutableList<Block>>(mutableListOf())
@@ -244,22 +251,30 @@ object SidingGuide {
      */
     private class CardRow(
         private val label: String,
-        private val cards: List<GuideCard>,
+        counted: List<GuideCard>,
         private val width: Float,
         private val cardWidth: Float,
         private val strong: Boolean,
         private val faded: Boolean,
         private val f: Fonts,
         private val image: (CardId) -> PdfImage?,
+        private val style: GuideStyle = GuideStyle.ART,
     ) {
+        // Art: every copy its own picture, no count and no name — the Siding page's art view.
+        private val cards = if (style == GuideStyle.ART) counted.flatMap { c -> List(c.count.coerceAtLeast(1)) { c.copy(count = 0) } } else counted
         private val gap = 3f
         private val labelHeight = 11f
         private val cardHeight = cardWidth * RATIO
         private val perLine = max(1, ((width + gap) / (cardWidth + gap)).toInt())
         private val lines = (cards.size + perLine - 1) / perLine
-        private val nameSize = if (faded) 6f else 6.5f
-        private val names = cards.flatMap { wrap("${it.name} ×${it.count}", f.regular.metrics, nameSize, width) }
-        val height: Float = labelHeight + if (cards.isEmpty()) 10f else lines * cardHeight + (lines - 1) * gap + 2f + names.size * (nameSize + 2f)
+        private val listSize = if (faded) 7f else 7.5f
+        // List: a line a card, its count first, as a player writes a decklist.
+        private val names = if (style == GuideStyle.LIST) cards.flatMap { wrap("${it.count}× ${it.name}", f.regular.metrics, listSize, width) } else emptyList()
+        val height: Float = labelHeight + when {
+            cards.isEmpty() -> 10f
+            style == GuideStyle.LIST -> names.size * (listSize + 3f)
+            else -> lines * cardHeight + (lines - 1) * gap + 2f
+        }
 
         fun draw(page: PdfPage, x: Float, top: Float) {
             page.text(f.bold, 6f, x, top + 7f, label, if (faded) INK45 else INK)
@@ -268,33 +283,36 @@ object SidingGuide {
                 page.text(f.regular, 7f, x, y0 + 7f, "Nothing", INK45)
                 return
             }
+            if (style == GuideStyle.LIST) {
+                var y = y0
+                names.forEach { n ->
+                    y += listSize + 3f
+                    page.text(if (strong) f.bold else f.regular, listSize, x, y - 2f, n, if (faded) INK45 else INK)
+                    if (faded) page.line(x, y - 2f - listSize * 0.3f, x + (if (strong) f.bold else f.regular).width(n, listSize), y - 2f - listSize * 0.3f, INK45, 0.4f)
+                }
+                return
+            }
             cards.forEachIndexed { i, c ->
                 val col = i % perLine
                 val line = i / perLine
                 card(page, f, c, image, x + col * (cardWidth + gap), y0 + line * (cardHeight + gap), cardWidth, strong, faded)
             }
-            var y = y0 + lines * cardHeight + (lines - 1) * gap + 2f
-            names.forEach { n ->
-                y += nameSize + 2f
-                page.text(f.regular, nameSize, x, y - 1.5f, n, if (faded) INK45 else INK70)
-                if (faded) page.line(x, y - 1.5f - nameSize * 0.3f, x + f.regular.width(n, nameSize), y - 1.5f - nameSize * 0.3f, INK45, 0.4f)
-            }
         }
     }
 
     /** One turn's box: its title, out and in, why, and their plan under a dashed line. */
-    private class TurnBox(private val t: GuideTurn, width: Float, private val f: Fonts, image: (CardId) -> PdfImage?) {
+    private class TurnBox(private val t: GuideTurn, width: Float, private val f: Fonts, image: (CardId) -> PdfImage?, style: GuideStyle) {
         private val pad = 7f
         private val inner = width - 2 * pad
         private val half = (inner - 10f) / 2
         private val plan = t.plan?.takeIf { it.written }
-        private val out = plan?.let { CardRow("OUT", it.out, half, 22f, false, false, f, image) }
-        private val into = plan?.let { CardRow("IN", it.into, half, 22f, true, false, f, image) }
+        private val out = plan?.let { CardRow("OUT", it.out, half, 22f, false, false, f, image, style) }
+        private val into = plan?.let { CardRow("IN", it.into, half, 22f, true, false, f, image, style) }
         private val swap = if (out == null || into == null) 0f else max(out.height, into.height)
         private val note = plan?.note?.takeIf { it.isNotBlank() }?.let { wrap(it, f.regular.metrics, 8f, inner) }.orEmpty()
         private val theirs = t.theirs?.takeIf { it.written }
-        private val bring = theirs?.let { CardRow("THEY BRING", it.into, half, 20f, true, false, f, image) }
-        private val drop = theirs?.let { CardRow("THEY DROP", it.out, half, 15f, false, true, f, image) }
+        private val bring = theirs?.let { CardRow("THEY BRING", it.into, half, 20f, true, false, f, image, style) }
+        private val drop = theirs?.let { CardRow("THEY DROP", it.out, half, 15f, false, true, f, image, style) }
         private val answer = if (bring == null || drop == null) 0f else max(bring.height, drop.height)
         private val quote = theirs?.note?.takeIf { it.isNotBlank() }?.let { wrap("“$it”", f.regular.metrics, 7.5f, inner - 10f) }.orEmpty()
 
@@ -354,13 +372,13 @@ object SidingGuide {
     }
 
     /** A matchup: faces, name, share and note over its two turns, a rule under it. */
-    private class Section(private val m: GuideMatchup, private val f: Fonts, private val image: (CardId) -> PdfImage?) : Block {
+    private class Section(private val m: GuideMatchup, private val f: Fonts, private val image: (CardId) -> PdfImage?, style: GuideStyle) : Block {
         private val coverW = 24f
         private val textX = ML + 3 * (coverW + 2.5f) + 6f
         private val note = wrap(m.note, f.regular.metrics, 8.5f, W - ML - textX - 60f)
         private val head = max(coverW * RATIO, 16f + note.size * 12.5f) + 8f
         private val boxWidth = (CW - 12f) / 2
-        private val boxes = m.turns.map { TurnBox(it, boxWidth, f, image) }
+        private val boxes = m.turns.map { TurnBox(it, boxWidth, f, image, style) }
         private val boxHeight = boxes.maxOfOrNull { it.height } ?: 0f
         override val height: Float = head + boxHeight + 12f
 

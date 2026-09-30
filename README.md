@@ -88,6 +88,10 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   duplicates and exports without opening it.
 - **Your artwork.** Alternate arts from the pool, or your own picture for a card
   whose alternates the database does not have.
+- **Siding you can see.** Side against each deck you expect, going first and
+  second: your deck laid out as the builder lays it, a click to side a copy out
+  or in, the plans as card art (or as a list), and a PDF guide that prints the way
+  you are looking at it. Name an opponent and it suggests their cards.
 - **Zen.** Leave it alone in full screen and the deck floats to the middle of the
   window; the cards are yours to arrange.
 - **Ai, an assistant that acts.** A panel beside every page (`Ctrl I`): chat about

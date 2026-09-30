@@ -48,6 +48,9 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
     /** The opponent the siding editor opens on, when it was opened from a matchup. */
     var sidingAgainst by mutableStateOf<String?>(null)
 
+    /** A new opponent to open the siding editor's New opponent on, with this name typed (the studio's `--opponent`). */
+    var newOpponent by mutableStateOf<String?>(null)
+
     /** Opens the siding editor: [deckId] sided, against [against] when given. */
     fun side(deckId: String, against: String? = null) {
         library.webOf(deckId)?.let { selectedId = it.id }

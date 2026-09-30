@@ -231,6 +231,12 @@ data class NeuePreferences(
      * cards as the builder draws them, or [SHOT_LIST], a decklist of art, counts and names.
      */
     val shotStyle: String = SHOT_PICTURE,
+    /**
+     * How Siding shows the cards a plan moves (1.0.49, kai): [SIDING_ART], one picture per
+     * copy and no counts, or [SIDING_LIST], a row a card with its count. The siding guide's
+     * PDF follows it.
+     */
+    val sidingView: String = SIDING_ART,
     /** The tablet's first-run note has been shown (touch swarm, rec 20): a field with a default, no migration. */
     val touchIntroSeen: Boolean = false,
     /** Lists of cards kept for consideration (1.0.19), in the order they were made. */
@@ -297,6 +303,7 @@ data class NeuePreferences(
         contrast = if (contrast == CONTRAST_HIGH) CONTRAST_HIGH else CONTRAST_STANDARD,
         groupPalette = groupPalette.ifBlank { DEFAULT_PALETTE },
         shotStyle = if (shotStyle == SHOT_LIST) SHOT_LIST else SHOT_PICTURE,
+        sidingView = if (sidingView == SIDING_LIST) SIDING_LIST else SIDING_ART,
         deckZoom = if (deckZoom.isFinite()) deckZoom.coerceIn(MIN_ZOOM, 1f) else 1f,
         groupGap = if (groupGap.isFinite()) groupGap.coerceIn(MIN_GAP, MAX_GAP) else 1f,
         groupArrangement = groupArrangement.takeIf { name -> com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries.any { it.name == name } } ?: "FITTED",
@@ -328,6 +335,8 @@ data class NeuePreferences(
 
     companion object {
         const val KEY = "neue.ui"
+        const val SIDING_ART = "art"
+        const val SIDING_LIST = "list"
 
         /** The interface scales Ctrl = and Ctrl - step through. A large display wants the top of this. */
         val SCALES = listOf(0.875f, 1f, 1.125f, 1.25f, 1.5f, 1.75f, 2f)

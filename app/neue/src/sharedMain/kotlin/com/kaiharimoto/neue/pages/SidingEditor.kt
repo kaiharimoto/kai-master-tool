@@ -76,6 +76,7 @@ import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.Tag
 import com.kaiharimoto.neue.kit.animatedColor
+import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
@@ -134,7 +135,7 @@ internal fun SidingEditor(
     LaunchedEffect(me.entry.id, reload, webs.revision) { library = webs.libraryDecks() }
     fun linked(m: Matchup?): StoredDeck? = m?.deckId?.let { id -> decks.firstOrNull { it.entry.id == id } ?: library.firstOrNull { it.entry.id == id } }
     var selected by remember(me.entry.id) {
-        mutableStateOf(webs.sidingAgainst?.takeIf { a -> opponents.any { it.entry.id == a } } ?: opponents.firstOrNull()?.entry?.id ?: loose.firstOrNull()?.let { "m:${it.id}" })
+        mutableStateOf(webs.sidingAgainst?.takeIf { a -> opponents.any { it.entry.id == a } || loose.any { "m:${it.id}" == a } } ?: opponents.firstOrNull()?.entry?.id ?: loose.firstOrNull()?.let { "m:${it.id}" })
     }
     val opponent = opponents.firstOrNull { it.entry.id == selected }
     val matchup: Matchup? = opponent?.let { siding.against(it.entry.id, it.entry.name) } ?: siding.byId(selected?.removePrefix("m:"))
@@ -158,7 +159,7 @@ internal fun SidingEditor(
     fun setPlan(t: Turn, p: SidePlan) = edit { it.withPlan(t, p) }
 
     // An opponent made or changed here (1.0.42): a name and three cards, its decklist linked later.
-    var creating by remember { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(webs.newOpponent != null) }
     var changing by remember { mutableStateOf<Matchup?>(null) }
     fun remove(m: Matchup) {
         val before = siding
@@ -169,25 +170,19 @@ internal fun SidingEditor(
             selected = "m:${m.id}"
         }
     }
-    fun opponentMenu(m: Matchup, at: Offset) {
-        val decklist = linked(m)
-        neue.menu = MenuSpec(at, buildList {
-            add(MenuEntry("Name and cards…") { changing = m })
-            add(MenuEntry(if (decklist == null) "Link a decklist…" else "Link another decklist…") {
-                val choices = library.filter { it.entry.id != me.entry.id }.sortedBy { it.entry.name.lowercase() }
-                neue.menu = MenuSpec(at, if (choices.isEmpty()) {
-                    listOf(MenuEntry("No other decks in the library", enabled = false) {})
-                } else {
-                    choices.map { d -> MenuEntry(d.entry.name, hint = if (d.entry.id == m.deckId) "✓" else null) { save(siding.put(m.copy(deckId = d.entry.id))) } }
-                })
-            })
-            if (decklist != null) add(MenuEntry("Unlink “${decklist.entry.name}”") { save(siding.put(m.copy(deckId = null))) })
-            add(MenuEntry("Remove this matchup", danger = true, separatorBefore = true) { remove(m) })
+    /** The library's decks to link a matchup made here to (1.0.49: a button, no longer inside a ⋯ menu). */
+    fun linkMenu(m: Matchup, at: Offset) {
+        val choices = library.filter { it.entry.id != me.entry.id }.sortedBy { it.entry.name.lowercase() }
+        neue.menu = MenuSpec(at, if (choices.isEmpty()) {
+            listOf(MenuEntry("No other decks in the library", enabled = false) {})
+        } else {
+            choices.map { d -> MenuEntry(d.entry.name, hint = if (d.entry.id == m.deckId) "✓" else null) { save(siding.put(m.copy(deckId = d.entry.id))) } }
         })
     }
+    val art = neue.prefs.sidingView != com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_LIST
 
     Column(Modifier.fillMaxSize()) {
-        val art = com.kaiharimoto.neue.art.LocalArt.current
+        val arts = com.kaiharimoto.neue.art.LocalArt.current
         val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         var making by remember { mutableStateOf(false) }
@@ -197,7 +192,7 @@ internal fun SidingEditor(
             making = true
             scope.launch {
                 try {
-                    GuideExport.deliver(webs, web, named, me, state, neue, art, custom)
+                    GuideExport.deliver(webs, web, named, me, state, neue, arts, custom)
                 } finally {
                     making = false
                 }
@@ -205,7 +200,8 @@ internal fun SidingEditor(
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
         creating.takeIf { it }?.let {
-            OpponentDialog(null, state, { creating = false }) { n, covers ->
+            OpponentDialog(null, state, { creating = false; webs.newOpponent = null }, typed = webs.newOpponent.orEmpty()) { n, covers ->
+                webs.newOpponent = null
                 val made = Matchup("m-${Random.nextLong().toULong().toString(36)}", n, covers = covers)
                 save(siding.put(made))
                 selected = "m:${made.id}"
@@ -233,7 +229,7 @@ internal fun SidingEditor(
             val wide = maxWidth >= 1100.dp
             val narrow = maxWidth < 700.dp
             val theirs: @Composable (Modifier) -> Unit = { modifier ->
-                TheirPlan(webs, theirDeck, me, turn, state, neue, web != null, modifier) { webs.side(it, me.entry.id) }
+                TheirPlan(webs, theirDeck, me, turn, state, neue, web != null, art, modifier) { webs.side(it, me.entry.id) }
             }
             val body: @Composable (Modifier) -> Unit = { modifier ->
                 val scroll = rememberScrollState()
@@ -249,19 +245,35 @@ internal fun SidingEditor(
                                 Tag("+ Opponent", false, { creating = true }, caption = "New")
                             }
                         }
-                        OpponentHeader(theirDeck, matchup?.covers.orEmpty(), name, state, neue, onMenu = if (opponent == null && matchup != null) { at -> opponentMenu(matchup, at) } else null)
+                        val own = matchup?.takeIf { opponent == null }
+                        OpponentHeader(
+                            theirDeck,
+                            matchup?.covers.orEmpty(),
+                            name,
+                            state,
+                            neue,
+                            actions = own?.let { m ->
+                                OpponentActions(
+                                    decklist = linked(m)?.entry?.name,
+                                    onEdit = { changing = m },
+                                    onLink = { at -> linkMenu(m, at) },
+                                    onUnlink = { save(siding.put(m.copy(deckId = null))) },
+                                    onRemove = { remove(m) },
+                                )
+                            },
+                        )
                         PlanNote(matchup?.note.orEmpty(), { note -> edit { it.copy(note = note) } }, "The matchup: how it plays, what matters, what to hold.")
                         if (narrow) {
                             com.kaiharimoto.neue.kit.Segmented(turn, Turn.entries, { it.title }, { turn = it })
-                            TurnColumn(turn, plan(turn), true, state, myDeck, { setPlan(turn, it) }, {})
+                            TurnColumn(turn, plan(turn), true, state, myDeck, art, { setPlan(turn, it) }, {})
                         } else {
                             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                 Turn.entries.forEach { t ->
-                                    TurnColumn(t, plan(t), t == turn, state, myDeck, { setPlan(t, it) }, { turn = t }, Modifier.weight(1f))
+                                    TurnColumn(t, plan(t), t == turn, state, myDeck, art, { setPlan(t, it) }, { turn = t }, Modifier.weight(1f))
                                 }
                             }
                         }
-                        Tray(myDeck, plan(turn), turn, state, { setPlan(turn, it) })
+                        SidingBoard(myDeck, plan(turn), turn, state) { setPlan(turn, it) }
                         if (!wide) theirs(Modifier.fillMaxWidth())
                     }
                     ScrollbarFor(scroll)
@@ -325,11 +337,18 @@ private fun SidingBar(webs: Webs, web: DeckWeb?, decks: List<StoredDeck>, me: St
             // A deck on its own (1.0.42): the one in the builder, by name.
             MuText(me.entry.name, style = MuType.body(LocalMuFonts.current).copy(fontWeight = FontWeight.Bold), color = c.ink, maxLines = 1)
         }
+        com.kaiharimoto.neue.kit.Segmented(
+            neue.prefs.sidingView,
+            listOf(com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_ART, com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_LIST),
+            { if (it == com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_LIST) "List" else "Art" },
+            { v -> neue.update { it.copy(sidingView = v) } },
+            small = true,
+        )
         GuideButton(making, onGuide)
         if (!phone) {
             Small(
-                if (LocalTouchFirst.current) "Tap a card in the deck to side it; tap one in a list to take it back."
-                else "Pick a column, then click a card in the deck to side it out or in. Click one in a list to take it back.",
+                if (LocalTouchFirst.current) "Tap a card in the deck to side it; tap it again to take it back."
+                else "Pick a turn, then click a card in the deck below to side it out or in. Click it again to take it back.",
                 color = c.ink45,
             )
         }
@@ -402,30 +421,49 @@ private fun MatchupRow(name: String, marks: String, on: Boolean, onClick: () -> 
     }
 }
 
+/** What a matchup made here can do (1.0.49, kai: buttons, not a ⋯ menu — "we have an abundance of UI space"). */
+private class OpponentActions(
+    val decklist: String?,
+    val onEdit: () -> Unit,
+    val onLink: (Offset) -> Unit,
+    val onUnlink: () -> Unit,
+    val onRemove: () -> Unit,
+)
+
 /**
  * Who this is against: their faces — their deck's, else the three cards the matchup was
- * made with — and their name; for a matchup made here, its menu (1.0.42).
+ * made with — and their name; for a matchup made here (1.0.42), its actions as buttons.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun OpponentHeader(opponent: StoredDeck?, covers: List<CardId>, name: String, state: DeckBuilderState, neue: NeueState, onMenu: ((Offset) -> Unit)?) {
+private fun OpponentHeader(opponent: StoredDeck?, covers: List<CardId>, name: String, state: DeckBuilderState, neue: NeueState, actions: OpponentActions?) {
     val c = Mu.colors
     var at by remember { mutableStateOf(Offset.Zero) }
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        val faces = if (opponent != null) remember(opponent.entry.deck, state.index) { faces(opponent, neue, state) } else covers.mapNotNull(state.index::byId)
-        if (faces.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                faces.forEach { NeueCard(it, Modifier.size(34.dp, 50.dp), foil = "off") }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            val faces = if (opponent != null) remember(opponent.entry.deck, state.index) { faces(opponent, neue, state) } else covers.mapNotNull(state.index::byId)
+            if (faces.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    faces.forEach { NeueCard(it, Modifier.size(34.dp, 50.dp), foil = "off") }
+                }
+            }
+            Column(Modifier.weight(1f, fill = false)) {
+                MuText("vs $name", style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 2)
+                if (actions != null) Small(actions.decklist?.let { "Decklist: $it" } ?: "No decklist linked", color = c.ink45)
             }
         }
-        Column(Modifier.weight(1f, fill = false)) {
-            MuText("vs $name", style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 2)
-            if (onMenu != null) Small(if (opponent != null) "Decklist: ${opponent.entry.name}" else "No decklist linked", color = c.ink45)
-        }
-        if (onMenu != null) {
-            Box(Modifier.onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
-                com.kaiharimoto.neue.kit.Tip("This opponent: its name and cards, its decklist, or remove it") {
-                    IconButton(com.kaiharimoto.neue.kit.Icons.More, { onMenu(at) }, size = 32.dp, label = "Opponent")
-                }
+        if (actions != null) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MuButton("Name and cards", actions.onEdit, variant = BtnVariant.SECONDARY, size = BtnSize.SM, icon = com.kaiharimoto.neue.kit.Icons.Pencil)
+                MuButton(
+                    if (actions.decklist == null) "Link a decklist ▾" else "Change decklist ▾",
+                    { actions.onLink(at) },
+                    Modifier.onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) },
+                    variant = BtnVariant.SECONDARY,
+                    size = BtnSize.SM,
+                )
+                if (actions.decklist != null) MuButton("Unlink", actions.onUnlink, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                MuButton("Remove", actions.onRemove, variant = BtnVariant.GHOST, size = BtnSize.SM, icon = com.kaiharimoto.neue.kit.Icons.Trash)
             }
         }
     }
@@ -451,6 +489,7 @@ private fun TurnColumn(
     active: Boolean,
     state: DeckBuilderState,
     deck: Deck,
+    art: Boolean,
     onPlan: (SidePlan) -> Unit,
     onPick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -471,8 +510,13 @@ private fun TurnColumn(
             Mono("${plan.out.size} out · ${plan.into.size} in · ${SidingMath.balanceWords(plan)}", color = if (active) c.paper else c.ink70)
         }
         Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PlanList("Out", SidingMath.counted(plan.out), state, deck, strong = false, Modifier.weight(1f)) { onPlan(plan.minusOut(it)) }
-            PlanList("In", SidingMath.counted(plan.into), state, deck, strong = true, Modifier.weight(1f)) { onPlan(plan.minusIn(it)) }
+            if (art) {
+                PlanArt("Out", SidingMath.counted(plan.out), state, deck, strong = false, Modifier.weight(1f)) { onPlan(plan.minusOut(it)) }
+                PlanArt("In", SidingMath.counted(plan.into), state, deck, strong = true, Modifier.weight(1f)) { onPlan(plan.minusIn(it)) }
+            } else {
+                PlanList("Out", SidingMath.counted(plan.out), state, deck, strong = false, Modifier.weight(1f)) { onPlan(plan.minusOut(it)) }
+                PlanList("In", SidingMath.counted(plan.into), state, deck, strong = true, Modifier.weight(1f)) { onPlan(plan.minusIn(it)) }
+            }
         }
         Box(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
             PlanNote(plan.note, { onPlan(plan.copy(note = it)) }, "Why: what this turn is afraid of, what it is for.")
@@ -527,65 +571,67 @@ private fun PlanList(
     }
 }
 
+/**
+ * The same list as pictures (1.0.49, kai: "Art mode would only display cards per copy, not
+ * using a quantity tag"): a card for every copy, five to a row, a click taking that copy back.
+ * A copy the deck no longer holds is dimmed and struck through with a rule.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PlanArt(
+    title: String,
+    counted: List<Pair<CardId, Int>>,
+    state: DeckBuilderState,
+    deck: Deck,
+    strong: Boolean,
+    modifier: Modifier,
+    onTakeBack: (CardId) -> Unit,
+) {
+    val c = Mu.colors
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Micro(title, color = c.ink70)
+            Mono(counted.sumOf { it.second }.toString(), color = c.ink45)
+        }
+        if (counted.isEmpty()) {
+            Small("Nothing yet", color = c.ink45)
+            return@Column
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val gap = 4.dp
+            val width = ((maxWidth - gap * 4) / 5).coerceAtMost(72.dp)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(gap), verticalArrangement = Arrangement.spacedBy(gap)) {
+                counted.forEach { (id, n) ->
+                    val held = if (strong) SidingMath.inOf(deck, id) else SidingMath.outOf(deck, id)
+                    val card = state.index.byId(id)
+                    repeat(n) { k ->
+                        val gone = k >= held
+                        Box(
+                            Modifier
+                                .width(width)
+                                .aspectRatio(CARD_RATIO)
+                                .border(if (strong) 2.dp else 1.dp, if (gone) c.ink25 else if (strong) c.ink else c.ink45)
+                                .cursorPointer(caption = "Take back")
+                                .muClickable { onTakeBack(id) },
+                        ) {
+                            if (card != null) {
+                                NeueCard(card, Modifier.fillMaxSize().padding(if (strong) 2.dp else 1.dp), format = state.format, foil = "off", dimmed = gone || !strong)
+                            } else {
+                                Mono("#${id.value}", Modifier.align(Alignment.Center), color = c.ink45, size = 9.sp)
+                            }
+                            if (gone) Box(Modifier.align(Alignment.Center).fillMaxWidth().height(2.dp).background(c.ink))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** A note, written where it is read. */
 @Composable
 private fun PlanNote(value: String, onChange: (String) -> Unit, placeholder: String) {
     NotesField(value, onChange, placeholder)
-}
-
-/**
- * The deck, to side from: every card of the main and extra decks (a click takes a
- * copy out) and of the side deck (a click brings one in), each with how many
- * copies are left to move in the turn being sided.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun Tray(deck: Deck, plan: SidePlan, turn: Turn, state: DeckBuilderState, onPlan: (SidePlan) -> Unit) {
-    val c = Mu.colors
-    val width = if (LocalTouchFirst.current) 64.dp else 56.dp
-    val when_ = if (turn == Turn.FIRST) "going first" else "going second"
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Micro("Main and extra deck", color = c.ink)
-            Small("side out, $when_", color = c.ink45)
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            (deck.main.distinct() + deck.extra.distinct()).forEach { id ->
-                val total = SidingMath.outOf(deck, id)
-                TrayCard(id, total - plan.outCount(id), total, state, width, "Side out") { if (SidingMath.canOut(deck, plan, id)) onPlan(plan.plusOut(id)) }
-            }
-        }
-        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Micro("Side deck", color = c.ink)
-            Small("side in, $when_", color = c.ink45)
-        }
-        if (deck.side.isEmpty()) Small("The side deck is empty.", color = c.ink45)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            deck.side.distinct().forEach { id ->
-                val total = SidingMath.inOf(deck, id)
-                TrayCard(id, total - plan.inCount(id), total, state, width, "Side in") { if (SidingMath.canIn(deck, plan, id)) onPlan(plan.plusIn(id)) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TrayCard(id: CardId, left: Int, total: Int, state: DeckBuilderState, width: Dp, verb: String, onClick: () -> Unit) {
-    val c = Mu.colors
-    val card = state.index.byId(id) ?: return
-    val spent = left <= 0
-    Box(
-        Modifier
-            .width(width)
-            .aspectRatio(CARD_RATIO)
-            .cursorPointer(caption = if (spent) null else verb, enabled = !spent, reason = "Every copy is sided already")
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, enabled = !spent, onClick = onClick),
-    ) {
-        NeueCard(card, Modifier.fillMaxSize(), foil = "off", dimmed = spent)
-        Box(Modifier.align(Alignment.BottomEnd).padding(2.dp).background(c.paper).border(1.dp, c.ink).padding(horizontal = 3.dp)) {
-            Mono("$left/$total", color = c.ink, size = 9.sp)
-        }
-    }
 }
 
 /**
@@ -604,6 +650,7 @@ private fun TheirPlan(
     state: DeckBuilderState,
     neue: NeueState,
     inWeb: Boolean,
+    art: Boolean,
     modifier: Modifier,
     onSideAs: (String) -> Unit,
 ) {
@@ -613,7 +660,7 @@ private fun TheirPlan(
             Micro("How they side against you", color = c.ink70)
             Small(
                 if (inWeb) "Only a deck of this web, or a matchup linked to a decklist, can show its own plan against you."
-                else "Link this matchup to a decklist (its ⋯ menu) to see how it sides against you.",
+                else "Link this matchup to a decklist (Link a decklist, beside its name) to see how it sides against you.",
                 color = c.ink45,
             )
             return@Column
@@ -638,8 +685,8 @@ private fun TheirPlan(
             Small("$name has no plan against you for this turn yet.", color = c.ink45)
             MicroLink("Side as $name", { onSideAs(opponent.entry.id) }, color = c.ink)
         } else {
-            CardGrid("They bring in", "what you will face", SidingMath.counted(plan.into), state, columns = 3, struck = false)
-            CardGrid("They take out", "less to play around", SidingMath.counted(plan.out), state, columns = 4, struck = true)
+            CardGrid("They bring in", "what you will face", SidingMath.counted(plan.into), state, columns = 3, struck = false, art = art)
+            CardGrid("They take out", "less to play around", SidingMath.counted(plan.out), state, columns = 4, struck = true, art = art)
             if (plan.note.isNotBlank()) {
                 Row(Modifier.fillMaxWidth().background(c.ink06)) {
                     Box(Modifier.width(2.dp).heightIn(min = 24.dp).background(c.ink))
@@ -668,10 +715,15 @@ private fun TheirPlan(
     }
 }
 
-/** Cards as pictures in a grid, each with its count: what the opponent brings in or takes out. */
+/**
+ * Cards as pictures in a grid: what the opponent brings in or takes out. In list mode each
+ * card once with its count and name; in art mode (1.0.49) a picture for every copy, and
+ * neither — the picture is the name.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun CardGrid(title: String, caption: String, counted: List<Pair<CardId, Int>>, state: DeckBuilderState, columns: Int, struck: Boolean) {
+private fun CardGrid(title: String, caption: String, grouped: List<Pair<CardId, Int>>, state: DeckBuilderState, columns: Int, struck: Boolean, art: Boolean) {
+    val counted = if (art) grouped.flatMap { (id, n) -> List(n) { id to 1 } } else grouped
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -689,11 +741,13 @@ private fun CardGrid(title: String, caption: String, counted: List<Pair<CardId, 
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Box(Modifier.fillMaxWidth().aspectRatio(CARD_RATIO).border(if (struck) 1.dp else 2.dp, if (struck) c.ink45 else c.ink)) {
                             if (card != null) NeueCard(card, Modifier.fillMaxSize().padding(if (struck) 1.dp else 2.dp), foil = "off", dimmed = struck)
-                            Box(Modifier.align(Alignment.BottomEnd).background(if (struck) c.paper else c.ink).padding(horizontal = 4.dp)) {
-                                Mono("×$n", color = if (struck) c.ink else c.paper, size = if (struck) 10.sp else 12.sp)
+                            if (!art) {
+                                Box(Modifier.align(Alignment.BottomEnd).background(if (struck) c.paper else c.ink).padding(horizontal = 4.dp)) {
+                                    Mono("×$n", color = if (struck) c.ink else c.paper, size = if (struck) 10.sp else 12.sp)
+                                }
                             }
                         }
-                        MuText(
+                        if (!art) MuText(
                             card?.name ?: "#${id.value}",
                             style = MuType.small(LocalMuFonts.current).copy(
                                 fontSize = if (struck) 10.sp else 11.sp,

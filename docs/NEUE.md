@@ -1649,11 +1649,44 @@ the builder resets to. A deck of a web is sided against the web's decks, as belo
 deck on its own against the opponents it is given here: **New opponent** (the matchup
 list, the empty page, `+ Opponent` on a phone) opens `OpponentDialog`, a name and three
 cards found in the pool (`Matchup.covers`, the `siding` payload's `"covers"`, at most
-three). Each such matchup has a ⋯ menu: its name and cards, **Link a decklist…** (any
+three). Each such matchup has buttons (a ⋯ menu until 1.0.49): its name and cards, **Link a decklist** (any
 deck of the library, `Matchup.deckId` — whose faces then head the matchup and whose own
 plan against this deck fills *how they side against you*), unlink, and remove (undone
 from its note). A web's deck may have such matchups too, under "Not in this web". The
 guide prints them with their three cards. An unsaved deck is asked to be saved first.
+
+**Made visual** (1.0.49, kai: "the card picker organized like the deck builder because that's
+what the user is most familiar with… the cards under IN and OUT shown using card arts… toggle
+between list mode and art mode… Art mode would only display cards per copy, not using a
+quantity tag"):
+
+- **The deck to side from is laid out as the builder lays it out** (`SidingBoard`): the Main
+  Deck ten to a row, the Extra and Side Decks fifteen, every copy its own card in the deck's
+  own order, under the section's name and count. A click on a Main or Extra card sides that
+  copy out, on a Side card brings it in; what the turn moves is marked on the copies
+  themselves — dimmed with `OUT`, or framed with `IN` — and a click on a marked copy, or a
+  right-click (a held finger) on any, takes it back. `SidingMath` still guards every move.
+  The first *n* copies of a card are the marked ones: the deck reads left to right.
+- **Art | List** in the bar (`NeuePreferences.sidingView`, `"art"` by default): in art the
+  turn's Out and In are a picture per copy (`PlanArt`, five to a row, In framed, Out
+  dimmed, a copy the deck no longer holds ruled through), and *how they side against you*
+  likewise, with no counts and no names; in list, the rows with `×n` and names as before.
+- **The PDF follows the toggle** (`GuideStyle`): art prints one picture per copy with no
+  counts or names; list prints `3× Name` rows and only the matchups' faces as pictures, so
+  the file is small.
+- **The name suggests the cards** (`OpponentGuess`, core, tested; kai: "it would be nice if it
+  suggested cards based on the name of the deck"): the archetypes a name spells — whole
+  words, hyphens and case ignored, the longest match kept ("Fire King Avatar" over "Fire
+  King") — each offer their own cards, main-deck monsters carrying the name first, then the
+  others, then the Extra Deck, then spells and traps, interleaved across archetypes; a name
+  that is a card's brings that card and the cards quoting it; too few, and the text and
+  names are searched. `OpponentDialog` shows them live under the name, above the pool's
+  search, and a new opponent added with nothing picked takes the first three (it says so).
+- **Buttons, not a ⋯ menu** (kai: "we have an abundance of UI space"): a matchup made here
+  shows **Name and cards**, **Link a decklist ▾** (or **Change decklist ▾** and **Unlink**)
+  and **Remove** under its name.
+- The studio: `--siding-view=art|list`, `--against=m:ID` (a matchup made by name) and
+  `--opponent=NAME` (New opponent open with NAME typed, `Webs.newOpponent`).
 
 **The page** (1.0.40, kai: "3 should be Siding and 4 should be Format"; `Ctrl 3`,
 `SidingPage`): the editor below, which stood inside Format, as a page of its own. It
@@ -1682,8 +1715,7 @@ on the mockup, "how they side against you" to be more visually intuitive.
   builder's web menu): matchups down the left with their marks (`■` sided with a
   reason, `□` sided, `·` not yet); the matchup's note; a column per turn — the
   active one inverted — with Out and In lists (a click takes a copy back) and a
-  why; the deck below, main and extra to side out and side to side in, each card
-  with the copies left. **How they side against you** stands to the right (below,
+  why; the deck below, laid out as the builder does from 1.0.49 (`SidingBoard`, above). **How they side against you** stands to the right (below,
   narrower): the opponent's own plan against this deck for the answering turn —
   you going first is them going second — what they bring in large, what they take
   out small and struck, their note, and their deck by its groups. With no plan,
@@ -1711,8 +1743,8 @@ view makes it for the deck being sided:
   label (`SIDING GUIDE · SPRING REGIONAL`), the deck's name over a rule, its counts
   and `page 2 of 4`; the first page **at a glance** (the web's notes, each matchup's
   share and plans in a line); then a block per matchup — faces, `vs Yubel`, share,
-  note — over a box for each turn: **Out** beside **In** as pictures with counts and
-  names, why, and under a dashed line **their plan** for the answering turn (*They go
+  note — over a box for each turn: **Out** beside **In** as a picture per copy (or,
+  in list mode from 1.0.49, names with counts), why, and under a dashed line **their plan** for the answering turn (*They go
   second*): what they bring beside what they drop (faded, struck), and their note.
   Blocks never break; runs side by side put two matchups on a page. Every web deck
   is listed, sided or not ("Not sided yet"), so the guide doubles as what is left.

@@ -140,11 +140,16 @@ fun neueMain(args: Array<String>) {
                         clock.run(60)
                     }
                 }
-                // --siding=N: the web's N-th deck in the siding editor (1.0.35); --against=M on its M-th deck.
+                // --siding=N: the web's N-th deck in the siding editor (1.0.35); --against=M on its M-th deck,
+                // or --against=m:ID on a matchup made by name (1.0.49).
                 // --matchups=true: the web's Matchups table instead.
+                // --siding-view=art|list: how Siding and its guide show a plan (1.0.49).
+                map["siding-view"]?.let { v -> h.neue.update { it.copy(sidingView = v) } }
+                // --opponent=NAME: Siding opens New opponent with NAME typed, its suggestions under it (1.0.49).
+                map["opponent"]?.let { h.webs.newOpponent = it }
                 map["siding"]?.toIntOrNull()?.let { n ->
                     val ids = h.webs.selected?.deckIds.orEmpty()
-                    ids.getOrNull(n)?.let { id -> h.webs.side(id, map["against"]?.toIntOrNull()?.let(ids::getOrNull)) }
+                    ids.getOrNull(n)?.let { id -> h.webs.side(id, map["against"]?.let { a -> a.toIntOrNull()?.let(ids::getOrNull) ?: a }) }
                     h.neue.page = Page.SIDING
                     clock.run(60)
                 }

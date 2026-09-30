@@ -20,6 +20,7 @@ import com.kaiharimoto.mastertool.core.siding.GuideMatchup
 import com.kaiharimoto.mastertool.core.siding.GuidePlan
 import com.kaiharimoto.mastertool.core.siding.GuideTurn
 import com.kaiharimoto.mastertool.core.siding.SidePlan
+import com.kaiharimoto.mastertool.core.siding.GuideStyle
 import com.kaiharimoto.mastertool.core.siding.SidingGuide
 import com.kaiharimoto.mastertool.core.siding.SidingMath
 import com.kaiharimoto.mastertool.core.siding.Turn
@@ -120,12 +121,14 @@ object GuideExport {
             TrueType(Res.readBytes("font/jetbrainsmono_regular.ttf")),
         )
         // Every picture the guide prints, read before it is laid out: the layout itself never waits.
+        // The guide is drawn as Siding is shown (1.0.49): art prints a picture per copy, a list only names.
+        val style = if (neue.prefs.sidingView == com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_LIST) GuideStyle.LIST else GuideStyle.ART
         val wanted = content.matchups.flatMap { m ->
-            m.covers + m.turns.flatMap { t -> listOfNotNull(t.plan, t.theirs).flatMap { p -> (p.out + p.into).map { it.id } } }
+            m.covers + if (style == GuideStyle.LIST) emptyList() else m.turns.flatMap { t -> listOfNotNull(t.plan, t.theirs).flatMap { p -> (p.out + p.into).map { it.id } } }
         }.distinct()
         val pictures = HashMap<CardId, PdfImage>()
         wanted.forEach { id -> picture(id, state, neue, library, custom)?.let { pictures[id] = it } }
-        return withContext(Dispatchers.Default) { SidingGuide.write(content, fonts, { pictures[it] }, JvmZlib) }
+        return withContext(Dispatchers.Default) { SidingGuide.write(content, fonts, { pictures[it] }, JvmZlib, style) }
     }
 
     /** A card's picture, as the app shows it, drawn down to print size; null when there is none to be had. */

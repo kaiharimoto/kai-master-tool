@@ -63,4 +63,16 @@ class SidingGuideTest {
         // Each card's picture is written once, however often it is printed.
         assertEquals(9, Regex("/Subtype /Image").findAll(text).count())
     }
+
+    @Test
+    fun theListStyleNamesTheCardsAndPrintsOnlyTheirFaces() {
+        val content = GuideContent("Snake-Eye Fiendsmith", "Spring Regional", "40 · 15 · 15", (1..7).map(::matchup))
+        val art = SidingGuide.write(content, fonts, ::picture, null, GuideStyle.ART)
+        val list = SidingGuide.write(content, fonts, ::picture, null, GuideStyle.LIST)
+        File("build/guide-sample-list.pdf").writeBytes(list)
+        val artImages = Regex("/Subtype /Image").findAll(String(art, Charsets.ISO_8859_1)).count()
+        val listImages = Regex("/Subtype /Image").findAll(String(list, Charsets.ISO_8859_1)).count()
+        assertTrue(listImages < artImages, "a list prints the opponents' faces, not the plans' cards: $listImages vs $artImages")
+        assertTrue(list.size < art.size)
+    }
 }
