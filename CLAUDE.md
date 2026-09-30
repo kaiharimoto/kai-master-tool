@@ -438,7 +438,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   buffer was the "typos"), and Claude Code's answer is committed from its snapshots.
   Setup ends on **Start chatting** and **What can you do?** (`AiDemo`); the name renames in
   place from the panel's head; the panel docks in immersive mode too.
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo --ai-step=KEY:anthropic` photographs it.
+  **1.0.47, the harness**: `calculate` (`Calc`), `hand_odds`, `todo_write`, `web_search`/
+  `web_fetch` (Anthropic's server tools on Anthropic; DuckDuckGo then Yugipedia elsewhere),
+  `rulings`/`archetype_guide` (Yugipedia, CC BY-SA, cached a week), `delegate` (a look-only
+  helper loop). `RulesPrimer` is always in the prompt, in our own words — never copy
+  Konami's rulebook. The loop retries, caps results and compacts (`Compaction`, a stored
+  `AiSession.summary`), and reasoning streams into `Part.Reasoning` (display only).
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

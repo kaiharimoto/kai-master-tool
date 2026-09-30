@@ -66,6 +66,16 @@ sealed interface Part {
     @Serializable
     @SerialName("opaque")
     data class Opaque(val provider: String, val json: String) : Part
+
+    /**
+     * What the model thought before answering, as far as its provider shows it (1.0.47,
+     * kai: "the AI should think out loud at least partially so the user can also learn
+     * with it"). For the chat alone: never sent back as words — Anthropic's own thinking
+     * blocks travel in [Opaque], untouched.
+     */
+    @Serializable
+    @SerialName("reasoning")
+    data class Reasoning(val text: String) : Part
 }
 
 @Serializable
@@ -118,7 +128,12 @@ data class Usage(
 }
 
 /** Why a model stopped talking. */
-enum class StopReason { END, TOOL_USE, MAX_TOKENS, REFUSAL, CANCELLED, ERROR }
+enum class StopReason {
+    END, TOOL_USE, MAX_TOKENS, REFUSAL, CANCELLED, ERROR,
+
+    /** The provider paused a long turn of its own tools (a web search) and wants it sent back to carry on. */
+    PAUSED,
+}
 
 /**
  * One conversation with Ai, as it is saved (`ai/sessions/<id>.json`): its turns, the
@@ -144,7 +159,24 @@ data class AiSession(
     val usage: Usage = Usage(),
     /** How many of [turns] the reflection after a conversation has already read (phase 3). */
     val reflected: Int = 0,
+    /**
+     * The conversation's first [summarized] turns, in a model's summary (1.0.47): what is
+     * sent instead of them once the conversation grew past what the model can read. The
+     * turns stay here whole for the person to scroll back through.
+     */
+    val summary: String = "",
+    val summarized: Int = 0,
 ) {
+    /** What the model is sent: the summary in front of the turns after it, or every turn. */
+    val sent: List<ChatTurn>
+        get() {
+            if (summarized <= 0 || summary.isBlank()) return turns
+            val tail = turns.drop(summarized)
+            val first = tail.firstOrNull() ?: return turns
+            val note = Part.Context("Summary of the conversation before this message (the earlier turns were shortened to fit):\n$summary")
+            return listOf(first.copy(parts = listOf(note) + first.parts)) + tail.drop(1)
+        }
+
     /** The person's messages the reflection has not read yet. */
     val unreflected: Int get() = turns.drop(reflected).count { it.role == Role.USER && !it.isToolResults }
 

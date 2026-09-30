@@ -95,6 +95,13 @@ class AiState(internal val h: NeueHolders) {
     var question by mutableStateOf<Question?>(null)
         private set
 
+    /** The model's thinking as it streams (1.0.47), shown above the words it leads to. */
+    var reasoning by mutableStateOf("")
+        private set
+
+    /** Ai's plan for the job in hand ([x] done, [>] doing, [ ] to do), from `todo_write` (1.0.47). */
+    var todos by mutableStateOf<List<String>>(emptyList())
+
     /** A line that outlives the answer (a limit reached), until the next message (1.0.46). */
     var notice by mutableStateOf<String?>(null)
 
@@ -190,27 +197,40 @@ class AiState(internal val h: NeueHolders) {
         }
         running = true
         streaming = ""
+        reasoning = ""
         activity = emptyList()
         val provider = Providers.byId(connection.provider)
         val effort = prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
-        val request = TurnRequest(start.system, start.turns, tools, connection.model, effort, start.resume)
+        val budget = if (model.runsOwnLoop) 0 else budgetFor(connection)
         job = scope.launch {
             try {
-                AgentLoop(model, { call -> host.run(call) }, now = System::currentTimeMillis).run(request).collect { event ->
+                // Past most of the model's window, the oldest turns become a summary first (1.0.47).
+                val ready = if (budget > 0) summarizedIfLong(start, model, connection, budget) else start
+                val request = TurnRequest(ready.system, ready.sent, tools, connection.model, effort, ready.resume)
+                AgentLoop(model, { call -> host.run(call) }, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->
                     when (event) {
                         is AgentEvent.Text -> streaming += event.delta
+                        is AgentEvent.Reasoning -> reasoning += event.delta
                         is AgentEvent.Status -> status = event.text
                         is AgentEvent.Notice -> notice = event.text
                         is AgentEvent.Session -> session?.let { commit(it.copy(resume = event.id)) }
                         is AgentEvent.ToolRunning -> Unit // the host reports its own line as it runs
                         is AgentEvent.ToolSeen -> activity = activity + Part.Activity(event.name, event.summary)
                         is AgentEvent.Appended -> {
-                            val turn = if (model.runsOwnLoop && event.turn.role == Role.ASSISTANT) {
-                                event.turn.copy(parts = activity + event.turn.parts)
+                            // What it thought, kept in front of what it said, for the chat alone (1.0.47).
+                            val thought = reasoning.trim().takeIf { it.isNotEmpty() && event.turn.role == Role.ASSISTANT }?.let { listOf(Part.Reasoning(it)) }.orEmpty()
+                            // Lines of what it did on the provider's side (a CLI's tools, Anthropic's web search).
+                            val turn = if (activity.isNotEmpty() && event.turn.role == Role.ASSISTANT) {
+                                event.turn.copy(parts = thought + activity + event.turn.parts)
+                            } else if (thought.isNotEmpty()) {
+                                event.turn.copy(parts = thought + event.turn.parts)
                             } else {
                                 event.turn
                             }
-                            if (turn.role == Role.ASSISTANT) streaming = ""
+                            if (turn.role == Role.ASSISTANT) {
+                                streaming = ""
+                                reasoning = ""
+                            }
                             activity = emptyList()
                             session?.let { commit(it.copy(turns = it.turns + turn, updatedAt = System.currentTimeMillis())) }
                         }
@@ -238,6 +258,7 @@ class AiState(internal val h: NeueHolders) {
             if (turns != s.turns) commit(s.copy(turns = turns))
         }
         streaming = ""
+        reasoning = ""
         activity = emptyList()
         working = null
         running = false
@@ -256,11 +277,97 @@ class AiState(internal val h: NeueHolders) {
     /** A new conversation, with the memory as it stands now. */
     fun newChat(mode: String = AiSession.MODE_CHAT) {
         stop()
+        todos = emptyList()
         session?.let(::reflect)
         problem = null
         val connection = prefs.connection
         session = if (connection != null) begin(connection, mode) else null
         historyOpen = false
+    }
+
+    // ---- a helper with a fresh mind (1.0.47) --------------------------------------
+
+    /**
+     * A big reading job handed to a helper (`delegate`, after DeepSeek Harness's and Claude
+     * Code's sub-agents): the same model, a fresh history holding only [task], and only the
+     * tools that look — it reads twenty lists or a whole web and hands back one report, so
+     * the conversation carries the report, not the reading. API connections only: a CLI
+     * runs its own loop and has its own helpers.
+     */
+    suspend fun delegate(task: String, steps: Int): Result<String> = runCatching {
+        val connection = prefs.connection ?: error("No connection is set up.")
+        val model = backendFor(connection)
+        if (model.runsOwnLoop) error("A helper needs an API connection; on a plan's command-line app, do the reading yourself.")
+        val look = tools.filter { it.name in AiTools.readOnly }
+        val system = session?.system ?: systemPrompt(connection)
+        val ask = ChatTurn.user(
+            "You are a helper the assistant sent to do one job and report back. Nothing you say reaches the person directly; " +
+                "your final message is your report, so make it complete and plain: the facts, the numbers, the card names, the ids. " +
+                "You can only look, never change anything.\n\nThe job: " + task.trim(),
+        )
+        var report = ""
+        val runner = com.kaiharimoto.mastertool.core.ai.ToolRunner { call ->
+            if (call.name.removePrefix("mcp__neue__") !in AiTools.readOnly) {
+                Part.ToolResult(call.id, call.name, "A helper can only look; ${call.name} is not one of its tools.", isError = true)
+            } else {
+                host.run(call)
+            }
+        }
+        AgentLoop(model, runner, maxSteps = steps, now = System::currentTimeMillis, budget = budgetFor(connection))
+            .run(TurnRequest(system, listOf(ask), look, connection.model, "medium"))
+            .collect { e ->
+                when (e) {
+                    is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) report = e.turn.text
+                    is AgentEvent.Failed -> error(e.message)
+                    else -> Unit
+                }
+            }
+        report.ifBlank { error("The helper came back without a report.") }
+    }
+
+    // ---- a long conversation (1.0.47) --------------------------------------------
+
+    /**
+     * How much a connection's model can read, in tokens, near enough: past most of it the
+     * oldest turns are summarised. The CLIs keep their own histories and are never asked.
+     */
+    private fun budgetFor(connection: AiConnection): Int {
+        val p = Providers.byId(connection.provider)
+        return when {
+            p == null -> 32_000
+            p.kind == com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.LOCAL -> 32_000
+            p.id == "gemini" -> 400_000
+            p.wire == Wire.ANTHROPIC -> 200_000
+            else -> 128_000
+        }
+    }
+
+    /**
+     * [s] with its oldest turns folded into a summary the model writes, once they no longer
+     * fit; the summary is kept with the conversation, so it is written once, not every time.
+     */
+    private suspend fun summarizedIfLong(s: AiSession, model: ModelBackend, connection: AiConnection, budget: Int): AiSession {
+        if (com.kaiharimoto.mastertool.core.ai.Compaction.estimate(s.system, s.sent) <= budget * com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARIZE_AT) return s
+        val keep = (budget * 0.3).toInt()
+        val cut = com.kaiharimoto.mastertool.core.ai.Compaction.cutAt(s.turns, keep, from = s.summarized) ?: return s
+        status = "Summarising the start of this conversation to fit"
+        val earlier = buildString {
+            if (s.summary.isNotBlank()) appendLine("Summary so far: ${s.summary}\n")
+            append(com.kaiharimoto.mastertool.core.ai.Compaction.transcript(s.turns.subList(s.summarized, cut)))
+        }
+        val ask = ChatTurn.user(com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARY_ASK + "\n\n" + earlier)
+        var summary = ""
+        runCatching {
+            model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).collect { e ->
+                if (e is com.kaiharimoto.mastertool.core.ai.BackendEvent.Finished) summary = e.turn?.text?.ifBlank { null } ?: e.text
+            }
+        }
+        status = null
+        if (summary.isBlank()) return s
+        val next = s.copy(summary = summary.trim(), summarized = cut)
+        commit(next)
+        notice = null
+        return next
     }
 
     // ---- learning (phase 3) ----------------------------------------------------

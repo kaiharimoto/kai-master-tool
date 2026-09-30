@@ -136,6 +136,8 @@ class ClaudeStream {
                     "message_start" -> streamedThisMessage = false
                     "content_block_delta" -> {
                         val delta = event["delta"] as? JsonObject
+                        // Its thinking as it thinks, for the chat (1.0.47).
+                        if (delta?.str("type") == "thinking_delta") delta.str("thinking")?.takeIf { it.isNotEmpty() }?.let { out += BackendEvent.ReasoningDelta(it) }
                         if (delta?.str("type") == "text_delta") {
                             delta.str("text")?.takeIf { it.isNotEmpty() }?.let {
                                 streamedThisMessage = true

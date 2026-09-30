@@ -300,6 +300,15 @@ private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueStat
             Segmented(prefs.effort, listOf("") + provider.efforts, { if (it.isBlank()) "Default" else it.replaceFirstChar { ch -> ch.uppercase() } }, { e -> neue.update { it.copy(ai = it.ai.copy(effort = e)) } }, small = true)
         }
     }
+    SettingRow("Reasoning", "How its thinking shows above an answer, where the model shares it: its first lines, all of it, or none. Reading it is a way to learn along.") {
+        Segmented(
+            prefs.showReasoning,
+            com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONINGS,
+            { when (it) { com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_OPEN -> "Open"; com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_HIDDEN -> "Hidden"; else -> "Folded" } },
+            { r -> neue.update { it.copy(ai = it.ai.copy(showReasoning = r)) } },
+            small = true,
+        )
+    }
     SettingRow("Ask before deleting", "Deleting a deck, a web, or a deck from a web waits for your OK in the chat. Every other change can be undone.", onToggle = { neue.update { it.copy(ai = it.ai.copy(alwaysAllow = !it.ai.alwaysAllow)) } }) {
         MuSwitch(!prefs.alwaysAllow, { on -> neue.update { it.copy(ai = it.ai.copy(alwaysAllow = !on)) } })
     }

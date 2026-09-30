@@ -1903,8 +1903,44 @@ whole session for it — and only for what the last reflection did not read
 - **Immersive mode.** The panel docks there too, and zen waits while it is open.
 - A limit reached ("Stopped after 24 rounds") stays on screen until the next message.
 
+**1.0.47, a harness like the big ones, and the rules.** kai: "make sure the AI has as many
+tools as possible, similar to Claude Code … look at DeepSeek Harness … and see if we can make
+our harness as advanced as theirs, built and tailored for this program", and "the AI tends
+to forget the game rules". What was taken from them, and what was not:
+- **Numbers are never guessed**: `calculate` (`Calc`, core: a safe evaluator with `C(n,k)`,
+  `hypergeo`, `atleast` — no code runs) and `hand_odds` (the builder's own `HandOdds` on the
+  deck's counts, by cards or by group, first and second).
+- **A plan the person can watch**: `todo_write`, drawn as a checklist above the reply.
+- **The web**: `web_search` and `web_fetch`. On an Anthropic connection they are Anthropic's
+  own server tools (`web_search_20260209`, `web_fetch_20260209`), run on its side and replayed
+  with the turn; a `pause_turn` is sent back to carry on (`StopReason.PAUSED`). Elsewhere the
+  app fetches (https only, 2 MB, HTML to text in `HtmlText`) and searches DuckDuckGo's HTML
+  page, which may answer a program with a challenge — then Yugipedia's own search.
+- **The rules, in the prompt always** (`RulesPrimer`, about 6k characters, in the app's own
+  words: Konami's terms forbid copying the rulebook; the official PDF is linked), the edge
+  cases in the skill `game-rules`, and a card's rulings from `rulings` — Yugipedia's rulings
+  page (Konami's Q&A, translated; CC BY-SA, attributed in every answer), read with a
+  User-Agent, one request at a time and kept a week in `<data>/ai/cache`, as its API asks.
+  `archetype_guide` reads an archetype page's playing style, combos and weaknesses.
+- **A helper with a fresh mind**: `delegate` runs a second loop with only the look-only tools
+  (`AiTools.readOnly`) and brings back its report alone — twenty decklists read without
+  filling the conversation. API connections only; the CLIs have their own.
+- **The loop holds**: a provider's stumble is tried again (twice, 1 s and 4 s — never once
+  words have gone out); a tool result is cut to its head and tail past 16k characters; old
+  tool results are shortened when the history nears the model's window (`Compaction.prune`);
+  past 60 % of it, the oldest turns become a summary the model writes once and the
+  conversation keeps (`AiSession.summary`/`summarized`, `AiSession.sent`), cut only where the
+  person spoke, so no tool call loses its result; an overflow is shortened and tried once.
+- **It thinks out loud**: Anthropic's summarised thinking, a reasoning model's
+  `reasoning_content` or `<think>`, and Claude Code's thinking stream into a faint block above
+  the answer (`Part.Reasoning`, for the chat only), folded to its first lines, open or hidden
+  (Settings → Assistant → Reasoning); and the prompt asks for one plain line before each
+  round of tools, saying what it checks and why.
+- Not taken: a shell, files and code execution (nothing in a deck builder needs them, and they
+  are what makes a harness dangerous), and plugins — this harness is one app's.
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`.
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

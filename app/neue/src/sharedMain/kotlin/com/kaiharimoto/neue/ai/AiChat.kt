@@ -81,6 +81,7 @@ private sealed interface Entry {
     data class Person(val text: String) : Entry
     data class Reply(val text: String) : Entry
     data class Line(val summary: String, val isError: Boolean) : Entry
+    data class Thought(val text: String) : Entry
 }
 
 /** The conversation as rows: the person's words, Ai's words, and a line for each thing Ai did. */
@@ -90,6 +91,7 @@ private fun rows(turns: List<ChatTurn>): List<Entry> = buildList {
             turn.role == Role.USER && turn.isToolResults -> turn.toolResults.forEach { add(Entry.Line(it.summary.ifBlank { it.name }, it.isError)) }
             turn.role == Role.USER -> turn.text.takeIf { it.isNotBlank() }?.let { add(Entry.Person(it)) }
             else -> {
+                turn.parts.filterIsInstance<Part.Reasoning>().forEach { add(Entry.Thought(it.text)) }
                 turn.parts.filterIsInstance<Part.Activity>().forEach { add(Entry.Line(if (it.summary.isNotBlank()) it.summary else it.name, it.isError)) }
                 turn.text.takeIf { it.isNotBlank() }?.let { add(Entry.Reply(it)) }
             }
@@ -108,9 +110,9 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
     val session = ai.session
     val rows = remember(session?.turns) { rows(session?.turns.orEmpty()) }
     val list = rememberLazyListState()
-    val tail = rows.size + (if (ai.streaming.isNotEmpty()) 1 else 0) + (if (ai.working != null || ai.running) 1 else 0) +
+    val tail = rows.size + (if (ai.streaming.isNotEmpty()) 1 else 0) + (if (ai.reasoning.isNotEmpty()) 1 else 0) + ai.todos.size + (if (ai.working != null || ai.running) 1 else 0) +
         (if (ai.confirm != null) 1 else 0) + (if (ai.question != null) 1 else 0) + (if (ai.problem != null) 1 else 0) + ai.activity.size
-    LaunchedEffect(tail, ai.streaming.length / 80) {
+    LaunchedEffect(tail, ai.streaming.length / 80, ai.reasoning.length / 200) {
         val last = list.layoutInfo.totalItemsCount - 1
         if (last >= 0) list.scrollToItem(last)
     }
@@ -130,8 +132,11 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
                     is Entry.Person -> PersonSays(row.text)
                     is Entry.Reply -> ReplyView(ai, row.text)
                     is Entry.Line -> ActivityLine(row.summary, row.isError)
+                    is Entry.Thought -> ReasoningView(ai, row.text, live = false)
                 }
             }
+            if (ai.reasoning.isNotBlank()) item { ReasoningView(ai, ai.reasoning, live = true) }
+            if (ai.todos.isNotEmpty()) item { TodoView(ai.todos) }
             items(ai.activity) { ActivityLine(it.summary.ifBlank { it.name }, it.isError) }
             if (ai.streaming.isNotEmpty()) item { ReplyView(ai, ai.streaming, live = true) }
             if (ai.running) item { Working(ai.working ?: ai.status ?: if (ai.streaming.isEmpty()) "Thinking" else "Writing") }
@@ -464,6 +469,65 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
                     )
                 }
                 com.kaiharimoto.neue.kit.IconButton(com.kaiharimoto.neue.kit.Icons.Trash, { ai.delete(s.id) }, size = 28.dp, label = "Delete")
+            }
+        }
+    }
+}
+
+/**
+ * What Ai thought on its way to an answer (1.0.47, kai: "the AI should think out loud at
+ * least partially so the user can also learn with it"): a faint block with a rule down its
+ * side, folded to its first lines unless the person opens it (Settings → Assistant →
+ * Reasoning), open while it streams so it can be followed as it goes.
+ */
+@Composable
+private fun ReasoningView(ai: AiState, text: String, live: Boolean) {
+    val c = Mu.colors
+    val how = ai.prefs.showReasoning
+    if (how == com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_HIDDEN) return
+    val startsOpen = live || how == com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_OPEN || ai.tuning
+    var open by remember(text.length > 0, startsOpen) { mutableStateOf(startsOpen) }
+    val source = remember { MutableInteractionSource() }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .drawBehind { drawLine(c.ink12, Offset(0f, 0f), Offset(0f, size.height), 2.dp.toPx()) }
+            .padding(start = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            Modifier
+                .hoverable(source)
+                .cursorPointer(caption = if (open) "Fold" else "Read")
+                .muClickable(interactionSource = source) { open = !open },
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Micro(if (live) "Thinking" else "How it thought", color = c.ink45)
+            Mono(if (open) "−" else "+", color = c.ink45)
+        }
+        val shown = if (open) text.trim() else text.trim().lineSequence().filter { it.isNotBlank() }.take(2).joinToString("\n") { it.take(160) }
+        MuText(shown, style = MuType.small(LocalMuFonts.current), color = c.ink45, maxLines = if (open) Int.MAX_VALUE else 3)
+    }
+}
+
+/** Ai's plan for the job in hand, as it works through it (`todo_write`, 1.0.47). */
+@Composable
+private fun TodoView(items: List<String>) {
+    val c = Mu.colors
+    Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Micro("Plan", color = c.ink45)
+        items.forEach { raw ->
+            val t = raw.trim()
+            val (mark, words) = when {
+                t.startsWith("[x]", ignoreCase = true) -> "✓" to t.drop(3).trim()
+                t.startsWith("[>]") -> "→" to t.drop(3).trim()
+                t.startsWith("[ ]") -> "·" to t.drop(3).trim()
+                else -> "·" to t
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Mono(mark, color = if (mark == "→") c.ink else c.ink45)
+                Small(words, color = when (mark) { "✓" -> c.ink45; "→" -> c.ink; else -> c.ink70 })
             }
         }
     }

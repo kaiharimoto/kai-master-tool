@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -26,6 +27,9 @@ data class TurnRequest(
 sealed interface BackendEvent {
     /** Words as they arrive. */
     data class TextDelta(val text: String) : BackendEvent
+
+    /** The model's thinking as it arrives, where the provider shows it: for the chat, not the answer. */
+    data class ReasoningDelta(val text: String) : BackendEvent
 
     /**
      * A tool the provider ran itself (a CLI's web search), or one of ours it called
@@ -78,6 +82,7 @@ fun interface ToolRunner {
 /** What the chat hears while Ai answers. */
 sealed interface AgentEvent {
     data class Text(val delta: String) : AgentEvent
+    data class Reasoning(val delta: String) : AgentEvent
     data class Status(val text: String) : AgentEvent
 
     /** Something the person should still read once the answer is done: a limit reached, history shortened. */
@@ -108,26 +113,70 @@ class AgentLoop(
     private val tools: ToolRunner,
     private val maxSteps: Int = MAX_STEPS,
     private val now: () -> Long = { 0L },
+    /** Waits before trying a failed call again that the provider says may work (1.0.47). */
+    private val retryDelays: List<Long> = listOf(1_000, 4_000),
+    /** The model's window in tokens: past most of it, old tool results are shortened. 0: never. */
+    private val budget: Int = 0,
 ) {
     fun run(request: TurnRequest): Flow<AgentEvent> = flow {
         var history = request.history
         var usage = Usage()
         var resume = request.resume
+        var pruned = false
         for (step in 0 until maxSteps) {
+            // A long run of tools grows the history fast; old results are the first to go (1.0.47).
+            if (budget > 0 && !backend.runsOwnLoop && Compaction.estimate(request.system, history) > budget * 0.8) {
+                val shorter = Compaction.prune(history)
+                if (shorter != history) {
+                    history = shorter
+                    if (!pruned) emit(AgentEvent.Notice("Old tool results were shortened to fit the model's memory."))
+                    pruned = true
+                }
+            }
             var finished: BackendEvent.Finished? = null
             var failed: BackendEvent.Failed? = null
-            backend.turn(request.copy(history = history, resume = resume)).collect { event ->
-                when (event) {
-                    is BackendEvent.TextDelta -> emit(AgentEvent.Text(event.text))
-                    is BackendEvent.Status -> emit(AgentEvent.Status(event.text))
-                    is BackendEvent.ToolSeen -> emit(AgentEvent.ToolSeen(event.name, event.summary))
-                    is BackendEvent.Session -> {
-                        resume = event.id
-                        emit(AgentEvent.Session(event.id))
+            var attempt = 0
+            var overflowRetried = false
+            while (true) {
+                finished = null
+                failed = null
+                var said = false
+                backend.turn(request.copy(history = history, resume = resume)).collect { event ->
+                    when (event) {
+                        is BackendEvent.TextDelta -> {
+                            said = true
+                            emit(AgentEvent.Text(event.text))
+                        }
+                        is BackendEvent.ReasoningDelta -> emit(AgentEvent.Reasoning(event.text))
+                        is BackendEvent.Status -> emit(AgentEvent.Status(event.text))
+                        is BackendEvent.ToolSeen -> emit(AgentEvent.ToolSeen(event.name, event.summary))
+                        is BackendEvent.Session -> {
+                            resume = event.id
+                            emit(AgentEvent.Session(event.id))
+                        }
+                        is BackendEvent.Finished -> finished = event
+                        is BackendEvent.Failed -> failed = event
                     }
-                    is BackendEvent.Finished -> finished = event
-                    is BackendEvent.Failed -> failed = event
                 }
+                val f = failed ?: break
+                // Too long: the history, shortened hard, once — and only if it really got shorter.
+                if (!overflowRetried && !said && !backend.runsOwnLoop && Compaction.overflowed(f.message)) {
+                    val shorter = Compaction.prune(history, keep = 2, max = 300)
+                    overflowRetried = true
+                    if (shorter != history) {
+                        history = shorter
+                        emit(AgentEvent.Notice("The conversation was too long for the model; old tool results were shortened."))
+                        continue
+                    }
+                }
+                // A busy or broken moment on the provider's side: try again, but never after words went out.
+                if (f.retryable && !said && attempt < retryDelays.size) {
+                    emit(AgentEvent.Status("The provider stumbled; trying again…"))
+                    delay(retryDelays[attempt])
+                    attempt++
+                    continue
+                }
+                break
             }
             failed?.let {
                 emit(AgentEvent.Failed(it.message, it.auth))
@@ -143,6 +192,8 @@ class AgentLoop(
                 history = history + turn
                 emit(AgentEvent.Appended(turn))
             }
+            // Paused mid-way through the provider's own tools: sent back as it is, it carries on (1.0.47).
+            if (done.stop == StopReason.PAUSED && !backend.runsOwnLoop) continue
             val calls = turn?.toolUses.orEmpty()
             if (backend.runsOwnLoop || done.stop != StopReason.TOOL_USE || calls.isEmpty()) {
                 emit(AgentEvent.Done(done.stop, usage))
@@ -153,7 +204,8 @@ class AgentLoop(
             val results = calls.map { call ->
                 emit(AgentEvent.ToolRunning(call))
                 try {
-                    tools.run(call)
+                    // No one result may crowd out the conversation: head and tail kept (1.0.47).
+                    tools.run(call).let { r -> if (r.content.length > Compaction.RESULT_CAP) r.copy(content = Compaction.cut(r.content, Compaction.RESULT_CAP)) else r }
                 } catch (c: CancellationException) {
                     throw c
                 } catch (t: Throwable) {

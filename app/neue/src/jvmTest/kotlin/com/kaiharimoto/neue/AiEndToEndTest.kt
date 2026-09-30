@@ -154,6 +154,27 @@ class AiEndToEndTest {
         ai.host.run(Part.ToolUse("t-" + UUID.randomUUID(), name, input(*args)))
 
     @Test
+    fun theHarnessWorksNumbersOutAndKeepsAPlan() = runBlocking {
+        val h = holders()
+        // Three copies at most of a card: a nine-card deck, 3 Ash among them.
+        h.tool("new_deck", "name" to "Odds deck", "main" to listOf("3 Ash Blossom & Joyous Spring", "3 Infinite Impermanence", "3 Raigeki"))
+        val calc = h.tool("calculate", "expression" to "atleast(40,3,5,1)")
+        assertFalse(calc.isError, calc.content)
+        assertTrue("0.337" in calc.content, calc.content)
+        val odds = h.tool("hand_odds", "cards" to listOf("Ash Blossom & Joyous Spring"), "turn" to "first")
+        assertFalse(odds.isError, odds.content)
+        assertTrue("95.2381%" in odds.content, "3 of 9 in five cards is 1 − C(6,5)/C(9,5): ${odds.content}")
+        val both = h.tool("hand_odds", "cards" to listOf("Ash Blossom & Joyous Spring"), "and_cards" to listOf("Infinite Impermanence"))
+        assertTrue("going second" in both.content, both.content)
+        val bad = h.tool("calculate", "expression" to "2 +")
+        assertTrue(bad.isError)
+        h.tool("todo_write", "items" to listOf("[x] Read the deck", "[>] Work out the odds", "[ ] Suggest cuts"))
+        assertEquals(3, h.ai.todos.size)
+        val offline = h.tool("web_fetch", "url" to "http://example.com")
+        assertTrue(offline.isError, "plain http is refused")
+    }
+
+    @Test
     fun aiBuildsEditsGroupsAndSidesADeckThroughItsTools() = runBlocking {
         val h = holders()
         val b = h.builder

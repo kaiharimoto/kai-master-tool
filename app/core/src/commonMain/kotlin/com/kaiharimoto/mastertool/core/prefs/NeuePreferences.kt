@@ -86,6 +86,8 @@ data class AiPrefs(
     val panelWidth: Float = DEFAULT_PANEL_WIDTH,
     /** The panel has greeted the person once. */
     val introSeen: Boolean = false,
+    /** How the model's thinking shows in the chat: folded to its first lines, open, or not at all (1.0.47). */
+    val showReasoning: String = REASONING_FOLDED,
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()
@@ -96,9 +98,14 @@ data class AiPrefs(
         effort = effort.takeIf { it in EFFORTS } ?: "",
         active = active?.takeIf { id -> connections.any { it.id == id } },
         connections = connections.distinctBy { it.id },
+        showReasoning = showReasoning.takeIf { it in REASONINGS } ?: REASONING_FOLDED,
     )
 
     companion object {
+        const val REASONING_FOLDED = "folded"
+        const val REASONING_OPEN = "open"
+        const val REASONING_HIDDEN = "hidden"
+        val REASONINGS = listOf(REASONING_FOLDED, REASONING_OPEN, REASONING_HIDDEN)
         const val DEFAULT_NAME = "Ai"
         const val MAX_NAME = 24
         const val DEFAULT_PANEL_WIDTH = 400f

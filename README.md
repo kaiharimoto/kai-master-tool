@@ -98,7 +98,9 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   apps, to an API key (Anthropic, OpenAI, Gemini, OpenRouter), or to a model on
   your own machine — a wizard walks you through each. **Fine Tuning** has it
   interview you about how you prepare for a tournament and remember the answers,
-  and it learns from ordinary conversations too, always with Undo. Settings can
+  and it learns from ordinary conversations too, always with Undo. It knows the rules,
+  checks a card's rulings, searches the web, draws tables and charts, and shows its
+  thinking as it works. Settings can
   turn it off entirely.
 - **The keyboard and the mouse, both whole.** Every action has a shortcut
   (`F1` lists them, `Ctrl K` finds them), and the mouse has a grammar: right-click

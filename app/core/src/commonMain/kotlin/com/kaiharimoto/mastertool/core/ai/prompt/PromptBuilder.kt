@@ -68,10 +68,19 @@ object PromptBuilder {
         appendLine("  ```")
         appendLine("  type is bar, hbar (long labels, shares), line (over time) or stacked; up to 4 series, each with one value per label.")
         appendLine("- To show cards as their art, list them in a fenced block, one per line with the copies first: ```cards / 3 Ash Blossom & Joyous Spring / 2 Called by the Grave / ```.")
+        appendLine("- Never work numbers out in your head: odds with hand_odds, anything else with calculate.")
+        appendLine("- For a job of several steps, keep a plan with todo_write; hand a big reading job (many decklists, a whole web) to delegate.")
+        appendLine("- Before each round of tools, say in one plain line what you are about to check and why: the person learns by following along.")
+        appendLine("- For anything recent (results, news, guides) use web_search and web_fetch, and say where it came from.")
         if (s.viaMcp) {
             appendLine("- The app's tools are the ones named `mcp__neue__…`. You have no shell and no file access; you do not need them.")
         }
         s.missing.forEach { appendLine("- Not in this version yet: $it. Say so if asked, rather than attempting it.") }
+        appendLine()
+        // The game's rules, always (1.0.47, kai: "the AI tends to forget the game rules"): in the
+        // app's own words, since Konami's rulebook may not be copied; card rulings come from a tool.
+        appendLine(com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer.TEXT.trim().replace("\n## ", "\n### ").replaceFirst("# Yu-Gi-Oh! TCG rules primer", "## The rules of the game"))
+        appendLine("- A ruling you are not sure of: check it with the rulings tool and say so; never invent one. The edge cases are in the skill game-rules.")
         appendLine()
         appendLine("## Memory")
         appendLine(

@@ -217,8 +217,13 @@ class OpenAiStream(private val newId: () -> String = { "call_" + (idCounter++).t
             val choice = choiceEl as? JsonObject ?: return@forEach
             (choice["finish_reason"] as? JsonPrimitive)?.contentOrNull?.let { finish = it }
             val delta = (choice["delta"] ?: choice["message"]) as? JsonObject ?: return@forEach
+            // A reasoning model's thinking, where the server sends it apart (DeepSeek, OpenRouter): shown, not said.
+            ((delta["reasoning_content"] ?: delta["reasoning"]) as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }?.let {
+                out += BackendEvent.ReasoningDelta(it)
+            }
             (delta["content"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() }?.let {
-                val (words, _) = think.feed(it)
+                val (words, thought) = think.feed(it)
+                if (thought.isNotEmpty()) out += BackendEvent.ReasoningDelta(thought)
                 if (words.isNotEmpty()) {
                     text.append(words)
                     out += BackendEvent.TextDelta(words)

@@ -12,6 +12,13 @@ object BuiltInSkills {
         phase to Skill(name, description, body.trimIndent().trim(), builtIn = true)
 
     private val catalogue: List<Pair<Int, Skill>> = listOf(
+        // The rules' edge cases, beyond the primer always in the prompt (1.0.47).
+        2 to Skill(
+            com.kaiharimoto.mastertool.core.ai.rules.GameRulesSkill.NAME,
+            com.kaiharimoto.mastertool.core.ai.rules.GameRulesSkill.DESCRIPTION,
+            com.kaiharimoto.mastertool.core.ai.rules.GameRulesSkill.BODY.trim(),
+            builtIn = true,
+        ),
         skill(
             "app-control",
             "How to drive Neue Master Tool: which tool does what, and the order that works.",

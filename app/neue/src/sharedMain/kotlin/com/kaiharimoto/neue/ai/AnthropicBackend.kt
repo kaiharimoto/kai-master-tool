@@ -15,6 +15,10 @@ import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.OutputConfig
 import com.anthropic.models.messages.TextBlockParam
 import com.anthropic.models.messages.ThinkingConfigAdaptive
+import com.anthropic.models.messages.WebFetchTool20250910
+import com.anthropic.models.messages.WebFetchTool20260209
+import com.anthropic.models.messages.WebSearchTool20250305
+import com.anthropic.models.messages.WebSearchTool20260209
 import com.anthropic.models.messages.Tool
 import com.anthropic.models.messages.ToolResultBlockParam
 import com.kaiharimoto.mastertool.core.ai.BackendEvent
@@ -94,10 +98,17 @@ class AnthropicBackend(
                 // Text blocks are paragraphs of their own once committed (ChatTurn.text), so
                 // they are while streaming too, or the words jump when the turn lands (1.0.46).
                 var lastBlock = -1L
+                val thought = StringBuilder()
                 while (events.hasNext()) {
                     val event = events.next()
                     accumulator.accumulate(event)
                     val delta = event.contentBlockDelta()
+                    // Its thinking, summarised, as it thinks (1.0.47): for the person to follow along.
+                    delta.flatMap { it.delta().thinking() }.ifPresent { t -> t.thinking().takeIf { it.isNotEmpty() }?.let { thought.append(it) } }
+                    if (thought.isNotEmpty()) {
+                        emit(BackendEvent.ReasoningDelta(thought.toString()))
+                        thought.clear()
+                    }
                     val words = delta.flatMap { it.delta().text() }
                     if (words.isPresent) {
                         val block = delta.get().index()
@@ -114,6 +125,14 @@ class AnthropicBackend(
             val parts = mutableListOf<Part>()
             message.content().forEach { block ->
                 block.text().ifPresent { parts += Part.Text(it.text()) }
+                // Its own web search or fetch, run on Anthropic's side: a line in the chat (1.0.47).
+                if (block.serverToolUse().isPresent) {
+                    val use = block.serverToolUse().get()
+                    val input = runCatching { json.parseToJsonElement(text(use._input())) as? JsonObject }.getOrNull()
+                    val what = input?.get("query")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                        ?: input?.get("url")?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+                    emit(BackendEvent.ToolSeen(use.name().asString(), if (what != null) "“$what”" else ""))
+                }
                 block.toolUse().ifPresent { use ->
                     val input = runCatching { json.parseToJsonElement(text(use._input())) as? JsonObject }.getOrNull()
                     parts += Part.ToolUse(use.id(), use.name(), input ?: JsonObject(emptyMap()))
@@ -121,8 +140,14 @@ class AnthropicBackend(
             }
             // The whole content, thinking and all, exactly as it came: what the next request sends back.
             parts += Part.Opaque(PROVIDER, text(message.content().map { it.toParam() }))
-            val stop = when (message.stopReason().map { it.asString() }.orElse("end_turn")) {
+            val reason = message.stopReason().map { it.asString() }.orElse("end_turn")
+            if (reason == "model_context_window_exceeded" && parts.none { it is Part.Text || it is Part.ToolUse }) {
+                emit(BackendEvent.Failed("The conversation is over the model's context window."))
+                return@flow
+            }
+            val stop = when (reason) {
                 "tool_use" -> StopReason.TOOL_USE
+                "pause_turn" -> StopReason.PAUSED
                 "max_tokens", "model_context_window_exceeded" -> StopReason.MAX_TOKENS
                 "refusal" -> StopReason.REFUSAL
                 else -> StopReason.END
@@ -163,8 +188,26 @@ class AnthropicBackend(
             .messages(messages(request.history))
             // Automatic caching of the conversation: it only ever grows at the end.
             .cacheControl(CacheControlEphemeral.builder().build())
-        request.tools.forEach { b.addTool(tool(it)) }
-        if (AnthropicModels.adaptive(model)) b.thinking(ThinkingConfigAdaptive.builder().build())
+        // web_search and web_fetch are Anthropic's own tools, run on its side, when the model has them (1.0.47).
+        request.tools.forEach { spec ->
+            when (spec.name) {
+                "web_search" -> if (AnthropicModels.adaptive(model)) {
+                    b.addTool(WebSearchTool20260209.builder().maxUses(5).build())
+                } else {
+                    b.addTool(WebSearchTool20250305.builder().maxUses(5).build())
+                }
+                "web_fetch" -> if (AnthropicModels.adaptive(model)) {
+                    b.addTool(WebFetchTool20260209.builder().maxUses(5).build())
+                } else {
+                    b.addTool(WebFetchTool20250910.builder().maxUses(5).build())
+                }
+                else -> b.addTool(tool(spec))
+            }
+        }
+        if (AnthropicModels.adaptive(model)) {
+            // Summarised thinking, streamed: the person can read how it got there (1.0.47).
+            b.thinking(ThinkingConfigAdaptive.builder().display(ThinkingConfigAdaptive.Display.SUMMARIZED).build())
+        }
         AnthropicModels.effort(model, request.effort)?.let { b.outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.of(it)).build()) }
         if (AnthropicModels.fallbacks(model)) {
             b.putAdditionalHeader("anthropic-beta", AnthropicModels.FALLBACK_BETA)
@@ -218,7 +261,7 @@ class AnthropicBackend(
                 is Part.ToolResult -> ContentBlockParam.ofToolResult(
                     ToolResultBlockParam.builder().toolUseId(part.id).content(part.content).isError(part.isError).build(),
                 )
-                is Part.Opaque, is Part.Activity -> null
+                is Part.Opaque, is Part.Activity, is Part.Reasoning -> null
             }
         }
     }

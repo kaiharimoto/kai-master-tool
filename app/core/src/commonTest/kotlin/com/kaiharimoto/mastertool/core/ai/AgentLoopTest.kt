@@ -110,4 +110,79 @@ class AgentLoopTest {
         assertEquals(3, backend.sent.size)
         assertIs<AgentEvent.Done>(events.last())
     }
+
+    @Test
+    fun aStumbleIsTriedAgainButNeverAfterWordsWentOut() = runTest {
+        val backend = Scripted(
+            listOf(
+                listOf(BackendEvent.Failed("overloaded", retryable = true)),
+                listOf(BackendEvent.Finished(StopReason.END, ChatTurn.assistant("Here."))),
+            ),
+        )
+        val events = AgentLoop(backend, { c -> Part.ToolResult(c.id, c.name, "") }, retryDelays = listOf(1, 1)).run(request).toList()
+        assertEquals(2, backend.sent.size, "tried again once")
+        assertIs<AgentEvent.Done>(events.last())
+
+        val spoke = Scripted(listOf(listOf(BackendEvent.TextDelta("Half"), BackendEvent.Failed("dropped", retryable = true))))
+        val out = AgentLoop(spoke, { c -> Part.ToolResult(c.id, c.name, "") }, retryDelays = listOf(1)).run(request).toList()
+        assertEquals(1, spoke.sent.size, "words already shown: not said twice")
+        assertIs<AgentEvent.Failed>(out.last())
+    }
+
+    @Test
+    fun aHugeResultIsCutAndAPausedTurnCarriesOn() = runTest {
+        val backend = Scripted(
+            listOf(
+                listOf(BackendEvent.Finished(StopReason.PAUSED, ChatTurn.assistant("Searching…"))),
+                listOf(BackendEvent.Finished(StopReason.TOOL_USE, ChatTurn(Role.ASSISTANT, listOf(call("a", "get_deck"))))),
+                listOf(BackendEvent.Finished(StopReason.END, ChatTurn.assistant("Done."))),
+            ),
+        )
+        AgentLoop(backend, { c -> Part.ToolResult(c.id, c.name, "x".repeat(50_000)) }).run(request).toList()
+        assertEquals(3, backend.sent.size, "the paused turn was sent back to carry on")
+        val result = backend.sent[2].history.last().toolResults.single().content
+        assertTrue(result.length < 17_000 && "characters cut" in result)
+    }
+
+    @Test
+    fun anOverflowShortensOldResultsAndTriesOnce() = runTest {
+        val long = ChatTurn(Role.USER, listOf(Part.ToolResult("old", "get_deck", "y".repeat(5_000))))
+        val history = listOf(ChatTurn.user("a"), ChatTurn(Role.ASSISTANT, listOf(call("old", "get_deck"))), long) +
+            (1..4).flatMap { listOf(ChatTurn.user("q$it"), ChatTurn.assistant("a$it")) } + ChatTurn.user("now")
+        val backend = Scripted(
+            listOf(
+                listOf(BackendEvent.Failed("prompt is too long: 250000 tokens > 200000 maximum")),
+                listOf(BackendEvent.Finished(StopReason.END, ChatTurn.assistant("Fits now."))),
+            ),
+        )
+        val events = AgentLoop(backend, { c -> Part.ToolResult(c.id, c.name, "") }).run(request.copy(history = history)).toList()
+        assertEquals(2, backend.sent.size)
+        assertTrue(backend.sent[1].history[2].toolResults.single().content.length < 1_000)
+        assertTrue(events.any { it is AgentEvent.Notice })
+        assertIs<AgentEvent.Done>(events.last())
+    }
+}
+
+class CompactionTest {
+    @Test
+    fun aCutFallsOnSomethingThePersonSaidAndTheSummaryRidesInFront() {
+        val turns = listOf(
+            ChatTurn.user("Build Branded"),
+            ChatTurn(Role.ASSISTANT, listOf(Part.ToolUse("t", "new_deck", JsonObject(emptyMap())))),
+            ChatTurn(Role.USER, listOf(Part.ToolResult("t", "new_deck", "z".repeat(4_000)))),
+            ChatTurn.assistant("Built."),
+            ChatTurn.user("Now side it"),
+            ChatTurn.assistant("Sided."),
+        )
+        val cut = Compaction.cutAt(turns, keepTokens = 100)
+        assertEquals(4, cut, "the first message whose tail fits; never a tool result")
+        val s = AiSession("s", turns = turns, summary = "Built Branded.", summarized = cut!!)
+        assertEquals(2, s.sent.size)
+        assertTrue(s.sent.first().parts.first() is Part.Context)
+        assertEquals("Now side it", s.sent.first().text)
+        val pruned = Compaction.prune(turns, keep = 2)
+        assertTrue(pruned[2].toolResults.single().content.length < 700)
+        assertEquals(turns[1], pruned[1], "an assistant's own turn is never touched")
+        assertTrue(Compaction.overflowed("This model's maximum context length is 128000 tokens"))
+    }
 }

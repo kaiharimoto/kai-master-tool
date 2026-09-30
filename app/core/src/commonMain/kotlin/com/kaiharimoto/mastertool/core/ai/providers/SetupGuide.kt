@@ -63,7 +63,10 @@ object SetupGuide {
         )
         SetupStep.MODEL -> buildList {
             add(Trouble("Not sure which", "Take the one marked Recommended; you can change it later in Settings."))
-            if (provider?.kind == ConnectKind.LOCAL) add(Trouble("It did not call the tool", "The model can chat but not act in the app. Try a larger model or one made for tools (qwen3, llama3.1, mistral-small)."))
+            if (provider?.kind == ConnectKind.LOCAL) {
+                add(Trouble("It did not call the tool", "The model can chat but not act in the app. Try a larger model or one made for tools (qwen3, llama3.1, mistral-small)."))
+                add(Trouble("Answers stop short or forget the start", "The app's instructions and tools are long: give the model a context length of 32k or more (Ollama: num_ctx; LM Studio: Context Length)."))
+            }
             else add(Trouble("A model is missing from the list", "Your account may not have it yet; type its id in the box instead."))
         }
     }

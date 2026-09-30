@@ -666,6 +666,33 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
             ai.demoStill = (step?.toIntOrNull() ?: 1) - 1
             ai.demoOpen = true
         }
+        // Its thinking above a reply, and a plan in hand (1.0.47).
+        "reason" -> {
+            val now = System.currentTimeMillis()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-reason",
+                    title = "Ratios",
+                    connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Should I play a third Called by the Grave?"),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn(
+                            com.kaiharimoto.mastertool.core.ai.Role.ASSISTANT,
+                            listOf(
+                                com.kaiharimoto.mastertool.core.ai.Part.Reasoning(
+                                    "The deck has 9 hand traps and 2 Called by the Grave. The field is mostly Snake-Eye and Yubel, which lean on hand traps less than on board breakers going second.\n" +
+                                        "A third Called helps when they open Ash into my starter, which is 1 in 3 games at most. Worth checking the odds of drawing 2 with 3 in the deck.",
+                                ),
+                                com.kaiharimoto.mastertool.core.ai.Part.Text("Checking how often a third copy shows up next to the first.\n\nAt 3 copies you open at least one **33.8%** of the time going first, and two at once only **2.8%**: the third is live, not a brick. Keep it if Ash is common at your event."),
+                            ),
+                        ),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            ai.todos = listOf("[x] Read the deck", "[x] Work out the odds", "[>] Weigh it against the field", "[ ] Suggest the cut")
+        }
         // A reply with a table, a chart and a strip of cards (1.0.46).
         "chart" -> {
             val now = System.currentTimeMillis()

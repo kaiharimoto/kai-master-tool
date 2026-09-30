@@ -162,13 +162,16 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "skill_manage" -> skillManage(i)
             "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false)
-            else -> meta.run(spec.name, i)?.let { Answer(it.content, it.summary, it.isError) }
+            else -> (harness.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
 
     /** The meta's tools: YGOPRODeck, the field, a deck's numbers (phase 2). */
     private val meta = AiMeta(h, ai)
+
+    /** The harness's own: numbers, a plan, the web, the rules, a helper (1.0.47). */
+    private val harness = AiHarness(h, ai)
 
     /** What a destructive tool will do, for the confirm card. */
     private suspend fun consequence(spec: ToolSpec, i: JsonObject): Pair<String, String> = when (spec.name) {
