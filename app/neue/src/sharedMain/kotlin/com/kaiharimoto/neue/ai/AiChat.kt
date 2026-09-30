@@ -502,6 +502,21 @@ private fun QuestionCard(ai: AiState, q: Question) {
         Modifier.fillMaxWidth().border(1.dp, c.ink).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // What it heard, before it asks whether it heard right (1.0.65).
+        if (q.heard.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().background(c.ink06).padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Micro("What I heard", color = c.ink45)
+                q.heard.forEach { point ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Mono("–", color = c.ink45)
+                        MuText(styled(ChatMarkdown.inline(point)), style = MuType.small(LocalMuFonts.current), color = c.ink)
+                    }
+                }
+            }
+        }
         // The cards it asks about, as their art (1.0.48): a question about a card shows the card.
         if (q.cards.isNotEmpty()) {
             CardsBlock(ai, com.kaiharimoto.mastertool.core.ai.text.Block.Cards(q.cards.map { com.kaiharimoto.mastertool.core.ai.text.CardLine(1, it.name) }))

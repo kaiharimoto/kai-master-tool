@@ -17,7 +17,7 @@ package com.kaiharimoto.mastertool.core.ai.memory
  * Anything that is not an entry — the title, a note the person wrote at the top —
  * is kept as it is. The person may edit the file by hand; this reads it back.
  */
-enum class MemoryKind(val file: String, val limit: Int, val title: String) {
+enum class MemoryKind(val file: String, val limit: Int, val title: String, val entryLimit: Int = limit / 2) {
     /**
      * What Ai learns about the person — their profile (1.0.54, Learn About You): goals,
      * preferences, workflow, how they play, their decks and events. Always in the prompt, so
@@ -39,8 +39,19 @@ enum class MemoryKind(val file: String, val limit: Int, val title: String) {
      * side deck — taught by the person or studied by Ai. Read while that deck is open, whether
      * or not it is in a web; the web's file is the field, this is the deck.
      */
-    GUIDE("guides/%s.md", 10000, "How %s plays"),
+    GUIDE("guides/%s.md", UNBOUNDED, "How %s plays", entryLimit = 5000),
+    ;
+
+    /** Whether the file may grow without end (1.0.65, the guide: kai "remove the 10k cap for guides"). */
+    val bounded: Boolean get() = limit != UNBOUNDED
 }
+
+/**
+ * No cap on the file's length: a deck's guide grows with everything Ai learns about the deck. It is
+ * read into a conversation once, while that deck is open, so its length costs context there alone;
+ * one entry is still held to [MemoryKind.entryLimit], so a single note never swallows it.
+ */
+const val UNBOUNDED = Int.MAX_VALUE
 
 data class MemoryDoc(val preamble: List<String>, val entries: List<String>) {
     val used: Int get() = entries.sumOf { it.length }
@@ -92,29 +103,33 @@ object AiMemory {
     private fun clean(text: String) = text.lines().map(String::trim).filter(String::isNotEmpty).joinToString(" ")
         .removePrefix("- ").trim()
 
-    fun add(doc: MemoryDoc, text: String, limit: Int): MemoryWrite {
+    /** "12,345 characters", with the cap when there is one. */
+    private fun size(used: Int, limit: Int) = if (limit == UNBOUNDED) "$used characters" else "$used/$limit characters"
+
+    fun add(doc: MemoryDoc, text: String, limit: Int, entryLimit: Int = limit / 2): MemoryWrite {
         val entry = clean(text)
         if (entry.isEmpty()) return MemoryWrite.Refused("Nothing to add.")
         if (doc.entries.any { it.equals(entry, ignoreCase = true) }) return MemoryWrite.Refused("That is already remembered.")
-        if (entry.length > limit / 2) return MemoryWrite.Refused("Too long for one entry (${entry.length} characters). Say it in under ${limit / 2}.")
-        if (doc.used + entry.length > limit) {
+        if (entry.length > entryLimit) return MemoryWrite.Refused("Too long for one entry (${entry.length} characters). Say it in under $entryLimit, or split it.")
+        if (limit != UNBOUNDED && doc.used + entry.length > limit) {
             return MemoryWrite.Refused(
                 "Memory is full (${doc.used}/$limit characters). Replace or remove an entry first — keep what will still matter. Entries:\n" +
                     doc.entries.joinToString("\n") { "- $it" },
             )
         }
         val next = doc.copy(entries = doc.entries + entry)
-        return MemoryWrite.Done(next, "Remembered (${next.used}/$limit characters).")
+        return MemoryWrite.Done(next, "Remembered (${size(next.used, limit)}).")
     }
 
-    fun replace(doc: MemoryDoc, oldText: String, text: String, limit: Int): MemoryWrite {
+    fun replace(doc: MemoryDoc, oldText: String, text: String, limit: Int, entryLimit: Int = limit / 2): MemoryWrite {
         val entry = clean(text)
         if (entry.isEmpty()) return remove(doc, oldText)
+        if (entry.length > entryLimit) return MemoryWrite.Refused("Too long for one entry (${entry.length} characters). Say it in under $entryLimit, or split it.")
         val at = find(doc, oldText) ?: return notFound(doc, oldText)
         if (at < 0) return ambiguous(doc, oldText)
         val next = doc.copy(entries = doc.entries.toMutableList().also { it[at] = entry })
-        if (next.used > limit) return MemoryWrite.Refused("That would make memory ${next.used}/$limit characters. Shorten it.")
-        return MemoryWrite.Done(next, "Replaced (${next.used}/$limit characters).")
+        if (limit != UNBOUNDED && next.used > limit) return MemoryWrite.Refused("That would make memory ${next.used}/$limit characters. Shorten it.")
+        return MemoryWrite.Done(next, "Replaced (${size(next.used, limit)}).")
     }
 
     fun remove(doc: MemoryDoc, oldText: String): MemoryWrite {

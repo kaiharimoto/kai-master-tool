@@ -3,7 +3,6 @@ package com.kaiharimoto.neue.ai
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,6 +40,8 @@ import com.kaiharimoto.mastertool.core.ai.text.Align
 import com.kaiharimoto.mastertool.core.ai.text.Block
 import com.kaiharimoto.mastertool.core.ai.text.ChatChart
 import com.kaiharimoto.mastertool.core.ai.text.Inline
+import com.kaiharimoto.mastertool.core.ai.text.TableFit
+import com.kaiharimoto.mastertool.core.ai.text.TableLayout
 import com.kaiharimoto.neue.Viewing
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
@@ -58,12 +58,16 @@ import com.kaiharimoto.neue.theme.MuType
 
 /**
  * The blocks a reply draws beyond words (1.0.46, kai: "I want the AI to draw tables and
- * charts"): a table set to its columns and scrolled sideways when it is wider than the
- * panel, a chart in ink (the family has no colour to spare — shades and hatching tell the
+ * charts"): a table laid out to the panel's width, a chart in ink (the family has no colour to spare — shades and hatching tell the
  * series apart), and a strip of card art for a list of cards.
  */
 
-/** A table: each column as wide as its longest cell (within reason), numbers set right. */
+/**
+ * A table, laid out to the room there is (1.0.65, `TableFit`): each column's width on one line and
+ * its longest word are measured in the chat's own type; side by side when they fit, the wide columns
+ * wrapped when that is enough, and a row at a time when even the longest words will not sit side by
+ * side. Never scrolled out of sight. Numbers are set right.
+ */
 @Composable
 internal fun TableBlock(block: Block.Table, styled: @Composable (List<Inline>) -> androidx.compose.ui.text.AnnotatedString) {
     val c = Mu.colors
@@ -71,36 +75,71 @@ internal fun TableBlock(block: Block.Table, styled: @Composable (List<Inline>) -
     val all = listOf(block.header) + block.rows
     val columns = all.maxOf { it.size }
     val plain = all.map { row -> row.map { cell -> cell.joinToString("") { text(it) } } }
-    val widths = (0 until columns).map { col ->
-        val longest = plain.maxOf { it.getOrNull(col)?.length ?: 0 }
-        (longest * 7 + 16).coerceIn(44, 260).dp
-    }
     val numeric = (0 until columns).map { col ->
         block.rows.isNotEmpty() && plain.drop(1).all { r -> r.getOrNull(col)?.trim().orEmpty().let { it.isEmpty() || NUMBER.matches(it) } }
     }
-    Box(Modifier.fillMaxWidth().border(1.dp, c.ink12).horizontalScroll(rememberScrollState())) {
-        Column {
-            all.forEachIndexed { r, cells ->
-                Row(
-                    Modifier
-                        .let { if (r == 0) it.background(c.ink06) else it }
-                        .drawBehind { if (r > 0) drawLine(c.ink12, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
-                        .padding(vertical = 6.dp),
-                ) {
-                    (0 until columns).forEach { col ->
-                        val cell = cells.getOrNull(col).orEmpty()
-                        val align = when (block.align.getOrNull(col)) {
-                            Align.RIGHT -> TextAlign.End
-                            Align.CENTER -> TextAlign.Center
-                            else -> if (numeric[col] && r > 0) TextAlign.End else TextAlign.Start
+    val headStyle = MuType.mono(f, 11.sp).copy(fontWeight = FontWeight.Medium)
+    val bodyStyle = MuType.small(f)
+    val measurer = rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // One cell's padding each side; a little over for card names set in medium weight.
+    val pad = with(density) { 16.dp.toPx() }
+    val (natural, minimum) = remember(plain, f) {
+        fun width(t: String, style: TextStyle) = if (t.isBlank()) 0f else measurer.measure(t, style, maxLines = 1, softWrap = false).size.width * 1.04f
+        val nat = (0 until columns).map { col -> plain.withIndex().maxOf { (r, row) -> width(row.getOrNull(col).orEmpty(), if (r == 0) headStyle else bodyStyle) } + pad }
+        val min = (0 until columns).map { col ->
+            plain.withIndex().maxOf { (r, row) -> row.getOrNull(col).orEmpty().split(' ').maxOfOrNull { w -> width(w, if (r == 0) headStyle else bodyStyle) } ?: 0f } + pad
+        }
+        nat to min
+    }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val full = maxWidth
+        val room = with(density) { full.toPx() } - with(density) { 2.dp.toPx() }
+        when (val fit = TableFit.fit(natural, minimum, room)) {
+            is TableLayout.Widths -> Column(Modifier.border(1.dp, c.ink12)) {
+                all.forEachIndexed { r, cells ->
+                    Row(
+                        Modifier
+                            .let { if (r == 0) it.background(c.ink06) else it }
+                            .drawBehind { if (r > 0) drawLine(c.ink12, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
+                            .padding(vertical = 6.dp),
+                    ) {
+                        (0 until columns).forEach { col ->
+                            val align = when (block.align.getOrNull(col)) {
+                                Align.RIGHT -> TextAlign.End
+                                Align.CENTER -> TextAlign.Center
+                                else -> if (numeric[col] && r > 0) TextAlign.End else TextAlign.Start
+                            }
+                            MuText(
+                                styled(cells.getOrNull(col).orEmpty()),
+                                Modifier.width(with(density) { fit.widths[col].toDp() }).padding(horizontal = 8.dp),
+                                style = (if (r == 0) headStyle else bodyStyle).copy(textAlign = align),
+                                color = if (r == 0) c.ink70 else c.ink,
+                            )
                         }
-                        val style = if (r == 0) MuType.mono(f, 11.sp) else MuType.small(f)
-                        MuText(
-                            styled(cell),
-                            Modifier.width(widths[col]).padding(horizontal = 8.dp),
-                            style = style.copy(textAlign = align, fontWeight = if (r == 0) FontWeight.Medium else style.fontWeight),
-                            color = if (r == 0) c.ink70 else c.ink,
-                        )
+                    }
+                }
+            }
+            TableLayout.Stacked -> Column(Modifier.fillMaxWidth().border(1.dp, c.ink12)) {
+                // A row at a time: its first cell the title, each other one under its header.
+                val label = minOf(full * 0.38f, 132.dp)
+                block.rows.forEachIndexed { r, cells ->
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .drawBehind { if (r > 0) drawLine(c.ink12, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        MuText(styled(cells.getOrNull(0).orEmpty()), style = bodyStyle.copy(fontWeight = FontWeight.Medium), color = c.ink)
+                        (1 until columns).forEach { col ->
+                            val cell = cells.getOrNull(col).orEmpty()
+                            if (cell.isEmpty()) return@forEach
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                MuText(styled(block.header.getOrNull(col).orEmpty()), Modifier.width(label), style = headStyle, color = c.ink45)
+                                MuText(styled(cell), Modifier.weight(1f), style = bodyStyle, color = c.ink)
+                            }
+                        }
                     }
                 }
             }

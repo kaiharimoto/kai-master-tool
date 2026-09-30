@@ -182,7 +182,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                 ok("The start of this conversation will be summarised as soon as this answer is done.", "Asked to summarise the start of the conversation")
             }
             "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
-            "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"))
+            "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
             else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
@@ -888,8 +888,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val inWebForDeck = scope == "deck" && kind == MemoryKind.WEB
         val entry = text?.let { if (inWebForDeck && !it.startsWith("[")) "[${state.deckName}] $it" else it }
         val write = when (action) {
-            "add" -> AiMemory.add(doc, entry ?: return fail("add needs text."), kind.limit)
-            "replace" -> AiMemory.replace(doc, old ?: return fail("replace needs old_text."), entry ?: return fail("replace needs text."), kind.limit)
+            "add" -> AiMemory.add(doc, entry ?: return fail("add needs text."), kind.limit, kind.entryLimit)
+            "replace" -> AiMemory.replace(doc, old ?: return fail("replace needs old_text."), entry ?: return fail("replace needs text."), kind.limit, kind.entryLimit)
             "remove" -> AiMemory.remove(doc, old ?: text ?: return fail("remove needs old_text."))
             else -> return fail("Actions: add, replace, remove.")
         }
@@ -1018,10 +1018,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         )
     }
 
-    private suspend fun askUser(question: String, options: List<String>, multiple: Boolean, cards: List<String> = emptyList()): Answer {
+    private suspend fun askUser(question: String, options: List<String>, multiple: Boolean, cards: List<String> = emptyList(), heard: List<String> = emptyList()): Answer {
         // The cards a question is about, shown as their art (1.0.48): "what does this one do for you?"
         val shown = cards.take(6).mapNotNull { (com.kaiharimoto.mastertool.core.ai.CardWords.resolve(it, index) as? com.kaiharimoto.mastertool.core.ai.Resolved.Found)?.card }
-        val answer = ai.ask(Question(question, options.take(6), multiple, shown))
-        return ok("The person answered: $answer", "Asked: ${question.take(80)}")
+        val answer = ai.ask(Question(question, options.take(6), multiple, shown, heard.map { it.trim() }.filter { it.isNotEmpty() }.take(8)))
+        // What was said stays in the conversation, not only the question (1.0.65).
+        return ok("The person answered: $answer", "${question.take(70)} → ${answer.take(90)}")
     }
 }

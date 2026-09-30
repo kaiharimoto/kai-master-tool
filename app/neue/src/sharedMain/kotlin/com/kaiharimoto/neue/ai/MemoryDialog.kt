@@ -185,6 +185,8 @@ private fun fullness(path: String, text: String): String? {
         if (k.file.contains("%s")) path.startsWith(k.file.substringBefore("%s")) else path == k.file
     } ?: return null
     val used = com.kaiharimoto.mastertool.core.ai.memory.AiMemory.parse(text).used
+    // A guide has no cap (1.0.65): its size in words' worth of characters, not a share of one.
+    if (!kind.bounded) return "${used / 1000}k characters".takeIf { used >= 1000 } ?: "$used characters"
     return "${used * 100 / kind.limit}% full"
 }
 

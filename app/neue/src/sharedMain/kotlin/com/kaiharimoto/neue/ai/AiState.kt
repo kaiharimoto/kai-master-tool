@@ -52,6 +52,11 @@ class Question(
     val multiple: Boolean,
     /** The cards it is about, shown as their art above it (1.0.48). */
     val cards: List<com.kaiharimoto.mastertool.core.model.Card> = emptyList(),
+    /**
+     * What Ai understood so far, shown above the question as "What I heard" (1.0.65, kai: "it keeps
+     * asking me just 'Is that right' without giving me a rundown of what I said").
+     */
+    val heard: List<String> = emptyList(),
 ) {
     internal val answer = CompletableDeferred<String>()
     fun reply(text: String) = answer.complete(text)
@@ -1060,11 +1065,13 @@ class AiState(internal val h: NeueHolders) {
         tuneBefore = snapshot()
         lastReport = null
         session = begin(connection, AiSession.MODE_PROFILE)
-        val known = files.entries(MemoryKind.USER).isNotBlank()
+        val profile = files.entries(MemoryKind.USER)
+        // Where the profile is thin, so this interview starts there, not at the top of an outline (1.0.65).
+        val coverage = com.kaiharimoto.mastertool.core.ai.memory.ProfileCoverage.brief(com.kaiharimoto.mastertool.core.ai.memory.ProfileCoverage.of(profile))
         send(
             "Let's do Learn About You: interview me so you understand my goals, my preferences and how I work. " +
-                (if (known) "Start from what you already know and fill the gaps. " else "") +
-                "Intensity: ${intensity.label}, about ${intensity.questions} questions.",
+                (if (profile.isNotBlank()) "Start from what you already know and fill the gaps. " else "") +
+                "$coverage Intensity: ${intensity.label}, about ${intensity.questions} questions.",
         )
     }
 

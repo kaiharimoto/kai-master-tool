@@ -409,12 +409,14 @@ object AiTools {
     val askUser = ToolSpec(
         "ask_user",
         "Asks the person one question with answers to tap (and room to type their own), and waits for the answer. " +
-            "Use it in Fine Tuning and whenever a choice is theirs to make.",
+            "Use it in Fine Tuning and whenever a choice is theirs to make. To check your understanding, put what you " +
+            "heard in heard — it is shown above the question — never a bare \"is that right?\".",
         schema {
             string("question", "The question", required = true)
             strings("options", "Two to six short answers", required = true)
             boolean("multiple", "More than one answer may be chosen")
             strings("cards", "Cards the question is about, by name: shown as their art above it")
+            strings("heard", "What you have understood so far, one short point each, in the person's own words: shown above the question as \"What I heard\"")
         },
         ToolGroup.ASK,
         phase = 3,

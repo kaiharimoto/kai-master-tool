@@ -2352,6 +2352,32 @@ art for flavor". The marquee is Ai's art, not a line of words.
   Assistant section in Settings (28 dp). The live face stays the bar's, the composer's and the
   greeting's.
 
+**1.0.65, how Ai's work reaches the person** (kai asked for "an exploration session on the way Ai
+outputs and how the user gets them").
+- **Tables fit the chat** (kai: "sometimes Ai draws a table and it doesn't fit properly"). Columns
+  used to be guessed at 7 dp a character, capped at 260, and scrolled sideways out of sight — a
+  plain "card | why" table was wider than the panel. Now `TableBlock` measures each column's
+  one-line width and its longest word in the chat's own type, and `TableFit` (core, tested) lays it
+  out: as it is when it fits, the wide columns wrapped when that is enough, and **stacked** a row at
+  a time (first cell a title, the others under their headers) when even the longest words will not
+  sit side by side. Never scrolled. The prompt asks for two to four columns of short cells, the
+  explanation under the table, and cards as card blocks — tables stay welcome.
+- **A read-back shows what was heard** (kai: "it keeps asking me just 'Is that right' without
+  giving me a rundown of what I said"). `ask_user` has `heard`: short points shown above the
+  question as **What I heard**. Learn About You and Fine Tuning read back with it every three or four
+  answers ("Anything to correct?" · All right · Fix something), never a bare "is that right?". And
+  the answer stays in the conversation: the line under a question is now "question → answer".
+- **Learn About You is about you** (kai: "do the questions change based on what I answer…? being
+  more personalized matters more"). No question was ever stored — the model writes each one — but
+  they followed one outline, the same for everyone. Now the interview opens on what the profile
+  already covers (`ProfileCoverage`, core: each section empty, thin or covered; start with the
+  thinnest), reads the evidence first (`list_decks`, `prep_state`, `list_webs`, `session_search`),
+  asks about what it saw ("You've built three Labrynth lists this month and Las Vegas is on the 12th
+  — which one are you taking?"), and lets every answer choose the next question.
+- **A deck's guide has no cap** (kai: "remove the 10k cap for guides"): `MemoryKind.GUIDE` is
+  `UNBOUNDED`, one entry still at most 5,000 characters; the brain shows its size, not a share.
+  The other memories stay bounded — they are in every prompt.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:

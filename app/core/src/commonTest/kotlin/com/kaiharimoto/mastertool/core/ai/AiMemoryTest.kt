@@ -107,4 +107,21 @@ class AiMemoryTest {
         assertEquals(listOf("Mine."), merged.map { it.description })
         assertTrue("(yours)" in Skills.index(merged))
     }
+
+    @Test
+    fun aDecksGuideHasNoCapButOneEntryStillDoes() {
+        // kai (1.0.65): "remove the 10k cap for guides".
+        val kind = MemoryKind.GUIDE
+        assertTrue(!kind.bounded)
+        var doc = MemoryDoc.blank("How Labrynth plays")
+        repeat(40) { n ->
+            val w = AiMemory.add(doc, "Lines: line $n — " + "a step of the combo, ".repeat(20), kind.limit, kind.entryLimit)
+            doc = assertIs<MemoryWrite.Done>(w).doc
+        }
+        assertTrue(doc.used > 10_000, "past the old cap")
+        assertTrue((AiMemory.add(doc, "one more", kind.limit, kind.entryLimit) as MemoryWrite.Done).message.endsWith("characters)."))
+        assertIs<MemoryWrite.Refused>(AiMemory.add(doc, "x".repeat(kind.entryLimit + 1), kind.limit, kind.entryLimit), "one note is still held to its size")
+        // The profile, always in the prompt, stays bounded.
+        assertTrue(MemoryKind.USER.bounded)
+    }
 }

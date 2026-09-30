@@ -725,6 +725,74 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
                 ),
             )
         }
+        // --ai=tables (1.0.65): tables of two, four and six columns laid out to the panel — fitted, wrapped, stacked.
+        "tables" -> {
+            val now = System.currentTimeMillis()
+            val reply = """Here is how your flex slots compare.
+
+| Card | Why |
+| --- | --- |
+| [[Infinite Impermanence]] | Stops Maliss's first link play and still works from the hand going second. |
+| [[Dominus Impulse]] | Answers a quick effect without needing a set trap first. |
+
+| Matchup | Going first | Going second | Share |
+| --- | --- | --- | ---: |
+| Maliss | Floodgates, hold Welcome | Impermanence, Dominus | 22% |
+| Mitsurugi | Big Welcome early | Ash, Droll | 18% |
+| Ryzeal | Lady on board | Nibiru, Veiler | 12% |
+
+| Card | Copies | Role | Opens | Dead going second | Side out vs |
+| --- | ---: | --- | ---: | --- | --- |
+| [[Arianna the Labrynth Servant]] | 3 | Starter | 34% | No | Nothing |
+| [[Big Welcome Labrynth]] | 3 | Engine | 34% | Sometimes | Mitsurugi |
+
+The long reasons sit under the first table only where they must; the third is too wide for the panel, so it reads a row at a time."""
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-tables",
+                    title = "Flex slots",
+                    connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Compare my flex slots and the matchups."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(reply),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+        }
+        // --ai=heard (1.0.65): a read-back in Learn About You, what it heard above the question.
+        "heard" -> {
+            val now = System.currentTimeMillis()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-heard",
+                    title = "Learn About You",
+                    connection = "anthropic-demo",
+                    mode = com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PROFILE,
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Let's do Learn About You."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("You've built three Labrynth lists this month and Las Vegas is on the 12th — let me check I've got you right."),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            ai.previewTuning(
+                com.kaiharimoto.neue.ai.Question(
+                    "Anything to correct?",
+                    listOf("All right", "Fix something"),
+                    false,
+                    heard = listOf(
+                        "You're taking the no-floodgate Labrynth to Las Vegas, aiming for top cut.",
+                        "You test on DuelingBook with two friends on weeknights.",
+                        "You want short answers, and tables when it's numbers.",
+                        "[[Dominus Impulse]] is your favourite tech going second.",
+                    ),
+                ),
+                null,
+            )
+        }
         // --ai=videokey (1.0.62): a video linked with no Gemini key; the key's box stands in the chat.
         "videokey" -> {
             val now = System.currentTimeMillis()

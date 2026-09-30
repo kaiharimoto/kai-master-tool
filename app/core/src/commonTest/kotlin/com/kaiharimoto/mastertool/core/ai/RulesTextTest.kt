@@ -25,7 +25,7 @@ class RulesTextTest {
         "archetype_guide", "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "web_search", "web_fetch",
         "delegate", "todo_write", "calculate", "hand_odds", "skill_view", "get_web", "list_webs", "get_siding",
         "set_siding_plan", "prep_state", "log_game", "matchup_matrix", "expected_winrate", "set_event", "drill",
-        "session_report", "resolve_cards", "new_deck", "watch_video",
+        "session_report", "resolve_cards", "new_deck", "watch_video", "list_decks", "list_webs", "session_search",
     )
 
     private val skillBodies: Map<String, String> = mapOf(
@@ -72,6 +72,17 @@ class RulesTextTest {
         }
         assertTrue("`rulings`" in RulesPrimer.TEXT)
         assertTrue("`rulings`" in GameRulesSkill.BODY)
+    }
+
+    @Test
+    fun interviewsReadBackWhatTheyHeard() {
+        // kai (1.0.65): "it keeps asking me just 'Is that right' without giving me a rundown of what I said".
+        listOf(DeckSkills.ABOUT_YOU, DeckSkills.FINE_TUNING).forEach { body ->
+            assertTrue("with heard set to" in body, "a read-back shows what was heard")
+            assertTrue("Never" in body && "is that right" in body.lowercase())
+        }
+        // And Learn About You starts from what the app can already see about the person.
+        listOf("`list_decks`", "`prep_state`", "`list_webs`", "`session_search`").forEach { assertTrue(it in DeckSkills.ABOUT_YOU, it) }
     }
 
     @Test

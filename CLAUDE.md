@@ -547,6 +547,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   brain opens from an icon in the panel's head.
   **1.0.64**: the bar's Ai is the face alone, and `AiMark` (the art, drawn still) stands by every
   mention of Ai's name (`AiName`).
+  **1.0.65**: tables are laid out to the panel by `TableFit` (fit, wrap, or stack a row at a time —
+  never scrolled); `ask_user` has `heard`, shown as "What I heard", and interviews read back with it;
+  Learn About You opens on `ProfileCoverage` and the person's own evidence (decks, event, webs, recent
+  chats); the guide (`MemoryKind.GUIDE`) is `UNBOUNDED`, one entry at most 5,000 characters.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
