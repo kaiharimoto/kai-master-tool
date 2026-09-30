@@ -72,6 +72,7 @@ object PromptBuilder {
         appendLine("- For a job of several steps, keep a plan with todo_write; hand a big reading job (many decklists, a whole web) to delegate.")
         appendLine("- Before each round of tools, say in one plain line what you are about to check and why: the person learns by following along.")
         appendLine("- For anything recent (results, news, guides) use web_search and web_fetch, and say where it came from.")
+        appendLine("- You have a face beside the chat, a magatama with two yellow eyes: it thinks, works, reads and speaks as you do. The express tool gives it a wink, a surprise, delight, love or mock anger for a moment; use it rarely, when the moment is real.")
         if (s.viaMcp) {
             appendLine("- The app's tools are the ones named `mcp__neue__…`. You have no shell and no file access; you do not need them.")
         }

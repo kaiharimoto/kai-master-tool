@@ -94,6 +94,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         }
         ToolArgs.problem(spec, call.input)?.let { return result(call, fail(it)) }
         ai.working(describe(spec, call.input))
+        ai.tool = spec.name
         val answer = try {
             dispatch(spec, call.input)
         } catch (c: CancellationException) {
@@ -102,7 +103,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             fail("${spec.name} failed: ${t.message ?: t::class.simpleName}")
         } finally {
             ai.working(null)
+            ai.tool = null
         }
+        // Something found: the face lights up for a moment.
+        if (!answer.isError && spec.name in com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker.finding && !answer.summary.startsWith("No ")) ai.mood.found(ai.clock())
         ai.activity(Part.Activity(spec.name, answer.summary, answer.isError))
         return result(call, answer)
     }

@@ -54,6 +54,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         "rulings" -> rulings(ToolArgs.string(i, "card")!!)
         "archetype_guide" -> archetype(ToolArgs.string(i, "archetype")!!, ToolArgs.strings(i, "sections"))
         "delegate" -> delegate(ToolArgs.string(i, "task")!!, ToolArgs.int(i, "steps") ?: 12)
+        "express" -> express(ToolArgs.string(i, "face")!!, ToolArgs.int(i, "seconds") ?: 3)
         else -> null
     }
 
@@ -122,6 +123,15 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         ai.todos = items.map { it.trim() }.filter { it.isNotEmpty() }.take(20)
         val done = ai.todos.count { it.startsWith("[x]", ignoreCase = true) }
         return MetaAnswer("Plan shown: $done of ${ai.todos.size} done.", "Plan: $done of ${ai.todos.size} done")
+    }
+
+    /** A face for a moment, on the avatar beside the chat and in the bar. */
+    private fun express(face: String, seconds: Int): MetaAnswer {
+        val e = com.kaiharimoto.mastertool.core.ai.avatar.Expression.byId(face)
+            ?.takeIf { it in com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker.expressible }
+            ?: return fail("No face “$face”: wink, surprised, delighted, love or angry.")
+        ai.express(e, seconds)
+        return MetaAnswer("Showing ${e.id} for ${seconds.coerceIn(1, 8)} s.", "${e.title} ${e.kaomoji}")
     }
 
     // ---- the web -------------------------------------------------------------------------

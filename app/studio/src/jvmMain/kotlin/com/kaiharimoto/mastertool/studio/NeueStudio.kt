@@ -321,6 +321,18 @@ fun neueMain(args: Array<String>) {
             if (map["help"] == "true") h.neue.helpOpen = true
             // Ai's panel (1.0.43): --ai=panel (a sample conversation), empty, wizard (--ai-step=KEY:anthropic), setup (the first setup, the same steps), tune or review.
             map["ai"]?.let { mode -> studioAi(h, mode, map["ai-step"]) }
+            // Ai's face (1.0.52): --ai-face=wink (any of the twenty), --ai-working="Searching cards" for a turn at work.
+            map["ai-working"]?.let { line ->
+                h.ai.running = true
+                h.ai.working = line
+            }
+            map["ai-face"]?.let { id ->
+                com.kaiharimoto.mastertool.core.ai.avatar.Expression.byId(id)?.let { h.ai.express(it, 8) }
+            }
+            if (map["ai"] != null || map["ai-face"] != null) {
+                h.lastInput = System.nanoTime()
+                h.ai.tickFace()
+            }
             // --list=N: a list of the first N main-deck cards, shown in the pool (1.0.19).
             map["list"]?.toIntOrNull()?.let { n ->
                 val id = h.neue.newList()
