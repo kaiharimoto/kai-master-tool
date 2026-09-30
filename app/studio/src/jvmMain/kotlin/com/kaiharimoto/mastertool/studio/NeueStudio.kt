@@ -322,10 +322,7 @@ fun neueMain(args: Array<String>) {
             // Ai's panel (1.0.43): --ai=panel (a sample conversation), empty, wizard (--ai-step=KEY:anthropic), setup (the first setup, the same steps), tune or review.
             map["ai"]?.let { mode -> studioAi(h, mode, map["ai-step"]) }
             // Ai's face (1.0.52): --ai-face=wink (any of the twenty), --ai-working="Searching cards" for a turn at work.
-            map["ai-working"]?.let { line ->
-                h.ai.running = true
-                h.ai.working = line
-            }
+            map["ai-working"]?.let { h.ai.pretendWorking(it) }
             map["ai-face"]?.let { id ->
                 com.kaiharimoto.mastertool.core.ai.avatar.Expression.byId(id)?.let { h.ai.express(it, 8) }
             }

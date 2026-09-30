@@ -185,6 +185,12 @@ class AiState(internal val h: NeueHolders) {
     /** The face's clock: seconds on `System.nanoTime`, the clock [NeueHolders.lastInput] keeps. */
     internal fun clock(): Double = System.nanoTime() / 1e9
 
+    /** For the studio's pictures: a turn at work on [line], with no model behind it. */
+    fun pretendWorking(line: String) {
+        running = true
+        working = line
+    }
+
     /** A face Ai chose for itself (the `express` tool). */
     fun express(e: com.kaiharimoto.mastertool.core.ai.avatar.Expression, seconds: Int) = mood.express(e, seconds.toDouble(), clock())
 
