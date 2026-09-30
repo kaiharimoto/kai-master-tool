@@ -312,8 +312,7 @@ private fun RailRow(page: Page, active: Boolean, count: String?, onClick: () -> 
     val chord = when (page) {
         Page.DECKS -> DeskAction.GO_DECKS
         Page.BUILDER -> DeskAction.GO_BUILDER
-        Page.ODDS -> DeskAction.GO_ODDS
-        Page.STATS -> DeskAction.GO_STATS
+        Page.SIDING -> DeskAction.GO_SIDING
         Page.FORMAT -> DeskAction.GO_FORMAT
         Page.SETTINGS -> DeskAction.GO_SETTINGS
     }.let { DeskShortcuts.chordFor(it)?.let(DeskShortcuts::kbd) }

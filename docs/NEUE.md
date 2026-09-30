@@ -509,7 +509,8 @@ cursor at each point and logs what it resolved to.
 there (the builder puts the deck's name, its legality, its tools and Save), what
 is being fetched and how far (§4h), the update pill and immersive mode — the 232
 px index rail —
-`01 Decks · 02 Builder · 03 Odds · 04 Stats`; below the rule, what is being
+`01 Decks · 02 Builder · 03 Siding · 04 Format` (1.0.40: Odds and Stats are gone,
+on kai's word, and Siding has a page of its own); below the rule, what is being
 fetched, `Search Ctrl K` and Settings — and the page. Until 1.0.10 the app and
 the builder each had a bar; kai merged them, moved search to the rail beside
 Settings, and let the card count go to the pool, where it is read.
@@ -1442,9 +1443,18 @@ the Groups panel carries a three-way switch (`Shift K` walks it, the menu bar ha
 - **As is** — the deck in its own order, rows of ten, broken into pieces where the
   groups fall (`GroupPieces`, above). What 1.0.36 and every release before it did.
 - **Fitted** — each group one rectangle, the rectangles fitted together like a
-  puzzle: flush across, a hairline apart for their two outlines, and room between
-  bands for the names. The deck reads as one thing.
-- **Separate** — the same blocks a whole gap apart both ways (the Shift-wheel's gap).
+  puzzle, a whole gap between any two (the Shift-wheel's gap). In 1.0.37–1.0.39 this
+  was two modes, the blocks touching (a hairline for their outlines) and the blocks
+  apart; kai: "Fitted is what separate is currently. Organized and with gaps
+  separating them for visual clarity" — the touching version is gone.
+- **Separate** (1.0.40, `GroupRows`) — each group on rows of its own, as it reads: its
+  copy sets in the Fitted order, copies side by side, wrapping where the row ends, a
+  gap under it. kai: "each group in its own line/row (separate does not follow the
+  rules for fitment)" — no block shapes, no four-row limit, no group beside another.
+  The width is the one that leaves the biggest card in the pane, the nearer ten on a
+  tie. It is handed on as a `BandLayout` (a band of one block per group), so the
+  outlines, name tabs, drops, the drag's sets (§4h⅞) and zen read it unchanged, and it
+  shares the Fitted order.
 
 The layout is `GroupBands` (core, `GroupBandsTest`), and each of its rules was kai's:
 
@@ -1577,7 +1587,7 @@ file, the page, the switcher), then the siding editor, then the guide.
   another deck of the web can be pointed at the new ids. A `.ydkw` that arrives
   through a deck's Import, or from another app (the manifest takes `.ydkw` too), is
   sent to Format (`DeckBuilderState.onWebFile`).
-- **The page** (`05`, `Ctrl 5`, `FormatPage`): the webs down the left (chips on a
+- **The page** (`04`, `Ctrl 4`, `FormatPage`; `05` until 1.0.40): the webs down the left (chips on a
   phone), the open web's name and notes written where they stand, **Import deck**
   (a file; on a phone or tablet also a deck's QR code, `CardActions.readCode`),
   **Add from library**, **Export .ydkw** (save, or share on Android) and **Delete
@@ -1590,7 +1600,15 @@ file, the page, the switcher), then the siding editor, then the guide.
   builder is saved as it goes (`NeueHolders.openDeck`). A phone has both in ⋯.
 
 
-### 4j. Siding (1.0.35)
+### 4j. Siding (1.0.35; its own page, `03`, from 1.0.40)
+
+**The page** (1.0.40, kai: "3 should be Siding and 4 should be Format"; `Ctrl 3`,
+`SidingPage`): the editor below, which stood inside Format, as a page of its own. It
+sides a deck of yours in the web open on Format — the one last asked for
+(`Webs.side`), else the first you star — and its bar's way back leads to that web on
+Format. Anything that asks for siding (the builder bar's web menu, a matchup's Open,
+the editor's own deck menu) opens the page (`Webs.sidingAsked`). With no web, or no
+deck of yours starred in it, the page says so and leads to Format.
 
 kai: "siding patterns, can use other decks in the deck web as a matchup and also
 write notes… Patterns would differ for every matchup, going first and second", and

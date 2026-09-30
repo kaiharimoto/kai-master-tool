@@ -43,7 +43,8 @@ class DeskShortcutsTest {
 
     @Test
     fun pagesAreReachableWhileTyping() {
-        assertEquals(DeskAction.GO_ODDS, DeskShortcuts.resolve(KeyChord("3", ctrl = true), typingName))
+        assertEquals(DeskAction.GO_SIDING, DeskShortcuts.resolve(KeyChord("3", ctrl = true), typingName))
+        assertEquals(DeskAction.GO_FORMAT, DeskShortcuts.resolve(KeyChord("4", ctrl = true), typingName))
         assertEquals(DeskAction.GO_SETTINGS, DeskShortcuts.resolve(KeyChord("comma", ctrl = true), searching))
     }
 

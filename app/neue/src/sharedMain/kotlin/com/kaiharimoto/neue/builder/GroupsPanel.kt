@@ -166,7 +166,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         Micro("Groups", color = c.ink70)
         // How the deck is laid out by its groups (kai, 1.0.37): the deck's own order in pieces,
         // or its groups as blocks in bands, touching or apart (`GroupBands`).
-        com.kaiharimoto.neue.kit.Tip("As is keeps your order; Fitted and Separate make each group a block", kbd = "Shift K") {
+        com.kaiharimoto.neue.kit.Tip("As is keeps your order; Fitted fits the groups together as blocks; Separate gives each group its own rows", kbd = "Shift K") {
             com.kaiharimoto.neue.kit.Segmented(
                 neue.prefs.arrangement,
                 com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries,

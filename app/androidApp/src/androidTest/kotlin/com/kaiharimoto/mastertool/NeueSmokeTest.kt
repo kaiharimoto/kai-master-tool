@@ -477,14 +477,14 @@ class NeueSmokeTest {
             tap(later!!.exactCenterX() / density, later!!.exactCenterY() / density)
             assertTrue("Later did not close the update dialog", until { !on { it.neue!!.updates.dialogOpen } })
 
-            // The tabs along the bottom: Decks, first of five.
+            // The tabs along the bottom: Decks, first of five (Decks, Builder, Siding, Format, Settings).
             tap(w / 10f, h - bottom - 28f)
             assertTrue("the Decks tab did not open Decks", until { on { it.neue!!.neue.page } == Page.DECKS })
             shoot("05-decks.png")
             on { it.neue!!.neue.go(Page.SETTINGS) }
             shoot("06-settings.png")
-            on { it.neue!!.neue.go(Page.ODDS) }
-            shoot("07-odds.png")
+            on { it.neue!!.neue.go(Page.SIDING) }
+            shoot("07-siding.png")
             on { it.neue!!.neue.go(Page.BUILDER) }
 
             // Turned: Landscape asks the screen to lie down, and Neue lays itself out for it.

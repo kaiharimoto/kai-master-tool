@@ -130,10 +130,8 @@ import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.Progress
 import com.kaiharimoto.neue.kit.ToastBox
 import com.kaiharimoto.neue.pages.DecksPage
-import com.kaiharimoto.neue.pages.OddsPage
 import com.kaiharimoto.neue.pages.SettingsHost
 import com.kaiharimoto.neue.pages.SettingsPage
-import com.kaiharimoto.neue.pages.StatsPage
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.shell.Command
 import com.kaiharimoto.neue.shell.CommandPalette
@@ -291,8 +289,7 @@ class NeueHolders(
             DeskAction.PALETTE -> neue.paletteOpen = !neue.paletteOpen
             DeskAction.GO_DECKS -> neue.go(Page.DECKS)
             DeskAction.GO_BUILDER -> neue.go(Page.BUILDER)
-            DeskAction.GO_ODDS -> neue.go(Page.ODDS)
-            DeskAction.GO_STATS -> neue.go(Page.STATS)
+            DeskAction.GO_SIDING -> neue.go(Page.SIDING)
             DeskAction.GO_FORMAT -> neue.go(Page.FORMAT)
             DeskAction.WEB_PREVIOUS -> stepWeb(-1)
             DeskAction.WEB_NEXT -> stepWeb(1)
@@ -468,7 +465,8 @@ class NeueHolders(
         goal = builder.editingGoal != null,
         draft = builder.groupDraft != null,
         focus = textFocus.any || builder.textInputFocused || neue.searchFocused,
-        siding = neue.page == Page.FORMAT && webs.sidingDeckId != null,
+        // Siding is a page of its own (1.0.40): Back leaves it as it leaves any page.
+        siding = false,
         palettes = neue.groupPalettesOpen,
         isolation = builder.isolatedKey != null,
         selection = neue.selection != null,
@@ -571,8 +569,7 @@ class NeueHolders(
         val fixed = listOf(
             cmd("Go", "Decks", DeskAction.GO_DECKS),
             cmd("Go", "Builder", DeskAction.GO_BUILDER),
-            cmd("Go", "Odds", DeskAction.GO_ODDS),
-            cmd("Go", "Stats", DeskAction.GO_STATS),
+            cmd("Go", "Siding", DeskAction.GO_SIDING),
             cmd("Go", "Format", DeskAction.GO_FORMAT),
             cmd("Go", "Settings", DeskAction.GO_SETTINGS),
             cmd("Deck", "Save", DeskAction.SAVE),
@@ -1076,12 +1073,14 @@ private fun Shell(h: NeueHolders) {
                     TabBar(neue, vertical = true, onSearch = { neue.paletteOpen = true })
                 } else if (pinned && !phone) rail()
                 Box(Modifier.weight(1f)) {
+                    // Siding asked for from anywhere (the builder's web switch, a matchup, the editor's
+                    // own deck menu) opens the Siding page (1.0.40).
+                    LaunchedEffect(h.webs.sidingAsked) { if (h.webs.sidingAsked > 0) neue.go(Page.SIDING) }
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
                             Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds)
                             Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
-                            Page.ODDS -> OddsPage(state)
-                            Page.STATS -> StatsPage(state)
+                            Page.SIDING -> com.kaiharimoto.neue.pages.SidingPage(h.webs, state, neue, h.decksReload)
                             Page.FORMAT -> com.kaiharimoto.neue.pages.FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
                             Page.SETTINGS -> SettingsPage(
                                 state,

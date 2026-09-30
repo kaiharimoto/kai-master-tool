@@ -95,11 +95,15 @@ fun neueMain(args: Array<String>) {
             map["dock"]?.let { d -> h.neue.update { it.copy(phoneDockStop = d.uppercase()) } }
             h.neue.page = when (map["page"]) {
                 "decks" -> Page.DECKS
-                "odds" -> Page.ODDS
-                "stats" -> Page.STATS
+                "siding" -> Page.SIDING
                 "format" -> Page.FORMAT
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
+            }
+            // The webs are read at the app's start, which the studio does not run: for pages that show them.
+            if (map["page"] == "siding" || map["page"] == "format") {
+                h.webs.load()
+                clock.run(30)
             }
             // --grow=0.4: the deck drawn that small first and then full size — the cards grow
             // after their pictures were decoded, as they do when the window is maximised on
@@ -141,7 +145,7 @@ fun neueMain(args: Array<String>) {
                 map["siding"]?.toIntOrNull()?.let { n ->
                     val ids = h.webs.selected?.deckIds.orEmpty()
                     ids.getOrNull(n)?.let { id -> h.webs.side(id, map["against"]?.toIntOrNull()?.let(ids::getOrNull)) }
-                    h.neue.page = Page.FORMAT
+                    h.neue.page = Page.SIDING
                     clock.run(60)
                 }
                 // --guide=path: the siding guide of the deck --siding names, written to path as a PDF (1.0.36).

@@ -25,11 +25,15 @@ import kotlinx.coroutines.launch
 enum class Page(val numeral: Int?, val title: String) {
     DECKS(1, "Decks"),
     BUILDER(2, "Builder"),
-    ODDS(3, "Odds"),
-    STATS(4, "Stats"),
+
+    /**
+     * Siding your decks against their web (1.0.40, kai: "3 should be Siding"): the editor
+     * that stood inside Format, a page of its own. Odds and Stats are gone, on kai's word.
+     */
+    SIDING(3, "Siding"),
 
     /** The webs of decks (1.0.33): the fields you prepare for. */
-    FORMAT(5, "Format"),
+    FORMAT(4, "Format"),
     SETTINGS(null, "Settings"),
 }
 

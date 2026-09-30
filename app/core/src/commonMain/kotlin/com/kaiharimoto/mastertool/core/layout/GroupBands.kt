@@ -11,8 +11,10 @@ import kotlin.math.min
  * 3 toggles: as is — meaning custom order, fitted, and separate").
  *
  * - **As is**: the deck's own order, broken into pieces where groups touch ([GroupPieces]).
- * - **Fitted** and **Separate**: the deck as bands of group blocks ([GroupBands]), the
- *   blocks touching or apart.
+ * - **Fitted**: the deck as bands of group blocks fitted together ([GroupBands]), a whole
+ *   gap between any two (1.0.40, kai: "organized and with gaps separating them").
+ * - **Separate**: each group on rows of its own, as it reads ([GroupRows]; 1.0.40, kai:
+ *   "each group in its own line/row — separate does not follow the rules for fitment").
  */
 enum class GroupArrangement { AS_IS, FITTED, SEPARATE }
 

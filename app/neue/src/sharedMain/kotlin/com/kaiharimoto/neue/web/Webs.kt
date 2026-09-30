@@ -39,7 +39,7 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
     /** The web open on the Format page. */
     var selectedId by mutableStateOf<String?>(null)
 
-    /** The deck being sided on the Format page (1.0.35), or null for the web itself. */
+    /** The deck being sided on the Siding page (1.0.35; its own page from 1.0.40), or null for the first of yours. */
     var sidingDeckId by mutableStateOf<String?>(null)
 
     /** Whether the web's page shows its matchups rather than its field; kept, so the editor's Back returns to it. */
@@ -53,7 +53,12 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         library.webOf(deckId)?.let { selectedId = it.id }
         sidingAgainst = against
         sidingDeckId = deckId
+        sidingAsked++
     }
+
+    /** Moves each time siding is asked for, so the app opens the Siding page (1.0.40). */
+    var sidingAsked by mutableStateOf(0)
+        private set
 
     /** One write at a time, in the order they were asked for: the last edit is the one kept. */
     private val sidingLock = kotlinx.coroutines.sync.Mutex()

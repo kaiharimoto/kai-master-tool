@@ -104,7 +104,11 @@ actual class DeckShots actual constructor(
         val shown: BandLayout? = neue.bandCache.last
         if (shown != null && shown.row.size == ids.size) return shown
         val keying = state.keying(DeckSection.MAIN)
-        return GroupBands.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = state.groups.fitted.map { it.value })
+        val fitted = state.groups.fitted.map { it.value }
+        if (neue.prefs.arrangement == com.kaiharimoto.mastertool.core.layout.GroupArrangement.SEPARATE) {
+            return com.kaiharimoto.mastertool.core.layout.GroupRows.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = fitted)
+        }
+        return GroupBands.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = fitted)
     }
 
     fun snapshot(state: DeckBuilderState, neue: NeueState): ShotModel {
@@ -128,7 +132,6 @@ actual class DeckShots actual constructor(
                     keying = if (showing) state.keying(section).takeIf { !it.isEmpty } else null,
                     // The bands the builder is showing, or the same deck laid out for the picture's shape.
                     bands = if (section == DeckSection.MAIN) bandsFor(state, neue) else null,
-                    separate = neue.prefs.arrangement == com.kaiharimoto.mastertool.core.layout.GroupArrangement.SEPARATE,
                 )
             },
             lens = if (showing) state.lens.displayName else null,

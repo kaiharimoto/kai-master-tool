@@ -61,8 +61,7 @@ object DeskMenuBar {
             listOf(
                 item(DeskAction.GO_DECKS, "Decks"),
                 item(DeskAction.GO_BUILDER, "Builder"),
-                item(DeskAction.GO_ODDS, "Odds"),
-                item(DeskAction.GO_STATS, "Statistics"),
+                item(DeskAction.GO_SIDING, "Siding"),
                 item(DeskAction.GO_FORMAT, "Format", ruleAfter = true),
                 item(DeskAction.WEB_PREVIOUS, "Previous deck in the web"),
                 item(DeskAction.WEB_NEXT, "Next deck in the web", ruleAfter = true),

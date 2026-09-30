@@ -487,7 +487,6 @@ private fun WebSwitch(
                             ) { onOpen(entry.deckId) }
                         } + com.kaiharimoto.neue.kit.MenuEntry("Side this deck", hint = "Matchups", separatorBefore = true) {
                             webs.side(id)
-                            neue.go(com.kaiharimoto.neue.Page.FORMAT)
                         } + com.kaiharimoto.neue.kit.MenuEntry("Open the web in Format") {
                             webs.selectedId = web.id
                             webs.sidingDeckId = null

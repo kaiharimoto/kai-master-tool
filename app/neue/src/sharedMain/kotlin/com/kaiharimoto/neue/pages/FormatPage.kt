@@ -202,14 +202,8 @@ fun FormatPage(
     }
 
     Column(Modifier.fillMaxSize()) {
-        // Siding takes the page: its own bar says where it is and leads back (1.0.35).
-        val siding = webs.sidingDeckId?.takeIf { web?.has(it) == true }
-        if (web != null && siding != null) {
-            SidingHost(webs, web, siding, state, neue, reload)
-            return@Column
-        }
         PageHeader(
-            numeral = 5,
+            numeral = 4,
             title = "Format",
             subtitle = web?.let { w -> "${w.name} · ${w.entries.size} ${if (w.entries.size == 1) "deck" else "decks"} · ${w.mine.size} yours" }
                 ?: "${webs.library.webs.size} webs",

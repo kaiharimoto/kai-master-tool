@@ -17,8 +17,9 @@ enum class DeskAction {
     PALETTE,
     GO_DECKS,
     GO_BUILDER,
-    GO_ODDS,
-    GO_STATS,
+
+    /** Siding (1.0.40): your decks sided against their web. */
+    GO_SIDING,
 
     /** Format (1.0.33): the webs of decks, the fields you prepare for. */
     GO_FORMAT,
@@ -158,9 +159,8 @@ object DeskShortcuts {
 
         DeskShortcut(ctrl("1"), DeskAction.GO_DECKS, DeskScope.APP, "Decks", allowedInTextInput = true),
         DeskShortcut(ctrl("2"), DeskAction.GO_BUILDER, DeskScope.APP, "Builder", allowedInTextInput = true),
-        DeskShortcut(ctrl("3"), DeskAction.GO_ODDS, DeskScope.APP, "Odds", allowedInTextInput = true),
-        DeskShortcut(ctrl("4"), DeskAction.GO_STATS, DeskScope.APP, "Statistics", allowedInTextInput = true),
-        DeskShortcut(ctrl("5"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true),
+        DeskShortcut(ctrl("3"), DeskAction.GO_SIDING, DeskScope.APP, "Siding", allowedInTextInput = true),
+        DeskShortcut(ctrl("4"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),

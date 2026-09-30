@@ -51,8 +51,6 @@ data class ShotSection(
     val keying: LensKeying?,
     /** The main deck's bands of group blocks, when the builder shows them (1.0.37), else null: rows as they read. */
     val bands: com.kaiharimoto.mastertool.core.layout.BandLayout? = null,
-    /** The bands a whole gap apart (Separate), or touching (Fitted). */
-    val separate: Boolean = false,
 )
 
 /** Everything the picture shows, gathered off the builder at the instant it was asked for. */

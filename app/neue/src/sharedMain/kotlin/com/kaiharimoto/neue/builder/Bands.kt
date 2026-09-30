@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.layout.BandLayout
 import com.kaiharimoto.mastertool.core.layout.BandMemory
 import com.kaiharimoto.mastertool.core.layout.GroupArrangement
 import com.kaiharimoto.mastertool.core.layout.GroupBands
+import com.kaiharimoto.mastertool.core.layout.GroupRows
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
@@ -37,21 +38,27 @@ internal class BandCache {
         otherRows: Int,
         gaps: Pair<Float, Float>,
         setOrder: List<Int>,
+        /** Separate (1.0.40): each group on rows of its own ([GroupRows]); else fitted bands. */
+        separate: Boolean,
     ): BandLayout? {
         if (deckId != deck) {
             deck = deckId
             memory = null
             inputs = null
         }
-        val key = listOf(ids, keys, order, pane, otherRows, gaps, setOrder)
+        val key = listOf(ids, keys, order, pane, otherRows, gaps, setOrder, separate)
         if (key == inputs) return result
         inputs = key
         // The memory is for edits: a new pane (a window resized, a tablet turned, the extra
         // deck shown) is laid out afresh, or the first frame's size would hold for ever.
-        val here = Triple(pane, otherRows, gaps)
+        val here = listOf(pane, otherRows, gaps, separate)
         if (here != room) memory = null
         room = here
-        result = GroupBands.layout(ids, keys, order, pane, otherRows, memory = memory, gapX = gaps.first, gapY = gaps.second, setOrder = setOrder)
+        result = if (separate) {
+            GroupRows.layout(ids, keys, order, pane, otherRows, gapY = gaps.second, setOrder = setOrder)
+        } else {
+            GroupBands.layout(ids, keys, order, pane, otherRows, memory = memory, gapX = gaps.first, gapY = gaps.second, setOrder = setOrder)
+        }
         result?.let { memory = it.memory }
         return result
     }
@@ -71,6 +78,7 @@ internal class BandCache {
         val pane = key[3] as Pair<Float, Float>
         val otherRows = key[4] as Int
         val gaps = key[5] as Pair<Float, Float>
+        if (key[7] == true) return GroupRows.layout(ids, keys, order, pane, otherRows, gapY = gaps.second, setOrder = setOrder, widths = shown.columns..shown.columns)
         return GroupBands.layout(
             ids, keys, order, pane, otherRows, memory = shown.memory, widths = shown.columns..shown.columns,
             gapX = gaps.first, gapY = gaps.second, setOrder = setOrder,
@@ -115,6 +123,7 @@ internal fun mainBands(
     return neue.bandCache.layout(
         state.deckId, ids, keying.keyOfCell, keying.keyOrder, step(paneWidth) to step(height), others, gapX to gapY,
         state.groups.fitted.map { it.value },
+        separate = neue.prefs.arrangement == GroupArrangement.SEPARATE,
     )
 }
 

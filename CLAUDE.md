@@ -209,8 +209,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   deleted. A group may hold extra- and side-deck cards; its colour is an index
   read through one of seven palettes (`GroupMarkers.palettes`). **Out, the groups are
   As is, Fitted or Separate** (1.0.37, `NeuePreferences.groupArrangement`, `Shift K`):
-  As is is the pieces above; Fitted and Separate lay the main deck out in bands of
-  group blocks (`GroupBands`) — copy sets kept whole, blocks at most four rows,
+  As is is the pieces above; Fitted lays the main deck out in bands of group blocks
+  a whole gap apart (`GroupBands`), and Separate puts each group on rows of its own
+  with no fitting rules (`GroupRows`, 1.0.40) — Fitted's blocks keep copy sets whole, blocks at most four rows,
   groups in order, ungrouped last, an edit holding the last shapes (`BandMemory`),
   and never much smaller cards than As is (1.0.38: a layout below nine tenths of the
   plain deck's card pays heavily; gaps and the other sections are counted) —
@@ -290,7 +291,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   from a picture, one screenshot holding every part (v1.3.7); `DeckCodes.read` (core) turns what
   was read into a deck. `NEUE.md` §4. A tip at the
   bottom of the window opens `above`, or it covers its own control.
-- **Format** (1.0.33, `05`, `NEUE.md` §4i): **webs of decks** — the field expected
+- **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format** (1.0.40, kai:
+  Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by
+  anything that asks `Webs.side`). `NEUE.md` §3, §4j.
+- **Format** (1.0.33, `04`, `NEUE.md` §4i): **webs of decks** — the field expected
   at an event, yours starred. `DeckWeb`/`WebLibrary` (core; the page is Format, the
   type is not, since `Format` is TCG/OCG) kept as one preferences document
   (`neue.webs`, no migration); a web's decks are ordinary decks the Decks page

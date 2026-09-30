@@ -219,9 +219,9 @@ internal object ShotDesigns {
             val bands = s.bands?.takeIf { keys != null }?.pieces()
             val cols = bands?.columns ?: columnsOf(s.section)
             val frame = mainW * 0.035f
-            // Fitted blocks touch, with room for their outlines across and their names down.
-            val gapX = if (bands != null && !s.separate) frame * 2 else gap
-            val gapY = if (bands != null && !s.separate) tab + frame else gap
+            // Fitted and Separate both stand a whole gap apart (1.0.40).
+            val gapX = gap
+            val gapY = gap
             val span = bands?.spanX ?: keys?.let { GroupPieces.of(it, cols).spanX } ?: 0
             val cardW = (b.inner - gapX * span) / cols
             val colors = keying?.keys?.associate { it.id to GroupMarkers.paint(it.paint, b.c.ink) }.orEmpty()

@@ -97,7 +97,6 @@ import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.deck.DeckLenses
 import com.kaiharimoto.mastertool.core.layout.GroupPieces
 import com.kaiharimoto.mastertool.core.layout.BandLayout
-import com.kaiharimoto.mastertool.core.layout.GroupArrangement
 import com.kaiharimoto.mastertool.core.layout.PieceLayout
 import com.kaiharimoto.neue.zen.zenGlow
 import com.kaiharimoto.mastertool.core.layout.SectionFit
@@ -388,11 +387,10 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         // The deck in pieces by the lens (GroupPieces): what width and height the gaps
         // between them take, declared to the fitter so the cards pay for them honestly.
         val gapPx = with(density) { PIECE_GAP.toPx() } * neue.prefs.groupGap
-        // Fitted blocks touch (kai, 1.0.37): across, room for their two outlines; down, for
-        // the outlines and the name tab. Separate blocks stand a whole gap apart both ways.
-        val separate = neue.prefs.arrangement == GroupArrangement.SEPARATE
-        val bandGapX = if (separate) gapPx else with(density) { FRAME.toPx() * 2 }
-        val bandGapY = if (separate) gapPx else with(density) { nameTab.toPx() + FRAME.toPx() }
+        // Fitted and Separate both stand a whole gap apart, the Shift-wheel's (1.0.40, kai:
+        // "the current fitted doesn't have enough space between them").
+        val bandGapX = gapPx
+        val bandGapY = gapPx
         // The pane less what is drawn over and between the sections whatever the cards: each
         // section's padding and rule, the other sections' names, the name tabs over the top
         // band — or a tall deck is chosen for room it will not have (1.0.38).
@@ -576,9 +574,8 @@ internal fun naturalDeckHeight(state: DeckBuilderState, neue: NeueState, width: 
     return with(density) {
         val gapPx = PIECE_GAP.toPx() * neue.prefs.groupGap
         // The same bands the deck is laid out in, asked with the same width (`mainBands`).
-        val separate = neue.prefs.arrangement == GroupArrangement.SEPARATE
-        val bandGapX = if (separate) gapPx else FRAME.toPx() * 2
-        val bandGapY = if (separate) gapPx else nameTab.toPx() + FRAME.toPx()
+        val bandGapX = gapPx
+        val bandGapY = gapPx
         val bands = mainBands(state, neue, null, (width - (if (neue.phone) 8.dp else SIDE_PAD) * 2).toPx(), 0f, bandGapX, bandGapY)
         val placed = DeckLabels.stack(
             availableWidth = (width - SIDE_PAD * 2).toPx(),
