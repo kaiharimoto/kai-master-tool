@@ -158,6 +158,60 @@ class AiState(internal val h: NeueHolders) {
     private var backend: Pair<String, ModelBackend>? = null
     private var mcp: McpHandle? = null
 
+    // ---- the face (1.0.52) ------------------------------------------------------
+
+    /** The face Ai wears now, beside the chat and in the bar alike: the mood table's, ticked by [AiFaceClock]. */
+    var face by mutableStateOf(com.kaiharimoto.mastertool.core.ai.avatar.Expression.IDLE)
+        internal set
+
+    internal val mood = com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker()
+
+    /** The tool running now, by name, for the face: reading or working. */
+    var tool by mutableStateOf<String?>(null)
+        internal set
+
+    /** The first line of the last answer, and when it came: the bar's marquee shows it for a while. */
+    var lastReply by mutableStateOf<String?>(null)
+        private set
+    var repliedAt by mutableStateOf(0L)
+        private set
+
+    /** Whether the empty conversation has winked hello yet, this run. */
+    internal var greeted = false
+
+    /** Stop was pressed: the turn's end is a sad face, not a done one. */
+    private var stopping = false
+
+    /** The face's clock: seconds on `System.nanoTime`, the clock [NeueHolders.lastInput] keeps. */
+    internal fun clock(): Double = System.nanoTime() / 1e9
+
+    /** For the studio's pictures: a turn at work on [line], with no model behind it. */
+    fun pretendWorking(line: String) {
+        running = true
+        working = line
+    }
+
+    /** A face Ai chose for itself (the `express` tool). */
+    fun express(e: com.kaiharimoto.mastertool.core.ai.avatar.Expression, seconds: Int) = mood.express(e, seconds.toDouble(), clock())
+
+    /** The face now, from what Ai is doing. */
+    fun tickFace() {
+        face = mood.at(
+            com.kaiharimoto.mastertool.core.ai.avatar.AiSignals(
+                running = running,
+                streaming = streaming.isNotEmpty(),
+                tool = tool,
+                waiting = confirm != null || question != null,
+                problem = problem?.first,
+                drafting = draft.isNotBlank(),
+                tuning = tuning,
+                studying = studying,
+            ),
+            clock(),
+            h.lastInput / 1e9,
+        )
+    }
+
     // ---- the panel ------------------------------------------------------------
 
     fun toggle() = setOpen(!prefs.panelOpen)
@@ -184,6 +238,7 @@ class AiState(internal val h: NeueHolders) {
         status = null
         notice = null
         draft = ""
+        if (com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker.isThanks(words)) mood.thanked(clock())
         val current = session?.takeIf { it.connection == connection.id } ?: begin(connection)
         val scope = host.scope()
         val scopeChanged = scope?.path != current.scopeShown
@@ -286,7 +341,19 @@ class AiState(internal val h: NeueHolders) {
         reasoning = ""
         activity = emptyList()
         working = null
+        tool = null
         running = false
+        // The face: sad at a Stop, happy at an answer; the answer's first line for the bar.
+        if (stopping) {
+            mood.stopped(clock())
+        } else if (problem == null) {
+            mood.done(clock())
+            session?.turns?.lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.let {
+                lastReply = firstLine(it.text)
+                repliedAt = System.currentTimeMillis()
+            }
+        }
+        stopping = false
         confirm?.reply(false)
         confirm = null
         question?.reply("(no answer)")
@@ -296,6 +363,7 @@ class AiState(internal val h: NeueHolders) {
     }
 
     fun stop() {
+        if (job != null) stopping = true
         job?.cancel()
     }
 
@@ -751,6 +819,13 @@ class AiState(internal val h: NeueHolders) {
     }
 
     companion object {
+        /** A reply's first line in plain words, for the bar: no markdown, no card brackets. */
+        fun firstLine(text: String): String = text.lineSequence()
+            .map { it.trim().trimStart('#', '-', '*', '>', ' ').replace("[[", "").replace("]]", "").replace("**", "").replace("`", "").trim() }
+            .firstOrNull { it.isNotEmpty() && !it.startsWith("|") }
+            .orEmpty()
+            .take(160)
+
         /** The phase this build ships: 1, the harness; 2, the meta; 3, learning. */
         const val PHASE = 3
 

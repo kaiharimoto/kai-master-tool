@@ -658,6 +658,21 @@ object AiTools {
         phase = 3,
     )
 
+    val express = ToolSpec(
+        "express",
+        "Shows a face on your avatar for a few seconds, beside the chat and in the app's bar. Your face already shows " +
+            "thinking, working, reading, speaking and waiting by itself; this is for a real moment, now and then: wink " +
+            "(a tip or a shortcut worth sharing), surprised (something unexpected in the deck), delighted (a legal deck " +
+            "at last, a win, a finished web), love (a deck or a combo that sings) or angry (played for charm: a banned " +
+            "card, a rule broken).",
+        schema {
+            enum("face", "Which face", listOf("wink", "surprised", "delighted", "love", "angry"), required = true)
+            integer("seconds", "How long to wear it (default 3)", min = 1, max = 8)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
     /** The tools a delegated helper may use: every one that only looks. */
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
@@ -679,6 +694,7 @@ object AiTools {
         tournamentDecks, tournamentDeck, importTournamentDeck, fieldSnapshot,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
+        express,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

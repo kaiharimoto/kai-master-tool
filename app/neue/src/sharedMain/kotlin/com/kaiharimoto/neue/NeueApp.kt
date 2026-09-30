@@ -842,8 +842,11 @@ private fun Shell(h: NeueHolders) {
                 onUpdate = { h.updates.dialogOpen = true },
                 menu = { h.phoneMenu(it) },
                 working = work != null,
-                ai = if (neue.prefs.ai.enabled) h.ai.name else null,
-                onAi = { h.ai.toggle() },
+                ai = if (neue.prefs.ai.enabled) {
+                    { narrow -> com.kaiharimoto.neue.ai.avatar.AiMarquee(h, width = if (narrow) 84.dp else 112.dp, height = 40.dp) }
+                } else {
+                    null
+                },
             )
         } else TitleBar(
             neue = neue,
@@ -852,7 +855,7 @@ private fun Shell(h: NeueHolders) {
             onImmersive = { h.run(DeskAction.IMMERSIVE) },
             work = work,
             onWork = { neue.go(Page.SETTINGS) },
-            trailing = { if (neue.prefs.ai.enabled) com.kaiharimoto.neue.ai.AiToggle(h) },
+            trailing = { if (neue.prefs.ai.enabled) com.kaiharimoto.neue.ai.avatar.AiMarquee(h) },
         ) { narrow ->
             if (neue.page == Page.BUILDER) {
                 BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow, webs = h.webs, onStepWeb = h::stepWeb, onOpenDeck = h::openDeck)
@@ -1210,6 +1213,7 @@ private fun Shell(h: NeueHolders) {
         // Ai's first setup takes the whole window, bars and all (1.0.45).
         if (neue.aiSetup) com.kaiharimoto.neue.ai.AiSetupScreen(h.ai, Modifier.fillMaxSize())
         if (neue.prefs.ai.enabled) {
+            com.kaiharimoto.neue.ai.avatar.AiFaceClock(h.ai)
             com.kaiharimoto.neue.ai.MemoryDialog(h.ai)
             com.kaiharimoto.neue.ai.ReviewDialog(h.ai)
             com.kaiharimoto.neue.ai.TuneLauncher(h.ai)

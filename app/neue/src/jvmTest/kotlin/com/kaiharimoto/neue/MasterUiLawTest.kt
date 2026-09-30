@@ -10,15 +10,15 @@ import kotlin.test.fail
  * Neue and fails on the things §15 forbids. The kit's own linter reads CSS and
  * TSX; this is the same list of laws, spelled the way Compose spells them.
  *
- * Two files may name a colour, and only two, because kai granted exactly two
- * exceptions: the foil on a card's face (content, §17) and the markers the user
- * draws on their own deck.
+ * Three files may name a colour, and only three, because kai granted exactly
+ * three exceptions: the foil on a card's face (content, §17), the markers the user
+ * draws on their own deck, and Ai's face (1.0.52), drawn in its character's colours.
  */
 class MasterUiLawTest {
 
     // Every source set's Kotlin: the shared code and each platform's own (1.0.20).
     private val root = File("src")
-    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt")
+    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt")
 
     private val sources: List<File> =
         root.listFiles().orEmpty().filter { it.isDirectory && it.name.endsWith("Main") }

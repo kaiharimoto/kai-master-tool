@@ -76,7 +76,7 @@ fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = fals
                     else -> Transcript(ai, Modifier.fillMaxSize())
                 }
             }
-            if (!ai.wizardOpen && !ai.historyOpen && !ai.demoOpen) Composer(ai)
+            if (!ai.wizardOpen && !ai.historyOpen && !ai.demoOpen) Composer(ai, phone = phone)
         }
     }
 }
@@ -212,14 +212,5 @@ private fun PanelEdge(h: NeueHolders) {
                     Orientation.Horizontal,
                 ),
         )
-    }
-}
-
-/** The bar's switch for the panel: the assistant's name, boxed, inverted while it is out. */
-@Composable
-fun AiToggle(h: NeueHolders) {
-    val ai = h.ai
-    Tip("${ai.name}: your assistant. Ask it anything, or have it build and tune decks", kbd = DeskShortcuts.chordFor(DeskAction.AI_PANEL)?.let(DeskShortcuts::kbd)) {
-        WordToggle(ai.name, ai.prefs.panelOpen) { ai.toggle() }
     }
 }

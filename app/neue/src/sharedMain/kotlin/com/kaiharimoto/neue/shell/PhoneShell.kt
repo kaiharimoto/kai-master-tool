@@ -69,9 +69,8 @@ fun PhoneBar(
     menu: (Offset) -> List<MenuEntry>,
     modifier: Modifier = Modifier,
     working: Boolean = false,
-    /** The assistant's name while it is on, for its button (1.0.43). */
-    ai: String? = null,
-    onAi: () -> Unit = {},
+    /** Ai's marquee while it is on (1.0.52), told whether the Update chip is taking room from it. */
+    ai: (@Composable (narrow: Boolean) -> Unit)? = null,
 ) {
     val c = Mu.colors
     var moreAt by remember { mutableStateOf(Offset.Zero) }
@@ -113,17 +112,8 @@ fun PhoneBar(
                 ) { Micro("Update", color = c.paper) }
             }
         }
-        if (ai != null) {
-            Box(
-                Modifier
-                    .height(40.dp)
-                    .border(1.dp, c.ink)
-                    .cursorPointer(caption = "Ask")
-                    .muClickable(onClick = onAi)
-                    .padding(horizontal = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) { Micro(ai, color = c.ink) }
-        }
+        // Never in the overflow either: shorter while the Update chip is out.
+        if (ai != null) ai(update != null)
         Box(Modifier.onGloballyPositioned { moreAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
             Tip("Everything else: import, export, save, search, rotate, updates") {
                 IconButton(Icons.More, { neue.menu = MenuSpec(moreAt, menu(moreAt)) }, size = 40.dp, label = "More")

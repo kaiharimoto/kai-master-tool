@@ -59,7 +59,6 @@ import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.neue.Viewing
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
-import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
@@ -110,8 +109,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
     val session = ai.session
     val rows = remember(session?.turns) { rows(session?.turns.orEmpty()) }
     val list = rememberLazyListState()
-    val tail = rows.size + (if (ai.streaming.isNotEmpty()) 1 else 0) + (if (ai.reasoning.isNotEmpty()) 1 else 0) + ai.todos.size + (if (ai.working != null || ai.running) 1 else 0) +
-        (if (ai.confirm != null) 1 else 0) + (if (ai.question != null) 1 else 0) + (if (ai.problem != null) 1 else 0) + ai.activity.size
+    val tail = rows.size + (if (ai.streaming.isNotEmpty()) 1 else 0) + (if (ai.reasoning.isNotEmpty()) 1 else 0) + ai.todos.size + (if (ai.confirm != null) 1 else 0) + (if (ai.question != null) 1 else 0) + (if (ai.problem != null) 1 else 0) + ai.activity.size
     LaunchedEffect(tail, ai.streaming.length / 80, ai.reasoning.length / 200) {
         val last = list.layoutInfo.totalItemsCount - 1
         if (last >= 0) list.scrollToItem(last)
@@ -139,7 +137,6 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
             if (ai.todos.isNotEmpty()) item { TodoView(ai.todos) }
             items(ai.activity) { ActivityLine(it.summary.ifBlank { it.name }, it.isError) }
             if (ai.streaming.isNotEmpty()) item { ReplyView(ai, ai.streaming, live = true) }
-            if (ai.running) item { Working(ai.working ?: ai.status ?: if (ai.streaming.isEmpty()) "Thinking" else "Writing") }
             ai.confirm?.let { c -> item { ConfirmCard(c) } }
             ai.question?.let { q -> item { QuestionCard(ai, q) } }
             ai.problem?.let { (message, connection) -> item { ProblemCard(message, connection) { ai.openWizard() } } }
@@ -151,7 +148,20 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
 @Composable
 private fun Greeting(ai: AiState, modifier: Modifier) {
     val c = Mu.colors
+    // The first time the conversation opens empty, Ai winks hello (1.0.52).
+    LaunchedEffect(Unit) {
+        if (!ai.greeted) {
+            ai.greeted = true
+            ai.express(com.kaiharimoto.mastertool.core.ai.avatar.Expression.WINK, 3)
+        }
+    }
     Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        com.kaiharimoto.neue.ai.avatar.AiAvatar(
+            ai.face,
+            com.kaiharimoto.neue.ai.avatar.AvatarSizes.greeting,
+            pointer = { ai.h.cursor.position },
+            name = ai.name,
+        )
         MuText(ai.name, style = MuType.h1(LocalMuFonts.current), color = c.ink)
         Small(
             "Ask me anything about the game, or have me do it: build a deck, tune the one that is open, sort it into groups, " +
@@ -163,11 +173,10 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun Suggestions(ai: AiState) {
+/** What to ask Ai now: the Greeting's suggestions, and the bar's marquee when it is idle. */
+internal fun ideas(ai: AiState): List<String> {
     val deck = ai.h.builder.deck
-    val ideas = buildList {
+    return buildList {
         if (deck.totalCards > 0) {
             add("Assess this deck")
             add("Sort this deck into groups")
@@ -178,6 +187,12 @@ private fun Suggestions(ai: AiState) {
         if (AiState.PHASE >= 2) add("What is topping in the TCG right now?")
         if (AiState.PHASE >= 2 && ai.h.webs.library.webs.isEmpty()) add("Build a web of the current field")
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Suggestions(ai: AiState) {
+    val ideas = ideas(ai)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ideas.forEach { idea -> Tag(idea, selected = false, onClick = { ai.draft = idea; ai.focusTick++ }, caption = "Ask") }
     }
@@ -199,15 +214,6 @@ private fun ActivityLine(summary: String, isError: Boolean) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
         Mono(if (isError) "✕" else "→", color = if (isError) c.ink else c.ink45)
         MuText(summary, style = MuType.mono(LocalMuFonts.current), color = if (isError) c.ink else c.ink70)
-    }
-}
-
-@Composable
-private fun Working(line: String) {
-    val c = Mu.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Breathe(running = true)
-        Mono(line, color = c.ink70)
     }
 }
 
@@ -381,7 +387,7 @@ private fun ProblemCard(message: String, connection: Boolean, onFix: () -> Unit)
  * answering. The draft is [AiState.draft], so it survives the panel being closed.
  */
 @Composable
-fun Composer(ai: AiState, modifier: Modifier = Modifier) {
+fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     val focus = remember { FocusRequester() }
@@ -396,6 +402,7 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier) {
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        FaceStrip(ai, phone)
         Box(
             Modifier
                 .fillMaxWidth()
@@ -434,6 +441,50 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier) {
                 MuButton("Stop", ai::stop, variant = BtnVariant.SECONDARY, size = BtnSize.SM)
             } else {
                 MuButton("Send", { ai.send(ai.draft) }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.draft.isNotBlank(), reason = "Write something first")
+            }
+        }
+    }
+}
+
+/**
+ * Ai at the chat box (1.0.52, kai: "closer to the chat box like Claude and Grok Bot when
+ * it thinks and displays its status"): its face on the composer's top edge, and beside it
+ * its name and what it is doing — the tool's line while it works, Thinking, Writing,
+ * Waiting on you — or, at rest, the kaomoji of the face it is wearing.
+ */
+@Composable
+private fun FaceStrip(ai: AiState, phone: Boolean) {
+    val c = Mu.colors
+    val face = ai.face
+    val status = when {
+        ai.confirm != null || ai.question != null -> "Waiting on you"
+        ai.running -> ai.working ?: ai.status ?: when {
+            ai.streaming.isNotEmpty() -> "Writing"
+            ai.studying -> "Studying the deck"
+            else -> "Thinking"
+        }
+        ai.problem != null -> "Could not finish"
+        face == com.kaiharimoto.mastertool.core.ai.avatar.Expression.DONE -> "Done"
+        face == com.kaiharimoto.mastertool.core.ai.avatar.Expression.SAD -> "Stopped"
+        face == com.kaiharimoto.mastertool.core.ai.avatar.Expression.SLEEPING -> "Asleep"
+        else -> null
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        com.kaiharimoto.neue.ai.avatar.AiAvatar(
+            face,
+            if (phone) com.kaiharimoto.neue.ai.avatar.AvatarSizes.composerPhone else com.kaiharimoto.neue.ai.avatar.AvatarSizes.composer,
+            pointer = { ai.h.cursor.position },
+            name = ai.name,
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Micro(ai.name, color = c.ink)
+                androidx.compose.animation.Crossfade(face.kaomoji, animationSpec = androidx.compose.animation.core.tween(com.kaiharimoto.neue.theme.MuMotion.FAST), label = "kaomoji") {
+                    Mono(it, color = c.ink45)
+                }
+            }
+            androidx.compose.animation.Crossfade(status, animationSpec = androidx.compose.animation.core.tween(com.kaiharimoto.neue.theme.MuMotion.FAST), label = "status") { line ->
+                if (line != null) MuText(line, style = MuType.small(LocalMuFonts.current), color = c.ink70, maxLines = 1)
             }
         }
     }
