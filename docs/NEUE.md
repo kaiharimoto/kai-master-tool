@@ -1667,6 +1667,16 @@ quantity tag"):
   themselves — dimmed with `OUT`, or framed with `IN` — and a click on a marked copy, or a
   right-click (a held finger) on any, takes it back. `SidingMath` still guards every move.
   The first *n* copies of a card are the marked ones: the deck reads left to right.
+- **The whole deck on screen** (1.0.51, kai: "have the main deck all fit in the screen without
+  needing to scroll… with the remaining space horizontally put the side deck next to the main
+  deck"): on the desk the plans above take what they need, up to half the height, and scroll on
+  their own past it; the deck to side from fills the rest without scrolling, the Side Deck
+  standing beside the Main Deck, filled column by column over the same rows, every card one
+  size — the largest that fits both ways (`BoardFit`, core, tested). A phone keeps one page that
+  scrolls, the sections stacked. **The Extra Deck is a toggle** beside the Main Deck's heading
+  (`NeuePreferences.sidingExtra`, off: siding it is rare), offered only when the Side Deck holds
+  an Extra Deck card to bring in for it; shown, it takes rows under the Main Deck and the board
+  re-fits.
 - **Art | List** in the bar (`NeuePreferences.sidingView`, `"art"` by default): in art the
   turn's Out and In are a picture per copy (`PlanArt`, five to a row, In framed, Out
   dimmed, a copy the deck no longer holds ruled through), and *how they side against you*

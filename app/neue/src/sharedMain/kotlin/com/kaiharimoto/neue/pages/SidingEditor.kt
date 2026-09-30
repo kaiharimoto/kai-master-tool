@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
@@ -231,52 +232,95 @@ internal fun SidingEditor(
             val theirs: @Composable (Modifier) -> Unit = { modifier ->
                 TheirPlan(webs, theirDeck, me, turn, state, neue, web != null, art, modifier) { webs.side(it, me.entry.id) }
             }
-            val body: @Composable (Modifier) -> Unit = { modifier ->
-                val scroll = rememberScrollState()
-                Box(modifier) {
-                    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = if (narrow) 16.dp else 24.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        if (narrow) {
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                opponents.forEach { o ->
-                                    val m = siding.against(o.entry.id, o.entry.name)
-                                    Tag(o.entry.name, selected == o.entry.id, { selected = o.entry.id }, count = marks(m), caption = "Side")
-                                }
-                                loose.forEach { m -> Tag(m.name, selected == "m:${m.id}", { selected = "m:${m.id}" }, count = marks(m), caption = "Side") }
-                                Tag("+ Opponent", false, { creating = true }, caption = "New")
-                            }
+            val showExtra = neue.prefs.sidingExtra
+            val onShowExtra: (Boolean) -> Unit = { v -> neue.update { it.copy(sidingExtra = v) } }
+            // Who, the note and the two turns' plans: above the deck to side from.
+            val plans: @Composable () -> Unit = {
+                if (narrow) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        opponents.forEach { o ->
+                            val m = siding.against(o.entry.id, o.entry.name)
+                            Tag(o.entry.name, selected == o.entry.id, { selected = o.entry.id }, count = marks(m), caption = "Side")
                         }
-                        val own = matchup?.takeIf { opponent == null }
-                        OpponentHeader(
-                            theirDeck,
-                            matchup?.covers.orEmpty(),
-                            name,
-                            state,
-                            neue,
-                            actions = own?.let { m ->
-                                OpponentActions(
-                                    decklist = linked(m)?.entry?.name,
-                                    onEdit = { changing = m },
-                                    onLink = { at -> linkMenu(m, at) },
-                                    onUnlink = { save(siding.put(m.copy(deckId = null))) },
-                                    onRemove = { remove(m) },
-                                )
-                            },
-                        )
-                        PlanNote(matchup?.note.orEmpty(), { note -> edit { it.copy(note = note) } }, "The matchup: how it plays, what matters, what to hold.")
-                        if (narrow) {
-                            com.kaiharimoto.neue.kit.Segmented(turn, Turn.entries, { it.title }, { turn = it })
-                            TurnColumn(turn, plan(turn), true, state, myDeck, art, { setPlan(turn, it) }, {})
-                        } else {
-                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Turn.entries.forEach { t ->
-                                    TurnColumn(t, plan(t), t == turn, state, myDeck, art, { setPlan(t, it) }, { turn = t }, Modifier.weight(1f))
-                                }
-                            }
-                        }
-                        SidingBoard(myDeck, plan(turn), turn, state) { setPlan(turn, it) }
-                        if (!wide) theirs(Modifier.fillMaxWidth())
+                        loose.forEach { m -> Tag(m.name, selected == "m:${m.id}", { selected = "m:${m.id}" }, count = marks(m), caption = "Side") }
+                        Tag("+ Opponent", false, { creating = true }, caption = "New")
                     }
-                    ScrollbarFor(scroll)
+                }
+                val own = matchup?.takeIf { opponent == null }
+                OpponentHeader(
+                    theirDeck,
+                    matchup?.covers.orEmpty(),
+                    name,
+                    state,
+                    neue,
+                    actions = own?.let { m ->
+                        OpponentActions(
+                            decklist = linked(m)?.entry?.name,
+                            onEdit = { changing = m },
+                            onLink = { at -> linkMenu(m, at) },
+                            onUnlink = { save(siding.put(m.copy(deckId = null))) },
+                            onRemove = { remove(m) },
+                        )
+                    },
+                )
+                PlanNote(matchup?.note.orEmpty(), { note -> edit { it.copy(note = note) } }, "The matchup: how it plays, what matters, what to hold.")
+                if (narrow) {
+                    com.kaiharimoto.neue.kit.Segmented(turn, Turn.entries, { it.title }, { turn = it })
+                    TurnColumn(turn, plan(turn), true, state, myDeck, art, { setPlan(turn, it) }, {})
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Turn.entries.forEach { t ->
+                            TurnColumn(t, plan(t), t == turn, state, myDeck, art, { setPlan(t, it) }, { turn = t }, Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+            val body: @Composable (Modifier) -> Unit = { modifier ->
+                if (narrow) {
+                    // A phone: one page that scrolls, the deck's sections stacked under the plans.
+                    val scroll = rememberScrollState()
+                    Box(modifier) {
+                        Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = 16.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            plans()
+                            SidingBoard(myDeck, plan(turn), turn, state, showExtra, onShowExtra) { setPlan(turn, it) }
+                            theirs(Modifier.fillMaxWidth())
+                        }
+                        ScrollbarFor(scroll)
+                    }
+                } else {
+                    // The desk (1.0.51, kai: "have the main deck all fit in the screen without needing to
+                    // scroll"): the plans take what they need, up to half the height, and scroll on their
+                    // own past it; the deck to side from fills the rest, fitted whole, the Side Deck beside it.
+                    BoxWithConstraints(modifier) {
+                        val limit = maxHeight * 0.5f
+                        Column(Modifier.fillMaxSize()) {
+                            val scroll = rememberScrollState()
+                            // The plans' own height, measured, so the board gets every pixel they leave (the
+                            // scrollbar alone would stretch the box to its cap).
+                            val density = androidx.compose.ui.platform.LocalDensity.current
+                            var natural by remember { mutableStateOf(limit) }
+                            Box(Modifier.fillMaxWidth().height(minOf(natural, limit))) {
+                                Column(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(scroll)
+                                        .onSizeChanged { natural = with(density) { it.height.toDp() } }
+                                        .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                ) {
+                                    plans()
+                                    if (!wide) theirs(Modifier.fillMaxWidth())
+                                }
+                                ScrollbarFor(scroll)
+                            }
+                            Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
+                            SidingBoard(
+                                myDeck, plan(turn), turn, state, showExtra, onShowExtra,
+                                Modifier.weight(1f).padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 12.dp),
+                                fit = true,
+                            ) { setPlan(turn, it) }
+                        }
+                    }
                 }
             }
             if (narrow) {

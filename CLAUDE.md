@@ -307,6 +307,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`NeuePreferences.sidingView`) shows the plans as a picture per copy or as counted rows,
   and the PDF guide follows it (`GuideStyle`); a new opponent's name suggests its cards
   (`OpponentGuess`), and a matchup's actions are buttons, not a ⋯ menu.
+  **The deck to side from fits the window** (1.0.51, `BoardFit`): plans above, capped at half
+  the height; below, the Main Deck ten across with the Side Deck beside it, no scrolling; the
+  Extra Deck behind a toggle (`sidingExtra`) offered only when the Side Deck holds Extra Deck cards.
   `NEUE.md` §3, §4j.
 - **Format** (1.0.33, `04`, `NEUE.md` §4i): **webs of decks** — the field expected
   at an event, yours starred. `DeckWeb`/`WebLibrary` (core; the page is Format, the

@@ -147,6 +147,8 @@ fun neueMain(args: Array<String>) {
                 // --matchups=true: the web's Matchups table instead.
                 // --siding-view=art|list: how Siding and its guide show a plan (1.0.49).
                 map["siding-view"]?.let { v -> h.neue.update { it.copy(sidingView = v) } }
+                // --siding-extra=true: the Extra Deck shown to side out from (1.0.51).
+                map["siding-extra"]?.let { v -> h.neue.update { it.copy(sidingExtra = v == "true") } }
                 // --opponent=NAME: Siding opens New opponent with NAME typed, its suggestions under it (1.0.49).
                 map["opponent"]?.let { h.webs.newOpponent = it }
                 map["siding"]?.toIntOrNull()?.let { n ->

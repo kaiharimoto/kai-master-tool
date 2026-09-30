@@ -52,6 +52,7 @@ object AiSettings {
         "slidesAutoplay" to "The Groups column's slides turn by themselves.",
         "autoSaveOn" to "Save the deck by itself a moment after every change.",
         "shotStyle" to "The deck's screenshot: \"picture\" or \"list\".",
+        "sidingExtra" to "Siding shows the Extra Deck to side out from (offered only when the Side Deck holds Extra Deck cards).",
         "sidingView" to "How Siding and its PDF guide show the cards a plan moves: \"art\" (a picture per copy) or \"list\" (names and counts).",
         "autoZen" to "In immersive mode, zen comes by itself after idle seconds.",
         "zenLabels" to "Each group's name is written on its piece in zen.",

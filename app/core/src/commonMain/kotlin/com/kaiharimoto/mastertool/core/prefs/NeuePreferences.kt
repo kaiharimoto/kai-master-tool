@@ -237,6 +237,11 @@ data class NeuePreferences(
      * PDF follows it.
      */
     val sidingView: String = SIDING_ART,
+    /**
+     * Siding shows the Extra Deck to side out from (1.0.51, kai: "it's rare to need to side
+     * extra deck cards"): off by default, and offered only when the Side Deck holds Extra Deck cards.
+     */
+    val sidingExtra: Boolean = false,
     /** The tablet's first-run note has been shown (touch swarm, rec 20): a field with a default, no migration. */
     val touchIntroSeen: Boolean = false,
     /** Lists of cards kept for consideration (1.0.19), in the order they were made. */

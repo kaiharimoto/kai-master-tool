@@ -605,7 +605,7 @@ private fun DrillsTab(prep: Prep, webs: Webs, mine: StoredDeck?, state: DeckBuil
             Mono("${left / 60}:${(left % 60).toString().padStart(2, '0')}", color = if (left == 0) c.ink45 else c.ink, size = 28.sp)
         }
         if (score == null) {
-            SidingBoard(deck, picked, drill.turn, state) { picked = it }
+            SidingBoard(deck, picked, drill.turn, state, neue.prefs.sidingExtra, { v -> neue.update { it.copy(sidingExtra = v) } }) { picked = it }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuButton("Check", {
                     val s = Drill.score(drill.plan.out.map { it.value }, drill.plan.into.map { it.value }, picked.out.map { it.value }, picked.into.map { it.value })
