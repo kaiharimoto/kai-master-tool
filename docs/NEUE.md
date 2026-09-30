@@ -2341,6 +2341,17 @@ let the AI parse it with vision and transcription to learn about the deck").
   (`Icons.Brain`, Lucide's). A right-click or a held finger on `AiBadge` still opens it, and the
   palette's command and the phone's ⋯ menu too.
 
+**1.0.64, the marquee, and Ai's mark wherever it is named.** kai: "just have it as the marquee only,
+its cleaner", and "whenever Ai is mentioned, it's a chance to input the marquee or some form of the
+art for flavor". The marquee is Ai's art, not a line of words.
+- **The bar's button is the live face alone** (`AiBadge`): no box, no name; a wash under the
+  pointer and a rule under it while the panel is open. What Ai is doing is on its face.
+- **`AiMark`** (`AiAvatar.kt`, the file allowed colour): the same art drawn once and still — no
+  frame loop, no eyes on the pointer — so it costs nothing beside every mention. **`AiName`** is
+  the mark before the name: over each of Ai's replies, in the demo, in the panel's head, and at the
+  Assistant section in Settings (28 dp). The live face stays the bar's, the composer's and the
+  greeting's.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:

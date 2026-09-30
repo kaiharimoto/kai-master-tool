@@ -305,8 +305,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     Ai's own choice of five.
   - `neue/ai/avatar/AiAvatar.kt` draws it. It is the third file allowed colour.
   - The face sits on the composer's top edge with its status (`FaceStrip`).
-  - The bar's button is `AiBadge` on every platform (1.0.63): Ai's face and name in a box,
-    no running line; its brain opens from the panel's head.
+  - The bar's button is `AiBadge` on every platform: since 1.0.64 the live face alone, no box,
+    no name, no running line; its brain opens from the panel's head. Wherever Ai is named, its
+    still `AiMark` stands by the name (`AiName`: replies, the panel's head, Settings) — kai: "every
+    mention of Ai is a chance for the art".
   - Only the whole head moves; the net never distorts.
 - **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep** (1.0.40, kai:
   Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by
@@ -543,6 +545,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `remember`), and a question closed unanswered hands it to the message box (`keepUnsent`); the bar's
   Ai is `AiBadge` on every platform (the running `AiMarquee` and `AiBrainButton` are deleted), and the
   brain opens from an icon in the panel's head.
+  **1.0.64**: the bar's Ai is the face alone, and `AiMark` (the art, drawn still) stands by every
+  mention of Ai's name (`AiName`).
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.

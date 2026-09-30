@@ -259,6 +259,8 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
 private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueState) {
     val prefs = neue.prefs.ai
     SectionTitle(3, "Assistant")
+    // Ai's mark by its name, for flavour (1.0.63).
+    if (prefs.enabled) com.kaiharimoto.neue.ai.avatar.AiName(prefs.name, com.kaiharimoto.neue.theme.Mu.colors.ink, mark = 28.dp)
     SettingRow(
         "Assistant",
         if (prefs.enabled) "${prefs.name} is on: in the bar, on ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL).ifEmpty { "its button" }}, beside every page. Off hides every trace of it; what it remembers is kept."

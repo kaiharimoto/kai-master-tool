@@ -210,7 +210,7 @@ private fun NameInHead(ai: AiState) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Micro(ai.name, color = c.ink)
+            com.kaiharimoto.neue.ai.avatar.AiName(ai.name, c.ink)
             if (hovered || com.kaiharimoto.neue.kit.LocalTouchFirst.current) {
                 com.kaiharimoto.neue.kit.MuIcon(Icons.Pencil, c.ink45, Modifier.size(11.dp))
             }

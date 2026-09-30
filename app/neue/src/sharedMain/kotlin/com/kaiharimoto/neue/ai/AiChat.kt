@@ -357,7 +357,7 @@ private fun ReplyView(ai: AiState, text: String, live: Boolean = false) {
     val c = Mu.colors
     val blocks = remember(text, live) { ChatMarkdown.parse(text, streaming = live) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Micro(ai.name, color = c.ink45)
+        com.kaiharimoto.neue.ai.avatar.AiName(ai.name, c.ink45)
         SelectionContainer {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { blocks.forEach { MarkdownBlock(ai, it) } }
         }

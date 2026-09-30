@@ -99,7 +99,7 @@ internal fun AiDemoView(ai: AiState, modifier: Modifier = Modifier) {
                 val text = reply.take(shown)
                 val blocks = remember(text, done) { ChatMarkdown.parse(text, streaming = !done) }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Micro(ai.name, color = c.ink45)
+                    com.kaiharimoto.neue.ai.avatar.AiName(ai.name, c.ink45)
                     blocks.forEach { MarkdownBlock(ai, it) }
                 }
             }

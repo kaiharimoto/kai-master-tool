@@ -17,6 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -54,11 +56,10 @@ fun AiFaceClock(ai: AiState) {
 }
 
 /**
- * The bar's way to Ai (1.0.59 on a phone or a tablet, kai: "the android button for ai should be the
- * Ai marquee and not the sliding text"; 1.0.63 on the desk too): the marquee as it stood in 1.0.52,
- * a box with Ai's live face and its name, and no line running through it — what Ai is doing is on
- * its face. Inverted while the panel is open; a click or tap opens or closes it, and a right-click
- * or a held finger looks into its brain, whose own button is in the panel's head.
+ * The bar's way to Ai: its marquee, the live face alone (1.0.63, kai: "just have it as the marquee
+ * only, its cleaner") — no box, no name, no running line; what Ai is doing is on its face. A rule
+ * under it while the panel is open, a wash under the pointer. A click or tap opens or closes the
+ * panel; a right-click or a held finger looks into its brain, whose own button is in the panel's head.
  */
 @Composable
 fun AiBadge(h: NeueHolders, height: Dp = 40.dp) {
@@ -67,42 +68,27 @@ fun AiBadge(h: NeueHolders, height: Dp = 40.dp) {
     val open = ai.prefs.panelOpen
     val source = remember { MutableInteractionSource() }
     val hot by source.collectIsHotAsState()
-    val face = (height - 8.dp).coerceAtMost(AvatarSizes.bar + 4.dp)
+    val face = (height - 4.dp).coerceAtMost(AvatarSizes.bar + 8.dp)
     Tip(
         when {
             open -> "Close ${ai.name}"
             !ai.configured -> "Set up ${ai.name}: connect it to a model"
-            else -> "${ai.name}: your assistant. Hold to look into what it knows"
+            else -> "${ai.name}: your assistant. Right-click or hold to look into what it knows"
         },
         kbd = DeskShortcuts.chordFor(DeskAction.AI_PANEL)?.let(DeskShortcuts::kbd),
     ) {
         Box(
             Modifier
-                .height(height)
-                .border(1.dp, c.ink)
+                .size(height)
+                .background(animatedColor(if (hot) c.ink06 else Color.Transparent))
+                .drawBehind { if (open) drawLine(c.ink, Offset(0f, size.height - 1.dp.toPx()), Offset(size.width, size.height - 1.dp.toPx()), 1.dp.toPx()) }
                 .hoverable(source)
                 .cursorPointer(caption = if (open) "Close" else "Open")
                 .onContextMenu { ai.memoryOpen = if (ai.memoryOpen != null) null else "USER.md" }
                 .muClickable(interactionSource = source) { ai.toggle() },
+            contentAlignment = Alignment.Center,
         ) {
-            Inverted(open) {
-                val s = Mu.colors
-                Row(
-                    Modifier.fillMaxHeight().background(animatedColor(if (open) s.paper else if (hot) s.ink06 else Color.Transparent)).padding(start = 4.dp, end = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Box(Modifier.size(face), contentAlignment = Alignment.Center) {
-                        AiAvatar(ai.face, face, name = ai.name)
-                    }
-                    MuText(
-                        ai.name,
-                        style = MuType.row(LocalMuFonts.current).copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
-                        color = s.ink,
-                        maxLines = 1,
-                    )
-                }
-            }
+            AiAvatar(ai.face, face, pointer = { h.cursor.position }, name = ai.name)
         }
     }
 }

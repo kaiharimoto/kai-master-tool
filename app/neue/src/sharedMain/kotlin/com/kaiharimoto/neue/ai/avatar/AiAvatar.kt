@@ -105,6 +105,32 @@ fun AiAvatar(
     }
 }
 
+/**
+ * Ai's mark (1.0.63, kai: "whenever Ai is mentioned, it's a chance to input the marquee or some form
+ * of the art for flavor"): the same art, drawn once and still — no frame loop, no eyes following the
+ * pointer — so it can stand beside every place Ai is named, a reply's label or a section's title,
+ * for nothing. The live face is the bar's, the composer's and the greeting's.
+ */
+@Composable
+fun AiMark(size: Dp, modifier: Modifier = Modifier, expression: Expression = Expression.IDLE, name: String = "Ai") {
+    val glyph = size.value < AvatarRig.GLYPH_BELOW_DP
+    val frame = remember(glyph, expression) { AvatarRig(glyph = glyph, seed = 7).apply { show(expression) }.step(0.4f) }
+    Canvas(modifier.size(size).semantics { contentDescription = name }) { drawAvatar(frame, glyph) }
+}
+
+/** Ai's name as a label, its mark before it: where a reply begins, in the panel's head. */
+@Composable
+fun AiName(name: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier, mark: Dp = 14.dp) {
+    androidx.compose.foundation.layout.Row(
+        modifier,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(5.dp),
+    ) {
+        AiMark(mark, name = name)
+        com.kaiharimoto.neue.kit.Micro(name, color = color)
+    }
+}
+
 // ---- the palette: the reference's own colours, flat ------------------------------------
 
 private val BODY = Color(0xFF362E42)
