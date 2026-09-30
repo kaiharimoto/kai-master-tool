@@ -148,6 +148,22 @@ private val LABEL_GUTTER = 104.dp
  */
 private val BOTTOM_SAFE = 28.dp
 private val GRID_PAD = 6.dp
+
+/**
+ * Breathing room each side of the rule between two sections (1.0.41, kai: "the extra
+ * deck and side deck are too close to each other and the main deck"), over the grid's
+ * own [GRID_PAD]: on the desk the rows of two sections stand 33 dp apart, not 13.
+ */
+private fun air(phone: Boolean) = if (phone) 5.dp else 10.dp
+
+/** Paper over a section's grid: its pad, and air when a section stands above it. */
+private fun padTop(section: DeckSection, phone: Boolean) = GRID_PAD + if (section == DeckSection.MAIN) 0.dp else air(phone)
+
+/** Paper under a section's grid, down to its rule. */
+private fun padBottom(phone: Boolean) = GRID_PAD + air(phone)
+
+/** All the height a section spends on other than its cards: its paper and its rule. */
+private fun chromeOf(section: DeckSection, phone: Boolean) = padTop(section, phone) + padBottom(phone) + RULE
 private val SIDE_PAD = 16.dp
 private val RULE = 1.dp
 
@@ -401,7 +417,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         // The pane less what is drawn over and between the sections whatever the cards: each
         // section's padding and rule, the other sections' names, the name tabs over the top
         // band — or a tall deck is chosen for room it will not have (1.0.38).
-        val chrome = (GRID_PAD * 2 + RULE) * sections.size + nameTab
+        val chrome = sections.fold(0.dp) { sum, s -> sum + chromeOf(s, neue.phone) } + nameTab
         val liveBands = with(density) { mainBands(state, neue, phoneCols, (maxWidth - sidePad * 2).toPx(), (deckHeight - chrome).toPx(), bandGapX, bandGapY) }
         val keptBands = remember { arrayOfNulls<BandLayout>(1) }
         val bands = liveBands ?: keptBands[0]?.takeIf { !lensOn && crack > 0.01f && it.row.size == state.deck[DeckSection.MAIN].size }
@@ -460,7 +476,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                     columns = cols(section),
                     baselineCount = cells ?: if (section == DeckSection.MAIN) section.minSize else section.maxSize,
                     spacing = 0f,
-                    chromeHeight = (GRID_PAD * 2 + RULE).toPx(),
+                    chromeHeight = chromeOf(section, neue.phone).toPx(),
                     extraWidth = fitted.spanX * gapX(section) * crack,
                     extraHeight = fitted.spanY * gapY(section) * crack + (if (fitted.pieces > 1) nameTab.toPx() * crack else 0f),
                 )
@@ -600,7 +616,7 @@ internal fun naturalDeckHeight(state: DeckBuilderState, neue: NeueState, width: 
                     columns = banded?.columns ?: columnsOf(section),
                     baselineCount = banded?.let { it.columns * it.rows } ?: if (section == DeckSection.MAIN) section.minSize else section.maxSize,
                     spacing = 0f,
-                    chromeHeight = (GRID_PAD * 2 + RULE).toPx(),
+                    chromeHeight = chromeOf(section, neue.phone).toPx(),
                     extraWidth = (pieces?.spanX ?: 0) * gapX,
                     extraHeight = (pieces?.spanY ?: 0) * gapY + (if ((pieces?.pieces ?: 0) > 1) nameTab.toPx() else 0f),
                 )
@@ -922,7 +938,7 @@ private fun DeckSectionPane(
             }
         }
 
-        Box(Modifier.fillMaxWidth().padding(vertical = GRID_PAD), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.fillMaxWidth().padding(top = padTop(section, neue.phone), bottom = padBottom(neue.phone)), contentAlignment = Alignment.TopCenter) {
             Box(
                 Modifier
                     .size(contentWidth, gridHeight)
@@ -1009,7 +1025,7 @@ private fun DeckSectionPane(
                         val frame = FRAME.toPx()
                         val labels = Labels(measurer, tabStyle, nameTab.toPx()) { id -> roleKeying.keyById(id)?.label.orEmpty() }
                         val gapNow = zenGapPx * zen.pieceAmount
-                        val between = (GRID_PAD * 2 + RULE).toPx()
+                        val between = (padBottom(neue.phone) + RULE + padTop(section, neue.phone)).toPx()
                         val least = nameTab.toPx() * 0.55f
                         roleKeys.filterNotNull().distinct().forEach { id ->
                             val key = roleKeying.keyById(id) ?: return@forEach

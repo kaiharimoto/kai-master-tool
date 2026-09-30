@@ -1448,6 +1448,10 @@ indicator be more intuitive"; and the bar was cutting off the deck's name.
   its count on its row.
 - **Paper under the deck** (`BOTTOM_SAFE`, 28 dp, not on a phone): the deck is fitted
   to what is left, so the last section never meets the window's edge.
+- **Air between the sections** (kai: "the extra deck and side deck are too close to
+  each other and the main deck, they need a bit of breathing room"): 10 dp each side of
+  the rule between two sections over the grid's own 6 (`air`, 5 on a phone), so their
+  rows stand 33 dp apart, not 13; the fitter is told (`chromeOf`).
 - **The wheel's notch is 5 %** (`DeckZoom.PER_NOTCH` 0.05, from 0.12): about nineteen
   notches from the full size to the smallest.
 - **A selected card stands up out of the page**: 5 % larger than its neighbours
