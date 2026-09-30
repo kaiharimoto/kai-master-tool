@@ -143,24 +143,28 @@ private fun sessionsWords(n: Int) = when (n) {
     else -> "$n sessions so far"
 }
 
+private const val MIRROR = "Mirror match"
+
 /** The three scores side by side: a number, ten cells of meter, and how it moved since last time. */
 @Composable
 internal fun ScoresRow(r: SessionReport, log: List<SessionReport>) {
     val c = Mu.colors
     val f = LocalMuFonts.current
-    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+    // A phone's column is a third of 360 dp: the short words, or "Understanding" is cut.
+    val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+    Row(horizontalArrangement = Arrangement.spacedBy(if (phone) 14.dp else 20.dp)) {
         listOf(
-            Triple("Understanding", r.understanding, "What the deck is for, and how its cards fit") to ReportLog.change(log, r) { it.understanding },
-            Triple("Playing it", r.playing, "Piloting it, turn by turn") to ReportLog.change(log, r) { it.playing },
-            Triple("Mirror match", r.mirror, "Best-of-three wins it expects against the same deck") to ReportLog.change(log, r) { it.mirror },
+            Triple(if (phone) "Knows it" else "Understanding", r.understanding, "What the deck is for, and how its cards fit") to ReportLog.change(log, r) { it.understanding },
+            Triple(if (phone) "Plays it" else "Playing it", r.playing, "Piloting it, turn by turn") to ReportLog.change(log, r) { it.playing },
+            Triple(MIRROR, r.mirror, "Best-of-three wins it expects against the same deck") to ReportLog.change(log, r) { it.mirror },
         ).forEach { (t, delta) ->
             val (label, value, caption) = t
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.fillMaxWidth().height(2.dp).background(c.ink))
                 Micro(label, color = c.ink70)
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    MuText(if (label == "Mirror match") "$value%" else value.toString(), style = MuType.mono(f, 34.sp), color = c.ink)
-                    if (label != "Mirror match") Mono("/100", Modifier.padding(bottom = 6.dp), color = c.ink45)
+                    MuText(if (label == MIRROR) "$value%" else value.toString(), style = MuType.mono(f, 34.sp), color = c.ink)
+                    if (label != MIRROR) Mono("/100", Modifier.padding(bottom = 6.dp), color = c.ink45)
                     Box(Modifier.weight(1f))
                     delta?.let { Mono(if (it == 0) "±0" else if (it > 0) "+$it" else "−${-it}", Modifier.padding(bottom = 6.dp), color = if (it < 0) c.ink45 else c.ink) }
                 }
