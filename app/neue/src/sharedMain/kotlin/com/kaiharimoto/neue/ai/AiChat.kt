@@ -149,7 +149,7 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
         MuText(ai.name, style = MuType.h1(LocalMuFonts.current), color = c.ink)
         Small(
             "Ask me anything about the game, or have me do it: build a deck, tune the one that is open, sort it into groups, " +
-                "write a siding plan, change a setting. I remember what you tell me.",
+                "write a siding plan, read the latest tournament results, change a setting. I remember what you tell me.",
             color = c.ink70,
         )
         Suggestions(ai)
@@ -168,6 +168,8 @@ private fun Suggestions(ai: AiState) {
         add("Build me a deck")
         if (deck.totalCards > 0) add("Which cards here are limited?") else add("Explain going first versus second")
         if (ai.h.webs.library.webs.isNotEmpty()) add("Write siding plans for my web")
+        if (AiState.PHASE >= 2) add("What is topping in the TCG right now?")
+        if (AiState.PHASE >= 2 && ai.h.webs.library.webs.isEmpty()) add("Build a web of the current field")
     }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ideas.forEach { idea -> Tag(idea, selected = false, onClick = { ai.draft = idea; ai.focusTick++ }, caption = "Ask") }

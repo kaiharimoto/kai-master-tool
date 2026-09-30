@@ -92,7 +92,8 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   window; the cards are yours to arrange.
 - **Ai, an assistant that acts.** A panel beside every page (`Ctrl I`): chat about
   the game, or have it build a deck, tune and group the one that is open, write
-  siding plans, change any setting. It remembers you in markdown files you can
+  siding plans, change any setting — or read the latest tournament results on
+  YGOPRODeck and build a web of the field by itself. It remembers you in markdown files you can
   read, and connects to your Claude or ChatGPT plan through their command-line
   apps, to an API key (Anthropic, OpenAI, Gemini, OpenRouter), or to a model on
   your own machine — a wizard walks you through each. Settings can turn it off

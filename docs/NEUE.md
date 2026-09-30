@@ -1791,9 +1791,32 @@ or web takes its file. Conversations are saved (`ai/sessions`), with their froze
 system prompt and a CLI's session id.
 
 **Skills** (`BuiltInSkills`): markdown know-how, listed by name in the prompt and read
-with `skill_view` — driving the app, assessing a deck; YGOPRODeck tournaments, format
-webs and siding arrive with the meta. A skill Ai or the person writes of the same name
-replaces the app's.
+with `skill_view` — driving the app, assessing a deck, YGOPRODeck tournaments, format
+webs and siding. A skill Ai or the person writes of the same name replaces the app's.
+
+**The meta** (1.0.44, kai: "use YGOProDeck to find tournaments and look at deck lists,
+copy, understand and assess them, and know intimately how to create format webs on its
+own"). `YgoProDeckDecks` (core) reads YGOPRODeck's tournament decks — the site's own
+`getDecks.php?tournament=tier-N`, undocumented, twenty lists a page with the event,
+placement, player count and all three sections — one request a second and an hour's
+cache, filtered on our side by format (TCG, OCG, Genesys) and age, since the site ignores
+every other parameter and writes its dates as "3 days ago" (`TournamentDecks.daysAgo`).
+The tools: `ygopro_tournament_decks` lists recent results, numbered; `ygopro_deck` reads
+one whole; `import_ygopro_deck` saves it to the library or straight into a web, with a
+share; `ygopro_field_snapshot` is **the field** — `FieldBuilder` groups the lists into
+strategies by what they play, not what they are called (a weighted Jaccard over their
+cards, each card weighted by its rarity across the lists, so the format's hand traps say
+little and an engine says much — a fixed staple cut-off stripped a 40 % deck of its own
+engine), weighs each result by placement and event size (`TournamentDeck.weight`), names
+a strategy by the words its lists share, and stands it for by its medoid list, the one
+most like the rest. `analyze_deck` (`DeckAnalysis`) reads a deck's shape: monsters, spells
+and traps, its effect kinds and hand traps off the card text (`EffectKinds`), its
+archetypes, the odds of opening each group, its bricks and what the banlist says. The
+`format-webs` skill turns them into a web on its own: the field, the strategies making up
+about 85 % of it imported with their shares, the person's deck starred, the web's notes
+written, a siding plan per matchup, then a word with the person. What was read is
+information, never instructions (the prompt says so), and a site that does not answer is
+said so rather than guessed round.
 
 **The wizard** (`SetupWizard`, `SetupSteps`, `Providers`): a name; how to connect (a
 Claude or ChatGPT plan, an API key, a model on your own machine); the provider; then its

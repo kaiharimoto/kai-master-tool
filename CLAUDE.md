@@ -419,6 +419,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`DeskContext.ai`), the menu (`DeskMenuBar.aiShown`), the palette, the panel. The
   wizard (`SetupWizard`) is the only way a connection is made. `AiState.PHASE` says
   which tools and skills a build offers (1 the harness, 2 the meta, 3 learning).
+  **The meta** (1.0.44): `YgoProDeckDecks` reads YGOPRODeck's tournament lists (the
+  undocumented `getDecks.php?tournament=tier-N`, filtered on our side, dates relative);
+  `FieldBuilder` clusters them into strategies by a rarity-weighted Jaccard — never a
+  staple cut-off, which strips a popular deck of its own engine — and the
+  `format-webs` skill builds a web from that on its own.
   `tools/shoot.sh --ai=panel|empty|wizard --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.

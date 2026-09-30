@@ -298,9 +298,9 @@ class AiState(internal val h: NeueHolders) {
                     else -> "desktop"
                 },
                 viaMcp = wire == Wire.CLAUDE_CLI || wire == Wire.CODEX_CLI,
-                missing = when {
-                    PHASE < 2 -> listOf("reading tournament results from YGOPRODeck", "building a web of decks from the meta by itself")
-                    else -> emptyList()
+                missing = buildList {
+                    if (PHASE < 2) addAll(listOf("reading tournament results from YGOPRODeck", "building a web of decks from the meta by itself"))
+                    if (PHASE < 3) add("Fine Tuning, the interview about how the person prepares")
                 },
             ),
         )
@@ -451,6 +451,6 @@ class AiState(internal val h: NeueHolders) {
 
     companion object {
         /** The phase this build ships: 1, the harness; 2, the meta; 3, learning. */
-        const val PHASE = 1
+        const val PHASE = 2
     }
 }
