@@ -229,18 +229,25 @@ private fun NeueCardFace(
     // The phone's tilt (v1.3.6): the light on a card no finger is over follows the hand.
     // Read in the draw below, so a turn redraws the foil and recomposes nothing.
     val tilt = com.kaiharimoto.neue.kit.LocalTilt.current
+    // The selected card stands up out of the page (1.0.41, kai: "it's a bit hard to tell
+    // which card is being selected"): a little larger than its neighbours, and framed.
+    val raise by androidx.compose.animation.core.animateFloatAsState(
+        if (selected) SELECT_RAISE else 0f,
+        tween(MuMotion.BASE, easing = MuMotion.ease),
+        label = "raise",
+    )
 
     Box(
         modifier
             .let { base ->
-                if (motion == null) base else base.graphicsLayer {
-                    val pose = motion()
+                if (motion == null && !selected && raise == 0f) base else base.graphicsLayer {
+                    val pose = motion?.invoke() ?: LeanPose.REST
                     // Compose turns a positive rotationY right-edge-away; the pose
                     // is written the other way round, nearest edge up.
                     rotationX = pose.rotationX
                     rotationY = -pose.rotationY
-                    scaleX = 1f + pose.lift
-                    scaleY = 1f + pose.lift
+                    scaleX = 1f + pose.lift + raise
+                    scaleY = 1f + pose.lift + raise
                     // Zen's float: a drift in card widths, and a turn in the card's own plane.
                     translationX = pose.dx * size.width
                     translationY = pose.dy * size.width
@@ -257,6 +264,19 @@ private fun NeueCardFace(
                 if (grown != reach) reach = grown
                 // Drawn wider than the small render: ask for the original now, not in its turn.
                 if (px.width > SMALL_WIDTH && hd == null) library?.want(card)
+            }
+            // The selection's frame, outside the card's edge and over its neighbours (the deck
+            // draws a selected card above them): a paper hairline, then a band of ink, so it
+            // reads against any artwork and any neighbour. Drawn before the clip, in the lift.
+            .drawWithContent {
+                drawContent()
+                if (selected) {
+                    val gap = 1.5.dp.toPx()
+                    val band = 3.dp.toPx()
+                    drawRect(c.paper, topLeft = Offset(-gap / 2, -gap / 2), size = Size(size.width + gap, size.height + gap), style = Stroke(gap))
+                    val out = gap + band / 2
+                    drawRect(c.ink, topLeft = Offset(-out, -out), size = Size(size.width + 2 * out, size.height + 2 * out), style = Stroke(band))
+                }
             }
             .alpha(if (dimmed) 0.35f else 1f)
             .background(c.ink06)
@@ -422,24 +442,8 @@ private fun NeueCardFace(
         Box(
             Modifier.fillMaxSize().drawWithContent {
                 when {
-                    selected -> {
-                        val outer = 2.dp.toPx()
-                        val inset = 2.dp.toPx()
-                        drawRect(
-                            c.ink,
-                            topLeft = Offset(inset + outer / 2, inset + outer / 2),
-                            size = Size(size.width - 2 * inset - outer, size.height - 2 * inset - outer),
-                            style = Stroke(outer),
-                        )
-                        val inner = 1.dp.toPx()
-                        val k = inset + outer + inner / 2
-                        drawRect(
-                            c.paper,
-                            topLeft = Offset(k, k),
-                            size = Size(size.width - 2 * k, size.height - 2 * k),
-                            style = Stroke(inner),
-                        )
-                    }
+                    // A selected card is framed outside its edge, above the card (1.0.41).
+                    selected -> Unit
                     hovered || outlined -> {
                         val w = 1.dp.toPx()
                         drawRect(c.ink, topLeft = Offset(w / 2, w / 2), size = Size(size.width - w, size.height - w), style = Stroke(w))
@@ -481,3 +485,6 @@ fun MarkerChip(marker: Marker, modifier: Modifier = Modifier) {
 }
 
 private fun Color.luminanceApprox(): Float = 0.2126f * red + 0.7152f * green + 0.0722f * blue
+
+/** How much larger a selected card stands than its neighbours: the hover's lift, and a little more. */
+private const val SELECT_RAISE = 0.05f

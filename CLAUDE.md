@@ -191,9 +191,13 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `docs/master-ui/CURSOR.md` is the spec; `NEUE.md` §2d.
 - **Every pixel of chrome is a pixel off every card.** One 48px bar for the
   window and the builder together (search is on the rail), one row over the
-  main deck (the boxed Groups button, the name, the lens), and the extra and
-  side decks' names wherever the deck has room to spare — `DeckLabels` fits it
-  both ways and keeps the larger card. The Groups panel stands beside the deck.
+  main deck (the boxed Groups button, the name, the lens), and **no names or counts
+  on the extra and side decks** (1.0.41, kai: players know them on sight, and both
+  hold fifteen) — their room is the cards', and 28 dp of paper stays under the last
+  section. On the builder the bar drops the wordmark, a legal deck is a ✓ (its words in
+  the tip; issues and notes counted) and Import, Export and Screenshot are icons, so the
+  deck's name has room. A selected card stands up out of the page, framed outside its
+  edge in paper and ink, above its neighbours. The wheel's notch is 5 %. The Groups panel stands beside the deck.
   `NEUE.md` §3 has the budget. The ramp is darker than the kit's in both
   themes, with a High contrast setting.
 - **Groups break the deck into pieces** (`GroupPieces`, 1.0.15): cards of one

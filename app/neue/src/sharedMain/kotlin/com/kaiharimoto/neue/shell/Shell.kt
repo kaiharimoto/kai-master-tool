@@ -111,8 +111,9 @@ fun TitleBar(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Mark(20.dp, ink = c.ink, paper = c.paper)
-                // The wordmark gives way before anything that does something.
-                if (!narrow) MuText("NEUE MASTER TOOL", style = MuType.wordmark(LocalMuFonts.current))
+                // The wordmark gives way before anything that does something — and on the
+                // builder, whose title is the deck's name, before that (1.0.41).
+                if (!narrow && neue.page != Page.BUILDER) MuText("NEUE MASTER TOOL", style = MuType.wordmark(LocalMuFonts.current))
             }
             // Where you are, because the rail that says so is folded away.
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

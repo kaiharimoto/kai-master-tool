@@ -256,7 +256,7 @@ fun RowScope.BuilderBar(
     // A deck of a web (1.0.33): the web, where the deck stands in it, and ‹ › through it.
     webs?.webOf(state.deckId)?.let { web -> WebSwitch(web, webs, state, neue, onStepWeb, onOpenDeck) }
     DeckNameField(state, Modifier.weight(1f, fill = false).widthIn(min = 140.dp, max = 560.dp))
-    Standing(state, neue)
+    Standing(state, neue, compact = true)
     Box(Modifier.weight(1f))
     Tip("Undo", kbd = kbd(DeskAction.UNDO)) { IconButton(Icons.Undo, state::undo, enabled = state.canUndo, size = 32.dp, label = "Undo", reason = "Nothing to undo") }
     Tip("Redo", kbd = kbd(DeskAction.REDO)) { IconButton(Icons.Redo, state::redo, enabled = state.canRedo, size = 32.dp, label = "Redo", reason = "Nothing to redo") }
@@ -289,15 +289,17 @@ fun RowScope.BuilderBar(
                 neue.menu = com.kaiharimoto.neue.kit.MenuSpec(importAt, CardActions.importMenu(state, neue))
             }
         } else {
-            Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), !narrow, state::importFromFile)
+            Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), false, state::importFromFile)
         }
     }
     Box(Modifier.onGloballyPositioned { neue.exportAnchor = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
-        Tool("Export", "Export: a .ydk or .ydkx file, a YDKe code or a text list to paste, or a QR code to scan", Icons.Export, kbd(DeskAction.EXPORT), touch || !narrow) {
+        Tool("Export", "Export: a .ydk or .ydkx file, a YDKe code or a text list to paste, or a QR code to scan", Icons.Export, kbd(DeskAction.EXPORT), touch) {
             neue.menu = com.kaiharimoto.neue.kit.MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
         }
     }
-    if (!touch) Tool("Screenshot", "A picture of the deck, without the window around it", Icons.Camera, kbd(DeskAction.SCREENSHOT), !narrow, onScreenshot)
+    // On the desk the tools are their icons, named by their tips (1.0.41, kai: the deck's name
+    // was being cut off — "buttons can also be truncated to symbol buttons").
+    if (!touch) Tool("Screenshot", "A picture of the deck, without the window around it", Icons.Camera, kbd(DeskAction.SCREENSHOT), false, onScreenshot)
     // The pool's and the inspector's switches moved into the panes themselves (1.0.19).
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     // Auto save (kai, 1.0.18): beside Save, and while it is on the deck is written a moment after each change.
@@ -366,22 +368,34 @@ private fun Tool(label: String, tip: String, icon: androidx.compose.ui.graphics.
     }
 }
 
-/** Whether the deck may be played, in a word, and the way to the reasons when it may not. */
+/**
+ * Whether the deck may be played, and the way to the reasons when it may not. [compact]
+ * is the desk's bar (1.0.41, kai: "Legal in TCG seems like it's taking more space than
+ * it is useful"): a legal deck is a ✓ with its words in the tip — the format is beside
+ * it — and issues and notes are counted; the phone, with a line to itself, keeps words.
+ */
 @Composable
-internal fun Standing(state: DeckBuilderState, neue: NeueState) {
+internal fun Standing(state: DeckBuilderState, neue: NeueState, compact: Boolean = false) {
     val c = Mu.colors
     val validation = state.validation
+    val issues = validation.errors.size
+    val notes = validation.warnings.size
     when {
-        validation.errors.isNotEmpty() -> MicroLink(
-            "✕ ${validation.errors.size} ${if (validation.errors.size == 1) "issue" else "issues"} →",
-            { neue.drawer = Drawer.ISSUES },
-            color = c.ink,
-        )
-        validation.warnings.isNotEmpty() -> MicroLink(
-            "Legal · ${validation.warnings.size} ${if (validation.warnings.size == 1) "note" else "notes"} →",
-            { neue.drawer = Drawer.ISSUES },
-            color = c.ink70,
-        )
+        issues > 0 -> Tip("${if (issues == 1) "An issue" else "$issues issues"} stop this deck being played in ${state.format.name}. Click to read them") {
+            MicroLink(
+                if (compact) "✕ $issues" else "✕ $issues ${if (issues == 1) "issue" else "issues"} →",
+                { neue.drawer = Drawer.ISSUES },
+                color = c.ink,
+            )
+        }
+        notes > 0 -> Tip("Legal in ${state.format.name}, with ${if (notes == 1) "a note" else "$notes notes"}. Click to read") {
+            MicroLink(
+                if (compact) "✓ $notes" else "Legal · $notes ${if (notes == 1) "note" else "notes"} →",
+                { neue.drawer = Drawer.ISSUES },
+                color = c.ink70,
+            )
+        }
+        compact -> Tip("Legal in ${state.format.name}") { Micro("✓", color = c.ink70) }
         else -> Micro("Legal in ${state.format.name}", color = c.ink70)
     }
 }

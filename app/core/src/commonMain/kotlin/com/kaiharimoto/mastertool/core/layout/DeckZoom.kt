@@ -15,8 +15,8 @@ import kotlin.math.exp
  * and more fluid/smooth feeling". Two changes:
  *
  * - **A notch is a ratio, not a step** ([wheel]): each one scales the share by
- *   `e^(−0.12)`, about 11 %, so the whole range is eight notches and every notch
- *   looks the same size whatever size the deck is. The delta is taken as it
+ *   `e^(−0.05)`, about 5 % (1.0.41, kai: "more fine grained"; 11 % before), so every
+ *   notch looks the same size whatever size the deck is. The delta is taken as it
  *   comes, so a touchpad's fractions move the deck in proportion, and a burst is
  *   capped at [MAX_NOTCHES] so a flung wheel cannot throw it end to end.
  * - **The drawn deck glides** ([approach]): the share the wheel sets is the
@@ -31,8 +31,8 @@ object DeckZoom {
     /** The smallest share: the preference's floor. */
     const val MIN = NeuePreferences.MIN_ZOOM
 
-    /** How much one notch scales the share, as a natural log: `e^(−0.12)` ≈ 0.887. */
-    const val PER_NOTCH = 0.12f
+    /** How much one notch scales the share, as a natural log: `e^(−0.05)` ≈ 0.951. */
+    const val PER_NOTCH = 0.05f
 
     /** The most one scroll event may move, in notches: a flung wheel reports ten at once. */
     const val MAX_NOTCHES = 3f

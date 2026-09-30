@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import com.kaiharimoto.mastertool.core.layout.DeckLabels
 import com.kaiharimoto.mastertool.core.layout.DeckFitter
-import com.kaiharimoto.mastertool.core.layout.LabelPlace
 import com.kaiharimoto.mastertool.core.motion.ZenArrangement
 import com.kaiharimoto.mastertool.core.motion.ZenHome
 import com.kaiharimoto.mastertool.core.motion.ZenMembership
@@ -141,6 +140,13 @@ private fun nameTab(): Dp = with(LocalDensity.current) { maxOf(17.dp, 10.sp.toDp
 private val LENS_ROW = 40.dp
 private val LABEL_ROW = 24.dp
 private val LABEL_GUTTER = 104.dp
+
+/**
+ * Paper kept under the last section (1.0.41, kai: "a bit of a safety zone so the side
+ * deck doesn't get too close to the bottom edge for visual focus"). Not on a phone,
+ * whose deck ends at the pool's dock.
+ */
+private val BOTTOM_SAFE = 28.dp
 private val GRID_PAD = 6.dp
 private val SIDE_PAD = 16.dp
 private val RULE = 1.dp
@@ -380,7 +386,8 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         SideEffect { neue.phoneColumns = phoneCols }
         // The lens row stands still over the deck whatever the wheel does (kai, 1.0.18):
         // it is laid out once at the top, and the deck is fitted to what is below it.
-        val deckHeight = maxHeight - LENS_ROW
+        val bottomSafe = if (neue.phone) 0.dp else BOTTOM_SAFE
+        val deckHeight = maxHeight - LENS_ROW - bottomSafe
         // The main deck in bands of group blocks (1.0.37, `GroupBands`) while the groups are out
         // Fitted or Separate. As the groups close the last bands are kept, so the cards go back
         // into their reading order on the bands' width before the deck is plain again.
@@ -394,7 +401,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         // The pane less what is drawn over and between the sections whatever the cards: each
         // section's padding and rule, the other sections' names, the name tabs over the top
         // band — or a tall deck is chosen for room it will not have (1.0.38).
-        val chrome = (GRID_PAD * 2 + RULE) * sections.size + LABEL_ROW * (sections.size - 1) + nameTab
+        val chrome = (GRID_PAD * 2 + RULE) * sections.size + nameTab
         val liveBands = with(density) { mainBands(state, neue, phoneCols, (maxWidth - sidePad * 2).toPx(), (deckHeight - chrome).toPx(), bandGapX, bandGapY) }
         val keptBands = remember { arrayOfNulls<BandLayout>(1) }
         val bands = liveBands ?: keptBands[0]?.takeIf { !lensOn && crack > 0.01f && it.row.size == state.deck[DeckSection.MAIN].size }
@@ -458,7 +465,9 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                     extraHeight = fitted.spanY * gapY(section) * crack + (if (fitted.pieces > 1) nameTab.toPx() * crack else 0f),
                 )
             }
-            val labelled = sections.map { it != DeckSection.MAIN }
+            // The extra and side decks carry no names or counts (1.0.41, kai: "players know
+            // intuitively that the extra deck and side deck are what they are"): their room is the cards'.
+            val labelled = sections.map { false }
             if (phoneCols != null) {
                 DeckLabels.stack(
                     availableWidth = (maxWidth - sidePad * 2).toPx() * z,
@@ -509,7 +518,7 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
         val mainOut = mainIds.size > DeckSection.MAIN.maxSize || mainIds.size < DeckSection.MAIN.minSize
         LensRow(state, neue, "${mainIds.size} · ${DeckSection.MAIN.minSize}–${DeckSection.MAIN.maxSize}", mainOut, mainRefused, inset = rowInset)
         Column(
-            Modifier.padding(top = LENS_ROW).fillMaxSize().let { if (!fit.fits) it.verticalScroll(rememberScrollState()) else it },
+            Modifier.padding(top = LENS_ROW, bottom = bottomSafe).fillMaxSize().let { if (!fit.fits) it.verticalScroll(rememberScrollState()) else it },
             // Immersive: past the page's fixed strip at the top (IMMERSIVE_TOP), whatever
             // height the deck does not need is shared above and below it, so the deck sits
             // in the middle of the screen (kai, 1.0.12: all of it above was too much).
@@ -526,7 +535,6 @@ private fun DeckBody(state: DeckBuilderState, neue: NeueState, drag: NeueDrag, m
                     fit = fit.sections[i],
                     contentWidth = contentWidth,
                     gridLeft = gridLeft,
-                    labels = placed.place,
                     pieces = pieces[i],
                     gapPx = gapX(section),
                     gapYPx = gapY(section),
@@ -597,7 +605,7 @@ internal fun naturalDeckHeight(state: DeckBuilderState, neue: NeueState, width: 
                     extraHeight = (pieces?.spanY ?: 0) * gapY + (if ((pieces?.pieces ?: 0) > 1) nameTab.toPx() else 0f),
                 )
             },
-            labelled = sections.map { it != DeckSection.MAIN },
+            labelled = sections.map { false },
         )
         placed.fit.totalHeight.toDp() + LENS_ROW + 2.dp
     }
@@ -795,29 +803,6 @@ private fun BoxToggle(label: String, on: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** A section's name and count, for the extra and side decks, wherever `DeckLabels` put it. */
-@Composable
-private fun SectionLabel(section: DeckSection, count: String, outOfRange: Boolean, refused: Boolean, modifier: Modifier, stacked: Boolean, aimed: Boolean = false) {
-    val c = Mu.colors
-    val parts: @Composable () -> Unit = {
-        // The side deck's name inverted while the pool adds to it (touch swarm, rec 17).
-        if (aimed) {
-            com.kaiharimoto.neue.theme.Inverted {
-                Micro("${section.displayName} deck", Modifier.background(Mu.colors.paper).padding(horizontal = 4.dp), color = Mu.colors.ink)
-            }
-        } else {
-            Micro("${section.displayName} deck", color = c.ink70)
-        }
-        Mono(if (outOfRange) "✕ $count" else count, color = if (outOfRange) c.ink else c.ink70)
-        if (refused) Micro("✕ Not allowed", color = c.ink)
-    }
-    if (stacked) {
-        Column(modifier.zenQuiet(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) { parts() }
-    } else {
-        Row(modifier.zenQuiet(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { parts() }
-    }
-}
-
 @Composable
 private fun DeckSectionPane(
     state: DeckBuilderState,
@@ -827,7 +812,6 @@ private fun DeckSectionPane(
     fit: SectionFit,
     contentWidth: Dp,
     gridLeft: Dp,
-    labels: LabelPlace,
     pieces: PieceLayout,
     gapPx: Float,
     gapYPx: Float,
@@ -853,10 +837,6 @@ private fun DeckSectionPane(
     val ids = state.deck[section]
     val roleKeys = roleKeying.keyOfCell
     val hover = drag.hover?.takeIf { it.section == section && drag.held != null }
-    val count = ids.size
-    val rangeText = if (section == DeckSection.MAIN) "${section.minSize}–${section.maxSize}" else "0–${section.maxSize}"
-    val outOfRange = count > section.maxSize || count < section.minSize
-    val refused = hover != null && !hover.accepted
     val keying = state.keying(section)
     val ring by rememberRing(state)
     val aimed = section == DeckSection.SIDE && neue.touchFirst && neue.prefs.poolToSide
@@ -930,15 +910,6 @@ private fun DeckSectionPane(
                 publish()
             },
     ) {
-        if (section != DeckSection.MAIN && labels == LabelPlace.ROWS) {
-            SectionLabel(
-                section, "$count · $rangeText", outOfRange, refused,
-                Modifier.fillMaxWidth().height(LABEL_ROW).padding(start = maxOf(gridLeft, SIDE_PAD)),
-                stacked = false,
-                aimed = aimed,
-            )
-        }
-
         val cardH = with(density) { fit.cardHeight.toDp() }
         val gridHeight = with(density) { fit.gridHeight.toDp() }
         // The card the bump is over is drawn above its neighbours, so its lift is never
@@ -952,14 +923,6 @@ private fun DeckSectionPane(
         }
 
         Box(Modifier.fillMaxWidth().padding(vertical = GRID_PAD), contentAlignment = Alignment.TopCenter) {
-            if (section != DeckSection.MAIN && labels == LabelPlace.GUTTER) {
-                SectionLabel(
-                    section, "$count · $rangeText", outOfRange, refused,
-                    Modifier.align(Alignment.TopStart).width((gridLeft - 16.dp).coerceAtLeast(0.dp)),
-                    stacked = true,
-                    aimed = aimed,
-                )
-            }
             Box(
                 Modifier
                     .size(contentWidth, gridHeight)
@@ -997,7 +960,8 @@ private fun DeckSectionPane(
                         )
                         publish()
                     }
-                    .let { if (hover?.accepted == true) it.border(1.dp, c.ink) else it },
+                    // The side deck the pool adds to on a tablet is ringed, as its name was inverted (rec 17).
+                    .let { if (hover?.accepted == true) it.border(1.dp, c.ink) else if (aimed) it.border(1.dp, c.ink45) else it },
             ) {
                 // Zen: every card's shadow on the table, under all of them.
                 Canvas(Modifier.matchParentSize()) {
@@ -1118,7 +1082,8 @@ private fun DeckSectionPane(
                                 IntOffset(x + o.x.roundToInt(), y + o.y.roundToInt())
                             }
                             .size(with(density) { (r - l).toDp() }, with(density) { (b - t).toDp() })
-                            .zIndex(zen.layerOf(zenKey).takeIf { it > 0f } ?: if (position == onTop) 1f else 0f)
+                            // A selected card over its neighbours, so its frame is seen whole (1.0.41).
+                            .zIndex(zen.layerOf(zenKey).takeIf { it > 0f } ?: if ((neue.selection as? Selection.InDeck)?.let { it.section == section && it.index == position } == true) 2f else if (position == onTop) 1f else 0f)
                             // The carried card's own place is the slot it will land in: a faint ghost of it.
                             .alpha(if (held) 0.3f else if (covered) 0.3f else 1f),
                     ) {

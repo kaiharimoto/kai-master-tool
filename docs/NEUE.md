@@ -1433,6 +1433,33 @@ with the gaps (`crack`), so turning Groups off takes them home. The screenshot u
 the same columns. A group that wraps from the end of a full row to the start of the
 next still breaks there: only a last row has room.
 
+### 4h½′. Room for the cards, and a selection you can see (1.0.41)
+
+kai: "players know intuitively that the extra deck and side deck are what they are, so
+a label is actually redundant, and all decks have to have 15 side and extra deck cards,
+so a card count indicator is equally redundant… add a bit of a safety zone so the side
+deck doesn't get too close to the bottom edge"; "have the scroll to scale be more fine
+grained"; "it's a bit hard to tell which card is being selected, let's have the
+indicator be more intuitive"; and the bar was cutting off the deck's name.
+
+- **The extra and side decks carry no names or counts.** `DeckLabels` is asked for no
+  labels, so the rows and the gutter they took are the cards'. On a tablet the side
+  deck the pool adds to is ringed (it was its name, inverted). The main deck keeps
+  its count on its row.
+- **Paper under the deck** (`BOTTOM_SAFE`, 28 dp, not on a phone): the deck is fitted
+  to what is left, so the last section never meets the window's edge.
+- **The wheel's notch is 5 %** (`DeckZoom.PER_NOTCH` 0.05, from 0.12): about nineteen
+  notches from the full size to the smallest.
+- **A selected card stands up out of the page**: 5 % larger than its neighbours
+  (`SELECT_RAISE`, gliding in at `MuMotion.BASE`), framed *outside* its edge — a paper
+  hairline, then 3 dp of ink — and drawn above its neighbours (`zIndex`), so the frame
+  reads whole against any artwork. The ring inside the card, which the art swallowed,
+  is gone.
+- **The bar on the builder**: no wordmark (the deck's name is the page's title), a
+  legal deck is a ✓ with "Legal in TCG" in its tip, issues and notes a count
+  (`Standing(compact = true)`; the phone keeps its words), and Import, Export and
+  Screenshot are icons named by their tips on the desk. A tablet keeps its words.
+
 ### 4h¾. The groups As is, Fitted or Separate (1.0.37)
 
 kai: "completely reengineer the way the deck builder works in group mode to be more

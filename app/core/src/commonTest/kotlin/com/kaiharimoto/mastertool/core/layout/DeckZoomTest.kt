@@ -17,29 +17,31 @@ class DeckZoomTest {
     }
 
     @Test
-    fun aNotchIsMoreThanTheOldFourPercent() {
-        // 1.0.17–1.0.23 took 0.04 off the share a notch; kai asked for more.
+    fun aNotchIsAFineStep() {
+        // 1.0.24–1.0.40 took about 11 % a notch; kai asked for finer (1.0.41): about 5 %.
         for (z in listOf(1f, 0.8f, 0.6f, 0.45f)) {
-            val moved = z - DeckZoom.wheel(z, 1f)
-            assertTrue(moved > 0.04f || DeckZoom.wheel(z, 1f) == DeckZoom.MIN, "at $z a notch moved $moved")
+            val next = DeckZoom.wheel(z, 1f)
+            if (next == DeckZoom.MIN) continue
+            val ratio = next / z
+            assertTrue(ratio in 0.93f..0.97f, "at $z a notch scaled by $ratio")
         }
     }
 
     @Test
-    fun theWholeRangeIsAboutEightNotches() {
+    fun theWholeRangeIsAboutNineteenNotches() {
         var z = 1f
         var notches = 0
         while (z > DeckZoom.MIN) {
             z = DeckZoom.wheel(z, 1f)
             notches++
         }
-        assertEquals(8, notches)
+        assertTrue(notches in 17..21, "down took $notches")
         notches = 0
         while (z < 1f) {
             z = DeckZoom.wheel(z, -1f)
             notches++
         }
-        assertTrue(notches in 7..8, "up took $notches")
+        assertTrue(notches in 16..21, "up took $notches")
     }
 
     @Test
@@ -66,7 +68,7 @@ class DeckZoomTest {
 
     @Test
     fun theLastNotchUpLandsOnTheFullSize() {
-        assertEquals(1f, DeckZoom.wheel(0.9f, -1f))
+        assertEquals(1f, DeckZoom.wheel(0.95f, -1f))
         // Down never snaps: a touchpad may rest a hair under the full size.
         assertTrue(DeckZoom.wheel(1f, 0.1f) < 1f)
     }

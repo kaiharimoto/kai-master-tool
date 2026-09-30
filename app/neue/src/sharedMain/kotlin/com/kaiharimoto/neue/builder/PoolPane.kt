@@ -28,6 +28,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -284,6 +285,8 @@ fun PoolPane(
                             NeueCard(
                                 card = card,
                                 modifier = Modifier
+                                    // Over its neighbours, so the selection's frame is seen whole (1.0.41).
+                                    .zIndex(if (selected) 1f else 0f)
                                     .aspectRatio(CARD_RATIO)
                                     .cardPointer(
                                         card = card,
