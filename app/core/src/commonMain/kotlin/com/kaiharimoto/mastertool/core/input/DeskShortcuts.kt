@@ -106,6 +106,13 @@ enum class DeskAction {
      */
     WEB_PREVIOUS,
     WEB_NEXT,
+
+    /**
+     * The assistant's panel, open or closed (Ai, 1.0.42): docked beside every page.
+     * Live only while Ai is on ([DeskContext.ai]); with it off, the key is dead and
+     * no menu or palette names it.
+     */
+    AI_PANEL,
 }
 
 /** Where a desk shortcut applies, with the heading it is listed under. Declaration order is display order. */
@@ -136,6 +143,8 @@ data class DeskContext(
     val overlayOpen: Boolean = false,
     /** The builder is the page on screen. */
     val onBuilder: Boolean = true,
+    /** Ai is on (Settings → Ai). Off, every trace of it is gone, its key included. */
+    val ai: Boolean = true,
 )
 
 data class DeskShortcut(
@@ -171,6 +180,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("minus"), DeskAction.ZOOM_OUT, DeskScope.APP, "Smaller interface", allowedInTextInput = true),
         DeskShortcut(ctrl("0"), DeskAction.ZOOM_RESET, DeskScope.APP, "Interface at 100%", allowedInTextInput = true),
         DeskShortcut(ctrl("i", shift = true), DeskAction.TOGGLE_THEME, DeskScope.APP, "Switch paper and ink", allowedInTextInput = true),
+        DeskShortcut(ctrl("i"), DeskAction.AI_PANEL, DeskScope.APP, "Ai: open or close the assistant", allowedInTextInput = true),
         DeskShortcut(KeyChord("f11"), DeskAction.IMMERSIVE, DeskScope.APP, "Immersive mode", allowedInTextInput = true),
         DeskShortcut(ctrl("s", shift = true), DeskAction.SCREENSHOT, DeskScope.APP, "Screenshot of the deck", allowedInTextInput = true),
 
@@ -216,7 +226,7 @@ object DeskShortcuts {
 
     /** Every row that would fire in [context], in table order. */
     fun live(context: DeskContext): List<DeskShortcut> =
-        all.filter { (!context.textInputFocused || it.allowedInTextInput) && it.isActive(context) }
+        all.filter { (!context.textInputFocused || it.allowedInTextInput) && it.isActive(context) && (context.ai || it.action != DeskAction.AI_PANEL) }
 
     /** The first chord bound to [action], for hints beside a menu item or in a tooltip. */
     fun chordFor(action: DeskAction): KeyChord? = all.firstOrNull { it.action == action }?.chord

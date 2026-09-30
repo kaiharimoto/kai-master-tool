@@ -34,7 +34,15 @@ object DeskMenuBar {
      * The application menu (About, Settings, Quit) is the Mac's own and is
      * supplied by the system; Settings is routed to [DeskAction.GO_SETTINGS].
      */
-    val menus: List<DeskMenu> = listOf(
+    val menus: List<DeskMenu> get() = if (aiShown) all else all.map { menu -> menu.copy(items = menu.items.filter { it.action != DeskAction.AI_PANEL }) }
+
+    /**
+     * Whether Ai's item is in the menus: off, every trace of Ai is gone (Settings → Ai).
+     * Set by the desktop as the setting changes, a fact about the app like [DeskShortcuts.macLabels].
+     */
+    var aiShown: Boolean = true
+
+    private val all: List<DeskMenu> = listOf(
         DeskMenu(
             "File",
             listOf(
@@ -74,7 +82,8 @@ object DeskMenuBar {
                 item(DeskAction.ZOOM_RESET, "Actual size", ruleAfter = true),
                 item(DeskAction.TOGGLE_THEME, "Switch paper and ink"),
                 item(DeskAction.IMMERSIVE, "Immersive mode"),
-                item(DeskAction.ZEN, "Zen"),
+                item(DeskAction.ZEN, "Zen", ruleAfter = true),
+                item(DeskAction.AI_PANEL, "Ai"),
             ),
         ),
         DeskMenu(

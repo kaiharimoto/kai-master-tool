@@ -1,0 +1,217 @@
+package com.kaiharimoto.mastertool.core.ai
+
+import com.kaiharimoto.mastertool.core.ai.cli.ClaudeCli
+import com.kaiharimoto.mastertool.core.ai.cli.ClaudeStream
+import com.kaiharimoto.mastertool.core.ai.cli.CodexCli
+import com.kaiharimoto.mastertool.core.ai.cli.CodexStream
+import com.kaiharimoto.mastertool.core.ai.wire.OpenAiChatBackend
+import com.kaiharimoto.mastertool.core.ai.wire.OpenAiEndpoint
+import com.kaiharimoto.mastertool.core.ai.wire.OpenAiStream
+import com.kaiharimoto.mastertool.core.ai.wire.OpenAiWire
+import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.mock.toByteArray
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class WireTest {
+
+    @Test
+    fun toolCallsArriveInPiecesAndComeOutWhole() {
+        val s = OpenAiStream()
+        listOf(
+            """data: {"choices":[{"delta":{"content":"Adding "}}]}""",
+            """data: {"choices":[{"delta":{"content":"Ash."}}]}""",
+            """data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"edit_","arguments":"{\"ops\":"}}]}}]}""",
+            """data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":"deck","arguments":"[]}"}}]}}]}""",
+            """data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_2","function":{"name":"app_state","arguments":""}}]}}]}""",
+            """data: {"choices":[{"finish_reason":"tool_calls","delta":{}}]}""",
+            """data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":80}}}""",
+            "data: [DONE]",
+        ).flatMap { s.line(it) }.let { events ->
+            assertEquals("Adding Ash.", events.filterIsInstance<BackendEvent.TextDelta>().joinToString("") { it.text })
+        }
+        val done = s.finish()
+        assertIs<BackendEvent.Finished>(done)
+        assertEquals(StopReason.TOOL_USE, done.stop)
+        val calls = done.turn!!.toolUses
+        assertEquals(listOf("edit_deck", "app_state"), calls.map { it.name })
+        assertEquals("call_1", calls[0].id)
+        assertEquals(0, calls[0].input["ops"]!!.jsonArray.size)
+        assertEquals(JsonObject(emptyMap()), calls[1].input)
+        assertEquals(80, done.usage!!.cacheRead)
+    }
+
+    @Test
+    fun cutShortArgumentsAreMarkedNotGuessed() {
+        val s = OpenAiStream()
+        s.line("""data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c","function":{"name":"new_deck","arguments":"{\"name\": \"Bra"}}]}}]}""")
+        val call = (s.finish() as BackendEvent.Finished).turn!!.toolUses.single()
+        assertTrue(OpenAiStream.BROKEN_ARGS in call.input)
+    }
+
+    @Test
+    fun theHistoryBecomesChatMessages() {
+        val history = listOf(
+            ChatTurn.user("Hi", context = "Page: Builder"),
+            ChatTurn(Role.ASSISTANT, listOf(Part.Text("Looking."), Part.ToolUse("c1", "app_state", JsonObject(emptyMap())))),
+            ChatTurn(Role.USER, listOf(Part.ToolResult("c1", "app_state", "{}"))),
+            ChatTurn.assistant("You are on the builder."),
+        )
+        val messages = OpenAiWire.messages("You are Ai.", history)
+        val roles = messages.map { it.jsonObject["role"]!!.jsonPrimitive.content }
+        assertEquals(listOf("system", "user", "assistant", "tool", "assistant"), roles)
+        val first = messages[1].jsonObject["content"]!!.jsonPrimitive.content
+        assertTrue(first.startsWith("<app_context>") && first.endsWith("Hi"))
+        val call = messages[2].jsonObject["tool_calls"]!!.jsonArray.single().jsonObject
+        assertEquals("app_state", call["function"]!!.jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals("c1", messages[3].jsonObject["tool_call_id"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun theBodyCarriesToolsAndOnlyTheEffortTheEndpointTakes() {
+        val req = TurnRequest("s", listOf(ChatTurn.user("x")), listOf(AiTools.appState), model = "gpt-x", effort = "high")
+        val openai = OpenAiWire.body(req, OpenAiEndpoint("https://api.openai.com/v1", sendsEffort = true))
+        assertEquals("high", openai["reasoning_effort"]!!.jsonPrimitive.content)
+        val local = OpenAiWire.body(req, OpenAiEndpoint("http://localhost:11434/v1"))
+        assertNull(local["reasoning_effort"])
+        assertEquals("app_state", local["tools"]!!.jsonArray.single().jsonObject["function"]!!.jsonObject["name"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun theBackendStreamsOverHttp() = runTest {
+        var sentBody = ""
+        var auth: String? = null
+        val engine = MockEngine { request ->
+            sentBody = String(request.body.toByteArray())
+            auth = request.headers[HttpHeaders.Authorization]
+            respond(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"finish_reason\":\"stop\",\"delta\":{}}]}\n\ndata: [DONE]\n\n",
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, "text/event-stream"),
+            )
+        }
+        val backend = OpenAiChatBackend(HttpClientFactory.create(engine), OpenAiEndpoint("https://example.test/v1", apiKey = "k"))
+        val events = backend.turn(TurnRequest("sys", listOf(ChatTurn.user("hi")), emptyList(), model = "m")).toList()
+        assertEquals("Bearer k", auth)
+        assertTrue("\"model\":\"m\"" in sentBody)
+        val done = events.last()
+        assertIs<BackendEvent.Finished>(done)
+        assertEquals("Hello", done.turn!!.text)
+    }
+
+    @Test
+    fun aRejectedKeyIsAnAuthFailure() = runTest {
+        val engine = MockEngine { respond("""{"error":{"message":"Incorrect API key"}}""", HttpStatusCode.Unauthorized) }
+        val backend = OpenAiChatBackend(HttpClientFactory.create(engine), OpenAiEndpoint("https://example.test/v1", apiKey = "bad"))
+        val failed = backend.turn(TurnRequest("s", listOf(ChatTurn.user("x")), emptyList())).toList().single()
+        assertIs<BackendEvent.Failed>(failed)
+        assertTrue(failed.auth)
+        assertTrue("Incorrect API key" in failed.message)
+    }
+
+    @Test
+    fun modelListsAreReadInEveryShape() {
+        assertEquals(listOf("gpt-a", "gpt-b"), OpenAiWire.modelIds("""{"object":"list","data":[{"id":"gpt-a"},{"id":"gpt-b"}]}"""))
+        assertEquals(listOf("gemini-x"), OpenAiWire.modelIds("""{"data":[{"id":"models/gemini-x"}]}"""))
+    }
+
+    @Test
+    fun claudeCodeStreamsTextAndEndsWithItsResult() {
+        val s = ClaudeStream()
+        val lines = listOf(
+            """{"type":"system","subtype":"init","session_id":"abc","mcp_servers":[{"name":"neue","status":"connected"}]}""",
+            """{"type":"stream_event","event":{"type":"message_start"}}""",
+            """{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Let me "}}}""",
+            """{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"look."}}}""",
+            """{"type":"assistant","message":{"content":[{"type":"text","text":"Let me look."},{"type":"tool_use","id":"t1","name":"mcp__neue__app_state","input":{}},{"type":"tool_use","id":"t2","name":"WebSearch","input":{"query":"YCS Paris top 8"}}]}}""",
+            """{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"{}"}]}}""",
+            """{"type":"assistant","message":{"content":[{"type":"text","text":"Done."}]}}""",
+            """{"type":"result","subtype":"success","is_error":false,"result":"Done.","session_id":"abc","total_cost_usd":0.012,"usage":{"input_tokens":10,"output_tokens":5}}""",
+        )
+        val events = lines.flatMap { s.line(it) }
+        assertEquals("abc", events.filterIsInstance<BackendEvent.Session>().single().id)
+        val seen = events.filterIsInstance<BackendEvent.ToolSeen>()
+        assertEquals(listOf("WebSearch"), seen.map { it.name }, "the app's own tools are the app's to show")
+        val done = s.finished
+        assertIs<BackendEvent.Finished>(done)
+        assertEquals("Let me look.\n\nDone.", done.text)
+        assertEquals(0.012, done.usage!!.costUsd)
+    }
+
+    @Test
+    fun claudeCodeNotLoggedInIsAnAuthFailure() {
+        val s = ClaudeStream()
+        s.line("""{"type":"result","subtype":"success","is_error":true,"result":"Invalid API key · Please run /login"}""")
+        val failed = s.finished
+        assertIs<BackendEvent.Failed>(failed)
+        assertTrue(failed.auth)
+        assertEquals(true, ClaudeCli.loggedIn("""{"loggedIn": true, "authMethod": "oauth_token"}"""))
+        assertEquals(false, ClaudeCli.loggedIn("""{"loggedIn": false}"""))
+    }
+
+    @Test
+    fun claudeLaunchesWithTheAppsToolsOnly() {
+        val l = ClaudeCli.launch("claude", "hi", "/tmp/s.md", "/tmp/m.json", model = "opus", effort = "high", resume = "s1")
+        val a = l.args
+        assertEquals("hi", l.stdin)
+        assertTrue(a.containsAll(listOf("-p", "--strict-mcp-config", "--permission-prompts", "none")))
+        assertEquals("WebSearch,WebFetch", a[a.indexOf("--tools") + 1])
+        assertEquals("s1", a[a.indexOf("--resume") + 1])
+        assertTrue("Bearer tok" in ClaudeCli.mcpConfig("http://127.0.0.1:5/mcp", "tok"))
+    }
+
+    @Test
+    fun codexStreamsItsItemsAndFailures() {
+        val s = CodexStream()
+        val events = listOf(
+            """{"type":"thread.started","thread_id":"th-1"}""",
+            """{"type":"turn.started"}""",
+            """{"type":"item.started","item":{"id":"i0","type":"mcp_tool_call","server":"neue","tool":"edit_deck","arguments":{}}}""",
+            """{"type":"item.completed","item":{"id":"i1","type":"agent_message","text":"Built it."}}""",
+            """{"type":"turn.completed","usage":{"input_tokens":5,"cached_input_tokens":2,"output_tokens":3}}""",
+        ).flatMap { s.line(it) }
+        assertEquals("th-1", events.filterIsInstance<BackendEvent.Session>().single().id)
+        assertTrue(events.none { it is BackendEvent.ToolSeen }, "the app's own tool is the app's to show")
+        val done = s.finished
+        assertIs<BackendEvent.Finished>(done)
+        assertEquals("Built it.", done.text)
+
+        val f = CodexStream()
+        f.line("""{"type":"error","message":"Reconnecting... 2/5 (unexpected status 401 Unauthorized)"}""")
+        f.line("""{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Missing bearer"}}""")
+        val failed = f.finished
+        assertIs<BackendEvent.Failed>(failed)
+        assertTrue(failed.auth)
+    }
+
+    @Test
+    fun codexLaunchesReadOnlyWithTheAppsServer() {
+        val l = CodexCli.launch("codex", "hi", "/data/ai", "http://127.0.0.1:9/mcp", "tok", model = "", effort = "low", resume = "th-1")
+        val a = l.args
+        assertEquals(listOf("codex", "exec", "--json"), a.take(3))
+        assertEquals("read-only", a[a.indexOf("-s") + 1])
+        assertTrue(a.contains("approval_policy=\"never\""))
+        assertEquals(listOf("resume", "th-1", "-"), a.takeLast(3))
+        assertEquals("tok", l.env[CodexCli.TOKEN_ENV])
+        assertEquals(false, CodexCli.loggedIn(1, "Not logged in"))
+        assertEquals(true, CodexCli.loggedIn(0, "Logged in using ChatGPT"))
+    }
+
+    @Suppress("unused")
+    private fun p(s: String) = JsonPrimitive(s)
+}

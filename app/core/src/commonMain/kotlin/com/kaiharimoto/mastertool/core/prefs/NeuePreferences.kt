@@ -45,6 +45,69 @@ object CardLists {
     fun replace(lists: List<CardList>, changed: CardList): List<CardList> = lists.map { if (it.id == changed.id) changed else it }
 }
 
+/**
+ * One saved way of reaching a model (Settings → Ai): which provider, the model chosen,
+ * and — for a local server or a CLI — where it is. Never the key: keys live in the
+ * app's secret store, outside the database and outside every export.
+ */
+@Serializable
+data class AiConnection(
+    val id: String,
+    /** A `Providers` id: "anthropic", "claude-code", "ollama"… */
+    val provider: String,
+    val label: String = "",
+    /** The model's id; empty is the provider's own default. */
+    val model: String = "",
+    /** A local or custom server's base URL, when it is not the provider's. */
+    val baseUrl: String? = null,
+    /** A CLI's full path, when it is not found on the PATH. */
+    val program: String? = null,
+)
+
+/**
+ * The assistant's settings (Ai, 1.0.42): a field of [NeuePreferences] with a default,
+ * so no migration. [enabled] off hides every trace of Ai in the app.
+ */
+@Serializable
+data class AiPrefs(
+    val enabled: Boolean = true,
+    /** What the assistant is called (kai: "renamable", Ai by default). */
+    val name: String = DEFAULT_NAME,
+    val connections: List<AiConnection> = emptyList(),
+    /** The connection in use, by id; null is the first. */
+    val active: String? = null,
+    /** How hard the model thinks, where it can be told: "low" … "max"; empty is the provider's default. */
+    val effort: String = "",
+    /** Destructive steps (deleting a deck or a web) run without asking. Off: Ai asks first. */
+    val alwaysAllow: Boolean = false,
+    /** The panel beside the page is out. */
+    val panelOpen: Boolean = false,
+    /** Its width in dp at a scale of one. */
+    val panelWidth: Float = DEFAULT_PANEL_WIDTH,
+    /** The panel has greeted the person once. */
+    val introSeen: Boolean = false,
+) {
+    /** The connection in use, if any is set up. */
+    val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()
+
+    fun sanitised(): AiPrefs = copy(
+        name = name.trim().take(MAX_NAME).ifBlank { DEFAULT_NAME },
+        panelWidth = if (panelWidth.isFinite()) panelWidth.coerceIn(MIN_PANEL_WIDTH, MAX_PANEL_WIDTH) else DEFAULT_PANEL_WIDTH,
+        effort = effort.takeIf { it in EFFORTS } ?: "",
+        active = active?.takeIf { id -> connections.any { it.id == id } },
+        connections = connections.distinctBy { it.id },
+    )
+
+    companion object {
+        const val DEFAULT_NAME = "Ai"
+        const val MAX_NAME = 24
+        const val DEFAULT_PANEL_WIDTH = 400f
+        const val MIN_PANEL_WIDTH = 320f
+        const val MAX_PANEL_WIDTH = 720f
+        val EFFORTS = setOf("", "low", "medium", "high", "xhigh", "max")
+    }
+}
+
 /** Where the window was, so it opens there again. */
 @Serializable
 data class WindowBounds(
@@ -201,6 +264,8 @@ data class NeuePreferences(
      * where there is a sensor. A field with a default, no migration.
      */
     val foilTilt: Boolean = true,
+    /** The assistant (1.0.42): on or off, its name, its connections, its panel. */
+    val ai: AiPrefs = AiPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's
@@ -232,6 +297,7 @@ data class NeuePreferences(
         orientation = orientation?.takeIf { it in ORIENTATIONS },
         phoneDockStop = phoneDockStop.takeIf { it in DOCK_STOPS } ?: DEFAULT_DOCK_STOP,
         textScale = textScale?.takeIf { it.isFinite() }?.let { t -> TEXT_SCALES.minBy { kotlin.math.abs(it - t) } },
+        ai = ai.sanitised(),
         window = window?.takeIf {
             it.x.isFinite() && it.y.isFinite() && it.width.isFinite() && it.height.isFinite() &&
                 it.width >= MIN_WINDOW_WIDTH && it.height >= MIN_WINDOW_HEIGHT
