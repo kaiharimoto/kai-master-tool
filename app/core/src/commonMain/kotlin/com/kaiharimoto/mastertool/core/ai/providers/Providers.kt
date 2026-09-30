@@ -187,6 +187,8 @@ object Providers {
         Preset("Fireworks", "https://api.fireworks.ai/inference/v1"),
         Preset("Cerebras", "https://api.cerebras.ai/v1", "https://cloud.cerebras.ai"),
         Preset("Moonshot", "https://api.moonshot.ai/v1", "https://platform.moonshot.ai/console/api-keys"),
+        // Xiaomi MiMo, pay-as-you-go (its Token Plan keys use their own address, typed in by hand).
+        Preset("Xiaomi MiMo", "https://api.xiaomimimo.com/v1", "https://platform.xiaomimimo.com/#/console/api-keys"),
     )
 
     /** Whether [provider] is reached at an address the person gives (a local server, or [compatible]). */

@@ -1884,7 +1884,7 @@ holds every provider's every fallible step to having them. A phone drops the lef
 openai compatible with different custom providers"): `Providers.compatible` sits with the API
 keys — an OpenAI-compatible API's address, its key and a name of the person's own. A tap fills
 a known one (`Providers.compatiblePresets`: DeepSeek, Groq, Mistral, xAI, Together, Fireworks,
-Cerebras, Moonshot, each checked to answer `/models` asking for a key) — its address, name and
+Cerebras, Moonshot, Xiaomi MiMo (1.0.58), each checked to answer `/models` asking for a key) — its address, name and
 key page. `Providers.addressProblem` holds the address to https, or plain http at home. The
 connection keeps its own address and label (`AiConnection.baseUrl`, `label`) and its key under
 its own id, so any number of them live side by side; the model step offers Try tool use, as for
