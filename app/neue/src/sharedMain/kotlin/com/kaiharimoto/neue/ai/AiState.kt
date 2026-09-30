@@ -227,6 +227,8 @@ class AiState(internal val h: NeueHolders) {
                 drafting = draft.isNotBlank(),
                 tuning = tuning,
                 studying = studying,
+                hearing = hearing,
+                aloud = aloud,
             ),
             clock(),
             h.lastInput / 1e9,
@@ -246,6 +248,170 @@ class AiState(internal val h: NeueHolders) {
     }
 
     // ---- talking ---------------------------------------------------------------
+
+    // ---- voice (1.0.57) ---------------------------------------------------------
+
+    /** The microphone is open. */
+    var hearing by mutableStateOf(false)
+        private set
+
+    /** What was said is being written out. */
+    var transcribing by mutableStateOf(false)
+        private set
+
+    /** How loud the microphone is now, 0–1, for the composer's meter. */
+    var voiceLevel by mutableStateOf(0f)
+        private set
+
+    /** Talk mode: listen, answer aloud, listen again, until it is ended. */
+    var talkMode by mutableStateOf(false)
+        private set
+
+    /** A reply is being spoken aloud. */
+    var aloud by mutableStateOf(false)
+        private set
+
+    /** The desk's speech model is missing: the dialog asking to download it is open. */
+    var voiceAsk by mutableStateOf(false)
+
+    /** The speech model downloading, 0–1; null when not. */
+    var voiceDownload by mutableStateOf<Float?>(null)
+        private set
+
+    private var voiceJob: Job? = null
+    private var speakJob: Job? = null
+
+    val voiceModel: com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
+        get() = com.kaiharimoto.mastertool.core.ai.voice.VoiceModel.of(prefs.voiceModel)
+
+    /** The words a transcriber is primed with: the open deck's cards, and the game's. */
+    private fun hints(): String {
+        val index = h.builder.index
+        val deck = h.builder.deck
+        val names = (deck.main + deck.extra + deck.side).distinct().mapNotNull { index.byId(it)?.name }
+        return com.kaiharimoto.mastertool.core.ai.voice.Hints.prompt(names)
+    }
+
+    /** The microphone on or off: the words go into the composer, to read over before sending. */
+    fun toggleVoice() {
+        if (hearing || transcribing) com.kaiharimoto.neue.platform.Voice.stopListening() else listen(send = false)
+    }
+
+    /**
+     * Listening (1.0.57): the level as it goes, the words into the draft — after whatever was
+     * already written — and in talk mode sent as soon as they are written out.
+     */
+    fun listen(send: Boolean) {
+        val voice = com.kaiharimoto.neue.platform.Voice
+        if (hearing || transcribing || voiceJob?.isActive == true) return
+        if (!voice.canListen) {
+            h.neue.note = com.kaiharimoto.neue.Note("No microphone could be found")
+            if (talkMode) talkMode = false
+            return
+        }
+        if (voice.needsModel(voiceModel)) {
+            voiceAsk = true
+            return
+        }
+        stopSpeaking()
+        val before = draft.trimEnd()
+        fun joined(words: String) = if (before.isEmpty()) words.trim() else "$before ${words.trim()}"
+        hearing = true
+        voiceJob = scope.launch {
+            try {
+                voice.listen(voiceModel, hints()).collect { heard ->
+                    when (heard) {
+                        is com.kaiharimoto.neue.platform.Heard.Level -> voiceLevel = heard.rms
+                        is com.kaiharimoto.neue.platform.Heard.Partial -> draft = joined(heard.text)
+                        com.kaiharimoto.neue.platform.Heard.Transcribing -> {
+                            hearing = false
+                            transcribing = true
+                        }
+                        is com.kaiharimoto.neue.platform.Heard.Final -> {
+                            draft = joined(heard.text)
+                            if (send) send(draft) else focusTick++
+                        }
+                        is com.kaiharimoto.neue.platform.Heard.Failed -> {
+                            if (talkMode) {
+                                talkMode = false
+                                notice = "Talk mode ended: ${heard.reason.replaceFirstChar { it.lowercase() }}"
+                            } else {
+                                h.neue.note = com.kaiharimoto.neue.Note(heard.reason.removeSuffix("."))
+                            }
+                        }
+                    }
+                }
+            } finally {
+                hearing = false
+                transcribing = false
+                voiceLevel = 0f
+            }
+        }
+    }
+
+    /** The speech model, downloaded once with the person's yes; then the microphone opens. */
+    fun downloadVoiceModel() {
+        voiceAsk = false
+        val model = voiceModel
+        voiceDownload = 0f
+        scope.launch {
+            val done = com.kaiharimoto.neue.platform.Voice.download(model) { bytes -> voiceDownload = (bytes.toFloat() / model.bytes).coerceIn(0f, 1f) }
+            voiceDownload = null
+            done.fold(
+                { listen(send = talkMode) },
+                {
+                    talkMode = false
+                    h.neue.note = com.kaiharimoto.neue.Note("The speech model could not be downloaded: ${it.message ?: "try again"}")
+                },
+            )
+        }
+    }
+
+    /** Talk mode on or off (1.0.57): a conversation out loud. */
+    fun toggleTalk() {
+        if (talkMode) {
+            endTalk()
+        } else {
+            if (!configured) {
+                openWizard()
+                return
+            }
+            talkMode = true
+            notice = if (com.kaiharimoto.neue.platform.Voice.canSpeak || prefs.speakReplies == com.kaiharimoto.mastertool.core.prefs.AiPrefs.SPEAK_NEVER) null
+            else "This computer has no voice to speak with, so replies stay on screen."
+            listen(send = true)
+        }
+    }
+
+    fun endTalk() {
+        talkMode = false
+        com.kaiharimoto.neue.platform.Voice.stopListening()
+        stopSpeaking()
+    }
+
+    fun stopSpeaking() {
+        speakJob?.cancel()
+        speakJob = null
+        com.kaiharimoto.neue.platform.Voice.stopSpeaking()
+        aloud = false
+    }
+
+    /** In talk mode, after an answer: say it, then listen again. */
+    private fun answerAloud() {
+        val reply = session?.turns?.lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.text
+        speakJob = scope.launch {
+            val voice = com.kaiharimoto.neue.platform.Voice
+            if (reply != null && voice.canSpeak && prefs.speakReplies != com.kaiharimoto.mastertool.core.prefs.AiPrefs.SPEAK_NEVER) {
+                aloud = true
+                try {
+                    voice.speak(com.kaiharimoto.mastertool.core.ai.voice.Spoken.of(reply), prefs.speechRate)
+                } finally {
+                    aloud = false
+                }
+            }
+            if (talkMode) listen(send = true)
+        }
+    }
 
     // ---- pictures (1.0.55) -----------------------------------------------------
 
@@ -281,6 +447,14 @@ class AiState(internal val h: NeueHolders) {
 
     /** The system prompt a conversation on the connection in use would start with, for the studio's pictures. */
     fun previewSystem(): String = prefs.connection?.let { systemPrompt(it) }.orEmpty()
+
+    /** The studio's pictures of voice (1.0.57): listening at a level, talk mode, speaking aloud. */
+    fun previewVoice(listening: Boolean, level: Float, talk: Boolean, speaking: Boolean) {
+        hearing = listening
+        voiceLevel = level
+        talkMode = talk
+        aloud = speaking
+    }
 
     /** The studio's picture of pictures waiting in the composer. */
     fun previewAttached(list: List<Attachment>) {
@@ -444,6 +618,7 @@ class AiState(internal val h: NeueHolders) {
                 repliedAt = System.currentTimeMillis()
             }
         }
+        val wasStopped = stopping
         stopping = false
         confirm?.reply(false)
         confirm = null
@@ -451,6 +626,10 @@ class AiState(internal val h: NeueHolders) {
         question = null
         status = null
         job = null
+        // Talk mode (1.0.57): the answer said aloud, then the microphone again; a Stop or a problem ends it.
+        if (talkMode) {
+            if (problem == null && !wasStopped) answerAloud() else endTalk()
+        }
         // A summary asked for while it answered (1.0.56): made now the answer is done.
         pendingCompact?.let { focus ->
             pendingCompact = null

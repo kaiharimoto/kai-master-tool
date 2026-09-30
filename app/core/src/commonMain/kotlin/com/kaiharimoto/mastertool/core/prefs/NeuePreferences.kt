@@ -92,6 +92,12 @@ data class AiPrefs(
     val showReasoning: String = REASONING_FOLDED,
     /** How long and hard Fine Tuning goes: quick, standard or deep (1.0.48). */
     val tuneIntensity: String = "standard",
+    /** The speech model the desk transcribes with, on the computer itself (1.0.57, `VoiceModel`). */
+    val voiceModel: String = "base.en",
+    /** Whether replies are spoken aloud: in talk mode only ("talk"), or never ("never"). */
+    val speakReplies: String = SPEAK_IN_TALK,
+    /** How fast replies are spoken, 0.5 to 2 (1 is the voice's own pace). */
+    val speechRate: Float = 1f,
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()
@@ -104,9 +110,14 @@ data class AiPrefs(
         connections = connections.distinctBy { it.id },
         showReasoning = showReasoning.takeIf { it in REASONINGS } ?: REASONING_FOLDED,
         tuneIntensity = tuneIntensity.takeIf { it in listOf("quick", "standard", "deep") } ?: "standard",
+        voiceModel = voiceModel.takeIf { id -> com.kaiharimoto.mastertool.core.ai.voice.VoiceModel.entries.any { it.id == id } } ?: com.kaiharimoto.mastertool.core.ai.voice.VoiceModel.DEFAULT.id,
+        speakReplies = speakReplies.takeIf { it in listOf(SPEAK_IN_TALK, SPEAK_NEVER) } ?: SPEAK_IN_TALK,
+        speechRate = if (speechRate.isFinite()) speechRate.coerceIn(0.5f, 2f) else 1f,
     )
 
     companion object {
+        const val SPEAK_IN_TALK = "talk"
+        const val SPEAK_NEVER = "never"
         const val REASONING_FOLDED = "folded"
         const val REASONING_OPEN = "open"
         const val REASONING_HIDDEN = "hidden"

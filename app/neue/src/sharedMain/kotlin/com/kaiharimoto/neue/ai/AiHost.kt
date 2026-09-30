@@ -822,7 +822,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     }
 
     private fun runAction(name: String): Answer {
-        val action = runCatching { DeskAction.valueOf(name.uppercase()) }.getOrNull()?.takeIf { it != DeskAction.AI_PANEL }
+        val action = runCatching { DeskAction.valueOf(name.uppercase()) }.getOrNull()?.takeIf { it !in DeskAction.AI }
             ?: return fail("No action $name.")
         h.run(action)
         return ok("Done: $name.", name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })

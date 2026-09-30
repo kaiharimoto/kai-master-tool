@@ -534,6 +534,29 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                     label = "Attach",
                 )
             }
+            // Speak instead of typing (1.0.57): the words go into the box to read over; talk mode sends them and answers aloud.
+            com.kaiharimoto.neue.kit.Tip(
+                if (ai.hearing) "Stop listening" else "Speak to ${ai.name}",
+                kbd = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.AI_VOICE)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd),
+                above = true,
+            ) {
+                com.kaiharimoto.neue.kit.IconButton(
+                    com.kaiharimoto.neue.kit.Icons.Mic,
+                    { ai.toggleVoice() },
+                    toggled = ai.hearing || ai.transcribing,
+                    label = if (ai.hearing) "Stop" else "Speak",
+                    enabled = !ai.talkMode && ai.voiceDownload == null,
+                    reason = if (ai.talkMode) "Talk mode is listening" else "The speech model is downloading",
+                )
+            }
+            com.kaiharimoto.neue.kit.Tip(if (ai.talkMode) "End talk mode" else "Talk mode: a conversation out loud — speak, hear the answer, speak again", above = true) {
+                com.kaiharimoto.neue.kit.IconButton(
+                    com.kaiharimoto.neue.kit.Icons.AudioLines,
+                    { ai.toggleTalk() },
+                    toggled = ai.talkMode,
+                    label = if (ai.talkMode) "End" else "Talk",
+                )
+            }
             // A phone's or a tablet's camera: a photo of a paper decklist or a board, straight to Ai.
             if (com.kaiharimoto.neue.platform.Platform.canTakePhoto) {
                 com.kaiharimoto.neue.kit.Tip("Take a photo for ${ai.name} to see", above = true) {
@@ -545,13 +568,30 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                 }
             }
             Box(Modifier.weight(1f)) {
-                Help(if (ai.running) "${ai.name} is answering" else if (phone) "Enter sends" else "Enter sends · Shift Enter for a new line", maxLines = 1)
+                when {
+                    ai.hearing -> VoiceMeter(ai)
+                    ai.voiceDownload != null -> Help("Downloading the speech model · ${((ai.voiceDownload ?: 0f) * 100).toInt()}%", maxLines = 1)
+                    ai.talkMode -> Help(if (ai.aloud) "Talk mode · speaking · the talk button ends it" else "Talk mode · the talk button ends it", maxLines = 1)
+                    else -> Help(if (ai.running) "${ai.name} is answering" else if (phone) "Enter sends" else "Enter sends · Shift Enter for a new line", maxLines = 1)
+                }
             }
             if (ai.running) {
                 MuButton("Stop", ai::stop, variant = BtnVariant.SECONDARY, size = BtnSize.SM)
             } else {
                 MuButton("Send", { ai.send(ai.draft) }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.draft.isNotBlank() || ai.attached.isNotEmpty(), reason = "Write something first")
             }
+        }
+    }
+}
+
+/** How loud the microphone is, as it listens (1.0.57): a word and a bar that follows the voice. */
+@Composable
+private fun VoiceMeter(ai: AiState) {
+    val c = Mu.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Mono(if (ai.talkMode) "Talk mode · listening" else "Listening · pause to finish", color = c.ink)
+        Box(Modifier.weight(1f).height(4.dp).background(c.ink12)) {
+            Box(Modifier.fillMaxWidth((ai.voiceLevel * 6f).coerceIn(0.02f, 1f)).height(4.dp).background(c.ink))
         }
     }
 }
@@ -567,6 +607,9 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
     val c = Mu.colors
     val face = ai.face
     val status = when {
+        ai.hearing -> "Listening"
+        ai.transcribing -> "Writing down what you said"
+        ai.aloud -> "Speaking"
         ai.confirm != null || ai.question != null -> "Waiting on you"
         ai.running -> ai.working ?: ai.status ?: when {
             ai.streaming.isNotEmpty() -> "Writing"

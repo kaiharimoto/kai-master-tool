@@ -2,6 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Needed once, to download the card database. Everything afterwards is local. -->
+    <!-- Voice input (1.0.57): asked for the first time the microphone is used. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- The system's speech recogniser and text-to-speech, visible to the app (Android 11). -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Lets the app install the release APK it downloads from GitHub. -->

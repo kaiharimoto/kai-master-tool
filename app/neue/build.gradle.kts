@@ -49,6 +49,7 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.sqldelight.driver.jvm)
+                implementation(libs.whisper.jni)
             }
         }
         androidMain {
@@ -133,6 +134,13 @@ compose.desktop {
                 iconFile.set(project.file("icons/neue.icns"))
                 dockName = "Neue Master Tool"
                 appCategory = "public.app-category.games"
+                // Voice input (1.0.57): macOS asks the person before the microphone opens, in these words.
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>NSMicrophoneUsageDescription</key>
+                        <string>Neue Master Tool listens only while you speak to Ai, and turns your words into text on this Mac.</string>
+                    """.trimIndent()
+                }
 
                 // The signing switch (Phase 4), off. release-neue.yml turns it on
                 // only when the five Apple secrets are in the repository — see

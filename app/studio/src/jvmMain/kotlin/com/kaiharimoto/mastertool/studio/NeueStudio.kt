@@ -809,6 +809,28 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
         // 1.0.55: a picture sent and read into a deck, the new layouts, pictures waiting to go.
         "picture", "visual", "attach" -> studioAi155(h, mode)
         // 1.0.56: a long conversation, its start summarised, the gauge; --ai=context opens the panel.
+        // 1.0.57: listening with the words arriving, talk mode speaking, the model's download asked for.
+        "listening", "talk", "voice" -> {
+            val now = System.currentTimeMillis()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-157", title = "Voice", connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("What do I side in against Snake-Eye going second?"),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Two [[Infinite Impermanence]] for your two [[Labrynth Cooclock]]: their turn is a chain of Special Summons, and Impermanence stops the first one."),
+                    ),
+                    createdAt = now, updatedAt = now,
+                ),
+            )
+            when (mode) {
+                "listening" -> {
+                    ai.draft = "and what about going first against Fiendsmith"
+                    ai.previewVoice(listening = true, level = 0.08f, talk = false, speaking = false)
+                }
+                "talk" -> ai.previewVoice(listening = false, level = 0f, talk = true, speaking = true)
+                else -> ai.voiceAsk = true
+            }
+        }
         "context", "summarised" -> {
             val now = System.currentTimeMillis()
             val talk = (1..8).flatMap { i ->

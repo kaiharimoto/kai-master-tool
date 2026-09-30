@@ -47,7 +47,7 @@ class AiToolsTest {
     fun everyDeskActionIsReachableThroughRunAction() {
         val offered = ((AiTools.runAction.schema["properties"] as JsonObject)["action"] as JsonObject)["enum"] as JsonArray
         val names = offered.map { (it as JsonPrimitive).content }.toSet()
-        val missing = DeskAction.entries.filter { it != DeskAction.AI_PANEL && it.name !in names }
+        val missing = DeskAction.entries.filter { it !in DeskAction.AI && it.name !in names }
         assertTrue(missing.isEmpty(), "run_action cannot reach $missing")
     }
 

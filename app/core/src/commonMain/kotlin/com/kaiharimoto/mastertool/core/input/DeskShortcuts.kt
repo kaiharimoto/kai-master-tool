@@ -114,6 +114,18 @@ enum class DeskAction {
      * no menu or palette names it.
      */
     AI_PANEL,
+
+    /** Speak to the assistant (1.0.57): the microphone, on or off. Never Ai's own to press. */
+    AI_VOICE,
+
+    /** Talk mode (1.0.57): a conversation out loud, listen, answer aloud, listen again. */
+    AI_TALK,
+    ;
+
+    companion object {
+        /** The assistant's own actions: live only while it is on, and never run by it (`run_action`). */
+        val AI: Set<DeskAction> = setOf(AI_PANEL, AI_VOICE, AI_TALK)
+    }
 }
 
 /** Where a desk shortcut applies, with the heading it is listed under. Declaration order is display order. */
@@ -183,6 +195,8 @@ object DeskShortcuts {
         DeskShortcut(ctrl("0"), DeskAction.ZOOM_RESET, DeskScope.APP, "Interface at 100%", allowedInTextInput = true),
         DeskShortcut(ctrl("i", shift = true), DeskAction.TOGGLE_THEME, DeskScope.APP, "Switch paper and ink", allowedInTextInput = true),
         DeskShortcut(ctrl("i"), DeskAction.AI_PANEL, DeskScope.APP, "Open or close the assistant", allowedInTextInput = true),
+        DeskShortcut(ctrl("space", shift = true), DeskAction.AI_VOICE, DeskScope.APP, "Speak to the assistant", allowedInTextInput = true),
+        DeskShortcut(ctrl("t", shift = true), DeskAction.AI_TALK, DeskScope.APP, "Talk mode: a conversation out loud", allowedInTextInput = true),
         DeskShortcut(KeyChord("f11"), DeskAction.IMMERSIVE, DeskScope.APP, "Immersive mode", allowedInTextInput = true),
         DeskShortcut(ctrl("s", shift = true), DeskAction.SCREENSHOT, DeskScope.APP, "Screenshot of the deck", allowedInTextInput = true),
 
@@ -226,7 +240,7 @@ object DeskShortcuts {
 
     /** Every row that would fire in [context], in table order. */
     fun live(context: DeskContext): List<DeskShortcut> =
-        all.filter { (!context.textInputFocused || it.allowedInTextInput) && it.isActive(context) && (context.ai || it.action != DeskAction.AI_PANEL) }
+        all.filter { (!context.textInputFocused || it.allowedInTextInput) && it.isActive(context) && (context.ai || it.action !in DeskAction.AI) }
 
     /** The first chord bound to [action], for hints beside a menu item or in a tooltip. */
     fun chordFor(action: DeskAction): KeyChord? = all.firstOrNull { it.action == action }?.chord

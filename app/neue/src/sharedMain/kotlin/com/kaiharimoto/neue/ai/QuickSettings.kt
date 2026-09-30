@@ -121,6 +121,9 @@ fun QuickSettings(ai: AiState) {
                     }, small = true)
                 }
             }
+            // Voice (1.0.57): the speech model on the desk, and talk mode's answers.
+            FieldLabel("Voice", hint = if (com.kaiharimoto.neue.platform.Voice.usesModels) "written out on this computer" else "the system's recogniser")
+            VoiceSettings(ai)
             FieldLabel("Its thinking", hint = "in the conversation")
             Segmented(prefs.showReasoning, AiPrefs.REASONINGS, { it.replaceFirstChar { ch -> ch.uppercase() } }, { v ->
                 ai.h.neue.update { it.copy(ai = it.ai.copy(showReasoning = v)) }

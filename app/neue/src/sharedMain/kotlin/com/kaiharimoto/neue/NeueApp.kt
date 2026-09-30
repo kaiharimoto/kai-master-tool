@@ -389,6 +389,8 @@ class NeueHolders(
             }
             DeskAction.SCREENSHOT -> shots.export(builder, neue)
             DeskAction.AI_PANEL -> if (neue.prefs.ai.enabled) ai.toggle()
+            DeskAction.AI_VOICE -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleVoice() }
+            DeskAction.AI_TALK -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleTalk() }
         }
     }
 
@@ -624,6 +626,8 @@ class NeueHolders(
             // The assistant's own, while it is on (1.0.43).
             *(if (neue.prefs.ai.enabled) arrayOf(
                 cmd(ai.name, "${ai.name}: open or close", DeskAction.AI_PANEL),
+                cmd(ai.name, "${ai.name}: speak to it", DeskAction.AI_VOICE),
+                cmd(ai.name, "${ai.name}: talk mode, a conversation out loud", DeskAction.AI_TALK),
                 Command(ai.name, "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
                 Command(ai.name, "${ai.name}: set up a connection") { ai.openWizard() },
                 Command(ai.name, "${ai.name}'s brain: read and edit what it knows") { ai.memoryOpen = "USER.md" },
@@ -1235,6 +1239,7 @@ private fun Shell(h: NeueHolders) {
             com.kaiharimoto.neue.ai.LivingDocDialog(h.ai)
             com.kaiharimoto.neue.ai.PictureDialog(h.ai)
             com.kaiharimoto.neue.ai.ContextPanel(h.ai)
+            com.kaiharimoto.neue.ai.VoiceDialog(h.ai)
             com.kaiharimoto.neue.ai.QuickSettings(h.ai)
             if (h.ai.forgetAsked) {
                 MuDialog(

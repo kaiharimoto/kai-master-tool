@@ -113,7 +113,9 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   thinking as it works. Show it a picture — paste a screenshot of a decklist and it builds
   the deck — and it answers in cards: decklists, what to side out and in, a combo step by
   step, the end board on the field. A gauge shows how full its memory of the conversation is,
-  and one click summarises, clears or starts fresh. Settings can
+  and one click summarises, clears or starts fresh. Speak to it instead of typing —
+  on the desktop your words are written out on your own computer — or switch on talk mode for a
+  conversation out loud. Settings can
   turn it off entirely.
 - **The keyboard and the mouse, both whole.** Every action has a shortcut
   (`F1` lists them, `Ctrl K` finds them), and the mouse has a grammar: right-click

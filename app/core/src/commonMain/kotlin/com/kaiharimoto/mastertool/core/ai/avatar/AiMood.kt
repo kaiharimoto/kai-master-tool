@@ -17,6 +17,10 @@ data class AiSignals(
     /** A Fine Tuning conversation: the person teaching, or Ai studying. */
     val tuning: Boolean = false,
     val studying: Boolean = false,
+    /** The microphone is open: the person is speaking to it (1.0.57). */
+    val hearing: Boolean = false,
+    /** It is speaking its answer aloud (1.0.57, talk mode). */
+    val aloud: Boolean = false,
 )
 
 /**
@@ -73,6 +77,8 @@ class MoodTracker {
         chosen?.let { if (now < chosenUntil) return awake(it) else chosen = null }
         passing?.let { if (now < passingUntil) return it else passing = null }
         val busy = when {
+            s.hearing -> Expression.LISTENING
+            s.aloud -> Expression.SPEAKING
             s.running && s.streaming -> Expression.SPEAKING
             s.running && s.tool != null -> if (s.tool.removePrefix("mcp__neue__") in reading) Expression.READING else Expression.WORKING
             s.running -> if (s.studying) Expression.READING else Expression.THINKING

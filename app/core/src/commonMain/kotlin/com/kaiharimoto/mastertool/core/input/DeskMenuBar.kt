@@ -34,7 +34,7 @@ object DeskMenuBar {
      * The application menu (About, Settings, Quit) is the Mac's own and is
      * supplied by the system; Settings is routed to [DeskAction.GO_SETTINGS].
      */
-    val menus: List<DeskMenu> get() = if (aiShown) all else all.map { menu -> menu.copy(items = menu.items.filter { it.action != DeskAction.AI_PANEL }) }
+    val menus: List<DeskMenu> get() = if (aiShown) all else all.map { menu -> menu.copy(items = menu.items.filter { it.action !in DeskAction.AI }) }
 
     /**
      * Whether Ai's item is in the menus: off, every trace of Ai is gone (Settings → Ai).

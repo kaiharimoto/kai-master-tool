@@ -290,7 +290,7 @@ private fun KeyTable() {
                 pair.forEach { scope ->
                     Column {
                         SectionTitle(null, scope.heading)
-                        DeskShortcuts.all.filter { it.scope == scope && (it.action != DeskAction.AI_PANEL || com.kaiharimoto.mastertool.core.input.DeskMenuBar.aiShown) }.distinctBy { it.action to it.description }.forEach { row ->
+                        DeskShortcuts.all.filter { it.scope == scope && (it.action !in DeskAction.AI || com.kaiharimoto.mastertool.core.input.DeskMenuBar.aiShown) }.distinctBy { it.action to it.description }.forEach { row ->
                             Row(
                                 Modifier.fillMaxWidth().padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,

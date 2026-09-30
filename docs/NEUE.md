@@ -2168,8 +2168,50 @@ indicators".
 
 The prompt tells Ai to check before a long job and to recall what a summary dropped.
 
+**1.0.57, speak to it, and hear it.** kai: "enable voice input", with the words written out on the
+computer itself (kai's choice over a cloud service), and — from the frontier list — **talk mode**.
+
+**The desk**
+- **Hearing:** the microphone through Java Sound at 16 kHz mono (`Voice.jvm.kt`). Written out
+  by **Whisper** (whisper.cpp through `io.github.givimad:whisper-jni` 1.7.1, whose jar carries
+  the natives for Windows x64, macOS arm64 and x64, and Linux x64 and arm64) on the computer:
+  nothing heard leaves it.
+- **The model:** downloaded once, after asking (`VoiceDialog`), from whisper.cpp's own
+  repository into `<data>/voice/`, and checked by its SHA-256 (`VoiceModel`). The choices are
+  Fast (tiny.en, 78 MB), Standard (base.en, 148 MB, the default), Accurate (small.en, 488 MB) or
+  Any language (base).
+- **Priming:** the transcriber is primed with the open deck's card names and the game's words
+  (`Hints`), so "Nibiru" comes out as Nibiru.
+- **Knowing when to stop:** `SpeechGate` hears a turn end after 1.2 s of quiet once speech was
+  heard, learning the room's hum first. It gives up after 8 s of nothing, or 60 s all told.
+- **Speaking:** replies are said by the system's own voice — `say` on a Mac, Windows' speech
+  synthesiser through PowerShell (the text passed in base64), speech-dispatcher or eSpeak on
+  Linux. Where there is none, answers stay on screen and it says so.
+- **Packaging:** macOS asks before the microphone opens, in the words of
+  `NSMicrophoneUsageDescription`; a signed build carries the `audio-input` entitlement.
+
+**A phone or tablet**
+- **Hearing:** the system's recogniser: on the device where it has one (Android 12), the words
+  appearing as they are said, and on Android 13 biased toward the deck's card names.
+- **Speaking:** Android's text-to-speech.
+- **Permission:** `RECORD_AUDIO`, asked for the first time through the activity's permission
+  launcher (`Platform.attach(permission = …)`), which the camera now uses too.
+
+**Using it**
+- **The mic button** beside the picture button (`Ctrl Shift Space`) puts what was said into the
+  box, after what was already written, to read over before sending. While it listens the face
+  listens, a bar follows the voice, and the strip says Listening, then Writing down what you said.
+- **Talk mode** (the sound-lines button, `Ctrl Shift T`) is a conversation out loud: it listens,
+  sends as soon as the words are written out, says the answer (`Spoken`: the words only, and "I've
+  put it on screen" for a table, chart or layout of cards), and listens again. Stop, the button,
+  or silence ends it.
+- **Keeping it from Ai:** both actions are `DeskAction.AI`, never Ai's own to press
+  (`run_action` refuses them).
+- **Settings:** in quick settings — the speech model on the desk, whether talk mode answers
+  aloud, and how fast (`ai.voiceModel`, `ai.speakReplies`, `ai.speechRate`).
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`, and from 1.0.55 `--ai=picture` (a screenshot read into a deck), `--ai=visual` (line, board, compare), `--ai=attach` (pictures waiting in the composer), and from 1.0.56 `--ai=summarised` (a long conversation, its start summarised, the gauge) and `--ai=context` (the Context panel).
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`, and from 1.0.55 `--ai=picture` (a screenshot read into a deck), `--ai=visual` (line, board, compare), `--ai=attach` (pictures waiting in the composer), and from 1.0.56 `--ai=summarised` (a long conversation, its start summarised, the gauge) and `--ai=context` (the Context panel); from 1.0.57 `--ai=listening`, `--ai=talk` and `--ai=voice` (the model's download).
 
 ### 4k′. Ai's face (1.0.52)
 

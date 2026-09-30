@@ -74,6 +74,9 @@ object AiSettings {
         "ai.panelWidth" to "The assistant panel's width in dp (320–720).",
         "ai.tuneIntensity" to "How long and hard Fine Tuning goes: quick, standard or deep.",
         "ai.showReasoning" to "How the model's thinking shows in the chat: folded (first lines), open, or hidden.",
+        "ai.voiceModel" to "The speech model the desktop transcribes the microphone with, on the computer: tiny.en (fast), base.en (standard), small.en (accurate) or base (any language).",
+        "ai.speakReplies" to "Whether replies are spoken aloud: talk (in talk mode) or never.",
+        "ai.speechRate" to "How fast replies are spoken aloud, 0.5 to 2; 1 is the voice's own pace.",
         FORMAT to "The banlist the builder checks against: TCG or OCG.",
         SEARCH_EFFECTS to "Card searches read the printed text as well as names.",
     )

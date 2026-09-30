@@ -55,6 +55,7 @@ object DeskKeys {
         Key.N to "n",
         Key.O to "o",
         Key.S to "s",
+        Key.T to "t",
         Key.Y to "y",
         Key.Z to "z",
     )

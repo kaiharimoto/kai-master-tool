@@ -508,7 +508,14 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   in the panel's head opens `ContextPanel` (`ContextBreakdown`, Compact now, Clear old tool
   results via `clearedBefore`, Start fresh via `carriedFrom`); Ai has `context_status`, `compact`
   and `recall` (`Recall`). The estimate counts the tool specs.
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context --ai-step=KEY:anthropic` photographs it.
+  **1.0.57, voice**: `platform/Voice` (expect): on the desk Java Sound + Whisper on the computer
+  (`whisper-jni`, the model a checked download into `<data>/voice`, `VoiceModel`, `VoiceDialog`),
+  on Android the system's recogniser and text-to-speech (`RECORD_AUDIO` through
+  `Platform.attach(permission = …)`); `SpeechGate`, `Hints`, `Spoken` and `Pcm` in `core/ai/voice`,
+  tested. The mic (`AI_VOICE`, `Ctrl Shift Space`) fills the box; talk mode (`AI_TALK`, `Ctrl Shift
+  T`) listens, sends, answers aloud, listens again. `DeskAction.AI` is never `run_action`'s.
+  `VoiceProbeTest` transcribes a real recording when `NEUE_WHISPER_MODEL`/`NEUE_WHISPER_WAV` are set.
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 
