@@ -695,6 +695,24 @@ object AiTools {
         phase = 3,
     )
 
+    // ---- pictures (1.0.55) -------------------------------------------------------------
+
+    val resolveCards = ToolSpec(
+        "resolve_cards",
+        "Matches card names you read off a picture (a decklist screenshot, a photo of a list, a board) to the real cards, " +
+            "forgiving misreadings, names cut short and capitals. Returns each line's best match with how sure it is (0-1) " +
+            "and, when it is not sure, the nearest other names. Read everything first, then resolve it in one call.",
+        schema {
+            objects("cards", "What you read, in order", required = true) {
+                string("name", "The name as read", required = true)
+                integer("count", "Copies (default 1)", min = 1, max = 3)
+                enum("section", "Where it was listed, when the picture says", SECTIONS)
+            }
+        },
+        ToolGroup.CARDS,
+        phase = 3,
+    )
+
     /**
      * Closed while a deck is learned from first principles (1.0.54, kai: "studies without looking
      * online for guides"): the web, the community's lists and the archetype's page, and the
@@ -712,7 +730,7 @@ object AiTools {
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide",
-        "prep_state", "matchup_matrix", "expected_winrate",
+        "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards",
     )
 
     /** Every tool, in the order they are offered. */
@@ -727,7 +745,7 @@ object AiTools {
         tournamentDecks, tournamentDeck, importTournamentDeck, fieldSnapshot,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
-        express, sessionReport,
+        express, sessionReport, resolveCards,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

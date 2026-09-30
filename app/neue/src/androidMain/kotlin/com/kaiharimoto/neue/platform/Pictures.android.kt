@@ -35,6 +35,17 @@ actual fun encodePng(image: ImageBitmap): ByteArray? = runCatching {
     out.toByteArray()
 }.getOrNull()
 
+actual fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray? = runCatching {
+    val out = ByteArrayOutputStream()
+    if (!image.asAndroidBitmap().compress(Bitmap.CompressFormat.JPEG, quality, out)) return null
+    out.toByteArray()
+}.getOrNull()
+
+actual fun clipboardHasPicture(): Boolean = runCatching {
+    val manager = Platform.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    manager.primaryClipDescription?.hasMimeType("image/*") == true
+}.getOrDefault(false)
+
 actual suspend fun pastedPicture(): PickedFile? {
     val clip = runCatching {
         (Platform.context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).primaryClip

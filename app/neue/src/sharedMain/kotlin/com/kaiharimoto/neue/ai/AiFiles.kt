@@ -1,6 +1,8 @@
 package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.AiSession
+import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryDoc
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
@@ -87,7 +89,7 @@ class AiFiles(val root: File) {
     /** Everything Ai remembers gone: memory, skills it wrote, conversations. The folder stays. */
     fun forgetEverything() {
         listOf(Persona.FILE, MemoryKind.USER.file, MemoryKind.AGENT.file).forEach(::delete)
-        listOf("decks", "guides", "reports", "webs", "skills", "sessions", "run", "cache").forEach { file(it).deleteRecursively() }
+        listOf("decks", "guides", "reports", "webs", "skills", "sessions", "images", "run", "cache").forEach { file(it).deleteRecursively() }
     }
 
     // ---- skills -------------------------------------------------------------
@@ -109,7 +111,56 @@ class AiFiles(val root: File) {
     fun loadSession(id: String): AiSession? =
         read("sessions/${AiMemory.safeId(id)}.json")?.let { runCatching { json.decodeFromString(AiSession.serializer(), it) }.getOrNull() }
 
-    fun deleteSession(id: String) = delete("sessions/${AiMemory.safeId(id)}.json")
+    fun deleteSession(id: String) {
+        delete("sessions/${AiMemory.safeId(id)}.json")
+        file("images/${AiMemory.safeId(id)}").deleteRecursively()
+    }
+
+    // ---- pictures (1.0.55) ----------------------------------------------------
+
+    /**
+     * A picture the person attached, kept for the conversation [sessionId] under
+     * `images/<session>/<sha1>.<ext>` and named in the turn by that path; the same picture
+     * twice is one file.
+     */
+    fun putImage(sessionId: String, bytes: ByteArray, mime: String, width: Int, height: Int): Part.Image {
+        val sha = java.security.MessageDigest.getInstance("SHA-1").digest(bytes).joinToString("") { "%02x".format(it) }
+        val ext = when (mime) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            "image/gif" -> "gif"
+            else -> "jpg"
+        }
+        val path = "images/${AiMemory.safeId(sessionId)}/$sha.$ext"
+        val target = file(path)
+        if (!target.isFile) {
+            target.parentFile?.mkdirs()
+            target.writeBytes(bytes)
+        }
+        return Part.Image(path, mime, width, height)
+    }
+
+    private val encoded = object : LinkedHashMap<String, String>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 24
+    }
+
+    /** [turns] with each picture's bytes put in, as its wire sends them; a picture whose file is gone is left empty. */
+    fun hydrate(turns: List<ChatTurn>): List<ChatTurn> = turns.map { turn ->
+        if (turn.parts.none { it is Part.Image }) {
+            turn
+        } else {
+            turn.copy(parts = turn.parts.map { p ->
+                if (p is Part.Image) p.copy(data = imageData(p.file)) else p
+            })
+        }
+    }
+
+    private fun imageData(path: String): String? = synchronized(encoded) {
+        encoded[path] ?: file(path).takeIf { it.isFile }?.readBytes()?.let { java.util.Base64.getEncoder().encodeToString(it) }?.also { encoded[path] = it }
+    }
+
+    /** A picture's bytes, for drawing it in the chat. */
+    fun imageBytes(path: String): ByteArray? = file(path).takeIf { it.isFile }?.readBytes()
 
     /** The saved conversations, newest first: id, title, when. Read lazily, turns and all, only when opened. */
     fun sessions(): List<AiSession> = file("sessions").listFiles { f -> f.extension == "json" }

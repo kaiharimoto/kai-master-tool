@@ -806,6 +806,8 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
         }
         // 1.0.54: the living guide, the session's end, the brain, quick settings, the profile, a petted face.
         "guide", "end", "brain", "quick", "profile", "about", "petted" -> studioAi154(h, mode)
+        // 1.0.55: a picture sent and read into a deck, the new layouts, pictures waiting to go.
+        "picture", "visual", "attach" -> studioAi155(h, mode)
         // Fine Tuning (phase 3): the interview mid-way, a question on the table; or its review.
         "tune", "review" -> {
             val now = System.currentTimeMillis()
@@ -945,4 +947,76 @@ private fun studioAi154(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
             dir.resolve("ai-report.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.reportBytes(h, reports.last()))
         }
     }.onFailure { System.err.println("studio: the PDFs failed: $it") }
+}
+
+
+/** The studio's pictures of 1.0.55: a decklist screenshot read into a deck, each new layout, the composer's waiting pictures. */
+private fun studioAi155(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
+    val ai = h.ai
+    val now = System.currentTimeMillis()
+    val shot = java.io.File("../docs/shots/neue-builder.png").takeIf { it.isFile }?.readBytes()
+    val deck = h.builder.deck
+    fun name(id: com.kaiharimoto.mastertool.core.model.CardId) = h.builder.index.byId(id)?.name
+    fun counted(ids: List<com.kaiharimoto.mastertool.core.model.CardId>) =
+        ids.groupingBy { it }.eachCount().entries.mapNotNull { (id, n) -> name(id)?.let { "$n $it" } }.joinToString("\n")
+    val main = deck.main.mapNotNull(::name).distinct()
+    val sessionId = "studio-155"
+    when (mode) {
+        "attach" -> {
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = sessionId, title = "Pictures", connection = "anthropic-demo",
+                    turns = listOf(com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Hi."), com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Hello — what are we building today?")),
+                    createdAt = now, updatedAt = now,
+                ),
+            )
+            ai.draft = "Is this list any good against Snake-Eye?"
+            shot?.let { bytes ->
+                kotlinx.coroutines.runBlocking { com.kaiharimoto.neue.ai.Attachments.prepare(com.kaiharimoto.neue.platform.PickedFile("screenshot.png", bytes)) }
+                    ?.let { a -> ai.previewAttached(listOf(a, a)) }
+            }
+        }
+        "picture" -> {
+            val image = shot?.let { ai.files.putImage(sessionId, it, "image/png", 1920, 1080) }
+            val call = com.kaiharimoto.mastertool.core.ai.Part.ToolResult("t1", "resolve_cards", "{}", summary = "Read ${main.size} cards off the picture, 1 to check")
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = sessionId, title = "A picture", connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("What deck is this? Build it for me.", images = listOfNotNull(image)),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(call)),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                            "It's a **Labrynth** list with a hand-trap package — here is what I read off the screenshot:\n\n" +
+                                "```deck\nMain:\n${counted(deck.main)}\nExtra:\n${counted(deck.extra)}\nSide:\n${counted(deck.side)}\n```\n\n" +
+                                "One card I read from its art alone; say if it is wrong and I'll fix it before building.",
+                        ),
+                    ),
+                    createdAt = now, updatedAt = now,
+                ),
+            )
+        }
+        "visual" -> {
+            val a = main.getOrElse(0) { "Arianna the Labrynth Servant" }
+            val b = main.getOrElse(1) { "Labrynth Labyrinth" }
+            val c = main.getOrElse(2) { "Big Welcome Labrynth" }
+            val d = main.getOrElse(3) { "Welcome Labrynth" }
+            val e = main.getOrElse(4) { "Lady Labrynth of the Silver Castle" }
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = sessionId, title = "Lines", connection = "anthropic-demo",
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Show me your best line, the board it ends on, and what you'd change."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                            "## The line\n\n```line\n1. [[$a]] — Normal Summon it; it searches the card that starts the chain.\n" +
+                                "2. [[$b]] — Activate it; the field spell sets up the rest of the turn.\n" +
+                                "3. [[$c]] — Set it; on their turn it summons from the deck.\n4. [[$d]] — The interruption: it answers their first play.\n```\n\n" +
+                                "## Where it ends\n\n```board\nMonsters: $a, -, $e, -, -\nSpells/Traps: $c (set), $d (set), -, -, -\nField: $b\nHand: ${main.getOrElse(5) { a }}\nGY: $d\n```\n\n" +
+                                "## What I'd change\n\n```compare\nOut:\n1 $e\nIn:\n1 $d\n```\n\nA second copy of [[$d]] opens more often than the boss it replaces.",
+                        ),
+                    ),
+                    createdAt = now, updatedAt = now,
+                ),
+            )
+        }
+    }
 }

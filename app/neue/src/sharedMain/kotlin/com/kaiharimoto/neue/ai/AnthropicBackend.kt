@@ -261,6 +261,18 @@ class AnthropicBackend(
                 is Part.ToolResult -> ContentBlockParam.ofToolResult(
                     ToolResultBlockParam.builder().toolUseId(part.id).content(part.content).isError(part.isError).build(),
                 )
+                is Part.Image -> part.data?.let { data ->
+                    ContentBlockParam.ofImage(
+                        com.anthropic.models.messages.ImageBlockParam.builder()
+                            .source(
+                                com.anthropic.models.messages.Base64ImageSource.builder()
+                                    .data(data)
+                                    .mediaType(com.anthropic.models.messages.Base64ImageSource.MediaType.of(part.mime))
+                                    .build(),
+                            )
+                            .build(),
+                    )
+                } ?: ContentBlockParam.ofText(TextBlockParam.builder().text(part.missing).build())
                 is Part.Opaque, is Part.Activity, is Part.Reasoning -> null
             }
         }

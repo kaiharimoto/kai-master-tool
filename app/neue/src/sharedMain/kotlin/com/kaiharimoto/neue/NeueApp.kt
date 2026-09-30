@@ -1232,6 +1232,7 @@ private fun Shell(h: NeueHolders) {
             com.kaiharimoto.neue.ai.TuneLauncher(h.ai)
             com.kaiharimoto.neue.ai.ProfileLauncher(h.ai)
             com.kaiharimoto.neue.ai.LivingDocDialog(h.ai)
+            com.kaiharimoto.neue.ai.PictureDialog(h.ai)
             com.kaiharimoto.neue.ai.QuickSettings(h.ai)
             if (h.ai.forgetAsked) {
                 MuDialog(

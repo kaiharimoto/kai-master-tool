@@ -45,6 +45,9 @@ object Icons {
     private const val ROUNDED_SQUARE = "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"
 
     val Search = icon("search", circle(11f, 11f, 8f), "m21 21-4.3-4.3")
+    val Image = icon("image", ROUNDED_SQUARE, circle(9f, 9f, 2f), "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21")
+    val Mic = icon("mic", "M12 19v3", "M19 10v2a7 7 0 0 1-14 0v-2", "M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0Z")
+    val AudioLines = icon("audio-lines", "M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3")
     val X = icon("x", "M18 6 6 18", "m6 6 12 12")
     val Plus = icon("plus", "M5 12h14", "M12 5v14")
     val Minus = icon("minus", "M5 12h14")

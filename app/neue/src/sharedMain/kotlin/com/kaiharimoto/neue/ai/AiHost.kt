@@ -123,6 +123,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         "search_cards" -> "Searching cards" + (ToolArgs.string(input, "query")?.let { " for “$it”" } ?: "")
         "new_deck" -> "Building ${ToolArgs.string(input, "name") ?: "a deck"}"
         "edit_deck" -> "Editing the deck"
+        "resolve_cards" -> "Reading the cards off the picture"
         else -> spec.name.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 
@@ -171,6 +172,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "skill_manage" -> skillManage(i)
             "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
             "session_report" -> sessionReport(i)
+            "resolve_cards" -> resolveCards(ToolArgs.objects(i, "cards"))
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"))
             else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
@@ -948,6 +950,21 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     }
 
     /** Fine Tuning's report (1.0.54): kept beside the deck's guide, and a PDF when the session ends. */
+    /** Names read off a picture, matched to cards (1.0.55). */
+    private fun resolveCards(lines: List<JsonObject>): Answer {
+        if (lines.isEmpty()) return fail("Give the cards you read.")
+        val read = lines.take(80).mapNotNull { o ->
+            val name = ToolArgs.string(o, "name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            com.kaiharimoto.mastertool.core.ai.vision.ReadCards.Read(name, ToolArgs.int(o, "count") ?: 1, ToolArgs.string(o, "section"))
+        }
+        val matches = com.kaiharimoto.mastertool.core.ai.vision.ReadCards.resolve(read, index)
+        val unsure = matches.count { !it.sure }
+        return ok(
+            com.kaiharimoto.mastertool.core.ai.vision.ReadCards.describe(matches),
+            "Read ${matches.size} cards off the picture" + if (unsure > 0) ", $unsure to check" else "",
+        )
+    }
+
     private fun sessionReport(i: JsonObject): Answer {
         val deckId = state.deckId ?: return fail("There is no saved deck open to report on.")
         val s = ai.session ?: return fail("There is no session to report on.")

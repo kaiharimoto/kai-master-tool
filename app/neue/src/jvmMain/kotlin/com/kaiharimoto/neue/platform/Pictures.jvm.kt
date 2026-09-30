@@ -25,6 +25,16 @@ actual fun decodePicture(bytes: ByteArray): ImageBitmap? =
 actual fun encodePng(image: ImageBitmap): ByteArray? =
     runCatching { Image.makeFromBitmap(image.asSkiaBitmap()).encodeToData(EncodedImageFormat.PNG)?.bytes }.getOrNull()
 
+actual fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray? =
+    runCatching { Image.makeFromBitmap(image.asSkiaBitmap()).encodeToData(EncodedImageFormat.JPEG, quality)?.bytes }.getOrNull()
+
+actual fun clipboardHasPicture(): Boolean = runCatching {
+    val clip = Toolkit.getDefaultToolkit().systemClipboard
+    clip.isDataFlavorAvailable(DataFlavor.imageFlavor) ||
+        (clip.isDataFlavorAvailable(DataFlavor.javaFileListFlavor) &&
+            (clip.getData(DataFlavor.javaFileListFlavor) as? List<*>)?.filterIsInstance<File>()?.any { it.extension.lowercase() in PICTURE_EXTENSIONS } == true)
+}.getOrDefault(false)
+
 actual suspend fun pastedPicture(): PickedFile? = withContext(Dispatchers.IO) {
     runCatching { pictureIn(Toolkit.getDefaultToolkit().systemClipboard.getContents(null)) }.getOrNull()
 }

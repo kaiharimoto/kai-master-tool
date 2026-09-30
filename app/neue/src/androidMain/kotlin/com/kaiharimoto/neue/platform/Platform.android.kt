@@ -39,11 +39,26 @@ actual object Platform {
     internal var activity: java.lang.ref.WeakReference<android.app.Activity>? = null
         private set
 
-    fun attach(context: Context, picker: suspend (Array<String>) -> PickedFile?, scanner: (suspend () -> QrScan)? = null) {
+    /** The activity's camera app, for a photo to show Ai (1.0.55). */
+    private var camera: (suspend () -> PickedFile?)? = null
+
+    /** The activity asking for a runtime permission (1.0.57: the microphone): granted or not. */
+    internal var permission: (suspend (String) -> Boolean)? = null
+        private set
+
+    fun attach(
+        context: Context,
+        picker: suspend (Array<String>) -> PickedFile?,
+        scanner: (suspend () -> QrScan)? = null,
+        camera: (suspend () -> PickedFile?)? = null,
+        permission: (suspend (String) -> Boolean)? = null,
+    ) {
         this.context = context.applicationContext
         activity = (context as? android.app.Activity)?.let { java.lang.ref.WeakReference(it) }
         this.picker = picker
         this.scanner = scanner
+        this.camera = camera
+        this.permission = permission
     }
 
     actual val os: DesktopOs = DesktopOs.ANDROID
@@ -111,6 +126,11 @@ actual object Platform {
             if (camera && scanner != null) add(QrSource.CAMERA)
             add(QrSource.PICTURE)
         }
+
+    actual val canTakePhoto: Boolean
+        get() = camera != null && runCatching { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }.getOrDefault(false)
+
+    actual suspend fun takePhoto(): PickedFile? = camera?.invoke()
 
     actual suspend fun scanQr(from: QrSource): QrScan = when (from) {
         QrSource.CAMERA -> scanner?.invoke() ?: QrScan.NoCamera

@@ -4,7 +4,7 @@ package com.kaiharimoto.mastertool.core.ai
  * The "What can you do?" demo: seven scripted scenes the chat panel plays like a
  * conversation — the person's message, the tool activity lines, then Ai's reply —
  * without calling any model. Replies are ordinary chat markdown: `[[Card]]` chips,
- * tables, and the fenced `chart` and `cards` blocks. Every card named is a real TCG
+ * tables, and the fenced `chart`, `cards` and `compare` blocks. Every card named is a real TCG
  * card; the numbers are illustrations, and the meta scene says so.
  */
 object AiDemo {
@@ -118,17 +118,14 @@ object AiDemo {
             reply = """
                 Going second against Fiendsmith, you want to break their board and stop the turn before it gets there. Saved to the Siding page:
 
-                **In**
-                ```cards
-                2 Nibiru, the Primal Being
-                1 Evenly Matched
-                ```
-
-                **Out**
-                ```cards
+                ```compare
+                Out:
                 1 Droll & Lock Bird
                 1 Effect Veiler
                 1 Called by the Grave
+                In:
+                2 Nibiru, the Primal Being
+                1 Evenly Matched
                 ```
 
                 Why, in one line for the table: their turn is Special Summon after Special Summon, so [[Nibiru, the Primal Being]] lands after the fifth, and [[Evenly Matched]] cleans up whatever is left. [[Ash Blossom & Joyous Spring]] stays in for [[Fiendsmith Engraver]]'s search.

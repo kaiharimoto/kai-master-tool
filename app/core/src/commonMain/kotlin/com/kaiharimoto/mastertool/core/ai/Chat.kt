@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.ai
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -76,6 +77,31 @@ sealed interface Part {
     @Serializable
     @SerialName("reasoning")
     data class Reasoning(val text: String) : Part
+
+    /**
+     * A picture the person showed Ai (1.0.55, kai: "enable … image input"): a screenshot of a
+     * decklist, a card, a board. The bytes live in a file of their own under Ai's folder
+     * ([file], relative to it), never in the saved conversation, so the list of conversations
+     * stays quick to read. [data] is the picture in base64, put in by the app just before a
+     * turn is sent and never saved; a wire that finds it missing says a picture was lost.
+     */
+    @Serializable
+    @SerialName("image")
+    data class Image(
+        val file: String,
+        val mime: String,
+        val width: Int = 0,
+        val height: Int = 0,
+        @Transient val data: String? = null,
+    ) : Part {
+        /** A picture's description in words, for the wires that cannot send one. */
+        val missing: String get() = "[A picture was attached here, but it could not be read.]"
+
+        companion object {
+            /** Roughly what a picture costs a model's window, in characters (about 1,600 tokens). */
+            const val WEIGHT = 6_400
+        }
+    }
 }
 
 @Serializable
@@ -88,6 +114,8 @@ data class ChatTurn(
     /** The words of the turn, context and tool traffic left out. */
     val text: String get() = parts.filterIsInstance<Part.Text>().joinToString("\n\n") { it.text }
 
+    val images: List<Part.Image> get() = parts.filterIsInstance<Part.Image>()
+
     val toolUses: List<Part.ToolUse> get() = parts.filterIsInstance<Part.ToolUse>()
     val toolResults: List<Part.ToolResult> get() = parts.filterIsInstance<Part.ToolResult>()
 
@@ -95,11 +123,12 @@ data class ChatTurn(
     val isToolResults: Boolean get() = role == Role.USER && parts.isNotEmpty() && parts.all { it is Part.ToolResult }
 
     companion object {
-        fun user(text: String, context: String? = null, at: Long = 0) = ChatTurn(
+        fun user(text: String, context: String? = null, at: Long = 0, images: List<Part.Image> = emptyList()) = ChatTurn(
             Role.USER,
             buildList {
                 if (!context.isNullOrBlank()) add(Part.Context(context))
-                add(Part.Text(text))
+                addAll(images)
+                if (text.isNotBlank() || images.isEmpty()) add(Part.Text(text))
             },
             at,
         )
@@ -184,7 +213,10 @@ data class AiSession(
 
     /** A title from the first thing the person said. */
     fun titled(): AiSession = if (title.isNotBlank()) this else copy(
-        title = turns.firstOrNull { it.role == Role.USER && !it.isToolResults }?.text?.lineSequence()?.firstOrNull()?.take(60)?.trim().orEmpty(),
+        title = turns.firstOrNull { it.role == Role.USER && !it.isToolResults }?.let { first ->
+            first.text.lineSequence().firstOrNull()?.take(60)?.trim()?.takeIf { it.isNotEmpty() }
+                ?: if (first.images.isNotEmpty()) "A picture" else null
+        }.orEmpty(),
     )
 
     companion object {

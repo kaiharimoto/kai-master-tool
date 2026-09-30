@@ -85,4 +85,8 @@ actual object Platform {
     actual val scanSources: Set<QrSource> = emptySet()
 
     actual suspend fun scanQr(from: QrSource): QrScan = QrScan.Cancelled
+
+    actual val canTakePhoto: Boolean = false
+
+    actual suspend fun takePhoto(): PickedFile? = null
 }

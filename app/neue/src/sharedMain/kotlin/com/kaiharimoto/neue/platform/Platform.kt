@@ -56,6 +56,12 @@ expect object Platform {
 
     /** The text of a QR code, read by the camera or found in a picture the person picks. */
     suspend fun scanQr(from: QrSource): QrScan
+
+    /** Whether a photo can be taken here (1.0.55): a phone's or a tablet's camera, for Ai to see. */
+    val canTakePhoto: Boolean
+
+    /** A photo taken with the device's camera app, upright, or null when there is none. */
+    suspend fun takePhoto(): PickedFile?
 }
 
 /** Where a QR code is read from: the camera, or a picture (a screenshot someone sent). */

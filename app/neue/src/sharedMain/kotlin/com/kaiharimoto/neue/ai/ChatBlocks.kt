@@ -285,40 +285,6 @@ private fun DrawScope.horizontal(
     drawLine(grid, Offset(labelW, 0f), Offset(labelW, size.height), 1.dp.toPx())
 }
 
-/** A ```cards block: every copy as its art, in order; a click opens the card large. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun CardsBlock(ai: AiState, block: Block.Cards) {
-    val c = Mu.colors
-    val index = ai.h.builder.index
-    val cards = remember(block, index.size) {
-        block.lines.map { line -> line to (index.byName(line.name) ?: (com.kaiharimoto.mastertool.core.ai.CardWords.resolve(line.name, index) as? com.kaiharimoto.mastertool.core.ai.Resolved.Found)?.card) }
-    }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        cards.forEach { (line, card) ->
-            repeat(line.count) {
-                if (card == null) {
-                    Box(Modifier.width(52.dp).height((52 / CARD_RATIO).dp).border(1.dp, c.ink25).padding(4.dp)) {
-                        Micro(line.name, color = c.ink45, maxLines = 4)
-                    }
-                } else {
-                    val source = remember { MutableInteractionSource() }
-                    NeueCard(
-                        card,
-                        Modifier
-                            .width(52.dp)
-                            .hoverable(source)
-                            .cursorPointer(caption = "Open")
-                            .muClickable(interactionSource = source) { ai.h.neue.viewing = Viewing(card, null, 0) },
-                        format = ai.h.builder.format,
-                        foil = "off",
-                    )
-                }
-            }
-        }
-    }
-}
-
 /** A chart or strip still being written: a quiet working line, not raw JSON. */
 @Composable
 internal fun PendingBlock(block: Block.Pending) {

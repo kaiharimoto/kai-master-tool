@@ -66,7 +66,14 @@ fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = fals
     val c = Mu.colors
     Row(modifier.background(c.paper)) {
         if (!phone) PanelEdge(h)
-        Column(Modifier.weight(1f).fillMaxHeight().let { if (phone) it.imePadding() else it }) {
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .let { if (phone) it.imePadding() else it }
+                // A picture dropped anywhere on the panel goes with the next message (1.0.55).
+                .let { if (!ai.wizardOpen && ai.configured) it.takesPictures(ai) else it },
+        ) {
             Head(ai, phone)
             if (!ai.wizardOpen && AiState.PHASE >= 3 && ai.configured) Tools(ai)
             Box(Modifier.weight(1f).fillMaxWidth()) {

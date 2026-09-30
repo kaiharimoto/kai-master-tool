@@ -52,11 +52,15 @@ object ClaudeCli {
         model: String,
         effort: String,
         resume: String?,
+        images: List<com.kaiharimoto.mastertool.core.ai.Part.Image> = emptyList(),
     ): CliLaunch = CliLaunch(
         args = buildList {
             add(program)
             add("-p")
             addAll(listOf("--output-format", "stream-json", "--verbose", "--include-partial-messages"))
+            // A message with pictures (1.0.55) goes in as one stream-json user message, which
+            // can carry image blocks; a message of words stays plain text on stdin.
+            if (images.any { it.data != null }) addAll(listOf("--input-format", "stream-json"))
             addAll(listOf("--system-prompt-file", systemFile))
             addAll(listOf("--mcp-config", mcpFile, "--strict-mcp-config"))
             // Only web search and fetch of Claude Code's own tools; the app's through MCP.
@@ -68,8 +72,34 @@ object ClaudeCli {
             if (effort.isNotBlank()) addAll(listOf("--effort", effort))
             if (!resume.isNullOrBlank()) addAll(listOf("--resume", resume))
         },
-        stdin = prompt,
+        stdin = if (images.any { it.data != null }) userLine(prompt, images) else prompt,
     )
+
+    /** One stream-json user message: the words, then each picture as a base64 image block. */
+    fun userLine(prompt: String, images: List<com.kaiharimoto.mastertool.core.ai.Part.Image>): String =
+        kotlinx.serialization.json.buildJsonObject {
+            put("type", kotlinx.serialization.json.JsonPrimitive("user"))
+            put("message", kotlinx.serialization.json.buildJsonObject {
+                put("role", kotlinx.serialization.json.JsonPrimitive("user"))
+                put("content", kotlinx.serialization.json.buildJsonArray {
+                    if (prompt.isNotBlank()) add(kotlinx.serialization.json.buildJsonObject {
+                        put("type", kotlinx.serialization.json.JsonPrimitive("text"))
+                        put("text", kotlinx.serialization.json.JsonPrimitive(prompt))
+                    })
+                    images.forEach { img ->
+                        val data = img.data ?: return@forEach
+                        add(kotlinx.serialization.json.buildJsonObject {
+                            put("type", kotlinx.serialization.json.JsonPrimitive("image"))
+                            put("source", kotlinx.serialization.json.buildJsonObject {
+                                put("type", kotlinx.serialization.json.JsonPrimitive("base64"))
+                                put("media_type", kotlinx.serialization.json.JsonPrimitive(img.mime))
+                                put("data", kotlinx.serialization.json.JsonPrimitive(data))
+                            })
+                        })
+                    }
+                })
+            })
+        }.toString() + "\n"
 
     /** The MCP configuration file's contents: the app's server over HTTP with its token. */
     fun mcpConfig(url: String, token: String): String =
@@ -218,6 +248,8 @@ object CodexCli {
         model: String,
         effort: String,
         resume: String?,
+        /** Pictures the message carries (1.0.55), as files Codex reads itself. */
+        imageFiles: List<String> = emptyList(),
     ): CliLaunch {
         // Values without quotes: Codex reads a value that is not TOML as a plain string, and
         // a quote is the one thing Windows' .cmd shims mangle on the way to the program.
@@ -239,6 +271,8 @@ object CodexCli {
                 addAll(listOf("-C", workDir))
                 config.forEach { addAll(listOf("-c", it)) }
                 if (model.isNotBlank()) addAll(listOf("-m", model))
+                // `--image` takes several values; the `=` form keeps it from swallowing the `-` after.
+                if (imageFiles.isNotEmpty()) add("--image=" + imageFiles.joinToString(","))
                 if (!resume.isNullOrBlank()) {
                     add("resume")
                     add(resume)

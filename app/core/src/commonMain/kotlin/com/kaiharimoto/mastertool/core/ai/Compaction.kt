@@ -33,6 +33,7 @@ object Compaction {
         is Part.ToolUse -> p.name.length + p.input.toString().length
         is Part.ToolResult -> p.content.length
         is Part.Opaque -> p.json.length
+        is Part.Image -> Part.Image.WEIGHT
         is Part.Activity, is Part.Reasoning -> 0
     }
 

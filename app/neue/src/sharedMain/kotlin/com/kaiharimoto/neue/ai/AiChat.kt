@@ -40,6 +40,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -50,6 +52,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,7 +84,7 @@ import com.kaiharimoto.neue.theme.MuType
 
 /** One thing drawn in the transcript. */
 private sealed interface Entry {
-    data class Person(val text: String) : Entry
+    data class Person(val text: String, val images: List<Part.Image> = emptyList()) : Entry
     data class Reply(val text: String) : Entry
     data class Line(val summary: String, val isError: Boolean) : Entry
     data class Thought(val text: String) : Entry
@@ -92,7 +95,7 @@ private fun rows(turns: List<ChatTurn>): List<Entry> = buildList {
     turns.forEach { turn ->
         when {
             turn.role == Role.USER && turn.isToolResults -> turn.toolResults.forEach { add(Entry.Line(it.summary.ifBlank { it.name }, it.isError)) }
-            turn.role == Role.USER -> turn.text.takeIf { it.isNotBlank() }?.let { add(Entry.Person(it)) }
+            turn.role == Role.USER -> if (turn.text.isNotBlank() || turn.images.isNotEmpty()) add(Entry.Person(turn.text, turn.images))
             else -> {
                 turn.parts.filterIsInstance<Part.Reasoning>().forEach { add(Entry.Thought(it.text)) }
                 turn.parts.filterIsInstance<Part.Activity>().forEach { add(Entry.Line(if (it.summary.isNotBlank()) it.summary else it.name, it.isError)) }
@@ -131,7 +134,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
         ) {
             items(rows) { row ->
                 when (row) {
-                    is Entry.Person -> PersonSays(row.text)
+                    is Entry.Person -> PersonSays(ai, row.text, row.images)
                     is Entry.Reply -> ReplyView(ai, row.text)
                     is Entry.Line -> ActivityLine(row.summary, row.isError)
                     is Entry.Thought -> ReasoningView(ai, row.text, live = false)
@@ -203,11 +206,15 @@ private fun Suggestions(ai: AiState) {
 }
 
 @Composable
-private fun PersonSays(text: String) {
+private fun PersonSays(ai: AiState, text: String, images: List<Part.Image>) {
     val c = Mu.colors
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-        Box(Modifier.fillMaxWidth(0.88f).background(c.ink06).padding(horizontal = 12.dp, vertical = 8.dp)) {
-            SelectionContainer { MuText(text, style = MuType.row(LocalMuFonts.current), color = c.ink) }
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // What they showed (1.0.55), above what they said, as they sent it.
+        if (images.isNotEmpty()) SentPictures(ai, images)
+        if (text.isNotBlank()) {
+            Box(Modifier.fillMaxWidth(0.88f).background(c.ink06).padding(horizontal = 12.dp, vertical = 8.dp)) {
+                SelectionContainer { MuText(text, style = MuType.row(LocalMuFonts.current), color = c.ink) }
+            }
         }
     }
 }
@@ -266,8 +273,20 @@ private fun CardChip(ai: AiState, card: com.kaiharimoto.mastertool.core.model.Ca
     }
 }
 
+/**
+ * What a card named in a reply's words does when it is clicked (1.0.55): opens it large. Given by
+ * [MarkdownBlock], so every block's words — paragraphs, lists, tables, a combo's steps — link alike.
+ */
+internal val LocalCardLink = androidx.compose.runtime.compositionLocalOf<((String) -> Unit)?> { null }
+
 @Composable
 internal fun MarkdownBlock(ai: AiState, block: Block) {
+    val open: (String) -> Unit = remember(ai) { { name -> cardNamed(ai, name)?.let { ai.h.neue.viewing = Viewing(it, null, 0) } } }
+    androidx.compose.runtime.CompositionLocalProvider(LocalCardLink provides open) { BlockBody(ai, block) }
+}
+
+@Composable
+private fun BlockBody(ai: AiState, block: Block) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     when (block) {
@@ -292,6 +311,10 @@ internal fun MarkdownBlock(ai: AiState, block: Block) {
         is Block.Code -> Box(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(8.dp)) { Mono(block.text, color = c.ink) }
         is Block.Chart -> ChartBlock(block.chart)
         is Block.Cards -> CardsBlock(ai, block)
+        is Block.Deck -> DeckBlock(ai, block)
+        is Block.Compare -> CompareBlock(ai, block)
+        is Block.Line -> LineBlock(ai, block)
+        is Block.Board -> BoardBlock(ai, block)
         is Block.Pending -> PendingBlock(block)
         is Block.Quote -> Row(
             Modifier.drawBehind { drawLine(c.ink25, Offset(0f, 0f), Offset(0f, size.height), 2.dp.toPx()) }.padding(start = 10.dp),
@@ -305,6 +328,8 @@ internal fun MarkdownBlock(ai: AiState, block: Block) {
 internal fun styled(inlines: List<Inline>): AnnotatedString {
     val f = LocalMuFonts.current
     val mono = MuType.mono(f, 12.sp).fontFamily
+    val link = LocalCardLink.current
+    val card = SpanStyle(fontWeight = FontWeight.Medium, textDecoration = TextDecoration.Underline)
     return buildAnnotatedString {
         inlines.forEach { i ->
             when (i) {
@@ -312,7 +337,17 @@ internal fun styled(inlines: List<Inline>): AnnotatedString {
                 is Inline.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(i.text) }
                 is Inline.Italic -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(i.text) }
                 is Inline.Code -> withStyle(SpanStyle(fontFamily = mono)) { append(i.text) }
-                is Inline.Card -> withStyle(SpanStyle(fontWeight = FontWeight.Medium, textDecoration = TextDecoration.Underline)) { append(i.name) }
+                is Inline.Card -> if (link != null) {
+                    // A card in the words opens large on a click (1.0.55); it was only underlined.
+                    withLink(
+                        androidx.compose.ui.text.LinkAnnotation.Clickable(
+                            "card:${i.name}",
+                            androidx.compose.ui.text.TextLinkStyles(style = card, hoveredStyle = card.copy(fontWeight = FontWeight.Bold)),
+                        ) { link(i.name) },
+                    ) { append(i.name) }
+                } else {
+                    withStyle(card) { append(i.name) }
+                }
             }
         }
     }
@@ -399,6 +434,7 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
     val focused by source.collectIsFocusedAsState()
     val style = MuType.row(f).copy(color = c.ink)
     LaunchedEffect(ai.focusTick) { if (ai.focusTick > 0) runCatching { focus.requestFocus() } }
+    val pasteScope = androidx.compose.runtime.rememberCoroutineScope()
     Column(
         modifier
             .fillMaxWidth()
@@ -407,6 +443,7 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         FaceStrip(ai, phone)
+        AttachedRow(ai)
         Box(
             Modifier
                 .fillMaxWidth()
@@ -428,23 +465,48 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                     .reportsTextFocus()
                     .onPreviewKeyEvent { e ->
                         val enter = e.key == Key.Enter || e.key == Key.NumPadEnter
-                        if (enter && e.type == KeyEventType.KeyDown && !e.isShiftPressed) {
-                            ai.send(ai.draft)
-                            true
-                        } else {
-                            false
+                        val paste = e.key == Key.V && (e.isCtrlPressed || e.isMetaPressed) && e.type == KeyEventType.KeyDown
+                        when {
+                            enter && e.type == KeyEventType.KeyDown && !e.isShiftPressed -> {
+                                ai.send(ai.draft)
+                                true
+                            }
+                            // A copied picture goes with the message (1.0.55); copied words paste as ever.
+                            paste && com.kaiharimoto.neue.platform.clipboardHasPicture() -> {
+                                pasteScope.launch { com.kaiharimoto.neue.platform.pastedPicture()?.let(ai::attach) }
+                                true
+                            }
+                            else -> false
                         }
                     },
             )
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // A picture: chosen here, pasted, or dropped anywhere on the panel (1.0.55).
+            com.kaiharimoto.neue.kit.Tip("Attach a picture — or paste one, or drop it on the panel", above = true) {
+                com.kaiharimoto.neue.kit.IconButton(
+                    com.kaiharimoto.neue.kit.Icons.Image,
+                    { pasteScope.launch { choosePicture(ai) } },
+                    label = "Attach",
+                )
+            }
+            // A phone's or a tablet's camera: a photo of a paper decklist or a board, straight to Ai.
+            if (com.kaiharimoto.neue.platform.Platform.canTakePhoto) {
+                com.kaiharimoto.neue.kit.Tip("Take a photo for ${ai.name} to see", above = true) {
+                    com.kaiharimoto.neue.kit.IconButton(
+                        com.kaiharimoto.neue.kit.Icons.Camera,
+                        { pasteScope.launch { com.kaiharimoto.neue.platform.Platform.takePhoto()?.let(ai::attach) } },
+                        label = "Photo",
+                    )
+                }
+            }
             Box(Modifier.weight(1f)) {
-                Help(if (ai.running) "${ai.name} is answering" else "Enter sends · Shift Enter for a new line", maxLines = 1)
+                Help(if (ai.running) "${ai.name} is answering" else if (phone) "Enter sends" else "Enter sends · Shift Enter for a new line", maxLines = 1)
             }
             if (ai.running) {
                 MuButton("Stop", ai::stop, variant = BtnVariant.SECONDARY, size = BtnSize.SM)
             } else {
-                MuButton("Send", { ai.send(ai.draft) }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.draft.isNotBlank(), reason = "Write something first")
+                MuButton("Send", { ai.send(ai.draft) }, variant = BtnVariant.PRIMARY, size = BtnSize.SM, enabled = ai.draft.isNotBlank() || ai.attached.isNotEmpty(), reason = "Write something first")
             }
         }
     }

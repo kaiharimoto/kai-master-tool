@@ -22,8 +22,14 @@ expect fun decodePicture(bytes: ByteArray): ImageBitmap?
 /** [image] as a PNG file's bytes, or null when it could not be written. */
 expect fun encodePng(image: ImageBitmap): ByteArray?
 
+/** [image] as a JPEG file's bytes at [quality] (0–100), or null when it could not be written. */
+expect fun encodeJpeg(image: ImageBitmap, quality: Int): ByteArray?
+
 /** The picture on the clipboard — an image copied, or an image file copied in a file manager — or null. */
 expect suspend fun pastedPicture(): PickedFile?
+
+/** Whether the clipboard holds a picture now, without reading it: a paste into a text field decides by it. */
+expect fun clipboardHasPicture(): Boolean
 
 /** Whether [event] is carrying something that may be a picture, so the drop target lights up for it. */
 expect fun mayBePicture(event: DragAndDropEvent): Boolean

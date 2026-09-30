@@ -102,10 +102,28 @@ object OpenAiWire {
                         when (it) {
                             is Part.Context -> contextBlock(it.text)
                             is Part.Text -> it.text
+                            is Part.Image -> if (it.data == null) it.missing else null
                             else -> null
                         }
                     }
-                    if (words.isNotEmpty()) add(buildJsonObject { put("role", "user"); put("content", words.joinToString("\n\n")) })
+                    val pictures = turn.images.filter { it.data != null }
+                    when {
+                        // A turn with pictures (1.0.55) is a list of parts; a turn of words stays one
+                        // string, byte for byte what it always was.
+                        pictures.isNotEmpty() -> add(buildJsonObject {
+                            put("role", "user")
+                            putJsonArray("content") {
+                                if (words.isNotEmpty()) add(buildJsonObject { put("type", "text"); put("text", words.joinToString("\n\n")) })
+                                pictures.forEach { p ->
+                                    add(buildJsonObject {
+                                        put("type", "image_url")
+                                        putJsonObject("image_url") { put("url", "data:${p.mime};base64,${p.data}") }
+                                    })
+                                }
+                            }
+                        })
+                        words.isNotEmpty() -> add(buildJsonObject { put("role", "user"); put("content", words.joinToString("\n\n")) })
+                    }
                 }
                 Role.ASSISTANT -> add(buildJsonObject {
                     put("role", "assistant")

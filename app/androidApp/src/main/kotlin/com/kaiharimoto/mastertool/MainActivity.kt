@@ -223,7 +223,7 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         // choice replaces it once the settings are read (v1.3.5).
         applyOrientation(null)
 
-        Platform.attach(this, picker = { types -> pick(types) }, scanner = { scan() })
+        Platform.attach(this, picker = { types -> pick(types) }, scanner = { scan() }, camera = { photo() }, permission = { permission(it) })
 
         val app = application as MasterToolApplication
         val deps = AppDependencies(
@@ -449,6 +449,81 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         pendingPick = deferred
         pickDocument.launch(types)
         return deferred.await()
+    }
+
+    private var pendingPermission: CompletableDeferred<Boolean>? = null
+
+    private val askPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            val deferred = pendingPermission
+            pendingPermission = null
+            deferred?.complete(granted)
+        }
+
+    /** A runtime permission, asked for when it is not held yet (1.0.55: the camera; 1.0.57: the microphone). */
+    private suspend fun permission(name: String): Boolean {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, name) == android.content.pm.PackageManager.PERMISSION_GRANTED) return true
+        pendingPermission?.complete(false)
+        val deferred = CompletableDeferred<Boolean>()
+        pendingPermission = deferred
+        runCatching { askPermission.launch(name) }.onFailure {
+            pendingPermission = null
+            return false
+        }
+        return deferred.await()
+    }
+
+    private var pendingPhoto: CompletableDeferred<Boolean>? = null
+
+    private val takePicture =
+        registerForActivityResult(ActivityResultContracts.TakePicture()) { taken ->
+            val deferred = pendingPhoto
+            pendingPhoto = null
+            deferred?.complete(taken)
+        }
+
+    /**
+     * A photo for Ai to see (1.0.55), taken with the device's own camera app into the cache's
+     * `shared/` folder, turned upright by its EXIF orientation. The camera permission comes with
+     * the QR scanner, so it is asked for first: holding it undeclared-but-refused makes the
+     * camera app's intent throw.
+     */
+    private suspend fun photo(): PickedFile? {
+        if (!permission(android.Manifest.permission.CAMERA)) return null
+        val file = java.io.File(cacheDir, "shared/photo-${System.currentTimeMillis()}.jpg").apply { parentFile?.mkdirs() }
+        val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        pendingPhoto?.complete(false)
+        val deferred = CompletableDeferred<Boolean>()
+        pendingPhoto = deferred
+        runCatching { takePicture.launch(uri) }.onFailure {
+            pendingPhoto = null
+            return null
+        }
+        val taken = deferred.await()
+        return try {
+            if (taken && file.length() > 0) PickedFile("photo.jpg", upright(file)) else null
+        } finally {
+            file.delete()
+        }
+    }
+
+    /** A camera's JPEG, turned as its EXIF says it was held; the bytes as they are when it needs no turn. */
+    private fun upright(file: java.io.File): ByteArray {
+        val bytes = file.readBytes()
+        val degrees = runCatching {
+            when (android.media.ExifInterface(file.absolutePath).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)) {
+                android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+        }.getOrDefault(0f)
+        if (degrees == 0f) return bytes
+        return runCatching {
+            val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            val turned = android.graphics.Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, android.graphics.Matrix().apply { postRotate(degrees) }, true)
+            java.io.ByteArrayOutputStream().also { turned.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, it) }.toByteArray()
+        }.getOrDefault(bytes)
     }
 
     /** A deck's QR code, off another screen: the desk's Export → QR code, or anyone's `ydke://` code. */

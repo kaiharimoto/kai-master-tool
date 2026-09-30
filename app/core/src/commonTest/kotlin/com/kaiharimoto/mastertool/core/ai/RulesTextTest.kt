@@ -25,7 +25,7 @@ class RulesTextTest {
         "archetype_guide", "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "web_search", "web_fetch",
         "delegate", "todo_write", "calculate", "hand_odds", "skill_view", "get_web", "list_webs", "get_siding",
         "set_siding_plan", "prep_state", "log_game", "matchup_matrix", "expected_winrate", "set_event", "drill",
-        "session_report",
+        "session_report", "resolve_cards", "new_deck",
     )
 
     private val skillBodies: Map<String, String> = mapOf(
@@ -36,12 +36,14 @@ class RulesTextTest {
         DeckSkills.TOURNAMENT_PREP_NAME to DeckSkills.TOURNAMENT_PREP,
         DeckSkills.FIRST_PRINCIPLES_NAME to DeckSkills.FIRST_PRINCIPLES,
         DeckSkills.ABOUT_YOU_NAME to DeckSkills.ABOUT_YOU,
+        DeckSkills.DECK_FROM_PICTURE_NAME to DeckSkills.DECK_FROM_PICTURE,
     )
 
     private val allTexts: List<String>
         get() = skillBodies.values.toList() + listOf(
             GameRulesSkill.DESCRIPTION, DeckSkills.FINE_TUNING_DESCRIPTION, DeckSkills.SELF_STUDY_DESCRIPTION,
             DeckSkills.TOURNAMENT_PREP_DESCRIPTION, DeckSkills.FIRST_PRINCIPLES_DESCRIPTION, DeckSkills.ABOUT_YOU_DESCRIPTION,
+            DeckSkills.DECK_FROM_PICTURE_DESCRIPTION,
         ) + AiDemo.scenes.flatMap { listOf(it.title, it.caption, it.person, it.reply) + it.activity }
 
     @Test

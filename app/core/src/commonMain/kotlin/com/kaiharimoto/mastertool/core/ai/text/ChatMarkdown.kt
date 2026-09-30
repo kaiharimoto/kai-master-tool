@@ -27,8 +27,25 @@ sealed interface Block {
     /** A ```chart block that read as a chart ([ChatChart]); one that did not is [Code]. */
     data class Chart(val chart: ChatChart.Chart) : Block
 
-    /** A ```cards block: card names, each with its copies, drawn as art (1.0.46). */
-    data class Cards(val lines: List<CardLine>) : Block
+    /**
+     * A ```cards block: card names, each with its copies, drawn as art (1.0.46). `## Label`
+     * lines inside break it into labelled [groups] (1.0.55); [lines] is every card, in order.
+     */
+    data class Cards(val lines: List<CardLine>, val groups: List<CardGroup> = listOf(CardGroup("", lines))) : Block
+
+    /** A ```deck block (1.0.55): a whole list, `Main:`, `Extra:` and `Side:` sections of counted cards. */
+    data class Deck(val sections: List<CardGroup>) : Block {
+        val total: Int get() = sections.sumOf { g -> g.lines.sumOf { it.count } }
+    }
+
+    /** A ```compare block (1.0.55): cards out and cards in, a change to a deck or a siding plan. */
+    data class Compare(val out: CardGroup, val into: CardGroup) : Block
+
+    /** A ```line block (1.0.55): a combo, step by step, each step a card and what it does. */
+    data class Line(val steps: List<Step>) : Block
+
+    /** A ```board block (1.0.55): the field as it stands, zone by zone. */
+    data class Board(val board: ChatBoard) : Block
 
     /** A block still being written (a chart whose fence is not closed yet): a quiet line, not raw JSON. */
     data class Pending(val what: String) : Block
@@ -38,6 +55,34 @@ enum class Align { LEFT, CENTER, RIGHT }
 
 /** One line of a ```cards block: `3 Ash Blossom & Joyous Spring`, `Ash Blossom x2`, or a bare name. */
 data class CardLine(val count: Int, val name: String)
+
+/** Cards under a label: a group of a ```cards block, a section of a ```deck, one side of a ```compare. */
+data class CardGroup(val label: String, val lines: List<CardLine>) {
+    val count: Int get() = lines.sumOf { it.count }
+}
+
+/** One step of a ```line: the card it turns on, if it names one, and what happens, in words. */
+data class Step(val card: String?, val action: List<Inline>)
+
+/**
+ * A field in a ```board: five main monster zones, two extra monster zones, five spell and trap
+ * zones and the field zone, each a card or empty; the hand, the graveyard and the banished as
+ * lists. A card set face-down is marked.
+ */
+data class ChatBoard(
+    val monsters: List<Slot?>,
+    val extraMonsters: List<Slot?>,
+    val spells: List<Slot?>,
+    val field: Slot?,
+    val hand: List<CardLine>,
+    val graveyard: List<CardLine>,
+    val banished: List<CardLine>,
+) {
+    data class Slot(val name: String, val set: Boolean = false)
+
+    val isEmpty: Boolean get() = monsters.all { it == null } && extraMonsters.all { it == null } && spells.all { it == null } &&
+        this.field == null && hand.isEmpty() && graveyard.isEmpty() && banished.isEmpty()
+}
 
 sealed interface Inline {
     data class Text(val text: String) : Inline
@@ -77,9 +122,14 @@ object ChatMarkdown {
                     val closed = i < lines.size
                     val body = code.joinToString("\n")
                     blocks += when {
-                        streaming && !closed && lang in DRAWN -> Block.Pending(if (lang == "chart") "Drawing a chart" else "Laying out cards")
+                        streaming && !closed && lang in DRAWN -> Block.Pending(PENDING.getValue(lang))
                         lang == "chart" -> ChatChart.parse(body).fold({ Block.Chart(it) }, { Block.Code(body, lang) })
-                        lang == "cards" -> cardLines(body).takeIf { it.isNotEmpty() }?.let { Block.Cards(it) } ?: Block.Code(body, lang)
+                        lang == "cards" -> cardGroups(body).takeIf { g -> g.any { it.lines.isNotEmpty() } }
+                            ?.let { g -> Block.Cards(g.flatMap { it.lines }, g.filter { it.lines.isNotEmpty() }) } ?: Block.Code(body, lang)
+                        lang == "deck" -> deck(body) ?: Block.Code(body, lang)
+                        lang == "compare" -> compare(body) ?: Block.Code(body, lang)
+                        lang == "line" || lang == "combo" -> line(body) ?: Block.Code(body, lang)
+                        lang == "board" -> board(body)?.let { Block.Board(it) } ?: Block.Code(body, lang)
                         else -> Block.Code(body, lang)
                     }
                 }
@@ -152,7 +202,16 @@ object ChatMarkdown {
         return blocks
     }
 
-    private val DRAWN = setOf("chart", "cards")
+    private val PENDING = mapOf(
+        "chart" to "Drawing a chart",
+        "cards" to "Laying out cards",
+        "deck" to "Laying out the deck",
+        "compare" to "Laying out the changes",
+        "line" to "Drawing the line",
+        "combo" to "Drawing the line",
+        "board" to "Setting the board",
+    )
+    private val DRAWN = PENDING.keys
 
     /** `| --- | :---: | ---: |`, with or without the outer pipes. */
     private fun isRule(t: String): Boolean =
@@ -187,9 +246,45 @@ object ChatMarkdown {
     }
 
     /** A ```cards block's lines: `3 Name`, `3x Name`, `Name x2`, `[[Name]]`, or a bare name. */
-    fun cardLines(body: String): List<CardLine> = body.lines().mapNotNull { raw ->
-        val t = raw.trim().removePrefix("- ").removePrefix("* ").trim()
-        if (t.isEmpty()) return@mapNotNull null
+    fun cardLines(body: String): List<CardLine> = body.lines().mapNotNull { cardLine(it) }
+
+    /**
+     * A block's lines under their labels: a `## Label` or `Label:` line starts a group
+     * (`Main Deck (40):` is "Main Deck"); the lines before any label are a group with none.
+     */
+    fun cardGroups(body: String): List<CardGroup> {
+        val out = mutableListOf<CardGroup>()
+        var label = ""
+        var lines = mutableListOf<CardLine>()
+        fun close() {
+            if (lines.isNotEmpty() || label.isNotEmpty()) out += CardGroup(label, lines)
+            lines = mutableListOf()
+        }
+        body.lines().forEach { raw ->
+            val t = raw.trim()
+            val heading = Regex("^#{1,4}\\s+(.+)$").find(t)?.groupValues?.get(1)
+            val colon = Regex("^([A-Za-z][A-Za-z /&'-]{0,30}?)\\s*(\\(\\s*\\d+\\s*\\))?\\s*:\\s*(.*)$").find(t)
+            when {
+                heading != null -> { close(); label = heading.trim() }
+                colon != null && !t.startsWith("[[") -> {
+                    close()
+                    label = colon.groupValues[1].trim()
+                    // `Hand: A, B` — the cards on the label's own line.
+                    colon.groupValues[3].takeIf { it.isNotBlank() }?.let { rest -> lines += list(rest) }
+                }
+                else -> cardLine(raw)?.let { lines += it }
+            }
+        }
+        close()
+        return out
+    }
+
+    /** A comma-separated run of cards (`A, 2 B, [[C]]`), as lines. */
+    private fun list(text: String): List<CardLine> = text.split(',', ';').mapNotNull { cardLine(it) }
+
+    private fun cardLine(raw: String): CardLine? {
+        val t = raw.trim().removePrefix("- ").removePrefix("* ").removePrefix("+ ").trim()
+        if (t.isEmpty() || t == "-" || t.equals("none", true) || t.equals("empty", true)) return null
         val lead = Regex("^(\\d{1,2})\\s*[x×]?\\s+(.+)$").find(t)
         val tail = Regex("^(.+?)\\s*[x×]\\s*(\\d{1,2})$").find(t)
         val (count, name) = when {
@@ -198,7 +293,100 @@ object ChatMarkdown {
             else -> 1 to t
         }
         val clean = name.trim().removePrefix("[[").removeSuffix("]]").trim()
-        if (clean.isEmpty()) null else CardLine(count.coerceIn(1, 3), clean)
+        return if (clean.isEmpty()) null else CardLine(count.coerceIn(1, 3), clean)
+    }
+
+    private fun key(label: String) = label.lowercase().filter { it.isLetter() }
+
+    /** A ```deck: its sections in the order Main, Extra, Side, whatever order they came in. */
+    fun deck(body: String): Block.Deck? {
+        val groups = cardGroups(body).filter { it.lines.isNotEmpty() }
+        if (groups.isEmpty()) return null
+        fun rank(g: CardGroup) = key(g.label).let {
+            when {
+                it.startsWith("main") || it.isEmpty() -> 0
+                it.startsWith("extra") -> 1
+                it.startsWith("side") -> 2
+                else -> 3
+            }
+        }
+        return Block.Deck(groups.map { if (it.label.isEmpty()) it.copy(label = "Main") else it }.sortedBy(::rank))
+    }
+
+    /** A ```compare: `Out:`/`In:` (or `-`/`+` lines, or `Before:`/`After:`); the first two groups otherwise. */
+    fun compare(body: String): Block.Compare? {
+        val signed = body.lines().map { it.trim() }.filter { it.startsWith("+") || it.startsWith("-") && !it.startsWith("- ") || it.startsWith("−") }
+        if (signed.isNotEmpty() && cardGroups(body).none { it.label.isNotEmpty() }) {
+            val out = signed.filter { it.startsWith("-") || it.startsWith("−") }.mapNotNull { cardLine(it.drop(1)) }
+            val into = signed.filter { it.startsWith("+") }.mapNotNull { cardLine(it.drop(1)) }
+            return if (out.isEmpty() && into.isEmpty()) null else Block.Compare(CardGroup("Out", out), CardGroup("In", into))
+        }
+        val groups = cardGroups(body).filter { it.label.isNotEmpty() }
+        if (groups.isEmpty()) return null
+        val out = groups.firstOrNull { key(it.label).let { k -> k.startsWith("out") || k.startsWith("remove") || k.startsWith("cut") || k.startsWith("before") } } ?: groups.first()
+        val into = groups.firstOrNull { it !== out && key(it.label).let { k -> k.startsWith("in") || k.startsWith("add") || k.startsWith("after") } }
+            ?: groups.firstOrNull { it !== out } ?: CardGroup("In", emptyList())
+        return Block.Compare(out, into)
+    }
+
+    /** A ```line: numbered or bulleted steps; each names the card it turns on first, in brackets. */
+    fun line(body: String): Block.Line? {
+        val steps = body.lines().mapNotNull { raw ->
+            val t = raw.trim().replace(Regex("^(\\d{1,2}[.)]|[-*•→])\\s*"), "").trim()
+            if (t.isEmpty()) return@mapNotNull null
+            val first = Regex("\\[\\[([^\\]]+)]]").find(t)
+            val card = first?.takeIf { it.range.first <= 2 }?.groupValues?.get(1)?.trim()
+            val rest = if (card != null) t.removeRange(first.range).trimStart(' ', ':', '—', '–', '-', ',', '→').trim() else t
+            Step(card, inline(rest))
+        }
+        return if (steps.isEmpty()) null else Block.Line(steps)
+    }
+
+    /**
+     * A ```board: `Monsters:`, `Extra Monster:`, `Spells/Traps:`, `Field:`, `Hand:`, `GY:` and
+     * `Banished:` lines of comma-separated cards; `-` is an empty zone and `(set)` a face-down card.
+     */
+    fun board(body: String): ChatBoard? {
+        val zones = mutableMapOf<String, List<String>>()
+        body.lines().forEach { raw ->
+            val t = raw.trim().removePrefix("- ").trim()
+            val i = t.indexOf(':')
+            if (i <= 0) return@forEach
+            val k = key(t.take(i))
+            val cards = t.drop(i + 1).split(',', ';').map { it.trim() }
+            val zone = when {
+                k.startsWith("extramonster") || k == "emz" || k.startsWith("extrazone") -> "emz"
+                k.startsWith("monster") || k == "mmz" || k.startsWith("mainmonster") -> "monsters"
+                k.startsWith("spell") || k.startsWith("st") || k.startsWith("backrow") || k.startsWith("trap") -> "spells"
+                k.startsWith("field") -> "field"
+                k.startsWith("hand") -> "hand"
+                k == "gy" || k.startsWith("grave") -> "gy"
+                k.startsWith("banish") || k.startsWith("removed") -> "banished"
+                else -> return@forEach
+            }
+            zones[zone] = cards
+        }
+        if (zones.isEmpty()) return null
+        fun slot(s: String): ChatBoard.Slot? {
+            val set = Regex("\\((set|face-?down)\\)", RegexOption.IGNORE_CASE).containsMatchIn(s)
+            val name = s.replace(Regex("\\((set|face-?down)\\)", RegexOption.IGNORE_CASE), "").trim().removePrefix("[[").removeSuffix("]]").trim()
+            return if (name.isEmpty() || name == "-" || name == "—" || name.equals("empty", true)) null else ChatBoard.Slot(name, set)
+        }
+        fun row(zone: String, n: Int): List<ChatBoard.Slot?> {
+            val given = zones[zone].orEmpty().map(::slot).take(n)
+            return given + List(n - given.size) { null }
+        }
+        fun pile(zone: String) = zones[zone].orEmpty().mapNotNull { cardLine(it) }
+        val b = ChatBoard(
+            monsters = row("monsters", 5),
+            extraMonsters = row("emz", 2),
+            spells = row("spells", 5),
+            field = zones["field"]?.firstNotNullOfOrNull(::slot),
+            hand = pile("hand"),
+            graveyard = pile("gy"),
+            banished = pile("banished"),
+        )
+        return if (b.isEmpty) null else b
     }
 
     /**

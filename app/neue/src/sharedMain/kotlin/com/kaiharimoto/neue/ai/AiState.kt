@@ -247,10 +247,57 @@ class AiState(internal val h: NeueHolders) {
 
     // ---- talking ---------------------------------------------------------------
 
+    // ---- pictures (1.0.55) -----------------------------------------------------
+
+    /** Pictures waiting in the composer for the next message. */
+    var attached by mutableStateOf<List<Attachment>>(emptyList())
+        private set
+
+    /** A picture being read into the composer, so the composer can say so. */
+    var attaching by mutableStateOf(false)
+        private set
+
+    /** [file] added to the next message, when it is a picture and there is room; a note says why not. */
+    fun attach(file: com.kaiharimoto.neue.platform.PickedFile) {
+        if (attached.size >= com.kaiharimoto.mastertool.core.ai.vision.PictureFit.MOST) {
+            h.neue.note = com.kaiharimoto.neue.Note("${com.kaiharimoto.mastertool.core.ai.vision.PictureFit.MOST} pictures at most in one message")
+            return
+        }
+        attaching = true
+        scope.launch {
+            val ready = Attachments.prepare(file)
+            attaching = false
+            if (ready == null) {
+                h.neue.note = com.kaiharimoto.neue.Note("That is not a picture ${name} can read")
+            } else {
+                attached = attached + ready
+                focusTick++
+            }
+        }
+    }
+
+    /** A picture of the chat opened large. */
+    var pictureOpen by mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
+
+    /** The studio's picture of pictures waiting in the composer. */
+    fun previewAttached(list: List<Attachment>) {
+        attached = list
+    }
+
+    fun detach(a: Attachment) {
+        attached = attached - a
+    }
+
+    /** Whether the model in use can see a picture: yes, no, or it cannot be told. */
+    val sight: com.kaiharimoto.mastertool.core.ai.vision.Vision.Sight
+        get() = prefs.connection?.let { com.kaiharimoto.mastertool.core.ai.vision.Vision.of(it.provider, it.model) }
+            ?: com.kaiharimoto.mastertool.core.ai.vision.Vision.Sight.MAYBE
+
     /** The person's message, sent; Ai answers, acting through its tools. */
     fun send(text: String) {
         val words = text.trim()
-        if (words.isEmpty() || running) return
+        val pictures = attached
+        if ((words.isEmpty() && pictures.isEmpty()) || running) return
         val connection = prefs.connection ?: run {
             openWizard()
             return
@@ -259,8 +306,10 @@ class AiState(internal val h: NeueHolders) {
         status = null
         notice = null
         draft = ""
+        attached = emptyList()
         if (com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker.isThanks(words)) mood.thanked(clock())
         val current = session?.takeIf { it.connection == connection.id } ?: begin(connection)
+        val images = pictures.map { files.putImage(current.id, it.bytes, it.mime, it.width, it.height) }
         val scope = host.scope()
         val scopeChanged = scope?.path != current.scopeShown
         val renamed = renamedTo?.let { listOf("The person renamed you: you are $it from now on, whatever the instructions above call you.") }.orEmpty()
@@ -273,7 +322,7 @@ class AiState(internal val h: NeueHolders) {
             emptyList()
         }
         val context = PromptBuilder.context(renamed + host.situation() + guide, scope, scope?.let { host.notes(it) }, scopeChanged)
-        val turn = ChatTurn.user(words, context, System.currentTimeMillis())
+        val turn = ChatTurn.user(words, context, System.currentTimeMillis(), images)
         val next = current.copy(
             turns = current.turns + turn,
             updatedAt = System.currentTimeMillis(),
@@ -310,7 +359,8 @@ class AiState(internal val h: NeueHolders) {
                 val ready = if (budget > 0) summarizedIfLong(start, model, connection, budget) else start
                 // From first principles (1.0.54) the model is never offered the web or the community's lists.
                 val offered = if (start.mode == AiSession.MODE_PRINCIPLES) tools.filter { it.name !in AiTools.FIRST_PRINCIPLES_BARRED } else tools
-                val request = TurnRequest(ready.system, ready.sent, offered, connection.model, effort, ready.resume)
+                // The pictures' bytes, read from their files just now: they are never kept in the conversation.
+                val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
                 AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->
                     when (event) {
                         is AgentEvent.Text -> streaming += event.delta
@@ -339,7 +389,14 @@ class AiState(internal val h: NeueHolders) {
                             session?.let { commit(it.copy(turns = it.turns + turn, updatedAt = System.currentTimeMillis())) }
                         }
                         is AgentEvent.Done -> session?.let { commit(it.copy(usage = it.usage + event.usage)) }
-                        is AgentEvent.Failed -> problem = event.message to event.auth
+                        is AgentEvent.Failed -> problem = (
+                            // A model that cannot see, sent a picture, says so in its own words; say it plainly.
+                            if (start.turns.any { t -> t.images.isNotEmpty() } && com.kaiharimoto.mastertool.core.ai.vision.Vision.refused(event.message)) {
+                                com.kaiharimoto.mastertool.core.ai.vision.Vision.REFUSED
+                            } else {
+                                event.message
+                            }
+                            ) to event.auth
                     }
                 }
             } finally {
