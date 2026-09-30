@@ -154,7 +154,7 @@ data class AiSession(
     val resume: String? = null,
     /** The memory scope whose notes the conversation has already been given (`MemoryScope.path`). */
     val scopeShown: String? = null,
-    /** "chat", or "tune" for Fine Tuning. */
+    /** "chat"; "tune" when the person teaches Ai a deck; "study" when Ai studies it itself (Fine Tuning). */
     val mode: String = MODE_CHAT,
     val usage: Usage = Usage(),
     /** How many of [turns] the reflection after a conversation has already read (phase 3). */
@@ -166,6 +166,8 @@ data class AiSession(
      */
     val summary: String = "",
     val summarized: Int = 0,
+    /** The deck whose guide the conversation has already been given (1.0.48). */
+    val guideShown: String? = null,
 ) {
     /** What the model is sent: the summary in front of the turns after it, or every turn. */
     val sent: List<ChatTurn>
@@ -188,5 +190,6 @@ data class AiSession(
     companion object {
         const val MODE_CHAT = "chat"
         const val MODE_TUNE = "tune"
+        const val MODE_STUDY = "study"
     }
 }

@@ -101,7 +101,7 @@ private fun Head(ai: AiState, phone: Boolean) {
                 when {
                     ai.wizardOpen -> "Setting up"
                     provider == null -> "Not connected"
-                    ai.tuning -> "Fine Tuning · " + provider.label
+                    ai.tuning -> "Fine Tuning · " + (if (ai.studying) "studying" else "being taught") + " · " + provider.label
                     else -> provider.label + (connection?.model?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
                 },
                 color = c.ink45,
@@ -109,8 +109,8 @@ private fun Head(ai: AiState, phone: Boolean) {
         }
         val size = if (phone) 40.dp else 28.dp
         if (!ai.wizardOpen && AiState.PHASE >= 3 && ai.configured) {
-            Tip(if (ai.tuning) "Finish, and see what ${ai.name} learned" else "Fine Tuning: ${ai.name} asks how you prepare for a tournament, and remembers") {
-                WordToggle(if (ai.tuning) "Finish" else "Tune", on = ai.tuning, onClick = { if (ai.tuning) ai.finishTuning() else ai.startTuning() })
+            Tip(if (ai.tuning) "Finish, and see what ${ai.name} learned" else "Fine Tuning: teach ${ai.name} the open deck, or let it study the deck itself") {
+                WordToggle(if (ai.tuning) "Finish" else "Teach", on = ai.tuning, onClick = { if (ai.tuning) ai.finishTuning() else ai.tuneAsk = true })
             }
         }
         if (!ai.wizardOpen) {

@@ -96,8 +96,9 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
   YGOPRODeck and build a web of the field by itself. It remembers you in markdown files you can
   read, and connects to your Claude or ChatGPT plan through their command-line
   apps, to an API key (Anthropic, OpenAI, Gemini, OpenRouter), or to a model on
-  your own machine — a wizard walks you through each. **Fine Tuning** has it
-  interview you about how you prepare for a tournament and remember the answers,
+  your own machine — a wizard walks you through each. **Fine Tuning** teaches it your
+  deck — you explain it, or it studies the cards and the internet itself, thinking out
+  loud — into a guide it reads whenever the deck is open,
   and it learns from ordinary conversations too, always with Undo. It knows the rules,
   checks a card's rulings, searches the web, draws tables and charts, and shows its
   thinking as it works. Settings can

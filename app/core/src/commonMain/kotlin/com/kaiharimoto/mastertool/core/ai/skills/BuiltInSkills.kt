@@ -159,33 +159,9 @@ object BuiltInSkills {
             - `get_siding` shows what is there; `set_siding_plan` replaces one turn's plan.
             """,
         ),
-        skill(
-            "fine-tuning",
-            "Fine Tuning: interviewing the person about their tournament preparation and learning it for good.",
-            3,
-            """
-            # Fine Tuning
-
-            The person started Fine Tuning to teach you how to help them prepare. Interview them, one question at a time,
-            with `ask_user` (short options they can tap, and they can always type their own). Write each answer that will
-            matter later into memory (`memory`, scope user — or web/deck for things about one event or deck) as soon as you
-            have it. Keep entries short and factual.
-
-            Cover, adapting to what they say (skip what memory already holds):
-            1. The next event: name, date, format (TCG/OCG), size, rounds, Swiss or elimination.
-            2. Their deck: which one, how long they have played it, how comfortable they are, cards they still lack.
-            3. The field they expect there, and the matchups they fear.
-            4. How they play: going first or second by choice, risk appetite, how they side today.
-            5. Practice: how much time they have before the event, and how they like to practise (combo lines, games,
-               reading lists, matchup notes).
-            6. What they want from you: build and tune decks, research the meta, write siding plans, quiz them, explain
-               rulings… and what they do not want (no long lectures, no changes without asking…).
-            7. How they like answers: short or detailed, lists or prose.
-
-            End with a summary of what you learned in five lines, and offer the first concrete step (build the web for the
-            event, assess their deck, draft siding). Do not ask more than about ten questions in a sitting.
-            """,
-        ),
+        // Fine Tuning, about the deck (1.0.48, kai): the person teaches it, or Ai studies it itself.
+        3 to Skill(DeckSkills.FINE_TUNING_NAME, DeckSkills.FINE_TUNING_DESCRIPTION, DeckSkills.FINE_TUNING.trim(), builtIn = true),
+        3 to Skill(DeckSkills.SELF_STUDY_NAME, DeckSkills.SELF_STUDY_DESCRIPTION, DeckSkills.SELF_STUDY.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

@@ -172,6 +172,16 @@ class AiEndToEndTest {
         assertEquals(3, h.ai.todos.size)
         val offline = h.tool("web_fetch", "url" to "http://example.com")
         assertTrue(offline.isError, "plain http is refused")
+
+        // Fine Tuning's guide (1.0.48): the open deck's own file, once it is saved.
+        val unsaved = h.tool("memory", "action" to "add", "scope" to "guide", "text" to "Game plan: go second.")
+        withTimeout(5_000) { while (h.builder.deckId == null) delay(20) }
+        val wrote = h.tool("memory", "action" to "add", "scope" to "guide", "text" to "Card roles: [[Ash Blossom & Joyous Spring]] — hand trap.")
+        assertFalse(wrote.isError, wrote.content + " / " + unsaved.content)
+        val guide = h.ai.files.read("guides/${h.builder.deckId}.md").orEmpty()
+        assertTrue("Card roles" in guide, guide)
+        val read = h.tool("memory_read", "scope" to "guide")
+        assertTrue("hand trap" in read.content, read.content)
     }
 
     @Test

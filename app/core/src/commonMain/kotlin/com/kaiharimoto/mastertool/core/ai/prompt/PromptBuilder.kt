@@ -105,11 +105,20 @@ object PromptBuilder {
         appendLine(s.skillsIndex.trim().ifEmpty { "(none)" })
         if (s.mode == "tune") {
             appendLine()
-            appendLine("## This conversation is Fine Tuning")
+            appendLine("## This conversation is Fine Tuning: the person teaches you their deck")
             appendLine(
-                "The person started Fine Tuning to teach you how they prepare for tournaments. Read the skill fine-tuning " +
-                    "with skill_view first, then interview them as it says: one question at a time with ask_user, writing " +
-                    "what you learn to memory as you go. Do not change their decks or settings in this conversation.",
+                "Read the skill fine-tuning with skill_view first and follow it: one question at a time with ask_user, " +
+                    "writing what you learn to memory scope guide as you go, within the intensity in the first message. " +
+                    "Do not change their decks or settings in this conversation.",
+            )
+        }
+        if (s.mode == "study") {
+            appendLine()
+            appendLine("## This conversation is Fine Tuning: you study the deck yourself")
+            appendLine(
+                "Read the skill self-study with skill_view first and follow it, within the intensity in the first message. " +
+                    "Think out loud in short plain lines so the person learns with you, and write the guide to memory scope guide. " +
+                    "Do not change their decks or settings in this conversation.",
             )
         }
     }.trim() + "\n"

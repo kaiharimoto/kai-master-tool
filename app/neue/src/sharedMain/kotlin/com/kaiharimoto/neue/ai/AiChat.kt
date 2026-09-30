@@ -141,7 +141,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
             if (ai.streaming.isNotEmpty()) item { ReplyView(ai, ai.streaming, live = true) }
             if (ai.running) item { Working(ai.working ?: ai.status ?: if (ai.streaming.isEmpty()) "Thinking" else "Writing") }
             ai.confirm?.let { c -> item { ConfirmCard(c) } }
-            ai.question?.let { q -> item { QuestionCard(q) } }
+            ai.question?.let { q -> item { QuestionCard(ai, q) } }
             ai.problem?.let { (message, connection) -> item { ProblemCard(message, connection) { ai.openWizard() } } }
             ai.notice?.takeIf { !ai.running }?.let { n -> item { ActivityLine(n, isError = false) } }
         }
@@ -326,7 +326,7 @@ private fun ConfirmCard(c: Confirm) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuestionCard(q: Question) {
+private fun QuestionCard(ai: AiState, q: Question) {
     val c = Mu.colors
     var picked by remember(q) { mutableStateOf(setOf<String>()) }
     var own by remember(q) { mutableStateOf("") }
@@ -334,7 +334,11 @@ private fun QuestionCard(q: Question) {
         Modifier.fillMaxWidth().border(1.dp, c.ink).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        MuText(q.question, style = MuType.row(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium), color = c.ink)
+        // The cards it asks about, as their art (1.0.48): a question about a card shows the card.
+        if (q.cards.isNotEmpty()) {
+            CardsBlock(ai, com.kaiharimoto.mastertool.core.ai.text.Block.Cards(q.cards.map { com.kaiharimoto.mastertool.core.ai.text.CardLine(1, it.name) }))
+        }
+        MuText(styled(ChatMarkdown.inline(q.question)), style = MuType.row(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium), color = c.ink)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             q.options.forEach { option ->
                 Tag(option, selected = option in picked, onClick = {

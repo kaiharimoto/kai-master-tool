@@ -70,6 +70,7 @@ object AiSettings {
         "ai.alwaysAllow" to "Deleting decks and webs runs without asking the person first.",
         "ai.panelOpen" to "The assistant's panel is open.",
         "ai.panelWidth" to "The assistant panel's width in dp (320–720).",
+        "ai.tuneIntensity" to "How long and hard Fine Tuning goes: quick, standard or deep.",
         "ai.showReasoning" to "How the model's thinking shows in the chat: folded (first lines), open, or hidden.",
         FORMAT to "The banlist the builder checks against: TCG or OCG.",
         SEARCH_EFFECTS to "Card searches read the printed text as well as names.",

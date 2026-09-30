@@ -68,13 +68,13 @@ class AiFiles(val root: File) {
     /** Every memory file, for the person to see what Ai knows. */
     fun memoryFiles(): List<File> = buildList {
         listOf(Persona.FILE, MemoryKind.USER.file, MemoryKind.AGENT.file).map(::file).filter { it.isFile }.forEach(::add)
-        listOf("decks", "webs").forEach { dir -> file(dir).listFiles { f -> f.extension == "md" }?.sortedBy { it.name }?.forEach(::add) }
+        listOf("decks", "guides", "webs").forEach { dir -> file(dir).listFiles { f -> f.extension == "md" }?.sortedBy { it.name }?.forEach(::add) }
     }
 
     /** Everything Ai remembers gone: memory, skills it wrote, conversations. The folder stays. */
     fun forgetEverything() {
         listOf(Persona.FILE, MemoryKind.USER.file, MemoryKind.AGENT.file).forEach(::delete)
-        listOf("decks", "webs", "skills", "sessions", "run").forEach { file(it).deleteRecursively() }
+        listOf("decks", "guides", "webs", "skills", "sessions", "run", "cache").forEach { file(it).deleteRecursively() }
     }
 
     // ---- skills -------------------------------------------------------------

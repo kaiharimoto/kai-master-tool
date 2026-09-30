@@ -88,6 +88,8 @@ data class AiPrefs(
     val introSeen: Boolean = false,
     /** How the model's thinking shows in the chat: folded to its first lines, open, or not at all (1.0.47). */
     val showReasoning: String = REASONING_FOLDED,
+    /** How long and hard Fine Tuning goes: quick, standard or deep (1.0.48). */
+    val tuneIntensity: String = "standard",
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()
@@ -99,6 +101,7 @@ data class AiPrefs(
         active = active?.takeIf { id -> connections.any { it.id == id } },
         connections = connections.distinctBy { it.id },
         showReasoning = showReasoning.takeIf { it in REASONINGS } ?: REASONING_FOLDED,
+        tuneIntensity = tuneIntensity.takeIf { it in listOf("quick", "standard", "deep") } ?: "standard",
     )
 
     companion object {

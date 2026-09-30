@@ -29,6 +29,13 @@ enum class MemoryKind(val file: String, val limit: Int, val title: String) {
 
     /** Notes on one web — the field for an event, every deck in it: in the prompt while it is in scope. */
     WEB("webs/%s.md", 6000, "Notes on %s"),
+
+    /**
+     * How one deck plays (1.0.48, Fine Tuning): its game plan, lines, card roles, weak points,
+     * side deck — taught by the person or studied by Ai. Read while that deck is open, whether
+     * or not it is in a web; the web's file is the field, this is the deck.
+     */
+    GUIDE("guides/%s.md", 10000, "How %s plays"),
 }
 
 data class MemoryDoc(val preamble: List<String>, val entries: List<String>) {
@@ -144,7 +151,7 @@ object AiMemory {
 
     /** The file's name under the memory folder, for [kind] and a deck's or web's id. */
     fun path(kind: MemoryKind, id: String? = null): String =
-        if (kind == MemoryKind.DECK || kind == MemoryKind.WEB) kind.file.replace("%s", safeId(id ?: "")) else kind.file
+        if (kind == MemoryKind.DECK || kind == MemoryKind.WEB || kind == MemoryKind.GUIDE) kind.file.replace("%s", safeId(id ?: "")) else kind.file
 
     /** An id made safe for a file name: letters, digits, dashes and underscores only. */
     fun safeId(id: String): String = id.map { if (it.isLetterOrDigit() || it == '-' || it == '_') it else '_' }.joinToString("").take(80)

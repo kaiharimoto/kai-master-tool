@@ -136,7 +136,7 @@ object AiDemo {
         ),
         Scene(
             title = "Teach it your deck",
-            caption = "Fine Tuning: Ai interviews you about your deck and writes a guide it keeps.",
+            caption = "Fine Tuning: teach Ai your deck, or let it study the cards itself. Either way it writes a guide it keeps.",
             person = "Tune: I want you to really know this deck.",
             activity = listOf(
                 "Read “Snake-Eye 40”",

@@ -1939,8 +1939,30 @@ to forget the game rules". What was taken from them, and what was not:
 - Not taken: a shell, files and code execution (nothing in a deck builder needs them, and they
   are what makes a harness dangerous), and plugins — this harness is one app's.
 
+**1.0.48, Fine Tuning is about the deck.** kai: "What I meant was for me to teach it how to
+play my deck and have it ask me questions about my deck … so it could build a solid
+understanding to be able to find me insights and improve my deck building. Fine tuning should
+be for deck specific information, we can build a tournament prep feature separately", and
+"two options: have the user teach it, and have the AI teach itself by reading the cards and
+going online. The user can set the intensity … The AI should think out loud". So:
+- **Teach** in the panel's head (or the palette) opens `TuneLauncher` on the deck open in the
+  builder (saved; the guide belongs to a saved deck): **I'll teach you** (`MODE_TUNE`, the skill
+  `fine-tuning`: one question at a time with `ask_user`, whose `cards` show the art of the
+  cards it asks about, the understanding read back every few answers) or **Study it
+  yourself** (`MODE_STUDY`, the skill `self-study`: every card's text, the archetype's
+  Yugipedia page, the key rulings, how recent tournament lists build it, a helper and the web
+  at Deep, thinking out loud all the way, then the questions it could not settle).
+- **Intensity** (`TuneIntensity`, `AiPrefs.tuneIntensity`): Quick, Standard or Deep — the
+  questions asked, the rounds of tools, the sources read and how hard the model thinks.
+- Both write **the deck's guide** (`MemoryKind.GUIDE`, `guides/<deck>.md`, 10k characters:
+  game plan, lines, card roles, weak points, side deck, open questions, sources), its own file
+  whether or not the deck is in a web, read into the conversation whenever that deck is open
+  (`AiSession.guideShown`) and deleted with the deck. `deck-assessment` reads it first. Finish
+  shows the change entry by entry, to keep or undo, as before. The event interview of 1.0.45
+  is gone from Fine Tuning; tournament prep is its own page (1.0.50).
+
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
-`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`.
+`--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

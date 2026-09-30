@@ -123,6 +123,7 @@ private fun label(ai: AiState, path: String): String = when {
     path == "MEMORY.md" -> "Its own notes"
     path.startsWith("webs/") -> "Web: " + (ai.h.webs.library.byId(path.removePrefix("webs/").removeSuffix(".md"))?.name ?: path.removePrefix("webs/"))
     path.startsWith("decks/") -> "Deck: " + path.removePrefix("decks/").removeSuffix(".md").take(12)
+    path.startsWith("guides/") -> "Guide: " + path.removePrefix("guides/").removeSuffix(".md").let { id -> if (id == ai.h.builder.deckId) ai.h.builder.deckName else id.take(12) }
     else -> path
 }
 

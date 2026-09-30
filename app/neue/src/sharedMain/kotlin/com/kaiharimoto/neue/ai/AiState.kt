@@ -46,7 +46,13 @@ class Confirm(val title: String, val detail: String, val action: String) {
 }
 
 /** A question Ai asked (`ask_user`), waiting on a tap or a typed answer. */
-class Question(val question: String, val options: List<String>, val multiple: Boolean) {
+class Question(
+    val question: String,
+    val options: List<String>,
+    val multiple: Boolean,
+    /** The cards it is about, shown as their art above it (1.0.48). */
+    val cards: List<com.kaiharimoto.mastertool.core.model.Card> = emptyList(),
+) {
     internal val answer = CompletableDeferred<String>()
     fun reply(text: String) = answer.complete(text)
 }
@@ -183,9 +189,21 @@ class AiState(internal val h: NeueHolders) {
         val scopeChanged = scope?.path != current.scopeShown
         val renamed = renamedTo?.let { listOf("The person renamed you: you are $it from now on, whatever the instructions above call you.") }.orEmpty()
         renamedTo = null
-        val context = PromptBuilder.context(renamed + host.situation(), scope, scope?.let { host.notes(it) }, scopeChanged)
+        // The open deck's guide (how it plays), once per deck: taught or studied in Fine Tuning (1.0.48).
+        val deckId = h.builder.deckId
+        val guide = if (deckId != null && deckId != current.guideShown) {
+            files.entries(MemoryKind.GUIDE, deckId).takeIf { it.isNotBlank() }?.let { listOf("", "Your guide to how “${h.builder.deckName}” plays (memory scope guide):", it) }.orEmpty()
+        } else {
+            emptyList()
+        }
+        val context = PromptBuilder.context(renamed + host.situation() + guide, scope, scope?.let { host.notes(it) }, scopeChanged)
         val turn = ChatTurn.user(words, context, System.currentTimeMillis())
-        val next = current.copy(turns = current.turns + turn, updatedAt = System.currentTimeMillis(), scopeShown = scope?.path ?: current.scopeShown).titled()
+        val next = current.copy(
+            turns = current.turns + turn,
+            updatedAt = System.currentTimeMillis(),
+            scopeShown = scope?.path ?: current.scopeShown,
+            guideShown = deckId ?: current.guideShown,
+        ).titled()
         commit(next)
         respond(next, connection)
     }
@@ -200,14 +218,21 @@ class AiState(internal val h: NeueHolders) {
         reasoning = ""
         activity = emptyList()
         val provider = Providers.byId(connection.provider)
-        val effort = prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
+        val intensity = com.kaiharimoto.mastertool.core.ai.TuneIntensity.of(prefs.tuneIntensity)
+        // A study runs as long and thinks as hard as its intensity says; an interview needs rounds for its questions.
+        val effort = if (start.mode == AiSession.MODE_STUDY) intensity.effort else prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
+        val steps = when (start.mode) {
+            AiSession.MODE_STUDY -> intensity.steps
+            AiSession.MODE_TUNE -> intensity.questions * 3 + 8
+            else -> AgentLoop.MAX_STEPS
+        }
         val budget = if (model.runsOwnLoop) 0 else budgetFor(connection)
         job = scope.launch {
             try {
                 // Past most of the model's window, the oldest turns become a summary first (1.0.47).
                 val ready = if (budget > 0) summarizedIfLong(start, model, connection, budget) else start
                 val request = TurnRequest(ready.system, ready.sent, tools, connection.model, effort, ready.resume)
-                AgentLoop(model, { call -> host.run(call) }, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->
+                AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->
                     when (event) {
                         is AgentEvent.Text -> streaming += event.delta
                         is AgentEvent.Reasoning -> reasoning += event.delta
@@ -388,25 +413,49 @@ class AiState(internal val h: NeueHolders) {
         return paths.associateWith { files.read(it) }
     }
 
-    /** Fine Tuning (kai): an interview about how the person prepares, written to memory as it goes. */
-    fun startTuning() {
+    /** The Fine Tuning launcher is open: which way, and how hard (1.0.48). */
+    var tuneAsk by mutableStateOf(false)
+
+    /**
+     * Fine Tuning (1.0.48, kai: "for me to teach it how to play my deck and have it ask me
+     * questions about my deck … or have the AI teach itself by reading the cards and going
+     * online"): a conversation of its own about the deck open in the builder, [study] or
+     * taught, at [intensity]; what it learns goes to the deck's guide.
+     */
+    fun startTuning(study: Boolean, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity) {
         if (PHASE < 3) return
+        tuneAsk = false
         val connection = prefs.connection ?: run {
             openWizard()
             return
         }
+        val deck = h.builder.deckName
+        if (h.builder.deckId == null) {
+            h.neue.note = com.kaiharimoto.neue.Note("Save the deck first: Fine Tuning writes a guide to a saved deck")
+            return
+        }
         stop()
-        h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true)) }
+        h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true, tuneIntensity = intensity.id)) }
         wizardOpen = false
         historyOpen = false
+        demoOpen = false
         tuneBefore = snapshot()
-        session = begin(connection, AiSession.MODE_TUNE)
-        send("Let's do Fine Tuning.")
+        session = begin(connection, if (study) AiSession.MODE_STUDY else AiSession.MODE_TUNE)
+        send(
+            if (study) {
+                "Study “$deck” yourself, and think out loud so I can learn with you. Intensity: ${intensity.label} — ${intensity.studies}"
+            } else {
+                "Let's do Fine Tuning on “$deck”: I'll teach you how I play it. Intensity: ${intensity.label}, about ${intensity.questions} questions."
+            },
+        )
     }
 
     private var tuneBefore: Map<String, String?>? = null
 
-    val tuning: Boolean get() = session?.mode == AiSession.MODE_TUNE
+    val tuning: Boolean get() = session?.mode == AiSession.MODE_TUNE || session?.mode == AiSession.MODE_STUDY
+
+    /** Studying on its own rather than being taught. */
+    val studying: Boolean get() = session?.mode == AiSession.MODE_STUDY
 
     /** Fine Tuning done: what it learned, to keep or undo, then an ordinary conversation. */
     fun finishTuning() {

@@ -666,6 +666,41 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
             ai.demoStill = (step?.toIntOrNull() ?: 1) - 1
             ai.demoOpen = true
         }
+        // Fine Tuning's launcher (1.0.48): teach it, or let it study, and how hard.
+        "teach" -> ai.tuneAsk = true
+        // A study in progress: thinking out loud, a plan, a question with the card it is about.
+        "study" -> {
+            val now = System.currentTimeMillis()
+            ai.preview(
+                com.kaiharimoto.mastertool.core.ai.AiSession(
+                    id = "studio-study",
+                    title = "Study",
+                    connection = "anthropic-demo",
+                    mode = com.kaiharimoto.mastertool.core.ai.AiSession.MODE_STUDY,
+                    turns = listOf(
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Study “lab” yourself, and think out loud so I can learn with you. Intensity: Standard."),
+                        com.kaiharimoto.mastertool.core.ai.ChatTurn(
+                            com.kaiharimoto.mastertool.core.ai.Role.ASSISTANT,
+                            listOf(
+                                com.kaiharimoto.mastertool.core.ai.Part.Reasoning("Labrynth is a trap deck: the Furniture monsters set traps and Lady Labrynth recycles them. The engine is 23 cards, so the ratio of Furniture to Normal Traps matters most."),
+                                com.kaiharimoto.mastertool.core.ai.Part.Activity("archetype_guide", "Read how Labrynth plays: Playing style, Weaknesses"),
+                                com.kaiharimoto.mastertool.core.ai.Part.Activity("rulings", "Read 14 rulings for Lady Labrynth of the Silver Castle"),
+                                com.kaiharimoto.mastertool.core.ai.Part.Text(
+                                    "Reading [[Arianna the Labrynth Servant]]: when a Normal Trap resolves she adds a Labrynth card and can Special Summon — **so she is a one-card starter going first**.\n\n" +
+                                        "The lists at recent events run 3 Arianna and 2 Ariane; yours runs 3 and 3. I'll ask you why.",
+                                ),
+                            ),
+                        ),
+                    ),
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            ai.todos = listOf("[x] Read every card", "[x] Read the archetype's page", "[>] Check the key rulings", "[ ] Compare with tournament lists", "[ ] Write the guide")
+            h.builder.index.byName("Arianna the Labrynth Servant")?.let { card ->
+                ai.previewTuning(com.kaiharimoto.neue.ai.Question("You run 3 [[Arianna the Labrynth Servant]] and 3 Ariane. Which is your real starter?", listOf("Arianna", "Ariane", "Both, depends on the hand"), false, listOf(card)), null)
+            }
+        }
         // Its thinking above a reply, and a plan in hand (1.0.47).
         "reason" -> {
             val now = System.currentTimeMillis()

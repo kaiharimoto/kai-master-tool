@@ -161,7 +161,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "skill_view" -> skillView(ToolArgs.string(i, "name")!!)
             "skill_manage" -> skillManage(i)
             "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
-            "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false)
+            "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"))
             else -> (harness.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
@@ -831,6 +831,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private fun memoryTarget(scope: String, id: String? = null): Triple<MemoryKind, String?, String>? = when (scope) {
         "user" -> Triple(MemoryKind.USER, null, ai.name)
         "agent" -> Triple(MemoryKind.AGENT, null, ai.name)
+        // How the open deck plays (1.0.48): its own file, in a web or not.
+        "guide" -> (id ?: state.deckId)?.let { Triple(MemoryKind.GUIDE, it, if (it == state.deckId) state.deckName else "this deck") }
         "web" -> (id?.let { webs.library.byId(it) } ?: scope()?.takeIf { it.kind == MemoryKind.WEB }?.let { webs.library.byId(it.id) })
             ?.let { Triple(MemoryKind.WEB, it.id, it.name) }
         "deck" -> {
@@ -848,7 +850,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     private fun memory(action: String, scope: String, text: String?, old: String?): Answer {
         val (kind, id, name) = memoryTarget(scope) ?: return fail(
-            if (scope == "web") "No web is in scope: the open deck is in no web, and none is on screen." else "Save the deck first; a deck never saved has no notes yet.",
+            if (scope == "web") "No web is in scope: the open deck is in no web, and none is on screen." else "Save the deck first; a deck never saved has no notes or guide yet.",
         )
         val doc = ai.files.memory(kind, id, name)
         val inWebForDeck = scope == "deck" && kind == MemoryKind.WEB
@@ -924,8 +926,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return ok(if (hits.isEmpty()) "Nothing found for “$query”." else hits.joinToString("\n"), "Searched past conversations for “$query”")
     }
 
-    private suspend fun askUser(question: String, options: List<String>, multiple: Boolean): Answer {
-        val answer = ai.ask(Question(question, options.take(6), multiple))
+    private suspend fun askUser(question: String, options: List<String>, multiple: Boolean, cards: List<String> = emptyList()): Answer {
+        // The cards a question is about, shown as their art (1.0.48): "what does this one do for you?"
+        val shown = cards.take(6).mapNotNull { (com.kaiharimoto.mastertool.core.ai.CardWords.resolve(it, index) as? com.kaiharimoto.mastertool.core.ai.Resolved.Found)?.card }
+        val answer = ai.ask(Question(question, options.take(6), multiple, shown))
         return ok("The person answered: $answer", "Asked: ${question.take(80)}")
     }
 }

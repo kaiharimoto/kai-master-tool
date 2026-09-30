@@ -222,3 +222,19 @@ class StreamFixesTest {
         assertEquals("Ash Blossom is a hand trap.", (s.finished as BackendEvent.Finished).text)
     }
 }
+
+class FineTuningTest {
+    @Test
+    fun twoWaysEachWithItsOwnInstructionsAndABudget() {
+        val base = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.Setup("Ai", "soul", "", "", "", "desktop")
+        val teach = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.system(base.copy(mode = AiSession.MODE_TUNE))
+        val study = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.system(base.copy(mode = AiSession.MODE_STUDY))
+        assertTrue("fine-tuning" in teach && "self-study" !in teach)
+        assertTrue("self-study" in study && "Think out loud" in study)
+        assertEquals(TuneIntensity.STANDARD, TuneIntensity.of("nonsense"))
+        assertTrue(TuneIntensity.QUICK.steps < TuneIntensity.DEEP.steps)
+        assertEquals("guides/d1.md", com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, "d1"))
+        val names = BuiltInSkills.upTo(3).map { it.name }
+        assertTrue("self-study" in names && "fine-tuning" in names && "game-rules" in names)
+    }
+}

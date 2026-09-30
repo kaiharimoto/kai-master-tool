@@ -444,7 +444,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   helper loop). `RulesPrimer` is always in the prompt, in our own words — never copy
   Konami's rulebook. The loop retries, caps results and compacts (`Compaction`, a stored
   `AiSession.summary`), and reasoning streams into `Part.Reasoning` (display only).
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason --ai-step=KEY:anthropic` photographs it.
+  **1.0.48, Fine Tuning is about the deck**: `TuneLauncher` — the person teaches it
+  (`fine-tuning`) or it studies the deck itself (`self-study`), at a `TuneIntensity` — both
+  writing the deck's guide (`MemoryKind.GUIDE`, `guides/<id>.md`), read while it is open.
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

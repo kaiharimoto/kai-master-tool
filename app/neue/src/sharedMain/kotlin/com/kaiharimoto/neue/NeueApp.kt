@@ -622,7 +622,7 @@ class NeueHolders(
                 Command(ai.name, "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
                 Command(ai.name, "${ai.name}: set up a connection") { ai.openWizard() },
                 Command(ai.name, "${ai.name}: what it knows") { ai.memoryOpen = "USER.md" },
-                Command(ai.name, "${ai.name}: Fine Tuning") { ai.startTuning() },
+                Command(ai.name, "${ai.name}: Fine Tuning, teach it this deck") { ai.setOpen(true); ai.tuneAsk = true },
                 Command(ai.name, "${ai.name}: what can you do?") { ai.setOpen(true); ai.demoOpen = true },
             ) else emptyArray()),
             Command("App", "Report an issue →") { Platform.reportIssue() },
@@ -1205,6 +1205,7 @@ private fun Shell(h: NeueHolders) {
         if (neue.prefs.ai.enabled) {
             com.kaiharimoto.neue.ai.MemoryDialog(h.ai)
             com.kaiharimoto.neue.ai.ReviewDialog(h.ai)
+            com.kaiharimoto.neue.ai.TuneLauncher(h.ai)
             if (h.ai.forgetAsked) {
                 MuDialog(
                     title = "Forget everything",
@@ -1263,6 +1264,7 @@ private fun Shell(h: NeueHolders) {
                             h.deps.deckRepository.delete(id)
                             // Ai's notes on the deck go with it (1.0.43).
                             h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.DECK, id))
+                            h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, id))
                             if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                 neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
                             }

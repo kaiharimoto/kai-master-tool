@@ -536,7 +536,7 @@ private fun Steps(lines: List<String>) {
 
 /** A big choice: a title and a line, boxed, inverted when chosen. */
 @Composable
-private fun Choice(title: String, line: String, selected: Boolean, enabled: Boolean = true, reason: String? = null, onClick: () -> Unit) {
+internal fun Choice(title: String, line: String, selected: Boolean, enabled: Boolean = true, reason: String? = null, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHoveredAsState()

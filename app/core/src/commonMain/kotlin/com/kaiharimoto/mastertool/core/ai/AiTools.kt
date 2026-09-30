@@ -355,7 +355,7 @@ object AiTools {
             "facts that will still matter next week, never a transcript.",
         schema {
             enum("action", "What to do", listOf("add", "replace", "remove"), required = true)
-            enum("scope", "Which memory", listOf("user", "agent", "deck", "web"), required = true)
+            enum("scope", "Which memory", listOf("user", "agent", "deck", "web", "guide"), required = true)
             string("text", "The entry (add, replace)")
             string("old_text", "A unique part of the entry to replace or remove")
         },
@@ -366,7 +366,7 @@ object AiTools {
         "memory_read",
         "Reads a memory file in full: user, agent, or the notes of a deck or web by id.",
         schema {
-            enum("scope", "Which memory", listOf("user", "agent", "deck", "web"), required = true)
+            enum("scope", "Which memory", listOf("user", "agent", "deck", "web", "guide"), required = true)
             string("id", "For deck or web: its id (default: the one in scope)")
         },
         ToolGroup.MEMORY,
@@ -414,6 +414,7 @@ object AiTools {
             string("question", "The question", required = true)
             strings("options", "Two to six short answers", required = true)
             boolean("multiple", "More than one answer may be chosen")
+            strings("cards", "Cards the question is about, by name: shown as their art above it")
         },
         ToolGroup.ASK,
         phase = 3,
