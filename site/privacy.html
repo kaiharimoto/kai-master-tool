@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy policy · Neue Master Tool</title>
+<meta name="description" content="How Neue Master Tool handles your data.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <a class="mark" href="./">Neue Master Tool</a>
+  <nav><a href="privacy.html" aria-current="page">Privacy</a><a href="terms.html">Terms</a><a href="https://github.com/kaiharimoto/kai-master-tool">Source</a></nav>
+</header>
+<main>
+  <p class="micro">02 · Privacy policy</p>
+  <h1>Privacy policy</h1>
+  <p class="lead">Neue Master Tool keeps what you make on your own devices. We run no servers, keep no accounts, and collect no analytics.</p>
+  <p class="micro">Effective 1 October 2026</p>
+
+  <h2>Who we are</h2>
+  <p>Neue Master Tool (the &ldquo;app&rdquo;) is an open-source Yu-Gi-Oh! deck builder for Windows, macOS, Linux and Android, published by its developer at <a href="https://github.com/kaiharimoto/kai-master-tool">github.com/kaiharimoto/kai-master-tool</a>. &ldquo;We&rdquo; means that developer.</p>
+
+  <h2>What stays on your device</h2>
+  <p>Your decks, groups, siding plans, event preparation, settings, card pictures you add, and the assistant&rsquo;s notes and conversations are stored on the device you use, in the app&rsquo;s own data folder. We never receive them. Uninstalling the app or deleting its data folder removes them.</p>
+  <p>Keys you give the app &mdash; for an AI provider, a WebDAV password, or a Google sign-in &mdash; are stored on that device only. They are never synced, never put in a backup, and never sent to us.</p>
+
+  <h2>Who the app talks to</h2>
+  <p>The app connects directly from your device to these services, and only for the purpose given. We do not see this traffic.</p>
+  <ul>
+    <li><strong>YGOPRODeck</strong> &mdash; card data, card images and published tournament decklists. No personal data is sent.</li>
+    <li><strong>GitHub</strong> &mdash; checking for and downloading updates. &ldquo;Report an issue&rdquo; opens GitHub in your browser, where you decide what to post.</li>
+    <li><strong>An AI provider you connect, if you do</strong> &mdash; for example Anthropic, OpenAI, Google or a model on your own computer. Your messages, pictures you attach, and the deck or event context the assistant needs are sent to that provider, under that provider&rsquo;s own terms and privacy policy. The assistant is off until you set it up, and can be disabled entirely.</li>
+    <li><strong>Yugipedia and DuckDuckGo</strong> &mdash; when the assistant looks up rulings or searches the web, the search words are sent to them.</li>
+    <li><strong>Google Gemini</strong> &mdash; only if you ask the assistant to watch a YouTube video, using a key you provide; the video&rsquo;s address is sent.</li>
+    <li><strong>Hugging Face</strong> &mdash; only if you turn on voice input on a computer, to download the speech model once.</li>
+    <li><strong>The sync place you choose, if any</strong> &mdash; a synced folder, a WebDAV server, or Google Drive (below).</li>
+  </ul>
+
+  <h2>Sync and Google Drive</h2>
+  <p>Sync is off until you choose a place for it. When you choose <strong>Google Drive</strong>, the app asks Google for one permission only: <code>https://www.googleapis.com/auth/drive.appdata</code>, which reaches the app&rsquo;s own hidden folder in your Drive and nothing else. The app cannot see, read, change or delete any other file in your Drive.</p>
+  <p>The app uses this access solely to keep your own devices the same: it writes copies of your decks, settings and notes into that hidden folder, and reads them back on your other devices. It also reads your Google account&rsquo;s email address to show which account is signed in. This data goes only between your devices and your own Google Drive. It is never sent to us or to anyone else, never used for advertising, never sold, and never used to train AI models. No person reads it.</p>
+  <p>Neue Master Tool&rsquo;s use and transfer of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+  <p>The sign-in token Google gives the app is stored on your device. To stop the app&rsquo;s access, choose <em>Sign out</em> in Settings › Sync, or remove the app at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. To delete what the app stored in your Drive, open Google Drive › Settings › Manage apps, find Neue Master Tool, and choose <em>Delete hidden app data</em>.</p>
+
+  <h2>Backups</h2>
+  <p>The app writes backups of your data to a folder on your own device before an update changes anything, and once a week. They stay on your device unless you move them.</p>
+
+  <h2>Children</h2>
+  <p>The app collects nothing from anyone, children included.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the new version will be published on this page with a new date. The history of every change is public in the project&rsquo;s repository.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about privacy: <a href="https://github.com/kaiharimoto/kai-master-tool/issues">open an issue on GitHub</a>.</p>
+</main>
+<footer>Neue Master Tool is not affiliated with Konami. Yu-Gi-Oh! is a trademark of Konami. Card images and data from YGOPRODeck.</footer>
+</body>
+</html>
