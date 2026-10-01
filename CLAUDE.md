@@ -26,7 +26,7 @@ Kotlin Multiplatform + Compose Multiplatform. `app/README.md` has the modules.
 - `app/androidApp/` — the APK: one activity hosting Neue, the theme-free crash
   reporter, and `NeueSmokeTest` for the emulator
 - `app/studio/` — the headless renderer; `tools/shoot.sh`
-- `docs/NEUE.md` (the app), `docs/classic/` (the tablet app and play stage),
+- `docs/NEUE.md` (the app), `docs/SYNC.md` (sync), `docs/classic/` (the tablet app and play stage),
   `docs/PORT.md` (the 3DS)
 - `legacy/` — the archived original HTML tool; `3ds/` — the New 3DS rewrite
 - `ydk/`, `lab.ydkx` — sample deck files (YDKX = YDK + `#ydkx-extended` JSON)
@@ -567,6 +567,16 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   line's board after each play animates (`FramesPlayer`); PDF and JSON export. Notes and highlights
   baked in by Ai (1.0.68) and the interactive book and HTML (1.0.69) are next.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|refactor|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked|reader|reader-lines|reader-lessons|reader-empty --ai-step=KEY:anthropic` photographs it; `--book=pdf|json` writes the sample book.
+
+- **Sync: bring your cloud** (1.0.68, `docs/SYNC.md`, `NEUE.md` §4m): Settings › Sync meets the other
+  devices in a synced **folder** (desk path, or an Android `OpenDocumentTree` grant), **WebDAV**, or
+  **Google Drive / Dropbox / OneDrive** app folders (OAuth PKCE through the browser and
+  `http://localhost:53682/`; offered once `CloudClients` holds kai's registrations). The engine is
+  `core/sync`: `blobs/<sha-256>` plus one `devices/<id>.json` manifest per device (no device writes
+  another's file), `SyncPlan` three ways, decks keep both, settings merge (`JsonMerge`), files newer-wins.
+  **Every `NeuePreferences`/`AiPrefs` field must be in `SyncedPrefs.SYNCED` or `DEVICE`** (`SyncTest`
+  fails otherwise). Keys never sync (`SecretStore`, `ai/credentials.*`). `NeueSyncLocal` turns the app's
+  state into items; `SyncCenter` runs it on opening, 20 s after a change, every three minutes.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

@@ -237,6 +237,8 @@ fun MuInput(
      */
     imeAction: ImeAction = ImeAction.Done,
     keyboardType: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
+    /** A password: shown as dots, and the keyboard offers no suggestions (sync's WebDAV, 1.0.68). */
+    secret: Boolean = false,
 ) {
     val c = Mu.colors
     val f = LocalMuFonts.current
@@ -306,7 +308,12 @@ fun MuInput(
             textStyle = style,
             cursorBrush = SolidColor(c.ink),
             interactionSource = source,
-            keyboardOptions = KeyboardOptions(imeAction = imeAction, keyboardType = keyboardType),
+            keyboardOptions = KeyboardOptions(
+                imeAction = imeAction,
+                keyboardType = if (secret) androidx.compose.ui.text.input.KeyboardType.Password else keyboardType,
+                autoCorrectEnabled = !secret,
+            ),
+            visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
             keyboardActions = KeyboardActions(onAny = {
                 focusManager.clearFocus()
                 keyboard?.hide()

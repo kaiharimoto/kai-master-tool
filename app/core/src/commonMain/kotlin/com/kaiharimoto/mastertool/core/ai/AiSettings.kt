@@ -85,11 +85,12 @@ object AiSettings {
     /**
      * Keys Ai may read but not set, or not see: where the window was, the tablet's
      * first-run note, fields read by nothing since older releases, and the saved
-     * connections (Ai switches between them with ai.active, never edits them).
+     * connections (Ai switches between them with ai.active, never edits them), and where
+     * the device syncs to (set up by the person in Settings, never by Ai).
      */
     val INTERNAL = setOf(
         "window", "touchIntroSeen", "lensKeys", "extraSideVisible", "inspectorFolded",
-        "ai.connections", "ai.introSeen",
+        "ai.connections", "ai.introSeen", "sync",
     )
 
     /** The settings as Ai reads them: each key's value, then what it does. */

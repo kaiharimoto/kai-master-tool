@@ -153,6 +153,32 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             deferred?.complete(uri?.let(::readDeckFile))
         }
 
+    private var pendingTree: CompletableDeferred<String?>? = null
+
+    /**
+     * The folder sync meets the other devices in (1.0.68): the system's folder picker. The grant is
+     * kept, so the folder stays the app's to read and write after a restart.
+     */
+    private val pickTree =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            val deferred = pendingTree
+            pendingTree = null
+            if (uri != null) {
+                runCatching {
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                }
+            }
+            deferred?.complete(uri?.toString())
+        }
+
+    private suspend fun pickFolder(): String? {
+        pendingTree?.complete(null)
+        val deferred = CompletableDeferred<String?>()
+        pendingTree = deferred
+        pickTree.launch(null)
+        return deferred.await()
+    }
+
     private val pickDocument =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             val deferred = pendingPick
@@ -224,6 +250,7 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         // choice replaces it once the settings are read (v1.3.5).
         applyOrientation(null)
 
+        com.kaiharimoto.neue.sync.SyncPlatform.attach(this) { pickFolder() }
         Platform.attach(
             this,
             picker = { types -> pick(types) },
@@ -382,6 +409,8 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Back from signing in to a cloud (sync, 1.0.68): the app is in front again, and that is all.
+        if (intent.data?.scheme == "neuemastertool") return
         val file = intent.data?.let(::readDeckFile) ?: return
         incoming = file
         holders?.let { h ->

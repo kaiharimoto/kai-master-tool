@@ -302,6 +302,8 @@ data class NeuePreferences(
     val foilTilt: Boolean = true,
     /** The assistant (1.0.43): on or off, its name, its connections, its panel. */
     val ai: AiPrefs = AiPrefs(),
+    /** Where this device syncs to (1.0.68): this device's own, never synced. */
+    val sync: com.kaiharimoto.mastertool.core.sync.SyncPrefs = com.kaiharimoto.mastertool.core.sync.SyncPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

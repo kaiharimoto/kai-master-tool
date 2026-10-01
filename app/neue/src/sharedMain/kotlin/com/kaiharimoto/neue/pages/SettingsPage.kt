@@ -61,6 +61,8 @@ class SettingsHost(
     val art: ArtLibrary? = null,
     /** The assistant, for its section (1.0.43). */
     val ai: com.kaiharimoto.neue.ai.AiState? = null,
+    /** Sync across devices, for its section (1.0.68). */
+    val sync: com.kaiharimoto.neue.sync.SyncCenter? = null,
 )
 
 /**
@@ -139,10 +141,17 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 host.ai?.let { ai -> Column { AssistantSection(ai, neue) } }
+                // Sync (1.0.68): where this device meets the others.
+                host.sync?.let { sync ->
+                    Column {
+                        SectionTitle(4, "Sync")
+                        com.kaiharimoto.neue.sync.SyncSection(sync) { label, help, onToggle, control -> SettingRow(label, help, onToggle = onToggle, control = control) }
+                    }
+                }
                 // Offline (kai, for a flight): whether the pool is current, bringing it up to
                 // date, every card's picture on this computer, and when all of it is.
                 Column {
-                    SectionTitle(4, "Offline")
+                    SectionTitle(5, "Offline")
                     val check = state.poolCheck
                     val clock = check?.let { checkedClock(it.checkedAt) }
                     val updating = state.poolProgress ?: if (state.isSyncing) com.kaiharimoto.mastertool.core.data.PoolProgress.Asking else null
@@ -223,7 +232,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(5, "Updates and feedback")
+                    SectionTitle(6, "Updates and feedback")
                     SettingRow("Version", host.updateStatus) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Mono(host.version, color = Mu.colors.ink)
@@ -241,7 +250,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(6, "Licences")
+                    SectionTitle(7, "Licences")
                     Help("Inter and JetBrains Mono, SIL Open Font License 1.1. Card images and data from YGOPRODeck. Neue Master Tool is not affiliated with Konami.")
                 }
             }

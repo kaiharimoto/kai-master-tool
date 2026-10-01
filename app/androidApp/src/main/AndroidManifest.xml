@@ -71,6 +71,14 @@
                 <data android:pathPattern=".*\\.ydkx" />
                 <data android:pathPattern=".*\\.ydkw" />
             </intent-filter>
+
+            <!-- Back from the browser after signing in to a cloud for sync (1.0.68). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="neuemastertool" android:host="signed-in" />
+            </intent-filter>
         </activity>
 
         <!-- The camera screen that scans a deck's QR code (v1.3.7), and every part of

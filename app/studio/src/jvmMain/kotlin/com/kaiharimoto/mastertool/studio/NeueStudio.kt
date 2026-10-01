@@ -132,6 +132,23 @@ fun neueMain(args: Array<String>) {
             }
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
+            // --sync=<folder>: this run as a device syncing with a folder (1.0.68) — what it sent and took, and
+            // the decks it holds after; --device=Name names it. Two runs with different --data and XDG_DATA_HOME
+            // are two devices meeting in one folder.
+            map["sync"]?.let { folder ->
+                h.webs.load()
+                h.prep.load()
+                clock.run(30)
+                h.neue.update { it.copy(sync = it.sync.copy(service = com.kaiharimoto.mastertool.core.sync.SyncPrefs.FOLDER, folder = folder, deviceName = map["device"] ?: "Studio")) }
+                h.sync.syncNow()
+                clock.run(10)
+                var waited = 0
+                while ((h.sync.running || h.sync.last == null && h.sync.problem == null) && waited < 600) { clock.run(5); waited++ }
+                val decks = kotlinx.coroutines.runBlocking { h.deps.deckRepository.all() }
+                println("[neue-studio] sync: ${h.sync.problem ?: h.sync.last?.let { com.kaiharimoto.neue.sync.describe(it) }}")
+                println("[neue-studio] sync: ${decks.size} decks here: ${decks.joinToString { it.entry.name }}")
+                println("[neue-studio] sync: theme ${h.neue.prefs.theme}, ${h.webs.library.webs.size} webs, ai files ${java.io.File(com.kaiharimoto.neue.platform.Platform.dataDir, "ai").walkTopDown().count { it.isFile }}")
+            }
             // --book=pdf|json|all: the sample reader's guide (the Las Vegas Labrynth as a book) written to shots/ (1.0.67).
             map["book"]?.let { which ->
                 val book = com.kaiharimoto.mastertool.core.ai.report.book.BookSample.labrynth

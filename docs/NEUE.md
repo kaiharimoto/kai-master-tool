@@ -2669,6 +2669,33 @@ share × weakness. On Prep, Ai's memory is the event's web.
 
 **Pictures**: `tools/shoot.sh --page=prep --ydkw=… --prep-demo=true --prep-tab=plan|practice|drills|decklist|day`.
 
+### 4m. Sync: bring your cloud (1.0.68)
+
+kai: "Sometimes I'm on the go and I want to have access to everything on the laptop and computer … give
+users options to use any service they choose. Bring your cloud." Every device keeps its own copy and
+meets the others in a place the person already has. **`docs/SYNC.md` is the authority**; the short version:
+
+- **Settings › Sync** (section 4): Off, **Folder** (any folder another app keeps in sync — iCloud Drive,
+  Dropbox, OneDrive, Google Drive for desktop, Syncthing; on Android one granted by the system's folder
+  picker, `OpenDocumentTree`, its grant kept), **WebDAV** (Nextcloud, ownCloud, pCloud, Koofr, Synology:
+  an address, a user, an app password, tested before it is kept) and **Google Drive, Dropbox, OneDrive**
+  (each in its app folder, signed in through the browser and `http://localhost:53682/`, `Loopback`; shown
+  only once `CloudClients` holds the app's registration). This device's name, the last sync in words,
+  Sync now and "By itself".
+- **What travels**: decks, webs, Prep, the settings about the person (`SyncedPrefs`; the window, panes,
+  zoom, orientation and text size stay), Ai's folder but its keys, the person's own card pictures. Keys
+  and tokens live in `SecretStore` (`sync:webdav`, `sync:<cloud>`) and never leave the device.
+- **The engine is core's** (`core/sync`): content-addressed blobs and one manifest per device, so no two
+  devices write one file; a three-way plan per item (`SyncPlan`); decks both changed keep both ("Name
+  (from Phone)"), settings and Prep merge key by key (`JsonMerge`), files go to the newer; an edit beats a
+  deletion; a device's first sync takes what the store holds. The open deck with unsaved edits is never
+  written under: what came in is kept beside it.
+- **When**: on opening, 20 s after anything that travels changes, every three minutes while open
+  (`SyncCenter`, `NeueEffects`). `tools/shoot.sh --sync=<folder> --device=Name` runs the real sync and
+  prints what it did; two runs with different `--data` and `XDG_DATA_HOME` are two devices.
+- New stored state, device-only: `NeuePreferences.sync` (`SyncPrefs`, internal to Ai) and `<data>/sync/`
+  (`state.json`, `seen.json`, `place.txt`). No schema change.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

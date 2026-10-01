@@ -81,6 +81,19 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         }
     }
 
+    /** A web as another device last saved it (sync, 1.0.68): in place of this device's, or added. */
+    fun adopt(web: DeckWeb) {
+        commit(library.put(web))
+        revision++
+    }
+
+    /** A web another device deleted (sync): gone here too; its decks stay in the library. */
+    fun forget(id: String) {
+        if (library.byId(id) == null) return
+        commit(library.remove(id))
+        revision++
+    }
+
     private fun commit(next: WebLibrary) {
         library = next
         scope.launch { deps.preferencesRepository.saveWebs(next) }

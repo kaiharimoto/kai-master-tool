@@ -27,6 +27,8 @@ import com.kaiharimoto.neue.zen.LocalZen
 import com.kaiharimoto.neue.zen.ZenReset
 import com.kaiharimoto.neue.zen.ZenLayer
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -170,6 +172,9 @@ class NeueHolders(
 
     /** Pictures the person added to cards themselves (1.0.18). */
     val customArt = com.kaiharimoto.neue.art.CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
+
+    /** Sync across devices (1.0.68): where to, what the last sync did, signing in. */
+    val sync: com.kaiharimoto.neue.sync.SyncCenter by lazy { com.kaiharimoto.neue.sync.SyncCenter(this) }
 
     /** The assistant (Ai, 1.0.43): the conversation, its model and its tools, for the app's lifetime. */
     val ai: com.kaiharimoto.neue.ai.AiState by lazy { com.kaiharimoto.neue.ai.AiState(this) }
@@ -772,6 +777,28 @@ fun NeueEffects(h: NeueHolders) {
         }
         LaunchedEffect(neue.prefs.ai.name) { DeskMenuBar.aiName = neue.prefs.ai.name }
         LaunchedEffect(neue.inspected) { neue.inspected?.let(h.art::want) }
+        // Sync (1.0.68): once everything is read, then every few minutes while the app is open…
+        LaunchedEffect(neue.ready, neue.prefs.sync.service, neue.prefs.sync.auto) {
+            if (!neue.ready || !neue.prefs.sync.auto) return@LaunchedEffect
+            snapshotFlow { h.webs.loaded && h.prep.loaded }.first { it }
+            while (true) {
+                h.sync.syncNow(quiet = true)
+                kotlinx.coroutines.delay(com.kaiharimoto.neue.sync.SyncCenter.EVERY_MS)
+            }
+        }
+        // …and a little after anything that travels changes: a deck saved, a setting, a web, prep, Ai's notes.
+        LaunchedEffect(neue.ready) {
+            if (!neue.ready) return@LaunchedEffect
+            snapshotFlow {
+                listOf(
+                    h.decksReload, com.kaiharimoto.mastertool.core.sync.SyncedPrefs.extract(neue.prefs).contentHashCode(),
+                    h.layout.preferences.format, h.webs.revision, h.prep.doc.hashCode(), h.ai.bookVersion, h.customArt.version,
+                )
+            }.drop(1).collectLatest {
+                kotlinx.coroutines.delay(20_000)
+                if (neue.prefs.sync.auto) h.sync.syncNow(quiet = true)
+            }
+        }
         // The ~2 GB library waits for Wi-Fi on a tablet (touch swarm, rec 27); looked at again each half minute.
         LaunchedEffect(neue.prefs.hdArt) {
             while (true) {
@@ -1153,6 +1180,7 @@ private fun Shell(h: NeueHolders) {
                                     onSearchEffects = h::setSearchEffects,
                                     art = h.art,
                                     ai = h.ai,
+                                    sync = h.sync,
                                 ),
                             )
                         }

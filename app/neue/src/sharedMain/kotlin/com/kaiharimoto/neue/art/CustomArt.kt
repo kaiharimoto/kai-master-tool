@@ -30,6 +30,12 @@ class CustomArt(private val dir: File) {
 
     private val cache = HashMap<Int, List<File>>()
 
+    /** Pictures came in from another device (sync, 1.0.68): read the folders again. */
+    fun reload() {
+        cache.clear()
+        version++
+    }
+
     fun files(card: Int): List<File> {
         if (version < 0) return emptyList()
         return cache.getOrPut(card) {
