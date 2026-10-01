@@ -1,484 +1,413 @@
 package com.kaiharimoto.mastertool.core.ai.report
 
-import com.kaiharimoto.mastertool.core.pdf.PdfDocument
-import com.kaiharimoto.mastertool.core.pdf.PdfFont
+import com.kaiharimoto.mastertool.core.ai.report.guide.CardKind
+import com.kaiharimoto.mastertool.core.ai.report.guide.EngineLayout
+import com.kaiharimoto.mastertool.core.ai.report.guide.GuideFacts
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.CW
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.INK
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.INK12
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.INK45
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.INK70
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.MARGIN
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.W
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.col
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.span
+import com.kaiharimoto.mastertool.core.ai.report.guide.Phone.Companion.two
+import com.kaiharimoto.mastertool.core.ai.report.guide.board
+import com.kaiharimoto.mastertool.core.ai.report.guide.bigNumber
+import com.kaiharimoto.mastertool.core.ai.report.guide.checklist
+import com.kaiharimoto.mastertool.core.ai.report.guide.compareBars
+import com.kaiharimoto.mastertool.core.ai.report.guide.engineMap
+import com.kaiharimoto.mastertool.core.ai.report.guide.flow
+import com.kaiharimoto.mastertool.core.ai.report.guide.frames
+import com.kaiharimoto.mastertool.core.ai.report.guide.hands
+import com.kaiharimoto.mastertool.core.ai.report.guide.lanes
+import com.kaiharimoto.mastertool.core.ai.report.guide.ledger
+import com.kaiharimoto.mastertool.core.ai.report.guide.maxim
+import com.kaiharimoto.mastertool.core.ai.report.guide.short
+import com.kaiharimoto.mastertool.core.ai.report.guide.strip
+import com.kaiharimoto.mastertool.core.ai.report.guide.unitChart
 import com.kaiharimoto.mastertool.core.pdf.PdfImage
-import com.kaiharimoto.mastertool.core.pdf.PdfPage
 import com.kaiharimoto.mastertool.core.siding.GuideFonts
 import com.kaiharimoto.mastertool.core.ydk.Zlib
 
 /**
- * The reader's guide as a PDF to share (1.0.66, kai: "these guides are also meant to be shared so
- * the layout and ease of understanding is very important"), in one of three layouts kai chooses
- * between: a **Primer** (a cover that says what the deck is, then each line as a chain of cards),
- * a **Cheat sheet** (two dense columns, a card beside each thing that names it) and a **Magazine**
- * (one idea to a page, large art). Master UI on paper, as the siding guide: ink and its greys, Inter
- * and JetBrains Mono, rules rather than boxes, `01` numerals; card art is the only colour.
+ * The reader's guide as a PDF for a phone (1.0.67, the second exploration; kai on the first: "None of
+ * these designs speak out to me … strong editorial fundamentals, visual hierarchy. Cheat sheet at a
+ * glance, strong and memorable lessons/insights, and detailed reasoning … Abstract ideas should be
+ * visualized using graphics"). Three directions over one set of pictures ([Phone], `Graphics.kt`), so
+ * what differs is the structure and the voice of the page:
+ *
+ * - [Style.MANUAL] — a field manual: the whole guide on its first screen, then the reference;
+ * - [Style.LESSONS] — three lessons: each a maxim, the picture that proves it, and the reasoning;
+ * - [Style.TURN] — one turn, annotated: the deck watched playing, board by board.
+ *
+ * Every screen leads with a claim (the inverted pyramid), draws it, and only then explains.
  */
 object ReaderGuidePdf {
-    enum class Style(val label: String) { PRIMER("Primer"), SHEET("Cheat sheet"), MAGAZINE("Magazine") }
+    enum class Style(val label: String) { MANUAL("Field manual"), LESSONS("Three lessons"), TURN("One turn, annotated") }
 
-    private const val W = PdfDocument.A4_WIDTH
-    private const val H = PdfDocument.A4_HEIGHT
-    private const val ML = 40f
-    private const val CW = W - 2 * ML
-    private const val MT = 34f
-    private const val TOP = MT + 62f
-    private const val BOTTOM = H - 48f
-
-    private const val INK = 0f
-    private const val INK70 = 0.3f
-    private const val INK45 = 0.55f
-    private const val INK12 = 0.88f
-    private const val INK06 = 0.95f
-
-    /** A card's height for its width: the printed card's shape. */
-    private const val CARD = 1.4583f
-
-    fun render(guide: ReaderGuide, style: Style, fonts: GuideFonts, image: (String) -> PdfImage?, zlib: Zlib?, updated: String = ""): ByteArray {
-        val pdf = PdfDocument(zlib, title = "${guide.deckName} · a guide", author = "Neue Master Tool")
-        val pen = Pen(pdf, pdf.font(fonts.regular), pdf.font(fonts.bold), pdf.font(fonts.mono), image, guide.deckName, updated)
+    fun render(
+        guide: ReaderGuide,
+        style: Style,
+        fonts: GuideFonts,
+        image: (String) -> PdfImage?,
+        zlib: Zlib?,
+        updated: String = "",
+        kind: CardKind? = null,
+    ): ByteArray {
+        val ph = Phone(fonts, image, zlib, "${guide.deckName} · a guide", guide.deckName)
+        val facts = GuideFacts.of(guide)
+        val cards = kind ?: guess(guide)
+        val doc = Doc(ph, guide, facts, cards, updated)
         when (style) {
-            Style.PRIMER -> primer(pen, guide)
-            Style.SHEET -> sheet(pen, guide)
-            Style.MAGAZINE -> magazine(pen, guide)
+            Style.MANUAL -> doc.manual()
+            Style.LESSONS -> doc.lessons()
+            Style.TURN -> doc.turn()
         }
-        pen.finish()
-        return pdf.write()
+        return ph.finish()
     }
 
-    // ---- the pen: pages, words and cards --------------------------------------------------
+    /** Without the card pool: a set card or a card in a role named for traps is a trap, the rest monsters. */
+    private fun guess(g: ReaderGuide): CardKind {
+        val traps = g.lines.flatMap { it.endSet }.toSet() + g.roles.filter { it.name.contains("trap", ignoreCase = true) }.flatMap { r -> r.cards.map { it.card } }
+        return { name -> if (name in traps) 'T' else 'M' }
+    }
 
-    private class Pen(
-        val pdf: PdfDocument,
-        val regular: PdfFont,
-        val bold: PdfFont,
-        val mono: PdfFont,
-        val art: (String) -> PdfImage?,
-        val title: String,
-        val updated: String,
-    ) {
-        private val pages = mutableListOf<Pair<PdfPage, Boolean>>()
-        lateinit var page: PdfPage
-        var y = TOP
+    private class Doc(val ph: Phone, val g: ReaderGuide, val facts: GuideFacts, val kind: CardKind, val updated: String) {
+        var n = 0
+        val engine = EngineLayout.of(g.connections)
+        /** The hub nearest the top of the engine: the card the deck runs through, the cover's picture. */
+        val hub = engine.rows.flatten().firstOrNull { it in engine.hubs }
 
-        /** A new page; [chrome] false for a cover that sets its own title. */
-        fun next(chrome: Boolean = true) {
-            page = pdf.page()
-            pages += page to chrome
-            y = if (chrome) TOP else MT
+        // ---- the three directions --------------------------------------------------------------
+
+        fun manual() {
+            glance()
+            if (g.connections.isNotEmpty()) engineScreen()
+            g.lines.forEachIndexed { i, l -> lineScreen(i, l) }
+            breaks()
+            matchups()
+            handsScreen()
+            cardsScreen()
+            sources()
         }
 
-        fun room(h: Float) {
-            if (y + h > BOTTOM) next()
+        fun lessons() {
+            cover()
+            g.lessons.forEachIndexed { i, l -> lessonScreen(i, l) }
+            if (g.connections.isNotEmpty()) engineScreen()
+            matchups()
+            glance(title = "The guide on one screen", reserve = 80f)
+            sources()
         }
 
-        fun finish() {
-            pages.forEachIndexed { i, (p, chrome) ->
-                if (chrome) {
-                    p.text(regular, 7.5f, ML, MT + 8f, "DECK GUIDE", INK70)
-                    p.text(bold, 22f, ML, MT + 36f, fit(title, bold, 22f, CW - 150f))
-                    right(p, mono, 7.5f, W - ML, MT + 26f, updated, INK70)
-                    right(p, mono, 7.5f, W - ML, MT + 37f, "page ${i + 1} of ${pages.size}", INK70)
-                    p.fillRect(ML, MT + 46f, CW, 1.5f, INK)
+        fun turn() {
+            turnCover()
+            g.lines.firstOrNull()?.let { line ->
+                lanesScreen(line)
+                framesScreen(line)
+                lineScreen(0, line, title = "Where it breaks")
+            }
+            g.lines.drop(1).forEachIndexed { i, l -> lineScreen(i + 1, l) }
+            handsScreen()
+            matchups()
+            glance(title = "Before the next game", reserve = 80f)
+            sources()
+        }
+
+        // ---- screens --------------------------------------------------------------------------
+
+        /** A new section: a fresh screen, its kicker, and its headline. The y under the headline. */
+        fun open(section: String, headline: String, size: Float = 26f) {
+            ph.screen(section)
+            n++
+            ph.kicker(n, section)
+            ph.y += 18f
+            ph.y += ph.headline(headline, size = size) + 10f
+        }
+
+        fun lede(text: String, gray: Float = INK70) {
+            if (text.isBlank()) return
+            ph.y += ph.para(text, MARGIN, ph.y, CW, ph.regular, 10.5f, 15f, gray) + 14f
+        }
+
+        /** The whole guide at a glance: the big idea, the two numbers, the forty cards, the rules, the checklist. */
+        fun glance(title: String = "At a glance", reserve: Float = 0f) {
+            ph.screen(title)
+            n++
+            ph.kicker(n, title)
+            ph.y += 18f
+            ph.y += ph.headline(g.deckName, size = 36f) + 6f
+            if (g.subtitle.isNotBlank()) {
+                ph.page.text(ph.mono, 7.5f, MARGIN, ph.y + 8f, g.subtitle, INK45)
+                ph.y += 16f
+            }
+            if (g.bigIdea.isNotBlank()) ph.y += ph.para(g.bigIdea, MARGIN, ph.y, CW, ph.medium, 14f, 18.5f, INK, tracking = -0.15f) + 14f
+            ph.page.line(MARGIN, ph.y, W - MARGIN, ph.y, INK, 1.2f)
+            ph.y += 10f
+            if (facts.deckSize > 0) {
+                val a = ph.bigNumber(facts.startFirst, "Opens a starter · first", col(0), ph.y, span(2) - 6f, size = 40f)
+                val b = ph.bigNumber(facts.startSecond, "Opens a starter · second", col(2), ph.y, span(2) - 6f, size = 40f)
+                ph.y += maxOf(a, b) + 12f
+                ph.micro(ph.page, "The ${facts.deckSize} cards, by role", MARGIN, ph.y + 7f, INK45)
+                ph.y += 14f
+                ph.y += ph.unitChart(facts, MARGIN, ph.y, CW) + 10f
+            }
+            if (g.lessons.isNotEmpty()) {
+                ph.page.line(MARGIN, ph.y, W - MARGIN, ph.y, INK12, 0.5f)
+                ph.y += 8f
+                ph.micro(ph.page, "Remember", MARGIN, ph.y + 7f, INK45)
+                ph.y += 14f
+                g.lessons.forEachIndexed { i, l ->
+                    ph.page.text(ph.mono, 9f, MARGIN, ph.y + 11f, two(i + 1), INK)
+                    ph.y += ph.para(l.maxim, MARGIN + 22f, ph.y, CW - 22f, ph.medium, 12f, 16f, INK) + 6f
                 }
-                p.line(ML, H - 34f, W - ML, H - 34f, INK12, 0.5f)
-                p.text(regular, 7f, ML, H - 22f, "Made with Neue Master Tool", INK45)
-                right(p, mono, 7f, W - ML, H - 22f, (i + 1).toString().padStart(2, '0'), INK45)
+            }
+            if (g.checklist.isNotEmpty()) {
+                val h = 22f + g.checklist.sumOf { ph.height(it, CW - 18f, size = 9f, lead = 13f).toDouble() + 6 }.toFloat()
+                ph.room(h)
+                ph.page.line(MARGIN, ph.y + 4f, W - MARGIN, ph.y + 4f, INK12, 0.5f)
+                ph.y += 12f
+                ph.micro(ph.page, "Before you pass", MARGIN, ph.y + 7f, INK45)
+                ph.y += 14f
+                ph.y += ph.checklist(g.checklist, MARGIN, ph.y, CW, size = 9f)
+            }
+            // The best turn as a strip of cards, when the screen has room for it.
+            val best = g.lines.firstOrNull()
+            if (best != null && ph.y + 130f + reserve < Phone.BOTTOM) {
+                ph.page.line(MARGIN, ph.y + 4f, W - MARGIN, ph.y + 4f, INK12, 0.5f)
+                ph.y += 12f
+                ph.micro(ph.page, "Your best turn · ${best.name}", MARGIN, ph.y + 7f, INK45)
+                ph.y += 12f
+                ph.y += ph.strip(best, MARGIN, ph.y, CW)
             }
         }
 
-        fun wrap(text: String, font: PdfFont, size: Float, width: Float): List<String> {
-            val words = clean(text).split(' ').filter { it.isNotEmpty() }
-            val out = mutableListOf<String>()
-            var line = ""
-            words.forEach { w ->
-                val next = if (line.isEmpty()) w else "$line $w"
-                if (line.isNotEmpty() && font.width(next, size) > width) {
-                    out += line
-                    line = w
+        fun engineScreen() {
+            open("The engine", hub?.let { "Every line runs through ${ph.short(it)}." } ?: "How the cards find each other.")
+            lede("Starting cards on top. Each arrow is a card finding another; the heavier frames are the cards every route passes through — protect them, and know what stops them.")
+            ph.y += ph.engineMap(engine, MARGIN, ph.y, CW) + 4f
+        }
+
+        fun lineScreen(i: Int, line: ReaderGuide.Line, title: String = "Line ${i + 1}") {
+            open(title, line.name)
+            lede(line.note)
+            ph.y += ph.flow(line, MARGIN, ph.y, CW) + 14f
+            if (line.endBoard.isNotEmpty() || line.endSet.isNotEmpty()) {
+                val bw = 170f
+                val bh = bw / 5 * 1.4583f * 3 + 30f
+                ph.room(bh + 30f)
+                ph.page.fillRect(MARGIN, ph.y, CW, 1.5f, INK)
+                ph.micro(ph.page, "Ends on", MARGIN, ph.y + 14f, INK)
+                ph.y += 22f
+                val top = ph.y
+                val h = ph.board(line.endBoard, line.endSet, MARGIN, top, bw)
+                val names = (line.endBoard.map { it } + line.endSet.map { "${it} (set)" })
+                var ny = top
+                names.forEach { nm -> ny += ph.para(nm, MARGIN + bw + 14f, ny, CW - bw - 14f, ph.regular, 8.5f, 11.5f, INK70) + 3f }
+                ph.y += maxOf(h, ny - top) + 10f
+            }
+        }
+
+        fun breaks() {
+            if (g.chokePoints.isEmpty()) return
+            open("Where it breaks", "${g.chokePoints.size} cards stop this deck. Know them before you sit down.")
+            g.chokePoints.forEach { c ->
+                val textW = CW - 64f
+                val h = maxOf(48f * 1.4583f, ph.height(c.card, textW, ph.bold, 13f, 17f) + ph.height(c.text, textW) + 6f) + 16f
+                ph.room(h)
+                ph.page.fillRect(MARGIN, ph.y, CW, 1.2f, INK)
+                ph.y += 10f
+                if (c.card.isNotBlank()) ph.card(c.card, MARGIN, ph.y, 48f)
+                var t = ph.y
+                if (c.card.isNotBlank()) t += ph.para(c.card, MARGIN + 64f, t, textW, ph.bold, 13f, 17f, INK) + 4f
+                ph.para(c.text, MARGIN + 64f, t, textW, ph.regular, 10f, 14f, INK70)
+                ph.y += h - 10f
+            }
+        }
+
+        fun matchups() {
+            if (g.siding.isEmpty()) return
+            open("Matchups", "Side for what they do, not for what they are.")
+            g.siding.forEachIndexed { i, s ->
+                val f = facts.sides[i]
+                val h = 150f + ph.height(s.why, CW, size = 8.5f, lead = 12f)
+                ph.room(h)
+                ph.y += ph.ledger(s, f, MARGIN, ph.y, CW) + 18f
+            }
+        }
+
+        fun handsScreen() {
+            if (facts.hands.isEmpty()) return
+            open("Your opening hands", "${GuideFacts.percent(facts.startFirst)} of hands start. Here is what the rest look like.")
+            lede("Three hands dealt from the list. The framed card is the one that starts; a brick hand has none, and going second it still has its hand traps.")
+            ph.y += ph.hands(facts, MARGIN, ph.y, CW)
+        }
+
+        fun cardsScreen() {
+            if (g.roles.isEmpty()) return
+            open("The cards", "Forty cards, four jobs.")
+            g.roles.forEach { r ->
+                ph.room(30f + 50f)
+                ph.page.fillRect(MARGIN, ph.y, CW, 1.5f, INK)
+                ph.page.text(ph.bold, 12f, MARGIN, ph.y + 16f, r.name, INK)
+                ph.right(ph.page, ph.mono, 9f, W - MARGIN, ph.y + 16f, r.cards.sumOf { it.copies }.toString(), INK45)
+                ph.y += 26f
+                r.cards.forEach { c ->
+                    val textW = CW - 50f
+                    val h = maxOf(34f * 1.4583f, ph.height(c.card, textW - 24f, ph.medium, 10f, 13f) + ph.height(c.note, textW, size = 9f, lead = 12.5f)) + 8f
+                    ph.room(h)
+                    ph.card(c.card, MARGIN, ph.y, 34f)
+                    var t = ph.y
+                    t += ph.para(c.card, MARGIN + 46f, t, textW - 24f, ph.medium, 10f, 13f, INK)
+                    if (c.copies > 0) ph.right(ph.page, ph.mono, 9f, W - MARGIN, ph.y + 10f, "×${c.copies}", INK)
+                    ph.para(c.note, MARGIN + 46f, t, textW, ph.regular, 9f, 12.5f, INK70)
+                    ph.y += h
+                }
+                ph.y += 8f
+            }
+        }
+
+        fun sources() {
+            if (g.sources.isEmpty() && g.tips.isEmpty()) return
+            ph.room(70f)
+            ph.y += 10f
+            ph.page.line(MARGIN, ph.y, W - MARGIN, ph.y, INK12, 0.5f)
+            ph.y += 10f
+            ph.micro(ph.page, "Sources", MARGIN, ph.y + 7f, INK45)
+            ph.y += 14f
+            g.sources.forEach { ph.y += ph.para(it, MARGIN, ph.y, CW, ph.regular, 8f, 11f, INK45) + 3f }
+            if (updated.isNotBlank()) ph.page.text(ph.mono, 7f, MARGIN, ph.y + 10f, "Updated $updated", INK45)
+        }
+
+        // ---- the lessons direction --------------------------------------------------------------
+
+        fun cover() {
+            ph.screen("Cover", head = false)
+            val heroCard = hub ?: g.lessons.firstOrNull()?.card ?: g.roles.firstOrNull()?.cards?.firstOrNull()?.card.orEmpty()
+            val heroH = 430f
+            ph.artwork(heroCard, 0f, 0f, W, heroH)
+            ph.page.fillRect(0f, heroH, W, 4f, INK)
+            var y = heroH + 26f
+            ph.micro(ph.page, "A deck guide", MARGIN, y, INK45)
+            y += 8f
+            y += ph.headline(g.deckName, top = y, size = 48f) + 10f
+            if (g.subtitle.isNotBlank()) {
+                ph.page.text(ph.mono, 7.5f, MARGIN, y + 8f, g.subtitle, INK45)
+                y += 18f
+            }
+            if (g.bigIdea.isNotBlank()) y += ph.para(g.bigIdea, MARGIN, y, CW, ph.medium, 17f, 22f, INK, tracking = -0.2f) + 18f
+            ph.page.line(MARGIN, y, W - MARGIN, y, INK, 0.8f)
+            y += 10f
+            ph.micro(ph.page, "Three lessons", MARGIN, y + 7f, INK45)
+            y += 16f
+            g.lessons.forEachIndexed { i, l ->
+                ph.page.text(ph.mono, 10f, MARGIN, y + 12f, two(i + 1), INK)
+                val h = ph.para(l.maxim, MARGIN + 26f, y, CW - 60f, ph.medium, 13f, 17f, INK)
+                ph.right(ph.page, ph.mono, 8f, W - MARGIN, y + 12f, "p. ${two(3 + i)}", INK45)
+                y += h + 8f
+            }
+            ph.y = y
+        }
+
+        fun lessonScreen(i: Int, l: ReaderGuide.Lesson) {
+            ph.screen("Lesson ${two(i + 1)}")
+            n++
+            ph.y += 8f
+            // The maxim as large as it can be in three lines: a long one steps down a size.
+            val maximSize = if (ph.wrap(l.maxim, ph.bold, 40f, CW - 88f, -1f).size <= 3) 40f else 32f
+            ph.y += ph.maxim(i + 1, l, MARGIN, ph.y, CW, size = maximSize, tile = 72f) + 18f
+            if (l.number.isNotBlank()) {
+                ph.page.fillRect(MARGIN, ph.y, CW, 1.5f, INK)
+                // The number at 46 points, smaller only as far as it must be to fit the width.
+                val size = minOf(46f, 46f * CW / ph.mono.width(l.number, 46f, -1.6f))
+                ph.page.text(ph.mono, size, MARGIN - 1f, ph.y + 8f + size * 0.95f, l.number, INK, tracking = -size * 0.035f)
+                val nw = ph.mono.width(l.number, size, -size * 0.035f)
+                val lw = CW - nw - 14f
+                if (lw > 90f) {
+                    ph.para(l.numberLabel, MARGIN + nw + 14f, ph.y + 22f, lw, ph.regular, 10f, 13f, INK70)
+                    ph.y += 18f + size * 1.1f
                 } else {
-                    line = next
+                    ph.y += 14f + size * 1.1f
+                    ph.y += ph.para(l.numberLabel, MARGIN, ph.y, CW, ph.regular, 10f, 13f, INK70) + 8f
                 }
             }
-            if (line.isNotEmpty()) out += line
-            return out
-        }
-
-        /** Words at [x], [width] wide, from [top]; how tall they were. */
-        fun para(text: String, x: Float, top: Float, width: Float, font: PdfFont = regular, size: Float = 9.5f, lead: Float = size * 1.42f, gray: Float = INK, max: Int = Int.MAX_VALUE): Float {
-            val lines = wrap(text, font, size, width).take(max)
-            lines.forEachIndexed { i, l -> page.text(font, size, x, top + lead * (i + 1) - lead * 0.28f, l, gray) }
-            return lines.size * lead
-        }
-
-        fun height(text: String, width: Float, font: PdfFont = regular, size: Float = 9.5f, lead: Float = size * 1.42f, max: Int = Int.MAX_VALUE): Float =
-            wrap(text, font, size, width).take(max).size * lead
-
-        /** A card's art at [x], [top], [w] wide; its name on grey when there is no picture. */
-        fun card(name: String, x: Float, top: Float, w: Float) {
-            val h = w * CARD
-            val img = art(name)
-            if (img != null) {
-                page.image(img, x, top, w, h)
-            } else {
-                page.fillRect(x, top, w, h, INK06)
-                wrap(name, mono, 5.5f, w - 6f).take(4).forEachIndexed { i, l -> page.text(mono, 5.5f, x + 3f, top + 10f + i * 7f, l, INK45) }
-            }
-            page.strokeRect(x, top, w, h, INK12, 0.5f)
-        }
-
-        /** `01  NAME` over a rule. */
-        fun heading(n: Int, name: String, width: Float = CW, x: Float = ML) {
-            room(40f)
-            page.text(mono, 8f, x, y + 15f, n.toString().padStart(2, '0'), INK45)
-            page.text(bold, 12f, x + 20f, y + 15f, name)
-            page.line(x, y + 21f, x + width, y + 21f, INK, 0.75f)
-            y += 32f
-        }
-
-        fun label(text: String, x: Float, top: Float, gray: Float = INK45) = page.text(regular, 7f, x, top + 8f, text.uppercase(), gray)
-    }
-
-    private fun clean(s: String) = s.replace("[[", "").replace("]]", "").replace("**", "").replace('\n', ' ')
-
-    private fun right(page: PdfPage, font: PdfFont, size: Float, x: Float, baseline: Float, text: String, gray: Float) =
-        page.text(font, size, x - font.width(text, size), baseline, text, gray)
-
-    private fun fit(text: String, font: PdfFont, size: Float, width: Float): String {
-        if (font.width(text, size) <= width) return text
-        var t = text
-        while (t.isNotEmpty() && font.width("$t…", size) > width) t = t.dropLast(1)
-        return "$t…"
-    }
-
-    // ---- A · Primer --------------------------------------------------------------------------
-
-    private fun primer(p: Pen, g: ReaderGuide) {
-        p.next()
-        if (g.subtitle.isNotBlank()) {
-            p.page.text(p.mono, 8f, ML, p.y + 8f, g.subtitle, INK70)
-            p.y += 18f
-        }
-        p.y += p.para(g.pitch, ML, p.y, CW * 0.86f, size = 13f, lead = 18.5f) + 18f
-        var n = 1
-        // Key cards, a row a role: the role on the left, its cards with a line each.
-        if (g.roles.isNotEmpty()) {
-            p.heading(n++, "The cards")
-            g.roles.forEach { role ->
-                val per = 4
-                role.cards.chunked(per).forEach { row ->
-                    val cell = (CW - 92f) / per
-                    val cw = 50f
-                    val rowH = row.maxOf { c -> cw * CARD + 6f + p.height(c.card, cell - 8f, p.bold, 7.5f, 10f, 2) + p.height(c.note, cell - 8f, size = 7.5f, lead = 10f, max = 4) } + 14f
-                    p.room(rowH)
-                    if (row === role.cards.chunked(per).first()) p.page.text(p.bold, 9f, ML, p.y + 10f, role.name)
-                    row.forEachIndexed { i, c ->
-                        val x = ML + 92f + i * cell
-                        p.card(c.card, x, p.y, cw)
-                        if (c.copies > 0) p.page.text(p.mono, 7f, x + cw + 4f, p.y + 8f, "×${c.copies}", INK45)
-                        var t = p.y + cw * CARD + 6f
-                        t += p.para(c.card, x, t, cell - 8f, p.bold, 7.5f, 10f, max = 2)
-                        p.para(c.note, x, t, cell - 8f, size = 7.5f, lead = 10f, gray = INK70, max = 4)
+            // The picture that proves it.
+            ph.y += 6f
+            when {
+                l.show == "odds" -> {
+                    val starters = g.roles.firstOrNull()
+                    if (starters != null) {
+                        val all = starters.cards.sumOf { it.copies }
+                        val monsters = starters.cards.filter { kind(it.card) == 'M' }.sumOf { it.copies }
+                        val rows = listOf(
+                            "$monsters monsters" to GuideFacts.atLeastOne(monsters, facts.deckSize, 5),
+                            "$all with the traps" to GuideFacts.atLeastOne(all, facts.deckSize, 5),
+                        )
+                        ph.micro(ph.page, "At least one starter in five cards", MARGIN, ph.y + 7f, INK45)
+                        ph.y += 14f
+                        ph.y += ph.compareBars(rows, MARGIN, ph.y, CW, bar = 16f) + 14f
                     }
-                    p.y += rowH
                 }
-                p.page.line(ML, p.y - 6f, W - ML, p.y - 6f, INK12, 0.5f)
-            }
-            p.y += 8f
-        }
-        // The plan, going first and second side by side.
-        if (g.goingFirst.isNotEmpty() || g.goingSecond.isNotEmpty()) {
-            p.heading(n++, "The plan")
-            val col = (CW - 24f) / 2
-            val need = maxOf(listHeight(p, g.goingFirst, col), listHeight(p, g.goingSecond, col)) + 20f
-            p.room(need)
-            p.label("Going first", ML, p.y)
-            p.label("Going second", ML + col + 24f, p.y)
-            numbered(p, g.goingFirst, ML, p.y + 16f, col)
-            numbered(p, g.goingSecond, ML + col + 24f, p.y + 16f, col)
-            p.y += need + 10f
-        }
-        // Each line as a chain of cards, the action under each, then the board it ends on.
-        if (g.lines.isNotEmpty()) {
-            p.heading(n++, "The lines")
-            g.lines.forEachIndexed { li, line -> chain(p, li + 1, line, perRow = 5, cw = 58f) }
-        }
-        chokes(p, n++, g.chokePoints)
-        siding(p, n++, g.siding)
-        tips(p, n, g)
-    }
-
-    private fun listHeight(p: Pen, items: List<String>, width: Float) = items.sumOf { p.height(it, width - 18f).toDouble() + 4.0 }.toFloat()
-
-    private fun numbered(p: Pen, items: List<String>, x: Float, top: Float, width: Float, size: Float = 9.5f): Float {
-        var t = top
-        items.forEachIndexed { i, it ->
-            p.page.text(p.mono, 7.5f, x, t + size * 1.42f * 0.72f, (i + 1).toString().padStart(2, '0'), INK45)
-            t += p.para(it, x + 18f, t, width - 18f, size = size) + 4f
-        }
-        return t - top
-    }
-
-    /** A line: its name, a note, the steps as cards with arrows and their actions, the end board. */
-    private fun chain(p: Pen, n: Int, line: ReaderGuide.Line, perRow: Int, cw: Float) {
-        val cell = CW / perRow
-        val actionW = cell - 12f
-        val head = 18f + if (line.note.isNotBlank()) p.height(line.note, CW, size = 9f) + 4f else 0f
-        val firstRow = line.steps.take(perRow)
-        val rowH = { steps: List<ReaderGuide.Step> -> cw * CARD + 8f + steps.maxOf { p.height(it.action, actionW, size = 8f, lead = 11f, max = 5) } + 12f }
-        p.room(head + rowH(firstRow))
-        p.page.text(p.mono, 8f, ML, p.y + 11f, "LINE ${n.toString().padStart(2, '0')}", INK45)
-        p.page.text(p.bold, 11.5f, ML + 52f, p.y + 11f, line.name)
-        p.y += 18f
-        if (line.note.isNotBlank()) p.y += p.para(line.note, ML, p.y, CW, size = 9f, gray = INK70) + 4f
-        line.steps.chunked(perRow).forEachIndexed { r, steps ->
-            val h = rowH(steps)
-            p.room(h)
-            steps.forEachIndexed { i, s ->
-                val x = ML + i * cell
-                p.page.text(p.mono, 7f, x, p.y + 7f, (r * perRow + i + 1).toString(), INK45)
-                p.card(s.card, x + 10f, p.y, cw)
-                val last = r * perRow + i == line.steps.lastIndex
-                if (!last && i < steps.lastIndex) p.page.text(p.regular, 12f, x + 10f + cw + (cell - cw - 10f) / 2 - 5f, p.y + cw * CARD / 2 + 4f, "→", INK45)
-                p.para(s.action, x + 10f, p.y + cw * CARD + 6f, actionW, size = 8f, lead = 11f, max = 5)
-            }
-            p.y += h
-        }
-        if (line.endBoard.isNotEmpty()) {
-            p.room(56f)
-            p.label("Ends on", ML, p.y)
-            line.endBoard.forEachIndexed { i, c -> p.card(c, ML + 60f + i * 34f, p.y - 2f, 28f) }
-            p.para(line.endBoard.joinToString(" · "), ML + 60f + line.endBoard.size * 34f + 6f, p.y + 6f, CW - 70f - line.endBoard.size * 34f, size = 7.5f, lead = 10f, gray = INK70, max = 4)
-            p.y += 28f * CARD + 10f
-        }
-        p.page.line(ML, p.y, W - ML, p.y, INK12, 0.5f)
-        p.y += 14f
-    }
-
-    private fun chokes(p: Pen, n: Int, items: List<ReaderGuide.Choke>) {
-        if (items.isEmpty()) return
-        p.heading(n, "What stops it")
-        items.forEach { c ->
-            val textW = CW - 50f
-            val h = maxOf(34f * CARD, p.height(c.card, textW, p.bold, 9.5f) + p.height(c.text, textW)) + 10f
-            p.room(h)
-            if (c.card.isNotBlank()) p.card(c.card, ML, p.y, 34f)
-            var t = p.y
-            if (c.card.isNotBlank()) t += p.para(c.card, ML + 46f, t, textW, p.bold)
-            p.para(c.text, ML + 46f, t, textW, gray = INK70)
-            p.y += h
-        }
-        p.y += 6f
-    }
-
-    private fun siding(p: Pen, n: Int, sides: List<ReaderGuide.Side>) {
-        if (sides.isEmpty()) return
-        p.heading(n, "Siding")
-        sides.forEach { s ->
-            val cw = 30f
-            val whyH = if (s.why.isNotBlank()) p.height(s.why, CW - 20f, size = 9f) + 6f else 0f
-            val h = 22f + 2 * (cw * CARD + 8f) + whyH + 14f
-            p.room(h)
-            p.page.strokeRect(ML, p.y, CW, h - 8f, INK12, 0.75f)
-            p.page.text(p.bold, 11f, ML + 10f, p.y + 16f, "vs ${s.matchup}")
-            var t = p.y + 24f
-            listOf("In" to s.sideIn, "Out" to s.sideOut).forEach { (word, cards) ->
-                p.label(word, ML + 10f, t + 14f, if (word == "In") INK else INK45)
-                cards.forEachIndexed { i, c -> p.card(c, ML + 44f + i * (cw + 5f), t, cw) }
-                val names = cards.groupingBy { it }.eachCount().entries.joinToString(" · ") { (k, v) -> if (v > 1) "$v× $k" else k }
-                p.para(names, ML + 44f + cards.size * (cw + 5f) + 8f, t + 4f, CW - 60f - cards.size * (cw + 5f), size = 8f, lead = 11f, gray = INK70, max = 4)
-                t += cw * CARD + 8f
-            }
-            if (s.why.isNotBlank()) p.para(s.why, ML + 10f, t + 2f, CW - 20f, size = 9f)
-            p.y += h
-        }
-    }
-
-    private fun tips(p: Pen, n: Int, g: ReaderGuide) {
-        if (g.tips.isNotEmpty()) {
-            p.heading(n, "Tips")
-            p.room(listHeight(p, g.tips, CW))
-            p.y += numbered(p, g.tips, ML, p.y, CW) + 10f
-        }
-        if (g.sources.isNotEmpty()) {
-            val h = g.sources.sumOf { p.height(it, CW, size = 7.5f, lead = 10f).toDouble() }.toFloat() + 18f
-            p.room(h)
-            p.label("Sources", ML, p.y)
-            var t = p.y + 14f
-            g.sources.forEach { t += p.para(it, ML, t, CW, size = 7.5f, lead = 10f, gray = INK45) }
-            p.y = t + 6f
-        }
-    }
-
-    // ---- B · Cheat sheet ------------------------------------------------------------------------
-
-    /** Two columns of short items, a small card beside each that names one; the columns flow on. */
-    private fun sheet(p: Pen, g: ReaderGuide) {
-        p.next()
-        if (g.subtitle.isNotBlank()) {
-            p.page.text(p.mono, 8f, ML, p.y + 8f, g.subtitle, INK70)
-            p.y += 16f
-        }
-        p.y += p.para(g.pitch, ML, p.y, CW, size = 10f, lead = 14f) + 12f
-        val gap = 20f
-        val col = (CW - gap) / 2
-        var c = 0
-        var top = p.y
-        var y = top
-        fun x() = ML + c * (col + gap)
-        fun take(h: Float) {
-            if (y + h > BOTTOM) {
-                if (c == 0) {
-                    c = 1
-                    y = top
-                } else {
-                    p.next()
-                    c = 0
-                    top = p.y
-                    y = top
+                l.show.startsWith("turn:") -> g.lines.getOrNull(l.show.substringAfter(':').toIntOrNull() ?: 0)?.let { line ->
+                    ph.y += ph.lanes(line, MARGIN, ph.y, CW, tile = 30f) + 14f
                 }
+                l.show.startsWith("line:") -> g.lines.getOrNull(l.show.substringAfter(':').toIntOrNull() ?: 0)?.let { line ->
+                    ph.y += ph.flow(line, MARGIN, ph.y, CW, tile = 22f) + 10f
+                }
+                l.show == "engine" -> ph.y += ph.engineMap(engine, MARGIN, ph.y, CW, tile = 32f) + 10f
+            }
+            if (l.why.isNotBlank()) {
+                val h = ph.height(l.why, CW - (col(1) - 30f - MARGIN), size = 12f, lead = 18f) + 20f
+                ph.room(h)
+                ph.page.line(MARGIN, ph.y, W - MARGIN, ph.y, INK12, 0.5f)
+                ph.y += 10f
+                ph.micro(ph.page, "Why", MARGIN, ph.y + 7f, INK)
+                ph.y += ph.para(l.why, col(1) - 30f, ph.y, CW - (col(1) - 30f - MARGIN), ph.regular, 12f, 18f, INK) + 10f
             }
         }
-        fun head(name: String) {
-            take(34f)
-            p.page.text(p.bold, 10f, x(), y + 12f, name)
-            p.page.line(x(), y + 17f, x() + col, y + 17f, INK, 0.75f)
-            y += 24f
-        }
-        val thumb = 22f
-        fun item(card: String?, bold: String?, text: String) {
-            val tw = col - thumb - 8f
-            val h = maxOf(if (card != null) thumb * CARD else 0f, (if (bold != null) p.height(bold, tw, p.bold, 8.5f, 11.5f) else 0f) + p.height(text, tw, size = 8.5f, lead = 11.5f)) + 6f
-            take(h) // first: it may move to the next column, and the text goes where the card does
-            val tx = x() + thumb + 8f
-            if (card != null) p.card(card, x(), y, thumb)
-            var t = y
-            if (bold != null) t += p.para(bold, tx, t, tw, p.bold, 8.5f, 11.5f)
-            p.para(text, tx, t, tw, size = 8.5f, lead = 11.5f, gray = INK70)
-            y += h
-        }
-        g.roles.forEach { r ->
-            head(r.name)
-            r.cards.forEach { item(it.card, (if (it.copies > 0) "${it.copies}× " else "") + it.card, it.note) }
-        }
-        if (g.goingFirst.isNotEmpty()) {
-            head("Going first")
-            g.goingFirst.forEachIndexed { i, s -> item(null, null, "${i + 1}. $s") }
-        }
-        if (g.goingSecond.isNotEmpty()) {
-            head("Going second")
-            g.goingSecond.forEachIndexed { i, s -> item(null, null, "${i + 1}. $s") }
-        }
-        g.lines.forEachIndexed { li, l ->
-            head("Line ${li + 1} · ${l.name}")
-            if (l.note.isNotBlank()) item(null, null, l.note)
-            l.steps.forEachIndexed { i, s -> item(s.card, "${i + 1}  ${s.card}", s.action) }
-            if (l.endBoard.isNotEmpty()) item(null, "Ends on", l.endBoard.joinToString(" · "))
-        }
-        if (g.chokePoints.isNotEmpty()) {
-            head("What stops it")
-            g.chokePoints.forEach { item(it.card.ifBlank { null }, it.card.ifBlank { null }, it.text) }
-        }
-        g.siding.forEach { s ->
-            head("vs ${s.matchup}")
-            item(s.sideIn.firstOrNull(), "In", s.sideIn.groupingBy { it }.eachCount().entries.joinToString(" · ") { (k, v) -> if (v > 1) "$v× $k" else k })
-            item(s.sideOut.firstOrNull(), "Out", s.sideOut.groupingBy { it }.eachCount().entries.joinToString(" · ") { (k, v) -> if (v > 1) "$v× $k" else k })
-            if (s.why.isNotBlank()) item(null, null, s.why)
-        }
-        if (g.tips.isNotEmpty()) {
-            head("Tips")
-            g.tips.forEachIndexed { i, t -> item(null, null, "${i + 1}. $t") }
-        }
-        if (g.sources.isNotEmpty()) {
-            head("Sources")
-            g.sources.forEach { item(null, null, it) }
-        }
-    }
 
-    // ---- C · Magazine -----------------------------------------------------------------------------
+        // ---- the turn direction ------------------------------------------------------------------
 
-    /** One idea to a page, the cards large: a cover, the cards and the plan, a page a line, the rest. */
-    private fun magazine(p: Pen, g: ReaderGuide) {
-        // The cover: the title large, three cards across, the pitch under them.
-        p.next(chrome = false)
-        p.page.text(p.regular, 8f, ML, MT + 10f, "DECK GUIDE", INK70)
-        p.page.text(p.bold, 46f, ML, MT + 80f, fit(g.deckName, p.bold, 46f, CW))
-        if (g.subtitle.isNotBlank()) p.page.text(p.mono, 9f, ML, MT + 100f, g.subtitle, INK70)
-        p.page.fillRect(ML, MT + 112f, CW, 2f, INK)
-        val cover = g.roles.mapNotNull { it.cards.firstOrNull()?.card }.distinct().take(3).ifEmpty { g.cards().take(3) }
-        val big = (CW - 2 * 14f) / 3
-        cover.forEachIndexed { i, c -> p.card(c, ML + i * (big + 14f), MT + 132f, big) }
-        p.para(g.pitch, ML, MT + 150f + big * CARD, CW, size = 15f, lead = 21f)
-        // The cards by role, larger, and the plan.
-        p.next()
-        var n = 1
-        p.heading(n++, "The cards")
-        g.roles.forEach { role ->
-            val cw = 64f
-            val cell = CW / 4
-            role.cards.chunked(4).forEachIndexed { r, row ->
-                val h = cw * CARD + 8f + row.maxOf { p.height(it.note, cell - 10f, size = 8f, lead = 11f, max = 4) } + 26f
-                p.room(h + if (r == 0) 16f else 0f)
-                if (r == 0) {
-                    p.label(role.name, ML, p.y)
-                    p.y += 14f
-                }
-                row.forEachIndexed { i, c ->
-                    val x = ML + i * cell
-                    p.card(c.card, x, p.y, cw)
-                    var t = p.y + cw * CARD + 6f
-                    t += p.para(c.card, x, t, cell - 10f, p.bold, 8f, 11f, max = 2)
-                    p.para(c.note, x, t, cell - 10f, size = 8f, lead = 11f, gray = INK70, max = 4)
-                }
-                p.y += h
+        fun turnCover() {
+            ph.screen("Cover", head = false)
+            var y = 40f
+            ph.micro(ph.page, "One turn, annotated", MARGIN, y, INK45)
+            y += 10f
+            y += ph.headline(g.deckName, top = y, size = 48f) + 10f
+            if (g.subtitle.isNotBlank()) {
+                ph.page.text(ph.mono, 7.5f, MARGIN, y + 8f, g.subtitle, INK45)
+                y += 18f
+            }
+            if (g.bigIdea.isNotBlank()) y += ph.para(g.bigIdea, MARGIN, y, CW, ph.medium, 17f, 22f, INK, tracking = -0.2f) + 22f
+            val line = g.lines.firstOrNull()
+            if (line != null) {
+                ph.page.fillRect(MARGIN, y, CW, 1.5f, INK)
+                ph.micro(ph.page, "Where you want to be when they pass back", MARGIN, y + 14f, INK)
+                y += 26f
+                val bw = 250f
+                y += ph.board(line.endBoard, line.endSet, MARGIN, y, bw) + 18f
+                ph.page.fillRect(MARGIN, y, CW, 1.5f, INK)
+                ph.micro(ph.page, "How you get there · ${line.name}", MARGIN, y + 14f, INK)
+                y += 22f
+                y += ph.strip(line, MARGIN, y, CW) + 8f
+                ph.para("One card on your turn; the rest on theirs. The next screens take it a step at a time, and show where it breaks.", MARGIN, y, CW, ph.regular, 10f, 14f, INK70)
             }
         }
-        if (g.goingFirst.isNotEmpty() || g.goingSecond.isNotEmpty()) {
-            p.heading(n++, "The plan")
-            val col = (CW - 24f) / 2
-            val need = maxOf(listHeight(p, g.goingFirst, col), listHeight(p, g.goingSecond, col)) + 20f
-            p.room(need)
-            p.label("Going first", ML, p.y)
-            p.label("Going second", ML + col + 24f, p.y)
-            numbered(p, g.goingFirst, ML, p.y + 16f, col, 10.5f)
-            numbered(p, g.goingSecond, ML + col + 24f, p.y + 16f, col, 10.5f)
-            p.y += need + 10f
+
+        fun lanesScreen(line: ReaderGuide.Line) {
+            val theirs = GuideFacts.theirTurn(line)
+            open("The turn", "$theirs of ${line.steps.size} plays happen on their turn.")
+            lede("Your turn on the left, theirs on the right, in order. Going first you summon one card and pass; the deck does its work while they play.")
+            ph.y += ph.lanes(line, MARGIN, ph.y, CW) + 8f
         }
-        // What stops it, under the plan: the two belong together, and it fills the plan's page.
-        if (g.chokePoints.isNotEmpty()) chokes(p, n++, g.chokePoints)
-        // A page a line, three large steps across (four when that saves a lone card on a row of its own).
-        g.lines.forEachIndexed { li, line ->
-            p.next()
-            p.page.text(p.mono, 8f, ML, p.y + 8f, "LINE ${(li + 1).toString().padStart(2, '0')}", INK45)
-            p.page.text(p.bold, 24f, ML, p.y + 36f, fit(line.name, p.bold, 24f, CW))
-            p.y += 46f
-            if (line.note.isNotBlank()) p.y += p.para(line.note, ML, p.y, CW, size = 11f, gray = INK70) + 12f
-            val per = if (line.steps.size > 1 && line.steps.size % 3 == 1) 4 else 3
-            val cell = CW / per
-            val cw = cell - 40f
-            line.steps.chunked(per).forEachIndexed { r, row ->
-                val h = cw * CARD + 12f + row.maxOf { p.height(it.action, cell - 16f, size = 10f, lead = 14f, max = 6) } + 18f
-                p.room(h)
-                row.forEachIndexed { i, s ->
-                    val x = ML + i * cell
-                    p.page.text(p.bold, 18f, x, p.y + 16f, (r * per + i + 1).toString())
-                    p.card(s.card, x + 22f, p.y, cw)
-                    p.para(s.action, x + 22f, p.y + cw * CARD + 8f, cell - 30f, size = 10f, lead = 14f, max = 6)
-                }
-                p.y += h
-            }
-            if (line.endBoard.isNotEmpty()) {
-                val end = 64f
-                p.room(14f + end * CARD + 10f)
-                p.label("Ends on", ML, p.y)
-                line.endBoard.forEachIndexed { i, c -> p.card(c, ML + i * (end + 8f), p.y + 14f, end) }
-                p.y += 14f + end * CARD + 10f
-            }
+
+        fun framesScreen(line: ReaderGuide.Line) {
+            open("Step by step", "The board after each play.")
+            lede("Each frame is the field after one step: the card that moved is framed, the rest are dimmed. Set cards show what they are under the face-down mark.")
+            ph.y += ph.frames(line, kind, MARGIN, ph.y, CW)
         }
-        // The rest: siding and tips.
-        p.next()
-        siding(p, n++, g.siding)
-        tips(p, n, g)
     }
 }

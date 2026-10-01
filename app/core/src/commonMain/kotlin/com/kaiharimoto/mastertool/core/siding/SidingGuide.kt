@@ -47,8 +47,8 @@ data class GuideContent(
  */
 enum class GuideStyle { ART, LIST }
 
-/** The fonts the guide is set in: the app's own, read from its files. */
-class GuideFonts(val regular: TrueType, val bold: TrueType, val mono: TrueType)
+/** The fonts the guide is set in: the app's own, read from its files; [medium] (Inter 500) for headings that are not shouts. */
+class GuideFonts(val regular: TrueType, val bold: TrueType, val mono: TrueType, val medium: TrueType = bold)
 
 /**
  * The siding guide (kai, 1.0.36: "export an organized and visually coherent

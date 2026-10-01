@@ -132,7 +132,7 @@ fun neueMain(args: Array<String>) {
             }
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
-            // --reader=primer|sheet|magazine|all: the sample reader's guide in each layout, as PDFs in shots/ (1.0.66 mockups).
+            // --reader=manual|lessons|turn|all: the sample reader's guide in each direction, as phone PDFs in shots/ (1.0.67 exploration).
             map["reader"]?.let { which ->
                 val styles = com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.Style.entries
                     .filter { which == "all" || it.name.equals(which, ignoreCase = true) || it.label.equals(which, ignoreCase = true) }

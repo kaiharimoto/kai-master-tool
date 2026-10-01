@@ -132,7 +132,7 @@ object GuideExport {
     }
 
     /** A card's picture, as the app shows it, drawn down to print size; null when there is none to be had. */
-    internal suspend fun picture(id: CardId, state: DeckBuilderState, neue: NeueState, library: ArtLibrary?, custom: CustomArt?, width: Int = PICTURE_WIDTH): PdfImage? {
+    internal suspend fun picture(id: CardId, state: DeckBuilderState, neue: NeueState, library: ArtLibrary?, custom: CustomArt?, width: Int = PICTURE_WIDTH, jpeg: Boolean = false): PdfImage? {
         val card = state.index.byId(id) ?: return null
         val choice = neue.prefs.arts[id.value]
         val drawn = custom?.drawn(card, choice) ?: CardArt.show(card, choice?.let(::CardId))
@@ -142,16 +142,28 @@ object GuideExport {
                 if (own != null) File(URI(own)).readBytes() else library?.ensure(drawn)?.readBytes()
             }.getOrNull()
         } ?: return null
-        return withContext(Dispatchers.Default) { decodePicture(bytes)?.let { rgb(it, width) } }
+        return withContext(Dispatchers.Default) {
+            decodePicture(bytes)?.let { image ->
+                // A JPEG when asked (1.0.67): a guide shared in a chat must be small, and card art deflates poorly.
+                if (jpeg) scaled(image, width).let { small -> com.kaiharimoto.neue.platform.encodeJpeg(small, 82)?.let { PdfImage.jpeg(small.width, small.height, it) } } ?: rgb(image, width) else rgb(image, width)
+            }
+        }
     }
 
-    /** [image] drawn [w] pixels wide (by default [PICTURE_WIDTH]) at the card's own shape, as RGB. */
-    private fun rgb(image: ImageBitmap, w: Int = PICTURE_WIDTH): PdfImage {
+    /** [image] drawn [w] pixels wide at its own shape. */
+    private fun scaled(image: ImageBitmap, w: Int): ImageBitmap {
         val h = (w * image.height.toFloat() / image.width).toInt().coerceAtLeast(1)
         val small = ImageBitmap(w, h)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(small), Size(w.toFloat(), h.toFloat())) {
             drawImage(image, dstSize = IntSize(w, h), filterQuality = FilterQuality.High)
         }
+        return small
+    }
+
+    /** [image] drawn [w] pixels wide (by default [PICTURE_WIDTH]) at the card's own shape, as RGB. */
+    private fun rgb(image: ImageBitmap, w: Int = PICTURE_WIDTH): PdfImage {
+        val small = scaled(image, w)
+        val h = small.height
         val argb = IntArray(w * h)
         small.readPixels(argb)
         val out = ByteArray(w * h * 3)

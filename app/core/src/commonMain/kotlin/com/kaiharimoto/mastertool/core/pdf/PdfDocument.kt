@@ -9,16 +9,70 @@ class PdfFont internal constructor(internal val key: String, val metrics: TrueTy
 
     fun width(text: String, size: Float): Float = metrics.width(text, size)
 
+    /** [text]'s width with [tracking] points added after every character, as [PdfPage.text] sets it. */
+    fun width(text: String, size: Float, tracking: Float): Float =
+        metrics.width(text, size) + if (tracking == 0f) 0f else tracking * TrueType.codePoints(text).size
+
     /** The font's ascent at [size], in points. */
     fun ascent(size: Float): Float = metrics.ascent * size / metrics.unitsPerEm
 
     fun capHeight(size: Float): Float = metrics.capHeight * size / metrics.unitsPerEm
 }
 
-/** A picture for a PDF: 8-bit RGB, row by row from the top, three bytes a pixel. */
-class PdfImage(val width: Int, val height: Int, val rgb: ByteArray) {
+/**
+ * A picture for a PDF: 8-bit RGB, row by row from the top, three bytes a pixel — or, when [jpeg]
+ * is given, a baseline JPEG passed through as it is (`/DCTDecode`, 1.0.67: a guide shared in a chat
+ * must be small, and card art deflates poorly); [rgb] is then unused.
+ */
+class PdfImage(val width: Int, val height: Int, val rgb: ByteArray, val jpeg: ByteArray? = null) {
     init {
-        require(rgb.size == width * height * 3) { "Expected ${width * height * 3} bytes for $width × $height, got ${rgb.size}" }
+        if (jpeg == null) require(rgb.size == width * height * 3) { "Expected ${width * height * 3} bytes for $width × $height, got ${rgb.size}" }
+    }
+
+    companion object {
+        /** A JPEG of [width] × [height] pixels, RGB. */
+        fun jpeg(width: Int, height: Int, bytes: ByteArray) = PdfImage(width, height, ByteArray(0), bytes)
+    }
+}
+
+/** How a stroke's ends are drawn. */
+enum class LineCap(internal val code: Int) { BUTT(0), ROUND(1), SQUARE(2) }
+
+/**
+ * A shape for [PdfPage.fill] and [PdfPage.stroke] (1.0.67: the reader's guide draws its ideas —
+ * arrows, curves, rings, the field's zones): points from the page's top left, like every other call.
+ */
+class PdfPath internal constructor(private val height: Float) {
+    internal val ops = StringBuilder()
+
+    private fun n(v: Float): String = PdfPage.num(v)
+
+    fun moveTo(x: Float, top: Float) = apply { ops.append("${n(x)} ${n(height - top)} m ") }
+
+    fun lineTo(x: Float, top: Float) = apply { ops.append("${n(x)} ${n(height - top)} l ") }
+
+    /** A cubic Bézier to ([x], [top]) by the two control points. */
+    fun curveTo(x1: Float, top1: Float, x2: Float, top2: Float, x: Float, top: Float) = apply {
+        ops.append("${n(x1)} ${n(height - top1)} ${n(x2)} ${n(height - top2)} ${n(x)} ${n(height - top)} c ")
+    }
+
+    fun close() = apply { ops.append("h ") }
+
+    /** A circle round ([cx], [cy]) of radius [r], from four Béziers. */
+    fun circle(cx: Float, cy: Float, r: Float) = apply {
+        val k = 0.5523f * r
+        moveTo(cx + r, cy)
+        curveTo(cx + r, cy + k, cx + k, cy + r, cx, cy + r)
+        curveTo(cx - k, cy + r, cx - r, cy + k, cx - r, cy)
+        curveTo(cx - r, cy - k, cx - k, cy - r, cx, cy - r)
+        curveTo(cx + k, cy - r, cx + r, cy - k, cx + r, cy)
+        close()
+    }
+
+    /** A closed polygon through [points], each (x, top). */
+    fun polygon(points: List<Pair<Float, Float>>) = apply {
+        points.forEachIndexed { i, (x, t) -> if (i == 0) moveTo(x, t) else lineTo(x, t) }
+        close()
     }
 }
 
@@ -33,10 +87,10 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
     internal val images = LinkedHashSet<PdfImage>()
     internal val alphas = LinkedHashSet<Int>()
 
-    private fun n(v: Float): String {
-        val r = kotlin.math.round(v * 100f) / 100f
-        return if (r == r.toLong().toFloat()) r.toLong().toString() else r.toString()
-    }
+    private fun n(v: Float): String = num(v)
+
+    /** The character spacing in force, as the content stream has set it. */
+    private var tc = 0f
 
     private fun y(top: Float) = height - top
 
@@ -60,8 +114,38 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
         if (dash != null) ops.append("[${n(dash)} ${n(dash)}] 0 d\n")
     }
 
-    /** [text] set in [font] at [size], its baseline [baseline] points from the top. */
-    fun text(font: PdfFont, size: Float, x: Float, baseline: Float, text: String, gray: Float = 0f) {
+    /** A new shape on this page: give it to [fill], [stroke] or [fillStroke]. */
+    fun path(build: PdfPath.() -> Unit): PdfPath = PdfPath(height).apply(build)
+
+    fun fill(path: PdfPath, gray: Float) {
+        ops.append("${n(gray)} g ").append(path.ops).append("f\n")
+    }
+
+    fun stroke(path: PdfPath, gray: Float = 0f, width: Float = 1f, dash: Float? = null, cap: LineCap = LineCap.BUTT, round: Boolean = false) {
+        dashed(dash)
+        ops.append("${n(gray)} G ${n(width)} w ${cap.code} J ${if (round) 1 else 0} j ").append(path.ops).append("S\n")
+        if (dash != null) ops.append("[] 0 d\n")
+        if (cap != LineCap.BUTT || round) ops.append("0 J 0 j\n")
+    }
+
+    fun fillStroke(path: PdfPath, fill: Float, stroke: Float, width: Float = 1f) {
+        ops.append("${n(fill)} g ${n(stroke)} G ${n(width)} w ").append(path.ops).append("B\n")
+    }
+
+    /** What [draw] puts on the page, cut to the box: nothing outside it shows. */
+    fun clip(x: Float, top: Float, w: Float, h: Float, draw: () -> Unit) {
+        ops.append("q ${n(x)} ${n(y(top + h))} ${n(w)} ${n(h)} re W n\n")
+        val saved = tc
+        draw()
+        ops.append("Q\n")
+        tc = saved
+    }
+
+    /**
+     * [text] set in [font] at [size], its baseline [baseline] points from the top; [tracking] adds
+     * that many points after every character (micro caps open up, display type closes in).
+     */
+    fun text(font: PdfFont, size: Float, x: Float, baseline: Float, text: String, gray: Float = 0f, tracking: Float = 0f) {
         if (text.isEmpty()) return
         fonts += font
         val hex = StringBuilder()
@@ -70,7 +154,11 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
             font.used.getOrPut(g) { cp }
             hex.append(g.toString(16).padStart(4, '0'))
         }
-        ops.append("BT /${font.key} ${n(size)} Tf ${n(gray)} g ${n(x)} ${n(y(baseline))} Td <$hex> Tj ET\n")
+        // Character spacing is part of the graphics state, not the text object: it outlives ET, so it is
+        // set whenever it changes (and q … Q in faded and clip restore it, which they track too).
+        val spacing = if (tracking != tc) "${n(tracking)} Tc " else ""
+        tc = tracking
+        ops.append("BT /${font.key} ${n(size)} Tf $spacing${n(gray)} g ${n(x)} ${n(y(baseline))} Td <$hex> Tj ET\n")
     }
 
     /** What [draw] puts on the page, see-through: [alpha] 0 to 1, fills, strokes and pictures alike. */
@@ -78,8 +166,10 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
         val percent = (alpha * 100).toInt().coerceIn(0, 100)
         alphas += percent
         ops.append("q /GA$percent gs\n")
+        val saved = tc
         draw()
         ops.append("Q\n")
+        tc = saved
     }
 
     /** [image] drawn into the box at ([x], [top]), [w] × [h] points. */
@@ -87,6 +177,13 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
         val key = doc.register(image)
         images += image
         ops.append("q ${n(w)} 0 0 ${n(h)} ${n(x)} ${n(y(top + h))} cm /$key Do Q\n")
+    }
+
+    internal companion object {
+        fun num(v: Float): String {
+            val r = kotlin.math.round(v * 100f) / 100f
+            return if (r == r.toLong().toFloat()) r.toLong().toString() else r.toString()
+        }
     }
 }
 
@@ -171,11 +268,9 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
             out.stream(toUnicode, "", toUnicodeMap(font).encodeToByteArray())
         }
         images.forEach { image ->
-            out.stream(
-                imageIds.getValue(image),
-                "/Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8",
-                image.rgb,
-            )
+            val dict = "/Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8"
+            val jpeg = image.jpeg
+            if (jpeg != null) out.stream(imageIds.getValue(image), "$dict /Filter /DCTDecode", jpeg, deflate = false) else out.stream(imageIds.getValue(image), dict, image.rgb)
         }
         val xref = out.size
         val total = next
@@ -228,9 +323,9 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
             raw("$id 0 obj\n$body\nendobj\n".encodeToByteArray())
         }
 
-        fun stream(id: Int, dict: String, data: ByteArray) {
+        fun stream(id: Int, dict: String, data: ByteArray, deflate: Boolean = true) {
             offsets[id] = size
-            val packed = zlib?.deflate(data)
+            val packed = if (deflate) zlib?.deflate(data) else null
             val body = packed ?: data
             val filter = if (packed != null) " /Filter /FlateDecode" else ""
             raw("$id 0 obj\n<< $dict /Length ${body.size}$filter >>\nstream\n".encodeToByteArray())

@@ -66,4 +66,29 @@ class PdfDocumentTest {
         page.text(font, 12f, 44f, 100f, "They go second into our board with Dimension Shifter — “keep Called by the Grave”.")
         File("build/pdf-sample.pdf").writeBytes(doc.write())
     }
+
+    @Test
+    fun shapesClipsTrackingAndJpegsAreWritten() {
+        val doc = PdfDocument(null)
+        val font = doc.font(inter)
+        val page = doc.page(400f, 866f)
+        page.fill(page.path { circle(50f, 50f, 10f) }, 0f)
+        page.stroke(page.path { moveTo(10f, 10f); curveTo(10f, 40f, 60f, 40f, 60f, 70f) }, 0.5f, 0.8f, cap = LineCap.ROUND, round = true)
+        page.fillStroke(page.path { polygon(listOf(0f to 0f, 10f to 0f, 5f to 8f)) }, 0f, 0f)
+        page.clip(0f, 0f, 20f, 20f) { page.fillRect(0f, 0f, 40f, 40f, 0f) }
+        page.text(font, 7f, 10f, 100f, "MICRO CAPS", 0.5f, tracking = 0.56f)
+        // A one-pixel JPEG, as a JPEG file begins and ends: passed through, never deflated.
+        val jpeg = byteArrayOf(-1, -40, -1, -39)
+        page.image(PdfImage.jpeg(1, 1, jpeg), 0f, 0f, 10f, 10f)
+        val text = String(doc.write(), Charsets.ISO_8859_1)
+        assertTrue(" c " in text, "a curve")
+        assertTrue("re W n" in text, "a clip")
+        assertTrue("0.56 Tc" in text, "letter-spacing")
+        assertTrue("1 J 1 j" in text, "a round cap and join")
+        assertTrue("/DCTDecode" in text, "the JPEG kept as it is")
+        assertTrue(String(jpeg, Charsets.ISO_8859_1) in text)
+        // Tracking is measured the way it is set: a tracked word is wider by the tracking a character.
+        val f = doc.font(inter)
+        assertEquals(f.width("ABC", 10f) + 3f, f.width("ABC", 10f, 1f), 0.001f)
+    }
 }

@@ -554,7 +554,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **1.0.66**: one Fine Tuning run may add `TuneIntensity.guideBudget` to the guide (Deep 20,000;
   `GuideBudget`); **Refactor guide** (`MODE_REFACTOR`, skill `refactor-guide`) rewrites the whole guide
   with the memory tool's `rewrite` (`GuideRewrite`, only in that mode), reviewed on Finish. The reader's
-  guide mockups are `ReaderGuide`/`ReaderGuidePdf` (`tools/shoot.sh --reader=all`).
+  guide is in design (second exploration, for the phone): `ReaderGuide`/`ReaderGuidePdf` over
+  `core/ai/report/guide/` (`Phone`, `Graphics`, `GuideFacts`, `EngineLayout`); `tools/shoot.sh
+  --reader=all`. The PDF toolkit draws paths, clips, tracks type and embeds JPEGs.
   `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|refactor|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.

@@ -10,10 +10,10 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The reader's guide (1.0.66 mockups): each layout a real PDF with art, and the data round-trips. */
+/** The reader's guide (1.0.67): each direction a real phone-shaped PDF with art, and the data round-trips. */
 class ReaderGuidePdfTest {
     private fun font(name: String) = TrueType(File("../neue/src/commonMain/composeResources/font/$name.ttf").readBytes())
-    private val fonts = GuideFonts(font("inter_regular"), font("inter_bold"), font("jetbrainsmono_regular"))
+    private val fonts = GuideFonts(font("inter_regular"), font("inter_bold"), font("jetbrainsmono_regular"), font("inter_medium"))
     private val sample = ReaderGuideSample.labrynth
     private val pictures = sample.cards().associateWith { name -> PdfImage(4, 6, ByteArray(4 * 6 * 3) { (name.length * 7).toByte() }) }
 
@@ -27,7 +27,8 @@ class ReaderGuidePdfTest {
             val pdf = String(bytes, Charsets.ISO_8859_1)
             assertTrue(pdf.startsWith("%PDF-"), style.name)
             assertTrue(pdf.contains("/Subtype /Image") || pdf.contains("/Subtype/Image"), "$style draws the art")
-            assertTrue(pages(bytes) >= 2, "$style: ${pages(bytes)} pages")
+            assertTrue(pages(bytes) >= 5, "$style: ${pages(bytes)} pages")
+            assertTrue("/MediaBox [0 0 400.0 866.0]" in pdf, "$style is phone-shaped")
         }
     }
 

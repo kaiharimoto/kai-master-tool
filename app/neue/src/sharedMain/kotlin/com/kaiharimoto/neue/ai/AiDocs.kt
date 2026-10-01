@@ -35,6 +35,7 @@ object AiDocs {
         TrueType(Res.readBytes("font/inter_regular.ttf")),
         TrueType(Res.readBytes("font/inter_bold.ttf")),
         TrueType(Res.readBytes("font/jetbrainsmono_regular.ttf")),
+        TrueType(Res.readBytes("font/inter_medium.ttf")),
     )
 
     /** The guide's key cards: the ones it names most, resolved to cards the pool knows. */
@@ -58,14 +59,26 @@ object AiDocs {
      * person chose, large enough for the largest place a layout sets it.
      */
     suspend fun readerBytes(h: NeueHolders, guide: com.kaiharimoto.mastertool.core.ai.report.ReaderGuide, style: com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.Style): ByteArray {
-        val width = if (style == com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.Style.MAGAZINE) 300 else 180
+        // JPEG pictures (1.0.67), small enough to send in a chat: the cards a cover or a lesson sets large get more pixels.
+        // Only a cover's hero is drawn large; every other tile prints at 72 points or less.
+        val large = com.kaiharimoto.mastertool.core.ai.report.guide.EngineLayout.of(guide.connections).hubs
         val pictures = HashMap<String, PdfImage>()
         guide.cards().forEach { name ->
-            h.builder.index.byName(name)?.let { card -> GuideExport.picture(card.id, h.builder, h.neue, h.art, h.customArt, width)?.let { pictures[name] = it } }
+            h.builder.index.byName(name)?.let { card ->
+                GuideExport.picture(card.id, h.builder, h.neue, h.art, h.customArt, if (name in large) 600 else 240, jpeg = true)?.let { pictures[name] = it }
+            }
+        }
+        val kind: (String) -> Char? = { name ->
+            when (h.builder.index.byName(name)?.category) {
+                com.kaiharimoto.mastertool.core.model.CardCategory.MONSTER -> 'M'
+                com.kaiharimoto.mastertool.core.model.CardCategory.SPELL -> 'S'
+                com.kaiharimoto.mastertool.core.model.CardCategory.TRAP -> 'T'
+                else -> null
+            }
         }
         val f = fonts()
         val updated = date(guide.updatedAt.takeIf { it > 0 } ?: System.currentTimeMillis())
-        return withContext(Dispatchers.Default) { com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.render(guide, style, f, { pictures[it] }, JvmZlib, updated) }
+        return withContext(Dispatchers.Default) { com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.render(guide, style, f, { pictures[it] }, JvmZlib, updated, kind) }
     }
 
     suspend fun reportBytes(h: NeueHolders, report: SessionReport): ByteArray {

@@ -2394,9 +2394,19 @@ outputs and how the user gets them").
   and refused when it would empty the guide or keep under a tenth of it). Labels in reading order,
   lines numbered, cards in [[ ]]. Finish shows every change to keep or undo, as Fine Tuning does; no
   session report. Intensity sets how hard it checks the claims against the card text.
-- The reader's guide (a version written for people, to share as a PDF) has three layouts as
-  mockups (`ReaderGuide`, `ReaderGuidePdf`: Primer, Cheat sheet, Magazine; `tools/shoot.sh
-  --reader=all`), waiting on kai's pick.
+- The reader's guide (a version written for people, to share as a PDF) is being designed. kai turned
+  down the first three A4 mockups ("none of these designs speak out to me"); the second exploration
+  (1.0.67, no release) is made for the phone, where guides are read: `core/ai/report/guide/` —
+  `Phone` (400 × 866 pt, four columns, a 4-pt baseline, MuType's scale, three ink weights),
+  `Graphics` (the forty cards as Isotype cells, one big number on a 0–100 bar, the engine map from
+  `EngineLayout`, a line with its choke points, your turn / their turn lanes, the field and small
+  multiples of it, the matchup ledger, sample hands, the checklist, a filmstrip of the turn) and
+  `GuideFacts` (the numbers, worked out: odds by the hypergeometric, sample hands from a seed, side
+  plans as signed counts). `ReaderGuide` gained the big idea, lessons (with the picture that proves
+  each), connections, choke points on steps, the end board's sets and a checklist. Three directions
+  over the same pictures: Field manual, Three lessons, One turn annotated (`tools/shoot.sh
+  --reader=all`). The PDF toolkit gained paths and curves, clipping, letter-spacing (set only when it
+  changes: `Tc` outlives `ET`) and JPEG pictures (`/DCTDecode`).
 
 #### Going further — the roadmap
 
