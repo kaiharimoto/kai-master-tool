@@ -6,9 +6,7 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.sync.Cloud
 import com.kaiharimoto.mastertool.core.sync.CloudSignIn
 import com.kaiharimoto.mastertool.core.sync.CloudTokens
-import com.kaiharimoto.mastertool.core.sync.DropboxStore
 import com.kaiharimoto.mastertool.core.sync.GoogleDriveStore
-import com.kaiharimoto.mastertool.core.sync.OneDriveStore
 import com.kaiharimoto.mastertool.core.sync.Sync
 import com.kaiharimoto.mastertool.core.sync.SyncEngine
 import com.kaiharimoto.mastertool.core.sync.SyncException
@@ -132,8 +130,6 @@ class SyncCenter(private val h: NeueHolders) {
             val token: suspend () -> String = { access(cloud) }
             when (cloud) {
                 Cloud.GOOGLE_DRIVE -> GoogleDriveStore(http, token, p.account)
-                Cloud.DROPBOX -> DropboxStore(http, token, p.account)
-                Cloud.ONEDRIVE -> OneDriveStore(http, token, p.account)
             }
         }
     }

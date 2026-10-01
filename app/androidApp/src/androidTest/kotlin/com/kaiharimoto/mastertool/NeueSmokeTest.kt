@@ -38,6 +38,7 @@ class NeueSmokeTest {
     @Test(timeout = 600_000)
     fun neueOpensOntoTheTabletsDeck() {
         val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
+        skipStart(app)
         val deck = Deck(
             main = List(40) { CardId(listOf(14558127, 23434538, 27204311, 81497285)[it % 4]) },
             extra = emptyList(),
@@ -74,6 +75,7 @@ class NeueSmokeTest {
     @Test(timeout = 600_000)
     fun aFingerFindsRoomAndWaysOut() {
         val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
+        skipStart(app)
         // The tablet's walk taps where a tablet's controls are; a phone has its own walk.
         org.junit.Assume.assumeFalse("a phone: see aPhoneHeldUpright", isPhone(app))
         val deck = Deck(
@@ -327,6 +329,7 @@ class NeueSmokeTest {
     @Test(timeout = 600_000)
     fun aPhoneHeldUpright() {
         val app = ApplicationProvider.getApplicationContext<MasterToolApplication>()
+        skipStart(app)
         org.junit.Assume.assumeTrue("a tablet: see aFingerFindsRoomAndWaysOut", isPhone(app))
         val deck = Deck(
             main = List(40) { CardId(listOf(14558127, 23434538, 27204311, 81497285)[it % 4]) },
@@ -553,6 +556,15 @@ private fun <T> readActivity(read: (MainActivity) -> T): T? {
         if (activity != null) out = read(activity)
     }
     return out
+}
+
+/**
+ * The setup offered on opening (1.0.69) marked as seen, so the walk starts on the app itself: it would
+ * otherwise cover the page, since a seeded deck reads as someone updating.
+ */
+private fun skipStart(app: MasterToolApplication) = runBlocking {
+    val prefs = app.preferencesRepository.loadNeue()
+    app.preferencesRepository.saveNeue(prefs.copy(start = com.kaiharimoto.mastertool.core.start.StartPrefs(seen = "999.0.0")))
 }
 
 /** Plain effect monsters under [ids], written into the card pool the way a sync writes them. */

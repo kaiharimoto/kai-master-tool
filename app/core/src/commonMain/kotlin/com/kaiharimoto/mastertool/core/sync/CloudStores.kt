@@ -22,7 +22,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-/** What the three sign-in stores share: a token asked for before each call, and failures worded once. */
+/** What a sign-in store needs: a token asked for before each call, and failures worded once. */
 abstract class CloudStore(
     protected val http: HttpClient,
     protected val cloud: Cloud,
@@ -132,107 +132,5 @@ class GoogleDriveStore(http: HttpClient, token: suspend () -> String, account: S
     companion object {
         private const val API = "https://www.googleapis.com/drive/v3/files"
         private const val UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
-    }
-}
-
-/** Dropbox with "App folder" access: the app sees `Apps/Neue Master Tool` and nothing else. */
-class DropboxStore(http: HttpClient, token: suspend () -> String, account: String = "") : CloudStore(http, Cloud.DROPBOX, token, account) {
-    override suspend fun list(folder: String): List<String> {
-        val out = mutableListOf<String>()
-        var r = call(HttpMethod.Post, "$API/files/list_folder") {
-            contentType(ContentType.Application.Json)
-            setBody("""{"path":"/$folder","limit":2000}""")
-        }
-        while (true) {
-            if (r.status.value == 409 && "not_found" in r.bodyAsText()) return emptyList()
-            check(r, "list its files")
-            val o = json(r)
-            o["entries"]?.jsonArray?.forEach { e ->
-                if (e.jsonObject[".tag"]?.jsonPrimitive?.content == "file") out += e.jsonObject["name"]!!.jsonPrimitive.content
-            }
-            if (o["has_more"]?.jsonPrimitive?.booleanOrNull != true) break
-            val cursor = o["cursor"]!!.jsonPrimitive.content
-            r = call(HttpMethod.Post, "$API/files/list_folder/continue") {
-                contentType(ContentType.Application.Json)
-                setBody("""{"cursor":"$cursor"}""")
-            }
-        }
-        return out
-    }
-
-    override suspend fun read(name: String): ByteArray? {
-        val r = call(HttpMethod.Post, "$CONTENT/files/download") { header("Dropbox-API-Arg", """{"path":"/$name"}""") }
-        if (r.status.value == 409 && "not_found" in r.bodyAsText()) return null
-        check(r, "read a file")
-        return r.bodyAsBytes()
-    }
-
-    override suspend fun write(name: String, bytes: ByteArray) {
-        val r = call(HttpMethod.Post, "$CONTENT/files/upload") {
-            header("Dropbox-API-Arg", """{"path":"/$name","mode":"overwrite","mute":true}""")
-            contentType(ContentType.Application.OctetStream)
-            setBody(bytes)
-        }
-        check(r, "save a file")
-    }
-
-    override suspend fun delete(name: String) {
-        val r = call(HttpMethod.Post, "$API/files/delete_v2") {
-            contentType(ContentType.Application.Json)
-            setBody("""{"path":"/$name"}""")
-        }
-        if (r.status.value == 409) return
-        check(r, "delete a file")
-    }
-
-    companion object {
-        private const val API = "https://api.dropboxapi.com/2"
-        private const val CONTENT = "https://content.dropboxapi.com/2"
-    }
-}
-
-/** OneDrive's app folder (`Files.ReadWrite.AppFolder`): `Apps/Neue Master Tool`, made by OneDrive on first use. */
-class OneDriveStore(http: HttpClient, token: suspend () -> String, account: String = "") : CloudStore(http, Cloud.ONEDRIVE, token, account) {
-    private fun item(name: String) = "$ROOT:/${name.split('/').joinToString("/") { it.encodeURLPathPart() }}:"
-
-    override suspend fun list(folder: String): List<String> {
-        val out = mutableListOf<String>()
-        var url: String? = "${item(folder)}/children?\$select=name,file&\$top=1000"
-        while (url != null) {
-            val r = call(HttpMethod.Get, url)
-            if (r.status.value == 404) return emptyList()
-            check(r, "list its files")
-            val o = json(r)
-            o["value"]?.jsonArray?.forEach { e -> if (e.jsonObject["file"] != null) out += e.jsonObject["name"]!!.jsonPrimitive.content }
-            url = o["@odata.nextLink"]?.jsonPrimitive?.content
-        }
-        return out
-    }
-
-    override suspend fun read(name: String): ByteArray? {
-        val r = call(HttpMethod.Get, "${item(name)}/content")
-        if (r.status.value == 404) return null
-        check(r, "read a file")
-        return r.bodyAsBytes()
-    }
-
-    override suspend fun write(name: String, bytes: ByteArray) {
-        val r = call(HttpMethod.Put, "${item(name)}/content") {
-            contentType(ContentType.Application.OctetStream)
-            setBody(bytes)
-        }
-        check(r, "save a file")
-    }
-
-    override suspend fun delete(name: String) {
-        val r = call(HttpMethod.Delete, item(name))
-        if (r.status.value != 404) check(r, "delete a file")
-    }
-
-    companion object {
-        private const val ROOT = "https://graph.microsoft.com/v1.0/me/drive/special/approot"
-
-        /** Who signed in, for the line under OneDrive. */
-        const val ME = "https://graph.microsoft.com/v1.0/me"
     }
 }

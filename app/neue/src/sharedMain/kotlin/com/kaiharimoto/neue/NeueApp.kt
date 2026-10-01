@@ -173,6 +173,29 @@ class NeueHolders(
     /** Pictures the person added to cards themselves (1.0.18). */
     val customArt = com.kaiharimoto.neue.art.CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
 
+    /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
+    val backups: com.kaiharimoto.neue.backup.BackupCenter by lazy { com.kaiharimoto.neue.backup.BackupCenter(this) }
+
+    /** Whether the library held a deck as the app opened: someone new has none (1.0.69, the setup). */
+    var decksKnown = false
+
+    /** Offers the setup: what is still to do since the version last opened here, or with [again] every step not done yet. */
+    suspend fun offerStart(again: Boolean = false) {
+        decksKnown = deps.deckRepository.all().isNotEmpty()
+        val state = com.kaiharimoto.neue.start.startState(this)
+        val android = Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID
+        val steps = if (again) {
+            com.kaiharimoto.mastertool.core.start.StartSteps.pending(Platform.version, com.kaiharimoto.mastertool.core.start.StartPrefs(), state, android)
+        } else {
+            com.kaiharimoto.mastertool.core.start.StartSteps.pending(Platform.version, neue.prefs.start, state, android)
+        }
+        if (steps.isEmpty()) {
+            if (neue.prefs.start.seen != Platform.version) neue.update { it.copy(start = it.start.copy(seen = Platform.version)) }
+        } else {
+            neue.startSteps = steps
+        }
+    }
+
     /** Sync across devices (1.0.68): where to, what the last sync did, signing in. */
     val sync: com.kaiharimoto.neue.sync.SyncCenter by lazy { com.kaiharimoto.neue.sync.SyncCenter(this) }
 
@@ -777,6 +800,12 @@ fun NeueEffects(h: NeueHolders) {
         }
         LaunchedEffect(neue.prefs.ai.name) { DeskMenuBar.aiName = neue.prefs.ai.name }
         LaunchedEffect(neue.inspected) { neue.inspected?.let(h.art::want) }
+        // As the app opens (1.0.69): a backup first when this version is new here, then the setup still to do.
+        LaunchedEffect(neue.ready) {
+            if (!neue.ready) return@LaunchedEffect
+            h.backups.onOpen()
+            h.offerStart()
+        }
         // Sync (1.0.68): once everything is read, then every few minutes while the app is open…
         LaunchedEffect(neue.ready, neue.prefs.sync.service, neue.prefs.sync.auto) {
             if (!neue.ready || !neue.prefs.sync.auto) return@LaunchedEffect
@@ -1181,6 +1210,8 @@ private fun Shell(h: NeueHolders) {
                                     art = h.art,
                                     ai = h.ai,
                                     sync = h.sync,
+                                    backups = h.backups,
+                                    onSetupAgain = { scope.launch { h.offerStart(again = true) } },
                                 ),
                             )
                         }
@@ -1260,6 +1291,8 @@ private fun Shell(h: NeueHolders) {
 
         // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
         if (neue.aiSheet) com.kaiharimoto.neue.ai.AiPanel(h, Modifier.fillMaxSize(), phone = true)
+        // The setup offered on opening (1.0.69): under Ai's own setup, which its Ai step can open.
+        if (neue.starting) com.kaiharimoto.neue.start.StartScreen(h, Modifier.fillMaxSize())
         // Ai's first setup takes the whole window, bars and all (1.0.45).
         if (neue.aiSetup) com.kaiharimoto.neue.ai.AiSetupScreen(h.ai, Modifier.fillMaxSize())
         // The reader's guide, read as a book over the whole window (1.0.67); the card viewer opens over it.

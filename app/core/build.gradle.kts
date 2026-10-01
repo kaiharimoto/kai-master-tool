@@ -10,6 +10,31 @@ val iosEnabled =
     providers.gradleProperty("mastertool.ios").orNull?.toBooleanStrictOrNull()
         ?: System.getProperty("os.name").startsWith("Mac")
 
+// The app's registration with Google, for Drive sync (1.0.69): put in at build time from the release
+// workflows' secrets (GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET), never kept in the repository.
+// Left blank — a local build, CI — and Google Drive is simply not offered.
+val cloudKeys = tasks.register("generateCloudKeys") {
+    val clean = { raw: String -> raw.filter { it.isLetterOrDigit() || it in "._-" } }
+    val id = providers.environmentVariable("GOOGLE_OAUTH_CLIENT_ID").orElse("").map(clean)
+    val secret = providers.environmentVariable("GOOGLE_OAUTH_CLIENT_SECRET").orElse("").map(clean)
+    val out = layout.buildDirectory.dir("generated/cloudkeys/kotlin")
+    inputs.property("id", id)
+    inputs.property("secret", secret)
+    outputs.dir(out)
+    doLast {
+        val file = out.get().file("com/kaiharimoto/mastertool/core/sync/CloudKeys.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            "package com.kaiharimoto.mastertool.core.sync\n\n" +
+                "/** Written by the build from the release secrets; never in the repository. */\n" +
+                "internal object CloudKeys {\n" +
+                "    const val GOOGLE_ID = \"${id.get()}\"\n" +
+                "    const val GOOGLE_SECRET = \"${secret.get()}\"\n" +
+                "}\n",
+        )
+    }
+}
+
 kotlin {
     // Deliberately no androidTarget(). Nothing here touches an Android API, and
     // Kotlin's jvm -> androidJvm compatibility rule lets the Android app consume
@@ -25,6 +50,9 @@ kotlin {
     jvmToolchain(libs.versions.jdk.get().toInt())
 
     sourceSets {
+        commonMain {
+            kotlin.srcDir(cloudKeys)
+        }
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
             // `api`, not `implementation`: JsonObject appears in this module's

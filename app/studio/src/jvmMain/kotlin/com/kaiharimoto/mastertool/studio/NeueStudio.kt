@@ -132,6 +132,17 @@ fun neueMain(args: Array<String>) {
             }
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
+            // --start=new|update[:N]: the setup offered on opening (1.0.69), as someone new sees it or someone
+            // updating from before sync; :N opens it on its N-th step.
+            map["start"]?.let { spec ->
+                val fresh = spec.startsWith("new")
+                h.decksKnown = !fresh
+                h.neue.update { it.copy(start = com.kaiharimoto.mastertool.core.start.StartPrefs(seen = if (fresh) "" else "1.0.60")) }
+                h.neue.startSteps = if (fresh) com.kaiharimoto.mastertool.core.start.StartStep.entries.toList()
+                else listOf(com.kaiharimoto.mastertool.core.start.StartStep.SYNC, com.kaiharimoto.mastertool.core.start.StartStep.AI, com.kaiharimoto.mastertool.core.start.StartStep.ART)
+                com.kaiharimoto.neue.start.StudioStart.at = spec.substringAfter(':', "0").toIntOrNull() ?: 0
+                clock.run(20)
+            }
             // --sync=<folder>: this run as a device syncing with a folder (1.0.68) — what it sent and took, and
             // the decks it holds after; --device=Name names it. Two runs with different --data and XDG_DATA_HOME
             // are two devices meeting in one folder.

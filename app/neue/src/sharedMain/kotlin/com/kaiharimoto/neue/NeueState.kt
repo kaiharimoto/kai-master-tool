@@ -203,6 +203,19 @@ class NeueState(
     /** Where the Export button is, in the window, so the keyboard opens its menu there too. Plain. */
     var exportAnchor: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset(640f, 48f)
 
+    /**
+     * The setup offered on opening (1.0.69): the steps still to show, over the whole window, while there
+     * are any. Esc and Back are "later": the steps stay undone, and Settings can show them again.
+     */
+    var startSteps by mutableStateOf<List<com.kaiharimoto.mastertool.core.start.StartStep>>(emptyList())
+    val starting: Boolean get() = startSteps.isNotEmpty()
+
+    /** The setup put away for now: this version counts as seen, the steps not done. */
+    fun startLater() {
+        startSteps = emptyList()
+        update { it.copy(start = it.start.copy(seen = com.kaiharimoto.neue.platform.Platform.version)) }
+    }
+
     /** The reader's guide open over the window, on this deck's book (1.0.67); Esc and Back close it. */
     var reading by mutableStateOf<String?>(null)
 
@@ -235,7 +248,7 @@ class NeueState(
     val aiDocked: Boolean get() = prefs.ai.enabled && prefs.ai.panelOpen && !phone && !aiSetup
 
     val overlayOpen: Boolean
-        get() = aiSheet || aiSetup || reading != null || showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || studio != null
+        get() = aiSheet || aiSetup || starting || reading != null || showcase != null || paletteOpen || helpOpen || drawer != null || menu != null || viewing != null || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || studio != null
 
     /**
      * A touch screen first (Neue on a tablet): no hover to bring the rail out or
@@ -426,7 +439,7 @@ class NeueState(
 
     /** Whether [dismissTop] has something to close. */
     val hasTop: Boolean
-        get() = aiSheet || aiSetup || reading != null || showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || helpOpen || drawer != null || studio != null
+        get() = aiSheet || aiSetup || starting || reading != null || showcase != null || menu != null || viewing != null || paletteOpen || confirmDelete != null || confirmRemoveArt != null || cropping != null || qr != null || helpOpen || drawer != null || studio != null
 
     /** Closes the top-most thing. Returns false when nothing was open, so Esc can fall through. */
     fun dismissTop(): Boolean = when {
@@ -442,6 +455,7 @@ class NeueState(
         drawer != null -> { drawer = null; true }
         studio != null -> { studio = null; true }
         reading != null -> { reading = null; true }
+        starting -> { startLater(); true }
         aiSheet || aiSetup -> { update { it.copy(ai = it.ai.copy(panelOpen = false)) }; true }
         else -> false
     }

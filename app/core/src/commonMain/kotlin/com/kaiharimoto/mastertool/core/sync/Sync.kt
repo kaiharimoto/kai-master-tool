@@ -8,7 +8,7 @@ import kotlinx.serialization.json.Json
  * on the laptop and computer … give users options to use any service they choose. Bring your cloud").
  *
  * Every device keeps its own copy and meets the others in a store anyone already has — a synced
- * folder, a WebDAV server, Google Drive, Dropbox, OneDrive ([SyncStore]). In it are two kinds of file,
+ * folder, a WebDAV server, Google Drive ([SyncStore]). In it are two kinds of file,
  * and no device ever writes one another device writes:
  * - `blobs/<sha-256>`: one item's content at one moment. Named by its hash, so it never changes once
  *   written and the same bytes from two devices are one file.

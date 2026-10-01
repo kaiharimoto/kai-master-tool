@@ -2678,8 +2678,8 @@ meets the others in a place the person already has. **`docs/SYNC.md` is the auth
 - **Settings › Sync** (section 4): Off, **Folder** (any folder another app keeps in sync — iCloud Drive,
   Dropbox, OneDrive, Google Drive for desktop, Syncthing; on Android one granted by the system's folder
   picker, `OpenDocumentTree`, its grant kept), **WebDAV** (Nextcloud, ownCloud, pCloud, Koofr, Synology:
-  an address, a user, an app password, tested before it is kept) and **Google Drive, Dropbox, OneDrive**
-  (each in its app folder, signed in through the browser and `http://localhost:53682/`, `Loopback`; shown
+  an address, a user, an app password, tested before it is kept) and **Google Drive**
+  (its hidden app folder, signed in through the browser and `http://localhost:53682/`, `Loopback`; shown
   only once `CloudClients` holds the app's registration). This device's name, the last sync in words,
   Sync now and "By itself".
 - **What travels**: decks, webs, Prep, the settings about the person (`SyncedPrefs`; the window, panes,
@@ -2695,6 +2695,32 @@ meets the others in a place the person already has. **`docs/SYNC.md` is the auth
   prints what it did; two runs with different `--data` and `XDG_DATA_HOME` are two devices.
 - New stored state, device-only: `NeuePreferences.sync` (`SyncPrefs`, internal to Ai) and `<data>/sync/`
   (`state.json`, `seen.json`, `place.txt`). No schema change.
+
+### 4n. Setup on opening, backups, and data that outlives versions (1.0.69)
+
+kai: "for new users, and older versions who are updating to new versions, have features that would be
+needed for the initial setup be offered on startup. Also, I have a lot of progress in my current version on
+desktop that might be outdated or be outdated by changes we make in the future, how do we account for that?"
+
+- **The setup on opening** (`core/start/StartSteps`, `neue/start/StartScreen`): Paper or ink, Your decks,
+  Every device (sync), Ai, Offline art — over the whole window, a rail of steps beside one step at a time,
+  each choice made there. Someone new (nothing seen, no decks) gets them all; someone updating gets only the
+  steps that arrived after the version last opened here (`StartPrefs.seen`; each step knows its desktop and
+  APK release), and never one already settled (sync on, Ai connected or off, the art here or declined) or
+  skipped. Before 1.0.69 nothing was written down, so each step is asked about once. Later, Esc and Back put
+  it away; Settings › Updates › Setup › Show again brings back every step not done. The emulator walk marks
+  it seen before it launches (`skipStart`).
+- **Backups** (`core/backup/Backups`, `neue/backup/BackupCenter`): a `.nmtbackup` zip of the person's work
+  read through the app — decks with their ids and times, every settings document, webs, Prep, Ai's folder but
+  its keys, their own pictures — so it restores into any later version whatever the tables look like. One is
+  made by itself **the first time a new version opens, before anything else runs**, once a week, and before
+  a restore; the newest ten stay in `<data>/backups`. Settings › Backups: Back up now, Export (the file to
+  keep elsewhere), Restore from the list or a file. Restoring keeps whatever was made since and this device's
+  own sync and setup.
+- **The stored-data contract** (CLAUDE.md has it as a rule): a setting is a field with a default and is
+  never renamed (`@SerialName` keeps an old name) or removed; documents read unknown keys; the schema only
+  rises with tested migrations; the deck payload passes through untouched; every shape older versions
+  wrote is held in `OldDataTest`, and a release that changes one adds its old shape there.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

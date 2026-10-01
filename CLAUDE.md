@@ -570,13 +570,33 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 
 - **Sync: bring your cloud** (1.0.68, `docs/SYNC.md`, `NEUE.md` §4m): Settings › Sync meets the other
   devices in a synced **folder** (desk path, or an Android `OpenDocumentTree` grant), **WebDAV**, or
-  **Google Drive / Dropbox / OneDrive** app folders (OAuth PKCE through the browser and
-  `http://localhost:53682/`; offered once `CloudClients` holds kai's registrations). The engine is
+  **Google Drive**'s app folder (OAuth PKCE through the browser and
+  `http://localhost:53682/`; offered once `CloudClients` holds kai's registration; Dropbox and OneDrive
+  were built and taken out on kai's word). The engine is
   `core/sync`: `blobs/<sha-256>` plus one `devices/<id>.json` manifest per device (no device writes
   another's file), `SyncPlan` three ways, decks keep both, settings merge (`JsonMerge`), files newer-wins.
   **Every `NeuePreferences`/`AiPrefs` field must be in `SyncedPrefs.SYNCED` or `DEVICE`** (`SyncTest`
   fails otherwise). Keys never sync (`SecretStore`, `ai/credentials.*`). `NeueSyncLocal` turns the app's
   state into items; `SyncCenter` runs it on opening, 20 s after a change, every three minutes.
+
+- **Setup on opening and backups** (1.0.69, `NEUE.md` §4n): `StartSteps` offers someone new every step
+  and someone updating only what arrived after `StartPrefs.seen` (each `StartStep` names its desktop and APK
+  release — **a feature that needs setting up adds a step**). `BackupCenter` writes a `.nmtbackup` before a new
+  version changes anything, weekly and before a restore; Settings › Backups exports and restores.
+
+## Stored data outlives versions — a rule
+
+kai's progress lives in what older builds wrote; every release must read it. So:
+- A preference is a field with a default; never rename one (keep the old name with `@SerialName`) or remove
+  one; documents are read with unknown keys ignored, so an older build reads a newer document too.
+- New `NeuePreferences`/`AiPrefs` fields are sorted into `SyncedPrefs.SYNCED` or `DEVICE`, and described in
+  `AiSettings` or listed `INTERNAL` (two tests fail otherwise).
+- The SQLite schema only rises, with a migration `MigrationTest` proves; the `.ydkx` payload's unknown keys
+  pass through byte for byte.
+- Every stored shape an older version wrote is held in `core/compat/OldDataTest`; a release that changes
+  what is stored adds the old shape there, in the same commit.
+- Backups are read through the app (`Backups`), never a database copy, so an old backup restores into any
+  later version.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

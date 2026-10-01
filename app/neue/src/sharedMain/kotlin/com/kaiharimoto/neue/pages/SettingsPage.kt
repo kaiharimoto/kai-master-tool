@@ -63,6 +63,10 @@ class SettingsHost(
     val ai: com.kaiharimoto.neue.ai.AiState? = null,
     /** Sync across devices, for its section (1.0.68). */
     val sync: com.kaiharimoto.neue.sync.SyncCenter? = null,
+    /** Backups, for theirs (1.0.69). */
+    val backups: com.kaiharimoto.neue.backup.BackupCenter? = null,
+    /** Shows the setup offered on opening again (1.0.69). */
+    val onSetupAgain: (() -> Unit)? = null,
 )
 
 /**
@@ -148,10 +152,17 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         com.kaiharimoto.neue.sync.SyncSection(sync) { label, help, onToggle, control -> SettingRow(label, help, onToggle = onToggle, control = control) }
                     }
                 }
+                // Backups (1.0.69): everything made, kept safe across versions.
+                host.backups?.let { backups ->
+                    Column {
+                        SectionTitle(5, "Backups")
+                        BackupsSection(backups)
+                    }
+                }
                 // Offline (kai, for a flight): whether the pool is current, bringing it up to
                 // date, every card's picture on this computer, and when all of it is.
                 Column {
-                    SectionTitle(5, "Offline")
+                    SectionTitle(6, "Offline")
                     val check = state.poolCheck
                     val clock = check?.let { checkedClock(it.checkedAt) }
                     val updating = state.poolProgress ?: if (state.isSyncing) com.kaiharimoto.mastertool.core.data.PoolProgress.Asking else null
@@ -232,12 +243,17 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(6, "Updates and feedback")
+                    SectionTitle(7, "Updates and feedback")
                     SettingRow("Version", host.updateStatus) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Mono(host.version, color = Mu.colors.ink)
                             if (host.checking) Breathe()
                             MuButton("Check now", host.onCheckUpdates, variant = BtnVariant.SUBTLE, size = BtnSize.SM, enabled = !host.checking, reason = "Checking")
+                        }
+                    }
+                    host.onSetupAgain?.let { again ->
+                        SettingRow("Setup", "The steps offered when the app opens: your look, your decks, sync, the assistant and offline art. Done ones are left out.") {
+                            MuButton("Show again", again, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
                         }
                     }
                     SettingRow("Report an issue", "Opens a new issue on GitHub with the version and the system filled in.") {
@@ -250,7 +266,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                 }
                 Column {
-                    SectionTitle(7, "Licences")
+                    SectionTitle(8, "Licences")
                     Help("Inter and JetBrains Mono, SIL Open Font License 1.1. Card images and data from YGOPRODeck. Neue Master Tool is not affiliated with Konami.")
                 }
             }
@@ -331,6 +347,60 @@ private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueStat
                 MuButton("Open folder", { ai.files.root.mkdirs(); com.kaiharimoto.neue.platform.Platform.open(ai.files.root) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
             }
             MuButton("Forget everything", { ai.forgetAsked = true }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+        }
+    }
+}
+
+/**
+ * Backups (1.0.69, kai: "I have a lot of progress in my current version … how do we account for that?"):
+ * the last one and why it was made, Back up now, Export, and Restore from the list or a file.
+ */
+@Composable
+private fun BackupsSection(b: com.kaiharimoto.neue.backup.BackupCenter) {
+    val c = Mu.colors
+    val list = androidx.compose.runtime.remember(b.revision) { b.list() }
+    var choosing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val last = list.firstOrNull()
+    SettingRow(
+        "Backups",
+        (last?.let { "Last: ${com.kaiharimoto.neue.backup.BackupCenter.date(it.manifest.at)} · ${it.manifest.reason.lowercase()}. " } ?: "None yet. ") +
+            "One is made by itself the first time a new version opens, before it changes anything, and once a week; the last ten are kept. " +
+            "Each holds your decks, webs, Prep, settings, Ai's notes and your own pictures.",
+        helpLines = 5,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MuButton(b.working ?: "Back up now", b::backUpNow, variant = BtnVariant.SUBTLE, size = BtnSize.SM, enabled = b.working == null, reason = "Working")
+            MuButton("Export", b::export, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.Export, enabled = b.working == null, reason = "Working")
+            MuButton("Restore", { choosing = true }, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = b.working == null, reason = "Working")
+        }
+    }
+    if (choosing) {
+        com.kaiharimoto.neue.kit.MuDialog(
+            title = "Restore a backup",
+            onDismiss = { choosing = false },
+            width = 560.dp,
+            description = "Your decks, settings, webs, Prep, notes and pictures as they were. Nothing made since is deleted, and how things are now is backed up first.",
+            footer = {
+                MuButton("Cancel", { choosing = false }, variant = BtnVariant.GHOST)
+                MuButton("From a file", { choosing = false; b.restoreFromFile() }, variant = BtnVariant.SECONDARY, arrow = true)
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                if (list.isEmpty()) Help("No backups on this device yet.")
+                list.forEach { e ->
+                    Row(
+                        Modifier.fillMaxWidth().drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }.padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            RowText(com.kaiharimoto.neue.backup.BackupCenter.date(e.manifest.at))
+                            Help("${e.manifest.reason} · ${e.manifest.decks} decks · v${e.manifest.version}".trim())
+                        }
+                        MuButton("Restore", { choosing = false; b.restore(e) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+                    }
+                }
+            }
         }
     }
 }

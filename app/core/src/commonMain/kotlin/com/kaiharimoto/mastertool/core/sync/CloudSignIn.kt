@@ -4,7 +4,6 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.forms.submitForm
 import io.ktor.client.request.get
 import io.ktor.client.request.header
-import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.Parameters
 import io.ktor.http.decodeURLQueryComponent
@@ -16,10 +15,11 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 /**
- * The sign-in clouds (1.0.68): Google Drive, Dropbox and OneDrive, each written to its app folder —
- * a folder only this app can see, so signing in never hands it the rest of the person's files.
+ * The sign-in cloud (1.0.68): Google Drive, written to its hidden app folder — a folder only this app
+ * can see, so signing in never hands it the rest of the person's files. (Dropbox and OneDrive were built
+ * and taken out, kai: "the others aren't popular enough"; a folder or WebDAV reaches them anyway.)
  *
- * One way in for all three, on the desk and on Android alike: the system's browser opens the service's
+ * One way in, on the desk and on Android alike: the system's browser opens the service's
  * own sign-in page, and the service sends the browser back to [REDIRECT], where the app is listening for
  * that one request. OAuth with PKCE, so no secret is needed (Google's desktop clients carry one anyway,
  * which Google says is not a secret for an installed app). The refresh token lives in `SecretStore`.
@@ -38,18 +38,6 @@ enum class Cloud(
         "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token",
         "https://www.googleapis.com/auth/drive.appdata",
         "a hidden app folder in your Drive",
-    ),
-    DROPBOX(
-        SyncPrefs.DROPBOX, "Dropbox",
-        "https://www.dropbox.com/oauth2/authorize", "https://api.dropboxapi.com/oauth2/token",
-        "",
-        "Dropbox › Apps › Neue Master Tool",
-    ),
-    ONEDRIVE(
-        SyncPrefs.ONEDRIVE, "OneDrive",
-        "https://login.microsoftonline.com/common/oauth2/v2.0/authorize", "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-        "Files.ReadWrite.AppFolder offline_access User.Read",
-        "OneDrive › Apps › Neue Master Tool",
     ),
     ;
 
@@ -70,7 +58,7 @@ enum class Cloud(
 data class CloudTokens(val refresh: String = "", val access: String = "", val expiresAt: Long = 0, val account: String = "")
 
 object CloudSignIn {
-    /** Fixed, because Dropbox matches a redirect exactly: registered as `http://localhost:53682/` with each service. */
+    /** Fixed, so the redirect is one known address: `http://localhost:53682/`. */
     const val PORT = 53682
     const val REDIRECT = "http://localhost:$PORT/"
 
@@ -89,8 +77,6 @@ object CloudSignIn {
             if (cloud.scope.isNotBlank()) add("scope" to cloud.scope)
             when (cloud) {
                 Cloud.GOOGLE_DRIVE -> { add("access_type" to "offline"); add("prompt" to "consent") }
-                Cloud.DROPBOX -> add("token_access_type" to "offline")
-                Cloud.ONEDRIVE -> add("prompt" to "select_account")
             }
         }
         return cloud.authorize + "?" + params.joinToString("&") { (k, v) -> "$k=${v.encodeURLParameter()}" }
@@ -117,7 +103,6 @@ object CloudSignIn {
         tokens(http, cloud, now, t) {
             append("grant_type", "refresh_token")
             append("refresh_token", t.refresh)
-            if (cloud.scope.isNotBlank() && cloud == Cloud.ONEDRIVE) append("scope", cloud.scope)
         }
 
     private suspend fun tokens(http: HttpClient, cloud: Cloud, now: Long, old: CloudTokens?, body: io.ktor.http.ParametersBuilder.() -> Unit): CloudTokens {
@@ -154,14 +139,10 @@ object CloudSignIn {
     suspend fun account(http: HttpClient, cloud: Cloud, access: String): String = runCatching {
         val r = when (cloud) {
             Cloud.GOOGLE_DRIVE -> http.get("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)") { header("Authorization", "Bearer $access") }
-            Cloud.DROPBOX -> http.post("https://api.dropboxapi.com/2/users/get_current_account") { header("Authorization", "Bearer $access") }
-            Cloud.ONEDRIVE -> http.get(OneDriveStore.ME) { header("Authorization", "Bearer $access") }
         }
         val o = Sync.json.parseToJsonElement(r.bodyAsText()) as JsonObject
         when (cloud) {
             Cloud.GOOGLE_DRIVE -> (o["user"] as? JsonObject)?.get("emailAddress")?.jsonPrimitive?.content
-            Cloud.DROPBOX -> o["email"]?.jsonPrimitive?.content
-            Cloud.ONEDRIVE -> (o["mail"] ?: o["userPrincipalName"])?.jsonPrimitive?.content
         }.orEmpty()
     }.getOrDefault("")
 

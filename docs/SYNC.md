@@ -9,11 +9,10 @@ Settings › Sync chooses it:
 | **Folder** | A folder another app keeps in sync: iCloud Drive, Dropbox, OneDrive, Google Drive for desktop, Syncthing. On Android, any folder the system's picker reaches (Syncthing, Nextcloud's app). | Choose the folder on each device. |
 | **WebDAV** | Nextcloud, ownCloud, pCloud, Koofr, Synology, any WebDAV server. | The folder's WebDAV address, a user name and an app password. |
 | **Google Drive** | Drive's hidden app data folder. | Sign in with Google. |
-| **Dropbox** | `Apps/Neue Master Tool`. | Sign in with Dropbox. |
-| **OneDrive** | `Apps/Neue Master Tool`. | Sign in with Microsoft. |
 
-Everything is free on the person's side. The three sign-ins need the app registered with each service
-once (below); until a service's id is in `CloudClients.kt` it is not offered.
+Everything is free on the person's side. Google Drive needs the app registered with Google once (below);
+until its keys are in the repository's secrets it is not offered. Dropbox and OneDrive sign-ins were built and taken
+out (kai: not popular enough); their desktop apps still work as a synced folder.
 
 ## What travels, and what stays
 
@@ -43,13 +42,14 @@ once (below); until a service's id is in `CloudClients.kt` it is not offered.
 - It runs on opening, 20 seconds after anything that travels changes, and every three minutes while
   the app is open (`SyncCenter`, `NeueEffects`); Settings has Sync now and the last result.
 
-## Registering the app with the sign-in clouds
+## Registering the app with Google
 
-Each is free and done once, by the app's owner. All three use the redirect **`http://localhost:53682/`**
-(`CloudSignIn.REDIRECT`): the browser signs in on the service's own page and comes back to the app,
-which listens on that port for that one request — on the desk and on Android alike. Client ids are not
-secrets (every installed copy carries them); put them in
-`app/core/src/commonMain/kotlin/com/kaiharimoto/mastertool/core/sync/CloudClients.kt`.
+Free, done once, by the app's owner. The browser signs in on Google's own page and comes back to the app
+at **`http://localhost:53682/`** (`CloudSignIn.REDIRECT`), where the app listens for that one request — on the
+desk and on Android alike. The client id and secret live in the repository's GitHub secrets, `GOOGLE_OAUTH_CLIENT_ID` and
+`GOOGLE_OAUTH_CLIENT_SECRET` (Settings › Secrets and variables › Actions). The release workflows hand them to
+the build, and `:core`'s `generateCloudKeys` writes them into a generated `CloudKeys` — never into the
+repository. A local or CI build has none, and Google Drive is not offered there.
 
 ### Google Drive
 
@@ -58,29 +58,8 @@ secrets (every installed copy carries them); put them in
 3. Google Auth Platform → **Branding**: app name, support email, developer email. **Audience**: External,
    then **Publish app** (in Testing, sign-ins expire after seven days and only listed testers may sign in).
 4. **Data Access** → Add scope `https://www.googleapis.com/auth/drive.appdata` (non-sensitive: no review).
-5. **Clients** → Create client → **Desktop app** → copy the **Client ID** and **Client secret** into
-   `GOOGLE_ID` and `GOOGLE_SECRET`. (Google: an installed app's secret "is obviously not treated as a
+5. **Clients** → Create client → **Desktop app** → copy the **Client ID** and **Client secret** into the
+   repository's secrets `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`. (Google: an installed app's secret "is obviously not treated as a
    secret".) Desktop clients accept any loopback port; nothing else to register.
 
-### Dropbox
-
-1. [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps) → **Create app** → Scoped access →
-   **App folder** → name it "Neue Master Tool".
-2. **Permissions**: tick `files.content.read`, `files.content.write`, `files.metadata.read`
-   (`account_info.read` is on already) → Submit.
-3. **Settings**: OAuth 2 → Redirect URIs → add `http://localhost:53682/`; **Allow public clients
-   (Implicit Grant & PKCE)** → Allow. Copy the **App key** into `DROPBOX_ID`.
-4. A new app serves 500 people in development; Settings › **Apply for production** lifts that.
-
-### OneDrive
-
-1. [entra.microsoft.com](https://entra.microsoft.com) (a personal Microsoft account can make a free
-   directory) → Applications → **App registrations** → New registration.
-2. Supported account types: **Accounts in any organizational directory and personal Microsoft accounts**.
-   Redirect URI: **Public client/native (mobile & desktop)** → `http://localhost:53682/`.
-3. **API permissions** → Microsoft Graph → Delegated: `Files.ReadWrite.AppFolder`, `User.Read`,
-   `offline_access`.
-4. **Authentication** → Allow public client flows → **Yes**.
-5. Copy the **Application (client) ID** into `ONEDRIVE_ID`.
-
-Once an id is in, the service appears in Settings › Sync on the next release.
+Once the id is in, Google Drive appears in Settings › Sync on the next release.

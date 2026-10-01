@@ -33,9 +33,7 @@ data class SyncPrefs(
         const val FOLDER = "folder"
         const val WEBDAV = "webdav"
         const val GOOGLE_DRIVE = "gdrive"
-        const val DROPBOX = "dropbox"
-        const val ONEDRIVE = "onedrive"
-        val SERVICES = listOf(OFF, FOLDER, WEBDAV, GOOGLE_DRIVE, DROPBOX, ONEDRIVE)
+        val SERVICES = listOf(OFF, FOLDER, WEBDAV, GOOGLE_DRIVE)
     }
 }
 
@@ -59,7 +57,7 @@ object SyncedPrefs {
         "scale", "poolVisible", "inspectorVisible", "poolWidth", "inspectorWidth", "poolColumns", "filtersOpen",
         "sound", "railPinned", "hdArt", "lensKeys", "groupsPanel", "inspectorFolded", "window", "extraSideVisible",
         "extraVisible", "sideVisible", "deckZoom", "groupGap", "touchIntroSeen", "poolList", "textScale",
-        "orientation", "phoneDockStop", "foilTilt", "sync",
+        "orientation", "phoneDockStop", "foilTilt", "sync", "start",
     )
 
     /** Ai's settings that travel; its connections are this device's (their keys never leave it). */

@@ -31,8 +31,7 @@ class CloudSignInTest {
     fun theSignInPageAsksForTheAppFolderOnly() {
         val url = CloudSignIn.authorizeUrl(Cloud.GOOGLE_DRIVE, "v".repeat(43), "s")
         assertTrue("drive.appdata" in url && "code_challenge_method=S256" in url && "redirect_uri=http%3A%2F%2Flocalhost%3A53682%2F" in url, url)
-        assertTrue("token_access_type=offline" in CloudSignIn.authorizeUrl(Cloud.DROPBOX, "v", "s"))
-        assertTrue("Files.ReadWrite.AppFolder" in CloudSignIn.authorizeUrl(Cloud.ONEDRIVE, "v", "s").replace("%2E", "."))
+        assertTrue("access_type=offline" in url)
     }
 
     @Test

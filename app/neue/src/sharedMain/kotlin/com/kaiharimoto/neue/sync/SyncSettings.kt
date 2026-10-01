@@ -34,7 +34,7 @@ import com.kaiharimoto.neue.theme.Mu
 /**
  * Settings › Sync (1.0.68, kai: "give users options to use any service they choose. Bring your
  * cloud"): where the devices meet — a folder another app keeps in sync, a WebDAV server, or a sign-in
- * to Google Drive, Dropbox or OneDrive — this device's name, and what the last sync did. [row] is
+ * to Google Drive — this device's name, and what the last sync did. [row] is
  * Settings' own row, label and help beside the control.
  */
 @Composable

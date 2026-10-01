@@ -87,6 +87,14 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         revision++
     }
 
+    /** Every web as a backup kept them (1.0.69): theirs in place, any made since kept. */
+    fun restore(from: WebLibrary) {
+        var next = library
+        from.webs.forEach { next = next.put(it) }
+        commit(next)
+        revision++
+    }
+
     /** A web another device deleted (sync): gone here too; its decks stay in the library. */
     fun forget(id: String) {
         if (library.byId(id) == null) return

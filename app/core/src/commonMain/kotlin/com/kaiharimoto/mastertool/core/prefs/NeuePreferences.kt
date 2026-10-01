@@ -304,6 +304,8 @@ data class NeuePreferences(
     val ai: AiPrefs = AiPrefs(),
     /** Where this device syncs to (1.0.68): this device's own, never synced. */
     val sync: com.kaiharimoto.mastertool.core.sync.SyncPrefs = com.kaiharimoto.mastertool.core.sync.SyncPrefs(),
+    /** The setup offered on opening (1.0.69): the version last opened here, and the steps done. This device's own. */
+    val start: com.kaiharimoto.mastertool.core.start.StartPrefs = com.kaiharimoto.mastertool.core.start.StartPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

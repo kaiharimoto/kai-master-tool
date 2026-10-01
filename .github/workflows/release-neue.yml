@@ -190,6 +190,10 @@ jobs:
 
       - name: Package
         working-directory: app
+        env:
+          # Google Drive sync (1.0.69): the app's Google registration, from the repository's secrets.
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
         run: ./gradlew :neue:${{ matrix.task }} -Pmastertool.android=true -Pneue.versionName=${{ needs.version.outputs.name }} --stacktrace
 
       - name: Notarise (only when signed)
