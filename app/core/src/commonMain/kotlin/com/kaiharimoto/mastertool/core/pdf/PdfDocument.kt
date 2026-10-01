@@ -20,8 +20,6 @@ class PdfImage(val width: Int, val height: Int, val rgb: ByteArray) {
     init {
         require(rgb.size == width * height * 3) { "Expected ${width * height * 3} bytes for $width × $height, got ${rgb.size}" }
     }
-
-    internal var key: String? = null
 }
 
 /**
@@ -86,9 +84,9 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
 
     /** [image] drawn into the box at ([x], [top]), [w] × [h] points. */
     fun image(image: PdfImage, x: Float, top: Float, w: Float, h: Float) {
-        doc.register(image)
+        val key = doc.register(image)
         images += image
-        ops.append("q ${n(w)} 0 0 ${n(h)} ${n(x)} ${n(y(top + h))} cm /${image.key} Do Q\n")
+        ops.append("q ${n(w)} 0 0 ${n(h)} ${n(x)} ${n(y(top + h))} cm /$key Do Q\n")
     }
 }
 
@@ -114,11 +112,12 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
 
     val pageCount: Int get() = pages.size
 
-    internal fun register(image: PdfImage) {
-        if (image.key == null) {
-            images += image
-            image.key = "Im${images.size}"
-        }
+    /** The picture's name in this document. Kept here, not on the picture, so one picture can go into many documents. */
+    private val keys = HashMap<PdfImage, String>()
+
+    internal fun register(image: PdfImage): String = keys.getOrPut(image) {
+        images += image
+        "Im${images.size}"
     }
 
     fun write(): ByteArray {
@@ -139,7 +138,7 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
         pages.forEachIndexed { i, page ->
             val (pageId, contentId) = pageIds[i]
             val fontRes = page.fonts.joinToString(" ") { "/${it.key} ${fontIds.getValue(it)[0]} 0 R" }
-            val imageRes = page.images.joinToString(" ") { "/${it.key} ${imageIds.getValue(it)} 0 R" }
+            val imageRes = page.images.joinToString(" ") { "/${keys.getValue(it)} ${imageIds.getValue(it)} 0 R" }
             val alphaRes = page.alphas.joinToString(" ") { "/GA$it << /ca ${it / 100f} /CA ${it / 100f} >>" }
             out.obj(
                 pageId,

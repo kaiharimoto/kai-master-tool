@@ -132,6 +132,20 @@ fun neueMain(args: Array<String>) {
             }
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
+            // --reader=primer|sheet|magazine|all: the sample reader's guide in each layout, as PDFs in shots/ (1.0.66 mockups).
+            map["reader"]?.let { which ->
+                val styles = com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.Style.entries
+                    .filter { which == "all" || it.name.equals(which, ignoreCase = true) || it.label.equals(which, ignoreCase = true) }
+                styles.forEach { style ->
+                    val bytes = kotlinx.coroutines.runBlocking {
+                        com.kaiharimoto.neue.ai.AiDocs.readerBytes(h, com.kaiharimoto.mastertool.core.ai.report.ReaderGuideSample.labrynth, style)
+                    }
+                    val out = java.io.File(map["out"] ?: "shots", "reader-${style.name.lowercase()}.pdf")
+                    out.parentFile?.mkdirs()
+                    out.writeBytes(bytes)
+                    println("[neue-studio] reader: ${style.label}, ${bytes.size / 1024} KiB to $out")
+                }
+            }
             map["ydkw"]?.let { path ->
                 h.webs.open(java.io.File(path).readText()) { made -> println("[neue-studio] opened web ${made?.name}: ${made?.entries?.size} decks") }
                 clock.run(40)

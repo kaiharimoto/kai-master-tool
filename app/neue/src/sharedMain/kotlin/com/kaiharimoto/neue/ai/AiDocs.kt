@@ -53,6 +53,21 @@ object AiDocs {
         return withContext(Dispatchers.Default) { ReportPdf.guide(doc, deckName, reports, cards, updated, f, { pictures[it] }, JvmZlib) }
     }
 
+    /**
+     * The reader's guide as a PDF in [style] (1.0.66): every card it names drawn in the artwork the
+     * person chose, large enough for the largest place a layout sets it.
+     */
+    suspend fun readerBytes(h: NeueHolders, guide: com.kaiharimoto.mastertool.core.ai.report.ReaderGuide, style: com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.Style): ByteArray {
+        val width = if (style == com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.Style.MAGAZINE) 300 else 180
+        val pictures = HashMap<String, PdfImage>()
+        guide.cards().forEach { name ->
+            h.builder.index.byName(name)?.let { card -> GuideExport.picture(card.id, h.builder, h.neue, h.art, h.customArt, width)?.let { pictures[name] = it } }
+        }
+        val f = fonts()
+        val updated = date(guide.updatedAt.takeIf { it > 0 } ?: System.currentTimeMillis())
+        return withContext(Dispatchers.Default) { com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.render(guide, style, f, { pictures[it] }, JvmZlib, updated) }
+    }
+
     suspend fun reportBytes(h: NeueHolders, report: SessionReport): ByteArray {
         val doc = GuideDoc.parse(h.ai.files.read(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(MemoryKind.GUIDE, report.deckId)))
         val log = h.ai.files.reports(report.deckId).ifEmpty { listOf(report) }
