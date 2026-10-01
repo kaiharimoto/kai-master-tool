@@ -631,10 +631,10 @@ class AiState(internal val h: NeueHolders) {
         val provider = Providers.byId(connection.provider)
         val intensity = com.kaiharimoto.mastertool.core.ai.TuneIntensity.of(prefs.tuneIntensity)
         // A study runs as long and thinks as hard as its intensity says; an interview needs rounds for its questions.
-        val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES
+        val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES || start.mode == AiSession.MODE_REFACTOR
         val effort = if (studies) intensity.effort else prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
         val steps = when (start.mode) {
-            AiSession.MODE_STUDY, AiSession.MODE_PRINCIPLES -> intensity.steps
+            AiSession.MODE_STUDY, AiSession.MODE_PRINCIPLES, AiSession.MODE_REFACTOR -> intensity.steps
             AiSession.MODE_TUNE, AiSession.MODE_PROFILE -> intensity.questions * 3 + 8
             else -> AgentLoop.MAX_STEPS
         }
@@ -1008,6 +1008,15 @@ class AiState(internal val h: NeueHolders) {
     /** The Fine Tuning launcher is open: which way, and how hard (1.0.48). */
     var tuneAsk by mutableStateOf(false)
 
+    /** The way the launcher opens on, when something asked for one (Refactor, from the guide). */
+    var tuneMode by mutableStateOf<String?>(null)
+
+    /** Opens the Fine Tuning launcher, on [mode] when given. */
+    fun askTune(mode: String? = null) {
+        tuneMode = mode
+        tuneAsk = true
+    }
+
     /**
      * Fine Tuning (1.0.48, kai: "for me to teach it how to play my deck and have it ask me
      * questions about my deck … or have the AI teach itself by reading the cards and going
@@ -1033,15 +1042,42 @@ class AiState(internal val h: NeueHolders) {
         demoOpen = false
         tuneBefore = snapshot()
         lastReport = null
+        val deckId = h.builder.deckId
+        // The guide's size now: the run may add its intensity's room to it, no more (1.0.66).
+        guideStart = if (mode in AiSession.DECK_MODES && deckId != null) Triple(files.memory(MemoryKind.GUIDE, deckId, deck).used, intensity.guideBudget, intensity.label) else null
         session = begin(connection, mode)
+        val room = com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.brief(intensity)
         send(
             when (mode) {
-                AiSession.MODE_STUDY -> "Study “$deck” yourself, and think out loud so I can learn with you. Intensity: ${intensity.label} — ${intensity.studies}"
+                AiSession.MODE_STUDY -> "Study “$deck” yourself, and think out loud so I can learn with you. Intensity: ${intensity.label} — ${intensity.studies} $room"
                 AiSession.MODE_PRINCIPLES -> "Learn “$deck” from first principles: its card text and the rules, no guides or lists. Work out its goals and how its cards pair, " +
-                    "interact and connect, and think out loud so I can learn with you. Intensity: ${intensity.label} — about ${intensity.steps} rounds."
-                else -> "Let's do Fine Tuning on “$deck”: I'll teach you how I play it. Intensity: ${intensity.label}, about ${intensity.questions} questions."
+                    "interact and connect, and think out loud so I can learn with you. Intensity: ${intensity.label} — about ${intensity.steps} rounds. $room"
+                AiSession.MODE_REFACTOR -> refactorBrief(deck, deckId, intensity)
+                else -> "Let's do Fine Tuning on “$deck”: I'll teach you how I play it. Intensity: ${intensity.label}, about ${intensity.questions} questions. $room"
             },
         )
+    }
+
+    /** The guide's size at the start of a Fine Tuning run, the run's room and its intensity's name; null outside one. */
+    private var guideStart: Triple<Int, Int, String>? = null
+
+    /** What the host checks a guide write against (1.0.66), while a Fine Tuning run is going. */
+    fun guideRoom(): Triple<Int, Int, String>? = guideStart?.takeIf { session?.mode in AiSession.DECK_MODES }
+
+    /** Refactor guide's first message: what the guide holds now, so Ai knows the size of the job. */
+    private fun refactorBrief(deck: String, deckId: String?, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity): String {
+        val text = deckId?.let { files.read(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(MemoryKind.GUIDE, it)) }
+        val doc = com.kaiharimoto.mastertool.core.ai.report.GuideDoc.parse(text)
+        val sections = doc.sections.joinToString(", ") { "${it.name} ${it.entries.size}" }
+        val used = deckId?.let { files.memory(MemoryKind.GUIDE, it, deck).used } ?: 0
+        val depth = when (intensity) {
+            com.kaiharimoto.mastertool.core.ai.TuneIntensity.QUICK -> "a quick pass: drop and merge, check only what looks wrong"
+            com.kaiharimoto.mastertool.core.ai.TuneIntensity.STANDARD -> "check the claims that matter against the cards"
+            com.kaiharimoto.mastertool.core.ai.TuneIntensity.DEEP -> "check every line and claim against the card text, step by step"
+        }
+        return "Refactor the guide for “$deck”: drop what is not helpful, sharpen what is, and put it in order. " +
+            "It has ${doc.entryCount} entries, ${com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.grouped(used)} characters ($sections). " +
+            "Intensity: ${intensity.label} — $depth."
     }
 
     /**
@@ -1110,7 +1146,10 @@ class AiState(internal val h: NeueHolders) {
 
     private var tuneBefore: Map<String, String?>? = null
 
-    val tuning: Boolean get() = session?.mode.let { it in AiSession.DECK_MODES || it == AiSession.MODE_PROFILE }
+    val tuning: Boolean get() = session?.mode.let { it in AiSession.DECK_MODES || it == AiSession.MODE_PROFILE || it == AiSession.MODE_REFACTOR }
+
+    /** Rewriting the deck's guide (1.0.66). */
+    val refactoring: Boolean get() = session?.mode == AiSession.MODE_REFACTOR
 
     /** Studying on its own rather than being taught. */
     val studying: Boolean get() = session?.mode == AiSession.MODE_STUDY || session?.mode == AiSession.MODE_PRINCIPLES
@@ -1137,6 +1176,7 @@ class AiState(internal val h: NeueHolders) {
 
     private fun completeTuning() {
         wrapping = false
+        guideStart = null
         val ended = session
         stop()
         endReport = lastReport?.takeIf { r -> ended != null && ended.mode in AiSession.DECK_MODES && r.at >= ended.createdAt }

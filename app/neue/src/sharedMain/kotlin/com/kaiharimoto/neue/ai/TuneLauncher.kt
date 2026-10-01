@@ -34,27 +34,34 @@ fun TuneLauncher(ai: AiState) {
     val c = Mu.colors
     val deck = ai.h.builder.deckName
     val saved = ai.h.builder.deckId != null
-    var mode by remember { mutableStateOf(AiSession.MODE_TUNE) }
+    var mode by remember { mutableStateOf(ai.tuneMode ?: AiSession.MODE_TUNE) }
+    // Refactor guide (1.0.66) is offered once there is a guide to refactor.
+    val guided = remember(ai.h.builder.deckId) { ai.h.builder.deckId?.let { ai.files.entries(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, it).isNotBlank() } ?: false }
     val study = mode != AiSession.MODE_TUNE
     var intensity by remember { mutableStateOf(TuneIntensity.of(ai.prefs.tuneIntensity)) }
     MuDialog(
         title = "Fine Tuning · $deck",
         onDismiss = { ai.tuneAsk = false },
         width = 560.dp,
-        description = "Three ways for ${ai.name} to learn how this deck plays. What it learns goes into the deck's guide — a document it keeps across sessions — and each session ends with a report and its confidence, as a PDF.",
+        description = "Three ways for ${ai.name} to learn how this deck plays, and one to tidy what it knows. What it learns goes into the deck's guide — a document it keeps across sessions — and each session ends with a report and its confidence, as a PDF.",
         footer = {
             MuButton("Cancel", { ai.tuneAsk = false }, variant = BtnVariant.GHOST)
             MuButton(
                 when (mode) {
                     AiSession.MODE_STUDY -> "Start studying"
                     AiSession.MODE_PRINCIPLES -> "Start learning"
+                    AiSession.MODE_REFACTOR -> "Start refactoring"
                     else -> "Start teaching"
                 },
                 { ai.startTuning(mode, intensity) },
                 variant = BtnVariant.PRIMARY,
                 arrow = true,
-                enabled = saved && ai.configured,
-                reason = if (!saved) "Save the deck first" else "Set up ${ai.name} first",
+                enabled = saved && ai.configured && (mode != AiSession.MODE_REFACTOR || guided),
+                reason = when {
+                    !saved -> "Save the deck first"
+                    !ai.configured -> "Set up ${ai.name} first"
+                    else -> "The guide is empty: teach or study the deck first"
+                },
             )
         },
     ) {
@@ -77,6 +84,14 @@ fun TuneLauncher(ai: AiState) {
                     "trying to do and how its cards pair, interact and connect, thinking out loud as it goes.",
                 selected = mode == AiSession.MODE_PRINCIPLES,
             ) { mode = AiSession.MODE_PRINCIPLES }
+            if (guided) {
+                Choice(
+                    "Refactor the guide",
+                    "${ai.name} rereads the whole guide against the cards and the list as it stands, drops what does not help — wrong, stale, " +
+                        "generic, repeated, vague — sharpens the rest and puts it in order. You see every change before it is kept.",
+                    selected = mode == AiSession.MODE_REFACTOR,
+                ) { mode = AiSession.MODE_REFACTOR }
+            }
             Micro("Intensity", color = c.ink45)
             Segmented(intensity, TuneIntensity.entries, { it.label }, { intensity = it })
             Small(if (study) intensity.studyTime else intensity.teachTime, color = c.ink)
@@ -84,8 +99,13 @@ fun TuneLauncher(ai: AiState) {
                 when (mode) {
                     AiSession.MODE_STUDY -> intensity.studies
                     AiSession.MODE_PRINCIPLES -> "About ${intensity.steps} rounds of reading and reasoning, from the card text alone."
+                    AiSession.MODE_REFACTOR -> when (intensity) {
+                        TuneIntensity.QUICK -> "A quick pass: drops and merges, checking only what looks wrong."
+                        TuneIntensity.STANDARD -> "Checks the claims that matter against the cards."
+                        TuneIntensity.DEEP -> "Checks every line and claim against the card text, step by step."
+                    }
                     else -> "About ${intensity.questions} questions, one at a time; stop whenever you like."
-                },
+                } + if (mode == AiSession.MODE_REFACTOR) "" else " It may add up to ${com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.grouped(intensity.guideBudget)} characters to the guide.",
                 color = c.ink70,
             )
             if (!saved) Help("Save “$deck” first: the guide belongs to a saved deck.", color = c.ink)

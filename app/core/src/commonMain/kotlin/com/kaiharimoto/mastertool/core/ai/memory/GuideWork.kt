@@ -1,0 +1,59 @@
+package com.kaiharimoto.mastertool.core.ai.memory
+
+import com.kaiharimoto.mastertool.core.ai.TuneIntensity
+
+/**
+ * What one Fine Tuning run may add to a deck's guide (1.0.66, kai: "if the study run is deep let it
+ * add up to 20k"). The guide itself has no cap ([UNBOUNDED]); a run does, by its intensity, so a
+ * Quick pass stays a quick pass and a Deep one has the room to write everything it found.
+ */
+object GuideBudget {
+    /** The refusal Ai reads when a write would take this run past [budget]; null when it fits. */
+    fun refusal(startUsed: Int, nextUsed: Int, budget: Int, intensity: String): String? {
+        val added = nextUsed - startUsed
+        if (added <= budget) return null
+        return "This run has room to add $budget characters to the guide at $intensity, and that would make it $added. " +
+            "Tighten or merge entries (replace, remove), or keep the rest for the next run."
+    }
+
+    /** How the run's room is said to the model at the start. */
+    fun brief(intensity: TuneIntensity): String = "You may add up to ${grouped(intensity.guideBudget)} characters to the guide in this run."
+
+    /** 20000 as "20,000". */
+    fun grouped(n: Int): String = n.toString().reversed().chunked(3).joinToString(",").reversed()
+}
+
+/**
+ * Refactor guide (1.0.66, kai: "a refactor guide functionality that cleans up anything that's not
+ * actually helpful or useful/improve and organize it"): Ai rewrites the whole guide at once — the
+ * one write that can reorder, merge and drop — in a session of its own that ends in the review,
+ * where every change is kept or undone.
+ */
+object GuideRewrite {
+    /** The new guide, from [text]: one `- ` entry per line, an indented line continuing one; headings and blank lines dropped. */
+    fun entries(text: String): List<String> =
+        AiMemory.parse(text.lines().filterNot { it.trimStart().startsWith("#") }.joinToString("\n")).let { parsed ->
+            // Lines before the first bullet are the preamble to a parser; here every line is meant as an entry.
+            (parsed.preamble.filter { it.isNotBlank() } + parsed.entries).map { it.trim().removePrefix("- ").trim() }.filter { it.isNotEmpty() }
+        }
+
+    /** [doc] with its entries replaced by [text]'s, the title and any note above them kept. */
+    fun rewrite(doc: MemoryDoc, text: String, entryLimit: Int): MemoryWrite {
+        val next = entries(text)
+        if (next.isEmpty()) return MemoryWrite.Refused("That would leave the guide empty. Rewrite it with its entries, one \"- \" line each.")
+        // A rewrite that keeps a tenth of a long guide is a mistake more often than a cleanup.
+        if (doc.used > 2000 && next.sumOf { it.length } < doc.used / 10) {
+            return MemoryWrite.Refused("That keeps under a tenth of the guide (${next.sumOf { it.length }} of ${doc.used} characters). Rewrite all of it, not part.")
+        }
+        next.firstOrNull { it.length > entryLimit }?.let { return MemoryWrite.Refused("One entry is ${it.length} characters; keep each under $entryLimit, or split it.") }
+        val after = doc.copy(entries = next)
+        return MemoryWrite.Done(after, summary(doc, after))
+    }
+
+    /** "Rewrote the guide: 48 entries, 12,030 characters → 31 entries, 8,410 characters; 9 kept word for word." */
+    fun summary(before: MemoryDoc, after: MemoryDoc): String {
+        val same = after.entries.count { it in before.entries }
+        return "Rewrote the guide: ${before.entries.size} entries, ${before.used} characters → ${after.entries.size} entries, ${after.used} characters; " +
+            "$same kept word for word. The person reviews every change when the session ends."
+    }
+}

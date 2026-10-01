@@ -81,9 +81,14 @@ fun LivingDocDialog(ai: AiState) {
                         ai.docOpen = null
                         ai.memoryOpen = AiMemory.path(MemoryKind.GUIDE, open.deckId)
                     }, variant = BtnVariant.GHOST)
+                    // Refactor guide (1.0.66): drop what does not help, sharpen the rest, put it in order.
+                    MuButton("Refactor", {
+                        ai.docOpen = null
+                        ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_REFACTOR)
+                    }, variant = BtnVariant.GHOST, enabled = h.builder.deckId == open.deckId && !doc.isEmpty, reason = if (doc.isEmpty) "Nothing to refactor yet" else "Open the deck in the builder first")
                     MuButton("Teach it more", {
                         ai.docOpen = null
-                        ai.tuneAsk = true
+                        ai.askTune()
                     }, variant = BtnVariant.SECONDARY, enabled = h.builder.deckId == open.deckId, reason = "Open the deck in the builder first")
                     MuButton(if (making) "Making the PDF…" else "Guide · PDF", {
                         making = true

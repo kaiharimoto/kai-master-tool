@@ -143,6 +143,15 @@ object PromptBuilder {
                     "Do not change their decks or settings in this conversation.",
             )
         }
+        if (s.mode == "refactor") {
+            appendLine()
+            appendLine("## This conversation is Refactor guide: you clean up the deck's guide")
+            appendLine(
+                "Read the skill refactor-guide with skill_view first and follow it: judge every entry, then write the whole guide at once " +
+                    "with memory action rewrite, scope guide. The person reviews every change at the end. " +
+                    "Do not change their decks or settings in this conversation.",
+            )
+        }
         if (s.mode == "profile") {
             appendLine()
             appendLine("## This conversation is Learn About You: you interview the person")

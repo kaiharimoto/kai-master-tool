@@ -109,6 +109,7 @@ private fun Head(ai: AiState, phone: Boolean) {
                 ai.wizardOpen -> "Setting up"
                 provider == null -> "Not connected"
                 ai.profiling -> "Learn About You · " + provider.label
+                ai.refactoring -> "Refactor guide · " + provider.label
                 ai.tuning -> "Fine Tuning · " + when (ai.session?.mode) {
                     com.kaiharimoto.mastertool.core.ai.AiSession.MODE_STUDY -> "studying"
                     com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PRINCIPLES -> "first principles"
@@ -264,13 +265,20 @@ private fun Tools(ai: AiState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (ai.tuning) {
-            Tip("Finish: its report, and what it learned to keep or undo") {
+            Tip(if (ai.refactoring) "Finish: every change to the guide, to keep or undo" else "Finish: its report, and what it learned to keep or undo") {
                 WordToggle("Finish", on = true, onClick = { ai.finishTuning() })
             }
-            Mono(if (ai.profiling) "Learning about you" else "Learning ${ai.h.builder.deckName}", color = c.ink45)
+            Mono(
+                when {
+                    ai.profiling -> "Learning about you"
+                    ai.refactoring -> "Refactoring ${ai.h.builder.deckName}'s guide"
+                    else -> "Learning ${ai.h.builder.deckName}"
+                },
+                color = c.ink45,
+            )
         } else {
-            Tip("Fine Tuning: teach ${ai.name} the open deck, let it study it, or learn it from first principles") {
-                WordToggle("Teach", on = false, onClick = { ai.tuneAsk = true })
+            Tip("Fine Tuning: teach ${ai.name} the open deck, let it study it, learn it from first principles, or refactor its guide") {
+                WordToggle("Teach", on = false, onClick = { ai.askTune() })
             }
             Tip(if (saved) "${ai.name}'s guide to ${ai.h.builder.deckName}: kept across sessions, as a PDF too" else "Save the deck first: the guide belongs to a saved deck") {
                 WordToggle("Guide", on = ai.docOpen is LivingDoc.Guide, onClick = { ai.openGuide() })

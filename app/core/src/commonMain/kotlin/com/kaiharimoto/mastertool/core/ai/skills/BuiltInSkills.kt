@@ -176,6 +176,8 @@ object BuiltInSkills {
         // A decklist read off a picture (1.0.55).
         3 to Skill(DeckSkills.DECK_FROM_PICTURE_NAME, DeckSkills.DECK_FROM_PICTURE_DESCRIPTION, DeckSkills.DECK_FROM_PICTURE.trim(), builtIn = true),
         3 to Skill(DeckSkills.DECK_FROM_VIDEO_NAME, DeckSkills.DECK_FROM_VIDEO_DESCRIPTION, DeckSkills.DECK_FROM_VIDEO.trim(), builtIn = true),
+        // Refactor guide (1.0.66): the deck's guide rewritten as one document worth reading.
+        3 to Skill(DeckSkills.REFACTOR_GUIDE_NAME, DeckSkills.REFACTOR_GUIDE_DESCRIPTION, DeckSkills.REFACTOR_GUIDE.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

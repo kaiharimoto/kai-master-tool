@@ -352,11 +352,12 @@ object AiTools {
             "format, decks, habits, what they want from you). agent: what you learned about doing this job well. " +
             "deck / web: notes about the deck or web in scope (the open deck, or the web it belongs to). " +
             "add a new entry; replace an entry (old_text is a unique part of it); remove one. Keep entries short and durable: " +
-            "facts that will still matter next week, never a transcript.",
+            "facts that will still matter next week, never a transcript. rewrite (scope guide, in Refactor guide only): text is the whole " +
+            "new guide, one \"- \" entry per line, replacing every entry.",
         schema {
-            enum("action", "What to do", listOf("add", "replace", "remove"), required = true)
+            enum("action", "What to do", listOf("add", "replace", "remove", "rewrite"), required = true)
             enum("scope", "Which memory", listOf("user", "agent", "deck", "web", "guide"), required = true)
-            string("text", "The entry (add, replace)")
+            string("text", "The entry (add, replace), or the whole guide (rewrite)")
             string("old_text", "A unique part of the entry to replace or remove")
         },
         ToolGroup.MEMORY,

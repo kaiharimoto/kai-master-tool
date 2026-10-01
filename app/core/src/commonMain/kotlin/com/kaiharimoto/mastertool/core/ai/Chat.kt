@@ -253,6 +253,9 @@ data class AiSession(
         /** Learn About You (1.0.54): an interview that builds the person's profile in USER.md. */
         const val MODE_PROFILE = "profile"
 
+        /** Refactor guide (1.0.66): the deck's guide rewritten whole, reviewed at the end. */
+        const val MODE_REFACTOR = "refactor"
+
         /** What an old tool result is cut to once the person clears them. */
         const val CLEARED = 200
 

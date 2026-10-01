@@ -891,7 +891,19 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "add" -> AiMemory.add(doc, entry ?: return fail("add needs text."), kind.limit, kind.entryLimit)
             "replace" -> AiMemory.replace(doc, old ?: return fail("replace needs old_text."), entry ?: return fail("replace needs text."), kind.limit, kind.entryLimit)
             "remove" -> AiMemory.remove(doc, old ?: text ?: return fail("remove needs old_text."))
+            // The whole guide at once (1.0.66): only in Refactor guide, which ends in the person's review.
+            "rewrite" -> when {
+                kind != MemoryKind.GUIDE -> return fail("rewrite is for the guide only.")
+                ai.session?.mode != AiSession.MODE_REFACTOR -> return fail("rewrite is for Refactor guide. Here, use replace and remove.")
+                else -> com.kaiharimoto.mastertool.core.ai.memory.GuideRewrite.rewrite(doc, text ?: return fail("rewrite needs text: the whole guide."), kind.entryLimit)
+            }
             else -> return fail("Actions: add, replace, remove.")
+        }
+        // What one Fine Tuning run may add to the guide, by its intensity (1.0.66: Deep, 20,000 characters).
+        if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && action != "rewrite") {
+            ai.guideRoom()?.let { (start, budget, label) ->
+                com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.refusal(start, write.doc.used, budget, label)?.let { return fail(it) }
+            }
         }
         return when (write) {
             is MemoryWrite.Done -> {
@@ -899,6 +911,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                 ok(write.message, when (action) {
                     "add" -> "Remembered: ${entry.orEmpty().take(100)}"
                     "replace" -> "Updated a memory"
+                    "rewrite" -> "Rewrote the guide"
                     else -> "Forgot: ${old.orEmpty().take(80)}"
                 })
             }

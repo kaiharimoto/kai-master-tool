@@ -922,7 +922,7 @@ The long reasons sit under the first table only where they must; the third is to
             )
         }
         // 1.0.54: the living guide, the session's end, the brain, quick settings, the profile, a petted face.
-        "guide", "end", "brain", "quick", "profile", "about", "petted" -> studioAi154(h, mode)
+        "guide", "refactor", "end", "brain", "quick", "profile", "about", "petted" -> studioAi154(h, mode)
         // 1.0.55: a picture sent and read into a deck, the new layouts, pictures waiting to go.
         "picture", "visual", "attach" -> studioAi155(h, mode)
         // 1.0.56: a long conversation, its start summarised, the gauge; --ai=context opens the panel.
@@ -1104,6 +1104,8 @@ private fun studioAi154(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
     ai.deckNames = mapOf(deckId to deckName)
     when (mode) {
         "guide" -> ai.docOpen = com.kaiharimoto.neue.ai.LivingDoc.Guide(deckId, deckName)
+        // Refactor guide (1.0.66): the launcher, on its fourth way in.
+        "refactor" -> ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_REFACTOR)
         "profile" -> ai.docOpen = com.kaiharimoto.neue.ai.LivingDoc.Profile
         "about" -> ai.profileAsk = true
         "quick" -> ai.quickOpen = true

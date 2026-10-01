@@ -20,13 +20,15 @@ enum class TuneIntensity(
     val studyTime: String,
     /** What a study reads at this intensity, in the person's words. */
     val studies: String,
+    /** How many characters one run may add to the deck's guide (1.0.66; the guide itself has no cap). */
+    val guideBudget: Int,
 ) {
     QUICK("quick", "Quick", 6, 14, "low", "About five minutes", "A minute or two",
-        "Every card's text and the archetype's page on Yugipedia."),
+        "Every card's text and the archetype's page on Yugipedia.", 5_000),
     STANDARD("standard", "Standard", 12, 32, "medium", "About fifteen minutes", "A few minutes",
-        "Adds the key cards' rulings and how recent tournament lists build it."),
+        "Adds the key cards' rulings and how recent tournament lists build it.", 10_000),
     DEEP("deep", "Deep", 20, 64, "high", "Half an hour or more", "Ten minutes or more",
-        "Adds up to twenty tournament lists read by a helper, recent guides from the web, and a second pass checking its own guide against the cards."),
+        "Adds up to twenty tournament lists read by a helper, recent guides from the web, and a second pass checking its own guide against the cards.", 20_000),
     ;
 
     companion object {

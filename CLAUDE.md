@@ -551,7 +551,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   never scrolled); `ask_user` has `heard`, shown as "What I heard", and interviews read back with it;
   Learn About You opens on `ProfileCoverage` and the person's own evidence (decks, event, webs, recent
   chats); the guide (`MemoryKind.GUIDE`) is `UNBOUNDED`, one entry at most 5,000 characters.
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
+  **1.0.66**: one Fine Tuning run may add `TuneIntensity.guideBudget` to the guide (Deep 20,000;
+  `GuideBudget`); **Refactor guide** (`MODE_REFACTOR`, skill `refactor-guide`) rewrites the whole guide
+  with the memory tool's `rewrite` (`GuideRewrite`, only in that mode), reviewed on Finish. The reader's
+  guide mockups are `ReaderGuide`/`ReaderGuidePdf` (`tools/shoot.sh --reader=all`).
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|refactor|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

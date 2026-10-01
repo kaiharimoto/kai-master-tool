@@ -2378,6 +2378,26 @@ outputs and how the user gets them").
   `UNBOUNDED`, one entry still at most 5,000 characters; the brain shows its size, not a share.
   The other memories stay bounded — they are in every prompt.
 
+**1.0.66, the guide kept worth reading.**
+- **A run's room, by its intensity** (kai: "if the study run is deep let it add up to 20k"): the guide
+  has no cap, but one Fine Tuning run may add `TuneIntensity.guideBudget` to it — 5,000 characters
+  at Quick, 10,000 at Standard, 20,000 at Deep. The run is told its room in its first message, the
+  study skills say "at Deep, use the room", and the host refuses a write past it (`GuideBudget`,
+  core) with "tighten or merge". Shrinking is always allowed.
+- **Refactor guide** (kai: "cleans up anything that's not actually helpful or useful/improve and
+  organize it"): the fourth way into Fine Tuning (`AiSession.MODE_REFACTOR`), offered once the deck
+  has a guide — also **Refactor** in the guide's own view and the palette. The `refactor-guide` skill
+  reads the guide, the list as it stands and the cards, judges every entry (**wrong**, **stale**,
+  **generic**, **repeated**, **vague**, **transcript** go; the person's teaching outranks inference),
+  says what it will drop, merge and fix, then writes the whole guide at once with the memory tool's
+  `rewrite` (`GuideRewrite`, core: one `- ` entry a line, the title kept; refused outside this mode,
+  and refused when it would empty the guide or keep under a tenth of it). Labels in reading order,
+  lines numbered, cards in [[ ]]. Finish shows every change to keep or undo, as Fine Tuning does; no
+  session report. Intensity sets how hard it checks the claims against the card text.
+- The reader's guide (a version written for people, to share as a PDF) has three layouts as
+  mockups (`ReaderGuide`, `ReaderGuidePdf`: Primer, Cheat sheet, Magazine; `tools/shoot.sh
+  --reader=all`), waiting on kai's pick.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:

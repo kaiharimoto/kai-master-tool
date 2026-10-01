@@ -38,13 +38,14 @@ class RulesTextTest {
         DeckSkills.ABOUT_YOU_NAME to DeckSkills.ABOUT_YOU,
         DeckSkills.DECK_FROM_PICTURE_NAME to DeckSkills.DECK_FROM_PICTURE,
         DeckSkills.DECK_FROM_VIDEO_NAME to DeckSkills.DECK_FROM_VIDEO,
+        DeckSkills.REFACTOR_GUIDE_NAME to DeckSkills.REFACTOR_GUIDE,
     )
 
     private val allTexts: List<String>
         get() = skillBodies.values.toList() + listOf(
             GameRulesSkill.DESCRIPTION, DeckSkills.FINE_TUNING_DESCRIPTION, DeckSkills.SELF_STUDY_DESCRIPTION,
             DeckSkills.TOURNAMENT_PREP_DESCRIPTION, DeckSkills.FIRST_PRINCIPLES_DESCRIPTION, DeckSkills.ABOUT_YOU_DESCRIPTION,
-            DeckSkills.DECK_FROM_PICTURE_DESCRIPTION,
+            DeckSkills.DECK_FROM_PICTURE_DESCRIPTION, DeckSkills.REFACTOR_GUIDE_DESCRIPTION,
         ) + AiDemo.scenes.flatMap { listOf(it.title, it.caption, it.person, it.reply) + it.activity }
 
     @Test
@@ -83,6 +84,15 @@ class RulesTextTest {
         }
         // And Learn About You starts from what the app can already see about the person.
         listOf("`list_decks`", "`prep_state`", "`list_webs`", "`session_search`").forEach { assertTrue(it in DeckSkills.ABOUT_YOU, it) }
+    }
+
+    @Test
+    fun refactorWritesTheWholeGuideAndStudiesKnowTheirRoom() {
+        // kai (1.0.66): "cleans up anything that's not actually helpful or useful/improve and organize it".
+        listOf("Wrong", "Stale", "Generic", "Repeated", "Vague").forEach { assertTrue("**$it**" in DeckSkills.REFACTOR_GUIDE, it) }
+        assertTrue("action rewrite" in DeckSkills.REFACTOR_GUIDE)
+        // "If the study run is deep let it add up to 20k."
+        listOf(DeckSkills.SELF_STUDY, DeckSkills.FIRST_PRINCIPLES).forEach { assertTrue("20,000 at Deep" in it) }
     }
 
     @Test
