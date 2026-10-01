@@ -637,6 +637,8 @@ class NeueHolders(
                 Command(ai.name, "${ai.name}: learn this deck from first principles") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PRINCIPLES) },
                 Command(ai.name, "${ai.name}: refactor this deck's guide") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_REFACTOR) },
                 Command(ai.name, "${ai.name}: this deck's guide") { ai.openGuide() },
+                Command(ai.name, "${ai.name}: read this deck's reader's guide") { ai.openBook() },
+                Command(ai.name, "${ai.name}: write this deck's reader's guide") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_WRITE) },
                 Command(ai.name, "${ai.name}: learn about you") { ai.setOpen(true); ai.profileAsk = true },
                 Command(ai.name, "${ai.name}: your profile") { ai.openProfile() },
                 Command(ai.name, "${ai.name}: what can you do?") { ai.setOpen(true); ai.demoOpen = true },
@@ -1232,6 +1234,8 @@ private fun Shell(h: NeueHolders) {
         if (neue.aiSheet) com.kaiharimoto.neue.ai.AiPanel(h, Modifier.fillMaxSize(), phone = true)
         // Ai's first setup takes the whole window, bars and all (1.0.45).
         if (neue.aiSetup) com.kaiharimoto.neue.ai.AiSetupScreen(h.ai, Modifier.fillMaxSize())
+        // The reader's guide, read as a book over the whole window (1.0.67); the card viewer opens over it.
+        neue.reading?.let { com.kaiharimoto.neue.ai.reader.BookReader(h, it, Modifier.fillMaxSize()) }
         if (neue.prefs.ai.enabled) {
             com.kaiharimoto.neue.ai.avatar.AiFaceClock(h.ai)
             com.kaiharimoto.neue.ai.MemoryDialog(h.ai)
@@ -1302,6 +1306,7 @@ private fun Shell(h: NeueHolders) {
                             // Ai's notes on the deck go with it (1.0.43).
                             h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.DECK, id))
                             h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, id))
+                            h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(id))
                             h.ai.files.deleteReports(id)
                             if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                 neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }

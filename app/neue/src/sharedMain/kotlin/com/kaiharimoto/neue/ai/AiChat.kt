@@ -710,6 +710,7 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
             ai.streaming.isNotEmpty() -> "Writing"
             ai.studying -> "Studying the deck"
             ai.refactoring -> "Refactoring the guide"
+            ai.writing -> "Writing the guide"
             else -> "Thinking"
         }
         ai.handLine != null -> ai.handLine

@@ -132,18 +132,18 @@ fun neueMain(args: Array<String>) {
             }
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
-            // --reader=manual|lessons|turn|all: the sample reader's guide in each direction, as phone PDFs in shots/ (1.0.67 exploration).
-            map["reader"]?.let { which ->
-                val styles = com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.Style.entries
-                    .filter { which == "all" || it.name.equals(which, ignoreCase = true) || it.label.equals(which, ignoreCase = true) }
-                styles.forEach { style ->
-                    val bytes = kotlinx.coroutines.runBlocking {
-                        com.kaiharimoto.neue.ai.AiDocs.readerBytes(h, com.kaiharimoto.mastertool.core.ai.report.ReaderGuideSample.labrynth, style)
-                    }
-                    val out = java.io.File(map["out"] ?: "shots", "reader-${style.name.lowercase()}.pdf")
-                    out.parentFile?.mkdirs()
-                    out.writeBytes(bytes)
-                    println("[neue-studio] reader: ${style.label}, ${bytes.size / 1024} KiB to $out")
+            // --book=pdf|json|all: the sample reader's guide (the Las Vegas Labrynth as a book) written to shots/ (1.0.67).
+            map["book"]?.let { which ->
+                val book = com.kaiharimoto.mastertool.core.ai.report.book.BookSample.labrynth
+                val dir = java.io.File(map["out"] ?: "shots").also { it.mkdirs() }
+                if (which == "pdf" || which == "all") {
+                    val bytes = kotlinx.coroutines.runBlocking { com.kaiharimoto.neue.ai.AiDocs.bookBytes(h, book) }
+                    java.io.File(dir, "book.pdf").writeBytes(bytes)
+                    println("[neue-studio] book: ${bytes.size / 1024} KiB to ${dir}/book.pdf")
+                }
+                if (which == "json" || which == "all") {
+                    java.io.File(dir, "book.json").writeText(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.write(book))
+                    println("[neue-studio] book: json to ${dir}/book.json")
                 }
             }
             map["ydkw"]?.let { path ->
@@ -923,6 +923,35 @@ The long reasons sit under the first table only where they must; the third is to
         }
         // 1.0.54: the living guide, the session's end, the brain, quick settings, the profile, a petted face.
         "guide", "refactor", "end", "brain", "quick", "profile", "about", "petted" -> studioAi154(h, mode)
+        // 1.0.67: the reader's guide, the sample book open in the reader; --ai=reader-lines lands on the first line,
+        // reader-lessons on the lessons, reader-empty is a deck with no book.
+        "reader", "reader-lines", "reader-lessons", "reader-empty" -> {
+            val deckId = h.builder.deckId ?: "studio-lab"
+            val path = com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(deckId)
+            if (mode == "reader-empty") {
+                h.ai.files.delete(path)
+            } else {
+                val book = com.kaiharimoto.mastertool.core.ai.report.book.BookSample.labrynth
+                h.ai.files.write(path, com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.write(book))
+                // The reader's rows: the cover, then each chapter's opening, each section's head and each block.
+                var at = 1
+                var landed = 0
+                book.chapters.forEach { ch ->
+                    if (mode == "reader-lessons" && ch.title == "Lessons") landed = at
+                    at++
+                    ch.sections.forEach { s ->
+                        at++
+                        s.blocks.forEach { b ->
+                            if (mode == "reader-lines" && landed == 0 && b is com.kaiharimoto.mastertool.core.ai.report.book.Block.Line && b.frames) landed = at
+                            at++
+                        }
+                    }
+                }
+                h.ai.bookPlaces[deckId] = landed
+            }
+            h.ai.bookChanged()
+            h.neue.reading = deckId
+        }
         // 1.0.55: a picture sent and read into a deck, the new layouts, pictures waiting to go.
         "picture", "visual", "attach" -> studioAi155(h, mode)
         // 1.0.56: a long conversation, its start summarised, the gauge; --ai=context opens the panel.

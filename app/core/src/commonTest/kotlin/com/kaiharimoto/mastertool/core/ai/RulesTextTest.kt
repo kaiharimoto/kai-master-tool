@@ -25,7 +25,7 @@ class RulesTextTest {
         "archetype_guide", "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player", "web_search", "web_fetch",
         "delegate", "todo_write", "calculate", "hand_odds", "skill_view", "get_web", "list_webs", "get_siding",
         "set_siding_plan", "prep_state", "log_game", "matchup_matrix", "expected_winrate", "set_event", "drill",
-        "session_report", "resolve_cards", "new_deck", "watch_video", "list_decks", "list_webs", "session_search",
+        "session_report", "resolve_cards", "new_deck", "watch_video", "list_decks", "list_webs", "session_search", "reader_guide",
     )
 
     private val skillBodies: Map<String, String> = mapOf(
@@ -39,13 +39,14 @@ class RulesTextTest {
         DeckSkills.DECK_FROM_PICTURE_NAME to DeckSkills.DECK_FROM_PICTURE,
         DeckSkills.DECK_FROM_VIDEO_NAME to DeckSkills.DECK_FROM_VIDEO,
         DeckSkills.REFACTOR_GUIDE_NAME to DeckSkills.REFACTOR_GUIDE,
+        DeckSkills.WRITE_GUIDE_NAME to DeckSkills.WRITE_GUIDE,
     )
 
     private val allTexts: List<String>
         get() = skillBodies.values.toList() + listOf(
             GameRulesSkill.DESCRIPTION, DeckSkills.FINE_TUNING_DESCRIPTION, DeckSkills.SELF_STUDY_DESCRIPTION,
             DeckSkills.TOURNAMENT_PREP_DESCRIPTION, DeckSkills.FIRST_PRINCIPLES_DESCRIPTION, DeckSkills.ABOUT_YOU_DESCRIPTION,
-            DeckSkills.DECK_FROM_PICTURE_DESCRIPTION, DeckSkills.REFACTOR_GUIDE_DESCRIPTION,
+            DeckSkills.DECK_FROM_PICTURE_DESCRIPTION, DeckSkills.REFACTOR_GUIDE_DESCRIPTION, DeckSkills.WRITE_GUIDE_DESCRIPTION,
         ) + AiDemo.scenes.flatMap { listOf(it.title, it.caption, it.person, it.reply) + it.activity }
 
     @Test

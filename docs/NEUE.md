@@ -2394,19 +2394,63 @@ outputs and how the user gets them").
   and refused when it would empty the guide or keep under a tenth of it). Labels in reading order,
   lines numbered, cards in [[ ]]. Finish shows every change to keep or undo, as Fine Tuning does; no
   session report. Intensity sets how hard it checks the claims against the card text.
-- The reader's guide (a version written for people, to share as a PDF) is being designed. kai turned
-  down the first three A4 mockups ("none of these designs speak out to me"); the second exploration
-  (1.0.67, no release) is made for the phone, where guides are read: `core/ai/report/guide/` —
-  `Phone` (400 × 866 pt, four columns, a 4-pt baseline, MuType's scale, three ink weights),
-  `Graphics` (the forty cards as Isotype cells, one big number on a 0–100 bar, the engine map from
-  `EngineLayout`, a line with its choke points, your turn / their turn lanes, the field and small
-  multiples of it, the matchup ledger, sample hands, the checklist, a filmstrip of the turn) and
-  `GuideFacts` (the numbers, worked out: odds by the hypergeometric, sample hands from a seed, side
-  plans as signed counts). `ReaderGuide` gained the big idea, lessons (with the picture that proves
-  each), connections, choke points on steps, the end board's sets and a checklist. Three directions
-  over the same pictures: Field manual, Three lessons, One turn annotated (`tools/shoot.sh
-  --reader=all`). The PDF toolkit gained paths and curves, clipping, letter-spacing (set only when it
-  changes: `Tc` outlives `ET`) and JPEG pictures (`/DCTDecode`).
+- The reader's guide (a version written for people, to share as a PDF) went through two design
+  explorations. kai turned down the first three A4 mockups ("none of these designs speak out to me");
+  of the second, made for the phone, they kept the Three lessons cover and its lessons (maxim,
+  number, picture, why) and One turn's board after each play.
+
+**1.0.67, the reader's guide as a book** (kai: "There should be no limit to the length of the
+guides, but it must be well organized. A table of contents is crucial … true mastery is way deeper
+and extensive, which is good, and why we need Ai").
+- **The book** (`core/ai/report/book/`): `GuideBook` — a title, the line under it, the big idea, the
+  deck by role, then chapters of sections of typed blocks (`Block`: `text`, `lesson`, `odds`,
+  `cells`, `engine`, `line`, `lanes`, `board`, `ledger`, `hands`, `checklist`, `table`, `cards`,
+  `callout`), any length. JSON with a `"type"` key, unknown keys ignored, every chapter, section and
+  block given a stable id (`withIds`), so a link or a note survives a rewrite. Kept beside Ai's notes
+  as `guides/<deck>.book.json`, deleted with the deck. Numbers are never written into it: the odds,
+  the forty cells and the sample hands are worked out from the deck as it is (`GuideFacts`, the
+  open deck's main deck when the book is the builder's, else the book's roles).
+- **One layout, three painters.** A picture is laid out once, in core, on an `Ink` — rectangles,
+  lines, shapes, measured text in the app's own fonts (`Faces`, `Pen`), card tiles, and tags (a card,
+  a step, a choke point, a box to tick). `PdfInk` paints it on a page; `RecordingInk` keeps it as a
+  `Drawing`, which the app paints and the HTML will. `BookArt` turns each block into drawings for a
+  width — a line a row per step, its board after each play a frame per step (`frameStates`). The
+  round-two `Graphics` moved onto the ink (`book/Graphics.kt`); `ReaderGuidePdf` and its three
+  directions are gone, and `BookSample.labrynth` is the Las Vegas list written as a book.
+- **The PDF** (`BookPdf`, phone pages, 400 × 866 pt): the cover kai chose — the engine's hub as a
+  picture (`BookPdf.hero`), the name, the big idea — and **the table of contents** under it, every
+  chapter and section with its page, each a link. Laid out twice: once to learn where each section
+  lands, once to write the pages in. Each chapter opens on a page of its own with its sections; each
+  section has a numbered kicker and a headline (a lesson's maxim instead when it opens with one), then
+  its blocks; a line's board after each play two across under its steps. The PDF's bookmarks are the
+  contents again, so a phone's viewer lists them (`PdfDocument.link`, `bookmarks`, `/Outlines`).
+  Card art goes in as JPEG (240 px, the cover's hero 600), so a long book still sends in a chat.
+- **Ai writes it a chapter at a time** (`AiSession.MODE_WRITE`, the `write-guide` skill, the
+  `reader_guide` tool): "Write the reader's guide" is the fifth way into Fine Tuning, and in the
+  palette. It reads its notes, the deck, the web and the siding plans; sets the front and the outline
+  first; then writes one chapter per call, each checked before it is kept (`BookWriter`: a name that
+  is not a card, a step with no card, an odds row with nothing to count, a block of no known type is
+  refused with what to fix; names come back as printed); `facts` gives it the numbers to quote, and
+  the roles are checked against the deck. Intensity sizes it: Quick the essentials, Standard all but
+  the card-by-card, building and rulings chapters, Deep all eleven. A session that does not finish
+  continues from the outline. Finish shows the book section by section to keep or undo (`BookReview`);
+  the book remembers which notes it was written from (`notesHash`) and says when they have changed.
+- **The reader** (`neue/ai/reader/`, `NeueState.reading`; Esc and Back close it): the book over the
+  whole window — the cover with its contents, each chapter's opening, each section, its blocks. Words
+  are set by the app (`[[cards]]` open large); pictures are the same drawings, painted by
+  `DrawingView` on canvases in ink (a grey level read between the theme's ink and paper, so dark mode
+  turns them) with real cards, in the artworks the person chose, placed in their order between them.
+  The contents stand beside the page on a wide window and slide in on a narrow one; the chapter being
+  read is marked, and the place is kept per deck while the app runs. **A line's board after each play
+  animates**: one board, stepped with the arrows, Play, a finger dragged across it, or a tap on a
+  step or its choke point — the cards slide from zone to zone and what is new fades in
+  (`FramesPlayer`; cards may move). A card anywhere opens large; a checklist's boxes tick. PDF and
+  JSON from the bar; Update starts a writing session. Opened from the guide's view (Reader's guide),
+  the palette and the panel's head while it is being written (Read).
+- `tools/shoot.sh --ai=reader|reader-lines|reader-lessons|reader-empty` photographs it;
+  `--book=pdf|json|all` writes the sample book.
+- Release note: a new file per deck, `guides/<deck>.book.json`; no preference, schema or deck-file
+  change.
 
 #### Going further — the roadmap
 

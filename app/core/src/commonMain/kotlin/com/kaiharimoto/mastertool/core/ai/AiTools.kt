@@ -714,6 +714,35 @@ object AiTools {
         phase = 3,
     )
 
+    // ---- the reader's guide (1.0.67) ---------------------------------------------------
+
+    val readerGuide = ToolSpec(
+        "reader_guide",
+        "Writes the open deck's guide for people — a book of chapters and sections the person reads in the app and shares as a PDF " +
+            "(its notes for you stay in memory scope guide). outline: what is written and planned. set_outline: the chapters in order, " +
+            "each a title and a summary. set_front: the title, subtitle, big_idea and roles (the deck by job, every card with copies). " +
+            "write_chapter: one whole chapter as JSON {title, summary, sections: [{title, blocks: [...]}]}, each block with a \"type\" " +
+            "(text, lesson, odds, cells, engine, line, lanes, board, ledger, hands, checklist, table, cards, callout; the write-guide skill " +
+            "has their fields). read_chapter / remove_chapter by id. facts: the odds and counts worked out from the deck — quote these, never " +
+            "your own sums. Every card is checked; a chapter with a name that is not a card is not kept.",
+        schema {
+            enum("action", "What to do", listOf("outline", "set_outline", "set_front", "write_chapter", "read_chapter", "remove_chapter", "facts"), required = true)
+            objects("chapters", "set_outline: the chapters in order") {
+                string("title", "The chapter's title", required = true)
+                string("summary", "What it will hold, in a sentence")
+                string("id", "Keep an existing chapter's id")
+            }
+            any("chapter", "write_chapter: the whole chapter, as an object")
+            string("id", "read_chapter, remove_chapter: the chapter's id or title")
+            string("title", "set_front: the book's title, usually the deck's name")
+            string("subtitle", "set_front: who played it and where, when it is a list from somewhere")
+            string("big_idea", "set_front: the one sentence to remember, under twenty words")
+            any("roles", "set_front: [{name, cards: [{card, copies, note}]}], the first role the starters")
+        },
+        ToolGroup.MEMORY,
+        phase = 3,
+    )
+
     // ---- pictures (1.0.55) -------------------------------------------------------------
 
     val watchVideo = ToolSpec(
@@ -812,7 +841,7 @@ object AiTools {
         tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot,
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
-        express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall,
+        express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

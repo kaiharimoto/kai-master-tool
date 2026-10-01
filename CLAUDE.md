@@ -554,10 +554,19 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **1.0.66**: one Fine Tuning run may add `TuneIntensity.guideBudget` to the guide (Deep 20,000;
   `GuideBudget`); **Refactor guide** (`MODE_REFACTOR`, skill `refactor-guide`) rewrites the whole guide
   with the memory tool's `rewrite` (`GuideRewrite`, only in that mode), reviewed on Finish. The reader's
-  guide is in design (second exploration, for the phone): `ReaderGuide`/`ReaderGuidePdf` over
-  `core/ai/report/guide/` (`Phone`, `Graphics`, `GuideFacts`, `EngineLayout`); `tools/shoot.sh
-  --reader=all`. The PDF toolkit draws paths, clips, tracks type and embeds JPEGs.
-  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|refactor|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked --ai-step=KEY:anthropic` photographs it.
+  guide went through two explorations; kai kept the lessons cover and the board after each play.
+  **1.0.67, the reader's guide is a book** (`NEUE.md` §4k): `GuideBook` (core `ai/report/book/`,
+  chapters → sections → typed `Block`s, any length, stable ids, `guides/<deck>.book.json`, deleted
+  with the deck). **One layout, three painters**: pictures are laid out once on an `Ink` (`Pen`,
+  `Faces`, `book/Graphics.kt`, `BookArt`) — `PdfInk` paints a page, `RecordingInk` keeps a `Drawing`
+  the app paints (`DrawingView`) and the HTML will. `BookPdf`: the cover with **the table of
+  contents**, page numbers by laying out twice, links and bookmarks (`PdfDocument.link`, `bookmarks`).
+  Ai writes it a chapter at a time (`MODE_WRITE`, skill `write-guide`, tool `reader_guide`, checked by
+  `BookWriter`, reviewed by `BookReview`); numbers come from `GuideFacts`, never from Ai. **The reader**
+  (`neue/ai/reader/BookReader`, `NeueState.reading`) paints the same drawings with real cards; a
+  line's board after each play animates (`FramesPlayer`); PDF and JSON export. Notes and highlights
+  baked in by Ai (1.0.68) and the interactive book and HTML (1.0.69) are next.
+  `tools/shoot.sh --ai=panel|empty|wizard|setup|tune|review|chart|demo|reason|teach|study|guide|refactor|end|brain|quick|profile|about|petted|picture|visual|attach|summarised|context|listening|talk|voice|checked|reader|reader-lines|reader-lessons|reader-empty --ai-step=KEY:anthropic` photographs it; `--book=pdf|json` writes the sample book.
 
 Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
 

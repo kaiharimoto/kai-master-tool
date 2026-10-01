@@ -1,4 +1,4 @@
-package com.kaiharimoto.mastertool.core.ai.report.guide
+package com.kaiharimoto.mastertool.core.ai.report.book
 
 import com.kaiharimoto.mastertool.core.ai.report.ReaderGuide
 import com.kaiharimoto.mastertool.core.hand.HandOdds
@@ -39,18 +39,33 @@ data class GuideFacts(
     }
 
     companion object {
-        fun of(guide: ReaderGuide, seed: Long = 711878): GuideFacts {
-            val roles = guide.roles.mapIndexed { i, r -> Role(r.name, r.cards.sumOf { it.copies.coerceAtLeast(1) }, Fill.entries[minOf(i, Fill.entries.lastIndex)]) }
-            val deck = guide.roles.flatMapIndexed { i, r -> r.cards.flatMap { c -> List(c.copies.coerceAtLeast(1)) { i to c.card } } }
-            val size = deck.size
-            val starters = roles.firstOrNull()?.count ?: 0
-            val second = guide.roles.indexOfFirst { it.name.contains("second", ignoreCase = true) }
+        fun of(guide: ReaderGuide, seed: Long = 711878): GuideFacts = of(guide.roles, null, guide.siding, seed)
+
+        /**
+         * The facts of a deck known by its [roles] — every card with its copies — or, when [deck] is
+         * given (the main deck as it is, a name a copy), of that deck read through the roles: a card
+         * in no role is counted under "Other", so the cells always add up to the deck.
+         */
+        fun of(roles: List<ReaderGuide.Role>, deck: List<String>?, sides: List<ReaderGuide.Side> = emptyList(), seed: Long = 711878): GuideFacts {
+            val roleOf = HashMap<String, Int>()
+            roles.forEachIndexed { i, r -> r.cards.forEach { c -> roleOf.putIfAbsent(c.card.lowercase(), i) } }
+            val cards: List<Pair<Int, String>> = if (deck != null) {
+                deck.map { (roleOf[it.lowercase()] ?: roles.size) to it }.sortedBy { it.first }
+            } else {
+                roles.flatMapIndexed { i, r -> r.cards.flatMap { c -> List(c.copies.coerceAtLeast(1)) { i to c.card } } }
+            }
+            val other = cards.count { it.first == roles.size }
+            val roleFacts = roles.mapIndexed { i, r -> Role(r.name, cards.count { it.first == i }, Fill.entries[minOf(i, Fill.entries.lastIndex)]) } +
+                if (other > 0) listOf(Role("Other", other, Fill.DOT)) else emptyList()
+            val size = cards.size
+            val starters = roleFacts.firstOrNull()?.count ?: 0
+            val second = roles.indexOfFirst { it.name.contains("second", ignoreCase = true) }
             fun hands(): List<Hand> {
                 val random = Random(seed)
                 val found = LinkedHashMap<Verdict, Hand>()
                 repeat(400) {
                     if (found.size == Verdict.entries.size || size < 5) return@repeat
-                    val hand = deck.shuffled(random).take(5)
+                    val hand = cards.shuffled(random).take(5)
                     val starter = hand.firstOrNull { it.first == 0 }?.second
                     val verdict = when {
                         starter != null -> Verdict.STARTS
@@ -61,20 +76,20 @@ data class GuideFacts(
                 }
                 return Verdict.entries.mapNotNull { found[it] }
             }
-            val sides = guide.siding.map { s ->
-                Side(s.matchup, counted(s.sideIn), counted(s.sideOut))
-            }
             return GuideFacts(
                 deckSize = size,
-                roles = roles,
-                cells = deck.map { it.first },
+                roles = roleFacts,
+                cells = cards.map { it.first },
                 startFirst = atLeastOne(starters, size, 5),
                 startSecond = atLeastOne(starters, size, 6),
                 brick = 1 - atLeastOne(starters, size, 5),
                 hands = hands(),
-                sides = sides,
+                sides = sides.map { s -> Side(s.matchup, counted(s.sideIn), counted(s.sideOut)) },
             )
         }
+
+        /** The chance to open at least one of [cards] (each named as often as it is run) in [hand] cards of [deck]. */
+        fun odds(cards: Int, deck: Int, hand: Int): Double = atLeastOne(cards, deck, hand)
 
         /** The chance that [hand] cards from [deck] hold at least one of [copies]. */
         fun atLeastOne(copies: Int, deck: Int, hand: Int): Double {

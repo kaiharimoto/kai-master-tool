@@ -86,6 +86,15 @@ class PdfPage internal constructor(val width: Float, val height: Float, private 
     internal val fonts = LinkedHashSet<PdfFont>()
     internal val images = LinkedHashSet<PdfImage>()
     internal val alphas = LinkedHashSet<Int>()
+    internal val links = mutableListOf<Link>()
+
+    /** A tappable box on this page that opens [target] at [targetTop] points from its top. */
+    internal class Link(val x: Float, val top: Float, val w: Float, val h: Float, val target: PdfPage, val targetTop: Float)
+
+    /** The box ([x], [top], [w], [h]) taps through to [target], [targetTop] points down it (1.0.67: a guide's contents). */
+    fun link(x: Float, top: Float, w: Float, h: Float, target: PdfPage, targetTop: Float = 0f) {
+        links += Link(x, top, w, h, target, targetTop)
+    }
 
     private fun n(v: Float): String = num(v)
 
@@ -202,6 +211,12 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
     private val fonts = ArrayList<PdfFont>()
     private val images = ArrayList<PdfImage>()
 
+    /** A bookmark: what a reader's sidebar lists, opening [page] at [top]; [children] under it. */
+    class Bookmark(val title: String, val page: PdfPage, val top: Float = 0f, val children: List<Bookmark> = emptyList())
+
+    /** The bookmarks, in order (1.0.67): a phone's PDF viewer lists them as the document's outline. */
+    val bookmarks = mutableListOf<Bookmark>()
+
     fun font(metrics: TrueType): PdfFont = PdfFont("F${fonts.size + 1}", metrics).also { fonts += it }
 
     /** A new page, A4 unless told otherwise. */
@@ -228,8 +243,21 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
         val pageIds = pages.map { next++ to next++ }
         val fontIds = fonts.associateWith { IntArray(5) { next++ } }
         val imageIds = images.associateWith { next++ }
+        val linkIds = pages.associateWith { p -> p.links.map { next++ } }
+        // Every bookmark, depth first, numbered before anything is written.
+        val marks = ArrayList<Pair<Bookmark, Int>>()
+        fun number(list: List<Bookmark>) {
+            list.forEach { b ->
+                marks += b to next++
+                number(b.children)
+            }
+        }
+        number(bookmarks)
+        val markIds = marks.toMap()
+        val outlines = if (bookmarks.isNotEmpty()) next++ else 0
 
-        out.obj(catalog, "<< /Type /Catalog /Pages $pagesId 0 R >>")
+        val outlineRef = if (outlines > 0) " /Outlines $outlines 0 R" else ""
+        out.obj(catalog, "<< /Type /Catalog /Pages $pagesId 0 R$outlineRef >>")
         out.obj(pagesId, "<< /Type /Pages /Kids [${pageIds.joinToString(" ") { "${it.first} 0 R" }}] /Count ${pages.size} >>")
         out.obj(info, "<< /Title ${pdfString(title)} /Author ${pdfString(author)} /Producer ${pdfString("Neue Master Tool")} >>")
         pages.forEachIndexed { i, page ->
@@ -237,10 +265,11 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
             val fontRes = page.fonts.joinToString(" ") { "/${it.key} ${fontIds.getValue(it)[0]} 0 R" }
             val imageRes = page.images.joinToString(" ") { "/${keys.getValue(it)} ${imageIds.getValue(it)} 0 R" }
             val alphaRes = page.alphas.joinToString(" ") { "/GA$it << /ca ${it / 100f} /CA ${it / 100f} >>" }
+            val annots = linkIds.getValue(page).let { ids -> if (ids.isEmpty()) "" else " /Annots [${ids.joinToString(" ") { "$it 0 R" }}]" }
             out.obj(
                 pageId,
                 "<< /Type /Page /Parent $pagesId 0 R /MediaBox [0 0 ${page.width} ${page.height}] " +
-                    "/Resources << /Font << $fontRes >> /XObject << $imageRes >> /ExtGState << $alphaRes >> >> /Contents $contentId 0 R >>",
+                    "/Resources << /Font << $fontRes >> /XObject << $imageRes >> /ExtGState << $alphaRes >> >> /Contents $contentId 0 R$annots >>",
             )
             out.stream(contentId, "", page.ops.toString().encodeToByteArray())
         }
@@ -271,6 +300,44 @@ class PdfDocument(private val zlib: Zlib? = null, val title: String = "", val au
             val dict = "/Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8"
             val jpeg = image.jpeg
             if (jpeg != null) out.stream(imageIds.getValue(image), "$dict /Filter /DCTDecode", jpeg, deflate = false) else out.stream(imageIds.getValue(image), dict, image.rgb)
+        }
+        fun dest(page: PdfPage, top: Float): String {
+            val id = pageIds[pages.indexOf(page)].first
+            return "[$id 0 R /XYZ 0 ${PdfPage.num(page.height - top)} null]"
+        }
+        pages.forEach { page ->
+            page.links.zip(linkIds.getValue(page)).forEach { (l, id) ->
+                val y1 = page.height - l.top - l.h
+                out.obj(
+                    id,
+                    "<< /Type /Annot /Subtype /Link /Rect [${PdfPage.num(l.x)} ${PdfPage.num(y1)} ${PdfPage.num(l.x + l.w)} ${PdfPage.num(y1 + l.h)}] " +
+                        "/Border [0 0 0] /Dest ${dest(l.target, l.targetTop)} >>",
+                )
+            }
+        }
+        if (outlines > 0) {
+            fun count(list: List<Bookmark>): Int {
+                var n = 0
+                list.forEach { n += 1 + count(it.children) }
+                return n
+            }
+            fun write(list: List<Bookmark>, parent: Int) {
+                list.forEachIndexed { i, b ->
+                    val id = markIds.getValue(b)
+                    val links = buildString {
+                        append("/Parent $parent 0 R")
+                        if (i > 0) append(" /Prev ${markIds.getValue(list[i - 1])} 0 R")
+                        if (i < list.lastIndex) append(" /Next ${markIds.getValue(list[i + 1])} 0 R")
+                        if (b.children.isNotEmpty()) {
+                            append(" /First ${markIds.getValue(b.children.first())} 0 R /Last ${markIds.getValue(b.children.last())} 0 R /Count -${count(b.children)}")
+                        }
+                    }
+                    out.obj(id, "<< /Title ${pdfString(b.title)} $links /Dest ${dest(b.page, b.top)} >>")
+                    write(b.children, id)
+                }
+            }
+            out.obj(outlines, "<< /Type /Outlines /First ${markIds.getValue(bookmarks.first())} 0 R /Last ${markIds.getValue(bookmarks.last())} 0 R /Count ${count(bookmarks)} >>")
+            write(bookmarks, outlines)
         }
         val xref = out.size
         val total = next

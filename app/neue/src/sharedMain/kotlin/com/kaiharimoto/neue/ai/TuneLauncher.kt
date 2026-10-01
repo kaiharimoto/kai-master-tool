@@ -43,7 +43,7 @@ fun TuneLauncher(ai: AiState) {
         title = "Fine Tuning · $deck",
         onDismiss = { ai.tuneAsk = false },
         width = 560.dp,
-        description = "Three ways for ${ai.name} to learn how this deck plays, and one to tidy what it knows. What it learns goes into the deck's guide — a document it keeps across sessions — and each session ends with a report and its confidence, as a PDF.",
+        description = "Three ways for ${ai.name} to learn how this deck plays, one to write it up for you to read, and one to tidy what it knows. What it learns goes into the deck's guide — a document it keeps across sessions — and each session ends with a report and its confidence, as a PDF.",
         footer = {
             MuButton("Cancel", { ai.tuneAsk = false }, variant = BtnVariant.GHOST)
             MuButton(
@@ -51,6 +51,7 @@ fun TuneLauncher(ai: AiState) {
                     AiSession.MODE_STUDY -> "Start studying"
                     AiSession.MODE_PRINCIPLES -> "Start learning"
                     AiSession.MODE_REFACTOR -> "Start refactoring"
+                    AiSession.MODE_WRITE -> "Start writing"
                     else -> "Start teaching"
                 },
                 { ai.startTuning(mode, intensity) },
@@ -84,6 +85,13 @@ fun TuneLauncher(ai: AiState) {
                     "trying to do and how its cards pair, interact and connect, thinking out loud as it goes.",
                 selected = mode == AiSession.MODE_PRINCIPLES,
             ) { mode = AiSession.MODE_PRINCIPLES }
+            // The reader's guide (1.0.67): a book for people, written a chapter at a time from what it knows.
+            Choice(
+                "Write the reader's guide",
+                "${ai.name} writes a book about the deck for you to read — the lessons, every line with the board after each play, " +
+                    "where it breaks, each matchup, hands to solve — a chapter at a time, from its notes and the cards. Read it in the app or as a PDF.",
+                selected = mode == AiSession.MODE_WRITE,
+            ) { mode = AiSession.MODE_WRITE }
             if (guided) {
                 Choice(
                     "Refactor the guide",
@@ -104,8 +112,13 @@ fun TuneLauncher(ai: AiState) {
                         TuneIntensity.STANDARD -> "Checks the claims that matter against the cards."
                         TuneIntensity.DEEP -> "Checks every line and claim against the card text, step by step."
                     }
+                    AiSession.MODE_WRITE -> when (intensity) {
+                        TuneIntensity.QUICK -> "The essentials: the deck on one page, the lessons, how it works, the main lines and the matchups."
+                        TuneIntensity.STANDARD -> "Every chapter but the card-by-card, building and rulings ones; the lines and matchups that matter."
+                        TuneIntensity.DEEP -> "Every chapter, every line and every matchup, each step checked against the card text."
+                    } + if (guided) "" else " With no notes on the deck yet, it studies the cards as it writes."
                     else -> "About ${intensity.questions} questions, one at a time; stop whenever you like."
-                } + if (mode == AiSession.MODE_REFACTOR) "" else " It may add up to ${com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.grouped(intensity.guideBudget)} characters to the guide.",
+                } + if (mode == AiSession.MODE_REFACTOR || mode == AiSession.MODE_WRITE) "" else " It may add up to ${com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.grouped(intensity.guideBudget)} characters to the guide.",
                 color = c.ink70,
             )
             if (!saved) Help("Save “$deck” first: the guide belongs to a saved deck.", color = c.ink)

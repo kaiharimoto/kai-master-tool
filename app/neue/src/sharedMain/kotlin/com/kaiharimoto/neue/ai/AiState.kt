@@ -631,10 +631,12 @@ class AiState(internal val h: NeueHolders) {
         val provider = Providers.byId(connection.provider)
         val intensity = com.kaiharimoto.mastertool.core.ai.TuneIntensity.of(prefs.tuneIntensity)
         // A study runs as long and thinks as hard as its intensity says; an interview needs rounds for its questions.
-        val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES || start.mode == AiSession.MODE_REFACTOR
+        val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES || start.mode == AiSession.MODE_REFACTOR || start.mode == AiSession.MODE_WRITE
         val effort = if (studies) intensity.effort else prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
         val steps = when (start.mode) {
             AiSession.MODE_STUDY, AiSession.MODE_PRINCIPLES, AiSession.MODE_REFACTOR -> intensity.steps
+            // A book is written a chapter at a time, each read up on first: twice a study's rounds.
+            AiSession.MODE_WRITE -> intensity.steps * 2
             AiSession.MODE_TUNE, AiSession.MODE_PROFILE -> intensity.questions * 3 + 8
             else -> AgentLoop.MAX_STEPS
         }
@@ -1001,6 +1003,7 @@ class AiState(internal val h: NeueHolders) {
             add(MemoryKind.AGENT.file)
             files.memoryFiles().forEach { add(it.relativeTo(files.root).invariantSeparatorsPath) }
             host.scope()?.path?.let(::add)
+            h.builder.deckId?.let { add(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(it)) }
         }
         return paths.associateWith { files.read(it) }
     }
@@ -1053,10 +1056,47 @@ class AiState(internal val h: NeueHolders) {
                 AiSession.MODE_PRINCIPLES -> "Learn “$deck” from first principles: its card text and the rules, no guides or lists. Work out its goals and how its cards pair, " +
                     "interact and connect, and think out loud so I can learn with you. Intensity: ${intensity.label} — about ${intensity.steps} rounds. $room"
                 AiSession.MODE_REFACTOR -> refactorBrief(deck, deckId, intensity)
+                AiSession.MODE_WRITE -> writeBrief(deck, deckId, intensity)
                 else -> "Let's do Fine Tuning on “$deck”: I'll teach you how I play it. Intensity: ${intensity.label}, about ${intensity.questions} questions. $room"
             },
         )
     }
+
+    /** The writing session's first message: the intensity's chapters, and what is written already. */
+    private fun writeBrief(deck: String, deckId: String?, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity): String {
+        val book = deckId?.let { com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.read(files.read(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(it))) }
+        val scope = when (intensity) {
+            com.kaiharimoto.mastertool.core.ai.TuneIntensity.QUICK -> "chapters 1 to 4 and 7, the main lines only"
+            com.kaiharimoto.mastertool.core.ai.TuneIntensity.STANDARD -> "every chapter but 9 to 11, every line you know"
+            com.kaiharimoto.mastertool.core.ai.TuneIntensity.DEEP -> "all eleven chapters, every line, every matchup in the field, every card"
+        }
+        val sofar = when {
+            book == null || book.chapters.isEmpty() -> "Nothing is written yet."
+            else -> "Written so far: ${book.chapters.count { it.written }} of ${book.chapters.size} chapters; continue from the outline."
+        }
+        return "Write the reader's guide for “$deck”: the book a player reads to master it. Intensity: ${intensity.label} — $scope. $sofar"
+    }
+
+    /** Bumped when the open deck's book is written: the reader reads it again. */
+    var bookVersion by mutableStateOf(0)
+        private set
+
+    fun bookChanged() {
+        bookVersion++
+    }
+
+    /** Opens the reader's guide (1.0.67) on [deckId], the builder's deck when not given. */
+    fun openBook(deckId: String? = null) {
+        val id = deckId ?: h.builder.deckId ?: run {
+            h.neue.note = com.kaiharimoto.neue.Note("Save the deck first: the guide belongs to a saved deck")
+            return
+        }
+        h.neue.reading = id
+    }
+
+    /** Where the reader was in each deck's book, and the boxes ticked in it: kept while the app runs. */
+    val bookPlaces = HashMap<String, Int>()
+    val bookTicks = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
 
     /** The guide's size at the start of a Fine Tuning run, the run's room and its intensity's name; null outside one. */
     private var guideStart: Triple<Int, Int, String>? = null
@@ -1146,7 +1186,10 @@ class AiState(internal val h: NeueHolders) {
 
     private var tuneBefore: Map<String, String?>? = null
 
-    val tuning: Boolean get() = session?.mode.let { it in AiSession.DECK_MODES || it == AiSession.MODE_PROFILE || it == AiSession.MODE_REFACTOR }
+    val tuning: Boolean get() = session?.mode.let { it in AiSession.DECK_MODES || it == AiSession.MODE_PROFILE || it == AiSession.MODE_REFACTOR || it == AiSession.MODE_WRITE }
+
+    /** Writing the reader's guide (1.0.67). */
+    val writing: Boolean get() = session?.mode == AiSession.MODE_WRITE
 
     /** Rewriting the deck's guide (1.0.66). */
     val refactoring: Boolean get() = session?.mode == AiSession.MODE_REFACTOR
@@ -1189,7 +1232,14 @@ class AiState(internal val h: NeueHolders) {
     }
 
     private fun offerReview(before: Map<String, String?>) {
-        val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before, snapshot())
+        val after = snapshot()
+        // A book is JSON, not entries: its change is told section by section, and undone as the file it was.
+        fun isBook(path: String) = path.endsWith(".book.json")
+        val books = (before.keys + after.keys).filter(::isBook).distinct().mapNotNull { path ->
+            val (added, removed) = com.kaiharimoto.mastertool.core.ai.report.book.BookReview.diff(before[path], after[path])
+            com.kaiharimoto.mastertool.core.ai.memory.MemoryChange(path, added, removed).takeUnless { it.isEmpty }
+        }
+        val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before.filterKeys { !isBook(it) }, after.filterKeys { !isBook(it) }) + books
         if (changes.isNotEmpty()) {
             reviewBefore = before
             review = changes
@@ -1206,6 +1256,7 @@ class AiState(internal val h: NeueHolders) {
     fun undoReview() {
         val changed = review?.map { it.path }.orEmpty()
         changed.forEach { path -> reviewBefore[path]?.let { files.write(path, it) } ?: files.delete(path) }
+        if (changed.any { it.endsWith(".book.json") }) bookChanged()
         review = null
         reviewBefore = emptyMap()
         endReport = null

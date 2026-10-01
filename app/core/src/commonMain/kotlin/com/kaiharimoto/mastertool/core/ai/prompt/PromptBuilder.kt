@@ -152,6 +152,15 @@ object PromptBuilder {
                     "Do not change their decks or settings in this conversation.",
             )
         }
+        if (s.mode == "write") {
+            appendLine()
+            appendLine("## This conversation writes the reader's guide: a book about the deck, for people")
+            appendLine(
+                "Read the skill write-guide with skill_view first and follow it: the outline first, then one whole chapter per reader_guide " +
+                    "write_chapter, every number from reader_guide facts, every card as printed. Say in a line what each chapter covers as you go. " +
+                    "Do not change their decks or settings in this conversation.",
+            )
+        }
         if (s.mode == "profile") {
             appendLine()
             appendLine("## This conversation is Learn About You: you interview the person")

@@ -1,7 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.report
 
-import com.kaiharimoto.mastertool.core.ai.report.guide.EngineLayout
-import com.kaiharimoto.mastertool.core.ai.report.guide.GuideFacts
+import com.kaiharimoto.mastertool.core.ai.report.book.EngineLayout
+import com.kaiharimoto.mastertool.core.ai.report.book.GuideFacts
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals

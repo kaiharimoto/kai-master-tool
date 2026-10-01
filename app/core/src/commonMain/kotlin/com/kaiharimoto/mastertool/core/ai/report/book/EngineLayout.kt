@@ -1,4 +1,4 @@
-package com.kaiharimoto.mastertool.core.ai.report.guide
+package com.kaiharimoto.mastertool.core.ai.report.book
 
 import com.kaiharimoto.mastertool.core.ai.report.ReaderGuide
 

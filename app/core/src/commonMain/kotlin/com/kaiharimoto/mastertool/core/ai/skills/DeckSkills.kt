@@ -304,4 +304,64 @@ Keep the person's own teaching over anything inferred, unless the cards prove it
 3. Read it back with `memory_read` and fix what came out wrong with replace or remove.
 4. Finish with a short account: entries and characters before and after, the biggest changes, and anything you were unsure of. The person reviews every change when the session ends and can keep or undo it.
 """
+
+    const val WRITE_GUIDE_NAME = "write-guide"
+    const val WRITE_GUIDE_DESCRIPTION = "Write the reader's guide — a book about the deck for people: chapters, lines drawn step by step, matchups, hands, every card."
+
+    /** Writing the reader's guide (1.0.67, kai: "true mastery is way deeper and extensive … why we need Ai"). */
+    const val WRITE_GUIDE: String = """# Write the reader's guide: a book about the deck
+
+The person will read this in the app and share it as a PDF. It is a book, not notes: chapters a player can open at the page they need, each section one idea with the picture that proves it. No length limit — a deep guide is long — but every page must earn its place, and the table of contents must make the whole thing easy to find your way through.
+
+## Before writing
+1. `reader_guide` outline: what is already written or planned. Continue from there; never start over a written chapter unless asked.
+2. Read what you know: `memory_read` scope guide (your notes on the deck), `get_deck`, `get_siding`, and `get_web` when the deck is in a web. `card_info` on any card you will make a claim about; `rulings` for interactions the lines depend on.
+3. `reader_guide` set_front: the title (the deck's name), the subtitle (who played it and where, when known), the big idea (one sentence under twenty words), and the roles — every card of the main deck in exactly one job, with its copies: starters first, then engine, interruption, going second, tech. `reader_guide` facts then gives the numbers you may quote.
+4. `reader_guide` set_outline, sized to the intensity in the first message.
+
+## The chapters
+1. **The deck on one page** — the big idea in a "text" block, an "odds" block for the starters, the "cells" block, the three lessons named, and a "checklist" (before you pass).
+2. **Lessons** — the few things that decide games. A section each: a "lesson" block (maxim, card, number, label), the picture that proves it ("odds", "lanes", "line", "engine" or "board"), then a "text" block with label "Why".
+3. **How it works** — the "engine" map (who finds whom, verbs on the arrows), the plan going first and second, and every card's job ("cards" blocks by role).
+4. **Lines** — every opening worth knowing, from one-card starters to the best two- and three-card hands. A section each: a "text" note on when to play it, then a "line" block with every step, its phase, the cards that stop each step ("stoppedBy") and what to do then ("ifStopped"), and the end board ("endBoard" face up, "endSet" set). The board after each play is drawn from it.
+5. **Where it breaks** — each hand trap and board breaker the deck fears: where it lands in the lines, what you keep, what to play around it with. A "callout" of kind "choke" with the card, then the reasoning.
+6. **Going second** — the breakers, the order to use them, and lines through a typical board ("board" blocks show the board you face).
+7. **Matchups** — a section a deck of the field (the web's decks when there is one): their plan in a sentence, their key card, a "ledger" for each turn's siding (sideIn, sideOut, theirChoke, plan, why), and what changes in your lines.
+8. **Hands** — "hands" puzzles: five cards, a verdict, and the answer to "what do you do with this?". A "hands" block with no hands deals sample hands from the deck.
+9. **Card by card** — every card in the main, extra and side decks: what it does here, when to play it, the common misplay ("cards" blocks; "callout" kind "misplay").
+10. **Building it** — ratios with their odds (from facts), tech choices, what tournament lists do differently, as a "table" where it helps.
+11. **Rulings that matter** — each ruling the lines rest on, with its source ("callout" kind "ruling").
+
+Intensity: **Quick** — chapters 1 to 4 and 7, the main lines only. **Standard** — all but 9 to 11, every line you know. **Deep** — all eleven, every line, every matchup in the field, every card. A later session adds and deepens chapters from the outline.
+
+## Writing a chapter
+- One `reader_guide` write_chapter per chapter, the whole chapter as one object. A section's title is a claim ("Every line runs through Lady Labrynth"), not a label ("The engine").
+- Lead with what to do; explain after. Short paragraphs; one idea a section.
+- Card names exactly as printed; in words, write them as [[Card Name]]. Use `resolve_cards` when unsure.
+- Every number from `reader_guide` facts, `hand_odds` or `calculate` — never your own arithmetic.
+- Check each line card by card against the text before writing it; a line that is not legal does more harm than none.
+- After writing, say in a line what the chapter covers, then go on to the next.
+
+## Blocks (each an object with "type")
+- "text": text (markdown, [[cards]]), label (optional margin word: "Why", "In practice").
+- "lesson": maxim, card, number ("74 → 90%"), label (what the number is).
+- "odds": rows [{label, cards [names] or role}], hand (5), title.
+- "cells": nothing else — the deck as cells by role.
+- "engine": edges [{from, to, verb}].
+- "line": line {name, note, steps [{card, action, phase ("Your Main Phase 1" / "Their Main Phase 1"), stoppedBy [cards], ifStopped}], endBoard [cards], endSet [cards]}, frames (true).
+- "lanes": line (as above) — your turn and theirs side by side.
+- "board": up [cards], down [cards], caption.
+- "ledger": side {matchup, sideIn [cards, one per copy], sideOut [...], theirChoke, plan, why}.
+- "hands": hands [{cards [5], verdict, answer}] — or no hands for sample hands.
+- "checklist": items, title.
+- "table": header [..], rows [[..]].
+- "cards": cards [{card, copies, note}].
+- "callout": text, kind (tip, misplay, ruling, choke, note), card.
+
+Example of a chapter:
+{"title": "Lines", "summary": "Every opening, step by step.", "sections": [{"title": "Arianna alone is a whole turn", "blocks": [{"type": "text", "text": "Your most common opening."}, {"type": "line", "line": {"name": "Arianna, one card", "steps": [{"card": "Arianna the Labrynth Servant", "action": "Normal Summon. Add Big Welcome Labrynth.", "phase": "Your Main Phase 1", "stoppedBy": ["Ash Blossom & Joyous Spring"], "ifStopped": "Set what you have and pass."}], "endBoard": ["Arianna the Labrynth Servant"], "endSet": ["Big Welcome Labrynth"]}}]}]}
+
+## Finish
+Say what is written and what is left in the outline for a later session. The person reviews every chapter changed when they press Finish.
+"""
 }

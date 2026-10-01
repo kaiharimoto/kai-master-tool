@@ -110,6 +110,7 @@ private fun Head(ai: AiState, phone: Boolean) {
                 provider == null -> "Not connected"
                 ai.profiling -> "Learn About You · " + provider.label
                 ai.refactoring -> "Refactor guide · " + provider.label
+                ai.writing -> "Reader's guide · " + provider.label
                 ai.tuning -> "Fine Tuning · " + when (ai.session?.mode) {
                     com.kaiharimoto.mastertool.core.ai.AiSession.MODE_STUDY -> "studying"
                     com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PRINCIPLES -> "first principles"
@@ -265,13 +266,16 @@ private fun Tools(ai: AiState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (ai.tuning) {
-            Tip(if (ai.refactoring) "Finish: every change to the guide, to keep or undo" else "Finish: its report, and what it learned to keep or undo") {
+            Tip(if (ai.refactoring || ai.writing) "Finish: every change to the guide, to keep or undo" else "Finish: its report, and what it learned to keep or undo") {
                 WordToggle("Finish", on = true, onClick = { ai.finishTuning() })
             }
+            // The book as it is written (1.0.67): open it beside the session and watch the chapters land.
+            if (ai.writing) Tip("Read the guide as it is written") { WordToggle("Read", on = false, onClick = { ai.openBook() }) }
             Mono(
                 when {
                     ai.profiling -> "Learning about you"
                     ai.refactoring -> "Refactoring ${ai.h.builder.deckName}'s guide"
+                    ai.writing -> "Writing ${ai.h.builder.deckName}'s guide"
                     else -> "Learning ${ai.h.builder.deckName}"
                 },
                 color = c.ink45,

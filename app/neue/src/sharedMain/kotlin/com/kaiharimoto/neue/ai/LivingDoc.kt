@@ -86,6 +86,11 @@ fun LivingDocDialog(ai: AiState) {
                         ai.docOpen = null
                         ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_REFACTOR)
                     }, variant = BtnVariant.GHOST, enabled = h.builder.deckId == open.deckId && !doc.isEmpty, reason = if (doc.isEmpty) "Nothing to refactor yet" else "Open the deck in the builder first")
+                    // The reader's guide (1.0.67): the book written for people from these notes.
+                    MuButton("Reader's guide", {
+                        ai.docOpen = null
+                        ai.openBook(open.deckId)
+                    }, variant = BtnVariant.GHOST)
                     MuButton("Teach it more", {
                         ai.docOpen = null
                         ai.askTune()

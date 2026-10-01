@@ -175,6 +175,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "skill_manage" -> skillManage(i)
             "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
             "session_report" -> sessionReport(i)
+            "reader_guide" -> readerGuide(i)
             "resolve_cards" -> resolveCards(ToolArgs.objects(i, "cards"))
             "context_status" -> ok(ai.contextReport(), "Checked how full its memory is")
             "compact" -> {
@@ -1000,6 +1001,43 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             com.kaiharimoto.mastertool.core.ai.vision.ReadCards.describe(matches),
             "Read ${matches.size} cards off the picture" + if (unsure > 0) ", $unsure to check" else "",
         )
+    }
+
+    /** The reader's guide (1.0.67): a book about the open deck, written a chapter at a time and checked as it goes. */
+    private fun readerGuide(i: JsonObject): Answer {
+        val deckId = state.deckId ?: return fail("Save the deck first: the guide belongs to a saved deck.")
+        val path = com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(deckId)
+        val book = com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.read(ai.files.read(path))
+            ?: com.kaiharimoto.mastertool.core.ai.report.book.GuideBook(state.deckName)
+        val main = state.deck.main.mapNotNull { state.index.byId(it)?.name }
+        val ctx = com.kaiharimoto.mastertool.core.ai.report.book.BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis())
+        val w = com.kaiharimoto.mastertool.core.ai.report.book.BookWriter
+        val result = when (ToolArgs.string(i, "action")) {
+            "outline" -> com.kaiharimoto.mastertool.core.ai.report.book.BookWriter.Result(book, w.outline(book))
+            "set_outline" -> w.setOutline(book, ToolArgs.objects(i, "chapters"))
+            "set_front" -> w.setFront(book, i, ctx)
+            "write_chapter" -> w.writeChapter(book, ToolArgs.element(i, "chapter"), ctx)
+            "read_chapter" -> w.readChapter(book, ToolArgs.string(i, "id").orEmpty())
+            "remove_chapter" -> w.removeChapter(book, ToolArgs.string(i, "id").orEmpty())
+            "facts" -> com.kaiharimoto.mastertool.core.ai.report.book.BookWriter.Result(book, w.facts(book, ctx))
+            else -> return fail("Actions: outline, set_outline, set_front, write_chapter, read_chapter, remove_chapter, facts.")
+        }
+        if (!result.ok) return fail(result.message)
+        if (result.book != book) {
+            // Which version of Ai's notes it was written from, so the app can say when it is out of date.
+            val notes = ai.files.read(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty()
+            ai.files.write(path, com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.write(result.book.copy(notesHash = com.kaiharimoto.mastertool.core.ai.report.ReaderGuide.hashOf(notes))))
+            ai.bookChanged()
+        }
+        val summary = when (ToolArgs.string(i, "action")) {
+            "write_chapter" -> "Wrote a chapter of the guide"
+            "set_outline" -> "Planned the guide's chapters"
+            "set_front" -> "Set the guide's front"
+            "facts" -> "Read the deck's numbers"
+            "remove_chapter" -> "Removed a chapter"
+            else -> "Read the guide"
+        }
+        return ok(result.message, summary)
     }
 
     private fun sessionReport(i: JsonObject): Answer {

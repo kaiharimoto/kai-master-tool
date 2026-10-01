@@ -31,7 +31,7 @@ object AiDocs {
 
     fun date(at: Long): String = day.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
 
-    private suspend fun fonts() = GuideFonts(
+    internal suspend fun fonts() = GuideFonts(
         TrueType(Res.readBytes("font/inter_regular.ttf")),
         TrueType(Res.readBytes("font/inter_bold.ttf")),
         TrueType(Res.readBytes("font/jetbrainsmono_regular.ttf")),
@@ -54,31 +54,58 @@ object AiDocs {
         return withContext(Dispatchers.Default) { ReportPdf.guide(doc, deckName, reports, cards, updated, f, { pictures[it] }, JvmZlib) }
     }
 
-    /**
-     * The reader's guide as a PDF in [style] (1.0.66): every card it names drawn in the artwork the
-     * person chose, large enough for the largest place a layout sets it.
-     */
-    suspend fun readerBytes(h: NeueHolders, guide: com.kaiharimoto.mastertool.core.ai.report.ReaderGuide, style: com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.Style): ByteArray {
-        // JPEG pictures (1.0.67), small enough to send in a chat: the cards a cover or a lesson sets large get more pixels.
-        // Only a cover's hero is drawn large; every other tile prints at 72 points or less.
-        val large = com.kaiharimoto.mastertool.core.ai.report.guide.EngineLayout.of(guide.connections).hubs
-        val pictures = HashMap<String, PdfImage>()
-        guide.cards().forEach { name ->
-            h.builder.index.byName(name)?.let { card ->
-                GuideExport.picture(card.id, h.builder, h.neue, h.art, h.customArt, if (name in large) 600 else 240, jpeg = true)?.let { pictures[name] = it }
-            }
+    /** What the pool says a card is: 'M', 'S' or 'T', for the pictures that draw a monster face up and a trap set. */
+    fun kind(h: NeueHolders): (String) -> Char? = { name ->
+        when (h.builder.index.byName(name)?.category) {
+            com.kaiharimoto.mastertool.core.model.CardCategory.MONSTER -> 'M'
+            com.kaiharimoto.mastertool.core.model.CardCategory.SPELL -> 'S'
+            com.kaiharimoto.mastertool.core.model.CardCategory.TRAP -> 'T'
+            else -> null
         }
-        val kind: (String) -> Char? = { name ->
-            when (h.builder.index.byName(name)?.category) {
-                com.kaiharimoto.mastertool.core.model.CardCategory.MONSTER -> 'M'
-                com.kaiharimoto.mastertool.core.model.CardCategory.SPELL -> 'S'
-                com.kaiharimoto.mastertool.core.model.CardCategory.TRAP -> 'T'
-                else -> null
+    }
+
+    /** The deck's main deck by name, when [deckId] is the one on the builder: what the book's numbers are worked out from. */
+    fun deckNames(h: NeueHolders, deckId: String?): List<String>? =
+        if (deckId != null && deckId == h.builder.deckId)
+            h.builder.deck[com.kaiharimoto.mastertool.core.model.DeckSection.MAIN].mapNotNull { h.builder.index.byId(it)?.name }.takeIf { it.isNotEmpty() }
+        else null
+
+    /**
+     * A reader's guide as a PDF (1.0.67): every card it names drawn in the artwork the person chose,
+     * as JPEGs small enough to send in a chat — the cover's hero at 600 pixels, every other tile at 240.
+     */
+    suspend fun bookBytes(h: NeueHolders, book: com.kaiharimoto.mastertool.core.ai.report.book.GuideBook, deck: List<String>? = null): ByteArray {
+        val hero = com.kaiharimoto.mastertool.core.ai.report.book.BookPdf.hero(book)
+        val pictures = HashMap<String, PdfImage>()
+        val large = HashMap<String, PdfImage>()
+        withContext(Dispatchers.Default) {
+            book.cards().forEach { name ->
+                h.builder.index.byName(name)?.let { card ->
+                    GuideExport.picture(card.id, h.builder, h.neue, h.art, h.customArt, 240, jpeg = true)?.let { pictures[name] = it }
+                    if (name == hero) GuideExport.picture(card.id, h.builder, h.neue, h.art, h.customArt, 600, jpeg = true)?.let { large[name] = it }
+                }
             }
         }
         val f = fonts()
-        val updated = date(guide.updatedAt.takeIf { it > 0 } ?: System.currentTimeMillis())
-        return withContext(Dispatchers.Default) { com.kaiharimoto.mastertool.core.ai.report.ReaderGuidePdf.render(guide, style, f, { pictures[it] }, JvmZlib, updated, kind) }
+        val updated = date(book.updatedAt.takeIf { it > 0 } ?: System.currentTimeMillis())
+        val kind = kind(h)
+        return withContext(Dispatchers.Default) {
+            com.kaiharimoto.mastertool.core.ai.report.book.BookPdf.render(book, f, { pictures[it] }, JvmZlib, updated, deck, kind, { large[it] ?: pictures[it] })
+        }
+    }
+
+    suspend fun deliverBook(h: NeueHolders, deckId: String, book: com.kaiharimoto.mastertool.core.ai.report.book.GuideBook) {
+        val bytes = runCatching { bookBytes(h, book, deckNames(h, deckId)) }.getOrElse {
+            h.neue.note = Note("The guide could not be made")
+            return
+        }
+        deliverFile("${safe(book.title)} · reader's guide.pdf", "application/pdf", bytes)?.let { h.neue.note = Note(it) }
+    }
+
+    /** The book as its own file, JSON: what another copy of the app, or anything else, can read. */
+    suspend fun deliverBookJson(h: NeueHolders, book: com.kaiharimoto.mastertool.core.ai.report.book.GuideBook) {
+        val bytes = com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.write(book).encodeToByteArray()
+        deliverFile("${safe(book.title)} · reader's guide.json", "application/json", bytes)?.let { h.neue.note = Note(it) }
     }
 
     suspend fun reportBytes(h: NeueHolders, report: SessionReport): ByteArray {
