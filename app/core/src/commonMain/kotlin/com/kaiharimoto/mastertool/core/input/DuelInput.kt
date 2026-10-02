@@ -1,0 +1,135 @@
+package com.kaiharimoto.mastertool.core.input
+
+/**
+ * The mouse and the finger on the duel table, as data — a third table pair beside [DeskMouse] and
+ * [PresentMouse], because a card on a duel table has verbs a deck's card does not (summon, set,
+ * activate, target) and places a deck has no word for (a zone, a pile, the chain). The help dialog
+ * renders both tables, and a test holds every mouse action to a finger's form.
+ *
+ * The grammar, against DuelingBook's menu on every card:
+ * - **Drag anything anywhere.** What the card will do is drawn where it will land before you let go.
+ * - **Right-click does the obvious thing** for that card where it is: a monster in the hand is
+ *   summoned, a spell activated, a trap set, a set card activated, the deck drawn from, the opponent's
+ *   card pointed at. A finger's double-tap is the same.
+ * - **Hold for everything else**: the card large in the inspector with every verb beside it.
+ * - The keyboard has a key per verb over the card under the pointer (`DeskShortcuts`, [DeskScope.DUEL]),
+ *   and the command line takes what a player says across a table.
+ */
+enum class DuelTarget(val heading: String) {
+    MY_CARD("Your card, in the hand or on the field"),
+    THEIR_CARD("Their card"),
+    PILE("A deck, graveyard, banished pile or Extra Deck"),
+    STRIP_CARD("A card in an open pile"),
+    CHAIN("The chain"),
+    SEAT("A player's name and life points"),
+    PHASE("The phases"),
+    TABLE("The table around them"),
+}
+
+enum class DuelInputAction {
+    INSPECT,
+    DEFAULT_VERB,
+    VERBS,
+    MOVE,
+    ADD_TO_SELECTION,
+    PING,
+    OPEN_PILE,
+    RESOLVE,
+    CLEAR_CHAIN,
+    LP_PAD,
+    GO_PHASE,
+    MARQUEE,
+    COMMAND,
+    CLEAR_SELECTION,
+}
+
+data class DuelBinding(
+    val target: DuelTarget,
+    /** The words of the gesture, as the help dialog prints them. */
+    val gesture: String,
+    val action: DuelInputAction,
+    val description: String,
+)
+
+object DuelMouse {
+    const val CLICK = "Click"
+    const val RIGHT = "Right-click"
+    const val DRAG = "Drag"
+    const val HOLD = "Hold"
+    const val SHIFT_CLICK = "Shift click"
+    const val ALT_CLICK = "Alt click"
+    const val DOUBLE = "Double-click"
+
+    val all: List<DuelBinding> = listOf(
+        DuelBinding(DuelTarget.MY_CARD, CLICK, DuelInputAction.INSPECT, "Read it in the inspector, and select it"),
+        DuelBinding(DuelTarget.MY_CARD, RIGHT, DuelInputAction.DEFAULT_VERB, "The obvious thing: summon, activate, set, flip summon"),
+        DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The obvious thing, as a right-click"),
+        DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it; Alt sets it, Shift puts it under a pile"),
+        DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, beside the card read large"),
+        DuelBinding(DuelTarget.MY_CARD, SHIFT_CLICK, DuelInputAction.ADD_TO_SELECTION, "Select several; a key or a drag then moves them all"),
+        DuelBinding(DuelTarget.MY_CARD, ALT_CLICK, DuelInputAction.PING, "Point at it for the other player"),
+        DuelBinding(DuelTarget.THEIR_CARD, CLICK, DuelInputAction.INSPECT, "Read it in the inspector"),
+        DuelBinding(DuelTarget.THEIR_CARD, RIGHT, DuelInputAction.DEFAULT_VERB, "Target it: an arrow both players see"),
+        DuelBinding(DuelTarget.THEIR_CARD, DRAG, DuelInputAction.MOVE, "Take control of it, or send it somewhere"),
+        DuelBinding(DuelTarget.THEIR_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it"),
+        DuelBinding(DuelTarget.THEIR_CARD, ALT_CLICK, DuelInputAction.PING, "Point at it"),
+        DuelBinding(DuelTarget.PILE, CLICK, DuelInputAction.OPEN_PILE, "Open it above the hand, cards to drag out"),
+        DuelBinding(DuelTarget.PILE, RIGHT, DuelInputAction.DEFAULT_VERB, "The deck draws a card; any other pile opens"),
+        DuelBinding(DuelTarget.PILE, DRAG, DuelInputAction.MOVE, "Take its top card"),
+        DuelBinding(DuelTarget.PILE, ALT_CLICK, DuelInputAction.PING, "Point at it"),
+        DuelBinding(DuelTarget.STRIP_CARD, CLICK, DuelInputAction.INSPECT, "Read it"),
+        DuelBinding(DuelTarget.STRIP_CARD, RIGHT, DuelInputAction.DEFAULT_VERB, "From the deck to the hand; from the GY, activate"),
+        DuelBinding(DuelTarget.STRIP_CARD, DRAG, DuelInputAction.MOVE, "Take it out of the pile"),
+        DuelBinding(DuelTarget.STRIP_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it"),
+        DuelBinding(DuelTarget.CHAIN, CLICK, DuelInputAction.RESOLVE, "Resolve the newest link"),
+        DuelBinding(DuelTarget.CHAIN, RIGHT, DuelInputAction.CLEAR_CHAIN, "Clear the chain"),
+        DuelBinding(DuelTarget.SEAT, CLICK, DuelInputAction.LP_PAD, "Change life points"),
+        DuelBinding(DuelTarget.PHASE, CLICK, DuelInputAction.GO_PHASE, "Go to that phase, or end the turn"),
+        DuelBinding(DuelTarget.TABLE, CLICK, DuelInputAction.CLEAR_SELECTION, "Select nothing"),
+        DuelBinding(DuelTarget.TABLE, DRAG, DuelInputAction.MARQUEE, "Select every card the box touches"),
+        DuelBinding(DuelTarget.TABLE, RIGHT, DuelInputAction.COMMAND, "The command line"),
+    )
+
+    fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =
+        all.firstOrNull { it.target == target && it.gesture == gesture }?.action
+}
+
+object DuelTouch {
+    const val TAP = "Tap"
+    const val DOUBLE = "Double-tap"
+    const val DRAG = "Drag"
+    const val HOLD = "Press and hold"
+    const val SEVERAL = "Tap with Select several on"
+
+    val all: List<DuelBinding> = listOf(
+        DuelBinding(DuelTarget.MY_CARD, TAP, DuelInputAction.INSPECT, "Read it in the inspector, and select it"),
+        DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The obvious thing: summon, activate, set, flip summon"),
+        DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it"),
+        DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, Point among them"),
+        DuelBinding(DuelTarget.MY_CARD, SEVERAL, DuelInputAction.ADD_TO_SELECTION, "Select several"),
+        DuelBinding(DuelTarget.MY_CARD, "Hold, then Point", DuelInputAction.PING, "Point at it for the other player"),
+        DuelBinding(DuelTarget.THEIR_CARD, TAP, DuelInputAction.INSPECT, "Read it in the inspector"),
+        DuelBinding(DuelTarget.THEIR_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "Target it"),
+        DuelBinding(DuelTarget.THEIR_CARD, DRAG, DuelInputAction.MOVE, "Take control of it, or send it somewhere"),
+        DuelBinding(DuelTarget.THEIR_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it"),
+        DuelBinding(DuelTarget.THEIR_CARD, "Hold, then Point", DuelInputAction.PING, "Point at it"),
+        DuelBinding(DuelTarget.PILE, TAP, DuelInputAction.OPEN_PILE, "Open it above the hand"),
+        DuelBinding(DuelTarget.PILE, DOUBLE, DuelInputAction.DEFAULT_VERB, "The deck draws a card; any other pile opens"),
+        DuelBinding(DuelTarget.PILE, DRAG, DuelInputAction.MOVE, "Take its top card"),
+        DuelBinding(DuelTarget.PILE, HOLD, DuelInputAction.PING, "Point at it"),
+        DuelBinding(DuelTarget.STRIP_CARD, TAP, DuelInputAction.INSPECT, "Read it"),
+        DuelBinding(DuelTarget.STRIP_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "From the deck to the hand; from the GY, activate"),
+        DuelBinding(DuelTarget.STRIP_CARD, DRAG, DuelInputAction.MOVE, "Take it out of the pile"),
+        DuelBinding(DuelTarget.STRIP_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it"),
+        DuelBinding(DuelTarget.CHAIN, TAP, DuelInputAction.RESOLVE, "Resolve the newest link"),
+        DuelBinding(DuelTarget.CHAIN, HOLD, DuelInputAction.CLEAR_CHAIN, "Clear the chain"),
+        DuelBinding(DuelTarget.SEAT, TAP, DuelInputAction.LP_PAD, "Change life points"),
+        DuelBinding(DuelTarget.PHASE, TAP, DuelInputAction.GO_PHASE, "Go to that phase, or end the turn"),
+        DuelBinding(DuelTarget.TABLE, TAP, DuelInputAction.CLEAR_SELECTION, "Select nothing"),
+        DuelBinding(DuelTarget.TABLE, DRAG, DuelInputAction.MARQUEE, "Select every card the box touches"),
+        DuelBinding(DuelTarget.TABLE, HOLD, DuelInputAction.COMMAND, "The command line"),
+    )
+
+    fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =
+        all.firstOrNull { it.target == target && it.gesture == gesture }?.action
+}

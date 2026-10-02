@@ -173,6 +173,60 @@ enum class DeskAction {
 
     /** While presenting: the speaker notes over the slide, or away. */
     PRESENT_NOTES,
+
+    /** Duel (1.0.74): the duel simulator — a table, two seats, every card moved by hand. */
+    GO_DUEL,
+    DUEL_NEW,
+    DUEL_DRAW,
+    DUEL_SHUFFLE,
+    DUEL_NEXT_PHASE,
+    DUEL_END_TURN,
+    DUEL_LP,
+    /** "Hold on, I'm thinking" — a mark beside your life points the other player sees. */
+    DUEL_THINK,
+    DUEL_COMMAND,
+    DUEL_CHAT,
+    /** One player's table or two. */
+    DUEL_SIDES,
+    /** Sit at the other seat (the hot-seat's turn of the table). */
+    DUEL_SWAP,
+    DUEL_RESOLVE,
+
+    /** The verbs, on the card under the pointer (or the selection). */
+    DUEL_DEFAULT,
+    DUEL_ACTIVATE,
+    DUEL_SUMMON,
+    DUEL_SPECIAL,
+    DUEL_SET,
+    DUEL_POSITION,
+    DUEL_FLIP,
+    DUEL_GRAVE,
+    DUEL_BANISH,
+    DUEL_BANISH_DOWN,
+    DUEL_HAND,
+    DUEL_DECK_TOP,
+    DUEL_DECK_BOTTOM,
+    DUEL_EXTRA,
+    DUEL_ATTACH,
+    DUEL_REVEAL,
+    DUEL_COUNTER_UP,
+    DUEL_COUNTER_DOWN,
+    DUEL_TARGET,
+
+    /** The card just placed, moved to that zone instead (the numbers shown on the free zones). */
+    DUEL_ZONE_1,
+    DUEL_ZONE_2,
+    DUEL_ZONE_3,
+    DUEL_ZONE_4,
+    DUEL_ZONE_5,
+    DUEL_ZONE_S1,
+    DUEL_ZONE_S2,
+    DUEL_ZONE_S3,
+    DUEL_ZONE_S4,
+    DUEL_ZONE_S5,
+    DUEL_ZONE_EMZ_LEFT,
+    DUEL_ZONE_EMZ_RIGHT,
+    DUEL_ZONE_FIELD,
     ;
 
     companion object {
@@ -203,6 +257,9 @@ enum class DeskScope(val heading: String) {
 
     /** While a presentation is playing. */
     PRESENTING("Presenting"),
+
+    /** On Duel, with nothing covering it (1.0.74). Verbs act on the card under the pointer. */
+    DUEL("Duelling"),
 }
 
 /** What is on screen, which decides which desk shortcuts are live. */
@@ -221,6 +278,8 @@ data class DeskContext(
     val onPresent: Boolean = false,
     /** A presentation is playing: the page's keys give way to the presenter's. */
     val presenting: Boolean = false,
+    /** Duel is the page on screen (1.0.74). */
+    val onDuel: Boolean = false,
 )
 
 data class DeskShortcut(
@@ -248,6 +307,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("4"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true),
         DeskShortcut(ctrl("5"), DeskAction.GO_PREP, DeskScope.APP, "Prep: an event and its practice", allowedInTextInput = true),
         DeskShortcut(ctrl("6"), DeskAction.GO_PRESENT, DeskScope.APP, "Present: deck profiles as slides", allowedInTextInput = true),
+        DeskShortcut(ctrl("7"), DeskAction.GO_DUEL, DeskScope.APP, "Duel: the duel simulator", allowedInTextInput = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),
@@ -343,6 +403,54 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("e", shift = true), DeskAction.PRESENT_CLEAR_INK, DeskScope.PRESENTING, "Clear the drawing"),
         DeskShortcut(KeyChord("s"), DeskAction.PRESENT_NOTES, DeskScope.PRESENTING, "Speaker notes"),
 
+        DeskShortcut(ctrl("n", shift = true), DeskAction.DUEL_NEW, DeskScope.DUEL, "New duel", allowedInTextInput = true),
+        DeskShortcut(ctrl("z"), DeskAction.UNDO, DeskScope.DUEL, "Undo", repeatable = true),
+        DeskShortcut(ctrl("z", shift = true), DeskAction.REDO, DeskScope.DUEL, "Redo", repeatable = true),
+        DeskShortcut(ctrl("y"), DeskAction.REDO, DeskScope.DUEL, "Redo", repeatable = true),
+        DeskShortcut(KeyChord("d"), DeskAction.DUEL_DRAW, DeskScope.DUEL, "Draw a card", repeatable = true),
+        DeskShortcut(KeyChord("d", shift = true), DeskAction.DUEL_SHUFFLE, DeskScope.DUEL, "Shuffle the deck"),
+        DeskShortcut(KeyChord("n"), DeskAction.DUEL_NEXT_PHASE, DeskScope.DUEL, "Next phase"),
+        DeskShortcut(KeyChord("n", shift = true), DeskAction.DUEL_END_TURN, DeskScope.DUEL, "End the turn"),
+        DeskShortcut(KeyChord("l"), DeskAction.DUEL_LP, DeskScope.DUEL, "Change life points"),
+        DeskShortcut(KeyChord("w"), DeskAction.DUEL_THINK, DeskScope.DUEL, "I'm thinking, or ready again"),
+        DeskShortcut(KeyChord("slash"), DeskAction.DUEL_COMMAND, DeskScope.DUEL, "The command line"),
+        DeskShortcut(KeyChord("enter"), DeskAction.DUEL_CHAT, DeskScope.DUEL, "Chat"),
+        DeskShortcut(KeyChord("v"), DeskAction.DUEL_SIDES, DeskScope.DUEL, "One player's table or two"),
+        DeskShortcut(KeyChord("tab"), DeskAction.DUEL_SWAP, DeskScope.DUEL, "Sit at the other seat"),
+        DeskShortcut(KeyChord("q"), DeskAction.DUEL_RESOLVE, DeskScope.DUEL, "Resolve the newest chain link"),
+        DeskShortcut(KeyChord("space"), DeskAction.DUEL_DEFAULT, DeskScope.DUEL, "The obvious thing for the card under the pointer"),
+        DeskShortcut(KeyChord("a"), DeskAction.DUEL_ACTIVATE, DeskScope.DUEL, "Activate it"),
+        DeskShortcut(KeyChord("s"), DeskAction.DUEL_SUMMON, DeskScope.DUEL, "Summon it, or Flip Summon it"),
+        DeskShortcut(KeyChord("s", shift = true), DeskAction.DUEL_SPECIAL, DeskScope.DUEL, "Special Summon it"),
+        DeskShortcut(KeyChord("e"), DeskAction.DUEL_SET, DeskScope.DUEL, "Set it"),
+        DeskShortcut(KeyChord("p"), DeskAction.DUEL_POSITION, DeskScope.DUEL, "Attack or Defense Position"),
+        DeskShortcut(KeyChord("f"), DeskAction.DUEL_FLIP, DeskScope.DUEL, "Turn it face-up or face-down"),
+        DeskShortcut(KeyChord("g"), DeskAction.DUEL_GRAVE, DeskScope.DUEL, "Send it to the GY"),
+        DeskShortcut(KeyChord("b"), DeskAction.DUEL_BANISH, DeskScope.DUEL, "Banish it"),
+        DeskShortcut(KeyChord("b", shift = true), DeskAction.DUEL_BANISH_DOWN, DeskScope.DUEL, "Banish it face-down"),
+        DeskShortcut(KeyChord("h"), DeskAction.DUEL_HAND, DeskScope.DUEL, "Return it to the hand"),
+        DeskShortcut(KeyChord("k"), DeskAction.DUEL_DECK_TOP, DeskScope.DUEL, "Put it on top of the deck"),
+        DeskShortcut(KeyChord("k", shift = true), DeskAction.DUEL_DECK_BOTTOM, DeskScope.DUEL, "Put it on the bottom of the deck"),
+        DeskShortcut(KeyChord("x"), DeskAction.DUEL_EXTRA, DeskScope.DUEL, "Return it to the Extra Deck"),
+        DeskShortcut(KeyChord("o"), DeskAction.DUEL_ATTACH, DeskScope.DUEL, "Attach it as material: then click the card it goes under"),
+        DeskShortcut(KeyChord("r"), DeskAction.DUEL_REVEAL, DeskScope.DUEL, "Reveal it"),
+        DeskShortcut(KeyChord("c"), DeskAction.DUEL_COUNTER_UP, DeskScope.DUEL, "Put a counter on it", repeatable = true),
+        DeskShortcut(KeyChord("c", shift = true), DeskAction.DUEL_COUNTER_DOWN, DeskScope.DUEL, "Take a counter off it", repeatable = true),
+        DeskShortcut(KeyChord("t"), DeskAction.DUEL_TARGET, DeskScope.DUEL, "Target it, or take the arrow back"),
+        DeskShortcut(KeyChord("1"), DeskAction.DUEL_ZONE_1, DeskScope.DUEL, "The card just placed to Monster Zone 1, or Spell & Trap Zone 1"),
+        DeskShortcut(KeyChord("2"), DeskAction.DUEL_ZONE_2, DeskScope.DUEL, "To zone 2"),
+        DeskShortcut(KeyChord("3"), DeskAction.DUEL_ZONE_3, DeskScope.DUEL, "To zone 3"),
+        DeskShortcut(KeyChord("4"), DeskAction.DUEL_ZONE_4, DeskScope.DUEL, "To zone 4"),
+        DeskShortcut(KeyChord("5"), DeskAction.DUEL_ZONE_5, DeskScope.DUEL, "To zone 5"),
+        DeskShortcut(KeyChord("1", shift = true), DeskAction.DUEL_ZONE_S1, DeskScope.DUEL, "To Spell & Trap Zone 1"),
+        DeskShortcut(KeyChord("2", shift = true), DeskAction.DUEL_ZONE_S2, DeskScope.DUEL, "To Spell & Trap Zone 2"),
+        DeskShortcut(KeyChord("3", shift = true), DeskAction.DUEL_ZONE_S3, DeskScope.DUEL, "To Spell & Trap Zone 3"),
+        DeskShortcut(KeyChord("4", shift = true), DeskAction.DUEL_ZONE_S4, DeskScope.DUEL, "To Spell & Trap Zone 4"),
+        DeskShortcut(KeyChord("5", shift = true), DeskAction.DUEL_ZONE_S5, DeskScope.DUEL, "To Spell & Trap Zone 5"),
+        DeskShortcut(KeyChord("6"), DeskAction.DUEL_ZONE_EMZ_LEFT, DeskScope.DUEL, "To the left Extra Monster Zone"),
+        DeskShortcut(KeyChord("7"), DeskAction.DUEL_ZONE_EMZ_RIGHT, DeskScope.DUEL, "To the right Extra Monster Zone"),
+        DeskShortcut(KeyChord("0"), DeskAction.DUEL_ZONE_FIELD, DeskScope.DUEL, "To the Field Zone"),
+
         DeskShortcut(KeyChord("up"), DeskAction.POOL_PREVIOUS, DeskScope.POOL, "Previous result, or the card above the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("down"), DeskAction.POOL_NEXT, DeskScope.POOL, "Next result, or the card below the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter"), DeskAction.POOL_ADD, DeskScope.POOL, "Add the result to the deck", allowedInTextInput = true, repeatable = true),
@@ -370,6 +478,7 @@ object DeskShortcuts {
             (context.searchFocused || !context.textInputFocused)
         DeskScope.PRESENT_EDIT -> !context.overlayOpen && context.onPresent && !context.presenting && !context.onBuilder
         DeskScope.PRESENTING -> !context.overlayOpen && context.presenting
+        DeskScope.DUEL -> !context.overlayOpen && context.onDuel && !context.onBuilder
     }
 
     /**
@@ -443,6 +552,7 @@ object DeskShortcuts {
         "pagedown" -> "Page Down"
         "home" -> "Home"
         "end" -> "End"
+        "tab" -> "Tab"
         "bracketleft" -> "["
         "bracketright" -> "]"
         else -> key.uppercase()
