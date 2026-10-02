@@ -296,10 +296,15 @@ private fun ElementView(
             .drawWithContent {
                 val st = state(e)
                 if (st.glow > 0.01f) {
-                    val g = ctx.color("@accent", "#FFFFFF").copy(alpha = 0.55f * st.glow)
                     val pad = 18f * s
-                    val p = Path().apply { addRect(Rect(-pad, -pad, size.width + pad, size.height + pad)) }
-                    slideShadow(p, g, 28f * s)
+                    if (ctx.theme.flat) {
+                        // Master UI draws the eye with a rule, not a glow.
+                        drawRect(ctx.color("@accent", "#FFFFFF").copy(alpha = st.glow), Offset(-pad / 2f, -pad / 2f), Size(size.width + pad, size.height + pad), style = DrawStroke(5f * s))
+                    } else {
+                        val g = ctx.color("@accent", "#FFFFFF").copy(alpha = 0.55f * st.glow)
+                        val p = Path().apply { addRect(Rect(-pad, -pad, size.width + pad, size.height + pad)) }
+                        slideShadow(p, g, 28f * s)
+                    }
                 }
                 if (st.clip < 1f) clipRect(right = size.width * st.clip) { this@drawWithContent.drawContent() } else drawContent()
             },
@@ -541,9 +546,10 @@ internal fun shapePath(kind: String, w: Float, h: Float, corner: Float): Path = 
 private fun ShapeBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float, state: (Element) -> ElementState) {
     val line = e.shape == Element.SHAPE_LINE || e.shape == Element.SHAPE_ARROW_LINE
     Canvas(Modifier.fillMaxSize()) {
-        val path = shapePath(e.shape, size.width, size.height, e.corner * s)
+        // Master UI's flat themes keep rounded boxes square; the ellipses and stars the person drew stay.
+        val path = shapePath(e.shape, size.width, size.height, if (ctx.theme.flat) 0f else e.corner * s)
         if (!line) {
-            e.shadow?.let { sh ->
+            e.shadow?.takeIf { !ctx.theme.flat }?.let { sh ->
                 withTransform({ translate(sh.dx * s, sh.dy * s) }) { slideShadow(path, ctx.color(sh.color, "#66000000"), sh.blur * s) }
             }
             e.fill?.let { drawPath(path, brushOf(ctx, it, size), style = DrawFill) }
@@ -611,8 +617,8 @@ private fun ImageBlock(ctx: SlideContext, e: Element, s: Float, editing: Boolean
         return
     }
     Canvas(Modifier.fillMaxSize()) {
-        val path = shapePath(if (e.shape == Element.SHAPE_RECT) Element.SHAPE_RECT else e.shape, size.width, size.height, e.corner * s)
-        e.shadow?.let { sh -> withTransform({ translate(sh.dx * s, sh.dy * s) }) { slideShadow(path, ctx.color(sh.color, "#66000000"), sh.blur * s) } }
+        val path = shapePath(if (e.shape == Element.SHAPE_RECT) Element.SHAPE_RECT else e.shape, size.width, size.height, if (ctx.theme.flat) 0f else e.corner * s)
+        e.shadow?.takeIf { !ctx.theme.flat }?.let { sh -> withTransform({ translate(sh.dx * s, sh.dy * s) }) { slideShadow(path, ctx.color(sh.color, "#66000000"), sh.blur * s) } }
         clipPath(path) { drawCover(image, Offset.Zero, size, e.crop, contain = e.imageFit == Element.FIT_CONTAIN) }
         e.stroke?.let { drawPath(path, ctx.color(it.color, "@line"), style = strokeOf(it, s)) }
     }
@@ -734,10 +740,10 @@ internal fun DeckLayer(ctx: SlideContext, frame: () -> StageFrame?, keys: List<S
             val r = Rect(b.x * s, b.y * s, b.right * s, b.bottom * s)
             if (c.emphasis > 0.01f) {
                 val groupTint = c.group?.let { f.colors[it] }?.let(ctx::groupColor)
-                val glow = (if (theme.highlight == Theme.HIGHLIGHT_OUTLINE) accent else groupTint ?: accent)
+                val glow = (if (theme.highlight == Theme.HIGHLIGHT_OUTLINE || theme.flat) accent else groupTint ?: accent)
                 val grow = 1f + 0.05f * c.emphasis
                 val gr = Rect(r.center.x - r.width * grow / 2f, r.center.y - r.height * grow / 2f, r.center.x + r.width * grow / 2f, r.center.y + r.height * grow / 2f)
-                when (theme.highlight) {
+                when (if (theme.flat) Theme.HIGHLIGHT_OUTLINE else theme.highlight) {
                     Theme.HIGHLIGHT_OUTLINE -> drawRect(glow.copy(alpha = c.emphasis * c.alpha), gr.topLeft - Offset(4f * s, 4f * s), Size(gr.width + 8f * s, gr.height + 8f * s), style = DrawStroke(5f * s))
                     Theme.HIGHLIGHT_LIFT -> {
                         val p = Path().apply { addRect(gr.translate(Offset(0f, 14f * s * c.emphasis))) }
@@ -801,7 +807,7 @@ internal fun DeckLayer(ctx: SlideContext, frame: () -> StageFrame?, keys: List<S
             val bh = t.size.height + pad
             val x = b.right * s - bw - 10f * s
             val y = b.bottom * s - bh - 10f * s
-            drawRoundRect(Color.Black.copy(alpha = 0.82f * c.alpha), Offset(x, y), Size(bw, bh), CornerRadius(8f * s))
+            drawRoundRect(Color.Black.copy(alpha = 0.82f * c.alpha), Offset(x, y), Size(bw, bh), CornerRadius(if (theme.flat) 0f else 8f * s))
             drawText(t, topLeft = Offset(x + pad, y + pad / 2f))
         }
         for (l in f.labels) {
@@ -856,7 +862,7 @@ private fun DrawScope.drawNote(ctx: SlideContext, measurer: TextMeasurer, title:
     val (_, layout) = fitOf(measurer, ::build, inner, (r.height - pad * 2).roundToInt(), shrink = true)
     val panelH = (layout.size.height + pad * 2).coerceAtMost(r.height)
     val top = r.top + (r.height - panelH) / 2f
-    drawRoundRect(ctx.color("@surface", "#FFFFFF").copy(alpha = 0.92f), Offset(r.left, top), Size(r.width, panelH), CornerRadius(18f * s))
+    drawRoundRect(ctx.color("@surface", "#FFFFFF").copy(alpha = 0.92f), Offset(r.left, top), Size(r.width, panelH), CornerRadius(if (theme.flat) 0f else 18f * s))
     drawRect(ctx.color("@accent", "#000000"), Offset(r.left, top + 18f * s), Size(8f * s, panelH - 36f * s))
     drawText(layout, topLeft = Offset(r.left + pad + 10f * s, top + pad))
 }
@@ -1037,12 +1043,13 @@ private fun StatBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) {
 // ---- the camera ------------------------------------------------------------------------
 
 /** A zone's outline: square, rounded, a circle or a pill. */
-internal fun zonePath(shape: String, w: Float, h: Float, s: Float): Path = Path().apply {
+internal fun zonePath(shape: String, w: Float, h: Float, s: Float, flat: Boolean = false): Path = Path().apply {
     when (shape) {
         WebcamZone.SHAPE_RECT -> addRect(Rect(0f, 0f, w, h))
         WebcamZone.SHAPE_CIRCLE -> addOval(Rect(0f, 0f, w, h))
         WebcamZone.SHAPE_PILL -> addRoundRect(RoundRect(Rect(0f, 0f, w, h), CornerRadius(min(w, h) / 2f)))
-        else -> addRoundRect(RoundRect(Rect(0f, 0f, w, h), CornerRadius(28f * s)))
+        // The default rounded frame is square under Master UI; a circle or pill the person chose stays.
+        else -> addRoundRect(RoundRect(Rect(0f, 0f, w, h), CornerRadius(if (flat) 0f else 28f * s)))
     }
 }
 
@@ -1063,7 +1070,7 @@ private fun CameraFrame(ctx: SlideContext, z: WebcamZone, modifier: Modifier, s:
     val density = LocalDensity.current
     Box(
         modifier.drawWithContent {
-            val path = zonePath(z.shape, size.width, size.height, s)
+            val path = zonePath(z.shape, size.width, size.height, s, ctx.theme.flat)
             when {
                 camera != null -> clipPath(path) { this@drawWithContent.drawContent() }
                 z.fill == WebcamZone.FILL_CHROMA -> drawPath(path, ctx.color(WebcamZone.CHROMA, "#00B140"))

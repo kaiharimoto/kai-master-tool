@@ -5,7 +5,6 @@ import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.present.DeckSnapshot
-import com.kaiharimoto.mastertool.core.present.PresentPrefs
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.SlideLayouts
 import com.kaiharimoto.mastertool.core.present.Themes
@@ -205,7 +204,8 @@ internal class AiPresent(private val h: NeueHolders) {
             snap(state.deck, state.groups, state.deckName, state.deckId, now)
         } else null
         val style = ToolArgs.string(op, "style")?.let(PresentWriter::styleOf) ?: prefs.present.style
-        val theme = ToolArgs.string(op, "theme")?.let { t -> Themes.all.firstOrNull { it.id == t.lowercase() || it.name.equals(t, true) }?.id } ?: prefs.present.theme
+        val theme = ToolArgs.string(op, "theme")?.let { t -> Themes.named(t)?.id }
+            ?: prefs.present.startTheme(prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK)
         val base = WebcamZone(enabled = prefs.present.webcam, preset = prefs.present.webcamPreset)
         val webcam = (op["webcam"] as? JsonObject)?.let { w -> PresentWriter.webcamOf(base, w).getOrElse { throw ModuleProblem("create: ${it.message}") } } ?: base
         val enabled = webcam.enabled
@@ -217,7 +217,7 @@ internal class AiPresent(private val h: NeueHolders) {
         } else {
             PresentEdits.newProfile(present.newId(), name, snapshot, style, theme, webcam, creator, now)
         }
-        h.neue.update { it.copy(present = PresentPrefs(style, theme, enabled, preset, creator, p.id)) }
+        h.neue.update { it.copy(present = it.present.copy(style = style, webcam = enabled, webcamPreset = preset, creator = creator, open = p.id)) }
         return p
     }
 

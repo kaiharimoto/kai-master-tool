@@ -210,7 +210,10 @@ private fun NewPresentationDialog(h: NeueHolders) {
     var deck by remember { mutableStateOf<StoredDeck?>(null) }
     LaunchedEffect(decks) { if (deck == null) deck = decks.firstOrNull { it.entry.id == h.builder.deckId } ?: decks.firstOrNull() }
     var style by remember { mutableStateOf(prefs.style) }
-    var theme by remember { mutableStateOf(prefs.theme) }
+    // Master UI unless the person has picked another theme themselves (kai, 1.0.72).
+    val appDark = neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK
+    var theme by remember { mutableStateOf(prefs.startTheme(appDark)) }
+    var themeChosen by remember { mutableStateOf(prefs.themeChosen) }
     var camera by remember { mutableStateOf(prefs.webcam) }
     var preset by remember { mutableStateOf(prefs.webcamPreset) }
     var creator by remember { mutableStateOf(prefs.creator) }
@@ -238,7 +241,7 @@ private fun NewPresentationDialog(h: NeueHolders) {
         } else {
             PresentEdits.newProfile(present.newId(), title, snapshot, style, theme, webcam, creator, now)
         }
-        neue.update { it.copy(present = PresentPrefs(style, theme, camera, preset, creator, p.id)) }
+        neue.update { it.copy(present = PresentPrefs(style, theme, camera, preset, creator, p.id, themeChosen = themeChosen)) }
         present.creating = false
         present.create(p)
         if (withAi) present.briefing = true
@@ -267,9 +270,20 @@ private fun NewPresentationDialog(h: NeueHolders) {
                     StyleChoice(st, st == style, { style = st }, Modifier.weight(1f))
                 }
             }
-            FieldLabel("Theme")
+            FieldLabel("Look", hint = "Master UI unless you choose another")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Themes.all.forEach { t -> ThemeSwatch(t, t.id == theme, { theme = t.id }, Modifier.width(96.dp)) }
+                Themes.all.forEach { t ->
+                    val master = t.id == Themes.MASTER || t.id == Themes.MASTER_DARK
+                    ThemeSwatch(
+                        t, t.id == theme, {
+                            theme = t.id
+                            // Picking the default back is not a choice: the next profile follows the app again.
+                            themeChosen = !master
+                        },
+                        Modifier.width(96.dp),
+                        caption = if (master) "Default" else null,
+                    )
+                }
             }
             FieldLabel("Webcam", hint = "the slides make room for it")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

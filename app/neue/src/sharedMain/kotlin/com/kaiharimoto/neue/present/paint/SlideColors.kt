@@ -208,7 +208,7 @@ private fun ColorPanel(value: String?, theme: Theme, none: Boolean, onChange: (S
 
 /** A theme's look in a small square: background, a title bar and its accents. */
 @Composable
-fun ThemeSwatch(theme: Theme, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun ThemeSwatch(theme: Theme, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, caption: String? = null) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     Column(modifier.hoverable(source).cursorPointer(label = theme.name).muClickable(interactionSource = source, onClick = onClick), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -223,5 +223,6 @@ fun ThemeSwatch(theme: Theme, selected: Boolean, onClick: () -> Unit, modifier: 
             }
         }
         Small(theme.name, maxLines = 1)
+        if (caption != null) Small(caption, color = c.ink45, maxLines = 1)
     }
 }

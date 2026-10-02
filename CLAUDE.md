@@ -604,8 +604,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `present_edit` (ops applied by `core/present/ai/PresentWriter`, the editor's own `PresentEdits`, one Undo a
   batch; create, add_module, refresh_module in `neue/ai/AiPresent`), `present_view` (`PresentReport.check`,
   in words), the `deck-profile` and `slide-design` skills, and **Build with Ai** (`PresentBrief`,
-  `AiSession.MODE_PRESENT`). Next: 1.0.72 recording (JavaCV/FFmpeg, LGPL), 1.0.73 Android recording and
-  extras. `tools/shoot.sh --page=present --present=demo …` photographs it.
+  `AiSession.MODE_PRESENT`). **1.0.72**: **Master UI is the default look** (the `paper`/`ink` themes, named
+  Master UI and Master UI Dark: Inter only, 4.5 : 1, `Theme.flat` — square, no shadows or glows, honoured by the
+  painter; `PresentPrefs.startTheme`/`themeChosen` so 1.0.71's stored Arena no longer wins); the other looks
+  are options (New dialog, **Style ▾**, the Theme tab, with a Flat switch); **Restyle** hands the look to Ai from
+  the person's words and an optional picture (`RestyleBrief`, `AiSession.MODE_RESTYLE`, skill `restyle`; look only,
+  never content; **Undo restyle** via `Presentations.restyleBefore`). Next: 1.0.73 recording (JavaCV/FFmpeg,
+  LGPL; `core/present/record` holds the take timeline, chapters and encoder choice already), 1.0.74 Android
+  recording and extras. `tools/shoot.sh --page=present --present=demo …` photographs it
+  (`--present-mode=restyle` the dialog).
 
 ## Stored data outlives versions — a rule
 

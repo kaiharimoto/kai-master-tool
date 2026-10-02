@@ -23,6 +23,12 @@ data class Theme(
     val highlight: String = HIGHLIGHT_GLOW,
     /** Titles in capitals. */
     val capsTitles: Boolean = false,
+    /**
+     * Master UI's rule (1.0.72): what the painter adds of its own is square and without depth —
+     * rounded boxes, the note panel, the camera's frame and badges square, no shadows or glows.
+     * Shapes the person chose (an ellipse, a circle camera) are content and stay.
+     */
+    val flat: Boolean = false,
 ) {
     fun color(token: String): String = colors[token] ?: colors["text"] ?: "#000000"
 
@@ -32,6 +38,7 @@ data class Theme(
         headingFont = override.headingFont ?: headingFont,
         bodyFont = override.bodyFont ?: bodyFont,
         dim = override.dim ?: dim,
+        flat = override.flat ?: flat,
     )
 
     companion object {
@@ -65,23 +72,25 @@ object Themes {
     const val CLEAN = "clean"
 
     val all: List<Theme> = listOf(
+        // Master UI (kai, 1.0.72: "high contrast, easy to read, Inter only"), the default. The ids stay
+        // `paper` and `ink`: presentations store them.
         Theme(
-            PAPER, "Paper",
+            PAPER, "Master UI",
             mapOf(
-                "bg" to "#F4F2EC", "surface" to "#FFFFFF", "text" to "#141414", "muted" to "#5E5E5E",
-                "accent" to "#141414", "accent2" to "#7A7A7A", "accent3" to "#B5B5B5", "accent4" to "#D9D6CE",
+                "bg" to "#F4F2EC", "surface" to "#FFFFFF", "text" to "#141414", "muted" to "#4A4A4A",
+                "accent" to "#141414", "accent2" to "#4F4F4F", "accent3" to "#141414", "accent4" to "#6B6B6B",
                 "line" to "#141414",
             ),
-            headingFont = SlideFonts.INTER, bodyFont = SlideFonts.INTER, highlight = Theme.HIGHLIGHT_OUTLINE,
+            headingFont = SlideFonts.INTER, bodyFont = SlideFonts.INTER, highlight = Theme.HIGHLIGHT_OUTLINE, flat = true,
         ),
         Theme(
-            INK, "Ink",
+            INK, "Master UI Dark",
             mapOf(
-                "bg" to "#101010", "surface" to "#1C1C1C", "text" to "#F2F0EA", "muted" to "#A3A3A3",
-                "accent" to "#F2F0EA", "accent2" to "#8C8C8C", "accent3" to "#5A5A5A", "accent4" to "#2E2E2E",
+                "bg" to "#101010", "surface" to "#1C1C1C", "text" to "#F2F0EA", "muted" to "#B8B8B8",
+                "accent" to "#F2F0EA", "accent2" to "#B0B0B0", "accent3" to "#F2F0EA", "accent4" to "#9A9A9A",
                 "line" to "#F2F0EA",
             ),
-            headingFont = SlideFonts.INTER, bodyFont = SlideFonts.INTER, dim = 0.22f,
+            headingFont = SlideFonts.INTER, bodyFont = SlideFonts.INTER, dim = 0.22f, highlight = Theme.HIGHLIGHT_OUTLINE, flat = true,
         ),
         Theme(
             ARENA, "Arena",
@@ -123,7 +132,24 @@ object Themes {
         ),
     )
 
+    /** The two Master UI themes, light and dark: what a new presentation starts in. */
+    const val MASTER = PAPER
+    const val MASTER_DARK = INK
+
     fun of(id: String?): Theme = all.firstOrNull { it.id == id } ?: all.first()
+
+    /**
+     * A theme by what a person or Ai calls it: its id, its name, or `master` / `master-dark` for
+     * the two Master UI themes; null when there is none by that name.
+     */
+    fun named(name: String): Theme? {
+        val n = name.trim().lowercase().replace('_', '-').replace(' ', '-')
+        return when (n) {
+            "master", "master-ui", "masterui", "master-light", "master-ui-light" -> of(MASTER)
+            "master-dark", "master-ui-dark", "masterui-dark" -> of(MASTER_DARK)
+            else -> all.firstOrNull { it.id == n || it.name.lowercase().replace(' ', '-') == n }
+        }
+    }
 
     /** The theme a presentation is drawn in, with the person's changes. */
     fun of(p: Presentation): Theme = of(p.theme).with(p.themeOverride)

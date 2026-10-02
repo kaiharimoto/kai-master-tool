@@ -117,6 +117,8 @@ internal fun PresentEditor(h: NeueHolders, p: Presentation) {
     CardPicker(h)
     ModuleDialog(h)
     BuildWithAiDialog(h)
+    RestyleDialog(h)
+    RestyleWatcher(h)
     ExportOverlay(h)
 }
 
@@ -134,6 +136,7 @@ private fun EditorBar(h: NeueHolders, p: Presentation, ctx: SlideContext) {
     var presentAt by remember { mutableStateOf(Offset.Zero) }
     var moduleAt by remember { mutableStateOf(Offset.Zero) }
     var exportAt by remember { mutableStateOf(Offset.Zero) }
+    var styleAt by remember { mutableStateOf(Offset.Zero) }
     fun kbd(a: DeskAction) = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
     Row(
         Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp),
@@ -174,8 +177,32 @@ private fun EditorBar(h: NeueHolders, p: Presentation, ctx: SlideContext) {
                 )
             }, size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.Plus)
         }
+        Box(Modifier.onGloballyPositioned { styleAt = it.positionInWindow() }) {
+            MuButton("Style", {
+                // Master UI first: the default look; the others are there when wanted (kai, 1.0.72).
+                neue.menu = MenuSpec(
+                    Offset(styleAt.x, styleAt.y + 36f),
+                    com.kaiharimoto.mastertool.core.present.Themes.all.map { t ->
+                        MenuEntry(
+                            t.name,
+                            hint = when {
+                                t.id == p.theme -> "In use"
+                                t.id == com.kaiharimoto.mastertool.core.present.Themes.MASTER -> "Default"
+                                else -> null
+                            },
+                        ) { present.applyTheme(t.id) }
+                    } + listOfNotNull(
+                        present.restyleBefore?.takeIf { it.id == p.id }?.let { MenuEntry("Undo restyle", separatorBefore = true) { present.undoRestyle() } },
+                        if (neue.prefs.ai.enabled) MenuEntry("Restyle with ${h.ai.name}…", separatorBefore = present.restyleBefore?.id != p.id) { present.restyling = true } else null,
+                    ),
+                )
+            }, size = BtnSize.SM, variant = BtnVariant.GHOST, arrow = true)
+        }
         Box(Modifier.weight(1f))
         if (neue.prefs.ai.enabled) {
+            Tip("Describe a look and ${h.ai.name} restyles the slides; the words and cards stay") {
+                MuButton("Restyle", { present.restyling = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            }
             Tip("${h.ai.name} fills these slides in from the deck, and checks each one") {
                 MuButton("Build with ${h.ai.name}", { present.briefing = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
             }

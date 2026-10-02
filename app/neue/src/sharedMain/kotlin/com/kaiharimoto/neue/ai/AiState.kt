@@ -785,6 +785,17 @@ class AiState(internal val h: NeueHolders) {
         send(brief.message())
     }
 
+    /**
+     * Restyle on Present (1.0.72): a fresh restyle conversation opened with the person's words, and
+     * the picture they attached if any — the look changes, the content does not.
+     */
+    fun restyle(brief: com.kaiharimoto.mastertool.core.present.ai.RestyleBrief) {
+        setOpen(true)
+        if (prefs.connection == null) return
+        newChat(AiSession.MODE_RESTYLE)
+        send(brief.message())
+    }
+
     // ---- a helper with a fresh mind (1.0.47) --------------------------------------
 
     /**

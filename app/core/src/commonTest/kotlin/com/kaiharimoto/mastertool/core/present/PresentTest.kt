@@ -125,6 +125,35 @@ class PresentTest {
     }
 
     @Test
+    fun masterUiIsTheDefaultFlatAndEasyToRead() {
+        // kai (1.0.72): "default to Master UI … high contrast, easy to read, Inter only".
+        val master = Themes.of(null)
+        assertEquals(Themes.MASTER, master.id)
+        assertEquals("Master UI", master.name)
+        listOf(Themes.of(Themes.MASTER), Themes.of(Themes.MASTER_DARK)).forEach { t ->
+            assertTrue(t.flat, t.name)
+            assertEquals(SlideFonts.INTER, t.headingFont)
+            assertEquals(SlideFonts.INTER, t.bodyFont)
+            assertNull(t.backgroundTo)
+            assertEquals(Theme.HIGHLIGHT_OUTLINE, t.highlight)
+        }
+        // Every word token reads at 4.5 : 1 on the background and the surface, in both.
+        for (t in listOf(Themes.of(Themes.MASTER), Themes.of(Themes.MASTER_DARK))) for (under in listOf("bg", "surface")) {
+            for (token in listOf("text", "muted", "accent", "accent2", "accent3")) {
+                val ratio = SlideColor.contrast(SlideColor.hex(t.color(token))!!, SlideColor.hex(t.color(under))!!)
+                assertTrue(ratio >= 4.5, "${t.name}: $token on $under is ${"%.2f".format(ratio)}")
+            }
+        }
+        // Softened by the person, or Ai, without leaving the theme.
+        assertFalse(master.with(ThemeOverride(flat = false)).flat)
+        assertFalse(Themes.of(Themes.ARENA).flat)
+        assertEquals(Themes.MASTER_DARK, Themes.named("Master UI Dark")?.id)
+        assertEquals(Themes.MASTER, Themes.named("master")?.id)
+        assertEquals(Themes.NEON, Themes.named("Neon")?.id)
+        assertNull(Themes.named("vaporwave"))
+    }
+
+    @Test
     fun theTweenMatchesCopiesByKey() {
         val a = DeckStage.frame(deck, steps(), Presentation.STYLE_SPOTLIGHT, 0, stage)
         val b = DeckStage.frame(deck, listOf(DeckFocus(cards = listOf(1))), Presentation.STYLE_SLIDES, 0, stage)

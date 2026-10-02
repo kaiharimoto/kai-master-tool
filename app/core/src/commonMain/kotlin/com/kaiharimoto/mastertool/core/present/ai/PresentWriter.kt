@@ -93,6 +93,7 @@ object PresentWriter {
             }
             op.str("heading_font")?.let { f -> next = next.copy(themeOverride = (next.themeOverride ?: ThemeOverride()).copy(headingFont = fontOf(f))) }
             op.str("body_font")?.let { f -> next = next.copy(themeOverride = (next.themeOverride ?: ThemeOverride()).copy(bodyFont = fontOf(f))) }
+            op.bool("flat")?.let { f -> next = next.copy(themeOverride = (next.themeOverride ?: ThemeOverride()).copy(flat = f)) }
             Triple(next, "Set the presentation's ${op.keys.filter { it != "action" }.joinToString()}", null)
         }
         "apply_theme" -> {
@@ -216,8 +217,8 @@ object PresentWriter {
         else -> null
     }
 
-    private fun themeOf(t: String): String = Themes.all.firstOrNull { it.id == t.lowercase() || it.name.equals(t, ignoreCase = true) }?.id
-        ?: fail("no theme $t; they are ${Themes.all.joinToString { it.id }}")
+    private fun themeOf(t: String): String = Themes.named(t)?.id
+        ?: fail("no theme $t; they are master, master-dark, ${Themes.all.drop(2).joinToString { it.id }}")
 
     private fun fontOf(f: String): String = SlideFonts.all.firstOrNull { it == f.lowercase() || SlideFonts.name(it).equals(f, ignoreCase = true) }
         ?: fail("no face $f; they are ${SlideFonts.all.joinToString { SlideFonts.name(it) }}")

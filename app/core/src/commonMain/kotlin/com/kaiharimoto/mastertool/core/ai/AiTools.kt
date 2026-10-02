@@ -834,7 +834,7 @@ object AiTools {
     val presentEdit = ToolSpec(
         "present_edit",
         "Changes the open presentation (Present, 06) by a list of ops applied in order: one step of the person's Undo. Each op has an action: " +
-            "create {deck_id, style, theme, webcam, creator, name} makes a deck profile and opens it; set_props; apply_theme; steps_from_groups; " +
+            "create {deck_id, style, theme, webcam, creator, name} makes a deck profile and opens it; set_props {name, style, theme, colors, heading_font, body_font, flat}; apply_theme; steps_from_groups; " +
             "set_steps {steps: [{title, groups, cards, all, note, notes}]} replaces the deck slides; add_slide {layout, after, title, slots, elements, deck, notes, transition}; " +
             "edit_slide; set_notes; add_element {slide, element}; update_element {slide, element, patch}; remove {slide, element?}; reorder {slide, to}; " +
             "duplicate_slide; set_animation; add_module {type, title, matchups, picks, strong, weak, shoutouts, event_id, placement, after}; refresh_module {slide}. " +
@@ -861,10 +861,11 @@ object AiTools {
                 string("name", "create, set_props: the name")
                 string("deck_id", "create: the saved deck to profile; omit for the deck on the builder")
                 string("style", "spotlight, slides or build_up")
-                string("theme", "paper, ink, arena, neon, duel or clean")
+                string("theme", "master (Master UI, the default), master-dark, arena, neon, duel or clean")
                 string("creator", "The creator's name for the title")
                 string("heading_font", "set_props")
                 string("body_font", "set_props")
+                boolean("flat", "set_props: square corners and no shadows (Master UI's rule), or false to soften")
                 string("layout", "add_slide: TITLE, TITLE_BODY, TWO_COLUMN, SECTION, BIG_NUMBER, CARD_FOCUS, CARDS_ROW, IMAGE_FULL, QUOTE, CAMERA_BIG, END_CARD, DECK, BLANK")
                 string("after", "add_slide, add_module: the slide it goes after")
                 string("title", "A slide's title, or a module's")

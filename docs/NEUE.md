@@ -2722,7 +2722,7 @@ desktop that might be outdated or be outdated by changes we make in the future, 
   rises with tested migrations; the deck payload passes through untouched; every shape older versions
   wrote is held in `OldDataTest`, and a release that changes one adds its old shape there.
 
-### 4o. Present: deck profiles as slides (1.0.70–1.0.71)
+### 4o. Present: deck profiles as slides (1.0.70–1.0.72)
 
 kai: "There's a lot of content creators on YouTube who do deck profiles explaining and presenting their
 deck by using a webcam and a screen recording of their deck list on duelingbook … Present mode should work
@@ -2813,6 +2813,42 @@ synced, internal to Ai) remembers how the last profile was started. No schema ch
 **Input as data**: `DeskShortcuts` has two new scopes, Making slides (`PRESENT_EDIT`) and Presenting
 (`PRESENTING`, during which the page keys are dead); the mouse and the finger are `PresentMouse` and
 `PresentTouch` (`PresentInputTest` holds every mouse action to a finger's form), printed by the help dialog.
+
+**Master UI by default** (1.0.72, kai: "default to Master UI for styling (high contrast, easy to read, Inter/Neue
+font only) and give the user options for styles if they desire it"):
+- **The default look.** A new presentation starts in **Master UI**: ink on paper, Inter only, every word token
+  at least 4.5 : 1 on the background and the surface (a test holds it). It starts in **Master UI Dark** when the
+  app itself is in Ink.
+  - The ids stay `paper` and `ink`, because presentations store them.
+  - `PresentPrefs.themeChosen` records whether the person picked a theme in the New dialog. Until they do,
+    `PresentPrefs.startTheme` gives Master UI, so the Arena that 1.0.70–1.0.71 wrote into every saved setting no
+    longer wins.
+- **`Theme.flat`** is Master UI's rule on slides, and `ThemeOverride.flat` (the Theme tab's Flat switch, or Ai's
+  `set_props flat`) turns it on or off for one presentation. What the painter adds of its own is square and
+  without depth:
+  - rounded boxes, the note panel, the camera's default frame and the copy-count badges are square;
+  - there are no element shadows or glows, and the highlight is an outline.
+  - Shapes the person chose (an ellipse, a circle camera) are content and stay.
+- **The other five looks** (Arena, Neon, Duel, Clean, and Master UI Dark) are options:
+  - in the New dialog, where Master UI is marked Default;
+  - in **Style ▾** in the editor's bar, where Master UI is first and choosing a look is one step of Undo;
+  - in the Theme tab.
+- **Restyle** (the bar, Style ▾, the Theme tab, the palette; `present/Restyle.kt`):
+  - The person describes a look: suggestions to start from, the whole presentation or this slide, "keep it easy
+    to read" (4.5 : 1), and an optional picture (a logo, a banner) to take the colors from.
+  - `RestyleBrief` (core, tested) makes the first message of a conversation in `AiSession.MODE_RESTYLE`. Its
+    prompt and the `restyle` skill change the look only — theme, colors, faces, backgrounds, fills — and never
+    the words, cards, order or notes, then check every changed slide with `present_view`.
+  - The presentation as it was is kept (`Presentations.restyleBefore`). When the conversation ends, a note offers
+    **Undo restyle** (one step of Undo), and so does Style ▾.
+
+**The camera decides the room** (1.0.70, made explicit in 1.0.72):
+- **With the camera off,** the stage is the whole safe area.
+- **With it on,** every stage-anchored element (all layout placeholders and module slots) and every deck frame
+  re-flow into the band beside the camera where they draw largest. `WebcamLayout.stage` tries the four bands;
+  `CompiledShow.deckFrame` tries each for the deck and the note lane.
+- **Per slide,** a slide can hide or move the camera (`Slide.camera`), and CAMERA_BIG gives the face the room.
+- **The exception:** only elements placed by hand in canvas units stay where they were put.
 
 **Modules** (1.0.71, Module ▾ in the bar; `core/present/modules/Modules`, tested): generators that make
 ordinary slides, every element editable, each slide remembering how it was made (`Slide.module`, a

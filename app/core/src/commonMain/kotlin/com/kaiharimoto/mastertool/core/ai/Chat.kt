@@ -262,6 +262,9 @@ data class AiSession(
         /** Build with Ai on Present (1.0.71): a deck profile for a video, slide by slide, checked as it goes. */
         const val MODE_PRESENT = "present"
 
+        /** Restyle on Present (1.0.72): the look of a presentation changed from the person's words, and nothing else. */
+        const val MODE_RESTYLE = "restyle"
+
         /** What an old tool result is cut to once the person clears them. */
         const val CLEARED = 200
 

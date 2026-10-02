@@ -183,6 +183,8 @@ object BuiltInSkills {
         // Present (1.0.71): a deck profile for a video, and how its slides read.
         3 to Skill(DeckSkills.DECK_PROFILE_NAME, DeckSkills.DECK_PROFILE_DESCRIPTION, DeckSkills.DECK_PROFILE.trim(), builtIn = true),
         3 to Skill(DeckSkills.SLIDE_DESIGN_NAME, DeckSkills.SLIDE_DESIGN_DESCRIPTION, DeckSkills.SLIDE_DESIGN.trim(), builtIn = true),
+        // Restyle (1.0.72): the look from the person's words or a picture.
+        3 to Skill(DeckSkills.RESTYLE_NAME, DeckSkills.RESTYLE_DESCRIPTION, DeckSkills.RESTYLE.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

@@ -566,6 +566,8 @@ data class ThemeOverride(
     val headingFont: String? = null,
     val bodyFont: String? = null,
     val dim: Float? = null,
+    /** Square and without depth, or softened; null keeps the theme's own (1.0.72). */
+    val flat: Boolean? = null,
 )
 
 /**
@@ -581,4 +583,12 @@ data class PresentPrefs(
     val creator: String = "",
     /** The presentation open last, by id. */
     val open: String? = null,
-)
+    /**
+     * Whether [theme] is one the person picked (1.0.72). Until they do, a new presentation starts
+     * in Master UI — so the old default written down by 1.0.70 and 1.0.71 (Arena) no longer wins.
+     */
+    val themeChosen: Boolean = false,
+) {
+    /** The theme a new presentation starts in: the one picked, else Master UI (dark when the app is). */
+    fun startTheme(appDark: Boolean): String = if (themeChosen) theme else if (appDark) Themes.MASTER_DARK else Themes.MASTER
+}

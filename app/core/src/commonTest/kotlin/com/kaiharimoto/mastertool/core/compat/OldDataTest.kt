@@ -81,4 +81,17 @@ class OldDataTest {
         assertEquals("Say hello", p.slides[1].notes)
         assertTrue(p.webcam.enabled)
     }
+
+    @Test
+    fun presentSettingsFrom1071StartInMasterUi() {
+        // 1.0.70–1.0.71 wrote Arena, the old default, into every saved setting; 1.0.72 starts in Master UI
+        // until the person picks a theme themselves (kai: "default to Master UI").
+        val old = """{"present":{"style":"SPOTLIGHT","theme":"arena","webcam":true,"webcamPreset":"BOTTOM_RIGHT","creator":"kai","open":"p1"}}"""
+        val p = prefs.decodeFromString(NeuePreferences.serializer(), old).present
+        assertEquals("kai", p.creator)
+        assertEquals(false, p.themeChosen)
+        assertEquals(com.kaiharimoto.mastertool.core.present.Themes.MASTER, p.startTheme(appDark = false))
+        assertEquals(com.kaiharimoto.mastertool.core.present.Themes.MASTER_DARK, p.startTheme(appDark = true))
+        assertEquals("neon", p.copy(theme = "neon", themeChosen = true).startTheme(appDark = false))
+    }
 }

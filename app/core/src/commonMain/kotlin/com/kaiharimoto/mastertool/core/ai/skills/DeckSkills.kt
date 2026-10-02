@@ -381,7 +381,7 @@ The person makes deck-profile videos: they talk over their deck with a webcam in
 - Ask only what you cannot find, one question at a time with `ask_user`: which style, how long the video runs, the creator's name, whether the webcam is on and where, which modules they want. Offer the answer you would pick first.
 
 ## 2. Make it
-- One `present_edit` with create {deck_id, style, theme, webcam, creator}. It makes a title, the whole deck, a deck slide per group and an end card.
+- One `present_edit` with create {deck_id, style, webcam, creator}. It makes a title, the whole deck, a deck slide per group and an end card. Leave the theme out: Master UI (paper and ink, Inter, high contrast) is the default, and another look comes only when the person asks for one.
 - The three styles:
   - **Spotlight**: the whole deck stays on screen, dimmed, and what you talk about lights up. Best for decks whose engine is one big piece.
   - **Slides**: each group or card fills the slide; the whole deck is a key away. Best for many small packages.
@@ -441,10 +441,43 @@ TITLE for the open, SECTION between parts, TITLE_BODY for a point, TWO_COLUMN fo
 - Transitions: one kind through the whole video (fade or push), a different one only to mark a new part.
 
 ## Color and type
+- Master UI is the default look: ink on paper (or paper on ink), Inter only, square corners, no shadows, high contrast. Keep it unless the person asks for another look; the restyle skill is how to change it.
 - Stay inside the theme: its accent for the one thing to look at, never several accents fighting. apply_theme rather than coloring slides one by one.
 - One heading font and one body font. Bold for a card name or a number, not for a whole sentence.
 
 ## Checking
 `present_view` lists what a viewer would trip over. A slide is done when it lists nothing but, at most, missing speaker notes you are about to write.
+"""
+
+    const val RESTYLE_NAME = "restyle"
+    const val RESTYLE_DESCRIPTION =
+        "Changes how a presentation looks from the person's words or a picture: the theme, its colors and faces, backgrounds and fills, never the content."
+
+    const val RESTYLE: String = """# Restyling a presentation
+
+The person described a look, maybe with a picture (a logo, a channel banner). Change how the slides look, and nothing else: never the words, the cards, the order of the slides or the speaker notes.
+
+## 1. Read what is there
+`present_state` for the theme, the slides and every element's id. Master UI (ink on paper, Inter, square, no shadows) is where most presentations start.
+
+## 2. Choose the base
+- Pick the theme closest to the ask with apply_theme: master, master-dark, arena (navy and gold, broadcast), neon (dark, pink and cyan), duel (warm, classic), clean (white and blue).
+- Then set_props with colors by token (bg, surface, text, muted, accent, accent2, accent3, accent4, line), heading_font and body_font (inter, bebas, oswald, playfair, marker, mono), and flat: true keeps corners square and drops shadows, false softens them.
+- With a picture, take two or three brand colors from it: one for accent, one for the background or surface. Keep the cards the hero: a quiet background, one strong accent.
+
+## 3. Touch slides only where the ask needs it
+- edit_slide with background for a slide that should stand apart (a section, the title, the end card).
+- update_element with color, fill or font for a single element. Prefer tokens like @accent over hex, so a later theme change still recolors everything.
+- For one slide only, change that slide's background and elements and leave the theme alone.
+
+## 4. Readable first
+Words at least 4.5 to 1 against what is behind them, unless the person said readability is their call. Text on a picture needs a fill behind it. Titles stay big.
+
+## 5. Check and finish
+Run `present_view` on every slide you changed and fix every contrast or size finding. Then say in two lines what changed, and that Undo, or Style and then Master UI, takes it back.
+
+## Throughout
+- One `present_edit` per step (the base, then the touches), not one per element: each is one step of the person's Undo.
+- Ask with `ask_user` only when the words could mean two very different looks; otherwise make a choice and say it.
 """
 }

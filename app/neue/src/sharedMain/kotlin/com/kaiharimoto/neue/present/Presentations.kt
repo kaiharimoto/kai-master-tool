@@ -161,6 +161,29 @@ class Presentations(val dir: File) {
     /** Build with Ai's launcher, open (1.0.71). */
     var briefing by mutableStateOf(false)
 
+    /** Restyle's dialog, open (1.0.72). */
+    var restyling by mutableStateOf(false)
+
+    /** The presentation as it was before a restyle began, for Undo restyle; null when there is none. */
+    var restyleBefore by mutableStateOf<Presentation?>(null)
+
+    /** The look set by hand from Style: one step of Undo. */
+    fun applyTheme(id: String) {
+        val o = open ?: return
+        commit(o.copy(theme = id, themeOverride = null), "Style: ${com.kaiharimoto.mastertool.core.present.Themes.of(id).name}")
+        seal()
+    }
+
+    /** The presentation put back as it was before the restyle, as one step of Undo. */
+    fun undoRestyle() {
+        val before = restyleBefore ?: return
+        val o = open
+        restyleBefore = null
+        if (o == null || o.id != before.id) return
+        commit(o.copy(theme = before.theme, themeOverride = before.themeOverride, slides = before.slides), "Undo restyle")
+        seal()
+    }
+
     /** The New dialog, open. */
     var creating by mutableStateOf(false)
 

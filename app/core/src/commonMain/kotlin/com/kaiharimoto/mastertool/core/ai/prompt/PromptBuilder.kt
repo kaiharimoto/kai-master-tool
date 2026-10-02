@@ -170,6 +170,15 @@ object PromptBuilder {
                     "Do not change their decks in this conversation.",
             )
         }
+        if (s.mode == "restyle") {
+            appendLine()
+            appendLine("## This conversation restyles a presentation on the Present page")
+            appendLine(
+                "Read the skill restyle with skill_view first and follow it. Change the look only, with present_edit: the theme, its colors " +
+                    "and faces, slide backgrounds, and elements' colors, fills and faces. Never change words, cards, the order of slides or the " +
+                    "speaker notes. Run present_view on every slide you change and fix what it lists.",
+            )
+        }
         if (s.mode == "profile") {
             appendLine()
             appendLine("## This conversation is Learn About You: you interview the person")

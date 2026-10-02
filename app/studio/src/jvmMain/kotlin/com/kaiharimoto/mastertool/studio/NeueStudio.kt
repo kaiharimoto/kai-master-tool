@@ -165,7 +165,7 @@ fun neueMain(args: Array<String>) {
                     h.neue.prefs.arts, 0, System.currentTimeMillis(),
                 )
                 var p = com.kaiharimoto.mastertool.core.present.edit.PresentEdits.newProfile(
-                    "pstudio", "${h.builder.deckName} deck profile", snap, style, map["present-theme"] ?: com.kaiharimoto.mastertool.core.present.Themes.ARENA,
+                    "pstudio", "${h.builder.deckName} deck profile", snap, style, map["present-theme"]?.let { com.kaiharimoto.mastertool.core.present.Themes.named(it)?.id } ?: com.kaiharimoto.mastertool.core.present.Themes.MASTER,
                     webcam, "kai", System.currentTimeMillis(), kotlin.random.Random(7),
                 )
                 // A note on each group's step, as a creator would write it.
@@ -216,6 +216,8 @@ fun neueMain(args: Array<String>) {
                 clock.run(80)
                 when (map["present-mode"]) {
                     "library" -> { h.present.close(); clock.run(60) }
+                    "restyle" -> { h.present.restyling = true; clock.run(40) }
+                    "style" -> { h.present.restyleBefore = h.present.open; clock.run(20) }
                     "play", "overview", "notes" -> {
                         h.present.present(h.present.slideIndex)
                         clock.run(90)

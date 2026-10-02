@@ -645,12 +645,22 @@ private fun DeckProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: SlideC
 private fun ThemeProps(h: NeueHolders, p: Presentation, ctx: SlideContext) {
     val present = h.present
     val c = Mu.colors
-    FieldLabel("Theme")
+    FieldLabel("Theme", hint = "Master UI is the default")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Themes.all.forEach { t -> ThemeSwatch(t, t.id == p.theme, { present.commit(p.copy(theme = t.id, themeOverride = null), "Theme") }, Modifier.width(84.dp)) }
+        Themes.all.forEach { t -> ThemeSwatch(t, t.id == p.theme, { present.applyTheme(t.id) }, Modifier.width(84.dp)) }
+    }
+    if (h.neue.prefs.ai.enabled) {
+        MuButton("Restyle with ${h.ai.name}…", { present.restyling = true }, Modifier.fillMaxWidth(), size = BtnSize.SM, variant = BtnVariant.GHOST)
+    }
+    val o = p.themeOverride ?: ThemeOverride()
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        MuSwitch(ctx.theme.flat, { v -> present.commit(p.copy(themeOverride = o.copy(flat = v)), "Flat") })
+        Column {
+            Small("Flat", color = c.ink)
+            Small("Square corners, no shadows or glows", color = c.ink45)
+        }
     }
     FieldLabel("Its colours", hint = "change any")
-    val o = p.themeOverride ?: ThemeOverride()
     com.kaiharimoto.mastertool.core.present.Theme.TOKENS.forEach { token ->
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Small(com.kaiharimoto.mastertool.core.present.Theme.tokenName(token), Modifier.width(92.dp))

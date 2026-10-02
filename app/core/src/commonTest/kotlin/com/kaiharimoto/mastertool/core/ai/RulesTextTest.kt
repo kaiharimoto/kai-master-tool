@@ -43,6 +43,7 @@ class RulesTextTest {
         DeckSkills.WRITE_GUIDE_NAME to DeckSkills.WRITE_GUIDE,
         DeckSkills.DECK_PROFILE_NAME to DeckSkills.DECK_PROFILE,
         DeckSkills.SLIDE_DESIGN_NAME to DeckSkills.SLIDE_DESIGN,
+        DeckSkills.RESTYLE_NAME to DeckSkills.RESTYLE,
     )
 
     private val allTexts: List<String>
@@ -50,8 +51,8 @@ class RulesTextTest {
             GameRulesSkill.DESCRIPTION, DeckSkills.FINE_TUNING_DESCRIPTION, DeckSkills.SELF_STUDY_DESCRIPTION,
             DeckSkills.TOURNAMENT_PREP_DESCRIPTION, DeckSkills.FIRST_PRINCIPLES_DESCRIPTION, DeckSkills.ABOUT_YOU_DESCRIPTION,
             DeckSkills.DECK_FROM_PICTURE_DESCRIPTION, DeckSkills.REFACTOR_GUIDE_DESCRIPTION, DeckSkills.WRITE_GUIDE_DESCRIPTION,
-            DeckSkills.DECK_PROFILE_DESCRIPTION, DeckSkills.SLIDE_DESIGN_DESCRIPTION,
-        ) + AiDemo.scenes.flatMap { listOf(it.title, it.caption, it.person, it.reply) + it.activity }
+            DeckSkills.DECK_PROFILE_DESCRIPTION, DeckSkills.SLIDE_DESIGN_DESCRIPTION, DeckSkills.RESTYLE_DESCRIPTION,
+        ) + com.kaiharimoto.mastertool.core.present.ai.RestyleBrief.SUGGESTIONS + AiDemo.scenes.flatMap { listOf(it.title, it.caption, it.person, it.reply) + it.activity }
 
     @Test
     fun americanEnglish() {
@@ -107,6 +108,9 @@ class RulesTextTest {
         assertTrue("webcam" in DeckSkills.SLIDE_DESIGN && "Never put anything under it" in DeckSkills.SLIDE_DESIGN)
         // Numbers on slides come from the app, as in the guide.
         assertTrue("never type a percentage yourself" in DeckSkills.DECK_PROFILE)
+        // 1.0.72: Master UI is the default look; restyling changes the look and never the content.
+        assertTrue("Master UI" in DeckSkills.DECK_PROFILE && "Master UI" in DeckSkills.SLIDE_DESIGN)
+        assertTrue("never the words, the cards" in DeckSkills.RESTYLE && "`present_view`" in DeckSkills.RESTYLE)
     }
 
     @Test

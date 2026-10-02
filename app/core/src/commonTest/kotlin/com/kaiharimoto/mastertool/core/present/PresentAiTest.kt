@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.present.ai.PresentBrief
 import com.kaiharimoto.mastertool.core.present.ai.PresentReport
 import com.kaiharimoto.mastertool.core.present.ai.PresentWriter
+import com.kaiharimoto.mastertool.core.present.ai.RestyleBrief
 import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
 import com.kaiharimoto.mastertool.core.present.modules.Modules
 import com.kaiharimoto.mastertool.core.present.stage.WebcamZone
@@ -150,6 +151,31 @@ class PresentAiTest {
         assertTrue(AiTools.presentState.name in AiTools.readOnly)
         assertTrue(AiTools.presentView.name in AiTools.readOnly)
         assertFalse(AiTools.presentEdit.name in AiTools.readOnly)
+    }
+
+    @Test
+    fun restylingNamesMasterUiAndSoftensIt() {
+        val r = PresentWriter.apply(
+            profile(),
+            ops("""[{"action":"apply_theme","theme":"Master UI Dark"},{"action":"set_props","flat":false,"colors":{"accent":"#FF3366"}}]"""),
+            ctx,
+        )
+        assertTrue(r.ok, r.lines.joinToString())
+        assertEquals(Themes.MASTER_DARK, r.presentation.theme)
+        val t = Themes.of(r.presentation)
+        assertFalse(t.flat)
+        assertEquals("#FF3366", t.color("accent"))
+        assertFalse(PresentWriter.apply(profile(), ops("""[{"action":"apply_theme","theme":"vaporwave"}]"""), ctx).ok)
+    }
+
+    @Test
+    fun theRestyleBriefKeepsToTheLook() {
+        val whole = RestyleBrief("p1", "Match my channel: black and lime", picture = true).message()
+        assertTrue("whole presentation" in whole && "black and lime" in whole && "picture" in whole && "4.5" in whole, whole)
+        assertTrue("never the words, the cards" in whole)
+        val one = RestyleBrief("p1", "Darker", slideId = "s9", slideNumber = 3, readable = false).message()
+        assertTrue("slide 3 (id s9)" in one && "Leave the theme alone" in one && "my call" in one, one)
+        assertTrue(RestyleBrief.SUGGESTIONS.size >= 4)
     }
 
     @Test
