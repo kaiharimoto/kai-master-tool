@@ -210,8 +210,8 @@ private fun DuelBar(h: NeueHolders, duels: Duels, prefs: DuelPrefs) {
                     }
                 }
                 VRule(Modifier.height(24.dp), color = c.ink12)
-                IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndo, label = "Undo", reason = "Nothing to take back")
-                IconButton(Icons.Redo, { duels.redo() }, enabled = game.canRedo, label = "Redo", reason = "Nothing to put back")
+                IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndo || online, label = if (online) "Ask to take back" else "Undo", reason = "Nothing to take back")
+                if (!online) IconButton(Icons.Redo, { duels.redo() }, enabled = game.canRedo, label = "Redo", reason = "Nothing to put back")
                 if (phone) Box(Modifier.weight(1f)) else commandLine(Modifier.weight(1f))
                 IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
             } else {

@@ -213,7 +213,7 @@ internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: M
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Micro("Log", Modifier.weight(1f), color = c.ink70)
-            Mono("${game.cursor - game.floor}", color = c.ink45)
+            Mono("${if (guest) remote.size else game.cursor - game.floor}", color = c.ink45)
         }
         HRule()
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list) {
