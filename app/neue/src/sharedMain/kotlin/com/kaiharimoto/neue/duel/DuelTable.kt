@@ -400,7 +400,7 @@ private fun PileLabels(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: Due
                 Micro(label, color = c.ink45, size = (slot.width / 8f).coerceIn(8f, 11f).let { androidx.compose.ui.unit.TextUnit(it, androidx.compose.ui.unit.TextUnitType.Sp) })
             }
         } else {
-            Box(Modifier.zIndex(30f).offset(slot.right.dp - 22.dp, slot.bottom.dp - 16.dp).background(c.paper).border(1.dp, c.ink).padding(horizontal = 3.dp)) {
+            Box(Modifier.zIndex(3f).offset(slot.right.dp - 22.dp, slot.bottom.dp - 16.dp).background(c.paper).border(1.dp, c.ink).padding(horizontal = 3.dp)) {
                 Mono("$n", color = c.ink)
             }
         }

@@ -150,46 +150,57 @@ private fun DuelBar(h: NeueHolders, duels: Duels, prefs: DuelPrefs) {
     val game = duels.game
     val focus = remember { FocusRequester() }
     LaunchedEffect(duels.commandFocus) { if (duels.commandFocus > 0) runCatching { focus.requestFocus() } }
-    Row(
-        Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Tip("Start again with new decks", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_NEW)?.let(DeskShortcuts::kbd)) {
-            MuButton("New duel", { duels.setupOpen = true }, size = BtnSize.SM, icon = Icons.Plus)
-        }
-        if (game != null) {
-            if (!game.state.solo) {
-                Segmented(prefs.twoSided, listOf(true, false), { if (it) "Two sides" else "One side" }, { v -> neue.update { it.copy(duel = it.duel.copy(twoSided = v)) } }, small = true, compact = true)
-                Tip("Sit at the other seat", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_SWAP)?.let(DeskShortcuts::kbd)) {
-                    MuButton("Seat: ${com.kaiharimoto.mastertool.core.duel.text.DuelWords.seatName(game.state, duels.bottom)}", { duels.swap() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
-                }
-                if (!phone) {
-                    Segmented(
-                        prefs.knowledge, listOf(DuelPrefs.KNOW_ALL, DuelPrefs.KNOW_SEAT),
-                        { if (it == DuelPrefs.KNOW_ALL) "Both hands" else "This seat's eyes" },
-                        { v -> neue.update { it.copy(duel = it.duel.copy(knowledge = v)) } },
-                        small = true, compact = true,
-                    )
-                }
+    val commandLine: @Composable (Modifier) -> Unit = { m ->
+        MuInput(
+            duels.command,
+            { duels.command = it },
+            m,
+            placeholder = if (phone) "Type a command: ash to hand" else "Type a command: ash to hand · summon droll to m3 · lp -1000 · mill 3   ( / )",
+            dense = true,
+            focusRequester = focus,
+            onSubmit = { duels.run(duels.command) },
+        )
+    }
+    Column {
+        Row(
+            Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Tip("Start again with new decks", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_NEW)?.let(DeskShortcuts::kbd)) {
+                MuButton(if (phone) "New" else "New duel", { duels.setupOpen = true }, size = BtnSize.SM, icon = Icons.Plus)
             }
-            VRule(Modifier.height(24.dp), color = c.ink12)
-            IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndo, label = "Undo", reason = "Nothing to take back")
-            IconButton(Icons.Redo, { duels.redo() }, enabled = game.canRedo, label = "Redo", reason = "Nothing to put back")
-            MuInput(
-                duels.command,
-                { duels.command = it },
-                Modifier.weight(1f),
-                placeholder = if (phone) "ash to hand" else "Type a command: ash to hand · summon droll to m3 · lp -1000 · mill 3   ( / )",
-                dense = true,
-                focusRequester = focus,
-                onSubmit = { duels.run(duels.command) },
-            )
-            if (phone || duels.game != null) {
+            if (game != null) {
+                if (!game.state.solo) {
+                    if (!phone) {
+                        Segmented(prefs.twoSided, listOf(true, false), { if (it) "Two sides" else "One side" }, { v -> neue.update { it.copy(duel = it.duel.copy(twoSided = v)) } }, small = true, compact = true)
+                    }
+                    Tip("Sit at the other seat", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_SWAP)?.let(DeskShortcuts::kbd)) {
+                        MuButton("Seat: ${com.kaiharimoto.mastertool.core.duel.text.DuelWords.seatName(game.state, duels.bottom)}", { duels.swap() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+                    }
+                    if (!phone) {
+                        Segmented(
+                            prefs.knowledge, listOf(DuelPrefs.KNOW_ALL, DuelPrefs.KNOW_SEAT),
+                            { if (it == DuelPrefs.KNOW_ALL) "Both hands" else "This seat's eyes" },
+                            { v -> neue.update { it.copy(duel = it.duel.copy(knowledge = v)) } },
+                            small = true, compact = true,
+                        )
+                    }
+                }
+                VRule(Modifier.height(24.dp), color = c.ink12)
+                IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndo, label = "Undo", reason = "Nothing to take back")
+                IconButton(Icons.Redo, { duels.redo() }, enabled = game.canRedo, label = "Redo", reason = "Nothing to put back")
+                if (phone) Box(Modifier.weight(1f)) else commandLine(Modifier.weight(1f))
                 IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
+            } else {
+                Box(Modifier.weight(1f))
             }
-        } else {
-            Box(Modifier.weight(1f))
+        }
+        // On a phone the command line has a row of its own.
+        if (phone && game != null) {
+            Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                commandLine(Modifier.weight(1f))
+            }
         }
     }
 }

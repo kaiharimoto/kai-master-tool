@@ -57,6 +57,11 @@ data class DuelRecord(
     val cursor: Int = entries.size,
     val name: String = "",
     val version: Int = VERSION,
+    /** A "what if" remembers the replay it was played on from, and from where. */
+    val parent: String? = null,
+    val parentAt: Int? = null,
+    /** When it was saved as a replay, in ms. */
+    val saved: Long = 0L,
 ) {
     companion object {
         const val VERSION = 1
@@ -162,7 +167,8 @@ data class DuelGame(
     /** The table before entry [n] (after the first n entries). */
     fun stateAt(n: Int): DuelState = DuelSetup.fold(header, entries.subList(0, n.coerceIn(0, entries.size))).first
 
-    fun record(name: String = ""): DuelRecord = DuelRecord(header, entries, cursor, name)
+    fun record(name: String = "", parent: String? = null, parentAt: Int? = null, saved: Long = 0L): DuelRecord =
+        DuelRecord(header, entries, cursor, name, parent = parent, parentAt = parentAt, saved = saved)
 
     data class Result(val game: DuelGame, val problem: String?) {
         val ok: Boolean get() = problem == null

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -75,7 +76,7 @@ internal fun SeatBars(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout)
             if (turn) {
                 Box(Modifier.background(c.ink).padding(horizontal = 5.dp, vertical = 1.dp)) { Micro("Turn ${s.turn}", color = c.paper, size = 9.sp) }
             }
-            RowText(DuelWords.seatName(s, seat), Modifier.weight(1f, fill = false), color = c.ink)
+            RowText(DuelWords.seatName(s, seat), Modifier.widthIn(max = 160.dp), color = c.ink)
             Box(
                 Modifier.cursorPointer(caption = "Change LP").muClickable { duels.lpPad = if (duels.lpPad == seat) null else seat }
                     .padding(horizontal = 4.dp),
@@ -88,7 +89,7 @@ internal fun SeatBars(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout)
             }
             if (s.conceded == seat) Micro("Conceded", color = c.ink, size = 9.sp)
             Box(Modifier.weight(1f))
-            val counts = if (slot.width < 360f) "H ${st.hand.size} · D ${st.deck.size}"
+            val counts = if (slot.width < 460f) "H ${st.hand.size} · D ${st.deck.size}"
             else "Hand ${st.hand.size} · Deck ${st.deck.size} · Extra ${st.extra.size} · GY ${st.gy.size}"
             Mono(
                 counts,

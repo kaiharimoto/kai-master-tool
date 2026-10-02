@@ -190,7 +190,9 @@ object DuelLayouter {
 
         // Rows, top to bottom; the block is centred in the height.
         val totalH = tall(c, farScale, farHand) - margin * 2
-        var y = margin + ((height - margin * 2) - totalH).coerceAtLeast(0f) / 2f
+        // Centred in the height; on a phone, down by the thumbs, the room left above the far side.
+        val slack = ((height - margin * 2) - totalH).coerceAtLeast(0f)
+        var y = margin + if (form == FormFactor.PHONE) slack else slack / 2f
         val spots = LinkedHashMap<DuelSpot, Slot>()
         val bars = HashMap<Int, Slot>()
         val near = bottom
