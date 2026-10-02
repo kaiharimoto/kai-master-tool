@@ -90,9 +90,10 @@ class Duels(val dir: File) {
     private var timelineOf: DuelRecord? = null
     private var refusedOf: Pair<DuelRecord, Set<Int>>? = null
 
-    /** What the table shows: the replay where it stands, or the duel in play. */
+    /** What the table shows: the replay where it stands, the guest's view of the host's duel, or the duel in play. */
     val shown: DuelGame?
         get() {
+            if (role == NetRole.GUEST) return remote
             val r = replay ?: return game
             val t = timelineFor(r.record)
             val floor = r.record.entries.indexOfFirst { it.seat != null }.let { if (it < 0) r.record.entries.size else it }
@@ -160,6 +161,8 @@ class Duels(val dir: File) {
     /** Commits [actions] as one group by [seat]. False, and the reason said, when the table refuses. */
     fun act(actions: List<DuelAction>, seat: Int? = bottom): Boolean {
         if (replay != null) return insert(actions, seat)
+        if (role == NetRole.GUEST) return ask(actions)
+        if (role == NetRole.HOST) return hostAct(actions, seat ?: bottom)
         val g = game ?: return false
         if (actions.isEmpty()) return false
         val r = g.act(actions, seat, now())
@@ -251,6 +254,7 @@ class Duels(val dir: File) {
 
     fun undo() {
         if (replay != null) { step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, -1); return }
+        if (role != null) { askTakeBack(); return }
         val g = game ?: return
         if (!g.canUndo) return
         game = g.undo()
@@ -261,6 +265,7 @@ class Duels(val dir: File) {
 
     fun redo() {
         if (replay != null) { step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, 1); return }
+        if (role != null) return
         val g = game ?: return
         if (!g.canRedo) return
         game = g.redo()
@@ -309,6 +314,247 @@ class Duels(val dir: File) {
                 temp.renameTo(target)
             }
         }
+    }
+
+    // ---- two players over the network (1.0.77) -------------------------------------------------------
+
+    enum class NetRole { HOST, GUEST }
+
+    var role by mutableStateOf<NetRole?>(null)
+    var netStatus by mutableStateOf<String?>(null)
+    var netCode by mutableStateOf<String?>(null)
+    var peer by mutableStateOf<String?>(null)
+    /** The guest's table: the host's duel as its seat sees it, rebuilt from every update. */
+    var remote by mutableStateOf<DuelGame?>(null)
+    var remoteLines by mutableStateOf<List<com.kaiharimoto.mastertool.core.duel.net.Line>>(emptyList())
+    /** Who a response window waits on, as the guest was told. */
+    var remoteWaiting by mutableStateOf<Int?>(null)
+    /** A seat asking to take back its last move, for the other player to answer. */
+    var takeBackAsked by mutableStateOf<Int?>(null)
+    /** The next move goes ahead though a response window waits ("Go on anyway"). */
+    var forceNext = false
+    /** This player's own response windows, set by the page from its settings. */
+    var myWindows: String = com.kaiharimoto.mastertool.core.duel.net.Windows.ACTIVATIONS
+    private var guestWindows: String = com.kaiharimoto.mastertool.core.duel.net.Windows.ACTIVATIONS
+    private var hosting: DuelHosting? = null
+    private var link: DuelLink? = null
+    private var hostSeat: com.kaiharimoto.mastertool.core.duel.SeatSetup? = null
+    private var guestToken: String? = null
+    private var token: String? = null
+    private var sentTo = 0
+    private var seq = 0
+    /** This player's seat at a networked table: the host sits at 0, the guest at 1. */
+    val mySeat: Int get() = if (role == NetRole.GUEST) 1 else 0
+
+    /** Whose answer the table waits on now, if anyone's. */
+    val waitingFor: Int?
+        get() = when (role) {
+            NetRole.GUEST -> remoteWaiting
+            NetRole.HOST -> game?.state?.window?.responder
+            null -> null
+        }
+
+    /** Opens a table on the local network with [mine] at the host's seat; the code to share comes back in [netCode]. */
+    fun host(mine: com.kaiharimoto.mastertool.core.duel.SeatSetup) {
+        leave()
+        role = NetRole.HOST
+        hostSeat = mine
+        bottom = 0
+        netStatus = "Opening the table…"
+        val h = DuelHosting(onGuest = ::guestArrived, onProblem = { problem = it })
+        hosting = h
+        scope.launch {
+            val code = runCatching { h.open() }.getOrNull()
+            if (code == null) {
+                problem = "No local network to open a table on. Join the same Wi-Fi as the other player."
+                leave()
+            } else {
+                netCode = code
+                netStatus = "Waiting for someone to join"
+            }
+        }
+    }
+
+    private fun guestArrived(socket: java.net.Socket) {
+        if (link != null) { runCatching { socket.close() }; return }
+        val l = DuelLink(socket, ::hostHears) { _ ->
+            link = null
+            netStatus = "${peer ?: "The other player"} left. They can join again with the same code."
+        }
+        link = l
+        l.start()
+    }
+
+    private fun hostHears(w: com.kaiharimoto.mastertool.core.duel.net.Wire) {
+        val l = link ?: return
+        val h = hosting ?: return
+        when (w) {
+            is com.kaiharimoto.mastertool.core.duel.net.Wire.Hello -> {
+                com.kaiharimoto.mastertool.core.duel.net.DuelHost.knows(w, h.secret)?.let { why ->
+                    l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Rejected(why)); l.close(); link = null; return
+                }
+                guestWindows = w.windows
+                val back = w.token != null && w.token == guestToken && game != null
+                if (!back) {
+                    val mine = hostSeat ?: return
+                    guestToken = java.util.UUID.randomUUID().toString()
+                    start(
+                        DuelHeader(
+                            id = "n${now()}",
+                            seed = java.security.SecureRandom().nextLong(),
+                            seats = listOf(mine, com.kaiharimoto.mastertool.core.duel.SeatSetup(w.name.ifBlank { "Guest" }, w.main, w.extra, null, w.deckName)),
+                            created = now(),
+                        ),
+                    )
+                    role = NetRole.HOST
+                }
+                peer = w.name.ifBlank { "Guest" }
+                netStatus = "Playing ${peer} over the network"
+                sentTo = 0
+                l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Welcome(1, guestToken!!, hostSeat?.name.orEmpty()))
+                sendUpdate()
+            }
+            is com.kaiharimoto.mastertool.core.duel.net.Wire.Intent -> {
+                val g = game ?: return
+                val (resolved, why) = com.kaiharimoto.mastertool.core.duel.net.DuelHost.resolve(g.state, 1, g.header.seed, w.actions)
+                if (resolved == null) { l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Refused(w.seq, why ?: "No")); return }
+                val r = com.kaiharimoto.mastertool.core.duel.net.DuelHost.act(g, 1, resolved, windows(), w.force, now())
+                if (!r.ok) { l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Refused(w.seq, r.problem ?: "No")); return }
+                game = r.game
+                save()
+                sendUpdate()
+            }
+            is com.kaiharimoto.mastertool.core.duel.net.Wire.TakeBack -> if (w.ask) {
+                takeBackAsked = 1
+            } else if (w.yes) {
+                takeBack(0)
+            } else {
+                problem = "${peer ?: "They"} would rather you did not take it back"
+            }
+            is com.kaiharimoto.mastertool.core.duel.net.Wire.SetWindows -> guestWindows = w.windows
+            com.kaiharimoto.mastertool.core.duel.net.Wire.Bye -> { netStatus = "${peer ?: "The other player"} left the table."; link?.close(); link = null }
+            else -> Unit
+        }
+    }
+
+    private fun windows(): Map<Int, String> = mapOf(0 to myWindows, 1 to guestWindows)
+
+    private fun hostAct(actions: List<DuelAction>, seat: Int): Boolean {
+        val g = game ?: return false
+        val r = com.kaiharimoto.mastertool.core.duel.net.DuelHost.act(g, seat, actions, windows(), forceNext, now())
+        forceNext = false
+        if (!r.ok) { problem = r.problem; return false }
+        game = r.game
+        problem = null
+        save()
+        sendUpdate()
+        return true
+    }
+
+    private fun sendUpdate(takeBackFrom: Int? = null) {
+        val g = game ?: return
+        val l = link ?: return
+        sentTo = minOf(sentTo, g.cursor)
+        l.send(com.kaiharimoto.mastertool.core.duel.net.DuelHost.update(g, 1, sentTo, g.header.seed, catalog, takeBackFrom))
+        sentTo = g.cursor
+    }
+
+    /** Joins the table [code] names, with [mine] as this player's deck. */
+    fun join(code: String, mine: com.kaiharimoto.mastertool.core.duel.SeatSetup) {
+        val table = com.kaiharimoto.mastertool.core.duel.net.PairCode.decode(code) ?: run { problem = "That is not a table's code"; return }
+        leave()
+        role = NetRole.GUEST
+        bottom = 1
+        netStatus = "Joining…"
+        scope.launch {
+            val socket = runCatching { dial(table) }.getOrElse {
+                problem = "Could not reach the table at ${table.host}. Both of you need to be on the same network."
+                leave()
+                return@launch
+            }
+            val l = DuelLink(socket, ::guestHears) { _ ->
+                link = null
+                netStatus = "The table closed. Join again with the same code to sit back down."
+            }
+            link = l
+            l.start()
+            l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Hello(name = mine.name, main = mine.main, extra = mine.extra, deckName = mine.deckName, secret = table.secret, token = token, windows = myWindows))
+        }
+    }
+
+    private fun guestHears(w: com.kaiharimoto.mastertool.core.duel.net.Wire) {
+        when (w) {
+            is com.kaiharimoto.mastertool.core.duel.net.Wire.Welcome -> {
+                token = w.token
+                peer = w.hostName.ifBlank { "Host" }
+                netStatus = "Playing $peer over the network"
+                setupOpen = false
+            }
+            is com.kaiharimoto.mastertool.core.duel.net.Wire.Update -> {
+                remote = com.kaiharimoto.mastertool.core.duel.net.DuelMirror.game(w.view, DuelHeader(id = "remote"))
+                val first = w.lines.firstOrNull()?.i ?: w.cursor
+                remoteLines = remoteLines.filter { it.i < first && it.i < w.cursor } + w.lines
+                remoteWaiting = w.waitingFor
+                takeBackAsked = w.takeBackFrom
+            }
+            is com.kaiharimoto.mastertool.core.duel.net.Wire.Refused -> problem = w.reason
+            is com.kaiharimoto.mastertool.core.duel.net.Wire.Rejected -> { problem = w.reason; leave() }
+            else -> Unit
+        }
+    }
+
+    private fun ask(actions: List<DuelAction>): Boolean {
+        val l = link ?: run { problem = "Not connected to the table"; return false }
+        l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Intent(++seq, actions, forceNext))
+        forceNext = false
+        return true
+    }
+
+    /** Asks the other player to let this one take back its last move. */
+    private fun askTakeBack() {
+        when (role) {
+            NetRole.GUEST -> link?.send(com.kaiharimoto.mastertool.core.duel.net.Wire.TakeBack(ask = true))
+            NetRole.HOST -> sendUpdate(takeBackFrom = 0)
+            null -> Unit
+        }
+        problem = "Asked ${peer ?: "the other player"} to let you take it back"
+    }
+
+    /** The answer to a take-back request shown to this player. */
+    fun answerTakeBack(yes: Boolean) {
+        val asker = takeBackAsked ?: return
+        takeBackAsked = null
+        when (role) {
+            NetRole.HOST -> if (yes) takeBack(asker) else link?.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Refused(0, "${hostSeat?.name ?: "The host"} would rather you did not take it back"))
+            NetRole.GUEST -> link?.send(com.kaiharimoto.mastertool.core.duel.net.Wire.TakeBack(ask = false, yes = yes))
+            null -> Unit
+        }
+    }
+
+    /** [seat]'s last move undone on the host's table, when it is that seat's. */
+    private fun takeBack(seat: Int) {
+        val g = game ?: return
+        val last = g.entries.getOrNull(g.cursor - 1) ?: return
+        if (last.seat != seat || !g.canUndo) { problem = "The last move is not theirs to take back"; return }
+        game = g.undo()
+        save()
+        sendUpdate()
+    }
+
+    /** Leaves the networked table; the duel stays on this device. */
+    fun leave() {
+        link?.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Bye)
+        link?.close()
+        link = null
+        hosting?.close()
+        hosting = null
+        if (role == NetRole.GUEST) { remote = null; remoteLines = emptyList(); bottom = 0 }
+        role = null
+        netCode = null
+        netStatus = null
+        peer = null
+        remoteWaiting = null
+        takeBackAsked = null
     }
 
     // ---- replays --------------------------------------------------------------------------------------
@@ -523,6 +769,8 @@ class Duels(val dir: File) {
 
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */
     fun viewers(prefs: DuelPrefs): Set<Int> = when {
+        // At a networked table each player sees through their own seat's eyes, whatever the hot-seat setting.
+        role != null -> setOf(mySeat)
         shown?.state?.solo == true -> setOf(0)
         prefs.knowledge == DuelPrefs.KNOW_SEAT -> setOf(bottom)
         else -> setOf(0, 1)

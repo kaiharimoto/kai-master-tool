@@ -201,7 +201,11 @@ private fun placeWords(game: DuelGame, uid: Int, where: Place?): String {
 internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: Modifier = Modifier) {
     val c = Mu.colors
     val refused = duels.refused()
-    val lines = remember(game.header, game.entries, game.cursor, viewer, refused) { logLines(game, viewer, duels, refused) }
+    val remote = duels.remoteLines
+    val guest = duels.role == Duels.NetRole.GUEST
+    val lines = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest) {
+        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, viewer, duels, refused)
+    }
     val list = rememberLazyListState()
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) list.scrollToItem(lines.size - 1) }
     val chatFocus = remember { FocusRequester() }
@@ -251,6 +255,17 @@ internal sealed interface LogLine {
     data class Done(val text: String, val mine: Boolean, val struck: Boolean = false) : LogLine
     data class Noted(val text: String) : LogLine
     data class Said(val text: String) : LogLine
+}
+
+/** The guest's log: the lines the host sent it, a rule at each new turn. */
+private fun remoteLog(lines: List<com.kaiharimoto.mastertool.core.duel.net.Line>, me: Int): List<LogLine> {
+    val out = ArrayList<LogLine>()
+    var turn = 0
+    lines.forEach { l ->
+        if (l.turn != turn) { turn = l.turn; out += LogLine.Turn("Turn $turn") }
+        out += if (l.chat) LogLine.Said(l.text) else LogLine.Done(l.text, l.seat == me)
+    }
+    return out
 }
 
 private fun logLines(game: DuelGame, viewer: Int?, duels: Duels, refused: Set<Int>): List<LogLine> {

@@ -608,6 +608,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `DuelBrief` (the table in words through `DuelView` — never names a hidden card), knowledge self/auto/full with
   every auto peek logged, moves played out at a pace (`Duels.playOut`, checked whole first); combos in
   `<data>/duel/combos/<deck>.json`, steps by name never uid (`ComboRecorder`, `ComboRunner`).
+  **Two players** (1.0.77, `core/duel/net`): host-authoritative — the guest is only ever sent its own `DuelView`
+  and draws a `DuelMirror`; `DuelHost.resolve` refuses a ref the guest was never shown; `Wire` over a TCP socket
+  (`DuelLink`), paired by `PairCode` (LAN address, port, secret) or its QR; response windows per player
+  (`Windows`), take-backs asked of the other player. A relay (R5) is next, on the same messages.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

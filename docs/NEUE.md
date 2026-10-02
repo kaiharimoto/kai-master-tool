@@ -3062,6 +3062,32 @@ backed up — the duel in play is not synced) and lists every one to watch or de
   (`ComboRunner.missing`) and the whole line (`plan`) and then plays it out step by step — no Ai needed. Ai keeps,
   records and runs them through `duel_combo`.
 
+**Two players on the network** (1.0.77, `core/duel/net`, `neue/duel/DuelNet.kt`, `DuelOnline.kt`), kai's choice of
+direct play first and a relay later on the same messages:
+- **Host-authoritative.** The host's app holds the duel — the log, the seed, both decks — and is the only one that
+  shuffles or rolls. The guest's app is sent, after every move, **its own `DuelView`** (hidden cards as veils) and the
+  new log lines as its seat reads them (`DuelHost.update`), and draws a mirror of it (`DuelMirror.state`: a
+  `DuelState` whose cards are the view's refs, a deck's cards by place, `deckRef`), so the guest's page, clicks,
+  verbs and command line work unchanged — and the guest can never hold more than its seat may see. The host's own
+  page shows only the host's seat's eyes at a networked table, whatever the hot-seat setting.
+- **Intents**: the guest's moves go to the host as `Wire.Intent`s naming cards by ref; `DuelHost.resolve` turns them
+  into uids and refuses a card the guest was never shown (a veil still names an opponent's set card it destroys);
+  what a guest says or does as itself is always its own seat's.
+- **The wire** (`Wire`, `WireCodec`): Hello (name, deck, the code's secret, a seat token for coming back, its
+  window setting), Welcome, Update, Intent, Refused, Rejected, TakeBack, SetWindows, Bye — length-prefixed JSON over a
+  plain TCP socket (`DuelLink`, `java.net`, no server library; the desk and Android alike). `Wire.PROTO` refuses an
+  app of another version.
+- **Pairing** (`PairCode`): the host's LAN IPv4, port and a 16-bit secret in thirteen Crockford base-32 characters,
+  `K7Q2-M9XA-3FBCP` (typed I, L, O read as 1, 1, 0), and the same in a QR (`NMTDUEL:`). New duel › Host on the
+  network opens the table and shows both; Join a table takes the code. A dropped guest sits back down with the
+  same code (its token).
+- **Response windows** (`Windows`, each player's own setting — never, activations, activations and summons, every
+  move — plus auto-pass after 5–20 s): the other player's move that opens one holds the mover's next table move
+  (`DuelHost.act`) until the responder answers Respond or Pass, acts, or the mover chooses **Go on anyway**. Talk
+  (chat, pings, Thinking — kai's "a sign that they're thinking") never waits. `NetBar` under the bar shows it.
+- **Take-backs**: Undo at a networked table asks the other player, who allows or refuses it in the bar.
+- **Next (R5)**: a relay for play across the internet — the same `Wire` over websockets, the relay running `DuelHost`.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N`.
 

@@ -81,6 +81,8 @@ internal fun DuelPage(h: NeueHolders) {
     val replay = duels.replay
     Column(Modifier.fillMaxSize()) {
         if (replay != null) ReplayBar(duels, replay) else DuelBar(h, duels, prefs)
+        duels.myWindows = prefs.windows
+        if (duels.role != null) NetBar(h, duels)
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
         if (game == null) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -261,11 +263,16 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
     var me by remember { mutableStateOf(prefs.names.getOrElse(0) { "You" }) }
     var them by remember { mutableStateOf(prefs.names.getOrElse(1) { "Opponent" }) }
     val solo = theirs === nobody || theirs.id == "-"
+    var where by remember { mutableStateOf(if (duels.role == Duels.NetRole.HOST) "host" else if (duels.role == Duels.NetRole.GUEST) "join" else "here") }
+    val seat = { SeatSetup(me, mine.deck.main.map { it.value }, mine.deck.extra.map { it.value }, mine.id, mine.name) }
     MuDialog(
         "New duel",
         { duels.setupOpen = false },
         description = "Both decks are shuffled and five cards drawn each. The duel is kept as you play, so closing the window loses nothing.",
         footer = {
+            if (where != "here") {
+                MuButton("Close", { duels.setupOpen = false }, variant = BtnVariant.GHOST)
+            } else {
             MuButton("Cancel", { duels.setupOpen = false }, variant = BtnVariant.GHOST)
             MuButton("Shuffle and draw", {
                 if (mine.deck.main.isEmpty()) { neue.note = Note("That deck has no Main Deck to draw from."); return@MuButton }
@@ -284,8 +291,12 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
                 )
                 duels.setupOpen = false
             }, variant = BtnVariant.PRIMARY)
+            }
         },
     ) {
+        Segmented(where, listOf("here", "host", "join"), {
+            when (it) { "here" -> "On this screen"; "host" -> "Host on the network"; else -> "Join a table" }
+        }, { where = it }, small = true)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {
                 FieldLabel("Your deck")
@@ -296,17 +307,21 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
                 MuInput(me, { me = it }, Modifier.fillMaxWidth())
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f)) {
-                FieldLabel("Across the table")
-                MuSelect(theirs, choices + nobody, { it.name }, { theirs = it }, Modifier.fillMaxWidth())
+        if (where == "here") {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f)) {
+                    FieldLabel("Across the table")
+                    MuSelect(theirs, choices + nobody, { it.name }, { theirs = it }, Modifier.fillMaxWidth())
+                }
+                Column(Modifier.weight(0.6f)) {
+                    FieldLabel("Their name")
+                    MuInput(them, { them = it }, Modifier.fillMaxWidth())
+                }
             }
-            Column(Modifier.weight(0.6f)) {
-                FieldLabel("Their name")
-                MuInput(them, { them = it }, Modifier.fillMaxWidth())
-            }
+            Help("Two seats on one screen is a hot-seat: Tab sits you at the other.")
+        } else {
+            OnlineSetup(h, duels, hosting = where == "host", mine = seat)
         }
-        Help("Two seats on one screen is a hot-seat: Tab sits you at the other. Playing someone over the network comes in a later version.")
     }
 }
 

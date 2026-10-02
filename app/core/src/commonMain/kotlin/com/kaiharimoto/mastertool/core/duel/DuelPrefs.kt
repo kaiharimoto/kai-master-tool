@@ -26,6 +26,9 @@ data class DuelPrefs(
     val aiPace: Int = 450,
     /** Ai plays [aiSeat]'s turns by itself when the turn passes to it. */
     val aiPlays: Boolean = false,
+    /** Two players over the network (1.0.77): which of the other player's moves wait for this one (`Windows`), and auto-pass after so many seconds (0: never). */
+    val windows: String = "activations",
+    val autoPass: Int = 0,
 ) {
     companion object {
         const val KNOW_ALL = "all"
