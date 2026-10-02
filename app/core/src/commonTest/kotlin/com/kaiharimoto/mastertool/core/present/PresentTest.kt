@@ -105,6 +105,26 @@ class PresentTest {
     }
 
     @Test
+    fun spotlightKeepsWhatItHasRevealed() {
+        // kai (1.0.71): "the already revealed cards should stay revealed".
+        val f = DeckStage.frame(deck, steps(), Presentation.STYLE_SPOTLIGHT, 2, stage)
+        val starters = f.cards.filter { DeckStage.idOf(it.key) in 1..4 }
+        val extenders = f.cards.filter { DeckStage.idOf(it.key) in 5..8 }
+        val rest = f.cards.filter { DeckStage.idOf(it.key) in 9..14 }
+        assertTrue(starters.all { it.alpha == 1f && it.emphasis == 0f }, "talked about before: bright, not lifted")
+        assertTrue(extenders.all { it.alpha == 1f && it.emphasis == 1f }, "talked about now: lit and lifted")
+        assertTrue(rest.all { it.alpha < 0.5f }, "not yet: dim")
+        assertEquals(1f, f.labels.first { it.group == "g1" }.alpha)
+        assertTrue(f.labels.first { it.group == "g3" }.alpha < 0.5f)
+        // Going back takes the light back with it.
+        val back = DeckStage.frame(deck, steps(), Presentation.STYLE_SPOTLIGHT, 1, stage)
+        assertTrue(back.cards.filter { DeckStage.idOf(it.key) in 5..8 }.all { it.alpha < 0.5f })
+        // The whole deck at the end is all bright, as before.
+        val end = DeckStage.frame(deck, steps() + DeckFocus(all = true), Presentation.STYLE_SPOTLIGHT, 6, stage)
+        assertTrue(end.cards.all { it.alpha == 1f && it.emphasis == 0f })
+    }
+
+    @Test
     fun theTweenMatchesCopiesByKey() {
         val a = DeckStage.frame(deck, steps(), Presentation.STYLE_SPOTLIGHT, 0, stage)
         val b = DeckStage.frame(deck, listOf(DeckFocus(cards = listOf(1))), Presentation.STYLE_SLIDES, 0, stage)

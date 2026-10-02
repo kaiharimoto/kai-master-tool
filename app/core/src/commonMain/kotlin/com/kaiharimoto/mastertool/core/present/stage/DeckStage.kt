@@ -60,7 +60,7 @@ data class StageFrame(
  * glides between consecutive frames ([StageTween]), so nothing here knows about time.
  *
  * - **Spotlight**: the whole deck, as the builder lays it; the cards talked about lit and
- *   lifted, the rest dimmed.
+ *   lifted, those talked about before staying bright, the rest dimmed.
  * - **Slides**: what is talked about, large — one card, a few, a group as its piece — and
  *   the whole deck only on demand ([overview]).
  * - **Build-up**: only the cards talked about so far, laid out as a deck that fills the
@@ -146,6 +146,11 @@ object DeckStage {
                 val (area, note) = split(stage, wantsNote, focus.notePlace, deckAspect(deck, null), title, noteText)
                 val placed = whole(deck, area, sections = focus.sections.takeIf { focus.all })
                 val anyLit = !focus.all && lit.isNotEmpty()
+                // Spotlight keeps what it has revealed (kai, 1.0.71): the cards of earlier steps stay
+                // bright, and only the step's own focus is lifted and lit.
+                val keep = style == Presentation.STYLE_SPOTLIGHT && !focus.all
+                val seen = if (keep) revealed(deck, steps, step) else emptySet()
+                val seenGroups = if (keep) steps.take(step + 1).filter { !it.all }.flatMap { it.groups }.toSet() else emptySet()
                 placed.copy(
                     cards = placed.cards.map { c ->
                         val on = c.key in lit
@@ -153,14 +158,14 @@ object DeckStage {
                         c.copy(
                             alpha = when {
                                 !shown -> dim * 0.5f
-                                !anyLit || on -> 1f
+                                !anyLit || on || c.key in seen -> 1f
                                 else -> dim
                             },
                             emphasis = if (anyLit && on) 1f else 0f,
                         )
                     },
                     labels = placed.labels.map { l ->
-                        l.copy(alpha = if (!anyLit || focus.groups.contains(l.group)) 1f else dim)
+                        l.copy(alpha = if (!anyLit || focus.groups.contains(l.group) || l.group in seenGroups) 1f else dim)
                     },
                     note = note,
                     colors = colors,

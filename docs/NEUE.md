@@ -2741,6 +2741,8 @@ and tested): the deck slides each hold a `DeckFocus` (groups, cards, single copi
 title and a note), and the style decides what the stage draws.
 - **Spotlight**: the whole deck as the builder lays it (the snapshot's As is, Fitted or Separate), the cards
   talked about lifted and lit in the theme's highlight (glow, outline or lift), the rest at the theme's dim.
+  **What it has revealed stays revealed** (1.0.71, kai): the cards of earlier steps stay bright, unlifted, so the
+  deck lights up as it is explained; going back takes the light back with it.
 - **Slides**: what is talked about, large — one card with its count, several, a group — and the whole deck on
   demand (`D`) at any time.
 - **Build-up**: only the cards talked about so far, laid out as a deck that fills the stage, so the cards
