@@ -33,8 +33,8 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     /** Present's presentations and their pictures (1.0.70): files, the newer one kept. */
     private val present = File(com.kaiharimoto.neue.platform.Platform.dataDir, "present")
 
-    /** Duel's replays (1.0.75): files, the newer one kept. The duel in play is this device's own. */
-    private val replays = File(com.kaiharimoto.neue.platform.Platform.dataDir, "duel/replays")
+    /** Duel's replays (1.0.75) and combos (1.0.76): files, the newer one kept. The duel in play is this device's own. */
+    private val duel = File(com.kaiharimoto.neue.platform.Platform.dataDir, "duel")
 
     /** What came in this sync, so the screens showing it can be told once at the end. */
     val changed = mutableSetOf<String>()
@@ -57,7 +57,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
             files(ai, "ai/") { rel -> !privateToDevice(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(art, "art/") { true }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(present, "present/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
-            files(replays, "duel/replays/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
+            files(duel, "duel/") { rel -> !rel.endsWith(".tmp") && rel.substringAfterLast('/') != com.kaiharimoto.neue.duel.Duels.CURRENT }.forEach { (path, f) -> out[path] = seen.file(path, f) }
         }
         return out
     }
@@ -115,8 +115,8 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
                 seen.forget(path)
                 changed += "present"
             }
-            path.startsWith("duel/replays/") -> {
-                write(File(replays, path.removePrefix("duel/replays/")), bytes)
+            path.startsWith("duel/") && path != "duel/${com.kaiharimoto.neue.duel.Duels.CURRENT}" -> {
+                write(File(duel, path.removePrefix("duel/")), bytes)
                 seen.forget(path)
                 changed += "replays"
             }

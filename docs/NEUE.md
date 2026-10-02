@@ -3042,6 +3042,26 @@ backed up — the duel in play is not synced) and lists every one to watch or de
 - **Play from here** (`Enter`) is the "what if": the duel as it stood, as the duel in play (`Replays.branch`), the
   same seed; its record keeps `parent`/`parentAt`, and the library marks it a what-if.
 
+**Ai at the table** (1.0.76, `core/duel/ai`, `neue/ai/AiDuel.kt`, `neue/duel/DuelAi.kt`, skill `duel-table`):
+- **What it may know** (`DuelPrefs.aiKnowledge`, kai's three and a fourth for symmetry): *its seat's eyes* (`DuelBrief`
+  from `DuelView` — a hidden card is never named, only a veil), *everything* (a tester's view; still never a deck's
+  order), and **auto** — its own eyes, plus `duel_peek` when it judges a hidden card would change its play; every
+  peek is a `Note` in the log with its reason, for both players to read. A peek in any other mode is refused.
+- **Tools**: `duel_state` (the table in words, `#uid` for each card the seat can see), `duel_act` (ops as the command
+  line says them — `summon #12 to m3`, `chain ash`, `link #40`, `attach #7 to #40`, `end` — checked whole by
+  `ComboRunner.plan` before anything moves, then **played out one step at a time at the page's pace** so the person
+  watches it happen; each step its own undo, Esc stops it), `duel_peek`, `duel_log`, `duel_setup`, `duel_combo`.
+  `#uid`s and `link` (a chain link for a card where it stands) are the command line's too.
+- **Seats**: Ai plays the seat set in **Ai · Combos** (the other one by default). *Play this turn* asks it now;
+  **Takes its seat's turns by itself** asks it once a turn as the turn passes to it (`Duels.aiAskedTurn`). The
+  prompt (`turnPrompt`) tells it to stop where the person could respond — a manual table has no response windows
+  yet (R4) — and the `duel-table` skill says how to play a manual table honestly.
+- **Combos** (`Combo`, `ComboBook`, `<data>/duel/combos/<deckId>.json`, synced and backed up): what a line needs in hand
+  and its steps as command lines with **names, never uids**, so a combo plays against any shuffle. **Record this
+  turn** turns the bottom seat's moves since the last End Turn into one (`ComboRecorder`); **Run** checks the hand
+  (`ComboRunner.missing`) and the whole line (`plan`) and then plays it out step by step — no Ai needed. Ai keeps,
+  records and runs them through `duel_combo`.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N`.
 

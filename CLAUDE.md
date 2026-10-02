@@ -604,6 +604,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   as the table first drew — `NonLocalReturnTest` scans every shipped class. **Replays** (1.0.75):
   `<data>/duel/replays/` (synced, backed up), `Replays` steps by gesture/phase/turn both ways, inserts, cuts a
   step, notes, branches a what-if; `DeskScope.REPLAY` replaces the duel's keys while one is open.
+  **Ai at the table** (1.0.76): `duel_state`/`duel_act`/`duel_peek`/`duel_log`/`duel_setup`/`duel_combo` (`AiDuel`),
+  `DuelBrief` (the table in words through `DuelView` — never names a hidden card), knowledge self/auto/full with
+  every auto peek logged, moves played out at a pace (`Duels.playOut`, checked whole first); combos in
+  `<data>/duel/combos/<deck>.json`, steps by name never uid (`ComboRecorder`, `ComboRunner`).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

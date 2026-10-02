@@ -898,6 +898,98 @@ object AiTools {
         phase = 3,
     )
 
+    // ---- Duel (1.0.76): Ai at the table -------------------------------------------------------------
+
+    val duelState = ToolSpec(
+        "duel_state",
+        "Duel (07): the table as one seat sees it — whose turn, the phase, the chain, each seat's LP, hand, zones, GY, banished, Extra Deck " +
+            "and deck count. Cards you can see are written #uid with their name; hidden ones are 'a face-down card [?veil]'. perspective: " +
+            "self (the seat you act as — the honest one, and the default), opponent (theirs), full (everything, for testing), auto (yours; " +
+            "duel_peek when you judge you must know more). Follow the person's knowledge setting unless they say otherwise.",
+        schema {
+            enum("perspective", "Whose eyes", com.kaiharimoto.mastertool.core.duel.ai.DuelBrief.PERSPECTIVES)
+            integer("seat", "The seat you act as: 0 the bottom player, 1 across the table; omit for the one set on the page", min = 0, max = 1)
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val duelAct = ToolSpec(
+        "duel_act",
+        "Duel (07): plays moves on the table for a seat, each op a line of the duel's command line, checked all together before anything moves " +
+            "and then played out one by one at a pace the person can follow (each one step of their Undo). Ops say what a player says: " +
+            "'summon #12 to m3', 'set called by', 'activate pot', 'chain ash' (a hand trap: to the GY and on the chain), 'link #40' (an effect " +
+            "where it stands), 'attach #7 to #40', '#9 to gy', 'banish #3', 'ash to hand' (a search), 'draw', 'mill 2', 'shuffle', 'lp opp -1000', " +
+            "'bp', 'm2', 'end', 'resolve', 'coin', 'token', 'reveal #5', 'say ok?'. Use #uids from duel_state where a name could mean two cards. " +
+            "You can only name cards your seat may see (and your own deck's, to search it).",
+        schema {
+            strings("ops", "The moves, in order", required = true)
+            integer("seat", "The seat acting; omit for the one set on the page", min = 0, max = 1)
+            integer("pace_ms", "Milliseconds between moves, 0 for all at once; default the page's pace", min = 0, max = 5000)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val duelPeek = ToolSpec(
+        "duel_peek",
+        "Duel (07), auto knowledge only: look at something your seat could not see — their hand, a set card, the top of a deck — when you judge " +
+            "you need it. Every peek is written in the duel's log with your reason, for both players to see. Refused in self or opponent knowledge.",
+        schema {
+            enum("what", "What to look at", listOf("their_hand", "their_set", "their_deck_top", "my_deck_top"), required = true)
+            integer("count", "For a deck top: how many cards", min = 1, max = 10)
+            string("reason", "Why you need it, in a sentence; it is written in the log", required = true)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val duelLog = ToolSpec(
+        "duel_log",
+        "Duel (07): the duel's log in words, as one seat saw it (perspective as duel_state), the last 'count' lines.",
+        schema {
+            enum("perspective", "Whose eyes", com.kaiharimoto.mastertool.core.duel.ai.DuelBrief.PERSPECTIVES)
+            integer("count", "How many lines from the end; default 40", min = 1, max = 400)
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val duelSetup = ToolSpec(
+        "duel_setup",
+        "Duel (07): starts a new duel — both decks shuffled and five cards drawn each. deck_id is the bottom seat's (omit for the builder's deck), " +
+            "opponent_deck_id the other's; solo for one player's table (a test hand). The duel in play is replaced: keep it first with the Replays button if it matters.",
+        schema {
+            string("deck_id", "The bottom seat's deck; omit for the builder's")
+            string("opponent_deck_id", "The other seat's deck; omit for the same deck")
+            boolean("solo", "One player's table, to test a hand")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val duelCombo = ToolSpec(
+        "duel_combo",
+        "Duel (07): a deck's combos — lines kept with the deck, each what it needs in hand and its steps as duel_act ops (names, never #uids, so " +
+            "they play against any shuffle). list {deck_id}; get {combo_id}; save {name, needs, steps, notes, deck_id} (a new one, or combo_id to " +
+            "replace); record {name, from_entry, to_entry} turns a span of the duel's log into one; run {combo_id, pace_ms} plays it on the table " +
+            "for the seat whose deck it is, checked first, stopping before anything moves if a step cannot be done.",
+        schema {
+            enum("action", "What to do", listOf("list", "get", "save", "record", "run"), required = true)
+            string("deck_id", "The deck; omit for the bottom seat's in the duel, else the builder's")
+            string("combo_id", "A combo's id")
+            string("name", "Its name")
+            strings("needs", "Cards it needs in hand to start")
+            strings("steps", "Its steps, as duel_act ops")
+            string("notes", "When to play it, what it beats, what stops it")
+            integer("from_entry", "record: the first log entry of the line (duel_log numbers them)", min = 0)
+            integer("to_entry", "record: the entry after the last", min = 0)
+            integer("pace_ms", "run: milliseconds between steps", min = 0, max = 5000)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
@@ -905,6 +997,7 @@ object AiTools {
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
+        "duel_state", "duel_log",
     )
 
     /** Every tool, in the order they are offered. */
@@ -921,6 +1014,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
+        duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

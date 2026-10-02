@@ -20,6 +20,12 @@ data class DuelPrefs(
     val names: List<String> = listOf("You", "Opponent"),
     /** Whether the log and chat stand beside the table. */
     val logShown: Boolean = true,
+    /** Ai at the table (1.0.76): what it may know (`DuelBrief`: self, opponent, full, auto), the seat it plays, its pace. */
+    val aiKnowledge: String = "self",
+    val aiSeat: Int = 1,
+    val aiPace: Int = 450,
+    /** Ai plays [aiSeat]'s turns by itself when the turn passes to it. */
+    val aiPlays: Boolean = false,
 ) {
     companion object {
         const val KNOW_ALL = "all"

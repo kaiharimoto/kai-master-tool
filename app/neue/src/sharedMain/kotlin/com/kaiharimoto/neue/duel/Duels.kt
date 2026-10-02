@@ -464,6 +464,63 @@ class Duels(val dir: File) {
         }
     }
 
+    // ---- combos and Ai (1.0.76) ----------------------------------------------------------------------
+
+    /** Whether moves are being played out a step at a time (a combo, Ai's turn); Esc stops them. */
+    var playing by mutableStateOf(false)
+    var stopRequested = false
+    var combosOpen by mutableStateOf(false)
+    /** The last turn Ai was asked to play, so a turn is asked for once. */
+    var aiAskedTurn = -1
+
+    /** The deck a seat is playing, for its combos: the duel's own, else none. */
+    fun deckOf(seat: Int): String? = shown?.header?.seats?.getOrNull(seat)?.deckId
+
+    suspend fun combos(deckId: String): com.kaiharimoto.mastertool.core.duel.ai.ComboBook = withContext(Dispatchers.IO) {
+        File(dir, com.kaiharimoto.mastertool.core.duel.ai.ComboCodec.path(deckId)).takeIf { it.exists() }
+            ?.readText()?.let(com.kaiharimoto.mastertool.core.duel.ai.ComboCodec::decode)
+            ?: com.kaiharimoto.mastertool.core.duel.ai.ComboBook()
+    }
+
+    suspend fun saveCombos(deckId: String, book: com.kaiharimoto.mastertool.core.duel.ai.ComboBook) = io.withLock {
+        withContext(Dispatchers.IO) {
+            val target = File(dir, com.kaiharimoto.mastertool.core.duel.ai.ComboCodec.path(deckId))
+            target.parentFile?.mkdirs()
+            val temp = File(target.parentFile, "${target.name}.tmp")
+            temp.writeText(com.kaiharimoto.mastertool.core.duel.ai.ComboCodec.encode(book))
+            if (!temp.renameTo(target)) { target.delete(); temp.renameTo(target) }
+        }
+    }
+
+    /**
+     * [steps] played on the table for [seat], checked whole first (nothing moves if a step cannot be
+     * done), then one step at a time [paceMs] apart, each its own step of undo. Returns what happened in
+     * words: the steps played, and where it stopped if the person stopped it or the table changed under it.
+     */
+    suspend fun playOut(steps: List<String>, seat: Int, paceMs: Long): String {
+        val g = game ?: return "There is no duel on the table."
+        val plan = com.kaiharimoto.mastertool.core.duel.ai.ComboRunner.plan(g.state, seat, steps, catalog)
+        if (!plan.ok) return "Nothing was played. ${plan.problem}"
+        playing = true
+        stopRequested = false
+        var done = 0
+        try {
+            for ((text, actions) in plan.steps) {
+                if (stopRequested) return "Stopped by the person after $done of ${plan.steps.size} steps."
+                if (!act(actions, seat)) return "Played $done of ${plan.steps.size}; “$text” no longer fits the table: ${problem ?: "refused"}."
+                done++
+                if (paceMs > 0) delay(paceMs)
+            }
+        } finally {
+            playing = false
+        }
+        return "Played all ${plan.steps.size} steps."
+    }
+
+    fun useIndex(index: com.kaiharimoto.mastertool.core.search.CardIndex) {
+        catalog = DuelCatalog { code -> index.byId(com.kaiharimoto.mastertool.core.model.CardId(code))?.let(com.kaiharimoto.mastertool.core.duel.DuelCardInfo::of) }
+    }
+
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */
     fun viewers(prefs: DuelPrefs): Set<Int> = when {
         shown?.state?.solo == true -> setOf(0)

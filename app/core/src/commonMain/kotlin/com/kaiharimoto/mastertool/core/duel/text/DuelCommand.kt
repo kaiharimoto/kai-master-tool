@@ -117,6 +117,12 @@ object DuelCommand {
                 return Parsed.Actions(actions, if (count > 1) "$count tokens" else "Token")
             }
             "clear" -> if (rest.firstOrNull() == "chain" || rest.isEmpty()) return one(DuelAction.ChainClear, "Clear the chain")
+            // A chain link for a card where it stands (an effect on the field or in the GY), nothing moved.
+            "link", "effect" -> {
+                val q = rest.joinToString(" ").ifBlank { return Parsed.Problem("Which card's effect?") }
+                val uid = find(q, s, seat, catalog, null, false) ?: return Parsed.Problem("No card you can see matches “$q”")
+                return one(DuelAction.ChainAdd(seat, uid), "Effect: ${catalog.nameOf(s.cards.getValue(uid))}")
+            }
         }
         return cardCommand(words, s, seat, catalog)
     }
@@ -263,6 +269,12 @@ object DuelCommand {
      * field, the graveyard, banishment, the Extra Deck and last the deck — the order a player reaches.
      */
     fun find(query: String, s: DuelState, seat: Int, catalog: DuelCatalog, from: PileKind?, fieldOnly: Boolean): Int? {
+        // "#17": a card by its uid, as Ai is shown them — only one the seat may see (or its own deck's).
+        Regex("^#(\\d+)$").find(query.trim())?.let { m ->
+            val uid = m.groupValues[1].toInt()
+            val own = s.cards[uid]?.owner == seat && s.placeOf(uid).let { it is Place.Pile && (it.kind == PileKind.DECK || it.kind == PileKind.EXTRA) }
+            return uid.takeIf { it in s.cards && (DuelSight.sees(s, uid, seat) || own) }
+        }
         val other = 1 - seat
         val mine = s.seats[seat]
         val theirs = s.seats[other]

@@ -449,6 +449,33 @@ TITLE for the open, SECTION between parts, TITLE_BODY for a point, TWO_COLUMN fo
 `present_view` lists what a viewer would trip over. A slide is done when it lists nothing but, at most, missing speaker notes you are about to write.
 """
 
+    const val DUEL_TABLE_NAME = "duel-table"
+    const val DUEL_TABLE_DESCRIPTION =
+        "Playing at the Duel page's table: reading it honestly from one seat, moving cards with duel_act, running and recording combos."
+
+    const val DUEL_TABLE: String = """# At the duel table
+The Duel page (07) is a manual table: nothing enforces card text, so you play the cards as their text says, and say what you do.
+
+## Reading it
+- `duel_state` first, every turn. Its perspective is a promise: **self** means you know only what your seat could know — never guess a
+  hidden card's name from anything else. **full** is for testing when the person asks. **auto** is self, plus `duel_peek` when you judge a
+  hidden card would change your play; the peek and your reason go in the log, so peek rarely and say why.
+- Cards are `#uid` with their name. Use the uid in ops when a name could be two cards (two copies on the field).
+
+## Moving
+- `duel_act` with ops as a player says them: `summon #12 to m3`, `set called by`, `activate pot`, `chain ash`, `link #40` (an effect on the
+  field or in the GY: a chain link, nothing moved), `attach #7 to #40`, `#9 to gy`, `banish #3`, `ash to hand`, `draw`, `mill 2`,
+  `lp opp -1000`, `bp`, `end`, `resolve`.
+- Play a turn as a sequence of ops in one call: it is checked whole first, then played at a pace the person can watch. Pay costs as moves
+  (discard, tribute, detach) before the effect; resolve the chain (`resolve`) in order.
+- In a duel against the person, stop where they could respond: after an activation or a summon that matters, end the call and say what
+  you did, so they can chain. Only in a combo the person asked to see do you play straight through.
+
+## Combos
+- `duel_combo` list the deck's combos before inventing one; `run` plays a saved one (it checks the hand first).
+- When a line works, `save` it (needs and steps, names not uids) or `record` it from the log, with notes on what stops it.
+"""
+
     const val RESTYLE_NAME = "restyle"
     const val RESTYLE_DESCRIPTION =
         "Changes how a presentation looks from the person's words or a picture: the theme, its colors and faces, backgrounds and fills, never the content."

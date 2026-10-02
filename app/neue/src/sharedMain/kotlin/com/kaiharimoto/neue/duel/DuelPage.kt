@@ -142,6 +142,15 @@ internal fun DuelPage(h: NeueHolders) {
     }
     if (duels.setupOpen) SetupDialog(h, duels)
     if (duels.libraryOpen) ReplayLibrary(duels)
+    if (duels.combosOpen) DuelAiDialog(h)
+    // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
+    val live = duels.game
+    LaunchedEffect(live?.state?.turn, live?.state?.active, prefs.aiPlays) {
+        val g = duels.game ?: return@LaunchedEffect
+        if (prefs.aiPlays && neue.prefs.ai.enabled && !g.state.solo && g.state.active == prefs.aiSeat &&
+            duels.aiAskedTurn != g.state.turn && duels.replay == null && !h.ai.running
+        ) askAiToPlay(h)
+    }
 }
 
 /** The page's own row: the duel's shape, the seat, the hot-seat's knowledge, undo and the command line. */
@@ -175,6 +184,9 @@ private fun DuelBar(h: NeueHolders, duels: Duels, prefs: DuelPrefs) {
             }
             Tip("Keep this duel, or watch one again") {
                 MuButton("Replays", { duels.libraryOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+            }
+            Tip(if (neue.prefs.ai.enabled) "${h.ai.name} at the table, and the deck's combos" else "The deck's combos") {
+                MuButton(if (neue.prefs.ai.enabled && !phone) "${h.ai.name} · Combos" else "Combos", { duels.combosOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
             }
             if (game != null) {
                 if (!game.state.solo) {

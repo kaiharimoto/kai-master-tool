@@ -185,6 +185,8 @@ object BuiltInSkills {
         3 to Skill(DeckSkills.SLIDE_DESIGN_NAME, DeckSkills.SLIDE_DESIGN_DESCRIPTION, DeckSkills.SLIDE_DESIGN.trim(), builtIn = true),
         // Restyle (1.0.72): the look from the person's words or a picture.
         3 to Skill(DeckSkills.RESTYLE_NAME, DeckSkills.RESTYLE_DESCRIPTION, DeckSkills.RESTYLE.trim(), builtIn = true),
+        // Duel (1.0.76): Ai at the table — honest knowledge, moves as a player says them, combos.
+        3 to Skill(DeckSkills.DUEL_TABLE_NAME, DeckSkills.DUEL_TABLE_DESCRIPTION, DeckSkills.DUEL_TABLE.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

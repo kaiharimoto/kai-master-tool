@@ -110,6 +110,8 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
     if (h.neue.page != Page.DUEL || h.neue.hasTop || h.overlays.isOpen) return false
     val d = h.duel
     when {
+        d.playing -> d.stopRequested = true
+        d.combosOpen -> d.combosOpen = false
         d.setupOpen -> d.setupOpen = false
         d.libraryOpen -> d.libraryOpen = false
         d.lpPad != null -> d.lpPad = null
