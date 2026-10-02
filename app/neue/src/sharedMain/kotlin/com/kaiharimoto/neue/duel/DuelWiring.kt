@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
@@ -51,7 +52,24 @@ private val ZONES = mapOf(
 internal fun runDuel(h: NeueHolders, action: DeskAction) {
     val duels = h.duel
     if (action == DeskAction.DUEL_NEW) { duels.setupOpen = true; return }
-    val game = duels.game ?: return
+    if (duels.replay != null) {
+        when (action) {
+            DeskAction.REPLAY_BACK -> duels.step(ReplayUnit.GROUP, -1)
+            DeskAction.REPLAY_FORWARD -> duels.step(ReplayUnit.GROUP, 1)
+            DeskAction.REPLAY_BACK_PHASE -> duels.step(ReplayUnit.PHASE, -1)
+            DeskAction.REPLAY_FORWARD_PHASE -> duels.step(ReplayUnit.PHASE, 1)
+            DeskAction.REPLAY_BACK_TURN -> duels.step(ReplayUnit.TURN, -1)
+            DeskAction.REPLAY_FORWARD_TURN -> duels.step(ReplayUnit.TURN, 1)
+            DeskAction.REPLAY_START -> duels.seek(0)
+            DeskAction.REPLAY_END -> duels.seek(Int.MAX_VALUE)
+            DeskAction.REPLAY_PLAY -> duels.play(1)
+            DeskAction.REPLAY_DELETE -> duels.deleteStep()
+            DeskAction.REPLAY_BRANCH -> duels.branch()
+            else -> Unit
+        }
+        return
+    }
+    val game = duels.shown ?: return
     val s = game.state
     VERBS[action]?.let { verb ->
         // The card under the pointer, else the one selected, else the one being read.
@@ -93,12 +111,14 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
     val d = h.duel
     when {
         d.setupOpen -> d.setupOpen = false
+        d.libraryOpen -> d.libraryOpen = false
         d.lpPad != null -> d.lpPad = null
         d.attaching != null -> d.attaching = null
         d.drawer != null -> d.drawer = null
         d.strip != null -> d.strip = null
         d.verbsOpen -> d.verbsOpen = false
         d.selection.isNotEmpty() -> d.selection = emptySet()
+        d.replay != null -> d.closeReplay()
         else -> return false
     }
     return true

@@ -200,7 +200,8 @@ private fun placeWords(game: DuelGame, uid: Int, where: Place?): String {
 @Composable
 internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: Modifier = Modifier) {
     val c = Mu.colors
-    val lines = remember(game.header, game.entries, game.cursor, viewer) { logLines(game, viewer, duels) }
+    val refused = duels.refused()
+    val lines = remember(game.header, game.entries, game.cursor, viewer, refused) { logLines(game, viewer, duels, refused) }
     val list = rememberLazyListState()
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) list.scrollToItem(lines.size - 1) }
     val chatFocus = remember { FocusRequester() }
@@ -221,7 +222,14 @@ internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: M
                     is LogLine.Said -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)) {
                         Box(Modifier.background(c.ink06).padding(horizontal = 6.dp, vertical = 3.dp)) { Small(line.text, color = c.ink) }
                     }
-                    is LogLine.Done -> Small(line.text, Modifier.padding(horizontal = 12.dp, vertical = 2.dp), color = if (line.mine) c.ink else c.ink70)
+                    is LogLine.Done -> if (line.struck) {
+                        Small("${line.text} — no longer fits", Modifier.padding(horizontal = 12.dp, vertical = 2.dp), color = c.ink25)
+                    } else {
+                        Small(line.text, Modifier.padding(horizontal = 12.dp, vertical = 2.dp), color = if (line.mine) c.ink else c.ink70)
+                    }
+                    is LogLine.Noted -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                        Box(Modifier.border(1.dp, c.ink).padding(horizontal = 6.dp, vertical = 3.dp)) { Small(line.text, color = c.ink) }
+                    }
                 }
             }
         }
@@ -240,22 +248,25 @@ internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: M
 
 internal sealed interface LogLine {
     data class Turn(val text: String) : LogLine
-    data class Done(val text: String, val mine: Boolean) : LogLine
+    data class Done(val text: String, val mine: Boolean, val struck: Boolean = false) : LogLine
+    data class Noted(val text: String) : LogLine
     data class Said(val text: String) : LogLine
 }
 
-private fun logLines(game: DuelGame, viewer: Int?, duels: Duels): List<LogLine> {
+private fun logLines(game: DuelGame, viewer: Int?, duels: Duels, refused: Set<Int>): List<LogLine> {
     val out = ArrayList<LogLine>()
     var s = DuelSetup.initial(game.header)
     game.played.forEachIndexed { i, e ->
-        val after = (DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok)?.state ?: s
+        val applied = DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok
+        val after = applied?.state ?: s
         if (i == game.floor) out += LogLine.Turn("Turn 1")
         if (i >= game.floor) {
             when (e.action) {
                 is DuelAction.Chat -> out += LogLine.Said(DuelWords.say(s, after, e, viewer, duels.catalog))
                 DuelAction.EndTurn -> out += LogLine.Turn("Turn ${after.turn} · ${DuelWords.seatName(after, after.active)}")
+                is DuelAction.Note -> out += LogLine.Noted(DuelWords.say(s, after, e, viewer, duels.catalog))
                 is DuelAction.Thinking, is DuelAction.Ping -> out += LogLine.Done(DuelWords.say(s, after, e, viewer, duels.catalog), false)
-                else -> out += LogLine.Done(DuelWords.say(s, after, e, viewer, duels.catalog), e.seat == duels.bottom)
+                else -> out += LogLine.Done(DuelWords.say(s, after, e, viewer, duels.catalog), e.seat == duels.bottom, struck = applied == null || e.i in refused)
             }
         }
         s = after

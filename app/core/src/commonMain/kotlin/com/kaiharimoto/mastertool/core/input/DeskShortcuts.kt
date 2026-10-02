@@ -227,6 +227,21 @@ enum class DeskAction {
     DUEL_ZONE_EMZ_LEFT,
     DUEL_ZONE_EMZ_RIGHT,
     DUEL_ZONE_FIELD,
+
+    /** A replay (1.0.75): a step, a phase or a turn either way; the ends; play; edit. */
+    REPLAY_BACK,
+    REPLAY_FORWARD,
+    REPLAY_BACK_PHASE,
+    REPLAY_FORWARD_PHASE,
+    REPLAY_BACK_TURN,
+    REPLAY_FORWARD_TURN,
+    REPLAY_START,
+    REPLAY_END,
+    REPLAY_PLAY,
+    /** The step just played, taken out of the replay. */
+    REPLAY_DELETE,
+    /** "What if": play on from here as a duel of its own. */
+    REPLAY_BRANCH,
     ;
 
     companion object {
@@ -260,6 +275,9 @@ enum class DeskScope(val heading: String) {
 
     /** On Duel, with nothing covering it (1.0.74). Verbs act on the card under the pointer. */
     DUEL("Duelling"),
+
+    /** A replay open on the Duel page (1.0.75). */
+    REPLAY("Watching a replay"),
 }
 
 /** What is on screen, which decides which desk shortcuts are live. */
@@ -280,6 +298,8 @@ data class DeskContext(
     val presenting: Boolean = false,
     /** Duel is the page on screen (1.0.74). */
     val onDuel: Boolean = false,
+    /** A replay is open on it (1.0.75): its keys stand in for the duel's. */
+    val replaying: Boolean = false,
 )
 
 data class DeskShortcut(
@@ -451,6 +471,20 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("7"), DeskAction.DUEL_ZONE_EMZ_RIGHT, DeskScope.DUEL, "To the right Extra Monster Zone"),
         DeskShortcut(KeyChord("0"), DeskAction.DUEL_ZONE_FIELD, DeskScope.DUEL, "To the Field Zone"),
 
+        DeskShortcut(KeyChord("left"), DeskAction.REPLAY_BACK, DeskScope.REPLAY, "A step back", repeatable = true),
+        DeskShortcut(KeyChord("right"), DeskAction.REPLAY_FORWARD, DeskScope.REPLAY, "A step on", repeatable = true),
+        DeskShortcut(KeyChord("left", shift = true), DeskAction.REPLAY_BACK_PHASE, DeskScope.REPLAY, "A phase back", repeatable = true),
+        DeskShortcut(KeyChord("right", shift = true), DeskAction.REPLAY_FORWARD_PHASE, DeskScope.REPLAY, "A phase on", repeatable = true),
+        DeskShortcut(ctrl("left"), DeskAction.REPLAY_BACK_TURN, DeskScope.REPLAY, "A turn back", repeatable = true),
+        DeskShortcut(ctrl("right"), DeskAction.REPLAY_FORWARD_TURN, DeskScope.REPLAY, "A turn on", repeatable = true),
+        DeskShortcut(KeyChord("home"), DeskAction.REPLAY_START, DeskScope.REPLAY, "The start"),
+        DeskShortcut(KeyChord("end"), DeskAction.REPLAY_END, DeskScope.REPLAY, "The end"),
+        DeskShortcut(KeyChord("space"), DeskAction.REPLAY_PLAY, DeskScope.REPLAY, "Play or pause"),
+        DeskShortcut(KeyChord("delete"), DeskAction.REPLAY_DELETE, DeskScope.REPLAY, "Take out the step just played"),
+        DeskShortcut(KeyChord("enter"), DeskAction.REPLAY_BRANCH, DeskScope.REPLAY, "What if: play on from here"),
+        DeskShortcut(ctrl("z"), DeskAction.UNDO, DeskScope.REPLAY, "A step back", repeatable = true),
+        DeskShortcut(ctrl("z", shift = true), DeskAction.REDO, DeskScope.REPLAY, "A step on", repeatable = true),
+
         DeskShortcut(KeyChord("up"), DeskAction.POOL_PREVIOUS, DeskScope.POOL, "Previous result, or the card above the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("down"), DeskAction.POOL_NEXT, DeskScope.POOL, "Next result, or the card below the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter"), DeskAction.POOL_ADD, DeskScope.POOL, "Add the result to the deck", allowedInTextInput = true, repeatable = true),
@@ -478,7 +512,8 @@ object DeskShortcuts {
             (context.searchFocused || !context.textInputFocused)
         DeskScope.PRESENT_EDIT -> !context.overlayOpen && context.onPresent && !context.presenting && !context.onBuilder
         DeskScope.PRESENTING -> !context.overlayOpen && context.presenting
-        DeskScope.DUEL -> !context.overlayOpen && context.onDuel && !context.onBuilder
+        DeskScope.DUEL -> !context.overlayOpen && context.onDuel && !context.onBuilder && !context.replaying
+        DeskScope.REPLAY -> !context.overlayOpen && context.onDuel && !context.onBuilder && context.replaying
     }
 
     /**

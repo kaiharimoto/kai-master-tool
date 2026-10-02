@@ -3026,7 +3026,24 @@ marked Set. `DuelInspector` and `DuelLogRail` are the rails; the bar holds New d
 "Both hands" or "This seat's eyes" (the hot-seat's knowledge; never a deck's order either way), undo and the
 command line. `DuelPrefs` (`NeuePreferences.duel`, synced, internal to Ai) remembers the shape and the decks.
 
-**Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy`.
+**Replays** (1.0.75, `core/duel/replay/Replays`, `neue/duel/DuelReplay.kt`): **Replays** on the bar keeps the
+duel in play as `<data>/duel/replays/<id>.json` (a `DuelRecord` with a name and when it was saved; **synced** and
+backed up — the duel in play is not synced) and lists every one to watch or delete.
+- **Watching**: the bar becomes the replay's — a step (one gesture: an Xyz Summon and its materials are one step),
+  a phase or a turn back or on (`←`/`→`, with Shift, with Ctrl), the ends (`Home`/`End`), **play forwards or
+  backwards** at ½× to 4× (`Space`) — and a timeline under it: a tick per step, a taller one at each phase, a rule at
+  each turn, a mark at each note; a click or a drag anywhere goes there. DuelingBook's replays cannot step back.
+- The table is the replay where it stands (`Duels.shown`, folded by `DuelTimeline` from snapshots), drawn and
+  glided as the live table is, so a step back is a card gliding home.
+- **Editing**: anything done on the table while a replay is open goes *into it* where it stands (`Replays.insert`,
+  one new group); **Cut step** (`Delete`) takes out the step just played (`deleteGroup`); **Note** writes a line at
+  this moment (`annotate`, a `Note` action — it changes nothing on the table). Edits are written at once. Steps
+  that no longer fit after an edit are struck through in the log and short on the timeline, never refused.
+- **Play from here** (`Enter`) is the "what if": the duel as it stood, as the duel in play (`Replays.branch`), the
+  same seed; its record keeps `parent`/`parentAt`, and the library marks it a what-if.
+
+**Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
+--duel-replay=N`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

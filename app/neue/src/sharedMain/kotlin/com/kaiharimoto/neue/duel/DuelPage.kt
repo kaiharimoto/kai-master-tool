@@ -77,9 +77,10 @@ internal fun DuelPage(h: NeueHolders) {
     // A refusal is said once, at the foot of the window.
     LaunchedEffect(duels.problem) { duels.problem?.let { neue.note = Note(it); duels.problem = null } }
 
-    val game = duels.game
+    val game = duels.shown
+    val replay = duels.replay
     Column(Modifier.fillMaxSize()) {
-        DuelBar(h, duels, prefs)
+        if (replay != null) ReplayBar(duels, replay) else DuelBar(h, duels, prefs)
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
         if (game == null) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -90,6 +91,7 @@ internal fun DuelPage(h: NeueHolders) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         MuButton("Test hand", { testHand(h) }, variant = BtnVariant.PRIMARY)
                         MuButton("Set up a duel", { duels.setupOpen = true })
+                        MuButton("Replays", { duels.libraryOpen = true }, variant = BtnVariant.GHOST)
                     }
                 }
             }
@@ -139,6 +141,7 @@ internal fun DuelPage(h: NeueHolders) {
         }
     }
     if (duels.setupOpen) SetupDialog(h, duels)
+    if (duels.libraryOpen) ReplayLibrary(duels)
 }
 
 /** The page's own row: the duel's shape, the seat, the hot-seat's knowledge, undo and the command line. */
@@ -169,6 +172,9 @@ private fun DuelBar(h: NeueHolders, duels: Duels, prefs: DuelPrefs) {
         ) {
             Tip("Start again with new decks", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_NEW)?.let(DeskShortcuts::kbd)) {
                 MuButton(if (phone) "New" else "New duel", { duels.setupOpen = true }, size = BtnSize.SM, icon = Icons.Plus)
+            }
+            Tip("Keep this duel, or watch one again") {
+                MuButton("Replays", { duels.libraryOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
             }
             if (game != null) {
                 if (!game.state.solo) {

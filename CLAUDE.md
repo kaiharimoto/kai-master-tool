@@ -599,7 +599,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   card the only free variable (capped; lanes a tenth of a card) and `DuelFrames` places every card, a pile's
   too. `DuelInput` (mouse ↔ finger, tested) and `DeskScope.DUEL` (a key per verb; a card just placed shows zone
   numbers for a moment). `neue/duel`: `Duels` (holder, `<data>/duel/current.json`), `DuelTable` (one pointer
-  arbiter), `CardBack`. `tools/shoot.sh --page=duel --duel=two --duel-play=true`.
+  arbiter), `CardBack`. **Never `return@` out of an inline lambda with composable calls in it** (`key`, `Box`, a
+  `forEach` in a composable): it left the non-local-return marker in the bytecode and the class failed to load
+  as the table first drew — `NonLocalReturnTest` scans every shipped class. **Replays** (1.0.75):
+  `<data>/duel/replays/` (synced, backed up), `Replays` steps by gesture/phase/turn both ways, inserts, cuts a
+  step, notes, branches a what-if; `DeskScope.REPLAY` replaces the duel's keys while one is open.
+  `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

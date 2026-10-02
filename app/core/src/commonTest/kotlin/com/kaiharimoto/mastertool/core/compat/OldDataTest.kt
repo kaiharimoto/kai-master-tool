@@ -83,6 +83,19 @@ class OldDataTest {
     }
 
     @Test
+    fun aReplayFrom1075StillReads() {
+        // 1.0.75: a replay in `<data>/duel/replays/`, a what-if of another, with a note in it.
+        val old = """{"header":{"id":"d2","seed":3,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},{"i":1,"seat":0,"group":1,"action":{"t":"note","text":"Ash here?","seat":0}}],
+            "cursor":2,"name":"Locals R3","parent":"r1","parentAt":12,"saved":1760000000000}"""
+        val r = assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(old))
+        assertEquals("r1", r.parent)
+        assertEquals(12, r.parentAt)
+        assertEquals("Locals R3", r.name)
+        assertEquals(1, com.kaiharimoto.mastertool.core.duel.replay.Replays.marks(r.entries).size)
+    }
+
+    @Test
     fun aPresentationFrom1070StillReads() {
         // 1.0.70: the first shape Present wrote, a deck slide and a freeform one.
         val old = """{"id":"pabc","name":"Labrynth profile","style":"BUILD_UP","theme":"arena",

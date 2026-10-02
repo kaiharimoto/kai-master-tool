@@ -285,6 +285,7 @@ class NeueHolders(
         onPresent = neue.page == Page.PRESENT,
         presenting = present.playing != null,
         onDuel = neue.page == Page.DUEL,
+        replaying = neue.page == Page.DUEL && duel.replay != null,
     )
 
     /**
@@ -638,6 +639,7 @@ class NeueHolders(
             cmd("Go", "Duel", DeskAction.GO_DUEL),
             Command("Duel", "New duel") { neue.go(Page.DUEL); duel.setupOpen = true },
             Command("Duel", "Test hand: the builder's deck, one player") { neue.go(Page.DUEL); com.kaiharimoto.neue.duel.testHand(this) },
+            Command("Duel", "Replays: keep this duel, watch one again") { neue.go(Page.DUEL); duel.libraryOpen = true },
             Command("Present", "New deck profile") { neue.go(Page.PRESENT); present.creating = true },
             *(if (present.open != null) arrayOf(
                 cmd("Present", "Present from the start", DeskAction.PRESENT_START),

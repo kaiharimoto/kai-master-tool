@@ -121,6 +121,7 @@ class SyncCenter(private val h: NeueHolders) {
         if ("ai" in changed) h.ai.bookChanged()
         if ("art" in changed) h.customArt.reload()
         if ("present" in changed) h.present.reload()
+        if ("replays" in changed) h.duel.loadReplays()
     }
 
     /** The store [prefs] names, or null when there is none to sync with. */

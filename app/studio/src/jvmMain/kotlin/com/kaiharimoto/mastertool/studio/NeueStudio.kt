@@ -180,6 +180,13 @@ fun neueMain(args: Array<String>) {
                     }
                     h.duel.openPile(0, kind)
                 }
+                // --duel-replay=N: the duel as a replay, stood at entry N (or halfway), with a note there.
+                map["duel-replay"]?.let { spec ->
+                    val g = h.duel.game!!
+                    val at = spec.toIntOrNull() ?: (g.cursor / 2)
+                    h.duel.replay = com.kaiharimoto.neue.duel.Replay("studio", g.record("Studio duel"), at)
+                    h.duel.note("Ash here would have stopped the whole line")
+                }
                 h.neue.page = Page.DUEL
                 clock.run(120)
                 val g = h.duel.game!!

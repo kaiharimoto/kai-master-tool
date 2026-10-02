@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.duel.DuelRecord
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
@@ -25,6 +26,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+
+/** A saved replay, as the library lists it. */
+data class ReplayInfo(val id: String, val name: String, val saved: Long, val entries: Int, val decks: String, val parent: String?)
+
+/**
+ * A replay open on the table: its record, where it stands ([at] entries played), and whether it is
+ * playing forwards (1), backwards (-1) or still (0), at [speed].
+ */
+data class Replay(val id: String, val record: DuelRecord, val at: Int, val playing: Int = 0, val speed: Float = 1f)
 
 /** A card just put in a zone by a key or a click: for a moment a number moves it to another zone. */
 data class Placed(val uid: Int, val kind: ZoneKind, val seat: Int, val until: Long)
@@ -70,6 +80,42 @@ class Duels(val dir: File) {
     var verbsOpen by mutableStateOf(false)
     var catalog: DuelCatalog = DuelCatalog.NONE
 
+    /** The replay open on the table, if any: the table shows it instead of the duel in play. */
+    var replay by mutableStateOf<Replay?>(null)
+    var replays by mutableStateOf<List<ReplayInfo>>(emptyList())
+    var libraryOpen by mutableStateOf(false)
+    /** Where the duel in play came from, when it is a "what if" played on from a replay. */
+    private var origin: Pair<String, Int>? = null
+    private var timeline: com.kaiharimoto.mastertool.core.duel.DuelTimeline? = null
+    private var timelineOf: DuelRecord? = null
+    private var refusedOf: Pair<DuelRecord, Set<Int>>? = null
+
+    /** What the table shows: the replay where it stands, or the duel in play. */
+    val shown: DuelGame?
+        get() {
+            val r = replay ?: return game
+            val t = timelineFor(r.record)
+            val floor = r.record.entries.indexOfFirst { it.seat != null }.let { if (it < 0) r.record.entries.size else it }
+            return DuelGame(r.record.header, r.record.entries, r.at, t.at(r.at).first, minOf(floor, r.at))
+        }
+
+    /** The entries of the open replay that no longer fit the table after an edit: struck through. */
+    fun refused(): Set<Int> {
+        val r = replay ?: return emptySet()
+        refusedOf?.let { (rec, set) -> if (rec === r.record) return set }
+        val set = com.kaiharimoto.mastertool.core.duel.replay.Replays.refused(r.record)
+        refusedOf = r.record to set
+        return set
+    }
+
+    private fun timelineFor(r: DuelRecord): com.kaiharimoto.mastertool.core.duel.DuelTimeline {
+        if (timelineOf !== r) {
+            timeline = com.kaiharimoto.mastertool.core.duel.replay.Replays.timeline(r)
+            timelineOf = r
+        }
+        return timeline!!
+    }
+
     private var loaded = false
 
     /** Reads the duel left in play, once. */
@@ -92,6 +138,8 @@ class Duels(val dir: File) {
 
     fun start(header: DuelHeader) {
         game = DuelGame.start(header, now())
+        origin = null
+        closeReplay()
         bottom = 0
         selection = emptySet()
         strip = null
@@ -104,13 +152,14 @@ class Duels(val dir: File) {
 
     /** The seat acting on [uid]: its controller on the field, its owner anywhere else. */
     fun seatFor(uid: Int): Int {
-        val g = game ?: return bottom
+        val g = shown ?: return bottom
         val card = g.state.cards[uid] ?: return bottom
         return if (g.state.placeOf(uid) is Place.Zone) card.controller else card.owner
     }
 
     /** Commits [actions] as one group by [seat]. False, and the reason said, when the table refuses. */
     fun act(actions: List<DuelAction>, seat: Int? = bottom): Boolean {
+        if (replay != null) return insert(actions, seat)
         val g = game ?: return false
         if (actions.isEmpty()) return false
         val r = g.act(actions, seat, now())
@@ -131,7 +180,7 @@ class Duels(val dir: File) {
      * remembers it for a moment, so the number keys can move it to the zone meant.
      */
     fun verb(uid: Int, verb: DuelVerb, zone: Place.Zone? = null, host: Int? = null, seat: Int? = null): Boolean {
-        val g = game ?: return false
+        val g = shown ?: return false
         val actor = seat ?: seatFor(uid)
         val targets = if (uid in selection && selection.size > 1) selection.toList() else listOf(uid)
         if (targets.size > 1) {
@@ -187,7 +236,7 @@ class Duels(val dir: File) {
 
     /** The command line's text, run for the seat at the bottom. */
     fun run(text: String): Boolean {
-        val g = game ?: return false
+        val g = shown ?: return false
         return when (val p = DuelCommand.parse(text, g.state, bottom, catalog)) {
             is DuelCommand.Parsed.Problem -> { problem = p.text; false }
             is DuelCommand.Parsed.Actions -> act(p.actions, bottom).also { if (it) command = "" }
@@ -201,6 +250,7 @@ class Duels(val dir: File) {
     }
 
     fun undo() {
+        if (replay != null) { step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, -1); return }
         val g = game ?: return
         if (!g.canUndo) return
         game = g.undo()
@@ -210,6 +260,7 @@ class Duels(val dir: File) {
     }
 
     fun redo() {
+        if (replay != null) { step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, 1); return }
         val g = game ?: return
         if (!g.canRedo) return
         game = g.redo()
@@ -252,7 +303,160 @@ class Duels(val dir: File) {
             dir.mkdirs()
             val target = File(dir, CURRENT)
             val temp = File(dir, "$CURRENT.tmp")
-            temp.writeText(DuelCodec.encode(g.record()))
+            temp.writeText(DuelCodec.encode(g.record(parent = origin?.first, parentAt = origin?.second)))
+            if (!temp.renameTo(target)) {
+                target.delete()
+                temp.renameTo(target)
+            }
+        }
+    }
+
+    // ---- replays --------------------------------------------------------------------------------------
+
+    private val replayDir: File get() = File(dir, "replays")
+
+    /** Reads the library of replays: names and sizes, newest first. */
+    fun loadReplays() {
+        scope.launch {
+            val list = withContext(Dispatchers.IO) {
+                replayDir.listFiles { f -> f.name.endsWith(".json") }.orEmpty().mapNotNull { f ->
+                    val r = DuelCodec.decode(f.readText()) ?: return@mapNotNull null
+                    ReplayInfo(
+                        f.name.removeSuffix(".json"),
+                        r.name.ifBlank { "Untitled duel" },
+                        r.saved.takeIf { it > 0 } ?: f.lastModified(),
+                        r.entries.count { it.seat != null },
+                        r.header.seats.mapNotNull { it.deckName.ifBlank { null } }.joinToString(" v ").ifBlank { r.header.seats.joinToString(" v ") { it.name } },
+                        r.parent,
+                    )
+                }.sortedByDescending { it.saved }
+            }
+            replays = list
+        }
+    }
+
+    /** The duel in play kept as a replay, under [name]. */
+    fun saveReplay(name: String) {
+        val g = game ?: return
+        val id = "r${now()}"
+        val record = g.record(name.ifBlank { "Duel of ${java.text.SimpleDateFormat("d MMM, HH:mm").format(java.util.Date())}" }, origin?.first, origin?.second, now())
+        scope.launch {
+            writeReplay(id, record)
+            loadReplays()
+        }
+    }
+
+    fun openReplay(id: String) {
+        scope.launch {
+            val r = withContext(Dispatchers.IO) { File(replayDir, "$id.json").takeIf { it.exists() }?.readText()?.let(DuelCodec::decode) }
+            if (r == null) { problem = "That replay could not be read"; return@launch }
+            val floor = r.entries.indexOfFirst { it.seat != null }.let { if (it < 0) r.entries.size else it }
+            replay = Replay(id, r, floor)
+            libraryOpen = false
+            selection = emptySet()
+            strip = null
+            placed = null
+        }
+    }
+
+    fun deleteReplay(id: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) { File(replayDir, "$id.json").delete() }
+            if (replay?.id == id) replay = null
+            loadReplays()
+        }
+    }
+
+    fun closeReplay() {
+        replay = null
+        timeline = null
+        timelineOf = null
+    }
+
+    /** The replay moved to [at], within its log. */
+    fun seek(at: Int) {
+        val r = replay ?: return
+        replay = r.copy(at = at.coerceIn(0, r.record.entries.size))
+    }
+
+    fun step(unit: com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit, dir: Int) {
+        val r = replay ?: return
+        val e = r.record.entries
+        val to = if (dir > 0) com.kaiharimoto.mastertool.core.duel.replay.Replays.next(e, r.at, unit)
+        else com.kaiharimoto.mastertool.core.duel.replay.Replays.previous(e, r.at, unit)
+        replay = r.copy(at = to, playing = 0)
+    }
+
+    /** Plays the replay a step at a time in [direction] (1 forwards, -1 backwards), or stops it. */
+    fun play(direction: Int) {
+        val r = replay ?: return
+        replay = r.copy(playing = if (r.playing == direction) 0 else direction)
+    }
+
+    fun speed(s: Float) {
+        replay = replay?.copy(speed = s)
+    }
+
+    /** One step of playback; false when it has reached the end it was playing toward. */
+    fun tick(): Boolean {
+        val r = replay ?: return false
+        val e = r.record.entries
+        val unit = com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP
+        val to = if (r.playing > 0) com.kaiharimoto.mastertool.core.duel.replay.Replays.next(e, r.at, unit)
+        else com.kaiharimoto.mastertool.core.duel.replay.Replays.previous(e, r.at, unit)
+        if (to == r.at) { replay = r.copy(playing = 0); return false }
+        replay = r.copy(at = to)
+        return true
+    }
+
+    /** Edits are written at once: the replay on disk is the replay on screen. */
+    private fun edit(record: DuelRecord, at: Int) {
+        val r = replay ?: return
+        replay = r.copy(record = record, at = at.coerceIn(0, record.entries.size), playing = 0)
+        scope.launch { writeReplay(r.id, record) }
+    }
+
+    /** Actions done on the table while a replay is open go into it where it stands. */
+    private fun insert(actions: List<DuelAction>, seat: Int?): Boolean {
+        val r = replay ?: return false
+        val g = shown ?: return false
+        val stamped = actions.mapIndexed { k, a -> com.kaiharimoto.mastertool.core.duel.DuelRandom.stamp(a, com.kaiharimoto.mastertool.core.duel.DuelRandom.forEntry(r.record.header.seed, r.at + k + 7919)) }
+        val (ok, why) = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(g.state, stamped, seat)
+        if (ok == null) { problem = why; return false }
+        edit(com.kaiharimoto.mastertool.core.duel.replay.Replays.insert(r.record, r.at, stamped, seat, now()), r.at + stamped.size)
+        return true
+    }
+
+    /** The step just before where the replay stands, taken out. */
+    fun deleteStep() {
+        val r = replay ?: return
+        if (r.at <= 0) return
+        val start = com.kaiharimoto.mastertool.core.duel.replay.Replays.previous(r.record.entries, r.at, com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP)
+        edit(com.kaiharimoto.mastertool.core.duel.replay.Replays.deleteGroup(r.record, r.at - 1), start)
+    }
+
+    fun note(text: String) {
+        val r = replay ?: return
+        if (text.isBlank()) return
+        edit(com.kaiharimoto.mastertool.core.duel.replay.Replays.annotate(r.record, r.at, text.trim(), bottom), r.at + 1)
+    }
+
+    /** "What if": the duel as it stood here, as the duel in play, to play on from. */
+    fun branch() {
+        val r = replay ?: return
+        game = com.kaiharimoto.mastertool.core.duel.replay.Replays.branch(r.record, r.at)
+        origin = r.id to r.at
+        closeReplay()
+        selection = emptySet()
+        save()
+    }
+
+    private suspend fun writeReplay(id: String, record: DuelRecord) = io.withLock {
+        withContext(Dispatchers.IO) {
+            replayDir.mkdirs()
+            val target = File(replayDir, "$id.json")
+            val temp = File(replayDir, "$id.json.tmp")
+            temp.writeText(DuelCodec.encode(record))
             if (!temp.renameTo(target)) {
                 target.delete()
                 temp.renameTo(target)
@@ -262,7 +466,7 @@ class Duels(val dir: File) {
 
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */
     fun viewers(prefs: DuelPrefs): Set<Int> = when {
-        game?.state?.solo == true -> setOf(0)
+        shown?.state?.solo == true -> setOf(0)
         prefs.knowledge == DuelPrefs.KNOW_SEAT -> setOf(bottom)
         else -> setOf(0, 1)
     }
