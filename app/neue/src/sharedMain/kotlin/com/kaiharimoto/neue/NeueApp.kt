@@ -176,6 +176,9 @@ class NeueHolders(
     /** Present (1.0.70): the presentations, the one open in the editor, and the one playing. */
     val present: com.kaiharimoto.neue.present.Presentations by lazy { com.kaiharimoto.neue.present.Presentations(java.io.File(Platform.dataDir, "present")) }
 
+    /** Duel (1.0.74): the duel in play, its table, its log; kept in `<data>/duel/`. */
+    val duel: com.kaiharimoto.neue.duel.Duels by lazy { com.kaiharimoto.neue.duel.Duels(java.io.File(Platform.dataDir, "duel")) }
+
     /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
     val backups: com.kaiharimoto.neue.backup.BackupCenter by lazy { com.kaiharimoto.neue.backup.BackupCenter(this) }
 
@@ -281,6 +284,7 @@ class NeueHolders(
         ai = neue.prefs.ai.enabled,
         onPresent = neue.page == Page.PRESENT,
         presenting = present.playing != null,
+        onDuel = neue.page == Page.DUEL,
     )
 
     /**
@@ -332,14 +336,23 @@ class NeueHolders(
             DeskAction.GO_FORMAT -> neue.go(Page.FORMAT)
             DeskAction.GO_PREP -> neue.go(Page.PREP)
             DeskAction.GO_PRESENT -> neue.go(Page.PRESENT)
+            DeskAction.GO_DUEL -> neue.go(Page.DUEL)
             DeskAction.WEB_PREVIOUS -> stepWeb(-1)
             DeskAction.WEB_NEXT -> stepWeb(1)
             DeskAction.GO_SETTINGS -> neue.go(Page.SETTINGS)
             DeskAction.HELP -> neue.helpOpen = true
             DeskAction.DISMISS -> dismiss()
             DeskAction.SAVE -> state.save { decksReload++ }
-            DeskAction.UNDO -> if (neue.page == Page.PRESENT) present.undo() else state.undo()
-            DeskAction.REDO -> if (neue.page == Page.PRESENT) present.redo() else state.redo()
+            DeskAction.UNDO -> when (neue.page) {
+                Page.PRESENT -> present.undo()
+                Page.DUEL -> duel.undo()
+                else -> state.undo()
+            }
+            DeskAction.REDO -> when (neue.page) {
+                Page.PRESENT -> present.redo()
+                Page.DUEL -> duel.redo()
+                else -> state.redo()
+            }
             DeskAction.NEW_DECK -> { state.newDeck(); neue.go(Page.BUILDER) }
             DeskAction.IMPORT -> { state.importFromFile(); neue.go(Page.BUILDER) }
             DeskAction.EXPORT -> neue.menu = MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
@@ -425,7 +438,7 @@ class NeueHolders(
             DeskAction.AI_PANEL -> if (neue.prefs.ai.enabled) ai.toggle()
             DeskAction.AI_VOICE -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleVoice() }
             DeskAction.AI_TALK -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleTalk() }
-            else -> com.kaiharimoto.neue.present.runPresent(this, action)
+            else -> if (neue.page == Page.DUEL) com.kaiharimoto.neue.duel.runDuel(this, action) else com.kaiharimoto.neue.present.runPresent(this, action)
         }
     }
 
@@ -518,6 +531,7 @@ class NeueHolders(
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
     private fun dismiss() {
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
+        if (com.kaiharimoto.neue.duel.dismissDuel(this)) return
         BackChain.esc(backFlags())?.let(::unwind)
     }
 
@@ -528,6 +542,7 @@ class NeueHolders(
     fun back(): Boolean {
         wake()
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
+        if (com.kaiharimoto.neue.duel.dismissDuel(this)) return true
         val step = BackChain.back(backFlags()) ?: return false
         unwind(step)
         return true
@@ -570,6 +585,7 @@ class NeueHolders(
             if (neue.prefs.ai.enabled) add(MenuEntry("Look into ${ai.name}", hint = "What it knows") { ai.memoryOpen = "USER.md" })
             add(MenuEntry("Advanced search") { run(DeskAction.ADVANCED_SEARCH) })
             add(MenuEntry("Present", hint = "Deck profiles as slides") { neue.go(Page.PRESENT) })
+            add(MenuEntry("Duel", hint = "The duel simulator") { neue.go(Page.DUEL) })
             if (onBuilder) {
                 add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
                 add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
@@ -619,6 +635,9 @@ class NeueHolders(
             cmd("Go", "Format", DeskAction.GO_FORMAT),
             cmd("Go", "Prep", DeskAction.GO_PREP),
             cmd("Go", "Present", DeskAction.GO_PRESENT),
+            cmd("Go", "Duel", DeskAction.GO_DUEL),
+            Command("Duel", "New duel") { neue.go(Page.DUEL); duel.setupOpen = true },
+            Command("Duel", "Test hand: the builder's deck, one player") { neue.go(Page.DUEL); com.kaiharimoto.neue.duel.testHand(this) },
             Command("Present", "New deck profile") { neue.go(Page.PRESENT); present.creating = true },
             *(if (present.open != null) arrayOf(
                 cmd("Present", "Present from the start", DeskAction.PRESENT_START),
@@ -1218,6 +1237,7 @@ private fun Shell(h: NeueHolders) {
                             Page.FORMAT -> com.kaiharimoto.neue.pages.FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
                             Page.PREP -> com.kaiharimoto.neue.prep.PrepPage(h.prep, h.webs, state, neue, h.decksReload)
                             Page.PRESENT -> com.kaiharimoto.neue.present.PresentPage(h)
+                            Page.DUEL -> com.kaiharimoto.neue.duel.DuelPage(h)
                             Page.SETTINGS -> SettingsPage(
                                 state,
                                 neue,

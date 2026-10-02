@@ -16,8 +16,8 @@ look comes from anywhere else. The port's phases are in `CLAUDE.md`, "The port".
 ![The builder, paper](shots/neue-builder.png)
 ![The builder, ink](shots/neue-builder-ink.png)
 
-Play mode is not in it. kai will rebuild play from scratch later; Neue is the
-builder, its odds and its statistics.
+Play mode is rebuilt inside it as **Duel** (`07`, §4p, from 1.0.74); Neue is the
+builder, and everything around a deck: its siding, its event, its profile and its duels.
 
 ---
 
@@ -2926,6 +2926,107 @@ tools to operate this feature autonomously"). Three tools, all phase 3:
 **Pictures**: `tools/shoot.sh --page=present --present=demo --present-slide=N --present-mode=library|edit|play|overview|notes
 --present-style=spotlight|slides|buildup --present-theme=arena|neon|… --present-webcam=tr|tl|br|bl|left|right|off
 --present-frames=N,K`.
+
+### 4p. Duel: the duel simulator (1.0.74–)
+
+kai: "The baseline is Duelingbook, which is rather low. We need to be better than it by miles ahead in ease of
+use, visuals, functionality, and intuitiveness, while maintaining a lightweight profile … utilitarian:
+functional, clean visuals. The controls will be a big factor in how it feels." A **manual** simulator — no card
+is scripted, as on DuelingBook — built in phases, one release (or a run of them) each:
+
+1. **The table** (1.0.74): the model, the log, the layout, the controls; one seat or two, the second by hot-seat.
+2. **Replays**: saved logs scrubbed forwards and backwards a step, a phase or a turn at a time, viewed as
+   either seat, edited (entries deleted, inserted, altered, annotated) and branched into a "what if".
+3. **Ai at the table**: every action as a tool, played with full knowledge, one seat's, or *Auto* (Ai peeks when
+   it judges it must, and every peek is written in the log); combos sequenced as one batch and played out in
+   real time, saved per deck in `<data>/duel/combos/<deckId>.json`.
+4. **Two players, direct**: one hosts, the other joins by a code or a QR on the same Wi-Fi or by address;
+   response windows (Respond / Pass, each player's own setting), the thinking signal, chat, pings, take-backs.
+5. **A relay** for play across the internet, running the same messages.
+
+kai's decisions (1.0.74 planning): direct play first and a relay later; flat, top-down, paper and ink — no new
+colour exception, cards keep their art and foil; optional response windows plus a "thinking" signal.
+
+**What DuelingBook taught.** A menu on every card, so every move is three clicks; replays that cannot step
+back (its forum asks for a "previous play" button, and players refresh the page instead); macro extensions
+(custom-duelingbook) because players repeat the same sequences — our combos. Omega's and Nexus's manual modes
+lean on slash commands (`/excavate`, `/banishhand`) — our command line, but as a second way, not the first.
+The classic play stage's rules hold here too (`docs/classic`): point-and-drop beats menus; the indicator is
+the intent; a gesture holds a card, not a place; seed everything; no modal viewers.
+
+**The model** (`core/duel`, beside `core/board` — which is ported to the 3DS and frozen by golden vectors, so it
+is never the duel's): `DuelState` is two `SeatState`s (LP; hand, deck, Extra Deck, GY, banished; five Monster
+and five Spell & Trap Zones — 0 and 4 the Pendulum Zones — and a Field Zone), the two Extra Monster Zones they
+share, the turn, the phase, a **chain written down by hand** (`ChainLink`s), target `Arrow`s, who is thinking.
+Every card is a `CardInst` keyed by a **uid** it keeps all duel (seat 0's 1…, seat 1's 1001…, tokens 100000…),
+so a gesture, a log entry, a combo step and a network message name a card the same way however it moves.
+- **`DuelAction`** is about twenty small, orthogonal actions as data — `Move` covers attach (to `Place.Under`),
+  detach and a token leaving (`Place.Void`); an action from a newer build reads as `Unknown` and is written
+  back byte for byte (`LenientAction`).
+- **`DuelRules.apply`** is the table's physics and nothing more: one card to a zone, the EMZ shared, a card to
+  its owner's piles whoever controls it, a token leaving the field leaves the duel, materials follow their card
+  (and go to the GY when it leaves the field), a draw needs a deck. Never what a card's text allows.
+- **The log is the duel.** `DuelGame` is the log, a cursor, and the table it folds to; every change is a
+  *group* (a gesture, an Xyz Summon with its materials, a mill of three, one Ai batch), and undo takes back a
+  group. Randomness is **stamped into the action when it is committed** (`DuelRandom.stamp`, one `Random` per
+  entry): a replay plays the same however it is edited, and an undone shuffle shuffled again comes out the same,
+  so undo can never be used to fish for a better draw. `DuelRandom.riffle` is `PlayField`'s Fisher-Yates spelled
+  out, so a seed deals the same everywhere. The deal itself is in the log (`DuelSetup.opening`), behind undo.
+- **`DuelTimeline`** folds a long log from snapshots every 32 entries, for scrubbing (replays).
+- **`DuelSight`/`DuelView`**: who can see a card (face-up on the field, a hand to its owner, a set card to its
+  controller, a deck to no one, plus what a seat saw before it went out of sight, until a shuffle). `DuelView`
+  is the table as one seat sees it — hidden cards as **veils**, handles stable in a hand or on the field and
+  re-minted by a shuffle, so a card cannot be followed through one. The hot-seat, Ai's knowledge and the
+  network all use it.
+- **`DuelVerbs`**: the verbs (summon, set, activate, flip, to GY, banish, …) as one list read by a right-click, a
+  key, the inspector, the command line and Ai — so `S` on a card, `summon ash` and Ai's summon do one thing. The
+  default verb fits the card where it is: a monster in the hand is summoned, a spell activated, a trap set, a
+  set card activated (flipped, and a chain link), a hand trap discarded and chained, the opponent's card
+  targeted. A card goes to the free zone nearest the middle, or the one under the pointer's column.
+- **`DuelWords`** writes each entry as a sentence *for a viewer* ("Kai sets a card in S/T 2" for the other seat);
+  **`DuelCommand`** reads what a player says across a table — `ash to hand`, `summon droll to m3`, `set called by`,
+  `mill 3`, `lp opp /2`, `chain ash`, `bp`, `end` — matching names loosely (`NameScore`: "ash", "abjs", "called by")
+  but only among cards the player can see, so the line never finds a hidden card.
+- **`DuelDrop`**: what letting go of a carried card does, and the words of the highlight drawn under it before
+  it is let go — the same answer, because the indicator is the intent. Onto a monster it attaches.
+
+**The layout** (`core/layout/DuelLayout.kt`, tested at ten window sizes in both modes): the far side is the
+near side turned round, as across a real table; the shared row between them holds both banished piles, the
+Extra Monster Zones and the **chain well** between them; the one-player table is the near side alone with that
+row above it. The card is the only free variable — `min(by width, by height, CAP)` (132 dp on the desk) — and the
+lane between zones is a tenth of it, 4–14 dp, so a bigger window grows the rails and the margins, never the
+gaps. Spare width goes to the inspector (left, 260–380), then the log (right, 260–360); narrower, the log is a
+tab of the inspector, then both are drawers. A short window shrinks the far side to three quarters before the
+near side is unreadable, then folds the far hand into its seat bar. `DuelFrames` places every card (a card in a
+pile too, at the pile, so it glides out of it) and is what the page, a replay and the studio draw.
+
+**The controls** (`core/input/DuelInput.kt`: `DuelMouse`, `DuelTouch`, held to each other by `DuelInputTest`;
+the keys are `DeskShortcuts`' Duelling rows):
+- **Drag anything anywhere**; the spot is framed and the words of what will happen are written over it ("Summon
+  to M3", "Attach to Zeus", "Bottom of the Deck"). Alt sets or banishes face-down, Shift is the bottom of a deck.
+  The deck's top card into the hand is a draw.
+- **Right-click is the obvious thing** (a double-click or double-tap too); **hold** for every verb, beside the
+  card read large in the inspector; Shift-click and a box select several; Alt-click points.
+- **A key per verb** over the card under the pointer: Space the obvious thing, `S` summon, `E` set, `A`
+  activate, `F` flip, `P` position, `G` GY, `B` banish, `H` hand, `K` deck, `X` Extra Deck, `O` attach, `T` target,
+  `C` counter, `R` reveal; `D` draw, `N` next phase, `Shift N` end turn, `L` life points, `W` thinking, `/` the
+  command line, `Enter` chat, `Tab` the other seat, `V` one side or two. **A card just placed shows numbers on the
+  free zones for a moment**: `1`–`5` (`Shift` for Spell & Trap Zones, `6`/`7` the EMZ) moves it there — one key to
+  play a card, one more to put it exactly where it belongs.
+- Piles open **non-modal** above the hand (`DuelFrames.stripBand`), cards to drag out; the deck's has Shuffle and
+  close. The phase strip stands beside the field; the seat bars carry name, LP (a click: the pad, `-1000`, `/2`,
+  chips), the turn, Thinking and the counts.
+
+**The page** (`neue/duel`): `Duels` is the holder (`NeueHolders.duel`, lazy), the duel in play kept in
+`<data>/duel/current.json` after every change (backed up; not synced — it is this device's game). `DuelTable`
+has **one pointer arbiter** for the whole table — click, right-click, hold, drag, box — and `TableCard` glides a
+card to its frame on the one easing (cards may move; nothing else may); `CardBack` is a paper-and-ink back,
+because every face-down card has a back, and a controller's own set card is its face dimmed under the hatch,
+marked Set. `DuelInspector` and `DuelLogRail` are the rails; the bar holds New duel, one side or two, the seat,
+"Both hands" or "This seat's eyes" (the hot-seat's knowledge; never a deck's order either way), undo and the
+command line. `DuelPrefs` (`NeuePreferences.duel`, synced, internal to Ai) remembers the shape and the decks.
+
+**Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

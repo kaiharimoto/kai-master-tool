@@ -40,6 +40,9 @@ enum class Page(val numeral: Int?, val title: String) {
 
     /** Present (1.0.70): deck profiles as slides — made, presented, and recorded. */
     PRESENT(6, "Present"),
+
+    /** Duel (1.0.74): the duel simulator — a table, one seat or two, every card moved by hand. */
+    DUEL(7, "Duel"),
     SETTINGS(null, "Settings"),
 }
 

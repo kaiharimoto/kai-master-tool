@@ -268,6 +268,7 @@ fun HelpDialog(onDismiss: () -> Unit) {
             }
             if (!touch || keyboard) KeyTable()
             PresentGestureTable(touch)
+            DuelGestureTable(touch)
             if (!touch) {
                 GestureTable(touch = false)
                 MuText(
@@ -299,6 +300,35 @@ private fun KeyTable() {
                             ) {
                                 RowText(if (row.action == DeskAction.AI_PANEL) "${com.kaiharimoto.mastertool.core.input.DeskMenuBar.aiName}: open or close" else row.description, Modifier.weight(1f))
                                 Kbd(DeskShortcuts.kbd(row.chord))
+                            }
+                            HRule()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The duel's gestures (1.0.74), from its own tables: what a press means on the duel table. */
+@Composable
+private fun DuelGestureTable(touch: Boolean) {
+    val rows = if (touch) com.kaiharimoto.mastertool.core.input.DuelTouch.all else com.kaiharimoto.mastertool.core.input.DuelMouse.all
+    Column {
+        SectionTitle(null, "Duel: the table")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            com.kaiharimoto.mastertool.core.input.DuelTarget.entries.chunked(3).forEach { targets ->
+                Column(Modifier.weight(1f)) {
+                    targets.forEach { target ->
+                        MuText(target.heading, Modifier.padding(top = 12.dp, bottom = 4.dp), style = MuType.help(LocalMuFonts.current), color = Mu.colors.ink70)
+                        rows.filter { it.target == target }.forEach { row ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                RowText(row.description, Modifier.weight(1f))
+                                Kbd(row.gesture, always = true)
                             }
                             HRule()
                         }

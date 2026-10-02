@@ -64,6 +64,25 @@ class OldDataTest {
     }
 
     @Test
+    fun aDuelFrom1074StillReads() {
+        // 1.0.74: the first duel the Duel page kept in `<data>/duel/current.json`, with an action from a later build.
+        val old = """{"header":{"id":"d1","seed":7,"seats":[{"name":"Kai","main":[1,2,3,4,5,6],"extra":[9]},{"name":"Rival"}],"solo":true,"handSize":5},
+            "entries":[{"i":0,"group":0,"action":{"t":"shuffle","seat":0,"salt":11}},{"i":1,"group":0,"action":{"t":"draw","seat":0,"n":5}},
+            {"i":2,"seat":0,"group":1,"action":{"t":"move","uid":1,"to":{"t":"zone","seat":0,"kind":"MONSTER","index":2},"pos":"FACE_UP_ATK","how":"normal"}},
+            {"i":3,"seat":0,"group":2,"action":{"t":"hologram","glow":3}}],"cursor":4,"version":1}"""
+        val record = assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(old))
+        val game = com.kaiharimoto.mastertool.core.duel.DuelGame.of(record)
+        assertEquals(1, game.state.onField().size)
+        assertEquals(4, game.state.seats[0].hand.size)
+        assertTrue(game.entries.last().action is com.kaiharimoto.mastertool.core.duel.DuelAction.Unknown)
+        assertTrue(com.kaiharimoto.mastertool.core.duel.DuelCodec.encode(game.record()).contains("\"glow\":3"))
+        // Its settings, as 1.0.74 wrote them.
+        val p = prefs.decodeFromString(NeuePreferences.serializer(), """{"duel":{"twoSided":false,"knowledge":"seat","names":["Kai","Rival"]}}""").duel
+        assertEquals(false, p.twoSided)
+        assertEquals("seat", p.knowledge)
+    }
+
+    @Test
     fun aPresentationFrom1070StillReads() {
         // 1.0.70: the first shape Present wrote, a deck slide and a freeform one.
         val old = """{"id":"pabc","name":"Labrynth profile","style":"BUILD_UP","theme":"arena",

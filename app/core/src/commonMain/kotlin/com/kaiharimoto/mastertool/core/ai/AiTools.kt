@@ -14,7 +14,7 @@ import com.kaiharimoto.mastertool.core.search.EffectKind
  * a passcode, or with a count in front, `"3 Ash Blossom"` / `"3x Ash Blossom"`.
  */
 object AiTools {
-    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "PRESENT", "SETTINGS")
+    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "PRESENT", "DUEL", "SETTINGS")
     val SECTIONS = listOf("main", "extra", "side")
     val EXPORTS = listOf("ydk", "ydkx", "ydke", "text", "qr")
 
@@ -323,7 +323,7 @@ object AiTools {
 
     val navigate = ToolSpec(
         "navigate",
-        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), PRESENT (deck profiles as slides), SETTINGS.",
+        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), PRESENT (deck profiles as slides), DUEL (the duel simulator), SETTINGS.",
         schema { enum("page", "The page", PAGES, required = true) },
         ToolGroup.APP,
     )

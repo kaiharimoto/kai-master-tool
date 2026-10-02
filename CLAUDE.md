@@ -22,6 +22,9 @@ Kotlin Multiplatform + Compose Multiplatform. `app/README.md` has the modules.
 - `app/builder/` — the builder's state and plumbing that is not a look
   (`DeckBuilderState`, `AppDependencies`, updater seam, image loader, shader
   seam, card foil); files keep their `com.kaiharimoto.mastertool.ui.*` packages
+- `app/core/.../duel/` — the duel simulator's model, rules, log, views, words and command line
+  (1.0.74); **never `core/board`**, which is the classic play stage's, ported to the 3DS and frozen
+  by golden vectors
 - `app/neue/` — **Neue Master Tool**: every screen
 - `app/androidApp/` — the APK: one activity hosting Neue, the theme-free crash
   reporter, and `NeueSmokeTest` for the emulator
@@ -310,7 +313,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     still `AiMark` stands by the name (`AiName`: replies, the panel's head, Settings) — kai: "every
     mention of Ai is a chance for the art".
   - Only the whole head moves; the net never distorts.
-- **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep, `06` Present** (1.0.40, kai:
+- **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel** (1.0.40, kai:
   Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
@@ -584,6 +587,19 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   release — **a feature that needs setting up adds a step**). `BackupCenter` writes a `.nmtbackup` before a new
   version changes anything, weekly and before a restore; Settings › Backups exports and restores.
 
+- **Duel** (1.0.74, `07`, `Ctrl 7`, `NEUE.md` §4p; kai: "better than DuelingBook by miles … utilitarian … the
+  controls will be a big factor"): a **manual** duel simulator, phased — the table (1.0.74), replays, Ai at the
+  table (full / one seat's / Auto knowledge, peeks logged; combos as one batch, per deck in
+  `<data>/duel/combos/`), direct two-player (host-authoritative, code or QR; response windows and a thinking
+  signal), then a relay. kai chose flat paper and ink (no new colour exception). **The log is the duel**
+  (`DuelGame`: a fold over `DuelAction`s, groups for undo, randomness stamped into each action on commit);
+  `DuelRules` is physics only, never card text; `DuelView` redacts per seat (veils re-minted by a shuffle) for
+  the hot-seat, Ai and the network; `DuelVerbs` is the one list of verbs a right-click, a key, the inspector,
+  `DuelCommand` and Ai all run; `DuelDrop` is the drop's intent and its highlight's words. `DuelLayout` keeps the
+  card the only free variable (capped; lanes a tenth of a card) and `DuelFrames` places every card, a pile's
+  too. `DuelInput` (mouse ↔ finger, tested) and `DeskScope.DUEL` (a key per verb; a card just placed shows zone
+  numbers for a moment). `neue/duel`: `Duels` (holder, `<data>/duel/current.json`), `DuelTable` (one pointer
+  arbiter), `CardBack`. `tools/shoot.sh --page=duel --duel=two --duel-play=true`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,
@@ -630,7 +646,8 @@ kai's progress lives in what older builds wrote; every release must read it. So:
 - Backups are read through the app (`Backups`), never a database copy, so an old backup restores into any
   later version.
 
-Play mode is not in Neue; kai will rebuild it from scratch inside Neue in a later session.
+Play mode is rebuilt inside Neue as **Duel** (`07`, 1.0.74–, `NEUE.md` §4p), from scratch on `core/duel`;
+the classic play stage's rules below still apply to it.
 
 ## The port — Neue on Android and on the Mac
 

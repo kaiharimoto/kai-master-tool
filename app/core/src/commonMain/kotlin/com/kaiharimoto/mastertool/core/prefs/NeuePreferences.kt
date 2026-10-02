@@ -313,6 +313,8 @@ data class NeuePreferences(
      * players know the list. A Forbidden card's 0 always shows — the deck cannot be played with it.
      */
     val limitMarks: Boolean = false,
+    /** Duel (1.0.74): one table or two, what the hot-seat shows, the decks chosen last. */
+    val duel: com.kaiharimoto.mastertool.core.duel.DuelPrefs = com.kaiharimoto.mastertool.core.duel.DuelPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

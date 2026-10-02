@@ -108,6 +108,7 @@ fun neueMain(args: Array<String>) {
                 "format" -> Page.FORMAT
                 "prep" -> Page.PREP
                 "present" -> Page.PRESENT
+                "duel" -> Page.DUEL
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
             }
@@ -139,6 +140,50 @@ fun neueMain(args: Array<String>) {
                 }
                 if (map["default"] == "true" && id != null) h.neue.update { it.copy(defaultDeckId = id) }
                 println("[neue-studio] saved as $id; covers ${h.neue.prefs.covers[id]}; default ${h.neue.prefs.defaultDeckId}")
+            }
+            // --duel=two|one|solo: the builder's deck against itself on the duel table (1.0.74), dealt from a
+            // fixed seed; --duel-play=true plays a turn's worth of moves on both sides; --duel-know=seat hides
+            // the far hand; --duel-strip=gy|deck|extra|banished opens that pile of the near seat.
+            map["duel"]?.let { mode ->
+                val b = h.builder
+                val main = b.deck.main.map { it.value }
+                val extra = b.deck.extra.map { it.value }
+                val index = b.index
+                h.duel.catalog = com.kaiharimoto.mastertool.core.duel.DuelCatalog { code ->
+                    index.byId(com.kaiharimoto.mastertool.core.model.CardId(code))?.let(com.kaiharimoto.mastertool.core.duel.DuelCardInfo::of)
+                }
+                h.neue.update {
+                    it.copy(duel = it.duel.copy(
+                        twoSided = mode != "one",
+                        knowledge = if (map["duel-know"] == "seat") com.kaiharimoto.mastertool.core.duel.DuelPrefs.KNOW_SEAT else com.kaiharimoto.mastertool.core.duel.DuelPrefs.KNOW_ALL,
+                    ))
+                }
+                val solo = mode == "solo"
+                h.duel.start(
+                    com.kaiharimoto.mastertool.core.duel.DuelHeader(
+                        id = "studio",
+                        seed = 7L,
+                        seats = listOf(
+                            com.kaiharimoto.mastertool.core.duel.SeatSetup("Kai", main, extra),
+                            if (solo) com.kaiharimoto.mastertool.core.duel.SeatSetup("Rival") else com.kaiharimoto.mastertool.core.duel.SeatSetup("Rival", main, extra),
+                        ),
+                        solo = solo,
+                    ),
+                )
+                if (map["duel-play"] == "true") studioDuelMoves(h)
+                map["duel-strip"]?.let { k ->
+                    val kind = when (k) {
+                        "deck" -> com.kaiharimoto.mastertool.core.duel.PileKind.DECK
+                        "extra" -> com.kaiharimoto.mastertool.core.duel.PileKind.EXTRA
+                        "banished" -> com.kaiharimoto.mastertool.core.duel.PileKind.BANISHED
+                        else -> com.kaiharimoto.mastertool.core.duel.PileKind.GY
+                    }
+                    h.duel.openPile(0, kind)
+                }
+                h.neue.page = Page.DUEL
+                clock.run(120)
+                val g = h.duel.game!!
+                println("[neue-studio] duel: ${g.cursor} entries, field ${g.state.onField().size}, hands ${g.state.seats.map { it.hand.size }}, lp ${g.state.seats.map { it.lp }}")
             }
             // --present=demo: a deck profile of the builder's deck (1.0.70), opened in the editor;
             // --present-style=spotlight|slides|buildup, --present-theme=arena|neon|…, --present-webcam=tr|tl|br|bl|left|right|off,
@@ -1378,4 +1423,36 @@ private fun studioAi155(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
             )
         }
     }
+}
+
+/**
+ * A turn's worth of moves on both sides of the studio's duel, through the same verbs a right-click
+ * runs: the first cards of each hand played as they would be by default, an Extra Deck monster with a
+ * material under it, a mill, a chain link with a target, life points paid, a ping.
+ */
+private fun studioDuelMoves(h: com.kaiharimoto.neue.NeueHolders) {
+    val d = h.duel
+    fun state() = d.game!!.state
+    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Phase(com.kaiharimoto.mastertool.core.board.DuelPhase.MAIN1), 0)
+    for (seat in 0..1) {
+        if (state().solo && seat == 1) break
+        d.bottom = seat
+        state().seats[seat].hand.take(3).forEach { uid -> d.verb(uid, com.kaiharimoto.mastertool.core.duel.DuelVerb.DEFAULT) }
+        state().seats[seat].extra.firstOrNull()?.let { x ->
+            if (d.verb(x, com.kaiharimoto.mastertool.core.duel.DuelVerb.SUMMON)) {
+                state().seats[seat].hand.firstOrNull()?.let { m -> d.verb(m, com.kaiharimoto.mastertool.core.duel.DuelVerb.ATTACH, host = x) }
+            }
+        }
+        d.act(state().seats[seat].deck.take(2).map { com.kaiharimoto.mastertool.core.duel.DuelAction.Move(it, com.kaiharimoto.mastertool.core.duel.Place.Pile(seat, com.kaiharimoto.mastertool.core.duel.PileKind.GY), how = "send") }, seat)
+    }
+    d.bottom = 0
+    val theirs = state().onField().firstOrNull { state().cards[it]?.controller == 1 }
+    val mine = state().onField().firstOrNull { state().cards[it]?.controller == 0 }
+    if (theirs != null && mine != null) {
+        d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.ChainAdd(1, theirs, targets = listOf(mine)), 1)
+        d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Ping(0, com.kaiharimoto.mastertool.core.duel.DuelAction.PING_WAIT, uid = theirs), 0)
+    }
+    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Lp(1, delta = -1500), 1)
+    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Thinking(1, true), 1)
+    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Chat(0, "Ash on that?"), 0)
 }
