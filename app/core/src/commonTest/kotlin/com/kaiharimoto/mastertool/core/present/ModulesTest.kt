@@ -44,6 +44,39 @@ class ModulesTest {
     }
 
     @Test
+    fun nothingOnAModuleSlideSitsOnAnythingElse() {
+        // 1.0.71's pictures: a siding note under the OUT and IN tags. Words, cards, tables, charts
+        // and numbers each have their own room; only a shape (the arrow) may stand among them.
+        val input = ModuleInput(
+            matchups = listOf(SideMatchup("Snake-Eye", SideTurn(listOf(1, 2), listOf(9, 8), "Stop it early"), SideTurn(listOf(3), listOf(7), "Out-grind"), "The most played deck")),
+            rows = listOf(MatchRow("Snake-Eye", 0.6, 10, 0.4, 10, 0.5, 8, 0.5, 12, 0.5, 20), MatchRow("Yubel", games = 4)),
+            expected = 0.55,
+            strong = listOf(Pick(1, "Won games"), Pick(4, "Always live")),
+            weak = listOf(Pick(2, "Dead"), Pick(5, "Slow")),
+            picks = listOf(Pick(1, "Normal"), Pick(2, "Search"), Pick(3, "End")),
+            rounds = listOf(com.kaiharimoto.mastertool.core.present.modules.RoundRow(1, "Yubel", "Won")),
+            record = "1–0",
+            placement = "Top 8",
+            shoutouts = listOf(com.kaiharimoto.mastertool.core.present.modules.Shoutout(null, "Crew", "@crew", "Testing")),
+            odds = listOf(GroupOdds("Starters", 0.87, 0.91, 12), GroupOdds("Extenders", 0.6, 0.7, 9)),
+            code = "ydke://abc",
+            title = "Event",
+        )
+        for (type in Modules.all) {
+            Modules.generate(type, input, 0L, r).forEach { s ->
+                val solid = s.elements.filter { it.type != Element.SHAPE && it.type != Element.QR }
+                for (i in solid.indices) for (j in i + 1 until solid.size) {
+                    val a = solid[i]
+                    val b = solid[j]
+                    val w = minOf(a.x + a.w, b.x + b.w) - maxOf(a.x, b.x)
+                    val h = minOf(a.y + a.h, b.y + b.h) - maxOf(a.y, b.y)
+                    assertTrue(w <= 0.005f || h <= 0.005f, "$type: ${a.id} and ${b.id} overlap")
+                }
+            }
+        }
+    }
+
+    @Test
     fun aComboComesInACardAtATime() {
         val s = Modules.generate(Modules.COMBO, ModuleInput(picks = listOf(Pick(1), Pick(2), Pick(3))), 0L, r).single()
         assertEquals(4, Builds.compile(s).count, "the arrival and a click per card")

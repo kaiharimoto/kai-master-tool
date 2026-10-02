@@ -150,9 +150,10 @@ object Modules {
             SIDING -> input.matchups.ifEmpty { listOf(SideMatchup("No matchups yet")) }.map { m ->
                 slide("Siding vs ${m.name}") {
                     title("vs ${m.name}")
-                    if (m.note.isNotBlank()) caption(m.note, 0f, 0.14f, 1f, 0.07f, "note")
-                    turn("Going first", m.first, 0.23f, "first", click = false)
-                    turn("Going second", m.second, 0.61f, "second", click = true)
+                    // Bands that never touch: the note, then each turn's tags, cards and why (1.0.71).
+                    if (m.note.isNotBlank()) caption(m.note, 0f, 0.13f, 1f, 0.06f, "note")
+                    turn("Going first", m.first, 0.26f, "first", click = false)
+                    turn("Going second", m.second, 0.64f, "second", click = true)
                     notes = buildString {
                         append("Against ${m.name}. ")
                         if (m.first.note.isNotBlank()) append("Going first: ${m.first.note} ")
@@ -343,7 +344,7 @@ object Modules {
             )
             add(Element(id("$slot-in-tag"), Element.TEXT, 0.62f, top - 0.04f, 0.36f, 0.05f, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_CAPTION, paras = listOf(Para.of("IN", RunStyle(weight = 700, color = "@accent3"))), animations = anim(4)))
             add(Element(id("$slot-in"), Element.CARDS, 0.62f, top + 0.01f, 0.38f, 0.27f, anchor = Element.ANCHOR_STAGE, cards = t.into, animations = anim(5)))
-            if (t.note.isNotBlank()) caption(t.note, 0.18f, top + 0.29f, 0.8f, 0.06f, "$slot-why")
+            if (t.note.isNotBlank()) caption(t.note, 0.18f, top + 0.285f, 0.8f, 0.06f, "$slot-why")
         }
 
         fun column(label: String, picks: List<Pick>, left: Float, slot: String, accent: String) {

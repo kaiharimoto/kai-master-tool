@@ -328,10 +328,13 @@ private fun Placeholder(ctx: SlideContext, s: Float, words: String) {
     Canvas(Modifier.fillMaxSize()) {
         drawRect(line.copy(alpha = 0.12f))
         val step = 18f * s
-        var x = -size.height
-        while (x < size.width) {
-            drawLine(line.copy(alpha = 0.35f), Offset(x, size.height), Offset(x + size.height, 0f), 1.5f * s)
-            x += step
+        // A canvas does not clip: the diagonals start left of the box and end right of it.
+        clipRect {
+            var x = -size.height
+            while (x < size.width) {
+                drawLine(line.copy(alpha = 0.35f), Offset(x, size.height), Offset(x + size.height, 0f), 1.5f * s)
+                x += step
+            }
         }
         drawRect(line.copy(alpha = 0.6f), style = DrawStroke(2f * s))
         val t = measurer.measure(words, TextStyle(color = line, fontSize = (26f * s / density / fontScale).sp))
@@ -370,7 +373,10 @@ internal fun styledText(
     var number = 0
     return buildAnnotatedString {
         paras.forEachIndexed { i, p ->
-            val lineHeight = p.lineHeight.coerceIn(0.8f, 3f)
+            // In sp from the paragraph's largest face: an `em` here is of the measurer's base style
+            // (14 sp), not the spans', and wrapped lines of large words were drawn on top of each other.
+            val biggest = (p.runs.maxOfOrNull { it.style.size ?: look.size } ?: look.size) * px * fit
+            val lineHeight = with(density) { (biggest * p.lineHeight.coerceIn(0.8f, 3f)).toSp() }
             withStyle(
                 ParagraphStyle(
                     textAlign = when (p.align) {
@@ -378,7 +384,7 @@ internal fun styledText(
                         Para.ALIGN_RIGHT -> TextAlign.End
                         else -> TextAlign.Start
                     },
-                    lineHeight = lineHeight.em,
+                    lineHeight = lineHeight,
                     lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
                 ),
             ) {
@@ -832,14 +838,14 @@ private fun DrawScope.drawNote(ctx: SlideContext, measurer: TextMeasurer, title:
     val heading = roleLook(Element.ROLE_TITLE, theme)
     fun build(f: Float): AnnotatedString = buildAnnotatedString {
         if (title.isNotBlank()) {
-            withStyle(ParagraphStyle(lineHeight = 1.1.em)) {
+            withStyle(ParagraphStyle(lineHeight = with(density) { (54f * s * f * 1.1f).toSp() })) {
                 withStyle(SpanStyle(color = ctx.color("@text", "#000000"), fontSize = with(density) { (54f * s * f).toSp() }, fontWeight = if (heading.weight >= 700) FontWeight.Bold else FontWeight.Normal, fontFamily = ctx.fonts.of(heading.font))) {
                     append(if (heading.caps) title.uppercase() else title)
                 }
             }
         }
         if (text.isNotBlank()) {
-            withStyle(ParagraphStyle(lineHeight = 1.35.em)) {
+            withStyle(ParagraphStyle(lineHeight = with(density) { (32f * s * f * 1.35f).toSp() })) {
                 withStyle(SpanStyle(color = ctx.color("@text", "#000000").copy(alpha = 0.86f), fontSize = with(density) { (32f * s * f).toSp() }, fontFamily = ctx.fonts.of(theme.bodyFont))) {
                     if (title.isNotBlank()) append("\n")
                     append(text)
@@ -866,8 +872,24 @@ private fun TableBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
     val cols = rows.maxOf { it.size }.coerceAtLeast(1)
     Canvas(Modifier.fillMaxSize()) {
         val rh = size.height / rows.size
-        val cw = size.width / cols
-        val fontPx = (rh * 0.42f).coerceAtMost(34f * s)
+        val pad = 24f * s
+        val plain = TextStyle(fontFamily = ctx.fonts.of(ctx.theme.bodyFont), fontWeight = FontWeight.Bold)
+        val probe = 100f
+        // Each column as wide as its longest word needs, the room left shared out; then the largest
+        // face at which every word fits its column: words wrap whole, never split, and a long name
+        // in the first column no longer shrinks the numbers beside it.
+        val widest = FloatArray(cols) { c ->
+            rows.mapNotNull { it.getOrNull(c) }.flatMap { it.split(' ') }.filter { it.isNotBlank() }.maxOfOrNull { w ->
+                measurer.measure(w, plain.copy(fontSize = with(density) { probe.toSp() }), maxLines = 1, softWrap = false).size.width.toFloat()
+            } ?: 0f
+        }
+        val wanted = (rh * 0.42f).coerceAtMost(34f * s)
+        val need = widest.sum()
+        val fontPx = if (need <= 0f) wanted else min(wanted, (size.width - pad * cols) / need * probe * 0.98f).coerceAtLeast(10f * s)
+        val natural = FloatArray(cols) { widest[it] * fontPx / probe + pad }
+        val spare = ((size.width - natural.sum()) / cols).coerceAtLeast(0f)
+        val widths = FloatArray(cols) { natural[it] + spare }
+        val lefts = FloatArray(cols).also { for (c in 1 until cols) it[c] = it[c - 1] + widths[c - 1] }
         rows.forEachIndexed { r, row ->
             val header = r == 0
             if (header) drawRect(ctx.color("@accent", "#000000"), Offset(0f, 0f), Size(size.width, rh))
@@ -877,11 +899,11 @@ private fun TableBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
                 val t = measurer.measure(
                     cell,
                     TextStyle(color = color, fontSize = with(density) { fontPx.toSp() }, fontWeight = if (header) FontWeight.Bold else FontWeight.Normal, fontFamily = ctx.fonts.of(ctx.theme.bodyFont), textAlign = if (c == 0) TextAlign.Start else TextAlign.Center),
-                    constraints = Constraints(maxWidth = (cw - 24f * s).roundToInt().coerceAtLeast(1)),
+                    constraints = Constraints(maxWidth = (widths[c] - pad).roundToInt().coerceAtLeast(1)),
                     maxLines = 2,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
-                val x = c * cw + if (c == 0) 12f * s else (cw - t.size.width) / 2f
+                val x = lefts[c] + if (c == 0) pad / 2f else (widths[c] - t.size.width) / 2f
                 drawText(t, topLeft = Offset(x, r * rh + (rh - t.size.height) / 2f))
             }
         }
@@ -946,20 +968,24 @@ private fun ChartBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
                 val groupSpan = (if (horizontal) size.height else size.width) / n
                 val barSpan = groupSpan * 0.72f / series.size
                 val labelRoom = 44f * s
-                val extent = (if (horizontal) size.width * 0.75f else size.height - labelRoom)
+                // The names' column as wide as the longest name, up to two fifths: then a value's room.
+                val gutter = if (!horizontal) 0f else (chart.labels.maxOfOrNull { measurer.measure(it, label, maxLines = 1, softWrap = false).size.width.toFloat() } ?: 0f)
+                    .plus(16f * s).coerceIn(size.width * 0.12f, size.width * 0.4f)
+                val valueRoom = 90f * s
+                val extent = (if (horizontal) size.width - gutter - valueRoom else size.height - labelRoom)
                 for (i in 0 until n) {
                     series.forEachIndexed { si, sr ->
                         val x = sr.values.getOrNull(i) ?: return@forEachIndexed
                         val len = extent * (x / top).coerceIn(0f, 1f)
                         val start = i * groupSpan + groupSpan * 0.14f + si * barSpan
-                        if (horizontal) drawRect(colorOf(si, sr), Offset(size.width * 0.25f, start), Size(len, barSpan * 0.92f))
+                        if (horizontal) drawRect(colorOf(si, sr), Offset(gutter, start), Size(len, barSpan * 0.92f))
                         else drawRect(colorOf(si, sr), Offset(start, extent - len), Size(barSpan * 0.92f, len))
                         val v = measurer.measure(if (chart.percent) "${x.roundToInt()}%" else trimNumber(x), label.copy(color = ctx.color("@text", "#000000")))
-                        if (horizontal) drawText(v, topLeft = Offset(size.width * 0.25f + len + 8f * s, start + (barSpan - v.size.height) / 2f))
+                        if (horizontal) drawText(v, topLeft = Offset(gutter + len + 8f * s, start + (barSpan - v.size.height) / 2f))
                         else drawText(v, topLeft = Offset(start + (barSpan - v.size.width) / 2f, (extent - len - v.size.height - 4f * s).coerceAtLeast(0f)))
                     }
                     val name = chart.labels.getOrNull(i) ?: continue
-                    val t = measurer.measure(name, label, constraints = Constraints(maxWidth = (if (horizontal) size.width * 0.24f else groupSpan).roundToInt().coerceAtLeast(1)), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    val t = measurer.measure(name, label, constraints = Constraints(maxWidth = (if (horizontal) gutter - 12f * s else groupSpan).roundToInt().coerceAtLeast(1)), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     if (horizontal) drawText(t, topLeft = Offset(0f, i * groupSpan + (groupSpan - t.size.height) / 2f))
                     else drawText(t, topLeft = Offset(i * groupSpan + (groupSpan - t.size.width) / 2f, size.height - t.size.height))
                 }
@@ -978,19 +1004,33 @@ private fun StatBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) {
     val heading = roleLook(Element.ROLE_TITLE, ctx.theme)
     Canvas(Modifier.fillMaxSize()) {
         val valueStyle = TextStyle(color = ctx.color("@accent", "#000000"), fontFamily = ctx.fonts.of(heading.font), fontWeight = if (heading.weight >= 700) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center)
-        var px = size.height * 0.62f
+        val words = listOf(stat.label, stat.sub).filter { it.isNotBlank() }.joinToString("\n")
+        fun labelAt(px: Float) = measurer.measure(
+            words,
+            TextStyle(color = ctx.color("@text", "#000000"), fontSize = with(density) { px.toSp() }, lineHeight = with(density) { (px * 1.2f).toSp() }, fontFamily = ctx.fonts.of(ctx.theme.bodyFont), textAlign = TextAlign.Center),
+            constraints = Constraints.fixedWidth(size.width.roundToInt().coerceAtLeast(1)),
+        )
+        // The words take at most two fifths of the box, the number what is left: never past the box.
+        var labelPx = 38f * s
+        var label = if (words.isEmpty()) null else labelAt(labelPx)
+        while (label != null && label.size.height > size.height * 0.4f && labelPx > 18f * s) {
+            labelPx *= 0.88f
+            label = labelAt(labelPx)
+        }
+        val room = size.height - (label?.size?.height ?: 0)
+        var px = room / 1.2f
         var t = measurer.measure(stat.value, valueStyle.copy(fontSize = with(density) { px.toSp() }), maxLines = 1)
         if (t.size.width > size.width) {
             px *= size.width / t.size.width * 0.95f
             t = measurer.measure(stat.value, valueStyle.copy(fontSize = with(density) { px.toSp() }), maxLines = 1)
         }
-        drawText(t, topLeft = Offset((size.width - t.size.width) / 2f, 0f))
-        val label = measurer.measure(
-            listOf(stat.label, stat.sub).filter { it.isNotBlank() }.joinToString("\n"),
-            TextStyle(color = ctx.color("@text", "#000000"), fontSize = with(density) { (38f * s).toSp() }, fontFamily = ctx.fonts.of(ctx.theme.bodyFont), textAlign = TextAlign.Center),
-            constraints = Constraints.fixedWidth(size.width.roundToInt().coerceAtLeast(1)),
-        )
-        drawText(label, topLeft = Offset((size.width - label.size.width) / 2f, t.size.height.toFloat()))
+        if (t.size.height > room) {
+            px *= room / t.size.height
+            t = measurer.measure(stat.value, valueStyle.copy(fontSize = with(density) { px.toSp() }), maxLines = 1)
+        }
+        val top = ((size.height - t.size.height - (label?.size?.height ?: 0)) / 2f).coerceAtLeast(0f)
+        drawText(t, topLeft = Offset((size.width - t.size.width) / 2f, top))
+        label?.let { drawText(it, topLeft = Offset((size.width - it.size.width) / 2f, top + t.size.height)) }
     }
 }
 
