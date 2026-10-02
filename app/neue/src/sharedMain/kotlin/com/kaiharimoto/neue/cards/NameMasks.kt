@@ -12,6 +12,9 @@ class NameMask(val letters: ImageBitmap, val outline: ImageBitmap)
 /** The name style every card in the window draws with; the studio, with no provider, gets the default. */
 val LocalNameStyle = staticCompositionLocalOf { NameStyles.FOIL }
 
+/** Whether Limited and Semi-Limited cards show their 1 or 2 (1.0.73, `NeuePreferences.limitMarks`, off by default). */
+val LocalLimitMarks = staticCompositionLocalOf { false }
+
 /** How a card's name is drawn: stamped in the foil (kai's pick), foil over an ink outline, or as printed. */
 object NameStyles {
     const val FOIL = "foil"

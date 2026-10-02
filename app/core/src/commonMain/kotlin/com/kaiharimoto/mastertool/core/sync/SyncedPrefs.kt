@@ -48,7 +48,7 @@ object SyncedPrefs {
     const val FORMAT_PATH = "prefs/format.json"
 
     val SYNCED = setOf(
-        "theme", "foil", "foilNames", "contrast", "groupPalette", "groupArrangement", "slidesAutoplay",
+        "theme", "foil", "foilNames", "limitMarks", "contrast", "groupPalette", "groupArrangement", "slidesAutoplay",
         "autoSaveOn", "shotStyle", "sidingView", "sidingExtra", "autoZen", "zenLabels", "poolToSide",
         "defaultDeckId", "covers", "arts", "cardLists", "activeList", "ai", "present",
     )

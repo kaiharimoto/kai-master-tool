@@ -262,8 +262,9 @@ private fun brushOf(ctx: SlideContext, fill: Fill, size: Size): Brush {
 /** Laid out at [box] on the canvas, [s] pixels to the canvas unit; the node spans the canvas. */
 internal fun Modifier.onCanvas(s: Float, box: () -> CanvasBox): Modifier = layout { measurable, constraints ->
     val b = box()
-    val w = (b.w * s).roundToInt().coerceAtLeast(1)
-    val h = (b.h * s).roundToInt().coerceAtLeast(1)
+    // Both sides held to what fixed `Constraints` can encode together (1.0.73): far past any slide.
+    val w = (b.w * s).roundToInt().coerceIn(1, MAX_LAYOUT)
+    val h = (b.h * s).roundToInt().coerceIn(1, MAX_LAYOUT)
     val p = measurable.measure(Constraints.fixed(w, h))
     layout(constraints.maxWidth, constraints.maxHeight) { p.place((b.x * s).roundToInt(), (b.y * s).roundToInt()) }
 }
@@ -440,12 +441,28 @@ private fun spanOf(ctx: SlideContext, r: RunStyle, look: RoleLook, px: Float, fi
 }
 
 /**
+ * The widest a slide ever measures words, in pixels (1.0.73): far past a 4K slide, and inside what
+ * Compose's `Constraints` can hold with an unbounded height. kai's 1.0.72 crash was a box 539,075
+ * pixels wide; whatever the data says, the painter never asks for more than this.
+ */
+internal const val MAX_MEASURE = 32_000
+
+/** The largest box an element is laid out in, each side, in pixels: two fixed sides share the encoding. */
+internal const val MAX_LAYOUT = 8_000
+
+/** Exactly [px] wide, within what can be measured. */
+internal fun fixedWidth(px: Int): Constraints = Constraints.fixedWidth(px.coerceIn(1, MAX_MEASURE))
+
+/** At most [px] wide, within what can be measured. */
+internal fun maxWidth(px: Int): Constraints = Constraints(maxWidth = px.coerceIn(1, MAX_MEASURE))
+
+/**
  * The shrink that fits [e]'s words in a [w] × [h] pixel box: the largest of a few steps down
  * to a third whose laid-out text is no taller than the box.
  */
 internal fun fitOf(measurer: TextMeasurer, build: (Float) -> AnnotatedString, w: Int, h: Int, shrink: Boolean): Pair<Float, TextLayoutResult> {
     // A fixed width: measured text otherwise shrink-wraps, and a centred line lands on the left.
-    val constraints = Constraints.fixedWidth(w.coerceAtLeast(1))
+    val constraints = fixedWidth(w)
     val full = measurer.measure(build(1f), constraints = constraints)
     if (!shrink || (full.size.height <= h && !full.hasVisualOverflow)) return 1f to full
     var lo = 0.3f
@@ -471,13 +488,13 @@ private fun TextBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float, s
     // The typewriter reads its share in composition: a typing build recomposes this block alone.
     val reveal = state(e).reveal
     val pad = e.padding * s
-    val w = (box.w * s - pad * 2).roundToInt()
-    val h = (box.h * s - pad * 2).roundToInt()
+    val w = (box.w * s - pad * 2).roundToInt().coerceIn(1, MAX_MEASURE)
+    val h = (box.h * s - pad * 2).roundToInt().coerceIn(0, MAX_MEASURE)
     val fitted = remember(e.paras, e.role, e.fit, ctx.theme, w, h, s) {
         fitOf(measurer, { f -> styledText(ctx, e.paras, e.role, s, f, density) }, w, h, e.fit == Element.FIT_SHRINK).first
     }
     val layout = remember(e.paras, e.role, fitted, ctx.theme, w, s, reveal) {
-        measurer.measure(styledText(ctx, e.paras, e.role, s, fitted, density, reveal), constraints = Constraints.fixedWidth(w.coerceAtLeast(1)))
+        measurer.measure(styledText(ctx, e.paras, e.role, s, fitted, density, reveal), constraints = fixedWidth(w))
     }
     Canvas(Modifier.fillMaxSize()) {
         e.fill?.let { drawRect(brushOf(ctx, it, size)) }
@@ -693,7 +710,7 @@ private fun CardsBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float, 
                         fontFamily = ctx.fonts.of(look.font),
                         textAlign = TextAlign.Center,
                     )
-                    val t = measurer.measure(name, style, constraints = Constraints.fixedWidth((b.w * s + gap * s).roundToInt().coerceAtLeast(1)), maxLines = 2)
+                    val t = measurer.measure(name, style, constraints = fixedWidth((b.w * s + gap * s).roundToInt()), maxLines = 2)
                     drawText(t, topLeft = Offset(b.cx * s - t.size.width / 2f, (area.bottom + 8f) * s))
                 }
             }
@@ -778,8 +795,8 @@ internal fun DeckLayer(ctx: SlideContext, frame: () -> StageFrame?, keys: List<S
                         val p = m.measure(Constraints.fixed(1, 1))
                         layout(cons.maxWidth, cons.maxHeight) { p.place(-10, -10) }
                     } else {
-                        val w = (b.w * s).roundToInt().coerceAtLeast(1)
-                        val h = (b.h * s).roundToInt().coerceAtLeast(1)
+                        val w = (b.w * s).roundToInt().coerceIn(1, MAX_LAYOUT)
+                        val h = (b.h * s).roundToInt().coerceIn(1, MAX_LAYOUT)
                         val p = m.measure(Constraints.fixed(w, h))
                         layout(cons.maxWidth, cons.maxHeight) { p.place((b.x * s).roundToInt(), (b.y * s).roundToInt()) }
                     }
@@ -819,7 +836,7 @@ internal fun DeckLayer(ctx: SlideContext, frame: () -> StageFrame?, keys: List<S
             val t = measurer.measure(
                 l.text,
                 TextStyle(color = ink, fontSize = with(density) { fontPx.toSp() }, fontWeight = FontWeight.Bold, fontFamily = ctx.fonts.of(theme.bodyFont)),
-                constraints = Constraints(maxWidth = (b.w * s).roundToInt().coerceAtLeast(1)),
+                constraints = maxWidth((b.w * s).roundToInt()),
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
@@ -905,7 +922,7 @@ private fun TableBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
                 val t = measurer.measure(
                     cell,
                     TextStyle(color = color, fontSize = with(density) { fontPx.toSp() }, fontWeight = if (header) FontWeight.Bold else FontWeight.Normal, fontFamily = ctx.fonts.of(ctx.theme.bodyFont), textAlign = if (c == 0) TextAlign.Start else TextAlign.Center),
-                    constraints = Constraints(maxWidth = (widths[c] - pad).roundToInt().coerceAtLeast(1)),
+                    constraints = maxWidth((widths[c] - pad).roundToInt()),
                     maxLines = 2,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
@@ -991,7 +1008,7 @@ private fun ChartBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
                         else drawText(v, topLeft = Offset(start + (barSpan - v.size.width) / 2f, (extent - len - v.size.height - 4f * s).coerceAtLeast(0f)))
                     }
                     val name = chart.labels.getOrNull(i) ?: continue
-                    val t = measurer.measure(name, label, constraints = Constraints(maxWidth = (if (horizontal) gutter - 12f * s else groupSpan).roundToInt().coerceAtLeast(1)), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    val t = measurer.measure(name, label, constraints = maxWidth((if (horizontal) gutter - 12f * s else groupSpan).roundToInt()), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     if (horizontal) drawText(t, topLeft = Offset(0f, i * groupSpan + (groupSpan - t.size.height) / 2f))
                     else drawText(t, topLeft = Offset(i * groupSpan + (groupSpan - t.size.width) / 2f, size.height - t.size.height))
                 }
@@ -1014,7 +1031,7 @@ private fun StatBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) {
         fun labelAt(px: Float) = measurer.measure(
             words,
             TextStyle(color = ctx.color("@text", "#000000"), fontSize = with(density) { px.toSp() }, lineHeight = with(density) { (px * 1.2f).toSp() }, fontFamily = ctx.fonts.of(ctx.theme.bodyFont), textAlign = TextAlign.Center),
-            constraints = Constraints.fixedWidth(size.width.roundToInt().coerceAtLeast(1)),
+            constraints = fixedWidth(size.width.roundToInt()),
         )
         // The words take at most two fifths of the box, the number what is left: never past the box.
         var labelPx = 38f * s

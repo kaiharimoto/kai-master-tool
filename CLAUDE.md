@@ -609,9 +609,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   painter; `PresentPrefs.startTheme`/`themeChosen` so 1.0.71's stored Arena no longer wins); the other looks
   are options (New dialog, **Style ▾**, the Theme tab, with a Flat switch); **Restyle** hands the look to Ai from
   the person's words and an optional picture (`RestyleBrief`, `AiSession.MODE_RESTYLE`, skill `restyle`; look only,
-  never content; **Undo restyle** via `Presentations.restyleBefore`). Next: 1.0.73 recording (JavaCV/FFmpeg,
-  LGPL; `core/present/record` holds the take timeline, chapters and encoder choice already), 1.0.74 Android
-  recording and extras. `tools/shoot.sh --page=present --present=demo …` photographs it
+  never content; **Undo restyle** via `Presentations.restyleBefore`). **1.0.73**: geometry is sane wherever it
+  enters (`Geometry.sane` on decode, paste and Ai's writes; a canvas box over a stage placeholder lands as
+  written) and the painter never asks `Constraints` for more than `MAX_MEASURE`/`MAX_LAYOUT` (kai's crash,
+  `SlidePaintTest`). Next: 1.0.74 recording (JavaCV/FFmpeg, LGPL; `core/present/record` holds the take timeline,
+  chapters and encoder choice already), 1.0.75 Android recording and extras. `tools/shoot.sh --page=present --present=demo …` photographs it
   (`--present-mode=restyle` the dialog).
 
 ## Stored data outlives versions — a rule

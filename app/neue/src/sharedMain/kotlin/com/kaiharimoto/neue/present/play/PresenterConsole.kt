@@ -139,6 +139,7 @@ fun PresentAudience(h: NeueHolders, ctx: SlideContext) {
         LocalArts provides neue.prefs.arts,
         LocalCustomArt provides h.customArt,
         LocalNameStyle provides neue.prefs.foilNames,
+        com.kaiharimoto.neue.cards.LocalLimitMarks provides neue.prefs.limitMarks,
     ) {
         MuTheme(ink = neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK) {
             PresentStage(h.present, ctx)

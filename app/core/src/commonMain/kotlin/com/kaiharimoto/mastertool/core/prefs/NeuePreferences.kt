@@ -308,6 +308,11 @@ data class NeuePreferences(
     val start: com.kaiharimoto.mastertool.core.start.StartPrefs = com.kaiharimoto.mastertool.core.start.StartPrefs(),
     /** Present (1.0.70): how a new deck profile starts — style, theme, camera, the creator's name. */
     val present: com.kaiharimoto.mastertool.core.present.PresentPrefs = com.kaiharimoto.mastertool.core.present.PresentPrefs(),
+    /**
+     * The 1 and 2 squares on Limited and Semi-Limited cards (1.0.73). Off by default, on kai's word:
+     * players know the list. A Forbidden card's 0 always shows — the deck cannot be played with it.
+     */
+    val limitMarks: Boolean = false,
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

@@ -381,7 +381,8 @@ private fun NeueCardFace(
         }
 
         val ban = card.banStatus(format)
-        if (ban != BanStatus.UNLIMITED) {
+        // Forbidden always shows; Limited and Semi-Limited only when asked for (kai, 1.0.73).
+        if (ban != BanStatus.UNLIMITED && (ban.maxCopies == 0 || LocalLimitMarks.current)) {
             Inverted {
                 Box(
                     Modifier.align(Alignment.TopStart).padding(3.dp).size(16.dp).background(Mu.colors.paper),

@@ -257,7 +257,7 @@ object SlideClip {
     fun readElements(text: String?): List<Element>? {
         if (text == null || !text.startsWith(ELEMENTS)) return null
         return try {
-            PresentCodec.json.decodeFromString(ListSerializer(Element.serializer()), text.removePrefix(ELEMENTS))
+            PresentCodec.json.decodeFromString(ListSerializer(Element.serializer()), text.removePrefix(ELEMENTS)).map(com.kaiharimoto.mastertool.core.present.Geometry::sane)
         } catch (e: Exception) {
             null
         }
@@ -266,7 +266,7 @@ object SlideClip {
     fun readSlides(text: String?): List<Slide>? {
         if (text == null || !text.startsWith(SLIDES)) return null
         return try {
-            PresentCodec.json.decodeFromString(ListSerializer(Slide.serializer()), text.removePrefix(SLIDES))
+            PresentCodec.json.decodeFromString(ListSerializer(Slide.serializer()), text.removePrefix(SLIDES)).map { sl -> sl.copy(elements = sl.elements.map(com.kaiharimoto.mastertool.core.present.Geometry::sane)) }
         } catch (e: Exception) {
             null
         }

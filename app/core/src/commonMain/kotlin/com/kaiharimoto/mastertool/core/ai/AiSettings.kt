@@ -38,6 +38,7 @@ object AiSettings {
         "filtersOpen" to "The pool's filters are open.",
         "foil" to "The foil on card faces: \"holo\", \"classic\" or \"off\".",
         "foilNames" to "How card names are drawn: \"foil\", \"outline\" or \"printed\".",
+        "limitMarks" to "The 1 and 2 squares on Limited and Semi-Limited cards; off by default. A Forbidden card's 0 always shows.",
         "foilTilt" to "On a phone or tablet, the foil follows the device's tilt.",
         "sound" to "Sounds on.",
         "railPinned" to "The page rail stays out instead of folding away.",

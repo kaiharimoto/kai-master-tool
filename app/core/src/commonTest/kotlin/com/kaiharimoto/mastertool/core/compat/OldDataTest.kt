@@ -94,4 +94,15 @@ class OldDataTest {
         assertEquals(com.kaiharimoto.mastertool.core.present.Themes.MASTER_DARK, p.startTheme(appDark = true))
         assertEquals("neon", p.copy(theme = "neon", themeChosen = true).startTheme(appDark = false))
     }
+
+    @Test
+    fun aPresentationBroken1072ReadsRepaired() {
+        // 1.0.72: Ai's canvas box over a stage placeholder, saved as 800 stages wide — it crashed the painter.
+        val old = """{"id":"pbad","name":"Profile","theme":"paper","slides":[{"id":"s1","elements":[
+            {"id":"e","type":"TEXT","x":100,"y":200,"w":800,"h":300,"anchor":"STAGE","paras":[{"runs":[{"text":"Hi"}]}]}]}]}"""
+        val e = assertNotNull(PresentCodec.decode(old)).slides.single().elements.single()
+        assertEquals("CANVAS", e.anchor)
+        assertEquals(800f, e.w)
+        assertEquals("Hi", e.plainText)
+    }
 }

@@ -154,6 +154,22 @@ class PresentTest {
     }
 
     @Test
+    fun geometryIsSaneWhereverItEnters() {
+        val wild = Element("a", Element.TEXT, 0.1f, 0.1f, 500f, 0.2f, anchor = Element.ANCHOR_STAGE)
+        val fixed = Geometry.sane(wild)
+        assertEquals(Element.ANCHOR_CANVAS, fixed.anchor, "past four stages is canvas units")
+        assertEquals(500f, fixed.w)
+        val huge = Geometry.sane(Element("b", Element.TEXT, 0f, 0f, 1_000_000f, Float.NaN))
+        assertEquals(Presentation.WIDTH * 4f, huge.w)
+        assertEquals(200f, huge.h, "not a number takes the default")
+        val fine = Element("c", Element.TEXT, 0.1f, 0.2f, 0.5f, 0.3f, anchor = Element.ANCHOR_STAGE)
+        assertTrue(Geometry.sane(fine) === fine, "a sane element is left alone")
+        // A file holding the broken shape reads repaired.
+        val file = PresentCodec.encode(Presentation("p", "P", slides = listOf(Slide("s", elements = listOf(wild)))))
+        assertEquals(Element.ANCHOR_CANVAS, PresentCodec.decode(file)!!.slides.single().elements.single().anchor)
+    }
+
+    @Test
     fun theTweenMatchesCopiesByKey() {
         val a = DeckStage.frame(deck, steps(), Presentation.STYLE_SPOTLIGHT, 0, stage)
         val b = DeckStage.frame(deck, listOf(DeckFocus(cards = listOf(1))), Presentation.STYLE_SLIDES, 0, stage)

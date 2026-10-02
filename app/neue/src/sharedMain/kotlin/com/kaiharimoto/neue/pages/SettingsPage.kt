@@ -124,6 +124,9 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SettingRow("Card names", "The name printed across the top of a card, stamped in the same foil as its border. Holographic foil only.") {
                         Segmented(prefs.foilNames, NameStyles.all, NameStyles::label, { n -> neue.update { it.copy(foilNames = n) } })
                     }
+                    SettingRow("Limit marks", "A 1 or 2 in the corner of Limited and Semi-Limited cards. A Forbidden card's 0 always shows.", onToggle = { neue.update { it.copy(limitMarks = !it.limitMarks) } }) {
+                        MuSwitch(prefs.limitMarks, { on -> neue.update { it.copy(limitMarks = on) } })
+                    }
                     // A tablet's index is always out (the strip): there is nothing to choose.
                     if (!touch) SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DECKS)} to ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_PRESENT)} reach the pages either way.") {
                         Segmented(prefs.railPinned, listOf(false, true), { if (it) "Pinned" else "Auto-hide" }, { p -> neue.update { it.copy(railPinned = p) } })

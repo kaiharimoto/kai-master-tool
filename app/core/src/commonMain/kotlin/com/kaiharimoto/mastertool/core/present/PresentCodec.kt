@@ -35,7 +35,7 @@ object PresentCodec {
             json.decodeFromString(Presentation.serializer(), text)
         } catch (e: Exception) {
             salvage(text)
-        }
+        }?.let(Geometry::sane)
     }
 
     /** Slide by slide and element by element, keeping whatever reads. */
@@ -111,6 +111,42 @@ object Geometry {
         e.copy(x = (box.x - stage.x) / stage.w, y = (box.y - stage.y) / stage.h, w = box.w / stage.w, h = box.h / stage.h)
     } else {
         e.copy(x = box.x, y = box.y, w = box.w, h = box.h)
+    }
+
+    /**
+     * [e] with geometry that can be drawn (1.0.73). kai's 1.0.72 crash was a stage-anchored box 500 stages
+     * wide: canvas units written over a placeholder's fractions. So: numbers that are not numbers take the
+     * defaults; a stage-anchored box past four stages is canvas units and is anchored so; sizes are held
+     * within four canvases (or stages) and positions near the slide, so an element stays findable.
+     */
+    fun sane(e: Element): Element {
+        fun num(v: Float, d: Float) = if (v.isNaN() || v.isInfinite()) d else v
+        var x = num(e.x, 0f)
+        var y = num(e.y, 0f)
+        var w = num(e.w, if (e.anchor == Element.ANCHOR_STAGE) 0.5f else 400f)
+        var h = num(e.h, if (e.anchor == Element.ANCHOR_STAGE) 0.3f else 200f)
+        val rotation = num(e.rotation, 0f)
+        var anchor = e.anchor
+        if (anchor == Element.ANCHOR_STAGE && (kotlin.math.abs(x) > 4f || kotlin.math.abs(y) > 4f || w > 4f || h > 4f)) anchor = Element.ANCHOR_CANVAS
+        if (anchor == Element.ANCHOR_STAGE) {
+            x = x.coerceIn(-4f, 4f)
+            y = y.coerceIn(-4f, 4f)
+            w = w.coerceIn(0f, 4f)
+            h = h.coerceIn(0f, 4f)
+        } else {
+            x = x.coerceIn(-Presentation.WIDTH * 2f, Presentation.WIDTH * 3f)
+            y = y.coerceIn(-Presentation.HEIGHT * 2f, Presentation.HEIGHT * 3f)
+            w = w.coerceIn(0f, Presentation.WIDTH * 4f)
+            h = h.coerceIn(0f, Presentation.HEIGHT * 4f)
+        }
+        return if (x == e.x && y == e.y && w == e.w && h == e.h && rotation == e.rotation && anchor == e.anchor) e
+        else e.copy(x = x, y = y, w = w, h = h, rotation = rotation, anchor = anchor)
+    }
+
+    /** Every element of [p] made [sane]. */
+    fun sane(p: Presentation): Presentation {
+        val slides = p.slides.map { s -> s.elements.map(::sane).let { els -> if (els == s.elements) s else s.copy(elements = els) } }
+        return if (slides == p.slides) p else p.copy(slides = slides)
     }
 
     /** [e] in canvas units, whatever it was anchored to: what an edit by hand turns it into. */

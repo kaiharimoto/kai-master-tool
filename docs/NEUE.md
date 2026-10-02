@@ -433,6 +433,12 @@ lost the hover would flicker). And the eye is **2.2 of the card's own widths**
 away: `cameraDistance` is in 72-pixel inches, so a fixed one leaves a small card
 flat and throws a large one at the viewer.
 
+### 2b′. Limit marks (1.0.73)
+
+A Limited or Semi-Limited card's 1 or 2, the inverted square in its corner, is **off by default** on kai's word
+(players know the list): Settings › Limit marks, `NeuePreferences.limitMarks`, synced, read through
+`LocalLimitMarks`. A Forbidden card's 0 always shows, because the deck cannot be played with it.
+
 ### 2c. The name in foil
 
 kai asked whether a card's *name* could be stamped in the foil too, saw three
@@ -2841,6 +2847,18 @@ font only) and give the user options for styles if they desire it"):
     the words, cards, order or notes, then check every changed slide with `present_view`.
   - The presentation as it was is kept (`Presentations.restyleBefore`). When the conversation ends, a note offers
     **Undo restyle** (one step of Undo), and so does Style ▾.
+
+**Geometry is sane wherever it enters** (1.0.73, after kai's crash on 1.0.72: "Can't represent a width of
+539075"):
+- **The root cause.** Ai's `update_element` with a canvas box over a stage-anchored placeholder kept the stage
+  anchor, so `w: 800` meant 800 stages.
+- **The writer.** `PresentWriter.elementOf` turns the placeholder into canvas units first when the numbers given
+  are canvas units, and keeps fractions as fractions.
+- **`Geometry.sane`.** Numbers that are not numbers take the defaults; a stage box past four stages is canvas
+  units; sizes are held within four canvases. It runs on everything read (`PresentCodec.decode`, so a broken
+  file is repaired when it opens), pasted (`SlideClip`) and written by Ai.
+- **The painter cannot throw on a size.** Words are measured at most `MAX_MEASURE` (32,000 px) wide and boxes laid
+  out at most `MAX_LAYOUT` (8,000 px) a side. `SlidePaintTest` renders impossible boxes headlessly.
 
 **The camera decides the room** (1.0.70, made explicit in 1.0.72):
 - **With the camera off,** the stage is the whole safe area.

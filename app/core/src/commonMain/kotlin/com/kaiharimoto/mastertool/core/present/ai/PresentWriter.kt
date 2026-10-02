@@ -3,6 +3,9 @@ package com.kaiharimoto.mastertool.core.present.ai
 import com.kaiharimoto.mastertool.core.present.Anim
 import com.kaiharimoto.mastertool.core.present.DeckFocus
 import com.kaiharimoto.mastertool.core.present.Element
+import com.kaiharimoto.mastertool.core.present.stage.Box
+import com.kaiharimoto.mastertool.core.present.play.CompiledShow
+import com.kaiharimoto.mastertool.core.present.Geometry
 import com.kaiharimoto.mastertool.core.present.Fill
 import com.kaiharimoto.mastertool.core.present.Para
 import com.kaiharimoto.mastertool.core.present.PresentCodec
@@ -160,7 +163,7 @@ object PresentWriter {
             val id = op.str("element") ?: fail("give element: its id")
             val old = s.element(id) ?: fail("slide ${p.indexOf(s.id) + 1} has no element $id")
             val patch = op["patch"] as? JsonObject ?: fail("give patch: the fields to change")
-            val next = elementOf(patch, old, ctx)
+            val next = elementOf(patch, old, ctx, CompiledShow(p).stage(p.indexOf(s.id)))
             Triple(PresentEdits.updateElements(p, s.id, setOf(id)) { next }, "Changed $id on slide ${p.indexOf(s.id) + 1}", s.id)
         }
         "remove" -> {
@@ -343,9 +346,18 @@ object PresentWriter {
      * write: `text` (lines, `- ` for a bullet), `cards` by name, `box` [x, y, w, h], `color`,
      * `size`, `bold`, `align`, and `fill` as a colour. Over [base] when changing one.
      */
-    fun elementOf(o: JsonObject, base: Element?, ctx: Context): Element {
+    fun elementOf(o: JsonObject, start: Element?, ctx: Context, stage: Box? = null): Element {
         val easy = setOf("text", "cards", "box", "color", "size", "bold", "align", "fill", "font", "italic")
         val raw = JsonObject(o.filterKeys { it !in easy })
+        // The geometry given, by the box or by its own keys: numbers past 1 are canvas units (1.0.73).
+        val given = (o["box"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.floatOrNull }.orEmpty() +
+            listOf("x", "y", "w", "h").mapNotNull { k -> o.float(k) }
+        val canvasNumbers = given.any { kotlin.math.abs(it) > 1.01f }
+        // Canvas units over a stage-anchored placeholder: the placeholder turned into canvas units first, so
+        // the numbers given land as written rather than as hundreds of stages (kai's 1.0.72 crash).
+        val base = if (start != null && start.anchor == Element.ANCHOR_STAGE && canvasNumbers && o.str("anchor") == null) {
+            stage?.let { Geometry.toCanvas(start, it) } ?: start.copy(anchor = Element.ANCHOR_CANVAS)
+        } else start
         val merged = if (base != null) PresentCodec.merge(PresentCodec.element(base), raw) else buildJsonObject {
             put("id", JsonPrimitive(PresentIds.next("e", ctx.random)))
             raw.forEach { (k, v) -> put(k, v) }
@@ -378,6 +390,6 @@ object PresentWriter {
             e = e.copy(anchor = Element.ANCHOR_STAGE)
         }
         if (e.type == Element.CARD && e.cards.size > 1) e = e.copy(type = Element.CARDS)
-        return e
+        return Geometry.sane(e)
     }
 }

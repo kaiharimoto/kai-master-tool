@@ -179,6 +179,28 @@ class PresentAiTest {
     }
 
     @Test
+    fun aCanvasBoxOverAPlaceholderLandsAsWritten() {
+        // kai's 1.0.72 crash: canvas units over a stage-anchored placeholder were read as 800 stages wide.
+        val p = profile()
+        val slide = p.slides.first()
+        val placeholder = slide.elements.first { it.anchor == Element.ANCHOR_STAGE }
+        val r = PresentWriter.apply(
+            p,
+            ops("""[{"action":"update_element","slide":"${slide.id}","element":"${placeholder.id}","patch":{"box":[100,200,800,300]}},
+                   {"action":"update_element","slide":"${slide.id}","element":"${placeholder.id}","patch":{"w":900}}]"""),
+            ctx,
+        )
+        assertTrue(r.ok, r.lines.joinToString())
+        val e = r.presentation.slides.first().element(placeholder.id)!!
+        assertEquals(Element.ANCHOR_CANVAS, e.anchor)
+        assertEquals(listOf(100f, 200f, 900f, 300f), listOf(e.x, e.y, e.w, e.h))
+        assertTrue(PresentReport.check(r.presentation, 0).none { placeholder.id in it && "off the slide" in it })
+        // Fractions over a placeholder stay fractions.
+        val f = PresentWriter.apply(p, ops("""[{"action":"update_element","slide":"${slide.id}","element":"${placeholder.id}","patch":{"box":[0.1,0.1,0.5,0.2]}}]"""), ctx)
+        assertEquals(Element.ANCHOR_STAGE, f.presentation.slides.first().element(placeholder.id)!!.anchor)
+    }
+
+    @Test
     fun theBriefSaysWhatTheLauncherAsked() {
         val b = PresentBrief(presentationId = "p1", length = PresentBrief.SHORT, tone = PresentBrief.TONE_HYPE, modules = listOf(Modules.SIDING, Modules.SHOUTOUTS), script = false)
         val text = b.message()
