@@ -411,6 +411,7 @@ class Duels(val dir: File) {
                 }
                 peer = w.name.ifBlank { "Guest" }
                 netStatus = "Playing ${peer} over the network"
+                setupOpen = false
                 sentTo = 0
                 l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Welcome(1, guestToken!!, hostSeat?.name.orEmpty()))
                 sendUpdate()
