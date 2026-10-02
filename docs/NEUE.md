@@ -2722,7 +2722,7 @@ desktop that might be outdated or be outdated by changes we make in the future, 
   rises with tested migrations; the deck payload passes through untouched; every shape older versions
   wrote is held in `OldDataTest`, and a release that changes one adds its old shape there.
 
-### 4o. Present: deck profiles as slides (1.0.70)
+### 4o. Present: deck profiles as slides (1.0.70–1.0.71)
 
 kai: "There's a lot of content creators on YouTube who do deck profiles explaining and presenting their
 deck by using a webcam and a screen recording of their deck list on duelingbook … Present mode should work
@@ -2811,6 +2811,61 @@ synced, internal to Ai) remembers how the last profile was started. No schema ch
 **Input as data**: `DeskShortcuts` has two new scopes, Making slides (`PRESENT_EDIT`) and Presenting
 (`PRESENTING`, during which the page keys are dead); the mouse and the finger are `PresentMouse` and
 `PresentTouch` (`PresentInputTest` holds every mouse action to a finger's form), printed by the help dialog.
+
+**Modules** (1.0.71, Module ▾ in the bar; `core/present/modules/Modules`, tested): generators that make
+ordinary slides, every element editable, each slide remembering how it was made (`Slide.module`, a
+`ModuleRef` of its type and input) so **Refresh from data** (the Slide tab) makes it again and leaves alone
+whatever was changed by hand (`Element.edited`). kai's five and six more:
+- **Siding**: a slide per matchup from the deck's own siding plans (`SidingCodec`), out and in going first
+  and second, with the why; the matchups chosen in the dialog.
+- **Matchups**: the practice record from Prep (`TestStats.matrix`) as a table and a chart, and the match win to
+  expect against the event's field.
+- **Strong and weak performers**: picked by hand (kai: "manual only"), a card and a line each.
+- **Tournament**: a Prep event's rounds, the record and the placement.
+- **Shoutouts**: up to six, each a logo or picture **uploaded or pasted** (`pastedPicture`), a name, a handle
+  and a line.
+- **Opening odds** and **Ratios** from the deck's groups (`GroupStats`): numbers from the app, never typed.
+- **Tech choices**, **Combo** (the cards of a line in order), **Get the deck** (the deck's ydke code as a QR),
+  **Decklist** (every card).
+`present/ModuleData` gathers what each reads from the rest of the app, for the dialog, Refresh and Ai alike.
+Every module element is stage-anchored, so a module slide makes room for the camera like any layout.
+
+**Export** (1.0.71, the bar's export menu; `present/SlideExport`): a PDF of every slide shown (one 16:9 page a
+slide, through `core/pdf`), this slide or every slide as 1920 × 1080 pictures (a zip), and a **YouTube
+thumbnail** of a slide at 1280 × 720. Each slide is drawn by the same painter with every build done, and
+caught once its art has arrived.
+
+**Ai builds it** (1.0.71, §4k; kai: "Ai will be a big part of this … well taught on how to use the
+tools to operate this feature autonomously"). Three tools, all phase 3:
+- **`present_state`** (looks): the list, or one presentation's outline — the style, theme, webcam, deck and
+  groups, then every slide with its id, layout, transition, deck step, each element's id, type, role, box,
+  words, cards and builds, and its notes (`PresentReport.outline`). It opens what it reads.
+- **`present_edit`**: a list of ops in order, **the whole batch one step of the person's Undo** ("Ai: …").
+  `core/present/ai/PresentWriter` applies the editor's own edits (`PresentEdits`), so Ai and the person never
+  disagree on what an edit means: set_props, apply_theme, steps_from_groups, set_steps (by group and card
+  names), add_slide (a layout and its slots: title, subtitle, body, right, caption, card, cards, number),
+  edit_slide, set_notes, add_element and update_element (the stored fields, plus `text`, `box`, `color`,
+  `size`, `bold`… and cards by name), remove, reorder, duplicate_slide, set_animation. Every card named
+  is checked (`CardWords`), and one failing op stops the rest with the ones before it kept. What needs the
+  app is `neue/ai/AiPresent`: **create** (a deck profile of a saved deck or the builder's, opened on
+  Present), **add_module** (through `ModuleData`; a module with no data says what to make first — siding plans,
+  logged games, an event — rather than inventing it) and **refresh_module**.
+- **`present_view`** (looks): one slide as the audience sees it, in words (`PresentReport.check`), because a
+  tool's answer is text and not every model sees: anything on the webcam or off the slide, words under 26
+  units, boxes too small for their words, contrast under 3 : 1, empty card or picture slots, over 45 words, a
+  deck slide about nothing, cards drawn under the camera, more than six clicks, no notes; and which cards a
+  deck slide lights.
+- **Skills**: `deck-profile` (learn the deck first; ask only what is missing; create; order the steps the way
+  the deck is explained; modules from the app's data; the script in the notes at about 130 words a minute;
+  `present_view` every slide and fix it) and `slide-design` (the 96-unit margin, never under the camera, one
+  idea a slide, eight-word titles, about 30 body words, 36-unit type, 4.5 : 1 contrast, cards as the hero, at
+  most three clicks, one transition through the video).
+- **Build with Ai** (the bar, the New dialog, the palette; `BuildWithAiDialog`): how long the video runs
+  (Short, Standard, Deep dive), the tone (Teaching, Hype, Calm), the modules, whether Ai writes the script,
+  and anything else — `PresentBrief` turns it into the first message of a conversation in
+  `AiSession.MODE_PRESENT`, whose prompt sends Ai to both skills.
+- On Present, Ai's memory is the profiled deck's (`AiHost.scope`) and its situation names the presentation
+  and the slide on screen.
 
 **Pictures**: `tools/shoot.sh --page=present --present=demo --present-slide=N --present-mode=library|edit|play|overview|notes
 --present-style=spotlight|slides|buildup --present-theme=arena|neon|… --present-webcam=tr|tl|br|bl|left|right|off

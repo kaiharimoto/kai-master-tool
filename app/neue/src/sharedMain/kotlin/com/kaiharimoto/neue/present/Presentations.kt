@@ -152,6 +152,15 @@ class Presentations(val dir: File) {
     /** Whether the desktop found a second screen to show the slides on. Set by the window. */
     var screens by mutableStateOf(1)
 
+    /** An export running: the slides drawn one by one and caught as pictures. */
+    var exporting by mutableStateOf<ExportJob?>(null)
+
+    /** The module dialog, open on a module's type. */
+    var addingModule by mutableStateOf<String?>(null)
+
+    /** Build with Ai's launcher, open (1.0.71). */
+    var briefing by mutableStateOf(false)
+
     /** The New dialog, open. */
     var creating by mutableStateOf(false)
 
@@ -170,6 +179,13 @@ class Presentations(val dir: File) {
             library = withContext(Dispatchers.Default) { readAll() }
             loaded = true
         }
+    }
+
+    /** The library read, if it has not been yet: Ai can ask before the page was ever opened. */
+    suspend fun ensureLoaded() {
+        if (loaded) return
+        library = withContext(Dispatchers.Default) { readAll() }
+        loaded = true
     }
 
     /** Read the folder again: after a sync or a restore brought presentations in. */
@@ -292,6 +308,11 @@ class Presentations(val dir: File) {
     }
 
     fun delete(p: Presentation) {
+        // A write still waiting for it would bring the file back.
+        if (pending?.id == p.id) {
+            saveJob?.cancel()
+            pending = null
+        }
         library = library.filterNot { it.id == p.id }
         if (open?.id == p.id) open = null
         scope.launch { io.withLock { withContext(Dispatchers.IO) { File(dir, "${p.id}.json").delete() } } }

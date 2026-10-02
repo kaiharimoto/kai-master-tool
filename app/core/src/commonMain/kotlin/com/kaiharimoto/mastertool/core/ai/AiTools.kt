@@ -821,12 +821,89 @@ object AiTools {
     )
 
     /** The tools a delegated helper may use: every one that only looks. */
+    val presentState = ToolSpec(
+        "present_state",
+        "Present (06): with no id, the person's presentations; with one, its outline — the style (spotlight, slides, build_up), the theme, the webcam, " +
+            "the deck and its groups, and every slide in order with its id, layout, transition, deck step (what it talks about and its note), " +
+            "each element's id, type, role, box, words, cards and builds, and the speaker notes. Read it before present_edit.",
+        schema { string("presentation_id", "One presentation; omit for the open one, or the list when none is open") },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val presentEdit = ToolSpec(
+        "present_edit",
+        "Changes the open presentation (Present, 06) by a list of ops applied in order: one step of the person's Undo. Each op has an action: " +
+            "create {deck_id, style, theme, webcam, creator, name} makes a deck profile and opens it; set_props; apply_theme; steps_from_groups; " +
+            "set_steps {steps: [{title, groups, cards, all, note, notes}]} replaces the deck slides; add_slide {layout, after, title, slots, elements, deck, notes, transition}; " +
+            "edit_slide; set_notes; add_element {slide, element}; update_element {slide, element, patch}; remove {slide, element?}; reorder {slide, to}; " +
+            "duplicate_slide; set_animation; add_module {type, title, matchups, picks, strong, weak, shoutouts, event_id, placement, after}; refresh_module {slide}. " +
+            "Slides by id or number; cards by printed name, checked. Read the deck-profile and slide-design skills first.",
+        schema {
+            objects("ops", "The operations, in order", required = true) {
+                enum("action", "What to do", listOf("create", "add_module", "refresh_module") + com.kaiharimoto.mastertool.core.present.ai.PresentWriter.ACTIONS, required = true)
+                any("slide", "A slide: its id or its number")
+                any("element", "An element's id; add_element: the element {type, text, box, role, cards, …}")
+                any("patch", "update_element: the fields to change")
+                any("slots", "add_slide, edit_slide: words and cards for the layout's placeholders")
+                any("elements", "add_slide: elements to add")
+                any("deck", "A deck slide's step {title, groups, cards, all, note, note_place}")
+                any("steps", "set_steps: the deck steps in order")
+                any("webcam", "{enabled, preset, size, shape, fill, border}")
+                any("colors", "set_props: theme colors by token (bg, surface, text, muted, accent, accent2, accent3, accent4, line)")
+                any("background", "edit_slide: a color, {kind, color, stops, angle}, or null for the theme's")
+                any("transition", "A transition kind, or {kind, duration_ms, direction}")
+                any("picks", "add_module: [{card, note}] for tech choices or a combo")
+                any("strong", "add_module performers: [{card, note}]")
+                any("weak", "add_module performers: [{card, note}]")
+                any("shoutouts", "add_module shoutouts: [{name, handle, line}]")
+                any("matchups", "add_module siding: the matchup names to show; omit for all")
+                string("name", "create, set_props: the name")
+                string("deck_id", "create: the saved deck to profile; omit for the deck on the builder")
+                string("style", "spotlight, slides or build_up")
+                string("theme", "paper, ink, arena, neon, duel or clean")
+                string("creator", "The creator's name for the title")
+                string("heading_font", "set_props")
+                string("body_font", "set_props")
+                string("layout", "add_slide: TITLE, TITLE_BODY, TWO_COLUMN, SECTION, BIG_NUMBER, CARD_FOCUS, CARDS_ROW, IMAGE_FULL, QUOTE, CAMERA_BIG, END_CARD, DECK, BLANK")
+                string("after", "add_slide, add_module: the slide it goes after")
+                string("title", "A slide's title, or a module's")
+                string("notes", "Speaker notes, written to be spoken")
+                string("camera", "edit_slide: default, hidden, or a preset")
+                string("type", "add_module: SIDING, MATCHUPS, PERFORMERS, TOURNAMENT, SHOUTOUTS, ODDS, RATIOS, TECH, COMBO, GET_THE_DECK, DECKLIST")
+                string("event_id", "add_module tournament: the Prep event")
+                string("placement", "add_module tournament: where it finished")
+                string("kind", "set_animation: entrance, emphasis or exit")
+                string("effect", "set_animation: fade, rise, drop, zoom, wipe, fly_left, fly_right, type; pulse, grow, spin, glow")
+                string("trigger", "set_animation: on_click, with_previous or after_previous")
+                integer("to", "reorder: the slide number it moves to", min = 1, max = 500)
+                integer("duration_ms", "set_animation", min = 0, max = 10000)
+                integer("delay_ms", "set_animation", min = 0, max = 10000)
+                boolean("hidden", "edit_slide: skipped when presenting")
+                boolean("clear", "set_animation: remove the element's builds")
+            }
+        },
+        ToolGroup.BUILD,
+        phase = 3,
+    )
+
+    val presentView = ToolSpec(
+        "present_view",
+        "Looks at one slide of the open presentation as the audience will see it, and says what is wrong: anything on the webcam or off the slide, " +
+            "words too many, too small or too faint to read, boxes too small for their words, empty card or picture slots, a deck slide talking about " +
+            "nothing, too many clicks, no speaker notes — and for a deck slide which cards are lit. Run it on every slide you make and fix what it says.",
+        schema { any("slide", "The slide: its id or number", required = true) },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
+        "present_state", "present_view",
     )
 
     /** Every tool, in the order they are offered. */
@@ -842,6 +919,7 @@ object AiTools {
         calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
+        presentState, presentEdit, presentView,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

@@ -1,5 +1,14 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.present.modules.ModuleInput
+import com.kaiharimoto.mastertool.core.present.modules.SideMatchup
+import com.kaiharimoto.mastertool.core.present.modules.SideTurn
+import com.kaiharimoto.mastertool.core.present.modules.MatchRow
+import com.kaiharimoto.mastertool.core.present.modules.RoundRow
+import com.kaiharimoto.mastertool.core.present.modules.Shoutout
+import com.kaiharimoto.mastertool.core.present.modules.GroupOdds
+import com.kaiharimoto.mastertool.core.present.modules.Modules
+import com.kaiharimoto.mastertool.core.present.modules.Pick
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.ImageComposeScene
@@ -134,7 +143,8 @@ fun neueMain(args: Array<String>) {
             // --present=demo: a deck profile of the builder's deck (1.0.70), opened in the editor;
             // --present-style=spotlight|slides|buildup, --present-theme=arena|neon|…, --present-webcam=tr|tl|br|bl|left|right|off,
             // --present-slide=N the slide in view, --present-mode=library|edit|play|overview|notes, and
-            // --present-frames=N,K: from that slide, the next click and N stills K frames apart.
+            // --present-frames=N,K: from that slide, the next click and N stills K frames apart;
+            // --present-module=TYPE: a module's slides from sample data.
             if (map["present"] == "demo") {
                 val style = when (map["present-style"]) {
                     "slides" -> com.kaiharimoto.mastertool.core.present.Presentation.STYLE_SLIDES
@@ -163,7 +173,44 @@ fun neueMain(args: Array<String>) {
                     val f = sl.deck ?: return@map sl
                     if (f.all) sl else sl.copy(deck = f.copy(note = "Why these: what they open, what they need, and the line they start."))
                 })
+                // --present-module=SIDING|MATCHUPS|PERFORMERS|…: that module's slides after the title, from sample
+                // data made of the deck's own cards (1.0.71), the first of them in view.
+                var moduleFirst: String? = null
+                map["present-module"]?.uppercase()?.let { type ->
+                    val ids = h.builder.deck.main.map { it.value }.distinct()
+                    val side = h.builder.deck.side.map { it.value }.distinct().ifEmpty { ids.takeLast(3) }
+                    fun pick(i: Int, note: String) = Pick(ids[i % ids.size], note)
+                    val input = ModuleInput(
+                        title = "",
+                        matchups = listOf(
+                            SideMatchup("Snake-Eye", SideTurn(ids.take(2), side.take(2), "Their board is one big turn: stop it early."), SideTurn(ids.drop(2).take(2), side.take(2), "Break the board, then out-grind."), "The most played deck."),
+                            SideMatchup("Yubel", SideTurn(ids.take(1), side.take(1), "Keep the board small."), SideTurn(ids.take(1), side.takeLast(1), "Out them with removal."), ""),
+                        ),
+                        rows = listOf(
+                            MatchRow("Snake-Eye", 0.6, 10, 0.4, 10, 0.5, 10, 0.55, 10, 0.52, 20, 30),
+                            MatchRow("Yubel", 0.7, 8, 0.5, 8, 0.6, 8, 0.6, 8, 0.6, 16, 20),
+                            MatchRow("Fiendsmith", 0.4, 6, 0.3, 6, 0.35, 6, 0.4, 6, 0.37, 12, 25),
+                        ),
+                        expected = 0.54,
+                        strong = listOf(pick(0, "Opened every hand it touched"), pick(3, "Live in every matchup")),
+                        weak = listOf(pick(5, "Dead going second"), pick(7, "Too slow against Yubel")),
+                        picks = listOf(pick(1, "The starter"), pick(2, "Extends through a hand trap"), pick(4, "The payoff")),
+                        rounds = listOf(RoundRow(1, "Snake-Eye", "Won"), RoundRow(2, "Yubel", "Won"), RoundRow(3, "Fiendsmith", "Lost"), RoundRow(4, "Tenpai", "Won")),
+                        record = "3–1",
+                        placement = "Top 8",
+                        shoutouts = listOf(Shoutout(null, "Locals crew", "@locals", "Testing every week"), Shoutout(null, "Card shop", "@shop", "Hosting the event")),
+                        odds = com.kaiharimoto.mastertool.core.deck.GroupStats.of(h.builder.deck, h.builder.groups, { h.builder.index.byId(it) }).groups.map { g ->
+                            GroupOdds(g.name, g.opening, g.openingSecond, g.main + g.extra + g.side, g.color)
+                        },
+                        code = com.kaiharimoto.mastertool.core.ydk.YdkeCodec.encode(h.builder.deck),
+                    ).let { if (type == Modules.TOURNAMENT) it.copy(title = "Regional Qualifier", subtitle = "2026-09-20 · 120 players · Tier 2") else it }
+                    val made = Modules.generate(type, input, System.currentTimeMillis(), kotlin.random.Random(4))
+                    var after = 0
+                    made.forEach { sl -> p = com.kaiharimoto.mastertool.core.present.edit.PresentEdits.addSlide(p, sl, after); after++ }
+                    moduleFirst = made.firstOrNull()?.id
+                }
                 h.present.create(p)
+                moduleFirst?.let { h.present.slideId = it }
                 map["present-slide"]?.toIntOrNull()?.let { n -> p.slides.getOrNull(n)?.let { h.present.slideId = it.id } }
                 h.neue.page = Page.PRESENT
                 clock.run(80)

@@ -281,6 +281,58 @@ class AiEndToEndTest {
     }
 
     @Test
+    fun aiBuildsADeckProfileOnPresentThroughItsTools() = runBlocking {
+        val h = holders()
+        h.tool(
+            "new_deck",
+            "name" to "Profiled",
+            "main" to listOf("3 Ash Blossom & Joyous Spring", "Nibiru, the Primal Being", "2 Infinite Impermanence", "Raigeki"),
+            "extra" to listOf("Accesscode Talker"),
+        )
+        withTimeout(5_000) { while (h.builder.deckId == null) delay(20) }
+        val deckId = h.builder.deckId!!
+        try {
+            val made = h.tool("present_edit", "ops" to listOf(input("action" to "create", "deck_id" to deckId, "style" to "build_up", "creator" to "kai")))
+            assertFalse(made.isError, made.content)
+            val p = h.present.open ?: error("create opens the presentation")
+            assertEquals(com.kaiharimoto.mastertool.core.present.Presentation.STYLE_BUILD_UP, p.style)
+            assertEquals(deckId, p.deck?.deckId)
+            assertEquals(Page.PRESENT, h.neue.page)
+
+            // A batch is one step of Undo; an op naming a card that is not one stops there and says so.
+            val before = h.present.open!!.slides.size
+            val edit = h.tool(
+                "present_edit",
+                "ops" to listOf(
+                    input("action" to "add_slide", "layout" to "CARD_FOCUS", "slots" to input("title" to "The hand trap", "card" to "Ash Blossom & Joyous Spring")),
+                    input("action" to "add_slide", "layout" to "CARDS_ROW", "slots" to input("cards" to listOf("No Such Card"))),
+                ),
+            )
+            assertTrue("Operation 2" in edit.content && "Stopped" in edit.content, edit.content)
+            assertEquals(before + 1, h.present.open!!.slides.size)
+            val focus = h.present.open!!.slides.first { it.title == "The hand trap" }
+            assertEquals(listOf(14558127), focus.elements.first { it.type == com.kaiharimoto.mastertool.core.present.Element.CARD }.cards)
+            h.present.undo()
+            assertEquals(before, h.present.open!!.slides.size, "the batch undoes as one")
+
+            // Modules read the app's own data, and say what is missing rather than inventing it.
+            val picks = h.tool("present_edit", "ops" to listOf(input("action" to "add_module", "type" to "PERFORMERS", "strong" to listOf(input("card" to "Nibiru, the Primal Being", "note" to "Breaks boards")))))
+            assertFalse(picks.isError, picks.content)
+            assertTrue(h.present.open!!.slides.any { it.module?.type == "PERFORMERS" })
+            val siding = h.tool("present_edit", "ops" to listOf(input("action" to "add_module", "type" to "SIDING")))
+            assertTrue("no siding plans" in siding.content, siding.content)
+
+            val outline = h.tool("present_state")
+            assertTrue("Profiled" in outline.content && "Build-up" in outline.content, outline.content)
+            val view = h.tool("present_view", "slide" to "1")
+            assertFalse(view.isError, view.content)
+            assertTrue(view.content.startsWith("Slide 1 of"), view.content)
+        } finally {
+            h.present.open?.let { h.present.delete(it) }
+        }
+    }
+
+    @Test
     fun memorySettingsAndConfirmations() = runBlocking {
         val h = holders()
         val remembered = h.tool("memory", "action" to "add", "scope" to "user", "text" to "Plays Branded in TCG.")

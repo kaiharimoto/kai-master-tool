@@ -217,7 +217,7 @@ private fun NewPresentationDialog(h: NeueHolders) {
     var name by remember { mutableStateOf("") }
     val c = Mu.colors
 
-    fun create(blank: Boolean) {
+    fun create(blank: Boolean, withAi: Boolean = false) {
         val chosen = deck
         val now = System.currentTimeMillis()
         val snapshot = if (blank || chosen == null) null else {
@@ -241,6 +241,7 @@ private fun NewPresentationDialog(h: NeueHolders) {
         neue.update { it.copy(present = PresentPrefs(style, theme, camera, preset, creator, p.id)) }
         present.creating = false
         present.create(p)
+        if (withAi) present.briefing = true
     }
 
     MuDialog(
@@ -250,6 +251,7 @@ private fun NewPresentationDialog(h: NeueHolders) {
         description = "Pick the deck and how to tell it. Every slide it makes is yours to change.",
         footer = {
             MuButton("Blank presentation", { create(blank = true) }, variant = BtnVariant.GHOST)
+            if (neue.prefs.ai.enabled) MuButton("Build with ${h.ai.name}", { create(blank = false, withAi = true) }, enabled = deck != null, reason = "Save a deck first")
             MuButton("Make it", { create(blank = false) }, variant = BtnVariant.PRIMARY, enabled = deck != null, reason = "Save a deck first")
         },
     ) {

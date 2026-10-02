@@ -364,4 +364,87 @@ Example of a chapter:
 ## Finish
 Say what is written and what is left in the outline for a later session. The person reviews every chapter changed when they press Finish.
 """
+
+    // ---- Present (1.0.71): a deck profile for a video, and how a slide reads -----------
+
+    const val DECK_PROFILE_NAME = "deck-profile"
+    const val DECK_PROFILE_DESCRIPTION =
+        "Builds a deck profile for a YouTube video on the Present page: the slides, the deck steps, the modules and the speaker notes, checked slide by slide."
+
+    const val DECK_PROFILE: String = """# Building a deck profile
+
+The person makes deck-profile videos: they talk over their deck with a webcam in a corner. You build the presentation they will present and record, in Present (page 06), with `present_state`, `present_edit` and `present_view`. Read the slide-design skill with `skill_view` before your first slide.
+
+## 1. Learn the deck before a single slide
+- `present_state` says whether a presentation is open, and lists the others.
+- Read the deck: `get_deck` (its groups are its engines), `analyze_deck`, and the deck's guide in memory. `get_siding` for its plans, `matchup_matrix` and `prep_state` for its record. A profile is only as good as what you understand about the deck.
+- Ask only what you cannot find, one question at a time with `ask_user`: which style, how long the video runs, the creator's name, whether the webcam is on and where, which modules they want. Offer the answer you would pick first.
+
+## 2. Make it
+- One `present_edit` with create {deck_id, style, theme, webcam, creator}. It makes a title, the whole deck, a deck slide per group and an end card.
+- The three styles:
+  - **Spotlight**: the whole deck stays on screen, dimmed, and what you talk about lights up. Best for decks whose engine is one big piece.
+  - **Slides**: each group or card fills the slide; the whole deck is a key away. Best for many small packages.
+  - **Build-up**: cards appear as they are talked about and the deck grows to its full size. Best for a story: the starter, then what it finds, then the payoff.
+- Order the deck steps the way the deck is explained, not the way it is sorted: the engine first, then the extenders, the non-engine, the hand traps, the Extra Deck, the Side Deck. set_steps takes {title, groups, cards, note} per step, by name; one group or two to four cards a step.
+- Each step's note is one line on screen (the point), and its notes are what the creator says.
+
+## 3. Modules
+add_module with a type. They read the app's own data, so make sure the data is there first:
+- **SIDING** from the deck's siding plans (one slide a matchup; name the matchups to keep it short).
+- **MATCHUPS** from the logged practice games. **TOURNAMENT** from a Prep event's rounds, with placement.
+- **ODDS** and **RATIOS** from the deck's groups. Numbers always come from the app; never type a percentage yourself.
+- **PERFORMERS** {strong, weak: [{card, note}]}, **TECH** and **COMBO** {picks}: the person's own picks, so ask before writing them.
+- **SHOUTOUTS** {shoutouts: [{name, handle, line}]}: the logos are left as picture slots for the person to add.
+- **GET_THE_DECK** puts the deck's code as a QR on the end; **DECKLIST** shows every card.
+
+## 4. The script
+Write every slide's speaker notes as the creator would say them: short sentences, the card names spoken in full, a hook on the title, a call to action on the end card. About 130 words make a minute; ask how long the video runs and fit the notes to it.
+
+## 5. Check every slide
+Run `present_view` on each slide you made or changed, and fix everything it lists with update_element or edit_slide before you move on. Nothing may sit on the webcam. When every slide reads well, tell the person in a few lines what is there, and that F5 presents it.
+
+## Throughout
+- Batch the ops: one `present_edit` per slide or per step of the plan, not one per word. Each call is one step of the person's Undo.
+- Never remove or rewrite what the person made by hand unless they ask; elements marked edited by hand are theirs.
+- Keep the person's words when they give you a line for a slide.
+"""
+
+    const val SLIDE_DESIGN_NAME = "slide-design"
+    const val SLIDE_DESIGN_DESCRIPTION =
+        "How a slide for a video reads: one idea, few words, big type, contrast, the webcam kept clear, cards as the hero and few clicks."
+
+    const val SLIDE_DESIGN: String = """# Slide design for a deck-profile video
+
+The slides are watched on a phone, often small, while someone talks over them. Design for that.
+
+## The canvas
+- 1920 by 1080. Keep 96 units from every edge. Boxes are [x, y, w, h] in canvas units; slots already sit where they belong.
+- The webcam is a zone the creator's face fills. Never put anything under it: STAGE boxes (fractions of the room the camera leaves) move out of its way, canvas boxes do not. When in doubt, use a layout's slots.
+
+## One idea a slide
+- A title of at most 8 words, saying the point, not the topic: "Three ways to open Fiendsmith", not "Combos".
+- Body words: about 30 at most, 45 never. The rest belongs in the speaker notes.
+- Words at least 36 units (titles 72 to 110); nothing under 26 reads on a phone.
+- Contrast of at least 4.5 to 1 for words; the theme's text and muted colors already have it. Do not set words on a busy picture without a fill behind them.
+
+## Cards are the hero
+- A card large beats a sentence about it. Use the CARD_FOCUS or CARDS_ROW layouts, or a deck step, and let the words caption the card.
+- Up to five cards in a row read; more wants the deck view.
+
+## Layouts
+TITLE for the open, SECTION between parts, TITLE_BODY for a point, TWO_COLUMN for a comparison (going first and second, pros and cons), BIG_NUMBER for one number from the app, QUOTE for a line worth stopping on, CAMERA_BIG when the creator talks to camera, END_CARD last (YouTube puts its end screen over the lower part).
+
+## Motion
+- At most three clicks a slide. A build reveals in the order it is spoken: rise or fade, on click; with_previous for things that belong together.
+- The deck steps animate on their own between slides. Do not add builds to a deck slide unless it needs a caption to come in.
+- Transitions: one kind through the whole video (fade or push), a different one only to mark a new part.
+
+## Color and type
+- Stay inside the theme: its accent for the one thing to look at, never several accents fighting. apply_theme rather than coloring slides one by one.
+- One heading font and one body font. Bold for a card name or a number, not for a whole sentence.
+
+## Checking
+`present_view` lists what a viewer would trip over. A slide is done when it lists nothing but, at most, missing speaker notes you are about to write.
+"""
 }

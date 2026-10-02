@@ -127,6 +127,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         "watch_video" -> "Watching the video with Gemini"
         "context_status" -> "Checking how full its memory is"
         "recall" -> "Remembering" + (ToolArgs.string(input, "query")?.let { " “$it”" } ?: "")
+        "present_state" -> "Reading the presentation"
+        "present_edit" -> "Building the slides"
+        "present_view" -> "Looking at slide " + (ToolArgs.element(input, "slide")?.toString()?.trim('"') ?: "")
         else -> spec.name.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 
@@ -184,7 +187,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
             "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
-            else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
+            else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
@@ -197,6 +200,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** Tournament prep's (1.0.50): the event, the test games, the numbers, the drills. */
     private val prepTools = AiPrep(h)
+
+    /** Present's (1.0.71): the outline, the edits, a look at a slide. */
+    private val presentTools = AiPresent(h)
 
     /** What a destructive tool will do, for the confirm card. */
     private suspend fun consequence(spec: ToolSpec, i: JsonObject): Pair<String, String> = when (spec.name) {
@@ -221,12 +227,15 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     /** The memory scope now: the open deck's (or its web's), or the web on Format. */
     fun scope(): MemoryScope? = MemoryScope.of(
         neue.page.name,
-        state.deckId,
-        state.deckName,
+        // On Present, the deck the open presentation profiles (1.0.71).
+        presentDeck()?.deckId ?: state.deckId,
+        presentDeck()?.name ?: state.deckName,
         // On Prep, the web in view is the event's field (1.0.50).
         if (neue.page == Page.PREP) h.prep.active?.webId ?: webs.selected?.id else webs.selected?.id,
         webs.library,
     )
+
+    private fun presentDeck() = if (neue.page == Page.PRESENT) h.present.open?.deck?.takeIf { it.deckId != null } else null
 
     fun notes(scope: MemoryScope): String = ai.files.entries(scope.kind, scope.id)
 
@@ -247,6 +256,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         neue.selection?.let { add("Selected card: ${it.card.name}") }
         if (neue.page == Page.FORMAT || neue.page == Page.SIDING) webs.selected?.let { add("Web on screen: “${it.name}” (id ${it.id}), ${it.entries.size} decks") }
         if (neue.page == Page.PREP) h.prep.active?.let { e -> add("Event being prepared for: “${e.name}” (id ${e.id}) on ${e.date}, tab ${h.prep.tab.title}; prep_state has the rest") }
+        if (neue.page == Page.PRESENT) h.present.open?.let { p ->
+            add("Presentation open: “${p.name}” (id ${p.id}), ${p.slides.size} slides, on slide ${h.present.slideIndex + 1}${p.deck?.let { d -> "; profiles the deck “${d.name}”" } ?: ""}; present_state has the outline")
+        }
     }
 
     // ---- looking ---------------------------------------------------------------

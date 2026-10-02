@@ -180,6 +180,9 @@ object BuiltInSkills {
         3 to Skill(DeckSkills.REFACTOR_GUIDE_NAME, DeckSkills.REFACTOR_GUIDE_DESCRIPTION, DeckSkills.REFACTOR_GUIDE.trim(), builtIn = true),
         // The reader's guide (1.0.67): a book about the deck for people, a chapter at a time.
         3 to Skill(DeckSkills.WRITE_GUIDE_NAME, DeckSkills.WRITE_GUIDE_DESCRIPTION, DeckSkills.WRITE_GUIDE.trim(), builtIn = true),
+        // Present (1.0.71): a deck profile for a video, and how its slides read.
+        3 to Skill(DeckSkills.DECK_PROFILE_NAME, DeckSkills.DECK_PROFILE_DESCRIPTION, DeckSkills.DECK_PROFILE.trim(), builtIn = true),
+        3 to Skill(DeckSkills.SLIDE_DESIGN_NAME, DeckSkills.SLIDE_DESIGN_DESCRIPTION, DeckSkills.SLIDE_DESIGN.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

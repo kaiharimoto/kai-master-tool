@@ -259,6 +259,9 @@ data class AiSession(
         /** Writing the reader's guide (1.0.67): a book for people, a chapter at a time, reviewed at the end. */
         const val MODE_WRITE = "write"
 
+        /** Build with Ai on Present (1.0.71): a deck profile for a video, slide by slide, checked as it goes. */
+        const val MODE_PRESENT = "present"
+
         /** What an old tool result is cut to once the person clears them. */
         const val CLEARED = 200
 

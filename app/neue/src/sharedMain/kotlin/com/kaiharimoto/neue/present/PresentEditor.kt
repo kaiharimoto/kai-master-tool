@@ -115,6 +115,9 @@ internal fun PresentEditor(h: NeueHolders, p: Presentation) {
         }
     }
     CardPicker(h)
+    ModuleDialog(h)
+    BuildWithAiDialog(h)
+    ExportOverlay(h)
 }
 
 // ---- the bar -----------------------------------------------------------------------------
@@ -129,6 +132,8 @@ private fun EditorBar(h: NeueHolders, p: Presentation, ctx: SlideContext) {
     var shapeAt by remember { mutableStateOf(Offset.Zero) }
     var layoutAt by remember { mutableStateOf(Offset.Zero) }
     var presentAt by remember { mutableStateOf(Offset.Zero) }
+    var moduleAt by remember { mutableStateOf(Offset.Zero) }
+    var exportAt by remember { mutableStateOf(Offset.Zero) }
     fun kbd(a: DeskAction) = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
     Row(
         Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp),
@@ -159,7 +164,38 @@ private fun EditorBar(h: NeueHolders, p: Presentation, ctx: SlideContext) {
                 neue.menu = MenuSpec(Offset(insertAt.x, insertAt.y + 36f), insertMenu(h, p))
             }, size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.More)
         }
+        Box(Modifier.onGloballyPositioned { moduleAt = it.positionInWindow() }) {
+            MuButton("Module", {
+                neue.menu = MenuSpec(
+                    Offset(moduleAt.x, moduleAt.y + 36f),
+                    com.kaiharimoto.mastertool.core.present.modules.Modules.all.map { t ->
+                        MenuEntry(com.kaiharimoto.mastertool.core.present.modules.Modules.name(t)) { present.addingModule = t }
+                    },
+                )
+            }, size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.Plus)
+        }
         Box(Modifier.weight(1f))
+        if (neue.prefs.ai.enabled) {
+            Tip("${h.ai.name} fills these slides in from the deck, and checks each one") {
+                MuButton("Build with ${h.ai.name}", { present.briefing = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            }
+        }
+        Box(Modifier.onGloballyPositioned { exportAt = it.positionInWindow() }) {
+            Tip("Export") {
+                IconButton(Icons.Export, {
+                    val shown = p.slides.indices.filter { !p.slides[it].hidden }
+                    neue.menu = MenuSpec(
+                        Offset(exportAt.x - 160f, exportAt.y + 36f),
+                        listOf(
+                            MenuEntry("PDF of every slide", hint = "${shown.size} pages") { present.exporting = ExportJob(ExportJob.PDF, shown) },
+                            MenuEntry("This slide as a picture", hint = "1920 × 1080") { present.exporting = ExportJob(ExportJob.PNG, listOf(present.slideIndex)) },
+                            MenuEntry("Every slide as pictures", hint = "a zip") { present.exporting = ExportJob(ExportJob.PNG, shown) },
+                            MenuEntry("YouTube thumbnail of this slide", hint = "1280 × 720", separatorBefore = true) { present.exporting = ExportJob(ExportJob.THUMBNAIL, listOf(present.slideIndex)) },
+                        ),
+                    )
+                }, label = "Export")
+            }
+        }
         Box(Modifier.onGloballyPositioned { presentAt = it.positionInWindow() }) {
             MuButton("Present", {
                 neue.menu = MenuSpec(

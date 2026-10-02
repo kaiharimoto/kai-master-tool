@@ -161,6 +161,15 @@ object PromptBuilder {
                     "Do not change their decks or settings in this conversation.",
             )
         }
+        if (s.mode == "present") {
+            appendLine()
+            appendLine("## This conversation builds a deck profile on the Present page")
+            appendLine(
+                "Read the skills deck-profile and slide-design with skill_view first and follow them. Build with present_edit, a slide or a step " +
+                    "at a time, and run present_view on every slide you make or change, fixing what it lists. Say in a line what each batch did. " +
+                    "Do not change their decks in this conversation.",
+            )
+        }
         if (s.mode == "profile") {
             appendLine()
             appendLine("## This conversation is Learn About You: you interview the person")

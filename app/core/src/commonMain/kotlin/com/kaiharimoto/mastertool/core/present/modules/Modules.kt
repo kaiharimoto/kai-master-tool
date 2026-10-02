@@ -77,6 +77,8 @@ data class ModuleInput(
     val handSize: Int = 5,
     /** The deck's ydke code, for a QR. */
     val code: String = "",
+    /** Where the data came from, for a refresh: the event's id, the matchups chosen. */
+    val params: Map<String, String> = emptyMap(),
 )
 
 /**

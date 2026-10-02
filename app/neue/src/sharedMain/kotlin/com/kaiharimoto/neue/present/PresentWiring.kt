@@ -75,6 +75,9 @@ internal fun dismissPresent(h: NeueHolders, esc: Boolean): Boolean {
     if (h.neue.page != Page.PRESENT || h.neue.hasTop || h.overlays.isOpen) return false
     if (present.pickingCards != null) { present.pickingCards = null; return true }
     if (present.creating) { present.creating = false; return true }
+    if (present.addingModule != null) { present.addingModule = null; return true }
+    if (present.briefing) { present.briefing = false; return true }
+    if (present.exporting != null) { present.exporting = null; return true }
     if (present.confirmDelete != null) { present.confirmDelete = null; return true }
     if (present.editingText != null) { present.editingText = null; h.focus?.clearFocus(); return true }
     if (present.selection.isNotEmpty()) { present.selection = emptySet(); return true }

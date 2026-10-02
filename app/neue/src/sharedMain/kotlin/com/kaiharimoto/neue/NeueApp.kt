@@ -626,6 +626,9 @@ class NeueHolders(
                 Command("Present", "Rehearse timings") { present.present(0, rehearse = true) },
                 cmd("Present", "New slide", DeskAction.SLIDE_NEW),
             ) else emptyArray()),
+            *(if (present.open != null && neue.prefs.ai.enabled) arrayOf(
+                Command("Present", "Build these slides with ${ai.name}") { neue.go(Page.PRESENT); present.briefing = true },
+            ) else emptyArray()),
             cmd("Go", "Settings", DeskAction.GO_SETTINGS),
             cmd("Deck", "Save", DeskAction.SAVE),
             cmd("Deck", "New deck", DeskAction.NEW_DECK),

@@ -597,8 +597,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   gradients, rounded shapes and shadows live in `present/paint/SlidePaint.kt` and `SlideColors.kt` only (the
   law test's `slideAllowed`). Stored as files in `<data>/present/` (synced and backed up), never the database.
   Keys: `DeskScope.PRESENT_EDIT` and `PRESENTING`; mouse and finger: `PresentMouse`/`PresentTouch`. Android
-  lies down on Present. Phases: 1.0.71 modules and Ai, 1.0.72 recording (JavaCV/FFmpeg, LGPL), 1.0.73 Android
-  recording and extras. `tools/shoot.sh --page=present --present=demo …` photographs it.
+  lies down on Present. **1.0.71**: modules (`present/modules/Modules`: siding, matchups, performers — by
+  hand —, tournament, shoutouts with an uploaded or pasted logo, odds, ratios, tech, combo, get the deck,
+  decklist; `Slide.module` remembers how, and Refresh keeps what was `edited` by hand; `neue/present/ModuleData`
+  gathers the app's data), export (PDF, pictures, a YouTube thumbnail), and **Ai builds it**: `present_state`,
+  `present_edit` (ops applied by `core/present/ai/PresentWriter`, the editor's own `PresentEdits`, one Undo a
+  batch; create, add_module, refresh_module in `neue/ai/AiPresent`), `present_view` (`PresentReport.check`,
+  in words), the `deck-profile` and `slide-design` skills, and **Build with Ai** (`PresentBrief`,
+  `AiSession.MODE_PRESENT`). Next: 1.0.72 recording (JavaCV/FFmpeg, LGPL), 1.0.73 Android recording and
+  extras. `tools/shoot.sh --page=present --present=demo …` photographs it.
 
 ## Stored data outlives versions — a rule
 

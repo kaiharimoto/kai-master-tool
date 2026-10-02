@@ -774,6 +774,17 @@ class AiState(internal val h: NeueHolders) {
         historyOpen = false
     }
 
+    /**
+     * Build with Ai on Present (1.0.71): a fresh Present conversation, opened with what the
+     * launcher learned, so the deck-profile skill begins with the answers it would ask for.
+     */
+    fun buildPresentation(brief: com.kaiharimoto.mastertool.core.present.ai.PresentBrief) {
+        setOpen(true)
+        if (prefs.connection == null) return
+        newChat(AiSession.MODE_PRESENT)
+        send(brief.message())
+    }
+
     // ---- a helper with a fresh mind (1.0.47) --------------------------------------
 
     /**
