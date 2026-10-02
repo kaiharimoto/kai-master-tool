@@ -30,6 +30,9 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     private val ai get() = h.ai.files.root
     private val art = File(com.kaiharimoto.neue.platform.Platform.dataDir, "custom-art")
 
+    /** Present's presentations and their pictures (1.0.70): files, the newer one kept. */
+    private val present = File(com.kaiharimoto.neue.platform.Platform.dataDir, "present")
+
     /** What came in this sync, so the screens showing it can be told once at the end. */
     val changed = mutableSetOf<String>()
 
@@ -50,6 +53,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
         withContext(Dispatchers.IO) {
             files(ai, "ai/") { rel -> !privateToDevice(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(art, "art/") { true }.forEach { (path, f) -> out[path] = seen.file(path, f) }
+            files(present, "present/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
         }
         return out
     }
@@ -101,6 +105,11 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
                 write(File(art, path.removePrefix("art/")), bytes)
                 seen.forget(path)
                 changed += "art"
+            }
+            path.startsWith("present/") -> {
+                write(File(present, path.removePrefix("present/")), bytes)
+                seen.forget(path)
+                changed += "present"
             }
         }
     }

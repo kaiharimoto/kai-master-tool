@@ -37,6 +37,9 @@ enum class Page(val numeral: Int?, val title: String) {
 
     /** Tournament prep (1.0.50): an event, its field, the practice, the drills and the decklist. */
     PREP(5, "Prep"),
+
+    /** Present (1.0.70): deck profiles as slides — made, presented, and recorded. */
+    PRESENT(6, "Present"),
     SETTINGS(null, "Settings"),
 }
 

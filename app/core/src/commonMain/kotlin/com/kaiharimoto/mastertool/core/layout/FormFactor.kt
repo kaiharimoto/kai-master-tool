@@ -57,5 +57,13 @@ enum class ScreenOrientation(val key: String, val label: String) {
 
         /** The stored choice, else the device's default. */
         fun resolve(stored: String?, form: FormFactor): ScreenOrientation = parse(stored) ?: defaultFor(form)
+
+        /**
+         * The turn in force: [resolve], unless the page on screen lies down whatever was chosen —
+         * Present (1.0.70, kai: "android should be landscape only but it should work"), whose
+         * slides are 16:9.
+         */
+        fun resolve(stored: String?, form: FormFactor, forceLandscape: Boolean): ScreenOrientation =
+            if (forceLandscape) LANDSCAPE else resolve(stored, form)
     }
 }

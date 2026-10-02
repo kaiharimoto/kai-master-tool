@@ -310,7 +310,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     still `AiMark` stands by the name (`AiName`: replies, the panel's head, Settings) — kai: "every
     mention of Ai is a chance for the art".
   - Only the whole head moves; the net never distorts.
-- **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep** (1.0.40, kai:
+- **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep, `06` Present** (1.0.40, kai:
   Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
@@ -583,6 +583,22 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   and someone updating only what arrived after `StartPrefs.seen` (each `StartStep` names its desktop and APK
   release — **a feature that needs setting up adds a step**). `BackupCenter` writes a `.nmtbackup` before a new
   version changes anything, weekly and before a restore; Settings › Backups exports and restores.
+
+- **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
+  presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
+  the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,
+  so edits to the deck never break a take), `PresentCodec` (forgiving per slide and element), `Themes`,
+  `SlideLayouts`; `stage/DeckStage` tells a deck three ways (Spotlight, Slides, Build-up) as pure frames keyed
+  per copy, glided by `StageTween`; `stage/WebcamLayout` gives the zone and the room it leaves (STAGE-anchored
+  elements re-flow round it); `play/` (`Builds`, `CompiledShow`) and `edit/` (`PresentEdits`, `EditHistory`,
+  `Transform`, `Snap`, `Align`, `RichText`, `SlideClip`) are shared by the editor and, from 1.0.71, Ai.
+  `neue/present`: `Presentations` (the holder, lazy in `NeueHolders`), the editor, `SlideCanvas`, `PropsPanel`,
+  `play/PresentStage` and `PresenterConsole` (the second screen on the desk). **Slides are content**: colour,
+  gradients, rounded shapes and shadows live in `present/paint/SlidePaint.kt` and `SlideColors.kt` only (the
+  law test's `slideAllowed`). Stored as files in `<data>/present/` (synced and backed up), never the database.
+  Keys: `DeskScope.PRESENT_EDIT` and `PRESENTING`; mouse and finger: `PresentMouse`/`PresentTouch`. Android
+  lies down on Present. Phases: 1.0.71 modules and Ai, 1.0.72 recording (JavaCV/FFmpeg, LGPL), 1.0.73 Android
+  recording and extras. `tools/shoot.sh --page=present --present=demo …` photographs it.
 
 ## Stored data outlives versions — a rule
 

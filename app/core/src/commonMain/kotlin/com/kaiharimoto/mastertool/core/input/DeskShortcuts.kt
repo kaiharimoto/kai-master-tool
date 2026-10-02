@@ -120,6 +120,59 @@ enum class DeskAction {
 
     /** Talk mode (1.0.57): a conversation out loud, listen, answer aloud, listen again. */
     AI_TALK,
+
+    /** Present (1.0.70): deck profiles as slides, presented and recorded. */
+    GO_PRESENT,
+
+    /** From the first slide, or from the one being edited. */
+    PRESENT_START,
+    PRESENT_FROM_HERE,
+
+    /** A new slide after the current one. */
+    SLIDE_NEW,
+
+    /** The selected elements, or the current slide, copied in place. */
+    PRESENT_DUPLICATE,
+    PRESENT_COPY,
+    PRESENT_CUT,
+    PRESENT_PASTE,
+    PRESENT_SELECT_ALL,
+    PRESENT_GROUP,
+    PRESENT_UNGROUP,
+    BRING_FORWARD,
+    SEND_BACKWARD,
+    BRING_TO_FRONT,
+    SEND_TO_BACK,
+
+    /** The selected elements a step along, or ten with Shift; with nothing selected, the slide before or after. */
+    NUDGE_LEFT,
+    NUDGE_RIGHT,
+    NUDGE_UP,
+    NUDGE_DOWN,
+    NUDGE_LEFT_FAR,
+    NUDGE_RIGHT_FAR,
+    NUDGE_UP_FAR,
+    NUDGE_DOWN_FAR,
+    TEXT_BOLD,
+    TEXT_ITALIC,
+    TEXT_UNDERLINE,
+
+    /** While presenting: the next click, or the one before. */
+    PRESENT_NEXT,
+    PRESENT_PREVIOUS,
+    PRESENT_FIRST,
+    PRESENT_LAST,
+
+    /** While presenting: the whole deck, at any time (kai: "return to full deck view on demand anytime"). */
+    PRESENT_DECK,
+    PRESENT_BLACK,
+    PRESENT_WHITE,
+    PRESENT_LASER,
+    PRESENT_PEN,
+    PRESENT_CLEAR_INK,
+
+    /** While presenting: the speaker notes over the slide, or away. */
+    PRESENT_NOTES,
     ;
 
     companion object {
@@ -144,6 +197,12 @@ enum class DeskScope(val heading: String) {
      * which is the point of them: type a name, press ↓ twice, press Enter.
      */
     POOL("The card pool"),
+
+    /** On Present, making slides, with nothing covering it and nothing being presented. */
+    PRESENT_EDIT("Making slides"),
+
+    /** While a presentation is playing. */
+    PRESENTING("Presenting"),
 }
 
 /** What is on screen, which decides which desk shortcuts are live. */
@@ -158,6 +217,10 @@ data class DeskContext(
     val onBuilder: Boolean = true,
     /** Ai is on (Settings → Ai). Off, every trace of it is gone, its key included. */
     val ai: Boolean = true,
+    /** Present is the page on screen (1.0.70). */
+    val onPresent: Boolean = false,
+    /** A presentation is playing: the page's keys give way to the presenter's. */
+    val presenting: Boolean = false,
 )
 
 data class DeskShortcut(
@@ -184,6 +247,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("3"), DeskAction.GO_SIDING, DeskScope.APP, "Siding", allowedInTextInput = true),
         DeskShortcut(ctrl("4"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true),
         DeskShortcut(ctrl("5"), DeskAction.GO_PREP, DeskScope.APP, "Prep: an event and its practice", allowedInTextInput = true),
+        DeskShortcut(ctrl("6"), DeskAction.GO_PRESENT, DeskScope.APP, "Present: deck profiles as slides", allowedInTextInput = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),
@@ -227,6 +291,58 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("left", alt = true), DeskAction.WEB_PREVIOUS, DeskScope.BUILDER, "Previous deck in the web"),
         DeskShortcut(KeyChord("right", alt = true), DeskAction.WEB_NEXT, DeskScope.BUILDER, "Next deck in the web"),
 
+        DeskShortcut(KeyChord("f5"), DeskAction.PRESENT_START, DeskScope.PRESENT_EDIT, "Present from the first slide", allowedInTextInput = true),
+        DeskShortcut(KeyChord("f5", shift = true), DeskAction.PRESENT_FROM_HERE, DeskScope.PRESENT_EDIT, "Present from this slide", allowedInTextInput = true),
+        DeskShortcut(ctrl("m"), DeskAction.SLIDE_NEW, DeskScope.PRESENT_EDIT, "New slide", allowedInTextInput = true),
+        DeskShortcut(ctrl("d"), DeskAction.PRESENT_DUPLICATE, DeskScope.PRESENT_EDIT, "Duplicate the selection or the slide"),
+        DeskShortcut(ctrl("c"), DeskAction.PRESENT_COPY, DeskScope.PRESENT_EDIT, "Copy"),
+        DeskShortcut(ctrl("x"), DeskAction.PRESENT_CUT, DeskScope.PRESENT_EDIT, "Cut"),
+        DeskShortcut(ctrl("v"), DeskAction.PRESENT_PASTE, DeskScope.PRESENT_EDIT, "Paste elements, slides or a picture"),
+        DeskShortcut(ctrl("a"), DeskAction.PRESENT_SELECT_ALL, DeskScope.PRESENT_EDIT, "Select everything on the slide"),
+        DeskShortcut(ctrl("g"), DeskAction.PRESENT_GROUP, DeskScope.PRESENT_EDIT, "Group the selection"),
+        DeskShortcut(ctrl("g", shift = true), DeskAction.PRESENT_UNGROUP, DeskScope.PRESENT_EDIT, "Ungroup"),
+        DeskShortcut(ctrl("bracketright"), DeskAction.BRING_FORWARD, DeskScope.PRESENT_EDIT, "Bring forward"),
+        DeskShortcut(ctrl("bracketleft"), DeskAction.SEND_BACKWARD, DeskScope.PRESENT_EDIT, "Send backward"),
+        DeskShortcut(ctrl("bracketright", shift = true), DeskAction.BRING_TO_FRONT, DeskScope.PRESENT_EDIT, "Bring to front"),
+        DeskShortcut(ctrl("bracketleft", shift = true), DeskAction.SEND_TO_BACK, DeskScope.PRESENT_EDIT, "Send to back"),
+        DeskShortcut(ctrl("z"), DeskAction.UNDO, DeskScope.PRESENT_EDIT, "Undo", repeatable = true),
+        DeskShortcut(ctrl("z", shift = true), DeskAction.REDO, DeskScope.PRESENT_EDIT, "Redo", repeatable = true),
+        DeskShortcut(ctrl("y"), DeskAction.REDO, DeskScope.PRESENT_EDIT, "Redo", repeatable = true),
+        DeskShortcut(KeyChord("delete"), DeskAction.REMOVE_SELECTED, DeskScope.PRESENT_EDIT, "Delete the selection or the slide"),
+        DeskShortcut(KeyChord("backspace"), DeskAction.REMOVE_SELECTED, DeskScope.PRESENT_EDIT, "Delete the selection or the slide"),
+        DeskShortcut(KeyChord("left"), DeskAction.NUDGE_LEFT, DeskScope.PRESENT_EDIT, "Nudge left, or the slide before", repeatable = true),
+        DeskShortcut(KeyChord("right"), DeskAction.NUDGE_RIGHT, DeskScope.PRESENT_EDIT, "Nudge right, or the slide after", repeatable = true),
+        DeskShortcut(KeyChord("up"), DeskAction.NUDGE_UP, DeskScope.PRESENT_EDIT, "Nudge up, or the slide before", repeatable = true),
+        DeskShortcut(KeyChord("down"), DeskAction.NUDGE_DOWN, DeskScope.PRESENT_EDIT, "Nudge down, or the slide after", repeatable = true),
+        DeskShortcut(KeyChord("left", shift = true), DeskAction.NUDGE_LEFT_FAR, DeskScope.PRESENT_EDIT, "Nudge ten left", repeatable = true),
+        DeskShortcut(KeyChord("right", shift = true), DeskAction.NUDGE_RIGHT_FAR, DeskScope.PRESENT_EDIT, "Nudge ten right", repeatable = true),
+        DeskShortcut(KeyChord("up", shift = true), DeskAction.NUDGE_UP_FAR, DeskScope.PRESENT_EDIT, "Nudge ten up", repeatable = true),
+        DeskShortcut(KeyChord("down", shift = true), DeskAction.NUDGE_DOWN_FAR, DeskScope.PRESENT_EDIT, "Nudge ten down", repeatable = true),
+        DeskShortcut(ctrl("b"), DeskAction.TEXT_BOLD, DeskScope.PRESENT_EDIT, "Bold", allowedInTextInput = true),
+        DeskShortcut(KeyChord("i", ctrl = true, alt = true), DeskAction.TEXT_ITALIC, DeskScope.PRESENT_EDIT, "Italic", allowedInTextInput = true),
+        DeskShortcut(ctrl("u"), DeskAction.TEXT_UNDERLINE, DeskScope.PRESENT_EDIT, "Underline", allowedInTextInput = true),
+
+        DeskShortcut(KeyChord("right"), DeskAction.PRESENT_NEXT, DeskScope.PRESENTING, "Next", repeatable = true),
+        DeskShortcut(KeyChord("space"), DeskAction.PRESENT_NEXT, DeskScope.PRESENTING, "Next"),
+        DeskShortcut(KeyChord("pagedown"), DeskAction.PRESENT_NEXT, DeskScope.PRESENTING, "Next, from a clicker"),
+        DeskShortcut(KeyChord("enter"), DeskAction.PRESENT_NEXT, DeskScope.PRESENTING, "Next"),
+        DeskShortcut(KeyChord("down"), DeskAction.PRESENT_NEXT, DeskScope.PRESENTING, "Next", repeatable = true),
+        DeskShortcut(KeyChord("n"), DeskAction.PRESENT_NEXT, DeskScope.PRESENTING, "Next"),
+        DeskShortcut(KeyChord("left"), DeskAction.PRESENT_PREVIOUS, DeskScope.PRESENTING, "Back", repeatable = true),
+        DeskShortcut(KeyChord("pageup"), DeskAction.PRESENT_PREVIOUS, DeskScope.PRESENTING, "Back, from a clicker"),
+        DeskShortcut(KeyChord("backspace"), DeskAction.PRESENT_PREVIOUS, DeskScope.PRESENTING, "Back"),
+        DeskShortcut(KeyChord("up"), DeskAction.PRESENT_PREVIOUS, DeskScope.PRESENTING, "Back", repeatable = true),
+        DeskShortcut(KeyChord("p"), DeskAction.PRESENT_PREVIOUS, DeskScope.PRESENTING, "Back"),
+        DeskShortcut(KeyChord("home"), DeskAction.PRESENT_FIRST, DeskScope.PRESENTING, "First slide"),
+        DeskShortcut(KeyChord("end"), DeskAction.PRESENT_LAST, DeskScope.PRESENTING, "Last slide"),
+        DeskShortcut(KeyChord("d"), DeskAction.PRESENT_DECK, DeskScope.PRESENTING, "The whole deck, or back to the slide"),
+        DeskShortcut(KeyChord("b"), DeskAction.PRESENT_BLACK, DeskScope.PRESENTING, "Black screen"),
+        DeskShortcut(KeyChord("w"), DeskAction.PRESENT_WHITE, DeskScope.PRESENTING, "White screen"),
+        DeskShortcut(KeyChord("l"), DeskAction.PRESENT_LASER, DeskScope.PRESENTING, "Laser pointer"),
+        DeskShortcut(KeyChord("e"), DeskAction.PRESENT_PEN, DeskScope.PRESENTING, "Draw on the slide"),
+        DeskShortcut(KeyChord("e", shift = true), DeskAction.PRESENT_CLEAR_INK, DeskScope.PRESENTING, "Clear the drawing"),
+        DeskShortcut(KeyChord("s"), DeskAction.PRESENT_NOTES, DeskScope.PRESENTING, "Speaker notes"),
+
         DeskShortcut(KeyChord("up"), DeskAction.POOL_PREVIOUS, DeskScope.POOL, "Previous result, or the card above the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("down"), DeskAction.POOL_NEXT, DeskScope.POOL, "Next result, or the card below the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter"), DeskAction.POOL_ADD, DeskScope.POOL, "Add the result to the deck", allowedInTextInput = true, repeatable = true),
@@ -247,11 +363,13 @@ object DeskShortcuts {
 
     private fun DeskShortcut.isActive(context: DeskContext): Boolean = when (scope) {
         DeskScope.ANYWHERE -> true
-        DeskScope.APP -> !context.overlayOpen
+        DeskScope.APP -> !context.overlayOpen && !context.presenting
         DeskScope.BUILDER -> !context.overlayOpen && context.onBuilder
         // Typing anywhere but the search field (the deck name) must not add cards.
         DeskScope.POOL -> !context.overlayOpen && context.onBuilder &&
             (context.searchFocused || !context.textInputFocused)
+        DeskScope.PRESENT_EDIT -> !context.overlayOpen && context.onPresent && !context.presenting && !context.onBuilder
+        DeskScope.PRESENTING -> !context.overlayOpen && context.presenting
     }
 
     /**
@@ -320,6 +438,13 @@ object DeskShortcuts {
         "space" -> "Space"
         "f1" -> "F1"
         "f11" -> "F11"
+        "f5" -> "F5"
+        "pageup" -> "Page Up"
+        "pagedown" -> "Page Down"
+        "home" -> "Home"
+        "end" -> "End"
+        "bracketleft" -> "["
+        "bracketright" -> "]"
         else -> key.uppercase()
     }
 }

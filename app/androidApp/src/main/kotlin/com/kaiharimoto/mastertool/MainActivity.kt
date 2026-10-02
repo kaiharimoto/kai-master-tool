@@ -320,8 +320,10 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                     androidx.compose.runtime.snapshotFlow { h.canGoBack() }.collect { backCallback.isEnabled = it }
                 }
                 // The Screen setting (v1.3.5): Portrait, Landscape or Auto, one tap from the bar's menu.
-                LaunchedEffect(h.neue.ready, h.neue.prefs.orientation) {
-                    if (h.neue.ready) applyOrientation(h.neue.prefs.orientation)
+                // Present lies down whatever the setting (1.0.70): its slides are 16:9.
+                val presenting = h.neue.page == com.kaiharimoto.neue.Page.PRESENT || h.present.playing != null
+                LaunchedEffect(h.neue.ready, h.neue.prefs.orientation, presenting) {
+                    if (h.neue.ready) applyOrientation(h.neue.prefs.orientation, presenting)
                 }
                 // Immersive mode is the system bars hidden, swiped back in from an edge.
                 LaunchedEffect(h.neue.immersive) { showImmersive(h.neue.immersive) }
@@ -441,12 +443,12 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
      * device's default — a phone (smallest width under 600dp) upright, a tablet lying
      * down. Each respects the rotation lock: the user-flavoured orientations do.
      */
-    private fun applyOrientation(stored: String?) {
+    private fun applyOrientation(stored: String?, landscape: Boolean = false) {
         val form = com.kaiharimoto.mastertool.core.layout.FormFactor.ofSmallestWidth(
             resources.configuration.smallestScreenWidthDp.toFloat(),
             touch = true,
         )
-        requestedOrientation = when (com.kaiharimoto.mastertool.core.layout.ScreenOrientation.resolve(stored, form)) {
+        requestedOrientation = when (com.kaiharimoto.mastertool.core.layout.ScreenOrientation.resolve(stored, form, landscape)) {
             com.kaiharimoto.mastertool.core.layout.ScreenOrientation.PORTRAIT -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
             com.kaiharimoto.mastertool.core.layout.ScreenOrientation.LANDSCAPE -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
             com.kaiharimoto.mastertool.core.layout.ScreenOrientation.AUTO -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER

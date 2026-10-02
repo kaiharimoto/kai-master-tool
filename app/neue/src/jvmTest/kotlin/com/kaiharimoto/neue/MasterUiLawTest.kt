@@ -18,7 +18,14 @@ class MasterUiLawTest {
 
     // Every source set's Kotlin: the shared code and each platform's own (1.0.20).
     private val root = File("src")
-    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt")
+    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt")
+
+    /**
+     * Slides are the creator's content (kai, 1.0.70: "slides are content: full colour"): what
+     * Present draws *on a slide* may be rounded, shadowed and graded as the creator chooses,
+     * in the slide painter's files alone. The editor around the slide keeps every law.
+     */
+    private val slideAllowed = setOf("SlidePaint.kt", "SlideColors.kt")
 
     private val sources: List<File> =
         root.listFiles().orEmpty().filter { it.isDirectory && it.name.endsWith("Main") }
@@ -50,7 +57,7 @@ class MasterUiLawTest {
 
     @Test
     fun zeroRadius() = assertNone(
-        scan("§1 law 2 · zero radius", Regex("""RoundedCornerShape|CircleShape|CutCornerShape|CornerRadius\(|drawRoundRect|clip\(\s*RoundedCorner""")),
+        scan("§1 law 2 · zero radius", Regex("""RoundedCornerShape|CircleShape|CutCornerShape|CornerRadius\(|drawRoundRect|clip\(\s*RoundedCorner"""), allowIn = slideAllowed),
     )
 
     @Test
@@ -59,7 +66,7 @@ class MasterUiLawTest {
         scan(
             "§1 law 3 · no shadows or blur",
             Regex("""\.shadow\(|shadowElevation|\.blur\(|BlurEffect|MaskFilter\.makeBlur|BlurMaskFilter|elevation\s*="""),
-            allowIn = setOf("ZenShadows.kt"),
+            allowIn = setOf("ZenShadows.kt") + slideAllowed,
         ),
     )
 

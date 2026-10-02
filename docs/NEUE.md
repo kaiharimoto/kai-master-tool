@@ -509,8 +509,8 @@ cursor at each point and logs what it resolved to.
 there (the builder puts the deck's name, its legality, its tools and Save), what
 is being fetched and how far (§4h), the update pill and immersive mode — the 232
 px index rail —
-`01 Decks · 02 Builder · 03 Siding · 04 Format · 05 Prep` (1.0.40: Odds and Stats are gone,
-on kai's word, and Siding has a page of its own; Prep came in 1.0.50); below the rule, what is being
+`01 Decks · 02 Builder · 03 Siding · 04 Format · 05 Prep · 06 Present` (1.0.40: Odds and Stats are gone,
+on kai's word, and Siding has a page of its own; Prep came in 1.0.50, Present in 1.0.70); below the rule, what is being
 fetched, `Search Ctrl K` and Settings — and the page. Until 1.0.10 the app and
 the builder each had a bar; kai merged them, moved search to the rail beside
 Settings, and let the card count go to the pool, where it is read.
@@ -2721,6 +2721,100 @@ desktop that might be outdated or be outdated by changes we make in the future, 
   never renamed (`@SerialName` keeps an old name) or removed; documents read unknown keys; the schema only
   rises with tested migrations; the deck payload passes through untouched; every shape older versions
   wrote is held in `OldDataTest`, and a release that changes one adds its old shape there.
+
+### 4o. Present: deck profiles as slides (1.0.70)
+
+kai: "There's a lot of content creators on YouTube who do deck profiles explaining and presenting their
+deck by using a webcam and a screen recording of their deck list on duelingbook … Present mode should work
+like a slideshow presentation creator that's animated and interactive, as well as the ability to record in
+app using a webcam. If a webcam option is on, the presentation will allocate a zone for the webcam and build
+around it." Google Slides is the benchmark. Built in four phases, one release each: **1.0.70** the editor,
+the three ways of telling a deck and presenting; **1.0.71** modules and Ai building it; **1.0.72** the
+desktop recording (JavaCV/FFmpeg, LGPL); **1.0.73** recording on Android, captions, chapters, thumbnails.
+
+**`06 Present`** (`Page.PRESENT`, `Ctrl 6`, `present/PresentPage.kt`): the library of presentations
+(a picture of each first slide, Open, Present, Duplicate, Delete), **New deck profile** (a saved deck, how
+it is told, a theme, the webcam on or off and where, the creator's name), and the editor.
+
+**The three ways a deck is told** (`Presentation.style`, kai's three; `core/present/stage/DeckStage`, pure
+and tested): the deck slides each hold a `DeckFocus` (groups, cards, single copies, or the whole deck, a
+title and a note), and the style decides what the stage draws.
+- **Spotlight**: the whole deck as the builder lays it (the snapshot's As is, Fitted or Separate), the cards
+  talked about lifted and lit in the theme's highlight (glow, outline or lift), the rest at the theme's dim.
+- **Slides**: what is talked about, large — one card with its count, several, a group — and the whole deck on
+  demand (`D`) at any time.
+- **Build-up**: only the cards talked about so far, laid out as a deck that fills the stage, so the cards
+  shrink as it grows; a whole-deck step shows everything and reveals nothing, and the profile ends on one.
+- Every copy has a key (`M:1234#0`), and the presenter glides from frame to frame by key (`StageTween`, the
+  reader's `DrawingView` idea): moving, coming in small and clear, going where it stood. The Main Deck takes
+  the Extra and Side Decks under it at its width or in a column beside it at its card size, whichever draws
+  larger. The note stands in a lane beside or under the deck (`NotePlace`), whichever leaves larger cards.
+
+**The deck is a snapshot** (`DeckSnapshot`): passcodes, groups, the Fitted order, the arrangement, the chosen
+arts and the palette, kept inside the presentation, so a deck edited later never breaks the slides or a take;
+**Refresh from the saved deck** (Deck tab) takes it again.
+
+**The webcam zone** (`WebcamZone`, `WebcamLayout`): a corner or a column, three sizes, four shapes (square,
+rounded, circle, pill), a border in a theme colour. `stage(zone, aspect)` is the room left for content —
+of the four bands round the zone, the one where content of that shape is drawn largest — and every deck
+frame and every stage-anchored element (`Element.anchor = STAGE`, which every layout's placeholders are)
+re-flows round it. A slide may move the camera or hide it (`Slide.camera`). Before the camera is live the
+zone is a panel, clear, or **green screen** (`#00B140`) so a creator's own recorder can key a camera in.
+
+**The editor** (`PresentEditor`): one 48 px bar (back, the name, Undo/Redo, Slide ▾ by layout, Text, Shape ▾,
+Picture, Card, More ▾ — cards in a row, the deck, camera, big number, table, chart, the deck's ydke as a QR —
+and Present ▾); the slides down the left (drag to reorder; right-click: new after, duplicate, skip when
+presenting, a section, present from here, delete; rehearsed times on each); the slide in the middle with its
+speaker notes under it; the panel on the right — **Slide** (title, background: theme, colour, gradient,
+radial, picture with a scrim; transition, its length and direction, on every slide; the camera on this
+slide; skip), **Item** (position and size in canvas units, turn, align and distribute, order, group, lock,
+see-through, and each kind's own: words with role, face, size, bold/italic/underline/capitals, colour,
+highlight, alignment, lists, line height, shrink to fit; shapes with fill, gradient, rounding, border, dash
+and shadow; pictures with fill/fit, a mask and a shadow; cards; numbers; tables as `a | b` lines; charts as
+`name: 1, 2, 3` lines; a code; a link to another slide), **Builds** (come in, draw the eye, go: twelve
+effects, on click / with previous / after previous, length and delay, reordered; `Builds` compiles them into
+click steps), **Deck** (the style, slides from groups, the step's title and note, its focus by group chips or
+by clicking cards on the slide or in the panel), **Theme** (six themes — Paper, Ink, Arena, Neon, Duel,
+Clean — any token recoloured, the faces, how dim, the webcam zone, the creator's name).
+
+**The canvas** (`SlideCanvas`): click, Shift/Ctrl click, a box dragged over the slide, drag to move with
+smart guides (`Snap`: the canvas, the safe margin, the stage, the camera, every other element), Alt-drag a
+copy, eight handles (Shift keeps the shape, Alt from the middle, pictures and cards keep theirs by the
+corners), the round handle turns (Shift snaps to 15°), double-click edits words in place (`RichText.edit`
+keeps each run's style through typing; Ctrl B / Ctrl U / Ctrl Alt I style the words selected — Ctrl I stays
+Ai's). One drag or one stretch of typing is one step of Undo (`EditHistory`, 200 steps). Copy and paste
+carries elements and slides between presentations; a picture on the clipboard pastes as a picture.
+
+**Slides are content** (kai: "slides are content: full colour"): colour, gradients, rounded and oval shapes
+and shadows are drawn by `present/paint/SlidePaint.kt` and `SlideColors.kt` alone — `MasterUiLawTest` allows
+them there and nowhere else — while the editor around a slide stays paper and ink. Colours are text:
+`#RRGGBB`, `#AARRGGBB` or a theme token (`@accent`), so a change of theme recolours every slide made from
+tokens. Four display faces are bundled for slides only (Bebas Neue, Oswald, Playfair Display — OFL; Permanent
+Marker — Apache 2.0; `docs/fonts/`).
+
+**Presenting** (`PresentStage`, over the window, immersive for its length; Android lies down whatever the
+Screen setting, `ScreenOrientation.resolve(…, forceLandscape)`): one frame clock that sleeps when nothing
+moves; transitions (fade, push, cover, zoom, morph; between deck slides the deck itself glides); builds run
+after the slide is in; **D** the whole deck over anything, a card clicked there goes to the step that talks
+about it; **B**/**W** a black or white screen; **L** the laser (a held finger too); **E** the pen; **S** the
+speaker notes over the slide; Home/End; clickers' Page Up/Page Down; click or the right of the screen next,
+right-click or the left back; Esc ends. **Rehearse timings** keeps each slide's time on it. **The presenter
+view** (desktop, two screens, Present ▾): the slides in a borderless window over the other screen, and this
+window the presenter's — the slide, the next one, the notes at any size, the clocks and the controls.
+
+**Stored**: one file per presentation, `<data>/present/<id>.json` (`PresentCodec`: unknown keys skipped, a
+broken slide or element dropped alone, never the file), pictures content-addressed in
+`<data>/present/media/`; synced as files and backed up (`SYNC.md`); `NeuePreferences.present` (`PresentPrefs`,
+synced, internal to Ai) remembers how the last profile was started. No schema change. `OldDataTest` holds the
+1.0.70 shape.
+
+**Input as data**: `DeskShortcuts` has two new scopes, Making slides (`PRESENT_EDIT`) and Presenting
+(`PRESENTING`, during which the page keys are dead); the mouse and the finger are `PresentMouse` and
+`PresentTouch` (`PresentInputTest` holds every mouse action to a finger's form), printed by the help dialog.
+
+**Pictures**: `tools/shoot.sh --page=present --present=demo --present-slide=N --present-mode=library|edit|play|overview|notes
+--present-style=spotlight|slides|buildup --present-theme=arena|neon|… --present-webcam=tr|tl|br|bl|left|right|off
+--present-frames=N,K`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

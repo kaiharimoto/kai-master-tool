@@ -50,7 +50,7 @@ object SyncedPrefs {
     val SYNCED = setOf(
         "theme", "foil", "foilNames", "contrast", "groupPalette", "groupArrangement", "slidesAutoplay",
         "autoSaveOn", "shotStyle", "sidingView", "sidingExtra", "autoZen", "zenLabels", "poolToSide",
-        "defaultDeckId", "covers", "arts", "cardLists", "activeList", "ai",
+        "defaultDeckId", "covers", "arts", "cardLists", "activeList", "ai", "present",
     )
 
     val DEVICE = setOf(

@@ -128,6 +128,7 @@ class BackupCenter(private val h: NeueHolders) {
                     }
                     name.startsWith("ai/") && safe(name) -> put(File(h.ai.files.root, name.removePrefix("ai/")), data)
                     name.startsWith("custom-art/") && safe(name) -> put(File(Platform.dataDir, name), data)
+                    name.startsWith("present/") && safe(name) -> put(File(Platform.dataDir, name), data)
                 }
             }
             val neue = entries[NEUE]?.let { runCatching { Backups.json.decodeFromString(NeuePreferences.serializer(), it.decodeToString()) }.getOrNull() }
@@ -148,6 +149,7 @@ class BackupCenter(private val h: NeueHolders) {
                 h.builder.deckId?.let { id -> if (!h.builder.dirty) h.builder.load(id) }
                 h.ai.bookChanged()
                 h.customArt.reload()
+                h.present.reload()
                 h.neue.note = Note("Restored $decks decks from ${date(manifest.at)}")
             }
         } catch (e: Exception) {
@@ -190,6 +192,7 @@ class BackupCenter(private val h: NeueHolders) {
                 withContext(Dispatchers.IO) {
                     tree(h.ai.files.root).filter { !NeueSyncLocal.privateToDevice(it.first) }.forEach { (rel, f) -> add("ai/$rel", f.readBytes()); files++ }
                     tree(File(Platform.dataDir, "custom-art")).forEach { (rel, f) -> add("custom-art/$rel", f.readBytes()); files++ }
+                    tree(File(Platform.dataDir, "present")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("present/$rel", f.readBytes()); files++ }
                 }
                 add(
                     BackupManifest.NAME,

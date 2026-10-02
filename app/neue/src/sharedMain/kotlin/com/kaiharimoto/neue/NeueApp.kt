@@ -173,6 +173,9 @@ class NeueHolders(
     /** Pictures the person added to cards themselves (1.0.18). */
     val customArt = com.kaiharimoto.neue.art.CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
 
+    /** Present (1.0.70): the presentations, the one open in the editor, and the one playing. */
+    val present: com.kaiharimoto.neue.present.Presentations by lazy { com.kaiharimoto.neue.present.Presentations(java.io.File(Platform.dataDir, "present")) }
+
     /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
     val backups: com.kaiharimoto.neue.backup.BackupCenter by lazy { com.kaiharimoto.neue.backup.BackupCenter(this) }
 
@@ -274,8 +277,10 @@ class NeueHolders(
         textInputFocused = textFocus.any || builder.textInputFocused || neue.searchFocused,
         searchFocused = neue.searchFocused,
         overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen,
-        onBuilder = neue.page == Page.BUILDER,
+        onBuilder = neue.page == Page.BUILDER && present.playing == null,
         ai = neue.prefs.ai.enabled,
+        onPresent = neue.page == Page.PRESENT,
+        presenting = present.playing != null,
     )
 
     /**
@@ -326,14 +331,15 @@ class NeueHolders(
             DeskAction.GO_SIDING -> neue.go(Page.SIDING)
             DeskAction.GO_FORMAT -> neue.go(Page.FORMAT)
             DeskAction.GO_PREP -> neue.go(Page.PREP)
+            DeskAction.GO_PRESENT -> neue.go(Page.PRESENT)
             DeskAction.WEB_PREVIOUS -> stepWeb(-1)
             DeskAction.WEB_NEXT -> stepWeb(1)
             DeskAction.GO_SETTINGS -> neue.go(Page.SETTINGS)
             DeskAction.HELP -> neue.helpOpen = true
             DeskAction.DISMISS -> dismiss()
             DeskAction.SAVE -> state.save { decksReload++ }
-            DeskAction.UNDO -> state.undo()
-            DeskAction.REDO -> state.redo()
+            DeskAction.UNDO -> if (neue.page == Page.PRESENT) present.undo() else state.undo()
+            DeskAction.REDO -> if (neue.page == Page.PRESENT) present.redo() else state.redo()
             DeskAction.NEW_DECK -> { state.newDeck(); neue.go(Page.BUILDER) }
             DeskAction.IMPORT -> { state.importFromFile(); neue.go(Page.BUILDER) }
             DeskAction.EXPORT -> neue.menu = MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
@@ -345,7 +351,7 @@ class NeueHolders(
             DeskAction.POOL_ADD, DeskAction.POOL_ADD_TO_SIDE -> state.results.getOrNull(neue.poolCursor)?.let { card ->
                 CardActions.add(state, card, toSide = (action == DeskAction.POOL_ADD_TO_SIDE) != neue.prefs.poolToSide)
             }
-            DeskAction.REMOVE_SELECTED -> (neue.selection as? Selection.InDeck)?.let { sel ->
+            DeskAction.REMOVE_SELECTED -> if (neue.page == Page.PRESENT) com.kaiharimoto.neue.present.deleteSelection(this) else (neue.selection as? Selection.InDeck)?.let { sel ->
                 state.removeAt(sel.card, sel.section, sel.index)
                 // Stay on the same slot, so Delete held down clears a row.
                 val ids = state.deck[sel.section]
@@ -419,6 +425,7 @@ class NeueHolders(
             DeskAction.AI_PANEL -> if (neue.prefs.ai.enabled) ai.toggle()
             DeskAction.AI_VOICE -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleVoice() }
             DeskAction.AI_TALK -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleTalk() }
+            else -> com.kaiharimoto.neue.present.runPresent(this, action)
         }
     }
 
@@ -510,15 +517,17 @@ class NeueHolders(
 
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
     private fun dismiss() {
+        if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
         BackChain.esc(backFlags())?.let(::unwind)
     }
 
     /** Whether Back has anything to close; with nothing, the system's own back (and its predictive preview) is right. */
-    fun canGoBack(): Boolean = BackChain.back(backFlags()) != null
+    fun canGoBack(): Boolean = present.playing != null || (neue.page == Page.PRESENT && present.open != null) || BackChain.back(backFlags()) != null
 
     /** Android's Back: one layer, as Esc — never focus or the selection. Returns false when there was nothing. */
     fun back(): Boolean {
         wake()
+        if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
         val step = BackChain.back(backFlags()) ?: return false
         unwind(step)
         return true
@@ -560,6 +569,7 @@ class NeueHolders(
             if (neue.prefs.ai.enabled) add(MenuEntry(ai.name, hint = "Your assistant") { ai.setOpen(true) })
             if (neue.prefs.ai.enabled) add(MenuEntry("Look into ${ai.name}", hint = "What it knows") { ai.memoryOpen = "USER.md" })
             add(MenuEntry("Advanced search") { run(DeskAction.ADVANCED_SEARCH) })
+            add(MenuEntry("Present", hint = "Deck profiles as slides") { neue.go(Page.PRESENT) })
             if (onBuilder) {
                 add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
                 add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
@@ -608,6 +618,14 @@ class NeueHolders(
             cmd("Go", "Siding", DeskAction.GO_SIDING),
             cmd("Go", "Format", DeskAction.GO_FORMAT),
             cmd("Go", "Prep", DeskAction.GO_PREP),
+            cmd("Go", "Present", DeskAction.GO_PRESENT),
+            Command("Present", "New deck profile") { neue.go(Page.PRESENT); present.creating = true },
+            *(if (present.open != null) arrayOf(
+                cmd("Present", "Present from the start", DeskAction.PRESENT_START),
+                cmd("Present", "Present from this slide", DeskAction.PRESENT_FROM_HERE),
+                Command("Present", "Rehearse timings") { present.present(0, rehearse = true) },
+                cmd("Present", "New slide", DeskAction.SLIDE_NEW),
+            ) else emptyArray()),
             cmd("Go", "Settings", DeskAction.GO_SETTINGS),
             cmd("Deck", "Save", DeskAction.SAVE),
             cmd("Deck", "New deck", DeskAction.NEW_DECK),
@@ -1195,6 +1213,7 @@ private fun Shell(h: NeueHolders) {
                             Page.SIDING -> com.kaiharimoto.neue.pages.SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
                             Page.FORMAT -> com.kaiharimoto.neue.pages.FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
                             Page.PREP -> com.kaiharimoto.neue.prep.PrepPage(h.prep, h.webs, state, neue, h.decksReload)
+                            Page.PRESENT -> com.kaiharimoto.neue.present.PresentPage(h)
                             Page.SETTINGS -> SettingsPage(
                                 state,
                                 neue,
@@ -1429,6 +1448,8 @@ private fun Shell(h: NeueHolders) {
                 onDismiss = { neue.cropping = null },
             )
         }
+        // A presentation playing, over everything but its own menus (1.0.70).
+        com.kaiharimoto.neue.present.PresentOverlay(h)
         MenuLayer(neue.menu) { neue.menu = null }
         OverlayLayer(h.overlays)
 

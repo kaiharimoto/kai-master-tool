@@ -19,7 +19,9 @@ out (kai: not popular enough); their desktop apps still work as a synced folder.
 - **Travels:** saved decks (`decks/<id>.json`: name, sections in order, notes, the `.ydkx` payload),
   each web (`webs/<id>.json`), Prep (`prefs/prep.json`), the settings in `SyncedPrefs.SYNCED` and Ai's
   in `AI_SYNCED` (`prefs/neue.json`), TCG/OCG and effect search (`prefs/format.json`), everything in
-  `<data>/ai` but its keys, and `<data>/custom-art`.
+  `<data>/ai` but its keys, `<data>/custom-art`, and Present's presentations and their pictures
+  (`present/<id>.json`, `present/media/<sha>.<ext>`, 1.0.70; files, so the newer one is kept).
+  Recordings never travel.
 - **Stays:** the window, pane widths, zoom, orientation, text size, what is open (`SyncedPrefs.DEVICE`),
   Ai's connections and every key (`SecretStore`: they never leave a device), the card pool and the
   downloaded art (each device fetches its own), the voice models.

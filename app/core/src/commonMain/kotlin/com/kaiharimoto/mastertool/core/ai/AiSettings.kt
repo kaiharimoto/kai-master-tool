@@ -90,7 +90,7 @@ object AiSettings {
      */
     val INTERNAL = setOf(
         "window", "touchIntroSeen", "lensKeys", "extraSideVisible", "inspectorFolded",
-        "ai.connections", "ai.introSeen", "sync", "start",
+        "ai.connections", "ai.introSeen", "sync", "start", "present",
     )
 
     /** The settings as Ai reads them: each key's value, then what it does. */

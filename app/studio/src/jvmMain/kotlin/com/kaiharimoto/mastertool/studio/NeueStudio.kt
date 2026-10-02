@@ -98,6 +98,7 @@ fun neueMain(args: Array<String>) {
                 "siding" -> Page.SIDING
                 "format" -> Page.FORMAT
                 "prep" -> Page.PREP
+                "present" -> Page.PRESENT
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
             }
@@ -129,6 +130,65 @@ fun neueMain(args: Array<String>) {
                 }
                 if (map["default"] == "true" && id != null) h.neue.update { it.copy(defaultDeckId = id) }
                 println("[neue-studio] saved as $id; covers ${h.neue.prefs.covers[id]}; default ${h.neue.prefs.defaultDeckId}")
+            }
+            // --present=demo: a deck profile of the builder's deck (1.0.70), opened in the editor;
+            // --present-style=spotlight|slides|buildup, --present-theme=arena|neon|…, --present-webcam=tr|tl|br|bl|left|right|off,
+            // --present-slide=N the slide in view, --present-mode=library|edit|play|overview|notes, and
+            // --present-frames=N,K: from that slide, the next click and N stills K frames apart.
+            if (map["present"] == "demo") {
+                val style = when (map["present-style"]) {
+                    "slides" -> com.kaiharimoto.mastertool.core.present.Presentation.STYLE_SLIDES
+                    "buildup" -> com.kaiharimoto.mastertool.core.present.Presentation.STYLE_BUILD_UP
+                    else -> com.kaiharimoto.mastertool.core.present.Presentation.STYLE_SPOTLIGHT
+                }
+                val webcam = when (map["present-webcam"] ?: "br") {
+                    "off" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone()
+                    "tr" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.TOP_RIGHT)
+                    "tl" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.TOP_LEFT)
+                    "bl" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.BOTTOM_LEFT)
+                    "left" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.LEFT_COLUMN)
+                    "right" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.RIGHT_COLUMN)
+                    else -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.BOTTOM_RIGHT)
+                }
+                val snap = com.kaiharimoto.mastertool.core.present.edit.PresentEdits.snapshot(
+                    h.builder.deck, h.builder.groups, h.builder.deckName, h.builder.deckId, h.neue.prefs.groupArrangement,
+                    h.neue.prefs.arts, 0, System.currentTimeMillis(),
+                )
+                var p = com.kaiharimoto.mastertool.core.present.edit.PresentEdits.newProfile(
+                    "pstudio", "${h.builder.deckName} deck profile", snap, style, map["present-theme"] ?: com.kaiharimoto.mastertool.core.present.Themes.ARENA,
+                    webcam, "kai", System.currentTimeMillis(), kotlin.random.Random(7),
+                )
+                // A note on each group's step, as a creator would write it.
+                p = p.copy(slides = p.slides.map { sl ->
+                    val f = sl.deck ?: return@map sl
+                    if (f.all) sl else sl.copy(deck = f.copy(note = "Why these: what they open, what they need, and the line they start."))
+                })
+                h.present.create(p)
+                map["present-slide"]?.toIntOrNull()?.let { n -> p.slides.getOrNull(n)?.let { h.present.slideId = it.id } }
+                h.neue.page = Page.PRESENT
+                clock.run(80)
+                when (map["present-mode"]) {
+                    "library" -> { h.present.close(); clock.run(60) }
+                    "play", "overview", "notes" -> {
+                        h.present.present(h.present.slideIndex)
+                        clock.run(90)
+                        if (map["present-mode"] == "overview") { h.present.toggleOverview(); clock.run(90) }
+                        if (map["present-mode"] == "notes") { h.present.toggleNotes(); clock.run(30) }
+                    }
+                }
+                map["present-frames"]?.let { spec ->
+                    val (n, k) = spec.split(",").map { it.toInt() }
+                    if (h.present.playing == null) { h.present.present(h.present.slideIndex); clock.run(90) }
+                    h.present.next()
+                    val dir = File(out, "$name-frames").apply { mkdirs() }
+                    repeat(n) { i ->
+                        clock.run(k)
+                        val still = clock.frame().encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
+                        File(dir, "%03d.png".format(i)).writeBytes(still.bytes)
+                    }
+                    println("[neue-studio] present: $n frames in ${dir.name}")
+                }
+                println("[neue-studio] present: ${p.slides.size} slides, ${p.deck?.groups?.size ?: 0} groups, style ${p.style}")
             }
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.

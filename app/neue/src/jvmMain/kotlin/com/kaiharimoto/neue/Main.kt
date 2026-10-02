@@ -266,6 +266,37 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
             }
         }
     }
+    // The presenter view (1.0.70): with a second screen, the slides go to a borderless window over
+    // it while this window shows the notes, the next slide and the clock.
+    LaunchedEffect(Unit) {
+        while (true) {
+            h.present.screens = runCatching { java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.size }.getOrDefault(1)
+            delay(5_000)
+        }
+    }
+    if (h.present.playing != null && h.present.audience && h.present.screens > 1) {
+        val other = remember(host) {
+            val devices = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices
+            val mine = host?.graphicsConfiguration?.device
+            (devices.firstOrNull { it != mine } ?: devices.last()).defaultConfiguration.bounds
+        }
+        val audienceState = remember(other) {
+            WindowState(placement = WindowPlacement.Floating, position = WindowPosition(other.x.dp, other.y.dp), size = DpSize(other.width.dp, other.height.dp))
+        }
+        Window(
+            onCloseRequest = { h.present.audience = false },
+            title = "Neue Master Tool · Presentation",
+            icon = painterResource("icons/neue.png"),
+            state = audienceState,
+            undecorated = true,
+            resizable = false,
+            focusable = false,
+            onPreviewKeyEvent = h::onKey,
+        ) {
+            val pl = h.present.playing
+            if (pl != null) com.kaiharimoto.neue.present.play.PresentAudience(h, com.kaiharimoto.neue.present.rememberSlideContext(h, pl.show.presentation))
+        }
+    }
     for (me in shown) key(me.id) {
         val full = me.full
         val shownState = if (full == null) {

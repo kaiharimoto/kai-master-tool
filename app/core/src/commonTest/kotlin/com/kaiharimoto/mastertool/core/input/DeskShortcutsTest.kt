@@ -13,6 +13,9 @@ class DeskShortcutsTest {
     private val searching = DeskContext(textInputFocused = true, searchFocused = true)
     private val covered = DeskContext(overlayOpen = true)
     private val decksPage = DeskContext(onBuilder = false)
+    private val editingSlides = DeskContext(onBuilder = false, onPresent = true)
+    private val typingOnASlide = DeskContext(onBuilder = false, onPresent = true, textInputFocused = true)
+    private val presenting = DeskContext(onBuilder = false, onPresent = true, presenting = true)
 
     @Test
     fun everyActionIsBound() {
@@ -25,7 +28,7 @@ class DeskShortcutsTest {
     fun noChordMeansTwoThingsAtOnce() {
         // Two rows sharing a chord are only a bug if some context makes both
         // live, because then the first one silently wins.
-        for (context in listOf(builder, typingName, searching, covered, decksPage)) {
+        for (context in listOf(builder, typingName, searching, covered, decksPage, editingSlides, typingOnASlide, presenting)) {
             DeskShortcuts.live(context).groupBy { it.chord }.forEach { (chord, rows) ->
                 val actions = rows.map { it.action }.toSet()
                 if (actions.size > 1) fail("${DeskShortcuts.kbd(chord)} means $actions in $context")
@@ -35,7 +38,7 @@ class DeskShortcutsTest {
 
     @Test
     fun thePaletteAndEscapeWorkOverEverything() {
-        for (context in listOf(builder, typingName, searching, covered, decksPage)) {
+        for (context in listOf(builder, typingName, searching, covered, decksPage, editingSlides, typingOnASlide, presenting)) {
             assertEquals(DeskAction.PALETTE, DeskShortcuts.resolve(KeyChord("k", ctrl = true), context))
             assertEquals(DeskAction.DISMISS, DeskShortcuts.resolve(KeyChord("escape"), context))
         }
@@ -105,7 +108,7 @@ class DeskShortcutsTest {
     fun typingNeverRunsALetterOrDeletesACard() {
         // A keyboard cover on a tablet types into a field while the table listens
         // (touch swarm, rec 6): nothing it types may act on the deck.
-        for (context in listOf(typingName, searching)) {
+        for (context in listOf(typingName, searching, typingOnASlide)) {
             DeskShortcuts.live(context).forEach { row ->
                 val chord = row.chord
                 val bare = !chord.ctrl && !chord.alt
@@ -113,5 +116,28 @@ class DeskShortcutsTest {
                 assertTrue(!(bare && chord.key in setOf("backspace", "delete", "space", "slash")), "${row.action} fires on ${chord.key} while typing")
             }
         }
+    }
+
+    @Test
+    fun presentKeysStayOnPresent() {
+        assertEquals(DeskAction.GO_PRESENT, DeskShortcuts.resolve(KeyChord("6", ctrl = true), builder))
+        assertEquals(DeskAction.PRESENT_START, DeskShortcuts.resolve(KeyChord("f5"), editingSlides))
+        assertNull(DeskShortcuts.resolve(KeyChord("f5"), builder))
+        assertEquals(DeskAction.UNDO, DeskShortcuts.resolve(KeyChord("z", ctrl = true), editingSlides))
+        assertEquals(DeskAction.NUDGE_LEFT, DeskShortcuts.resolve(KeyChord("left"), editingSlides))
+        assertEquals(DeskAction.TEXT_BOLD, DeskShortcuts.resolve(KeyChord("b", ctrl = true), typingOnASlide))
+        assertNull(DeskShortcuts.resolve(KeyChord("delete"), typingOnASlide), "Delete edits the words")
+        assertEquals(DeskAction.AI_PANEL, DeskShortcuts.resolve(KeyChord("i", ctrl = true), editingSlides))
+    }
+
+    @Test
+    fun pagesAreDeadWhilePresenting() {
+        assertNull(DeskShortcuts.resolve(KeyChord("2", ctrl = true), presenting))
+        assertNull(DeskShortcuts.resolve(KeyChord("s", ctrl = true), presenting))
+        assertEquals(DeskAction.PRESENT_NEXT, DeskShortcuts.resolve(KeyChord("pagedown"), presenting))
+        assertEquals(DeskAction.PRESENT_NEXT, DeskShortcuts.resolve(KeyChord("space"), presenting))
+        assertEquals(DeskAction.PRESENT_PREVIOUS, DeskShortcuts.resolve(KeyChord("pageup"), presenting))
+        assertEquals(DeskAction.PRESENT_DECK, DeskShortcuts.resolve(KeyChord("d"), presenting))
+        assertNull(DeskShortcuts.resolve(KeyChord("left", shift = true), presenting))
     }
 }

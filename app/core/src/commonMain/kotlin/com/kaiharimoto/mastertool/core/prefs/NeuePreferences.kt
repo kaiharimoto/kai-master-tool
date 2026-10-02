@@ -306,6 +306,8 @@ data class NeuePreferences(
     val sync: com.kaiharimoto.mastertool.core.sync.SyncPrefs = com.kaiharimoto.mastertool.core.sync.SyncPrefs(),
     /** The setup offered on opening (1.0.69): the version last opened here, and the steps done. This device's own. */
     val start: com.kaiharimoto.mastertool.core.start.StartPrefs = com.kaiharimoto.mastertool.core.start.StartPrefs(),
+    /** Present (1.0.70): how a new deck profile starts — style, theme, camera, the creator's name. */
+    val present: com.kaiharimoto.mastertool.core.present.PresentPrefs = com.kaiharimoto.mastertool.core.present.PresentPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

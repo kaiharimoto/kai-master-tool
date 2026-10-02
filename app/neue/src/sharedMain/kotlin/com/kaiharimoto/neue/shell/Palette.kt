@@ -267,6 +267,7 @@ fun HelpDialog(onDismiss: () -> Unit) {
                 MuText(DeskWords.TOUCH_FOOTER, style = MuType.help(LocalMuFonts.current), color = c.ink45)
             }
             if (!touch || keyboard) KeyTable()
+            PresentGestureTable(touch)
             if (!touch) {
                 GestureTable(touch = false)
                 MuText(
@@ -298,6 +299,35 @@ private fun KeyTable() {
                             ) {
                                 RowText(if (row.action == DeskAction.AI_PANEL) "${com.kaiharimoto.mastertool.core.input.DeskMenuBar.aiName}: open or close" else row.description, Modifier.weight(1f))
                                 Kbd(DeskShortcuts.kbd(row.chord))
+                            }
+                            HRule()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Present's gestures (1.0.70), from its own tables: what a press means on a slide and while presenting. */
+@Composable
+private fun PresentGestureTable(touch: Boolean) {
+    val rows = if (touch) com.kaiharimoto.mastertool.core.input.PresentTouch.all else com.kaiharimoto.mastertool.core.input.PresentMouse.all
+    Column {
+        SectionTitle(null, "Present: making and showing slides")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            com.kaiharimoto.mastertool.core.input.PresentTarget.entries.chunked(3).forEach { targets ->
+                Column(Modifier.weight(1f)) {
+                    targets.forEach { target ->
+                        MuText(target.heading, Modifier.padding(top = 12.dp, bottom = 4.dp), style = MuType.help(LocalMuFonts.current), color = Mu.colors.ink70)
+                        rows.filter { it.target == target }.forEach { row ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                RowText(row.description, Modifier.weight(1f))
+                                Kbd(row.gesture, always = true)
                             }
                             HRule()
                         }

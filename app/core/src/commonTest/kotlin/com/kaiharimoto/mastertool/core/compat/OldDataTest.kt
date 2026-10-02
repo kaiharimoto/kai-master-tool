@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.backup.Backups
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.sync.Manifest
 import com.kaiharimoto.mastertool.core.sync.Sync
@@ -60,5 +61,24 @@ class OldDataTest {
             {"id":"lessons/a","title":"A","blocks":[{"type":"text","text":"Words"},{"type":"lesson","maxim":"Open Welcome","card":"Welcome Labrynth","number":"74%"}]}]}]}"""
         val book = assertNotNull(GuideBook.read(old))
         assertEquals(2, book.chapters.single().sections.single().blocks.size)
+    }
+
+    @Test
+    fun aPresentationFrom1070StillReads() {
+        // 1.0.70: the first shape Present wrote, a deck slide and a freeform one.
+        val old = """{"id":"pabc","name":"Labrynth profile","style":"BUILD_UP","theme":"arena",
+            "deck":{"deckId":"d1","name":"Labrynth","main":[1,1,2],"groups":[{"id":"g","name":"Engine"}],"assignments":{"1":"g"}},
+            "webcam":{"enabled":true,"preset":"RIGHT_COLUMN"},
+            "slides":[{"id":"s1","layout":"DECK","deck":{"groups":["g"],"note":"Open these"}},
+            {"id":"s2","elements":[{"id":"e","type":"TEXT","x":0.1,"y":0.1,"w":0.8,"h":0.2,"anchor":"STAGE",
+              "paras":[{"runs":[{"text":"Hi","style":{"weight":700,"color":"@accent"}}]}],
+              "animations":[{"id":"a","effect":"RISE"}]}],"notes":"Say hello"}]}"""
+        val p = assertNotNull(PresentCodec.decode(old))
+        assertEquals("BUILD_UP", p.style)
+        assertEquals("g", p.deck?.groupOf(1))
+        assertEquals("Open these", p.slides[0].deck?.note)
+        assertEquals("Hi", p.slides[1].elements[0].plainText)
+        assertEquals("Say hello", p.slides[1].notes)
+        assertTrue(p.webcam.enabled)
     }
 }

@@ -97,4 +97,10 @@ class FormFactorTest {
         assertEquals(13f, placed.fit.sections[0].paneHeight - placed.fit.sections[0].gridHeight, 0.01f)
         assertEquals(37f, placed.fit.sections[1].paneHeight - placed.fit.sections[1].gridHeight, 0.01f)
     }
+
+    @Test
+    fun presentLiesDownWhateverWasChosen() {
+        assertEquals(ScreenOrientation.LANDSCAPE, ScreenOrientation.resolve("portrait", FormFactor.PHONE, forceLandscape = true))
+        assertEquals(ScreenOrientation.PORTRAIT, ScreenOrientation.resolve("portrait", FormFactor.PHONE, forceLandscape = false))
+    }
 }
