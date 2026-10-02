@@ -152,6 +152,9 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                                             if (to != null) present.goToSlide(to)
                                         }
                                         secondary -> present.previous()
+                                        // A linked element jumps to its slide.
+                                        linkAt(show, pl.cursor.slide, cx, cy)?.let { to -> show.presentation.indexOf(to).takeIf { it >= 0 } } != null ->
+                                            present.goToSlide(show.presentation.indexOf(linkAt(show, pl.cursor.slide, cx, cy)))
                                         change.type == androidx.compose.ui.input.pointer.PointerType.Touch && change.position.x < w / 3f -> present.previous()
                                         else -> present.next()
                                     }
@@ -219,7 +222,7 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
             // The whole deck, on demand.
             if (p.deck != null) {
                 Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (overviewAmount() > 0.001f) 1f else 0f }) {
-                    OverviewLayer(ctx, { overviewAmount() }, { toFrame }, { overviewFrame }, allKeys)
+                    OverviewLayer(ctx, { overviewAmount() }, { toFrame }, { overviewFrame }, allKeys, show.zone(cursor.slide), camera)
                 }
             }
             // Laser and pen over everything.
@@ -237,6 +240,15 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
             if (pl.notes) NotesPanel(pl, Modifier.align(Alignment.BottomCenter))
         }
     }
+}
+
+/** The slide an element at ([x], [y]) on slide [i] links to, if one does. */
+private fun linkAt(show: com.kaiharimoto.mastertool.core.present.play.CompiledShow, i: Int, x: Float, y: Float): String? {
+    val slide = show.slides.getOrNull(i) ?: return null
+    val stage = show.stage(i)
+    return slide.elements.asReversed().firstOrNull { e ->
+        e.link != null && com.kaiharimoto.mastertool.core.present.edit.Transform.hit(com.kaiharimoto.mastertool.core.present.Geometry.box(e, stage), e.rotation, x, y)
+    }?.link
 }
 
 /** How long the builds wait for the slide's arrival: they begin once it is in. */
@@ -291,19 +303,29 @@ private fun applyArriving(layer: androidx.compose.ui.graphics.GraphicsLayerScope
 
 /** The whole deck over the slide: the theme's background coming up, the cards gliding out to it. */
 @Composable
-private fun OverviewLayer(ctx: SlideContext, amount: () -> Float, slideFrame: () -> StageFrame?, overview: () -> StageFrame?, keys: List<String>) {
+private fun OverviewLayer(
+    ctx: SlideContext,
+    amount: () -> Float,
+    slideFrame: () -> StageFrame?,
+    overview: () -> StageFrame?,
+    keys: List<String>,
+    zone: com.kaiharimoto.mastertool.core.present.stage.Box?,
+    camera: (@Composable () -> Unit)?,
+) {
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) { drawThemeBackground(ctx, amount()) }
         SlideView(
             ctx,
             com.kaiharimoto.mastertool.core.present.Slide("overview"),
-            zone = null,
+            // The camera stays where it is: the creator is still talking.
+            zone = zone,
             stage = com.kaiharimoto.mastertool.core.present.stage.WebcamLayout.safe,
             modifier = Modifier.fillMaxSize(),
             deck = { StageTween.between(slideFrame(), overview(), amount()) },
             deckKeys = keys,
             drawBackground = false,
             drawElements = false,
+            camera = camera,
         )
     }
 }

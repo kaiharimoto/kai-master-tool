@@ -28,6 +28,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
@@ -173,11 +175,21 @@ private fun LibraryTile(h: NeueHolders, p: Presentation) {
             color = c.ink45,
             maxLines = 1,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        var moreAt by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             MuButton("Open", { present.openIt(p) }, size = BtnSize.SM)
             MuButton("Present", { present.openIt(p); present.present() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-            MuButton("Duplicate", { present.duplicate(p) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-            MuButton("Delete", { present.confirmDelete = p }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            Box(Modifier.onGloballyPositioned { moreAt = it.positionInWindow() }) {
+                com.kaiharimoto.neue.kit.IconButton(Icons.More, {
+                    h.neue.menu = com.kaiharimoto.neue.kit.MenuSpec(
+                        androidx.compose.ui.geometry.Offset(moreAt.x, moreAt.y + 30f),
+                        listOf(
+                            com.kaiharimoto.neue.kit.MenuEntry("Duplicate") { present.duplicate(p) },
+                            com.kaiharimoto.neue.kit.MenuEntry("Delete", danger = true, separatorBefore = true) { present.confirmDelete = p },
+                        ),
+                    )
+                }, label = "More")
+            }
         }
     }
 }
