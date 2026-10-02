@@ -161,7 +161,9 @@ private fun DuelBar(h: NeueHolders, duels: Duels, prefs: DuelPrefs) {
     val c = Mu.colors
     val neue = h.neue
     val phone = LocalPhone.current
-    val game = duels.game
+    // A guest's table is the host's duel as its seat sees it.
+    val game = duels.shown
+    val online = duels.role != null
     val focus = remember { FocusRequester() }
     LaunchedEffect(duels.commandFocus) { if (duels.commandFocus > 0) runCatching { focus.requestFocus() } }
     val commandLine: @Composable (Modifier) -> Unit = { m ->
@@ -191,7 +193,7 @@ private fun DuelBar(h: NeueHolders, duels: Duels, prefs: DuelPrefs) {
                 MuButton(if (neue.prefs.ai.enabled && !phone) "${h.ai.name} · Combos" else "Combos", { duels.combosOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
             }
             if (game != null) {
-                if (!game.state.solo) {
+                if (!game.state.solo && !online) {
                     if (!phone) {
                         Segmented(prefs.twoSided, listOf(true, false), { if (it) "Two sides" else "One side" }, { v -> neue.update { it.copy(duel = it.duel.copy(twoSided = v)) } }, small = true, compact = true)
                     }

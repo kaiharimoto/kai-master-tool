@@ -275,6 +275,7 @@ class Duels(val dir: File) {
 
     /** Sit at the other seat (a hot-seat's turn of the table). */
     fun swap() {
+        if (role != null) return
         val g = game ?: return
         if (g.state.solo) return
         bottom = 1 - bottom

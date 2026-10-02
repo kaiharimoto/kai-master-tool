@@ -187,6 +187,18 @@ fun neueMain(args: Array<String>) {
                     h.duel.replay = com.kaiharimoto.neue.duel.Replay("studio", g.record("Studio duel"), at)
                     h.duel.note("Ash here would have stopped the whole line")
                 }
+                // --duel-net=guest: the same duel as the guest's seat is sent it over the network — its own view only.
+                if (map["duel-net"] == "guest") {
+                    val g = h.duel.game!!
+                    val u = com.kaiharimoto.mastertool.core.duel.net.DuelHost.update(g, 1, 0, g.header.seed, h.duel.catalog)
+                    h.duel.role = com.kaiharimoto.neue.duel.Duels.NetRole.GUEST
+                    h.duel.remote = com.kaiharimoto.mastertool.core.duel.net.DuelMirror.game(u.view, g.header)
+                    h.duel.remoteLines = u.lines
+                    h.duel.remoteWaiting = 1
+                    h.duel.peer = "Kai"
+                    h.duel.netStatus = "Playing Kai over the network"
+                    h.duel.bottom = 1
+                }
                 h.neue.page = Page.DUEL
                 clock.run(120)
                 val g = h.duel.game!!
