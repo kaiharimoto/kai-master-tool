@@ -318,15 +318,6 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 val strong = spot is DuelSpot.Pile || spot == DuelSpot.Chain || (spot is DuelSpot.Zone && spot.zone.kind == ZoneKind.EMZ)
                 frame(slot, if (strong) ink25 else ink12)
             }
-            // The field's edge between the two sides.
-            if (layout.twoSided) {
-                val mid = layout.zone(Place.Zone(0, ZoneKind.EMZ, 0))!!
-                val y = mid.centerY
-                drawLine(ink12, Offset(layout.field.left.dp.toPx(), y.dp.toPx()), Offset(mid.left.dp.toPx() - layout.gap.dp.toPx(), y.dp.toPx()), 1.dp.toPx())
-                val right = layout.zone(Place.Zone(0, ZoneKind.EMZ, 1))!!
-                val far = maxOf(mid.right, right.right)
-                drawLine(ink12, Offset((far + layout.gap).dp.toPx(), y.dp.toPx()), Offset(layout.field.right.dp.toPx(), y.dp.toPx()), 1.dp.toPx())
-            }
         }
         PileLabels(s, layout)
 
