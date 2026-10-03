@@ -156,19 +156,12 @@ private fun StatPlate(stats: TableStats, width: Float, modifier: Modifier) {
 }
 
 /**
- * The back of a card, in paper and ink: an ink face, a paper rule inside its edge, and the hatch.
+ * The back of a card: the classic app's oval back (1.0.88, kai's pick; [com.kaiharimoto.neue.cards.ClassicCardBack]).
  * Every face-down card has one — a set card is never just a missing picture.
  */
 @Composable
 internal fun CardBack(modifier: Modifier) {
-    val c = Mu.colors
-    Box(
-        modifier.background(c.ink).drawBehind {
-            val inset = size.minDimension * 0.07f
-            drawHatch(c.paper.copy(alpha = 0.18f), period = size.minDimension * 0.12f, stroke = 1.dp.toPx())
-            drawRect(c.paper, Offset(inset, inset), Size(size.width - inset * 2, size.height - inset * 2), style = Stroke(1.dp.toPx()))
-        },
-    )
+    com.kaiharimoto.neue.cards.ClassicCardBack(modifier)
 }
 
 /** A card face-down that its controller may read: its face dimmed under the hatch, marked "Set". */

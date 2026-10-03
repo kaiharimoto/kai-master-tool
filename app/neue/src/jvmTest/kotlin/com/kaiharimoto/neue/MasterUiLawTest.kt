@@ -18,7 +18,8 @@ class MasterUiLawTest {
 
     // Every source set's Kotlin: the shared code and each platform's own (1.0.20).
     private val root = File("src")
-    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt")
+    // CardBackArt.kt: the classic app's card back, a card's own face like the foil (kai, 1.0.88).
+    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt", "CardBackArt.kt")
 
     /**
      * Slides are the creator's content (kai, 1.0.70: "slides are content: full colour"): what

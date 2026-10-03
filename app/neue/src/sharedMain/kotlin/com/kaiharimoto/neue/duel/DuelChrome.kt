@@ -432,7 +432,9 @@ internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<c
                 if (cursor != null) Mono("↑↓ choose · Enter · Esc", color = c.ink45, size = 9.sp)
             }
         },
-        modifier = Modifier.zIndex(DuelFrames.Z_STRIP + 2f),
+        // Over everything the table draws — the score column, the phases, the arrows (kai, 1.0.88: the menu sat under the
+        // phase buttons and the life points) — below only a card being carried and the drop's highlight.
+        modifier = Modifier.zIndex(VERB_Z),
     ) { measurables, constraints ->
         val p = measurables.first().measure(androidx.compose.ui.unit.Constraints())
         val px = density.density
@@ -495,3 +497,6 @@ internal fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
     }
     RequestFocusOnce(focus, seat)
 }
+
+/** The verb strip's layer: above the score column (30), the arrows (50) and open piles, under a carried card (100). */
+private const val VERB_Z = 85f
