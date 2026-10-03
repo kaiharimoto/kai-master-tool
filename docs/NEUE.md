@@ -3349,6 +3349,39 @@ at a time; Ai offers five answers at most at its table, so No response always ha
   its corner, as a chessboard's edge: `h1…`, `m1–m5`, `s1–s5`, `e1`/`e2` by absolute index, `fz`, `gy`, `ban`, `ex`, `dk`, an
   open pile's `gy1…`, the other seat's with `o` (`DuelFocus.label`, the notation the command line reads).
 
+**Command mode: hold M to speak** (1.0.87, kai: "hold a key to talk", "show, then confirm"; the voice's plumbing):
+- **The key.** A `DeskShortcuts` row may be `hold = true` (only `DeskAction.HELD` actions, never `repeatable`): `NeueApp.onKey`
+  starts it on the key going down and ends it on that key coming up, and the key's own repeats start nothing. `M` (Duel)
+  is `DUEL_VOICE`. While a text field has focus M types an m ("m3"), so **Alt M** is the same key there; what a held Alt M
+  would type is swallowed. A window that loses the keyboard ends what a held key started (`keysLost`): its key-up never comes.
+  Held actions are never `run_action`'s (a press with no hand to let go would leave the microphone open); from a menu or
+  the palette `DUEL_VOICE` toggles.
+- **The button.** A microphone beside the command line (and on the phone's command row, 36 dp) is M for a finger or the
+  mouse: held, it listens, ink-filled with the level as a bar along its foot (`DuelMic`, `DuelInput`'s `MIC`/`SPEAK` row).
+- **`DuelVoice`** (`NeueHolders.duelVoice`, app lifetime): `press()`/`release()`/`toggle()`, observable `phase` (idle,
+  listening, transcribing, heard, failed), `level`, `partial`, `heard`, `failure`; `onListen` and **`onHeard`**, the one hook
+  the command language plugs into (until then the words go into the command line, focused, so Enter makes the move);
+  `hints` from the table (what the bottom seat can see, then its own decklist — never the other seat's hidden cards);
+  `prewarm()` (the Duel page opening); `say(text)` behind `DuelPrefs.speak` (Table ▾ "Say the moves aloud", off by default).
+- **One microphone** (`platform/Mic`): Ai's voice and the duel's take turns; holding M ends Ai's talk mode
+  (`AiState.micTaken`), and Ai listening takes the microphone back. Each listening has its own stop (`Voice.listen` makes it
+  as it is called), so a key let go at once is never lost and listenings never re-arm each other.
+- **Push-to-talk** (`Voice.listen(…, command = true)`): only letting go ends it (`SpeechGate.pushToTalk`: no tail, no room
+  learnt — speech from the first slice counts), up to 20 s. The clip loses the key's clicks (`CommandClip.trim`), is refused
+  under 0.2 s of voice, and what Whisper invents for nothing ("Thanks for watching", a card name echoed from its priming,
+  a phrase looped) is refused or folded (`CommandClip`). On Android the recogniser is asked not to end on a pause.
+- **Speed on the desk** (`CommandTuning`): one segment, no carried context, and Whisper's encoder told to read 768 frames
+  (15 s) — or the clip's own length and a margin when longer — instead of its whole 30 s window. Shorter windows were faster
+  still but looped ("no response, no response, …") below about 400 frames. Measured on eight commands spoken by espeak-ng,
+  4 shared cores, model warmed: **tiny.en 0.76 s → 0.33 s** a command, **base.en about 1.6 s → 0.65–0.86 s** (also 0.45 s
+  at 512 frames, unused). Words heard, command way, tiny.en: "summon, Ash, welcome to monster zone 3", "go to battle phase",
+  "attack, now monster 1 with my monster 3", "yes", "no response", "set, h4 to spell 2", "and turn"; base.en: "summon ash
+  lossom to monster zone 3", "set H4 to spell 2", "yes", "no response", "and turn" — a synthetic voice; names are the
+  command language's forgiving match to mend. `VoiceCommandProbeTest` repeats it where `NEUE_WHISPER_MODEL` and
+  `NEUE_WHISPER_WAV` (a file or a folder) are given.
+- **Setting up:** the `VOICE` start step, "Duel by keys and voice" (desk 1.0.87, APK 1.3.64), offers the model where one is
+  needed (only the desk); holding M without it opens the download dialog in the duel's words, with Ai on or off.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared --duel-focus=m3 --duel-coords=true
 --duel-focus-menu=true --duel-pick=h2`.

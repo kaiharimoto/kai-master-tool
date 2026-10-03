@@ -151,6 +151,7 @@ fun startState(h: NeueHolders) = com.kaiharimoto.mastertool.core.start.StartStat
     aiEnabled = h.neue.prefs.ai.enabled,
     aiConnected = h.neue.prefs.ai.connection != null,
     artSettled = !h.neue.prefs.hdArt || h.art.count.complete,
+    voiceReady = !com.kaiharimoto.neue.platform.Voice.usesModels || !com.kaiharimoto.neue.platform.Voice.needsModel(h.ai.voiceModel),
 )
 
 private fun short(step: StartStep, h: NeueHolders) = when (step) {
@@ -159,6 +160,7 @@ private fun short(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.SYNC -> "Every device"
     StartStep.AI -> h.neue.prefs.ai.name
     StartStep.ART -> "Offline art"
+    StartStep.VOICE -> "Keys and voice"
 }
 
 private fun title(step: StartStep, h: NeueHolders) = when (step) {
@@ -167,6 +169,7 @@ private fun title(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.SYNC -> "Your decks on every device"
     StartStep.AI -> "Meet ${h.neue.prefs.ai.name}"
     StartStep.ART -> "Every card's picture, offline"
+    StartStep.VOICE -> "Duel by keys and voice"
 }
 
 @Composable
@@ -220,6 +223,24 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
                 }, variant = BtnVariant.GHOST, size = BtnSize.SM)
             }
             Help("Off hides every trace of it. Settings › Assistant turns it back on.")
+        }
+        // Command mode (1.0.87): only offered where a speech model is still to download, the desk.
+        StartStep.VOICE -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Small(
+                "Play a whole duel without the mouse. Type a move on the command line — \"summon h2 to m3\" — or hold M and say it, " +
+                    "and let go: the move is shown on the table, and Enter (or saying \"yes\") makes it.",
+                color = c.ink70,
+            )
+            Small("Your words are written out on this computer, never sent anywhere. That needs a speech model, downloaded once.", color = c.ink70)
+            com.kaiharimoto.neue.ai.VoiceModelChoice(h.ai)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MuButton("Download ${h.ai.voiceModel.megabytes} MB", {
+                    h.ai.downloadForDuel()
+                    next()
+                }, variant = BtnVariant.SECONDARY, size = BtnSize.SM)
+                MuButton("Typing is enough", { next() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            }
+            Help("Fast is quickest for short commands. Holding M without the model asks again.")
         }
         StartStep.ART -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Small(

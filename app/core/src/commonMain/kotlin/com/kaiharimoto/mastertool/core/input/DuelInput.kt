@@ -28,6 +28,8 @@ enum class DuelTarget(val heading: String) {
     ATTACKING("While attacking"),
     PHASE("The phases"),
     TABLE("The table around them"),
+    /** The microphone beside the command line (1.0.87): the M key for a hand on the mouse or the glass. */
+    MIC("The microphone beside the command line"),
 }
 
 enum class DuelInputAction {
@@ -49,6 +51,8 @@ enum class DuelInputAction {
     ATTACK,
     /** Put the waiting attack away. */
     CANCEL_ATTACK,
+    /** Listen while held, and send what was said when let go (1.0.87, as holding M). */
+    SPEAK,
 }
 
 data class DuelBinding(
@@ -98,6 +102,7 @@ object DuelMouse {
         DuelBinding(DuelTarget.TABLE, RIGHT, DuelInputAction.COMMAND, "The command line"),
         DuelBinding(DuelTarget.ATTACKING, CLICK, DuelInputAction.ATTACK, "Their monster: attack it; their life points or hand: attack directly"),
         DuelBinding(DuelTarget.ATTACKING, RIGHT, DuelInputAction.CANCEL_ATTACK, "Stop attacking; so do Esc and any other verb"),
+        DuelBinding(DuelTarget.MIC, HOLD, DuelInputAction.SPEAK, "Speak a command while held; let go to see it, then Enter makes it — as holding M"),
     )
 
     fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =
@@ -140,6 +145,7 @@ object DuelTouch {
         DuelBinding(DuelTarget.TABLE, HOLD, DuelInputAction.COMMAND, "The command line"),
         DuelBinding(DuelTarget.ATTACKING, TAP, DuelInputAction.ATTACK, "Their monster: attack it; their life points or hand: attack directly"),
         DuelBinding(DuelTarget.ATTACKING, "Tap Cancel, or Back", DuelInputAction.CANCEL_ATTACK, "Stop attacking; so does any other verb"),
+        DuelBinding(DuelTarget.MIC, HOLD, DuelInputAction.SPEAK, "Speak a command while held; lift to see it, then confirm it"),
     )
 
     fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =

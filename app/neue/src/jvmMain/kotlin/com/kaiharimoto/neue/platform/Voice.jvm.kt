@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.platform
 
+import com.kaiharimoto.mastertool.core.ai.voice.CommandClip
+import com.kaiharimoto.mastertool.core.ai.voice.CommandTuning
 import com.kaiharimoto.mastertool.core.ai.voice.Hints
 import com.kaiharimoto.mastertool.core.ai.voice.Pcm
 import com.kaiharimoto.mastertool.core.ai.voice.SpeechGate
@@ -38,9 +40,6 @@ import javax.sound.sampled.TargetDataLine
  */
 actual object Voice {
     private val format = AudioFormat(Pcm.RATE.toFloat(), 16, 1, true, false)
-
-    @Volatile
-    private var stopAsked = false
 
     @Volatile
     private var speaking: Process? = null
@@ -106,12 +105,16 @@ actual object Voice {
         return w to c
     }
 
-    private fun transcribe(model: VoiceModel, samples: FloatArray, hints: String): String =
-        transcribe(fileOf(model), model == VoiceModel.BASE, samples, hints)
+    private fun transcribe(model: VoiceModel, samples: FloatArray, hints: String, command: Boolean): String =
+        transcribe(fileOf(model), model == VoiceModel.BASE, samples, hints, command)
 
-    /** [samples] (16 kHz mono) written out by the model in [file]; `internal` so a test can hand it any model. */
+    /**
+     * [samples] (16 kHz mono) written out by the model in [file]; `internal` so a test can hand it any model.
+     * A [command] (1.0.87) is a clip of a few seconds wanted at once: one segment, no carried context, and
+     * the encoder told the clip's length (`CommandTuning`) rather than reading Whisper's whole 30 s window.
+     */
     @Synchronized
-    internal fun transcribe(file: File, anyLanguage: Boolean, samples: FloatArray, hints: String): String {
+    internal fun transcribe(file: File, anyLanguage: Boolean, samples: FloatArray, hints: String, command: Boolean = false): String {
         val (w, ctx) = contextFor(file)
         val params = WhisperFullParams(WhisperSamplingStrategy.GREEDY).apply {
             nThreads = Runtime.getRuntime().availableProcessors().coerceIn(1, 8)
@@ -119,6 +122,11 @@ actual object Voice {
             if (anyLanguage) detectLanguage = true
             suppressNonSpeechTokens = true
             noTimestamps = true
+            if (command) {
+                singleSegment = true
+                noContext = true
+                audioCtx = CommandTuning.audioCtx(samples.size.toDouble() / Pcm.RATE)
+            }
         }
         val result = w.full(ctx, params, samples, samples.size)
         if (result != 0) error("The speech model could not read it ($result).")
@@ -127,8 +135,16 @@ actual object Voice {
 
     // ---- listening -----------------------------------------------------------
 
-    actual fun listen(model: VoiceModel, hints: String): Flow<Heard> = flow {
-        stopAsked = false
+    actual fun listen(model: VoiceModel, hints: String, command: Boolean): Flow<Heard> {
+        // Its own stop, made now — before the flow runs on its thread — so a key let go at once is never lost,
+        // and a newer listening stops this one rather than re-arming a shared flag (1.0.87, the red team).
+        val ticket = Ticket()
+        current?.stopped = true
+        current = ticket
+        return heard(model, hints, command, ticket)
+    }
+
+    private fun heard(model: VoiceModel, hints: String, command: Boolean, ticket: Ticket): Flow<Heard> = flow {
         val line = runCatching {
             (AudioSystem.getLine(DataLine.Info(TargetDataLine::class.java, format)) as TargetDataLine).apply {
                 open(format, Pcm.RATE / 5)
@@ -138,13 +154,14 @@ actual object Voice {
             emit(Heard.Failed("No microphone could be opened. Check that one is plugged in, and that this app may use it."))
             return@flow
         }
-        val gate = SpeechGate()
+        // A command (1.0.87) is push-to-talk: letting go of the key ends it, never a pause.
+        val gate = if (command) SpeechGate.pushToTalk() else SpeechGate()
         val audio = ByteArrayOutputStream()
         val slice = ByteArray(Pcm.RATE / 10 * 2) // 100 ms
         var seconds = 0.0
         var loudest = 0f
         try {
-            while (currentCoroutineContext().isActive && !stopAsked && !gate.done) {
+            while (currentCoroutineContext().isActive && !ticket.stopped && !gate.done) {
                 val n = runInterruptible { line.read(slice, 0, slice.size) }
                 if (n <= 0) continue
                 audio.write(slice, 0, n)
@@ -167,17 +184,47 @@ actual object Voice {
             )
             return@flow
         }
+        var samples = Pcm.samples(audio.toByteArray())
+        // A command's clip (1.0.87): the key's clicks cut off, and too little voice never handed to Whisper,
+        // which invents words for near-silence.
+        val voiced = if (command) CommandClip.voiced(CommandClip.trim(samples).also { samples = it }) else Double.MAX_VALUE
+        if (voiced < CommandClip.VOICED_LEAST) {
+            emit(Heard.Failed("Nothing was said."))
+            return@flow
+        }
         emit(Heard.Transcribing)
-        val samples = Pcm.samples(audio.toByteArray())
-        val text = runCatching { transcribe(model, samples, hints) }.getOrElse {
+        val written = runCatching { transcribe(model, samples, hints, command) }.getOrElse {
             emit(Heard.Failed("The speech model failed: ${it.message ?: it::class.simpleName}"))
             return@flow
         }
-        if (Hints.isNothing(text)) emit(Heard.Failed("Nothing was said.")) else emit(Heard.Final(text))
+        val text = if (command) CommandClip.unrepeat(written) else written
+        val nothing = if (command) CommandClip.isNothing(text) || CommandClip.echoes(text, hints, voiced) else Hints.isNothing(text)
+        if (nothing) emit(Heard.Failed("Nothing was said.")) else emit(Heard.Final(text))
     }.flowOn(Dispatchers.IO)
 
+    /** One listening's stop flag (1.0.87): its own, so listenings never stop or re-arm each other. */
+    private class Ticket {
+        @Volatile
+        var stopped = false
+    }
+
+    @Volatile
+    private var current: Ticket? = null
+
     actual fun stopListening() {
-        stopAsked = true
+        current?.stopped = true
+    }
+
+    /**
+     * The model read into memory now, off the main thread, so the first command spoken is written out as
+     * fast as the tenth (1.0.87: the Duel page opening with voice set up). Half a second of silence is then
+     * written out once, so whisper.cpp's own buffers are made too.
+     */
+    actual suspend fun prewarm(model: VoiceModel) {
+        if (needsModel(model)) return
+        withContext(Dispatchers.IO) {
+            runCatching { transcribe(fileOf(model), model == VoiceModel.BASE, FloatArray(Pcm.RATE / 2), "", command = true) }
+        }
     }
 
     // ---- speaking --------------------------------------------------------------

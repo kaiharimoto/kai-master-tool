@@ -70,6 +70,33 @@ class DuelInputTest {
     }
 
     @Test
+    fun speakingIsHeldNotPressed() {
+        // Hold M to speak (1.0.87); typing in the command line, M is an m and Alt M is the key.
+        val m = DeskShortcuts.resolveShortcut(KeyChord("m"), duelling)
+        assertEquals(DeskAction.DUEL_VOICE, m?.action)
+        assertTrue(m!!.hold)
+        assertNull(DeskShortcuts.resolve(KeyChord("m"), chatting))
+        assertEquals(DeskAction.DUEL_VOICE, DeskShortcuts.resolve(KeyChord("m", alt = true), chatting))
+        assertEquals(DeskAction.DUEL_VOICE, DeskShortcuts.resolve(KeyChord("m", alt = true), duelling))
+        // It is the person's own: alive with Ai off, and only on Duel.
+        assertEquals(DeskAction.DUEL_VOICE, DeskShortcuts.resolve(KeyChord("m"), duelling.copy(ai = false)))
+        assertNull(DeskShortcuts.resolve(KeyChord("m"), DeskContext()))
+        assertNull(DeskShortcuts.resolve(KeyChord("m"), duelling.copy(overlayOpen = true)))
+    }
+
+    @Test
+    fun heldRowsAreHeldActionsAndNeverRepeat() {
+        val rows = DeskShortcuts.all.filter { it.hold }
+        assertTrue(rows.isNotEmpty())
+        rows.forEach { assertTrue(it.action in DeskAction.HELD && !it.repeatable, "${DeskShortcuts.kbd(it.chord)} (${it.action})") }
+        // A held action is only ever bound as held: a plain press would start it and nothing would end it.
+        DeskShortcuts.all.filter { it.action in DeskAction.HELD }.forEach { assertTrue(it.hold, "${DeskShortcuts.kbd(it.chord)} (${it.action})") }
+        // Ai never presses one (run_action), and it is not one of Ai's own.
+        assertTrue(DeskAction.HELD.none { it in DeskAction.AI })
+        assertTrue("\"${DeskAction.DUEL_VOICE.name}\"" !in com.kaiharimoto.mastertool.core.ai.AiTools.runAction.schema.toString())
+    }
+
+    @Test
     fun noChordMeansTwoThingsWhileDuelling() {
         for (context in listOf(duelling, chatting, duelling.copy(overlayOpen = true))) {
             DeskShortcuts.live(context).groupBy { it.chord }.forEach { (chord, rows) ->

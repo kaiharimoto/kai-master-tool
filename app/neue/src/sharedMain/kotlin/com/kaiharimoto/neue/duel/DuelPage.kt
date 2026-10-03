@@ -85,6 +85,8 @@ internal fun DuelPage(h: NeueHolders) {
     val index = h.builder.index
     duels.catalog = remember(index) { DuelCatalog { code -> index.byId(CardId(code))?.let(DuelCardInfo::of) } }
     LaunchedEffect(Unit) { duels.load() }
+    // The speech model read in before the first command is spoken, when voice is set up (1.0.87).
+    LaunchedEffect(Unit) { h.duelVoice.prewarm() }
     // A refusal is said once, at the foot of the window.
     LaunchedEffect(duels.problem) { duels.problem?.let { neue.note = Note(it); duels.problem = null } }
 
@@ -252,6 +254,8 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
                 IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
             } else {
                 CommandLine(duels, Modifier.weight(1f), short = narrow)
+                // Hold to speak a command (1.0.87): the M key for a hand on the mouse.
+                DuelMic(h)
             }
         } else {
             Box(Modifier.weight(1f))
@@ -323,6 +327,10 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
                 neue.update { it.copy(duel = it.duel.copy(autoDraw = !it.duel.autoDraw)) }
             })
         }
+        // Command mode speaks back (1.0.87): the move understood, their moves, the answers — off unless asked for.
+        add(MenuEntry(if (prefs.speak) "Keep the moves silent" else "Say the moves aloud") {
+            neue.update { it.copy(duel = it.duel.copy(speak = !it.duel.speak)) }
+        })
         add(MenuEntry("The card", separatorBefore = true, hint = "Read it large") { duels.drawer = "card" })
         add(MenuEntry("Log and chat") { duels.drawer = "log" })
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
@@ -340,8 +348,10 @@ private fun PhoneDuelBar(h: NeueHolders, duels: Duels) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) { DuelBarItems(h, narrow = true, phone = true) }
         if (duels.shown != null && duels.replay == null) {
-            Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CommandLine(duels, Modifier.weight(1f), short = true)
+                // A phone has no M key: the microphone is held instead (1.0.87).
+                DuelMic(h, size = 36.dp)
             }
         }
     }

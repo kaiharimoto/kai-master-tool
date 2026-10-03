@@ -43,6 +43,11 @@ class SpeechGate(
     private val tail: Double = TAIL,
     private val nothing: Double = NOTHING,
     private val most: Double = MOST,
+    /**
+     * Whether the room's hum is learnt from the first slices. Push-to-talk (1.0.87) does not: someone may speak
+     * the moment the key goes down, and their voice taken for the room would never count as speech.
+     */
+    private val learnsRoom: Boolean = true,
 ) {
     enum class State { WAITING, SPEAKING, DONE_SPOKEN, DONE_NOTHING, DONE_TOO_LONG }
 
@@ -58,7 +63,7 @@ class SpeechGate(
     fun feed(level: Float, seconds: Double): State {
         if (done) return state
         // The room: the quiet before anyone speaks, a floor under which nothing counts.
-        if (!heard && roomSlices < 5) {
+        if (learnsRoom && !heard && roomSlices < 5) {
             room = (room * roomSlices + level) / (roomSlices + 1)
             roomSlices++
         }
@@ -85,6 +90,130 @@ class SpeechGate(
 
         /** Below this nothing is speech, however quiet the room. */
         const val FLOOR = 0.015f
+
+        /** A spoken duel command is short: a key held this long is let go of by the gate (1.0.87). */
+        const val COMMAND_MOST = 20.0
+
+        /**
+         * Push-to-talk (1.0.87, kai: "hold a key to talk"): letting go of the key ends the turn, never a
+         * pause — someone thinking mid-command is not done — so there is no tail, and no room is learnt
+         * (speech is anything over [FLOOR]). The gate only gives up on a key held with nothing said, or held
+         * far longer than any command (a key whose release was lost).
+         */
+        fun pushToTalk(): SpeechGate = SpeechGate(tail = Double.POSITIVE_INFINITY, nothing = NOTHING, most = COMMAND_MOST, learnsRoom = false)
+    }
+}
+
+/**
+ * A push-to-talk clip made fit to write out (1.0.87, the red team): the key's own click at each end cut off,
+ * too little voice refused before Whisper is asked (near-silence makes it invent — "Thanks for watching", or a
+ * card name echoed from its priming), and the words it writes for nothing refused after.
+ */
+object CommandClip {
+    /** Seconds cut from the start (the key going down) and from the end (the key coming up). */
+    const val HEAD = 0.15
+    const val TAIL = 0.10
+
+    /** The least voice, in seconds over [SpeechGate.FLOOR], worth writing out: a quick "yes" is about 0.3 s. */
+    const val VOICED_LEAST = 0.2
+
+    /** A transcript that is one of the priming's names, from less voice than this, is the priming echoed. */
+    const val ECHO_UNDER = 0.5
+
+    private const val FRAME = Pcm.RATE / 50 // 20 ms
+
+    /** [samples] without the key's clicks; a clip too short to cut is kept whole. */
+    fun trim(samples: FloatArray): FloatArray {
+        val head = (HEAD * Pcm.RATE).toInt()
+        val tail = (TAIL * Pcm.RATE).toInt()
+        if (samples.size <= head + tail + FRAME) return samples
+        return samples.copyOfRange(head, samples.size - tail)
+    }
+
+    /** Seconds of [samples] louder than [SpeechGate.FLOOR], in 20 ms frames. */
+    fun voiced(samples: FloatArray): Double {
+        var frames = 0
+        var i = 0
+        while (i + FRAME <= samples.size) {
+            if (Pcm.rms(samples, i, i + FRAME) > SpeechGate.FLOOR) frames++
+            i += FRAME
+        }
+        return frames * FRAME.toDouble() / Pcm.RATE
+    }
+
+    /** What Whisper writes for a clip with no command in it: [Hints.isNothing], and the sign-offs it learnt from video. */
+    fun isNothing(text: String): Boolean {
+        if (Hints.isNothing(text)) return true
+        val t = norm(text)
+        return t.isEmpty() || t in INVENTED || INVENTED_STARTS.any { t.startsWith(it) }
+    }
+
+    /**
+     * Whether [text] is only one of the names in [hints] (a name of two words or more), from less than
+     * [ECHO_UNDER] seconds of voice: Whisper echoing its priming, not someone saying a card. A one-word
+     * hint ("yes", "Nibiru") is never taken for an echo — it can be said that quickly.
+     */
+    fun echoes(text: String, hints: String, voiced: Double): Boolean {
+        if (voiced >= ECHO_UNDER) return false
+        val t = norm(text)
+        return t.isNotEmpty() && hints.split(", ").any { h -> h.trim().contains(' ') && norm(h) == t }
+    }
+
+    /**
+     * [text] said once when Whisper wrote it over and over ("no response, no response, no response"): the
+     * loop it falls into on a short clip. Only a whole repeat — the same words every time, the last perhaps
+     * cut short — is folded; anything else is kept as written.
+     */
+    fun unrepeat(text: String): String {
+        val words = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val keys = words.map { norm(it) }
+        val n = keys.size
+        for (p in 1..n / 2) {
+            if (keys.subList(0, p).all { it.isEmpty() }) continue
+            // The last word may be cut off part-way ("…, sum").
+            if ((0 until n).all { keys[it] == keys[it % p] || (it == n - 1 && keys[it].isNotEmpty() && keys[it % p].startsWith(keys[it])) }) {
+                return words.subList(0, p).joinToString(" ").trimEnd(',', '.', ';', ' ', '…')
+            }
+        }
+        return text.trim()
+    }
+
+    private val notWord = Regex("[^a-z0-9]+")
+
+    private fun norm(text: String) = text.lowercase().replace(notWord, " ").trim()
+
+    private val INVENTED = setOf(
+        "thanks for watching", "thank you for watching", "thank you so much for watching", "thanks for watching bye",
+        "please subscribe", "subscribe", "like and subscribe", "bye", "bye bye", "goodbye", "you", "thank you", "thanks",
+        "the end", "so", "um", "uh", "hmm", "oh",
+    )
+    private val INVENTED_STARTS = listOf("subtitles by", "transcribed by", "transcript by", "captions by", "translated by")
+}
+
+/**
+ * How the desk's Whisper is tuned for a spoken command (1.0.87): a clip of a second or three, written out
+ * as fast as it can be. Whisper's encoder reads a 30-second window — 1500 frames, 50 a second — whatever
+ * the clip; told the clip's own length ([audioCtx]) it reads only that much, which is most of the time
+ * saved. A margin keeps the last word, and a floor keeps the window from being cut so short that Whisper
+ * falls into a loop ("no response, no response, …") or slows itself retrying — which below about 400
+ * frames it did, on both models. Measured in 1.0.87's making on eight spoken commands (4 cores, base.en):
+ * 1.7 s a command over the whole window, 0.65 s at 768 frames, 0.45 s at 512; `docs/NEUE.md` §4p.
+ */
+object CommandTuning {
+    /** Whisper's whole window, in encoder frames: 30 seconds. */
+    const val FULL = 1500
+
+    /** Frames past the clip's end, so the last word is not cut (about 1.3 s). */
+    const val MARGIN = 64
+
+    /** The fewest frames read, however short the clip: about 15 s, the shortest that never looped when measured. */
+    const val FLOOR = 768
+
+    /** The encoder frames to read for a clip of [seconds]: ceil(1500 · s / 30) + [MARGIN], within [[FLOOR], [FULL]]. */
+    fun audioCtx(seconds: Double): Int {
+        if (seconds.isNaN() || seconds <= 0.0) return FLOOR
+        val frames = kotlin.math.ceil(FULL * seconds / 30.0).toInt() + MARGIN
+        return frames.coerceIn(FLOOR, FULL)
     }
 }
 
@@ -112,7 +241,11 @@ object Hints {
     /** What a transcriber writes for silence or noise, which is no message at all. */
     fun isNothing(text: String): Boolean {
         val t = text.trim().lowercase().trim('.', ' ', '!', '?')
-        return t.isEmpty() || t in setOf("[blank_audio]", "(silence)", "[silence]", "[music]", "(music)", "you", "thank you", "[inaudible]") ||
+        return t.isEmpty() || t in setOf(
+            "[blank_audio]", "(silence)", "[silence]", "[music]", "(music)", "you", "thank you", "[inaudible]",
+            // What Whisper learnt to write at the end of a video, said to a microphone that heard nothing (1.0.87).
+            "thanks for watching", "thank you for watching", "thank you so much for watching", "please subscribe",
+        ) ||
             (t.startsWith("[") && t.endsWith("]")) || (t.startsWith("(") && t.endsWith(")"))
     }
 }

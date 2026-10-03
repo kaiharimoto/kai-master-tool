@@ -45,6 +45,11 @@ data class DuelPrefs(
     val autoDraw: Boolean = true,
     /** Every place's coordinate (`m3`, `os2`, `h4`) written faintly at its corner, as a chessboard's edge (1.0.87, `I`). */
     val coordinates: Boolean = false,
+    /**
+     * Command mode speaks back (1.0.87, off unless asked for): the move understood as it is shown, the other seat's
+     * moves as they land, the answers to questions — in this seat's own words, never naming a card it cannot see.
+     */
+    val speak: Boolean = false,
 ) {
     companion object {
         const val KNOW_ALL = "all"

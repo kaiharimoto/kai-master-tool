@@ -25,12 +25,20 @@ fun VoiceDialog(ai: AiState) {
     if (!ai.voiceAsk) return
     val c = Mu.colors
     val model = ai.voiceModel
+    // Asked for by the duel's push-to-talk (1.0.87): its own words, since Ai may be off.
+    val duel = ai.voiceForDuel
     MuDialog(
-        title = "Voice on this computer",
+        title = if (duel) "Speak your moves" else "Voice on this computer",
         onDismiss = { ai.voiceAsk = false },
         width = 520.dp,
-        description = "Speak to ${ai.name} and your words are written out here, on this computer — nothing you say is sent anywhere " +
-            "until you send the words. That needs a speech model, downloaded once (${model.megabytes} MB).",
+        description = if (duel) {
+            "Hold M and say a move — \"summon Ash Blossom to monster zone three\" — and let go: it is written out here, on this " +
+                "computer, and shown on the table before Enter makes it. Nothing you say leaves the computer. That needs a speech model, " +
+                "downloaded once (${model.megabytes} MB)."
+        } else {
+            "Speak to ${ai.name} and your words are written out here, on this computer — nothing you say is sent anywhere " +
+                "until you send the words. That needs a speech model, downloaded once (${model.megabytes} MB)."
+        },
         footer = {
             MuButton("Not now", { ai.voiceAsk = false }, variant = BtnVariant.GHOST)
             MuButton("Download ${model.megabytes} MB", { ai.downloadVoiceModel() }, variant = BtnVariant.PRIMARY, arrow = true)
@@ -38,7 +46,11 @@ fun VoiceDialog(ai: AiState) {
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             VoiceModelChoice(ai)
-            Help("It comes from whisper.cpp's own repository and is checked before it is used. You can change it any time in ${ai.name}'s quick settings.", color = c.ink45)
+            Help(
+                "It comes from whisper.cpp's own repository and is checked before it is used. " +
+                    if (duel) "Fast is quickest for short commands." else "You can change it any time in ${ai.name}'s quick settings.",
+                color = c.ink45,
+            )
         }
     }
 }
