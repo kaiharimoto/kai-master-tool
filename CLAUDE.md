@@ -167,8 +167,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 - **Colour is allowed in exactly two places**, on kai's instruction: the foil
   on a card's face (`cards/Foil.kt`, `cards/Holo.kt` — the holographic shader
   kai chose from the Blender mockups) and the group markers the user draws on
-  their deck (`cards/GroupMarkers.kt`). Card art keeps its colour as content, and so does the card back: the
-  classic app's oval back, kai's pick (1.0.88, `cards/CardBackArt.kt`).
+  their deck (`cards/GroupMarkers.kt`). Card art keeps its colour as content, and so does the card back: kai's
+  own artwork from the classic app, `composeResources/drawable/card_back.png` drawn as it is (1.0.88, `cards/CardBackArt.kt`).
 - **Cards may move, and nothing else may.** kai asked for the deck to lean
   toward the pointer and for a carried card to tilt and lift; that is
   `core/motion/DeskLean.kt`, read inside each card's `graphicsLayer` from one

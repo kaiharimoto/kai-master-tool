@@ -156,7 +156,7 @@ private fun StatPlate(stats: TableStats, width: Float, modifier: Modifier) {
 }
 
 /**
- * The back of a card: the classic app's oval back (1.0.88, kai's pick; [com.kaiharimoto.neue.cards.ClassicCardBack]).
+ * The back of a card: kai's own artwork, the classic app's back (1.0.88; [com.kaiharimoto.neue.cards.ClassicCardBack]).
  * Every face-down card has one — a set card is never just a missing picture.
  */
 @Composable
