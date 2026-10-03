@@ -90,7 +90,7 @@ fun TitleBar(
     onWork: () -> Unit = {},
     /** Before the bar's own switches: the assistant's (1.0.43). */
     trailing: @Composable () -> Unit = {},
-    /** Auto zen and Full screen; a page whose own row carries full screen (Duel, 1.0.78) leaves them out. */
+    /** Full screen; a page whose own row carries it (Duel, 1.0.78) leaves it out. Auto zen is in Settings (1.0.88). */
     switches: Boolean = true,
     content: @Composable RowScope.(narrow: Boolean) -> Unit = {},
 ) {
@@ -141,16 +141,7 @@ fun TitleBar(
             }
             trailing()
             if (switches) {
-            // Auto zen (kai, 1.0.16): whether immersive mode drifts into zen by itself when idle.
-            // Z still starts it either way.
-            Tip(
-                if (neue.prefs.autoZen) "Zen by itself: on. In immersive mode, idle ten seconds and the deck floats. Click to turn off" else "Zen by itself: off. Zen comes only when asked for. Click to turn on",
-                kbd = DeskShortcuts.chordFor(DeskAction.ZEN)?.let { "Zen now " + DeskShortcuts.kbd(it) },
-            ) {
-                WordToggle("Auto zen", neue.prefs.autoZen) { neue.update { it.copy(autoZen = !it.autoZen) } }
-            }
-            // A finger reaching for Full screen must not find Auto zen (touch swarm, rec 16).
-            if (neue.touchFirst) Box(Modifier.width(12.dp))
+            // Auto zen lives in Settings since 1.0.88 (kai); the bar keeps Full screen alone.
             Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, bars out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
                 IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 32.dp, label = if (neue.immersive) "Leave full screen" else "Full screen")
             }

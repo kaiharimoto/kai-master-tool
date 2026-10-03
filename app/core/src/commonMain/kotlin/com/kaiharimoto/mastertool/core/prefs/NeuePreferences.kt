@@ -267,9 +267,11 @@ data class NeuePreferences(
     val activeList: String? = null,
     /**
      * Zen comes by itself after idle seconds in immersive mode (1.0.16: a switch on
-     * the bar). Off, it comes only when asked for with Z.
+     * the bar). Off, it comes only when asked for with Z. In Settings and off by default since
+     * 1.0.88 (kai: "move auto zen to the settings menu and default off"); a document written
+     * before then holds it only if it was turned off, so the new default reaches everyone else.
      */
-    val autoZen: Boolean = true,
+    val autoZen: Boolean = false,
     /**
      * Each group's name on its piece in zen (kai, 1.0.24: "let the user toggle the
      * labels for the groups"), the corner's Labels switch. On unless turned off.
