@@ -447,8 +447,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 val stats = when {
                     f.look == com.kaiharimoto.mastertool.core.layout.CardLook.BACK || !inst.faceUp || !inMonsterZone -> null
                     // A token's own numbers, when its maker gave them (1.0.79).
-                    inst.token && (inst.atk != null || inst.def != null) -> "${inst.atk ?: "?"} / ${inst.def ?: "?"}"
-                    card != null && card.atk != null -> "${card.atk}" + (card.def?.let { " / $it" } ?: "")
+                    inst.token && (inst.atk != null || inst.def != null) -> TableStats("${inst.atk ?: "?"}", "${inst.def ?: "?"}", inst.defense)
+                    card != null && card.atk != null -> TableStats("${card.atk}", card.def?.toString(), inst.defense)
                     else -> null
                 }
                 val attacker = duels.attacking

@@ -199,6 +199,13 @@ fun neueMain(args: Array<String>) {
                     }
                     println("[neue-studio] attack: ${how} with $mine at $theirs; attacking ${d.attacking}; chip ${d.game?.let { com.kaiharimoto.mastertool.core.duel.DuelBattle.pending(it, d.catalog) }}")
                 }
+                // --duel-defense=true: the near seat's first face-up Attack Position monster turned to Defense
+                // (1.0.87), for the ATK / DEF plate on a card lying across.
+                if (map["duel-defense"] == "true") {
+                    val st = h.duel.game!!.state
+                    st.seats[0].monsters.filterNotNull().firstOrNull { st.cards[it]?.pos == com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK }
+                        ?.let { println("[neue-studio] defense: $it turned ${h.duel.verb(it, com.kaiharimoto.mastertool.core.duel.DuelVerb.POSITION)}") }
+                }
                 // --duel-select=near|far: a card on that side's field selected, its verb strip out (1.0.78).
                 map["duel-select"]?.let { side ->
                     val g = h.duel.game!!

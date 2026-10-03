@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -24,7 +25,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelGame
@@ -81,41 +86,73 @@ internal fun DuelInspector(h: NeueHolders, duels: Duels, game: DuelGame, viewers
     val s = game.state
     // The focus's card while the keys lead (1.0.87): the card is read without a mouse.
     val uid = duels.reading()?.takeIf { it in s.cards }
-    val body: @Composable () -> Unit = {
+    val body: @Composable (room: Dp?) -> Unit = { room ->
         if (uid == null) {
             Micro("The card", color = c.ink45)
             Help("Point at a card to read it here. Click it for what it can do; right-click does the obvious thing; drag puts it anywhere.")
         } else {
-            InspectedCard(h, duels, game, viewers, uid)
+            InspectedCard(h, duels, game, viewers, uid, room)
         }
     }
     Column(modifier.releasesTyping()) {
         if (fill) {
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { body() }
+            // The column's own height, measured, is what the art may grow into (1.0.87).
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val room = maxHeight - 24.dp
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { body(room) }
+            }
         } else {
-            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { body() }
+            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { body(null) }
         }
         KeyCheat(h)
     }
 }
 
 @Composable
-private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers: Set<Int>, uid: Int) {
-    val c = Mu.colors
+private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers: Set<Int>, uid: Int, room: Dp?) {
     val s = game.state
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val inst = s.cards.getValue(uid)
-        val sees = viewers.any { DuelSight.sees(s, uid, it) }
-        val card = if (sees && !(inst.token && inst.code == 0)) h.builder.index.byId(CardId(inst.code)) else null
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(Modifier.width(INSPECTOR_ART.dp).aspectRatio(CARD_RATIO)) {
+    val inst = s.cards.getValue(uid)
+    val sees = viewers.any { DuelSight.sees(s, uid, it) }
+    val card = if (sees && !(inst.token && inst.code == 0)) h.builder.index.byId(CardId(inst.code)) else null
+    // The words are measured first; the art takes what height they leave (1.0.87, kai: "the card art should
+    // grow to fill leftover space") — never narrower than [INSPECTOR_ART] unless the column is, never wider
+    // than the column, always 59:86. Past the minimum the column scrolls as before; the keys stay pinned.
+    SubcomposeLayout { cons ->
+        val gap = 8.dp.roundToPx()
+        val width = cons.maxWidth
+        val words = subcompose("words") { InspectedWords(duels, game, uid, sees, card) }
+            .map { it.measure(Constraints(maxWidth = width)) }
+        val wordsH = words.sumOf { it.height }
+        val least = minOf(INSPECTOR_ART.dp.roundToPx(), width)
+        val artW = if (room == null) least else {
+            val spare = room.roundToPx() - wordsH - gap
+            (spare * CARD_RATIO).toInt().coerceIn(least, width)
+        }
+        val artH = (artW / CARD_RATIO).roundToInt()
+        val art = subcompose("art") {
+            Box(Modifier.fillMaxSize()) {
                 when {
                     card != null -> NeueCard(card, Modifier.fillMaxSize(), foil = h.neue.prefs.foil)
                     sees -> TokenFace(duels.catalog.nameOf(inst), Modifier.fillMaxSize())
                     else -> CardBack(Modifier.fillMaxSize())
                 }
             }
+        }.map { it.measure(Constraints.fixed(artW, artH)) }
+        layout(width, artH + gap + wordsH) {
+            art.forEach { it.place((width - artW) / 2, 0) }
+            var y = artH + gap
+            words.forEach { it.place(0, y); y += it.height }
         }
+    }
+}
+
+/** Everything the inspector says under the art: name, text, rulings, materials. */
+@Composable
+private fun InspectedWords(duels: Duels, game: DuelGame, uid: Int, sees: Boolean, card: com.kaiharimoto.mastertool.core.model.Card?) {
+    val c = Mu.colors
+    val s = game.state
+    val inst = s.cards.getValue(uid)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         H2(if (sees) duels.catalog.nameOf(inst) else "A face-down card", maxLines = 2)
         if (sees && inst.token && (inst.atk != null || inst.def != null)) Mono("ATK ${inst.atk ?: "?"} / DEF ${inst.def ?: "?"}", color = c.ink)
         if (card != null) Body(card.description, color = c.ink)
@@ -168,7 +205,10 @@ internal fun TurnTally(duels: Duels, game: DuelGame, viewer: Int? = null) {
 /** The four arrows, as the key cheat writes them. */
 private const val ARROWS = "← ↑ → ↓"
 
-/** The inspector's art: big enough to know the card, small enough that its text needs no scrolling. */
+/**
+ * The inspector's least art: big enough to know the card, small enough that its text needs no scrolling.
+ * Where the column has height to spare the art grows past it, up to the column's width (1.0.87).
+ */
 private const val INSPECTOR_ART = 150
 
 @Composable
