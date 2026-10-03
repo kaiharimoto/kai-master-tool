@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.duel.CardKind
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelRules
+import com.kaiharimoto.mastertool.core.duel.DuelSelection
 import com.kaiharimoto.mastertool.core.duel.Outcome
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
@@ -42,7 +43,13 @@ object DuelCommand {
          * Moves to commit as one group. [named]: the cards the line named by name — the player knew them —
          * which the preview may name though the table hides them (their own Deck's card searched by name).
          */
-        data class Actions(val actions: List<DuelAction>, val said: String, val named: Set<Int> = emptySet()) : Parsed
+        data class Actions(
+            val actions: List<DuelAction>,
+            val said: String,
+            val named: Set<Int> = emptySet(),
+            /** [said] is the whole preview (1.0.89: several cards onto a Deck read top first, not move by move). */
+            val whole: Boolean = false,
+        ) : Parsed
 
         /** Why not. [choices]: "Did you mean" names (or coordinates), never a card the seat cannot see; [query] the words they replace. */
         data class Problem(val text: String, val choices: List<String> = emptyList(), val query: String? = null) : Parsed
@@ -130,6 +137,8 @@ object DuelCommand {
         "hand", "field", "their field", "gy", "lp", "chain", "no response", "your move", "pass", "swap", "undo",
         // Chance and the Deck (1.0.87, kai).
         "discard random", "random oh to gy", "banish random ex down", "random h2 h4 kb", "ks h1",
+        // The chain by keys, several cards at once (1.0.89, kai).
+        "resolve all", "negate 2", "g gy1 h2 ban1", "k gy1 gy3", "kb gy1 gy3", "t om1 om2",
     )
 
     /** Heads whose words are free text: a `;` in them is theirs, not a join. */
@@ -436,10 +445,22 @@ object DuelCommand {
                         return one(DuelAction.GoFirst(seat, pick == "first"), if (pick == "first") "Go first" else "Go second")
                     }
                 }
-                "resolve", "res" -> if (bare || (rest.size == 1 && rest.single() in setOf("keep", "stay", "stays", "chain", "it"))) {
+                // The whole chain, link by link (1.0.89, Shift Q): "resolve all", "resolve the whole chain".
+                "resolve", "res" -> if (rest.isNotEmpty() && rest.joinToString(" ") in RESOLVE_ALL) {
+                    if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to resolve")
+                    return Parsed.Actions(DuelVerbs.resolveAll(s, catalog), "Resolve the whole chain (${s.chain.size} link${if (s.chain.size == 1) "" else "s"})")
+                } else if (bare || (rest.size == 1 && rest.single() in setOf("keep", "stay", "stays", "chain", "it"))) {
                     if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to resolve")
                     val keep = rest.firstOrNull() in setOf("keep", "stay", "stays")
                     return Parsed.Actions(DuelVerbs.resolve(s, catalog, keep), "Resolve")
+                }
+                // A link negated (1.0.89): "negate" the newest, "negate 2", "negate link 2", "negate cl2". "Negate Attack" is a card.
+                "negate", "neg" -> linkNumber(rest)?.let { n0 ->
+                    if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to negate in")
+                    val k = if (n0 == 0) s.chain.size else n0
+                    val r = DuelVerbs.negate(s, seat, k, catalog)
+                    r.problem?.let { return Parsed.Problem(it) }
+                    return Parsed.Actions(r.actions, "Negate Chain Link $k")
                 }
                 "think", "thinking", "wait" -> if (bare) return one(DuelAction.Thinking(seat, true), "Thinking")
                 "ready" -> if (bare) return one(DuelAction.Thinking(seat, false), "Ready")
@@ -496,7 +517,72 @@ object DuelCommand {
                 val uid = DuelNotation.at(s, c, seat, secret) ?: return Parsed.Problem("Nothing is in $c")
                 return Parsed.Ui(UiKind.READ, head, uid = uid)
             }
+            several(words)?.let { return it }
             return cardCommand(words)
+        }
+
+        /** "negate" alone is 0 (the newest link); "2", "link 2", "chain link 2", "cl2", "l2" its number; anything else null. */
+        fun linkNumber(rest: List<String>): Int? {
+            if (rest.isEmpty()) return 0
+            val t = rest.joinToString(" ").removePrefix("chain ").removePrefix("link ").trim()
+            return t.toIntOrNull() ?: Regex("^c?l(\\d+)$").find(t)?.groupValues?.get(1)?.toInt()
+        }
+
+        /**
+         * One verb, several cards by coordinate (1.0.89, kai: "select multiple cards … and perform an action with them"):
+         * `g gy1 gy3 ban2`, `b h2 h4`, `t om1 om2`, `o h4 h5 m3` (the last the host). `k gy1 gy3` puts them on top of the
+         * Deck **top first** — gy1 ends on top, gy3 under it; `kb gy1 gy3` on the bottom, gy3 the bottom card; `ks` shuffles
+         * them in ([DuelSelection]). One group, one undo. A verb with a place after its card (`s h2 m3`, `h gy1 h2`) is the
+         * one-card line, as before.
+         */
+        fun several(words: List<String>): Parsed? {
+            val head = words.first()
+            val verb = verbWords[head] ?: return null
+            if (verb !in SEVERAL) return null
+            val coords = words.drop(1)
+            if (coords.size < 2 || coords.any { w -> DuelNotation.parse(w)?.index == null && DuelNotation.parse(w)?.kind?.onField != true }) return null
+            var cards = coords
+            var host: Int? = null
+            if (verb == DuelVerb.ATTACH) {
+                val last = DuelNotation.parse(coords.last())!!
+                if (!last.kind.onField || coords.size < 3) return null
+                host = DuelNotation.at(s, last, seat, secret) ?: return Parsed.Problem("Nothing is in ${coords.last()} to attach to")
+                cards = coords.dropLast(1)
+            } else {
+                // "h gy1 h2": a pile coordinate the verb sends to is where the one card goes, as it was.
+                val dest = DuelNotation.parse(coords.last())!!.kind.pile
+                val sends = when (verb) {
+                    DuelVerb.HAND -> PileKind.HAND
+                    DuelVerb.GRAVE -> PileKind.GY
+                    DuelVerb.BANISH, DuelVerb.BANISH_DOWN -> PileKind.BANISHED
+                    DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.DECK_SHUFFLE -> PileKind.DECK
+                    DuelVerb.EXTRA -> PileKind.EXTRA
+                    else -> null
+                }
+                if (coords.size == 2 && dest != null && dest == sends) return null
+            }
+            val uids = mutableListOf<Int>()
+            for (w in cards) {
+                when (val l = look(w)) {
+                    is Lookup.One -> uids += l.uid
+                    is Lookup.None -> return none(l)
+                    is Lookup.Many -> return Parsed.Problem("Which ${l.names.first()}?")
+                }
+            }
+            if (uids.distinct().size < uids.size) return Parsed.Problem("A card is named twice")
+            // A hidden card takes only the verbs that need not know what it is (1.0.87's rule, card by card).
+            if (uids.any { !DuelSight.sees(s, it, seat) } && verb !in BLIND_VERBS) return blindProblem(null)
+            val plan = DuelSelection.actions(s, uids, verb, catalog, seat, host = host)
+            if (plan.skipped.isNotEmpty()) {
+                val (u, why) = plan.skipped.first()
+                return Parsed.Problem("${label(u, false).replaceFirstChar { it.uppercase() }}: $why")
+            }
+            if (!plan.ok) return Parsed.Problem("Nothing to do")
+            val names = uids.mapIndexed { i, u -> "${i + 1} ${label(u, false)} (${DuelNotation.coordOf(s, u, seat, secret) ?: "?"})" }.joinToString(" · ")
+            return when (verb) {
+                DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM -> Parsed.Actions(plan.actions, "${DuelSelection.orderHead(verb == DuelVerb.DECK_BOTTOM)}: $names", whole = true)
+                else -> Parsed.Actions(plan.actions, "${verb.label}: $names")
+            }
         }
 
         // ---- questions and the chrome ------------------------------------------------------------------
@@ -901,6 +987,15 @@ object DuelCommand {
     }
 
     private val DIRECT = setOf("direct", "directly", "d", "dir", "lp", "face")
+
+    /** "resolve …" that resolves every link (1.0.89). */
+    private val RESOLVE_ALL = setOf("all", "everything", "whole chain", "the whole chain", "the chain all", "chain all", "all links", "the lot", "it all")
+
+    /** The verbs a line may give several cards at once (1.0.89, [DuelSelection]). */
+    private val SEVERAL = setOf(
+        DuelVerb.GRAVE, DuelVerb.BANISH, DuelVerb.BANISH_DOWN, DuelVerb.HAND, DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.DECK_SHUFFLE,
+        DuelVerb.EXTRA, DuelVerb.TARGET, DuelVerb.REVEAL, DuelVerb.FLIP, DuelVerb.ATTACH,
+    )
     private val DELTA = Regex("^[+-]?\\d+$")
 
     /** The verbs a hidden card takes: none of them needs to know what it is (1.0.87, the red team). */

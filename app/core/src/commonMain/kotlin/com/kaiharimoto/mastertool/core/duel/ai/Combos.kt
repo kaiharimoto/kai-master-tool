@@ -115,7 +115,7 @@ object ComboRecorder {
         fun n(uid: Int) = s.cards[uid]?.let { catalog.nameOf(it) } ?: "#$uid"
         return when (a) {
             // A card going to the GY as its chain resolves is the resolve step's own doing.
-            is DuelAction.Move -> if (a.how == "resolve") null else {
+            is DuelAction.Move -> if (a.how == "resolve" || a.how == "negate") null else {
                 val name = n(a.uid)
                 val from = s.placeOf(a.uid)
                 val fromWords = (from as? Place.Pile)?.kind?.let { " from ${word(it)}" } ?: ""
@@ -163,6 +163,7 @@ object ComboRecorder {
             is DuelAction.Reveal -> a.uids.firstOrNull()?.let { "reveal ${n(it)}" }
             is DuelAction.ChainResolve -> "resolve"
             is DuelAction.ChainClear -> "clear chain"
+            is DuelAction.Negate -> "negate ${a.link}"
             is DuelAction.Attack -> "${n(a.attacker)} attacks ${a.target?.let(::n) ?: "directly"}"
             else -> null
         }

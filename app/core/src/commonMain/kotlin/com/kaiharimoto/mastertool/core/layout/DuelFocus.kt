@@ -50,6 +50,13 @@ object DuelFocus {
 
         /** The [index]-th card (0 the top) of a pile laid open over the field. */
         data class PileCard(val seat: Int, val kind: PileKind, val index: Int) : Slot
+
+        /**
+         * Chain Link [index] + 1 in the chain well (1.0.89, kai: "consider the chain system and how we can use it better with
+         * a keyboard"): the well is a cell of the shared row while a chain stands, entered on its newest link; ↑ and ↓ walk
+         * its links (Link 1 at the top, as the well lists them) and leave it past either end, ← and → leave it sideways.
+         */
+        data class Link(val index: Int) : Slot
     }
 
     enum class Dir { UP, DOWN, LEFT, RIGHT }
@@ -126,6 +133,8 @@ object DuelFocus {
         raw += listOfNotNull(
             if (two) Slot.Pile(far, PileKind.BANISHED) to 0f else null,
             zone(0, ZoneKind.EMZ, emzLeft) to 2f,
+            // The chain well, a cell while a chain stands (1.0.89): its newest link stands for it.
+            if (s.chain.isNotEmpty()) Slot.Link(s.chain.size - 1) to 3f else null,
             zone(0, ZoneKind.EMZ, 1 - emzLeft) to 4f,
             Slot.Pile(near, PileKind.BANISHED) to 6f,
         )
@@ -169,8 +178,14 @@ object DuelFocus {
     fun step(from: Slot?, dir: Dir, s: DuelState, viewer: Int, shape: Shape): Slot {
         if (from == null) return home(s, viewer)
         if (from is Slot.PileCard) return stepStrip(from, dir, s, shape.stripPerRow)
+        // In the chain well, ↑ and ↓ walk its links before they leave it (1.0.89).
+        if (from is Slot.Link && s.chain.isNotEmpty()) {
+            val i = from.index.coerceIn(0, s.chain.size - 1)
+            if (dir == Dir.UP && i > 0) return Slot.Link(i - 1)
+            if (dir == Dir.DOWN && i < s.chain.size - 1) return Slot.Link(i + 1)
+        }
         val rows = rows(s, viewer, shape)
-        val at = settle(from, s, viewer, shape)
+        val at = settle(from, s, viewer, shape).let { if (it is Slot.Link) Slot.Link(s.chain.size - 1) else it }
         val cell = rows.flatten().firstOrNull { it.slot == at } ?: return home(s, viewer)
         val row = rows[cell.row]
         return when (dir) {
@@ -201,7 +216,7 @@ object DuelFocus {
             val start = (from.index.coerceIn(0, n - 1) / per) * per
             return from.copy(index = if (first) start else minOf(start + per, n) - 1)
         }
-        val at = settle(from, s, viewer, shape)
+        val at = settle(from, s, viewer, shape).let { if (it is Slot.Link) Slot.Link(s.chain.size - 1) else it }
         val rows = rows(s, viewer, shape)
         val cell = rows.flatten().firstOrNull { it.slot == at } ?: return home(s, viewer)
         val row = rows[cell.row]
@@ -240,6 +255,9 @@ object DuelFocus {
             val n = s.seats[slot.seat].pile(slot.kind).size
             slot.copy(index = slot.index.coerceIn(0, (n - 1).coerceAtLeast(0)))
         }
+        // A link: still a link while a chain stands; the chain over, the shared row's middle (an Extra Monster Zone).
+        is Slot.Link -> if (s.chain.isNotEmpty()) slot.copy(index = slot.index.coerceIn(0, s.chain.size - 1))
+            else settle(zone(0, ZoneKind.EMZ, if (viewer == 0) 0 else 1), s, viewer, shape)
         else -> if (cells(s, viewer, shape).any { it.slot == slot }) slot else home(s, viewer)
     }
 
@@ -252,6 +270,7 @@ object DuelFocus {
         is Slot.Pile -> s.seats[slot.seat].pile(slot.kind).firstOrNull()
         is Slot.HandCard -> eyes.hand(s, slot.seat).getOrNull(slot.index)
         is Slot.PileCard -> s.seats[slot.seat].pile(slot.kind).getOrNull(slot.index)
+        is Slot.Link -> s.chain.getOrNull(slot.index)?.uid
     }
 
     /**
@@ -286,6 +305,7 @@ object DuelFocus {
         // One notation (1.0.87, the Spotlight): the ring's tag, the faint coordinates and the Line all say what
         // DuelNotation says, so `oh3` on the table is the `oh3` typed.
         val place = when (slot) {
+            is Slot.Link -> return "link ${slot.index + 1}"
             is Slot.Zone -> slot.place
             is Slot.Pile -> Place.Pile(slot.seat, slot.kind)
             is Slot.HandCard -> Place.Pile(slot.seat, PileKind.HAND, slot.index)

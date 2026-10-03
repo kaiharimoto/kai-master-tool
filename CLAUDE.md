@@ -674,6 +674,14 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   are `DuelRandom`'s, stamped on commit with the throw in `OpeningRoll`); higher sum chooses (`GoFirst`), a tie rolls again;
   `DuelState.opening` holds the turn back until then; the log names numbers only once the dice land (`Duels.diceRolling`);
   Shift R / `roll`; `DuelPrefs.openingRoll`. `--duel-dice=rest|flying|settled|choose`.
+  **The chain by keys, several cards at once (1.0.89)**: `Shift Q` resolves the whole chain (`DuelVerbs.resolveAll`); the chain
+  well is a focus cell (`DuelFocus.Slot.Link`, ↑/↓ walk links) and Enter on a link offers Resolve / Negate / Target with it / Read
+  (`ChainMenu`); `DuelAction.Negate` marks `ChainLink.negated` (an activated Spell/Trap to the GY with it); Y with no Ai is No
+  response (`DUEL_PASS`, `DeskAction.WITHOUT_AI`). **Selection** (`core/duel/DuelSelection`): Ctrl/⌘ click toggles, Shift click a
+  run, Shift Space the focus, a finger's hold starts select mode; badges "2/4", the bar over the hand offers the verbs every card
+  takes (a card the eyes cannot see only `blindVerbs`), one verb one group; K / Shift K on several opens the **ordering strip**
+  (top first as they will stand; Alt ←/→, drag, R random, Alt K shuffle in). Typed: `g gy1 h2 ban1`, `k gy1 gy3` (gy1 on top),
+  `kb …`, `negate 2`, `resolve all`. `--duel-multi=true`, `--duel-order=top|bottom`, `--duel-chain-focus=N --duel-chain-menu=true`.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

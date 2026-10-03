@@ -110,6 +110,10 @@ object DuelWords {
                 "Chain Link ${before.chain.size} resolves${link?.uid?.let { ": ${card(it)}" } ?: ""}"
             }
             DuelAction.ChainClear -> "The chain is cleared"
+            is DuelAction.Negate -> {
+                val link = before.chain.getOrNull(a.link - 1)
+                "${seatName(before, a.seat)} negates Chain Link ${a.link}${link?.uid?.let { ": ${card(it)}" } ?: ""}"
+            }
             is DuelAction.Attack -> {
                 val by = card(a.attacker)
                 val whose = possessive(seatName(before, a.seat))
@@ -203,6 +207,7 @@ object DuelWords {
                 when (to.kind) {
                     PileKind.GY -> when {
                         a.how == "resolve" -> "$name goes to the GY as it resolves"
+                        a.how == "negate" -> "${name.replaceFirstChar { it.uppercase() }} goes to the GY, negated"
                         a.how == com.kaiharimoto.mastertool.core.duel.DuelBattle.HOW -> "${name.replaceFirstChar { it.uppercase() }} is destroyed by battle"
                         a.how == "tribute" -> subject("Tributes $name")
                         a.how == "detach" || from is Place.Under -> subject("detaches $name$fromWords")

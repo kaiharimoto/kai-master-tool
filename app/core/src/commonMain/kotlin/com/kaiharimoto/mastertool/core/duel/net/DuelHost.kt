@@ -84,6 +84,7 @@ object DuelHost {
                 }
                 is DuelAction.Attack -> a.copy(seat = seat, attacker = uid(a.attacker), target = a.target?.let(::uid))
                 is DuelAction.Keep -> a.copy(uid = uid(a.uid))
+                is DuelAction.Negate -> a.copy(seat = seat)
                 is DuelAction.Token -> a.copy(seat = seat)
                 is DuelAction.Lp -> a
                 is DuelAction.Propose -> a.copy(seat = seat)

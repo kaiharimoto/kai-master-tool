@@ -149,6 +149,14 @@ sealed class DuelAction {
     @Serializable @SerialName("attack")
     data class Attack(val seat: Int, val attacker: Int, val target: Int? = null) : DuelAction()
 
+    /**
+     * [seat] negates Chain Link [link] (1-based, 1.0.89, kai: "consider the chain system and how we can use it better with a
+     * keyboard"): the link stays on the chain, marked negated, and resolves doing nothing. Its card is moved by the
+     * actions that go with it (`DuelVerbs.negate`: an activated Spell or Trap to the GY), never by this.
+     */
+    @Serializable @SerialName("negate")
+    data class Negate(val seat: Int, val link: Int) : DuelAction()
+
     /** A resolved link's card stays on the field when the chain is over ("resolve keep", 1.0.83). */
     @Serializable @SerialName("keep")
     data class Keep(val uid: Int) : DuelAction()

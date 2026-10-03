@@ -292,10 +292,16 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Micro("Chain", color = if (s.chain.isEmpty()) c.ink45 else c.ink, size = 9.sp)
+        // The link the keys stand on (1.0.89): its line inverted, as the Spotlight's chosen row is.
+        val focused = (duels.focus as? com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link)?.takeIf { duels.byKeys }?.index ?: duels.chainMenu
         s.chain.takeLast(6).forEachIndexed { i, link ->
             val n = s.chain.size - minOf(6, s.chain.size) + i + 1
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.background(c.ink).padding(horizontal = 3.dp)) { Mono("$n", color = c.paper, size = 9.sp) }
+            val on = focused == n - 1
+            Row(
+                Modifier.then(if (on) Modifier.background(c.ink) else Modifier),
+                horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.background(if (on) c.paper else c.ink).padding(horizontal = 3.dp)) { Mono("$n", color = if (on) c.ink else c.paper, size = 9.sp) }
                 val card = link.uid?.let { s.cards[it] }
                 val sees = card != null && viewers.any { v -> com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, card.uid, v) }
                 val where = link.uid?.let { s.placeOf(it) }?.let { p ->
@@ -310,8 +316,14 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
                     sees -> duels.catalog.nameOf(card)
                     else -> "A set card"
                 }
-                Mono(name + (where?.let { " · $it" } ?: ""), color = c.ink, size = 9.sp)
+                Mono(name + (where?.let { " · $it" } ?: "") + if (link.negated) " · negated" else "", color = if (on) c.paper else c.ink, size = 9.sp)
             }
+        }
+        // Its keys, while a chain stands (1.0.89).
+        if (s.chain.isNotEmpty() && s.chain.size <= 4) {
+            val q = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.DUEL_RESOLVE)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
+            val all = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.DUEL_RESOLVE_ALL)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
+            Mono("$q · $all all", color = c.ink45, size = 8.sp)
         }
     }
 }
@@ -426,7 +438,7 @@ internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<c
             ) {
                 menu.verbs.forEachIndexed { i, v ->
                     val key = VERB_KEYS[v]?.let { com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(it) }?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
-                    VerbChip(v.label, key, strong = if (cursor == null) i == 0 else i == cursor, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, i) }
+                    VerbChip(verbWords(v, s), key, strong = if (cursor == null) i == 0 else i == cursor, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, i) }
                 }
                 VerbChip("Point at it", "Alt click", strong = cursor == menu.verbs.size, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, menu.verbs.size) }
                 if (cursor != null) Mono("↑↓ choose · Enter · Esc", color = c.ink45, size = 9.sp)
