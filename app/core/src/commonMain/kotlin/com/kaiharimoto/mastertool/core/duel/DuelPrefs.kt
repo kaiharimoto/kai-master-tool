@@ -23,7 +23,7 @@ data class DuelPrefs(
     /** Ai at the table (1.0.76): what it may know (`DuelBrief`: self, opponent, full, auto), the seat it plays, its pace. */
     val aiKnowledge: String = "self",
     val aiSeat: Int = 1,
-    val aiPace: Int = 450,
+    val aiPace: Int = 250,
     /** Ai plays [aiSeat]'s turns by itself when the turn passes to it. */
     val aiPlays: Boolean = false,
     /** Two players over the network (1.0.77): which of the other player's moves wait for this one (`Windows`), and auto-pass after so many seconds (0: never). */
@@ -39,6 +39,8 @@ data class DuelPrefs(
     val aiThinking: Boolean = false,
     /** A duel that ends against a known deck is logged to Prep as a practice game (1.0.80). */
     val logGames: Boolean = true,
+    /** Ai's response triggers (1.0.85): its watches wake it on the moves it could answer, and the person's moves wait for it. */
+    val aiTriggers: Boolean = true,
 ) {
     companion object {
         const val KNOW_ALL = "all"

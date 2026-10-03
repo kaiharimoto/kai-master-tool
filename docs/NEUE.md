@@ -3211,6 +3211,37 @@ first cue missed them. **New topic** in the log's head starts a new conversation
 `AiState.sendDuel(fresh = true)`): its lines leave the log, the table's moves and chat stay, the old conversation is kept
 in Ai's history, and its next cue reads the whole duel from the start.
 
+**Response triggers and the red team** (1.0.85, kai: "dueling against the AI feels slow and clunky. Is there a way to set up a
+response trigger, where Ai looks at the hand and sets up a trigger waiting for a range of specific actions … a card summon,
+card effect activation, entering a phase, attempting to leave a phase, an attack, setting a card"):
+
+- **Watches** (`core/duel/ai/DuelTriggers`, tested): Ai reads its hand once and leaves a watch per response it holds —
+  `duel_watch` set {on: summon, normal_summon, special_summon, set, activate, phase_enter, phase_leave, attack, draw, search,
+  send, banish; by; card; phase; at_least (Nibiru at 5); once; until; note}. `Duels.act` checks each of the person's moves
+  against them itself (`DuelTriggers.happenings` → `hits`, as Ai's seat could see it), so the model is asked only when a watch
+  fires. A fired watch cues Ai (`cueTriggered`) and **the person's next table move waits** for its answer, with **Don't wait** in
+  the log's foot; a watched **phase_leave holds the phase change** (`Duels.held`) until Ai has answered, and Undo takes a held
+  change back. Watches are Ai's private plan: never in the log, the record or the network; the person sees only their kinds,
+  behind Thinking. **Responds by itself** (`DuelPrefs.aiTriggers`, on) in Ai · Combos.
+- **Faster turns** (the latency pass): a duel conversation is offered only the table's tools (`AiTools.DUEL`, about twelve
+  thousand tokens a round fewer), its prompt is the soul, the rules, the person and the duel-table skill written in
+  (`PromptBuilder.duel`, no skill_view first), every cue carries the table as Ai's seat sees it (no duel_state round), effort is
+  low where the provider has it unless the person chose one, the play-out's pace is Quick (250 ms) by default with no wait
+  after the last step, and a cue or a message given while Ai answers is kept for when it is free (`Duels.queuedCue`).
+- **Closed** (the engineering pass, `DuelRedTeamTest`): a network guest can reveal only its own cards (it could name the host's
+  deck); moves the phase only on its turn and answers only its own window; a "yes" to a take-back counts only after the host
+  asked; a Hello never deals over a duel a guest is in (a guest whose app restarted rejoins by name); messages go out in order
+  through one writer. Ai reads with the knowledge setting, always — a `perspective` of full or the other seat is honoured only
+  with full knowledge, and peeks are its own seat's. A card leaving a hand gives every card left in it a new veil, and another
+  seat's hand is shown in no order, so a searched card cannot be followed to its Set; the turn's tally names an activation only
+  to a viewer who could see it, and a Set card dropped on the chain is turned face-up; a card leaving the field leaves the
+  attacks; veils never fall among the guest's deck references; a move inserted inside a gesture leaves its tail a group of its
+  own; a what-if keeps its parent across a restart, and the duel is written on quitting.
+- **Smoother table** (the UI pass): a mouse held still before it moves still drags; a move closes the verb strip and a stale
+  Attach; Insert here takes only the person's own next move; a focus request made before the log's box appeared no longer
+  grabs the keyboard later; the log follows only a reader at its end; Ai's read mark knows when moves were taken back; a turn
+  that passed while Ai answered is taken when it is free; the person cannot swap to the seat Ai plays.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

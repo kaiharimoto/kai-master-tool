@@ -262,6 +262,7 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
         LaunchedEffect(Unit) {
             MacChrome.handleAppMenu(h) {
                 h.neue.flush()
+                h.flushDuel()
                 exit()
             }
         }
@@ -313,6 +314,7 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
         Window(
             onCloseRequest = {
                 h.neue.flush()
+                h.flushDuel()
                 exit()
             },
             title = "Neue Master Tool",

@@ -17,10 +17,10 @@ object DuelSight {
     fun sees(s: DuelState, uid: Int, viewer: Int?): Boolean {
         if (viewer == null) return true
         val card = s.cards[uid] ?: return false
-        val place = s.placeOf(uid)
+        val place = s.placeOf(uid) ?: return false
         if (place is Place.Pile && place.kind == PileKind.HAND) return place.seat == viewer
         if (viewer in (s.seen[uid] ?: emptySet())) return true
-        return when (val p = s.placeOf(uid) ?: return false) {
+        return when (val p = place) {
             is Place.Zone -> card.faceUp || card.controller == viewer
             is Place.Pile -> when (p.kind) {
                 PileKind.HAND -> p.seat == viewer
@@ -75,11 +75,12 @@ data class DuelView(
             fun hide(uid: Int): Int = if (DuelSight.sees(s, uid, viewer)) uid else veil(secret, uid, s.epoch[uid] ?: 0)
             return DuelView(
                 viewer = viewer,
-                seats = s.seats.map { seat ->
+                seats = s.seats.mapIndexed { i, seat ->
                     SeatView(
                         name = seat.name,
                         lp = seat.lp,
-                        hand = seat.hand.map(::card),
+                        // Another seat's hand in no order of its own: which card came in last is not theirs to see (1.0.85).
+                        hand = seat.hand.map(::card).let { h -> if (viewer != null && viewer != i) h.sortedBy { c: ViewCard -> c.ref } else h },
                         deck = seat.deck.size,
                         deckKnown = seat.deck.mapIndexedNotNull { i, u -> if (DuelSight.sees(s, u, viewer)) i to card(u) else null }.toMap(),
                         extra = seat.extra.map(::card),
@@ -105,13 +106,16 @@ data class DuelView(
             )
         }
 
+        private const val VEIL_FLOOR = 2_200_001
+
         /** A hidden card's handle for one epoch: negative, so it never collides with a uid. */
         fun veil(secret: Long, uid: Int, epoch: Int): Int {
             var x = secret xor (uid.toLong() * -0x61c8864680b583ebL) xor (epoch.toLong() * 0x2545F4914F6CDD1DL)
             x = (x xor (x ushr 33)) * -0xae502812aa7333L
             x = (x xor (x ushr 33)) * -0x3b314601e57a13adL
             x = x xor (x ushr 33)
-            return -((x and 0x3fffffffL).toInt() + 1)
+            // Below the guest's deck references (DuelMirror's -2,000,000…-2,199,999), never among them (1.0.85).
+            return -((x and 0x3fffffffL).toInt() + VEIL_FLOOR)
         }
     }
 }

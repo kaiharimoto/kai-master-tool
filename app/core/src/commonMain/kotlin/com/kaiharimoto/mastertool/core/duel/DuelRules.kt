@@ -144,7 +144,10 @@ object DuelRules {
         }
 
         if (to == Place.Void) {
-            return ok(next.copy(cards = next.cards - a.uid, seen = next.seen - a.uid, arrows = next.arrows.dropUid(a.uid)))
+            return ok(next.copy(
+                cards = next.cards - a.uid, seen = next.seen - a.uid, arrows = next.arrows.dropUid(a.uid),
+                resolved = next.resolved - a.uid, attacks = next.attacks.filterNot { it.attacker == a.uid || it.target == a.uid },
+            ))
         }
         val onField = from is Place.Zone
         val pos = positionFor(to, a.pos, card, onField)
@@ -175,7 +178,17 @@ object DuelRules {
         } else {
             next.copy(seen = next.seen.with(a.uid, knowers))
         }
-        if (to !is Place.Zone) next = next.copy(arrows = next.arrows.dropUid(a.uid), resolved = next.resolved - a.uid)
+        if (to !is Place.Zone) next = next.copy(
+            arrows = next.arrows.dropUid(a.uid), resolved = next.resolved - a.uid,
+            // A card that left the field no longer attacks or is attacked (1.0.85).
+            attacks = next.attacks.filterNot { it.attacker == a.uid || it.target == a.uid },
+        )
+        if (from is Place.Pile && from.kind == PileKind.HAND) {
+            // A card left the hand: every card still in it takes a new veil, so the other seat cannot follow
+            // one card from a search to its Set by which veil went missing (1.0.85).
+            val rest = next.seats[from.seat].hand
+            if (rest.isNotEmpty()) next = next.copy(epoch = next.epoch + rest.associateWith { (next.epoch[it] ?: 0) + 1 })
+        }
         return ok(next)
     }
 

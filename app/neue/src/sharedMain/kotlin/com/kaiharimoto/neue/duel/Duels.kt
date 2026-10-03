@@ -104,6 +104,72 @@ class Duels(val dir: File) {
     /** The next move goes into the log after this entry, not at its end: acting in a phase gone by. */
     var insertAfter by mutableStateOf<Int?>(null)
 
+    // ---- Ai's response triggers (1.0.85) --------------------------------------------------------------
+
+    /** Ai's watches: its private plan for what it would answer. Never in the log, the record or the network. */
+    var watches by mutableStateOf<List<com.kaiharimoto.mastertool.core.duel.ai.Watch>>(emptyList())
+    private var nextWatch = 1
+    /** Watches that fired and wait for Ai: the page cues it with them as soon as it is free. */
+    var fired by mutableStateOf<List<com.kaiharimoto.mastertool.core.duel.ai.Hit>>(emptyList())
+    /** A phase change held while Ai decides whether to respond before it: a phase_leave watch fired. */
+    var held by mutableStateOf<Held?>(null)
+    /** Ai is answering a trigger: the person's moves wait for it, unless they say Don't wait. */
+    var aiAnswering by mutableStateOf(false)
+    /** The seat Ai watches as, set by the page while Ai sits at the table; null otherwise. */
+    var watcher: Int? = null
+    /** A cue given while Ai was still answering, kept for when it is free (1.0.85; before, it was dropped). */
+    var queuedCue by mutableStateOf<Pair<String, String>?>(null)
+    private var releasing = false
+
+    data class Held(val actions: List<DuelAction>, val seat: Int?)
+
+    fun watch(w: com.kaiharimoto.mastertool.core.duel.ai.Watch): com.kaiharimoto.mastertool.core.duel.ai.Watch {
+        val kept = w.copy(id = nextWatch++)
+        watches = watches + kept
+        return kept
+    }
+
+    fun unwatch(id: Int?): Int {
+        val before = watches.size
+        watches = if (id == null) emptyList() else watches.filter { it.id != id }
+        return before - watches.size
+    }
+
+    fun nextWatchId(): Int = nextWatch
+
+    private fun liveWatches(): List<com.kaiharimoto.mastertool.core.duel.ai.Watch> {
+        val turn = game?.state?.turn ?: return emptyList()
+        val alive = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.alive(watches, turn)
+        if (alive.size != watches.size) watches = alive
+        return alive
+    }
+
+    private fun summonsThisTurn(): (Int) -> Int {
+        val t by lazy { tally() }
+        return { seat -> t?.summons(seat) ?: 0 }
+    }
+
+    private fun fire(hits: List<com.kaiharimoto.mastertool.core.duel.ai.Hit>) {
+        if (hits.isEmpty()) return
+        val gone = hits.filter { it.watch.once }.map { it.watch.id }.toSet()
+        if (gone.isNotEmpty()) watches = watches.filter { it.id !in gone }
+        fired = fired + hits
+    }
+
+    /** The phase change held for Ai, made now: Ai has answered, or the person will not wait. */
+    fun releaseHeld() {
+        val h = held ?: return
+        held = null
+        releasing = true
+        try { act(h.actions, h.seat) } finally { releasing = false }
+    }
+
+    /** The person goes on without Ai's answer. */
+    fun dontWait() {
+        aiAnswering = false
+        releaseHeld()
+    }
+
     /** The duel already logged to Prep as a practice game, so it is logged once. */
     var loggedDuel: String? = null
 
@@ -171,7 +237,11 @@ class Duels(val dir: File) {
         scope.launch {
             val text = withContext(Dispatchers.IO) { File(dir, CURRENT).takeIf { it.exists() }?.readText() }
             val record = text?.let(DuelCodec::decode) ?: return@launch
-            if (game == null) game = runCatching { DuelGame.of(record) }.getOrNull()
+            if (game == null) {
+                game = runCatching { DuelGame.of(record) }.getOrNull()
+                // A what-if keeps where it branched from across a restart (1.0.85).
+                if (game != null) origin = record.parent?.let { it to (record.parentAt ?: 0) }
+            }
         }
     }
 
@@ -196,6 +266,11 @@ class Duels(val dir: File) {
         newTopic()
         logPick = emptyList()
         insertAfter = null
+        watches = emptyList()
+        fired = emptyList()
+        held = null
+        aiAnswering = false
+        queuedCue = null
         save()
     }
 
@@ -221,11 +296,43 @@ class Duels(val dir: File) {
     /** Commits [actions] as one group by [seat]. False, and the reason said, when the table refuses. */
     fun act(actions: List<DuelAction>, seat: Int? = bottom): Boolean {
         if (replay != null) return insert(actions, seat)
-        insertAfter?.let { at -> if (role == null && actions.any { !it.social }) { insertAfter = null; return insertPast(at, actions, seat) } }
+        // Insert here takes the person's next move only — never a step of Ai's or a combo's play-out (1.0.85).
+        insertAfter?.let { at -> if (role == null && !playing && actions.any { !it.social }) { insertAfter = null; return insertPast(at, actions, seat) } }
         if (role == NetRole.GUEST) return ask(actions)
         if (role == NetRole.HOST) return hostAct(actions, seat ?: bottom)
         val g = game ?: return false
         if (actions.isEmpty()) return false
+        // Ai's response triggers (1.0.85): the person's moves, checked against the watches Ai left.
+        val w = watcher
+        val watched = w != null && seat != w && actions.any { !it.social }
+        if (watched && !releasing) {
+            if (aiAnswering) {
+                problem = "Ai may respond — your move waits for it. Don't wait goes on without it."
+                return false
+            }
+            if (held != null) {
+                problem = "Your phase change waits on Ai's answer."
+                return false
+            }
+            if (actions.any { it is DuelAction.Phase || it is DuelAction.EndTurn }) {
+                val live = liveWatches()
+                if (live.any { com.kaiharimoto.mastertool.core.duel.ai.Trigger.PHASE_LEAVE.key in it.on }) {
+                    val leaving = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.happenings(
+                        g.state, actions.map { com.kaiharimoto.mastertool.core.duel.DuelEntry(0, 0L, seat, 0, it) }, catalog, w!!,
+                    ).filter { it.kind == com.kaiharimoto.mastertool.core.duel.ai.Trigger.PHASE_LEAVE }
+                    val hits = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.hits(live, leaving, w)
+                    if (hits.isNotEmpty()) {
+                        // Checked whole first, so a held change is one the table will take.
+                        val check = g.act(actions, seat, now())
+                        if (!check.ok) { problem = check.problem; return false }
+                        held = Held(actions, seat)
+                        problem = null
+                        fire(hits)
+                        return true
+                    }
+                }
+            }
+        }
         val r = g.act(actions, seat, now())
         if (!r.ok) {
             problem = r.problem
@@ -233,7 +340,21 @@ class Duels(val dir: File) {
         }
         game = r.game
         problem = null
+        // Something moved: a pending Attach and the verbs beside the last card are done with (1.0.85).
+        if (actions.any { !it.social && it !is DuelAction.Counter }) {
+            verbStrip = false
+            if (actions.none { it is DuelAction.Move && it.to is Place.Under }) attaching = null
+        }
         save()
+        if (watched) {
+            val live = liveWatches()
+            if (live.isNotEmpty()) {
+                val fresh = r.game.entries.subList(g.cursor, r.game.cursor)
+                val seen = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.happenings(g.state, fresh, catalog, w!!)
+                    .filter { !releasing || it.kind != com.kaiharimoto.mastertool.core.duel.ai.Trigger.PHASE_LEAVE }
+                fire(com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.hits(live, seen, w, summonsThisTurn()))
+            }
+        }
         return true
     }
 
@@ -283,6 +404,8 @@ class Duels(val dir: File) {
      * undone and done again, so the log keeps one entry.
      */
     fun replace(kind: ZoneKind, index: Int): Boolean {
+        // The live table on this device only: never a networked one or a replay (1.0.85).
+        if (role != null || replay != null) return false
         val p = placed?.takeIf { now() < it.until } ?: return false
         val g = game ?: return false
         val last = g.entries.getOrNull(g.cursor - 1) ?: return false
@@ -322,6 +445,8 @@ class Duels(val dir: File) {
     fun undo() {
         if (replay != null) { step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, -1); return }
         if (role != null) { askTakeBack(); return }
+        // A phase change held for Ai is not on the table yet: undo takes it back first.
+        if (held != null) { held = null; return }
         val g = game ?: return
         if (!g.canUndo) return
         game = g.undo()
@@ -341,10 +466,14 @@ class Duels(val dir: File) {
     }
 
     /** Sit at the other seat (a hot-seat's turn of the table). */
+    /** Ai is playing the other seat (set by the page): the person cannot sit there and see its hand (1.0.85). */
+    var aiEngaged = false
+
     fun swap() {
         if (role != null) return
         val g = game ?: return
         if (g.state.solo) return
+        if (aiEngaged) { problem = "Ai plays the other seat: sitting there would show you its hand."; return }
         bottom = 1 - bottom
         strip = null
     }
@@ -376,6 +505,14 @@ class Duels(val dir: File) {
             delay(300)
             write(g)
         }
+    }
+
+    /** The duel written now and waited for: the app is closing. */
+    fun flushNow() {
+        val g = game ?: return
+        if (saveJob?.isActive != true) return
+        saveJob?.cancel()
+        kotlinx.coroutines.runBlocking { write(g) }
     }
 
     /** The duel written now: the window closing. */
@@ -475,8 +612,14 @@ class Duels(val dir: File) {
                 com.kaiharimoto.mastertool.core.duel.net.DuelHost.knows(w, h.secret)?.let { why ->
                     l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Rejected(why)); l.close(); link = null; return
                 }
+                // A guest who sat down before comes back to the duel in play — by its token, or, when its app
+                // restarted and lost it, by its name. Never a new deal over a duel a guest is in (1.0.85).
+                val seated = guestToken != null && game != null && role == NetRole.HOST
+                val back = seated && ((w.token != null && w.token == guestToken) || game?.header?.seats?.getOrNull(1)?.name == w.name.ifBlank { "Guest" })
+                if (seated && !back) {
+                    l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Rejected("A duel is in play at this table.")); l.close(); link = null; return
+                }
                 guestWindows = w.windows
-                val back = w.token != null && w.token == guestToken && game != null
                 if (!back) {
                     val mine = hostSeat ?: return
                     guestToken = java.util.UUID.randomUUID().toString()
@@ -510,8 +653,10 @@ class Duels(val dir: File) {
             is com.kaiharimoto.mastertool.core.duel.net.Wire.TakeBack -> if (w.ask) {
                 takeBackAsked = 1
             } else if (w.yes) {
-                takeBack(0)
+                // Honoured only as the answer to the host's own ask (1.0.85: before, any yes undid the host).
+                if (hostAskedTakeBack) { hostAskedTakeBack = false; takeBack(0) }
             } else {
+                hostAskedTakeBack = false
                 problem = "${peer ?: "They"} would rather you did not take it back"
             }
             is com.kaiharimoto.mastertool.core.duel.net.Wire.SetWindows -> guestWindows = w.windows
@@ -593,11 +738,13 @@ class Duels(val dir: File) {
         return true
     }
 
+    private var hostAskedTakeBack = false
+
     /** Asks the other player to let this one take back its last move. */
     private fun askTakeBack() {
         when (role) {
             NetRole.GUEST -> link?.send(com.kaiharimoto.mastertool.core.duel.net.Wire.TakeBack(ask = true))
-            NetRole.HOST -> sendUpdate(takeBackFrom = 0)
+            NetRole.HOST -> { hostAskedTakeBack = true; sendUpdate(takeBackFrom = 0) }
             null -> Unit
         }
         problem = "Asked ${peer ?: "the other player"} to let you take it back"
@@ -847,6 +994,8 @@ class Duels(val dir: File) {
      */
     suspend fun playOut(steps: List<String>, seat: Int, paceMs: Long, viewer: Int? = seat): PlayReport {
         val g = game ?: return PlayReport("There is no duel on the table.", 0, false)
+        // Played on the live table only: never into an open replay (1.0.85).
+        if (replay != null) return PlayReport("A replay is open on the table; close it first.", 0, false)
         val plan = com.kaiharimoto.mastertool.core.duel.ai.ComboRunner.plan(g.state, seat, steps, catalog)
         if (!plan.ok) return PlayReport("Nothing was played. ${plan.problem}", 0, false)
         playing = true
@@ -866,7 +1015,7 @@ class Duels(val dir: File) {
                 val lines = if (role == NetRole.GUEST || now == null) listOf("sent to the host")
                 else com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(now, before, viewer, catalog).map { it.text }
                 said += "$done. $text → ${lines.joinToString("; ").ifBlank { "no change on the table" }}"
-                if (paceMs > 0) delay(paceMs)
+                if (paceMs > 0 && done < plan.steps.size) delay(paceMs)
             }
         } finally {
             playing = false
@@ -930,16 +1079,19 @@ class Duels(val dir: File) {
         }
     }
 
-    private var tallyOf: Pair<DuelGame, com.kaiharimoto.mastertool.core.duel.Tally>? = null
+    private var tallyOf: Triple<DuelGame, Int?, com.kaiharimoto.mastertool.core.duel.Tally>? = null
 
-    /** This turn's counts and locks, for the table shown; read off the log, kept until it changes. */
-    fun tally(): com.kaiharimoto.mastertool.core.duel.Tally? {
+    /**
+     * This turn's counts and locks, for the table shown, as [viewer] may read them (an activation of a card
+     * they could not see is "a card"); read off the log, kept until it changes.
+     */
+    fun tally(viewer: Int? = null): com.kaiharimoto.mastertool.core.duel.Tally? {
         val g = shown ?: return null
-        tallyOf?.let { (of, t) -> if (of === g) return t }
+        tallyOf?.let { (of, v, t) -> if (of === g && v == viewer) return t }
         // A guest has no log of its own: the locks it was sent, nothing counted.
         val t = if (role == NetRole.GUEST) com.kaiharimoto.mastertool.core.duel.Tally(g.state.turn, listOf(0, 0), listOf(0, 0), listOf(emptyMap(), emptyMap()), g.state.locks)
-        else com.kaiharimoto.mastertool.core.duel.DuelTally.of(g, catalog)
-        tallyOf = g to t
+        else com.kaiharimoto.mastertool.core.duel.DuelTally.of(g, catalog, viewer)
+        tallyOf = Triple(g, viewer, t)
         return t
     }
 

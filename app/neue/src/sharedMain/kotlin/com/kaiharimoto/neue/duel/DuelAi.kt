@@ -39,29 +39,12 @@ import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.theme.Mu
 import kotlinx.coroutines.launch
 
-/** What Ai is asked when it is to play a turn: its seat, its knowledge, and where to stop. */
-internal fun turnPrompt(h: NeueHolders): String {
-    val g = h.duel.game ?: return ""
-    val d = h.neue.prefs.duel
-    val seat = if (g.state.solo) 0 else d.aiSeat
-    val name = DuelWords.seatName(g.state, seat)
-    val knows = when (d.aiKnowledge) {
-        DuelBrief.FULL -> "full knowledge (you may read everything)"
-        DuelBrief.AUTO -> "auto knowledge (your seat's eyes; duel_peek only if a hidden card would change your play, and say why)"
-        DuelBrief.OPPONENT -> "the other seat's knowledge"
-        else -> "your seat's knowledge only"
-    }
-    return "You are playing $name (seat $seat) in the duel on the Duel page, with $knows. Read the duel-table skill if you have not, " +
-        "read the table with duel_state, then play $name's turn with duel_act — draw for the turn if it is the Draw Phase, play your " +
-        "cards as their text says, stop and tell me where I could respond to something that matters, and end the turn when you are done."
-}
-
 /** Asks Ai to play its seat's turn now, in the duel's log (1.0.80; before, the side panel). */
 internal fun askAiToPlay(h: NeueHolders) {
     if (!h.neue.prefs.ai.enabled) { h.neue.note = Note("Ai is off. Turn it on in Settings › Ai."); return }
     val g = h.duel.game ?: return
-    h.duel.aiAskedTurn = g.state.turn
-    cueAi(h, Cue.YOUR_MOVE)
+    // Marked as asked only once the cue went (1.0.85): a refused one is asked again when Ai is free.
+    if (cueAi(h, Cue.YOUR_MOVE)) h.duel.aiAskedTurn = g.state.turn
 }
 
 /**
@@ -120,38 +103,111 @@ internal fun aiAtTable(h: NeueHolders): Boolean = h.neue.prefs.ai.enabled && h.d
  * Ai's seat may see them — its seat and knowledge, and what the cue asks. The person's moves never start
  * Ai on their own; only a cue or a message does, so a small move never costs a turn of the model.
  */
-internal fun cueAi(h: NeueHolders, cue: Cue, words: String = "") {
+internal fun cueAi(h: NeueHolders, cue: Cue, words: String = ""): Boolean {
     val duels = h.duel
-    val g = duels.game ?: return
-    if (h.ai.running) { h.neue.note = Note("${h.ai.name} is still answering."); return }
+    val g = duels.game ?: return false
+    // A cue given while Ai answers waits for it (1.0.85; before, it was dropped with a note).
+    if (h.ai.running) {
+        duels.queuedCue = cue.name to words
+        h.neue.note = Note("${h.ai.name} will read that when it finishes.")
+        return false
+    }
+    val said = words.ifBlank { cue.shown }.ifBlank { "(the table)" }
+    val id = h.ai.sendDuel(said, cueContext(h, cue.ask, said), duels.aiSession, fresh = duels.aiFresh) ?: return false
+    duels.aiFresh = false
+    duels.aiSession = id
+    duels.aiRead = g.cursor
+    duels.aiResponding = false
+    return true
+}
+
+/**
+ * What every cue carries (1.0.85): Ai's seat and knowledge, what happened since it last read, **the table as
+ * its seat sees it** (so it need not spend a round on duel_state), and its watches — then the ask.
+ */
+private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> {
+    val duels = h.duel
+    val g = duels.game ?: return listOf(ask)
     val d = h.neue.prefs.duel
     val s = g.state
     val seat = if (s.solo) 0 else d.aiSeat
     val viewer = DuelBrief.viewer(d.aiKnowledge, seat)
+    // Moves taken back since Ai last read leave its mark past the log's end (1.0.85: it was told "nothing new").
+    val takenBack = (duels.aiRead ?: 0) > g.cursor
     val from = (duels.aiRead ?: g.floor).coerceIn(0, g.cursor)
     val lines = com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(g, from, viewer, duels.catalog)
         .filter { it.seat != seat }
+        // The cue's own words reach Ai as the message; not twice.
+        .filterNot { it.chat && it.text.endsWith(said) }
         .map { "${it.i}. ${it.text}" }
     val knows = when (d.aiKnowledge) {
         DuelBrief.FULL -> "full knowledge"
         DuelBrief.AUTO -> "auto knowledge (duel_peek only if a hidden card would change your play)"
         else -> "your seat's knowledge only"
     }
-    val context = buildList {
+    return buildList {
         add("At the duel table: you are ${DuelWords.seatLabel(s, seat)}, with $knows. Turn ${s.turn}, ${DuelWords.seatLabel(s, s.active)} to play, ${s.phase.label} Phase.")
+        if (takenBack) add("Moves were taken back since you last read: the table below is how it stands now.")
         if (lines.isEmpty()) add("Nothing new on the table since you last read.")
         else {
             add("What happened on the table since you last read (entries $from–${g.cursor - 1}), as your seat saw it:")
             addAll(lines.takeLast(60))
         }
-        add(cue.ask)
+        add("The table now, as your seat sees it (duel_state only if you need it again):")
+        add(DuelBrief.describe(s, viewer, duels.catalog, g.header.seed, seat, duels.tally(viewer), duels.rulings))
+        val watches = duels.watches
+        if (d.aiTriggers) {
+            add(
+                if (watches.isEmpty()) "Your watches: none. Leave one with duel_watch for each response your hand or set cards hold."
+                else "Your watches (private):\n" + watches.joinToString("\n") { "- " + com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.describe(it) },
+            )
+        }
+        add(ask)
     }
-    val said = words.ifBlank { cue.shown }
-    val id = h.ai.sendDuel(said, context, duels.aiSession, fresh = duels.aiFresh) ?: return
+}
+
+/**
+ * Wakes Ai on its watches (1.0.85): what fired, the table, and a short ask — respond or let it pass. The
+ * person's moves wait while it decides; a phase change it watched is held until it has.
+ */
+internal fun cueTriggered(h: NeueHolders) {
+    val duels = h.duel
+    val g = duels.game ?: return
+    val hits = duels.fired
+    if (hits.isEmpty() || h.ai.running) return
+    duels.fired = emptyList()
+    val held = duels.held
+    val what = hits.joinToString("\n") { hit ->
+        "- watch #${hit.watch.id} (${hit.watch.on.joinToString(", ")}${hit.watch.note.takeIf { it.isNotBlank() }?.let { " — $it" } ?: ""}) fired on: ${hit.happening.words}"
+    }
+    val ask = buildString {
+        append("Your watches fired:\n$what\n")
+        if (held != null) append("They are about to leave the ${g.state.phase.label} Phase and wait on you; when you finish, the phase moves on. ")
+        else append("They wait on you before their next move. ")
+        append(
+            "Respond now only if it is worth it: your chain link or move with duel_act, your seat only. If you let it pass, write nothing " +
+                "at all — no words — and end. Decide quickly. Then keep your watches true to your hand with duel_watch (clear the ones you spent).",
+        )
+    }
+    val said = "(trigger) " + hits.joinToString("; ") { it.happening.kind.words }
+    val id = h.ai.sendDuel(said, cueContext(h, ask, said), duels.aiSession, fresh = duels.aiFresh)
+    if (id == null) {
+        // No connection, or it would not start: the person is never left waiting.
+        duels.dontWait()
+        return
+    }
     duels.aiFresh = false
     duels.aiSession = id
     duels.aiRead = g.cursor
-    duels.aiResponding = false
+    duels.aiAnswering = true
+}
+
+/** A cue kept while Ai answered, given now it is free. */
+internal fun cueQueued(h: NeueHolders) {
+    val (name, words) = h.duel.queuedCue ?: return
+    h.duel.queuedCue = null
+    val cue = Cue.entries.firstOrNull { it.name == name } ?: return
+    cueAi(h, cue, words)
 }
 
 /**
@@ -213,6 +269,20 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     Small("May move your cards too", color = c.ink)
                 }
                 Help(if (d.aiBothSeats) "${h.ai.name} may move either seat's cards, when you ask it to." else "${h.ai.name} moves only its own seat's cards; on your turn it asks you to move the phase on.")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MuSwitch(d.aiTriggers, { v -> update { it.copy(aiTriggers = v) } })
+                    Small("Responds by itself", color = c.ink)
+                }
+                Help(
+                    if (d.aiTriggers) "${h.ai.name} leaves watches for what its hand could answer — a Summon, an activation, leaving a phase — and the table wakes it on those alone; your move waits for its answer."
+                    else "${h.ai.name} reads the table only when you cue it.",
+                )
+                if (d.aiTriggers && duels.watches.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Small("Watching for ${com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.kindsWords(duels.watches).lowercase()}", Modifier.weight(1f), color = c.ink70)
+                        MuButton("Clear", { duels.unwatch(null) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+                    }
+                }
             }
             MuButton("Play this turn, ${h.ai.name}", { duels.combosOpen = false; askAiToPlay(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
             HRule()

@@ -636,6 +636,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (onto their monster, or their hand for a direct attack; `DuelAction.Attack`, `DuelState.attacks`, a heavy arrow).
   **1.0.84**: New duel clears Ai's side of the log too, and **New topic** (the log's head) starts Ai afresh mid-game,
   keeping the table's moves (`Duels.newTopic`, `sendDuel(fresh = true)`).
+  **1.0.85, response triggers**: Ai leaves watches (`duel_watch`, `core/duel/ai/DuelTriggers`) for what its hand could answer;
+  `Duels.act` checks the person's moves against them and wakes Ai only on a hit (`cueTriggered`), the person's move waiting
+  (Don't wait) and a watched phase change held (`Duels.held`). A duel conversation gets `AiTools.DUEL` only and its own lean
+  prompt (`PromptBuilder.duel`, the duel-table skill written in), and every cue carries the table. The red team's fixes are held
+  by `DuelRedTeamTest` (guest reveals, turn and window checks, take-back, rejoin, ordered wire, Ai's knowledge cap, hand
+  veils, per-viewer tally).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

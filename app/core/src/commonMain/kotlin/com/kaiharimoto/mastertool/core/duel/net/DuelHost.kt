@@ -51,14 +51,31 @@ object DuelHost {
                 is DuelAction.Counter -> a.copy(uid = uid(a.uid))
                 is DuelAction.ChainAdd -> a.copy(seat = seat, uid = a.uid?.let(::uid), targets = a.targets.map(::uid))
                 is DuelAction.Target -> a.copy(seat = seat, from = a.from?.let(::uid), to = a.to.map(::uid))
-                is DuelAction.Reveal -> a.copy(seat = seat, uids = a.uids.map(::uid))
+                is DuelAction.Reveal -> a.copy(seat = seat, uids = a.uids.map(::uid)).also { r ->
+                    // A guest reveals its own cards only: never the host's deck, hand or set cards (1.0.85).
+                    if (problem == null && r.uids.any { u -> s.cards[u]?.let { it.owner != seat && it.controller != seat } != false }) {
+                        problem = "You can reveal only your own cards"
+                    }
+                }
+                is DuelAction.Attack -> a.copy(seat = seat, attacker = uid(a.attacker), target = a.target?.let(::uid))
+                is DuelAction.Keep -> a.copy(uid = uid(a.uid))
+                is DuelAction.Token -> a.copy(seat = seat)
+                is DuelAction.Lp -> a
+                is DuelAction.Propose -> a.copy(seat = seat)
+                is DuelAction.Decline -> a.copy(seat = seat)
+                is DuelAction.Lock -> a.copy(seat = seat)
+                // The turn player moves the phase; the other player asks (Propose).
+                is DuelAction.Phase, DuelAction.EndTurn -> a.also { if (problem == null && s.active != seat) problem = "It is not your turn: ask them to move on" }
                 is DuelAction.Ping -> a.copy(seat = seat, uid = a.uid?.let(::uid))
                 // What a guest says or does as itself is always its own seat's.
                 is DuelAction.Draw -> a.copy(seat = seat)
                 is DuelAction.Shuffle -> a.copy(seat = seat)
                 is DuelAction.Chat -> a.copy(seat = seat)
                 is DuelAction.Thinking -> a.copy(seat = seat)
-                is DuelAction.Answer -> a.copy(seat = seat)
+                is DuelAction.Answer -> a.copy(seat = seat).also {
+                    // Only the player a window waits on answers it.
+                    if (problem == null && s.window != null && s.window.responder != seat) problem = "That window waits on the other player"
+                }
                 is DuelAction.Concede -> a.copy(seat = seat)
                 is DuelAction.Coin -> a.copy(seat = seat)
                 is DuelAction.Dice -> a.copy(seat = seat)
@@ -119,6 +136,7 @@ object DuelHost {
         hello.proto != Wire.PROTO -> "That app speaks another version of the duel (${hello.proto}, this one ${Wire.PROTO}). Update both."
         hello.secret != secret -> "The code is not this table's."
         hello.main.isEmpty() -> "Bring a deck with a Main Deck."
+        hello.main.size > 200 || hello.extra.size > 100 -> "That deck is too large for the table."
         else -> null
     }
 }

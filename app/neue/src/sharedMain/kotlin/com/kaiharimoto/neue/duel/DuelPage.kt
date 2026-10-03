@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -171,11 +172,28 @@ internal fun DuelPage(h: NeueHolders) {
     val live = duels.game
     // A duel that ends against a known deck is a practice game on Prep (1.0.80).
     LaunchedEffect(live?.state?.conceded, live?.state?.seats?.map { it.lp }) { logFinishedDuel(h) }
-    LaunchedEffect(live?.state?.turn, live?.state?.active, prefs.aiPlays) {
+    // Keyed on Ai's running too: a turn that passed while it answered is taken once it is free (1.0.85).
+    LaunchedEffect(live?.state?.turn, live?.state?.active, prefs.aiPlays, h.ai.running) {
         val g = duels.game ?: return@LaunchedEffect
         if (prefs.aiPlays && neue.prefs.ai.enabled && !g.state.solo && g.state.active == prefs.aiSeat &&
-            duels.aiAskedTurn != g.state.turn && duels.replay == null && !h.ai.running
+            duels.aiAskedTurn != g.state.turn && duels.replay == null && !h.ai.running && duels.fired.isEmpty()
         ) askAiToPlay(h)
+    }
+    // Ai's response triggers (1.0.85): the table watches for it, and wakes it on what it could answer.
+    val watching = aiAtTable(h) && prefs.aiTriggers && live?.state?.solo == false && duels.replay == null
+    SideEffect {
+        duels.watcher = if (watching) prefs.aiSeat else null
+        duels.aiEngaged = aiAtTable(h) && live?.state?.solo == false && (prefs.aiPlays || duels.aiSession != null)
+    }
+    LaunchedEffect(duels.fired, duels.queuedCue, h.ai.running, watching) {
+        if (h.ai.running) return@LaunchedEffect
+        // Ai has answered (or stopped): the person's moves go on, and a phase change held for it is made.
+        if (duels.aiAnswering || (!watching && duels.held != null)) duels.dontWait()
+        if (!watching && duels.fired.isNotEmpty()) duels.fired = emptyList()
+        when {
+            watching && duels.fired.isNotEmpty() -> cueTriggered(h)
+            duels.queuedCue != null -> cueQueued(h)
+        }
     }
 }
 
@@ -248,7 +266,8 @@ private fun LogHead(h: NeueHolders) {
 @Composable
 private fun CommandLine(duels: Duels, modifier: Modifier, short: Boolean) {
     val focus = remember { FocusRequester() }
-    LaunchedEffect(duels.commandFocus) { if (duels.commandFocus > 0) runCatching { focus.requestFocus() } }
+    val askedBefore = remember { duels.commandFocus }
+    LaunchedEffect(duels.commandFocus) { if (duels.commandFocus > askedBefore) runCatching { focus.requestFocus() } }
     MuInput(
         duels.command,
         { duels.command = it },

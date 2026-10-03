@@ -178,7 +178,13 @@ class NeueHolders(
     val present: com.kaiharimoto.neue.present.Presentations by lazy { com.kaiharimoto.neue.present.Presentations(java.io.File(Platform.dataDir, "present")) }
 
     /** Duel (1.0.74): the duel in play, its table, its log; kept in `<data>/duel/`. */
-    val duel: com.kaiharimoto.neue.duel.Duels by lazy { com.kaiharimoto.neue.duel.Duels(java.io.File(Platform.dataDir, "duel")) }
+    private val duelHolder = lazy { com.kaiharimoto.neue.duel.Duels(java.io.File(Platform.dataDir, "duel")) }
+    val duel: com.kaiharimoto.neue.duel.Duels by duelHolder
+
+    /** The duel in play written now, when there is one: the app closing (1.0.85; the last moves were lost in the save's debounce). */
+    fun flushDuel() {
+        if (duelHolder.isInitialized()) duel.flushNow()
+    }
 
     /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
     val backups: com.kaiharimoto.neue.backup.BackupCenter by lazy { com.kaiharimoto.neue.backup.BackupCenter(this) }
@@ -819,6 +825,7 @@ fun NeueEffects(h: NeueHolders) {
                 h.art.stop()
                 h.layout.flush()
                 neue.flush()
+                h.flushDuel()
             }
         }
     }

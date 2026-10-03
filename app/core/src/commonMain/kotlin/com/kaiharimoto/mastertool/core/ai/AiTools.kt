@@ -1007,6 +1007,39 @@ object AiTools {
         phase = 3,
     )
 
+    val duelWatch = ToolSpec(
+        "duel_watch",
+        "Duel (07): your response triggers. Leave a watch for each response your hand or set cards hold, and the table wakes you only " +
+            "when that happens — you need not be cued. set {on, by, card, phase, at_least, once, until, note}: on is any of summon, " +
+            "normal_summon, special_summon, set, activate, phase_enter, phase_leave, attack, draw, search, send, banish. by: opponent " +
+            "(default), self, any. card: part of a name you can see. phase: e.g. main1, battle, end (for phase_leave the phase left — the " +
+            "person waits on you before it changes). at_least: Summons this turn (Nibiru: summon, at_least 5). note: your private reason. " +
+            "clear {id} or clear with no id for all; list. Watches are private; the person sees only the kinds.",
+        schema {
+            enum("action", "What to do", listOf("set", "clear", "list"), required = true)
+            strings("on", "set: what to wait for")
+            string("by", "set: opponent, self or any; default opponent")
+            string("card", "set: part of a card name to match")
+            string("phase", "set: only in this phase")
+            integer("at_least", "set: Summons this turn by that seat, at least", min = 0, max = 30)
+            boolean("once", "set: gone after it fires")
+            string("until", "set: duel (default) or turn")
+            string("note", "set: your private reason, e.g. which card answers it")
+            integer("id", "clear: the watch; omit to clear all", min = 0)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    /**
+     * What a duel conversation is offered (1.0.85): the table's tools and the few a player reaches for at it.
+     * Sending all of them cost every round about twelve thousand tokens the table never used.
+     */
+    val DUEL: Set<String> = setOf(
+        "duel_state", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch",
+        "ask_user", "card_info", "search_cards", "rulings", "calculate", "hand_odds", "express",
+    )
+
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
@@ -1031,7 +1064,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling,
+        duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

@@ -38,6 +38,9 @@ object DuelDrop {
             DropSpot.Chain -> if (from is Place.Pile && from.kind == PileKind.HAND) {
                 val r = DuelVerbs.actions(s, seat, uid, DuelVerb.ACTIVATE, catalog)
                 if (r.problem != null || r.actions.isEmpty()) NONE else Intent(r.actions, "Activate")
+            } else if (from is Place.Zone && !card.faceUp && from.kind != ZoneKind.MONSTER && from.kind != ZoneKind.EMZ) {
+                // A Set card is activated face-up, as the verb does: never a chain link with a hidden name (1.0.85).
+                Intent(listOf(DuelAction.Position(uid, com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK), DuelAction.ChainAdd(seat, uid)), "Activate")
             } else Intent(listOf(DuelAction.ChainAdd(seat, uid)), "Activate")
             is DropSpot.Zone -> {
                 val z = spot.zone

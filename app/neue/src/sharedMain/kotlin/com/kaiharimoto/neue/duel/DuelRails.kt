@@ -143,9 +143,9 @@ private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers:
  * each seat's Summons and activations, and every lock with a way to lift it. Gone when there is nothing.
  */
 @Composable
-internal fun TurnTally(duels: Duels, game: DuelGame) {
+internal fun TurnTally(duels: Duels, game: DuelGame, viewer: Int? = null) {
     val c = Mu.colors
-    val tally = remember(game) { duels.tally() } ?: return
+    val tally = remember(game, viewer) { duels.tally(viewer) } ?: return
     val s = game.state
     val lines = tally.words(s).dropLast(tally.locks.size)
     if (lines.isEmpty() && s.locks.isEmpty()) return

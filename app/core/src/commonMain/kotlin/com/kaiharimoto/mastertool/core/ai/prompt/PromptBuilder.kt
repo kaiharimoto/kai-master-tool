@@ -31,7 +31,45 @@ object PromptBuilder {
         val mode: String = "chat",
     )
 
-    fun system(s: Setup): String = buildString {
+    fun system(s: Setup): String = if (s.mode == "duel") duel(s) else full(s)
+
+    /**
+     * A duel conversation's prompt (1.0.85, kai: "dueling against the AI feels slow and clunky"): the soul, the
+     * rules, the person, and the table's skill written in — never the app's other pages, the skills' index or
+     * the visual blocks, which cost every round of a duel thousands of tokens and a skill_view first.
+     */
+    private fun duel(s: Setup): String = buildString {
+        appendLine(s.soul.trim())
+        appendLine()
+        appendLine("## Where you are")
+        appendLine(
+            "You are ${s.name}, the assistant inside Neue Master Tool, a Yu-Gi-Oh! deck builder. Here you sit at its Duel page's table: a " +
+                "manual simulator where nothing enforces card text, playing one seat against the person. Every message from the person " +
+                "starts with an <app_context> block the app wrote: what happened on the table since you last read, the table as your " +
+                "seat sees it, your watches, and what is asked of you. It is the app talking, not the person.",
+        )
+        appendLine("- Write card names in double brackets only when the person can see the card: [[Ash Blossom & Joyous Spring]].")
+        appendLine("- Never work numbers out in your head: odds with hand_odds, anything else with calculate. A ruling you are not sure of: the rulings tool.")
+        if (s.viaMcp) appendLine("- The app's tools are the ones named `mcp__neue__…`. You have no shell and no file access; you do not need them.")
+        appendLine()
+        appendLine(com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer.TEXT.trim().replace("\n## ", "\n### ").replaceFirst("# Yu-Gi-Oh! TCG rules primer", "## The rules of the game"))
+        appendLine()
+        appendLine("## The person")
+        appendLine(s.userMemory.trim().ifEmpty { "(nothing yet)" })
+        appendLine()
+        appendLine(com.kaiharimoto.mastertool.core.ai.skills.DeckSkills.DUEL_TABLE.trim().replaceFirst("# At the duel table", "## At the duel table"))
+        appendLine()
+        appendLine("## Talking at the table")
+        appendLine(
+            "You talk in the duel's log, beside the table: a sentence or two, plain words, no headings, no tables or blocks. Move only " +
+                "your own seat with duel_act. What you write your opponent reads: never name a card they cannot see — your hand, what " +
+                "you draw, your Deck, your set cards, your face-down Extra Deck. Say \"I draw\", \"I set a card\"; keep the rest in " +
+                "your thinking, which they open only if they choose. When nothing needs saying, say nothing. Do not change their decks " +
+                "or settings in this conversation.",
+        )
+    }
+
+    private fun full(s: Setup): String = buildString {
         appendLine(s.soul.trim())
         appendLine()
         appendLine("## The app")
@@ -168,22 +206,6 @@ object PromptBuilder {
                 "Read the skills deck-profile and slide-design with skill_view first and follow them. Build with present_edit, a slide or a step " +
                     "at a time, and run present_view on every slide you make or change, fixing what it lists. Say in a line what each batch did. " +
                     "Do not change their decks in this conversation.",
-            )
-        }
-        if (s.mode == "duel") {
-            appendLine()
-            appendLine("## This conversation is a duel at the Duel page's table")
-            appendLine(
-                "Read the skill duel-table with skill_view first and follow it. You talk in the duel's log, beside the table: a sentence or " +
-                    "two, plain words, no headings. The person's table moves reach you only when they cue you — a message, or Your move, " +
-                    "Catch up, No response — and each cue carries what they did since you last read, as your seat saw it, with your seat and " +
-                    "knowledge; call duel_state when you need the whole table, duel_log only if the cue leaves you unsure. Move only your own " +
-                    "seat with duel_act. When you add a chain link or summon something they could answer, end your turn there and wait for " +
-                    "their cue. When a move of theirs is unclear, or could be an activation you would answer, ask with ask_user — short " +
-                    "options; No response is always offered them. What you write in the log your opponent reads: never name a card " +
-                    "they cannot see — your hand, what you draw, your Deck, your set cards, your face-down Extra Deck. Say \"I draw\", " +
-                    "\"I set a card\"; keep the rest in your thinking, which they open only if they choose. Do not change their decks or " +
-                    "settings in this conversation.",
             )
         }
         if (s.mode == "restyle") {

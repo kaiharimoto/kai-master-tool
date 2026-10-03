@@ -661,7 +661,12 @@ class AiState(internal val h: NeueHolders) {
         val intensity = com.kaiharimoto.mastertool.core.ai.TuneIntensity.of(prefs.tuneIntensity)
         // A study runs as long and thinks as hard as its intensity says; an interview needs rounds for its questions.
         val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES || start.mode == AiSession.MODE_REFACTOR || start.mode == AiSession.MODE_WRITE
-        val effort = if (studies) intensity.effort else prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
+        val effort = when {
+            studies -> intensity.effort
+            // At the table a move is wanted quickly (1.0.85): low effort unless the person chose one.
+            start.mode == AiSession.MODE_DUEL -> prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
+            else -> prefs.effort.ifBlank { provider?.defaultEffort.orEmpty() }
+        }
         val steps = when (start.mode) {
             AiSession.MODE_STUDY, AiSession.MODE_PRINCIPLES, AiSession.MODE_REFACTOR -> intensity.steps
             // A book is written a chapter at a time, each read up on first: twice a study's rounds.
@@ -675,7 +680,12 @@ class AiState(internal val h: NeueHolders) {
                 // Past most of the model's window, the oldest turns become a summary first (1.0.47).
                 val ready = if (budget > 0) summarizedIfLong(start, model, connection, budget) else start
                 // From first principles (1.0.54) the model is never offered the web or the community's lists.
-                val offered = if (start.mode == AiSession.MODE_PRINCIPLES) tools.filter { it.name !in AiTools.FIRST_PRINCIPLES_BARRED } else tools
+                val offered = when (start.mode) {
+                    AiSession.MODE_PRINCIPLES -> tools.filter { it.name !in AiTools.FIRST_PRINCIPLES_BARRED }
+                    // At the table, the table's tools only (1.0.85): the rest cost every round thousands of tokens.
+                    AiSession.MODE_DUEL -> tools.filter { it.name in AiTools.DUEL }
+                    else -> tools
+                }
                 // The pictures' bytes, read from their files just now: they are never kept in the conversation.
                 val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
                 AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->

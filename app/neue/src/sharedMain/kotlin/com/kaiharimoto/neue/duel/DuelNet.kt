@@ -49,24 +49,33 @@ internal class DuelLink(private val socket: Socket, private val onMessage: (Wire
         }
     }
 
-    fun send(w: Wire) {
-        if (closed) return
-        val bytes = WireCodec.encode(w).encodeToByteArray()
-        scope.launch {
-            runCatching {
-                synchronized(out) {
-                    out.writeInt(bytes.size)
-                    out.write(bytes)
-                    out.flush()
-                }
+    // One writer, in order (1.0.85): a coroutine per message let a later table overtake an earlier one.
+    private val outbox = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED)
+    private val writer = scope.launch {
+        runCatching {
+            for (bytes in outbox) {
+                out.writeInt(bytes.size)
+                out.write(bytes)
+                out.flush()
             }
         }
     }
 
+    fun send(w: Wire) {
+        if (closed) return
+        outbox.trySend(WireCodec.encode(w).encodeToByteArray())
+    }
+
     fun close() {
+        if (outbox.isClosedForSend) return
         closed = true
-        runCatching { socket.close() }
-        scope.cancel()
+        outbox.close()
+        // What was already sent (a Bye) goes out before the socket closes — never more than a moment.
+        CoroutineScope(Dispatchers.IO).launch {
+            kotlinx.coroutines.withTimeoutOrNull(1500) { writer.join() }
+            runCatching { socket.close() }
+            scope.cancel()
+        }
     }
 
     companion object {

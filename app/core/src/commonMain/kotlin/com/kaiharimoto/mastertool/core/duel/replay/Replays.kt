@@ -107,7 +107,10 @@ object Replays {
         val k = at.coerceIn(0, r.entries.size)
         val group = (r.entries.getOrNull(k - 1)?.group ?: -1) + 1
         val added = actions.map { DuelEntry(0, time, seat, group, it) }
-        val after = r.entries.drop(k).map { it.copy(group = it.group + 1) }
+        // Put in the middle of a gesture, the gesture's tail becomes a group of its own (1.0.85): before, it
+        // shared the new group's number, and undo took the inserted moves away with half the old gesture.
+        val splits = k > 0 && k < r.entries.size && r.entries[k - 1].group == r.entries[k].group
+        val after = r.entries.drop(k).map { it.copy(group = it.group + if (splits) 2 else 1) }
         val entries = (r.entries.take(k) + added + after).renumber()
         return r.copy(entries = entries, cursor = entries.size)
     }

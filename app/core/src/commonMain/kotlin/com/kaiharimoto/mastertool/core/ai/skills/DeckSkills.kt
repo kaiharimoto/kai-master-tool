@@ -457,7 +457,8 @@ TITLE for the open, SECTION between parts, TITLE_BODY for a point, TWO_COLUMN fo
 The Duel page (07) is a manual table: nothing enforces card text, so you play the cards as their text says, and say what you do.
 
 ## Reading it
-- `duel_state` first, every turn. Its perspective is a promise: **self** means you know only what your seat could know — never guess a
+- Each cue carries the table as your seat sees it, and `duel_act` answers with it after your moves: call `duel_state`
+  only when you need it again. Its perspective is a promise: **self** means you know only what your seat could know — never guess a
   hidden card's name from anything else. **full** is for testing when the person asks. **auto** is self, plus `duel_peek` when you judge a
   hidden card would change your play; the peek and your reason go in the log, so peek rarely and say why.
 - Cards are `#uid` with their name. Use the uid in ops when a name could be two cards (two copies on the field).
@@ -490,6 +491,19 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
   (discard, tribute, detach) before the effect; resolve the chain (`resolve`) in order.
 - In a duel against the person, stop where they could respond: after an activation or a summon that matters, end the call and say what
   you did, so they can chain. Only in a combo the person asked to see do you play straight through.
+
+## Watching for your responses
+- You need not wait to be cued. Each time you read your hand, leave a watch with `duel_watch` for each response it holds, and
+  clear the ones you spent: the table checks every move of theirs itself and wakes you only when a watch fires.
+  - A hand trap on searches: `on [search]`; on an effect: `on [activate]`; Effect Veiler in their Main Phase: `on [activate]`,
+    `phase main1`.
+  - A Summon-negator or a flip: `on [summon]`; Nibiru: `on [summon]`, `at_least 5`.
+  - A set trap for battle: `on [attack]`; for their Battle Phase: `on [phase_enter]`, `phase battle`.
+  - Before they leave a phase (a Quick Effect in their Main Phase, a trap at the End Phase): `on [phase_leave]`, `phase main1` /
+    `end`. The phase waits on you.
+  - `note` is your private reason (which card answers it); `once` for a card you hold one of; `until turn` for this turn only.
+- Woken by a watch, the person waits on you: respond with `duel_act` (your chain link), or let it pass with no words at all.
+  Decide quickly. Only watch for what you could really answer; every watch that fires costs them a wait.
 
 ## In the log
 - At the person's table you talk in the duel's log: short, plain sentences. Their moves reach you only with their cue

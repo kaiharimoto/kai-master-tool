@@ -76,11 +76,17 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val live = talk != null && ai.running
     val list = rememberLazyListState()
     LaunchedEffect(lines.size, live, ai.streaming.length / 120) {
-        val last = list.layoutInfo.totalItemsCount - 1
-        if (last >= 0) list.scrollToItem(last, 1_000_000)
+        val info = list.layoutInfo
+        val last = info.totalItemsCount - 1
+        // Follows only a reader at the end (1.0.85): reading back, or picking a line, while Ai talks stays put.
+        val seen = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+        if (last >= 0 && (seen < 0 || seen >= last - 3)) list.scrollToItem(last, 1_000_000)
     }
     val chatFocus = remember { FocusRequester() }
-    LaunchedEffect(duels.chatFocus) { if (duels.chatFocus > 0) runCatching { chatFocus.requestFocus() } }
+    // Only a request made after the box appeared takes the keyboard (1.0.85: an old one did, each time the box
+    // came back on screen, and the next hotkeys typed into it).
+    val askedBefore = remember { duels.chatFocus }
+    LaunchedEffect(duels.chatFocus) { if (duels.chatFocus > askedBefore) runCatching { chatFocus.requestFocus() } }
     val opened = remember(duels.aiSession) { mutableStateMapOf<String, Boolean>() }
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -105,7 +111,7 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
             head()
         }
         HRule()
-        TurnTally(duels, game)
+        TurnTally(duels, game, viewer)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list) {
             items(lines) { line -> LogRow(h, duels, line, opened) }
             if (live && thinking && ai.reasoning.isNotBlank()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) { com.kaiharimoto.neue.ai.ReasoningView(ai, ai.reasoning, live = true, opened) } }
@@ -138,7 +144,7 @@ private fun submit(h: NeueHolders, duels: Duels, text: String, seated: Boolean) 
     when {
         t.startsWith("/") -> if (duels.run(t.drop(1))) duels.chat = ""
         seated -> {
-            if (h.ai.running) { h.neue.note = Note("${h.ai.name} is still answering."); return }
+            // Said while Ai answers: in the log now, read by Ai when it finishes (1.0.85).
             duels.say(t)
             cueAi(h, Cue.SAY, t)
         }
@@ -190,6 +196,13 @@ private fun AiCues(h: NeueHolders, duels: Duels, game: DuelGame, talking: Boolea
         Box(Modifier.fillMaxWidth().padding(8.dp)) { com.kaiharimoto.neue.ai.QuestionCard(ai, q) }
         return
     }
+    // What Ai's watches wait for, by kind, never by card — behind Thinking, as the rest of its plans are (1.0.85).
+    if (h.neue.prefs.duel.aiThinking && h.neue.prefs.duel.aiTriggers && duels.watches.isNotEmpty() && !duels.aiAnswering) {
+        Small(
+            "${ai.name} is watching for ${com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.kindsWords(duels.watches).lowercase()}",
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 6.dp), color = c.ink45, maxLines = 2,
+        )
+    }
     Row(
         Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -197,6 +210,15 @@ private fun AiCues(h: NeueHolders, duels: Duels, game: DuelGame, talking: Boolea
     ) {
         val top = s.chain.lastOrNull()
         when {
+            // Woken by a watch (1.0.85): the person's moves wait on its answer, unless they go on.
+            duels.aiAnswering || duels.held != null -> {
+                com.kaiharimoto.neue.ai.avatar.AiMark(18.dp, name = ai.name)
+                Small(
+                    if (duels.held != null) "${ai.name} may respond before the phase moves on" else "${ai.name} may respond — your move waits",
+                    Modifier.weight(1f), color = c.ink, maxLines = 1,
+                )
+                MuButton("Don't wait", { duels.dontWait() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+            }
             ai.running && talking -> {
                 com.kaiharimoto.neue.ai.avatar.AiMark(18.dp, name = ai.name)
                 Small(ai.working ?: ai.status ?: "${ai.name} is thinking", Modifier.weight(1f), color = c.ink70, maxLines = 1)

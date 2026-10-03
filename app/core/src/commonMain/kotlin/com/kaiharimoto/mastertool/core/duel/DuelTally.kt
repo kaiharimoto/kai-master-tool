@@ -34,7 +34,11 @@ data class Tally(
 }
 
 object DuelTally {
-    fun of(game: DuelGame, catalog: DuelCatalog): Tally {
+    /**
+     * The tally as [viewer] may read it (1.0.85): an activation is named only when the viewer could see the
+     * card as it went on the chain — a hand card linked, or a Set card chained face-down, is "a card".
+     */
+    fun of(game: DuelGame, catalog: DuelCatalog, viewer: Int? = null): Tally {
         val s = game.state
         val played = game.played
         // This turn began after the last End Turn.
@@ -58,7 +62,9 @@ object DuelTally {
                 }
                 is DuelAction.Token -> special[a.to.seat.coerceIn(0, 1)]++
                 is DuelAction.ChainAdd -> {
-                    val name = a.uid?.let { state.cards[it] }?.let { catalog.nameOf(it) } ?: a.note.ifBlank { null }
+                    val seen = a.uid == null || viewer == null || DuelSight.sees(state, a.uid, viewer) ||
+                        ((DuelRules.apply(state, e.action, e.seat) as? Outcome.Ok)?.state?.let { DuelSight.sees(it, a.uid, viewer) } == true)
+                    val name = if (!seen) "a card" else a.uid?.let { state.cards[it] }?.let { catalog.nameOf(it) } ?: a.note.ifBlank { null }
                     if (name != null) acts[a.seat.coerceIn(0, 1)].let { m -> m[name] = (m[name] ?: 0) + 1 }
                 }
                 else -> Unit

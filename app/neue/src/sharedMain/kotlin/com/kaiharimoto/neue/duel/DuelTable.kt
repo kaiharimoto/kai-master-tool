@@ -267,9 +267,25 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     }
                     @Suppress("UNREACHABLE_CODE") true
                 }
+                // A mouse held still before it moves still drags (1.0.85: aiming first killed the drag). The
+                // hold shows the card's verbs; a move past the slop then carries it as any drag.
+                if (decided == null && !released && moved == null && !finger && hit is Hit.Card) {
+                    duels.inspected = hit.frame.uid
+                    duels.selection = setOf(hit.frame.uid)
+                    duels.verbStrip = true
+                    var dragged = false
+                    while (true) {
+                        val e = awaitPointerEvent()
+                        val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+                        if (!ch.pressed) break
+                        val p = ch.position / d
+                        if ((p - Offset(x0, y0)).getDistance() > slop) { moved = p; dragged = true; break }
+                    }
+                    if (!dragged) continue
+                }
                 when {
                     released -> click(hit, shift, alt, x0, down.uptimeMillis)
-                    decided == null -> {
+                    decided == null && moved == null -> {
                         // A hold: every verb for the card, beside it read large.
                         if (hit is Hit.Card) {
                             duels.inspected = hit.frame.uid
@@ -302,14 +318,21 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                                 carry = Carry(uid, gx, gy, p.x, p.y, spot, DuelDrop.intent(stateNow, uid, spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed))
                             }
                             update()
-                            while (true) {
-                                val e = awaitPointerEvent()
-                                val ch = e.changes.firstOrNull { it.id == down.id } ?: break
-                                ch.consume()
-                                mods = e.keyboardModifiers
-                                p = ch.position / d
-                                if (!ch.pressed) break
-                                update()
+                            try {
+                                while (true) {
+                                    val e = awaitPointerEvent()
+                                    val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+                                    ch.consume()
+                                    mods = e.keyboardModifiers
+                                    p = ch.position / d
+                                    if (!ch.pressed) break
+                                    update()
+                                }
+                            } catch (gone: kotlinx.coroutines.CancellationException) {
+                                // The gesture was cut off: nothing is carried any more (1.0.85; the flag stayed set).
+                                carry = null
+                                duels.carrying = false
+                                throw gone
                             }
                             update()
                             val done = carry
