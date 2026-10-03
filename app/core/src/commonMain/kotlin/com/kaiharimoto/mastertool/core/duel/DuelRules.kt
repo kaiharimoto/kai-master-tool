@@ -49,8 +49,7 @@ object DuelRules {
             is DuelAction.Propose -> seatOk(s, a.seat) ?: if (a.phase == null && !a.end) Outcome.Refused("Ask for a phase, or the end of the turn")
                 else ok(s.copy(proposal = Proposal(a.seat, a.phase, a.end)))
             is DuelAction.Decline -> if (s.proposal == null) Outcome.Refused("Nothing was asked") else ok(s.copy(proposal = null))
-            is DuelAction.Lock -> seatOk(s, a.seat) ?: if (a.text.isBlank()) Outcome.Refused("Lock what?")
-                else ok(s.copy(locks = s.locks + Lock((s.locks.maxOfOrNull { it.id } ?: 0) + 1, a.seat, a.text.trim(), a.until)))
+            is DuelAction.Lock -> seatOk(s, a.seat) ?: if (a.text.isBlank()) Outcome.Refused("Lock what?") else lock(s, a)
             is DuelAction.Unlock -> if (s.locks.none { it.id == a.id }) Outcome.Refused("No lock ${a.id}")
                 else ok(s.copy(locks = s.locks.filterNot { it.id == a.id }))
             is DuelAction.ChainAdd -> chainAdd(s, a)
@@ -257,9 +256,19 @@ object DuelRules {
         if (a.to.kind == ZoneKind.FIELD) return Outcome.Refused("A token goes to a Monster Zone")
         if (a.to.index !in 0 until zoneCount(a.to.kind)) return Outcome.Refused("No such zone")
         if (s.at(a.to) != null) return Outcome.Refused("That zone is taken")
-        val uid = s.nextUid
+        // Stamped on commit (1.0.86), so a token put into the past never renumbers the ones after it; a log
+        // written before has none, and takes the table's next uid as it did.
+        val uid = a.uid ?: s.nextUid
+        if (uid in s.cards) return Outcome.Refused("That token is already on the table")
         val card = CardInst(uid, a.code, owner = a.seat, controller = a.to.seat, pos = positionFor(a.to, a.pos, null, false), token = true, name = a.name, atk = a.atk, def = a.def)
-        return ok(s.copy(cards = s.cards + (uid to card), nextUid = uid + 1).inZone(a.to, uid))
+        return ok(s.copy(cards = s.cards + (uid to card), nextUid = maxOf(s.nextUid, uid + 1)).inZone(a.to, uid))
+    }
+
+    /** A lock written down: its stamped id (1.0.86), or — in a log from before — the highest held + 1, as it was. */
+    private fun lock(s: DuelState, a: DuelAction.Lock): Outcome {
+        val id = a.id ?: ((s.locks.maxOfOrNull { it.id } ?: 0) + 1)
+        if (s.locks.any { it.id == id }) return Outcome.Refused("Lock $id is already written")
+        return ok(s.copy(locks = s.locks + Lock(id, a.seat, a.text.trim(), a.until), lastLock = maxOf(s.lastLock, id)))
     }
 
     private fun attack(s: DuelState, a: DuelAction.Attack): Outcome {
@@ -416,6 +425,16 @@ object DuelRandom {
 
     /** The dice for log entry [i] of a duel seeded [seed]. */
     fun forEntry(seed: Long, i: Int): Random = Random(seed * 1_000_003L + i * 7_919L + 17L)
+
+    /**
+     * The dice for the [n]th thing left to chance in a duel (1.0.86): keyed to how many shuffles, coins and
+     * dice came before it, not to its place in the log, so a shuffle undone and made again after a line of
+     * chat — or any move that leaves nothing to chance — comes out the same. Undo cannot fish for a draw.
+     */
+    fun forRoll(seed: Long, n: Int): Random = forEntry(seed, n)
+
+    /** Whether [a] leaves something to chance, to be stamped. */
+    fun rolls(a: DuelAction): Boolean = a is DuelAction.Shuffle || a is DuelAction.Coin || a is DuelAction.Dice
 
     /** Fills in what [a] leaves to chance: a shuffle's salt, a coin, a die. Everything else is returned as it came. */
     fun stamp(a: DuelAction, random: Random): DuelAction = when (a) {

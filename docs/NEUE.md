@@ -3242,6 +3242,28 @@ card effect activation, entering a phase, attempting to leave a phase, an attack
   grabs the keyboard later; the log follows only a reader at its end; Ai's read mark knows when moves were taken back; a turn
   that passed while Ai answered is taken when it is free; the person cannot swap to the seat Ai plays.
 
+**The log stays true and fast** (1.0.86):
+- **Numbers are stamped, not folded.** A token took the table's next uid and a lock the highest held id + 1 as the log
+  was folded, so a move put into the past (Insert here, Ai's `at`, a replay's edit) renumbered every later token and
+  lock, and a later move, attack or "lift lock 2" acted on the wrong one. `DuelAction.Token.uid` and
+  `DuelAction.Lock.id` are now written in on commit (`DuelIds.stamp`, from `DuelGame.act` and `Replays.insert`), each
+  one used nowhere else in the log (a token put into the past takes the highest ever + 1; `DuelState.lastLock`
+  remembers lifted locks), and a later step of the same gesture that named the number the table would have given is
+  pointed at the stamped one. A log from before has none and folds as it did; it is settled (`DuelIds.settle`: every
+  number written in as the fold gave it) before anything is put into it or taken out (`OldDataTest` holds the shape).
+- **Chance is keyed to the roll**, not the entry (`DuelRandom.forRoll`: the nth shuffle, coin or die of the duel), so a
+  shuffle undone and made again after a line of chat comes out the same. What older builds stamped keeps its values.
+- **Secrets, wider** (`Secrets`): the names players say are kept out too — a name's head before " - ", " & ", ", " or
+  " of the " ("Ash Blossom", "Droll", "Nibiru", "Lady Labrynth") when it is two words, or one of five letters that is not
+  an everyday word (`Secrets.COMMON`); never one a visible card goes by, never the head of two cards on the table (an
+  archetype, "Destiny HERO"). Ai's questions at its table are guarded as its words are: the question, what it heard and
+  every option (`Secrets.options`, "a card (2)" when two would read the same), the answer handed back to Ai as it wrote
+  the option (`Secrets.answer`), and a hidden card's art not shown.
+- **The log is folded once** (`DuelFolds`): the rail's words, the turn's tally, Insert here and the lines sent to a
+  guest or read to Ai come from one cache that reads each entry once — a move reads one, an undo, a redo or a replay's
+  tick none, an edit goes back to the nearest table kept (every 32 entries). Before, each move and each tick folded and
+  worded the whole duel again.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

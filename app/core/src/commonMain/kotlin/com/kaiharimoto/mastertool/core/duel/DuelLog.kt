@@ -114,8 +114,10 @@ object DuelSetup {
  * redo), and the table it folds to. Immutable — every act, undo and redo is a new game — so the page
  * holds one value and Compose sees every change.
  *
- * Randomness is stamped from entry [DuelEntry.i]'s own dice ([DuelRandom.forEntry]): an undone shuffle
- * shuffled again comes out the same, so undo can never be used to fish for a better draw.
+ * Randomness is stamped from the dice of its roll ([DuelRandom.forRoll]: the nth shuffle, coin or die of
+ * the duel; 1.0.74–1.0.85 keyed them by entry, and what those stamped keeps its values): an undone shuffle
+ * shuffled again comes out the same, chat or no chat in between, so undo can never be used to fish for a
+ * better draw. Tokens' uids and locks' ids are stamped too ([DuelIds]).
  */
 data class DuelGame(
     val header: DuelHeader,
@@ -138,7 +140,12 @@ data class DuelGame(
     fun act(actions: List<DuelAction>, seat: Int?, at: Long = 0L): Result {
         if (actions.isEmpty()) return Result(this, null)
         val group = (entries.getOrNull(cursor - 1)?.group ?: -1) + 1
-        val stamped = actions.mapIndexed { k, a -> DuelRandom.stamp(a, DuelRandom.forEntry(header.seed, cursor + k)) }
+        // Chance from the dice of the roll it is (1.0.86, `forRoll`), not of the entry: a line of chat
+        // between an undo and a new shuffle no longer changes the shuffle.
+        var roll = played.count { DuelRandom.rolls(it.action) }
+        val rolled = actions.map { a -> if (DuelRandom.rolls(a)) DuelRandom.stamp(a, DuelRandom.forRoll(header.seed, roll++)) else a }
+        // A token's uid and a lock's id written in too (1.0.86), so an insert into the past never renumbers them.
+        val stamped = DuelIds.stamp(state, rolled, DuelIds.next(state, played))
         val (next, problem) = DuelRules.applyAll(state, stamped, seat)
         if (next == null) return Result(this, problem)
         val added = stamped.mapIndexed { k, a -> DuelEntry(cursor + k, at, seat, group, a) }

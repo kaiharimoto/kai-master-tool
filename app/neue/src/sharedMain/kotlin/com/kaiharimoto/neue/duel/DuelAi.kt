@@ -135,7 +135,7 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
     // Moves taken back since Ai last read leave its mark past the log's end (1.0.85: it was told "nothing new").
     val takenBack = (duels.aiRead ?: 0) > g.cursor
     val from = (duels.aiRead ?: g.floor).coerceIn(0, g.cursor)
-    val lines = com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(g, from, viewer, duels.catalog)
+    val lines = com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(g, from, viewer, duels.catalog, duels.folds(g))
         .filter { it.seat != seat }
         // The cue's own words reach Ai as the message; not twice.
         .filterNot { it.chat && it.text.endsWith(said) }

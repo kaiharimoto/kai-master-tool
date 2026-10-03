@@ -83,6 +83,11 @@ sealed class DuelAction {
         val name: String = "Token",
         val atk: Int? = null,
         val def: Int? = null,
+        /**
+         * Stamped on commit (1.0.86, `DuelIds`), so a move put into the past never renumbers it. A log
+         * written before has none, and the token takes the table's next uid as it always did.
+         */
+        val uid: Int? = null,
     ) : DuelAction()
 
     // ---- life and flow -------------------------------------------------------------------------------
@@ -111,7 +116,13 @@ sealed class DuelAction {
 
     /** Writes a lock down (1.0.79): "Synchro Monsters only", until the end of the turn, the chain or the duel. */
     @Serializable @SerialName("lock")
-    data class Lock(val seat: Int, val text: String, val until: String = com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_TURN) : DuelAction()
+    data class Lock(
+        val seat: Int,
+        val text: String,
+        val until: String = com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_TURN,
+        /** Stamped on commit (1.0.86), as a token's uid is; without one it is the highest held + 1, as before. */
+        val id: Int? = null,
+    ) : DuelAction()
 
     @Serializable @SerialName("unlock")
     data class Unlock(val id: Int) : DuelAction()

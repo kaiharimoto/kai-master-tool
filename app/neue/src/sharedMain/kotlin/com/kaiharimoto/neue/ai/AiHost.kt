@@ -1099,7 +1099,21 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         // option and I had to keep typing it out").
         val duel = ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL
         val offered = options.take(6).let { o -> if (duel && o.none { it.equals("No response", true) }) o + "No response" else o }
-        val answer = ai.ask(Question(question, offered, multiple, shown, heard.map { it.trim() }.filter { it.isNotEmpty() }.take(8)))
+        val said = heard.map { it.trim() }.filter { it.isNotEmpty() }.take(8)
+        // At its own table its hidden cards stay out of the question as out of its words (1.0.86): the question,
+        // what it heard and every option put through `Secrets` for the person's eyes; the answer handed back as
+        // Ai wrote the options. A hidden card's art is not shown.
+        val g = h.duel.game?.takeIf { duel && h.duel.role == null && !it.state.solo }
+        if (g != null) {
+            val aiSeat = h.neue.prefs.duel.aiSeat
+            val secret = { t: String -> com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact(t, g.state, 1 - aiSeat, aiSeat, h.duel.catalog) }
+            val o = com.kaiharimoto.mastertool.core.duel.ai.Secrets.options(offered, g.state, 1 - aiSeat, aiSeat, h.duel.catalog)
+            val art = shown.filterNot { secret(it.name).changed }
+            val picked = ai.ask(Question(secret(question).text, o.shown, multiple, art, said.map { secret(it).text }))
+            val answer = com.kaiharimoto.mastertool.core.duel.ai.Secrets.answer(picked, o)
+            return ok("The person answered: $answer", "${question.take(70)} → ${answer.take(90)}")
+        }
+        val answer = ai.ask(Question(question, offered, multiple, shown, said))
         // What was said stays in the conversation, not only the question (1.0.65).
         return ok("The person answered: $answer", "${question.take(70)} → ${answer.take(90)}")
     }

@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.duel.replay
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelEntry
 import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.DuelIds
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
 import com.kaiharimoto.mastertool.core.duel.DuelSetup
 import com.kaiharimoto.mastertool.core.duel.DuelTimeline
@@ -85,40 +86,44 @@ object Replays {
         }
     }
 
-    /** The record with entry [i] taken out. */
+    /** The record with entry [i] taken out. Tokens and locks after it keep their numbers ([DuelIds.settle]). */
     fun delete(r: DuelRecord, i: Int): DuelRecord {
         if (i !in r.entries.indices) return r
-        val entries = (r.entries.take(i) + r.entries.drop(i + 1)).renumber()
+        val all = DuelIds.settle(r.header, r.entries).entries
+        val entries = (all.take(i) + all.drop(i + 1)).renumber()
         return r.copy(entries = entries, cursor = entries.size)
     }
 
     /** The record with the whole group of entry [i] taken out — one gesture, as undo takes it. */
     fun deleteGroup(r: DuelRecord, i: Int): DuelRecord {
         val g = r.entries.getOrNull(i)?.group ?: return r
-        val entries = r.entries.filterNot { it.group == g }.renumber()
+        val entries = DuelIds.settle(r.header, r.entries).entries.filterNot { it.group == g }.renumber()
         return r.copy(entries = entries, cursor = entries.size)
     }
 
     /**
      * The record with [actions] put in at [at], as one new group by [seat]. Groups after it are
-     * renumbered so a group never spans an insertion.
+     * renumbered so a group never spans an insertion. A token or lock it makes takes a number used nowhere
+     * in the log, and the ones after it keep theirs (1.0.86, [DuelIds]).
      */
     fun insert(r: DuelRecord, at: Int, actions: List<DuelAction>, seat: Int?, time: Long = 0L): DuelRecord {
         val k = at.coerceIn(0, r.entries.size)
-        val group = (r.entries.getOrNull(k - 1)?.group ?: -1) + 1
-        val added = actions.map { DuelEntry(0, time, seat, group, it) }
+        val settled = DuelIds.settle(r.header, r.entries, k)
+        val stamped = DuelIds.stamp(settled.before, actions, DuelIds.next(settled.end, settled.entries))
+        val group = (settled.entries.getOrNull(k - 1)?.group ?: -1) + 1
+        val added = stamped.map { DuelEntry(0, time, seat, group, it) }
         // Put in the middle of a gesture, the gesture's tail becomes a group of its own (1.0.85): before, it
         // shared the new group's number, and undo took the inserted moves away with half the old gesture.
-        val splits = k > 0 && k < r.entries.size && r.entries[k - 1].group == r.entries[k].group
-        val after = r.entries.drop(k).map { it.copy(group = it.group + if (splits) 2 else 1) }
-        val entries = (r.entries.take(k) + added + after).renumber()
+        val splits = k > 0 && k < settled.entries.size && settled.entries[k - 1].group == settled.entries[k].group
+        val after = settled.entries.drop(k).map { it.copy(group = it.group + if (splits) 2 else 1) }
+        val entries = (settled.entries.take(k) + added + after).renumber()
         return r.copy(entries = entries, cursor = entries.size)
     }
 
     /** The record with entry [i]'s action replaced. */
     fun alter(r: DuelRecord, i: Int, action: DuelAction): DuelRecord {
         if (i !in r.entries.indices) return r
-        return r.copy(entries = r.entries.mapIndexed { k, e -> if (k == i) e.copy(action = action) else e })
+        return r.copy(entries = DuelIds.settle(r.header, r.entries).entries.mapIndexed { k, e -> if (k == i) e.copy(action = action) else e })
     }
 
     /** A note at [at]: a line in the log that changes nothing, for whoever watches next. */

@@ -45,6 +45,8 @@ data class DuelState(
     /** One player alone at the table: the turn never passes, the second seat stays empty. */
     val solo: Boolean = false,
     val nextUid: Int = TOKEN_UIDS,
+    /** The highest lock id written in this duel, lifted or not (1.0.86): a stamped id is never reused. */
+    val lastLock: Int = 0,
     /** The non-turn seat's ask to move the phase on, waiting for the turn player's answer (1.0.79). */
     val proposal: Proposal? = null,
     /** What players have said is locked for now — "Synchro Monsters only from the Extra Deck" (1.0.79). */
