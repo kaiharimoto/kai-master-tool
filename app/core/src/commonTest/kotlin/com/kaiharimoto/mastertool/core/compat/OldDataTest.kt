@@ -158,6 +158,32 @@ class OldDataTest {
     }
 
     @Test
+    fun aDuelFrom1086BeganWithoutTheDiceAnd1087sOpeningRollReadsBack() {
+        // 1.0.86: no opening roll in the header — the first seat went first and turn 1 began at once.
+        val old = """{"header":{"id":"d5","seed":4,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},{"i":1,"seat":0,"group":1,"action":{"t":"phase","phase":"MAIN1"}}],"cursor":2}"""
+        val g = com.kaiharimoto.mastertool.core.duel.DuelGame.of(assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(old)))
+        assertEquals(null, g.state.opening)
+        assertEquals(com.kaiharimoto.mastertool.core.board.DuelPhase.MAIN1, g.state.phase)
+        // Duel settings from before 1.0.87 read with the opening roll on.
+        assertEquals(true, prefs.decodeFromString(NeuePreferences.serializer(), """{"duel":{"twoSided":true,"autoDraw":false}}""").duel.openingRoll)
+        // 1.0.87: the opening roll as it is written — both throws (a hand's, then a stamped one), then the winner's choice.
+        val die = """{"p":{"x":9.4,"y":6.6,"z":1.6},"q":{"w":0.7,"x":0.1,"y":-0.3,"z":0.6},"v":{"x":6.1,"y":-13.6,"z":3.0},"w":{"x":21.7,"y":9.7}}"""
+        val now = """{"header":{"id":"d6","seed":4,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}],"openingRoll":true},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},
+            {"i":1,"seat":0,"group":1,"action":{"t":"opening-roll","seat":0,"values":[6,5],"toss":{"dice":[$die,$die]}}},
+            {"i":2,"seat":1,"group":2,"action":{"t":"opening-roll","seat":1,"values":[2,3],"toss":{"dice":[$die,$die]}}},
+            {"i":3,"seat":0,"group":3,"action":{"t":"go-first","seat":0,"first":false}}],"cursor":4}"""
+        val n = com.kaiharimoto.mastertool.core.duel.DuelGame.of(assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(now)))
+        val o = assertNotNull(n.state.opening)
+        assertEquals(0, o.winner)
+        assertEquals(1, o.first)
+        assertEquals(1, n.state.active)
+        assertEquals(listOf(6, 5), o.dice[0])
+        assertEquals(2, o.throws[1]?.dice?.size)
+    }
+
+    @Test
     fun aPresentationFrom1070StillReads() {
         // 1.0.70: the first shape Present wrote, a deck slide and a freeform one.
         val old = """{"id":"pabc","name":"Labrynth profile","style":"BUILD_UP","theme":"arena",

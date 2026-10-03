@@ -22,6 +22,8 @@ sealed interface Outcome {
 object DuelRules {
 
     fun apply(s: DuelState, a: DuelAction, by: Int? = null): Outcome {
+        // The turn waits for the opening roll (1.0.87): no phase, no End Turn, no attack before who goes first is chosen.
+        Opening.waits(s, a)?.let { return Outcome.Refused(it) }
         val out = when (a) {
             is DuelAction.Move -> move(s, a)
             is DuelAction.Draw -> draw(s, a)
@@ -80,6 +82,8 @@ object DuelRules {
             is DuelAction.Thinking -> ok(s.copy(thinking = if (a.on) s.thinking + a.seat else s.thinking - a.seat))
             is DuelAction.Answer -> ok(s.copy(window = null))
             is DuelAction.Concede -> seatOk(s, a.seat) ?: ok(s.copy(conceded = a.seat))
+            is DuelAction.OpeningRoll -> Opening.roll(s, a)
+            is DuelAction.GoFirst -> Opening.choose(s, a)
         }
         // A seat that acts is no longer thinking.
         if (out is Outcome.Ok && by != null && !a.social && by in out.state.thinking) {
@@ -483,7 +487,8 @@ object DuelRandom {
     fun forRoll(seed: Long, n: Int): Random = forEntry(seed, n)
 
     /** Whether [a] leaves something to chance, to be stamped. */
-    fun rolls(a: DuelAction): Boolean = a is DuelAction.Shuffle || a is DuelAction.Coin || a is DuelAction.Dice || a is DuelAction.Pick
+    fun rolls(a: DuelAction): Boolean =
+        a is DuelAction.Shuffle || a is DuelAction.Coin || a is DuelAction.Dice || a is DuelAction.Pick || a is DuelAction.OpeningRoll
 
     /** Fills in what [a] leaves to chance: a shuffle's salt, a coin, a die. Everything else is returned as it came. */
     fun stamp(a: DuelAction, random: Random): DuelAction = when (a) {
@@ -491,6 +496,12 @@ object DuelRandom {
         is DuelAction.Coin -> a.copy(heads = random.nextBoolean())
         is DuelAction.Dice -> a.copy(value = random.nextInt(1, 7))
         is DuelAction.Pick -> a.copy(salt = random.nextLong())
+        // The opening roll's two dice (1.0.87), and a throw for them when no hand made one: the values first, so a
+        // throw made by hand never changes what the dice read.
+        is DuelAction.OpeningRoll -> {
+            val values = listOf(random.nextInt(1, 7), random.nextInt(1, 7))
+            a.copy(values = values, toss = a.toss?.takeIf { it.valid }?.rounded() ?: com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.random(random))
+        }
         else -> a
     }
 }

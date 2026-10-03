@@ -55,6 +55,11 @@ data class DuelPrefs(
      * move heard is made at once. Questions, cues to Ai and undo never wait.
      */
     val voiceConfirm: Boolean = true,
+    /**
+     * A new two-seat duel opens with the dice (1.0.87, kai): each seat throws two onto its field, the higher chooses to go
+     * first or second. Off, the first seat goes first, as before.
+     */
+    val openingRoll: Boolean = true,
 ) {
     companion object {
         const val KNOW_ALL = "all"

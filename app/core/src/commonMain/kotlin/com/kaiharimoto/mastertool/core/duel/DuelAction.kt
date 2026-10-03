@@ -42,8 +42,8 @@ sealed interface Place {
  * [Move] out of it, a token leaving is a [Move] to [Place.Void]. A newer build's action an older one
  * does not know reads as [Unknown] and passes through untouched.
  *
- * Randomness is never rolled when an action is applied: [Shuffle.salt], [Coin.heads] and [Dice.value]
- * are stamped when the action is committed (`DuelGame.act`), so a replay plays the same however it is
+ * Randomness is never rolled when an action is applied: [Shuffle.salt], [Coin.heads], [Dice.value] and
+ * [OpeningRoll.values] are stamped when the action is committed (`DuelGame.act`), so a replay plays the same however it is
  * edited, and the network's host is the only one who rolls.
  */
 @Serializable
@@ -188,6 +188,24 @@ sealed class DuelAction {
         val how: String? = null,
         val salt: Long = 0L,
     ) : DuelAction()
+
+    // ---- the opening roll (1.0.87) -------------------------------------------------------------------
+
+    /**
+     * [seat] throws its two dice for who goes first ([Opening]). [values] are stamped on commit, as a die's are;
+     * [toss] is the throw the table plays — the person's drag, or, when none was made (a key, `roll`, Ai), a random
+     * throw stamped with the values. The physics decides which face lands up, the stamp what it reads.
+     */
+    @Serializable @SerialName("opening-roll")
+    data class OpeningRoll(
+        val seat: Int,
+        val values: List<Int> = emptyList(),
+        val toss: com.kaiharimoto.mastertool.core.duel.dice.DiceThrow? = null,
+    ) : DuelAction()
+
+    /** The opening roll's winner [seat] goes first, or second when [first] is false: who has turn 1. */
+    @Serializable @SerialName("go-first")
+    data class GoFirst(val seat: Int, val first: Boolean = true) : DuelAction()
 
     // ---- talk ----------------------------------------------------------------------------------------
 

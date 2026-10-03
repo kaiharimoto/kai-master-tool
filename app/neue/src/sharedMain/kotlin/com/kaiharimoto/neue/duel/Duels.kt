@@ -513,6 +513,56 @@ class Duels(val dir: File) {
     /** Where the person's drag acts as another seat than the card's: a guest. */
     fun dragActor(): Int? = if (role == NetRole.GUEST) mySeat else null
 
+    // ---- the opening roll (1.0.87) ----------------------------------------------------------------------
+
+    /** `DuelPrefs.openingRoll`, set by the page: a new two-seat duel this table hosts opens with the dice. */
+    var openingRoll = true
+    /** The person's two dice in the hand, carried across the table before they are thrown; null when none are. */
+    var diceCarry by mutableStateOf<com.kaiharimoto.neue.duel.dice.DiceCarry?>(null)
+    /** The seat Ai throws and chooses for, set by the page while Ai takes its seat's turns; null otherwise. */
+    var aiOpeningSeat: Int? = null
+
+    /**
+     * Whether the person throws [seat]'s dice (or chooses for it): their own seat — the guest's or the host's at a
+     * networked table — or, in a hot-seat where they play both seats, either; never the seat Ai throws for.
+     */
+    fun mayRoll(seat: Int, playsBoth: Boolean): Boolean = when {
+        replay != null -> false
+        role != null -> seat == mySeat
+        seat == aiOpeningSeat -> false
+        else -> seat == bottom || playsBoth
+    }
+
+    /**
+     * [seat] throws its two dice: [toss] the person's own throw, or null for a fling with no hand behind it (a key,
+     * `roll`, Ai), made from the same stamped randomness as the values. The guest's throw goes to the host, who stamps.
+     */
+    fun throwDice(seat: Int, toss: com.kaiharimoto.mastertool.core.duel.dice.DiceThrow? = null): Boolean =
+        act(listOf(DuelAction.OpeningRoll(seat, toss = toss)), seat)
+
+    /** The roll's winner goes first, or second. */
+    fun goFirst(seat: Int, first: Boolean): Boolean = act(listOf(DuelAction.GoFirst(seat, first)), seat)
+
+    /**
+     * Ai at its seat throws its own dice and, winning, chooses to go first (1.0.87): one step each time it is called,
+     * so the page can let the person watch the dice between. True when it did something.
+     */
+    fun aiOpening(): Boolean {
+        val seat = aiOpeningSeat ?: return false
+        val g = game ?: return false
+        val o = g.state.opening ?: return false
+        if (o.decided || role != null || replay != null) return false
+        val wasAi = aiActing
+        aiActing = true
+        try {
+            return when {
+                o.waitsOn(seat) -> throwDice(seat)
+                o.winner == seat -> goFirst(seat, true)
+                else -> false
+            }
+        } finally { aiActing = wasAi }
+    }
+
     /** The duel already logged to Prep as a practice game, so it is logged once. */
     var loggedDuel: String? = null
 
@@ -723,8 +773,9 @@ class Duels(val dir: File) {
                 fire(com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.hits(live, seen, w, summonsThisTurn()))
             }
         }
-        // The turn passed: the next one opens by itself (1.0.86), after what this move fired.
-        if (DuelAction.EndTurn in actions) beginTurn()
+        // The turn passed: the next one opens by itself (1.0.86), after what this move fired. So does turn 1, once the
+        // opening roll's winner has chosen (1.0.87).
+        if (DuelAction.EndTurn in actions || actions.any { it is DuelAction.GoFirst }) beginTurn()
         return true
     }
 
@@ -1136,6 +1187,8 @@ class Duels(val dir: File) {
                             seed = java.security.SecureRandom().nextLong(),
                             seats = listOf(mine, com.kaiharimoto.mastertool.core.duel.SeatSetup(w.name.ifBlank { "Guest" }, w.main, w.extra, null, w.deckName)),
                             created = now(),
+                            // The dice decide who goes first over the network too (1.0.87): each player throws their own.
+                            openingRoll = openingRoll,
                         ),
                     )
                     role = NetRole.HOST

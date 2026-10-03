@@ -3525,6 +3525,39 @@ off and blends in with the background"; the inspector's art should "grow to fill
   the foot. The drawer (a narrow window, the phone) has no height to share and keeps 150 dp.
 - **Pictures:** `--duel-defense=true` turns the near seat's first face-up Attack Position monster to Defense.
 
+**1.0.87, the opening roll** (kai: "at the start of the duel … a dice roll simulation between the two players using
+two dice. the dice should be real and 3D and actually simulated, not an animation, although the dice roll output is truly
+random and predetermined … after determining a winner (higher), the player who wins chooses to go first or second"):
+- **The flow** (`core/duel/Opening`): a two-seat duel whose header says `openingRoll` (new duels, `DuelPrefs.openingRoll`,
+  on by default; Table ▾ turns it off) deals as before, then waits: no phase, no End Turn, no attack, and turns that start
+  themselves hold (`TurnStart`) until it is decided. Each seat throws once a round (`DuelAction.OpeningRoll`, `"opening-roll"`);
+  the higher sum wins, a tie throws again (a new round, both seats), and the winner's `GoFirst` (`"go-first"`) sets who has
+  turn 1 — then the turn opens by itself as any turn does. `DuelState.opening` and `DuelHeader.openingRoll` have defaults, so a
+  duel or a replay written before has none and begins as it did (`OldDataTest`); `DuelView` carries it whole to both seats.
+- **Predetermined, and real physics.** The two values are stamped at commit like every die (`DuelRandom.stamp`, the nth roll
+  of the duel — so undo cannot fish, and the network's host is the only one who rolls). The throw (`dice/DiceThrow`: each die's
+  position, orientation, velocity and spin) is the person's drag, or for a key, `roll` or Ai a random one stamped from the same
+  randomness; it is written into the log and sent over the wire, so every screen plays the same throw. `dice/DiceSim` is a
+  genuine rigid-body simulation of two unit cubes at 480 steps a second — gravity, the table and the field's four walls against
+  each corner, corner-in-cube and inscribed-sphere contact between the dice, sequential impulses with restitution and two-way
+  Coulomb friction, rolling and air damping, sleep, a six-second cap, then set exactly flat and parted (plain `Double`
+  arithmetic, no `sin`/`cos` in the loop, so the host and the guest agree). It runs to rest at once (a few milliseconds), and
+  then **the faces are relabelled** (`DieFaces.relabel`): of the 24 proper dice (opposite faces sum to seven, one handedness)
+  the one that writes the stamped value on the face physics put on top — and of the four that do, the one keeping most of the
+  numbers that were in view as the dice left the hand. The frames are then played back in real time with that one labelling,
+  so every frame shows the same consistent die.
+- **The table** (`neue/duel/dice/OpeningDice.kt`; `dice/DiceStage` places it): each seat's arena (20 by 8 die edges) lies on its
+  own field, the far one turned round; the dice rest in front of it, at the far end of the hand. A press on them (the table's one
+  arbiter) picks both up, they follow the pointer tumbling, and letting go throws them at the hand's speed; a click or a tap
+  tosses them, `Shift R` too, and `roll` on the Line. The camera looks down from over the person's side with the table as the
+  picture plane, so a die at rest sits exactly on its zone and one in the air is drawn larger and leaning away. Faces are paper,
+  shaded in steps of ink as they turn from the light, with ink pips and ink edges — no shadow, no colour. Over the shared row the
+  panel says who rolled what once the dice land, "A tie at 7: both throw again", or the winner's **Go first** / **Go second**
+  (`first`, `go first`, `second` on the Line; `DuelCoverage`'s new rows). A hot-seat that plays both seats throws either seat's
+  dice; a networked table only its own (`DuelHost.resolve` strips a guest's values); Ai, taking its seat's turns, throws a moment
+  after the deal and, winning, goes first ("Ai wins the roll and goes first" in the log). `DuelBrief` tells Ai where the roll
+  stands. Pictures: `tools/shoot.sh --page=duel --duel=two --duel-dice=rest|held|flying|settled|choose [--duel-dice-frames=N]`.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two --duel-play=true --duel-spot=attack|s_h2_m3 (underscores for
 spaces; alone: empty) --duel-spot-state=listening|answer|many --duel-heard=summon_ash_blossom_to_monster_three`, and
 `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy

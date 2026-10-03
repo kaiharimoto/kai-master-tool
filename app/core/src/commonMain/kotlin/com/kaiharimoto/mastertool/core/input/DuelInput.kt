@@ -30,6 +30,8 @@ enum class DuelTarget(val heading: String) {
     TABLE("The table around them"),
     /** The microphone beside the command line (1.0.87): the M key for a hand on the mouse or the glass. */
     MIC("The microphone beside the command line"),
+    /** The two dice in front of the field before turn 1 (1.0.87, the opening roll). */
+    DICE("Your dice, before turn 1"),
 }
 
 enum class DuelInputAction {
@@ -53,6 +55,8 @@ enum class DuelInputAction {
     CANCEL_ATTACK,
     /** Listen while held, and send what was said when let go (1.0.87, as holding M). */
     SPEAK,
+    /** Throw the opening roll's dice onto the field (1.0.87). */
+    THROW,
 }
 
 data class DuelBinding(
@@ -103,6 +107,8 @@ object DuelMouse {
         DuelBinding(DuelTarget.ATTACKING, CLICK, DuelInputAction.ATTACK, "Their monster: attack it; their life points or hand: attack directly"),
         DuelBinding(DuelTarget.ATTACKING, RIGHT, DuelInputAction.CANCEL_ATTACK, "Stop attacking; so do Esc and any other verb"),
         DuelBinding(DuelTarget.MIC, HOLD, DuelInputAction.SPEAK, "Speak a command while held; let go to see it, then Enter makes it — as holding M"),
+        DuelBinding(DuelTarget.DICE, DRAG, DuelInputAction.THROW, "Pick both up and throw them onto your field: let go while moving and they fly as fast as your hand"),
+        DuelBinding(DuelTarget.DICE, CLICK, DuelInputAction.THROW, "Toss them onto the field with a fling of their own"),
     )
 
     fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =
@@ -146,6 +152,8 @@ object DuelTouch {
         DuelBinding(DuelTarget.ATTACKING, TAP, DuelInputAction.ATTACK, "Their monster: attack it; their life points or hand: attack directly"),
         DuelBinding(DuelTarget.ATTACKING, "Tap Cancel, or Back", DuelInputAction.CANCEL_ATTACK, "Stop attacking; so does any other verb"),
         DuelBinding(DuelTarget.MIC, HOLD, DuelInputAction.SPEAK, "Speak a command while held; lift to see it, then confirm it"),
+        DuelBinding(DuelTarget.DICE, DRAG, DuelInputAction.THROW, "Pick both up and throw them onto your field: lift while moving and they fly as fast as your finger"),
+        DuelBinding(DuelTarget.DICE, TAP, DuelInputAction.THROW, "Toss them onto the field with a fling of their own"),
     )
 
     fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =

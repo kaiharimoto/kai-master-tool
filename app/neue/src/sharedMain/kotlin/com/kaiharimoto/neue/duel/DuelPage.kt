@@ -189,6 +189,8 @@ internal fun DuelPage(h: NeueHolders) {
         if (duels.watchSeat != null && duels.watchSeat != prefs.aiSeat) duels.forgetTriggers()
         duels.watchSeat = prefs.aiSeat
     }
+    // The seat Ai throws the opening roll for (1.0.87): its own, while it takes its seat's turns.
+    val aiRolls = if (aiAtTable(h) && prefs.aiPlays && live?.state?.solo == false) prefs.aiSeat else null
     SideEffect {
         // Holding M opens the Spotlight listening, and what is heard is understood there (1.0.87).
         wireSpotlightVoice(h)
@@ -197,6 +199,18 @@ internal fun DuelPage(h: NeueHolders) {
         duels.watcher = if (watching) prefs.aiSeat else null
         duels.aiEngaged = aiAtTable(h) && live?.state?.solo == false && (prefs.aiPlays || duels.aiSession != null)
         duels.autoDraw = prefs.autoDraw
+        duels.openingRoll = prefs.openingRoll
+        // Ai throws its own dice for who goes first, and chooses when it wins (1.0.87), while it takes its seat's turns.
+        duels.aiOpeningSeat = aiRolls
+    }
+    // Ai at the table throws a moment after the duel is dealt, and chooses once both seats' dice have landed.
+    LaunchedEffect(live?.state?.opening, aiRolls) {
+        val o = live?.state?.opening ?: return@LaunchedEffect
+        val seat = aiRolls ?: return@LaunchedEffect
+        duels.aiOpeningSeat = seat
+        if (o.decided) return@LaunchedEffect
+        if (o.waitsOn(seat)) { kotlinx.coroutines.delay(AI_THROW_MS); duels.aiOpening() }
+        else if (o.winner == seat) { kotlinx.coroutines.delay(AI_CHOOSE_MS); duels.aiOpening() }
     }
     // One effect, in order (1.0.86, the red team): Ai's answer is settled — the person's moves go on, a held change is
     // made, the turn's opening resumes — before Ai is woken on its watches, a kept cue, or its own turn. Two effects
@@ -214,7 +228,8 @@ internal fun DuelPage(h: NeueHolders) {
             duels.queuedCue != null -> cueQueued(h)
             // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, once its opening is made.
             g != null && prefs.aiPlays && neue.prefs.ai.enabled && !g.state.solo && g.state.active == prefs.aiSeat &&
-                duels.aiAskedTurn != g.state.turn && duels.replay == null && !duels.waitingOnAi && !duels.opening -> askAiToPlay(h)
+                duels.aiAskedTurn != g.state.turn && duels.replay == null && !duels.waitingOnAi && !duels.opening &&
+                !g.state.beforeTurnOne -> askAiToPlay(h)
         }
     }
 
@@ -341,6 +356,12 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
                 neue.update { it.copy(duel = it.duel.copy(autoDraw = !it.duel.autoDraw)) }
             })
         }
+        // The opening roll (1.0.87): new two-seat duels open with the dice, or the first seat goes first.
+        if (!online) {
+            add(MenuEntry(if (prefs.openingRoll) "New duels: the first seat goes first" else "New duels: roll for who goes first", hint = key(DeskAction.DUEL_ROLL)) {
+                neue.update { it.copy(duel = it.duel.copy(openingRoll = !it.duel.openingRoll)) }
+            })
+        }
         // Command mode speaks back (1.0.87): the move understood, their moves, the answers — off unless asked for.
         add(MenuEntry(if (prefs.speak) "Keep the moves silent" else "Say the moves aloud") {
             neue.update { it.copy(duel = it.duel.copy(speak = !it.duel.speak)) }
@@ -405,6 +426,7 @@ internal fun testHand(h: NeueHolders, solo: Boolean = true) {
             ),
             solo = solo,
             created = System.currentTimeMillis(),
+            openingRoll = !solo && h.neue.prefs.duel.openingRoll,
         ),
     )
 }
@@ -449,6 +471,8 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
                         ),
                         solo = solo,
                         created = System.currentTimeMillis(),
+                        // Who goes first is rolled for (1.0.87), unless the setting says the first seat does.
+                        openingRoll = !solo && prefs.openingRoll,
                     ),
                 )
                 duels.setupOpen = false
@@ -486,6 +510,10 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
         }
     }
 }
+
+/** Ai throws its dice this long after the duel is dealt, and chooses this long after the last die lands (1.0.87). */
+private const val AI_THROW_MS = 1200L
+private const val AI_CHOOSE_MS = 3200L
 
 /** The command line's help, one line: what to type. */
 internal val COMMAND_HINT: String = DuelCommand.EXAMPLES.take(8).joinToString(" · ")

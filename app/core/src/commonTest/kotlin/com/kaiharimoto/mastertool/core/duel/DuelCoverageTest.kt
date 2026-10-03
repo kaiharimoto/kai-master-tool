@@ -30,6 +30,8 @@ class DuelCoverageTest {
     private fun table(row: DuelCoverage.Row): DuelState = when (row.needs) {
         DuelCoverage.NEEDS_CHAIN -> ok(s, DuelAction.ChainAdd(0, uid(0, 5)))
         DuelCoverage.NEEDS_PROPOSAL -> ok(s, DuelAction.Propose(1, end = true), 1)
+        DuelCoverage.NEEDS_OPENING -> s.copy(opening = Opening())
+        DuelCoverage.NEEDS_CHOICE -> s.copy(opening = Opening(dice = listOf(listOf(6, 5), listOf(1, 2)), winner = 0))
         else -> s
     }
 

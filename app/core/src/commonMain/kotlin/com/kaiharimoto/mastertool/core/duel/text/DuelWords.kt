@@ -136,6 +136,8 @@ object DuelWords {
             }
             is DuelAction.Coin -> "${seatName(before, a.seat)} tosses a coin: ${if (a.heads) "heads" else "tails"}"
             is DuelAction.Dice -> "${seatName(before, a.seat)} rolls a die: ${a.value}"
+            is DuelAction.OpeningRoll -> opening(before, after, a)
+            is DuelAction.GoFirst -> "${seatName(before, a.seat)} wins the roll and goes ${if (a.first) "first" else "second"}"
             is DuelAction.Chat -> "${seatName(before, a.seat)}: ${a.text}"
             is DuelAction.Ping -> {
                 val on = a.uid?.let(::card) ?: a.place?.let { placeName(it, before) }
@@ -232,6 +234,19 @@ object DuelWords {
      * A seat's name. 1.0.74–1.0.78 wrote "You" and "Opponent" as names, which read as "You draws" and
      * "You's turn" (1.0.79, Ai's feedback): those read as Player 1 and Player 2.
      */
+    /** "Kai rolls 4 and 6 (10)", and what the round came to once both have thrown (1.0.87). */
+    fun opening(before: DuelState, after: DuelState, a: DuelAction.OpeningRoll): String {
+        val who = seatName(before, a.seat)
+        val dice = a.values.takeIf { it.size == 2 } ?: return "$who throws the dice"
+        val head = "$who rolls ${dice[0]} and ${dice[1]} (${dice.sum()})"
+        val o = after.opening ?: return head
+        return when {
+            o.winner != null && before.opening?.winner == null -> "$head · ${seatName(after, o.winner)} wins the roll and chooses"
+            o.tied && before.opening?.tied != true -> "$head · a tie: both roll again"
+            else -> head
+        }
+    }
+
     fun seatName(s: DuelState, seat: Int): String {
         val name = s.seats.getOrNull(seat)?.name?.trim().orEmpty()
         return when {

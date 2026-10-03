@@ -58,7 +58,12 @@ data class DuelState(
     val resolved: List<Int> = emptyList(),
     /** The attacks declared this turn, the newest last (1.0.83). */
     val attacks: List<Attack> = emptyList(),
+    /** The opening roll for who goes first (1.0.87): null when the duel has none, as every duel before it. */
+    val opening: Opening? = null,
 ) {
+    /** The opening roll is still to be decided: turn 1 has not begun. */
+    val beforeTurnOne: Boolean get() = opening != null && !opening.decided
+
     fun seat(i: Int): SeatState = seats[i]
 
     fun card(uid: Int): CardInst? = cards[uid]
