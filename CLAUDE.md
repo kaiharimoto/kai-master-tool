@@ -629,7 +629,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   here (`Duels.insertPast`, `Past`, `duel_act` `at`), Save as combo from two picked lines, a finished duel logged to Prep.
   **1.0.81, private stays private**: a card Set from the hand forgets who knew it and takes a fresh veil
   (`DuelRules.hidesOnSet`; from the Deck or GY it stays known), and Ai's words in the log never name its hidden cards
-  (`Secrets.redact`, the original behind Thinking).
+  (`Secrets.redact`, the original behind Thinking). **1.0.82**: a hand is its owner's alone (`DuelSight`): a search or a
+  reveal names a card in the log for that moment, never after; what was seen of a card is forgotten as it enters a hand.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

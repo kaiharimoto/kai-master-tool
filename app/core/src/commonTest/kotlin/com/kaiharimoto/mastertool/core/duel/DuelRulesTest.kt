@@ -188,13 +188,15 @@ class DuelRulesTest {
     }
 
     @Test
-    fun aCardSeenLeavingTheFieldIsStillKnownInTheHand() {
+    fun aCardThatLeavesTheFieldForTheHandIsPrivateThere() {
+        // 1.0.82, kai: "once it has gone into the hand it is no longer revealed or treated as public knowledge".
         var s = ok(bare(), DuelAction.Draw(0, 1))
         assertFalse(DuelSight.sees(s, ash, 1))
         s = ok(s, DuelAction.Move(ash, m(0, 0)))
         assertTrue(DuelSight.sees(s, ash, 1))
         s = ok(s, DuelAction.Move(ash, Place.Pile(0, PileKind.HAND)))
-        assertTrue(DuelSight.sees(s, ash, 1))
+        assertFalse(DuelSight.sees(s, ash, 1))
+        assertTrue(DuelSight.sees(s, ash, 0))
     }
 
     @Test

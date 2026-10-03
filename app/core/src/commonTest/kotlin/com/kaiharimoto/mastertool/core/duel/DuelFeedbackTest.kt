@@ -241,7 +241,8 @@ class DuelFeedbackTest {
     fun aCardSetFromTheHandIsPrivateAgain() {
         // kai, mid-game: a card searched (and so revealed), then Set from the hand, was named to the other seat.
         val searched = play(table, run("emblema four to hand", table))
-        assertTrue(DuelSight.sees(searched, e4a, 1))
+        // Shown for that moment, in the log; in the hand it is Kai's alone (1.0.82).
+        assertTrue(!DuelSight.sees(searched, e4a, 1))
         val set = DuelAction.Move(e4a, Place.Zone(0, ZoneKind.SPELL, 1), CardPosition.FACE_DOWN_ATK, "set")
         val after = ok(searched, set)
         assertTrue(!DuelSight.sees(after, e4a, 1))
@@ -278,5 +279,33 @@ class DuelFeedbackTest {
         // One player's table has no one to keep it from.
         val solo = s.copy(solo = true)
         assertTrue(!com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact("I drew Endgame Problem", solo, 0, 1, catalog).changed)
+    }
+
+    @Test
+    fun aCardInTheHandIsItsOwnersAloneWhateverWasSeen() {
+        // kai: "once it has gone into the hand it is no longer revealed or treated as public knowledge".
+        // A search: the log names it to the other seat at that moment, and then it is private.
+        val before = table
+        val search = run("emblema four to hand", before)
+        var s = before
+        val said = search.map { a ->
+            val after = ok(s, a)
+            DuelWords.say(s, after, DuelEntry(0, 0, 0, 0, a), 1, catalog).also { s = after }
+        }
+        assertTrue(said.any { "Emblema Four" in it }, said.toString())
+        assertTrue(!DuelSight.sees(s, e4a, 1))
+        assertTrue(DuelView.of(s, 1).seats[0].hand.single().hidden)
+        // A face-up card returned from the field to the hand.
+        val field = ok(table, DuelAction.Move(angel, Place.Zone(0, ZoneKind.MONSTER, 0), CardPosition.FACE_UP_ATK, "special"))
+        assertTrue(DuelSight.sees(field, angel, 1))
+        val back = ok(field, DuelAction.Move(angel, Place.Pile(0, PileKind.HAND), how = "return"))
+        assertTrue(!DuelSight.sees(back, angel, 1))
+        // A card revealed from the hand stays private; put back on the Deck, it carries nothing from the hand.
+        val shown = ok(back, DuelAction.Reveal(0, listOf(angel)))
+        assertTrue(!DuelSight.sees(shown, angel, 1))
+        assertTrue(!DuelSight.sees(ok(shown, DuelAction.Move(angel, Place.Pile(0, PileKind.DECK, Place.TOP), how = "return")), angel, 1))
+        // A top card looked at by both, then drawn: the owner's alone.
+        val looked = ok(table, DuelAction.Reveal(0, listOf(e4a)))
+        assertTrue(!DuelSight.sees(ok(looked, DuelAction.Draw(0)), e4a, 1))
     }
 }

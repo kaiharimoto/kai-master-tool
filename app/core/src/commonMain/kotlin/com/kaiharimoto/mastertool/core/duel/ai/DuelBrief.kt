@@ -52,7 +52,7 @@ object DuelBrief {
             val stats = if (c.token && (c.atk != null || c.def != null)) " ATK ${c.atk ?: "?"}/DEF ${c.def ?: "?"}" else ""
             // A card of the reader's own the other player has seen (a search, a reveal): they know it (1.0.79).
             val known = if (viewer != null && c.ref > 0 && c.owner == viewer && (1 - viewer) in (s.seen[c.ref] ?: emptySet()) &&
-                s.placeOf(c.ref).let { it is Place.Pile && (it.kind == PileKind.HAND || it.kind == PileKind.DECK || it.kind == PileKind.EXTRA) }
+                s.placeOf(c.ref).let { it is Place.Pile && (it.kind == PileKind.DECK || it.kind == PileKind.EXTRA) }
             ) " (they know it)" else ""
             val n = base + stats + known
             val pos = when (c.pos) {

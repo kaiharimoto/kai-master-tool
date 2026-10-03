@@ -9,12 +9,16 @@ import kotlinx.serialization.Serializable
  * face-up Pendulum in the Extra Deck or a material is seen by both seats; a hand by its owner; a
  * face-down card on the field by its controller; a face-down Extra Deck or banished card by its owner;
  * a deck by no one. On top of that, a seat that saw a card — revealed, or before it went out of sight —
- * keeps knowing it until it is shuffled away.
+ * keeps knowing it until it is shuffled away — except in a hand (1.0.82, kai: "once it has gone into the
+ * hand it is no longer revealed or treated as public knowledge"): a hand is its owner's alone, and a
+ * reveal or a search shows a card for that moment only, in the log.
  */
 object DuelSight {
     fun sees(s: DuelState, uid: Int, viewer: Int?): Boolean {
         if (viewer == null) return true
         val card = s.cards[uid] ?: return false
+        val place = s.placeOf(uid)
+        if (place is Place.Pile && place.kind == PileKind.HAND) return place.seat == viewer
         if (viewer in (s.seen[uid] ?: emptySet())) return true
         return when (val p = s.placeOf(uid) ?: return false) {
             is Place.Zone -> card.faceUp || card.controller == viewer

@@ -153,7 +153,10 @@ object DuelRules {
                 counters = if (stays) it.counters else emptyMap(),
             )
         }
-        next = if (hidesOnSet(from, to, pos)) {
+        next = if (to is Place.Pile && to.kind == PileKind.HAND) {
+            // Into a hand: its owner's alone; what anyone saw of it before is forgotten (1.0.82).
+            next.copy(seen = next.seen - a.uid)
+        } else if (hidesOnSet(from, to, pos)) {
             // Set from the hand: whatever was known of it is gone, and its veil is new, so the other seat
             // cannot tell which card it was (1.0.81, kai: a card searched, then Set, was named across the table).
             next.copy(seen = next.seen - a.uid, epoch = next.epoch + (a.uid to ((next.epoch[a.uid] ?: 0) + 1)))
@@ -180,7 +183,8 @@ object DuelRules {
         val drawn = deck.take(a.n)
         var next = s.withSeat(a.seat) { it.copy(deck = it.deck.drop(a.n), hand = it.hand + drawn) }
         drawn.forEach { u -> next = next.withCard(u) { it.copy(pos = CardPosition.FACE_UP_ATK) } }
-        return ok(next)
+        // A card drawn is its owner's alone, whatever was seen of it on the deck (1.0.82).
+        return ok(next.copy(seen = next.seen - drawn.toSet()))
     }
 
     private fun shuffle(s: DuelState, a: DuelAction.Shuffle): Outcome {
@@ -246,7 +250,9 @@ object DuelRules {
         if (a.uids.isEmpty()) return Outcome.Refused("Reveal at least one card")
         if (a.uids.any { it !in s.cards }) return Outcome.Refused("No such card")
         val to = a.to?.let { setOf(it) } ?: setOf(0, 1)
-        return ok(s.copy(seen = a.uids.fold(s.seen) { m, u -> m.with(u, to) }))
+        // A card revealed from a hand is shown for that moment — the log names it — and stays its owner's (1.0.82).
+        val kept = a.uids.filterNot { u -> s.placeOf(u).let { it is Place.Pile && it.kind == PileKind.HAND } }
+        return ok(s.copy(seen = kept.fold(s.seen) { m, u -> m.with(u, to) }))
     }
 
     // ---- helpers -------------------------------------------------------------------------------------

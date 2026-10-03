@@ -3184,6 +3184,13 @@ operate and communicate with the AI using the log chat as the main one"):
   `say`s into the record — unless the person can see a card of that name anyway. The words as written stay behind
   the Thinking switch.
 
+**A hand is its owner's alone** (1.0.82, kai: "once it has gone into the hand it is no longer revealed or treated as
+public knowledge"): `DuelSight` reads a card in a hand as its owner's only, whatever was seen of it — a search's or a
+reveal's card is named in the log at that moment and is private from then on; a face-up card returned to the hand,
+a card drawn after a look at the deck, a card revealed from the hand all stay private; what was known of a card is
+forgotten as it enters a hand, so it does not come back when the card leaves it. (1.0.79 had marked a searched card
+"known to opponent" in the hand; that is gone.)
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

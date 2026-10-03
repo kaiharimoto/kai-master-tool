@@ -461,7 +461,8 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
   hidden card's name from anything else. **full** is for testing when the person asks. **auto** is self, plus `duel_peek` when you judge a
   hidden card would change your play; the peek and your reason go in the log, so peek rarely and say why.
 - Cards are `#uid` with their name. Use the uid in ops when a name could be two cards (two copies on the field).
-- Seats read "Seat 0 (Kai)" and "Seat 1 (Ai)". A card of yours marked "(they know it)" was searched or revealed: the other player knows it.
+- Seats read "Seat 0 (Kai)" and "Seat 1 (Ai)". A search or a reveal shows a card for that moment, in the log; once in a
+  hand it is its owner's alone again. A card of yours on the Deck marked "(they know it)" was revealed there.
 - "This turn so far" counts each seat's Summons and activations and lists the locks written down; "House rulings" are what you and the
   person agreed — follow them.
 
