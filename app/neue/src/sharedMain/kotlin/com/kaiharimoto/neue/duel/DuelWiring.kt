@@ -147,12 +147,7 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
     if (h.neue.page != Page.DUEL || h.neue.hasTop || h.overlays.isOpen) return false
     val d = h.duel
     when {
-        // Ai thinking at the table stops first (1.0.86), and the moves it was playing out with it.
-        aiAtTable(h) && h.ai.running && h.ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL -> {
-            h.ai.stop()
-            if (d.playing) d.stopRequested = true
-        }
-        d.playing -> d.stopRequested = true
+        // What is open on the table closes first (1.0.86, the red team: Esc stopped Ai's turn and closed nothing).
         d.combosOpen -> d.combosOpen = false
         d.setupOpen -> d.setupOpen = false
         d.libraryOpen -> d.libraryOpen = false
@@ -163,6 +158,12 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.strip != null -> d.closeStrip()
         d.verbStrip -> d.verbStrip = false
         d.verbsOpen -> d.verbsOpen = false
+        // Then Ai thinking at the table stops, and the moves it was playing out with it.
+        aiAtTable(h) && h.ai.running && h.ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL -> {
+            h.ai.stop()
+            if (d.playing) d.stopRequested = true
+        }
+        d.playing -> d.stopRequested = true
         d.selection.isNotEmpty() -> d.selection = emptySet()
         d.replay != null -> d.closeReplay()
         else -> return false

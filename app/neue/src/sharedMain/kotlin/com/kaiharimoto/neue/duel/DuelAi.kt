@@ -148,8 +148,15 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
     return buildList {
         add("At the duel table: you are ${DuelWords.seatLabel(s, seat)}, with $knows. Turn ${s.turn}, ${DuelWords.seatLabel(s, s.active)} to play, ${s.phase.label} Phase.")
         // Turns that start themselves (1.0.86): the table has drawn for Ai's seat, so it must not draw again.
-        if (d.autoDraw) add(com.kaiharimoto.mastertool.core.duel.TurnStart.FOR_AI)
-        if (takenBack) add("Moves were taken back since you last read: the table below is how it stands now.")
+        if (d.autoDraw) {
+            add(com.kaiharimoto.mastertool.core.duel.TurnStart.FOR_AI)
+            // Said only as it is (1.0.86, the red team): on Ai's turn with its opening not yet made, the next step is named.
+            if (s.active == seat) com.kaiharimoto.mastertool.core.duel.TurnStart.next(g)?.let { step ->
+                add("Your turn's opening is not finished yet (next: ${step::class.simpleName}); the table makes it — wait for your Main Phase 1.")
+            }
+        }
+        if (takenBack || duels.aiTookBack) add("Moves were taken back since you last read: the table below is how it stands now.")
+        duels.aiTookBack = false
         if (lines.isEmpty()) add("Nothing new on the table since you last read.")
         else {
             add("What happened on the table since you last read (entries $from–${g.cursor - 1}), as your seat saw it:")

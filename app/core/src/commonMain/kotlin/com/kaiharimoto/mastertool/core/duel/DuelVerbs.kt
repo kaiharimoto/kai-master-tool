@@ -407,7 +407,8 @@ object DuelVerbs {
     fun canAttack(s: DuelState, seat: Int, uid: Int): Boolean {
         val c = s.cards[uid] ?: return false
         val at = s.placeOf(uid)
-        return s.phase == DuelPhase.BATTLE && at is Place.Zone && (at.kind == ZoneKind.MONSTER || at.kind == ZoneKind.EMZ) &&
+        // Only the turn player attacks (1.0.86, the red team: an attack armed earlier fired in the other player's Battle Phase).
+        return s.phase == DuelPhase.BATTLE && (s.solo || s.active == seat) && at is Place.Zone && (at.kind == ZoneKind.MONSTER || at.kind == ZoneKind.EMZ) &&
             c.controller == seat && c.faceUp && !c.defense
     }
 

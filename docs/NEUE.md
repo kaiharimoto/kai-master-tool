@@ -3315,6 +3315,15 @@ card effect activation, entering a phase, attempting to leave a phase, an attack
   verb strip beside it puts Target first and still lists the rest) unless the person plays both seats — a hot-seat with both hands face-up and no Ai at the
   other seat. The chain well says what a press does: "Resolve · right-click clears".
 
+**The third red team** (1.0.86, run on the three features merged): Ai's watches are forgotten only when Ai changes seats, not each
+time the Duel page opens (`Duels.watchSeat`); the person's turn opening is watched even when Ai's own End Turn began it;
+one page effect settles Ai's answer, resumes the opening, then wakes Ai — on its watches, a kept cue, or its turn, never
+while its opening waits (`Duels.opening`), and a cue says "your draw is done" only when it is; an undo that keeps the talk
+moves Ai's read mark back and tells it moves were taken back (`Duels.aiTookBack`); an armed attack ends with its phase,
+an undo, a replay or a seat change, and only the turn player attacks (`DuelVerbs.canAttack`); Esc closes what is open on
+the table before it stops Ai; a held opening step Ai answered is not made again; several attackers at once say they go one
+at a time; Ai offers five answers at most at its table, so No response always has a digit.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared`.
 

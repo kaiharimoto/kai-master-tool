@@ -172,35 +172,40 @@ internal fun DuelPage(h: NeueHolders) {
     val live = duels.game
     // A duel that ends against a known deck is a practice game on Prep (1.0.80).
     LaunchedEffect(live?.state?.conceded, live?.state?.seats?.map { it.lp }) { logFinishedDuel(h) }
-    // Keyed on Ai's running too: a turn that passed while it answered is taken once it is free (1.0.85).
-    LaunchedEffect(live?.state?.turn, live?.state?.active, prefs.aiPlays, h.ai.running) {
-        val g = duels.game ?: return@LaunchedEffect
-        if (prefs.aiPlays && neue.prefs.ai.enabled && !g.state.solo && g.state.active == prefs.aiSeat &&
-            duels.aiAskedTurn != g.state.turn && duels.replay == null && !h.ai.running && duels.fired.isEmpty()
-        ) askAiToPlay(h)
-    }
     // Ai's response triggers (1.0.85): the table watches for it, and wakes it on what it could answer.
     val watching = aiAtTable(h) && prefs.aiTriggers && live?.state?.solo == false && duels.replay == null
     // Ai changed seats: its watches were for the other hand (1.0.85).
-    LaunchedEffect(prefs.aiSeat) { duels.forgetTriggers() }
+    // Forgotten only on a real change of seat, never because the page opened again (1.0.86, the red team).
+    LaunchedEffect(prefs.aiSeat) {
+        if (duels.watchSeat != null && duels.watchSeat != prefs.aiSeat) duels.forgetTriggers()
+        duels.watchSeat = prefs.aiSeat
+    }
     SideEffect {
         duels.stopAi = { h.ai.stop() }
         duels.watcher = if (watching) prefs.aiSeat else null
         duels.aiEngaged = aiAtTable(h) && live?.state?.solo == false && (prefs.aiPlays || duels.aiSession != null)
         duels.autoDraw = prefs.autoDraw
     }
-    LaunchedEffect(duels.fired, duels.queuedCue, h.ai.running, watching) {
+    // One effect, in order (1.0.86, the red team): Ai's answer is settled — the person's moves go on, a held change is
+    // made, the turn's opening resumes — before Ai is woken on its watches, a kept cue, or its own turn. Two effects
+    // raced, and Ai was asked to play its turn while its opening still waited.
+    LaunchedEffect(duels.fired, duels.queuedCue, h.ai.running, watching, live?.state?.turn, live?.state?.active, prefs.aiPlays, duels.aiAnswering, duels.held) {
         if (h.ai.running) return@LaunchedEffect
         // Ai has answered (or stopped): the person's moves go on, and a phase change held for it is made.
         if (duels.aiAnswering || (!watching && duels.held != null)) duels.dontWait()
         if (!watching && duels.fired.isNotEmpty()) duels.fired = emptyList()
+        // A turn's opening paused on a watch goes on once nothing waits on Ai (1.0.86); a step of it may fire a watch.
+        duels.resumeTurn()
+        val g = duels.game
         when {
             watching && duels.fired.isNotEmpty() -> cueTriggered(h)
             duels.queuedCue != null -> cueQueued(h)
+            // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, once its opening is made.
+            g != null && prefs.aiPlays && neue.prefs.ai.enabled && !g.state.solo && g.state.active == prefs.aiSeat &&
+                duels.aiAskedTurn != g.state.turn && duels.replay == null && !duels.waitingOnAi && !duels.opening -> askAiToPlay(h)
         }
-        // A turn's opening paused on a watch goes on once nothing waits on Ai (1.0.86).
-        duels.resumeTurn()
     }
+
 }
 
 /**

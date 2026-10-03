@@ -163,6 +163,11 @@ class Duels(val dir: File) {
         return alive
     }
 
+    /** The seat Ai's watches were left for: they are forgotten only when Ai changes seats, not each time the page opens. */
+    var watchSeat: Int? = null
+    /** Moves were taken back under Ai's read mark (an undo that kept the talk after it): its next cue says so. */
+    var aiTookBack = false
+
     /** Everything about Ai's answers let go: a new duel, a what-if, a replay, the network, another seat for Ai. */
     fun forgetTriggers(clearWatches: Boolean = true) {
         if (clearWatches) watches = emptyList()
@@ -201,11 +206,15 @@ class Duels(val dir: File) {
         val moved = g.cursor < h.cursor || g.played.drop(h.cursor).any { !it.action.social }
         if (moved || g.state.chain.isNotEmpty()) {
             problem = "Ai responded — move the phase on again once the chain is done."
+            // The opening stops here too: made again at once it would wake Ai a second time for the same step.
+            autoTurn = null
             return
         }
         releasing = true
         autoActing = h.auto
-        try { act(h.actions, h.seat) } finally { releasing = false; autoActing = false }
+        val wasAi = aiActing
+        aiActing = false
+        try { act(h.actions, h.seat) } finally { releasing = false; autoActing = false; aiActing = wasAi }
         resumeTurn()
     }
 
@@ -230,7 +239,10 @@ class Duels(val dir: File) {
     /** `DuelPrefs.autoDraw`, set by the page: after End Turn the next player's draw, Standby and Main 1 are made here. */
     var autoDraw = true
     /** The turn whose opening is being made; null when none is. */
-    private var autoTurn: Int? = null
+    private var autoTurn by mutableStateOf<Int?>(null)
+
+    /** A turn's opening is still to be made (paused on Ai's answer): Ai is not asked to play until it is. */
+    val opening: Boolean get() = autoTurn != null
     /** The opening's group in the log: its steps are one gesture, the incoming seat's, one step of undo. */
     private var autoGroup: Int? = null
     /** A step of the opening is being committed. */
@@ -263,7 +275,10 @@ class Duels(val dir: File) {
             val pastAt = insertAfter
             insertAfter = null
             autoActing = true
-            val ok = try { act(listOf(step), g.state.active) } finally { autoActing = false; insertAfter = pastAt }
+            // Never Ai's move even when Ai's End Turn began it: the person's opening is watched (1.0.86, the red team).
+            val wasAi = aiActing
+            aiActing = false
+            val ok = try { act(listOf(step), g.state.active) } finally { autoActing = false; aiActing = wasAi; insertAfter = pastAt }
             if (!ok) { autoTurn = null; return }
         }
     }
@@ -447,6 +462,8 @@ class Duels(val dir: File) {
         problem = null
         if (autoActing && autoGroup == null) autoGroup = r.game.entries.getOrNull(r.game.cursor - 1)?.group
         // Something moved: a pending Attach and the verbs beside the last card are done with (1.0.85).
+        // An attack armed and never made ends with its phase (1.0.86, the red team).
+        if (actions.any { it is DuelAction.Phase || it is DuelAction.EndTurn }) attacking = null
         if (actions.any { !it.social && it !is DuelAction.Counter }) {
             verbStrip = false
             if (actions.none { it is DuelAction.Move && it.to is Place.Under }) attaching = null
@@ -482,14 +499,22 @@ class Duels(val dir: File) {
             // Several at once: each in turn on the table as the one before left it, one group.
             var s = g.state
             val all = mutableListOf<DuelAction>()
+            var attackers = 0
             targets.forEach { u ->
                 val r = DuelVerbs.actions(s, seatFor(u), u, verb, catalog)
+                // An attack wants its target: declared one monster at a time (1.0.86, the red team: they were dropped silently).
+                if (r.needsTarget) { attackers++; return@forEach }
                 if (r.problem != null || r.needsHost) return@forEach
                 val next = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(s, r.actions).first ?: return@forEach
                 all += r.actions
                 s = next
             }
+            if (all.isEmpty()) {
+                problem = if (attackers > 0) "Attacks are declared one monster at a time: pick one attacker." else problem
+                return false
+            }
             selection = emptySet()
+            if (attackers > 0) problem = "The other moves were made; attacks are declared one monster at a time."
             return act(all, seatFor(uid))
         }
         val r = DuelVerbs.actions(g.state, actor, uid, verb, catalog, zone, host, direct)
@@ -581,9 +606,17 @@ class Duels(val dir: File) {
         val next = g.undoMove()
         // Talk moved to before the move taken back: lines picked by number would now be other lines.
         if (next.entries !== g.entries) { logPick = emptyList(); insertAfter = null }
+        // Ai's read mark goes back to where the logs part, and its next cue says moves were taken back (1.0.86, the
+        // red team: with the talk kept, the cursor came back to the mark and Ai was told "nothing new").
+        val was = g.played
+        val now = next.played
+        var k = 0
+        while (k < was.size && k < now.size && was[k] == now[k]) k++
+        aiRead?.let { if (k < it) { aiRead = k; aiTookBack = true } }
         game = next
         placed = null
         problem = null
+        attacking = null
         save()
     }
 
@@ -595,6 +628,7 @@ class Duels(val dir: File) {
         if (!g.canRedo) return
         game = g.redoMove()
         placed = null
+        attacking = null
         save()
     }
 
@@ -607,6 +641,7 @@ class Duels(val dir: File) {
         val g = game ?: return
         if (g.state.solo) return
         if (aiEngaged) { problem = "Ai plays the other seat: sitting there would show you its hand."; return }
+        attacking = null
         bottom = 1 - bottom
         strip = null
     }
@@ -940,6 +975,7 @@ class Duels(val dir: File) {
         // The guest seat and its token belong to that table only (1.0.85: a second hosted game refused every guest).
         guestToken = null
         guestDuel = null
+        attacking = null
         hostAskedTakeBack = false
         forgetTriggers(clearWatches = false)
     }
@@ -982,6 +1018,7 @@ class Duels(val dir: File) {
     fun openReplay(id: String) {
         // A replay is not the table Ai's answer was for (1.0.85): what waited on it goes.
         forgetTriggers(clearWatches = false)
+        attacking = null
         scope.launch {
             val r = withContext(Dispatchers.IO) { File(replayDir, "$id.json").takeIf { it.exists() }?.readText()?.let(DuelCodec::decode) }
             if (r == null) { problem = "That replay could not be read"; return@launch }
@@ -1100,6 +1137,7 @@ class Duels(val dir: File) {
     fun branch() {
         val r = replay ?: return
         forgetTriggers()
+        attacking = null
         game = com.kaiharimoto.mastertool.core.duel.replay.Replays.branch(r.record, r.at)
         origin = r.id to r.at
         closeReplay()

@@ -1098,7 +1098,8 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         // At the duel table "No response" is always one of the answers (1.0.80, kai: "there was no 'No response'
         // option and I had to keep typing it out").
         val duel = ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL
-        val offered = options.take(6).let { o -> if (duel && o.none { it.equals("No response", true) }) o + "No response" else o }
+        // Five of Ai's own at most there, so No response always has a digit (1.0.86).
+        val offered = if (duel && options.none { it.equals("No response", true) }) options.take(5) + "No response" else options.take(6)
         val said = heard.map { it.trim() }.filter { it.isNotEmpty() }.take(8)
         // At its own table its hidden cards stay out of the question as out of its words (1.0.86): the question,
         // what it heard and every option put through `Secrets` for the person's eyes; the answer handed back as

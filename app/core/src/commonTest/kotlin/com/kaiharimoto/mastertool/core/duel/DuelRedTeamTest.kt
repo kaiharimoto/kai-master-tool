@@ -159,4 +159,14 @@ class DuelRedTeamTest {
         val intent = DuelDrop.intent(s, pot, DropSpot.Chain, catalog, actor = 1)
         assertTrue(intent.actions.none { it is DuelAction.Position })
     }
+
+    @Test
+    fun onlyTheTurnPlayerAttacks() {
+        var s = ok(bare(), DuelAction.Move(zeus, m(0, 0), CardPosition.FACE_UP_ATK))
+        s = ok(s, DuelAction.Phase(DuelPhase.BATTLE))
+        assertTrue(DuelVerbs.canAttack(s, 0, zeus))
+        // The same monster in the other player's Battle Phase does not attack: an armed attack left over must not fire.
+        val theirs = s.copy(active = 1)
+        assertFalse(DuelVerbs.canAttack(theirs, 0, zeus))
+    }
 }
