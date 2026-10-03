@@ -1,8 +1,9 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.ai.foldIntoWeb
+import com.kaiharimoto.neue.ai.shutDown
+import com.kaiharimoto.neue.ai.forgetEverything
 import androidx.compose.foundation.layout.imePadding
-import com.kaiharimoto.neue.kit.byFinger
-import com.kaiharimoto.neue.kit.isPrimaryPress
 import com.kaiharimoto.neue.platform.reportIssue
 import com.kaiharimoto.neue.cursor.CursorLayer
 import com.kaiharimoto.neue.cursor.FamilyCursor
@@ -12,37 +13,22 @@ import com.kaiharimoto.neue.kit.OverlayLayer
 import com.kaiharimoto.neue.kit.Overlays
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.input.pointer.areAnyPressed
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Animatable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.isSpecified
-import com.kaiharimoto.mastertool.core.motion.ZenClock
-import com.kaiharimoto.mastertool.core.motion.ZenCorner
 import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.neue.zen.LocalZen
 import com.kaiharimoto.neue.zen.ZenReset
 import com.kaiharimoto.neue.zen.ZenLayer
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import com.kaiharimoto.mastertool.core.layout.EdgeReveal
-import com.kaiharimoto.mastertool.core.layout.Revealed
 import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.art.LocalArt
 import com.kaiharimoto.neue.cards.LocalNameStyle
 import com.kaiharimoto.mastertool.core.model.DeckSection
-import com.kaiharimoto.neue.builder.IMMERSIVE_TOP
 import com.kaiharimoto.neue.builder.BuilderBar
 import com.kaiharimoto.neue.shot.DeckShots
 import com.kaiharimoto.neue.theme.MuShell
@@ -63,45 +49,29 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import com.kaiharimoto.mastertool.core.layout.GridStep
-import com.kaiharimoto.mastertool.core.layout.StepDirection
 import androidx.compose.runtime.SideEffect
-import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.mastertool.core.deck.Lens
-import com.kaiharimoto.neue.builder.groupsOn
-import com.kaiharimoto.mastertool.core.motion.ZenPick
-import com.kaiharimoto.mastertool.core.motion.ZenGestures
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.ui.input.pointer.isShiftPressed
-import androidx.compose.ui.input.pointer.isPrimaryPressed
 import com.kaiharimoto.mastertool.core.library.StartingDeck
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusManager
 import com.kaiharimoto.neue.duel.DuelBarItems
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.input.DeskAction
-import com.kaiharimoto.mastertool.core.input.DeskContext
-import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.input.DeskMenuBar
 import com.kaiharimoto.mastertool.core.input.BackChain
 import com.kaiharimoto.mastertool.core.input.BackFlags
@@ -117,10 +87,8 @@ import com.kaiharimoto.mastertool.ui.deckbuilder.DeckLayoutState
 import com.kaiharimoto.neue.builder.BuilderPage
 import com.kaiharimoto.neue.builder.CardViewer
 import com.kaiharimoto.neue.builder.CardActions
-import com.kaiharimoto.neue.builder.historyMenu
 import com.kaiharimoto.neue.shell.PhoneBar
 import com.kaiharimoto.neue.shell.TabBar
-import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.builder.NeueDrag
 import com.kaiharimoto.neue.builder.rememberCarryMotion
 import com.kaiharimoto.neue.cards.NeueCard
@@ -136,7 +104,8 @@ import com.kaiharimoto.neue.pages.DecksPage
 import com.kaiharimoto.neue.pages.SettingsHost
 import com.kaiharimoto.neue.pages.SettingsPage
 import com.kaiharimoto.neue.platform.Platform
-import com.kaiharimoto.neue.shell.Command
+import com.kaiharimoto.neue.shell.FoldedBars
+import com.kaiharimoto.neue.shell.windowPointer
 import com.kaiharimoto.neue.shell.CommandPalette
 import com.kaiharimoto.neue.shell.Drawers
 import com.kaiharimoto.neue.shell.HelpDialog
@@ -165,7 +134,8 @@ class NeueHolders(
     /** Tournament prep (1.0.50): events, the test games log, drills. */
     val prep: com.kaiharimoto.neue.prep.Prep,
 ) {
-    private val held = mutableSetOf<androidx.compose.ui.input.key.Key>()
+    /** Keys down now; the key handler itself is `NeueKeys.kt`. */
+    internal val held = mutableSetOf<androidx.compose.ui.input.key.Key>()
     var focus: FocusManager? = null
 
     /** Zen's amounts and clock, shared with everything that fades or floats. */
@@ -261,131 +231,13 @@ class NeueHolders(
         layout.update { it.copy(searchEffects = on) }
     }
 
-    /** The window's key handler: one table, one resolve, one dispatch (`DeskShortcuts`). */
-    fun onKey(event: KeyEvent): Boolean {
-        if (event.type == KeyEventType.KeyUp) {
-            held.remove(event.key)
-            // A held row's key coming up ends what its going down started (1.0.87: M let go sends what was said).
-            holding.remove(event.key)?.let { action ->
-                hold(action, down = false)
-                return true
-            }
-            return false
-        }
-        // While a key is held for a held row, what it would type is swallowed too (Alt M in the command line).
-        if (event.type != KeyEventType.KeyDown) return holding.isNotEmpty()
-        // The first key after deep zen only wakes the builder: nothing should
-        // happen to a deck you were not looking at.
-        if (wake() == ZenPhase.DEEP) {
-            held.add(event.key)
-            return true
-        }
-        val repeat = !held.add(event.key)
-        // The key's own repeats while a held row is down are nothing: never a second start.
-        if (event.key in holding) return true
-        val chord = DeskKeys.chord(event) ?: return false
-        val context = deskContext()
-        // Command mode (1.0.87, the red team): in a Spotlight a voice filled — or one listening — M is the voice key
-        // still, held to speak again ("yes"), never an m typed and repeated into the line.
-        if (neue.page == Page.DUEL && chord == com.kaiharimoto.mastertool.core.input.KeyChord("m") && !context.overlayOpen && !neue.hasTop) {
-            val spot = duel.spotlight
-            // Only while the box holds words heard (an edit makes them typed) and no other field has the keys: an m typed
-            // into the chat beside an open box is an m (the red team).
-            val voiced = spot != null && (spot.heard != null || spot.mode == com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.LISTENING)
-            if (voiced && (!context.textInputFocused || duel.spotlightTyping)) {
-                holding[event.key] = DeskAction.DUEL_VOICE
-                hold(DeskAction.DUEL_VOICE, down = true)
-                return true
-            }
-        }
-        // Keys typed after the box opened and before its field has the keyboard (a frame or two) are the box's, never
-        // duel keys: "zs…" typed fast opens the box on "zs", not a Summon (the red team).
-        if (neue.page == Page.DUEL && duel.spotlight != null && !duel.spotlightTyping && !context.textInputFocused && !context.overlayOpen && !neue.hasTop &&
-            !chord.ctrl && !chord.alt
-        ) {
-            val typed = when {
-                chord.key.length == 1 && (chord.key[0] in 'a'..'z' || chord.key[0] in '0'..'9') -> if (chord.shift) chord.key.uppercase() else chord.key
-                chord.key == "space" -> " "
-                else -> null
-            }
-            if (typed != null) {
-                duel.typeIntoSpotlight(typed)
-                return true
-            }
-        }
-        val shortcut = DeskShortcuts.resolveShortcut(chord, context) ?: return spotlightOn(chord, context)
-        if (repeat && !shortcut.repeatable) return true
-        if (shortcut.hold) {
-            holding[event.key] = shortcut.action
-            hold(shortcut.action, down = true)
-            return true
-        }
-        if (echo.admit(shortcut.action, System.currentTimeMillis())) run(shortcut.action)
-        return true
-    }
-
-    /**
-     * A letter that is no duel key, typed at the table (1.0.87, the Spotlight): the box opens holding it, so a move is
-     * typed straight onto the table. Only with nothing covering the page and no field taking the keys.
-     */
-    private fun spotlightOn(chord: com.kaiharimoto.mastertool.core.input.KeyChord, context: com.kaiharimoto.mastertool.core.input.DeskContext): Boolean {
-        if (neue.page != Page.DUEL || context.textInputFocused || context.overlayOpen || neue.hasTop) return false
-        if (chord.ctrl || chord.alt || chord.key.length != 1 || chord.key[0] !in 'a'..'z') return false
-        if (duel.shown == null || duel.replay != null) return false
-        duel.openSpotlight(chord.key)
-        return true
-    }
-
     /** Keys down for a held row (1.0.87), and the action each one started. */
-    private val holding = mutableMapOf<androidx.compose.ui.input.key.Key, DeskAction>()
+    internal val holding = mutableMapOf<androidx.compose.ui.input.key.Key, DeskAction>()
 
-    /** A held row's action: [down] starts it, the key coming up ends it. */
-    private fun hold(action: DeskAction, down: Boolean) {
-        when (action) {
-            DeskAction.DUEL_VOICE -> if (down) duelVoice.press() else duelVoice.release()
-            else -> if (down) run(action)
-        }
-    }
-
-    /**
-     * The window lost the keyboard (1.0.87, the red team): no key-up will come for the keys down now, so they are
-     * forgotten — or the next press reads as a repeat — and whatever a held key started ends here.
-     */
-    fun keysLost() {
-        held.clear()
-        val started = holding.values.toList()
-        holding.clear()
-        started.forEach { hold(it, down = false) }
-    }
-
-    /** What is on screen, as the shortcut table reads it. */
     /** Every kit text field's focus, reported by the fields themselves (touch swarm, rec 6). */
     val textFocus = com.kaiharimoto.neue.kit.TextFocus()
 
-    fun deskContext() = DeskContext(
-        textInputFocused = textFocus.any || builder.textInputFocused || neue.searchFocused,
-        searchFocused = neue.searchFocused,
-        overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen,
-        onBuilder = neue.page == Page.BUILDER && present.playing == null,
-        ai = neue.prefs.ai.enabled,
-        onPresent = neue.page == Page.PRESENT,
-        presenting = present.playing != null,
-        onDuel = neue.page == Page.DUEL,
-        replaying = neue.page == Page.DUEL && duel.replay != null,
-    )
-
-    /**
-     * The Mac's menu bar choosing [action] (`DeskMenuBar`): only where its key
-     * would have worked, and once per press — the menu's accelerator and
-     * [onKey] may both hear the same Command chord, and [echo] keeps the second out.
-     */
-    fun runFromMenu(action: DeskAction) {
-        wake()
-        if (!DeskMenuBar.enabled(action, deskContext())) return
-        if (echo.admit(action, System.currentTimeMillis())) run(action)
-    }
-
-    private val echo = ActionEcho()
+    internal val echo = ActionEcho()
 
     /**
      * [id] on the builder, the deck there saved first (1.0.33: "saved as you
@@ -413,124 +265,6 @@ class NeueHolders(
         openDeck(next)
     }
 
-    fun run(action: DeskAction) {
-        val state = builder
-        when (action) {
-            DeskAction.PALETTE -> neue.paletteOpen = !neue.paletteOpen
-            DeskAction.GO_DECKS -> neue.go(Page.DECKS)
-            DeskAction.GO_BUILDER -> neue.go(Page.BUILDER)
-            DeskAction.GO_SIDING -> neue.go(Page.SIDING)
-            DeskAction.GO_FORMAT -> neue.go(Page.FORMAT)
-            DeskAction.GO_PREP -> neue.go(Page.PREP)
-            DeskAction.GO_PRESENT -> neue.go(Page.PRESENT)
-            DeskAction.GO_DUEL -> neue.go(Page.DUEL)
-            // From a menu or the palette, where nothing is let go of: a press, and the next one sends (1.0.87).
-            DeskAction.DUEL_VOICE -> duelVoice.toggle()
-            DeskAction.WEB_PREVIOUS -> stepWeb(-1)
-            DeskAction.WEB_NEXT -> stepWeb(1)
-            DeskAction.GO_SETTINGS -> neue.go(Page.SETTINGS)
-            DeskAction.HELP -> neue.helpOpen = true
-            DeskAction.DISMISS -> dismiss()
-            DeskAction.SAVE -> state.save { decksReload++ }
-            DeskAction.UNDO -> when (neue.page) {
-                Page.PRESENT -> present.undo()
-                Page.DUEL -> duel.undo()
-                else -> state.undo()
-            }
-            DeskAction.REDO -> when (neue.page) {
-                Page.PRESENT -> present.redo()
-                Page.DUEL -> duel.redo()
-                else -> state.redo()
-            }
-            DeskAction.NEW_DECK -> { state.newDeck(); neue.go(Page.BUILDER) }
-            DeskAction.IMPORT -> { state.importFromFile(); neue.go(Page.BUILDER) }
-            DeskAction.EXPORT -> neue.menu = MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
-            DeskAction.FOCUS_SEARCH -> neue.focusSearch()
-            // ↑ and ↓ are one pair of keys with two jobs (1.0.18): in the search field, or with
-            // nothing selected, they walk the results; with a card selected, the selection.
-            DeskAction.POOL_PREVIOUS -> moveSelection(StepDirection.UP)
-            DeskAction.POOL_NEXT -> moveSelection(StepDirection.DOWN)
-            DeskAction.POOL_ADD, DeskAction.POOL_ADD_TO_SIDE -> state.results.getOrNull(neue.poolCursor)?.let { card ->
-                CardActions.add(state, card, toSide = (action == DeskAction.POOL_ADD_TO_SIDE) != neue.prefs.poolToSide)
-            }
-            DeskAction.REMOVE_SELECTED -> if (neue.page == Page.PRESENT) com.kaiharimoto.neue.present.deleteSelection(this) else (neue.selection as? Selection.InDeck)?.let { sel ->
-                state.removeAt(sel.card, sel.section, sel.index)
-                // Stay on the same slot, so Delete held down clears a row.
-                val ids = state.deck[sel.section]
-                val next = sel.index.coerceAtMost(ids.size - 1)
-                neue.selection = ids.getOrNull(next)?.let(state.index::byId)?.let { Selection.InDeck(it, sel.section, next) }
-            }
-            DeskAction.VIEW_SELECTED -> neue.viewing = when (val sel = neue.selection) {
-                is Selection.InDeck -> Viewing(sel.card, sel.section, sel.index)
-                is Selection.InPool -> Viewing(sel.card, null, sel.row)
-                null -> state.results.getOrNull(neue.poolCursor)?.let { Viewing(it, null, neue.poolCursor) }
-            }
-            DeskAction.TOGGLE_KEYS -> setGroups(!groupsOn(state))
-            DeskAction.GROUP_ARRANGEMENT -> {
-                // As is, fitted, separate, round (1.0.37); the groups come out if they were not.
-                val all = com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries
-                val next = all[(all.indexOf(neue.prefs.arrangement) + 1) % all.size]
-                neue.update { it.copy(groupArrangement = next.name) }
-                if (!groupsOn(state)) setGroups(true)
-                neue.note = Note("Groups ${arrangementWords(next).lowercase()}")
-            }
-            // Ai stands in the inspector's place (1.0.45): asking for the inspector puts Ai away.
-            DeskAction.TOGGLE_INSPECTOR -> if (neue.aiDocked && neue.page == Page.BUILDER) {
-                neue.update { it.copy(inspectorVisible = true, ai = it.ai.copy(panelOpen = false)) }
-            } else {
-                neue.update { it.copy(inspectorVisible = !it.inspectorVisible) }
-            }
-            DeskAction.TOGGLE_POOL -> neue.update { it.copy(poolVisible = !it.poolVisible) }
-            DeskAction.TOGGLE_FILTERS -> neue.update { it.copy(filtersOpen = !it.filtersOpen, poolVisible = true) }
-            DeskAction.NEW_GROUP -> state.startGroupDraft(seed = (neue.selection as? Selection.InDeck)?.card?.id)
-            DeskAction.GROUPS -> setGroups(true)
-            DeskAction.ADVANCED_SEARCH -> {
-                neue.page = Page.BUILDER
-                neue.studio = com.kaiharimoto.neue.Studio()
-            }
-            DeskAction.LIST_CARD -> (neue.inspected ?: state.results.getOrNull(neue.poolCursor))?.let { neue.toggleOnList(it) }
-            DeskAction.SHOW_LIST -> if (neue.prefs.poolList != null) {
-                neue.showList(null)
-            } else {
-                neue.showList(neue.activeList?.id ?: neue.newList())
-                neue.update { it.copy(poolVisible = true) }
-            }
-            DeskAction.SELECT_LEFT -> moveSelection(StepDirection.LEFT)
-            DeskAction.SELECT_RIGHT -> moveSelection(StepDirection.RIGHT)
-            DeskAction.NEXT_ART, DeskAction.PREVIOUS_ART -> neue.inspected?.let { card ->
-                if (neue.artChoices(card).size > 1) {
-                    neue.stepArt(card, if (action == DeskAction.NEXT_ART) 1 else -1)
-                } else {
-                    neue.note = Note("${card.name} has one artwork")
-                }
-            }
-            DeskAction.ZEN -> if (state.deck.totalCards > 0) {
-                neue.dismissTop()
-                neue.page = Page.BUILDER
-                if (!neue.immersive) {
-                    neue.immersive = true
-                    neue.revealed = Revealed.NONE
-                    zenWaitsForLayout = true
-                }
-                zenRequest++
-            }
-            DeskAction.ISSUES -> neue.drawer = if (neue.drawer == Drawer.ISSUES) null else Drawer.ISSUES
-            DeskAction.ZOOM_IN -> neue.update { it.zoomedIn() }
-            DeskAction.ZOOM_OUT -> neue.update { it.zoomedOut() }
-            DeskAction.ZOOM_RESET -> neue.update { it.copy(scale = 1f) }
-            DeskAction.TOGGLE_THEME -> neue.toggleTheme()
-            DeskAction.IMMERSIVE -> {
-                neue.immersive = !neue.immersive
-                neue.revealed = Revealed.NONE
-            }
-            DeskAction.SCREENSHOT -> shots.export(builder, neue)
-            DeskAction.AI_PANEL -> if (neue.prefs.ai.enabled) ai.toggle()
-            DeskAction.AI_VOICE -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleVoice() }
-            DeskAction.AI_TALK -> if (neue.prefs.ai.enabled) { ai.setOpen(true); ai.toggleTalk() }
-            else -> if (neue.page == Page.DUEL) com.kaiharimoto.neue.duel.runDuel(this, action) else com.kaiharimoto.neue.present.runPresent(this, action)
-        }
-    }
-
     /**
      * The Groups button (1.0.15): the Roles lens and the panel beside the deck,
      * together — on, the deck breaks into its groups and they can be edited; off,
@@ -544,56 +278,6 @@ class NeueHolders(
             state.cancelGroupDraft()
             state.useLens(Lens.DECK)
         }
-    }
-
-    /**
-     * The arrow keys (kai, 1.0.18): the selected card's neighbour becomes the
-     * selection, and the inspector shows it — the hover is let go of, since it
-     * outranks the selection there. In the deck, up past a section's top row and
-     * down past its bottom carry on into the section above or below, in the same
-     * column where it can. With nothing selected, up and down walk the pool.
-     */
-    private fun moveSelection(direction: StepDirection) {
-        val state = builder
-        when (val sel = if (neue.searchFocused) null else neue.selection) {
-            is Selection.InDeck -> {
-                val ids = state.deck[sel.section]
-                val columns = (neue.phoneColumns ?: com.kaiharimoto.neue.builder.columnsOf(sel.section))
-                GridStep.move(sel.index, ids.size, columns, direction)?.let { next ->
-                    state.index.byId(ids[next])?.let { neue.selection = Selection.InDeck(it, sel.section, next) }
-                } ?: run {
-                    if (direction != StepDirection.UP && direction != StepDirection.DOWN) return@run
-                    val shown = buildList {
-                        add(DeckSection.MAIN)
-                        if (neue.prefs.extraVisible) add(DeckSection.EXTRA)
-                        if (neue.prefs.sideVisible) add(DeckSection.SIDE)
-                    }.filter { state.deck[it].isNotEmpty() }
-                    val at = shown.indexOf(sel.section)
-                    val target = shown.getOrNull(if (direction == StepDirection.DOWN) at + 1 else at - 1) ?: return@run
-                    val there = state.deck[target]
-                    val cols = (neue.phoneColumns ?: com.kaiharimoto.neue.builder.columnsOf(target))
-                    val column = (sel.index % columns).coerceAtMost(cols - 1)
-                    val index = if (direction == StepDirection.DOWN) {
-                        column.coerceAtMost(there.lastIndex)
-                    } else {
-                        (((there.size - 1) / cols) * cols + column).coerceAtMost(there.lastIndex)
-                    }
-                    state.index.byId(there[index])?.let { neue.selection = Selection.InDeck(it, target, index) }
-                }
-            }
-            is Selection.InPool -> {
-                GridStep.move(sel.row, state.results.size, neue.poolColumns.coerceAtLeast(1), direction)?.let { next ->
-                    neue.selection = Selection.InPool(state.results[next], next)
-                    neue.poolCursor = next
-                }
-            }
-            null -> when (direction) {
-                StepDirection.UP -> neue.poolCursor = (neue.poolCursor - 1).coerceAtLeast(0)
-                StepDirection.DOWN -> neue.poolCursor = (neue.poolCursor + 1).coerceAtMost((state.results.size - 1).coerceAtLeast(0))
-                else -> Unit
-            }
-        }
-        neue.hovered = null
     }
 
     /** The foil on every card face, on or off (the shiny button beside Groups, 1.0.15). */
@@ -618,7 +302,7 @@ class NeueHolders(
     )
 
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
-    private fun dismiss() {
+    internal fun dismiss() {
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
         // The Spotlight closes first, its field with it (1.0.87).
         if (neue.page == Page.DUEL && duel.spotlight != null && com.kaiharimoto.neue.duel.dismissDuel(this)) return
@@ -661,168 +345,6 @@ class NeueHolders(
             Unwind.IMMERSIVE -> run(DeskAction.IMMERSIVE)
             Unwind.TO_BUILDER -> neue.go(Page.BUILDER)
         }
-    }
-
-    /**
-     * The phone's overflow (v1.3.5): every tool of the desk's bar, which a phone has no
-     * room to lay out, in one menu under the thumb. [at] is where it opened, so its
-     * second menus (Export, History) open in the same place.
-     */
-    fun phoneMenu(at: Offset): List<MenuEntry> {
-        val state = builder
-        val onBuilder = neue.page == Page.BUILDER
-        val next = neue.orientation.next()
-        return buildList {
-            add(MenuEntry("Search cards and commands", hint = "Search") { neue.paletteOpen = true })
-            if (neue.prefs.ai.enabled) add(MenuEntry(ai.name, hint = "Your assistant") { ai.setOpen(true) })
-            if (neue.prefs.ai.enabled) add(MenuEntry("Look into ${ai.name}", hint = "What it knows") { ai.memoryOpen = "USER.md" })
-            add(MenuEntry("Advanced search") { run(DeskAction.ADVANCED_SEARCH) })
-            add(MenuEntry("Present", hint = "Deck profiles as slides") { neue.go(Page.PRESENT) })
-            add(MenuEntry("Duel", hint = "The duel simulator") { neue.go(Page.DUEL) })
-            if (onBuilder) {
-                add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
-                add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
-                    neue.menu = MenuSpec(at, historyMenu(state, touch = true))
-                })
-                add(MenuEntry("Format: ${state.format.name}", hint = "Switch to ${if (state.format == Format.TCG) "OCG" else "TCG"}") {
-                    setFormat(if (state.format == Format.TCG) Format.OCG else Format.TCG)
-                })
-                if (state.validation.errors.isNotEmpty() || state.validation.warnings.isNotEmpty()) {
-                    add(MenuEntry("Issues", hint = "${state.validation.errors.size + state.validation.warnings.size}") { neue.drawer = Drawer.ISSUES })
-                }
-            }
-            add(MenuEntry(if (state.dirty) "Save" else "Saved", separatorBefore = true, enabled = state.dirty || !neue.prefs.autoSave) { run(DeskAction.SAVE) })
-            add(MenuEntry("Auto save: ${if (neue.prefs.autoSave) "on" else "off"}", hint = "Turn ${if (neue.prefs.autoSave) "off" else "on"}") {
-                neue.update { it.copy(autoSave = !it.autoSave) }
-            })
-            add(MenuEntry("New deck") { run(DeskAction.NEW_DECK) })
-            // A deck of a web (1.0.33): the phone's switcher, one entry each way.
-            webs.webOf(state.deckId)?.takeIf { onBuilder && it.entries.size > 1 }?.let { web ->
-                add(MenuEntry("Previous deck in ${web.name}", hint = "${web.position(state.deckId!!)}/${web.entries.size}") { stepWeb(-1) })
-                add(MenuEntry("Next deck in ${web.name}") { stepWeb(1) })
-            }
-            add(MenuEntry("Import…", hint = "File, QR code") { neue.menu = MenuSpec(at, CardActions.importMenu(state, neue)) })
-            add(MenuEntry("Export…", hint = "File, code, text, QR") { neue.menu = MenuSpec(at, CardActions.exportMenu(state, neue)) })
-            add(MenuEntry("Rotate: ${next.label}", hint = "Now ${neue.orientation.label}", separatorBefore = true) { neue.rotate() })
-            add(MenuEntry(if (neue.immersive) "Leave full screen" else "Full screen") { run(DeskAction.IMMERSIVE) })
-            add(MenuEntry(if (neue.prefs.theme == NeueTheme.PAPER) "Ink, the dark theme" else "Paper, the light theme") { neue.toggleTheme() })
-            add(MenuEntry("Gestures") { neue.helpOpen = true })
-            add(MenuEntry(
-                if (updates.available != null) "Update to ${updates.available?.versionName}" else "Check for updates",
-                hint = "v${Platform.version}",
-                separatorBefore = true,
-            ) {
-                if (updates.available != null) updates.dialogOpen = true else updates.check(userInitiated = true)
-            })
-        }
-    }
-
-    fun commands(query: String): List<Command> {
-        val q = query.trim().lowercase()
-        fun kbd(a: DeskAction) = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
-        fun cmd(group: String, label: String, action: DeskAction) = Command(group, label, kbd(action)) { run(action) }
-        val fixed = listOf(
-            cmd("Go", "Decks", DeskAction.GO_DECKS),
-            cmd("Go", "Builder", DeskAction.GO_BUILDER),
-            cmd("Go", "Siding", DeskAction.GO_SIDING),
-            cmd("Go", "Format", DeskAction.GO_FORMAT),
-            cmd("Go", "Prep", DeskAction.GO_PREP),
-            cmd("Go", "Present", DeskAction.GO_PRESENT),
-            cmd("Go", "Duel", DeskAction.GO_DUEL),
-            Command("Duel", "New duel") { neue.go(Page.DUEL); duel.setupOpen = true },
-            Command("Duel", "Test hand: the builder's deck, one player") { neue.go(Page.DUEL); com.kaiharimoto.neue.duel.testHand(this) },
-            Command("Duel", "Replays: keep this duel, watch one again") { neue.go(Page.DUEL); duel.libraryOpen = true },
-            Command("Present", "New deck profile") { neue.go(Page.PRESENT); present.creating = true },
-            *(if (present.open != null) arrayOf(
-                cmd("Present", "Present from the start", DeskAction.PRESENT_START),
-                cmd("Present", "Present from this slide", DeskAction.PRESENT_FROM_HERE),
-                Command("Present", "Rehearse timings") { present.present(0, rehearse = true) },
-                cmd("Present", "New slide", DeskAction.SLIDE_NEW),
-            ) else emptyArray()),
-            *(if (present.open != null && neue.prefs.ai.enabled) arrayOf(
-                Command("Present", "Build these slides with ${ai.name}") { neue.go(Page.PRESENT); present.briefing = true },
-                Command("Present", "Restyle these slides with ${ai.name}") { neue.go(Page.PRESENT); present.restyling = true },
-            ) else emptyArray()),
-            cmd("Go", "Settings", DeskAction.GO_SETTINGS),
-            cmd("Deck", "Save", DeskAction.SAVE),
-            cmd("Deck", "New deck", DeskAction.NEW_DECK),
-            cmd("Deck", "Import a .ydk or .ydkx", DeskAction.IMPORT),
-            cmd("Deck", "Export", DeskAction.EXPORT),
-            Command("Deck", "Export as a .ydk file") { CardActions.export(DeckExportFormat.YDK, builder, neue) },
-            Command("Deck", "Export as a .ydkx file, with groups") { CardActions.export(DeckExportFormat.YDKX, builder, neue) },
-            Command("Deck", "Copy the YDKe code") { CardActions.export(DeckExportFormat.YDKE, builder, neue) },
-            Command("Deck", "Copy the decklist as text") { CardActions.export(DeckExportFormat.TEXT, builder, neue) },
-            Command("Deck", "Show the deck as a QR code to scan") { CardActions.export(DeckExportFormat.QR, builder, neue) },
-            Command("Deck", if (neue.prefs.extraVisible) "Hide the extra deck" else "Show the extra deck") { neue.update { it.copy(extraVisible = !it.extraVisible) } },
-            Command("Deck", if (neue.prefs.sideVisible) "Hide the side deck" else "Show the side deck") { neue.update { it.copy(sideVisible = !it.sideVisible) } },
-            Command("Deck", if (neue.prefs.foil == com.kaiharimoto.neue.cards.Foils.OFF) "Foil on" else "Foil off") { toggleFoil() },
-            cmd("Deck", "Undo", DeskAction.UNDO),
-            cmd("Deck", "Redo", DeskAction.REDO),
-            cmd("Deck", "Issues", DeskAction.ISSUES),
-            cmd("Deck", "Groups", DeskAction.GROUPS),
-            cmd("App", "Zen, now", DeskAction.ZEN),
-            Command("App", if (neue.prefs.autoZen) "Zen by itself: off" else "Zen by itself: on") { neue.update { it.copy(autoZen = !it.autoZen) } },
-            cmd("Card", "Next artwork", DeskAction.NEXT_ART),
-            cmd("Cards", "Advanced search", DeskAction.ADVANCED_SEARCH),
-            cmd("Cards", "Put the card on the list, or take it off", DeskAction.LIST_CARD),
-            cmd("Cards", if (neue.prefs.poolList != null) "Show every card in the pool" else "Show the list in the pool", DeskAction.SHOW_LIST),
-            Command("Cards", "New list of cards") { neue.showList(neue.newList()) },
-            cmd("Deck", "New group", DeskAction.NEW_GROUP),
-            Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}") {
-                setFormat(if (builder.format == Format.TCG) Format.OCG else Format.TCG)
-            },
-            cmd("App", if (neue.prefs.theme == NeueTheme.PAPER) "Switch to ink (dark)" else "Switch to paper (light)", DeskAction.TOGGLE_THEME),
-            cmd("App", "Show or hide the pool", DeskAction.TOGGLE_POOL),
-            cmd("App", "Show or hide the inspector", DeskAction.TOGGLE_INSPECTOR),
-            cmd("App", if (neue.immersive) "Leave immersive mode" else "Immersive mode", DeskAction.IMMERSIVE),
-            cmd("Deck", "Screenshot of the deck", DeskAction.SCREENSHOT),
-            cmd("App", "Larger interface", DeskAction.ZOOM_IN),
-            cmd("App", "Smaller interface", DeskAction.ZOOM_OUT),
-            cmd("App", "Keyboard shortcuts", DeskAction.HELP),
-            Command("App", "Check for updates") { updates.check(userInitiated = true) },
-            // The phone's and the tablet's screen, the one-tap toggle in words (v1.3.5).
-            *(if (neue.touchFirst) arrayOf(Command("App", "Rotate the screen: ${neue.orientation.next().label}") { neue.rotate() }) else emptyArray()),
-            // A deck's QR code, off another screen or out of a picture (v1.3.7).
-            *(if (com.kaiharimoto.neue.platform.QrSource.CAMERA in Platform.scanSources) arrayOf(Command("Deck", "Scan a deck's QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.CAMERA, builder, neue) }) else emptyArray()),
-            *(if (com.kaiharimoto.neue.platform.QrSource.PICTURE in Platform.scanSources) arrayOf(Command("Deck", "Import a picture of a QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.PICTURE, builder, neue) }) else emptyArray()),
-            Command("App", "Refresh the card pool") { builder.refreshCardPool(force = true) },
-            // The assistant's own, while it is on (1.0.43).
-            *(if (neue.prefs.ai.enabled) arrayOf(
-                cmd(ai.name, "${ai.name}: open or close", DeskAction.AI_PANEL),
-                cmd(ai.name, "${ai.name}: speak to it", DeskAction.AI_VOICE),
-                cmd(ai.name, "${ai.name}: talk mode, a conversation out loud", DeskAction.AI_TALK),
-                Command(ai.name, "${ai.name}: new conversation") { ai.setOpen(true); ai.newChat() },
-                Command(ai.name, "${ai.name}: set up a connection") { ai.openWizard() },
-                Command(ai.name, "${ai.name}'s brain: read and edit what it knows") { ai.memoryOpen = "USER.md" },
-                Command(ai.name, "${ai.name}'s context: how full it is, and make room") { ai.contextOpen = true },
-                Command(ai.name, "${ai.name}: settings — model, effort and the rest") { ai.quickOpen = true },
-                Command(ai.name, "${ai.name}: Fine Tuning, teach it this deck") { ai.setOpen(true); ai.askTune() },
-                Command(ai.name, "${ai.name}: learn this deck from first principles") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PRINCIPLES) },
-                Command(ai.name, "${ai.name}: refactor this deck's guide") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_REFACTOR) },
-                Command(ai.name, "${ai.name}: this deck's guide") { ai.openGuide() },
-                Command(ai.name, "${ai.name}: read this deck's reader's guide") { ai.openBook() },
-                Command(ai.name, "${ai.name}: write this deck's reader's guide") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_WRITE) },
-                Command(ai.name, "${ai.name}: learn about you") { ai.setOpen(true); ai.profileAsk = true },
-                Command(ai.name, "${ai.name}: your profile") { ai.openProfile() },
-                Command(ai.name, "${ai.name}: what can you do?") { ai.setOpen(true); ai.demoOpen = true },
-            ) else emptyArray()),
-            Command("App", "Report an issue →") { Platform.reportIssue() },
-        ).filter { q.isEmpty() || it.label.lowercase().contains(q) || it.group.lowercase().startsWith(q) }
-
-        if (q.length < 2 || builder.index.size == 0) return fixed
-        val cards = builder.index.search(query, limit = 12).cards.map { card ->
-            Command(
-                "Card",
-                card.name,
-                hint = if (builder.remaining(card) > 0) "Enter · Shift Enter side" else "At the limit",
-                alt = { CardActions.add(builder, card, toSide = true) },
-            ) {
-                CardActions.add(builder, card)
-                neue.selection = Selection.InPool(card, 0)
-                neue.go(Page.BUILDER)
-            }
-        }
-        return fixed + cards
     }
 }
 
@@ -1124,203 +646,7 @@ private fun Shell(h: NeueHolders) {
             // The family cursor draws the pointer; the system's is hidden everywhere in the
             // window, over every child's own icon, unless the cursor has stepped aside.
             .pointerHoverIcon(if (h.cursor.native) PointerIcon.Default else FamilyCursor.BLANK, overrideDescendants = true)
-            .pointerInput(Unit) {
-                // One watcher over the whole window, on the way down, consuming
-                // nothing: every bar that folds away comes out from here.
-                awaitPointerEventScope {
-                    var still = Offset.Unspecified
-                    // A box being dragged over the table in deep zen: where it started, and what
-                    // was picked out before it when Shift added to that.
-                    var boxFrom: Offset? = null
-                    var boxBase = emptySet<Int>()
-                    var boxShift = false
-                    // A finger's press, for telling a tap from a swipe (touch swarm, rec 3).
-                    var fingerFrom: Offset? = null
-                    var fingerAt = 0L
-                    // Every finger of the gesture in hand: when each went down and came up, and how
-                    // far the furthest travelled — two together are undo, three redo (rec 22).
-                    val tapDowns = mutableMapOf<androidx.compose.ui.input.pointer.PointerId, Pair<Long, Offset>>()
-                    val tapUps = mutableMapOf<androidx.compose.ui.input.pointer.PointerId, Long>()
-                    var tapTravel = 0f
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        val at = event.changes.firstOrNull()?.position
-                        val gone = event.type == PointerEventType.Exit
-                        // The family cursor is a mouse's: a finger (or a tablet, where the system
-                        // draws its own pointer) leaves it hidden.
-                        val mouse = event.changes.none { it.byFinger } && !neue.touchFirst
-                        h.cursor.moved(if (gone || !mouse) null else at, mouse && event.buttons.areAnyPressed)
-                        // Where the pointer is, for the deck to turn toward in zen.
-                        if (neue.immersive) h.zen.pointer = if (gone) null else at
-                        // Waking. Before zen is deep, any real movement, press or scroll brings
-                        // the builder back (a pointer that twitches a pixel on a desk does not).
-                        // Once it is deep, nothing the pointer does wakes it — the pointer is for
-                        // arranging the cards, which are the garden — and only a key ends it.
-                        val deepZen = neue.zen == ZenPhase.DEEP
-                        // The groups' palettes stay out while they are tried, and fold at a press
-                        // off the Groups panel (1.0.24). Consuming nothing, so the press still does
-                        // what it was for. An overlay's press is the overlay's.
-                        if (event.type == PointerEventType.Press && neue.groupPalettesOpen && !neue.overlayOpen && at != null) {
-                            val panel = neue.groupsPanel
-                            if (panel == null || !panel.contains(at)) neue.groupPalettesOpen = false
-                        }
-                        when (event.type) {
-                            PointerEventType.Press -> if (!deepZen) h.wake()
-                            // In deep zen the wheel opens and closes the gaps between the groups
-                            // (kai, 1.0.17); up past closed opens them, and zen re-fits the cards.
-                            PointerEventType.Scroll -> if (!deepZen) {
-                                h.wake()
-                            } else {
-                                val d = event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero
-                                val step = if (d.y != 0f) d.y else d.x
-                                if (step != 0f && state.groups.groups.isNotEmpty()) {
-                                    if (!h.zen.groups && step < 0f) {
-                                        h.zen.groups = true
-                                    } else if (h.zen.groups) {
-                                        h.zen.gapScale = (h.zen.gapScale - step * 0.15f).coerceIn(ZEN_GAP_MIN, ZEN_GAP_MAX)
-                                    }
-                                }
-                            }
-                            PointerEventType.Move -> if (at != null && !deepZen) {
-                                if (!still.isSpecified || (at - still).getDistance() > 3f) {
-                                    still = at
-                                    h.wake()
-                                }
-                            }
-                        }
-                        // The corner where "put the cards back" comes out.
-                        // On a touch screen nothing can reach for the corner, so in deep zen it stays out.
-                        h.zen.corner = deepZen && (neue.touchFirst || at != null && !gone &&
-                            ZenCorner.reaches(at.x, at.y, size.width.toFloat(), size.height.toFloat(), h.zen.cornerRow))
-                        // Deep zen, 1.0.14: a press on the table rather than on a card draws a box,
-                        // and the cards it touches are picked out to move together (ZenGestures).
-                        // The press is spent here, on the way down, so the pool and the inspector
-                        // — faded out, not gone — never hear it.
-                        val zen = h.zen
-                        val from = boxFrom
-                        when {
-                            from == null && deepZen && event.type == PointerEventType.Press && at != null &&
-                                event.isPrimaryPress && zen.deck.width > 0f &&
-                                !zen.corner && zen.pickAt(at) == null -> {
-                                boxFrom = at
-                                boxShift = event.keyboardModifiers.isShiftPressed
-                                boxBase = zen.selection
-                                zen.marquee = Rect(at, at)
-                                event.changes.forEach { it.consume() }
-                            }
-                            from != null && at != null && event.type == PointerEventType.Move -> {
-                                val box = Rect(minOf(from.x, at.x), minOf(from.y, at.y), maxOf(from.x, at.x), maxOf(from.y, at.y))
-                                zen.marquee = box
-                                if (box.width > ZenPick.BOX_SLOP || box.height > ZenPick.BOX_SLOP) {
-                                    zen.selection = ZenPick.combine(boxBase, zen.within(box), boxShift)
-                                }
-                                event.changes.forEach { it.consume() }
-                            }
-                            from != null && (event.type == PointerEventType.Release || !event.buttons.areAnyPressed) -> {
-                                val box = zen.marquee
-                                if (box == null || (box.width <= ZenPick.BOX_SLOP && box.height <= ZenPick.BOX_SLOP)) {
-                                    zen.selection = ZenGestures.tableClick(boxBase, boxShift)
-                                }
-                                zen.marquee = null
-                                boxFrom = null
-                                event.changes.forEach { it.consume() }
-                            }
-                        }
-                        if (boxFrom != null && !deepZen) {
-                            zen.marquee = null
-                            boxFrom = null
-                        }
-                        // A click anywhere below the folded-out header lets go of the deck name:
-                        // on a desktop nothing else takes focus from a text field, so the bar
-                        // that is held out while you type would otherwise never fold away.
-                        val typing = (state.textInputFocused && !neue.searchFocused) || (neue.page == Page.DUEL && h.textFocus.any)
-                        // The index held out by the logo folds at a press outside it (1.0.89).
-                        if (event.type == PointerEventType.Press && neue.railHeld && at != null &&
-                            at.x > (if (neue.touchFirst) MuShell.strip else MuShell.rail).toPx() && at.y > measured.top
-                        ) {
-                            neue.railHeld = false
-                        }
-                        if (event.type == PointerEventType.Press && neue.immersive && neue.revealed.top &&
-                            typing && at != null && at.y > measured.top
-                        ) {
-                            h.focus?.clearFocus()
-                        }
-                        neue.revealed = EdgeReveal.next(
-                            current = neue.revealed,
-                            x = if (gone) null else at?.x,
-                            y = if (gone) null else at?.y,
-                            height = size.height.toFloat(),
-                            railWidth = (if (neue.touchFirst) MuShell.strip else MuShell.rail).toPx(),
-                            topHeight = measured.top.toFloat(),
-                            bottomHeight = measured.bottom.toFloat(),
-                            immersive = neue.immersive,
-                            holdTop = typing,
-                            suppress = h.drag.held != null || neue.menu != null || neue.zen == ZenPhase.DEEP || (neue.page == Page.DUEL && h.duel.carrying),
-                        // The builder has no footer since 1.0.9: nothing comes up from the bottom.
-                        ).copy(bottom = false)
-                        // Two fingers tapped together undo, three redo, anywhere in the window (rec 22,
-                        // `MultiTap`): a pinch travels, so it is never one. Watched on the way down,
-                        // and never consumed: a card under the first finger has already let it go.
-                        // More than one finger down: whatever each is doing to a card, it is not a tap to read it.
-                        if (event.changes.count { it.byFinger && it.pressed } > 1) neue.fingersAt = System.nanoTime() / 1_000_000
-                        event.changes.filter { it.byFinger }.forEach { change ->
-                            if (change.pressed && !change.previousPressed) {
-                                if (tapDowns.isEmpty()) {
-                                    tapUps.clear()
-                                    tapTravel = 0f
-                                }
-                                tapDowns[change.id] = change.uptimeMillis to change.position
-                                // A second finger in the same tap, whether or not one event ever held
-                                // both pressed (the emulator's injected pairs did not, 1.0.32): no card's
-                                // tap under it opens the viewer.
-                                if (tapDowns.size > 1) neue.fingersAt = System.nanoTime() / 1_000_000
-                            }
-                            tapDowns[change.id]?.let { (_, from) -> tapTravel = maxOf(tapTravel, (change.position - from).getDistance()) }
-                            if (!change.pressed && change.previousPressed && change.id in tapDowns) tapUps[change.id] = change.uptimeMillis
-                        }
-                        if (tapDowns.isNotEmpty() && tapUps.size == tapDowns.size) {
-                            val gesture = com.kaiharimoto.mastertool.core.input.MultiTap.classify(
-                                downs = tapDowns.values.map { it.first },
-                                ups = tapDowns.keys.map { tapUps.getValue(it) },
-                                travel = tapTravel,
-                                slop = viewConfiguration.touchSlop,
-                            )
-                            // The last finger's own tap is released after this, in the card's pass, and
-                            // schedules its open then: marked now, it is skipped when it comes due.
-                            if (tapDowns.size > 1) neue.fingersAt = System.nanoTime() / 1_000_000
-                            tapDowns.clear()
-                            tapUps.clear()
-                            com.kaiharimoto.mastertool.core.input.DeskTouch.window.firstOrNull { it.gesture == gesture }?.let { h.run(it.action) }
-                        }
-                        // A finger cannot reach an edge the system does not take, so in immersive a
-                        // tap on the paper strip along the top, or in the gutter down the left,
-                        // brings that bar out; a tap anywhere else folds it (EdgeReveal.onTap).
-                        val finger = event.changes.firstOrNull()?.takeIf { it.byFinger }
-                        if (finger != null && event.type == PointerEventType.Press) {
-                            fingerFrom = finger.position
-                            fingerAt = finger.uptimeMillis
-                        } else if (finger != null && event.type == PointerEventType.Release) {
-                            val from0 = fingerFrom
-                            fingerFrom = null
-                            if (from0 != null && neue.immersive && neue.zen != ZenPhase.DEEP && h.drag.held == null &&
-                                (finger.position - from0).getDistance() < viewConfiguration.touchSlop &&
-                                finger.uptimeMillis - fingerAt < com.kaiharimoto.mastertool.core.input.DeskTouch.DOUBLE_TAP_MS
-                            ) {
-                                neue.revealed = EdgeReveal.onTap(
-                                    current = neue.revealed,
-                                    x = finger.position.x,
-                                    y = finger.position.y,
-                                    topStrip = IMMERSIVE_TOP.toPx(),
-                                    leftStrip = 32.dp.toPx(),
-                                    topHeight = measured.top.toFloat(),
-                                    railWidth = MuShell.strip.toPx(),
-                                    immersive = true,
-                                )
-                            }
-                        }
-                    }
-                }
-            },
+            .windowPointer(h, neue, state, measured),
     ) {
         // A phone (v1.3.5): the slim bar, and the pages as tabs along the bottom — or,
         // lying down, as a strip down the left, where the height is the deck's.
@@ -1635,128 +961,6 @@ private fun AutoSave(h: NeueHolders) {
         delay(1_500)
         state.save(quiet = true) { h.decksReload++ }
     }
-}
-
-/**
- * Zen's clockwork: the phase deepens with idleness (`ZenClock`), and two
- * amounts follow the phase — slowly in, and back "slowly" as kai asked, a little
- * slower than they went. They are written into [ZenLayer] frame by frame and read
- * only in layers and draw blocks, so nothing recomposes while they move. The
- * clock that floats the cards runs only while zen is deep.
- */
-@Composable
-private fun ZenClockwork(h: NeueHolders) {
-    val neue = h.neue
-    // An empty deck has nothing to float (kai, 1.0.14): zen waits for a card.
-    // Ai open is someone at work (1.0.46): the deck does not float away from a conversation.
-    val eligible = neue.immersive && neue.page == Page.BUILDER && h.builder.deck.totalCards > 0 && !neue.aiDocked
-    LaunchedEffect(eligible, h.zenAuto, neue.prefs.autoZen) {
-        if (!eligible) {
-            neue.zen = ZenPhase.AWAKE
-            return@LaunchedEffect
-        }
-        // The bar's Zen switch (1.0.16): off, zen comes only when asked for (Z).
-        if (!h.zenAuto || !neue.prefs.autoZen) return@LaunchedEffect
-        h.lastInput = System.nanoTime()
-        while (true) {
-            // A menu, a dialog or a card in the hand is someone doing something.
-            if (h.drag.held != null || neue.overlayOpen || h.updates.dialogOpen) h.lastInput = System.nanoTime()
-            val idle = (System.nanoTime() - h.lastInput) / 1_000_000
-            val phase = ZenClock.phase(idle)
-            if (phase > neue.zen) neue.zen = phase
-            val wait = ZenClock.untilNext(idle)
-            if (wait == null) {
-                snapshotFlow { neue.zen }.first { it != ZenPhase.DEEP }
-            } else {
-                delay(wait.coerceAtLeast(50))
-            }
-        }
-    }
-
-    // From where the amounts are, so a tree composed afresh mid-fade carries on from there.
-    val quiet = remember { Animatable(h.zen.quiet) }
-    val deep = remember { Animatable(h.zen.deep) }
-    val phase = if (eligible) neue.zen else ZenPhase.AWAKE
-    LaunchedEffect(phase) {
-        // Deep is the pointer's: from this moment, nothing but the cards answers it.
-        val begins = phase == ZenPhase.DEEP && !h.zen.asleep
-        h.zen.asleep = phase == ZenPhase.DEEP
-        // Every zen starts with the cards in their slots (1.0.24): the last one's are forgotten.
-        if (begins) h.zen.begin()
-        val q = if (phase != ZenPhase.AWAKE) 1f else 0f
-        val d = if (phase == ZenPhase.DEEP) 1f else 0f
-        coroutineScope {
-            launch {
-                quiet.animateTo(q, tween(if (q > 0f) ZEN_IN else ZEN_OUT, delayMillis = if (q > 0f) 0 else 400, easing = MuMotion.ease)) { h.zen.quiet = value }
-            }
-            launch {
-                deep.animateTo(d, tween(if (d > 0f) ZEN_DEEP_IN else ZEN_OUT, easing = MuMotion.ease)) { h.zen.deep = value }
-            }
-        }
-    }
-    // Zen's pieces (1.0.15): on from the start when the builder had its groups on, so
-    // the pieces the person was looking at stay open; asked for from the corner otherwise.
-    LaunchedEffect(phase) {
-        if (phase == ZenPhase.DEEP) {
-            val on = h.builder.lens == Lens.ROLES
-            h.zen.groups = on
-            h.zen.groupsAmount = if (on) 1f else 0f
-        } else {
-            h.zen.groups = false
-        }
-    }
-    val pieces = remember { Animatable(0f) }
-    LaunchedEffect(h.zen.groups) {
-        pieces.snapTo(h.zen.groupsAmount)
-        pieces.animateTo(if (h.zen.groups) 1f else 0f, tween(ZEN_PIECES, easing = MuMotion.ease)) { h.zen.groupsAmount = value }
-    }
-    // The groups' names on their pieces (1.0.24): the corner's Labels switch, kept in the settings.
-    val labels = remember { Animatable(h.zen.labelsAmount) }
-    LaunchedEffect(neue.prefs.zenLabels) {
-        labels.snapTo(h.zen.labelsAmount)
-        labels.animateTo(if (neue.prefs.zenLabels) 1f else 0f, tween(MuMotion.SLOW, easing = MuMotion.ease)) { h.zen.labelsAmount = value }
-    }
-    // The Z key (1.0.15): immersive if it was not, and deep at once. A moment first when
-    // immersive is only now coming on, so the deck has been laid out full screen before it
-    // is measured for the middle of it.
-    LaunchedEffect(h.zenRequest) {
-        if (h.zenRequest == h.zenHandled) return@LaunchedEffect
-        delay(if (h.zenWaitsForLayout) 450 else 0)
-        h.zenWaitsForLayout = false
-        h.zenHandled = h.zenRequest
-        if (neue.immersive && neue.page == Page.BUILDER && h.builder.deck.totalCards > 0) {
-            h.lastInput = System.nanoTime()
-            neue.zen = ZenPhase.DEEP
-        }
-    }
-    val floating by remember { derivedStateOf { h.zen.deep > 0f } }
-    LaunchedEffect(floating) {
-        var last = 0L
-        while (floating && h.zen.deep > 0f) {
-            withFrameNanos { now ->
-                if (last != 0L) h.zen.time += ((now - last) / 1e9f).coerceIn(0f, 0.1f)
-                last = now
-            }
-        }
-    }
-}
-
-/** Zen's fades, in milliseconds: a breath in, a longer one for the deck to come forward, and back a little slower. */
-private const val ZEN_IN = 1400
-private const val ZEN_DEEP_IN = 2600
-private const val ZEN_OUT = 1600
-
-/** How far the wheel may close and open zen's gaps, as multiples of the standard gap. */
-internal const val ZEN_GAP_MIN = 0.3f
-internal const val ZEN_GAP_MAX = 5f
-
-/** The pieces opening or closing in zen: slow enough to watch the deck come apart. */
-private const val ZEN_PIECES = 900
-
-/** How tall the folded bars were when last laid out, in pixels. Plain fields: only the pointer watcher reads them. */
-private class FoldedBars {
-    var top: Int = 0
-    var bottom: Int = 0
 }
 
 @Composable

@@ -1,5 +1,11 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.neue.ai.openWizard
+import com.kaiharimoto.neue.ai.previewTuning
+import com.kaiharimoto.neue.ai.bookChanged
+import com.kaiharimoto.neue.ai.previewVoice
+import com.kaiharimoto.neue.ai.askTune
+import com.kaiharimoto.neue.phoneMenu
 import com.kaiharimoto.mastertool.core.present.modules.ModuleInput
 import com.kaiharimoto.mastertool.core.present.modules.SideMatchup
 import com.kaiharimoto.mastertool.core.present.modules.SideTurn
