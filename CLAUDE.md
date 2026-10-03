@@ -664,6 +664,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   Whisper invents), `DuelSpeech` normalize → classify, **shown, then confirmed** ("yes"/Enter; `DuelPrefs.voiceConfirm`),
   read back with `DuelPrefs.speak`; the `VOICE` start step. A combo plays by name, either copy (`anyCopy`).
   `--duel-focus=`, `--duel-coords`, `--duel-spot=attack|s_h2_m3`, `--duel-spot-state=listening|answer|many`, `--duel-heard=`.
+  **kai's table notes (1.0.87)**: a hand monster's effect reveals it while the chain stands (`DuelSight.onChain`) unless its
+  text pays with it (`DuelCardInfo.handCost`); the Deck is backs; top / shuffled in / bottom (K, Alt K, Shift K; the Deck's
+  thirds, `DeckPart`); chance is `DuelAction.Pick` (`discard random`, `random oh to gy`); a monster dropped on a monster goes
+  on top (`Move.over`); the ATK/DEF plate sits inside the card's foot (`StatPlate`); the inspector's art fills its column.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

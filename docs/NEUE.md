@@ -3486,6 +3486,25 @@ table (`neue/duel/Spotlight.kt`; its arithmetic is core's `duel/text/Spotlight`,
   monster one" → "yes" → `/` ↓ ⏎ for the battle → "end turn" → "yes". (Every move heard waits for its "yes"; turn
   "Make spoken moves at once" on for a faster take.)
 
+**1.0.87, kai's notes from the table:**
+- **A monster's effect from the hand reveals it** (kai: "it should just reveal itself until the chain resolves. only some
+  cards discard themselves"). Activate on a hand monster is a chain link and nothing else; the card stays in the hand,
+  shown to both seats while the chain stands (`DuelSight.onChain`: a link's card, or one already resolved, until the
+  chain is over), then takes a new veil (`DuelRules.rehidden`) so it cannot be followed back in. Only a card whose own text
+  pays with it — "discard this card", "send this card from your hand to the GY", "banish this card from your hand" —
+  goes as it is activated (`DuelCardInfo.handCost`, read off the text for the obvious thing, never a rule).
+- **The Deck is drawn as backs**, a known card put on top of it too (`DuelFrames`: it "places face up").
+- **Top, bottom or shuffled in** (kai: "some place to the top of the deck, some to the bottom, and some shuffle"): K, Shift
+  K and Alt K (`DECK_SHUFFLE`, `ks`, `spin`), and a card carried over a Deck finds three places there — its upper third
+  the top, the middle shuffled in, the lower third the bottom (`DeckPart`), each named on the pile as the card is over it.
+- **Chance** (kai: "card effects that banish, discard, or shuffle/bottom of deck randomly"): `DuelAction.Pick`, n cards
+  at random from a pile or from cards named, stamped on commit like a shuffle (`DuelRandom`), worded by what each card
+  can be seen as where it lands. Typed: `discard random`, `discard 2 random`, `random oh to gy`, `banish random ex down`,
+  `random h2 h4 kb` (those to the bottom of the Deck in a random order).
+- **A monster put on a monster goes on top** (kai: "it should overlay on top of it instead of attaching itself"):
+  `Move.over` — the card there and its materials go beneath the one put down, as an Xyz Summon is laid out; any other card
+  carried onto a monster still becomes its material.
+
 **1.0.87, the numbers on the card and the art in the inspector** (kai: the ATK/DEF readout "cuts the bottom of the card
 off and blends in with the background"; the inspector's art should "grow to fill leftover space"):
 - **The stat plate** (`StatPlate` in `neue/duel/DuelCards.kt`): a monster's ATK / DEF is a solid ink plate inside the
