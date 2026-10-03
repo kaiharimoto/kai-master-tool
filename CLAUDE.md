@@ -674,7 +674,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   are `DuelRandom`'s, stamped on commit with the throw in `OpeningRoll`); higher sum chooses (`GoFirst`), a tie rolls again;
   `DuelState.opening` holds the turn back until then; the log names numbers only once the dice land (`Duels.diceRolling`);
   Shift R / `roll`; `DuelPrefs.openingRoll`. `--duel-dice=rest|flying|settled|choose`.
-  **The chain by keys, several cards at once (1.0.89)**: `Shift Q` resolves the whole chain (`DuelVerbs.resolveAll`); the chain
+  **The chain by keys, several cards at once (1.0.90)**: `Shift Q` resolves the whole chain (`DuelVerbs.resolveAll`); the chain
   well is a focus cell (`DuelFocus.Slot.Link`, ↑/↓ walk links) and Enter on a link offers Resolve / Negate / Target with it / Read
   (`ChainMenu`); `DuelAction.Negate` marks `ChainLink.negated` (an activated Spell/Trap to the GY with it); Y with no Ai is No
   response (`DUEL_PASS`, `DeskAction.WITHOUT_AI`). **Selection** (`core/duel/DuelSelection`): Ctrl/⌘ click toggles, Shift click a

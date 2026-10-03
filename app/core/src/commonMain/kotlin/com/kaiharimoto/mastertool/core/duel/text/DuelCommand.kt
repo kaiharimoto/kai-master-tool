@@ -47,7 +47,7 @@ object DuelCommand {
             val actions: List<DuelAction>,
             val said: String,
             val named: Set<Int> = emptySet(),
-            /** [said] is the whole preview (1.0.89: several cards onto a Deck read top first, not move by move). */
+            /** [said] is the whole preview (1.0.90: several cards onto a Deck read top first, not move by move). */
             val whole: Boolean = false,
         ) : Parsed
 
@@ -137,7 +137,7 @@ object DuelCommand {
         "hand", "field", "their field", "gy", "lp", "chain", "no response", "your move", "pass", "swap", "undo",
         // Chance and the Deck (1.0.87, kai).
         "discard random", "random oh to gy", "banish random ex down", "random h2 h4 kb", "ks h1",
-        // The chain by keys, several cards at once (1.0.89, kai).
+        // The chain by keys, several cards at once (1.0.90, kai).
         "resolve all", "negate 2", "g gy1 h2 ban1", "k gy1 gy3", "kb gy1 gy3", "t om1 om2",
     )
 
@@ -445,7 +445,7 @@ object DuelCommand {
                         return one(DuelAction.GoFirst(seat, pick == "first"), if (pick == "first") "Go first" else "Go second")
                     }
                 }
-                // The whole chain, link by link (1.0.89, Shift Q): "resolve all", "resolve the whole chain".
+                // The whole chain, link by link (1.0.90, Shift Q): "resolve all", "resolve the whole chain".
                 "resolve", "res" -> if (rest.isNotEmpty() && rest.joinToString(" ") in RESOLVE_ALL) {
                     if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to resolve")
                     return Parsed.Actions(DuelVerbs.resolveAll(s, catalog), "Resolve the whole chain (${s.chain.size} link${if (s.chain.size == 1) "" else "s"})")
@@ -454,7 +454,7 @@ object DuelCommand {
                     val keep = rest.firstOrNull() in setOf("keep", "stay", "stays")
                     return Parsed.Actions(DuelVerbs.resolve(s, catalog, keep), "Resolve")
                 }
-                // A link negated (1.0.89): "negate" the newest, "negate 2", "negate link 2", "negate cl2". "Negate Attack" is a card.
+                // A link negated (1.0.90): "negate" the newest, "negate 2", "negate link 2", "negate cl2". "Negate Attack" is a card.
                 "negate", "neg" -> linkNumber(rest)?.let { n0 ->
                     if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to negate in")
                     val k = if (n0 == 0) s.chain.size else n0
@@ -529,7 +529,7 @@ object DuelCommand {
         }
 
         /**
-         * One verb, several cards by coordinate (1.0.89, kai: "select multiple cards … and perform an action with them"):
+         * One verb, several cards by coordinate (1.0.90, kai: "select multiple cards … and perform an action with them"):
          * `g gy1 gy3 ban2`, `b h2 h4`, `t om1 om2`, `o h4 h5 m3` (the last the host). `k gy1 gy3` puts them on top of the
          * Deck **top first** — gy1 ends on top, gy3 under it; `kb gy1 gy3` on the bottom, gy3 the bottom card; `ks` shuffles
          * them in ([DuelSelection]). One group, one undo. A verb with a place after its card (`s h2 m3`, `h gy1 h2`) is the
@@ -988,10 +988,10 @@ object DuelCommand {
 
     private val DIRECT = setOf("direct", "directly", "d", "dir", "lp", "face")
 
-    /** "resolve …" that resolves every link (1.0.89). */
+    /** "resolve …" that resolves every link (1.0.90). */
     private val RESOLVE_ALL = setOf("all", "everything", "whole chain", "the whole chain", "the chain all", "chain all", "all links", "the lot", "it all")
 
-    /** The verbs a line may give several cards at once (1.0.89, [DuelSelection]). */
+    /** The verbs a line may give several cards at once (1.0.90, [DuelSelection]). */
     private val SEVERAL = setOf(
         DuelVerb.GRAVE, DuelVerb.BANISH, DuelVerb.BANISH_DOWN, DuelVerb.HAND, DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.DECK_SHUFFLE,
         DuelVerb.EXTRA, DuelVerb.TARGET, DuelVerb.REVEAL, DuelVerb.FLIP, DuelVerb.ATTACH,

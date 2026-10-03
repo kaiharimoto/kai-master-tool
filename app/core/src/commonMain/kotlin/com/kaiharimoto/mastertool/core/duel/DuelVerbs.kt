@@ -431,7 +431,7 @@ object DuelVerbs {
     }
 
     /**
-     * The whole chain resolved, newest link first (1.0.89, `Shift Q`, `resolve all`): each link through [resolve] on the
+     * The whole chain resolved, newest link first (1.0.90, `Shift Q`, `resolve all`): each link through [resolve] on the
      * table the one before left, so the chain's Normal Spells and Traps go to the GY together with the last link, as
      * they do a press at a time. Empty when there is no chain.
      */
@@ -447,7 +447,7 @@ object DuelVerbs {
     }
 
     /**
-     * Chain Link [link] (1-based) negated by [seat] (1.0.89): the link stays, marked, and resolves doing nothing; an
+     * Chain Link [link] (1-based) negated by [seat] (1.0.90): the link stays, marked, and resolves doing nothing; an
      * activated Spell or Trap face-up in its zone goes to the GY with it (how "negate"), as a negated activation does. A
      * monster stays where it is — a negated effect leaves it there, and "negate and destroy" is a G after. A problem is
      * said in words.

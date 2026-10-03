@@ -55,7 +55,7 @@ import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.theme.Mu
 import kotlin.math.roundToInt
 
-// ---- Several cards, one move (1.0.89, kai: "let me select multiple cards on the field, graveyard, hand, and across
+// ---- Several cards, one move (1.0.90, kai: "let me select multiple cards on the field, graveyard, hand, and across
 // graveyard and banished and perform an action with them. if put to the bottom of the deck or top of the deck, I can
 // choose the order") -----------------------------------------------------------------------------------------------
 
@@ -66,7 +66,7 @@ internal fun seenBy(s: DuelState, uid: Int, viewers: Set<Int>): Boolean = viewer
 internal fun selectionVerbs(duels: Duels, s: DuelState, viewers: Set<Int>): List<DuelVerb> =
     DuelSelection.verbs(s, duels.selection.filter { it in s.cards }, duels.catalog, duels::seatFor, sees = { seenBy(s, it, viewers) })
 
-/** A verb's words where it stands: Activate while a chain stands is a response, and says so (1.0.89). */
+/** A verb's words where it stands: Activate while a chain stands is a response, and says so (1.0.90). */
 internal fun verbWords(v: DuelVerb, s: DuelState, several: Boolean = false): String = when {
     v == DuelVerb.ACTIVATE && s.chain.isNotEmpty() -> if (several) "Chain them" else "Chain it (link ${s.chain.size + 1})"
     else -> v.label
@@ -78,7 +78,7 @@ internal fun verbKey(v: DuelVerb): String? = VERB_KEYS[v]?.let { DeskShortcuts.c
 private fun keyOf(a: DeskAction): String? = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
 
 /**
- * Each selected card's place in the selection, "1/3", on the card as it lies (1.0.89): an ink box at its corner. A card in a
+ * Each selected card's place in the selection, "1/3", on the card as it lies (1.0.90): an ink box at its corner. A card in a
  * pile that is shut has no badge; the selection's bar lists it.
  */
 @Composable
@@ -99,7 +99,7 @@ internal fun SelectionBadges(duels: Duels, s: DuelState, frames: List<CardFrame>
 }
 
 /**
- * The selection's bar (1.0.89): with two cards or more selected, a band over the near hand lists them in the order picked —
+ * The selection's bar (1.0.90): with two cards or more selected, a band over the near hand lists them in the order picked —
  * each by name when the table's eyes see it, else by where it is — and every verb they all take, each with its key; one
  * press does it to all of them, one undo. A card's chip takes it out; Clear (Esc) lets them all go.
  */
@@ -157,7 +157,7 @@ internal fun SelectionBar(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLay
         val px = density.density
         val x = l.field.left * px
         // Its foot on the near hand's top edge, or its head at the field's top: whichever covers less of what is picked and
-        // of an open pile (1.0.89, the first picture: the bar over the hand hid the banished pile laid open under it).
+        // of an open pile (1.0.90, the first picture: the bar over the hand hid the banished pile laid open under it).
         val hgt = p.height / px
         val low = (hand.top - hgt - 4f).coerceAtLeast(0f)
         val high = l.field.top + 4f
@@ -178,7 +178,7 @@ internal fun SelectionBar(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLay
 }
 
 /**
- * The ordering strip (1.0.89): several cards going onto a Deck, laid in a row as they will stand in it, **top first**, each
+ * The ordering strip (1.0.90): several cards going onto a Deck, laid in a row as they will stand in it, **top first**, each
  * with its number. The order picked is the first order; a drag, or ← → to choose and Alt ← → to move, changes it; K and
  * Shift K say top or bottom; Enter puts them there, R in a random order, Alt K shuffles them in, Esc lets it go.
  */
@@ -276,7 +276,7 @@ internal fun OrderingStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLa
 /** The ordering strip's keys, as its foot does not have room to say: ← → choose, Alt ← → move. */
 internal val ORDER_HINT: String get() = "← → choose · ${keyOf(DeskAction.DUEL_ORDER_EARLIER) ?: "Alt ←"} ${keyOf(DeskAction.DUEL_ORDER_LATER) ?: "Alt →"} move · drag"
 
-// ---- The chain by keys (1.0.89) ------------------------------------------------------------------------------------
+// ---- The chain by keys (1.0.90) ------------------------------------------------------------------------------------
 
 /** What Enter offers on a link in the chain well. */
 internal enum class LinkItem(val label: String) {
@@ -325,7 +325,7 @@ internal fun runLinkItem(duels: Duels, s: DuelState, i: Int, item: LinkItem) {
     }
 }
 
-/** Enter's menu on a link in the chain well (1.0.89): ↑↓ choose, Enter does it, Esc closes. Beside the well. */
+/** Enter's menu on a link in the chain well (1.0.90): ↑↓ choose, Enter does it, Esc closes. Beside the well. */
 @Composable
 internal fun ChainMenu(duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>) {
     val c = Mu.colors
@@ -361,7 +361,7 @@ internal fun ChainMenu(duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<I
     }
 }
 
-/** A link's card waiting for what it targets (1.0.89): a band over the near hand saying how, as an attack's does. */
+/** A link's card waiting for what it targets (1.0.90): a band over the near hand saying how, as an attack's does. */
 @Composable
 internal fun LinkTargetBand(duels: Duels, s: DuelState, l: DuelLayout, from: Int) {
     val c = Mu.colors

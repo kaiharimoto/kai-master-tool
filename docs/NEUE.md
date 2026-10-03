@@ -3577,7 +3577,7 @@ random and predetermined … after determining a winner (higher), the player who
   after the deal and, winning, goes first ("Ai wins the roll and goes first" in the log). `DuelBrief` tells Ai where the roll
   stands. Pictures: `tools/shoot.sh --page=duel --duel=two --duel-dice=rest|held|flying|settled|choose [--duel-dice-frames=N]`.
 
-**1.0.89, the chain by keys and several cards at once** (kai: "consider the chain system and how we can use it better with
+**1.0.90, the chain by keys and several cards at once** (kai: "consider the chain system and how we can use it better with
 a keyboard. Also, let me select multiple cards on the field, graveyard, hand, and across graveyard and banished and perform an
 action with them. if put to the bottom of the deck or top of the deck, I can choose the order"):
 - **The chain by keys.** `A` (and the verb strip's Activate, now worded "Chain it (link 3)") chains while a chain stands; `Q`

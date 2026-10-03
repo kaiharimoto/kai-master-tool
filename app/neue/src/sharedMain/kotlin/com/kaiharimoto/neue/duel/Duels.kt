@@ -795,7 +795,7 @@ class Duels(val dir: File) {
         // Any verb puts a waiting attack away (1.0.86); an attack verb arms it again below.
         attacking = null
         val actor = seat ?: seatFor(uid)
-        // Several at once (1.0.89, DuelSelection): one group, one undo; onto a Deck, in an order the person chooses first.
+        // Several at once (1.0.90, DuelSelection): one group, one undo; onto a Deck, in an order the person chooses first.
         if (uid in selection && selection.size > 1 && verb != DuelVerb.ATTACK) return verbAll(verb, host)
         val r = DuelVerbs.actions(g.state, actor, uid, verb, catalog, zone, host, direct)
         if (r.needsHost) {
@@ -822,13 +822,13 @@ class Duels(val dir: File) {
         return ok
     }
 
-    // ---- Several cards, one move (1.0.89, kai: "let me select multiple cards … and perform an action with them") ---------
+    // ---- Several cards, one move (1.0.90, kai: "let me select multiple cards … and perform an action with them") ---------
 
     /** A finger's select mode: after a press and hold, each tap puts a card into the selection or takes it out. */
     var selecting by mutableStateOf(false)
 
     /**
-     * Cards going onto a Deck in the order the person chooses (1.0.89): [order] top first, as they will stand; [bottom] for
+     * Cards going onto a Deck in the order the person chooses (1.0.90): [order] top first, as they will stand; [bottom] for
      * the Deck's bottom; [cursor] the card the arrows have chosen. The ordering strip draws it; Enter makes it.
      */
     data class Ordering(val order: List<Int>, val bottom: Boolean, val cursor: Int = 0)
@@ -864,7 +864,7 @@ class Duels(val dir: File) {
         verbStrip = selection.size == 1
     }
 
-    /** Shift Space (1.0.89): the focused card into the selection, or out of it. */
+    /** Shift Space (1.0.90): the focused card into the selection, or out of it. */
     fun selectFocused(): Boolean {
         val uid = (if (byKeys) focusUid() else hovered) ?: run { problem = "Walk to a card first: the arrows, then Shift Space"; return false }
         toggleSelect(uid)
@@ -961,7 +961,7 @@ class Duels(val dir: File) {
         return ok
     }
 
-    // ---- The chain by keys (1.0.89, kai: "consider the chain system and how we can use it better with a keyboard") ------
+    // ---- The chain by keys (1.0.90, kai: "consider the chain system and how we can use it better with a keyboard") ------
 
     /** The link (0-based) whose menu Enter opened in the chain well, and the item ↑/↓ have chosen in it. */
     var chainMenu by mutableStateOf<Int?>(null)
@@ -994,7 +994,7 @@ class Duels(val dir: File) {
         return act(DuelAction.Target(bottom, from, listOf(uid)), bottom)
     }
 
-    /** Y with no Ai at the table (1.0.89): No response — priority passed while a chain stands or a window waits. */
+    /** Y with no Ai at the table (1.0.90): No response — priority passed while a chain stands or a window waits. */
     fun pass(): Boolean {
         val s = shown?.state ?: return false
         if (s.chain.isEmpty() && s.window == null) { problem = "Nothing to pass on: no chain stands"; return false }

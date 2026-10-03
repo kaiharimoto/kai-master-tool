@@ -66,7 +66,7 @@ object CommandHelp {
         "pass" to "Let the chain resolve",
         "swap" to "Sit at the other seat",
         "undo" to "Take the last move back",
-        // The chain by keys and several cards at once (1.0.89).
+        // The chain by keys and several cards at once (1.0.90).
         "resolve all" to "Resolve the whole chain, newest link first (Shift Q)",
         "negate 2" to "Negate Chain Link 2: it stays, and an activated Spell or Trap goes to the GY",
         "g gy1 h2 ban1" to "One verb, several cards: all three to the GY, one undo",

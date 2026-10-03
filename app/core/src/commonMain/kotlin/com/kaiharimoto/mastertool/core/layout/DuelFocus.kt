@@ -52,7 +52,7 @@ object DuelFocus {
         data class PileCard(val seat: Int, val kind: PileKind, val index: Int) : Slot
 
         /**
-         * Chain Link [index] + 1 in the chain well (1.0.89, kai: "consider the chain system and how we can use it better with
+         * Chain Link [index] + 1 in the chain well (1.0.90, kai: "consider the chain system and how we can use it better with
          * a keyboard"): the well is a cell of the shared row while a chain stands, entered on its newest link; ↑ and ↓ walk
          * its links (Link 1 at the top, as the well lists them) and leave it past either end, ← and → leave it sideways.
          */
@@ -133,7 +133,7 @@ object DuelFocus {
         raw += listOfNotNull(
             if (two) Slot.Pile(far, PileKind.BANISHED) to 0f else null,
             zone(0, ZoneKind.EMZ, emzLeft) to 2f,
-            // The chain well, a cell while a chain stands (1.0.89): its newest link stands for it.
+            // The chain well, a cell while a chain stands (1.0.90): its newest link stands for it.
             if (s.chain.isNotEmpty()) Slot.Link(s.chain.size - 1) to 3f else null,
             zone(0, ZoneKind.EMZ, 1 - emzLeft) to 4f,
             Slot.Pile(near, PileKind.BANISHED) to 6f,
@@ -178,7 +178,7 @@ object DuelFocus {
     fun step(from: Slot?, dir: Dir, s: DuelState, viewer: Int, shape: Shape): Slot {
         if (from == null) return home(s, viewer)
         if (from is Slot.PileCard) return stepStrip(from, dir, s, shape.stripPerRow)
-        // In the chain well, ↑ and ↓ walk its links before they leave it (1.0.89).
+        // In the chain well, ↑ and ↓ walk its links before they leave it (1.0.90).
         if (from is Slot.Link && s.chain.isNotEmpty()) {
             val i = from.index.coerceIn(0, s.chain.size - 1)
             if (dir == Dir.UP && i > 0) return Slot.Link(i - 1)

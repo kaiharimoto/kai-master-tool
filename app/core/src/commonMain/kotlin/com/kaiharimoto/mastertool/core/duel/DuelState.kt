@@ -183,7 +183,7 @@ data class ChainLink(
     val uid: Int? = null,
     val note: String = "",
     val targets: List<Int> = emptyList(),
-    /** Negated (1.0.89): it stays on the chain and resolves doing nothing. */
+    /** Negated (1.0.90): it stays on the chain and resolves doing nothing. */
     val negated: Boolean = false,
 )
 

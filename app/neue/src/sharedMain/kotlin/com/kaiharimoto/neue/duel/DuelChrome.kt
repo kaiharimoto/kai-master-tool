@@ -292,7 +292,7 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Micro("Chain", color = if (s.chain.isEmpty()) c.ink45 else c.ink, size = 9.sp)
-        // The link the keys stand on (1.0.89): its line inverted, as the Spotlight's chosen row is.
+        // The link the keys stand on (1.0.90): its line inverted, as the Spotlight's chosen row is.
         val focused = (duels.focus as? com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link)?.takeIf { duels.byKeys }?.index ?: duels.chainMenu
         s.chain.takeLast(6).forEachIndexed { i, link ->
             val n = s.chain.size - minOf(6, s.chain.size) + i + 1
@@ -319,7 +319,7 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
                 Mono(name + (where?.let { " · $it" } ?: "") + if (link.negated) " · negated" else "", color = if (on) c.paper else c.ink, size = 9.sp)
             }
         }
-        // Its keys, while a chain stands (1.0.89).
+        // Its keys, while a chain stands (1.0.90).
         if (s.chain.isNotEmpty() && s.chain.size <= 4) {
             val q = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.DUEL_RESOLVE)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
             val all = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.DUEL_RESOLVE_ALL)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)

@@ -80,11 +80,11 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
     }
     val game = duels.shown ?: return
     val s = game.state
-    // The ordering strip (1.0.89) has the keys while it is open: its own arrows, Enter, and K / Shift K / Alt K / R.
+    // The ordering strip (1.0.90) has the keys while it is open: its own arrows, Enter, and K / Shift K / Alt K / R.
     if (duels.ordering != null && runOrdering(duels, action)) return
     if (runFocus(h, action)) return
     VERBS[action]?.let { verb ->
-        // Several selected (1.0.89): a verb key moves them all, whatever the pointer is over — but a card under the
+        // Several selected (1.0.90): a verb key moves them all, whatever the pointer is over — but a card under the
         // pointer that is not among them is the pointer's, as before.
         if (duels.selection.size > 1 && (duels.byKeys || duels.hovered == null || duels.hovered in duels.selection) && verb != DuelVerb.ATTACK) {
             duels.verbAll(verb)
@@ -134,7 +134,7 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_SWAP -> duels.swap()
         DeskAction.DUEL_FACING -> h.neue.update { it.copy(duel = it.duel.copy(facing = !it.duel.facing)) }
         DeskAction.DUEL_RESOLVE -> duels.resolveChain()
-        // The chain by keys (1.0.89).
+        // The chain by keys (1.0.90).
         DeskAction.DUEL_RESOLVE_ALL -> duels.resolveAll()
         DeskAction.DUEL_PASS -> duels.pass()
         DeskAction.DUEL_SELECT -> duels.selectFocused()
@@ -160,7 +160,7 @@ private val DIGITS = mapOf(
  */
 private fun answerAi(h: NeueHolders, game: com.kaiharimoto.mastertool.core.duel.DuelGame, catching: Boolean) {
     if (h.duel.replay != null) return
-    // No Ai at this table (1.0.89): Y is No response across the hot-seat while a chain stands, as DUEL_PASS is with Ai off.
+    // No Ai at this table (1.0.90): Y is No response across the hot-seat while a chain stands, as DUEL_PASS is with Ai off.
     if (!aiAtTable(h)) {
         if (!catching) h.duel.pass()
         return
@@ -186,7 +186,7 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.setupOpen -> d.setupOpen = false
         d.libraryOpen -> d.libraryOpen = false
         d.lpPad != null -> d.lpPad = null
-        // Several cards (1.0.89): the ordering strip, the chain well's menu and a link's aim first, then the selection's keys.
+        // Several cards (1.0.90): the ordering strip, the chain well's menu and a link's aim first, then the selection's keys.
         d.ordering != null -> d.ordering = null
         d.chainMenu != null -> d.chainMenu = null
         d.linkTarget != null -> d.linkTarget = null
@@ -227,13 +227,13 @@ private fun runFocus(h: NeueHolders, action: DeskAction): Boolean {
     val d = h.duel
     val menuOpen = d.verbStrip && d.verbCursor != null
     val s0 = d.shown?.state
-    // Enter's menu on a link in the chain well (1.0.89): ↑↓ choose in it.
+    // Enter's menu on a link in the chain well (1.0.90): ↑↓ choose in it.
     val chainOpen = d.chainMenu?.let { i -> s0?.let { linkItems(it, i) } }?.takeIf { it.isNotEmpty() }
     if (chainOpen != null && (action == DeskAction.DUEL_FOCUS_UP || action == DeskAction.DUEL_FOCUS_DOWN)) {
         d.chainCursor = (d.chainCursor + if (action == DeskAction.DUEL_FOCUS_UP) -1 else 1).coerceIn(0, chainOpen.size - 1)
         return true
     }
-    // The selection's bar, once Enter put the keys in it (1.0.89).
+    // The selection's bar, once Enter put the keys in it (1.0.90).
     val selOpen = d.selCursor != null && d.selection.size > 1
     if (selOpen && s0 != null && (action == DeskAction.DUEL_FOCUS_UP || action == DeskAction.DUEL_FOCUS_DOWN || action == DeskAction.DUEL_FOCUS_LEFT || action == DeskAction.DUEL_FOCUS_RIGHT)) {
         val n = selectionVerbs(d, s0, d.eyes.viewers).size
@@ -279,7 +279,7 @@ private fun enterOnFocus(h: NeueHolders) {
     val s = d.shown?.state ?: return
     val asking = h.ai.question != null && duelTalking(h)
     val focus = d.focus
-    // The chain well's menu (1.0.89): Enter does the item chosen.
+    // The chain well's menu (1.0.90): Enter does the item chosen.
     d.chainMenu?.let { i ->
         val item = linkItems(s, i).getOrNull(d.chainCursor)
         if (item != null) runLinkItem(d, s, i, item) else d.chainMenu = null
@@ -307,7 +307,7 @@ private fun enterOnFocus(h: NeueHolders) {
     val picked = d.picked
     val aiming = d.linkTarget
     when {
-        // A link's card aims (1.0.89): Enter on a card gives it the arrow.
+        // A link's card aims (1.0.90): Enter on a card gives it the arrow.
         aiming != null -> if (uid != null && uid != aiming && focus !is DuelFocus.Slot.Link) d.targetFromLink(uid)
             else h.neue.note = Note("Walk to the card it targets, then Enter. Esc to stop.")
         // On a link in the chain well: what can be done with it, as a menu.
@@ -394,7 +394,7 @@ private fun placeByKey(h: NeueHolders, uid: Int, kind: ZoneKind, index: Int) {
 }
 
 /**
- * The ordering strip's keys (1.0.89): ← → choose a card, Alt ← → move it, Enter puts them on the Deck as shown, K and
+ * The ordering strip's keys (1.0.90): ← → choose a card, Alt ← → move it, Enter puts them on the Deck as shown, K and
  * Shift K say top or bottom, R puts them in a random order, Alt K shuffles them in. False for a key it leaves alone.
  */
 private fun runOrdering(d: Duels, action: DeskAction): Boolean {

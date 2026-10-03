@@ -83,11 +83,11 @@ object DuelCoverage {
         Row("A press on the chain well: resolve", "resolve", needs = NEEDS_CHAIN),
         Row("A right-click on the chain well: clear", "clear chain", needs = NEEDS_CHAIN),
         Row("Resolve, keeping the card on the field", "resolve keep", needs = NEEDS_CHAIN),
-        // ---- the chain by keys (1.0.89) ----
+        // ---- the chain by keys (1.0.90) ----
         Row("Shift Q: resolve the whole chain", "resolve all", needs = NEEDS_CHAIN),
         Row("Enter on a link in the chain well: Negate", "negate 1", needs = NEEDS_CHAIN),
         Row("Y with no Ai at the table: No response", "pass", needs = NEEDS_CHAIN),
-        // ---- several cards, one move (1.0.89) ----
+        // ---- several cards, one move (1.0.90) ----
         Row("Ctrl-click several, then G", "g h1 h2"),
         Row("Ctrl-click across the GY and the hand, then B", "b gy1 h3"),
         Row("Several onto the Deck in the order chosen, top first", "k h1 h2"),

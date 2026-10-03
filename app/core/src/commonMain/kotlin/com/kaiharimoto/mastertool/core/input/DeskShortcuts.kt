@@ -200,16 +200,16 @@ enum class DeskAction {
     /** The far seat's cards turned round to face them, or upright (1.0.78). */
     DUEL_FACING,
     DUEL_RESOLVE,
-    /** The whole chain resolved, newest link first (1.0.89, kai: "the chain system … better with a keyboard"). */
+    /** The whole chain resolved, newest link first (1.0.90, kai: "the chain system … better with a keyboard"). */
     DUEL_RESOLVE_ALL,
     /**
-     * No response: priority passed across a hot-seat while a chain stands (1.0.89). Y, the key Ai's cues use, so it lives
+     * No response: priority passed across a hot-seat while a chain stands (1.0.90). Y, the key Ai's cues use, so it lives
      * only while Ai is off ([DeskAction.WITHOUT_AI]); with Ai on, Y passes this way at a table Ai does not sit at.
      */
     DUEL_PASS,
-    /** The focused card into the selection, or out of it (1.0.89): several cards, one move. */
+    /** The focused card into the selection, or out of it (1.0.90): several cards, one move. */
     DUEL_SELECT,
-    /** Ordering several cards onto a Deck (1.0.89): the chosen card one place nearer the top, or the bottom. */
+    /** Ordering several cards onto a Deck (1.0.90): the chosen card one place nearer the top, or the bottom. */
     DUEL_ORDER_EARLIER,
     DUEL_ORDER_LATER,
 
@@ -303,7 +303,7 @@ enum class DeskAction {
          */
         val HELD: Set<DeskAction> = setOf(DUEL_VOICE)
 
-        /** Actions live only while Ai is off (1.0.89): they share a chord with an [AI] action, which wins while it lives. */
+        /** Actions live only while Ai is off (1.0.90): they share a chord with an [AI] action, which wins while it lives. */
         val WITHOUT_AI: Set<DeskAction> = setOf(DUEL_PASS)
     }
 }

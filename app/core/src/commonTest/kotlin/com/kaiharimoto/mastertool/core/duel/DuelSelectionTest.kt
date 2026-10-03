@@ -25,7 +25,7 @@ import kotlin.test.assertTrue
 import kotlin.test.fail
 
 /**
- * 1.0.89, kai: "consider the chain system and how we can use it better with a keyboard. Also, let me select multiple cards
+ * 1.0.90, kai: "consider the chain system and how we can use it better with a keyboard. Also, let me select multiple cards
  * on the field, graveyard, hand, and across graveyard and banished and perform an action with them. if put to the bottom of
  * the deck or top of the deck, I can choose the order".
  */

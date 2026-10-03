@@ -150,7 +150,7 @@ sealed class DuelAction {
     data class Attack(val seat: Int, val attacker: Int, val target: Int? = null) : DuelAction()
 
     /**
-     * [seat] negates Chain Link [link] (1-based, 1.0.89, kai: "consider the chain system and how we can use it better with a
+     * [seat] negates Chain Link [link] (1-based, 1.0.90, kai: "consider the chain system and how we can use it better with a
      * keyboard"): the link stays on the chain, marked negated, and resolves doing nothing. Its card is moved by the
      * actions that go with it (`DuelVerbs.negate`: an activated Spell or Trap to the GY), never by this.
      */

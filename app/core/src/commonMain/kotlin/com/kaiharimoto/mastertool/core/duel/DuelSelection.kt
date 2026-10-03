@@ -3,7 +3,7 @@ package com.kaiharimoto.mastertool.core.duel
 import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
 
 /**
- * Several cards, one action (1.0.89, kai: "let me select multiple cards on the field, graveyard, hand, and across graveyard
+ * Several cards, one action (1.0.90, kai: "let me select multiple cards on the field, graveyard, hand, and across graveyard
  * and banished and perform an action with them. if put to the bottom of the deck or top of the deck, I can choose the
  * order").
  *
@@ -164,7 +164,7 @@ object DuelSelection {
         return placed.map { u -> DuelAction.Move(u, Place.Pile(s.cards.getValue(u).owner, PileKind.DECK, if (bottom) Place.BOTTOM else Place.TOP), how = "return") }
     }
 
-    /** [order] onto the Deck in an order chance picks (1.0.89's "Random order"), stamped on commit as a [DuelAction.Pick]. */
+    /** [order] onto the Deck in an order chance picks (1.0.90's "Random order"), stamped on commit as a [DuelAction.Pick]. */
     fun randomToDeck(s: DuelState, seat: Int, order: List<Int>, bottom: Boolean): DuelAction.Pick {
         val live = order.distinct().filter { it in s.cards }
         return DuelAction.Pick(seat, Place.Pile(seat, PileKind.DECK, if (bottom) Place.BOTTOM else Place.TOP), among = live, n = live.size, how = "return")
@@ -209,7 +209,7 @@ object DuelSelection {
     }
 
     /**
-     * A Shift-click (1.0.89): every card from [anchor] to [uid] in the row they share ([rowOf]) added to [selection], in
+     * A Shift-click (1.0.90): every card from [anchor] to [uid] in the row they share ([rowOf]) added to [selection], in
      * the row's order from the anchor; when they share none, [uid] toggled.
      */
     fun range(s: DuelState, selection: List<Int>, anchor: Int?, uid: Int, hand: (Int) -> List<Int> = { s.seats[it].hand }): List<Int> {

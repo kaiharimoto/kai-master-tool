@@ -73,7 +73,7 @@ object DuelMouse {
     const val DRAG = "Drag"
     const val HOLD = "Hold"
     const val SHIFT_CLICK = "Shift click"
-    /** ⌘ click on a Mac (1.0.89). */
+    /** ⌘ click on a Mac (1.0.90). */
     const val CTRL_CLICK = "Ctrl click"
     const val ALT_CLICK = "Alt click"
     const val DOUBLE = "Double-click"
@@ -126,7 +126,7 @@ object DuelTouch {
     const val DOUBLE = "Double-tap"
     const val DRAG = "Drag"
     const val HOLD = "Press and hold"
-    /** After a press and hold on a card (1.0.89): select mode, until the selection is empty or let go. */
+    /** After a press and hold on a card (1.0.90): select mode, until the selection is empty or let go. */
     const val SEVERAL = "Tap, after a press and hold"
 
     val all: List<DuelBinding> = listOf(

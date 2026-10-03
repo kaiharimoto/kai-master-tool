@@ -229,7 +229,7 @@ fun neueMain(args: Array<String>) {
                         h.duel.verbStrip = true
                     }
                 }
-                // Several cards, one move (1.0.89): --duel-multi=true selects across the near GY and banished pile (two
+                // Several cards, one move (1.0.90): --duel-multi=true selects across the near GY and banished pile (two
                 // cards banished first) with the banished pile laid open, its badges and the selection's bar showing;
                 // --duel-order=top|bottom opens the ordering strip on three of them.
                 if (map["duel-multi"] == "true" || map["duel-order"] != null) {
@@ -253,7 +253,7 @@ fun neueMain(args: Array<String>) {
                     }
                     println("[neue-studio] multi: selection ${d.selection}, ordering ${d.ordering}")
                 }
-                // The chain by keys (1.0.89): --duel-chain-focus=N builds a chain of three and walks the keys' focus onto its
+                // The chain by keys (1.0.90): --duel-chain-focus=N builds a chain of three and walks the keys' focus onto its
                 // link N in the chain well; --duel-chain-menu=true opens Enter's menu there.
                 map["duel-chain-focus"]?.let { spec ->
                     val d = h.duel

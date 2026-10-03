@@ -210,7 +210,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     }
 
     fun click(hit: Hit, shift: Boolean, alt: Boolean, x: Float, y: Float, at: Long, ctrl: Boolean = false) {
-        // A link's card waiting for what it targets (1.0.89, the chain well's menu): the card clicked gets its arrow.
+        // A link's card waiting for what it targets (1.0.90, the chain well's menu): the card clicked gets its arrow.
         duels.linkTarget?.let { from ->
             if (hit is Hit.Card && hit.frame.uid != from) { duels.targetFromLink(hit.frame.uid); return }
             duels.linkTarget = null
@@ -242,7 +242,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     return
                 }
                 if (alt) { duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, uid = uid)); return }
-                // Several cards (1.0.89): Ctrl (⌘) click or a tap in select mode puts one in or takes it out, Shift click a
+                // Several cards (1.0.90): Ctrl (⌘) click or a tap in select mode puts one in or takes it out, Shift click a
                 // run of one hand, pile or row; the selection's bar then says what they can all do.
                 when {
                     ctrl || duels.selecting -> duels.toggleSelect(uid)
@@ -421,7 +421,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 when {
                     released -> click(hit, shift, alt, x0, y0, down.uptimeMillis, ctrl)
                     decided == null && moved == null -> {
-                        // A hold: every verb for the card, beside it read large. By a finger it is also select mode (1.0.89):
+                        // A hold: every verb for the card, beside it read large. By a finger it is also select mode (1.0.90):
                         // each tap after it puts a card into the selection or takes it out.
                         if (hit is Hit.Card) {
                             duels.inspected = hit.frame.uid
@@ -484,7 +484,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                                 val targets = if (uid in duels.selection && duels.selection.size > 1 && done.spot is DropSpot.Pile) duels.selection.toList() else listOf(uid)
                                 val deck = (done.spot as? DropSpot.Pile)?.takeIf { it.kind == PileKind.DECK }
                                 if (targets.size > 1 && deck != null && deck.part != DeckPart.SHUFFLE) {
-                                    // Several onto the Deck's top or bottom (1.0.89): their order first, in the ordering strip.
+                                    // Several onto the Deck's top or bottom (1.0.90): their order first, in the ordering strip.
                                     duels.ordering = Duels.Ordering(targets.filter { it in stateNow.cards }, bottom = deck.part == DeckPart.BOTTOM || mods.isShiftPressed)
                                 } else {
                                     val actions = targets.flatMap { t -> DuelDrop.intent(stateNow, t, done.spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed, duels.dragActor()).actions }
@@ -512,7 +512,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                                     f.shown && (f.inStrip || stateNow.placeOf(f.uid).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) }) &&
                                         f.x < b.right && f.x + f.w > b.left && f.y < b.bottom && f.y + f.h > b.top
                                 }.map { it.uid }
-                                // Ctrl or Shift held: the box adds to what is selected (1.0.89).
+                                // Ctrl or Shift held: the box adds to what is selected (1.0.90).
                                 duels.selection = (if (ctrl || shift) duels.selection.toList() + boxed else boxed).distinct().toSet()
                                 duels.verbStrip = duels.selection.size == 1
                                 duels.selection.singleOrNull()?.let { duels.inspected = it }
@@ -589,7 +589,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         if (!stripLeft) duels.strip?.let { (seat, kind) -> StripGround(duels, s, layout, seat, kind) }
         ShuffleOffer(duels, s, layout)
         if (carry == null && duels.verbStrip && duels.selection.size < 2) VerbStrip(duels, s, layout, shownFrames, playsBoth)
-        // Several cards, one move (1.0.89): their order on each, what they can all do, and the order onto a Deck.
+        // Several cards, one move (1.0.90): their order on each, what they can all do, and the order onto a Deck.
         if (carry == null) SelectionBadges(duels, s, shownFrames)
         if (carry == null) SelectionBar(h, duels, s, layout, viewers, shownFrames)
         if (carry == null) OrderingStrip(h, duels, s, layout, viewers)
@@ -809,7 +809,7 @@ internal fun seenBox(f: CardFrame): Slot {
 
 /** Where [slot] is drawn: its card as it lies, else the zone or the pile's frame. */
 private fun boxOf(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>, slot: DuelFocus.Slot): Slot? {
-    // A link is in the chain well (1.0.89): the well is ringed, and the link's own line inverted in it.
+    // A link is in the chain well (1.0.90): the well is ringed, and the link's own line inverted in it.
     if (slot is DuelFocus.Slot.Link) return l[DuelSpot.Chain]
     val uid = DuelFocus.uidAt(s, slot, duels.eyes)
     uid?.let { u -> frames.firstOrNull { it.uid == u && it.shown } }?.let { return seenBox(it) }
@@ -855,7 +855,7 @@ private fun FocusRing(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.Duel
         }
         DuelDrop.intent(s, w, spot, duels.catalog).let { i -> if (i.none) "nothing to do here" else "Enter: ${i.label}" }
     }
-    // On a link, what Enter offers (1.0.89).
+    // On a link, what Enter offers (1.0.90).
     val linkHint = (focus as? DuelFocus.Slot.Link)?.takeIf { duels.chainMenu == null }?.let { if (s.chain.getOrNull(it.index)?.negated == true) "negated · Enter" else "Enter: resolve, negate, target" }
     val text = listOfNotNull(coord, count?.let { "$it" }, what, intent ?: linkHint).joinToString(" · ")
     Box(Modifier.zIndex(FOCUS_Z).offset((box.left - 4).dp, (box.top - 4).dp).size((box.width + 8).dp, (box.height + 8).dp).border(2.dp, c.ink))
