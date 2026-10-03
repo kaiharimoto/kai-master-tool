@@ -31,6 +31,7 @@ private val VERBS = mapOf(
     DeskAction.DUEL_HAND to DuelVerb.HAND,
     DeskAction.DUEL_DECK_TOP to DuelVerb.DECK_TOP,
     DeskAction.DUEL_DECK_BOTTOM to DuelVerb.DECK_BOTTOM,
+    DeskAction.DUEL_DECK_SHUFFLE to DuelVerb.DECK_SHUFFLE,
     DeskAction.DUEL_EXTRA to DuelVerb.EXTRA,
     DeskAction.DUEL_ATTACH to DuelVerb.ATTACH,
     DeskAction.DUEL_REVEAL to DuelVerb.REVEAL,

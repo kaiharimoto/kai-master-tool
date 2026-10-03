@@ -54,10 +54,12 @@ sealed class DuelAction {
      * Moves a card. [pos] null keeps the card's face where that makes sense (and turns it face-up in a
      * graveyard, face-down in a deck). [how] says what the move meant — "normal", "special", "set",
      * "activate", "tribute", "search", "send", "banish", "return", "attach" — for the log and for
-     * response windows; the table never reads it.
+     * response windows; the table never reads it. [over]: into a Monster Zone that holds a card, on top of it — the
+     * card there and its materials go beneath this one, as an Xyz Summon is laid out (1.0.87, kai: "it should overlay
+     * on top of it instead of attaching itself").
      */
     @Serializable @SerialName("move")
-    data class Move(val uid: Int, val to: Place, val pos: CardPosition? = null, val how: String? = null) : DuelAction()
+    data class Move(val uid: Int, val to: Place, val pos: CardPosition? = null, val how: String? = null, val over: Boolean = false) : DuelAction()
 
     @Serializable @SerialName("draw")
     data class Draw(val seat: Int, val n: Int = 1) : DuelAction()
@@ -168,6 +170,24 @@ sealed class DuelAction {
 
     @Serializable @SerialName("dice")
     data class Dice(val seat: Int, val value: Int = 1) : DuelAction()
+
+    /**
+     * [n] cards picked at random and moved to the pile [to] (1.0.87, kai: "card effects that banish, discard, or
+     * shuffle/bottom of deck randomly"): from [among] when it names cards (to put them on the bottom of the Deck in a
+     * random order), else from the pile [from]. The pick is [salt]'s, stamped on commit, so it is chance and the same
+     * in every replay. Each card goes to its owner's pile.
+     */
+    @Serializable @SerialName("pick")
+    data class Pick(
+        val seat: Int,
+        val to: Place.Pile,
+        val from: Place.Pile? = null,
+        val among: List<Int> = emptyList(),
+        val n: Int = 1,
+        val pos: CardPosition? = null,
+        val how: String? = null,
+        val salt: Long = 0L,
+    ) : DuelAction()
 
     // ---- talk ----------------------------------------------------------------------------------------
 

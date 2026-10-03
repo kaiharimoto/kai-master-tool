@@ -33,11 +33,19 @@ class DuelDropTest {
     }
 
     @Test
-    fun dropOntoAMonsterAttachesIt() {
+    fun aMonsterDroppedOnAMonsterGoesOnTopAndAnyOtherCardUnder() {
+        // kai (1.0.87): "when I drag a monster atop another card, it should overlay on top of it instead of attaching itself".
         val s = ok(table, DuelAction.Move(zeus, m3))
         val i = DuelDrop.intent(s, ash, DropSpot.Zone(m3), catalog)
-        assertTrue(i.label.startsWith("Attach to"))
-        assertEquals(listOf(DuelAction.Move(ash, Place.Under(zeus), how = "attach")), i.actions)
+        assertTrue(i.label.startsWith("On top of"), i.label)
+        assertEquals(listOf(DuelAction.Move(ash, m3, CardPosition.FACE_UP_ATK, "special", over = true)), i.actions)
+        val after = DuelRules.applyAll(s, i.actions).first!!
+        assertEquals(ash, after.at(m3))
+        assertEquals(listOf(zeus), after.cards.getValue(ash).under)
+        // A spell carried onto a monster still goes under it.
+        val spell = DuelDrop.intent(s, pot, DropSpot.Zone(m3), catalog)
+        assertTrue(spell.label.startsWith("Attach to"))
+        assertEquals(listOf(DuelAction.Move(pot, Place.Under(zeus), how = "attach")), spell.actions)
     }
 
     @Test

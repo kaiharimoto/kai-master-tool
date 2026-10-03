@@ -32,6 +32,7 @@ object DuelComplete {
         "counter" to "Counters", "move" to "Move", "place" to "Place", "chain" to "Chain", "resolve" to "Resolve the chain",
         "draw" to "Draw", "mill" to "Mill", "lp" to "Life points", "token" to "Token", "open" to "Open a pile", "read" to "Read a card",
         "say" to "Say", "undo" to "Undo", "swap" to "Sit at the other seat",
+        "random" to "A card at random", "discard" to "Discard", "spin" to "Shuffle into the Deck",
     )
 
     /** The verb keys' letters, as `DeskShortcuts` binds them. */
@@ -173,7 +174,7 @@ object DuelComplete {
             verb != null -> {
                 val play = verb in setOf(DuelVerb.SUMMON, DuelVerb.SET, DuelVerb.SPECIAL, DuelVerb.ACTIVATE, DuelVerb.PLACE)
                 // A key's letter is a verb only before a coordinate: a card with none (the Deck's, by name) is not offered.
-                val letter = head!!.length == 1 || head in setOf("bd", "kb", "cd")
+                val letter = head!!.length == 1 || head in setOf("bd", "kb", "ks", "cd")
                 cards(70) { u ->
                     (!letter || DuelNotation.coordOf(s, u, seat, secret) != null) &&
                         (if (play) !(s.placeOf(u).let { it is Place.Pile && it.kind == PileKind.DECK }) else true)

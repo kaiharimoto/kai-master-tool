@@ -5,7 +5,8 @@ import com.kaiharimoto.mastertool.core.board.CardPosition
 /** Where a carried card is over, as the table's geometry found it. */
 sealed interface DropSpot {
     data class Zone(val zone: Place.Zone) : DropSpot
-    data class Pile(val seat: Int, val kind: PileKind) : DropSpot
+    /** A pile; on a Deck, [part] is the third of it the card is over: the top, the middle (shuffled in) or the bottom (1.0.87). */
+    data class Pile(val seat: Int, val kind: PileKind, val part: DeckPart? = null) : DropSpot
     /** A hand, before the card at [index] (its length: the right end). */
     data class Hand(val seat: Int, val index: Int) : DropSpot
     data object Chain : DropSpot
@@ -14,11 +15,29 @@ sealed interface DropSpot {
 }
 
 /**
+ * Where on a Deck a card is put (1.0.87, kai: "some place to the top of the deck, some to the bottom, and some shuffle
+ * to deck"): the pile's upper third is the top, its middle shuffles the card in, its lower third is the bottom.
+ */
+enum class DeckPart(val label: String) {
+    TOP("Top of the Deck"), SHUFFLE("Shuffle into the Deck"), BOTTOM("Bottom of the Deck");
+
+    companion object {
+        /** The part of a Deck at [y] of its height [h] (from its top edge). */
+        fun at(y: Float, h: Float): DeckPart = when {
+            h <= 0f || y < h / 3f -> TOP
+            y < h * 2f / 3f -> SHUFFLE
+            else -> BOTTOM
+        }
+    }
+}
+
+/**
  * What letting go of a carried card will do — the same answer the highlight under it shows, because
  * the indicator is the intent: what is drawn while carrying is exactly what the release commits.
  *
- * Over an empty zone the card goes there (Alt sets it); over a monster it becomes that monster's
- * material; over a pile it goes onto the pile (Shift: the bottom of a deck; Alt: banished face-down);
+ * Over an empty zone the card goes there (Alt sets it); a monster over a monster goes on top of it, the one
+ * there becoming its material (1.0.87), and any other card under it as a material; over a pile it goes onto the
+ * pile (a Deck by the third it is over, else Shift the bottom and Alt shuffled in; Alt: banished face-down);
  * over a hand it goes into it at that place; over the chain it is activated where it is.
  */
 object DuelDrop {
@@ -59,8 +78,17 @@ object DuelDrop {
                     there != null -> {
                         val host = s.cards.getValue(there)
                         val monsterZone = z.kind == ZoneKind.MONSTER || z.kind == ZoneKind.EMZ
-                        if (!monsterZone || uid in host.under) NONE
-                        else Intent(listOf(DuelAction.Move(uid, Place.Under(there), how = "attach")), "Attach to ${catalog.nameOf(host)}")
+                        val monster = kind == CardKind.MONSTER || kind == CardKind.EXTRA_MONSTER
+                        val hostName = if (host.faceUp) catalog.nameOf(host) else "the set monster"
+                        when {
+                            !monsterZone || uid in host.under -> NONE
+                            // A monster put on a monster goes on top: the one there, and its materials, beneath it (kai, 1.0.87).
+                            monster && from !is Place.Under -> Intent(
+                                listOf(DuelAction.Move(uid, z, if (from is Place.Zone) null else CardPosition.FACE_UP_ATK, if (from is Place.Zone) null else "special", over = true)),
+                                "On top of $hostName",
+                            )
+                            else -> Intent(listOf(DuelAction.Move(uid, Place.Under(there), how = "attach")), "Attach to $hostName")
+                        }
                     }
                     else -> {
                         val monsterZone = z.kind == ZoneKind.MONSTER || z.kind == ZoneKind.EMZ
@@ -96,12 +124,22 @@ object DuelDrop {
             is DropSpot.Pile -> {
                 val target = spot.kind
                 if (from is Place.Pile && from.kind == target && target != PileKind.DECK) return NONE
+                val part = spot.part ?: when {
+                    shift -> DeckPart.BOTTOM
+                    alt -> DeckPart.SHUFFLE
+                    else -> DeckPart.TOP
+                }
                 val (pos, at, label) = when (target) {
-                    PileKind.DECK -> Triple(null, if (shift) Place.BOTTOM else Place.TOP, if (shift) "Bottom of the Deck" else "Top of the Deck")
+                    PileKind.DECK -> Triple(null, if (part == DeckPart.BOTTOM) Place.BOTTOM else Place.TOP, part.label)
                     PileKind.GY -> Triple(null, null, "To the GY")
                     PileKind.BANISHED -> if (alt) Triple(CardPosition.FACE_DOWN_DEF, null, "Banish face-down") else Triple(CardPosition.FACE_UP_ATK, null, "Banish")
                     PileKind.EXTRA -> Triple(if (card.pendulumIn(catalog)) CardPosition.FACE_UP_ATK else null, null, "To the Extra Deck")
                     PileKind.HAND -> Triple(null, null, "To the hand")
+                }
+                if (target == PileKind.DECK && part == DeckPart.SHUFFLE) {
+                    // Shuffled in: onto the Deck and the Deck shuffled, one gesture — its place is never seen.
+                    if (from is Place.Pile && from.kind == PileKind.DECK) return Intent(listOf(DuelAction.Shuffle(card.owner, PileKind.DECK)), "Shuffle the Deck")
+                    return Intent(listOf(DuelAction.Move(uid, Place.Pile(card.owner, PileKind.DECK, Place.TOP), null, "shuffle"), DuelAction.Shuffle(card.owner, PileKind.DECK)), label)
                 }
                 val how = when (target) {
                     PileKind.GY -> if (from is Place.Under) "detach" else "send"

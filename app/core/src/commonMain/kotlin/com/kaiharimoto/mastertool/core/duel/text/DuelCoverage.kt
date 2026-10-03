@@ -45,6 +45,7 @@ object DuelCoverage {
         Row("H: to the hand", "h gy1", DuelVerb.HAND),
         Row("K: to the top of the Deck", "k h1", DuelVerb.DECK_TOP),
         Row("Shift K: to the bottom of the Deck", "kb h1", DuelVerb.DECK_BOTTOM),
+        Row("Alt K: shuffled into the Deck", "ks h1", DuelVerb.DECK_SHUFFLE),
         Row("X: to the Extra Deck", "x e1", DuelVerb.EXTRA),
         Row("O, then a click on the host: attach", "o h1 m1", DuelVerb.ATTACH),
         Row("A material's Detach", "detach m1", DuelVerb.DETACH),

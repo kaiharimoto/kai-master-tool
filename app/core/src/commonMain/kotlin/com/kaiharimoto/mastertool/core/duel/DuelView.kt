@@ -11,14 +11,15 @@ import kotlinx.serialization.Serializable
  * a deck by no one. On top of that, a seat that saw a card — revealed, or before it went out of sight —
  * keeps knowing it until it is shuffled away — except in a hand (1.0.82, kai: "once it has gone into the
  * hand it is no longer revealed or treated as public knowledge"): a hand is its owner's alone, and a
- * reveal or a search shows a card for that moment only, in the log.
+ * reveal or a search shows a card for that moment only, in the log. A card activated from a hand stays there shown to
+ * both seats while the chain stands (1.0.87, kai: "it should just reveal itself until the chain resolves").
  */
 object DuelSight {
     fun sees(s: DuelState, uid: Int, viewer: Int?): Boolean {
         if (viewer == null) return true
         val card = s.cards[uid] ?: return false
         val place = s.placeOf(uid) ?: return false
-        if (place is Place.Pile && place.kind == PileKind.HAND) return place.seat == viewer
+        if (place is Place.Pile && place.kind == PileKind.HAND) return place.seat == viewer || onChain(s, uid)
         if (viewer in (s.seen[uid] ?: emptySet())) return true
         return when (val p = place) {
             is Place.Zone -> card.faceUp || card.controller == viewer
@@ -32,6 +33,9 @@ object DuelSight {
             Place.Void -> false
         }
     }
+
+    /** Whether [uid] is the card of a link of the chain standing (or one of its links already resolved). */
+    fun onChain(s: DuelState, uid: Int): Boolean = s.chain.isNotEmpty() && (s.chain.any { it.uid == uid } || uid in s.resolved)
 
     /** The seats that can see [uid] now. */
     fun knowers(s: DuelState, uid: Int): Set<Int> = s.seats.indices.filter { sees(s, uid, it) }.toSet()

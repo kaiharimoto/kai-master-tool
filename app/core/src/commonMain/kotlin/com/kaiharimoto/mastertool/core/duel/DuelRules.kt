@@ -26,13 +26,14 @@ object DuelRules {
             is DuelAction.Move -> move(s, a)
             is DuelAction.Draw -> draw(s, a)
             is DuelAction.Shuffle -> shuffle(s, a)
+            is DuelAction.Pick -> pick(s, a)
             is DuelAction.Position -> position(s, a)
             is DuelAction.Counter -> counter(s, a)
             is DuelAction.Token -> token(s, a)
             is DuelAction.Lp -> seatOk(s, a.seat) ?: ok(s.withSeat(a.seat) { it.copy(lp = (a.set ?: (it.lp + a.delta)).coerceAtLeast(0)) })
             is DuelAction.Phase -> ok(s.copy(phase = a.phase, proposal = null))
             DuelAction.EndTurn -> ok(
-                s.copy(
+                s.rehidden().copy(
                     turn = s.turn + 1,
                     active = if (s.solo) s.active else 1 - s.active,
                     phase = DuelPhase.DRAW,
@@ -57,7 +58,7 @@ object DuelRules {
                 val top = s.chain.lastOrNull() ?: return Outcome.Refused("There is no chain to resolve")
                 val chain = s.chain.dropLast(1)
                 ok(
-                    s.copy(
+                    (if (chain.isEmpty()) s.rehidden() else s).copy(
                         chain = chain,
                         arrows = s.arrows.filterNot { top.uid != null && it.from == top.uid },
                         locks = if (chain.isEmpty()) s.locks.filterNot { it.until == Lock.UNTIL_CHAIN } else s.locks,
@@ -68,7 +69,7 @@ object DuelRules {
             }
             DuelAction.ChainClear -> {
                 val links = s.chain.mapNotNull { it.uid }.toSet()
-                ok(s.copy(chain = emptyList(), arrows = s.arrows.filterNot { it.from in links }, locks = s.locks.filterNot { it.until == Lock.UNTIL_CHAIN }, resolved = emptyList()))
+                ok(s.rehidden().copy(chain = emptyList(), arrows = s.arrows.filterNot { it.from in links }, locks = s.locks.filterNot { it.until == Lock.UNTIL_CHAIN }, resolved = emptyList()))
             }
             is DuelAction.Keep -> ok(s.copy(resolved = s.resolved - a.uid))
             is DuelAction.Target -> target(s, a)
@@ -110,7 +111,8 @@ object DuelRules {
             is Place.Zone -> {
                 if (t.seat !in 0..1 || t.index !in 0 until zoneCount(t.kind)) return Outcome.Refused("No such zone")
                 val there = s.at(t)
-                if (there != null && there != a.uid) return Outcome.Refused("That zone is taken")
+                if (there != null && there != a.uid && !(a.over && (t.kind == ZoneKind.MONSTER || t.kind == ZoneKind.EMZ))) return Outcome.Refused("That zone is taken")
+                if (there != null && a.over && a.uid in s.cards.getValue(there).under) return Outcome.Refused("A material cannot go on top of its own card")
                 t
             }
             is Place.Under -> {
@@ -127,6 +129,16 @@ object DuelRules {
 
         val knowers = DuelSight.knowers(s, a.uid)
         var next = s.without(a.uid, from)
+        // On top of the card there (Move.over): it and its materials are lifted out, to go beneath this one.
+        val covered = if (a.over && to is Place.Zone) s.at(to)?.takeIf { it != a.uid } else null
+        val beneath = covered?.let { listOf(it) + next.cards.getValue(it).under }.orEmpty()
+        if (covered != null) {
+            next = next.without(covered, to).withCard(covered) { it.copy(under = emptyList(), counters = emptyMap(), controller = it.owner) }
+            next = next.copy(
+                arrows = next.arrows.dropUid(covered),
+                attacks = next.attacks.filterNot { it.attacker == covered || it.target == covered },
+            )
+        }
         // Materials follow their card onto the field or beneath another; anywhere else they go to the graveyard.
         val materials = next.cards.getValue(a.uid).under
         if (materials.isNotEmpty() && to !is Place.Zone) {
@@ -151,7 +163,7 @@ object DuelRules {
         val onField = from is Place.Zone
         val pos = positionFor(to, a.pos, card, onField)
         next = when (to) {
-            is Place.Zone -> next.inZone(to, a.uid)
+            is Place.Zone -> next.inZone(to, a.uid).let { n -> if (beneath.isEmpty()) n else n.withCard(a.uid) { it.copy(under = it.under + beneath) } }
             is Place.Pile -> next.insertInPile(to.seat, to.kind, a.uid, to.at)
             is Place.Under -> next.withCard(to.host) { h ->
                 val under = h.under.toMutableList().apply { if (to.index < 0 || to.index > size) add(a.uid) else add(to.index, a.uid) }
@@ -191,6 +203,13 @@ object DuelRules {
     }
 
     /**
+     * The chain is over: a card activated from a hand, shown while its link stood ([DuelSight.onChain]), goes back
+     * to being one of its owner's cards and takes a new veil, so it cannot be followed back into the hand (1.0.87).
+     */
+    private fun DuelState.rehidden(): DuelState =
+        reveiled((chain.mapNotNull { it.uid } + resolved).filter { u -> placeOf(u).let { it is Place.Pile && it.kind == PileKind.HAND } })
+
+    /**
      * [uids] take new veils, and nothing still points at them by an old one: an arrow or a chain link's target
      * drawn at a hidden card would follow it through every new veil (1.0.85, the red team's second pass).
      */
@@ -222,6 +241,34 @@ object DuelRules {
         drawn.forEach { u -> next = next.withCard(u) { it.copy(pos = CardPosition.FACE_UP_ATK) } }
         // A card drawn is its owner's alone, whatever was seen of it on the deck (1.0.82).
         return ok(next.copy(seen = next.seen - drawn.toSet()))
+    }
+
+    /** The cards [a] picks on [s], in the order they are moved: its pool riffled by its salt. Empty when it cannot. */
+    fun picked(s: DuelState, a: DuelAction.Pick): List<Int> {
+        val pool = pool(s, a)
+        if (pool.isEmpty() || a.n !in 1..pool.size) return emptyList()
+        return DuelRandom.riffle(pool, a.salt).take(a.n)
+    }
+
+    private fun pool(s: DuelState, a: DuelAction.Pick): List<Int> =
+        a.among.ifEmpty { a.from?.let { f -> s.seats.getOrNull(f.seat)?.pile(f.kind) }.orEmpty() }.distinct()
+
+    private fun pick(s: DuelState, a: DuelAction.Pick): Outcome {
+        seatOk(s, a.seat)?.let { return it }
+        if (a.among.isEmpty() && a.from == null) return Outcome.Refused("Pick from where?")
+        if (a.among.any { it !in s.cards }) return Outcome.Refused("No such card")
+        val pool = pool(s, a)
+        if (pool.isEmpty()) return Outcome.Refused("There is nothing to pick from")
+        if (a.n < 1) return Outcome.Refused("Pick at least one")
+        if (a.n > pool.size) return Outcome.Refused("There ${if (pool.size == 1) "is only 1" else "are only ${pool.size}"} to pick from")
+        var st = s
+        for (u in picked(s, a)) {
+            when (val o = move(st, DuelAction.Move(u, a.to, a.pos, a.how))) {
+                is Outcome.Ok -> st = o.state
+                is Outcome.Refused -> return o
+            }
+        }
+        return ok(st)
     }
 
     private fun shuffle(s: DuelState, a: DuelAction.Shuffle): Outcome {
@@ -436,13 +483,14 @@ object DuelRandom {
     fun forRoll(seed: Long, n: Int): Random = forEntry(seed, n)
 
     /** Whether [a] leaves something to chance, to be stamped. */
-    fun rolls(a: DuelAction): Boolean = a is DuelAction.Shuffle || a is DuelAction.Coin || a is DuelAction.Dice
+    fun rolls(a: DuelAction): Boolean = a is DuelAction.Shuffle || a is DuelAction.Coin || a is DuelAction.Dice || a is DuelAction.Pick
 
     /** Fills in what [a] leaves to chance: a shuffle's salt, a coin, a die. Everything else is returned as it came. */
     fun stamp(a: DuelAction, random: Random): DuelAction = when (a) {
         is DuelAction.Shuffle -> a.copy(salt = random.nextLong())
         is DuelAction.Coin -> a.copy(heads = random.nextBoolean())
         is DuelAction.Dice -> a.copy(value = random.nextInt(1, 7))
+        is DuelAction.Pick -> a.copy(salt = random.nextLong())
         else -> a
     }
 }

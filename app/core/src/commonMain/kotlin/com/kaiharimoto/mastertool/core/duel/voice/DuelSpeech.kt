@@ -65,7 +65,7 @@ object DuelSpeech {
         "summon", "set", "activate", "chain", "attack", "at", "target", "send", "destroy", "tribute", "banish", "add", "search", "draw",
         "mill", "flip", "pos", "move", "place", "attach", "detach", "reveal", "counter", "token", "lp", "resolve", "bp", "m1", "m2",
         "ep", "end", "next", "ss", "special", "read", "open", "look", "discard", "return", "bounce", "spin", "excavate", "shuffle",
-        "coin", "dice", "concede", "swap", "redo", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play",
+        "coin", "dice", "concede", "swap", "redo", "random", "spin", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play",
     )
 
     /** The table's words and the command words, for the transcriber's prompt. */

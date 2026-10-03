@@ -35,6 +35,25 @@ object DuelWords {
                 val c = after.cards[uid]
                 if (c != null && DuelSight.sees(after, uid, viewer)) catalog.nameOf(c) else "a card"
             }
+            is DuelAction.Pick -> {
+                // Named as each card can be seen where it went: a discard from a hand is named, a card put on the
+                // bottom of the Deck only to whoever saw it before (1.0.87).
+                val picked = DuelRules.picked(before, a)
+                val names = picked.joinToString(", ") { card(it) }
+                val fromHand = a.from?.kind == PileKind.HAND || picked.all { before.placeOf(it).let { p -> p is Place.Pile && p.kind == PileKind.HAND } }
+                val whose = a.from?.let { f -> if (f.kind == PileKind.HAND) (if (f.seat == a.seat) " from their hand" else " from ${seatName(before, f.seat)}'s hand") else " from ${pileWords(f.kind)}" }.orEmpty()
+                val atRandom = if (a.among.isNotEmpty() && a.n == a.among.size) "in a random order" else "at random"
+                val what = "${count(a.n, "card")} $atRandom$whose"
+                subject(
+                    when (a.to.kind) {
+                        PileKind.GY -> if (fromHand) "discards $what: $names" else "sends $what to the GY: $names"
+                        PileKind.BANISHED -> "banishes $what${if (a.pos?.faceUp == false) " face-down" else ""}: $names"
+                        PileKind.DECK -> "puts $what on the ${if (a.to.at == Place.BOTTOM) "bottom" else "top"} of the Deck: $names"
+                        PileKind.HAND -> "adds $what to the hand: $names"
+                        PileKind.EXTRA -> "returns $what to the Extra Deck: $names"
+                    },
+                )
+            }
             is DuelAction.Draw -> {
                 val drawn = before.seats[a.seat].deck.take(a.n)
                 val names = drawn.filter { DuelSight.sees(after, it, viewer) }
@@ -160,7 +179,10 @@ object DuelWords {
             is Place.Zone -> {
                 val z = zoneName(to, before)
                 val up = c?.faceUp == true
+                val onTop = if (a.over) before.at(to)?.takeIf { it != a.uid }?.let { " on top of ${card(it)}" }.orEmpty() else ""
                 when {
+                    onTop.isNotEmpty() && from is Place.Zone -> subject("moves $name to $z$onTop")
+                    onTop.isNotEmpty() -> subject("Special Summons $name$fromWords to $z$onTop")
                     from is Place.Zone -> subject("moves $name to $z")
                     a.how == "place" -> subject(if (up) "places $name face-up in $z" else "places $name face-down in $z")
                     to.kind == ZoneKind.MONSTER || to.kind == ZoneKind.EMZ -> when {

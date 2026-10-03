@@ -14,8 +14,8 @@ object DuelFixtures {
 
     val catalog = DuelCatalog { code ->
         when (code) {
-            ASH -> DuelCardInfo("Ash Blossom & Joyous Spring", CardKind.MONSTER)
-            DROLL -> DuelCardInfo("Droll & Lock Bird", CardKind.MONSTER)
+            ASH -> DuelCardInfo("Ash Blossom & Joyous Spring", CardKind.MONSTER, handCost = PileKind.GY)
+            DROLL -> DuelCardInfo("Droll & Lock Bird", CardKind.MONSTER, handCost = PileKind.GY)
             POT -> DuelCardInfo("Pot of Prosperity", CardKind.SPELL)
             CALLED -> DuelCardInfo("Called by the Grave", CardKind.SPELL)
             ZEUS -> DuelCardInfo("Divine Arsenal AA-ZEUS - Sky Thunder", CardKind.EXTRA_MONSTER)

@@ -197,6 +197,23 @@ object DuelPreview {
             }
             is DuelAction.Draw -> if (a.seat == seat) (if (a.n == 1) "Draw" else "Draw ${a.n}") else "They draw ${a.n}"
             is DuelAction.Shuffle -> "Shuffle the ${pile(a.pile)}"
+            // Chance, said as chance: which cards is decided only as it is made.
+            is DuelAction.Pick -> {
+                val src = when {
+                    a.among.isNotEmpty() -> a.among.joinToString(", ") { name(it) }
+                    a.from != null -> (if (a.from.seat == seat) "your " else "their ") + pile(a.from.kind)
+                    else -> "nowhere"
+                }
+                val n = if (a.n == 1) "1 card" else "${a.n} cards"
+                val where = when (a.to.kind) {
+                    PileKind.GY -> "to the GY"
+                    PileKind.BANISHED -> if (a.pos?.faceUp == false) "banished face-down" else "banished"
+                    PileKind.DECK -> if (a.to.at == Place.BOTTOM) "to the bottom of the Deck" else "to the top of the Deck"
+                    PileKind.HAND -> "to the hand"
+                    PileKind.EXTRA -> "to the Extra Deck"
+                }
+                if (a.among.isNotEmpty()) "$src $where in a random order" else "$n at random from $src $where"
+            }
             is DuelAction.Position -> {
                 val c = s.cards[a.uid]
                 val where = DuelNotation.coordOf(s, a.uid, seat, secret)

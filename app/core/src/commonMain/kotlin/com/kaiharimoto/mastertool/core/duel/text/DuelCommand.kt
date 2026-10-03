@@ -128,6 +128,8 @@ object DuelCommand {
         "s h2 m3", "e h4 s2", "a s1", "a m3 om1", "attack m3 direct", "g om3", "b gy2", "o h4 m3", "t om2",
         "target om2 with s1", "counter m3 +2", "detach m3", "s h2 m3; bp", "open ogy", "close", "read om2", "?m3",
         "hand", "field", "their field", "gy", "lp", "chain", "no response", "your move", "pass", "swap", "undo",
+        // Chance and the Deck (1.0.87, kai).
+        "discard random", "random oh to gy", "banish random ex down", "random h2 h4 kb", "ks h1",
     )
 
     /** Heads whose words are free text: a `;` in them is theirs, not a join. */
@@ -222,6 +224,100 @@ object DuelCommand {
         fun look(q: String, want: Want = Want.ANY, from: PileKind? = null, fieldOnly: Boolean = false, everywhere: Boolean = false) =
             lookup(q, s, seat, catalog, want, from, fieldOnly, everywhere, secret, anyCopy)
 
+        /**
+         * A line with "random" in it (1.0.87, kai: "card effects that banish, discard, or shuffle/bottom of deck
+         * randomly"): `discard random`, `discard 2 random oh`, `banish random ex down`, `random oh to gy`,
+         * `random 3 ex bd`, `random h2 h4 kb` (those cards to the bottom of the Deck in a random order). A pile word
+         * before "to" is where from, after it where to; a verb's word or letter (`discard`, `g`, `b`, `bd`, `k`, `kb`,
+         * `bottom`, `top`, `x`) is where to. Which cards is chance, stamped as the move is made.
+         */
+        fun randomLine(words: List<String>): Parsed? {
+            if (words.none { it == "random" || it == "randomly" }) return null
+            val filler = setOf("random", "randomly", "at", "from", "of", "card", "cards", "a", "the", "in", "order", "my", "your", "and")
+            fun pileOf(w: String): Pair<Boolean, PileKind>? = when (w) {
+                "hand", "h" -> false to PileKind.HAND
+                "oh", "ohand" -> true to PileKind.HAND
+                "gy", "grave", "graveyard" -> false to PileKind.GY
+                "ogy" -> true to PileKind.GY
+                "ban", "banished", "banishment" -> false to PileKind.BANISHED
+                "oban" -> true to PileKind.BANISHED
+                "ex", "extra", "ed" -> false to PileKind.EXTRA
+                "oex", "oed" -> true to PileKind.EXTRA
+                "dk", "deck" -> false to PileKind.DECK
+                "odk", "odeck" -> true to PileKind.DECK
+                else -> null
+            }
+            var n: Int? = null
+            var down = false
+            var their = false
+            var sawTo = false
+            var discard = false
+            var src: Place.Pile? = null
+            var dest: PileKind? = null
+            var at: Int? = null
+            var how: String? = null
+            val among = mutableListOf<Int>()
+            for (w in words) {
+                if (w in filler) continue
+                val pile = pileOf(w)
+                when {
+                    w.toIntOrNull() != null && n == null && among.isEmpty() -> n = w.toInt()
+                    w == "their" -> their = true
+                    w in setOf("to", "into", "on", "onto") -> sawTo = true
+                    w in setOf("down", "facedown", "face-down") -> down = true
+                    w == "discard" || w == "discards" -> { dest = PileKind.GY; discard = true; how = "send" }
+                    w in setOf("send", "g", "mill") -> { dest = PileKind.GY; how = "send" }
+                    w in setOf("banish", "b") -> { dest = PileKind.BANISHED; how = "banish" }
+                    w == "bd" -> { dest = PileKind.BANISHED; down = true; how = "banish" }
+                    w in setOf("bottom", "kb") -> { dest = PileKind.DECK; at = Place.BOTTOM; how = "return" }
+                    w in setOf("top", "k", "spin") -> { dest = PileKind.DECK; at = Place.TOP; how = "return" }
+                    w == "x" -> { dest = PileKind.EXTRA; how = "return" }
+                    pile != null && !sawTo && src == null && among.isEmpty() -> {
+                        src = Place.Pile(if (pile.first || their) 1 - seat else seat, pile.second)
+                        their = false
+                    }
+                    pile != null -> {
+                        dest = pile.second
+                        if (pile.second == PileKind.DECK && at == null) at = Place.TOP
+                        how = how ?: if (pile.second == PileKind.BANISHED) "banish" else if (pile.second == PileKind.GY) "send" else "return"
+                    }
+                    DuelNotation.parse(w) != null -> when (val l = look(w)) {
+                        is Lookup.One -> among += l.uid
+                        is Lookup.None -> return Parsed.Problem(l.why)
+                        is Lookup.Many -> return Parsed.Problem("Which ${l.names.first()}?")
+                    }
+                    else -> return Parsed.Problem("“$w” is no place: say where from and where to, like “random oh to gy” or “discard random”")
+                }
+            }
+            if (src == null && among.isEmpty()) {
+                if (discard) src = Place.Pile(seat, PileKind.HAND)
+                else return Parsed.Problem("From where? “random hand to gy”, “banish random ex down”")
+            }
+            val to = dest ?: return Parsed.Problem("Where to? “random oh to gy”, “random h2 h4 kb”")
+            val k = n ?: if (among.isNotEmpty()) among.size else 1
+            val pos = when (to) {
+                PileKind.BANISHED -> if (down) CardPosition.FACE_DOWN_DEF else CardPosition.FACE_UP_ATK
+                else -> null
+            }
+            val pick = DuelAction.Pick(
+                seat, Place.Pile(seat, to, if (to == PileKind.DECK) at ?: Place.TOP else null), if (among.isEmpty()) src else null, among.distinct(), k, pos, how,
+            )
+            val said = buildString {
+                append(if (among.isNotEmpty() && k == among.distinct().size) "In a random order" else "$k at random")
+                append(" to ")
+                append(
+                    when (to) {
+                        PileKind.GY -> "the GY"
+                        PileKind.BANISHED -> if (down) "banishment, face-down" else "banishment"
+                        PileKind.DECK -> if (at == Place.BOTTOM) "the bottom of the Deck" else "the top of the Deck"
+                        PileKind.HAND -> "the hand"
+                        PileKind.EXTRA -> "the Extra Deck"
+                    },
+                )
+            }
+            return Parsed.Actions(listOf(pick), said)
+        }
+
         /** Whether [line], whole, is a card's name the seat can reach — so a system word at its head is that card's. */
         fun namesCard(line: String): Boolean {
             val l = look(line, Want.ANY, everywhere = true)
@@ -257,6 +353,8 @@ object DuelCommand {
             if (lower.startsWith("?")) return cardQuery(lower.drop(1).trim())
             queryOf(lower)?.let { return it }
             chrome(lower, head, rest)?.let { return it }
+            // ---- chance: a card at random (1.0.87) -----------------------------------------------------------
+            if (!namesCard(lower)) randomLine(words)?.let { return it }
 
             // ---- the table's own words: only as the whole line (1.0.87, the red team: "battle fader", "draw muscle") --
             when (head) {
@@ -736,6 +834,7 @@ object DuelCommand {
                     }
                     d == "deck" || d == "top" || d == "deck top" || d == "top of deck" -> if (verb == null || verb == DuelVerb.DEFAULT) verb = DuelVerb.DECK_TOP
                     d == "bottom" || d == "deck bottom" || d == "bottom of deck" -> verb = DuelVerb.DECK_BOTTOM
+                    d == "deck shuffled" || d == "deck and shuffle" || d == "shuffled deck" || d == "shuffle" -> verb = DuelVerb.DECK_SHUFFLE
                     d == "field" -> {
                         if (blind) return blindProblem("field")
                         if (verb == DuelVerb.PLACE || (verb == null && kind == CardKind.FIELD_SPELL)) {
@@ -795,7 +894,7 @@ object DuelCommand {
     /** The verbs a hidden card takes: none of them needs to know what it is (1.0.87, the red team). */
     private val BLIND_VERBS = setOf(
         DuelVerb.TARGET, DuelVerb.ATTACK, DuelVerb.FLIP, DuelVerb.GRAVE, DuelVerb.BANISH, DuelVerb.BANISH_DOWN, DuelVerb.HAND,
-        DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.ATTACH, DuelVerb.MOVE, DuelVerb.REVEAL, DuelVerb.COUNTER_UP, DuelVerb.COUNTER_DOWN,
+        DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.DECK_SHUFFLE, DuelVerb.ATTACH, DuelVerb.MOVE, DuelVerb.REVEAL, DuelVerb.COUNTER_UP, DuelVerb.COUNTER_DOWN,
     )
 
     /**
@@ -835,7 +934,7 @@ object DuelCommand {
         "destroy" to DuelVerb.GRAVE, "tribute" to DuelVerb.GRAVE, "kill" to DuelVerb.GRAVE,
         "banish" to DuelVerb.BANISH, "remove" to DuelVerb.BANISH, "bfd" to DuelVerb.BANISH_DOWN,
         "add" to DuelVerb.HAND, "search" to DuelVerb.HAND, "bounce" to DuelVerb.HAND, "hand" to DuelVerb.HAND,
-        "spin" to DuelVerb.DECK_TOP, "top" to DuelVerb.DECK_TOP, "bottom" to DuelVerb.DECK_BOTTOM,
+        "spin" to DuelVerb.DECK_SHUFFLE, "top" to DuelVerb.DECK_TOP, "bottom" to DuelVerb.DECK_BOTTOM,
         "extra" to DuelVerb.EXTRA,
         "attach" to DuelVerb.ATTACH, "overlay" to DuelVerb.ATTACH, "detach" to DuelVerb.DETACH,
         "reveal" to DuelVerb.REVEAL, "show" to DuelVerb.REVEAL,
@@ -847,11 +946,11 @@ object DuelCommand {
         "a" to DuelVerb.ACTIVATE, "s" to DuelVerb.SUMMON, "e" to DuelVerb.SET, "p" to DuelVerb.POSITION, "f" to DuelVerb.FLIP,
         "g" to DuelVerb.GRAVE, "b" to DuelVerb.BANISH, "h" to DuelVerb.HAND, "k" to DuelVerb.DECK_TOP, "x" to DuelVerb.EXTRA,
         "o" to DuelVerb.ATTACH, "r" to DuelVerb.REVEAL, "c" to DuelVerb.COUNTER_UP, "t" to DuelVerb.TARGET, "m" to DuelVerb.MOVE,
-        "bd" to DuelVerb.BANISH_DOWN, "kb" to DuelVerb.DECK_BOTTOM, "cd" to DuelVerb.COUNTER_DOWN,
+        "bd" to DuelVerb.BANISH_DOWN, "kb" to DuelVerb.DECK_BOTTOM, "ks" to DuelVerb.DECK_SHUFFLE, "cd" to DuelVerb.COUNTER_DOWN,
     )
 
     /** The one- and two-letter verbs: verbs only before a coordinate. */
-    private val letters = setOf("a", "s", "e", "p", "f", "g", "b", "h", "k", "x", "o", "r", "c", "t", "m", "bd", "kb", "cd")
+    private val letters = setOf("a", "s", "e", "p", "f", "g", "b", "h", "k", "x", "o", "r", "c", "t", "m", "bd", "kb", "ks", "cd")
 
     /** Every verb word the line knows, for completion: word → verb. */
     val VERB_WORDS: Map<String, DuelVerb> get() = verbWords
@@ -870,7 +969,7 @@ object DuelCommand {
     private fun wantOf(verb: DuelVerb?, dest: String, zone: Place.Zone?): Want = when {
         verb == DuelVerb.TARGET -> Want.TARGET
         verb == DuelVerb.HAND || dest == "hand" -> Want.HAND
-        verb in setOf(DuelVerb.GRAVE, DuelVerb.BANISH, DuelVerb.BANISH_DOWN, DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.EXTRA, DuelVerb.ATTACH, DuelVerb.FLIP, DuelVerb.POSITION, DuelVerb.MOVE) -> Want.AWAY
+        verb in setOf(DuelVerb.GRAVE, DuelVerb.BANISH, DuelVerb.BANISH_DOWN, DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.DECK_SHUFFLE, DuelVerb.EXTRA, DuelVerb.ATTACH, DuelVerb.FLIP, DuelVerb.POSITION, DuelVerb.MOVE) -> Want.AWAY
         dest in setOf("gy", "grave", "graveyard", "banish", "banished", "deck", "bottom", "extra", "ed") -> Want.AWAY
         verb in placing || verb == DuelVerb.PLACE || zone != null -> Want.PLAY
         else -> Want.ANY

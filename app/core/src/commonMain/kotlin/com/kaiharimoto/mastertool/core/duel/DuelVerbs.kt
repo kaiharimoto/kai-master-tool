@@ -17,6 +17,13 @@ data class DuelCardInfo(
     /** A monster's printed ATK and DEF, for the battle chip's suggestion (1.0.86); null when it has none. */
     val atk: Int? = null,
     val def: Int? = null,
+    /**
+     * Where the card goes as it is activated from the hand, when its own text pays with it — "discard this card" or
+     * "send this card from your hand to the GY" to the GY, "banish this card from your hand" banished (1.0.87, kai: "only
+     * some cards discard themselves when activated"); null: it is revealed and stays in the hand while the chain stands.
+     * A reading of the text for the obvious thing, never a rule: the card can always be moved by hand.
+     */
+    val handCost: PileKind? = null,
 ) {
     /** A card that goes to the GY once it resolves: a Normal, Quick-Play or Ritual Spell, a Normal or Counter Trap. */
     val leavesOnResolve: Boolean
@@ -35,7 +42,23 @@ data class DuelCardInfo(
                 else -> CardKind.MONSTER
             }
             val sub = if (kind == CardKind.SPELL || kind == CardKind.TRAP || kind == CardKind.FIELD_SPELL) card.race?.takeIf { it.isNotBlank() } else null
-            return DuelCardInfo(card.name, kind, pendulum = frame.contains("pendulum"), link = frame.contains("link"), sub = sub, atk = card.atk, def = card.def)
+            return DuelCardInfo(
+                card.name, kind, pendulum = frame.contains("pendulum"), link = frame.contains("link"), sub = sub, atk = card.atk, def = card.def,
+                handCost = if (kind == CardKind.MONSTER || kind == CardKind.EXTRA_MONSTER) handCost(card.description) else null,
+            )
+        }
+
+        private val DISCARDS = Regex("\\bdiscard this card\\b|\\bsend this card from your hand to the (gy|graveyard)\\b")
+        private val BANISHES = Regex("\\bbanish this card from your hand\\b")
+
+        /** Where a monster's text sends it from the hand to pay for its own effect, if it does (see [DuelCardInfo.handCost]). */
+        fun handCost(text: String): PileKind? {
+            val t = text.lowercase().replace('\n', ' ')
+            return when {
+                DISCARDS.containsMatchIn(t) -> PileKind.GY
+                BANISHES.containsMatchIn(t) -> PileKind.BANISHED
+                else -> null
+            }
         }
     }
 }
@@ -72,6 +95,7 @@ enum class DuelVerb(val label: String) {
     HAND("To hand"),
     DECK_TOP("To top of Deck"),
     DECK_BOTTOM("To bottom of Deck"),
+    DECK_SHUFFLE("Shuffle into Deck"),
     EXTRA("To Extra Deck"),
     ATTACH("Attach as material"),
     DETACH("Detach"),
@@ -131,7 +155,7 @@ object DuelVerbs {
                 }
                 add(DuelVerb.FLIP)
                 add(DuelVerb.TARGET)
-                addAll(listOf(DuelVerb.GRAVE, DuelVerb.BANISH, DuelVerb.BANISH_DOWN, DuelVerb.HAND, DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM))
+                addAll(listOf(DuelVerb.GRAVE, DuelVerb.BANISH, DuelVerb.BANISH_DOWN, DuelVerb.HAND, DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.DECK_SHUFFLE))
                 if (kind == CardKind.EXTRA_MONSTER || card.pendulum(catalog)) add(DuelVerb.EXTRA)
                 add(DuelVerb.ATTACH)
                 add(DuelVerb.COUNTER_UP)
@@ -151,7 +175,7 @@ object DuelVerbs {
                 if (p.kind != PileKind.HAND) add(DuelVerb.HAND)
                 if (p.kind != PileKind.GY) add(DuelVerb.GRAVE)
                 if (p.kind != PileKind.BANISHED) { add(DuelVerb.BANISH); add(DuelVerb.BANISH_DOWN) }
-                if (p.kind != PileKind.DECK && kind != CardKind.EXTRA_MONSTER) { add(DuelVerb.DECK_TOP); add(DuelVerb.DECK_BOTTOM) }
+                if (p.kind != PileKind.DECK && kind != CardKind.EXTRA_MONSTER) { add(DuelVerb.DECK_TOP); add(DuelVerb.DECK_BOTTOM); add(DuelVerb.DECK_SHUFFLE) }
                 if (p.kind != PileKind.EXTRA && (kind == CardKind.EXTRA_MONSTER || card.pendulum(catalog))) add(DuelVerb.EXTRA)
                 add(DuelVerb.ATTACH)
                 add(DuelVerb.REVEAL)
@@ -291,9 +315,12 @@ object DuelVerbs {
                         ?: return VerbResult.no("Both Pendulum Zones are taken")
                     VerbResult(listOf(move(z, CardPosition.FACE_UP_ATK, "pendulum")))
                 }
-                // A hand trap: to the graveyard as its cost, and onto the chain.
-                from is Place.Pile && from.kind == PileKind.HAND ->
-                    VerbResult(listOf(move(Place.Pile(owner, PileKind.GY), how = "activate"), DuelAction.ChainAdd(seat, uid)))
+                // A monster's effect from the hand: revealed there while the chain stands (DuelSight.onChain), unless its
+                // own text pays with it — then to the GY (or banished) as it goes on the chain (1.0.87).
+                from is Place.Pile && from.kind == PileKind.HAND -> when (val cost = catalog.info(card.code)?.handCost) {
+                    null -> VerbResult(listOf(DuelAction.ChainAdd(seat, uid)))
+                    else -> VerbResult(listOf(move(Place.Pile(owner, cost), if (cost == PileKind.BANISHED) CardPosition.FACE_UP_ATK else null, "activate"), DuelAction.ChainAdd(seat, uid)))
+                }
                 else -> VerbResult(listOf(DuelAction.ChainAdd(seat, uid)))
             }
             DuelVerb.POSITION -> {
@@ -320,6 +347,10 @@ object DuelVerbs {
             }
             DuelVerb.DECK_TOP -> pileMove(card, from, PileKind.DECK, null, "return", Place.TOP)
             DuelVerb.DECK_BOTTOM -> pileMove(card, from, PileKind.DECK, null, "return", Place.BOTTOM)
+            // Shuffled in (kai, 1.0.87): onto the Deck, then the Deck shuffled — one gesture, so its place is never seen.
+            DuelVerb.DECK_SHUFFLE -> pileMove(card, from, PileKind.DECK, null, "shuffle", Place.TOP).let { r ->
+                if (r.problem == null) r.copy(actions = r.actions + DuelAction.Shuffle(owner, PileKind.DECK)) else r
+            }
             // A Pendulum Monster goes to the Extra Deck face-up.
             DuelVerb.EXTRA -> pileMove(card, from, PileKind.EXTRA, if (card.pendulum(catalog)) CardPosition.FACE_UP_ATK else null, "return")
             DuelVerb.ATTACH -> {

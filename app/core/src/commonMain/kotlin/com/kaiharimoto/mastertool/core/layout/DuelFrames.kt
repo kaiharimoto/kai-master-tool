@@ -74,6 +74,8 @@ object DuelFrames {
             return when {
                 viewers.none { DuelSight.sees(s, uid, it) } -> CardLook.BACK
                 where is Place.Zone && !c.faceUp -> CardLook.SET
+                // The Deck is a pile of backs, even with a known card put on top of it (kai: "it places face up").
+                where is Place.Pile && where.kind == PileKind.DECK && !c.faceUp -> CardLook.BACK
                 // A face-down Extra Deck is a pile of backs on the table; its owner reads it opened.
                 where is Place.Pile && where.kind == PileKind.EXTRA && !c.faceUp -> CardLook.BACK
                 where is Place.Pile && where.kind == PileKind.BANISHED && !c.faceUp -> CardLook.SET

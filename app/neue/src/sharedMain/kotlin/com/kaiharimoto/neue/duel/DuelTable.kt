@@ -33,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.kaiharimoto.mastertool.core.duel.DeckPart
 import com.kaiharimoto.mastertool.core.duel.DropSpot
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelDrop
@@ -139,13 +140,16 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         val l = layoutNow
         val strip = duels.strip
         if (strip != null && !stripLeft && stripGround(st, l, strip).contains(x, y)) return DropSpot.Pile(strip.first, strip.second)
+        // A Deck is three places (1.0.87, kai): its upper third the top, the middle shuffled in, the lower third the bottom.
+        fun pileSpot(seat: Int, kind: PileKind): DropSpot.Pile =
+            DropSpot.Pile(seat, kind, if (kind == PileKind.DECK) l.pile(seat, kind)?.let { DeckPart.at(y - it.top, it.height) } else null)
         val under = framesNow.filter { it.uid != uid && it.shown && !it.inStrip && it.contains(x, y) }.maxByOrNull { it.z }
         if (under != null) {
             when (val p = st.placeOf(under.uid)) {
                 is Place.Zone -> return DropSpot.Zone(p)
                 is Place.Pile -> if (p.kind == PileKind.HAND) {
                     return DropSpot.Hand(p.seat, DuelFrames.handIndex(framesNow, st.seats[p.seat].hand, x))
-                } else return DropSpot.Pile(p.seat, p.kind)
+                } else return pileSpot(p.seat, p.kind)
                 else -> Unit
             }
         }
@@ -153,7 +157,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         l.score.entries.firstOrNull { it.value.contains(x, y) }?.let { return DropSpot.Score(it.key) }
         return when (val spot = l.spotAt(x, y)) {
             is DuelSpot.Zone -> DropSpot.Zone(if (spot.zone.kind == ZoneKind.EMZ) spot.zone.copy(seat = duels.seatFor(uid)) else spot.zone)
-            is DuelSpot.Pile -> DropSpot.Pile(spot.seat, spot.kind)
+            is DuelSpot.Pile -> pileSpot(spot.seat, spot.kind)
             is DuelSpot.Hand -> DropSpot.Hand(spot.seat, DuelFrames.handIndex(framesNow, st.seats[spot.seat].hand, x))
             DuelSpot.Chain -> DropSpot.Chain
             null -> null
@@ -582,6 +586,25 @@ private fun DropHint(cr: Carry, l: DuelLayout, frames: List<CardFrame>, s: com.k
     }
     slot ?: return
     Box(Modifier.zIndex(90f).offset((slot.left - 3).dp, (slot.top - 3).dp).size((slot.width + 6).dp, (slot.height + 6).dp).border(2.dp, c.ink))
+    // Over a Deck, its three places: the third the card is over in ink, the others named faintly (1.0.87).
+    val part = (cr.spot as? DropSpot.Pile)?.part
+    if (part != null) {
+        val third = slot.height / 3f
+        DeckPart.entries.forEachIndexed { i, p ->
+            val on = p == part
+            Box(
+                Modifier.zIndex(90f).offset(slot.left.dp, (slot.top + third * i).dp).size(slot.width.dp, third.dp)
+                    .background(if (on) c.ink else c.paper.copy(alpha = 0.85f)).border(1.dp, c.ink),
+                contentAlignment = Alignment.Center,
+            ) {
+                Micro(
+                    when (p) { DeckPart.TOP -> "Top"; DeckPart.SHUFFLE -> "Shuffle"; DeckPart.BOTTOM -> "Bottom" },
+                    color = if (on) c.paper else c.ink70,
+                    size = (slot.width / 7f).coerceIn(7f, 11f).let { androidx.compose.ui.unit.TextUnit(it, androidx.compose.ui.unit.TextUnitType.Sp) },
+                )
+            }
+        }
+    }
     Box(Modifier.zIndex(91f).offset(slot.left.dp, (slot.top - 22).dp).background(c.ink).padding(horizontal = 6.dp, vertical = 3.dp)) {
         Micro(cr.intent.label, color = c.paper)
     }

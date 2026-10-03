@@ -98,6 +98,8 @@ object DuelHost {
                 // What a guest says or does as itself is always its own seat's.
                 is DuelAction.Draw -> a.copy(seat = seat)
                 is DuelAction.Shuffle -> a.copy(seat = seat)
+                // A card at random (1.0.87): the guest names its pool by refs; chance is the host's, as every roll is.
+                is DuelAction.Pick -> a.copy(seat = seat, among = a.among.map(::uid), salt = 0L)
                 is DuelAction.Chat -> a.copy(seat = seat)
                 is DuelAction.Thinking -> a.copy(seat = seat)
                 is DuelAction.Answer -> a.copy(seat = seat).also {

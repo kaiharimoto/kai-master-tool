@@ -34,6 +34,11 @@ object CommandHelp {
     /** What each example line does, in words. */
     private val EXAMPLE_WORDS = mapOf(
         "s h2 m3" to "Summon the second card in your hand to Monster Zone 3",
+        "discard random" to "Discard a card from your hand at random",
+        "random oh to gy" to "Send a card of their hand to the GY at random",
+        "banish random ex down" to "Banish a card of your Extra Deck face-down at random",
+        "random h2 h4 kb" to "Those cards to the bottom of the Deck in a random order",
+        "ks h1" to "Shuffle h1 into the Deck (Alt K)",
         "e h4 s2" to "Set the fourth card in your hand in Spell & Trap Zone 2",
         "a s1" to "Activate the card in Spell & Trap Zone 1",
         "a m3 om1" to "Your M3 attacks their M1 (in the Battle Phase)",
@@ -79,7 +84,7 @@ object CommandHelp {
     )
 
     /** The verb keys' letters, which are the Line's verbs before a coordinate: `s h2 m3`, `e h4 s2`, `g om3`. */
-    val letters: List<Row> = DuelCommand.VERB_WORDS.filterKeys { it.length == 1 || it in setOf("bd", "kb", "cd") }
+    val letters: List<Row> = DuelCommand.VERB_WORDS.filterKeys { it.length == 1 || it in setOf("bd", "kb", "ks", "cd") }
         .map { (k, v) -> Row(k, v.label) }
         .sortedBy { it.left.length * 100 + it.left.first().code }
 
