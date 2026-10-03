@@ -127,6 +127,12 @@ class Duels(val dir: File) {
     /** Stops Ai's answer, set by the page: Don't wait means Ai's late answer never lands (1.0.85). */
     var stopAi: (() -> Unit)? = null
 
+    /** Ai's cues typed or spoken on the Line (1.0.87, set by the page): false when no Ai sits at the table. */
+    var cueAi: ((DuelCommand.Parsed.Ui) -> Boolean)? = null
+
+    /** The Line's last answer to a question (1.0.87): `hand`, `their field`, `?m3` — through this seat's eyes. */
+    var answer by mutableStateOf<String?>(null)
+
     /**
      * A phase change held for Ai: the moves, who made them, and the table it was made against — released only onto
      * that same table, unchanged ([cursor], the same [game]) with no chain open; [spent] are the once-watches it used;
@@ -574,12 +580,44 @@ class Duels(val dir: File) {
     /** The command line's text, run for the seat at the bottom. */
     fun run(text: String): Boolean {
         val g = shown ?: return false
-        return when (val p = DuelCommand.parse(text, g.state, bottom, catalog)) {
+        return when (val p = DuelCommand.parse(text, g.state, bottom, catalog, g.header.seed)) {
             is DuelCommand.Parsed.Problem -> { problem = p.text; false }
             is DuelCommand.Parsed.Actions -> act(p.actions, bottom).also { if (it) command = "" }
+            // Moves joined with ";" (1.0.87): each its own step, in order, stopping at the first the table refuses.
+            is DuelCommand.Parsed.Many -> {
+                var all = true
+                for (part in p.parts) if (!act(part.actions, bottom)) { all = false; break }
+                if (all) command = ""
+                all
+            }
             is DuelCommand.Parsed.Ruling -> {
                 val r = keepRuling(p.code, p.card, p.text)
                 act(DuelAction.Note("House ruling: ${r.card?.let { "$it — " } ?: ""}${r.text}", bottom), bottom)
+                command = ""
+                true
+            }
+            is DuelCommand.Parsed.Query -> {
+                val said = com.kaiharimoto.mastertool.core.duel.text.DuelAnswer.answer(p, g.state, bottom, catalog, g.header.seed)
+                answer = said
+                problem = said
+                if (p.uid != null) inspected = p.uid
+                command = ""
+                true
+            }
+            is DuelCommand.Parsed.Ui -> {
+                when (p.kind) {
+                    DuelCommand.UiKind.OPEN -> {
+                        val seat = p.seat
+                        val pile = p.pile
+                        if (seat != null && pile != null && strip != seat to pile) openPile(seat, pile)
+                    }
+                    DuelCommand.UiKind.CLOSE -> closeStrip()
+                    DuelCommand.UiKind.READ -> inspected = p.uid
+                    DuelCommand.UiKind.CUE -> if (cueAi?.invoke(p) != true) problem = "No Ai sits at this table."
+                    DuelCommand.UiKind.SWAP -> swap()
+                    DuelCommand.UiKind.UNDO -> undo()
+                    DuelCommand.UiKind.REDO -> redo()
+                }
                 command = ""
                 true
             }

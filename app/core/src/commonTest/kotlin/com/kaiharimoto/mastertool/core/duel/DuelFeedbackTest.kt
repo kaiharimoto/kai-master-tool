@@ -59,6 +59,7 @@ class DuelFeedbackTest {
         is DuelCommand.Parsed.Actions -> p.actions
         is DuelCommand.Parsed.Problem -> error("“$text”: ${p.text}")
         is DuelCommand.Parsed.Ruling -> error("“$text” is a ruling")
+        else -> error("“$text” is not one move: $p")
     }
 
     private fun play(s: DuelState, actions: List<DuelAction>, by: Int = 0): DuelState = actions.fold(s) { st, a -> ok(st, a, by) }

@@ -3324,6 +3324,51 @@ an undo, a replay or a seat change, and only the turn player attacks (`DuelVerbs
 the table before it stops Ai; a held opening step Ai answered is not made again; several attackers at once say they go one
 at a time; Ai offers five answers at most at its table, so No response always has a digit.
 
+**Command mode: the language** (1.0.87, kai: "like Magnus Carlsen playing blindfold chess … I can win with just typing
+too and not a mouse"): one language for the Line and for the voice, all of it pure core with tests.
+- **Table notation** (`DuelNotation`): from the viewer's seat, `h1…` the hand left to right, `m1`–`m5`, `s1`–`s5`, `fz`,
+  `e1`/`e2` the Extra Monster Zones by absolute index (as seat 0 sees them — the old `el`/`er`; `emz left` stays the
+  actor's own left), piles `gy`, `ban`, `ex`, `dk` with `gy3` the third from the top; the other seat's take an `o`
+  (`oh3`, `om1`, `os2`, `ofz`, `ogy2`). Case-free, exact words only (`ex` never eats "Exodia"). `coordOf`/`at` round-trip;
+  `slotCoord` names empty zones; `spoken` says them ("your monster zone three"). **Their hand is counted in the order the
+  viewer is shown** (`handOrder`, `DuelView`'s veil order with the duel's seed), never its real order — the table should
+  draw the other seat's hand in that order too, so `oh3` is the third card on screen.
+- **The Line reads it** (`DuelCommand`): a coordinate names a card before any name (`summon h2 to m3`, `activate s4`,
+  `g om3`, `target om2 with s1`, `attach h4 to m3`, `counter m3 +2`, `detach m3`, `move h3 to h1`); a whole pile is no card
+  (`b gy` asks which). The verb keys' letters are verbs **only as a head before a coordinate** (`s h2 m3`, `e h4 s2`,
+  `g om3`, `b s1`, `o h4 m3`; `bd`, `kb`, `cd` for Shift's) and `a` attacks only with your monster and their monster
+  or `direct`, in the Battle Phase (`a m3 om1`, `a m3 direct`; `attack`/`at` always). **The table's own words act only
+  as the whole line** (the red team: "battle fader" was the Battle Phase, "draw muscle" a draw): `m1`/`m2` are phases
+  only alone, a count is a number or the line is asked ("Draw how many?"), "effect veiler" activates Effect Veiler.
+  Attacks go through `DuelVerbs` and `DuelRules.attack` refuses a seat that is not the turn player's.
+- **`;` joins moves** into `Parsed.Many`: each read against the table the moves before it leave, its cards bound then,
+  committed as its own step in order and stopping at the first refused (a phase change is never grouped with a move).
+- **Names, tier by tier, then forgiving**: a name is looked for in the places the verb reaches in order — hand first to
+  play, Deck first to search, field first to send — and the first place with a match wins (Snake-Eye Ash in hand over Ash
+  Blossom in the Deck); two copies on the field are asked by coordinate. When spelling finds nothing, `NameMatch` and
+  `Phonetic` (a Metaphone-like key: "zoos" is Zeus, "drawl and lock bird" Droll & Lock Bird) take a sure match, or the
+  Line says "Did you mean: 1. … 2. …" with `Preview.fixes`, the whole line with each put in.
+- **Hidden cards** are reachable only by coordinate, named by where they are ("the face-down card in os2"), and take
+  only the verbs that need not know what they are (target, attack, flip, gy, banish, hand, deck, move, attach, counter).
+- **The chrome has words** (`Parsed.Ui`): `open ogy`, `look ban`, `close`, `read om2`, a lone coordinate reads it, Ai's
+  cues (`no response`, `over to you`, `your move`, `done`, `don't wait`, `catch up`, `respond`; `pass` on a chain),
+  `swap`, `undo`, `redo`. **Questions** (`Parsed.Query`, answered by `DuelAnswer` through the asker's eyes): `hand`,
+  `field`, `their field`, `board`, `gy`, `ogy`, `ban`, `ex`, `dk`, `lp` (bare `lp` asks; `lp o -1000` changes theirs),
+  `chain`, `turn`, `?m3`.
+- **The preview** (`DuelCommand.preview` → `DuelPreview`): "Summon Blue-Eyes White Dragon from h1 to M3", the cards to
+  outline, the places to mark, the problem — built from the parse and the table before it, checked by `DuelRules.applyAll`
+  on unstamped actions, so a shuffle, coin, die, draw, mill or look says only what it is.
+- **Completion** (`DuelComplete.suggest`/`apply`): history, verbs and letters, cards in reach by coordinate ("Ash Blossom ·
+  h4"), free zones for the card typed, their monsters and `direct` for an attack, phases, cues, questions.
+- **Voice** (`DuelSpeech`): `normalize` turns what a transcriber wrote into the Line ("Attack their monster one with my
+  monster three." → `attack om1 with m3`; "fourth card in my hand" → `h4`; "go to battle" → `bp`; "end my turn" →
+  `end`), `classify` sorts it (`Command`, `Confirm`, `Cancel`, `Undo`, `Cue`, `Query`, `ToAi`, `Unknown`; spoken "pass" is
+  No response, never the end of the turn), and `hints` is the table's visible names and the Line's words for the
+  transcriber. `DuelSpeechTest` holds a corpus of 97 phrasings.
+- **Coverage** (`DuelCoverage`, `DuelCoverageTest`): a row of typed words for every `DuelVerb`, every drop intent, the
+  chain well, the LP pad, the piles, phases, asks, cues and seats — a new gesture fails the test until it can be typed.
+  `TypedDuelTest` plays a whole duel to a win from typed lines alone.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared`.
 

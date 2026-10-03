@@ -302,6 +302,18 @@ internal fun giveCue(h: NeueHolders, cue: AiCue) {
     }
 }
 
+/** Ai's cue typed or spoken on the Line (1.0.87): what its button does; false when no Ai sits at the table. */
+internal fun lineCue(h: NeueHolders, u: com.kaiharimoto.mastertool.core.duel.text.DuelCommand.Parsed.Ui): Boolean {
+    if (!aiAtTable(h)) return false
+    val cue = u.cue
+    when {
+        cue != null -> giveCue(h, cue)
+        u.arg == com.kaiharimoto.mastertool.core.duel.text.DuelCommand.CUE_CATCH_UP -> catchUp(h)
+        u.arg == com.kaiharimoto.mastertool.core.duel.text.DuelCommand.CUE_RESPOND -> h.duel.aiResponding = true
+    }
+    return true
+}
+
 internal fun catchUp(h: NeueHolders) {
     h.duel.say(Cue.CATCH_UP.shown)
     cueAi(h, Cue.CATCH_UP)

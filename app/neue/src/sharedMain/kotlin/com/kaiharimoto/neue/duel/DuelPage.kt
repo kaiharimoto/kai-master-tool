@@ -182,6 +182,7 @@ internal fun DuelPage(h: NeueHolders) {
     }
     SideEffect {
         duels.stopAi = { h.ai.stop() }
+        duels.cueAi = { u -> lineCue(h, u) }
         duels.watcher = if (watching) prefs.aiSeat else null
         duels.aiEngaged = aiAtTable(h) && live?.state?.solo == false && (prefs.aiPlays || duels.aiSession != null)
         duels.autoDraw = prefs.autoDraw
