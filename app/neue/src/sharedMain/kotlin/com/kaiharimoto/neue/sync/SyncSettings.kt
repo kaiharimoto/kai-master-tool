@@ -161,6 +161,7 @@ private fun CloudRow(sync: SyncCenter, cloud: Cloud, row: @Composable (String, S
         if (waiting) "Finish signing in in the browser, then come back." else "Your own account. The app sees only its own folder: ${cloud.where}.",
         null,
     ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             if (signedIn) {
                 Small("Signed in" + prefs.account.takeIf { it.isNotBlank() }?.let { " as $it" }.orEmpty(), color = Mu.colors.ink)
@@ -177,6 +178,30 @@ private fun CloudRow(sync: SyncCenter, cloud: Cloud, row: @Composable (String, S
                 )
             }
         }
+        if (waiting) PasteAddress(sync)
+        }
+    }
+}
+
+/**
+ * The way through when the browser cannot reach the app (1.0.87, kai's phone: "connection timed out"): the address it
+ * shows after Continue — `localhost:53682/?state=…&code=…` — pasted here finishes the same sign-in.
+ */
+@Composable
+private fun PasteAddress(sync: SyncCenter) {
+    var address by remember { mutableStateOf("") }
+    var refused by remember { mutableStateOf(false) }
+    fun finish() { refused = !sync.paste(address) }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Small("Stuck on a page that will not load? Copy its whole address from the browser and paste it here.")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MuInput(
+                address, { address = it; refused = false }, Modifier.weight(1f), placeholder = "http://localhost:53682/?state=…", mono = true,
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri, onSubmit = { finish() },
+            )
+            MuButton("Finish", { finish() }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, enabled = address.isNotBlank(), reason = "Paste the address first")
+        }
+        if (refused) Small("That address has no sign-in in it. It starts with http://localhost:53682/?state=", color = Mu.colors.ink)
     }
 }
 

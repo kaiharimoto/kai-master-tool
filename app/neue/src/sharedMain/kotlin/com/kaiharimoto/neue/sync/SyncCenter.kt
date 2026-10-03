@@ -18,12 +18,14 @@ import com.kaiharimoto.mastertool.core.sync.WebDavStore
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.ai.SecretStore
 import com.kaiharimoto.neue.platform.Platform
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -182,6 +184,19 @@ class SyncCenter(private val h: NeueHolders) {
      * Signing in to [cloud]: the browser opens on the service's own page, and the app waits on
      * `localhost` for it to come back. On a phone the page that says so has a button back to the app.
      */
+    /** The browser's address, pasted while a sign-in waits (1.0.87): the way through when the listener never answered. */
+    private var pasted: CompletableDeferred<String>? = null
+
+    /**
+     * Finishes the waiting sign-in with the address the browser shows (kai's phone: "connection timed out" on
+     * `localhost:53682/?state=…&code=…`). False when nothing waits or it holds no answer from the service.
+     */
+    fun paste(address: String): Boolean {
+        val query = address.trim().substringAfter('?', "").takeIf { "state=" in it && ("code=" in it || "error=" in it) } ?: return false
+        val waiting = pasted ?: return false
+        return waiting.complete(query)
+    }
+
     fun signIn(cloud: Cloud) {
         if (!cloud.ready || signingIn != null) return
         signingIn = cloud
@@ -193,12 +208,19 @@ class SyncCenter(private val h: NeueHolders) {
                 val verifier = SyncPlatform.random(64)
                 val state = SyncPlatform.random(24)
                 val back = if (Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) RETURN else null
+                val typed = CompletableDeferred<String>().also { pasted = it }
                 val query = kotlinx.coroutines.coroutineScope {
                     val reply = async { Loopback.await(page = Loopback.page(cloud.label, back)) }
                     // The listener is up before the browser is sent anywhere.
                     delay(150)
                     withContext(Dispatchers.Main) { Platform.browse(CloudSignIn.authorizeUrl(cloud, verifier, state)) }
-                    reply.await()
+                    // Whichever comes first: the browser at the listener, or its address pasted into the app.
+                    val q = select<String> {
+                        reply.onAwait { it }
+                        typed.onAwait { it }
+                    }
+                    reply.cancel()
+                    q
                 }
                 val code = CloudSignIn.codeFrom(query, state).getOrThrow()
                 val t = CloudSignIn.exchange(http, cloud, code, verifier, h.deps.now())
@@ -213,6 +235,7 @@ class SyncCenter(private val h: NeueHolders) {
                 problem = "Signing in to ${cloud.label} did not finish: ${e.message ?: e::class.simpleName}"
             } finally {
                 signingIn = null
+                pasted = null
                 Platform.keepAwake(SIGN_IN, false, "", "")
             }
         }
