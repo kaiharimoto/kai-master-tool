@@ -3211,8 +3211,31 @@ first cue missed them. **New topic** in the log's head starts a new conversation
 `AiState.sendDuel(fresh = true)`): its lines leave the log, the table's moves and chat stay, the old conversation is kept
 in Ai's history, and its next cue reads the whole duel from the start.
 
+**Attacking is a verb, and the table fits a phone** (1.0.86):
+- **Attack** (`DuelVerb.ATTACK`, `Shift A`, the verb strip): in the Battle Phase the turn player's face-up Attack Position
+  monster's obvious thing is to attack (`DuelVerbs.canAttack`), so a right-click, a double-click or Space on it no longer
+  adds a chain link. It arms the attack (`Duels.attacking`, as `attaching` waits for a host; `VerbResult.needsTarget`):
+  the next click on their monster declares `Attack(seat, attacker, target)`, on their life points or hand a direct
+  attack — the same answer a drag there gives (`DuelDrop`), the cursor saying "Attack Arias" / "Attack directly" and a
+  band over your hand saying what to do. Esc, Back, a right-click, Cancel or any other verb puts it away. The score
+  column is a drop spot too (`DropSpot.Score`), since the far hand folds away on a short window. The line asks "Attack
+  what with Zeus?" for a bare name in the Battle Phase.
+- **The battle chip** (`DuelBattle`): after an attack, the printed ATK and DEF (`DuelCardInfo.atk/def`, a token's own
+  numbers first) say what battle comes to — the difference to the weaker monster's controller, a tie destroying both,
+  no piercing assumed against Defense, a direct attack's ATK — as one chip beside the life points it changes, "Apply 700
+  to Rival · Destroy Spark", committing the LP change and the moves to the GY ("destroyed by battle") as one group. A
+  face-down defender or a number the catalog lacks suggests nothing. It goes on the next move that changes the table.
+- **Phase controls a finger can hit** (`DuelLayout.phaseBoxes`, `PHASE_MIN` 32 dp): a phone lying down gave each phase
+  about 12 dp. Where the column cannot hold every phase at 32 dp (`phasesCompact`) it holds the phase now with the turn
+  — its name opens every phase as a menu in the window's own layer — one large **Next** with the next phase's name, and
+  **End** turn.
+- **Their open pile is theirs** (`DuelSeats`): a card in the other seat's open GY or banished pile was captioned
+  "Activate" and a right-click activated it *as them*. Now its right-click, double-click and caption are Target (the
+  verb strip beside it puts Target first and still lists the rest) unless the person plays both seats — a hot-seat with both hands face-up and no Ai at the
+  other seat. The chain well says what a press does: "Resolve · right-click clears".
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
---duel-replay=N --duel-facing=true --duel-select=near|far`.
+--duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

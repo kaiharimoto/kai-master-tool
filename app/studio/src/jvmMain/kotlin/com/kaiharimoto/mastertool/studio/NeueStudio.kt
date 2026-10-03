@@ -182,6 +182,21 @@ fun neueMain(args: Array<String>) {
                     }
                     h.duel.openPile(0, kind)
                 }
+                // --duel-attack=arm|declared: the Battle Phase, the near seat's first face-up Attack Position monster
+                // waiting for what it attacks (its band), or attacking their first monster (the battle chip) (1.0.86).
+                map["duel-attack"]?.let { how ->
+                    val d = h.duel
+                    d.bottom = 0
+                    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Phase(com.kaiharimoto.mastertool.core.board.DuelPhase.BATTLE), 0)
+                    val st = d.game!!.state
+                    val mine = st.onField().firstOrNull { com.kaiharimoto.mastertool.core.duel.DuelVerbs.canAttack(st, 0, it) }
+                    val theirs = st.onField().firstOrNull { u -> st.cards[u]?.controller == 1 && st.placeOf(u).let { it is com.kaiharimoto.mastertool.core.duel.Place.Zone && it.kind != com.kaiharimoto.mastertool.core.duel.ZoneKind.SPELL && it.kind != com.kaiharimoto.mastertool.core.duel.ZoneKind.FIELD } && st.cards[u]?.faceUp == true }
+                    if (mine != null) {
+                        d.verb(mine, com.kaiharimoto.mastertool.core.duel.DuelVerb.DEFAULT)
+                        if (how == "declared") d.attack(theirs)
+                    }
+                    println("[neue-studio] attack: ${how} with $mine at $theirs; attacking ${d.attacking}; chip ${d.game?.let { com.kaiharimoto.mastertool.core.duel.DuelBattle.pending(it, d.catalog) }}")
+                }
                 // --duel-select=near|far: a card on that side's field selected, its verb strip out (1.0.78).
                 map["duel-select"]?.let { side ->
                     val g = h.duel.game!!

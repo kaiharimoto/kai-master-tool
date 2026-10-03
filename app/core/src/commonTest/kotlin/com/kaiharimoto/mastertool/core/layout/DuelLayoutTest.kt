@@ -159,6 +159,38 @@ class DuelLayoutTest {
     }
 
     @Test
+    fun everyPhaseControlIsAFingersWidthTallAndInsideItsColumn() = every { c, two, _, l ->
+        val boxes = l.phaseBoxes()
+        val top = if (l.phasesCompact) l.turn.top else l.phases.top
+        boxes.forEachIndexed { i, b ->
+            assertTrue(b.slot.height >= DuelLayouter.PHASE_MIN - 0.01f, "$c two=$two: ${b.kind} ${b.phase} is ${b.slot.height} tall")
+            assertTrue(b.slot.top >= top - 0.01f && b.slot.bottom <= l.phases.bottom + 0.01f, "$c two=$two: ${b.kind} outside the column")
+            boxes.drop(i + 1).forEach { o -> assertFalse(overlaps(b.slot, o.slot), "$c two=$two: ${b.kind} overlaps ${o.kind}") }
+        }
+        if (l.phasesCompact) assertEquals(listOf(PhaseBox.Kind.NOW, PhaseBox.Kind.NEXT, PhaseBox.Kind.END), boxes.map { it.kind })
+        else assertEquals(7, boxes.size)
+    }
+
+    @Test
+    fun aPhoneLyingDownGetsOneLargeNextPhase() {
+        // 915 × 412 under the phone's bar and tabs (1.0.86: each phase box was about 12 dp here).
+        listOf(340f, 312f).forEach { h ->
+            val l = DuelLayouter.solve(915f, h, true, FormFactor.PHONE)
+            assertTrue(l.phasesCompact, "915×$h")
+            val boxes = l.phaseBoxes().associateBy { it.kind }
+            val next = boxes.getValue(PhaseBox.Kind.NEXT).slot
+            assertTrue(boxes.values.all { it.slot.height >= DuelLayouter.PHASE_MIN - 0.01f }, "915×$h: ${boxes.values.map { it.slot.height }}")
+            assertTrue(next.height >= boxes.getValue(PhaseBox.Kind.NOW).slot.height)
+            // The turn is folded into the phase now: the column starts where the turn stood.
+            assertEquals(l.turn.top, boxes.getValue(PhaseBox.Kind.NOW).slot.top, 0.01f)
+        }
+        // A desk keeps every phase a click away.
+        val desk = DuelLayouter.solve(1366f, 720f, true)
+        assertFalse(desk.phasesCompact)
+        assertEquals(com.kaiharimoto.mastertool.core.board.DuelPhase.entries, desk.phaseBoxes().mapNotNull { it.phase })
+    }
+
+    @Test
     fun theHandsSitRightAgainstTheField() {
         val l = DuelLayouter.solve(1920f, 984f, true)
         // No seat bars between (1.0.78): one lane from the field to each hand.

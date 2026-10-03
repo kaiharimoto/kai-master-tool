@@ -214,6 +214,8 @@ enum class DeskAction {
     DUEL_COUNTER_UP,
     DUEL_COUNTER_DOWN,
     DUEL_TARGET,
+    /** In the Battle Phase: attack with it, then click their monster or their life points (1.0.86). */
+    DUEL_ATTACK,
 
     /** The card just placed, moved to that zone instead (the numbers shown on the free zones). */
     DUEL_ZONE_1,
@@ -460,6 +462,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("c"), DeskAction.DUEL_COUNTER_UP, DeskScope.DUEL, "Put a counter on it", repeatable = true),
         DeskShortcut(KeyChord("c", shift = true), DeskAction.DUEL_COUNTER_DOWN, DeskScope.DUEL, "Take a counter off it", repeatable = true),
         DeskShortcut(KeyChord("t"), DeskAction.DUEL_TARGET, DeskScope.DUEL, "Target it, or take the arrow back"),
+        DeskShortcut(KeyChord("a", shift = true), DeskAction.DUEL_ATTACK, DeskScope.DUEL, "Attack with it: then click their monster, or their life points for a direct attack"),
         DeskShortcut(KeyChord("1"), DeskAction.DUEL_ZONE_1, DeskScope.DUEL, "The card just placed to Monster Zone 1, or Spell & Trap Zone 1"),
         DeskShortcut(KeyChord("2"), DeskAction.DUEL_ZONE_2, DeskScope.DUEL, "To zone 2"),
         DeskShortcut(KeyChord("3"), DeskAction.DUEL_ZONE_3, DeskScope.DUEL, "To zone 3"),

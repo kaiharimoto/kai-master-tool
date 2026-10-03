@@ -9,6 +9,8 @@ sealed interface DropSpot {
     /** A hand, before the card at [index] (its length: the right end). */
     data class Hand(val seat: Int, val index: Int) : DropSpot
     data object Chain : DropSpot
+    /** A player's name and life points in the score column: in the Battle Phase, a direct attack (1.0.86). */
+    data class Score(val seat: Int) : DropSpot
 }
 
 /**
@@ -105,6 +107,9 @@ object DuelDrop {
                 }
                 Intent(listOfNotNull(DuelAction.Move(uid, Place.Pile(card.owner, target, at), pos, how), searched(how, uid, card.owner)), label)
             }
+            // Dropped on the other player's life points in the Battle Phase: a direct attack — the far hand folds
+            // away on a short window, so the score column is always there to aim at (1.0.86).
+            is DropSpot.Score -> if (spot.seat != seat && attacks(s, uid, seat)) Intent(listOf(DuelAction.Attack(seat, uid, null)), "Attack directly") else NONE
             // Dropped on the other player's hand in the Battle Phase: a direct attack (1.0.83).
             is DropSpot.Hand -> if (spot.seat != seat && attacks(s, uid, seat)) {
                 Intent(listOf(DuelAction.Attack(seat, uid, null)), "Attack directly")
@@ -128,12 +133,7 @@ object DuelDrop {
     }
 
     /** Whether [uid] could attack now: the Battle Phase, a face-up Attack Position monster [seat] controls. */
-    private fun attacks(s: DuelState, uid: Int, seat: Int): Boolean {
-        val c = s.cards[uid] ?: return false
-        val at = s.placeOf(uid)
-        return s.phase == com.kaiharimoto.mastertool.core.board.DuelPhase.BATTLE && at is Place.Zone &&
-            (at.kind == ZoneKind.MONSTER || at.kind == ZoneKind.EMZ) && c.controller == seat && c.faceUp && !c.defense
-    }
+    private fun attacks(s: DuelState, uid: Int, seat: Int): Boolean = DuelVerbs.canAttack(s, seat, uid)
 
     /** A card searched from the Deck is shown to the other player (1.0.79): it is known from then on. */
     private fun searched(how: String, uid: Int, owner: Int): DuelAction? = if (how == "search") DuelAction.Reveal(owner, listOf(uid)) else null

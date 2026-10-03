@@ -90,6 +90,46 @@ data class DuelLayout(
     /** The seat drawn at the bottom, full size, and the one across from it. */
     val near: Int get() = bottom
     val far: Int get() = 1 - bottom
+
+    /**
+     * The phase column is too short for every phase at [DuelLayouter.PHASE_MIN] (1.0.86, a phone lying down
+     * gave each about 12 dp): it shows the phase now — its name opens the list, with the turn in it — one
+     * large Next phase, and End turn.
+     */
+    val phasesCompact: Boolean get() = phases.height < DuelLayouter.PHASES_FULL
+
+    /**
+     * The controls of the phase column, top to bottom (1.0.86). In full, each phase and End turn, every one
+     * at least [DuelLayouter.PHASE_MIN] tall. Compact, the column takes the turn's slot too, and holds
+     * [PhaseBox.Kind.NOW], [PhaseBox.Kind.NEXT] (the rest of the height) and [PhaseBox.Kind.END].
+     */
+    fun phaseBoxes(): List<PhaseBox> {
+        val sp = DuelLayouter.PHASE_SPACING
+        val x = phases.left
+        val w = phases.width
+        if (!phasesCompact) {
+            val unit = (phases.height - 6 * sp) / 7.2f
+            var y = phases.top
+            return com.kaiharimoto.mastertool.core.board.DuelPhase.entries.map { p ->
+                PhaseBox(PhaseBox.Kind.PHASE, Slot(x, y, w, unit), p).also { y += unit + sp }
+            } + PhaseBox(PhaseBox.Kind.END, Slot(x, y, w, phases.bottom - y))
+        }
+        val top = turn.top
+        val h = phases.bottom - top
+        val min = DuelLayouter.PHASE_MIN
+        val (now, end) = if (h >= 3 * min + 2 * sp) min to min else ((h - 2 * sp) / 3f).let { it to it }
+        val next = h - now - end - 2 * sp
+        return listOf(
+            PhaseBox(PhaseBox.Kind.NOW, Slot(x, top, w, now)),
+            PhaseBox(PhaseBox.Kind.NEXT, Slot(x, top + now + sp, w, next)),
+            PhaseBox(PhaseBox.Kind.END, Slot(x, top + now + sp + next + sp, w, end)),
+        )
+    }
+}
+
+/** One control in the phase column: a phase, End turn, or — compact — the phase now and Next phase. */
+data class PhaseBox(val kind: Kind, val slot: Slot, val phase: com.kaiharimoto.mastertool.core.board.DuelPhase? = null) {
+    enum class Kind { PHASE, END, NOW, NEXT }
 }
 
 object DuelLayouter {
@@ -103,6 +143,11 @@ object DuelLayouter {
     const val LOG_MIN = 260f
     const val LOG_MAX = 360f
     const val FAR_SHRUNK = 0.75f
+    /** The least a control in the phase column may be, for a finger (1.0.86). */
+    const val PHASE_MIN = 32f
+    const val PHASE_SPACING = 4f
+    /** Six phases and End turn (a box and a fifth) at [PHASE_MIN], with the spacing between. */
+    const val PHASES_FULL = 7.2f * PHASE_MIN + 6 * PHASE_SPACING
 
     /** The far hand's band, as a fraction of a card's height: their cards are held, not laid out. */
     private const val FAR_HAND = 0.62f

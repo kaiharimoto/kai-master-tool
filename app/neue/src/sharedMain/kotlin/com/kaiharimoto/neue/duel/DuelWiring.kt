@@ -30,6 +30,7 @@ private val VERBS = mapOf(
     DeskAction.DUEL_COUNTER_UP to DuelVerb.COUNTER_UP,
     DeskAction.DUEL_COUNTER_DOWN to DuelVerb.COUNTER_DOWN,
     DeskAction.DUEL_TARGET to DuelVerb.TARGET,
+    DeskAction.DUEL_ATTACK to DuelVerb.ATTACK,
 )
 
 private val ZONES = mapOf(
@@ -75,7 +76,9 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         // The card under the pointer, else the one selected, else the one being read.
         val uid = duels.hovered ?: duels.selection.singleOrNull() ?: duels.inspected ?: return
         if (uid !in s.cards) return
-        val mine = s.solo || duels.seatFor(uid) == duels.bottom
+        // A card in another seat's open pile is the person's to play only when they play both seats (1.0.86).
+        val inStrip = duels.strip?.let { (seat, kind) -> s.placeOf(uid).let { it is com.kaiharimoto.mastertool.core.duel.Place.Pile && it.seat == seat && it.kind == kind } } == true
+        val mine = s.solo || duels.seatFor(uid) == duels.bottom || (inStrip && playsBoth(h))
         when {
             verb == DuelVerb.TARGET || (verb == DuelVerb.DEFAULT && !mine) -> duels.verb(uid, DuelVerb.TARGET, seat = duels.bottom)
             else -> duels.verb(uid, verb)
@@ -117,6 +120,7 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.libraryOpen -> d.libraryOpen = false
         d.lpPad != null -> d.lpPad = null
         d.attaching != null -> d.attaching = null
+        d.attacking != null -> d.attacking = null
         d.drawer != null -> d.drawer = null
         d.strip != null -> d.closeStrip()
         d.verbStrip -> d.verbStrip = false
