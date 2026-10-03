@@ -1062,6 +1062,10 @@ object DuelCommand {
     /** Every verb word the line knows, for completion: word → verb. */
     val VERB_WORDS: Map<String, DuelVerb> get() = verbWords
 
+    /** For tests: the letters, and the words a "from"/"to" names a pile by. */
+    internal val LETTER_WORDS: Set<String> get() = letters
+    internal val PILE_WORDS: Map<String, PileKind> get() = pileWords
+
     private val pileWords: Map<String, PileKind> = mapOf(
         "hand" to PileKind.HAND, "deck" to PileKind.DECK, "extra" to PileKind.EXTRA, "ed" to PileKind.EXTRA,
         "gy" to PileKind.GY, "grave" to PileKind.GY, "graveyard" to PileKind.GY,

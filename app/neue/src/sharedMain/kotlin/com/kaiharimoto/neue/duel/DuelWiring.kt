@@ -17,7 +17,7 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.Page
 
-private val VERBS = mapOf(
+internal val VERBS = mapOf(
     DeskAction.DUEL_DEFAULT to DuelVerb.DEFAULT,
     DeskAction.DUEL_ACTIVATE to DuelVerb.ACTIVATE,
     DeskAction.DUEL_SUMMON to DuelVerb.SUMMON,

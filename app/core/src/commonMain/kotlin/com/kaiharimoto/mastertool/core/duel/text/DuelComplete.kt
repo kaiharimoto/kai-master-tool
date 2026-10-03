@@ -42,6 +42,9 @@ object DuelComplete {
         "x" to "To the Extra Deck", "c" to "A counter",
     )
 
+    /** For tests. */
+    internal val KEY_LETTERS: List<Pair<String, String>> get() = LETTERS
+
     private val PHASES = listOf("dp" to DuelPhase.DRAW, "sp" to DuelPhase.STANDBY, "m1" to DuelPhase.MAIN1, "bp" to DuelPhase.BATTLE, "m2" to DuelPhase.MAIN2, "ep" to DuelPhase.END)
 
     private val CUES = listOf("no response", "your move", "over to you", "done", "don't wait", "catch up", "respond", "pass")

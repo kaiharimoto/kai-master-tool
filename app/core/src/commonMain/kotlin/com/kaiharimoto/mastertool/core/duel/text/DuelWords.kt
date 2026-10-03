@@ -296,6 +296,9 @@ object DuelWords {
         Place.Void -> "nowhere"
     }
 
+    /** For tests. */
+    internal fun pileProse(kind: PileKind): String = pileWords(kind)
+
     private fun pileWords(kind: PileKind): String = when (kind) {
         PileKind.HAND -> "the hand"
         PileKind.DECK -> "the Deck"

@@ -68,6 +68,9 @@ object DuelSpeech {
         "coin", "dice", "concede", "swap", "redo", "random", "spin", "roll", "throw", "first", "second", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play",
     )
 
+    /** For tests. */
+    internal val COMMAND_HEADS: Set<String> get() = COMMANDS
+
     /** The table's words and the command words, for the transcriber's prompt. */
     val WORDS = listOf(
         "yes", "undo", "summon", "set", "activate", "attack", "directly", "target", "banish", "graveyard", "extra deck", "monster zone",
