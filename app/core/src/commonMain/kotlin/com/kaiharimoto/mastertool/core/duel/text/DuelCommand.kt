@@ -243,19 +243,7 @@ object DuelCommand {
         fun randomLine(words: List<String>): Parsed? {
             if (words.none { it == "random" || it == "randomly" }) return null
             val filler = setOf("random", "randomly", "at", "from", "of", "card", "cards", "a", "the", "in", "order", "my", "your", "and")
-            fun pileOf(w: String): Pair<Boolean, PileKind>? = when (w) {
-                "hand", "h" -> false to PileKind.HAND
-                "oh", "ohand" -> true to PileKind.HAND
-                "gy", "grave", "graveyard" -> false to PileKind.GY
-                "ogy" -> true to PileKind.GY
-                "ban", "banished", "banishment" -> false to PileKind.BANISHED
-                "oban" -> true to PileKind.BANISHED
-                "ex", "extra", "ed" -> false to PileKind.EXTRA
-                "oex", "oed" -> true to PileKind.EXTRA
-                "dk", "deck" -> false to PileKind.DECK
-                "odk", "odeck" -> true to PileKind.DECK
-                else -> null
-            }
+            fun pileOf(w: String): Pair<Boolean, PileKind>? = PileWords.RANDOM[w]
             var n: Int? = null
             var down = false
             var their = false
@@ -314,15 +302,7 @@ object DuelCommand {
             val said = buildString {
                 append(if (among.isNotEmpty() && k == among.distinct().size) "In a random order" else "$k at random")
                 append(" to ")
-                append(
-                    when (to) {
-                        PileKind.GY -> "the GY"
-                        PileKind.BANISHED -> if (down) "banishment, face-down" else "banishment"
-                        PileKind.DECK -> if (at == Place.BOTTOM) "the bottom of the Deck" else "the top of the Deck"
-                        PileKind.HAND -> "the hand"
-                        PileKind.EXTRA -> "the Extra Deck"
-                    },
-                )
+                append(PileWords.randomProse(to, bottom = at == Place.BOTTOM, down = down))
             }
             return Parsed.Actions(listOf(pick), said)
         }
@@ -380,12 +360,8 @@ object DuelCommand {
                     }
                     !namesCard(lower) -> return Parsed.Problem("Mill how many? “mill 3”")
                 }
-                "shuffle" -> if (bare || rest.size == 1 && rest[0] in setOf("hand", "extra", "ed", "deck", "dk", "ex")) {
-                    val pile = when (rest.firstOrNull()) {
-                        "hand" -> PileKind.HAND
-                        "extra", "ed", "ex" -> PileKind.EXTRA
-                        else -> PileKind.DECK
-                    }
+                "shuffle" -> if (bare || rest.size == 1 && rest[0] in PileWords.SHUFFLE) {
+                    val pile = rest.firstOrNull()?.let { PileWords.SHUFFLE.getValue(it) } ?: PileKind.DECK
                     return one(DuelAction.Shuffle(seat, pile), "Shuffle ${pile.label}")
                 }
                 "lp", "life" -> return lp(rest)
@@ -1013,15 +989,11 @@ object DuelCommand {
         var theirs = false
         Regex("^(their|theirs|opp|opponent's|opponents|opponent|the opponent's)\\s+").find(t)?.let { theirs = true; t = t.substring(it.range.last + 1) }
         Regex("^(my|mine|own|your)\\s+").find(t)?.let { t = t.substring(it.range.last + 1) }
-        if (t.length >= 2 && t.startsWith("o") && !theirs && t.drop(1) in setOf("gy", "ban", "ex", "dk", "hand", "field")) { theirs = true; t = t.drop(1) }
-        val kind = when (t) {
-            "hand", "cards in hand" -> QueryKind.HAND
+        if (t.length >= 2 && t.startsWith("o") && !theirs && t.drop(1) in PileWords.QUERY_THEIRS) { theirs = true; t = t.drop(1) }
+        // A pile's words ([PileWords.QUERY]) ask about the pile, yours or theirs; the rest are the table's.
+        val kind = PileWords.QUERY[t] ?: when (t) {
             "field", "side", "side of the field" -> QueryKind.FIELD
             "board", "table", "both fields" -> if (theirs) null else QueryKind.BOARD
-            "gy", "graveyard", "grave", "grave yard" -> QueryKind.GY
-            "ban", "banished", "banishment", "banished cards" -> QueryKind.BANISHED
-            "ex", "extra", "extra deck", "ed" -> QueryKind.EXTRA
-            "dk", "deck" -> QueryKind.DECK
             "lp", "life", "life points", "lps" -> if (theirs) null else QueryKind.LP
             "chain" -> if (theirs) null else QueryKind.CHAIN
             "turn", "phase", "whose turn" -> if (theirs) null else QueryKind.TURN
@@ -1049,24 +1021,39 @@ object DuelCommand {
         "counter" to DuelVerb.COUNTER_UP, "uncounter" to DuelVerb.COUNTER_DOWN,
         "place" to DuelVerb.PLACE, "put" to DuelVerb.PLACE, "move" to DuelVerb.MOVE,
         "do" to DuelVerb.DEFAULT,
+    ) +
         // The duel's verb keys (`DeskShortcuts`, DUEL scope), as a head before a coordinate (1.0.87); Shift's verbs by two letters.
-        "a" to DuelVerb.ACTIVATE, "s" to DuelVerb.SUMMON, "e" to DuelVerb.SET, "p" to DuelVerb.POSITION, "f" to DuelVerb.FLIP,
-        "g" to DuelVerb.GRAVE, "b" to DuelVerb.BANISH, "h" to DuelVerb.HAND, "k" to DuelVerb.DECK_TOP, "x" to DuelVerb.EXTRA,
-        "o" to DuelVerb.ATTACH, "r" to DuelVerb.REVEAL, "c" to DuelVerb.COUNTER_UP, "t" to DuelVerb.TARGET, "m" to DuelVerb.MOVE,
-        "bd" to DuelVerb.BANISH_DOWN, "kb" to DuelVerb.DECK_BOTTOM, "ks" to DuelVerb.DECK_SHUFFLE, "cd" to DuelVerb.COUNTER_DOWN,
-    )
+        DuelLetters.WORDS
 
     /** The one- and two-letter verbs: verbs only before a coordinate. */
-    private val letters = setOf("a", "s", "e", "p", "f", "g", "b", "h", "k", "x", "o", "r", "c", "t", "m", "bd", "kb", "ks", "cd")
+    private val letters = DuelLetters.LETTERS
+
+    /**
+     * The words the line reads as a head, for whoever needs to know a line is the Line's (`DuelSpeech`): every verb
+     * word and letter; the table's own words ([Reader.single]'s heads: `draw`, `mill`, `shuffle`, the phases, `lp`,
+     * `resolve`, `token`…); the heads of an attack, a target, counters and `detach`; the chrome's (`open`, `look`,
+     * `browse`, `read`, `inspect`, `close`, `swap`, `undo`, `redo`); a question (`?`); and `random`, `randomly` (a line
+     * with them is chance). Kept by hand beside those `when`s — a head added there belongs here too.
+     */
+    val HEADS: Set<String> = verbWords.keys + setOf(
+        "draw", "d", "dr", "mill", "dump", "shuffle", "lp", "life", "dp", "draw-phase", "sp", "standby",
+        "m1", "mp1", "main1", "bp", "battle", "m2", "mp2", "main2", "ep", "next", "np", "end", "pass", "et",
+        "accept", "yes", "decline", "no", "lock", "unlock", "ruling", "rule", "coin", "flip-coin", "dice", "roll", "throw", "die",
+        "first", "second", "go", "resolve", "res", "negate", "neg", "think", "thinking", "wait", "ready", "concede", "surrender",
+        "say", "chat", "note", "look", "peek", "top", "excavate", "token", "tokens", "clear", "link", "effect",
+        "attack", "at", "target", "t", "point", "counter", "counters", "c", "detach", "a",
+        "open", "browse", "read", "inspect", "close", "swap", "undo", "redo",
+        "?", "random", "randomly",
+    )
 
     /** Every verb word the line knows, for completion: word → verb. */
     val VERB_WORDS: Map<String, DuelVerb> get() = verbWords
 
-    private val pileWords: Map<String, PileKind> = mapOf(
-        "hand" to PileKind.HAND, "deck" to PileKind.DECK, "extra" to PileKind.EXTRA, "ed" to PileKind.EXTRA,
-        "gy" to PileKind.GY, "grave" to PileKind.GY, "graveyard" to PileKind.GY,
-        "banish" to PileKind.BANISHED, "banished" to PileKind.BANISHED, "removed" to PileKind.BANISHED, "exile" to PileKind.BANISHED,
-    )
+    /** For tests: the letters, and the words a "from"/"to" names a pile by. */
+    internal val LETTER_WORDS: Set<String> get() = letters
+    internal val PILE_WORDS: Map<String, PileKind> get() = pileWords
+
+    private val pileWords: Map<String, PileKind> = PileWords.LINE
 
     /** Words that only say a placed card lies face-up as a Spell — "as continuous", "as a Continuous Spell". */
     private val asContinuous = Regex("\\s+(as\\s+)?(an?\\s+)?(face-?up\\s+)?(continuous|face-?up)(\\s+(spell|trap|card))?$")
