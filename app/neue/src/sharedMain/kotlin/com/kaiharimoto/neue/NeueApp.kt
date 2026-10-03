@@ -181,6 +181,9 @@ class NeueHolders(
     private val duelHolder = lazy { com.kaiharimoto.neue.duel.Duels(java.io.File(Platform.dataDir, "duel")) }
     val duel: com.kaiharimoto.neue.duel.Duels by duelHolder
 
+    /** Command mode's voice (1.0.87): hold M, or the microphone beside the command line, to speak a move. */
+    val duelVoice: com.kaiharimoto.neue.duel.DuelVoice by lazy { com.kaiharimoto.neue.duel.DuelVoice(this) }
+
     /** The duel in play written now, when there is one: the app closing (1.0.85; the last moves were lost in the save's debounce). */
     fun flushDuel() {
         if (duelHolder.isInitialized()) duel.flushNow()
@@ -262,9 +265,15 @@ class NeueHolders(
     fun onKey(event: KeyEvent): Boolean {
         if (event.type == KeyEventType.KeyUp) {
             held.remove(event.key)
+            // A held row's key coming up ends what its going down started (1.0.87: M let go sends what was said).
+            holding.remove(event.key)?.let { action ->
+                hold(action, down = false)
+                return true
+            }
             return false
         }
-        if (event.type != KeyEventType.KeyDown) return false
+        // While a key is held for a held row, what it would type is swallowed too (Alt M in the command line).
+        if (event.type != KeyEventType.KeyDown) return holding.isNotEmpty()
         // The first key after deep zen only wakes the builder: nothing should
         // happen to a deck you were not looking at.
         if (wake() == ZenPhase.DEEP) {
@@ -272,11 +281,40 @@ class NeueHolders(
             return true
         }
         val repeat = !held.add(event.key)
+        // The key's own repeats while a held row is down are nothing: never a second start.
+        if (event.key in holding) return true
         val chord = DeskKeys.chord(event) ?: return false
         val shortcut = DeskShortcuts.resolveShortcut(chord, deskContext()) ?: return false
         if (repeat && !shortcut.repeatable) return true
+        if (shortcut.hold) {
+            holding[event.key] = shortcut.action
+            hold(shortcut.action, down = true)
+            return true
+        }
         if (echo.admit(shortcut.action, System.currentTimeMillis())) run(shortcut.action)
         return true
+    }
+
+    /** Keys down for a held row (1.0.87), and the action each one started. */
+    private val holding = mutableMapOf<androidx.compose.ui.input.key.Key, DeskAction>()
+
+    /** A held row's action: [down] starts it, the key coming up ends it. */
+    private fun hold(action: DeskAction, down: Boolean) {
+        when (action) {
+            DeskAction.DUEL_VOICE -> if (down) duelVoice.press() else duelVoice.release()
+            else -> if (down) run(action)
+        }
+    }
+
+    /**
+     * The window lost the keyboard (1.0.87, the red team): no key-up will come for the keys down now, so they are
+     * forgotten — or the next press reads as a repeat — and whatever a held key started ends here.
+     */
+    fun keysLost() {
+        held.clear()
+        val started = holding.values.toList()
+        holding.clear()
+        started.forEach { hold(it, down = false) }
     }
 
     /** What is on screen, as the shortcut table reads it. */
@@ -345,6 +383,8 @@ class NeueHolders(
             DeskAction.GO_PREP -> neue.go(Page.PREP)
             DeskAction.GO_PRESENT -> neue.go(Page.PRESENT)
             DeskAction.GO_DUEL -> neue.go(Page.DUEL)
+            // From a menu or the palette, where nothing is let go of: a press, and the next one sends (1.0.87).
+            DeskAction.DUEL_VOICE -> duelVoice.toggle()
             DeskAction.WEB_PREVIOUS -> stepWeb(-1)
             DeskAction.WEB_NEXT -> stepWeb(1)
             DeskAction.GO_SETTINGS -> neue.go(Page.SETTINGS)
@@ -777,6 +817,9 @@ fun rememberHolders(deps: AppDependencies, makeUpdates: (kotlinx.coroutines.Coro
 fun NeueRoot(h: NeueHolders, launchEffects: Boolean = true) {
     val focus = LocalFocusManager.current
     h.focus = focus
+    // The window losing the keyboard ends what a held key started (1.0.87): its key-up will never come.
+    val windowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(windowFocused) { if (!windowFocused) h.keysLost() }
 
     if (launchEffects) NeueEffects(h)
 
@@ -1368,6 +1411,11 @@ private fun Shell(h: NeueHolders) {
             com.kaiharimoto.neue.ai.ContextPanel(h.ai)
             com.kaiharimoto.neue.ai.VoiceDialog(h.ai)
             com.kaiharimoto.neue.ai.QuickSettings(h.ai)
+        } else {
+            // The duel's push-to-talk asks for the speech model whether or not Ai is on (1.0.87).
+            if (h.ai.voiceForDuel) com.kaiharimoto.neue.ai.VoiceDialog(h.ai)
+        }
+        if (neue.prefs.ai.enabled) {
             if (h.ai.forgetAsked) {
                 MuDialog(
                     title = "Forget everything",

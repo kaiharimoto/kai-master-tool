@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StartStepsTest {
-    private val nothing = StartState(hasDecks = false, syncOn = false, aiEnabled = true, aiConnected = false, artSettled = false)
+    private val nothing = StartState(hasDecks = false, syncOn = false, aiEnabled = true, aiConnected = false, artSettled = false, voiceReady = false)
     private val someone = nothing.copy(hasDecks = true)
 
     @Test
@@ -35,6 +35,17 @@ class StartStepsTest {
         assertEquals(listOf(StartStep.SYNC, StartStep.ART), StartSteps.pending("1.0.69", StartPrefs(), someone.copy(aiEnabled = false), android = false))
         // The same version opening again offers nothing.
         assertEquals(emptyList(), StartSteps.pending("1.0.69", StartPrefs(seen = "1.0.69"), someone, android = false))
+    }
+
+    @Test
+    fun duellingByVoiceIsOfferedOnceItArrives() {
+        // 1.0.87 on the desk, v1.3.64 on the APK: someone updating from 1.0.86 is offered the speech model.
+        assertEquals(listOf(StartStep.VOICE), StartSteps.pending("1.0.87", StartPrefs(seen = "1.0.86"), someone, android = false))
+        assertEquals(listOf(StartStep.VOICE), StartSteps.pending("1.3.64", StartPrefs(seen = "1.3.63"), someone, android = true))
+        // Not before it arrives, and never once the model is here (or the recogniser is the system's).
+        assertEquals(emptyList(), StartSteps.pending("1.0.86", StartPrefs(seen = "1.0.85"), someone, android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.0.87", StartPrefs(seen = "1.0.86"), someone.copy(voiceReady = true), android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.0.87", StartPrefs(seen = "1.0.86", done = listOf("voice")), someone, android = false))
     }
 
     @Test

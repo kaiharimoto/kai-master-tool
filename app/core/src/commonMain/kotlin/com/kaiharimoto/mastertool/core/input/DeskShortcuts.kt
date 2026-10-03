@@ -223,6 +223,11 @@ enum class DeskAction {
     DUEL_TARGET,
     /** In the Battle Phase: attack with it, then click their monster or their life points (1.0.86). */
     DUEL_ATTACK,
+    /**
+     * Command mode's voice (1.0.87, kai: "hold a key to talk"): held, the microphone listens; let go, what was
+     * said is written out and shown as a move to confirm. A [HELD] action: pressed and let go by a hand only.
+     */
+    DUEL_VOICE,
 
     /** The card just placed, moved to that zone instead (the numbers shown on the free zones). */
     DUEL_ZONE_1,
@@ -258,6 +263,13 @@ enum class DeskAction {
     companion object {
         /** The assistant's own actions: live only while it is on, and never run by it (`run_action`). */
         val AI: Set<DeskAction> = setOf(AI_PANEL, AI_VOICE, AI_TALK, DUEL_AI_ANSWER, DUEL_AI_CATCH_UP)
+
+        /**
+         * Actions that are held, not pressed (1.0.87): a press starts them and letting go ends them
+         * ([DeskShortcut.hold]). Never run by Ai (`run_action`): a press with no hand to let go would leave
+         * the microphone open. Unlike [AI], they live whether Ai is on or off.
+         */
+        val HELD: Set<DeskAction> = setOf(DUEL_VOICE)
     }
 }
 
@@ -322,6 +334,11 @@ data class DeskShortcut(
     val allowedInTextInput: Boolean = false,
     /** Holding the key keeps firing: stepping actions only, never anything that opens or closes. */
     val repeatable: Boolean = false,
+    /**
+     * Held, not pressed (1.0.87): the key going down starts [action] and the same key coming up ends it; the
+     * key's own repeats while held are nothing. Only [DeskAction.HELD] actions, never [repeatable].
+     */
+    val hold: Boolean = false,
 )
 
 object DeskShortcuts {
@@ -472,6 +489,9 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("c", shift = true), DeskAction.DUEL_COUNTER_DOWN, DeskScope.DUEL, "Take a counter off it", repeatable = true),
         DeskShortcut(KeyChord("t"), DeskAction.DUEL_TARGET, DeskScope.DUEL, "Target it, or take the arrow back"),
         DeskShortcut(KeyChord("a", shift = true), DeskAction.DUEL_ATTACK, DeskScope.DUEL, "Attack with it: then click their monster, or their life points for a direct attack"),
+        // Hold to speak (1.0.87). While typing in the command line M types an m ("m3"), so Alt M is the same key there.
+        DeskShortcut(KeyChord("m"), DeskAction.DUEL_VOICE, DeskScope.DUEL, "Hold to speak a command; let go to send", hold = true),
+        DeskShortcut(KeyChord("m", alt = true), DeskAction.DUEL_VOICE, DeskScope.DUEL, "Hold to speak a command, also while typing", allowedInTextInput = true, hold = true),
         DeskShortcut(KeyChord("1"), DeskAction.DUEL_ZONE_1, DeskScope.DUEL, "The card just placed to Monster Zone 1, or Spell & Trap Zone 1"),
         DeskShortcut(KeyChord("2"), DeskAction.DUEL_ZONE_2, DeskScope.DUEL, "To zone 2"),
         DeskShortcut(KeyChord("3"), DeskAction.DUEL_ZONE_3, DeskScope.DUEL, "To zone 3"),

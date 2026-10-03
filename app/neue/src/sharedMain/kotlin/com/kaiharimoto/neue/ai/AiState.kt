@@ -426,7 +426,8 @@ class AiState(internal val h: NeueHolders) {
         val before = draft.trimEnd()
         fun joined(words: String) = if (before.isEmpty()) words.trim() else "$before ${words.trim()}"
         hearing = true
-        voiceJob = scope.launch {
+        // One microphone (1.0.87): the duel's push-to-talk, if it listens, is stopped first; holding M later takes it back.
+        voiceJob = com.kaiharimoto.neue.platform.Mic.listen(scope, "ai", onLost = { micTaken() }) {
             try {
                 voice.listen(voiceModel, hints()).collect { heard ->
                     when (heard) {
@@ -458,16 +459,58 @@ class AiState(internal val h: NeueHolders) {
         }
     }
 
-    /** The speech model, downloaded once with the person's yes; then the microphone opens. */
+    /**
+     * The model asked for by the duel's push-to-talk (1.0.87): the same dialog, in the duel's words, and once it is
+     * here nothing starts listening — the key was let go long ago — it is only read in, ready for the next hold.
+     */
+    var voiceForDuel by mutableStateOf(false)
+        private set
+
+    /** The download dialog, for Ai's voice or ([forDuel]) the duel's commands. */
+    fun askVoiceModel(forDuel: Boolean) {
+        if (voiceDownload != null) return
+        voiceForDuel = forDuel
+        voiceAsk = true
+    }
+
+    /** The model downloaded for the duel's commands with no dialog: the setup's "Duel by keys and voice" step said yes. */
+    fun downloadForDuel() {
+        if (voiceDownload != null) return
+        voiceForDuel = true
+        downloadVoiceModel()
+    }
+
+    /**
+     * Someone else took the microphone (1.0.87, the duel's M held): talk mode would only listen again over them,
+     * so it ends, and anything being said aloud stops.
+     */
+    fun micTaken() {
+        if (talkMode) {
+            talkMode = false
+            notice = "Talk mode ended: the duel's microphone is in use."
+        }
+        stopSpeaking()
+    }
+
+    /** The speech model, downloaded once with the person's yes; then the microphone opens (not for the duel: see [voiceForDuel]). */
     fun downloadVoiceModel() {
         voiceAsk = false
         val model = voiceModel
+        val forDuel = voiceForDuel
+        voiceForDuel = false
         voiceDownload = 0f
         scope.launch {
             val done = com.kaiharimoto.neue.platform.Voice.download(model) { bytes -> voiceDownload = (bytes.toFloat() / model.bytes).coerceIn(0f, 1f) }
             voiceDownload = null
             done.fold(
-                { listen(send = talkMode) },
+                {
+                    if (forDuel) {
+                        h.neue.note = com.kaiharimoto.neue.Note("Voice is ready. Hold M, or the microphone, to speak a command")
+                        h.duelVoice.prewarm()
+                    } else {
+                        listen(send = talkMode)
+                    }
+                },
                 {
                     talkMode = false
                     h.neue.note = com.kaiharimoto.neue.Note("The speech model could not be downloaded: ${it.message ?: "try again"}")

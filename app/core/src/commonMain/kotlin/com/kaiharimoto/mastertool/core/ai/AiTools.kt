@@ -332,7 +332,7 @@ object AiTools {
         "run_action",
         "Does anything the keyboard or the command palette can: the action's name from this list. " +
             "Actions that act on 'the selected card' need a card selected.",
-        schema { enum("action", "The action", DeskAction.entries.filter { it !in DeskAction.AI }.map { it.name }, required = true) },
+        schema { enum("action", "The action", DeskAction.entries.filter { it !in DeskAction.AI && it !in DeskAction.HELD }.map { it.name }, required = true) },
         ToolGroup.APP,
     )
 

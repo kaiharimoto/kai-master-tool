@@ -38,11 +38,18 @@ expect object Voice {
     /**
      * Listening, until the person stops speaking (or [stopListening]): the level as it goes, the
      * words when they are ready. [hints] prime the transcriber with the words likely to be said.
+     *
+     * A [command] (1.0.87, the duel's push-to-talk) ends only on [stopListening] — a key let go —
+     * never on a pause, and is written out for speed: on the desk Whisper reads only the clip's own
+     * length (`CommandTuning`), in one segment with no carried context.
      */
-    fun listen(model: VoiceModel, hints: String): Flow<Heard>
+    fun listen(model: VoiceModel, hints: String, command: Boolean = false): Flow<Heard>
 
     /** Ends the listening now; what was heard so far is still written out. */
     fun stopListening()
+
+    /** The speech model made ready before it is first needed, off the main thread (1.0.87); nothing where there is none to load. */
+    suspend fun prewarm(model: VoiceModel)
 
     /** Whether replies can be spoken aloud here. */
     val canSpeak: Boolean

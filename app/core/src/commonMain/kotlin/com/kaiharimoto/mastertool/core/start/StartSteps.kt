@@ -26,6 +26,9 @@ enum class StartStep(
     SYNC("sync", "1.0.68", "1.3.45"),
     AI("ai", "1.0.43", "1.3.20"),
     ART("art", "1.0.10", "1.3.0"),
+
+    /** Command mode (1.0.87): a duel played by keys and voice; on the desk the speech model it needs. */
+    VOICE("voice", "1.0.87", "1.3.64"),
     ;
 
     companion object {
@@ -41,6 +44,11 @@ data class StartState(
     val aiConnected: Boolean,
     /** Every card's picture is here, or the person turned the download off. */
     val artSettled: Boolean,
+    /**
+     * Speaking duel commands needs nothing more here (1.0.87): the speech model is downloaded, or the platform's
+     * recogniser is the system's own (a phone or tablet), or there is no microphone to speak into.
+     */
+    val voiceReady: Boolean = true,
 )
 
 /** This device's own record of the setup (a field of `NeuePreferences`, never synced). */
@@ -81,5 +89,6 @@ object StartSteps {
         StartStep.SYNC -> s.syncOn
         StartStep.AI -> s.aiConnected || !s.aiEnabled
         StartStep.ART -> s.artSettled
+        StartStep.VOICE -> s.voiceReady
     }
 }

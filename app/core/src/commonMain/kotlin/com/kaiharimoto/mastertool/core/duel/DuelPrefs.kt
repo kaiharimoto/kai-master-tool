@@ -43,6 +43,11 @@ data class DuelPrefs(
     val aiTriggers: Boolean = true,
     /** Each turn starts in Main Phase 1 (1.0.86): after End Turn the table draws for the next player and moves on by itself. */
     val autoDraw: Boolean = true,
+    /**
+     * Command mode speaks back (1.0.87, off unless asked for): the move understood as it is shown, the other seat's
+     * moves as they land, the answers to questions — in this seat's own words, never naming a card it cannot see.
+     */
+    val speak: Boolean = false,
 ) {
     companion object {
         const val KNOW_ALL = "all"
