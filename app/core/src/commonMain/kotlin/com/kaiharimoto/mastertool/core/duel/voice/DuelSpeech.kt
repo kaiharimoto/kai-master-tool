@@ -65,7 +65,7 @@ object DuelSpeech {
         "summon", "set", "activate", "chain", "attack", "at", "target", "send", "destroy", "tribute", "banish", "add", "search", "draw",
         "mill", "flip", "pos", "move", "place", "attach", "detach", "reveal", "counter", "token", "lp", "resolve", "bp", "m1", "m2",
         "ep", "end", "next", "ss", "special", "read", "open", "look", "discard", "return", "bounce", "spin", "excavate", "shuffle",
-        "coin", "dice", "concede", "swap", "redo", "random", "spin", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play",
+        "coin", "dice", "concede", "swap", "redo", "random", "spin", "roll", "throw", "first", "second", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play",
     )
 
     /** The table's words and the command words, for the transcriber's prompt. */
@@ -135,6 +135,11 @@ object DuelSpeech {
         Rule("^(i'll|i will|i'm going to|im going to|i am going to|i want to|i'd like to|i would like to|let's|lets|let me|we'll|i'm gonna|im gonna|i'm|i)\\s+(?=\\S)", ""),
         Rule("^go ahead and\\s+", ""),
         // One move, then another.
+        // The opening roll (1.0.87): "roll the dice", "I'll go first", "we'll go second".
+        Rule("^(let me |i'?ll |i will )?(roll|throw)( the)? dice$", "roll"),
+        // Ordinals are digits by now ("first" → 1).
+        Rule("^(i'?ll |i will |we'?ll |let me )?go (first|1st|1)$", "first"),
+        Rule("^(i'?ll |i will |we'?ll |let me )?go (second|2nd|2)$", "second"),
         Rule("\\s+(and then|then|after that|and after that)\\s+", " ; "),
         // Whose.
         Rule("\\b(the opponent's|my opponent's|opponent's|opponents|opponent|theirs|their|his|her|the other player's|other player's)\\b", "their"),

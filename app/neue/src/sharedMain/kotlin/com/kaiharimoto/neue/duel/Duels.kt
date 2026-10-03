@@ -519,6 +519,8 @@ class Duels(val dir: File) {
     var openingRoll = true
     /** The person's two dice in the hand, carried across the table before they are thrown; null when none are. */
     var diceCarry by mutableStateOf<com.kaiharimoto.neue.duel.dice.DiceCarry?>(null)
+    /** The seats whose dice are still in the air: the log holds their numbers back until they land (1.0.87). */
+    var diceRolling by mutableStateOf<Set<Int>>(emptySet())
     /** The seat Ai throws and chooses for, set by the page while Ai takes its seat's turns; null otherwise. */
     var aiOpeningSeat: Int? = null
 

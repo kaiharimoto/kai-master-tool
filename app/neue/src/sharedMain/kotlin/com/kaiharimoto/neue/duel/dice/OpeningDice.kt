@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -101,10 +102,12 @@ internal fun OpeningDice(duels: Duels, s: DuelState, layout: DuelLayout, playsBo
                     if (th == null) started.remove(seat) else started[seat] = t
                 }
             }
-            val playing = runs.indices.any { seat -> playing(runs[seat], started[seat], t) }
-            if (!playing) break
+            val rolling = runs.indices.filter { seat -> playing(runs[seat], started[seat], t) }.toSet()
+            if (duels.diceRolling != rolling) duels.diceRolling = rolling
+            if (rolling.isEmpty()) break
         }
     }
+    DisposableEffect(Unit) { onDispose { duels.diceRolling = emptySet() } }
     fun elapsed(seat: Int): Double {
         // A throw just made, not yet met by a frame: its first frame, never a glimpse of where it ends.
         if (known[seat] != o.throws.getOrNull(seat)) return 0.0

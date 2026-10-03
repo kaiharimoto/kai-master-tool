@@ -159,4 +159,11 @@ class TableNotesTest {
         assertNull(DuelRules.applyAll(s, listOf(DuelAction.Move(chaos, m1)), 0).first)
         assertNotNull(CHAOS)
     }
+
+    @Test
+    fun theOpeningRollCanBeSaid() {
+        assertEquals("roll", com.kaiharimoto.mastertool.core.duel.voice.DuelSpeech.normalize("Roll the dice."))
+        assertEquals("first", com.kaiharimoto.mastertool.core.duel.voice.DuelSpeech.normalize("I'll go first"))
+        assertEquals("second", com.kaiharimoto.mastertool.core.duel.voice.DuelSpeech.normalize("go second"))
+    }
 }

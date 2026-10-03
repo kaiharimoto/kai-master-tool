@@ -65,8 +65,9 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val thinking = h.neue.prefs.duel.aiThinking
     val talk = ai.session?.takeIf { seated && it.mode == AiSession.MODE_DUEL && it.id == duels.aiSession }
     val folds = remember(game.header, viewer, duels.catalog) { logFolds(game, viewer, duels.catalog) }
-    val table = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest) {
-        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, folds, duels, refused)
+    val rolling = duels.diceRolling
+    val table = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest, rolling) {
+        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, folds, duels, refused, rolling)
     }
     // Ai's hidden cards never named to the person in what it says (1.0.81): the original behind Thinking.
     val aiSeat = if (game.state.solo) 0 else h.neue.prefs.duel.aiSeat
@@ -442,13 +443,20 @@ internal fun logFolds(game: DuelGame, viewer: Int?, catalog: com.kaiharimoto.mas
         LogRead(text, applied)
     }
 
-private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, duels: Duels, refused: Set<Int>): List<LogLine> {
+private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, duels: Duels, refused: Set<Int>, rolling: Set<Int> = emptySet()): List<LogLine> {
+    // A throw still in the air is a throw, not its numbers: the log never tells what the dice will read (1.0.87).
+    val lastRoll = (0..1).associateWith { seat -> game.entries.subList(0, game.cursor).indexOfLast { (it.action as? DuelAction.OpeningRoll)?.seat == seat } }
     val reads = folds.sync(game.entries).results(game.cursor)
     val out = ArrayList<LogLine>(reads.size - game.floor.coerceAtMost(reads.size) + 8)
     for (i in game.floor until reads.size) {
         val e = game.entries[i]
         val r = reads[i]
         if (i == game.floor) out += LogLine.Turn("Turn 1", e.at)
+        val inAir = (e.action as? DuelAction.OpeningRoll)?.let { it.seat in rolling && lastRoll[it.seat] == i } == true
+        if (inAir) {
+            out += LogLine.Done("${DuelWords.seatName(game.state, (e.action as DuelAction.OpeningRoll).seat)} throws the dice…", e.seat == duels.bottom, i = i, at = e.at)
+            continue
+        }
         out += when (e.action) {
             is DuelAction.Chat -> LogLine.Said(r.text, e.at)
             DuelAction.EndTurn -> LogLine.Turn(r.text, e.at)
