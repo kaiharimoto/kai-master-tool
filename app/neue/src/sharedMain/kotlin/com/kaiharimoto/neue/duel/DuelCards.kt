@@ -100,9 +100,15 @@ internal fun TableCard(
                 val h = w / com.kaiharimoto.neue.cards.CARD_RATIO
                 val across = frame.rotation % 180f != 0f
                 val boxW = if (across) h else w
+                // Inside the card's frame on every side, so the border and its foil stay whole round the card
+                // (kai, 1.0.87: the plate across the foot "covers the border foiling … the card is being cut off").
+                val frameInset = w * FRAME_INSET
                 Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = -rot }, contentAlignment = Alignment.Center) {
                     Box(Modifier.requiredSize(boxW.dp, (if (across) w else h).dp)) {
-                        StatPlate(stats, boxW, Modifier.align(Alignment.BottomCenter))
+                        StatPlate(
+                            stats, boxW - frameInset * 2,
+                            Modifier.align(Alignment.BottomCenter).padding(start = frameInset.dp, end = frameInset.dp, bottom = (frameInset * 1.15f).dp),
+                        )
                     }
                 }
             }
@@ -113,14 +119,17 @@ internal fun TableCard(
     }
 }
 
+/** A card's printed frame, as a share of its width: the plate stays inside it. */
+private const val FRAME_INSET = 0.065f
+
 /** A monster's battle numbers as the table shows them; [defense] says which one battles. */
 internal data class TableStats(val atk: String, val def: String?, val defense: Boolean)
 
 /**
  * A monster's ATK / DEF (1.0.87, kai: the old readout "cuts the bottom of the card off and blends in with
- * the background"): a solid ink plate inside the card's own bottom edge, the card's full width, paper
- * numerals — so it reads against the card and against the table in both themes, and never leaves the
- * card's bounds. The numerals are sized from the card's width to fit; the number that battles (ATK in
+ * the background"; then, of a plate the card's full width, "it feels like the card is being cut off"): a solid
+ * ink plate inside the card's frame, over the foot of its text box where its printed ATK and DEF are, paper
+ * numerals — so it reads against the card in both themes and the frame and its foil stay whole. The numerals are sized from the card's width to fit; the number that battles (ATK in
  * Attack Position, DEF in Defense) is full paper, the other at the ramp's meta weight. A paper hairline
  * round it keeps it apart from a dark frame (Xyz, Link) and from the plate of a card lying across beside it
  * (a card in Defense is wider than its zone, so two such plates meet).
@@ -133,7 +142,7 @@ private fun StatPlate(stats: TableStats, width: Float, modifier: Modifier) {
     val size = minOf(width / 7f, (width - 6f) / (0.62f * chars), 13f).coerceAtLeast(6f)
     val quiet = c.paper.copy(alpha = c.ink45.alpha)
     Row(
-        modifier.fillMaxWidth().background(c.ink).border(1.dp, c.paper)
+        modifier.fillMaxWidth().background(c.ink)
             .padding(top = (size * 0.18f + 1f).dp, bottom = (size * 0.14f).dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
