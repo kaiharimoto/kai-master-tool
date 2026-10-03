@@ -715,6 +715,24 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   chapters and encoder choice already), 1.0.75 Android recording and extras. `tools/shoot.sh --page=present --present=demo …` photographs it
   (`--present-mode=restyle` the dialog).
 
+## Where the big holders' code lives (1.0.91, the cleanup)
+
+- **`Duels`** (`neue/duel/Duels.kt`) keeps the table's state, `act`/`verb`, focus, the chain, the line runner, undo and
+  saving; its parts are owned classes beside it — `DuelNetTable.kt` (`DuelNet`), `DuelReplays`, `DuelRulings`,
+  `DuelSpotlightState`, `DuelAiWatch`, `DuelOpening` (turn opening and dice), `DuelPicking` (selection, ordering) — and
+  every moved member stays on `Duels` by forwarding, so `duels.x` reads the same everywhere. Add new state to the part
+  it belongs to, with a forwarder only if outside code needs it.
+- **`NeueHolders`**: the keyboard is `neue/NeueKeys.kt` (`onKey`, `run(action)`, …), the palette and phone menu
+  `NeuePalette.kt`, the window's pointer watcher `shell/WindowPointer.kt`, zen's clock `ZenClockwork.kt` — extensions
+  on `NeueHolders`, its state still members.
+- **`AiState`**: `AiVoice.kt`, `AiContext.kt`, `AiTuning.kt`, `AiConnections.kt`, `AiHelpers.kt` — extensions; the state
+  stays in `AiState.kt`.
+- **One list per fact**: the duel's verb letters are `core/duel/text/DuelLetters.kt` (the typed words, the completion,
+  the help and the window's `DuelWiring`/`DuelRails` maps all read it; `DuelLettersTest` holds it to `DeskShortcuts`),
+  and the pile words `PileWords.kt`; `DuelVocabularySnapshotTest` pins every table they feed.
+- **Imports, not inline names**: write `import …Name`, not `com.kaiharimoto….Name` in code, except for the short names
+  that clash (`Wire`, `Slot`, `Showcase`, `Block`, `Lock`, `Spoken`, `Heard`, `Card`, `Spotlight`, `Mode`).
+
 ## Stored data outlives versions — a rule
 
 kai's progress lives in what older builds wrote; every release must read it. So:
