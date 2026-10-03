@@ -648,6 +648,22 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   undo skips talk (`DuelGame.undoMove`); turns open themselves to Main 1 (`TurnStart`, `DuelPrefs.autoDraw`); token uids and lock
   ids are stamped on commit (`DuelIds`), dice keyed to the roll (`forRoll`); the log folded once (`DuelFolds`); `Secrets` covers
   short names and Ai's questions. The second red-team pass on 1.0.85 is in `DuelRedTeamTest` and `DuelTriggersTest`.
+  **1.0.87, Command mode** (kai: "like Magnus Carlsen … I can win with just typing too and not a mouse"): a duel played by
+  keys, typing or voice alone, each complete without the others. **Table notation** (`DuelNotation`: `h1…`, `m1–5`, `s1–5`,
+  `e1/e2` absolute, `fz`, `gy3`; theirs `o…`, their hand in veil order everywhere — typed, drawn and labelled), verb letters
+  (`s h2 m3`, `a m1 om2`), `;` for several moves (`Parsed.Many`: a later move may touch only cards the seat knew as it typed,
+  and fails without saying why), questions (`DuelAnswer`, never naming a hidden card) and the chrome's words; `DuelPreview`
+  (no stamping), `DuelComplete` (never in an order the seat cannot see), `Phonetic`, `DuelCoverage` (every mouse gesture has a
+  typed form, tested), `TypedDuelTest` (a whole duel typed). **Keys**: arrows walk a focus ring (`DuelFocus`), keys act on the
+  focus when the keyboard moved last (`Duels.keyTarget`), Enter opens the verbs, `I` coordinates. **The Spotlight** (kai's pick
+  of three, `neue/duel/Spotlight.kt`, core `text/Spotlight.kt`): `/`, `Ctrl L`, a free letter or holding M opens a box over the
+  dimmed table, the touched cards lit and ringed, the destination dashed; rows are sentences with their consequence; Enter
+  makes it, Shift Enter keeps typing, ↑ recent (`<data>/duel/lines.txt`), Tab takes, 1–3 did-you-mean; F1 renders
+  `CommandHelp`. **Voice**: hold **M** (Alt M while typing; `DeskShortcut.hold`, KeyUp in `NeueApp`) — push-to-talk
+  (`DuelVoice`, `Mic`, `SpeechGate.pushToTalk`, Whisper sized to the clip by `CommandTuning`, `CommandClip` against what
+  Whisper invents), `DuelSpeech` normalize → classify, **shown, then confirmed** ("yes"/Enter; `DuelPrefs.voiceConfirm`),
+  read back with `DuelPrefs.speak`; the `VOICE` start step. A combo plays by name, either copy (`anyCopy`).
+  `--duel-focus=`, `--duel-coords`, `--duel-spot=attack|s_h2_m3`, `--duel-spot-state=listening|answer|many`, `--duel-heard=`.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
