@@ -325,7 +325,19 @@ object DuelCommand {
                     }
                 }
                 "coin", "flip-coin" -> if (bare) return one(DuelAction.Coin(seat), "Coin")
-                "dice", "die", "roll" -> if (bare) return one(DuelAction.Dice(seat), "Die")
+                // Before turn 1, "roll" throws the opening roll's two dice (1.0.87); a die alone is "die" then.
+                "dice", "roll", "throw" -> if (bare && s.opening?.let { !it.decided && it.winner == null } == true) {
+                    return one(DuelAction.OpeningRoll(seat), "Throw the dice")
+                } else if (bare && head != "throw") return one(DuelAction.Dice(seat), "Die")
+                "die" -> if (bare) return one(DuelAction.Dice(seat), "Die")
+                // The opening roll's winner chooses (1.0.87): "first", "go first", "second", "go second".
+                "first", "second", "go" -> {
+                    val pick = if (head == "go") rest.singleOrNull() else if (bare) head else null
+                    if (pick == "first" || pick == "second") {
+                        if (s.opening == null) return Parsed.Problem("This duel has no opening roll")
+                        return one(DuelAction.GoFirst(seat, pick == "first"), if (pick == "first") "Go first" else "Go second")
+                    }
+                }
                 "resolve", "res" -> if (bare || (rest.size == 1 && rest.single() in setOf("keep", "stay", "stays", "chain", "it"))) {
                     if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to resolve")
                     val keep = rest.firstOrNull() in setOf("keep", "stay", "stays")

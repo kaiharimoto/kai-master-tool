@@ -67,6 +67,7 @@ import java.util.UUID
  */
 fun neueMain(args: Array<String>) {
     val map = args.mapNotNull { arg -> arg.removePrefix("--").split("=", limit = 2).let { if (it.size == 2) it[0] to it[1] else it[0] to "true" } }.toMap()
+    diceFrames = map["duel-dice-frames"]?.toIntOrNull()
     val width = map["width"]?.toInt() ?: 1920
     val height = map["height"]?.toInt() ?: 1080
     val density = map["density"]?.toFloat() ?: 1f
@@ -163,17 +164,28 @@ fun neueMain(args: Array<String>) {
                     ))
                 }
                 val solo = mode == "solo"
-                h.duel.start(
-                    com.kaiharimoto.mastertool.core.duel.DuelHeader(
-                        id = "studio",
-                        seed = 7L,
-                        seats = listOf(
-                            com.kaiharimoto.mastertool.core.duel.SeatSetup("Kai", main, extra),
-                            if (solo) com.kaiharimoto.mastertool.core.duel.SeatSetup("Rival") else com.kaiharimoto.mastertool.core.duel.SeatSetup("Rival", main, extra),
-                        ),
-                        solo = solo,
+                // --duel-dice=rest|held|flying|settled|choose: the opening roll (1.0.87) — the dice resting in front of each
+                // field, held in the hand over the near field, the near seat's throw mid-flight (the far seat's landed),
+                // the near seat's landed (the far still to throw), or both landed and the near seat choosing.
+                val dice = map["duel-dice"]
+                fun header(seed: Long) = com.kaiharimoto.mastertool.core.duel.DuelHeader(
+                    id = "studio",
+                    seed = seed,
+                    seats = listOf(
+                        com.kaiharimoto.mastertool.core.duel.SeatSetup("Kai", main, extra),
+                        if (solo) com.kaiharimoto.mastertool.core.duel.SeatSetup("Rival") else com.kaiharimoto.mastertool.core.duel.SeatSetup("Rival", main, extra),
                     ),
+                    solo = solo,
+                    openingRoll = dice != null,
                 )
+                // For the choice, a seed whose first round the near seat wins; for the flight, one that does not tie.
+                val seed = if (dice == null) 7L else (7L..400L).first { sd ->
+                    var g = com.kaiharimoto.mastertool.core.duel.DuelGame.start(header(sd))
+                    g = g.act(com.kaiharimoto.mastertool.core.duel.DuelAction.OpeningRoll(0), 0).game
+                    g = g.act(com.kaiharimoto.mastertool.core.duel.DuelAction.OpeningRoll(1), 1).game
+                    g.state.opening?.winner == 0
+                }
+                h.duel.start(header(seed))
                 if (map["duel-play"] == "true") studioDuelMoves(h)
                 map["duel-strip"]?.let { k ->
                     val kind = when (k) {
@@ -287,6 +299,7 @@ fun neueMain(args: Array<String>) {
                 }
                 h.neue.page = Page.DUEL
                 clock.run(120)
+                if (dice != null) studioDice(h, dice, clock)
                 val g = h.duel.game!!
                 println("[neue-studio] duel: ${g.cursor} entries, field ${g.state.onField().size}, hands ${g.state.seats.map { it.hand.size }}, lp ${g.state.seats.map { it.lp }}")
             }
@@ -1567,3 +1580,54 @@ private fun studioDuelMoves(h: com.kaiharimoto.neue.NeueHolders) {
     d.run("bp")
     d.bottom = 0
 }
+
+/**
+ * The opening roll photographed (1.0.87, `--duel-dice`): real throws through the real holder, the frame clock run by
+ * hand to the moment asked for. The throws are fixed drags, so every run takes the same picture.
+ */
+private suspend fun studioDice(h: NeueHolders, how: String, clock: FrameClock) {
+    val d = h.duel
+    d.bottom = 0
+    val layout = d.tableLayout ?: return
+    val stage = com.kaiharimoto.mastertool.core.duel.dice.DiceStage(layout)
+    val held = com.kaiharimoto.neue.duel.dice.RESTING
+    val near = com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.fromDrag(
+        com.kaiharimoto.mastertool.core.duel.dice.V3(6.5, 7.0), held, com.kaiharimoto.mastertool.core.duel.dice.V3(13.0, -21.0), 3.0,
+    )
+    val far = com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.fromDrag(
+        com.kaiharimoto.mastertool.core.duel.dice.V3(13.0, 7.0), held, com.kaiharimoto.mastertool.core.duel.dice.V3(-9.0, -19.0), -2.0,
+    )
+    when (how) {
+        "held" -> {
+            // Over the near field, a little turned in the hand.
+            val at = stage.toTable(0, com.kaiharimoto.mastertool.core.duel.dice.V3(9.0, 5.5, 0.0))
+            val turn = com.kaiharimoto.mastertool.core.duel.dice.Quat(0.93, 0.25, 0.2, 0.18).normalized()
+            d.diceCarry = com.kaiharimoto.neue.duel.dice.DiceCarry(0, at.x.toFloat(), at.y.toFloat(), held.map { (turn * it).normalized() })
+            clock.run(4)
+        }
+        "flying" -> {
+            d.throwDice(1, far)
+            clock.run(240)
+            d.throwDice(0, near)
+            // A tenth of a second and a little: in the air, tumbling, before the first bounce.
+            clock.run(diceFrames ?: 7)
+        }
+        "settled" -> {
+            d.throwDice(0, near)
+            clock.run(240)
+        }
+        "choose" -> {
+            // The near seat first, as the seed was chosen for: it wins and chooses.
+            d.throwDice(0, near)
+            clock.run(30)
+            d.throwDice(1, far)
+            clock.run(260)
+        }
+        else -> clock.run(2)
+    }
+    println("[neue-studio] dice: $how · ${d.game?.state?.opening}")
+}
+
+/** `--duel-dice-frames=N`: how many frames into the near seat's throw a flying shot is taken. */
+private var diceFrames: Int? = null
+

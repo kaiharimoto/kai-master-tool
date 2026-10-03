@@ -74,6 +74,17 @@ object DuelBrief {
             appendLine("Turn ${s.turn} · ${DuelWords.seatLabel(s, s.active)} to play · ${s.phase.label} Phase" + if (s.solo) " · one player's table" else "")
             appendLine("You read the table as: ${if (viewer == null) "everything (full knowledge)" else "${DuelWords.seatLabel(s, viewer)} — only what that player could see"}")
             if (seat != null) appendLine("You act as: ${DuelWords.seatLabel(s, seat)}")
+            // The opening roll (1.0.87): before turn 1 each seat throws two dice; the higher chooses to go first or second.
+            s.opening?.takeIf { !it.decided }?.let { o ->
+                val thrown = (0..1).filter { o.thrown(it) }.joinToString("; ") { "${DuelWords.seatLabel(s, it)} rolled ${o.dice[it].joinToString(" and ")} (${o.sum(it)})" }
+                appendLine(
+                    "Opening roll, before turn 1: " + when {
+                        o.winner != null -> "$thrown — ${DuelWords.seatLabel(s, o.winner)} won and chooses: `go first` or `go second`"
+                        o.tied -> "$thrown — a tie: both throw again (`roll`)"
+                        else -> (if (thrown.isEmpty()) "" else "$thrown; ") + "each seat throws its two dice (`roll`), the higher sum chooses"
+                    },
+                )
+            }
             s.proposal?.let { p -> appendLine("Asked: ${DuelWords.seatLabel(s, p.seat)} asks to ${if (p.end) "end the turn" else "go to the ${p.phase?.label} Phase"} — the turn player answers (accept / decline)") }
             if (s.chain.isNotEmpty()) {
                 appendLine("Chain: " + v.chain.mapIndexed { i, l ->

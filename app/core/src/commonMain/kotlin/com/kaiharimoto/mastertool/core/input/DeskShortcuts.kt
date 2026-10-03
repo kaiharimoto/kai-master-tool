@@ -260,6 +260,8 @@ enum class DeskAction {
     DUEL_PICK,
     /** Every place's coordinate written at its corner, as a chessboard's edge (`DuelPrefs.coordinates`). */
     DUEL_COORDINATES,
+    /** Before turn 1 (1.0.87): throw this seat's two dice for who goes first, a fling with no hand behind it. */
+    DUEL_ROLL,
 
     /** A replay (1.0.75): a step, a phase or a turn either way; the ends; play; edit. */
     REPLAY_BACK,
@@ -532,6 +534,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("enter"), DeskAction.DUEL_FOCUS_ACT, DeskScope.DUEL, "Act on the focus: the card's verbs, the pile opened, the picked card put down; with nothing focused, chat"),
         DeskShortcut(KeyChord("enter", shift = true), DeskAction.DUEL_PICK, DeskScope.DUEL, "Pick up the focused card: then Enter where it goes"),
         DeskShortcut(KeyChord("i"), DeskAction.DUEL_COORDINATES, DeskScope.DUEL, "Coordinates on every place, or none"),
+        DeskShortcut(KeyChord("r", shift = true), DeskAction.DUEL_ROLL, DeskScope.DUEL, "Before turn 1: throw your dice for who goes first"),
 
         DeskShortcut(KeyChord("left"), DeskAction.REPLAY_BACK, DeskScope.REPLAY, "A step back", repeatable = true),
         DeskShortcut(KeyChord("right"), DeskAction.REPLAY_FORWARD, DeskScope.REPLAY, "A step on", repeatable = true),

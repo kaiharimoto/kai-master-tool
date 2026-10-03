@@ -22,6 +22,10 @@ object DuelCoverage {
 
     const val NEEDS_CHAIN = "chain"
     const val NEEDS_PROPOSAL = "proposal"
+    /** Before turn 1, the opening roll to throw (1.0.87). */
+    const val NEEDS_OPENING = "opening"
+    /** Before turn 1, the roll won by the seat typing: go first or second (1.0.87). */
+    const val NEEDS_CHOICE = "choice"
 
     /** The drop intents, by [com.kaiharimoto.mastertool.core.duel.DropSpot] kind then what it does there. */
     val INTENTS = listOf(
@@ -110,6 +114,10 @@ object DuelCoverage {
         Row("Thinking", "think"),
         Row("Say", "say ok?"),
         Row("Several moves", "s h1 m3; t om1"),
+        // ---- the opening roll (1.0.87) ----
+        Row("Drag your dice and throw them onto the field", "roll", needs = NEEDS_OPENING),
+        Row("The winner's Go first", "go first", needs = NEEDS_CHOICE),
+        Row("The winner's Go second", "second", needs = NEEDS_CHOICE),
     )
 
     fun forVerb(verb: DuelVerb): Row? = ROWS.firstOrNull { it.verb == verb }

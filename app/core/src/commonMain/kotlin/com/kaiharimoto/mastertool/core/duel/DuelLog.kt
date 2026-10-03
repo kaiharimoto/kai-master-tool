@@ -22,6 +22,11 @@ data class DuelHeader(
     val startLp: Int = DuelState.START_LP,
     val handSize: Int = 5,
     val created: Long = 0L,
+    /**
+     * The duel opens with the dice (1.0.87, [Opening]): each seat throws two, the higher chooses to go first or second.
+     * Absent in every duel before — and on a one-player table — which begins with [first] going first, as it did.
+     */
+    val openingRoll: Boolean = false,
 )
 
 @Serializable
@@ -83,7 +88,7 @@ object DuelSetup {
             val extra = setup.extra.map { code -> (uid++).also { cards[it] = CardInst(it, code, owner = s, pos = CardPosition.FACE_DOWN_DEF) } }
             SeatState(name = setup.name, lp = h.startLp, deck = deck, extra = extra)
         }
-        return DuelState(cards = cards, seats = seats, active = h.first, solo = h.solo)
+        return DuelState(cards = cards, seats = seats, active = h.first, solo = h.solo, opening = if (h.openingRoll && !h.solo) Opening() else null)
     }
 
     fun opening(h: DuelHeader): List<DuelAction> = (0..1).flatMap { s ->

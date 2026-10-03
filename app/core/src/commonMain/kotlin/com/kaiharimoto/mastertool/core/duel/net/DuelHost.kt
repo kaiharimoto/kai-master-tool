@@ -107,6 +107,9 @@ object DuelHost {
                 is DuelAction.Concede -> a.copy(seat = seat)
                 is DuelAction.Coin -> a.copy(seat = seat)
                 is DuelAction.Dice -> a.copy(seat = seat)
+                // The guest throws its own dice and only those; what they read is the host's to stamp (1.0.87).
+                is DuelAction.OpeningRoll -> a.copy(seat = seat, values = emptyList(), toss = a.toss?.takeIf { it.valid })
+                is DuelAction.GoFirst -> a.copy(seat = seat)
                 is DuelAction.Note -> a.copy(seat = seat)
                 else -> a
             }
@@ -245,6 +248,7 @@ object DuelMirror {
             locks = v.locks,
             resolved = v.resolved,
             attacks = v.attacks,
+            opening = v.opening,
         )
     }
 

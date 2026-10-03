@@ -23,6 +23,8 @@ object TurnStart {
     fun next(g: DuelGame): DuelAction? = next(g.state, drewThisTurn(g))
 
     fun next(s: DuelState, drawn: Boolean): DuelAction? {
+        // Turn 1 waits for the opening roll's choice (1.0.87).
+        if (s.beforeTurnOne) return null
         if (s.chain.isNotEmpty() || s.proposal != null || s.window != null) return null
         if (s.conceded != null || s.seats.any { it.lp <= 0 }) return null
         return when (s.phase) {

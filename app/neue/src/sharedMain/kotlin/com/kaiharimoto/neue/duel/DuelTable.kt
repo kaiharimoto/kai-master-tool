@@ -170,6 +170,16 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
 
     var lastClick by remember { mutableStateOf(Triple<Any?, Long, Boolean>(null, 0L, false)) }
 
+    /** The seat whose resting dice are under (x, y), when the person may throw them now (1.0.87, the opening roll). */
+    fun diceAt(x: Float, y: Float): Int? {
+        val o = stateNow.opening ?: return null
+        if (o.decided || duels.diceCarry != null) return null
+        val stage = com.kaiharimoto.mastertool.core.duel.dice.DiceStage(layoutNow)
+        return (0..1).firstOrNull { seat ->
+            o.waitsOn(seat) && duels.mayRoll(seat, playsBothNow) && com.kaiharimoto.neue.duel.dice.restBox(stage, seat)?.contains(x, y) == true
+        }
+    }
+
     fun mine(uid: Int) = stateNow.solo || duels.seatFor(uid) == duels.bottom
 
     /** Whether the person plays [f]'s card, or only points at it: an open pile of theirs is target-only (1.0.86). */
@@ -274,6 +284,73 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 if (down.isConsumed) continue
                 val x0 = down.position.x / d
                 val y0 = down.position.y / d
+                // The opening roll (1.0.87): a press on the person's resting dice picks both up; they follow the pointer,
+                // tumbling as it moves, and letting go throws them at the hand's speed. Let go without moving: a toss.
+                val diceSeat = diceAt(x0, y0)
+                if (diceSeat != null) {
+                    down.consume()
+                    val stage = com.kaiharimoto.mastertool.core.duel.dice.DiceStage(layoutNow)
+                    val held0 = com.kaiharimoto.neue.duel.dice.RESTING
+                    var held = held0
+                    var p = Offset(x0, y0)
+                    var moved = false
+                    var wobble = 0.0
+                    var heading: Offset? = null
+                    // The pointer's last tenth of a second, for the speed it is let go at.
+                    val trail = ArrayDeque<Triple<Long, Float, Float>>()
+                    trail.addLast(Triple(down.uptimeMillis, x0, y0))
+                    duels.diceCarry = com.kaiharimoto.neue.duel.dice.DiceCarry(diceSeat, x0, y0, held)
+                    duels.carrying = true
+                    try {
+                        while (true) {
+                            val e = awaitPointerEvent()
+                            val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+                            ch.consume()
+                            val np = ch.position / d
+                            trail.addLast(Triple(ch.uptimeMillis, np.x, np.y))
+                            while (trail.size > 2 && ch.uptimeMillis - trail.first().first > 100) trail.removeFirst()
+                            if (!ch.pressed) break
+                            val step = np - p
+                            if ((np - Offset(x0, y0)).getDistance() > viewConfiguration.touchSlop / d) moved = true
+                            if (step.getDistance() > 0.01f) {
+                                // They tumble a little in the hand: a roll about the axis square to the motion.
+                                val v = stage.velocity(diceSeat, step.x, step.y, com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.HELD)
+                                val axis = com.kaiharimoto.mastertool.core.duel.dice.V3.UP.cross(v)
+                                val angle = axis.length * 0.5
+                                if (angle > 1e-6) {
+                                    val n = axis.normalized()
+                                    val r = com.kaiharimoto.mastertool.core.duel.dice.Quat(kotlin.math.cos(angle / 2), n.x * kotlin.math.sin(angle / 2), n.y * kotlin.math.sin(angle / 2), n.z * kotlin.math.sin(angle / 2))
+                                    held = held.map { q -> (r * q).normalized() }
+                                }
+                                // How the path curves: a twist for the throw.
+                                val dir = step / step.getDistance()
+                                heading?.let { h0 -> wobble = (wobble + (h0.x * dir.y - h0.y * dir.x) * 3.0).coerceIn(-24.0, 24.0) }
+                                heading = dir
+                            }
+                            p = np
+                            duels.diceCarry = com.kaiharimoto.neue.duel.dice.DiceCarry(diceSeat, p.x, p.y, held)
+                        }
+                    } catch (gone: kotlinx.coroutines.CancellationException) {
+                        duels.diceCarry = null
+                        duels.carrying = false
+                        throw gone
+                    }
+                    val first = trail.first()
+                    val last = trail.last()
+                    val dt = (last.first - first.first) / 1000f
+                    val vx = if (dt > 0.008f) (last.second - first.second) / dt else 0f
+                    val vy = if (dt > 0.008f) (last.third - first.third) / dt else 0f
+                    val toss = if (!moved) null else com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.fromDrag(
+                        stage.under(diceSeat, p.x, p.y, com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.HELD),
+                        held,
+                        stage.velocity(diceSeat, vx, vy, com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.HELD),
+                        wobble,
+                    )
+                    duels.diceCarry = null
+                    duels.carrying = false
+                    duels.throwDice(diceSeat, toss)
+                    continue
+                }
                 val hit = hitAt(x0, y0)
                 // A press outside an open pile closes it (1.0.78, kai: "close it by pressing outside of it"),
                 // and goes on to do what it does; a press on the pile itself is its own toggle.
@@ -485,6 +562,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         // Under an open pile, which covers the cards they point at.
         Canvas(Modifier.fillMaxSize().zIndex(if (duels.strip != null) DuelFrames.Z_STRIP - 1f else 50f)) { arrows(s, layout, shownFrames, c.ink, c.paper) }
         Pings(game, layout, shownFrames)
+        // The opening roll (1.0.87): the dice in front of each field, in the hand, or tumbling across it; the result.
+        if (duels.replay == null) com.kaiharimoto.neue.duel.dice.OpeningDice(duels, s, layout, playsBoth)
 
         // What letting go will do, where it will happen.
         carry?.let { cr -> DropHint(cr, layout, shownFrames, s) }

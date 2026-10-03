@@ -125,6 +125,8 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_SWAP -> duels.swap()
         DeskAction.DUEL_FACING -> h.neue.update { it.copy(duel = it.duel.copy(facing = !it.duel.facing)) }
         DeskAction.DUEL_RESOLVE -> duels.resolveChain()
+        // The opening roll (1.0.87): this seat's dice thrown with a fling of their own.
+        DeskAction.DUEL_ROLL -> duels.throwDice(duels.bottom)
         else -> Unit
     }
 }

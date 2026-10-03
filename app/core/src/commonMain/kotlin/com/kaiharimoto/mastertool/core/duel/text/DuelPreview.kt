@@ -71,7 +71,7 @@ object DuelPreview {
         parts.forEachIndexed { k, p ->
             if (problem != null) return@forEachIndexed
             // A mill, a draw or a look says what its parse said, nothing of the cards it reads (the red team).
-            val blindLabel = p.actions.any { it is DuelAction.Draw || it is DuelAction.Shuffle || it is DuelAction.Coin || it is DuelAction.Dice } ||
+            val blindLabel = p.actions.any { it is DuelAction.Draw || it is DuelAction.Shuffle || it is DuelAction.Coin || it is DuelAction.Dice || it is DuelAction.OpeningRoll } ||
                 p.said.substringBefore(' ') in setOf("Mill", "Look", "Peek", "Top", "Excavate")
             val phrases = mutableListOf<String>()
             p.actions.forEachIndexed { i, a ->
@@ -245,6 +245,8 @@ object DuelPreview {
             }
             is DuelAction.Coin -> "Flip a coin"
             is DuelAction.Dice -> "Roll a die"
+            is DuelAction.OpeningRoll -> "Throw your dice for who goes first"
+            is DuelAction.GoFirst -> if (a.first) "Go first" else "Go second"
             is DuelAction.Chat -> "Say “${a.text}”"
             is DuelAction.Ping -> "Ping"
             is DuelAction.Thinking -> if (a.on) "Thinking" else "Ready"

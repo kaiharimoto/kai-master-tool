@@ -192,6 +192,7 @@ internal class AiDuel(private val h: NeueHolders) {
                 ),
                 solo = solo,
                 created = System.currentTimeMillis(),
+                openingRoll = !solo && prefs.openingRoll,
             ),
         )
         h.neue.go(Page.DUEL)
