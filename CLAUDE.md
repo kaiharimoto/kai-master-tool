@@ -627,6 +627,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `DuelLog.kt`), Ai reading the table only when cued (`cueAi`: Your move, Catch up, No response, Respond/Done, Over to you;
   `Duels.aiRead`), its thinking behind a switch (`aiThinking`), its questions in the log's foot with No response; Insert
   here (`Duels.insertPast`, `Past`, `duel_act` `at`), Save as combo from two picked lines, a finished duel logged to Prep.
+  **1.0.81, private stays private**: a card Set from the hand forgets who knew it and takes a fresh veil
+  (`DuelRules.hidesOnSet`; from the Deck or GY it stays known), and Ai's words in the log never name its hidden cards
+  (`Secrets.redact`, the original behind Thinking).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

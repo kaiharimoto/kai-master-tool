@@ -3172,6 +3172,18 @@ operate and communicate with the AI using the log chat as the main one"):
 - **A finished duel is a practice game**: a concession or 0 LP against a known deck is logged to Prep once
   (`logFinishedDuel`, `DuelPrefs.logGames`), with Undo in the note.
 
+**Private stays private** (1.0.81, kai mid-game):
+- **A card Set from the hand is private again** (`DuelRules.hidesOnSet`): a search's reveal is public only for that
+  moment, so a card that goes from the hand to a zone face-down forgets who knew it and takes a fresh veil — the other
+  seat reads "Kai sets a card in S/T 2" and sees a face-down card it cannot follow. A card Set from the Deck or the GY
+  keeps what was known of it (Labrynth Chandraglier Setting Welcome Labrynth stays public); a flip or a new reveal
+  makes it known again.
+- **Ai keeps its own hand out of the log** (kai: "it said explicitly 'I drew X' … private information should be in
+  thinking"): its prompt and the `duel-table` skill say the log is read by its opponent, and `Secrets.redact` puts
+  any name of its cards the person's seat cannot see as "a card" — in its replies, as they stream, and in what it
+  `say`s into the record — unless the person can see a card of that name anyway. The words as written stay behind
+  the Thinking switch.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

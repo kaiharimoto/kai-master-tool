@@ -65,7 +65,12 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val table = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest) {
         if (guest) remoteLog(remote, duels.mySeat) else logLines(game, viewer, duels, refused)
     }
-    val said = remember(talk?.turns, thinking) { talk?.let { aiLines(it, thinking) }.orEmpty() }
+    // Ai's hidden cards never named to the person in what it says (1.0.81): the original behind Thinking.
+    val aiSeat = if (game.state.solo) 0 else h.neue.prefs.duel.aiSeat
+    val redact: (String) -> com.kaiharimoto.mastertool.core.duel.ai.Secrets.Redacted = { text ->
+        com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact(text, game.state, 1 - aiSeat, aiSeat, duels.catalog)
+    }
+    val said = remember(talk?.turns, thinking, game.cursor, aiSeat) { talk?.let { aiLines(it, thinking, redact) }.orEmpty() }
     // Ai's words among the table's lines, by when each was said.
     val lines = remember(table, said) { if (said.isEmpty()) table else (table + said).sortedBy { it.at } }
     val live = talk != null && ai.running
@@ -97,7 +102,7 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
             items(lines) { line -> LogRow(h, duels, line, opened) }
             if (live && thinking && ai.reasoning.isNotBlank()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) { com.kaiharimoto.neue.ai.ReasoningView(ai, ai.reasoning, live = true, opened) } }
             if (live && thinking) items(ai.activity) { Box(Modifier.padding(horizontal = 12.dp)) { com.kaiharimoto.neue.ai.ActivityLine(it.summary.ifBlank { it.name }, it.isError) } }
-            if (live && ai.streaming.isNotEmpty()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { com.kaiharimoto.neue.ai.ReplyView(ai, ai.streaming, live = true) } }
+            if (live && ai.streaming.isNotEmpty()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { com.kaiharimoto.neue.ai.ReplyView(ai, redact(ai.streaming).text, live = true) } }
         }
         HRule()
         if (duels.logPick.isNotEmpty() && !guest) PickBar(h, duels, game)
@@ -260,8 +265,11 @@ internal sealed interface LogLine {
     data class AiDid(val text: String, val isError: Boolean, override val at: Long) : LogLine
 }
 
-/** Ai's side of the duel's conversation: what it said, and — with Thinking on — how it thought and what it did. */
-private fun aiLines(session: AiSession, thinking: Boolean): List<LogLine> = buildList {
+/**
+ * Ai's side of the duel's conversation: what it said — its hidden cards put as "a card", the words as it
+ * wrote them kept as a thought — and, with Thinking on, how it thought and what it did.
+ */
+private fun aiLines(session: AiSession, thinking: Boolean, redact: (String) -> com.kaiharimoto.mastertool.core.duel.ai.Secrets.Redacted): List<LogLine> = buildList {
     session.turns.forEach { turn ->
         val at = turn.at
         when {
@@ -272,7 +280,11 @@ private fun aiLines(session: AiSession, thinking: Boolean): List<LogLine> = buil
                     turn.parts.filterIsInstance<Part.Reasoning>().forEach { add(LogLine.AiThought(it.text, at)) }
                     turn.parts.filterIsInstance<Part.Activity>().forEach { add(LogLine.AiDid(it.summary.ifBlank { it.name }, it.isError, at)) }
                 }
-                turn.text.takeIf { it.isNotBlank() }?.let { add(LogLine.AiSays(it, at)) }
+                turn.text.takeIf { it.isNotBlank() }?.let { text ->
+                    val r = redact(text)
+                    if (r.changed && thinking) add(LogLine.AiThought("Private — as written: $text", at))
+                    add(LogLine.AiSays(r.text, at))
+                }
             }
         }
     }

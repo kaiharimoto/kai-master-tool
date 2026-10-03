@@ -68,7 +68,15 @@ internal class AiDuel(private val h: NeueHolders) {
     }
 
     private suspend fun act(i: JsonObject): MetaAnswer {
-        val ops = ToolArgs.strings(i, "ops").filter { it.isNotBlank() }
+        val mineNow = aiSeat()
+        // What Ai says into the duel's record never names its hidden cards (1.0.81): the record is what replays show.
+        val ops = ToolArgs.strings(i, "ops").filter { it.isNotBlank() }.map { op ->
+            val g = duels.game
+            val word = op.trim().substringBefore(' ').lowercase()
+            if (g != null && (word == "say" || word == "chat")) {
+                word + " " + com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact(op.trim().substringAfter(' ', ""), g.state, 1 - mineNow, mineNow, duels.catalog).text
+            } else op
+        }
         if (ops.isEmpty()) return fail("No ops to play.")
         if (duels.game == null) return fail("There is no duel on the table. duel_setup starts one.")
         if (duels.replay != null) return fail("A replay is open on the table; the person must close it first.")

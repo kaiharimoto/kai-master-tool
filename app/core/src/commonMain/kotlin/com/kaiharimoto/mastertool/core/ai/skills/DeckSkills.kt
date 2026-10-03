@@ -489,6 +489,9 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
 ## In the log
 - At the person's table you talk in the duel's log: short, plain sentences. Their moves reach you only with their cue
   (a message, Your move, Catch up, No response, Done, Over to you), as "what happened since you last read".
+- Your opponent reads the log. Never name a card they cannot see — your hand, your draws, your Deck, your set cards,
+  your face-down Extra Deck: "I draw", "I set a card". Your plan and your hand belong in your thinking, which they
+  open only if they choose. A name that slips out is shown to them as "a card".
 - Catch up means read and ask, not move. When a move of theirs could have been an activation you would answer, ask
   (ask_user); No response is always offered them.
 - A move that belonged to a phase gone by ("in your End Phase I use Trap Trick"): `duel_act` with `at` ("t2 ep").

@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelEntry
+import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.PileKind
@@ -30,7 +31,10 @@ object DuelWords {
         fun subject(verb: String) = if (who == null) verb.replaceFirstChar { it.uppercase() } else "$who $verb"
 
         return when (val a = e.action) {
-            is DuelAction.Move -> move(before, after, a, ::card, ::subject)
+            is DuelAction.Move -> move(before, after, a, ::card, ::subject) { uid ->
+                val c = after.cards[uid]
+                if (c != null && DuelSight.sees(after, uid, viewer)) catalog.nameOf(c) else "a card"
+            }
             is DuelAction.Draw -> {
                 val drawn = before.seats[a.seat].deck.take(a.n)
                 val names = drawn.filter { DuelSight.sees(after, it, viewer) }
@@ -131,10 +135,13 @@ object DuelWords {
         a: DuelAction.Move,
         card: (Int) -> String,
         subject: (String) -> String,
+        cardNow: (Int) -> String,
     ): String {
         val from = before.placeOf(a.uid)
         val to = after.placeOf(a.uid) ?: a.to
-        val name = card(a.uid)
+        // Set from the hand: named only to those who see it now, not those who saw it in the hand (1.0.81).
+        val setFromHand = after.cards[a.uid]?.let { DuelRules.hidesOnSet(from, to, it.pos) } == true
+        val name = if (setFromHand) cardNow(a.uid) else card(a.uid)
         val c = after.cards[a.uid] ?: before.cards[a.uid]
         val fromPile = (from as? Place.Pile)?.kind
         val fromWords = when {

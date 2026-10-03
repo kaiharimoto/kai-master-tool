@@ -153,10 +153,24 @@ object DuelRules {
                 counters = if (stays) it.counters else emptyMap(),
             )
         }
-        next = next.copy(seen = next.seen.with(a.uid, knowers))
+        next = if (hidesOnSet(from, to, pos)) {
+            // Set from the hand: whatever was known of it is gone, and its veil is new, so the other seat
+            // cannot tell which card it was (1.0.81, kai: a card searched, then Set, was named across the table).
+            next.copy(seen = next.seen - a.uid, epoch = next.epoch + (a.uid to ((next.epoch[a.uid] ?: 0) + 1)))
+        } else {
+            next.copy(seen = next.seen.with(a.uid, knowers))
+        }
         if (to !is Place.Zone) next = next.copy(arrows = next.arrows.dropUid(a.uid))
         return ok(next)
     }
+
+    /**
+     * Whether a move hides the card from all but its controller: from a hand to a zone face-down. A
+     * reveal made it public only for that moment; once in the hand, which card was Set is private. A
+     * card Set from the Deck or the GY keeps what was known of it.
+     */
+    fun hidesOnSet(from: Place?, to: Place, pos: CardPosition): Boolean =
+        from is Place.Pile && from.kind == PileKind.HAND && to is Place.Zone && !pos.faceUp
 
     private fun draw(s: DuelState, a: DuelAction.Draw): Outcome {
         seatOk(s, a.seat)?.let { return it }

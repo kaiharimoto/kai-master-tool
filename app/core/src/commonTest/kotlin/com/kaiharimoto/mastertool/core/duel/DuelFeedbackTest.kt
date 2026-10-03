@@ -236,4 +236,47 @@ class DuelFeedbackTest {
         // Turn 2's Main Phase is now, not the past.
         assertNull(com.kaiharimoto.mastertool.core.duel.replay.Past.indexOf(header, g.played, 2, DuelPhase.MAIN1))
     }
+
+    @Test
+    fun aCardSetFromTheHandIsPrivateAgain() {
+        // kai, mid-game: a card searched (and so revealed), then Set from the hand, was named to the other seat.
+        val searched = play(table, run("emblema four to hand", table))
+        assertTrue(DuelSight.sees(searched, e4a, 1))
+        val set = DuelAction.Move(e4a, Place.Zone(0, ZoneKind.SPELL, 1), CardPosition.FACE_DOWN_ATK, "set")
+        val after = ok(searched, set)
+        assertTrue(!DuelSight.sees(after, e4a, 1))
+        assertTrue(DuelSight.sees(after, e4a, 0))
+        val ref = DuelView.of(after, 1, 99L).seats[0].spells[1]!!.ref
+        assertTrue(ref < 0 && ref != DuelView.veil(99L, e4a, searched.epoch[e4a] ?: 0))
+        assertTrue("Emblema Four" !in com.kaiharimoto.mastertool.core.duel.ai.DuelBrief.describe(after, 1, catalog, 99L).substringAfter("Kai (seat"))
+        val e = DuelEntry(0, 0, 0, 0, set)
+        assertEquals("Kai sets a card in S/T 2", DuelWords.say(searched, after, e, 1, catalog))
+        assertEquals("Kai sets Emblema Four in S/T 2", DuelWords.say(searched, after, e, 0, catalog))
+        // Known again once it is flipped face-up, or revealed again.
+        assertTrue(DuelSight.sees(ok(after, DuelAction.Position(e4a, CardPosition.FACE_UP_ATK)), e4a, 1))
+        assertTrue(DuelSight.sees(ok(after, DuelAction.Reveal(0, listOf(e4a))), e4a, 1))
+    }
+
+    @Test
+    fun aCardSetFromTheDeckAfterARevealStaysKnown() {
+        // Labrynth Chandraglier Setting Welcome Labrynth straight from the Deck: the card is public.
+        val shown = ok(table, DuelAction.Reveal(0, listOf(back)))
+        val set = ok(shown, DuelAction.Move(back, Place.Zone(0, ZoneKind.SPELL, 0), CardPosition.FACE_DOWN_ATK, "set"))
+        assertTrue(DuelSight.sees(set, back, 1))
+    }
+
+    @Test
+    fun aiKeepsItsHiddenCardsOutOfWhatItSays() {
+        // Seat 1 is Ai; Endgame Problem in its hand, Emblema Four in Kai's.
+        val s = play(table, listOf(DuelAction.Draw(1, 1), DuelAction.Draw(0, 1)))
+        val r = com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact("I drew Endgame Problem, and [[Endgame Problem]] is great. Is that Emblema Four?", s, 0, 1, catalog)
+        assertEquals("I drew a card, and a card is great. Is that Emblema Four?", r.text)
+        assertEquals(listOf("Endgame Problem"), r.hidden)
+        // The same name face-up where the person can see it is no secret.
+        val open = ok(s, DuelAction.Move(endgame, Place.Zone(0, ZoneKind.FIELD, 0), CardPosition.FACE_UP_ATK, "activate"))
+        assertTrue(!com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact("I drew Endgame Problem", open, 0, 1, catalog).changed)
+        // One player's table has no one to keep it from.
+        val solo = s.copy(solo = true)
+        assertTrue(!com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact("I drew Endgame Problem", solo, 0, 1, catalog).changed)
+    }
 }
