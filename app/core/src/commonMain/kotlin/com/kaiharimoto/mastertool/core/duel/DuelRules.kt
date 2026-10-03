@@ -274,6 +274,8 @@ object DuelRules {
     private fun attack(s: DuelState, a: DuelAction.Attack): Outcome {
         seatOk(s, a.seat)?.let { return it }
         if (s.phase != DuelPhase.BATTLE) return Outcome.Refused("Attacks are declared in the Battle Phase")
+        // Only the turn player attacks (1.0.87, the red team: typed attacks reached here without `DuelVerbs.canAttack`).
+        if (!s.solo && s.active != a.seat) return Outcome.Refused("Only the turn player attacks")
         val attacker = s.cards[a.attacker] ?: return Outcome.Refused("No such card")
         val at = s.placeOf(a.attacker)
         if (at !is Place.Zone || (at.kind != ZoneKind.MONSTER && at.kind != ZoneKind.EMZ) || attacker.controller != a.seat) {

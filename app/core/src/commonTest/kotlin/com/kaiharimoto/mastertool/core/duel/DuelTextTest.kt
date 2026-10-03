@@ -32,6 +32,7 @@ class DuelTextTest {
             is DuelCommand.Parsed.Actions -> p.actions
             is DuelCommand.Parsed.Problem -> error("“$text”: ${p.text}")
             is DuelCommand.Parsed.Ruling -> error("“$text” is a ruling")
+            else -> error("“$text” is not one move: $p")
         }
 
     private fun problem(text: String, s: DuelState = table): String =

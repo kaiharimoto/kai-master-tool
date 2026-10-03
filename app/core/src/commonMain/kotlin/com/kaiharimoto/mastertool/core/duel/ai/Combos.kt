@@ -80,6 +80,16 @@ object ComboRunner {
                     out += text to p.actions
                     state = next
                 }
+                // Moves joined with ";" (1.0.87): one step of the combo, each move in its order.
+                is DuelCommand.Parsed.Many -> {
+                    val all = p.parts.flatMap { it.actions }
+                    val (next, why) = DuelRules.applyAll(state, all, seat)
+                    if (next == null) return ComboRun(out, i, "Step ${i + 1} (“$text”): $why")
+                    out += text to all
+                    state = next
+                }
+                is DuelCommand.Parsed.Query, is DuelCommand.Parsed.Ui ->
+                    return ComboRun(out, i, "Step ${i + 1} (“$text”): a question or the table's chrome, not a move")
             }
         }
         return ComboRun(out)
