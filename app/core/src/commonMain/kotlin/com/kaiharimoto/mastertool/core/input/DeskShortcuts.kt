@@ -186,6 +186,13 @@ enum class DeskAction {
     DUEL_THINK,
     DUEL_COMMAND,
     DUEL_CHAT,
+    /**
+     * Ai's cue at the foot of the log, by key (1.0.86): whatever its first button offers now — No response, Over to you,
+     * Done, Don't wait, else Your move. Ai's own (in [AI]): never run by it, dead while it is off.
+     */
+    DUEL_AI_ANSWER,
+    /** Ai reads what you did and asks about anything unclear, moving nothing (1.0.86). */
+    DUEL_AI_CATCH_UP,
     /** One player's table or two. */
     DUEL_SIDES,
     /** Sit at the other seat (the hot-seat's turn of the table). */
@@ -248,7 +255,7 @@ enum class DeskAction {
 
     companion object {
         /** The assistant's own actions: live only while it is on, and never run by it (`run_action`). */
-        val AI: Set<DeskAction> = setOf(AI_PANEL, AI_VOICE, AI_TALK)
+        val AI: Set<DeskAction> = setOf(AI_PANEL, AI_VOICE, AI_TALK, DUEL_AI_ANSWER, DUEL_AI_CATCH_UP)
     }
 }
 
@@ -437,6 +444,8 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("w"), DeskAction.DUEL_THINK, DeskScope.DUEL, "I'm thinking, or ready again"),
         DeskShortcut(KeyChord("slash"), DeskAction.DUEL_COMMAND, DeskScope.DUEL, "The command line"),
         DeskShortcut(KeyChord("enter"), DeskAction.DUEL_CHAT, DeskScope.DUEL, "Chat"),
+        DeskShortcut(KeyChord("y"), DeskAction.DUEL_AI_ANSWER, DeskScope.DUEL, "Answer the assistant: No response, Over to you, Done, Don't wait or Your move"),
+        DeskShortcut(KeyChord("y", shift = true), DeskAction.DUEL_AI_CATCH_UP, DeskScope.DUEL, "The assistant catches up: reads what you did, moves nothing"),
         DeskShortcut(KeyChord("v"), DeskAction.DUEL_SIDES, DeskScope.DUEL, "One player's table or two"),
         DeskShortcut(KeyChord("tab"), DeskAction.DUEL_SWAP, DeskScope.DUEL, "Sit at the other seat"),
         DeskShortcut(KeyChord("f", shift = true), DeskAction.DUEL_FACING, DeskScope.DUEL, "Their cards face them, or face you"),

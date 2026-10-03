@@ -493,8 +493,10 @@ private fun ConfirmCard(c: Confirm) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun QuestionCard(ai: AiState, q: Question) {
+internal fun QuestionCard(ai: AiState, q: Question, numbered: Boolean = false) {
     val c = Mu.colors
+    // [numbered]: the duel's log, where the digit keys pick its first six options (1.0.86) — shown with a keyboard only.
+    val keys = numbered && com.kaiharimoto.neue.kit.LocalHardwareKeyboard.current
     // Kept on the question itself (1.0.63), so the row can be rebuilt without losing a word.
     var picked by q::picked
     var own by q::typed
@@ -523,10 +525,11 @@ internal fun QuestionCard(ai: AiState, q: Question) {
         }
         MuText(styled(ChatMarkdown.inline(q.question)), style = MuType.row(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium), color = c.ink)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            q.options.forEach { option ->
+            q.options.forEachIndexed { k, option ->
+                val digit = if (keys && k < 6) "${k + 1}" else null
                 Tag(option, selected = option in picked, onClick = {
                     if (q.multiple) picked = if (option in picked) picked - option else picked + option else q.reply(option)
-                }, caption = if (q.multiple) "Choose" else "Answer")
+                }, count = digit, caption = (if (q.multiple) "Choose" else "Answer") + (digit?.let { " · $it" } ?: ""))
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

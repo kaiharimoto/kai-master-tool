@@ -121,7 +121,8 @@ class Duels(val dir: File) {
     var queuedCue by mutableStateOf<Pair<String, String>?>(null)
     private var releasing = false
 
-    data class Held(val actions: List<DuelAction>, val seat: Int?)
+    /** [auto]: a step of a turn's opening, which goes on once it is made (1.0.86). */
+    data class Held(val actions: List<DuelAction>, val seat: Int?, val auto: Boolean = false)
 
     fun watch(w: com.kaiharimoto.mastertool.core.duel.ai.Watch): com.kaiharimoto.mastertool.core.duel.ai.Watch {
         val kept = w.copy(id = nextWatch++)
@@ -161,13 +162,59 @@ class Duels(val dir: File) {
         val h = held ?: return
         held = null
         releasing = true
-        try { act(h.actions, h.seat) } finally { releasing = false }
+        autoActing = h.auto
+        try { act(h.actions, h.seat) } finally { releasing = false; autoActing = false }
+        resumeTurn()
     }
 
     /** The person goes on without Ai's answer. */
     fun dontWait() {
         aiAnswering = false
         releaseHeld()
+        resumeTurn()
+    }
+
+    // ---- turns that start themselves (1.0.86) ----------------------------------------------------------
+
+    /** `DuelPrefs.autoDraw`, set by the page: after End Turn the next player's draw, Standby and Main 1 are made here. */
+    var autoDraw = true
+    /** The turn whose opening is being made; null when none is. */
+    private var autoTurn: Int? = null
+    /** The opening's group in the log: its steps are one gesture, the incoming seat's, one step of undo. */
+    private var autoGroup: Int? = null
+    /** A step of the opening is being committed. */
+    private var autoActing = false
+
+    /** The turn just begun opens by itself: on the live table of this device only, never a networked one or a replay. */
+    private fun beginTurn() {
+        autoTurn = null
+        if (!autoDraw || role != null || replay != null) return
+        autoTurn = game?.state?.turn ?: return
+        autoGroup = null
+        if (!releasing) resumeTurn()
+    }
+
+    /**
+     * Makes the opening's next steps ([com.kaiharimoto.mastertool.core.duel.TurnStart]) through [act], so Ai's watches see
+     * the draw and each phase entered and left. It pauses while Ai answers a watch that fired, or holds a phase change,
+     * and goes on from where it stopped once Ai has answered (or the person did not wait) and the held change is made;
+     * a held change taken back (Undo) ends it, as does any table it no longer fits.
+     */
+    fun resumeTurn() {
+        val turn = autoTurn ?: return
+        var left = 4
+        while (left-- > 0) {
+            val g = game
+            if (g == null || !autoDraw || role != null || replay != null || g.state.turn != turn) { autoTurn = null; return }
+            if (held != null || aiAnswering || fired.isNotEmpty()) return
+            val step = com.kaiharimoto.mastertool.core.duel.TurnStart.next(g) ?: run { autoTurn = null; return }
+            // The opening is the table's, never a move put back in a phase gone by.
+            val pastAt = insertAfter
+            insertAfter = null
+            autoActing = true
+            val ok = try { act(listOf(step), g.state.active) } finally { autoActing = false; insertAfter = pastAt }
+            if (!ok) { autoTurn = null; return }
+        }
     }
 
     /** The duel already logged to Prep as a practice game, so it is logged once. */
@@ -272,6 +319,8 @@ class Duels(val dir: File) {
         aiAnswering = false
         queuedCue = null
         save()
+        // Turn 1 opens by itself too (1.0.86): Standby and Main 1, nothing drawn.
+        beginTurn()
     }
 
     /**
@@ -325,7 +374,7 @@ class Duels(val dir: File) {
                         // Checked whole first, so a held change is one the table will take.
                         val check = g.act(actions, seat, now())
                         if (!check.ok) { problem = check.problem; return false }
-                        held = Held(actions, seat)
+                        held = Held(actions, seat, autoActing)
                         problem = null
                         fire(hits)
                         return true
@@ -333,13 +382,14 @@ class Duels(val dir: File) {
                 }
             }
         }
-        val r = g.act(actions, seat, now())
+        val r = g.act(actions, seat, now(), join = autoActing && autoGroup != null && g.entries.getOrNull(g.cursor - 1)?.group == autoGroup)
         if (!r.ok) {
             problem = r.problem
             return false
         }
         game = r.game
         problem = null
+        if (autoActing && autoGroup == null) autoGroup = r.game.entries.getOrNull(r.game.cursor - 1)?.group
         // Something moved: a pending Attach and the verbs beside the last card are done with (1.0.85).
         if (actions.any { !it.social && it !is DuelAction.Counter }) {
             verbStrip = false
@@ -355,6 +405,8 @@ class Duels(val dir: File) {
                 fire(com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.hits(live, seen, w, summonsThisTurn()))
             }
         }
+        // The turn passed: the next one opens by itself (1.0.86), after what this move fired.
+        if (DuelAction.EndTurn in actions) beginTurn()
         return true
     }
 
@@ -446,10 +498,15 @@ class Duels(val dir: File) {
         if (replay != null) { step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, -1); return }
         if (role != null) { askTakeBack(); return }
         // A phase change held for Ai is not on the table yet: undo takes it back first.
-        if (held != null) { held = null; return }
+        if (held != null) { held = null; autoTurn = null; return }
         val g = game ?: return
         if (!g.canUndo) return
-        game = g.undo()
+        autoTurn = null
+        // Talk stays (1.0.86): a word to Ai or a cue is never what Ctrl Z takes back; the move before it is.
+        val next = g.undoMove()
+        // Talk moved to before the move taken back: lines picked by number would now be other lines.
+        if (next.entries !== g.entries) { logPick = emptyList(); insertAfter = null }
+        game = next
         placed = null
         problem = null
         save()
@@ -460,7 +517,7 @@ class Duels(val dir: File) {
         if (role != null) return
         val g = game ?: return
         if (!g.canRedo) return
-        game = g.redo()
+        game = g.redoMove()
         placed = null
         save()
     }

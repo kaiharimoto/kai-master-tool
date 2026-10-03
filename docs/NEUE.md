@@ -3242,6 +3242,34 @@ card effect activation, entering a phase, attempting to leave a phase, an attack
   grabs the keyboard later; the log follows only a reader at its end; Ai's read mark knows when moves were taken back; a turn
   that passed while Ai answered is taken when it is free; the person cannot swap to the seat Ai plays.
 
+**No mouse needed, and turns that start themselves** (1.0.86):
+- **Ai's cues by key** (`DeskShortcuts`, DUEL scope, both in `DeskAction.AI`: dead while Ai is off, never Ai's own to run):
+  **Y** does what the first button at the log's foot offers now — No response when Ai's link tops the chain, Over to you when
+  the person's does, Done while responding, Don't wait while Ai answers a watch, else Your move — and **Shift Y** is Catch up.
+  The buttons and the key read one answer (`AiCue.primary`, core, tested), so they cannot drift; each button's tip shows its key.
+  **Esc** stops Ai while it thinks at the table (and the moves it was playing out) before any of Esc's other duties there.
+  While Ai's question stands in the log's foot, **1–6** pick its options (shown on the chips with a keyboard; a question asking
+  for several takes digits to pick and Enter to send) — unless a card was just placed, when the digit is still that card's zone
+  (`Duels.placed`). A finger's equivalent is the button already there.
+- **Undo skips talk** (`DuelGame.undoMove`/`redoMove`, `DuelGame.isTalk`): every word to Ai and every cue is a `Chat` in its own
+  group, so Ctrl Z after a cue used to take the cue back. Now undo takes back the newest group that moved anything, and the talk
+  made after it stays in the log, in its order, moved to just before it (entries renumbered, groups kept distinct and rising);
+  redo puts the move back after it. Talk is chat, pings, thinking marks, notes (Ai's peeks among them) and unknown actions — an
+  ask, its answer and a lock are moves, and undo takes them back. Only the local table: a networked table's take-back and a
+  replay's steps are unchanged.
+- **Turns start themselves** (`DuelPrefs.autoDraw`, on; "Start each turn in Main Phase 1" in Ai and combos, and in Table ▾):
+  after End Turn — and at a new duel's turn 1 — the incoming player's draw (one card; never on turn 1), Standby Phase and
+  Main Phase 1 are made through `Duels.act`, a step at a time, so Ai's watches see the draw and each phase entered and left;
+  the steps are the incoming seat's, joined into one group (`DuelGame.act(join = true)`), one step of undo — Undo once takes
+  the opening back to the Draw Phase, again the End Turn. `TurnStart.next` (core, tested) reads the step off the table and the
+  log, so a draw already made is never made twice; it stops on a chain, an ask, a finished duel or an empty deck. Only on this
+  device's live table (never networked, never a replay). **A watch that fires pauses it, and it resumes** once Ai has
+  answered (or the person said Don't wait) and a held phase change has gone through (`Duels.resumeTurn`, from `releaseHeld`,
+  `dontWait` and the page's trigger effect); a held change taken back by Undo ends it, as does a chain Ai started in answer.
+  Ai's own turn opens the same way, and every cue tells it so (`TurnStart.FOR_AI`; the duel-table skill says to `draw` only
+  when the cue does not) — no double draws. Record this turn starts after the opening (`TurnStart.afterOpening`), so a
+  recorded combo never draws again.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

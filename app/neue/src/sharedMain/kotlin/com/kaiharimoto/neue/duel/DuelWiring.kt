@@ -5,9 +5,11 @@ import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.ai.AiCue
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.Page
 
 private val VERBS = mapOf(
@@ -83,6 +85,11 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         return
     }
     ZONES[action]?.let { (kind, index) ->
+        // While Ai's question stands in the log's foot a digit answers it (1.0.86) — unless a card was just placed:
+        // then the digit is still that card's zone, as it was before.
+        val digit = DIGITS[action]
+        val placing = duels.placed?.let { Duels.now() < it.until } == true
+        if (digit != null && !placing && answerByDigit(h, digit)) return
         val p = duels.placed
         // Shift and a number is a Spell & Trap Zone; a plain number is the zone of the kind just placed in.
         val k = if (kind == ZoneKind.MONSTER && p?.kind == ZoneKind.SPELL) ZoneKind.SPELL else kind
@@ -97,7 +104,8 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_LP -> duels.lpPad = if (duels.lpPad == null) duels.bottom else null
         DeskAction.DUEL_THINK -> duels.act(DuelAction.Thinking(duels.bottom, duels.bottom !in s.thinking), duels.bottom)
         DeskAction.DUEL_COMMAND -> duels.commandFocus++
-        DeskAction.DUEL_CHAT -> duels.chatFocus++
+        DeskAction.DUEL_CHAT -> if (!answerPicked(h)) duels.chatFocus++
+        DeskAction.DUEL_AI_ANSWER, DeskAction.DUEL_AI_CATCH_UP -> answerAi(h, game, catching = action == DeskAction.DUEL_AI_CATCH_UP)
         DeskAction.DUEL_SIDES -> h.neue.update { it.copy(duel = it.duel.copy(twoSided = !it.duel.twoSided)) }
         DeskAction.DUEL_SWAP -> duels.swap()
         DeskAction.DUEL_FACING -> h.neue.update { it.copy(duel = it.duel.copy(facing = !it.duel.facing)) }
@@ -106,11 +114,41 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
     }
 }
 
+/** The digit keys, while Ai's question stands in the log (1.0.86): its first six options. */
+private val DIGITS = mapOf(
+    DeskAction.DUEL_ZONE_1 to 1,
+    DeskAction.DUEL_ZONE_2 to 2,
+    DeskAction.DUEL_ZONE_3 to 3,
+    DeskAction.DUEL_ZONE_4 to 4,
+    DeskAction.DUEL_ZONE_5 to 5,
+    DeskAction.DUEL_ZONE_EMZ_LEFT to 6,
+)
+
+/**
+ * Y and Shift Y (1.0.86): the log's first cue button, whatever it is now, or Catch up — at a table Ai sits at. While
+ * Ai is busy the key says how to stop it rather than queue a cue nobody pressed a button for.
+ */
+private fun answerAi(h: NeueHolders, game: com.kaiharimoto.mastertool.core.duel.DuelGame, catching: Boolean) {
+    if (!aiAtTable(h) || h.duel.replay != null) return
+    val cue = aiCueNow(h, game)
+    when {
+        cue == AiCue.BUSY -> h.neue.note = Note("${h.ai.name} is thinking. Esc stops it.")
+        !catching -> giveCue(h, cue)
+        cue == AiCue.YOUR_MOVE -> catchUp(h)
+        else -> h.neue.note = Note("Catch up is for when nothing is open: ${h.ai.name} waits on your answer first.")
+    }
+}
+
 /** Esc and Back on the Duel page: one layer at a time, from the top. */
 internal fun dismissDuel(h: NeueHolders): Boolean {
     if (h.neue.page != Page.DUEL || h.neue.hasTop || h.overlays.isOpen) return false
     val d = h.duel
     when {
+        // Ai thinking at the table stops first (1.0.86), and the moves it was playing out with it.
+        aiAtTable(h) && h.ai.running && h.ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL -> {
+            h.ai.stop()
+            if (d.playing) d.stopRequested = true
+        }
         d.playing -> d.stopRequested = true
         d.combosOpen -> d.combosOpen = false
         d.setupOpen -> d.setupOpen = false
