@@ -627,7 +627,7 @@ class AiState(internal val h: NeueHolders) {
      * moves never reach Ai except through a cue like this. Returns the conversation's id, or null when
      * nothing was sent (no connection, or Ai still answering).
      */
-    fun sendDuel(words: String, context: List<String>, sessionId: String?): String? {
+    fun sendDuel(words: String, context: List<String>, sessionId: String?, fresh: Boolean = false): String? {
         val text = words.trim()
         if (text.isEmpty() || running) return null
         val connection = prefs.connection ?: run {
@@ -637,8 +637,8 @@ class AiState(internal val h: NeueHolders) {
         problem = null
         status = null
         notice = null
-        val current = session?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL && (sessionId == null || it.id == sessionId) }
-            ?: sessionId?.let { id -> files.loadSession(id)?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL } }?.also { session = it }
+        val current = (if (fresh) null else session?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL && (sessionId == null || it.id == sessionId) })
+            ?: sessionId?.takeUnless { fresh }?.let { id -> files.loadSession(id)?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL } }?.also { session = it }
             ?: begin(connection, AiSession.MODE_DUEL)
         val block = PromptBuilder.context(context + host.situation(), null, null, false)
         val turn = ChatTurn.user(text, block, System.currentTimeMillis())

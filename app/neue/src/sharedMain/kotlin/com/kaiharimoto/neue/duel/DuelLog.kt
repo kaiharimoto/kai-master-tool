@@ -94,6 +94,14 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
                         .padding(horizontal = 6.dp, vertical = 3.dp),
                 ) { Micro("Thinking", color = if (thinking) c.paper else c.ink70) }
             }
+            if (talk != null && !live) {
+                Box(
+                    Modifier.border(1.dp, c.ink25).background(c.paper)
+                        .cursorPointer(caption = "Start a new conversation with ${ai.name}")
+                        .muClickable { duels.newTopic() }
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                ) { Micro("New topic", color = c.ink70) }
+            }
             head()
         }
         HRule()

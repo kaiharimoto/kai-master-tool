@@ -3204,6 +3204,13 @@ same drop still attaches. `DuelAction.Attack` is a declaration only — damage i
 turn in `DuelState.attacks`, the newest drawn as a heavy arrow while the Battle Phase lasts, written in the log and told
 to Ai. The line says it too: `zeus attacks arias`, `zeus attacks directly`, `attack arias with zeus`.
 
+**A clean log** (1.0.84, kai: "how do you clear the log, like for when I want to start a new game or topic?"): the log is
+the duel, so **New duel** is how it starts clean — and it now starts Ai's side clean too (`Duels.start` → `newTopic`):
+before, Ai's lines from the last game stayed in the new log and its read mark pointed past the new game's opening, so its
+first cue missed them. **New topic** in the log's head starts a new conversation with Ai mid-game (`Duels.newTopic`,
+`AiState.sendDuel(fresh = true)`): its lines leave the log, the table's moves and chat stay, the old conversation is kept
+in Ai's history, and its next cue reads the whole duel from the start.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

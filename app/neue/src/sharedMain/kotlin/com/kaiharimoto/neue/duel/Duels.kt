@@ -95,6 +95,8 @@ class Duels(val dir: File) {
     var aiSession by mutableStateOf<String?>(null)
     /** How far into the log Ai has read: each cue carries what came after, then moves this on. */
     var aiRead: Int? = null
+    /** The next cue starts a new conversation with Ai, not the one open (a new duel, or New topic). */
+    var aiFresh = false
     /** The person said Respond: Ai waits until they say Done. */
     var aiResponding by mutableStateOf(false)
     /** Log lines picked (their entry numbers), for Insert here or Save as combo. */
@@ -191,7 +193,22 @@ class Duels(val dir: File) {
         placed = null
         problem = null
         inspected = null
+        newTopic()
+        logPick = emptyList()
+        insertAfter = null
         save()
+    }
+
+    /**
+     * Ai's side of the log starts again (1.0.84): its lines leave the log and its next cue opens a new
+     * conversation, reading the whole duel from the start. The table's moves and chat stay — they are
+     * the duel. The old conversation is kept in Ai's history.
+     */
+    fun newTopic() {
+        aiSession = null
+        aiRead = null
+        aiResponding = false
+        aiFresh = true
     }
 
     /** The seat acting on [uid]: its controller on the field, its owner anywhere else. */

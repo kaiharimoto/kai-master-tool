@@ -147,7 +147,8 @@ internal fun cueAi(h: NeueHolders, cue: Cue, words: String = "") {
         add(cue.ask)
     }
     val said = words.ifBlank { cue.shown }
-    val id = h.ai.sendDuel(said, context, duels.aiSession) ?: return
+    val id = h.ai.sendDuel(said, context, duels.aiSession, fresh = duels.aiFresh) ?: return
+    duels.aiFresh = false
     duels.aiSession = id
     duels.aiRead = g.cursor
     duels.aiResponding = false
