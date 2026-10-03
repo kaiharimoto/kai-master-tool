@@ -145,7 +145,11 @@ private fun submit(h: NeueHolders, duels: Duels, text: String, seated: Boolean) 
     val t = text.trim()
     if (t.isEmpty()) return
     when {
-        t.startsWith("/") -> if (duels.run(t.drop(1))) duels.chat = ""
+        t.startsWith("/") -> when (val r = duels.runLine(t.drop(1))) {
+            // A `;` line stopped partway keeps only its rest (1.0.87, the red team: Enter again made the first step twice).
+            is Duels.Ran.Partial -> { duels.chat = "/" + r.rest; h.neue.note = com.kaiharimoto.neue.Note(r.words) }
+            else -> if (r.ok) duels.chat = ""
+        }
         seated -> {
             // Said while Ai answers: in the log now, read by Ai when it finishes (1.0.85).
             duels.say(t)

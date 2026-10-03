@@ -86,20 +86,17 @@ class DuelVoice(private val h: NeueHolders) {
 
     /**
      * What is done with the words (the one hook the command language plugs into: `DuelSpeech` into the
-     * Line's preview). Until then they go into the command line, focused, so Enter makes the move.
+     * Line's preview). Since 1.0.87 the Spotlight's (`spotHeard`): normalized, sorted, and a move shown for Enter or "yes".
      *
      * Two rules for whatever replaces it (1.0.87, the red team): a spoken move is only ever shown, never made
      * without a confirm; and the answer to a spoken question ("read my hand") is said or shown to this seat
      * alone — never a Chat or Note action, which the log keeps for both seats. Words never reach Ai's own
      * conversation from here (this is not `AiState.listen`, which sends what it hears).
      */
-    var onHeard: (String) -> Unit = { text ->
-        h.duel.command = text
-        h.duel.commandFocus++
-    }
+    var onHeard: (String) -> Unit = { text -> spotHeard(h, text) }
 
     /** Told when listening begins, so the Line can open in its listening state (the Spotlight: "holding M opens it listening"). */
-    var onListen: () -> Unit = {}
+    var onListen: () -> Unit = { h.duel.openSpotlight(mode = com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.LISTENING) }
 
     /** The words the transcriber is primed with: the table's cards, through the bottom seat's eyes, and the commands. */
     var hints: () -> String = { tableHints(h) }

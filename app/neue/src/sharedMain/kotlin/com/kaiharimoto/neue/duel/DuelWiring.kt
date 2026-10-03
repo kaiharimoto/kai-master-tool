@@ -117,7 +117,8 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_END_TURN -> duels.goPhase(null, end = true)
         DeskAction.DUEL_LP -> duels.lpPad = if (duels.lpPad == null) duels.bottom else null
         DeskAction.DUEL_THINK -> duels.act(DuelAction.Thinking(duels.bottom, duels.bottom !in s.thinking), duels.bottom)
-        DeskAction.DUEL_COMMAND -> duels.commandFocus++
+        // Command mode (1.0.87): the Spotlight, open — or, open already, its field given the keyboard back.
+        DeskAction.DUEL_COMMAND -> duels.openSpotlight(swallow = '/')
         DeskAction.DUEL_CHAT -> chatKey(h)
         DeskAction.DUEL_AI_ANSWER, DeskAction.DUEL_AI_CATCH_UP -> answerAi(h, game, catching = action == DeskAction.DUEL_AI_CATCH_UP)
         DeskAction.DUEL_SIDES -> h.neue.update { it.copy(duel = it.duel.copy(twoSided = !it.duel.twoSided)) }
@@ -158,6 +159,8 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
     if (h.neue.page != Page.DUEL || h.neue.hasTop || h.overlays.isOpen) return false
     val d = h.duel
     when {
+        // The Spotlight first (1.0.87): it stands over everything on the table.
+        d.spotlight != null -> d.closeSpotlight()
         // What is open on the table closes first (1.0.86, the red team: Esc stopped Ai's turn and closed nothing).
         d.combosOpen -> d.combosOpen = false
         d.setupOpen -> d.setupOpen = false
