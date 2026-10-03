@@ -229,6 +229,46 @@ fun neueMain(args: Array<String>) {
                         h.duel.verbStrip = true
                     }
                 }
+                // Several cards, one move (1.0.89): --duel-multi=true selects across the near GY and banished pile (two
+                // cards banished first) with the banished pile laid open, its badges and the selection's bar showing;
+                // --duel-order=top|bottom opens the ordering strip on three of them.
+                if (map["duel-multi"] == "true" || map["duel-order"] != null) {
+                    val d = h.duel
+                    d.bottom = 0
+                    val st0 = d.game!!.state
+                    d.act(st0.seats[0].deck.take(2).map { com.kaiharimoto.mastertool.core.duel.DuelAction.Move(it, com.kaiharimoto.mastertool.core.duel.Place.Pile(0, com.kaiharimoto.mastertool.core.duel.PileKind.BANISHED), com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK, "banish") }, 0)
+                    val st = d.game!!.state
+                    val gy = st.seats[0].gy
+                    val ban = st.seats[0].banished
+                    val picked = listOfNotNull(gy.getOrNull(0), ban.getOrNull(0), gy.getOrNull(1), ban.getOrNull(1))
+                    picked.forEach { d.toggleSelect(it) }
+                    if (map["duel-order"] != null) {
+                        val three = listOfNotNull(gy.getOrNull(0), ban.getOrNull(0), st.seats[0].hand.firstOrNull())
+                        d.clearSelection()
+                        three.forEach { d.toggleSelect(it) }
+                        d.verbAll(if (map["duel-order"] == "bottom") com.kaiharimoto.mastertool.core.duel.DuelVerb.DECK_BOTTOM else com.kaiharimoto.mastertool.core.duel.DuelVerb.DECK_TOP)
+                        d.orderMove(1)
+                    } else {
+                        d.openPile(0, com.kaiharimoto.mastertool.core.duel.PileKind.BANISHED)
+                    }
+                    println("[neue-studio] multi: selection ${d.selection}, ordering ${d.ordering}")
+                }
+                // The chain by keys (1.0.89): --duel-chain-focus=N builds a chain of three and walks the keys' focus onto its
+                // link N in the chain well; --duel-chain-menu=true opens Enter's menu there.
+                map["duel-chain-focus"]?.let { spec ->
+                    val d = h.duel
+                    d.bottom = 0
+                    val st = d.game!!.state
+                    val near = st.seats[0].hand.firstOrNull()
+                    val far = st.onField().firstOrNull { st.cards[it]?.controller == 1 }
+                    near?.let { d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.ChainAdd(0, it), 0) }
+                    st.onField().firstOrNull { st.cards[it]?.controller == 0 }?.let { d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.ChainAdd(0, it), 0) }
+                    val n = d.game!!.state.chain.size
+                    val link = ((spec.toIntOrNull() ?: n) - 1).coerceIn(0, (n - 1).coerceAtLeast(0))
+                    d.focusOn(com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link(link))
+                    if (map["duel-chain-menu"] == "true") { d.chainMenu = link; d.chainCursor = 0 }
+                    println("[neue-studio] chain: ${d.game!!.state.chain.size} links (far $far), focus ${d.focus}, menu ${d.chainMenu}")
+                }
                 // --duel-focus=m3|h2|ogy|…: Command mode's ring on that coordinate, as the arrows would leave it (1.0.87);
                 // --duel-focus-menu=true opens the card's verbs as Enter does, --duel-pick=h2 picks that card up first.
                 map["duel-focus"]?.let { coord ->

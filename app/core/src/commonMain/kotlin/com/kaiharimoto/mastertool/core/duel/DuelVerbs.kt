@@ -431,6 +431,44 @@ object DuelVerbs {
     }
 
     /**
+     * The whole chain resolved, newest link first (1.0.89, `Shift Q`, `resolve all`): each link through [resolve] on the
+     * table the one before left, so the chain's Normal Spells and Traps go to the GY together with the last link, as
+     * they do a press at a time. Empty when there is no chain.
+     */
+    fun resolveAll(s: DuelState, catalog: DuelCatalog): List<DuelAction> {
+        var st = s
+        val out = mutableListOf<DuelAction>()
+        while (st.chain.isNotEmpty()) {
+            val step = resolve(st, catalog)
+            st = DuelRules.applyAll(st, step).first ?: break
+            out += step
+        }
+        return out
+    }
+
+    /**
+     * Chain Link [link] (1-based) negated by [seat] (1.0.89): the link stays, marked, and resolves doing nothing; an
+     * activated Spell or Trap face-up in its zone goes to the GY with it (how "negate"), as a negated activation does. A
+     * monster stays where it is — a negated effect leaves it there, and "negate and destroy" is a G after. A problem is
+     * said in words.
+     */
+    fun negate(s: DuelState, seat: Int, link: Int, catalog: DuelCatalog): VerbResult {
+        val l = s.chain.getOrNull(link - 1) ?: return VerbResult.no(if (s.chain.isEmpty()) "There is no chain" else "There is no Chain Link $link")
+        if (l.negated) return VerbResult.no("Chain Link $link is negated already")
+        val out = mutableListOf<DuelAction>(DuelAction.Negate(seat, link))
+        val card = l.uid?.let { s.cards[it] }
+        if (card != null && !card.token && card.faceUp) {
+            val at = s.placeOf(card.uid)
+            val kind = kindOf(card, catalog)
+            val spellish = kind == CardKind.SPELL || kind == CardKind.TRAP || kind == CardKind.FIELD_SPELL
+            if (spellish && at is Place.Zone && (at.kind == ZoneKind.SPELL || at.kind == ZoneKind.FIELD)) {
+                out += DuelAction.Move(card.uid, Place.Pile(card.owner, PileKind.GY), how = "negate")
+            }
+        }
+        return VerbResult(out)
+    }
+
+    /**
      * Whether [uid] could attack now (1.0.86): the Battle Phase, and a face-up Attack Position monster in a
      * Monster Zone or an Extra Monster Zone that [seat] controls. Only what the table holds — whether it
      * has attacked already, or may, is the players' to say.

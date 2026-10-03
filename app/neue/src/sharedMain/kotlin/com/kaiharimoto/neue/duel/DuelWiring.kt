@@ -80,8 +80,16 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
     }
     val game = duels.shown ?: return
     val s = game.state
+    // The ordering strip (1.0.89) has the keys while it is open: its own arrows, Enter, and K / Shift K / Alt K / R.
+    if (duels.ordering != null && runOrdering(duels, action)) return
     if (runFocus(h, action)) return
     VERBS[action]?.let { verb ->
+        // Several selected (1.0.89): a verb key moves them all, whatever the pointer is over — but a card under the
+        // pointer that is not among them is the pointer's, as before.
+        if (duels.selection.size > 1 && (duels.byKeys || duels.hovered == null || duels.hovered in duels.selection) && verb != DuelVerb.ATTACK) {
+            duels.verbAll(verb)
+            return
+        }
         // The focus's card once the keys moved last (1.0.87); else the card under the pointer, the one selected, the one being read.
         val uid = duels.keyTarget() ?: return
         if (uid !in s.cards) return
@@ -126,6 +134,10 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_SWAP -> duels.swap()
         DeskAction.DUEL_FACING -> h.neue.update { it.copy(duel = it.duel.copy(facing = !it.duel.facing)) }
         DeskAction.DUEL_RESOLVE -> duels.resolveChain()
+        // The chain by keys (1.0.89).
+        DeskAction.DUEL_RESOLVE_ALL -> duels.resolveAll()
+        DeskAction.DUEL_PASS -> duels.pass()
+        DeskAction.DUEL_SELECT -> duels.selectFocused()
         // The opening roll (1.0.87): this seat's dice thrown with a fling of their own.
         DeskAction.DUEL_ROLL -> duels.throwDice(duels.bottom)
         else -> Unit
@@ -147,7 +159,12 @@ private val DIGITS = mapOf(
  * Ai is busy the key says how to stop it rather than queue a cue nobody pressed a button for.
  */
 private fun answerAi(h: NeueHolders, game: com.kaiharimoto.mastertool.core.duel.DuelGame, catching: Boolean) {
-    if (!aiAtTable(h) || h.duel.replay != null) return
+    if (h.duel.replay != null) return
+    // No Ai at this table (1.0.89): Y is No response across the hot-seat while a chain stands, as DUEL_PASS is with Ai off.
+    if (!aiAtTable(h)) {
+        if (!catching) h.duel.pass()
+        return
+    }
     val cue = aiCueNow(h, game)
     when {
         cue == AiCue.BUSY -> h.neue.note = Note("${h.ai.name} is thinking. Esc stops it.")
@@ -169,6 +186,11 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.setupOpen -> d.setupOpen = false
         d.libraryOpen -> d.libraryOpen = false
         d.lpPad != null -> d.lpPad = null
+        // Several cards (1.0.89): the ordering strip, the chain well's menu and a link's aim first, then the selection's keys.
+        d.ordering != null -> d.ordering = null
+        d.chainMenu != null -> d.chainMenu = null
+        d.linkTarget != null -> d.linkTarget = null
+        d.selCursor != null -> d.selCursor = null
         d.attaching != null -> d.attaching = null
         d.attacking != null -> d.attacking = null
         d.drawer != null -> d.drawer = null
@@ -184,7 +206,7 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
             if (d.playing) d.stopRequested = true
         }
         d.playing -> d.stopRequested = true
-        d.selection.isNotEmpty() -> d.selection = emptySet()
+        d.selection.isNotEmpty() || d.selecting -> d.clearSelection()
         d.replay != null -> d.closeReplay()
         // The focus is let go last: the ring goes, and the keys act on the pointer's card again.
         d.focus != null -> d.clearFocus()
@@ -204,6 +226,21 @@ private fun chatKey(h: NeueHolders) {
 private fun runFocus(h: NeueHolders, action: DeskAction): Boolean {
     val d = h.duel
     val menuOpen = d.verbStrip && d.verbCursor != null
+    val s0 = d.shown?.state
+    // Enter's menu on a link in the chain well (1.0.89): ↑↓ choose in it.
+    val chainOpen = d.chainMenu?.let { i -> s0?.let { linkItems(it, i) } }?.takeIf { it.isNotEmpty() }
+    if (chainOpen != null && (action == DeskAction.DUEL_FOCUS_UP || action == DeskAction.DUEL_FOCUS_DOWN)) {
+        d.chainCursor = (d.chainCursor + if (action == DeskAction.DUEL_FOCUS_UP) -1 else 1).coerceIn(0, chainOpen.size - 1)
+        return true
+    }
+    // The selection's bar, once Enter put the keys in it (1.0.89).
+    val selOpen = d.selCursor != null && d.selection.size > 1
+    if (selOpen && s0 != null && (action == DeskAction.DUEL_FOCUS_UP || action == DeskAction.DUEL_FOCUS_DOWN || action == DeskAction.DUEL_FOCUS_LEFT || action == DeskAction.DUEL_FOCUS_RIGHT)) {
+        val n = selectionVerbs(d, s0, d.eyes.viewers).size
+        val back = action == DeskAction.DUEL_FOCUS_UP || action == DeskAction.DUEL_FOCUS_LEFT
+        if (n > 0) d.selCursor = ((d.selCursor ?: 0) + if (back) -1 else 1).coerceIn(0, n - 1)
+        return true
+    }
     when (action) {
         DeskAction.DUEL_FOCUS_UP, DeskAction.DUEL_FOCUS_DOWN -> if (menuOpen) {
             val s = d.shown?.state ?: return true
@@ -229,6 +266,7 @@ private fun spotAt(d: Duels, slot: DuelFocus.Slot, uid: Int): DropSpot = when (s
     is DuelFocus.Slot.Pile -> DropSpot.Pile(slot.seat, slot.kind)
     is DuelFocus.Slot.HandCard -> DropSpot.Hand(slot.seat, slot.index)
     is DuelFocus.Slot.PileCard -> DropSpot.Pile(slot.seat, slot.kind)
+    is DuelFocus.Slot.Link -> DropSpot.Chain
 }
 
 /**
@@ -241,6 +279,19 @@ private fun enterOnFocus(h: NeueHolders) {
     val s = d.shown?.state ?: return
     val asking = h.ai.question != null && duelTalking(h)
     val focus = d.focus
+    // The chain well's menu (1.0.89): Enter does the item chosen.
+    d.chainMenu?.let { i ->
+        val item = linkItems(s, i).getOrNull(d.chainCursor)
+        if (item != null) runLinkItem(d, s, i, item) else d.chainMenu = null
+        return
+    }
+    // The selection's bar with the keys in it: Enter does the verb chosen.
+    if (d.selCursor != null && d.selection.size > 1) {
+        val v = selectionVerbs(d, s, d.eyes.viewers).getOrNull(d.selCursor ?: 0)
+        d.selCursor = null
+        if (v != null) d.verbAll(v)
+        return
+    }
     if (asking || !d.byKeys || focus == null) {
         chatKey(h)
         return
@@ -254,7 +305,16 @@ private fun enterOnFocus(h: NeueHolders) {
     val attacker = d.attacking
     val attaching = d.attaching
     val picked = d.picked
+    val aiming = d.linkTarget
     when {
+        // A link's card aims (1.0.89): Enter on a card gives it the arrow.
+        aiming != null -> if (uid != null && uid != aiming && focus !is DuelFocus.Slot.Link) d.targetFromLink(uid)
+            else h.neue.note = Note("Walk to the card it targets, then Enter. Esc to stop.")
+        // On a link in the chain well: what can be done with it, as a menu.
+        focus is DuelFocus.Slot.Link -> if (s.chain.isNotEmpty()) {
+            d.chainMenu = focus.index.coerceIn(0, s.chain.size - 1)
+            d.chainCursor = 0
+        }
         attacker != null -> {
             val aim = DuelDrop.intent(s, attacker, spotAt(d, focus, attacker), d.catalog).actions.singleOrNull() as? DuelAction.Attack
             if (aim != null) d.attack(aim.target) else h.neue.note = Note("Not something to attack: their monster, or their hand to attack directly. Esc to stop.")
@@ -277,6 +337,12 @@ private fun enterOnFocus(h: NeueHolders) {
         focus is DuelFocus.Slot.Pile -> {
             if (d.strip != focus.seat to focus.kind) d.openPile(focus.seat, focus.kind)
             if (s.seats[focus.seat].pile(focus.kind).isNotEmpty()) d.focusOn(DuelFocus.Slot.PileCard(focus.seat, focus.kind, 0))
+        }
+        // Several selected and the focus among them: the keys go into the selection's bar.
+        uid != null && d.selection.size > 1 && uid in d.selection -> {
+            d.inspected = uid
+            d.verbStrip = false
+            d.selCursor = 0
         }
         uid != null -> {
             d.inspected = uid
@@ -325,4 +391,26 @@ private fun placeByKey(h: NeueHolders, uid: Int, kind: ZoneKind, index: Int) {
     val wants = DuelVerbs.zoneKind(s, seat, uid, DuelVerbs.default(s, seat, uid, d.catalog), d.catalog)
     val k = if (kind == ZoneKind.MONSTER && wants == ZoneKind.SPELL) ZoneKind.SPELL else kind
     d.verb(uid, DuelVerb.DEFAULT, zone = Place.Zone(seat, k, index))
+}
+
+/**
+ * The ordering strip's keys (1.0.89): ← → choose a card, Alt ← → move it, Enter puts them on the Deck as shown, K and
+ * Shift K say top or bottom, R puts them in a random order, Alt K shuffles them in. False for a key it leaves alone.
+ */
+private fun runOrdering(d: Duels, action: DeskAction): Boolean {
+    when (action) {
+        DeskAction.DUEL_FOCUS_LEFT, DeskAction.DUEL_FOCUS_UP -> d.orderCursor(-1)
+        DeskAction.DUEL_FOCUS_RIGHT, DeskAction.DUEL_FOCUS_DOWN -> d.orderCursor(1)
+        DeskAction.DUEL_FOCUS_ROW_START -> d.orderCursor(-1000)
+        DeskAction.DUEL_FOCUS_ROW_END -> d.orderCursor(1000)
+        DeskAction.DUEL_ORDER_EARLIER -> d.orderMove(-1)
+        DeskAction.DUEL_ORDER_LATER -> d.orderMove(1)
+        DeskAction.DUEL_FOCUS_ACT -> d.commitOrdering()
+        DeskAction.DUEL_DECK_TOP -> d.orderTo(false)
+        DeskAction.DUEL_DECK_BOTTOM -> d.orderTo(true)
+        DeskAction.DUEL_DECK_SHUFFLE -> d.orderShuffle()
+        DeskAction.DUEL_REVEAL -> d.orderRandom()
+        else -> return false
+    }
+    return true
 }

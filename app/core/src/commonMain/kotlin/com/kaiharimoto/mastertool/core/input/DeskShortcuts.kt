@@ -200,6 +200,18 @@ enum class DeskAction {
     /** The far seat's cards turned round to face them, or upright (1.0.78). */
     DUEL_FACING,
     DUEL_RESOLVE,
+    /** The whole chain resolved, newest link first (1.0.89, kai: "the chain system … better with a keyboard"). */
+    DUEL_RESOLVE_ALL,
+    /**
+     * No response: priority passed across a hot-seat while a chain stands (1.0.89). Y, the key Ai's cues use, so it lives
+     * only while Ai is off ([DeskAction.WITHOUT_AI]); with Ai on, Y passes this way at a table Ai does not sit at.
+     */
+    DUEL_PASS,
+    /** The focused card into the selection, or out of it (1.0.89): several cards, one move. */
+    DUEL_SELECT,
+    /** Ordering several cards onto a Deck (1.0.89): the chosen card one place nearer the top, or the bottom. */
+    DUEL_ORDER_EARLIER,
+    DUEL_ORDER_LATER,
 
     /** The verbs, on the card under the pointer (or the selection). */
     DUEL_DEFAULT,
@@ -290,6 +302,9 @@ enum class DeskAction {
          * the microphone open. Unlike [AI], they live whether Ai is on or off.
          */
         val HELD: Set<DeskAction> = setOf(DUEL_VOICE)
+
+        /** Actions live only while Ai is off (1.0.89): they share a chord with an [AI] action, which wins while it lives. */
+        val WITHOUT_AI: Set<DeskAction> = setOf(DUEL_PASS)
     }
 }
 
@@ -490,6 +505,11 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("tab"), DeskAction.DUEL_SWAP, DeskScope.DUEL, "Sit at the other seat"),
         DeskShortcut(KeyChord("f", shift = true), DeskAction.DUEL_FACING, DeskScope.DUEL, "Their cards face them, or face you"),
         DeskShortcut(KeyChord("q"), DeskAction.DUEL_RESOLVE, DeskScope.DUEL, "Resolve the newest chain link"),
+        DeskShortcut(KeyChord("q", shift = true), DeskAction.DUEL_RESOLVE_ALL, DeskScope.DUEL, "Resolve the whole chain, newest link first"),
+        DeskShortcut(KeyChord("y"), DeskAction.DUEL_PASS, DeskScope.DUEL, "No response: pass while a chain stands"),
+        DeskShortcut(KeyChord("space", shift = true), DeskAction.DUEL_SELECT, DeskScope.DUEL, "Select the focused card too, or let it go: then one verb moves them all"),
+        DeskShortcut(KeyChord("left", alt = true), DeskAction.DUEL_ORDER_EARLIER, DeskScope.DUEL, "Ordering cards onto the Deck: the chosen card one place nearer the top", repeatable = true),
+        DeskShortcut(KeyChord("right", alt = true), DeskAction.DUEL_ORDER_LATER, DeskScope.DUEL, "Ordering cards onto the Deck: the chosen card one place further down", repeatable = true),
         DeskShortcut(KeyChord("space"), DeskAction.DUEL_DEFAULT, DeskScope.DUEL, "The obvious thing for the card under the pointer"),
         DeskShortcut(KeyChord("a"), DeskAction.DUEL_ACTIVATE, DeskScope.DUEL, "Activate it"),
         DeskShortcut(KeyChord("s"), DeskAction.DUEL_SUMMON, DeskScope.DUEL, "Summon it, or Flip Summon it"),
@@ -565,7 +585,10 @@ object DeskShortcuts {
 
     /** Every row that would fire in [context], in table order. */
     fun live(context: DeskContext): List<DeskShortcut> =
-        all.filter { (!context.textInputFocused || it.allowedInTextInput) && it.isActive(context) && (context.ai || it.action !in DeskAction.AI) }
+        all.filter {
+            (!context.textInputFocused || it.allowedInTextInput) && it.isActive(context) &&
+                (context.ai || it.action !in DeskAction.AI) && !(context.ai && it.action in DeskAction.WITHOUT_AI)
+        }
 
     /** The first chord bound to [action], for hints beside a menu item or in a tooltip. */
     fun chordFor(action: DeskAction): KeyChord? = all.firstOrNull { it.action == action }?.chord

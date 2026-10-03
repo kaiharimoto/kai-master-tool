@@ -73,6 +73,8 @@ object DuelMouse {
     const val DRAG = "Drag"
     const val HOLD = "Hold"
     const val SHIFT_CLICK = "Shift click"
+    /** ⌘ click on a Mac (1.0.89). */
+    const val CTRL_CLICK = "Ctrl click"
     const val ALT_CLICK = "Alt click"
     const val DOUBLE = "Double-click"
 
@@ -82,13 +84,15 @@ object DuelMouse {
         DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The obvious thing, as a right-click"),
         DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it — in the Battle Phase onto theirs attacks it, onto their hand or life points attacks directly; Alt sets it, Shift puts it under a pile"),
         DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, beside it"),
-        DuelBinding(DuelTarget.MY_CARD, SHIFT_CLICK, DuelInputAction.ADD_TO_SELECTION, "Select several; a key or a drag then moves them all"),
+        DuelBinding(DuelTarget.MY_CARD, CTRL_CLICK, DuelInputAction.ADD_TO_SELECTION, "Put it in the selection, or take it out: each card gets its number, and one key, verb or drag then moves them all, as one undo"),
+        DuelBinding(DuelTarget.MY_CARD, SHIFT_CLICK, DuelInputAction.ADD_TO_SELECTION, "Select a run: every card from the last one picked to this one, in one hand, pile or row"),
         DuelBinding(DuelTarget.MY_CARD, ALT_CLICK, DuelInputAction.PING, "Point at it for the other player"),
         DuelBinding(DuelTarget.THEIR_CARD, CLICK, DuelInputAction.INSPECT, "Select it and read it; Target stands beside it"),
         DuelBinding(DuelTarget.THEIR_CARD, RIGHT, DuelInputAction.DEFAULT_VERB, "Target it: an arrow both players see"),
         DuelBinding(DuelTarget.THEIR_CARD, DRAG, DuelInputAction.MOVE, "Take control of it, or send it somewhere"),
         DuelBinding(DuelTarget.THEIR_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it"),
         DuelBinding(DuelTarget.THEIR_CARD, ALT_CLICK, DuelInputAction.PING, "Point at it"),
+        DuelBinding(DuelTarget.THEIR_CARD, CTRL_CLICK, DuelInputAction.ADD_TO_SELECTION, "Put it in the selection with others: target each, or send them all away at once"),
         DuelBinding(DuelTarget.PILE, CLICK, DuelInputAction.OPEN_PILE, "Open it over the field, in rows; a press outside closes it"),
         DuelBinding(DuelTarget.PILE, RIGHT, DuelInputAction.DEFAULT_VERB, "The deck draws a card; any other pile opens"),
         DuelBinding(DuelTarget.PILE, DRAG, DuelInputAction.MOVE, "Take its top card"),
@@ -97,6 +101,8 @@ object DuelMouse {
         DuelBinding(DuelTarget.STRIP_CARD, RIGHT, DuelInputAction.DEFAULT_VERB, "From the deck to the hand; from your GY, activate; from theirs, target it"),
         DuelBinding(DuelTarget.STRIP_CARD, DRAG, DuelInputAction.MOVE, "Take it out of the pile: the pile steps aside and closes"),
         DuelBinding(DuelTarget.STRIP_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it"),
+        DuelBinding(DuelTarget.STRIP_CARD, CTRL_CLICK, DuelInputAction.ADD_TO_SELECTION, "Select it with others — open the GY, pick, open the banished pile, pick: the selection keeps them all"),
+        DuelBinding(DuelTarget.STRIP_CARD, SHIFT_CLICK, DuelInputAction.ADD_TO_SELECTION, "Select a run of the pile, from the last one picked"),
         DuelBinding(DuelTarget.CHAIN, CLICK, DuelInputAction.RESOLVE, "Resolve the newest link"),
         DuelBinding(DuelTarget.CHAIN, RIGHT, DuelInputAction.CLEAR_CHAIN, "Clear the chain"),
         DuelBinding(DuelTarget.SEAT, CLICK, DuelInputAction.LP_PAD, "Change life points"),
@@ -120,20 +126,22 @@ object DuelTouch {
     const val DOUBLE = "Double-tap"
     const val DRAG = "Drag"
     const val HOLD = "Press and hold"
-    const val SEVERAL = "Tap with Select several on"
+    /** After a press and hold on a card (1.0.89): select mode, until the selection is empty or let go. */
+    const val SEVERAL = "Tap, after a press and hold"
 
     val all: List<DuelBinding> = listOf(
         DuelBinding(DuelTarget.MY_CARD, TAP, DuelInputAction.INSPECT, "Select it: what it can do stands beside it, and the inspector reads it"),
         DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The obvious thing: summon, activate, set, flip summon; in the Battle Phase, attack with it"),
         DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it — in the Battle Phase onto theirs attacks it, onto their hand or life points attacks directly"),
-        DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, beside it, Point among them"),
-        DuelBinding(DuelTarget.MY_CARD, SEVERAL, DuelInputAction.ADD_TO_SELECTION, "Select several"),
+        DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, beside it, Point among them — and select mode: each tap after it adds a card"),
+        DuelBinding(DuelTarget.MY_CARD, SEVERAL, DuelInputAction.ADD_TO_SELECTION, "Put it in the selection, or take it out; the bar over your hand then moves them all"),
         DuelBinding(DuelTarget.MY_CARD, "Hold, then Point", DuelInputAction.PING, "Point at it for the other player"),
         DuelBinding(DuelTarget.THEIR_CARD, TAP, DuelInputAction.INSPECT, "Read it in the inspector"),
         DuelBinding(DuelTarget.THEIR_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "Target it"),
         DuelBinding(DuelTarget.THEIR_CARD, DRAG, DuelInputAction.MOVE, "Take control of it, or send it somewhere"),
         DuelBinding(DuelTarget.THEIR_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it"),
         DuelBinding(DuelTarget.THEIR_CARD, "Hold, then Point", DuelInputAction.PING, "Point at it"),
+        DuelBinding(DuelTarget.THEIR_CARD, SEVERAL, DuelInputAction.ADD_TO_SELECTION, "Put it in the selection with others"),
         DuelBinding(DuelTarget.PILE, TAP, DuelInputAction.OPEN_PILE, "Open it over the field; a tap outside closes it"),
         DuelBinding(DuelTarget.PILE, DOUBLE, DuelInputAction.DEFAULT_VERB, "The deck draws a card; any other pile opens"),
         DuelBinding(DuelTarget.PILE, DRAG, DuelInputAction.MOVE, "Take its top card"),
@@ -142,6 +150,7 @@ object DuelTouch {
         DuelBinding(DuelTarget.STRIP_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "From the deck to the hand; from your GY, activate; from theirs, target it"),
         DuelBinding(DuelTarget.STRIP_CARD, DRAG, DuelInputAction.MOVE, "Take it out of the pile: the pile steps aside and closes"),
         DuelBinding(DuelTarget.STRIP_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it"),
+        DuelBinding(DuelTarget.STRIP_CARD, SEVERAL, DuelInputAction.ADD_TO_SELECTION, "Select it with others, across piles"),
         DuelBinding(DuelTarget.CHAIN, TAP, DuelInputAction.RESOLVE, "Resolve the newest link"),
         DuelBinding(DuelTarget.CHAIN, HOLD, DuelInputAction.CLEAR_CHAIN, "Clear the chain"),
         DuelBinding(DuelTarget.SEAT, TAP, DuelInputAction.LP_PAD, "Change life points"),

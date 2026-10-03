@@ -144,7 +144,7 @@ class Duels(val dir: File) {
         focus = slot
         lastInput = Input.KEYS
         val s = shown?.state
-        focusCard = if (slot == null || s == null || slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile) null
+        focusCard = if (slot == null || s == null || slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile || slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link) null
         else com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, slot, eyes)?.takeIf { followable(s, it) }
         if (slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.PileCard) {
             val l = tableLayout ?: return
@@ -160,6 +160,7 @@ class Duels(val dir: File) {
     fun walk(dir: com.kaiharimoto.mastertool.core.layout.DuelFocus.Dir) {
         val s = shown?.state ?: return
         verbStrip = false
+        chainMenu = null
         val shape = focusShape()
         if (lastInput != Input.KEYS || focus == null) {
             // The keys take over: on the card under the pointer, else where the ring was left, else home.
@@ -188,7 +189,7 @@ class Duels(val dir: File) {
             ?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile(it.seat, it.kind) }
         val next = if (open != null) open else com.kaiharimoto.mastertool.core.layout.DuelFocus.follow(f, focusCard, s, bottom, focusShape(), strip, eyes)
         if (next != f) focus = next
-        focusCard = next?.takeIf { it !is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile }?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, it, eyes) }
+        focusCard = next?.takeIf { it !is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile && it !is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link }?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, it, eyes) }
             ?.takeIf { followable(s, it) }
         if (picked?.let { it !in s.cards } == true) picked = null
     }
@@ -671,7 +672,9 @@ class Duels(val dir: File) {
         closeSpotlight()
         closeReplay()
         bottom = 0
-        selection = emptySet()
+        clearSelection()
+        chainMenu = null
+        linkTarget = null
         strip = null
         attaching = null
         attacking = null
@@ -792,29 +795,8 @@ class Duels(val dir: File) {
         // Any verb puts a waiting attack away (1.0.86); an attack verb arms it again below.
         attacking = null
         val actor = seat ?: seatFor(uid)
-        val targets = if (uid in selection && selection.size > 1 && verb != DuelVerb.ATTACK) selection.toList() else listOf(uid)
-        if (targets.size > 1) {
-            // Several at once: each in turn on the table as the one before left it, one group.
-            var s = g.state
-            val all = mutableListOf<DuelAction>()
-            var attackers = 0
-            targets.forEach { u ->
-                val r = DuelVerbs.actions(s, seatFor(u), u, verb, catalog)
-                // An attack wants its target: declared one monster at a time (1.0.86, the red team: they were dropped silently).
-                if (r.needsTarget) { attackers++; return@forEach }
-                if (r.problem != null || r.needsHost) return@forEach
-                val next = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(s, r.actions).first ?: return@forEach
-                all += r.actions
-                s = next
-            }
-            if (all.isEmpty()) {
-                problem = if (attackers > 0) "Attacks are declared one monster at a time: pick one attacker." else problem
-                return false
-            }
-            selection = emptySet()
-            if (attackers > 0) problem = "The other moves were made; attacks are declared one monster at a time."
-            return act(all, seatFor(uid))
-        }
+        // Several at once (1.0.89, DuelSelection): one group, one undo; onto a Deck, in an order the person chooses first.
+        if (uid in selection && selection.size > 1 && verb != DuelVerb.ATTACK) return verbAll(verb, host)
         val r = DuelVerbs.actions(g.state, actor, uid, verb, catalog, zone, host, direct)
         if (r.needsHost) {
             attaching = uid
@@ -838,6 +820,185 @@ class Duels(val dir: File) {
             } else null
         }
         return ok
+    }
+
+    // ---- Several cards, one move (1.0.89, kai: "let me select multiple cards … and perform an action with them") ---------
+
+    /** A finger's select mode: after a press and hold, each tap puts a card into the selection or takes it out. */
+    var selecting by mutableStateOf(false)
+
+    /**
+     * Cards going onto a Deck in the order the person chooses (1.0.89): [order] top first, as they will stand; [bottom] for
+     * the Deck's bottom; [cursor] the card the arrows have chosen. The ordering strip draws it; Enter makes it.
+     */
+    data class Ordering(val order: List<Int>, val bottom: Boolean, val cursor: Int = 0)
+
+    var ordering by mutableStateOf<Ordering?>(null)
+
+    /** The verb ↑/↓ have chosen in the selection's bar, once Enter put the keys there; null while it is the pointer's. */
+    var selCursor by mutableStateOf<Int?>(null)
+
+    /** Nothing selected, select mode off, no ordering open. */
+    fun clearSelection() {
+        selection = emptySet()
+        selecting = false
+        ordering = null
+        selCursor = null
+    }
+
+    /** [uid] into the selection, or out of it (a Ctrl-click, a tap in select mode, Shift Space). The order picked is kept. */
+    fun toggleSelect(uid: Int) {
+        selection = com.kaiharimoto.mastertool.core.duel.DuelSelection.toggle(selection.toList(), uid).toSet()
+        inspected = uid
+        // One card: its verbs beside it, as a click; several: the selection's bar says what they can do.
+        verbStrip = selection.size == 1
+        if (selection.isEmpty()) selecting = false
+    }
+
+    /** A Shift-click: the run from the last card picked to [uid], in the row they share; else [uid] toggled. */
+    fun rangeSelect(uid: Int) {
+        val s = shown?.state ?: return
+        val anchor = selection.lastOrNull()
+        selection = com.kaiharimoto.mastertool.core.duel.DuelSelection.range(s, selection.toList(), anchor, uid) { seat -> eyes.hand(s, seat) }.toSet()
+        inspected = uid
+        verbStrip = selection.size == 1
+    }
+
+    /** Shift Space (1.0.89): the focused card into the selection, or out of it. */
+    fun selectFocused(): Boolean {
+        val uid = (if (byKeys) focusUid() else hovered) ?: run { problem = "Walk to a card first: the arrows, then Shift Space"; return false }
+        toggleSelect(uid)
+        return true
+    }
+
+    /**
+     * [verb] on every selected card, in the order they were picked, as one group ([com.kaiharimoto.mastertool.core.duel.DuelSelection.actions]).
+     * To the top or bottom of a Deck it opens the ordering strip first, the order picked as its first order; Attach waits
+     * for the card they go under ([host]). Cards the verb cannot take are left, and said.
+     */
+    fun verbAll(verb: DuelVerb, host: Int? = null): Boolean {
+        val g = shown ?: return false
+        val s = g.state
+        val uids = selection.filter { it in s.cards }
+        if (uids.size < 2) {
+            // Cards that left the duel leave the selection, so the one left is a one-card verb.
+            selection = uids.toSet()
+            return uids.singleOrNull()?.let { verb(it, verb, host = host) } ?: false
+        }
+        attacking = null
+        val sees = { u: Int -> eyes.viewers.isEmpty() || eyes.viewers.any { com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, u, it) } }
+        if (verb in com.kaiharimoto.mastertool.core.duel.DuelSelection.ORDERED) {
+            // Only what goes into a Deck is ordered: a token or an Extra Deck monster is said, and left.
+            val (fit, not) = com.kaiharimoto.mastertool.core.duel.DuelSelection.deckable(s, uids, catalog, sees)
+            if (fit.isEmpty()) { problem = "None of these go into the Deck"; return false }
+            problem = if (not.isEmpty()) null else "${not.size} of them do not go into the Deck: left out"
+            ordering = Ordering(fit, bottom = verb == DuelVerb.DECK_BOTTOM)
+            verbStrip = false
+            return true
+        }
+        if (verb == DuelVerb.ATTACH && host == null) {
+            attaching = uids.first()
+            verbStrip = false
+            problem = null
+            return false
+        }
+        val plan = com.kaiharimoto.mastertool.core.duel.DuelSelection.actions(s, uids, verb, catalog, seat = bottom, seatFor = ::seatFor, host = host, sees = sees)
+        if (!plan.ok) {
+            problem = plan.skipped.firstOrNull()?.second?.let { "${verb.label}: $it" } ?: "Nothing to do with these together"
+            return false
+        }
+        val ok = act(plan.actions, if (verb == DuelVerb.TARGET || verb == DuelVerb.REVEAL) bottom else seatFor(uids.first()))
+        if (ok) {
+            clearSelection()
+            if (plan.skipped.isNotEmpty()) problem = "${plan.skipped.size} of ${uids.size} stayed where they were: ${plan.skipped.first().second}"
+        }
+        return ok
+    }
+
+    /** The ordering strip's arrows: the chosen card ([delta] -1 left, 1 right). */
+    fun orderCursor(delta: Int) {
+        val o = ordering ?: return
+        ordering = o.copy(cursor = (o.cursor + delta).coerceIn(0, o.order.size - 1))
+    }
+
+    /** Alt ← / Alt → or a drag: the chosen card [delta] places nearer the top (−) or further down (+). */
+    fun orderMove(delta: Int, from: Int? = null) {
+        val o = ordering ?: return
+        val i = from ?: o.cursor
+        val j = (i + delta).coerceIn(0, o.order.size - 1)
+        ordering = o.copy(order = com.kaiharimoto.mastertool.core.duel.DuelSelection.reorder(o.order, i, j), cursor = j)
+    }
+
+    /** The strip's Top / Bottom switch (K, Shift K while it is open). */
+    fun orderTo(bottom: Boolean) {
+        ordering = ordering?.copy(bottom = bottom)
+    }
+
+    /** Enter on the ordering strip: the cards onto the Deck as it shows them, top first. One group. */
+    fun commitOrdering(): Boolean {
+        val o = ordering ?: return false
+        val s = shown?.state ?: return false
+        val ok = act(com.kaiharimoto.mastertool.core.duel.DuelSelection.toDeck(s, o.order, o.bottom), seatFor(o.order.first()))
+        if (ok) clearSelection()
+        return ok
+    }
+
+    /** "Random order": chance picks the order, stamped as the move is made ([DuelAction.Pick]). */
+    fun orderRandom(): Boolean {
+        val o = ordering ?: return false
+        val s = shown?.state ?: return false
+        val ok = act(com.kaiharimoto.mastertool.core.duel.DuelSelection.randomToDeck(s, bottom, o.order, o.bottom), bottom)
+        if (ok) clearSelection()
+        return ok
+    }
+
+    /** "Shuffle in": every card into its Deck, each Deck shuffled once. */
+    fun orderShuffle(): Boolean {
+        val o = ordering ?: return false
+        val s = shown?.state ?: return false
+        val ok = act(com.kaiharimoto.mastertool.core.duel.DuelSelection.shuffledIn(s, o.order), seatFor(o.order.first()))
+        if (ok) clearSelection()
+        return ok
+    }
+
+    // ---- The chain by keys (1.0.89, kai: "consider the chain system and how we can use it better with a keyboard") ------
+
+    /** The link (0-based) whose menu Enter opened in the chain well, and the item ↑/↓ have chosen in it. */
+    var chainMenu by mutableStateOf<Int?>(null)
+    var chainCursor by mutableStateOf(0)
+    /** A link's card waiting for what it targets: the next card clicked, or Enter on the focus, gets an arrow from it. */
+    var linkTarget by mutableStateOf<Int?>(null)
+
+    /** Shift Q: the whole chain, newest link first, as one group. */
+    fun resolveAll(): Boolean {
+        val s = shown?.state ?: return false
+        if (s.chain.isEmpty()) { problem = "There is no chain to resolve"; return false }
+        chainMenu = null
+        return act(DuelVerbs.resolveAll(s, catalog), bottom)
+    }
+
+    /** Chain Link [link] (1-based) negated: it stays and resolves doing nothing; an activated Spell or Trap goes to the GY. */
+    fun negate(link: Int): Boolean {
+        val s = shown?.state ?: return false
+        val r = DuelVerbs.negate(s, bottom, link, catalog)
+        r.problem?.let { problem = it; return false }
+        chainMenu = null
+        return act(r.actions, bottom)
+    }
+
+    /** The link's card's arrow to [uid] (Target with it, from the chain well's menu). */
+    fun targetFromLink(uid: Int): Boolean {
+        val from = linkTarget ?: return false
+        linkTarget = null
+        if (from == uid) return false
+        return act(DuelAction.Target(bottom, from, listOf(uid)), bottom)
+    }
+
+    /** Y with no Ai at the table (1.0.89): No response — priority passed while a chain stands or a window waits. */
+    fun pass(): Boolean {
+        val s = shown?.state ?: return false
+        if (s.chain.isEmpty() && s.window == null) { problem = "Nothing to pass on: no chain stands"; return false }
+        return act(DuelAction.Answer(bottom, respond = false), bottom)
     }
 
     /** The waiting attack declared (1.0.86): on [target], or directly when it is null. */
@@ -1410,7 +1571,7 @@ class Duels(val dir: File) {
             val floor = r.entries.indexOfFirst { it.seat != null }.let { if (it < 0) r.entries.size else it }
             replay = Replay(id, r, floor)
             libraryOpen = false
-            selection = emptySet()
+            clearSelection()
             strip = null
             placed = null
         }
@@ -1526,7 +1687,7 @@ class Duels(val dir: File) {
         game = com.kaiharimoto.mastertool.core.duel.replay.Replays.branch(r.record, r.at)
         origin = r.id to r.at
         closeReplay()
-        selection = emptySet()
+        clearSelection()
         save()
     }
 

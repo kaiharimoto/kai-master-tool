@@ -214,7 +214,9 @@ class DuelTurnsTest {
         val duel = DeskContext(onBuilder = false, onDuel = true)
         assertEquals(DeskAction.DUEL_AI_ANSWER, DeskShortcuts.resolve(KeyChord("y"), duel))
         assertEquals(DeskAction.DUEL_AI_CATCH_UP, DeskShortcuts.resolve(KeyChord("y", shift = true), duel))
-        assertNull(DeskShortcuts.resolve(KeyChord("y"), duel.copy(ai = false)), "dead while Ai is off")
+        // With Ai off, Y is No response across the hot-seat (1.0.89, DUEL_PASS) — no trace of Ai, the key the table's own.
+        assertEquals(DeskAction.DUEL_PASS, DeskShortcuts.resolve(KeyChord("y"), duel.copy(ai = false)), "Y passes while Ai is off")
+        assertNull(DeskShortcuts.resolve(KeyChord("y", shift = true), duel.copy(ai = false)), "Catch up is dead while Ai is off")
         assertNull(DeskShortcuts.resolve(KeyChord("y"), duel.copy(textInputFocused = true)), "typing a y types it")
         assertNull(DeskShortcuts.resolve(KeyChord("y"), DeskContext()))
         assertTrue(DeskAction.DUEL_AI_ANSWER in DeskAction.AI && DeskAction.DUEL_AI_CATCH_UP in DeskAction.AI, "Ai never cues itself")

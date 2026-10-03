@@ -66,6 +66,13 @@ object CommandHelp {
         "pass" to "Let the chain resolve",
         "swap" to "Sit at the other seat",
         "undo" to "Take the last move back",
+        // The chain by keys and several cards at once (1.0.89).
+        "resolve all" to "Resolve the whole chain, newest link first (Shift Q)",
+        "negate 2" to "Negate Chain Link 2: it stays, and an activated Spell or Trap goes to the GY",
+        "g gy1 h2 ban1" to "One verb, several cards: all three to the GY, one undo",
+        "k gy1 gy3" to "On top of the Deck, top first: gy1 the new top card, gy3 under it",
+        "kb gy1 gy3" to "On the bottom, top first: gy3 the bottom card, gy1 just above it",
+        "t om1 om2" to "An arrow to each of their cards",
     )
 
     /** One row of the help: what to type or press on the left, what it means on the right. */

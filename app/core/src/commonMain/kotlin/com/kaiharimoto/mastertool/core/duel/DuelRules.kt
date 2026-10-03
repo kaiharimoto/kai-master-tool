@@ -74,6 +74,11 @@ object DuelRules {
                 ok(s.rehidden().copy(chain = emptyList(), arrows = s.arrows.filterNot { it.from in links }, locks = s.locks.filterNot { it.until == Lock.UNTIL_CHAIN }, resolved = emptyList()))
             }
             is DuelAction.Keep -> ok(s.copy(resolved = s.resolved - a.uid))
+            is DuelAction.Negate -> seatOk(s, a.seat) ?: when {
+                a.link !in 1..s.chain.size -> Outcome.Refused(if (s.chain.isEmpty()) "There is no chain" else "There is no Chain Link ${a.link}")
+                s.chain[a.link - 1].negated -> Outcome.Refused("Chain Link ${a.link} is negated already")
+                else -> ok(s.copy(chain = s.chain.mapIndexed { i, l -> if (i == a.link - 1) l.copy(negated = true) else l }))
+            }
             is DuelAction.Target -> target(s, a)
             is DuelAction.Attack -> attack(s, a)
             is DuelAction.Reveal -> reveal(s, a)

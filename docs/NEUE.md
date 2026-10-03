@@ -3558,6 +3558,52 @@ random and predetermined … after determining a winner (higher), the player who
   after the deal and, winning, goes first ("Ai wins the roll and goes first" in the log). `DuelBrief` tells Ai where the roll
   stands. Pictures: `tools/shoot.sh --page=duel --duel=two --duel-dice=rest|held|flying|settled|choose [--duel-dice-frames=N]`.
 
+**1.0.89, the chain by keys and several cards at once** (kai: "consider the chain system and how we can use it better with
+a keyboard. Also, let me select multiple cards on the field, graveyard, hand, and across graveyard and banished and perform an
+action with them. if put to the bottom of the deck or top of the deck, I can choose the order"):
+- **The chain by keys.** `A` (and the verb strip's Activate, now worded "Chain it (link 3)") chains while a chain stands; `Q`
+  resolves the newest link, **`Shift Q` the whole chain** (`DuelVerbs.resolveAll`: each link through `resolve` on the table the
+  one before left, so the chain's Normal Spells and Traps still go to the GY together with the last link — one group, one
+  undo). **The well is a place the focus walks** (`DuelFocus.Slot.Link`): a cell of the shared row between the Extra Monster
+  Zones while a chain stands, entered on its newest link; ↑/↓ walk the links (Link 1 at the top, as the well lists them) and
+  leave past either end, ←/→ leave sideways; the link the keys stand on is inverted in the well, the well ringed, its tag
+  "link 2 · Ash Blossom · Enter: resolve, negate, target". **Enter on a link** (`ChainMenu`, `linkItems`): Resolve and Resolve
+  the whole chain (the newest link only), **Negate**, **Target with it** (the next card clicked, or Enter on the focus, gets an
+  arrow from the link's card, `Duels.linkTarget`, a band over the hand saying so) and Read it. **Negate** is
+  `DuelAction.Negate(seat, link)` (`"negate"`, a new action; older builds read it as `Unknown`) marking `ChainLink.negated`
+  (defaulted): the link stays and resolves doing nothing, "· negated" in the well; `DuelVerbs.negate` also sends an activated
+  Spell or Trap face-up in its zone to the GY (how `negate`), a monster staying where it is. **Y** with no Ai at the table is
+  No response across the hot-seat (`Duels.pass`, `DuelAction.Answer`); with Ai switched off it is `DUEL_PASS`
+  (`DeskAction.WITHOUT_AI`: live only while the Ai cue that shares Y is dead). Typed: `chain s1`, `resolve`, `resolve all`,
+  `negate` (the newest), `negate 2`, `negate link 2` — "Negate Attack" is still the card.
+- **Several cards, one move** (`core/duel/DuelSelection`, tested in `DuelSelectionTest`): the selection is a list in the order
+  picked. **Ctrl (⌘) click** puts a card in or takes it out — on the field, in a hand, in an open pile; **Shift click** adds the
+  run from the last one picked in the same hand, pile or row (`DuelSelection.range`); a box adds with Ctrl or Shift held; by a
+  finger, **press and hold** shows the card's verbs and starts select mode (`Duels.selecting`), each tap after it toggling a
+  card; by keys, **Shift Space** toggles the focused card. Across piles: open the GY, pick, open the banished pile (the GY
+  closes), pick — the selection keeps both. Each selected card wears its number ("2/4") at its corner (`SelectionBadges`), and
+  **the selection's bar** over the near hand lists them in order — by name only where the table's eyes see the card, else "a
+  face-down card · os2" (`DuelSelection.label`) — with every verb they all take (`DuelSelection.verbs`: the intersection, in
+  `MANY`'s order; never the default, an attack or a move), each with its key; a card's chip takes it out, Clear is Esc. A
+  verb key with several selected moves them all (the pointer's own card still wins when it is not among them); Enter on a
+  selected card puts the keys in the bar (↑↓/←→ choose, Enter). One verb is **one group, one undo** (`DuelSelection.actions`:
+  each card on the table the one before left; Target one arrow to each; Reveal one reveal; Attach waits for the host and puts
+  them all under it; a card the verb cannot take is left, and said). **Privacy**: a card the table's eyes cannot see is offered
+  only `DuelSelection.blindVerbs` — decided by where it lies, never by the catalog — so the bar's verbs say nothing of it.
+- **Their order on the Deck** (`OrderingStrip`): K or Shift K on several (or several dragged onto the Deck's upper or lower
+  third) opens the ordering strip over the field — the cards in a row **top first, as they will stand**, the order picked as the
+  first order, numbered. `←`/`→` choose, **`Alt ←`/`Alt →`** move the chosen card (`DUEL_ORDER_EARLIER`/`LATER`), a drag
+  moves one; K / Shift K switch top and bottom; **Enter** puts them there (`DuelSelection.toDeck`: on top the first ends as
+  the Deck's top card; on the bottom the last is the bottom card), **R** in a random order (`DuelSelection.randomToDeck`, a
+  `DuelAction.Pick` among them, stamped on commit), **Alt K** shuffles them in (each Deck shuffled once); Esc lets it go.
+  Typed (`DuelCommand.several`): one verb, several coordinates — `g gy1 h2 ban1`, `b h2 h4`, `t om1 om2`, `x e1 e2`, `o h4 h5
+  m3` (the last the host), and **`k gy1 gy3`: gy1 on top, gy3 under it; `kb gy1 gy3`: gy3 the bottom card, gy1 above it**
+  (top first, as the strip reads), `ks gy1 gy3` shuffled in; the Spotlight's preview says it so ("Top of the Deck, top first: 1
+  Ash Blossom (gy1) · 2 the face-down card in os1 (os1)"). A one-card line with a place after it (`s h2 m3`, `h gy1 h2`) reads
+  as before; a hidden card in a several-card line takes only the verbs that need no name. `DuelCoverage` has a row for each.
+- Pictures: `--duel-multi=true` (across the GY and the banished pile, the badges and the bar), `--duel-order=top|bottom`
+  (the ordering strip), `--duel-chain-focus=N [--duel-chain-menu=true]` (the well walked by keys), each with `--duel-play=true`.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two --duel-play=true --duel-spot=attack|s_h2_m3 (underscores for
 spaces; alone: empty) --duel-spot-state=listening|answer|many --duel-heard=summon_ash_blossom_to_monster_three`, and
 `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy

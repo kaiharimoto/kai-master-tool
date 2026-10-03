@@ -82,7 +82,7 @@ object DuelPreview {
                     is Outcome.Refused -> if (problem == null) problem = (if (parts.size > 1) "Move ${k + 1}: " else "") + o.reason
                 }
             }
-            words += if (blindLabel || phrases.isEmpty()) p.said else phrases.joinToString(", then ")
+            words += if (blindLabel || phrases.isEmpty() || p.whole) p.said else phrases.joinToString(", then ")
         }
         return Preview(
             ok = problem == null,
@@ -191,6 +191,7 @@ object DuelPreview {
                     "battle" -> "Destroy"
                     "flip" -> "Turn over"
                     "resolve" -> "Send"
+                    "negate" -> "Send"
                     else -> if (a.to is Place.Zone) "Move" else "Return"
                 }
                 "$verb ${name(a.uid)} from ${from(a.uid)} to ${placeWords(a.to, s, seat, catalog, secret)}"
@@ -248,6 +249,7 @@ object DuelPreview {
             }
             DuelAction.ChainResolve -> "Resolve Chain Link ${s.chain.size}"
             DuelAction.ChainClear -> "Clear the chain"
+            is DuelAction.Negate -> "Negate Chain Link ${a.link}${s.chain.getOrNull(a.link - 1)?.uid?.let { ": ${name(it)} (${from(it)})" } ?: ""}"
             is DuelAction.Keep -> "keep ${name(a.uid)} on the field"
             is DuelAction.Attack -> a.target?.let { "Attack ${name(it)} (${from(it)}) with ${name(a.attacker)} (${from(a.attacker)})" }
                 ?: "Attack directly with ${name(a.attacker)} (${from(a.attacker)})"
