@@ -15,6 +15,7 @@ import com.kaiharimoto.mastertool.core.duel.SeatState
 import com.kaiharimoto.mastertool.core.duel.ViewCard
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
+import com.kaiharimoto.mastertool.core.duel.DuelFolds
 
 /**
  * The host's side of a networked duel, pure: what a guest's intent comes to on the real table, and what
@@ -92,10 +93,13 @@ object DuelHost {
         return DuelGame.Result(r.game.copy(state = s), null)
     }
 
-    /** The log entries from [from] to the game's cursor, as [seat] reads them. */
-    fun lines(game: DuelGame, from: Int, seat: Int?, catalog: DuelCatalog): List<Line> {
+    /**
+     * The log entries from [from] to the game's cursor, as [seat] reads them; the table at [from] from
+     * [folds] when the page keeps one (1.0.86), not from folding the whole duel again.
+     */
+    fun lines(game: DuelGame, from: Int, seat: Int?, catalog: DuelCatalog, folds: DuelFolds<*>? = null): List<Line> {
         if (from >= game.cursor) return emptyList()
-        var s = game.stateAt(from)
+        var s = folds?.takeIf { it.header == game.header }?.sync(game.entries)?.stateAt(from) ?: game.stateAt(from)
         return game.entries.subList(from, game.cursor).map { e ->
             val after = (DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok)?.state ?: s
             val line = Line(e.i, DuelWords.say(s, after, e, seat, catalog), e.seat, chat = e.action is DuelAction.Chat, turn = after.turn)
@@ -105,11 +109,11 @@ object DuelHost {
     }
 
     /** Everything a guest at [seat] is sent after a change: its view, the new lines, whose answer is awaited. */
-    fun update(game: DuelGame, seat: Int, from: Int, secret: Long, catalog: DuelCatalog, takeBackFrom: Int? = null): Wire.Update =
+    fun update(game: DuelGame, seat: Int, from: Int, secret: Long, catalog: DuelCatalog, takeBackFrom: Int? = null, folds: DuelFolds<*>? = null): Wire.Update =
         Wire.Update(
             cursor = game.cursor,
             view = DuelView.of(game.state, seat, secret),
-            lines = lines(game, from, seat, catalog),
+            lines = lines(game, from, seat, catalog, folds),
             waitingFor = game.state.window?.responder,
             takeBackFrom = takeBackFrom,
         )

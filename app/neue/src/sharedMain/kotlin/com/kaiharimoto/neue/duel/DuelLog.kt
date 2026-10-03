@@ -23,10 +23,8 @@ import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelFolds
 import com.kaiharimoto.mastertool.core.duel.DuelGame
-import com.kaiharimoto.mastertool.core.duel.DuelRules
-import com.kaiharimoto.mastertool.core.duel.DuelSetup
-import com.kaiharimoto.mastertool.core.duel.Outcome
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
@@ -62,8 +60,9 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val seated = aiAtTable(h)
     val thinking = h.neue.prefs.duel.aiThinking
     val talk = ai.session?.takeIf { seated && it.mode == AiSession.MODE_DUEL && it.id == duels.aiSession }
+    val folds = remember(game.header, viewer, duels.catalog) { logFolds(game, viewer, duels.catalog) }
     val table = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest) {
-        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, viewer, duels, refused)
+        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, folds, duels, refused)
     }
     // Ai's hidden cards never named to the person in what it says (1.0.81): the original behind Thinking.
     val aiSeat = if (game.state.solo) 0 else h.neue.prefs.duel.aiSeat
@@ -309,23 +308,34 @@ private fun remoteLog(lines: List<com.kaiharimoto.mastertool.core.duel.net.Line>
     return out
 }
 
-private fun logLines(game: DuelGame, viewer: Int?, duels: Duels, refused: Set<Int>): List<LogLine> {
-    val out = ArrayList<LogLine>()
-    var s = DuelSetup.initial(game.header)
-    game.played.forEachIndexed { i, e ->
-        val applied = DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok
-        val after = applied?.state ?: s
+/** One entry of the log in words, as [DuelFolds] keeps it: what it says, and whether the table took it. */
+internal class LogRead(val text: String, val applied: Boolean)
+
+/**
+ * The log's words, read once an entry and kept (1.0.86): a move reads one entry, an undo, a redo or a
+ * replay's tick reads none. Before, every change of the cursor folded and worded the whole duel again.
+ */
+internal fun logFolds(game: DuelGame, viewer: Int?, catalog: com.kaiharimoto.mastertool.core.duel.DuelCatalog): DuelFolds<LogRead> =
+    DuelFolds(game.header) { e, before, after, applied ->
+        val text = if (e.action == DuelAction.EndTurn) "Turn ${after.turn} · ${DuelWords.seatName(after, after.active)}"
+        else DuelWords.say(before, after, e, viewer, catalog)
+        LogRead(text, applied)
+    }
+
+private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, duels: Duels, refused: Set<Int>): List<LogLine> {
+    val reads = folds.sync(game.entries).results(game.cursor)
+    val out = ArrayList<LogLine>(reads.size - game.floor.coerceAtMost(reads.size) + 8)
+    for (i in game.floor until reads.size) {
+        val e = game.entries[i]
+        val r = reads[i]
         if (i == game.floor) out += LogLine.Turn("Turn 1", e.at)
-        if (i >= game.floor) {
-            when (e.action) {
-                is DuelAction.Chat -> out += LogLine.Said(DuelWords.say(s, after, e, viewer, duels.catalog), e.at)
-                DuelAction.EndTurn -> out += LogLine.Turn("Turn ${after.turn} · ${DuelWords.seatName(after, after.active)}", e.at)
-                is DuelAction.Note -> out += LogLine.Noted(DuelWords.say(s, after, e, viewer, duels.catalog), e.at)
-                is DuelAction.Thinking, is DuelAction.Ping -> out += LogLine.Done(DuelWords.say(s, after, e, viewer, duels.catalog), false, at = e.at)
-                else -> out += LogLine.Done(DuelWords.say(s, after, e, viewer, duels.catalog), e.seat == duels.bottom, struck = applied == null || e.i in refused, i = i, at = e.at)
-            }
+        out += when (e.action) {
+            is DuelAction.Chat -> LogLine.Said(r.text, e.at)
+            DuelAction.EndTurn -> LogLine.Turn(r.text, e.at)
+            is DuelAction.Note -> LogLine.Noted(r.text, e.at)
+            is DuelAction.Thinking, is DuelAction.Ping -> LogLine.Done(r.text, false, at = e.at)
+            else -> LogLine.Done(r.text, e.seat == duels.bottom, struck = !r.applied || e.i in refused, i = i, at = e.at)
         }
-        s = after
     }
     if (game.floor >= game.cursor) out += LogLine.Turn("Turn 1")
     return out

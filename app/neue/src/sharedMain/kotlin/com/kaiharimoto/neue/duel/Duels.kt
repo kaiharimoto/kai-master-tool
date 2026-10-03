@@ -538,7 +538,7 @@ class Duels(val dir: File) {
         val g = game ?: return
         val l = link ?: return
         sentTo = minOf(sentTo, g.cursor)
-        l.send(com.kaiharimoto.mastertool.core.duel.net.DuelHost.update(g, 1, sentTo, g.header.seed, catalog, takeBackFrom))
+        l.send(com.kaiharimoto.mastertool.core.duel.net.DuelHost.update(g, 1, sentTo, g.header.seed, catalog, takeBackFrom, folds = folds(g)))
         sentTo = g.cursor
     }
 
@@ -765,7 +765,7 @@ class Duels(val dir: File) {
         val g = game ?: return false
         val k = at.coerceIn(g.floor, g.cursor)
         val stamped = actions.mapIndexed { n, a -> com.kaiharimoto.mastertool.core.duel.DuelRandom.stamp(a, com.kaiharimoto.mastertool.core.duel.DuelRandom.forEntry(g.header.seed, g.cursor + n + 104729)) }
-        val (ok, why) = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(g.stateAt(k), stamped, seat)
+        val (ok, why) = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(folds(g).sync(g.entries).stateAt(k), stamped, seat)
         if (ok == null) { problem = why; return false }
         val record = g.record().copy(entries = g.played, cursor = g.cursor)
         val inserted = com.kaiharimoto.mastertool.core.duel.replay.Replays.insert(record, k, stamped, seat, now())
@@ -864,7 +864,7 @@ class Duels(val dir: File) {
                 done++
                 val now = game
                 val lines = if (role == NetRole.GUEST || now == null) listOf("sent to the host")
-                else com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(now, before, viewer, catalog).map { it.text }
+                else com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(now, before, viewer, catalog, folds(now)).map { it.text }
                 said += "$done. $text → ${lines.joinToString("; ").ifBlank { "no change on the table" }}"
                 if (paceMs > 0) delay(paceMs)
             }
@@ -938,10 +938,19 @@ class Duels(val dir: File) {
         tallyOf?.let { (of, t) -> if (of === g) return t }
         // A guest has no log of its own: the locks it was sent, nothing counted.
         val t = if (role == NetRole.GUEST) com.kaiharimoto.mastertool.core.duel.Tally(g.state.turn, listOf(0, 0), listOf(0, 0), listOf(emptyMap(), emptyMap()), g.state.locks)
-        else com.kaiharimoto.mastertool.core.duel.DuelTally.of(g, catalog)
+        else com.kaiharimoto.mastertool.core.duel.DuelTally.of(g, catalog, folds(g))
         tallyOf = g to t
         return t
     }
+
+    private var folds: com.kaiharimoto.mastertool.core.duel.DuelFolds<Unit>? = null
+
+    /**
+     * The tables of [g]'s log, folded once and kept (1.0.86): the tally, Insert here and the lines sent to
+     * a guest or read to Ai start from it, never from the deal again. One per duel; a new one for a new header.
+     */
+    internal fun folds(g: DuelGame): com.kaiharimoto.mastertool.core.duel.DuelFolds<Unit> =
+        folds?.takeIf { it.header == g.header } ?: com.kaiharimoto.mastertool.core.duel.DuelFolds.states(g.header).also { folds = it }
 
     /**
      * The phase moved on, or the turn ended. At a hot-seat the turn player does it; at a networked table

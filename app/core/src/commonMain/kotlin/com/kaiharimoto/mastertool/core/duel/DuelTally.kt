@@ -34,7 +34,11 @@ data class Tally(
 }
 
 object DuelTally {
-    fun of(game: DuelGame, catalog: DuelCatalog): Tally {
+    /**
+     * [folds], when given, is the page's cache of the log (1.0.86): the turn's first table comes from it
+     * rather than from folding the whole duel again on every move.
+     */
+    fun of(game: DuelGame, catalog: DuelCatalog, folds: DuelFolds<*>? = null): Tally {
         val s = game.state
         val played = game.played
         // This turn began after the last End Turn.
@@ -42,7 +46,7 @@ object DuelTally {
         val normal = IntArray(2)
         val special = IntArray(2)
         val acts = listOf(LinkedHashMap<String, Int>(), LinkedHashMap<String, Int>())
-        var state = game.stateAt(start)
+        var state = folds?.takeIf { it.header == game.header }?.sync(game.entries)?.stateAt(start) ?: game.stateAt(start)
         for (e in played.subList(start, played.size)) {
             when (val a = e.action) {
                 is DuelAction.Move -> {

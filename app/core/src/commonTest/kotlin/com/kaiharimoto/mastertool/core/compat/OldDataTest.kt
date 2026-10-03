@@ -121,6 +121,41 @@ class OldDataTest {
     }
 
     @Test
+    fun aDuelFrom1085WithUnstampedTokensAndLocksStillReads() {
+        // 1.0.79–1.0.85: a token without its uid and a lock without its id — the fold numbered them — then a
+        // move of that token and the lock lifted by its number. 1.0.86 stamps both on commit.
+        val old = """{"header":{"id":"d4","seed":9,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},
+            {"i":1,"seat":0,"group":1,"action":{"t":"phase","phase":"MAIN1"}},
+            {"i":2,"seat":0,"group":2,"action":{"t":"lock","seat":0,"text":"Synchro Monsters only","until":"duel"}},
+            {"i":3,"seat":0,"group":3,"action":{"t":"token","seat":0,"to":{"t":"zone","seat":0,"kind":"MONSTER","index":0},"name":"Sheep"}},
+            {"i":4,"seat":0,"group":4,"action":{"t":"pos","uid":100000,"pos":"FACE_UP_ATK"}},
+            {"i":5,"seat":0,"group":5,"action":{"t":"unlock","id":1}}],"cursor":6}"""
+        val r = assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(old))
+        val g = com.kaiharimoto.mastertool.core.duel.DuelGame.of(r)
+        val sheep = g.state.cards.getValue(com.kaiharimoto.mastertool.core.duel.DuelState.TOKEN_UIDS)
+        assertEquals("Sheep", sheep.name)
+        assertEquals(com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK, sheep.pos)
+        assertEquals(emptyList(), g.state.locks)
+        // A token and a lock put in before them take new numbers; the old ones keep theirs.
+        val zone = com.kaiharimoto.mastertool.core.duel.Place.Zone(0, com.kaiharimoto.mastertool.core.duel.ZoneKind.MONSTER, 1)
+        val inserted = com.kaiharimoto.mastertool.core.duel.replay.Replays.insert(
+            r, 2,
+            listOf(
+                com.kaiharimoto.mastertool.core.duel.DuelAction.Lock(0, "Spells only", "duel"),
+                com.kaiharimoto.mastertool.core.duel.DuelAction.Token(0, zone, name = "Ram"),
+            ),
+            0,
+        )
+        val after = com.kaiharimoto.mastertool.core.duel.DuelGame.of(inserted).state
+        assertEquals(com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK, after.cards.getValue(100_000).pos)
+        assertEquals("Ram", after.cards.getValue(100_001).name)
+        assertEquals(listOf("Spells only"), after.locks.map { it.text })
+        // And it writes them down, readable by a build that ignores them.
+        assertTrue(com.kaiharimoto.mastertool.core.duel.DuelCodec.encode(inserted).contains("\"name\":\"Sheep\",\"uid\":100000"))
+    }
+
+    @Test
     fun aPresentationFrom1070StillReads() {
         // 1.0.70: the first shape Present wrote, a deck slide and a freeform one.
         val old = """{"id":"pabc","name":"Labrynth profile","style":"BUILD_UP","theme":"arena",

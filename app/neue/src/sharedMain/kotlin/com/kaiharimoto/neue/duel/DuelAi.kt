@@ -129,7 +129,7 @@ internal fun cueAi(h: NeueHolders, cue: Cue, words: String = "") {
     val seat = if (s.solo) 0 else d.aiSeat
     val viewer = DuelBrief.viewer(d.aiKnowledge, seat)
     val from = (duels.aiRead ?: g.floor).coerceIn(0, g.cursor)
-    val lines = com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(g, from, viewer, duels.catalog)
+    val lines = com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(g, from, viewer, duels.catalog, duels.folds(g))
         .filter { it.seat != seat }
         .map { "${it.i}. ${it.text}" }
     val knows = when (d.aiKnowledge) {
