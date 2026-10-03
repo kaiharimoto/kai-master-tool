@@ -138,6 +138,10 @@ object DuelPreview {
         }
     }
 
+    /**
+     * A pile named bare, after "your", "their" or "the" ("Open their banished cards", "Shuffle the Deck"). Deliberately
+     * not [PileWords]: the log's prose ("banishment", "the GY") is a destination's, and would not read here.
+     */
     private fun pile(kind: PileKind?): String = when (kind) {
         PileKind.GY -> "GY"
         PileKind.BANISHED -> "banished cards"

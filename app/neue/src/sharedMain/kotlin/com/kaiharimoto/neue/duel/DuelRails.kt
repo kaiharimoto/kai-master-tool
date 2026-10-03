@@ -41,6 +41,7 @@ import com.kaiharimoto.mastertool.core.duel.Outcome
 import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.nameOf
+import com.kaiharimoto.mastertool.core.duel.text.DuelLetters
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
@@ -62,16 +63,8 @@ import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.releasesTyping
 import com.kaiharimoto.neue.theme.Mu
 
-/** The key each verb answers to, for the verb strip. */
-internal val VERB_KEYS = mapOf(
-    DuelVerb.ACTIVATE to DeskAction.DUEL_ACTIVATE, DuelVerb.SUMMON to DeskAction.DUEL_SUMMON, DuelVerb.SPECIAL to DeskAction.DUEL_SPECIAL,
-    DuelVerb.SET to DeskAction.DUEL_SET, DuelVerb.POSITION to DeskAction.DUEL_POSITION, DuelVerb.FLIP to DeskAction.DUEL_FLIP,
-    DuelVerb.GRAVE to DeskAction.DUEL_GRAVE, DuelVerb.BANISH to DeskAction.DUEL_BANISH, DuelVerb.BANISH_DOWN to DeskAction.DUEL_BANISH_DOWN,
-    DuelVerb.HAND to DeskAction.DUEL_HAND, DuelVerb.DECK_TOP to DeskAction.DUEL_DECK_TOP, DuelVerb.DECK_BOTTOM to DeskAction.DUEL_DECK_BOTTOM, DuelVerb.DECK_SHUFFLE to DeskAction.DUEL_DECK_SHUFFLE,
-    DuelVerb.EXTRA to DeskAction.DUEL_EXTRA, DuelVerb.ATTACH to DeskAction.DUEL_ATTACH, DuelVerb.REVEAL to DeskAction.DUEL_REVEAL,
-    DuelVerb.COUNTER_UP to DeskAction.DUEL_COUNTER_UP, DuelVerb.COUNTER_DOWN to DeskAction.DUEL_COUNTER_DOWN, DuelVerb.TARGET to DeskAction.DUEL_TARGET,
-    DuelVerb.ATTACK to DeskAction.DUEL_ATTACK,
-)
+/** The key each verb answers to, for the verb strip: [DuelLetters.KEYS], the one list of the verb keys. */
+internal val VERB_KEYS: Map<DuelVerb, DeskAction> = DuelLetters.KEYS
 
 /**
  * The inspector (1.0.78, kai: "the action guide gets shoved down … the card art is a bit too big … the

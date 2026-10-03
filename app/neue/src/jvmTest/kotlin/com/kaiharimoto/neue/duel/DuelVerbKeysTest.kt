@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.duel
 
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
+import com.kaiharimoto.mastertool.core.duel.text.DuelLetters
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -64,5 +65,6 @@ class DuelVerbKeysTest {
         assertEquals(DuelVerb.DEFAULT, VERBS[DeskAction.DUEL_DEFAULT])
         assertEquals(null, VERB_KEYS[DuelVerb.DEFAULT])
         assertEquals(VERB_KEYS.size, VERB_KEYS.values.toSet().size)
+        assertEquals(DuelLetters.KEYS, VERB_KEYS)
     }
 }

@@ -91,8 +91,7 @@ object CommandHelp {
     )
 
     /** The verb keys' letters, which are the Line's verbs before a coordinate: `s h2 m3`, `e h4 s2`, `g om3`. */
-    val letters: List<Row> = DuelCommand.VERB_WORDS.filterKeys { it.length == 1 || it in setOf("bd", "kb", "ks", "cd") }
-        .map { (k, v) -> Row(k, v.label) }
+    val letters: List<Row> = DuelLetters.ROWS.map { Row(it.letter, it.verb.label) }
         .sortedBy { it.left.length * 100 + it.left.first().code }
 
     /** Lines to type: Command mode's own examples, as the Line's help lists them. */

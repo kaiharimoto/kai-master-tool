@@ -299,13 +299,7 @@ object DuelWords {
     /** For tests. */
     internal fun pileProse(kind: PileKind): String = pileWords(kind)
 
-    private fun pileWords(kind: PileKind): String = when (kind) {
-        PileKind.HAND -> "the hand"
-        PileKind.DECK -> "the Deck"
-        PileKind.EXTRA -> "the Extra Deck"
-        PileKind.GY -> "the GY"
-        PileKind.BANISHED -> "banishment"
-    }
+    private fun pileWords(kind: PileKind): String = PileWords.prose(kind)
 
     private fun Place?.isMonsterZone() = this is Place.Zone && (kind == ZoneKind.MONSTER || kind == ZoneKind.EMZ)
 

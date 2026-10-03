@@ -17,29 +17,12 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.Page
 
-internal val VERBS = mapOf(
-    DeskAction.DUEL_DEFAULT to DuelVerb.DEFAULT,
-    DeskAction.DUEL_ACTIVATE to DuelVerb.ACTIVATE,
-    DeskAction.DUEL_SUMMON to DuelVerb.SUMMON,
-    DeskAction.DUEL_SPECIAL to DuelVerb.SPECIAL,
-    DeskAction.DUEL_SET to DuelVerb.SET,
-    DeskAction.DUEL_POSITION to DuelVerb.POSITION,
-    DeskAction.DUEL_FLIP to DuelVerb.FLIP,
-    DeskAction.DUEL_GRAVE to DuelVerb.GRAVE,
-    DeskAction.DUEL_BANISH to DuelVerb.BANISH,
-    DeskAction.DUEL_BANISH_DOWN to DuelVerb.BANISH_DOWN,
-    DeskAction.DUEL_HAND to DuelVerb.HAND,
-    DeskAction.DUEL_DECK_TOP to DuelVerb.DECK_TOP,
-    DeskAction.DUEL_DECK_BOTTOM to DuelVerb.DECK_BOTTOM,
-    DeskAction.DUEL_DECK_SHUFFLE to DuelVerb.DECK_SHUFFLE,
-    DeskAction.DUEL_EXTRA to DuelVerb.EXTRA,
-    DeskAction.DUEL_ATTACH to DuelVerb.ATTACH,
-    DeskAction.DUEL_REVEAL to DuelVerb.REVEAL,
-    DeskAction.DUEL_COUNTER_UP to DuelVerb.COUNTER_UP,
-    DeskAction.DUEL_COUNTER_DOWN to DuelVerb.COUNTER_DOWN,
-    DeskAction.DUEL_TARGET to DuelVerb.TARGET,
-    DeskAction.DUEL_ATTACK to DuelVerb.ATTACK,
-)
+/**
+ * The verb keys the window runs: [VERB_KEYS] turned round (one verb a key), and Space, the obvious thing, which is
+ * the window's alone.
+ */
+internal val VERBS: Map<DeskAction, DuelVerb> =
+    mapOf(DeskAction.DUEL_DEFAULT to DuelVerb.DEFAULT) + VERB_KEYS.entries.associate { (verb, key) -> key to verb }
 
 private val ZONES = mapOf(
     DeskAction.DUEL_ZONE_1 to (ZoneKind.MONSTER to 0),

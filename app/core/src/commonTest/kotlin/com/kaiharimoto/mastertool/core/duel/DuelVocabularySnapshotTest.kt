@@ -7,7 +7,9 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand.Parsed
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand.QueryKind
 import com.kaiharimoto.mastertool.core.duel.text.DuelComplete
+import com.kaiharimoto.mastertool.core.duel.text.DuelLetters
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
+import com.kaiharimoto.mastertool.core.duel.text.PileWords
 import com.kaiharimoto.mastertool.core.duel.voice.DuelSpeech
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -199,6 +201,21 @@ class DuelVocabularySnapshotTest {
             val p = DuelCommand.parse("shuffle $w", s, 0, catalog)
             assertFalse(p is Parsed.Actions && p.actions.singleOrNull() is DuelAction.Shuffle, "shuffle $w: $p")
         }
+    }
+
+    /** The derived tables themselves ([PileWords], [DuelLetters]) against the literals they replaced. */
+    @Test
+    fun theDerivedTablesAreTheOldLiterals() {
+        assertEquals(pileWords, PileWords.LINE)
+        assertEquals(randomPiles, PileWords.RANDOM)
+        assertEquals(queryPiles, PileWords.QUERY)
+        assertEquals(queryTheirs, PileWords.QUERY_THEIRS)
+        assertEquals(shufflePiles, PileWords.SHUFFLE)
+        PileKind.entries.forEach { assertEquals(prose.getValue(it), PileWords.prose(it)) }
+        assertEquals(verbWords.filter { it.first in letters }, DuelLetters.WORDS.toList())
+        assertEquals(letters, DuelLetters.LETTERS)
+        assertEquals(twoLetters, DuelLetters.TWO_LETTER)
+        assertEquals(completionLetters.toMap(), DuelLetters.KEY_HINTS.toMap())
     }
 
     @Test

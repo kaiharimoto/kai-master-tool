@@ -35,12 +35,11 @@ object DuelComplete {
         "random" to "A card at random", "discard" to "Discard", "spin" to "Shuffle into the Deck",
     )
 
-    /** The verb keys' letters, as `DeskShortcuts` binds them. */
-    private val LETTERS = listOf(
-        "s" to "Summon", "e" to "Set", "a" to "Activate", "g" to "Send to the GY", "b" to "Banish", "h" to "To the hand",
-        "t" to "Target", "o" to "Attach", "p" to "Position", "f" to "Flip", "r" to "Reveal", "k" to "To the top of the Deck",
-        "x" to "To the Extra Deck", "c" to "A counter",
-    )
+    /**
+     * The verb keys' letters, as `DeskShortcuts` binds them ([DuelLetters.KEY_HINTS]: the single letters with a key).
+     * Only the letter that is the whole prefix is offered, so their order never shows.
+     */
+    private val LETTERS = DuelLetters.KEY_HINTS
 
     /** For tests. */
     internal val KEY_LETTERS: List<Pair<String, String>> get() = LETTERS
@@ -177,7 +176,7 @@ object DuelComplete {
             verb != null -> {
                 val play = verb in setOf(DuelVerb.SUMMON, DuelVerb.SET, DuelVerb.SPECIAL, DuelVerb.ACTIVATE, DuelVerb.PLACE)
                 // A key's letter is a verb only before a coordinate: a card with none (the Deck's, by name) is not offered.
-                val letter = head!!.length == 1 || head in setOf("bd", "kb", "ks", "cd")
+                val letter = head!!.length == 1 || head in DuelLetters.TWO_LETTER
                 cards(70) { u ->
                     (!letter || DuelNotation.coordOf(s, u, seat, secret) != null) &&
                         (if (play) !(s.placeOf(u).let { it is Place.Pile && it.kind == PileKind.DECK }) else true)
