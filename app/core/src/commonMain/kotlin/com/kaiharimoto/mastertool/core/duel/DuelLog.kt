@@ -137,9 +137,11 @@ data class DuelGame(
      * Commits [actions] as one group by [seat], all or nothing. What they leave to chance is stamped
      * here. Anything undone is dropped: acting after an undo starts a new future.
      */
-    fun act(actions: List<DuelAction>, seat: Int?, at: Long = 0L): Result {
+    fun act(actions: List<DuelAction>, seat: Int?, at: Long = 0L, join: Boolean = false): Result {
         if (actions.isEmpty()) return Result(this, null)
-        val group = (entries.getOrNull(cursor - 1)?.group ?: -1) + 1
+        // [join]: one gesture made in steps (a turn's opening, 1.0.86) — the last group grows, never one behind the deal.
+        val last = entries.getOrNull(cursor - 1)
+        val group = if (join && last != null && cursor > floor) last.group else (last?.group ?: -1) + 1
         // Chance from the dice of the roll it is (1.0.86, `forRoll`), not of the entry: a line of chat
         // between an undo and a new shuffle no longer changes the shuffle.
         var roll = played.count { DuelRandom.rolls(it.action) }
@@ -171,6 +173,60 @@ data class DuelGame(
         return copy(cursor = to, state = state)
     }
 
+    /** Some table move is in play to take back: talk alone is not one (1.0.86). */
+    val canUndoMove: Boolean get() = (floor until cursor).any { !isTalk(entries[it].action) }
+
+    /**
+     * Undo that steps over talk (1.0.86): the newest group that moved anything on the table is taken back, and the
+     * groups of talk made after it — a word to Ai, a cue, a ping, a thinking mark, a note — stay in the log, in their
+     * order, now just before it, so Ctrl Z after cueing Ai takes back the move and not the cue. The move is the first
+     * thing redo puts back. With no talk after the last move this is [undo]; with only talk back to the deal, nothing
+     * changes.
+     */
+    fun undoMove(): DuelGame {
+        var end = cursor
+        while (end > floor) {
+            val start = groupStart(end)
+            if ((start until end).any { !isTalk(entries[it].action) }) {
+                if (end == cursor) return undo()
+                val talk = entries.subList(end, cursor)
+                val move = entries.subList(start, end)
+                // The same run of group numbers in the new order, so groups stay distinct and rising.
+                var next = move.first().group
+                var was: Int? = null
+                val moved = (talk + move).mapIndexed { k, e ->
+                    if (was != null && e.group != was) next++
+                    was = e.group
+                    e.copy(i = start + k, group = next)
+                }
+                val reordered = entries.subList(0, start) + moved + entries.subList(cursor, entries.size)
+                val to = start + talk.size
+                return copy(entries = reordered, cursor = to, state = DuelSetup.fold(header, reordered.subList(0, to)).first)
+            }
+            end = start
+        }
+        return this
+    }
+
+    /** Redo that steps over talk (1.0.86): groups are put back until one that moves something on the table is. */
+    fun redoMove(): DuelGame {
+        var g = this
+        while (g.canRedo) {
+            val from = g.cursor
+            g = g.redo()
+            if ((from until g.cursor).any { !isTalk(g.entries[it].action) }) break
+        }
+        return g
+    }
+
+    /** Where the group that ends just before entry [end] begins (never behind the deal). */
+    private fun groupStart(end: Int): Int {
+        val group = entries[end - 1].group
+        var to = end - 1
+        while (to > floor && entries[to - 1].group == group) to--
+        return to
+    }
+
     /** The table before entry [n] (after the first n entries). */
     fun stateAt(n: Int): DuelState = DuelSetup.fold(header, entries.subList(0, n.coerceIn(0, entries.size))).first
 
@@ -182,6 +238,14 @@ data class DuelGame(
     }
 
     companion object {
+        /**
+         * Talk (1.0.86): what is said at the table and changes nothing on it — chat (every word to Ai and every cue),
+         * a ping, a thinking mark, a note, and what a newer build wrote. An ask, the answer to one and a lock written
+         * down are the players' moves, not talk: undo takes them back.
+         */
+        fun isTalk(a: DuelAction): Boolean = a is DuelAction.Chat || a is DuelAction.Ping || a is DuelAction.Thinking ||
+            a is DuelAction.Note || a is DuelAction.Unknown
+
         /** A new duel, dealt: the opening shuffles and draws are its first entries, behind undo's reach. */
         fun start(header: DuelHeader, at: Long = 0L): DuelGame {
             val base = DuelGame(header, emptyList(), 0, DuelSetup.initial(header), 0)

@@ -25,7 +25,10 @@ import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelFolds
 import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.ai.AiCue
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
+import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.cursor.cursorPointer
@@ -37,6 +40,7 @@ import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.theme.Mu
 
@@ -182,17 +186,18 @@ private fun LogRow(h: NeueHolders, duels: Duels, line: LogLine, opened: MutableM
 /**
  * The buttons that hand Ai a cue (1.0.80): what fits the table now. Ai's link on top of the chain: No
  * response or Respond. Responding: Done. The person's own link on top: Over to you. Otherwise: Your move,
- * Catch up. While Ai answers: what it is doing, and Stop. A question it asks stands here too.
+ * Catch up. While Ai answers: what it is doing, and Stop. A question it asks stands here too. From 1.0.86 each has
+ * a key, shown in its tip: Y is the first button whatever it is, Shift Y Catch up, Esc Stop, and a digit picks a
+ * question's option — so a duel against Ai needs no mouse.
  */
 @Composable
 private fun AiCues(h: NeueHolders, duels: Duels, game: DuelGame, talking: Boolean) {
     val c = Mu.colors
     val ai = h.ai
-    val s = game.state
-    val seat = if (s.solo) 0 else h.neue.prefs.duel.aiSeat
     val q = ai.question
     if (q != null && talking) {
-        Box(Modifier.fillMaxWidth().padding(8.dp)) { com.kaiharimoto.neue.ai.QuestionCard(ai, q) }
+        // Its options take the digit keys while it stands here (1.0.86).
+        Box(Modifier.fillMaxWidth().padding(8.dp)) { com.kaiharimoto.neue.ai.QuestionCard(ai, q, numbered = true) }
         return
     }
     // What Ai's watches wait for, by kind, never by card — behind Thinking, as the rest of its plans are (1.0.85).
@@ -208,42 +213,118 @@ private fun AiCues(h: NeueHolders, duels: Duels, game: DuelGame, talking: Boolea
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        val top = s.chain.lastOrNull()
-        when {
+        // The first button is the Y key's (1.0.86): both read [aiCueNow], so they never disagree.
+        val answer = cueKey(DeskAction.DUEL_AI_ANSWER)
+        when (val cue = aiCueNow(h, game)) {
             // Woken by a watch (1.0.85): the person's moves wait on its answer, unless they go on.
-            duels.aiAnswering || duels.held != null -> {
+            AiCue.DONT_WAIT -> {
                 com.kaiharimoto.neue.ai.avatar.AiMark(18.dp, name = ai.name)
                 Small(
                     if (duels.held != null) "${ai.name} may respond before the phase moves on" else "${ai.name} may respond — your move waits",
                     Modifier.weight(1f), color = c.ink, maxLines = 1,
                 )
-                MuButton("Don't wait", { duels.dontWait() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+                Tip("Go on without ${ai.name}'s answer", kbd = answer, above = true) {
+                    MuButton("Don't wait", { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+                }
             }
-            ai.running && talking -> {
+            AiCue.BUSY -> {
                 com.kaiharimoto.neue.ai.avatar.AiMark(18.dp, name = ai.name)
                 Small(ai.working ?: ai.status ?: "${ai.name} is thinking", Modifier.weight(1f), color = c.ink70, maxLines = 1)
-                MuButton("Stop", { ai.stop() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+                Tip("Stop ${ai.name} where it is", kbd = cueKey(DeskAction.DISMISS), above = true) {
+                    MuButton("Stop", { ai.stop() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+                }
             }
-            duels.aiResponding -> {
+            AiCue.DONE -> {
                 Small("Respond on the table, then:", Modifier.weight(1f), color = c.ink70, maxLines = 1)
-                MuButton("Done", { duels.say(Cue.DONE.shown); cueAi(h, Cue.DONE) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+                Tip("Tell ${ai.name} you have responded", kbd = answer, above = true) {
+                    MuButton("Done", { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+                }
             }
-            top != null && top.seat == seat && !s.solo -> {
-                MuButton("No response", { duels.say(Cue.NO_RESPONSE.shown); cueAi(h, Cue.NO_RESPONSE) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+            AiCue.NO_RESPONSE -> {
+                Tip("Let ${ai.name}'s link resolve", kbd = answer, above = true) {
+                    MuButton("No response", { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+                }
                 MuButton("Respond", { duels.aiResponding = true }, size = BtnSize.SM)
                 Box(Modifier.weight(1f))
             }
-            top != null && top.seat != seat && !s.solo -> {
-                MuButton("Over to you", { duels.say(Cue.PASS.shown); cueAi(h, Cue.PASS) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+            AiCue.PASS -> {
+                Tip("Pass priority to ${ai.name}", kbd = answer, above = true) {
+                    MuButton("Over to you", { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+                }
                 Small("or keep acting: you hold priority", Modifier.weight(1f), color = c.ink45, maxLines = 1)
             }
-            else -> {
-                MuButton(Cue.YOUR_MOVE.shown, { duels.say(Cue.YOUR_MOVE.shown); askAiToPlay(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
-                MuButton(Cue.CATCH_UP.shown, { duels.say(Cue.CATCH_UP.shown); cueAi(h, Cue.CATCH_UP) }, size = BtnSize.SM)
+            AiCue.YOUR_MOVE -> {
+                Tip("${ai.name} responds, or plays its turn", kbd = answer, above = true) {
+                    MuButton(Cue.YOUR_MOVE.shown, { giveCue(h, cue) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+                }
+                Tip("${ai.name} reads what you did and asks; it moves nothing", kbd = cueKey(DeskAction.DUEL_AI_CATCH_UP), above = true) {
+                    MuButton(Cue.CATCH_UP.shown, { catchUp(h) }, size = BtnSize.SM)
+                }
                 Box(Modifier.weight(1f))
             }
         }
     }
+}
+
+private fun cueKey(action: DeskAction): String? = DeskShortcuts.chordFor(action)?.let(DeskShortcuts::kbd)
+
+/** Ai's conversation at this table is the one open: the log's foot speaks for it (its question, Stop). */
+internal fun duelTalking(h: NeueHolders): Boolean {
+    val session = h.ai.session ?: return false
+    return aiAtTable(h) && session.mode == AiSession.MODE_DUEL && session.id == h.duel.aiSession
+}
+
+/** What the log's foot offers Ai now (1.0.86): its buttons and the Y key read this one answer. */
+internal fun aiCueNow(h: NeueHolders, game: DuelGame): AiCue {
+    val duels = h.duel
+    val s = game.state
+    val seat = if (s.solo) 0 else h.neue.prefs.duel.aiSeat
+    return AiCue.primary(
+        waiting = duels.aiAnswering || duels.held != null,
+        running = h.ai.running && duelTalking(h),
+        responding = duels.aiResponding,
+        topSeat = s.chain.lastOrNull()?.seat,
+        aiSeat = seat,
+        solo = s.solo,
+    )
+}
+
+/** [cue] given, by its button or by its key. */
+internal fun giveCue(h: NeueHolders, cue: AiCue) {
+    val duels = h.duel
+    when (cue) {
+        AiCue.DONT_WAIT -> duels.dontWait()
+        AiCue.BUSY -> Unit
+        AiCue.DONE -> { duels.say(Cue.DONE.shown); cueAi(h, Cue.DONE) }
+        AiCue.NO_RESPONSE -> { duels.say(Cue.NO_RESPONSE.shown); cueAi(h, Cue.NO_RESPONSE) }
+        AiCue.PASS -> { duels.say(Cue.PASS.shown); cueAi(h, Cue.PASS) }
+        AiCue.YOUR_MOVE -> { duels.say(Cue.YOUR_MOVE.shown); askAiToPlay(h) }
+    }
+}
+
+internal fun catchUp(h: NeueHolders) {
+    h.duel.say(Cue.CATCH_UP.shown)
+    cueAi(h, Cue.CATCH_UP)
+}
+
+/**
+ * A digit while Ai's question stands in the log's foot (1.0.86): option [n], as a click on it would — answered, or
+ * picked when it asks for several. False when no question of the duel's is showing, and the digit is a zone's.
+ */
+internal fun answerByDigit(h: NeueHolders, n: Int): Boolean {
+    val q = h.ai.question ?: return false
+    if (!duelTalking(h)) return false
+    val option = q.options.getOrNull(n - 1) ?: return false
+    if (q.multiple) q.picked = if (option in q.picked) q.picked - option else q.picked + option else q.reply(option)
+    return true
+}
+
+/** Enter while Ai asks for several answers and some are picked: sent, as its Answer button would. */
+internal fun answerPicked(h: NeueHolders): Boolean {
+    val q = h.ai.question ?: return false
+    if (!duelTalking(h) || !q.multiple || q.picked.isEmpty()) return false
+    q.reply((q.picked + listOfNotNull(q.typed.trim().takeIf { it.isNotEmpty() })).joinToString("; "))
+    return true
 }
 
 /**

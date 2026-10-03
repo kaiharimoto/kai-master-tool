@@ -147,6 +147,8 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
     }
     return buildList {
         add("At the duel table: you are ${DuelWords.seatLabel(s, seat)}, with $knows. Turn ${s.turn}, ${DuelWords.seatLabel(s, s.active)} to play, ${s.phase.label} Phase.")
+        // Turns that start themselves (1.0.86): the table has drawn for Ai's seat, so it must not draw again.
+        if (d.autoDraw) add(com.kaiharimoto.mastertool.core.duel.TurnStart.FOR_AI)
         if (takenBack) add("Moves were taken back since you last read: the table below is how it stands now.")
         if (lines.isEmpty()) add("Nothing new on the table since you last read.")
         else {
@@ -289,6 +291,22 @@ internal fun DuelAiDialog(h: NeueHolders) {
             MuButton("Play this turn, ${h.ai.name}", { duels.combosOpen = false; askAiToPlay(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
             HRule()
         }
+        // Turns that start themselves (1.0.86): a table setting, here beside Ai because it decides who draws for Ai.
+        FieldLabel("Turns")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MuSwitch(d.autoDraw, { v -> update { it.copy(autoDraw = v) } })
+            Small("Start each turn in Main Phase 1", color = c.ink)
+        }
+        Help(
+            if (d.autoDraw) {
+                "After End Turn the table draws for the next player — never on the first turn — and moves through the Standby Phase " +
+                    "to Main Phase 1, as one step of undo." +
+                    if (neue.prefs.ai.enabled) " A response ${h.ai.name} is watching for in the Draw or Standby Phase pauses it until ${h.ai.name} has answered." else ""
+            } else {
+                "Each turn starts in the Draw Phase with nothing drawn: draw (D) and move on (N) yourself."
+            },
+        )
+        HRule()
         FieldLabel("Combos")
         if (deckId == null) {
             Help("Combos are kept with a deck from the library: start a duel with a saved deck to keep one.")
@@ -323,8 +341,9 @@ internal fun DuelAiDialog(h: NeueHolders) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MuInput(name, { name = it }, Modifier.weight(1f), placeholder = "Name the line played this turn", dense = true)
                     MuButton("Record this turn", {
-                        // From the start of this turn (the last End Turn), the bottom seat's own moves.
-                        val from = g.entries.subList(0, g.cursor).indexOfLast { it.action == DuelAction.EndTurn }.let { if (it < 0) g.floor else it + 1 }
+                        // From the start of this turn (the last End Turn), past its draw and phases (1.0.86), the bottom seat's own moves.
+                        val turnFrom = g.entries.subList(0, g.cursor).indexOfLast { it.action == DuelAction.EndTurn }.let { if (it < 0) g.floor else it + 1 }
+                        val from = com.kaiharimoto.mastertool.core.duel.TurnStart.afterOpening(g.entries, turnFrom, g.cursor)
                         val start = g.stateAt(from)
                         val span = g.entries.subList(from, g.cursor).filter { it.seat == seat }
                         val steps = ComboRecorder.steps(start, span, duels.catalog)

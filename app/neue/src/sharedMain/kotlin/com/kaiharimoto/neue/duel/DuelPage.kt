@@ -187,6 +187,7 @@ internal fun DuelPage(h: NeueHolders) {
         duels.stopAi = { h.ai.stop() }
         duels.watcher = if (watching) prefs.aiSeat else null
         duels.aiEngaged = aiAtTable(h) && live?.state?.solo == false && (prefs.aiPlays || duels.aiSession != null)
+        duels.autoDraw = prefs.autoDraw
     }
     LaunchedEffect(duels.fired, duels.queuedCue, h.ai.running, watching) {
         if (h.ai.running) return@LaunchedEffect
@@ -197,6 +198,8 @@ internal fun DuelPage(h: NeueHolders) {
             watching && duels.fired.isNotEmpty() -> cueTriggered(h)
             duels.queuedCue != null -> cueQueued(h)
         }
+        // A turn's opening paused on a watch goes on once nothing waits on Ai (1.0.86).
+        duels.resumeTurn()
     }
 }
 
@@ -237,7 +240,7 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
             }
             if (online) Small("Online · ${duels.peer ?: "waiting"}", color = c.ink70, maxLines = 1)
             VRule(Modifier.height(24.dp), color = c.ink12)
-            IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndo || online, label = if (online) "Ask to take back" else "Undo", reason = "Nothing to take back")
+            IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndoMove || online || duels.held != null, label = if (online) "Ask to take back" else "Undo", reason = "Nothing to take back")
             if (!online) IconButton(Icons.Redo, { duels.redo() }, enabled = game.canRedo, label = "Redo", reason = "Nothing to put back")
             if (phone) {
                 Box(Modifier.weight(1f))
@@ -305,6 +308,12 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
             })
         }
         if (!s.solo && !online) add(MenuEntry("Sit at the other seat", hint = key(DeskAction.DUEL_SWAP)) { duels.swap() })
+        // Turns that start themselves (1.0.86); the help for it is in the Ai and combos dialog.
+        if (!online) {
+            add(MenuEntry(if (prefs.autoDraw) "Start turns in the Draw Phase" else "Start turns in Main Phase 1, drawn") {
+                neue.update { it.copy(duel = it.duel.copy(autoDraw = !it.duel.autoDraw)) }
+            })
+        }
         add(MenuEntry("The card", separatorBefore = true, hint = "Read it large") { duels.drawer = "card" })
         add(MenuEntry("Log and chat") { duels.drawer = "log" })
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })

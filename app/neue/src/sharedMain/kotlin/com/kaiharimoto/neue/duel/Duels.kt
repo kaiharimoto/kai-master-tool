@@ -127,7 +127,8 @@ class Duels(val dir: File) {
 
     /**
      * A phase change held for Ai: the moves, who made them, and the table it was made against — released only onto
-     * that same table, unchanged ([cursor], the same [game]) with no chain open; [spent] are the once-watches it used.
+     * that same table, unchanged ([cursor], the same [game]) with no chain open; [spent] are the once-watches it used;
+     * [auto]: a step of a turn's opening, which goes on once it is made (1.0.86).
      */
     data class Held(
         val actions: List<DuelAction>,
@@ -135,6 +136,7 @@ class Duels(val dir: File) {
         val cursor: Int,
         val game: DuelGame,
         val spent: List<com.kaiharimoto.mastertool.core.duel.ai.Watch> = emptyList(),
+        val auto: Boolean = false,
     )
 
     fun watch(w: com.kaiharimoto.mastertool.core.duel.ai.Watch): com.kaiharimoto.mastertool.core.duel.ai.Watch {
@@ -200,7 +202,9 @@ class Duels(val dir: File) {
             return
         }
         releasing = true
-        try { act(h.actions, h.seat) } finally { releasing = false }
+        autoActing = h.auto
+        try { act(h.actions, h.seat) } finally { releasing = false; autoActing = false }
+        resumeTurn()
     }
 
     /** The held phase change taken back (Undo): the once-watches it spent stand again. */
@@ -216,6 +220,50 @@ class Duels(val dir: File) {
         aiAnswering = false
         fired = emptyList()
         releaseHeld()
+        resumeTurn()
+    }
+
+    // ---- turns that start themselves (1.0.86) ----------------------------------------------------------
+
+    /** `DuelPrefs.autoDraw`, set by the page: after End Turn the next player's draw, Standby and Main 1 are made here. */
+    var autoDraw = true
+    /** The turn whose opening is being made; null when none is. */
+    private var autoTurn: Int? = null
+    /** The opening's group in the log: its steps are one gesture, the incoming seat's, one step of undo. */
+    private var autoGroup: Int? = null
+    /** A step of the opening is being committed. */
+    private var autoActing = false
+
+    /** The turn just begun opens by itself: on the live table of this device only, never a networked one or a replay. */
+    private fun beginTurn() {
+        autoTurn = null
+        if (!autoDraw || role != null || replay != null) return
+        autoTurn = game?.state?.turn ?: return
+        autoGroup = null
+        if (!releasing) resumeTurn()
+    }
+
+    /**
+     * Makes the opening's next steps ([com.kaiharimoto.mastertool.core.duel.TurnStart]) through [act], so Ai's watches see
+     * the draw and each phase entered and left. It pauses while Ai answers a watch that fired, or holds a phase change,
+     * and goes on from where it stopped once Ai has answered (or the person did not wait) and the held change is made;
+     * a held change taken back (Undo) ends it, as does any table it no longer fits.
+     */
+    fun resumeTurn() {
+        val turn = autoTurn ?: return
+        var left = 4
+        while (left-- > 0) {
+            val g = game
+            if (g == null || !autoDraw || role != null || replay != null || g.state.turn != turn) { autoTurn = null; return }
+            if (held != null || aiAnswering || fired.isNotEmpty()) return
+            val step = com.kaiharimoto.mastertool.core.duel.TurnStart.next(g) ?: run { autoTurn = null; return }
+            // The opening is the table's, never a move put back in a phase gone by.
+            val pastAt = insertAfter
+            insertAfter = null
+            autoActing = true
+            val ok = try { act(listOf(step), g.state.active) } finally { autoActing = false; insertAfter = pastAt }
+            if (!ok) { autoTurn = null; return }
+        }
     }
 
     /** Where the person's drag acts as another seat than the card's: a guest. */
@@ -321,6 +369,8 @@ class Duels(val dir: File) {
         forgetTriggers()
         queuedCue = null
         save()
+        // Turn 1 opens by itself too (1.0.86): Standby and Main 1, nothing drawn.
+        beginTurn()
     }
 
     /**
@@ -354,8 +404,9 @@ class Duels(val dir: File) {
         // Ai's response triggers (1.0.85): the person's moves, checked against the watches Ai left.
         // Every table move not Ai's own is the person's (1.0.85: moving Ai's cards, logged as its seat, counted too).
         val w = watcher
+        // A turn's opening is the incoming seat's own: Ai's draw and phases never wake Ai (1.0.86).
         val person = w?.let { 1 - it }
-        val watched = w != null && !aiActing && actions.any { !it.social }
+        val watched = w != null && !aiActing && !(autoActing && seat == w) && actions.any { !it.social }
         if (watched && !releasing) {
             if (held != null) {
                 problem = "Your phase change waits on Ai's answer."
@@ -378,19 +429,20 @@ class Duels(val dir: File) {
                         if (!check.ok) { problem = check.problem; return false }
                         problem = null
                         val spent = fire(hits)
-                        held = Held(actions, seat, g.cursor, g, spent)
+                        held = Held(actions, seat, g.cursor, g, spent, autoActing)
                         return true
                     }
                 }
             }
         }
-        val r = g.act(actions, seat, now())
+        val r = g.act(actions, seat, now(), join = autoActing && autoGroup != null && g.entries.getOrNull(g.cursor - 1)?.group == autoGroup)
         if (!r.ok) {
             problem = r.problem
             return false
         }
         game = r.game
         problem = null
+        if (autoActing && autoGroup == null) autoGroup = r.game.entries.getOrNull(r.game.cursor - 1)?.group
         // Something moved: a pending Attach and the verbs beside the last card are done with (1.0.85).
         if (actions.any { !it.social && it !is DuelAction.Counter }) {
             verbStrip = false
@@ -406,6 +458,8 @@ class Duels(val dir: File) {
                 fire(com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.hits(live, seen, w, summonsThisTurn()))
             }
         }
+        // The turn passed: the next one opens by itself (1.0.86), after what this move fired.
+        if (DuelAction.EndTurn in actions) beginTurn()
         return true
     }
 
@@ -497,12 +551,17 @@ class Duels(val dir: File) {
         if (replay != null) { step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, -1); return }
         if (role != null) { askTakeBack(); return }
         // A phase change held for Ai is not on the table yet: undo takes it back first.
-        if (held != null) { dropHeld(); return }
+        if (held != null) { dropHeld(); autoTurn = null; return }
         // Ai is answering the move just made: taking it back under its answer would leave the answer to nothing.
         if (aiAnswering || fired.isNotEmpty()) { problem = "Ai is answering your move — Don't wait first, then undo."; return }
         val g = game ?: return
         if (!g.canUndo) return
-        game = g.undo()
+        autoTurn = null
+        // Talk stays (1.0.86): a word to Ai or a cue is never what Ctrl Z takes back; the move before it is.
+        val next = g.undoMove()
+        // Talk moved to before the move taken back: lines picked by number would now be other lines.
+        if (next.entries !== g.entries) { logPick = emptyList(); insertAfter = null }
+        game = next
         placed = null
         problem = null
         save()
@@ -514,7 +573,7 @@ class Duels(val dir: File) {
         if (waitingOnAi) { problem = "Ai is answering your move — Don't wait first."; return }
         val g = game ?: return
         if (!g.canRedo) return
-        game = g.redo()
+        game = g.redoMove()
         placed = null
         save()
     }

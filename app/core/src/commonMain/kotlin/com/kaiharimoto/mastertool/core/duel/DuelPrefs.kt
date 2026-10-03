@@ -41,6 +41,8 @@ data class DuelPrefs(
     val logGames: Boolean = true,
     /** Ai's response triggers (1.0.85): its watches wake it on the moves it could answer, and the person's moves wait for it. */
     val aiTriggers: Boolean = true,
+    /** Each turn starts in Main Phase 1 (1.0.86): after End Turn the table draws for the next player and moves on by itself. */
+    val autoDraw: Boolean = true,
 ) {
     companion object {
         const val KNOW_ALL = "all"

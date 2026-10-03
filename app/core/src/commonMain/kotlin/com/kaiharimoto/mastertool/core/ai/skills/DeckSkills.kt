@@ -491,6 +491,8 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
   (discard, tribute, detach) before the effect; resolve the chain (`resolve`) in order.
 - In a duel against the person, stop where they could respond: after an activation or a summon that matters, end the call and say what
   you did, so they can chain. Only in a combo the person asked to see do you play straight through.
+- Your turn's opening: when the cue says turns start themselves, the table has drawn for you and you begin in Main Phase 1 — never
+  `draw` or `next` to start it. When it does not, begin with `draw`, then `next` to the Standby Phase and to Main Phase 1.
 
 ## Watching for your responses
 - You need not wait to be cued. Each time you read your hand, leave a watch with `duel_watch` for each response it holds, and
