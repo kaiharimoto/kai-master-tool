@@ -22,6 +22,40 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
+/**
+ * A refused call in words that say what to do (1.0.87, kai: "google drive would not let the app list its files"): the
+ * service's own reason is read from the body, because a 403 is many things — the Drive API switched off for the app's
+ * project (signing in again cannot help), the permission box left unticked at sign-in, a rate limit, a full Drive.
+ */
+object CloudErrors {
+    const val DRIVE_BOX = "“See, create, and delete its own configuration data in your Google Drive”"
+
+    fun explain(label: String, code: Int, body: String, doing: String): String {
+        val error = runCatching { Sync.json.parseToJsonElement(body).jsonObject["error"]?.jsonObject }.getOrNull()
+        val reasons = buildList {
+            error?.get("errors")?.jsonArray?.forEach { e -> e.jsonObject["reason"]?.jsonPrimitive?.content?.let(::add) }
+            error?.get("details")?.jsonArray?.forEach { d -> d.jsonObject["reason"]?.jsonPrimitive?.content?.let(::add) }
+            error?.get("status")?.jsonPrimitive?.content?.let(::add)
+        }
+        val message = error?.get("message")?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val project = message?.let { Regex("project (\\d+)").find(it)?.groupValues?.get(1) }
+        return when {
+            reasons.any { it == "accessNotConfigured" || it == "SERVICE_DISABLED" } ->
+                "The $label API is switched off for this app's Google Cloud project, so $label refuses every request — " +
+                    "signing in again will not help. Whoever registered the app turns it on: " +
+                    "https://console.cloud.google.com/apis/library/drive.googleapis.com" + (project?.let { "?project=$it" } ?: "") + " › Enable."
+            reasons.any { it == "insufficientPermissions" || it == "ACCESS_TOKEN_SCOPE_INSUFFICIENT" || it == "insufficientScopes" } ->
+                "$label was not given leave to keep the app's files. Sign in again in Settings › Sync, and on Google's page tick $DRIVE_BOX."
+            reasons.any { it == "storageQuotaExceeded" } || code == 507 -> "Your $label is full."
+            reasons.any { it == "rateLimitExceeded" || it == "userRateLimitExceeded" } || code == 429 ->
+                "$label asked the app to slow down. Sync will try again in a few minutes."
+            code == 401 -> "$label has signed this device out. Sign in again in Settings › Sync."
+            code == 403 -> "$label would not let the app $doing" + (message?.let { ": $it" } ?: ".") + " Signing in again in Settings › Sync may help."
+            else -> "$label could not $doing ($code)" + (message?.let { ": $it" } ?: ".")
+        }
+    }
+}
+
 /** What a sign-in store needs: a token asked for before each call, and failures worded once. */
 abstract class CloudStore(
     protected val http: HttpClient,
@@ -50,15 +84,8 @@ abstract class CloudStore(
     protected suspend fun check(r: HttpResponse, doing: String) {
         val code = r.status.value
         if (code in 200..299) return
-        throw SyncException(
-            when (code) {
-                401 -> "${cloud.label} has signed this device out. Sign in again in Settings › Sync."
-                403 -> "${cloud.label} would not let the app $doing. Sign in again in Settings › Sync."
-                429 -> "${cloud.label} asked the app to slow down. Sync will try again in a few minutes."
-                507 -> "Your ${cloud.label} is full."
-                else -> "${cloud.label} could not $doing ($code)."
-            },
-        )
+        val body = runCatching { r.bodyAsText() }.getOrDefault("")
+        throw SyncException(CloudErrors.explain(cloud.label, code, body, doing))
     }
 
     protected suspend fun json(r: HttpResponse): JsonObject = Sync.json.parseToJsonElement(r.bodyAsText()).jsonObject

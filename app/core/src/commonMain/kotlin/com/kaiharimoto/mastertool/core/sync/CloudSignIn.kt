@@ -124,6 +124,12 @@ object CloudSignIn {
                 else "${cloud.label} would not sign in (${why ?: r.status.value}).",
             )
         }
+        // Google lets the person untick the permission on its page: the token then opens nothing, and every call is a
+        // 403 later. Said now, at sign-in, where it can be put right (1.0.87).
+        val granted = o["scope"]?.jsonPrimitive?.content
+        if (granted != null && cloud.scope.isNotBlank() && cloud.scope.split(' ').any { it !in granted.split(' ') }) {
+            throw SyncException("${cloud.label} was not given leave to keep the app's files. Sign in again and tick ${CloudErrors.DRIVE_BOX}.")
+        }
         val access = o["access_token"]?.jsonPrimitive?.content.orEmpty()
         val expires = o["expires_in"]?.jsonPrimitive?.longOrNull ?: 3600
         return CloudTokens(
