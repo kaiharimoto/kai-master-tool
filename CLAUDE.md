@@ -668,6 +668,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   text pays with it (`DuelCardInfo.handCost`); the Deck is backs; top / shuffled in / bottom (K, Alt K, Shift K; the Deck's
   thirds, `DeckPart`); chance is `DuelAction.Pick` (`discard random`, `random oh to gy`); a monster dropped on a monster goes
   on top (`Move.over`); the ATK/DEF plate sits inside the card's foot (`StatPlate`); the inspector's art fills its column.
+  **The opening roll (1.0.88)**: two 3D dice a seat, dragged and thrown (`core/duel/dice`: `DiceSim` rigid bodies, plain
+  `Double` maths so host and guest agree; `DieFaces.relabel` puts the stamped value on the face physics left up — the values
+  are `DuelRandom`'s, stamped on commit with the throw in `OpeningRoll`); higher sum chooses (`GoFirst`), a tie rolls again;
+  `DuelState.opening` holds the turn back until then; the log names numbers only once the dice land (`Duels.diceRolling`);
+  Shift R / `roll`; `DuelPrefs.openingRoll`. `--duel-dice=rest|flying|settled|choose`.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
