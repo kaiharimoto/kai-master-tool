@@ -53,6 +53,7 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.byFinger
+import com.kaiharimoto.neue.kit.releasesTyping
 import com.kaiharimoto.neue.theme.Mu
 import kotlinx.coroutines.delay
 import kotlin.math.atan2
@@ -83,9 +84,18 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     val density = LocalDensity.current
     var carry by remember { mutableStateOf<Carry?>(null) }
     var box by remember { mutableStateOf<Slot?>(null) }
-    val frames = remember(s, layout, viewers, duels.strip) { DuelFrames.of(s, layout, viewers, duels.strip) }
+    // A card carried out of an open pile: the pile steps aside, so the zones under it take the drop (1.0.78).
+    var stripLeft by remember { mutableStateOf(false) }
+    val facing = h.neue.prefs.duel.facing
+    val frames = remember(s, layout, viewers, duels.strip, facing, duels.stripRow) { DuelFrames.of(s, layout, viewers, duels.strip, facing, duels.stripRow) }
     val shownFrames = carry?.let { cr ->
-        frames.map { f -> if (f.uid == cr.uid) f.copy(x = cr.x - cr.grabX, y = cr.y - cr.grabY, rotation = 0f, z = 100f, shown = true, w = layout.card, h = layout.cardHeight) else f }
+        frames.map { f ->
+            when {
+                f.uid == cr.uid -> f.copy(x = cr.x - cr.grabX, y = cr.y - cr.grabY, rotation = 0f, z = 100f, shown = true, w = layout.card, h = layout.cardHeight)
+                stripLeft && f.inStrip -> f.copy(shown = false)
+                else -> f
+            }
+        }
     } ?: frames
     val framesNow by rememberUpdatedState(frames)
     val stateNow by rememberUpdatedState(s)
@@ -111,7 +121,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         val st = stateNow
         val l = layoutNow
         val strip = duels.strip
-        if (strip != null && DuelFrames.stripBand(l).inflated(l.gap).contains(x, y)) return DropSpot.Pile(strip.first, strip.second)
+        if (strip != null && !stripLeft && stripGround(st, l, strip).contains(x, y)) return DropSpot.Pile(strip.first, strip.second)
         val under = framesNow.filter { it.uid != uid && it.shown && !it.inStrip && it.contains(x, y) }.maxByOrNull { it.z }
         if (under != null) {
             when (val p = st.placeOf(under.uid)) {
@@ -182,12 +192,15 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 if (alt) { duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, uid = uid)); return }
                 duels.inspected = uid
                 duels.selection = if (shift) (if (uid in duels.selection) duels.selection - uid else duels.selection + uid) else setOf(uid)
+                // What it can do, beside it (1.0.78).
+                duels.verbStrip = true
             }
             is Hit.Pile -> if (alt) duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, place = Place.Pile(hit.seat, hit.kind))) else duels.openPile(hit.seat, hit.kind)
             Hit.Chain -> if (stateNow.chain.isNotEmpty()) duels.act(DuelAction.ChainResolve)
             Hit.Table -> {
                 duels.selection = emptySet()
                 duels.attaching = null
+                duels.verbStrip = false
             }
         }
     }
@@ -204,12 +217,33 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     continue
                 }
                 if (event.type == PointerEventType.Exit) { duels.hovered = null; continue }
+                // The wheel over a long open pile turns its rows.
+                if (event.type == PointerEventType.Scroll) {
+                    val open = duels.strip
+                    val ch = event.changes.first()
+                    if (open != null) {
+                        val n = stateNow.seats[open.first].pile(open.second).size
+                        val grid = DuelFrames.stripGrid(n, layoutNow)
+                        if (grid.scrolls && stripGround(stateNow, layoutNow, open).contains(ch.position.x / d, ch.position.y / d)) {
+                            val step = if (ch.scrollDelta.y > 0) 1 else if (ch.scrollDelta.y < 0) -1 else 0
+                            duels.stripRow = (duels.stripRow + step).coerceIn(0, grid.rows - grid.visibleRows)
+                            ch.consume()
+                        }
+                    }
+                    continue
+                }
                 if (event.type != PointerEventType.Press) continue
                 val down = event.changes.first()
                 if (down.isConsumed) continue
                 val x0 = down.position.x / d
                 val y0 = down.position.y / d
                 val hit = hitAt(x0, y0)
+                // A press outside an open pile closes it (1.0.78, kai: "close it by pressing outside of it"),
+                // and goes on to do what it does; a press on the pile itself is its own toggle.
+                duels.strip?.let { open ->
+                    val onItsPile = hit is Hit.Pile && hit.seat == open.first && hit.kind == open.second
+                    if (!onItsPile && !stripGround(stateNow, layoutNow, open).contains(x0, y0)) duels.closeStrip()
+                }
                 val shift = event.keyboardModifiers.isShiftPressed
                 val alt = event.keyboardModifiers.isAltPressed
                 if (event.buttons.isSecondaryPressed) {
@@ -239,8 +273,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                         // A hold: every verb for the card, beside it read large.
                         if (hit is Hit.Card) {
                             duels.inspected = hit.frame.uid
-                            duels.verbsOpen = true
-                            if (layoutNow.drawers) duels.drawer = "card"
+                            duels.selection = setOf(hit.frame.uid)
+                            duels.verbStrip = true
                         } else if (hit is Hit.Table && finger) duels.commandFocus++
                         do { event = awaitPointerEvent(); event.changes.forEach { it.consume() } } while (event.changes.any { it.pressed })
                     }
@@ -257,7 +291,13 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                             val gy = (y0 - cardHit.y).coerceIn(0f, layoutNow.cardHeight)
                             var p = moved!!
                             var mods = event.keyboardModifiers
+                            val fromStrip = cardHit.inStrip
+                            val open = duels.strip
+                            stripLeft = false
+                            duels.carrying = true
+                            duels.verbStrip = false
                             val update = {
+                                if (fromStrip && open != null && !stripLeft && !stripGround(stateNow, layoutNow, open).contains(p.x, p.y)) stripLeft = true
                                 val spot = dropAt(uid, p.x, p.y)
                                 carry = Carry(uid, gx, gy, p.x, p.y, spot, DuelDrop.intent(stateNow, uid, spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed))
                             }
@@ -273,13 +313,18 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                             }
                             update()
                             val done = carry
+                            val left = stripLeft
                             carry = null
+                            stripLeft = false
+                            duels.carrying = false
                             if (done != null && !done.intent.none) {
                                 val targets = if (uid in duels.selection && duels.selection.size > 1 && done.spot is DropSpot.Pile) duels.selection.toList() else listOf(uid)
                                 val actions = targets.flatMap { t -> DuelDrop.intent(stateNow, t, done.spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed).actions }
                                 duels.act(actions, duels.seatFor(uid))
                                 duels.inspected = uid
                             }
+                            // Carried out of an open pile and let go: the pile has done its work (kai, 1.0.78).
+                            if (fromStrip && left) duels.closeStrip()
                         } else if (hit is Hit.Table) {
                             // A box: every card it touches is selected.
                             var p = moved!!
@@ -308,7 +353,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         }
     }
 
-    Box(Modifier.size(layout.width.dp, layout.height.dp).then(arbiter)) {
+    Box(Modifier.size(layout.width.dp, layout.height.dp).releasesTyping().then(arbiter)) {
         // The zones and piles, as hairline frames; the pile's name and count.
         Canvas(Modifier.fillMaxSize()) {
             val ink12 = c.ink12
@@ -359,12 +404,15 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
             }
         }
 
-        // The open pile's own ground, over the table.
-        duels.strip?.let { (seat, kind) -> StripGround(duels, s, layout, seat, kind) }
+        // The open pile's own ground, over the table — gone while a card carried out of it looks for a place.
+        if (!stripLeft) duels.strip?.let { (seat, kind) -> StripGround(duels, s, layout, seat, kind) }
+        ShuffleOffer(duels, s, layout)
+        if (carry == null && duels.verbStrip) VerbStrip(duels, s, layout, shownFrames)
 
         // The chain, the arrows, the pings — over the cards.
         ChainWell(s, layout, duels)
-        Canvas(Modifier.fillMaxSize().zIndex(50f)) { arrows(s, layout, shownFrames, c.ink, c.paper) }
+        // Under an open pile, which covers the cards they point at.
+        Canvas(Modifier.fillMaxSize().zIndex(if (duels.strip != null) DuelFrames.Z_STRIP - 1f else 50f)) { arrows(s, layout, shownFrames, c.ink, c.paper) }
         Pings(game, layout, shownFrames)
 
         // What letting go will do, where it will happen.
@@ -372,7 +420,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         box?.let { b ->
             Box(Modifier.zIndex(60f).offset(b.left.dp, b.top.dp).size(b.width.dp, b.height.dp).border(1.dp, c.ink).background(c.ink06))
         }
-        SeatBars(h, duels, s, layout)
+        ScoreColumn(h, duels, s, layout)
         PhaseStrip(duels, s, layout)
         duels.lpPad?.let { seat -> LpPad(duels, s, layout, seat) }
     }
@@ -442,11 +490,11 @@ private fun DropHint(cr: Carry, l: DuelLayout, frames: List<CardFrame>, s: com.k
     }
 }
 
-/** Target arrows: from the card (or the seat's bar) to each target, ink over a paper edge so they read on any art. */
+/** Target arrows: from the card (or the seat's score) to each target, ink over a paper edge so they read on any art. */
 private fun DrawScope.arrows(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>, ink: androidx.compose.ui.graphics.Color, paper: androidx.compose.ui.graphics.Color) {
     fun centre(uid: Int): Offset? = frames.firstOrNull { it.uid == uid && it.shown }?.let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
     s.arrows.forEach { a ->
-        val from = a.from?.let(::centre) ?: l.bars[a.seat]?.let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) } ?: return@forEach
+        val from = a.from?.let(::centre) ?: (l.score[a.seat] ?: l.turn).let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
         a.to.forEach { t ->
             val to = centre(t) ?: return@forEach
             drawLine(paper, from, to, 5.dp.toPx())
@@ -486,3 +534,9 @@ private fun Pings(game: DuelGame, l: DuelLayout, frames: List<CardFrame>) {
 }
 
 private const val PING_MS = 3000L
+
+/** The ground an open pile covers, its head included: a press outside it closes the pile. */
+internal fun stripGround(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, strip: Pair<Int, PileKind>): Slot {
+    val area = DuelFrames.stripBand(l, s.seats[strip.first].pile(strip.second).size).inflated(l.gap)
+    return Slot(area.left, area.top - DuelFrames.STRIP_HEAD, area.width, area.height + DuelFrames.STRIP_HEAD)
+}

@@ -90,6 +90,8 @@ fun TitleBar(
     onWork: () -> Unit = {},
     /** Before the bar's own switches: the assistant's (1.0.43). */
     trailing: @Composable () -> Unit = {},
+    /** Auto zen and Full screen; a page whose own row carries full screen (Duel, 1.0.78) leaves them out. */
+    switches: Boolean = true,
     content: @Composable RowScope.(narrow: Boolean) -> Unit = {},
 ) {
     val c = Mu.colors
@@ -138,6 +140,7 @@ fun TitleBar(
                 }
             }
             trailing()
+            if (switches) {
             // Auto zen (kai, 1.0.16): whether immersive mode drifts into zen by itself when idle.
             // Z still starts it either way.
             Tip(
@@ -150,6 +153,7 @@ fun TitleBar(
             if (neue.touchFirst) Box(Modifier.width(12.dp))
             Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, bars out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
                 IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, onImmersive, toggled = neue.immersive, size = 32.dp, label = if (neue.immersive) "Leave full screen" else "Full screen")
+            }
             }
         }
     }

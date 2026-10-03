@@ -190,6 +190,8 @@ enum class DeskAction {
     DUEL_SIDES,
     /** Sit at the other seat (the hot-seat's turn of the table). */
     DUEL_SWAP,
+    /** The far seat's cards turned round to face them, or upright (1.0.78). */
+    DUEL_FACING,
     DUEL_RESOLVE,
 
     /** The verbs, on the card under the pointer (or the selection). */
@@ -437,6 +439,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("enter"), DeskAction.DUEL_CHAT, DeskScope.DUEL, "Chat"),
         DeskShortcut(KeyChord("v"), DeskAction.DUEL_SIDES, DeskScope.DUEL, "One player's table or two"),
         DeskShortcut(KeyChord("tab"), DeskAction.DUEL_SWAP, DeskScope.DUEL, "Sit at the other seat"),
+        DeskShortcut(KeyChord("f", shift = true), DeskAction.DUEL_FACING, DeskScope.DUEL, "Their cards face them, or face you"),
         DeskShortcut(KeyChord("q"), DeskAction.DUEL_RESOLVE, DeskScope.DUEL, "Resolve the newest chain link"),
         DeskShortcut(KeyChord("space"), DeskAction.DUEL_DEFAULT, DeskScope.DUEL, "The obvious thing for the card under the pointer"),
         DeskShortcut(KeyChord("a"), DeskAction.DUEL_ACTIVATE, DeskScope.DUEL, "Activate it"),

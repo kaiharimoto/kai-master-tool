@@ -20,15 +20,16 @@ sealed interface DuelSpot {
  *
  * ```
  *               (their hand — small, backs)
- *               their name · LP · counts
- *   [Deck] [S5][S4][S3][S2][S1] [Extra]
- *   [GY]   [M5][M4][M3][M2][M1] [Field]        P
- *   [Ban]       [EMZ][chain][EMZ]     [Ban]    H
- *   [Field][M1][M2][M3][M4][M5]  [GY]          A
- *   [Extra][S1][S2][S3][S4][S5]  [Deck]        S
- *               your name · LP · counts        E
+ *   [Deck] [S5][S4][S3][S2][S1] [Extra]   their name, LP
+ *   [GY]   [M5][M4][M3][M2][M1] [Field]   turn
+ *   [Ban]       [EMZ][chain][EMZ]     [Ban]    phases
+ *   [Field][M1][M2][M3][M4][M5]  [GY]          …
+ *   [Extra][S1][S2][S3][S4][S5]  [Deck]   your LP, name
  *               — your hand, full size —
  * ```
+ *
+ * (1.0.78, kai: the seat bars cost two rows of height for what the piles already say.) Names, life
+ * points and the turn stand in the score column beside the field, with the phases between them.
  *
  * The far side is the near side turned round, as across a real table; the one-player table is the
  * near side alone, with the Extra Monster Zones and the chain well above it where they always are.
@@ -40,7 +41,7 @@ sealed interface DuelSpot {
  * - Spare width goes to the inspector (left), then the log (right), then the margins. A window too
  *   narrow for both folds the log into the inspector; too narrow for that, both become drawers.
  * - A short window shrinks the far side to three quarters before the near side shrinks below a
- *   readable card, and then folds the far hand into its seat bar.
+ *   readable card, and then folds the far hand away (a count by their name).
  */
 data class DuelLayout(
     val width: Float,
@@ -51,9 +52,11 @@ data class DuelLayout(
     /** The far side's cards are drawn at this fraction of [card]. */
     val farScale: Float,
     val spots: Map<DuelSpot, Slot>,
-    /** The name, LP and counts of each seat. */
-    val bars: Map<Int, Slot>,
-    /** The six phases and End turn, standing beside the field. */
+    /** Each seat's name and life points, at its own end of the score column. */
+    val score: Map<Int, Slot>,
+    /** The turn, under the far seat's score. */
+    val turn: Slot,
+    /** The six phases and End turn, in the score column between the two seats. */
     val phases: Slot,
     /** The grid of zones (both sides), without hands and bars. */
     val field: Slot,
@@ -105,8 +108,11 @@ object DuelLayouter {
     private const val FAR_HAND = 0.62f
 
     fun gapFor(card: Float) = (card * 0.10f).coerceIn(4f, 14f)
-    fun barFor(card: Float) = (card * CARD_RATIO * 0.24f).coerceIn(26f, 40f)
-    fun phasesFor(card: Float) = (card * 0.42f).coerceIn(30f, 52f)
+    /** The score column's width: room for "8000" and a name. */
+    fun scoreFor(card: Float) = (card * 0.55f).coerceIn(52f, 76f)
+    /** A seat's block in the score column: its name over its life points. */
+    fun scoreHeightFor(card: Float) = (card * CARD_RATIO * 0.38f).coerceIn(54f, 72f)
+    fun turnHeightFor(card: Float) = (card * CARD_RATIO * 0.12f).coerceIn(18f, 24f)
     fun capFor(form: FormFactor) = when (form) {
         FormFactor.DESK -> CAP_DESK
         FormFactor.TABLET -> CAP_TABLET
@@ -128,10 +134,9 @@ object DuelLayouter {
         fun tall(c: Float, scale: Float, farHand: Boolean): Float {
             val g = gapFor(c)
             val ch = c * CARD_RATIO
-            val bar = barFor(c)
-            var t = margin * 2 + ch + g + bar + g + (2 * ch + g)
+            var t = margin * 2 + ch + g + (2 * ch + g)
             if (twoSided) {
-                t += g + ch + g + scale * (2 * ch + g) + g + bar
+                t += g + ch + g + scale * (2 * ch + g)
                 if (farHand) t += g + FAR_HAND * ch * scale
             } else {
                 t += g + ch
@@ -151,7 +156,7 @@ object DuelLayouter {
                 c = byHeight(farScale, false)
             }
         }
-        fun grid(card: Float) = 7 * card + 6 * gapFor(card) + gapFor(card) + phasesFor(card)
+        fun grid(card: Float) = 7 * card + 6 * gapFor(card) + gapFor(card) + scoreFor(card)
 
         // Rails: both, the inspector alone (the log a tab of it), or drawers.
         var inspectorW = 0f
@@ -180,8 +185,7 @@ object DuelLayouter {
 
         val g = gapFor(c)
         val ch = c * CARD_RATIO
-        val bar = barFor(c)
-        val ph = phasesFor(c)
+        val ph = scoreFor(c)
         val gridW = 7 * c + 6 * g
         val blockW = gridW + g + ph
         val tableLeft = margin + (if (inspectorW > 0) inspectorW + margin else 0f)
@@ -194,7 +198,7 @@ object DuelLayouter {
         val slack = ((height - margin * 2) - totalH).coerceAtLeast(0f)
         var y = margin + if (form == FormFactor.PHONE) slack else slack / 2f
         val spots = LinkedHashMap<DuelSpot, Slot>()
-        val bars = HashMap<Int, Slot>()
+        val score = HashMap<Int, Slot>()
         val near = bottom
         val far = 1 - bottom
         val fieldTop: Float
@@ -217,8 +221,6 @@ object DuelLayouter {
                 spots[DuelSpot.Hand(far)] = Slot(gridLeft + (gridW - handW) / 2f, y, handW, FAR_HAND * ch * farScale)
                 y += FAR_HAND * ch * farScale + g
             }
-            bars[far] = Slot(gridLeft, y, gridW, bar)
-            y += bar + g
             fieldTop = y
             // Their Spell & Trap row, then their monsters, mirrored.
             spots[DuelSpot.Pile(far, PileKind.EXTRA)] = farSlot(0, y)
@@ -250,11 +252,21 @@ object DuelLayouter {
         y += ch
         val fieldBottom = y
         y += g
-        bars[near] = Slot(gridLeft, y, gridW, bar)
-        y += bar + g
         spots[DuelSpot.Hand(near)] = Slot(gridLeft, y, gridW, ch)
 
-        val phases = Slot(gridLeft + gridW + g, fieldTop, ph, fieldBottom - fieldTop)
+        // The score column: their score at the top, the turn, the phases, your score at the bottom.
+        val colLeft = gridLeft + gridW + g
+        val sh = scoreHeightFor(c)
+        val th = turnHeightFor(c)
+        var top = fieldTop
+        if (twoSided) {
+            score[far] = Slot(colLeft, top, ph, sh)
+            top += sh + g
+        }
+        val turn = Slot(colLeft, top, ph, th)
+        top += th + g / 2f
+        score[near] = Slot(colLeft, fieldBottom - sh, ph, sh)
+        val phases = Slot(colLeft, top, ph, (fieldBottom - sh - g - top).coerceAtLeast(0f))
         val railTop = margin
         val railH = height - margin * 2
         val inspector = if (inspectorW > 0) Slot(margin, railTop, inspectorW, railH) else null
@@ -267,7 +279,8 @@ object DuelLayouter {
             gap = g,
             farScale = farScale,
             spots = spots,
-            bars = bars,
+            score = score,
+            turn = turn,
             phases = phases,
             field = Slot(gridLeft, fieldTop, gridW, fieldBottom - fieldTop),
             inspector = inspector,

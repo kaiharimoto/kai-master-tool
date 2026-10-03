@@ -3013,9 +3013,9 @@ the keys are `DeskShortcuts`' Duelling rows):
   command line, `Enter` chat, `Tab` the other seat, `V` one side or two. **A card just placed shows numbers on the
   free zones for a moment**: `1`–`5` (`Shift` for Spell & Trap Zones, `6`/`7` the EMZ) moves it there — one key to
   play a card, one more to put it exactly where it belongs.
-- Piles open **non-modal** above the hand (`DuelFrames.stripBand`), cards to drag out; the deck's has Shuffle and
-  close. The phase strip stands beside the field; the seat bars carry name, LP (a click: the pad, `-1000`, `/2`,
-  chips), the turn, Thinking and the counts.
+- Piles open **non-modal** over the field (`DuelFrames.stripGrid`, 1.0.78), cards to drag out; the deck's has
+  Shuffle and close. The score column stands beside the field: names, LP (a click: the pad, `-1000`, `/2`, chips),
+  the turn, Thinking, and the phases between (1.0.78; the seat bars before it carried the counts too).
 
 **The page** (`neue/duel`): `Duels` is the holder (`NeueHolders.duel`, lazy), the duel in play kept in
 `<data>/duel/current.json` after every change (backed up; not synced — it is this device's game). `DuelTable`
@@ -3088,8 +3088,36 @@ direct play first and a relay later on the same messages:
 - **Take-backs**: Undo at a networked table asks the other player, who allows or refuses it in the bar.
 - **Next (R5)**: a relay for play across the internet — the same `Wire` over websockets, the relay running `DuelHost`.
 
+**A roomier table** (1.0.78, kai's notes after playing 1.0.77):
+- **One bar.** On a desk or a tablet the duel's row *is* the window's bar (`DuelBarItems` in `TitleBar`'s slot, as
+  the builder's is), so it folds away in immersive mode with `EdgeReveal` and comes out over the table — held out
+  while the command line has the keyboard, never pulled out by a carried card (`Duels.carrying`). On the Duel page
+  the bar drops Auto zen and the full-screen switch moves into the row; Ai's face moves to the log's head beside
+  Combos. The table's switches (one side or two, whose eyes, which way their cards face, the seat, Ai and combos,
+  Leave) are in **Table ▾**. A networked table's status is a word in the bar, and what it waits on (Respond / Pass,
+  a take-back) stands over the table's top edge only while it waits — never a row that pushes the cards down.
+- **No seat bars.** The two bars cost a row each for what the piles already say (their counts). Names, life points
+  and the turn stand in the **score column** beside the field (`DuelLayout.score`, `turn`): their seat at the top,
+  yours at the bottom, the phases between, the seat whose turn it is in ink, a click on the LP the pad. At
+  1920×1080 the cards are about a tenth larger.
+- **Their cards face them** (`DuelPrefs.facing`, `Shift F`, Table ▾): the far seat's field, piles and hand turned
+  round as across a real table; open piles, carried cards and the inspector stay upright.
+- **The inspector reads the card**: art at 150 dp, the name and the whole text — no stats, no place line, rarely a
+  scroll — and **the keys pinned at its foot**, two to a row, folded away by a click (`keysShown`).
+- **What a card can do stands beside it** (`VerbStrip`, kai's pick): a click or a hold on a card puts its verbs
+  next to it on the table, the obvious one in ink, each with its key; above a card in the hand; gone on Esc, a
+  click on the table, or once a verb runs.
+- **Open piles** lie over the field in rows (`DuelFrames.stripGrid`): at least four fifths of every card shows, no
+  card bigger than the table's, as many rows as the field holds (a whole Main Deck fits on a desk), the wheel or
+  the arrows past that. A press anywhere outside closes the pile; a card carried out of it makes the pile step
+  aside, so the zones under it take the drop, and closes it. A Deck looked through leaves **Shuffle** standing on
+  it for six seconds.
+- **Typing lets go.** A press on the table or the inspector releases the command line or the chat
+  (`releasesTyping`), and Esc on the Duel page releases it first — before, a click on the table left every key
+  typing into the field.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
---duel-replay=N`.
+--duel-replay=N --duel-facing=true --duel-select=near|far`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

@@ -612,7 +612,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   and draws a `DuelMirror`; `DuelHost.resolve` refuses a ref the guest was never shown; `Wire` over a TCP socket
   (`DuelLink`), paired by `PairCode` (LAN address, port, secret) or its QR; response windows per player
   (`Windows`), take-backs asked of the other player. A relay (R5) is next, on the same messages.
-  `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N]`.
+  **1.0.78, a roomier table** (kai's notes): the duel's row is the window's bar (`DuelBarItems`, folds in immersive;
+  `TitleBar(switches = false)` on Duel), no seat bars — names, LP and the turn in the score column (`DuelLayout.score`),
+  `DuelPrefs.facing` turns their cards round, the inspector is art and text with the keys pinned, verbs stand beside
+  the selected card (`VerbStrip`), open piles lie in rows over the field (`DuelFrames.stripGrid`, ≥ 80 % of each card)
+  and close on a press outside or a card carried out, and a press on the table releases a text field (`releasesTyping`).
+  `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

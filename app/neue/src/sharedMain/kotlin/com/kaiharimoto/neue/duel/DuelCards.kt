@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -93,8 +94,16 @@ internal fun TableCard(
             if (inst.under.isNotEmpty() && frame.shown) Badge("${inst.under.size}", Modifier.align(Alignment.BottomStart), outline = true)
             if (stats != null && w >= 48f) {
                 val c = Mu.colors
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(c.paper).padding(vertical = 1.dp), contentAlignment = Alignment.Center) {
-                    Mono(stats, color = c.ink, size = (w / 9f).coerceIn(8f, 12f).sp)
+                // Its numbers read upright at the foot of the card as it lies — in Defense, or turned to
+                // face the other seat (1.0.78) — so they are counter-turned inside the turned card.
+                val h = w / com.kaiharimoto.neue.cards.CARD_RATIO
+                val across = frame.rotation % 180f != 0f
+                Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = -rot }, contentAlignment = Alignment.Center) {
+                    Box(Modifier.requiredSize((if (across) h else w).dp, (if (across) w else h).dp)) {
+                        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(c.paper).padding(vertical = 1.dp), contentAlignment = Alignment.Center) {
+                            Mono(stats, color = c.ink, size = (w / 9f).coerceIn(8f, 12f).sp)
+                        }
+                    }
                 }
             }
         }

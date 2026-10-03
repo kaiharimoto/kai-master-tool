@@ -29,6 +29,10 @@ data class DuelPrefs(
     /** Two players over the network (1.0.77): which of the other player's moves wait for this one (`Windows`), and auto-pass after so many seconds (0: never). */
     val windows: String = "activations",
     val autoPass: Int = 0,
+    /** The far seat's cards turned round to face them, as across a real table (1.0.78). */
+    val facing: Boolean = false,
+    /** The keys pinned at the inspector's foot, or folded away (1.0.78). */
+    val keysShown: Boolean = true,
 ) {
     companion object {
         const val KNOW_ALL = "all"

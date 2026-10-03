@@ -156,6 +156,8 @@ fun neueMain(args: Array<String>) {
                     it.copy(duel = it.duel.copy(
                         twoSided = mode != "one",
                         knowledge = if (map["duel-know"] == "seat") com.kaiharimoto.mastertool.core.duel.DuelPrefs.KNOW_SEAT else com.kaiharimoto.mastertool.core.duel.DuelPrefs.KNOW_ALL,
+                        // --duel-facing=true: the far seat's cards turned to face them (1.0.78).
+                        facing = map["duel-facing"] == "true",
                     ))
                 }
                 val solo = mode == "solo"
@@ -179,6 +181,17 @@ fun neueMain(args: Array<String>) {
                         else -> com.kaiharimoto.mastertool.core.duel.PileKind.GY
                     }
                     h.duel.openPile(0, kind)
+                }
+                // --duel-select=near|far: a card on that side's field selected, its verb strip out (1.0.78).
+                map["duel-select"]?.let { side ->
+                    val g = h.duel.game!!
+                    val seat = if (side == "far") 1 else 0
+                    val uid = g.state.seats[seat].monsters.firstOrNull { it != null } ?: g.state.seats[seat].hand.firstOrNull()
+                    if (uid != null) {
+                        h.duel.inspected = uid
+                        h.duel.selection = setOf(uid)
+                        h.duel.verbStrip = true
+                    }
                 }
                 // --duel-replay=N: the duel as a replay, stood at entry N (or halfway), with a note there.
                 map["duel-replay"]?.let { spec ->

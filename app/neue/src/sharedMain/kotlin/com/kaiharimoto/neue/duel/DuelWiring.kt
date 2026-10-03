@@ -100,6 +100,7 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_CHAT -> duels.chatFocus++
         DeskAction.DUEL_SIDES -> h.neue.update { it.copy(duel = it.duel.copy(twoSided = !it.duel.twoSided)) }
         DeskAction.DUEL_SWAP -> duels.swap()
+        DeskAction.DUEL_FACING -> h.neue.update { it.copy(duel = it.duel.copy(facing = !it.duel.facing)) }
         DeskAction.DUEL_RESOLVE -> if (s.chain.isNotEmpty()) duels.act(DuelAction.ChainResolve)
         else -> Unit
     }
@@ -117,7 +118,8 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.lpPad != null -> d.lpPad = null
         d.attaching != null -> d.attaching = null
         d.drawer != null -> d.drawer = null
-        d.strip != null -> d.strip = null
+        d.strip != null -> d.closeStrip()
+        d.verbStrip -> d.verbStrip = false
         d.verbsOpen -> d.verbsOpen = false
         d.selection.isNotEmpty() -> d.selection = emptySet()
         d.replay != null -> d.closeReplay()

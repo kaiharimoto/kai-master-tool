@@ -44,7 +44,9 @@ data class CardFrame(
  * Every card's frame for a table, a layout and the seats whose eyes it is drawn through — pure, so the
  * page, a replay scrubbed backwards and the studio all draw the same table from the same state. Both
  * seats is the hot-seat tester's view: both hands face-up, and still never a deck's order. [strip] is
- * the pile laid out open above the near hand, if any.
+ * the pile laid out open over the field, if any ([stripRow] the first row of it in view, when it is
+ * too long to show whole). [facing] turns the far seat's cards round to face their owner, as across a
+ * real table (1.0.78); the cards in an open pile and in the hand still read the right way up.
  */
 object DuelFrames {
     const val Z_MATERIAL = 1f
@@ -53,7 +55,14 @@ object DuelFrames {
     const val Z_HAND = 4f
     const val Z_STRIP = 8f
 
-    fun of(s: DuelState, l: DuelLayout, viewers: Set<Int>, strip: Pair<Int, PileKind>? = null): List<CardFrame> {
+    fun of(
+        s: DuelState,
+        l: DuelLayout,
+        viewers: Set<Int>,
+        strip: Pair<Int, PileKind>? = null,
+        facing: Boolean = false,
+        stripRow: Int = 0,
+    ): List<CardFrame> {
         val out = ArrayList<CardFrame>(s.cards.size)
         fun look(uid: Int): CardLook {
             val c = s.cards.getValue(uid)
@@ -72,46 +81,55 @@ object DuelFrames {
             // Materials peek out from under their card, the first three of them.
             s.cards[uid]?.under?.forEachIndexed { k, m ->
                 val d = slot.width * 0.07f * (k + 1)
-                out += CardFrame(m, slot.left - d, slot.top - d, slot.width, slot.height, 0f, CardLook.FACE, z - 0.01f * (k + 1), shown && k < 3)
+                out += CardFrame(m, slot.left - d, slot.top - d, slot.width, slot.height, rotation - rotation % 180f, CardLook.FACE, z - 0.01f * (k + 1), shown && k < 3)
             }
         }
 
         // The field.
         val seats = if (l.twoSided) listOf(0, 1) else listOf(l.bottom)
+        // Turned to face its controller: the far side's cards, when the table is set to.
+        fun turn(seat: Int) = if (facing && l.twoSided && seat != l.bottom) 180f else 0f
         s.emz.forEachIndexed { i, uid ->
             uid ?: return@forEachIndexed
             val slot = l.zone(Place.Zone(0, ZoneKind.EMZ, i)) ?: return@forEachIndexed
-            place(uid, slot, Z_FIELD, rotation = rotationOf(s, uid))
+            place(uid, slot, Z_FIELD, rotation = rotationOf(s, uid) + turn(s.cards.getValue(uid).controller))
         }
         for (seat in seats) {
             val st = s.seats[seat]
-            st.monsters.forEachIndexed { i, uid -> uid ?: return@forEachIndexed; l.zone(Place.Zone(seat, ZoneKind.MONSTER, i))?.let { place(uid, it, Z_FIELD, rotation = rotationOf(s, uid)) } }
-            st.spells.forEachIndexed { i, uid -> uid ?: return@forEachIndexed; l.zone(Place.Zone(seat, ZoneKind.SPELL, i))?.let { place(uid, it, Z_FIELD) } }
-            st.field?.let { uid -> l.zone(Place.Zone(seat, ZoneKind.FIELD, 0))?.let { place(uid, it, Z_FIELD) } }
+            val r = turn(seat)
+            st.monsters.forEachIndexed { i, uid -> uid ?: return@forEachIndexed; l.zone(Place.Zone(seat, ZoneKind.MONSTER, i))?.let { place(uid, it, Z_FIELD, rotation = rotationOf(s, uid) + r) } }
+            st.spells.forEachIndexed { i, uid -> uid ?: return@forEachIndexed; l.zone(Place.Zone(seat, ZoneKind.SPELL, i))?.let { place(uid, it, Z_FIELD, rotation = r) } }
+            st.field?.let { uid -> l.zone(Place.Zone(seat, ZoneKind.FIELD, 0))?.let { place(uid, it, Z_FIELD, rotation = r) } }
             // Piles: every card at its pile, the top one shown.
             for (kind in listOf(PileKind.DECK, PileKind.EXTRA, PileKind.GY, PileKind.BANISHED)) {
                 if (strip == seat to kind) continue
                 val slot = l.pile(seat, kind) ?: continue
-                st.pile(kind).forEachIndexed { i, uid -> place(uid, slot, Z_PILE - i * 0.0001f, shown = i == 0) }
+                st.pile(kind).forEachIndexed { i, uid -> place(uid, slot, Z_PILE - i * 0.0001f, shown = i == 0, rotation = r) }
             }
             // The hand, fanned across its band.
             val band = l.pile(seat, PileKind.HAND)
             if (band != null) {
                 fan(st.hand.size, band, if (seat == l.bottom) l.card else band.height / DuelLayouter.CARD_RATIO)
-                    .forEachIndexed { i, slot -> place(st.hand[i], slot, Z_HAND + i * 0.001f) }
+                    .forEachIndexed { i, slot -> place(st.hand[i], slot, Z_HAND + i * 0.001f, rotation = r) }
             } else {
-                // A folded hand: its cards wait at the seat's bar, out of sight.
-                val bar = l.bars[seat]
-                if (bar != null) st.hand.forEach { uid -> place(uid, Slot(bar.left, bar.top, l.card * 0.3f, l.card * 0.3f * DuelLayouter.CARD_RATIO), Z_HAND, shown = false) }
+                // A folded hand: its cards wait by the seat's score, out of sight.
+                val at = l.score[seat] ?: l.turn
+                st.hand.forEach { uid -> place(uid, Slot(at.left, at.top, l.card * 0.3f, l.card * 0.3f * DuelLayouter.CARD_RATIO), Z_HAND, shown = false) }
             }
         }
-        // The open pile, over the near side of the table.
+        // The open pile, over the field.
         if (strip != null) {
-            val band = stripBand(l)
             val cards = s.seats[strip.first].pile(strip.second)
+            val grid = stripGrid(cards.size, l)
+            val first = stripRow.coerceIn(0, (grid.rows - grid.visibleRows).coerceAtLeast(0)) * grid.perRow
+            val inView = first until first + grid.visibleRows * grid.perRow
             // The owner looking through their own deck sees it; everyone else sees what they could anyway.
-            fan(cards.size, band, l.card).forEachIndexed { i, slot ->
+            grid.cells.forEachIndexed { i, cell ->
                 val uid = cards[i]
+                val shown = i in inView
+                // Rows scrolled out of view wait at the band's top or bottom edge, hidden.
+                val slot = if (shown) cell.copy(top = cell.top - (first / grid.perRow) * grid.rowStep)
+                else cell.copy(top = if (i < first) grid.area.top else grid.area.bottom - cell.height)
                 val own = s.cards[uid]?.owner in viewers
                 val lookAs = when {
                     strip.second == PileKind.DECK && own -> CardLook.FACE
@@ -119,18 +137,75 @@ object DuelFrames {
                     strip.second == PileKind.BANISHED && own -> if (s.cards[uid]?.faceUp == true) CardLook.FACE else CardLook.SET
                     else -> null
                 }
-                place(uid, slot, Z_STRIP + i * 0.001f, inStrip = true, lookAs = lookAs)
+                place(uid, slot, Z_STRIP + i * 0.001f, shown = shown, inStrip = true, lookAs = lookAs)
             }
         }
         return out
     }
 
-    /** The band an open pile is laid out in: over the near side's rows, above its seat bar. */
-    fun stripBand(l: DuelLayout): Slot {
-        val bar = l.bars.getValue(l.bottom)
-        val h = l.cardHeight
-        return Slot(bar.left, bar.top - l.gap - h, bar.width, h)
+    /**
+     * An open pile laid out in rows over the field (1.0.78, kai: "at least 80 % of the card showing …
+     * multiple rows … but not too big"). [cells] are in pile order, top of the pile first, the rows
+     * standing on the field's bottom edge and growing upward; [area] is what the rows cover (the
+     * strip's ground), at most the room from the top of the table to the field's bottom.
+     */
+    data class StripGrid(
+        val card: Float,
+        val perRow: Int,
+        val rows: Int,
+        /** Rows that fit; when fewer than [rows], the strip scrolls a row at a time. */
+        val visibleRows: Int,
+        val rowStep: Float,
+        val area: Slot,
+        val cells: List<Slot>,
+    ) {
+        val scrolls: Boolean get() = visibleRows < rows
     }
+
+    /** The smallest a card in an open pile gets before the pile scrolls instead. */
+    const val STRIP_MIN = 44f
+    /** How much of each card in an open pile shows, at least: the step to the next is this much of a card. */
+    const val STRIP_SHOWN = 0.8f
+    /** The strip's head: the pile's name and its buttons. */
+    const val STRIP_HEAD = 24f
+
+    fun stripGrid(n: Int, l: DuelLayout): StripGrid {
+        val width = l.field.width
+        val bottom = l.field.bottom
+        // Room above: the whole table to its top margin, less the strip's head and its frame.
+        val room = bottom - STRIP_HEAD - l.gap * 2 - 8f
+        val count = n.coerceAtLeast(1)
+        fun plan(w: Float): StripGrid {
+            val h = w * DuelLayouter.CARD_RATIO
+            val rowGap = (w * 0.08f).coerceAtLeast(3f)
+            val capacity = ((width - w) / (w * STRIP_SHOWN)).toInt() + 1
+            val rows = (count + capacity - 1) / capacity
+            val perRow = (count + rows - 1) / rows
+            val natural = w * 1.06f
+            val step = if (perRow <= 1) natural else minOf(natural, (width - w) / (perRow - 1))
+            val rowStep = h + rowGap
+            val visible = ((room + rowGap) / rowStep).toInt().coerceIn(1, rows)
+            val areaH = visible * rowStep - rowGap
+            val area = Slot(l.field.left, bottom - areaH, width, areaH)
+            val cells = List(n) { i ->
+                val row = i / perRow
+                val inRow = if (row == rows - 1) n - row * perRow else perRow
+                val used = w + step * (inRow - 1)
+                val left = l.field.left + (width - used) / 2f + (i % perRow) * step
+                Slot(left, area.top + row * rowStep, w, h)
+            }
+            return StripGrid(w, perRow, rows, visible, rowStep, area, cells)
+        }
+        var w = minOf(l.card, maxOf(56f, l.card * STRIP_SHOWN))
+        while (true) {
+            val g = plan(w)
+            if (!g.scrolls || w <= STRIP_MIN) return g
+            w = maxOf(STRIP_MIN, w - 2f)
+        }
+    }
+
+    /** What an open pile of [n] cards covers: the ground under its rows (its head stands above it). */
+    fun stripBand(l: DuelLayout, n: Int): Slot = stripGrid(n, l).area
 
     /**
      * [n] cards of width [w] across [band]: side by side with a small gap when they fit, overlapping

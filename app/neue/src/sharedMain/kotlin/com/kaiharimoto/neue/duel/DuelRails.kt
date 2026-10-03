@@ -6,13 +6,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -54,10 +53,11 @@ import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.muClickable
+import com.kaiharimoto.neue.kit.releasesTyping
 import com.kaiharimoto.neue.theme.Mu
 
-/** The key each verb answers to, for the inspector's column. */
-private val VERB_KEYS = mapOf(
+/** The key each verb answers to, for the verb strip. */
+internal val VERB_KEYS = mapOf(
     DuelVerb.ACTIVATE to DeskAction.DUEL_ACTIVATE, DuelVerb.SUMMON to DeskAction.DUEL_SUMMON, DuelVerb.SPECIAL to DeskAction.DUEL_SPECIAL,
     DuelVerb.SET to DeskAction.DUEL_SET, DuelVerb.POSITION to DeskAction.DUEL_POSITION, DuelVerb.FLIP to DeskAction.DUEL_FLIP,
     DuelVerb.GRAVE to DeskAction.DUEL_GRAVE, DuelVerb.BANISH to DeskAction.DUEL_BANISH, DuelVerb.BANISH_DOWN to DeskAction.DUEL_BANISH_DOWN,
@@ -67,57 +67,54 @@ private val VERB_KEYS = mapOf(
 )
 
 /**
- * The inspector: the card under the pointer (or the one clicked last) read large, its words, and
- * every verb that fits it where it is — the default first, each with its key. Nothing modal: the
- * table stays live beside it.
+ * The inspector (1.0.78, kai: "the action guide gets shoved down … the card art is a bit too big … the
+ * stats take up too much space"): the card read — its art at a modest size, its name and its whole
+ * text, with no scrolling for most cards — and, pinned at the foot where nothing pushes it, the keys.
+ * What a card can do is no longer here: it stands beside the card on the table ([VerbStrip]).
+ * [fill] false lays it out for a drawer, which has no height to share.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun DuelInspector(h: NeueHolders, duels: Duels, game: DuelGame, viewers: Set<Int>, modifier: Modifier = Modifier) {
+internal fun DuelInspector(h: NeueHolders, duels: Duels, game: DuelGame, viewers: Set<Int>, modifier: Modifier = Modifier, fill: Boolean = true) {
     val c = Mu.colors
     val s = game.state
     val uid = (duels.hovered ?: duels.inspected)?.takeIf { it in s.cards }
-    Column(modifier.verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val body: @Composable () -> Unit = {
         if (uid == null) {
             Micro("The card", color = c.ink45)
-            Help("Point at a card to read it here. Right-click does the obvious thing; hold for every verb; drag puts it anywhere.")
-            KeyCheat()
+            Help("Point at a card to read it here. Click it for what it can do; right-click does the obvious thing; drag puts it anywhere.")
         } else {
             InspectedCard(h, duels, game, viewers, uid)
         }
     }
+    Column(modifier.releasesTyping()) {
+        if (fill) {
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { body() }
+        } else {
+            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { body() }
+        }
+        KeyCheat(h)
+    }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers: Set<Int>, uid: Int) {
     val c = Mu.colors
     val s = game.state
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         val inst = s.cards.getValue(uid)
         val sees = viewers.any { DuelSight.sees(s, uid, it) }
         val card = if (sees && !(inst.token && inst.code == 0)) h.builder.index.byId(CardId(inst.code)) else null
-        val where = s.placeOf(uid)
-        Box(Modifier.fillMaxWidth().widthIn(max = 260.dp).aspectRatio(CARD_RATIO)) {
-            when {
-                card != null -> NeueCard(card, Modifier.fillMaxSize(), foil = h.neue.prefs.foil)
-                sees -> TokenFace(duels.catalog.nameOf(inst), Modifier.fillMaxSize())
-                else -> CardBack(Modifier.fillMaxSize())
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(INSPECTOR_ART.dp).aspectRatio(CARD_RATIO)) {
+                when {
+                    card != null -> NeueCard(card, Modifier.fillMaxSize(), foil = h.neue.prefs.foil)
+                    sees -> TokenFace(duels.catalog.nameOf(inst), Modifier.fillMaxSize())
+                    else -> CardBack(Modifier.fillMaxSize())
+                }
             }
         }
         H2(if (sees) duels.catalog.nameOf(inst) else "A face-down card", maxLines = 2)
-        Small(placeWords(game, uid, where), color = c.ink70)
-        if (card != null) {
-            val stats = listOfNotNull(
-                card.attribute.takeIf { it.name != "UNKNOWN" }?.name?.lowercase()?.replaceFirstChar { it.uppercase() },
-                card.race,
-                card.level?.let { (if (card.frameType.contains("xyz")) "Rank " else "Level ") + it },
-                card.linkValue?.let { "Link $it" },
-                card.atk?.let { "ATK $it" + (card.def?.let { d -> " / DEF $d" } ?: "") },
-            ).joinToString(" · ")
-            if (stats.isNotEmpty()) Mono(stats, color = c.ink70)
-            Body(card.description, color = c.ink)
-        }
+        if (card != null) Body(card.description, color = c.ink)
         if (inst.under.isNotEmpty()) {
             Micro("Materials · ${inst.under.size}", color = c.ink70)
             inst.under.forEach { m ->
@@ -127,69 +124,66 @@ private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers:
                 }
             }
         }
-        HRule()
-        val actor = duels.seatFor(uid)
-        val mine = s.solo || actor == duels.bottom
-        Micro(if (mine) "Do" else "Their card", color = c.ink70)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val verbs = if (mine) DuelVerbs.offered(s, actor, uid, duels.catalog) else listOf(DuelVerb.TARGET) + DuelVerbs.offered(s, actor, uid, duels.catalog).filter { it != DuelVerb.TARGET }
-            verbs.forEach { v ->
-                val key = VERB_KEYS[v]?.let { DeskShortcuts.chordFor(it) }?.let(DeskShortcuts::kbd)
-                VerbChip(v.label, key, strong = v == verbs.first()) {
-                    if (v == DuelVerb.TARGET && !mine) duels.verb(uid, v, seat = duels.bottom) else duels.verb(uid, v)
-                }
-            }
-            VerbChip("Point at it", "Alt click") { duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, uid = uid)) }
-        }
         if (duels.attaching == uid) Help("Now click the monster it goes under. Esc to stop.")
     }
 }
 
+/** The inspector's art: big enough to know the card, small enough that its text needs no scrolling. */
+private const val INSPECTOR_ART = 150
+
 @Composable
-private fun VerbChip(label: String, key: String? = null, strong: Boolean = false, onClick: () -> Unit) {
+internal fun VerbChip(label: String, key: String? = null, strong: Boolean = false, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val c = Mu.colors
     Row(
-        Modifier.border(1.dp, if (strong) c.ink else c.ink25).background(if (strong) c.ink else c.paper)
+        modifier.border(1.dp, if (strong) c.ink else c.ink25).background(if (strong) c.ink else c.paper)
             .cursorPointer(caption = label, showsWords = true).muClickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Micro(label, color = if (strong) c.paper else c.ink)
-        if (key != null && !strong) Mono(key, color = c.ink45)
+        Micro(label, Modifier.weight(1f, fill = false), color = if (strong) c.paper else c.ink)
+        if (key != null) Mono(key, color = if (strong) c.paper else c.ink45)
     }
 }
 
-/** The keys that matter most, for the empty inspector. */
+/** The keys that matter most, pinned at the inspector's foot, two to a row; a click folds them away. */
 @Composable
-private fun KeyCheat() {
+private fun KeyCheat(h: NeueHolders) {
     val c = Mu.colors
+    val shown = h.neue.prefs.duel.keysShown
     val rows = listOf(
-        DeskAction.DUEL_DEFAULT to "The obvious thing", DeskAction.DUEL_SUMMON to "Summon", DeskAction.DUEL_SET to "Set",
-        DeskAction.DUEL_ACTIVATE to "Activate", DeskAction.DUEL_GRAVE to "To the GY", DeskAction.DUEL_BANISH to "Banish",
-        DeskAction.DUEL_HAND to "To the hand", DeskAction.DUEL_DRAW to "Draw", DeskAction.DUEL_NEXT_PHASE to "Next phase",
-        DeskAction.DUEL_END_TURN to "End the turn", DeskAction.DUEL_COMMAND to "The command line", DeskAction.UNDO to "Undo",
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        rows.mapNotNull { (a, words) ->
-            DeskShortcuts.all.firstOrNull { it.action == a && it.scope == com.kaiharimoto.mastertool.core.input.DeskScope.DUEL }?.chord?.let { it to words }
-        }.forEach { (chord, words) ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Kbd(DeskShortcuts.kbd(chord), Modifier.widthIn(min = 56.dp))
-                Small(words, color = c.ink70)
+        DeskAction.DUEL_DEFAULT to "Obvious", DeskAction.DUEL_SUMMON to "Summon", DeskAction.DUEL_SET to "Set",
+        DeskAction.DUEL_ACTIVATE to "Activate", DeskAction.DUEL_GRAVE to "To GY", DeskAction.DUEL_BANISH to "Banish",
+        DeskAction.DUEL_HAND to "To hand", DeskAction.DUEL_DRAW to "Draw", DeskAction.DUEL_NEXT_PHASE to "Next phase",
+        DeskAction.DUEL_END_TURN to "End turn", DeskAction.DUEL_COMMAND to "Command", DeskAction.UNDO to "Undo",
+    ).mapNotNull { (a, words) ->
+        DeskShortcuts.all.firstOrNull { it.action == a && (it.scope == com.kaiharimoto.mastertool.core.input.DeskScope.DUEL || a == DeskAction.UNDO) }?.chord?.let { it to words }
+    }
+    Column(Modifier.fillMaxWidth()) {
+        HRule()
+        Row(
+            Modifier.fillMaxWidth().cursorPointer(caption = if (shown) "Hide the keys" else "Show the keys")
+                .muClickable { h.neue.update { it.copy(duel = it.duel.copy(keysShown = !shown)) } }
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Micro("Keys", Modifier.weight(1f), color = c.ink70)
+            Micro(if (shown) "Hide" else "Show", color = c.ink45)
+        }
+        if (shown) {
+            Column(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                rows.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        pair.forEach { (chord, words) ->
+                            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Kbd(DeskShortcuts.kbd(chord), Modifier.widthIn(min = 36.dp))
+                                Small(words, color = c.ink70, maxLines = 1)
+                            }
+                        }
+                        if (pair.size == 1) Box(Modifier.weight(1f))
+                    }
+                }
             }
         }
-    }
-}
-
-private fun placeWords(game: DuelGame, uid: Int, where: Place?): String {
-    val s = game.state
-    val owner = s.cards[uid]?.owner ?: 0
-    val who = DuelWords.seatName(s, owner)
-    return when (where) {
-        is Place.Zone -> "${DuelWords.zoneName(where)} · ${DuelWords.seatName(s, s.cards.getValue(uid).controller)}'s field"
-        is Place.Pile -> "$who's ${where.kind.label.let { if (it == "Hand") "hand" else it }}"
-        is Place.Under -> "A material"
-        else -> ""
     }
 }
 
@@ -198,7 +192,7 @@ private fun placeWords(game: DuelGame, uid: Int, where: Place?): String {
  * talk on. [viewer] null reads everything (the hot-seat with both hands shown).
  */
 @Composable
-internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: Modifier = Modifier) {
+internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: Modifier = Modifier, head: @Composable () -> Unit = {}) {
     val c = Mu.colors
     val refused = duels.refused()
     val remote = duels.remoteLines
@@ -212,8 +206,9 @@ internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: M
     LaunchedEffect(duels.chatFocus) { if (duels.chatFocus > 0) runCatching { chatFocus.requestFocus() } }
     Column(modifier) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Micro("Log", Modifier.weight(1f), color = c.ink70)
-            Mono("${if (guest) remote.size else game.cursor - game.floor}", color = c.ink45)
+            Micro("Log", color = c.ink70)
+            Mono("  ${if (guest) remote.size else game.cursor - game.floor}", Modifier.weight(1f), color = c.ink45)
+            head()
         }
         HRule()
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list) {

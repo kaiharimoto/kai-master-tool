@@ -197,6 +197,28 @@ fun Modifier.releasesTypingOnFinger(): Modifier = composed {
     }
 }
 
+/**
+ * A press here — mouse or finger — lets go of the text field that has the keyboard (1.0.78, kai: "if I
+ * typed into the command bar … and wanted to click outside of it and do an action, it would be stuck
+ * trying to type"). On a desktop nothing else takes focus from a field, so without this a click on the
+ * duel table leaves every key typing. Nothing is consumed: the press still does what it does. Put it
+ * only on surfaces with no text field of their own.
+ */
+fun Modifier.releasesTyping(): Modifier = composed {
+    val typing = LocalTextFocus.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    this.then(
+        Modifier.pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    if (event.type == androidx.compose.ui.input.pointer.PointerEventType.Press && typing?.any == true) focus.clearFocus()
+                }
+            }
+        },
+    )
+}
+
 /** Whether a keyboard is attached: always on the desk; on a tablet, only with a keyboard cover or a paired one. */
 val LocalHardwareKeyboard = androidx.compose.runtime.compositionLocalOf { true }
 

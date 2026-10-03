@@ -89,6 +89,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusManager
+import com.kaiharimoto.neue.duel.DuelBarItems
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -532,6 +533,8 @@ class NeueHolders(
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
     private fun dismiss() {
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
+        // On the Duel page Esc first lets go of the command line or the chat (1.0.78), so the keys go back to the table.
+        if (neue.page == Page.DUEL && textFocus.any) { focus?.clearFocus(); return }
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return
         BackChain.esc(backFlags())?.let(::unwind)
     }
@@ -968,8 +971,10 @@ private fun Shell(h: NeueHolders) {
             onImmersive = { h.run(DeskAction.IMMERSIVE) },
             work = work,
             onWork = { neue.go(Page.SETTINGS) },
+            // On the Duel page the bar is the duel's (1.0.78): full screen is in its row, Ai in the log.
+            switches = neue.page != Page.DUEL,
             trailing = {
-                if (neue.prefs.ai.enabled) {
+                if (neue.prefs.ai.enabled && neue.page != Page.DUEL) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Ai's face and name in a box on every platform (1.0.63, kai: "on desktop the app is not
                         // the marquee"); its brain is in its panel now, not beside it in the bar.
@@ -980,6 +985,8 @@ private fun Shell(h: NeueHolders) {
         ) { narrow ->
             if (neue.page == Page.BUILDER) {
                 BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow, webs = h.webs, onStepWeb = h::stepWeb, onOpenDeck = h::openDeck)
+            } else if (neue.page == Page.DUEL) {
+                DuelBarItems(h, narrow)
             } else {
                 Box(Modifier.weight(1f))
             }
@@ -1133,8 +1140,9 @@ private fun Shell(h: NeueHolders) {
                         // A click anywhere below the folded-out header lets go of the deck name:
                         // on a desktop nothing else takes focus from a text field, so the bar
                         // that is held out while you type would otherwise never fold away.
+                        val typing = (state.textInputFocused && !neue.searchFocused) || (neue.page == Page.DUEL && h.textFocus.any)
                         if (event.type == PointerEventType.Press && neue.immersive && neue.revealed.top &&
-                            state.textInputFocused && !neue.searchFocused && at != null && at.y > measured.top
+                            typing && at != null && at.y > measured.top
                         ) {
                             h.focus?.clearFocus()
                         }
@@ -1147,8 +1155,8 @@ private fun Shell(h: NeueHolders) {
                             topHeight = measured.top.toFloat(),
                             bottomHeight = measured.bottom.toFloat(),
                             immersive = neue.immersive,
-                            holdTop = state.textInputFocused && !neue.searchFocused,
-                            suppress = h.drag.held != null || neue.menu != null || neue.zen == ZenPhase.DEEP,
+                            holdTop = typing,
+                            suppress = h.drag.held != null || neue.menu != null || neue.zen == ZenPhase.DEEP || (neue.page == Page.DUEL && h.duel.carrying),
                         // The builder has no footer since 1.0.9: nothing comes up from the bottom.
                         ).copy(bottom = false)
                         // Two fingers tapped together undo, three redo, anywhere in the window (rec 22,

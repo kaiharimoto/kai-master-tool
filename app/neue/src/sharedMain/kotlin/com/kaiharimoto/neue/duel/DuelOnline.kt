@@ -49,13 +49,13 @@ internal fun windowsLabel(w: String) = when (w) {
 }
 
 /**
- * A networked table's own row (1.0.77), under the bar: who it is with, and what the table waits on —
+ * A networked table's own row (1.0.77) — on a phone under the bar, elsewhere over the table's top edge while something waits (1.0.78): who it is with, and what the table waits on —
  * a Respond / Pass for this player when the other's move opened a window on them, a "waiting for them"
  * with Go on anyway when this player's did, a take-back to allow or refuse. Never a dialog: the table
  * stays live, and talk (chat, pings, Thinking) never waits.
  */
 @Composable
-internal fun NetBar(h: NeueHolders, duels: Duels) {
+internal fun NetBar(h: NeueHolders, duels: Duels, overlay: Boolean = false) {
     val c = Mu.colors
     val prefs = h.neue.prefs.duel
     val waiting = duels.waitingFor
@@ -68,8 +68,12 @@ internal fun NetBar(h: NeueHolders, duels: Duels) {
             if (duels.waitingFor == me) duels.act(DuelAction.Answer(me, respond = false), me)
         }
     }
+    // Over the table (1.0.78), the row stands only while something waits; who it is with is in the bar.
+    val waits = (duels.takeBackAsked != null && duels.takeBackAsked != me) || waiting != null
+    if (overlay && !waits) return
     Row(
-        Modifier.fillMaxWidth().height(40.dp).background(if (waiting == me) c.ink else c.paper).padding(horizontal = 12.dp),
+        Modifier.fillMaxWidth().height(40.dp).background(if (waiting == me) c.ink else c.paper)
+            .then(if (overlay) Modifier.border(1.dp, c.ink) else Modifier).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -93,9 +97,9 @@ internal fun NetBar(h: NeueHolders, duels: Duels) {
                 MuButton("Go on anyway", { duels.forceNext = true; duels.problem = "Your next move goes ahead" }, size = BtnSize.SM, variant = BtnVariant.GHOST)
             }
         }
-        MuButton("Leave", { duels.leave() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+        if (!overlay) MuButton("Leave", { duels.leave() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
     }
-    Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
+    if (!overlay) Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
 }
 
 /**

@@ -38,7 +38,7 @@ class DuelLayoutTest {
 
     @Test
     fun nothingOverlapsAndEverythingIsInsideTheWindow() = every { c, two, bottom, l ->
-        val all = l.spots.values + l.bars.values + listOfNotNull(l.phases, l.inspector, l.log)
+        val all = l.spots.values + l.score.values + listOfNotNull(l.turn, l.phases, l.inspector, l.log)
         all.forEachIndexed { i, a ->
             assertTrue(a.left >= -0.01f && a.top >= -0.01f && a.right <= c.w + 0.01f && a.bottom <= c.h + 0.5f, "$c two=$two bottom=$bottom: $a outside")
             all.drop(i + 1).forEach { b -> assertFalse(overlaps(a, b), "$c two=$two: $a overlaps $b") }
@@ -63,7 +63,7 @@ class DuelLayoutTest {
             }
             assertNotNull(l.zone(Place.Zone(s, ZoneKind.FIELD, 0)))
             PileKind.entries.forEach { k ->
-                // A folded far hand is a count on its seat bar, not a spot.
+                // A folded far hand is a count by its name, not a spot.
                 if (k == PileKind.HAND && l.farHandFolded && s != bottom) assertNull(l.pile(s, k))
                 else assertNotNull(l.pile(s, k), "$k of $s")
             }
@@ -119,7 +119,8 @@ class DuelLayoutTest {
 
     @Test
     fun aShortWindowShrinksTheFarSideFirst() {
-        val l = DuelLayouter.solve(844f, 390f, true, FormFactor.PHONE)
+        // A phone lying down, under the bar and the tabs.
+        val l = DuelLayouter.solve(844f, 340f, true, FormFactor.PHONE)
         assertTrue(l.farScale < 1f)
         assertTrue(l.fits)
         val roomy = DuelLayouter.solve(1920f, 1032f, true)
@@ -140,5 +141,28 @@ class DuelLayoutTest {
         val a = l.zone(Place.Zone(0, ZoneKind.MONSTER, 1))!!
         val between = a.right + l.gap / 3f
         assertEquals(DuelSpot.Zone(Place.Zone(0, ZoneKind.MONSTER, 1)), l.spotAt(between, a.centerY))
+    }
+
+    @Test
+    fun theScoreColumnHoldsBothSeatsAndThePhasesBetween() = every { _, two, bottom, l ->
+        val near = l.score.getValue(bottom)
+        assertEquals(l.field.bottom, near.bottom, 0.01f)
+        assertTrue(near.left > l.field.right)
+        assertTrue(l.phases.top >= l.turn.bottom && l.phases.bottom <= near.top)
+        if (two) {
+            val far = l.score.getValue(1 - bottom)
+            assertEquals(l.field.top, far.top, 0.01f)
+            assertTrue(far.bottom <= l.turn.top)
+        } else {
+            assertNull(l.score[1 - bottom])
+        }
+    }
+
+    @Test
+    fun theHandsSitRightAgainstTheField() {
+        val l = DuelLayouter.solve(1920f, 984f, true)
+        // No seat bars between (1.0.78): one lane from the field to each hand.
+        assertEquals(l.gap, l.pile(l.near, PileKind.HAND)!!.top - l.field.bottom, 0.01f)
+        assertEquals(l.gap, l.field.top - l.pile(l.far, PileKind.HAND)!!.bottom, 0.01f)
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,6 +31,7 @@ import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.PileKind
+import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.layout.DuelFrames
@@ -57,49 +59,52 @@ private val PHASE_SHORT = mapOf(
 )
 
 /**
- * Each seat's bar: its name, its life points (a click opens the pad), whether it is that seat's turn,
- * whether it is thinking, and what is in its hand, deck and piles at a glance.
+ * The score column (1.0.78, kai: the seat bars took a row each for what the piles already show): each
+ * seat's name and life points at its own end of the column — theirs at the top, yours at the bottom —
+ * the seat whose turn it is in ink, and the turn between. A click on the life points opens the pad.
  */
 @Composable
-internal fun SeatBars(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout) {
+internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
-    l.bars.forEach { (seat, slot) ->
+    l.score.forEach { (seat, slot) ->
         val st = s.seats[seat]
         val turn = s.active == seat
-        Row(
+        val ink = if (turn) c.paper else c.ink
+        val top = seat != l.bottom
+        Column(
             Modifier.zIndex(30f).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp)
-                .border(1.dp, if (turn) c.ink else c.ink12)
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                .background(if (turn) c.ink else c.paper).border(1.dp, if (turn) c.ink else c.ink25)
+                .cursorPointer(caption = "Change LP").muClickable { duels.lpPad = if (duels.lpPad == seat) null else seat }
+                .padding(horizontal = 4.dp, vertical = 3.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp, if (top) Alignment.Top else Alignment.Bottom),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (turn) {
-                Box(Modifier.background(c.ink).padding(horizontal = 5.dp, vertical = 1.dp)) { Micro("Turn ${s.turn}", color = c.paper, size = 9.sp) }
+            val name: @Composable () -> Unit = { Micro(DuelWords.seatName(s, seat), color = ink, size = 9.sp, maxLines = 1) }
+            val marks: @Composable () -> Unit = {
+                when {
+                    s.conceded == seat -> Micro("Conceded", color = ink, size = 8.sp, maxLines = 1)
+                    seat in s.thinking -> Micro("Thinking", color = ink, size = 8.sp, maxLines = 1)
+                    l.farHandFolded && top -> Micro("Hand ${st.hand.size}", color = ink, size = 8.sp, maxLines = 1)
+                }
             }
-            RowText(DuelWords.seatName(s, seat), Modifier.widthIn(max = 160.dp), color = c.ink)
-            Box(
-                Modifier.cursorPointer(caption = "Change LP").muClickable { duels.lpPad = if (duels.lpPad == seat) null else seat }
-                    .padding(horizontal = 4.dp),
-            ) {
-                Mono("${st.lp}", color = c.ink, size = if (slot.height >= 34f) 18.sp else 15.sp)
-            }
-            Micro("LP", color = c.ink45, size = 9.sp)
-            if (seat in s.thinking) {
-                Box(Modifier.border(1.dp, c.ink).padding(horizontal = 5.dp, vertical = 1.dp)) { Micro("Thinking", color = c.ink, size = 9.sp) }
-            }
-            if (s.conceded == seat) Micro("Conceded", color = c.ink, size = 9.sp)
-            Box(Modifier.weight(1f))
-            val counts = if (slot.width < 460f) "H ${st.hand.size} · D ${st.deck.size}"
-            else "Hand ${st.hand.size} · Deck ${st.deck.size} · Extra ${st.extra.size} · GY ${st.gy.size}"
-            Mono(
-                counts,
-                color = c.ink70,
-            )
+            if (top) name()
+            Mono("${st.lp}", color = ink, size = if (slot.width >= 64f) 17.sp else 14.sp)
+            marks()
+            if (!top) name()
         }
+    }
+    val t = l.turn
+    Row(
+        Modifier.zIndex(30f).offset(t.left.dp, t.top.dp).size(t.width.dp, t.height.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Micro("Turn ", color = c.ink45, size = 9.sp)
+        Mono("${s.turn}", color = c.ink)
     }
 }
 
-/** The phases beside the field: the current one inverted, any of them a click away, End turn last. */
+/** The phases in the score column: the current one inverted, any of them a click away, End turn last. */
 @Composable
 internal fun PhaseStrip(duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
@@ -152,43 +157,141 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels) {
     }
 }
 
-/** The ground of an open pile, over the near side of the table, with its name and a way to close it. */
+/** The ground of an open pile, over the field, with its name, its rows when it scrolls, and a way to close it. */
 @Composable
 internal fun StripGround(duels: Duels, s: DuelState, l: DuelLayout, seat: Int, kind: PileKind) {
     val c = Mu.colors
-    val band = DuelFrames.stripBand(l)
-    val pad = l.gap
+    val n = s.seats[seat].pile(kind).size
+    val grid = DuelFrames.stripGrid(n, l)
+    val ground = stripGround(s, l, seat to kind)
     Box(
         Modifier.zIndex(DuelFrames.Z_STRIP - 0.5f)
-            .offset((band.left - pad).dp, (band.top - pad - 24f).dp)
-            .size((band.width + pad * 2).dp, (band.height + pad * 2 + 24f).dp)
+            .offset(ground.left.dp, ground.top.dp)
+            .size(ground.width.dp, ground.height.dp)
             .background(c.paper).border(1.dp, c.ink),
     ) {
-        Row(Modifier.fillMaxWidth().height(24.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Micro("${DuelWords.seatName(s, seat)} · ${kind.label} · ${s.seats[seat].pile(kind).size}", Modifier.weight(1f), color = c.ink)
+        Row(
+            Modifier.fillMaxWidth().height(DuelFrames.STRIP_HEAD.dp).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Micro("${DuelWords.seatName(s, seat)} · ${kind.label} · $n", Modifier.weight(1f), color = c.ink)
+            if (grid.scrolls) {
+                val first = duels.stripRow.coerceIn(0, grid.rows - grid.visibleRows)
+                Mono("rows ${first + 1}–${first + grid.visibleRows} of ${grid.rows}", color = c.ink45)
+                IconButton(Icons.ArrowUp, { duels.stripRow = (first - 1).coerceAtLeast(0) }, size = 22.dp, label = "Earlier rows", enabled = first > 0)
+                IconButton(Icons.ArrowDown, { duels.stripRow = (first + 1).coerceAtMost(grid.rows - grid.visibleRows) }, size = 22.dp, label = "Later rows", enabled = first < grid.rows - grid.visibleRows)
+            }
             if (kind == PileKind.DECK) {
                 MuButton("Shuffle and close", { duels.act(DuelAction.Shuffle(seat, PileKind.DECK), seat); duels.strip = null }, size = BtnSize.SM, variant = BtnVariant.GHOST)
             }
-            IconButton(Icons.X, { duels.strip = null }, size = 22.dp, label = "Close")
+            IconButton(Icons.X, { duels.closeStrip() }, size = 22.dp, label = "Close")
         }
     }
 }
+
+/** A deck looked through and closed: "Shuffle" stands on it for a few seconds, as a player shuffles after a search. */
+@Composable
+internal fun ShuffleOffer(duels: Duels, s: DuelState, l: DuelLayout) {
+    val c = Mu.colors
+    val (seat, until) = duels.offerShuffle ?: return
+    LaunchedEffect(until) {
+        kotlinx.coroutines.delay((until - Duels.now()).coerceAtLeast(0))
+        if (duels.offerShuffle?.second == until) duels.offerShuffle = null
+    }
+    val slot = l.pile(seat, PileKind.DECK) ?: return
+    Box(
+        Modifier.zIndex(45f).offset(slot.left.dp, (slot.bottom - 26f).dp).width(slot.width.dp).height(26.dp)
+            .background(c.ink).cursorPointer(caption = "Shuffle the Deck")
+            .muClickable { duels.act(DuelAction.Shuffle(seat, PileKind.DECK), seat); duels.offerShuffle = null },
+        contentAlignment = Alignment.Center,
+    ) { Micro("Shuffle", color = c.paper) }
+}
+
+/**
+ * What the selected card can do, standing beside it on the table (1.0.78, kai's pick of three): the
+ * obvious verb first, in ink, every one with its key. Right of the card where there is room, else left;
+ * above a card in the hand. Esc, a click on the table, or a verb run puts it away.
+ */
+@Composable
+internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<com.kaiharimoto.mastertool.core.layout.CardFrame>) {
+    val c = Mu.colors
+    val uid = duels.inspected?.takeIf { it in s.cards } ?: return
+    val f = frames.firstOrNull { it.uid == uid && it.shown } ?: return
+    val actor = duels.seatFor(uid)
+    val mine = s.solo || actor == duels.bottom || f.inStrip
+    val offered = com.kaiharimoto.mastertool.core.duel.DuelVerbs.offered(s, actor, uid, duels.catalog)
+    val verbs = if (mine) offered else listOf(com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET) + offered.filter { it != com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET }
+    if (verbs.isEmpty()) return
+    val turned = f.rotation % 180f != 0f
+    val vw = if (turned) f.h else f.w
+    val vh = if (turned) f.w else f.h
+    val anchor = com.kaiharimoto.mastertool.core.layout.Slot(f.centerX - vw / 2f, f.centerY - vh / 2f, vw, vh)
+    val inHand = s.placeOf(uid).let { it is Place.Pile && it.kind == PileKind.HAND }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.ui.layout.Layout(
+        content = {
+            Column(
+                Modifier.width(VERB_STRIP_W.dp).background(c.paper).border(1.dp, c.ink).padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                verbs.forEachIndexed { i, v ->
+                    val key = VERB_KEYS[v]?.let { com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(it) }?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
+                    VerbChip(v.label, key, strong = i == 0, modifier = Modifier.fillMaxWidth()) {
+                        duels.verbStrip = false
+                        if (v == com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET && !mine) duels.verb(uid, v, seat = duels.bottom) else duels.verb(uid, v)
+                    }
+                }
+                VerbChip("Point at it", "Alt click", modifier = Modifier.fillMaxWidth()) {
+                    duels.verbStrip = false
+                    duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, uid = uid))
+                }
+            }
+        },
+        modifier = Modifier.zIndex(DuelFrames.Z_STRIP + 2f),
+    ) { measurables, constraints ->
+        val p = measurables.first().measure(androidx.compose.ui.unit.Constraints())
+        val px = density.density
+        val gap = 6f * px
+        val w = p.width.toFloat()
+        val hgt = p.height.toFloat()
+        val maxW = l.width * px
+        val maxH = l.height * px
+        val (x, y) = if (inHand) {
+            (anchor.centerX * px - w / 2f) to (anchor.top * px - hgt - gap)
+        } else {
+            val right = anchor.right * px + gap
+            val left = anchor.left * px - gap - w
+            (if (right + w <= maxW - 4f * px || left < 0f) right else left) to (anchor.top * px)
+        }
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            p.place(
+                x.coerceIn(0f, (maxW - w).coerceAtLeast(0f)).toInt(),
+                y.coerceIn(0f, (maxH - hgt).coerceAtLeast(0f)).toInt(),
+            )
+        }
+    }
+}
+
+/** The verb strip's width: the longest verb and its key. */
+private const val VERB_STRIP_W = 168
 
 /** The life-point pad: type a change (−1000, +500, =4000, /2) or tap one. */
 @Composable
 internal fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
     val c = Mu.colors
-    val bar = l.bars[seat] ?: return
+    val anchor = l.score[seat] ?: l.turn
     val focus = remember { FocusRequester() }
     var text by remember(seat) { mutableStateOf("") }
     fun apply(expr: String) {
         val who = if (seat == duels.bottom) "" else "opp "
         if (duels.run("lp $who$expr")) duels.lpPad = null
     }
-    val above = seat != l.bottom
-    val top = if (above) bar.bottom + 6f else bar.top - 6f - 92f
+    // Beside the score it changes: level with its top for the far seat, its bottom for the near.
+    val top = if (seat != l.bottom) anchor.top else anchor.bottom - 92f
+    val left = (anchor.left - 8f - 300f).coerceAtLeast(0f)
     Column(
-        Modifier.zIndex(70f).offset((bar.left + 40f).dp, top.dp).width(300.dp).height(92.dp)
+        Modifier.zIndex(70f).offset(left.dp, top.dp).width(300.dp).height(92.dp)
             .background(c.paper).border(1.dp, c.ink).padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {

@@ -60,8 +60,16 @@ class Duels(val dir: File) {
     var hovered by mutableStateOf<Int?>(null)
     /** The card the inspector reads: the last clicked, or the hovered. */
     var inspected by mutableStateOf<Int?>(null)
-    /** The pile laid open above the hand. */
+    /** The pile laid open over the field. */
     var strip by mutableStateOf<Pair<Int, PileKind>?>(null)
+    /** The first row of a long open pile in view, when it scrolls. */
+    var stripRow by mutableStateOf(0)
+    /** A card is being carried across the table: the window's bars stay folded (1.0.78). */
+    var carrying by mutableStateOf(false)
+    /** A deck looked through and closed: "Shuffle Deck" stands by it until this time (ms), for this seat. */
+    var offerShuffle by mutableStateOf<Pair<Int, Long>?>(null)
+    /** Where the bar's Table menu opens, in the window. */
+    var tableMenuAt = androidx.compose.ui.geometry.Offset(320f, 48f)
     /** A card waiting for the card it goes under (the O key, the inspector's Attach). */
     var attaching by mutableStateOf<Int?>(null)
     var placed by mutableStateOf<Placed?>(null)
@@ -78,6 +86,8 @@ class Duels(val dir: File) {
     var drawer by mutableStateOf<String?>(null)
     /** The card whose every verb is shown, held open (a long press). */
     var verbsOpen by mutableStateOf(false)
+    /** The verb strip beside the selected card (1.0.78): shown for [inspected] while true. */
+    var verbStrip by mutableStateOf(false)
     var catalog: DuelCatalog = DuelCatalog.NONE
 
     /** The replay open on the table, if any: the table shows it instead of the duel in play. */
@@ -283,7 +293,21 @@ class Duels(val dir: File) {
     }
 
     fun openPile(seat: Int, kind: PileKind) {
-        strip = if (strip == seat to kind) null else seat to kind
+        if (strip == seat to kind) closeStrip() else {
+            strip = seat to kind
+            stripRow = 0
+        }
+    }
+
+    /**
+     * Closes the open pile (1.0.78: by its ✕, a press outside it, or a card carried out of it). A Deck
+     * looked through leaves "Shuffle Deck" standing by it for a few seconds, as a player shuffles after
+     * a search.
+     */
+    fun closeStrip() {
+        val open = strip ?: return
+        strip = null
+        if (open.second == PileKind.DECK) offerShuffle = open.first to System.currentTimeMillis() + SHUFFLE_OFFER_MS
     }
 
     private var saveJob: Job? = null
@@ -779,6 +803,8 @@ class Duels(val dir: File) {
     }
 
     companion object {
+        /** How long "Shuffle Deck" stands by a deck after it was looked through. */
+        const val SHUFFLE_OFFER_MS = 6000L
         const val CURRENT = "current.json"
         const val PLACED_MS = 2500L
         fun now(): Long = System.currentTimeMillis()

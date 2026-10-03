@@ -20,7 +20,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.zIndex
+import com.kaiharimoto.mastertool.core.duel.text.DuelWords
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.Small
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
@@ -79,11 +89,15 @@ internal fun DuelPage(h: NeueHolders) {
 
     val game = duels.shown
     val replay = duels.replay
+    val phone = LocalPhone.current
+    duels.myWindows = prefs.windows
     Column(Modifier.fillMaxSize()) {
-        if (replay != null) ReplayBar(duels, replay) else DuelBar(h, duels, prefs)
-        duels.myWindows = prefs.windows
-        if (duels.role != null) NetBar(h, duels)
-        Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
+        // On a desk or a tablet the duel's row is the window's bar (1.0.78), so it folds away in
+        // immersive mode; a phone's bar is its own, so the row stays here.
+        if (replay != null) ReplayBar(duels, replay)
+        else if (phone) PhoneDuelBar(h, duels)
+        if (duels.role != null && phone) NetBar(h, duels)
+        if (replay != null || phone) Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
         if (game == null) {
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 EmptyState(
@@ -117,7 +131,7 @@ internal fun DuelPage(h: NeueHolders) {
                             Column(Modifier.fillMaxSize()) {
                                 Segmented(tab, listOf("Card", "Log"), { it }, { tab = it }, Modifier.padding(8.dp), small = true)
                                 if (tab == "Card") DuelInspector(h, duels, game, viewers, Modifier.weight(1f))
-                                else DuelLogRail(duels, game, viewer, Modifier.weight(1f))
+                                else DuelLogRail(duels, game, viewer, Modifier.weight(1f), head = { LogHead(h) })
                             }
                         } else {
                             DuelInspector(h, duels, game, viewers, Modifier.fillMaxSize())
@@ -128,17 +142,19 @@ internal fun DuelPage(h: NeueHolders) {
                 layout.log?.let { r ->
                     Box(Modifier.offset((r.left - 7).dp, r.top.dp).width(1.dp).height(r.height.dp).background(c.ink12))
                     Box(Modifier.offset(r.left.dp, r.top.dp).size(r.width.dp, r.height.dp)) {
-                        DuelLogRail(duels, game, viewer, Modifier.fillMaxSize())
+                        DuelLogRail(duels, game, viewer, Modifier.fillMaxSize(), head = { LogHead(h) })
                     }
                 }
                 if (layout.drawers) {
                     MuDrawer(duels.drawer == "card", { duels.drawer = null }, header = { FieldLabel("The card") }) {
-                        DuelInspector(h, duels, game, viewers, Modifier.fillMaxWidth())
+                        DuelInspector(h, duels, game, viewers, Modifier.fillMaxWidth(), fill = false)
                     }
                     MuDrawer(duels.drawer == "log", { duels.drawer = null }, header = { FieldLabel("Log") }) {
-                        DuelLogRail(duels, game, viewer, Modifier.fillMaxWidth().height(480.dp))
+                        DuelLogRail(duels, game, viewer, Modifier.fillMaxWidth().height(480.dp), head = { LogHead(h) })
                     }
                 }
+                // What a networked table waits on, over its top edge: never a row that pushes the cards down.
+                if (duels.role != null && !phone) Box(Modifier.zIndex(95f).fillMaxWidth()) { NetBar(h, duels, overlay = true) }
             }
         }
     }
@@ -155,73 +171,129 @@ internal fun DuelPage(h: NeueHolders) {
     }
 }
 
-/** The page's own row: the duel's shape, the seat, the hot-seat's knowledge, undo and the command line. */
+/**
+ * The duel's row (1.0.78, kai: "the top bar with duel controls should be auto-hiding in immersive
+ * mode … the immersive button can be moved to the other top bar"): on a desk or a tablet it is the
+ * window's bar, so it folds away with it; New duel, Replays, the Table menu (the table's shape, whose
+ * eyes, which way their cards face, Ai and combos), the seat, undo, the command line and full screen.
+ */
 @Composable
-private fun DuelBar(h: NeueHolders, duels: Duels, prefs: DuelPrefs) {
+internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boolean = false) {
     val c = Mu.colors
+    val duels = h.duel
     val neue = h.neue
-    val phone = LocalPhone.current
     // A guest's table is the host's duel as its seat sees it.
     val game = duels.shown
     val online = duels.role != null
+    if (duels.replay != null) {
+        Micro("Replay", color = c.ink45)
+        Box(Modifier.weight(1f))
+    } else {
+        Tip("Start again with new decks", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_NEW)?.let(DeskShortcuts::kbd)) {
+            MuButton(if (phone || narrow) "New" else "New duel", { duels.setupOpen = true }, size = BtnSize.SM, icon = Icons.Plus)
+        }
+        Tip("Keep this duel, or watch one again") {
+            MuButton("Replays", { duels.libraryOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+        }
+        if (game != null) {
+            Box(Modifier.onGloballyPositioned { duels.tableMenuAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
+                Tip("The table: its sides, whose eyes, which way their cards face") {
+                    MuButton("Table ▾", { neue.menu = MenuSpec(duels.tableMenuAt, tableMenu(h)) }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+                }
+            }
+            if (!game.state.solo && !online) {
+                Tip("Sit at the other seat", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_SWAP)?.let(DeskShortcuts::kbd)) {
+                    MuButton("Seat: ${DuelWords.seatName(game.state, duels.bottom)}", { duels.swap() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
+                }
+            }
+            if (online) Small("Online · ${duels.peer ?: "waiting"}", color = c.ink70, maxLines = 1)
+            VRule(Modifier.height(24.dp), color = c.ink12)
+            IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndo || online, label = if (online) "Ask to take back" else "Undo", reason = "Nothing to take back")
+            if (!online) IconButton(Icons.Redo, { duels.redo() }, enabled = game.canRedo, label = "Redo", reason = "Nothing to put back")
+            if (phone) {
+                Box(Modifier.weight(1f))
+                IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
+            } else {
+                CommandLine(duels, Modifier.weight(1f), short = narrow)
+            }
+        } else {
+            Box(Modifier.weight(1f))
+        }
+    }
+    if (!phone) {
+        Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, the bar out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
+            IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, { h.run(DeskAction.IMMERSIVE) }, toggled = neue.immersive, size = 32.dp, label = if (neue.immersive) "Leave full screen" else "Full screen")
+        }
+    }
+}
+
+/** The log's head (1.0.78): Ai's face, which opens it, and the deck's combos — moved here from the bars. */
+@Composable
+private fun LogHead(h: NeueHolders) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        MuButton("Combos", { h.duel.combosOpen = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+        if (h.neue.prefs.ai.enabled) com.kaiharimoto.neue.ai.avatar.AiBadge(h, height = 28.dp)
+    }
+}
+
+/** The command line: type what you would say across the table. */
+@Composable
+private fun CommandLine(duels: Duels, modifier: Modifier, short: Boolean) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(duels.commandFocus) { if (duels.commandFocus > 0) runCatching { focus.requestFocus() } }
-    val commandLine: @Composable (Modifier) -> Unit = { m ->
-        MuInput(
-            duels.command,
-            { duels.command = it },
-            m,
-            placeholder = if (phone) "Type a command: ash to hand" else "Type a command: ash to hand · summon droll to m3 · lp -1000 · mill 3   ( / )",
-            dense = true,
-            focusRequester = focus,
-            onSubmit = { duels.run(duels.command) },
-        )
+    MuInput(
+        duels.command,
+        { duels.command = it },
+        modifier,
+        placeholder = if (short) "Type a command: ash to hand   ( / )" else "Type a command: ash to hand · summon droll to m3 · lp -1000 · mill 3   ( / )",
+        dense = true,
+        focusRequester = focus,
+        onSubmit = { duels.run(duels.command) },
+    )
+}
+
+/** The Table menu: the switches that change how the table is shown, not what is on it. */
+private fun tableMenu(h: NeueHolders): List<MenuEntry> {
+    val duels = h.duel
+    val neue = h.neue
+    val prefs = neue.prefs.duel
+    val s = duels.shown?.state ?: return emptyList()
+    val online = duels.role != null
+    fun key(a: DeskAction) = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
+    return buildList {
+        if (!s.solo && !online) {
+            add(MenuEntry(if (prefs.twoSided) "One side of the table" else "Both sides of the table", hint = key(DeskAction.DUEL_SIDES)) {
+                neue.update { it.copy(duel = it.duel.copy(twoSided = !it.duel.twoSided)) }
+            })
+            add(MenuEntry(if (prefs.knowledge == DuelPrefs.KNOW_ALL) "Only this seat's eyes" else "Both hands face-up") {
+                neue.update { it.copy(duel = it.duel.copy(knowledge = if (it.duel.knowledge == DuelPrefs.KNOW_ALL) DuelPrefs.KNOW_SEAT else DuelPrefs.KNOW_ALL)) }
+            })
+        }
+        if (!s.solo) {
+            add(MenuEntry(if (prefs.facing) "Their cards face you" else "Their cards face them", hint = key(DeskAction.DUEL_FACING)) {
+                neue.update { it.copy(duel = it.duel.copy(facing = !it.duel.facing)) }
+            })
+        }
+        if (!s.solo && !online) add(MenuEntry("Sit at the other seat", hint = key(DeskAction.DUEL_SWAP)) { duels.swap() })
+        add(MenuEntry("The card", separatorBefore = true, hint = "Read it large") { duels.drawer = "card" })
+        add(MenuEntry("Log and chat") { duels.drawer = "log" })
+        add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
+        if (online) add(MenuEntry("Leave the table", separatorBefore = true, danger = true) { duels.leave() })
     }
+}
+
+/** A phone's duel row, under its own bar; the command line has a row of its own. */
+@Composable
+private fun PhoneDuelBar(h: NeueHolders, duels: Duels) {
     Column {
         Row(
             Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Tip("Start again with new decks", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_NEW)?.let(DeskShortcuts::kbd)) {
-                MuButton(if (phone) "New" else "New duel", { duels.setupOpen = true }, size = BtnSize.SM, icon = Icons.Plus)
-            }
-            Tip("Keep this duel, or watch one again") {
-                MuButton("Replays", { duels.libraryOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
-            }
-            Tip(if (neue.prefs.ai.enabled) "${h.ai.name} at the table, and the deck's combos" else "The deck's combos") {
-                MuButton(if (neue.prefs.ai.enabled && !phone) "${h.ai.name} · Combos" else "Combos", { duels.combosOpen = true }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
-            }
-            if (game != null) {
-                if (!game.state.solo && !online) {
-                    if (!phone) {
-                        Segmented(prefs.twoSided, listOf(true, false), { if (it) "Two sides" else "One side" }, { v -> neue.update { it.copy(duel = it.duel.copy(twoSided = v)) } }, small = true, compact = true)
-                    }
-                    Tip("Sit at the other seat", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_SWAP)?.let(DeskShortcuts::kbd)) {
-                        MuButton("Seat: ${com.kaiharimoto.mastertool.core.duel.text.DuelWords.seatName(game.state, duels.bottom)}", { duels.swap() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
-                    }
-                    if (!phone) {
-                        Segmented(
-                            prefs.knowledge, listOf(DuelPrefs.KNOW_ALL, DuelPrefs.KNOW_SEAT),
-                            { if (it == DuelPrefs.KNOW_ALL) "Both hands" else "This seat's eyes" },
-                            { v -> neue.update { it.copy(duel = it.duel.copy(knowledge = v)) } },
-                            small = true, compact = true,
-                        )
-                    }
-                }
-                VRule(Modifier.height(24.dp), color = c.ink12)
-                IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndo || online, label = if (online) "Ask to take back" else "Undo", reason = "Nothing to take back")
-                if (!online) IconButton(Icons.Redo, { duels.redo() }, enabled = game.canRedo, label = "Redo", reason = "Nothing to put back")
-                if (phone) Box(Modifier.weight(1f)) else commandLine(Modifier.weight(1f))
-                IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
-            } else {
-                Box(Modifier.weight(1f))
-            }
-        }
-        // On a phone the command line has a row of its own.
-        if (phone && game != null) {
+        ) { DuelBarItems(h, narrow = true, phone = true) }
+        if (duels.shown != null && duels.replay == null) {
             Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                commandLine(Modifier.weight(1f))
+                CommandLine(duels, Modifier.weight(1f), short = true)
             }
         }
     }
