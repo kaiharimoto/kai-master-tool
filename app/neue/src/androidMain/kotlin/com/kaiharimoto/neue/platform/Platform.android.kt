@@ -52,8 +52,16 @@ actual object Platform {
     /** The APK's "Ai answered" notification, posted only while the app is out of sight. */
     private var answer: ((String, String) -> Unit)? = null
 
-    actual fun working(on: Boolean, title: String, line: String) {
-        runCatching { work?.invoke(on, title, line) }
+    actual fun working(on: Boolean, title: String, line: String) = keepAwake("ai", on, title, line)
+
+    /** What holds the foreground service now, each with its notification's words; the newest is shown. */
+    private val holds = LinkedHashMap<String, Pair<String, String>>()
+
+    @Synchronized
+    actual fun keepAwake(key: String, on: Boolean, title: String, line: String) {
+        if (on) { holds.remove(key); holds[key] = title to line } else holds.remove(key)
+        val shown = holds.values.lastOrNull()
+        runCatching { work?.invoke(shown != null, shown?.first ?: title, shown?.second ?: line) }
     }
 
     actual fun answered(title: String, line: String) {

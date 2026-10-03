@@ -93,5 +93,7 @@ actual object Platform {
     /** A computer does not freeze a window's process when another has the focus. */
     actual fun working(on: Boolean, title: String, line: String) = Unit
 
+    actual fun keepAwake(key: String, on: Boolean, title: String, line: String) = Unit
+
     actual fun answered(title: String, line: String) = Unit
 }

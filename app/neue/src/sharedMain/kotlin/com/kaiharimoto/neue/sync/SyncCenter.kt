@@ -185,6 +185,9 @@ class SyncCenter(private val h: NeueHolders) {
     fun signIn(cloud: Cloud) {
         if (!cloud.ready || signingIn != null) return
         signingIn = cloud
+        // Out of sight while the browser is up: on Android the listener must not be frozen (kai, 1.0.87: "it just loads
+        // endlessly forever").
+        Platform.keepAwake(SIGN_IN, true, "Signing in to ${cloud.label}", "Waiting for the browser")
         scope.launch {
             try {
                 val verifier = SyncPlatform.random(64)
@@ -210,6 +213,7 @@ class SyncCenter(private val h: NeueHolders) {
                 problem = "Signing in to ${cloud.label} did not finish: ${e.message ?: e::class.simpleName}"
             } finally {
                 signingIn = null
+                Platform.keepAwake(SIGN_IN, false, "", "")
             }
         }
     }
@@ -255,6 +259,7 @@ class SyncCenter(private val h: NeueHolders) {
 
         /** Where a phone's browser hands back to the app once signed in (`MainActivity`'s intent filter). */
         const val RETURN = "neuemastertool://signed-in"
+        private const val SIGN_IN = "sign-in"
 
         /** How often the app syncs by itself while it is open. */
         const val EVERY_MS = 3 * 60_000L

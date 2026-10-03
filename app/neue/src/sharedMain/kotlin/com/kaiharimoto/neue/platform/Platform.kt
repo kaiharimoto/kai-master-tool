@@ -70,6 +70,13 @@ expect object Platform {
      */
     fun working(on: Boolean, title: String, line: String)
 
+    /**
+     * The same keeping-alive for anything else that must not be frozen out of sight, by [key] (1.0.87: a sign-in
+     * waiting on the browser — Android froze the listener, and the browser loaded for ever). The service stays while
+     * any key holds it; the desk needs none.
+     */
+    fun keepAwake(key: String, on: Boolean, title: String, line: String)
+
     /** Ai finished while the app was out of sight: a notification says so (Android); nothing on the desk. */
     fun answered(title: String, line: String)
 }
