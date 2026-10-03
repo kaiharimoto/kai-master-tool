@@ -19,6 +19,7 @@ import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -81,7 +82,9 @@ import com.kaiharimoto.neue.theme.MuType
  * The picture first, then what the card says — its name, its numbers and its
  * text — then two sections that fold shut and stay shut: the facets, and the
  * copies in the deck. (1.0.9 put the words above the picture; kai moved the
- * picture back.)
+ * picture back.) The text is what must be read whole (1.0.88): the picture takes
+ * the height the words leave, and the text steps down a size only once the picture
+ * is at its least (`TextFirstCard`).
  */
 @Composable
 fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Modifier) {
@@ -116,9 +119,25 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
                     color = c.ink70,
                 )
             }
-            return@Box
+        } else {
+            InspectedCard(card, state, neue)
+            hide()
         }
-        val scroll = rememberScrollState()
+    }
+}
+
+/**
+ * The card itself: its picture and its words, fitted so the text is read whole without scrolling
+ * (1.0.88, `TextFirstCard`), then the folds below them — below the fold too, where the window is short.
+ */
+@Composable
+private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) {
+    val c = Mu.colors
+    val scroll = rememberScrollState()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // What is seen without scrolling: the column less its top padding and a margin at its foot —
+        // on a tablet the margin is the Hide button's corner, which stands over the column's last lines.
+        val room = if (constraints.hasBoundedHeight) maxHeight - 20.dp - (if (neue.touchFirst) 48.dp else 16.dp) else null
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 24.dp)) {
             // A picture dropped on the card is its own art, cropped in (1.0.34).
             val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
@@ -131,22 +150,31 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
                     }
                 }
             }
-            NeueCard(
-                card = card,
-                modifier = Modifier.fillMaxWidth().aspectRatio(CARD_RATIO).let { base ->
-                    if (custom == null) base else base.dragAndDropTarget(shouldStartDragAndDrop = { com.kaiharimoto.neue.platform.mayBePicture(it) }, target = drop)
-                },
-                format = state.format,
-                foil = neue.prefs.foil,
-            )
             // In zen the card stays a moment longer than what is written about it.
-            Column(Modifier.zenQuiet().padding(top = 20.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                CardHeading(card)
-                SelectionContainer {
-                    Body(card.description.ifBlank { "No card text." }, color = c.ink)
-                }
-            }
-            Column(Modifier.zenQuiet()) {
+            TextFirstCard(
+                room = room,
+                text = card.description.ifBlank { "No card text." },
+                style = MuType.body(LocalMuFonts.current),
+                artGap = 20.dp,
+                headGap = 16.dp,
+                head = { Box(Modifier.zenQuiet()) { CardHeading(card) } },
+                art = {
+                    NeueCard(
+                        card = card,
+                        modifier = Modifier.fillMaxSize().let { base ->
+                            if (custom == null) base else base.dragAndDropTarget(shouldStartDragAndDrop = { com.kaiharimoto.neue.platform.mayBePicture(it) }, target = drop)
+                        },
+                        format = state.format,
+                        foil = neue.prefs.foil,
+                    )
+                },
+                body = { style ->
+                    Box(Modifier.zenQuiet()) {
+                        SelectionContainer { com.kaiharimoto.neue.kit.MuText(card.description.ifBlank { "No card text." }, style = style, color = c.ink) }
+                    }
+                },
+            )
+            Column(Modifier.zenQuiet().padding(top = 20.dp)) {
                 Fold("Details", "details", neue) { CardTags(card, state) }
                 Fold("In the deck", "deck", neue) { Copies(card, state) }
                 // The artwork last (1.0.42, kai: "not vital to deckbuilding"): which picture, and your own.
@@ -154,9 +182,9 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
             }
         }
         Box(Modifier.matchParentSize().zenQuiet()) { ScrollbarFor(scroll) }
-        hide()
     }
 }
+
 
 /**
  * Which of a card's artworks is drawn, for a card printed with more than one
