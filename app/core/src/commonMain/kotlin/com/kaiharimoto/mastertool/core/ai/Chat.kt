@@ -265,6 +265,9 @@ data class AiSession(
         /** Restyle on Present (1.0.72): the look of a presentation changed from the person's words, and nothing else. */
         const val MODE_RESTYLE = "restyle"
 
+        /** At the duel table (1.0.80): Ai talks in the duel's log, reading the table only when cued. */
+        const val MODE_DUEL = "duel"
+
         /** What an old tool result is cut to once the person clears them. */
         const val CLEARED = 200
 

@@ -88,6 +88,38 @@ class Duels(val dir: File) {
     var verbsOpen by mutableStateOf(false)
     /** The verb strip beside the selected card (1.0.78): shown for [inspected] while true. */
     var verbStrip by mutableStateOf(false)
+
+    // ---- Ai in the log (1.0.80) ----------------------------------------------------------------------
+
+    /** The duel's own conversation with Ai, so the log always talks into it. */
+    var aiSession by mutableStateOf<String?>(null)
+    /** How far into the log Ai has read: each cue carries what came after, then moves this on. */
+    var aiRead: Int? = null
+    /** The person said Respond: Ai waits until they say Done. */
+    var aiResponding by mutableStateOf(false)
+    /** Log lines picked (their entry numbers), for Insert here or Save as combo. */
+    var logPick by mutableStateOf<List<Int>>(emptyList())
+    /** The next move goes into the log after this entry, not at its end: acting in a phase gone by. */
+    var insertAfter by mutableStateOf<Int?>(null)
+
+    /** The duel already logged to Prep as a practice game, so it is logged once. */
+    var loggedDuel: String? = null
+
+    /** A log line picked or let go; two at most, for a span. */
+    fun pickLine(i: Int) {
+        logPick = if (i in logPick) logPick - i else (logPick + i).takeLast(2)
+        if (logPick.size != 1) insertAfter = null
+    }
+
+    /** A span of the log kept as one of a deck's combos. */
+    fun saveSpan(deckId: String, name: String, needs: List<String>, steps: List<String>, done: (String) -> Unit) {
+        scope.launch {
+            val book = combos(deckId)
+            val combo = com.kaiharimoto.mastertool.core.duel.ai.Combo("c${now()}", name, deckId, needs, steps, created = now())
+            saveCombos(deckId, book.copy(combos = book.combos + combo))
+            done(name)
+        }
+    }
     var catalog: DuelCatalog = DuelCatalog.NONE
 
     /** The replay open on the table, if any: the table shows it instead of the duel in play. */
@@ -172,6 +204,7 @@ class Duels(val dir: File) {
     /** Commits [actions] as one group by [seat]. False, and the reason said, when the table refuses. */
     fun act(actions: List<DuelAction>, seat: Int? = bottom): Boolean {
         if (replay != null) return insert(actions, seat)
+        insertAfter?.let { at -> if (role == null && actions.any { !it.social }) { insertAfter = null; return insertPast(at, actions, seat) } }
         if (role == NetRole.GUEST) return ask(actions)
         if (role == NetRole.HOST) return hostAct(actions, seat ?: bottom)
         val g = game ?: return false
@@ -703,6 +736,25 @@ class Duels(val dir: File) {
         val (ok, why) = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(g.state, stamped, seat)
         if (ok == null) { problem = why; return false }
         edit(com.kaiharimoto.mastertool.core.duel.replay.Replays.insert(r.record, r.at, stamped, seat, now()), r.at + stamped.size)
+        return true
+    }
+
+    /**
+     * [actions] put into the log after entry [at] of the duel in play (1.0.80): a move made in a phase
+     * already gone by. Everything after folds on top of it; a later move it makes impossible is struck
+     * through in the log, never refused.
+     */
+    fun insertPast(at: Int, actions: List<DuelAction>, seat: Int?): Boolean {
+        val g = game ?: return false
+        val k = at.coerceIn(g.floor, g.cursor)
+        val stamped = actions.mapIndexed { n, a -> com.kaiharimoto.mastertool.core.duel.DuelRandom.stamp(a, com.kaiharimoto.mastertool.core.duel.DuelRandom.forEntry(g.header.seed, g.cursor + n + 104729)) }
+        val (ok, why) = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(g.stateAt(k), stamped, seat)
+        if (ok == null) { problem = why; return false }
+        val record = g.record().copy(entries = g.played, cursor = g.cursor)
+        val inserted = com.kaiharimoto.mastertool.core.duel.replay.Replays.insert(record, k, stamped, seat, now())
+        game = DuelGame.of(inserted)
+        problem = null
+        save()
         return true
     }
 

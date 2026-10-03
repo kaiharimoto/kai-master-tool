@@ -342,7 +342,7 @@ private fun SummaryMark(summary: String, carried: Boolean) {
 }
 
 @Composable
-private fun ActivityLine(summary: String, isError: Boolean) {
+internal fun ActivityLine(summary: String, isError: Boolean) {
     val c = Mu.colors
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
         Mono(if (isError) "✕" else "→", color = if (isError) c.ink else c.ink45)
@@ -353,7 +353,7 @@ private fun ActivityLine(summary: String, isError: Boolean) {
 /** Ai's words: its markdown in the app's type, and a chip for each card it named. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReplyView(ai: AiState, text: String, live: Boolean = false) {
+internal fun ReplyView(ai: AiState, text: String, live: Boolean = false) {
     val c = Mu.colors
     val blocks = remember(text, live) { ChatMarkdown.parse(text, streaming = live) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -493,7 +493,7 @@ private fun ConfirmCard(c: Confirm) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QuestionCard(ai: AiState, q: Question) {
+internal fun QuestionCard(ai: AiState, q: Question) {
     val c = Mu.colors
     // Kept on the question itself (1.0.63), so the row can be rebuilt without losing a word.
     var picked by q::picked
@@ -771,6 +771,7 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
                     Mono(
                         java.time.Instant.ofEpochMilli(s.updatedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString() +
                             (if (s.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_TUNE) " · Fine Tuning" else "") +
+                            (if (s.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL) " · Duel" else "") +
                             " · ${s.turns.count { it.role == Role.USER && !it.isToolResults }} messages",
                         color = c.ink45,
                     )
@@ -788,7 +789,7 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
  * Reasoning), open while it streams so it can be followed as it goes.
  */
 @Composable
-private fun ReasoningView(ai: AiState, text: String, live: Boolean, opened: MutableMap<String, Boolean>) {
+internal fun ReasoningView(ai: AiState, text: String, live: Boolean, opened: MutableMap<String, Boolean>) {
     val c = Mu.colors
     val how = ai.prefs.showReasoning
     if (how == com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_HIDDEN) return

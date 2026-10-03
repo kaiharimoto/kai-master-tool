@@ -143,7 +143,7 @@ private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers:
  * each seat's Summons and activations, and every lock with a way to lift it. Gone when there is nothing.
  */
 @Composable
-private fun TurnTally(duels: Duels, game: DuelGame) {
+internal fun TurnTally(duels: Duels, game: DuelGame) {
     val c = Mu.colors
     val tally = remember(game) { duels.tally() } ?: return
     val s = game.state
@@ -222,101 +222,3 @@ private fun KeyCheat(h: NeueHolders) {
     }
 }
 
-/**
- * The log in words, with the chat in it, newest at the bottom, a rule at each turn — and the line to
- * talk on. [viewer] null reads everything (the hot-seat with both hands shown).
- */
-@Composable
-internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: Modifier = Modifier, head: @Composable () -> Unit = {}) {
-    val c = Mu.colors
-    val refused = duels.refused()
-    val remote = duels.remoteLines
-    val guest = duels.role == Duels.NetRole.GUEST
-    val lines = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest) {
-        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, viewer, duels, refused)
-    }
-    val list = rememberLazyListState()
-    LaunchedEffect(lines.size) { if (lines.isNotEmpty()) list.scrollToItem(lines.size - 1) }
-    val chatFocus = remember { FocusRequester() }
-    LaunchedEffect(duels.chatFocus) { if (duels.chatFocus > 0) runCatching { chatFocus.requestFocus() } }
-    Column(modifier) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Micro("Log", color = c.ink70)
-            Mono("  ${if (guest) remote.size else game.cursor - game.floor}", Modifier.weight(1f), color = c.ink45)
-            head()
-        }
-        HRule()
-        TurnTally(duels, game)
-        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list) {
-            itemsIndexed(lines) { _, line ->
-                when (line) {
-                    is LogLine.Turn -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Micro(line.text, color = c.ink)
-                        Box(Modifier.weight(1f).padding(start = 8.dp)) { HRule() }
-                    }
-                    is LogLine.Said -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp)) {
-                        Box(Modifier.background(c.ink06).padding(horizontal = 6.dp, vertical = 3.dp)) { Small(line.text, color = c.ink) }
-                    }
-                    is LogLine.Done -> if (line.struck) {
-                        Small("${line.text} — no longer fits", Modifier.padding(horizontal = 12.dp, vertical = 2.dp), color = c.ink25)
-                    } else {
-                        Small(line.text, Modifier.padding(horizontal = 12.dp, vertical = 2.dp), color = if (line.mine) c.ink else c.ink70)
-                    }
-                    is LogLine.Noted -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                        Box(Modifier.border(1.dp, c.ink).padding(horizontal = 6.dp, vertical = 3.dp)) { Small(line.text, color = c.ink) }
-                    }
-                }
-            }
-        }
-        HRule()
-        MuInput(
-            duels.chat,
-            { duels.chat = it },
-            Modifier.fillMaxWidth().padding(8.dp),
-            placeholder = "Say something · Enter",
-            dense = true,
-            focusRequester = chatFocus,
-            onSubmit = { duels.say(duels.chat) },
-        )
-    }
-}
-
-internal sealed interface LogLine {
-    data class Turn(val text: String) : LogLine
-    data class Done(val text: String, val mine: Boolean, val struck: Boolean = false) : LogLine
-    data class Noted(val text: String) : LogLine
-    data class Said(val text: String) : LogLine
-}
-
-/** The guest's log: the lines the host sent it, a rule at each new turn. */
-private fun remoteLog(lines: List<com.kaiharimoto.mastertool.core.duel.net.Line>, me: Int): List<LogLine> {
-    val out = ArrayList<LogLine>()
-    var turn = 0
-    lines.forEach { l ->
-        if (l.turn != turn) { turn = l.turn; out += LogLine.Turn("Turn $turn") }
-        out += if (l.chat) LogLine.Said(l.text) else LogLine.Done(l.text, l.seat == me)
-    }
-    return out
-}
-
-private fun logLines(game: DuelGame, viewer: Int?, duels: Duels, refused: Set<Int>): List<LogLine> {
-    val out = ArrayList<LogLine>()
-    var s = DuelSetup.initial(game.header)
-    game.played.forEachIndexed { i, e ->
-        val applied = DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok
-        val after = applied?.state ?: s
-        if (i == game.floor) out += LogLine.Turn("Turn 1")
-        if (i >= game.floor) {
-            when (e.action) {
-                is DuelAction.Chat -> out += LogLine.Said(DuelWords.say(s, after, e, viewer, duels.catalog))
-                DuelAction.EndTurn -> out += LogLine.Turn("Turn ${after.turn} · ${DuelWords.seatName(after, after.active)}")
-                is DuelAction.Note -> out += LogLine.Noted(DuelWords.say(s, after, e, viewer, duels.catalog))
-                is DuelAction.Thinking, is DuelAction.Ping -> out += LogLine.Done(DuelWords.say(s, after, e, viewer, duels.catalog), false)
-                else -> out += LogLine.Done(DuelWords.say(s, after, e, viewer, duels.catalog), e.seat == duels.bottom, struck = applied == null || e.i in refused)
-            }
-        }
-        s = after
-    }
-    if (game.floor >= game.cursor) out += LogLine.Turn("Turn 1")
-    return out
-}

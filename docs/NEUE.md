@@ -3152,6 +3152,26 @@ direct play first and a relay later on the same messages:
   acting seat's eyes; it moves only its own seat unless the person allows both (`DuelPrefs.aiBothSeats`); and it is
   told each op's real effect in the log's words (`Duels.playOut` → `PlayReport`), "no change on the table" included.
 
+**Ai in the log** (1.0.80, kai: "it felt clunky as I had to continually type my actions out for it … what if I could
+operate and communicate with the AI using the log chat as the main one"):
+- **One conversation, in the log.** At a table Ai sits at (Ai on, not a networked table), the log's box talks to Ai
+  (`/` in front runs a command); what Ai says is set in among the table's lines by time (`DuelLogRail`, `LogLine`), and
+  its thinking and tool lines show behind the head's **Thinking** switch (`DuelPrefs.aiThinking`). The duel has its own
+  conversation (`AiSession.MODE_DUEL`, `Duels.aiSession`, its own `PromptBuilder` paragraph); the side panel stays shut
+  on the Duel page, and the face in the log's head opens it for everything else.
+- **Ai reads the table only when cued** (`cueAi`, `AiState.sendDuel`): a message, or a button — **Your move**, **Catch
+  up** (read what I did and ask about anything unclear; move nothing), **No response** / **Respond** (then **Done**) when
+  Ai's link tops the chain, **Over to you** when the person's does. Each cue carries what the person did since Ai last
+  read (`Duels.aiRead`), in the log's words as Ai's seat may see them, as context the chat does not show. The person's
+  moves never start Ai on their own, so a small move costs nothing.
+- **Questions stand in the log's foot**, with **No response** always among the answers (`AiHost.askUser` in a duel).
+- **A phase gone by**: pick a line in the log and **Insert here** — the next move goes in after it
+  (`Duels.insertPast`, `Replays.insert`), and a later move it makes impossible is struck through; Ai does the same with
+  `duel_act`'s `at` ("t2 ep", `Past`).
+- **Save as combo**: pick two lines and the span between them is kept as one of the deck's combos (`ComboRecorder`).
+- **A finished duel is a practice game**: a concession or 0 LP against a known deck is logged to Prep once
+  (`logFinishedDuel`, `DuelPrefs.logGames`), with Undo in the note.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

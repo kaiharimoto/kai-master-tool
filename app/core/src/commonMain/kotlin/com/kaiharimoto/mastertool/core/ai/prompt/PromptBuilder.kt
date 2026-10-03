@@ -170,6 +170,19 @@ object PromptBuilder {
                     "Do not change their decks in this conversation.",
             )
         }
+        if (s.mode == "duel") {
+            appendLine()
+            appendLine("## This conversation is a duel at the Duel page's table")
+            appendLine(
+                "Read the skill duel-table with skill_view first and follow it. You talk in the duel's log, beside the table: a sentence or " +
+                    "two, plain words, no headings. The person's table moves reach you only when they cue you — a message, or Your move, " +
+                    "Catch up, No response — and each cue carries what they did since you last read, as your seat saw it, with your seat and " +
+                    "knowledge; call duel_state when you need the whole table, duel_log only if the cue leaves you unsure. Move only your own " +
+                    "seat with duel_act. When you add a chain link or summon something they could answer, end your turn there and wait for " +
+                    "their cue. When a move of theirs is unclear, or could be an activation you would answer, ask with ask_user — short " +
+                    "options; No response is always offered them. Do not change their decks or settings in this conversation.",
+            )
+        }
         if (s.mode == "restyle") {
             appendLine()
             appendLine("## This conversation restyles a presentation on the Present page")

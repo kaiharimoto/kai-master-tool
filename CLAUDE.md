@@ -623,6 +623,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   Normal Spell/Trap to the GY; token ATK/DEF; a search reveals; `Propose`/`Decline` for the other seat's phase asks;
   `DuelTally` and `Lock`s; house rulings (`duel/rulings.json`, `duel_ruling`); Ai reads results through its knowledge
   setting and moves only its own seat (`aiBothSeats`).
+  **1.0.80, Ai in the log**: the log's box is the duel's conversation with Ai (`AiSession.MODE_DUEL`, `AiState.sendDuel`,
+  `DuelLog.kt`), Ai reading the table only when cued (`cueAi`: Your move, Catch up, No response, Respond/Done, Over to you;
+  `Duels.aiRead`), its thinking behind a switch (`aiThinking`), its questions in the log's foot with No response; Insert
+  here (`Duels.insertPast`, `Past`, `duel_act` `at`), Save as combo from two picked lines, a finished duel logged to Prep.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

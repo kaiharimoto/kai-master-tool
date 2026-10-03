@@ -1091,7 +1091,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private suspend fun askUser(question: String, options: List<String>, multiple: Boolean, cards: List<String> = emptyList(), heard: List<String> = emptyList()): Answer {
         // The cards a question is about, shown as their art (1.0.48): "what does this one do for you?"
         val shown = cards.take(6).mapNotNull { (com.kaiharimoto.mastertool.core.ai.CardWords.resolve(it, index) as? com.kaiharimoto.mastertool.core.ai.Resolved.Found)?.card }
-        val answer = ai.ask(Question(question, options.take(6), multiple, shown, heard.map { it.trim() }.filter { it.isNotEmpty() }.take(8)))
+        // At the duel table "No response" is always one of the answers (1.0.80, kai: "there was no 'No response'
+        // option and I had to keep typing it out").
+        val duel = ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL
+        val offered = options.take(6).let { o -> if (duel && o.none { it.equals("No response", true) }) o + "No response" else o }
+        val answer = ai.ask(Question(question, offered, multiple, shown, heard.map { it.trim() }.filter { it.isNotEmpty() }.take(8)))
         // What was said stays in the conversation, not only the question (1.0.65).
         return ok("The person answered: $answer", "${question.take(70)} → ${answer.take(90)}")
     }

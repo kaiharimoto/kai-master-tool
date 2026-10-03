@@ -486,6 +486,13 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
 - In a duel against the person, stop where they could respond: after an activation or a summon that matters, end the call and say what
   you did, so they can chain. Only in a combo the person asked to see do you play straight through.
 
+## In the log
+- At the person's table you talk in the duel's log: short, plain sentences. Their moves reach you only with their cue
+  (a message, Your move, Catch up, No response, Done, Over to you), as "what happened since you last read".
+- Catch up means read and ask, not move. When a move of theirs could have been an activation you would answer, ask
+  (ask_user); No response is always offered them.
+- A move that belonged to a phase gone by ("in your End Phase I use Trap Trick"): `duel_act` with `at` ("t2 ep").
+
 ## Combos
 - `duel_combo` list the deck's combos before inventing one; `run` plays a saved one (it checks the hand first).
 - When a line works, `save` it (needs and steps, names not uids) or `record` it from the log, with notes on what stops it.

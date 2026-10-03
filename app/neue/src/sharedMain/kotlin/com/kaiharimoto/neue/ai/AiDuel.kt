@@ -81,6 +81,8 @@ internal class AiDuel(private val h: NeueHolders) {
                 "or to let you move both seats (Ai · Combos › Ai may move both seats). To move the phase on their turn, play the phase op as your own seat: it asks them.")
         }
         h.neue.go(Page.DUEL)
+        // A move in a phase gone by (1.0.80): put into the log where it belongs, everything after folded on top.
+        ToolArgs.string(i, "at")?.takeIf { it.isNotBlank() }?.let { at -> return past(at, ops, seat) }
         val pace = (ToolArgs.int(i, "pace_ms") ?: prefs.aiPace).toLong().coerceIn(0, 5000)
         // What Ai is told comes through its knowledge setting, always as its own seat — never the acting seat's eyes.
         val viewer = DuelBrief.viewer(prefs.aiKnowledge, mine)
@@ -88,6 +90,25 @@ internal class AiDuel(private val h: NeueHolders) {
         val g = duels.game!!
         val after = DuelBrief.describe(g.state, viewer, duels.catalog, g.header.seed, mine, duels.tally(), duels.rulings)
         return MetaAnswer("${report.text}\n\nThe table now:\n$after", if (!report.played) "Could not play that" else "Played ${report.done} of ${ops.size} moves", isError = !report.played)
+    }
+
+    private fun past(at: String, ops: List<String>, seat: Int): MetaAnswer {
+        val g = duels.game!!
+        val (turn, phase) = com.kaiharimoto.mastertool.core.duel.replay.Past.parse(at) ?: return fail("“$at” is not a turn and phase: say it like 't2 ep'.")
+        val index = com.kaiharimoto.mastertool.core.duel.replay.Past.indexOf(g.header, g.played, turn, phase)
+            ?: return fail("Turn $turn's ${phase.label} Phase is now or still to come: play the moves without 'at'.")
+        val before = g.stateAt(index)
+        val plan = ComboRunner.plan(before, seat, ops, duels.catalog)
+        if (!plan.ok) return fail("Nothing was put in. ${plan.problem}")
+        if (!duels.insertPast(index, plan.steps.flatMap { it.second }, seat)) return fail("Nothing was put in: ${duels.problem ?: "the table refused it"}.")
+        val struck = duels.game!!.let { now -> com.kaiharimoto.mastertool.core.duel.DuelSetup.fold(now.header, now.played).second.size }
+        val viewer = DuelBrief.viewer(prefs.aiKnowledge, aiSeat())
+        val after = DuelBrief.describe(duels.game!!.state, viewer, duels.catalog, g.header.seed, aiSeat(), duels.tally(), duels.rulings)
+        return ok(
+            "Put ${ops.size} move(s) into turn $turn's ${phase.label} Phase: ${ops.joinToString("; ")}." +
+                (if (struck > 0) " $struck later move(s) no longer fit and are struck through in the log." else "") + "\n\nThe table now:\n$after",
+            "Played into turn $turn's ${phase.label} Phase",
+        )
     }
 
     private fun peek(i: JsonObject): MetaAnswer {

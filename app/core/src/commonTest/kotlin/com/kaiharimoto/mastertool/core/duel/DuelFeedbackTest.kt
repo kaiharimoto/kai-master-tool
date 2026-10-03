@@ -217,4 +217,23 @@ class DuelFeedbackTest {
         assertEquals("Seat 1 (Ai)", DuelWords.seatLabel(table, 1))
         assertEquals("Marcus'", DuelWords.possessive("Marcus"))
     }
+
+    @Test
+    fun aMoveInAPastPhaseIsPutWhereItBelongs() {
+        assertEquals(2 to DuelPhase.END, com.kaiharimoto.mastertool.core.duel.replay.Past.parse("t2 ep"))
+        assertEquals(3 to DuelPhase.BATTLE, com.kaiharimoto.mastertool.core.duel.replay.Past.parse("turn 3 bp"))
+        assertNull(com.kaiharimoto.mastertool.core.duel.replay.Past.parse("ep"))
+        val header = DuelHeader(id = "p", seed = 7L, seats = listOf(SeatSetup("Kai", main = List(40) { DuelFixtures.FILLER }), SeatSetup("Ai", main = List(40) { DuelFixtures.FILLER })))
+        var g = DuelGame(header, emptyList(), 0, DuelSetup.initial(header), 0)
+        fun act(a: DuelAction, seat: Int) { g = g.act(a, seat).game }
+        act(DuelAction.Phase(DuelPhase.MAIN1), 0)
+        act(DuelAction.Phase(DuelPhase.END), 0)
+        act(DuelAction.Chat(0, "in my End Phase"), 0)
+        act(DuelAction.EndTurn, 0)
+        act(DuelAction.Phase(DuelPhase.MAIN1), 1)
+        // Turn 1's End Phase ends after the chat, before the turn passes.
+        assertEquals(3, com.kaiharimoto.mastertool.core.duel.replay.Past.indexOf(header, g.played, 1, DuelPhase.END))
+        // Turn 2's Main Phase is now, not the past.
+        assertNull(com.kaiharimoto.mastertool.core.duel.replay.Past.indexOf(header, g.played, 2, DuelPhase.MAIN1))
+    }
 }

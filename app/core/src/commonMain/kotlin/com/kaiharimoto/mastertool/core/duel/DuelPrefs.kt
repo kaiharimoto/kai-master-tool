@@ -35,6 +35,10 @@ data class DuelPrefs(
     val keysShown: Boolean = true,
     /** Ai may move the other seat's cards too, not only its own (1.0.79; off: it asks the person). */
     val aiBothSeats: Boolean = false,
+    /** Ai's thinking and what it did shown in the duel's log, or only what it says (1.0.80). */
+    val aiThinking: Boolean = false,
+    /** A duel that ends against a known deck is logged to Prep as a practice game (1.0.80). */
+    val logGames: Boolean = true,
 ) {
     companion object {
         const val KNOW_ALL = "all"

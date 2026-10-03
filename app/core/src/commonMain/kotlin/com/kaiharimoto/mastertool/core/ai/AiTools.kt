@@ -927,6 +927,7 @@ object AiTools {
             strings("ops", "The moves, in order", required = true)
             integer("seat", "The seat acting; omit for the one set on the page", min = 0, max = 1)
             integer("pace_ms", "Milliseconds between moves, 0 for all at once; default the page's pace", min = 0, max = 5000)
+            string("at", "A phase gone by to put the moves in, e.g. 't2 ep' (turn 2's End Phase); omit for now")
         },
         ToolGroup.APP,
         phase = 3,

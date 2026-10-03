@@ -111,6 +111,7 @@ private fun Head(ai: AiState, phone: Boolean) {
                 ai.profiling -> "Learn About You · " + provider.label
                 ai.refactoring -> "Refactor guide · " + provider.label
                 ai.writing -> "Reader's guide · " + provider.label
+                ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL -> "At the duel table · " + provider.label
                 ai.tuning -> "Fine Tuning · " + when (ai.session?.mode) {
                     com.kaiharimoto.mastertool.core.ai.AiSession.MODE_STUDY -> "studying"
                     com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PRINCIPLES -> "first principles"

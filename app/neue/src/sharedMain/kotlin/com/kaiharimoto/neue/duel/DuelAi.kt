@@ -56,13 +56,101 @@ internal fun turnPrompt(h: NeueHolders): String {
         "cards as their text says, stop and tell me where I could respond to something that matters, and end the turn when you are done."
 }
 
-/** Asks Ai to play its seat's turn now: the panel opened, the message sent. */
+/** Asks Ai to play its seat's turn now, in the duel's log (1.0.80; before, the side panel). */
 internal fun askAiToPlay(h: NeueHolders) {
     if (!h.neue.prefs.ai.enabled) { h.neue.note = Note("Ai is off. Turn it on in Settings › Ai."); return }
     val g = h.duel.game ?: return
     h.duel.aiAskedTurn = g.state.turn
-    h.ai.setOpen(true)
-    h.ai.send(turnPrompt(h))
+    cueAi(h, Cue.YOUR_MOVE)
+}
+
+/**
+ * The words the person can hand Ai at the table without typing (1.0.80, kai: "there should be assigned
+ * buttons where I make some actions and then I can have it pick up based on what I did"), each with what
+ * it asks of Ai. [shown] is what the log shows the person said.
+ */
+internal enum class Cue(val shown: String, val ask: String) {
+    SAY("", "They said this to you at the table. Answer briefly; move only if they ask you to."),
+    YOUR_MOVE("Your move", "Your move: respond to what they did, or play your turn with duel_act. Stop where they could respond."),
+    CATCH_UP("Catch up", "Read what they did. If a move of theirs is unclear, or could have been an activation you would answer, ask with ask_user. Move nothing yet."),
+    NO_RESPONSE("No response", "They do not respond to your last move. Go on."),
+    DONE("Done responding", "They responded on the table: their moves are above. Go on from there, resolving the chain as it now stands."),
+    PASS("Over to you", "They activated something and pass priority to you: respond with a chain link, or say you do not and let them resolve it."),
+}
+
+/**
+ * A duel that has ended — a concession, or life points at 0 — logged to Prep once as a practice game
+ * against the other deck (1.0.80, Ai: "save this game automatically with log_game"), when both seats
+ * played known decks and the person has not turned it off. A note says so, with Undo.
+ */
+internal fun logFinishedDuel(h: NeueHolders) {
+    val duels = h.duel
+    val g = duels.game ?: return
+    val s = g.state
+    val d = h.neue.prefs.duel
+    if (s.solo || !d.logGames || duels.role != null || duels.replay != null || duels.loggedDuel == g.header.id) return
+    val loser = s.conceded ?: s.seats.indexOfFirst { it.lp <= 0 }.takeIf { it >= 0 } ?: return
+    // The person's seat: the one Ai does not play, else the bottom.
+    val me = if (h.neue.prefs.ai.enabled && (d.aiPlays || duels.aiSession != null)) 1 - d.aiSeat else duels.bottom
+    val mine = g.header.seats.getOrNull(me) ?: return
+    val theirs = g.header.seats.getOrNull(1 - me) ?: return
+    val deckId = mine.deckId ?: return
+    val foeName = theirs.deckName ?: return
+    duels.loggedDuel = g.header.id
+    val game = com.kaiharimoto.mastertool.core.prep.TestGame(
+        id = h.prep.newId("g"),
+        at = System.currentTimeMillis(),
+        deckId = deckId,
+        opponent = theirs.deckId ?: foeName,
+        opponentName = foeName,
+        // Seat 0 takes the first turn.
+        turn = if (me == 0) com.kaiharimoto.mastertool.core.prep.TestGame.FIRST else com.kaiharimoto.mastertool.core.prep.TestGame.SECOND,
+        result = if (loser == me) com.kaiharimoto.mastertool.core.prep.TestGame.LOSS else com.kaiharimoto.mastertool.core.prep.TestGame.WIN,
+        note = "From the Duel page, turn ${s.turn}",
+    )
+    h.prep.log(game)
+    h.neue.note = Note("Logged to Prep: a ${if (loser == me) "loss" else "win"} against $foeName", action = "Undo") { h.prep.removeGame(game.id) }
+}
+
+/** Whether Ai sits at this table: on, and not a networked table (there the log is the other player's). */
+internal fun aiAtTable(h: NeueHolders): Boolean = h.neue.prefs.ai.enabled && h.duel.role == null && h.duel.game != null
+
+/**
+ * Hands Ai a cue (1.0.80): what the person did on the table since Ai last read — in the log's words as
+ * Ai's seat may see them — its seat and knowledge, and what the cue asks. The person's moves never start
+ * Ai on their own; only a cue or a message does, so a small move never costs a turn of the model.
+ */
+internal fun cueAi(h: NeueHolders, cue: Cue, words: String = "") {
+    val duels = h.duel
+    val g = duels.game ?: return
+    if (h.ai.running) { h.neue.note = Note("${h.ai.name} is still answering."); return }
+    val d = h.neue.prefs.duel
+    val s = g.state
+    val seat = if (s.solo) 0 else d.aiSeat
+    val viewer = DuelBrief.viewer(d.aiKnowledge, seat)
+    val from = (duels.aiRead ?: g.floor).coerceIn(0, g.cursor)
+    val lines = com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(g, from, viewer, duels.catalog)
+        .filter { it.seat != seat }
+        .map { "${it.i}. ${it.text}" }
+    val knows = when (d.aiKnowledge) {
+        DuelBrief.FULL -> "full knowledge"
+        DuelBrief.AUTO -> "auto knowledge (duel_peek only if a hidden card would change your play)"
+        else -> "your seat's knowledge only"
+    }
+    val context = buildList {
+        add("At the duel table: you are ${DuelWords.seatLabel(s, seat)}, with $knows. Turn ${s.turn}, ${DuelWords.seatLabel(s, s.active)} to play, ${s.phase.label} Phase.")
+        if (lines.isEmpty()) add("Nothing new on the table since you last read.")
+        else {
+            add("What happened on the table since you last read (entries $from–${g.cursor - 1}), as your seat saw it:")
+            addAll(lines.takeLast(60))
+        }
+        add(cue.ask)
+    }
+    val said = words.ifBlank { cue.shown }
+    val id = h.ai.sendDuel(said, context, duels.aiSession) ?: return
+    duels.aiSession = id
+    duels.aiRead = g.cursor
+    duels.aiResponding = false
 }
 
 /**

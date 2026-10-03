@@ -131,7 +131,7 @@ internal fun DuelPage(h: NeueHolders) {
                             Column(Modifier.fillMaxSize()) {
                                 Segmented(tab, listOf("Card", "Log"), { it }, { tab = it }, Modifier.padding(8.dp), small = true)
                                 if (tab == "Card") DuelInspector(h, duels, game, viewers, Modifier.weight(1f))
-                                else DuelLogRail(duels, game, viewer, Modifier.weight(1f), head = { LogHead(h) })
+                                else DuelLogRail(h, duels, game, viewer, Modifier.weight(1f), head = { LogHead(h) })
                             }
                         } else {
                             DuelInspector(h, duels, game, viewers, Modifier.fillMaxSize())
@@ -142,7 +142,7 @@ internal fun DuelPage(h: NeueHolders) {
                 layout.log?.let { r ->
                     Box(Modifier.offset((r.left - 7).dp, r.top.dp).width(1.dp).height(r.height.dp).background(c.ink12))
                     Box(Modifier.offset(r.left.dp, r.top.dp).size(r.width.dp, r.height.dp)) {
-                        DuelLogRail(duels, game, viewer, Modifier.fillMaxSize(), head = { LogHead(h) })
+                        DuelLogRail(h, duels, game, viewer, Modifier.fillMaxSize(), head = { LogHead(h) })
                     }
                 }
                 if (layout.drawers) {
@@ -150,7 +150,7 @@ internal fun DuelPage(h: NeueHolders) {
                         DuelInspector(h, duels, game, viewers, Modifier.fillMaxWidth(), fill = false)
                     }
                     MuDrawer(duels.drawer == "log", { duels.drawer = null }, header = { FieldLabel("Log") }) {
-                        DuelLogRail(duels, game, viewer, Modifier.fillMaxWidth().height(480.dp), head = { LogHead(h) })
+                        DuelLogRail(h, duels, game, viewer, Modifier.fillMaxWidth().height(480.dp), head = { LogHead(h) })
                     }
                 }
                 // What a networked table waits on, over its top edge: never a row that pushes the cards down.
@@ -169,6 +169,8 @@ internal fun DuelPage(h: NeueHolders) {
     if (duels.combosOpen) DuelAiDialog(h)
     // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
     val live = duels.game
+    // A duel that ends against a known deck is a practice game on Prep (1.0.80).
+    LaunchedEffect(live?.state?.conceded, live?.state?.seats?.map { it.lp }) { logFinishedDuel(h) }
     LaunchedEffect(live?.state?.turn, live?.state?.active, prefs.aiPlays) {
         val g = duels.game ?: return@LaunchedEffect
         if (prefs.aiPlays && neue.prefs.ai.enabled && !g.state.solo && g.state.active == prefs.aiSeat &&

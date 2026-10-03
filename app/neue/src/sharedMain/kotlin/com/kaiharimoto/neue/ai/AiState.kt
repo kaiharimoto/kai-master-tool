@@ -619,6 +619,35 @@ class AiState(internal val h: NeueHolders) {
         respond(next, connection)
     }
 
+    /**
+     * A word at the duel table (1.0.80, kai: "operate and communicate with the AI using the log chat as
+     * the main one"): sent in the duel's own conversation ([AiSession.MODE_DUEL], begun when there is none
+     * or another is open), with [context] — what the person did on the table since Ai last read, its seat
+     * and knowledge — in front, where the model reads it and the chat does not show it. The person's
+     * moves never reach Ai except through a cue like this. Returns the conversation's id, or null when
+     * nothing was sent (no connection, or Ai still answering).
+     */
+    fun sendDuel(words: String, context: List<String>, sessionId: String?): String? {
+        val text = words.trim()
+        if (text.isEmpty() || running) return null
+        val connection = prefs.connection ?: run {
+            openWizard()
+            return null
+        }
+        problem = null
+        status = null
+        notice = null
+        val current = session?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL && (sessionId == null || it.id == sessionId) }
+            ?: sessionId?.let { id -> files.loadSession(id)?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL } }?.also { session = it }
+            ?: begin(connection, AiSession.MODE_DUEL)
+        val block = PromptBuilder.context(context + host.situation(), null, null, false)
+        val turn = ChatTurn.user(text, block, System.currentTimeMillis())
+        val next = current.copy(turns = current.turns + turn, updatedAt = System.currentTimeMillis()).titled()
+        commit(next)
+        respond(next, connection)
+        return next.id
+    }
+
     private fun respond(start: AiSession, connection: AiConnection) {
         val model = runCatching { backendFor(connection) }.getOrElse {
             problem = (it.message ?: "Could not connect.") to true
@@ -1431,7 +1460,8 @@ class AiState(internal val h: NeueHolders) {
 
     suspend fun ask(q: Question): String {
         question = q
-        h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true)) }
+        // At the duel table the question stands in the log's foot, not the side panel (1.0.80).
+        if (session?.mode != AiSession.MODE_DUEL || h.neue.page != com.kaiharimoto.neue.Page.DUEL) h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true)) }
         return try {
             q.answer.await()
         } finally {
