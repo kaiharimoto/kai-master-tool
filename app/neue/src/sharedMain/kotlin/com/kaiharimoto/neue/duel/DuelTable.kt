@@ -497,7 +497,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         if (duels.replay == null && carry == null) BattleChip(h, duels, game, layout)
         duels.lpPad?.let { seat -> LpPad(duels, s, layout, seat) }
         // Command mode's Spotlight (1.0.87): the table dims but for what the line touches and where it goes.
-        if (duels.spotlight != null) SpotlightDim(duels, s, layout, shownFrames)
+        if (duels.spotlight != null && duels.replay == null) SpotlightDim(duels, s, layout, shownFrames)
     }
 }
 

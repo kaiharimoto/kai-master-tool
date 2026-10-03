@@ -37,7 +37,8 @@ object Spotlight {
      * The box's state, kept by the page between keystrokes. [chosen] is the inked row (−1: none, as on an empty
      * box until ↓); [heard] the words as the transcriber wrote them, shown faint above the line they became;
      * [answer] a question's answer, or why nothing was understood; [historyAt] where ↑ stands in the history (0 the
-     * newest; null at the line being typed); [problem] what the table refused when Enter was pressed.
+     * newest; null at the line being typed); [problem] what the table refused when Enter was pressed; [shownAt] the
+     * duel's cursor when a heard move was shown, so a "yes" after the table moved is asked again, never made blind.
      */
     data class State(
         val text: String = "",
@@ -48,17 +49,26 @@ object Spotlight {
         val answer: String? = null,
         val historyAt: Int? = null,
         val problem: String? = null,
+        val shownAt: Int? = null,
     ) {
-        /** The line typed (or recalled) was changed by hand: the chosen row goes back to the first. */
+        /**
+         * The line typed (or recalled) was changed by hand: the chosen row goes back to the first, and what was heard
+         * is gone — the line is the person's own now, so M types again (the red team).
+         */
         fun typed(text: String, cursor: Int): State = copy(
             text = text,
             cursor = cursor.coerceIn(0, text.length),
             chosen = if (text.isBlank()) -1 else 0,
             mode = if (mode == Mode.LISTENING) mode else Mode.TYPING,
+            heard = null,
             answer = null,
             historyAt = null,
             problem = null,
+            shownAt = null,
         )
+
+        /** A line recalled from the history is typed, not heard. */
+        internal fun recalled(): State = if (mode == Mode.HEARD || heard != null) copy(mode = Mode.TYPING, heard = null, shownAt = null) else this
     }
 
     /** What a row is: the move the line makes, a step of a `;` line, a "did you mean", a completion, a line from history or one to try. */
@@ -226,7 +236,7 @@ object Spotlight {
         if (st.text.isBlank() || st.historyAt != null) {
             val next = (st.historyAt?.plus(1) ?: 0)
             val line = recent.getOrNull(next) ?: return st
-            return st.copy(text = line, cursor = line.length, historyAt = next, chosen = 0, answer = null, problem = null)
+            return st.copy(text = line, cursor = line.length, historyAt = next, chosen = 0, answer = null, problem = null).recalled()
         }
         return st.copy(chosen = (st.chosen - 1).coerceAtLeast(0).coerceAtMost((rows - 1).coerceAtLeast(0)))
     }
@@ -238,10 +248,10 @@ object Spotlight {
     fun down(st: State, rows: Int, history: List<String>): State {
         val at = st.historyAt
         if (at != null) {
-            if (at == 0) return st.copy(text = "", cursor = 0, historyAt = null, chosen = -1)
+            if (at == 0) return st.copy(text = "", cursor = 0, historyAt = null, chosen = -1).recalled()
             val recent = history.asReversed().map { it.trim() }.filter { it.isNotEmpty() }.distinct()
             val line = recent.getOrNull(at - 1) ?: return st
-            return st.copy(text = line, cursor = line.length, historyAt = at - 1, chosen = 0)
+            return st.copy(text = line, cursor = line.length, historyAt = at - 1, chosen = 0).recalled()
         }
         if (rows == 0) return st
         return st.copy(chosen = (st.chosen + 1).coerceAtMost(rows - 1))

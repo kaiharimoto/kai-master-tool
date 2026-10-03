@@ -179,6 +179,22 @@ class DuelVoice(private val h: NeueHolders) {
         if (phase == Phase.LISTENING && Mic.owner == OWNER) Voice.stopListening()
     }
 
+    /**
+     * The Spotlight closed while listening or writing out (Esc, a press outside): this listening ends and its words,
+     * when they come, are dropped — never made after the person said no (the red team).
+     */
+    fun cancel() {
+        if (!busy) return
+        turns++
+        job?.cancel()
+        job = null
+        held = false
+        level = 0f
+        partial = ""
+        phase = Phase.IDLE
+        if (Mic.owner == OWNER) Voice.stopListening()
+    }
+
     /** From the palette or a menu, where there is no letting go: a press, and the next one sends. */
     fun toggle() {
         if (held || listening) release() else press()

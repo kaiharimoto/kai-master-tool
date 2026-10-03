@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -124,9 +125,15 @@ internal fun SpotlightLayer(h: NeueHolders, game: DuelGame, phone: Boolean) {
         else DuelCommand.preview(marked, s, duels.bottom, duels.catalog, game.header.seed).let { SpotMarks(it.touched, it.dest) }
     }
     SideEffect { duels.spotlightMarks = marks }
-    DisposableEffect(Unit) { onDispose { duels.spotlightMarks = null } }
-    // Listening ended without words (let go too soon, the microphone taken back): the box goes back to typing.
     val voice = h.duelVoice
+    DisposableEffect(Unit) {
+        onDispose {
+            duels.spotlightMarks = null
+            // Esc while speaking (or the box closed any other way): what was being said is dropped, never made (the red team).
+            voice.cancel()
+        }
+    }
+    // Listening ended without words (let go too soon, the microphone taken back): the box goes back to typing.
     LaunchedEffect(voice.phase, st.mode) {
         if (st.mode == Mode.LISTENING && (voice.phase == DuelVoice.Phase.IDLE || voice.phase == DuelVoice.Phase.FAILED) && !voice.held && duels.spotlightLevels == null) {
             delay(250)
@@ -268,6 +275,7 @@ private fun Header(h: NeueHolders, st: Spotlight.State, view: Spotlight.View, ph
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focus)
+                    .onFocusChanged { duels.spotlightTyping = it.isFocused }
                     .reportsTextFocus()
                     .onPreviewKeyEvent { e -> e.type == KeyEventType.KeyDown && spotKey(h, e.key, e.isShiftPressed, e.isCtrlPressed || e.isMetaPressed, e.isAltPressed) },
             )
@@ -572,6 +580,13 @@ fun spotEnter(h: NeueHolders, keep: Boolean) {
     val g = duels.shown ?: return
     if (st.mode == Mode.LISTENING) return
     if (st.mode == Mode.ANSWER && st.answer != null) { if (keep) duels.spotlight = Spotlight.State() else duels.closeSpotlight(); return }
+    // A heard move confirmed after the table moved (Ai played, the other seat answered) is shown again, never made
+    // blind: the "yes" was for the table it was read out on (the red team).
+    if (st.mode == Mode.HEARD && st.shownAt != null && st.shownAt != g.cursor) {
+        duels.spotlight = st.copy(shownAt = g.cursor, problem = "The table changed. Check the move, then say “yes” or press Enter.")
+        h.duelVoice.say("The table changed. Check the move again.")
+        return
+    }
     val view = spotView(duels, st, g)
     val row = view.choosable.getOrNull(st.chosen)
     val line = when {
@@ -616,6 +631,8 @@ private fun spotChat(h: NeueHolders) {
  */
 fun spotHeard(h: NeueHolders, heard: String) {
     val duels = h.duel
+    // A replay is a record, not a table to play on: words finished while one opened change nothing (the red team).
+    if (duels.replay != null) return
     val g = duels.shown ?: return
     val s = g.state
     val line = DuelSpeech.normalize(heard)
@@ -629,7 +646,7 @@ fun spotHeard(h: NeueHolders, heard: String) {
             show(Spotlight.State(said.line).copy(heard = heard))
             spotMake(h, said.line, keep = false, heard = heard)
         } else {
-            show(Spotlight.State(said.line).copy(mode = Mode.HEARD, heard = heard))
+            show(Spotlight.State(said.line).copy(mode = Mode.HEARD, heard = heard, shownAt = g.cursor))
             // Said back as it is shown, when the table speaks.
             val p = DuelCommand.preview(said.line, s, duels.bottom, duels.catalog, g.header.seed)
             h.duelVoice.say(if (p.ok) Spotlight.sentence(p.actions, p.words, s, duels.bottom, duels.catalog) else p.problem ?: "")

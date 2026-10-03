@@ -255,9 +255,18 @@ class Duels(val dir: File) {
     /** The Spotlight (kai's direction C): open with its line, or shut (null). The page draws it over the table. */
     var spotlight by mutableStateOf<com.kaiharimoto.mastertool.core.duel.text.Spotlight.State?>(null)
 
-    /** The lines made from the Spotlight, oldest first, the last fifty kept (`<data>/duel/lines.txt`): ↑ on an empty box. */
-    var lineHistory by mutableStateOf<List<String>>(emptyList())
-        private set
+    /**
+     * The lines made from the Spotlight per seat, oldest first, the last fifty each kept (`<data>/duel/lines.txt`, a
+     * line `seat<TAB>line`): ↑ on an empty box. Per seat, because a line names cards — "set mirror force s2" typed at
+     * one seat of a hot-seat must never be recalled at the other (the red team).
+     */
+    private var lineHistories by mutableStateOf<Map<Int, List<String>>>(emptyMap())
+
+    /** The lines made at the seat at the bottom of the table. */
+    val lineHistory: List<String> get() = lineHistories[bottom].orEmpty()
+
+    /** Whether the Spotlight's own field has the keyboard (it reports it), so keys typed before it does are the box's. */
+    var spotlightTyping by mutableStateOf(false)
 
     /** Bumped to take the keyboard to the Spotlight's field. */
     var spotlightFocus by mutableStateOf(0)
@@ -292,18 +301,38 @@ class Duels(val dir: File) {
         spotlightFocus++
     }
 
+    /** [text] typed at the open box before its field took the keyboard: added to its line. */
+    fun typeIntoSpotlight(text: String) {
+        val st = spotlight ?: return
+        val line = st.text + text
+        spotlight = st.typed(line, line.length)
+        spotlightFocus++
+    }
+
     fun closeSpotlight() {
         spotlight = null
         spotlightSeed = null
+        spotlightTyping = false
     }
 
-    /** [line] made: kept in the history, newest last. */
+    /** [line] made at the bottom seat: kept in its history, newest last. */
     fun rememberLine(line: String) {
         val next = com.kaiharimoto.mastertool.core.duel.text.Spotlight.remember(lineHistory, line)
         if (next == lineHistory) return
-        lineHistory = next
-        val text = next.joinToString("\n")
-        scope.launch { withContext(Dispatchers.IO) { runCatching { File(dir, LINES).also { it.parentFile?.mkdirs() }.writeText(text) } } }
+        lineHistories = lineHistories + (bottom to next)
+        writeLines()
+    }
+
+    private val linesLock = Mutex()
+
+    /** The histories written out one at a time, each write the newest (a quick second line never loses to the first). */
+    private fun writeLines() {
+        scope.launch {
+            linesLock.withLock {
+                val text = lineHistories.entries.sortedBy { it.key }.flatMap { (seat, lines) -> lines.map { "$seat\t$it" } }.joinToString("\n")
+                withContext(Dispatchers.IO) { runCatching { File(dir, LINES).also { it.parentFile?.mkdirs() }.writeText(text) } }
+            }
+        }
     }
 
     /** What a line run from the Spotlight came to: a move made, a question answered, the chrome's words done, or refused. */
@@ -550,7 +579,20 @@ class Duels(val dir: File) {
         loaded = true
         scope.launch {
             val lines = withContext(Dispatchers.IO) { runCatching { File(dir, LINES).takeIf { it.exists() }?.readLines() }.getOrNull() }
-            if (lines != null && lineHistory.isEmpty()) lineHistory = lines.map { it.trim() }.filter { it.isNotEmpty() }.takeLast(com.kaiharimoto.mastertool.core.duel.text.Spotlight.HISTORY)
+            if (lines != null) {
+                // The lines read go before any made while they were read (the red team: those were dropped).
+                val read = lines.mapNotNull { l ->
+                    val tab = l.indexOf('\t')
+                    val seat = if (tab > 0) l.substring(0, tab).toIntOrNull() else 0
+                    val line = (if (tab > 0) l.substring(tab + 1) else l).trim()
+                    if (seat == null || line.isEmpty()) null else seat to line
+                }.groupBy({ it.first }, { it.second })
+                val made = lineHistories
+                lineHistories = (read.keys + made.keys).associateWith { seat ->
+                    made[seat].orEmpty().fold(read[seat].orEmpty().takeLast(com.kaiharimoto.mastertool.core.duel.text.Spotlight.HISTORY)) { acc, l -> com.kaiharimoto.mastertool.core.duel.text.Spotlight.remember(acc, l) }
+                }
+                if (made.isNotEmpty()) writeLines()
+            }
         }
         scope.launch {
             val text = withContext(Dispatchers.IO) { File(dir, CURRENT).takeIf { it.exists() }?.readText() }
@@ -925,6 +967,8 @@ class Duels(val dir: File) {
         if (g.state.solo) return
         if (aiEngaged) { problem = "Ai plays the other seat: sitting there would show you its hand."; return }
         attacking = null
+        // What the box shows — an answer about a hand, a line typed — was the other seat's (the red team).
+        closeSpotlight()
         bottom = 1 - bottom
         strip = null
     }
@@ -1301,8 +1345,9 @@ class Duels(val dir: File) {
     }
 
     fun openReplay(id: String) {
-        // A replay is not the table Ai's answer was for (1.0.85): what waited on it goes.
+        // A replay is not the table Ai's answer was for (1.0.85): what waited on it goes, and the Spotlight with it.
         forgetTriggers(clearWatches = false)
+        closeSpotlight()
         attacking = null
         scope.launch {
             val r = withContext(Dispatchers.IO) { File(replayDir, "$id.json").takeIf { it.exists() }?.readText()?.let(DuelCodec::decode) }

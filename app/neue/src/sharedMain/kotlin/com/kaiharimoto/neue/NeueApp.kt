@@ -289,9 +289,27 @@ class NeueHolders(
         // still, held to speak again ("yes"), never an m typed and repeated into the line.
         if (neue.page == Page.DUEL && chord == com.kaiharimoto.mastertool.core.input.KeyChord("m") && !context.overlayOpen && !neue.hasTop) {
             val spot = duel.spotlight
-            if (spot != null && (spot.heard != null || spot.mode == com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.LISTENING)) {
+            // Only while the box holds words heard (an edit makes them typed) and no other field has the keys: an m typed
+            // into the chat beside an open box is an m (the red team).
+            val voiced = spot != null && (spot.heard != null || spot.mode == com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.LISTENING)
+            if (voiced && (!context.textInputFocused || duel.spotlightTyping)) {
                 holding[event.key] = DeskAction.DUEL_VOICE
                 hold(DeskAction.DUEL_VOICE, down = true)
+                return true
+            }
+        }
+        // Keys typed after the box opened and before its field has the keyboard (a frame or two) are the box's, never
+        // duel keys: "zs…" typed fast opens the box on "zs", not a Summon (the red team).
+        if (neue.page == Page.DUEL && duel.spotlight != null && !duel.spotlightTyping && !context.textInputFocused && !context.overlayOpen && !neue.hasTop &&
+            !chord.ctrl && !chord.alt
+        ) {
+            val typed = when {
+                chord.key.length == 1 && (chord.key[0] in 'a'..'z' || chord.key[0] in '0'..'9') -> if (chord.shift) chord.key.uppercase() else chord.key
+                chord.key == "space" -> " "
+                else -> null
+            }
+            if (typed != null) {
+                duel.typeIntoSpotlight(typed)
                 return true
             }
         }
