@@ -128,6 +128,10 @@ sealed class DuelAction {
     @Serializable @SerialName("clear")
     data object ChainClear : DuelAction()
 
+    /** A resolved link's card stays on the field when the chain is over ("resolve keep", 1.0.83). */
+    @Serializable @SerialName("keep")
+    data class Keep(val uid: Int) : DuelAction()
+
     // ---- knowledge -----------------------------------------------------------------------------------
 
     /** Draws (or, with [on] false, clears) [seat]'s arrows from [from] to [to]. */

@@ -358,21 +358,27 @@ object DuelVerbs {
     }
 
     /**
-     * What resolving the newest chain link comes to (1.0.79): the link leaves the chain, and a Normal or
-     * Quick-Play Spell, a Normal or Counter Trap face-up in its zone goes to the GY with it, unless [keep]
-     * ("resolve keep": a card whose text says it stays). The table stays physics; this is the verb.
+     * What resolving the newest chain link comes to (1.0.79): the link leaves the chain. Its card stays on
+     * the field until the whole chain has resolved (1.0.83, kai); with the last link, every Normal or
+     * Quick-Play Spell, Normal or Counter Trap of the chain still face-up in its zone goes to the GY
+     * together. [keep] ("resolve keep": a card whose text says it stays) keeps this link's card where it is.
+     * The table stays physics; this is the verb.
      */
     fun resolve(s: DuelState, catalog: DuelCatalog, keep: Boolean = false): List<DuelAction> {
         val top = s.chain.lastOrNull() ?: return emptyList()
-        val uid = top.uid
-        val card = uid?.let { s.cards[it] }
-        val leaves = !keep && card != null && card.faceUp && !card.token &&
-            s.placeOf(uid).let { it is Place.Zone && it.kind == ZoneKind.SPELL } &&
-            catalog.info(card.code)?.leavesOnResolve == true &&
-            // Only its last link: a card chained twice stays until both have resolved.
-            s.chain.count { it.uid == uid } == 1
-        return if (leaves) listOf(DuelAction.ChainResolve, DuelAction.Move(uid!!, Place.Pile(card!!.owner, PileKind.GY), how = "resolve"))
-        else listOf(DuelAction.ChainResolve)
+        val out = mutableListOf<DuelAction>(DuelAction.ChainResolve)
+        if (keep && top.uid != null) out += DuelAction.Keep(top.uid)
+        if (s.chain.size > 1) return out
+        // The chain is over: what resolved in it goes, in the order it resolved.
+        val waiting = (s.resolved + listOfNotNull(top.uid.takeUnless { keep })).distinct()
+        waiting.forEach { uid ->
+            val card = s.cards[uid] ?: return@forEach
+            val leaves = card.faceUp && !card.token &&
+                s.placeOf(uid).let { it is Place.Zone && it.kind == ZoneKind.SPELL } &&
+                catalog.info(card.code)?.leavesOnResolve == true
+            if (leaves) out += DuelAction.Move(uid, Place.Pile(card.owner, PileKind.GY), how = "resolve")
+        }
+        return out
     }
 
     fun kindOf(card: CardInst, catalog: DuelCatalog): CardKind =

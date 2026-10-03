@@ -104,7 +104,8 @@ object ComboRecorder {
     fun command(s: DuelState, a: DuelAction, catalog: DuelCatalog): String? {
         fun n(uid: Int) = s.cards[uid]?.let { catalog.nameOf(it) } ?: "#$uid"
         return when (a) {
-            is DuelAction.Move -> {
+            // A card going to the GY as its chain resolves is the resolve step's own doing.
+            is DuelAction.Move -> if (a.how == "resolve") null else {
                 val name = n(a.uid)
                 val from = s.placeOf(a.uid)
                 val fromWords = (from as? Place.Pile)?.kind?.let { " from ${word(it)}" } ?: ""

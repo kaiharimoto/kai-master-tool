@@ -40,6 +40,7 @@ object DuelRules {
                     arrows = emptyList(),
                     window = null,
                     proposal = null,
+                    resolved = emptyList(),
                     // What lasted the turn (or a chain) is over.
                     locks = s.locks.filter { it.until == Lock.UNTIL_DUEL },
                 ),
@@ -55,12 +56,21 @@ object DuelRules {
             DuelAction.ChainResolve -> {
                 val top = s.chain.lastOrNull() ?: return Outcome.Refused("There is no chain to resolve")
                 val chain = s.chain.dropLast(1)
-                ok(s.copy(chain = chain, arrows = s.arrows.filterNot { top.uid != null && it.from == top.uid }, locks = if (chain.isEmpty()) s.locks.filterNot { it.until == Lock.UNTIL_CHAIN } else s.locks))
+                ok(
+                    s.copy(
+                        chain = chain,
+                        arrows = s.arrows.filterNot { top.uid != null && it.from == top.uid },
+                        locks = if (chain.isEmpty()) s.locks.filterNot { it.until == Lock.UNTIL_CHAIN } else s.locks,
+                        // Its card waits on the field until the chain is over.
+                        resolved = if (top.uid != null && top.uid !in s.resolved) s.resolved + top.uid else s.resolved,
+                    ),
+                )
             }
             DuelAction.ChainClear -> {
                 val links = s.chain.mapNotNull { it.uid }.toSet()
-                ok(s.copy(chain = emptyList(), arrows = s.arrows.filterNot { it.from in links }, locks = s.locks.filterNot { it.until == Lock.UNTIL_CHAIN }))
+                ok(s.copy(chain = emptyList(), arrows = s.arrows.filterNot { it.from in links }, locks = s.locks.filterNot { it.until == Lock.UNTIL_CHAIN }, resolved = emptyList()))
             }
+            is DuelAction.Keep -> ok(s.copy(resolved = s.resolved - a.uid))
             is DuelAction.Target -> target(s, a)
             is DuelAction.Reveal -> reveal(s, a)
             is DuelAction.Coin, is DuelAction.Dice, is DuelAction.Chat, is DuelAction.Ping, is DuelAction.Note,
@@ -163,7 +173,7 @@ object DuelRules {
         } else {
             next.copy(seen = next.seen.with(a.uid, knowers))
         }
-        if (to !is Place.Zone) next = next.copy(arrows = next.arrows.dropUid(a.uid))
+        if (to !is Place.Zone) next = next.copy(arrows = next.arrows.dropUid(a.uid), resolved = next.resolved - a.uid)
         return ok(next)
     }
 
@@ -231,7 +241,9 @@ object DuelRules {
         seatOk(s, a.seat)?.let { return it }
         if (a.uid != null && a.uid !in s.cards) return Outcome.Refused("No such card")
         val arrows = if (a.targets.isNotEmpty()) s.arrows + Arrow(a.seat, a.uid, a.targets) else s.arrows
-        return ok(s.copy(chain = s.chain + ChainLink(a.seat, a.uid, a.note, a.targets), arrows = arrows))
+        // A new chain begins with nothing waiting from the last one.
+        val resolved = if (s.chain.isEmpty()) emptyList() else s.resolved
+        return ok(s.copy(chain = s.chain + ChainLink(a.seat, a.uid, a.note, a.targets), arrows = arrows, resolved = resolved))
     }
 
     private fun target(s: DuelState, a: DuelAction.Target): Outcome {

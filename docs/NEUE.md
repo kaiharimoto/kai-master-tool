@@ -3191,6 +3191,12 @@ a card drawn after a look at the deck, a card revealed from the hand all stay pr
 forgotten as it enters a hand, so it does not come back when the card leaves it. (1.0.79 had marked a searched card
 "known to opponent" in the hand; that is gone.)
 
+**The chain resolves whole** (1.0.82, kai: "spells and traps should stay on field until the whole chain has
+resolved"): a resolved link's card waits on the field (`DuelState.resolved`), and with the last link every Normal or
+Quick-Play Spell, Normal or Counter Trap of the chain still face-up in its zone goes to the GY together
+(`DuelVerbs.resolve`). `resolve keep` keeps that link's card (`DuelAction.Keep`); a card that left the field
+mid-chain is no longer waiting; a new chain starts with nothing waiting.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

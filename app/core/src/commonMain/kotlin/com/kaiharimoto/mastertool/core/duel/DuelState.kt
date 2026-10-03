@@ -49,6 +49,11 @@ data class DuelState(
     val proposal: Proposal? = null,
     /** What players have said is locked for now — "Synchro Monsters only from the Extra Deck" (1.0.79). */
     val locks: List<Lock> = emptyList(),
+    /**
+     * The cards of this chain's links that have resolved, waiting on the field for the whole chain
+     * (1.0.83, kai: "spells and traps should stay on field until the whole chain has resolved").
+     */
+    val resolved: List<Int> = emptyList(),
 ) {
     fun seat(i: Int): SeatState = seats[i]
 

@@ -58,6 +58,7 @@ data class DuelView(
     val solo: Boolean,
     val proposal: Proposal? = null,
     val locks: List<Lock> = emptyList(),
+    val resolved: List<Int> = emptyList(),
 ) {
     companion object {
         /** The table as [viewer] sees it; null sees everything. [secret] keys the veils (the duel's seed). */
@@ -98,6 +99,7 @@ data class DuelView(
                 solo = s.solo,
                 proposal = s.proposal,
                 locks = s.locks,
+                resolved = s.resolved.map(::hide),
             )
         }
 

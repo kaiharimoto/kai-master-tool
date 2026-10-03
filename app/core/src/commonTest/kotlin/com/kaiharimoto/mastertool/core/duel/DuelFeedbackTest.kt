@@ -131,7 +131,7 @@ class DuelFeedbackTest {
         val normal = play(hand, run("activate back to square one", hand))
         val resolved = run("resolve", normal)
         assertEquals(listOf(DuelAction.ChainResolve, DuelAction.Move(back, Place.Pile(0, PileKind.GY), how = "resolve")), resolved)
-        assertEquals(listOf(DuelAction.ChainResolve), run("resolve keep", normal))
+        assertEquals(listOf(DuelAction.ChainResolve, DuelAction.Keep(back)), run("resolve keep", normal))
         val cont = play(hand, run("activate #$e4a", hand))
         assertEquals(listOf(DuelAction.ChainResolve), run("resolve", cont))
     }
@@ -307,5 +307,32 @@ class DuelFeedbackTest {
         // A top card looked at by both, then drawn: the owner's alone.
         val looked = ok(table, DuelAction.Reveal(0, listOf(e4a)))
         assertTrue(!DuelSight.sees(ok(looked, DuelAction.Draw(0)), e4a, 1))
+    }
+
+    @Test
+    fun aSpellStaysOnTheFieldUntilTheWholeChainHasResolved() {
+        // kai: "spells and traps should stay on field until the whole chain has resolved".
+        val hand = play(table, listOf(DuelAction.Draw(0, 6)))
+        val ash = uid(0, 5)
+        // Chain Link 1: Back to Square One. Chain Link 2: Ash, from the hand.
+        var s = play(hand, run("activate back to square one", hand))
+        s = play(s, run("chain #$ash", s))
+        assertEquals(2, s.chain.size)
+        // Link 2 resolves: Back to Square One is still there.
+        s = play(s, run("resolve", s))
+        assertTrue(s.placeOf(back) is Place.Zone)
+        assertEquals(listOf(ash), s.resolved)
+        // Link 1 resolves: the chain is over, and it goes.
+        val last = run("resolve", s)
+        assertEquals(listOf(DuelAction.ChainResolve, DuelAction.Move(back, Place.Pile(0, PileKind.GY), how = "resolve")), last)
+        val done = play(s, last)
+        assertTrue(done.chain.isEmpty() && done.placeOf(back) is Place.Pile)
+        // "resolve keep" on an earlier link keeps its card when the chain is over.
+        var k = play(hand, run("activate back to square one", hand))
+        k = play(k, run("link #$e4a", k))
+        k = play(k, run("resolve", k))
+        assertEquals(listOf(DuelAction.ChainResolve, DuelAction.Keep(back)), run("resolve keep", k))
+        // A new chain starts with nothing waiting.
+        assertTrue(play(done, run("link #$angel", done)).resolved.isEmpty())
     }
 }

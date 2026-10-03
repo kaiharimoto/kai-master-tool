@@ -91,6 +91,7 @@ object DuelWords {
                 "Chain Link ${before.chain.size} resolves${link?.uid?.let { ": ${card(it)}" } ?: ""}"
             }
             DuelAction.ChainClear -> "The chain is cleared"
+            is DuelAction.Keep -> "${card(a.uid).replaceFirstChar { it.uppercase() }} stays on the field"
             is DuelAction.Target -> {
                 val names = a.to.joinToString(", ") { card(it) }
                 val with = a.from?.let { " with ${card(it)}" } ?: ""

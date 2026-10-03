@@ -475,7 +475,9 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
 - A zone named is where the card goes: `place #8 in s2` puts it face-up with no chain link (a card "placed as a Continuous Spell");
   `place X in field`; `set #8 to s2` sets it there whatever it is; `move #8 to m4` on the field. `emz left` / `emz right` are your own left
   and right.
-- `resolve` sends a Normal or Quick-Play Spell, a Normal or Counter Trap to the GY as it resolves; `resolve keep` when its text says it stays.
+- `resolve` resolves the newest link; its card stays on the field until the whole chain has resolved, and then every
+  Normal or Quick-Play Spell, Normal or Counter Trap of the chain goes to the GY together. `resolve keep` when a card's
+  text says it stays.
 - Tokens: `token sheep atk 0 def 0 def m2` (stats, position, zone; `their` for their field).
 - Write locks down when a card applies one: `lock Synchro Monsters only from the Extra Deck` (until the turn ends; `until chain`, `until
   duel`), `unlock 2`. Check "This turn so far" before a Summon a hand trap could punish.
