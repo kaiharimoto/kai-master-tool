@@ -369,8 +369,8 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("escape"), DeskAction.DISMISS, DeskScope.ANYWHERE, "Close whatever is on top", allowedInTextInput = true),
         DeskShortcut(ctrl("k"), DeskAction.PALETTE, DeskScope.ANYWHERE, "Command palette", allowedInTextInput = true),
 
-        DeskShortcut(ctrl("1"), DeskAction.GO_DECKS, DeskScope.APP, "Decks", allowedInTextInput = true),
-        DeskShortcut(ctrl("2"), DeskAction.GO_BUILDER, DeskScope.APP, "Builder", allowedInTextInput = true),
+        DeskShortcut(ctrl("1"), DeskAction.GO_BUILDER, DeskScope.APP, "Builder", allowedInTextInput = true),
+        DeskShortcut(ctrl("2"), DeskAction.GO_DECKS, DeskScope.APP, "Decks", allowedInTextInput = true),
         DeskShortcut(ctrl("3"), DeskAction.GO_SIDING, DeskScope.APP, "Siding", allowedInTextInput = true),
         DeskShortcut(ctrl("4"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true),
         DeskShortcut(ctrl("5"), DeskAction.GO_PREP, DeskScope.APP, "Prep: an event and its practice", allowedInTextInput = true),

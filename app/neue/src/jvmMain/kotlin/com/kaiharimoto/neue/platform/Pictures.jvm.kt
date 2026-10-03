@@ -46,12 +46,29 @@ private fun transferableOf(event: DragAndDropEvent): Transferable? = when (val e
     else -> null
 }
 
+/** What a browser drags with an image: its address as a list of links, a string, or the `<img>` as HTML (1.0.89). */
+private val URI_LIST = runCatching { DataFlavor("text/uri-list;class=java.lang.String") }.getOrNull()
+private val HTML = runCatching { DataFlavor("text/html;class=java.lang.String") }.getOrNull()
+
+private fun carries(supported: (DataFlavor) -> Boolean): Boolean =
+    supported(DataFlavor.javaFileListFlavor) || supported(DataFlavor.imageFlavor) ||
+        listOfNotNull(URI_LIST, HTML, DataFlavor.stringFlavor).any(supported)
+
 @OptIn(ExperimentalComposeUiApi::class)
 actual fun mayBePicture(event: DragAndDropEvent): Boolean = when (val e = event.nativeEvent) {
-    is DropTargetDragEvent -> e.isDataFlavorSupported(DataFlavor.javaFileListFlavor) || e.isDataFlavorSupported(DataFlavor.imageFlavor)
-    is DropTargetDropEvent -> e.isDataFlavorSupported(DataFlavor.javaFileListFlavor) || e.isDataFlavorSupported(DataFlavor.imageFlavor)
+    is DropTargetDragEvent -> carries(e::isDataFlavorSupported)
+    is DropTargetDropEvent -> carries(e::isDataFlavorSupported)
     else -> true
 }
+
+actual fun droppedLink(event: DragAndDropEvent): String? = runCatching {
+    val t = transferableOf(event) ?: return@runCatching null
+    fun text(f: DataFlavor?): String? = f?.takeIf { t.isDataFlavorSupported(it) }?.let { runCatching { t.getTransferData(it) as? String }.getOrNull() }
+    // The image's own address first: a picture inside a link drags the link too, and the link is a page.
+    text(HTML)?.let(::imageSource)
+        ?: text(URI_LIST)?.lines()?.map { it.trim() }?.firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
+        ?: text(DataFlavor.stringFlavor)?.trim()?.takeIf { it.startsWith("http") || it.startsWith("data:image/") }
+}.getOrNull()
 
 actual fun droppedPicture(event: DragAndDropEvent): PickedFile? =
     runCatching { transferableOf(event)?.let(::pictureIn) }.getOrNull()

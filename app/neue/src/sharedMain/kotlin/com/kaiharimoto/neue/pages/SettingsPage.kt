@@ -135,7 +135,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         MuSwitch(prefs.autoZen, { on -> neue.update { it.copy(autoZen = on) } })
                     }
                     // A tablet's index is always out (the strip): there is nothing to choose.
-                    if (!touch) SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DECKS)} to ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DUEL)} reach the pages either way.") {
+                    if (!touch) SettingRow("Index", "Folded away until the pointer reaches the window's left edge, or always out. ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_BUILDER)} to ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_DUEL)} reach the pages either way.") {
                         Segmented(prefs.railPinned, listOf(false, true), { if (it) "Pinned" else "Auto-hide" }, { p -> neue.update { it.copy(railPinned = p) } })
                     }
                 }

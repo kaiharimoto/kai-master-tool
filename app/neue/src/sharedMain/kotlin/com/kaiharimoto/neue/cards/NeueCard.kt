@@ -468,11 +468,21 @@ private class DecodeKeys {
  */
 private fun decodeRequest(context: coil3.PlatformContext, data: Any?, width: Int, shown: MemoryCache.Key?): ImageRequest =
     ImageRequest.Builder(context)
-        .data(data)
+        .data(artData(data))
         .size(width, DecodeSize.height(width))
         .precision(Precision.INEXACT)
         .placeholderMemoryCacheKey(shown)
         .build()
+
+/**
+ * What the image loader is given for a card's picture: a `file:` address (the person's own art, `CustomArt.drawn`) as
+ * the [java.io.File] it names, never the text. Coil parses a `file:` string into a path, and on Windows
+ * `file:/C:/Users/…` becomes `/C:/Users/…`, a file that is not there — the picture failed and the card showed its
+ * stripes and name (kai, 1.0.89: "after adding the card art it just doesnt load the card image at all"). A File keeps
+ * its path as the system writes it. Anything else passes through.
+ */
+internal fun artData(data: Any?): Any? =
+    if (data is String && data.startsWith("file:")) runCatching { java.io.File(java.net.URI(data)) }.getOrDefault(data) else data
 
 /** A lens or group mark on a card: the two letters of the key, in the key's colour. */
 data class Marker(val mark: String, val color: Color)

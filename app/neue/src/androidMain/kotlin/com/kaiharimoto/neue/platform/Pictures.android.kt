@@ -56,8 +56,18 @@ actual suspend fun pastedPicture(): PickedFile? {
 actual fun mayBePicture(event: DragAndDropEvent): Boolean {
     val description = runCatching { event.toAndroidDragEvent().clipDescription }.getOrNull() ?: return true
     return (0 until description.mimeTypeCount).any { description.getMimeType(it).startsWith("image/") } ||
-        description.hasMimeType("application/octet-stream")
+        description.hasMimeType("application/octet-stream") ||
+        // A browser's image comes as its address (1.0.89).
+        description.hasMimeType("text/html") || description.hasMimeType("text/uri-list") || description.hasMimeType("text/plain")
 }
+
+actual fun droppedLink(event: DragAndDropEvent): String? = runCatching {
+    val clip = event.toAndroidDragEvent().clipData ?: return@runCatching null
+    (0 until clip.itemCount).firstNotNullOfOrNull { i ->
+        val item = clip.getItemAt(i)
+        item.htmlText?.let(::imageSource) ?: item.text?.toString()?.trim()?.takeIf { it.startsWith("http") || it.startsWith("data:image/") }
+    }
+}.getOrNull()
 
 actual fun droppedPicture(event: DragAndDropEvent): PickedFile? = runCatching {
     val drag = event.toAndroidDragEvent()

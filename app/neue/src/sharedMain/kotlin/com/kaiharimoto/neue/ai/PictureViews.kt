@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -148,12 +149,19 @@ internal suspend fun choosePicture(ai: AiState) {
 internal fun Modifier.takesPictures(ai: AiState): Modifier {
     val c = Mu.colors
     var over by remember { mutableStateOf(false) }
+    val fetching = androidx.compose.runtime.rememberCoroutineScope()
     val target = remember(ai) {
         object : DragAndDropTarget {
             override fun onDrop(event: DragAndDropEvent): Boolean {
                 over = false
-                val file = droppedPicture(event) ?: return false
-                ai.attach(file)
+                val file = droppedPicture(event)
+                if (file != null) {
+                    ai.attach(file)
+                    return true
+                }
+                // A browser's image is its address: fetched, then attached (1.0.89).
+                val link = com.kaiharimoto.neue.platform.droppedLink(event) ?: return false
+                fetching.launch { com.kaiharimoto.neue.platform.fetchPicture(link)?.let(ai::attach) }
                 return true
             }
 

@@ -314,8 +314,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     still `AiMark` stands by the name (`AiName`: replies, the panel's head, Settings) — kai: "every
     mention of Ai is a chance for the art".
   - Only the whole head moves; the net never distorts.
-- **The pages are `01` Decks, `02` Builder, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel** (1.0.40, kai:
-  Odds and Stats removed; the siding editor its own page, `SidingPage`, opened by
+- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel** (1.0.40, kai:
+  Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
   (`OpponentDialog`, `Matchup.covers`), a library decklist linked later (1.0.42).

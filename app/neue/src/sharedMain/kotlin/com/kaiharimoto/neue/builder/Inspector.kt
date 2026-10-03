@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.builder
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -122,11 +123,21 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 24.dp)) {
             // A picture dropped on the card is its own art, cropped in (1.0.34).
             val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+            val fetching = androidx.compose.runtime.rememberCoroutineScope()
             val drop = remember(card) {
                 object : androidx.compose.ui.draganddrop.DragAndDropTarget {
                     override fun onDrop(event: androidx.compose.ui.draganddrop.DragAndDropEvent): Boolean {
-                        val picked = com.kaiharimoto.neue.platform.droppedPicture(event) ?: return false
-                        neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card, picked)
+                        val picked = com.kaiharimoto.neue.platform.droppedPicture(event)
+                        if (picked != null) {
+                            neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card, picked)
+                            return true
+                        }
+                        // An image dragged out of a browser is its address: fetched, then cropped in (1.0.89).
+                        val link = com.kaiharimoto.neue.platform.droppedLink(event) ?: return false
+                        fetching.launch {
+                            com.kaiharimoto.neue.platform.fetchPicture(link)?.let { neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card, it) }
+                                ?: run { neue.note = com.kaiharimoto.neue.Note("That picture could not be fetched. Save it, then drop the file") }
+                        }
                         return true
                     }
                 }

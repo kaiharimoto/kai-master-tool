@@ -109,8 +109,9 @@ fun TitleBar(
         ) {
             Row(
                 Modifier
-                    .cursorPointer(caption = "Decks →")
-                    .muClickable { neue.go(Page.DECKS) },
+                    .cursorPointer(caption = if (neue.railPinned) "Builder →" else if (neue.railHeld) "Fold the index" else "The index")
+                    // The logo opens the index (kai, 1.0.89); with the index pinned out, it goes home to the builder.
+                    .muClickable { if (neue.railPinned) neue.go(Page.BUILDER) else neue.railHeld = !neue.railHeld },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {

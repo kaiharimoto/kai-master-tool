@@ -304,7 +304,7 @@ fun PoolPane(
                                         taps = taps,
                                     ),
                                 motion = press::pose,
-                                artChip = true,
+                                artChip = false,
                                 format = state.format,
                                 copies = state.copiesInDeck(card.id),
                                 selected = selected,

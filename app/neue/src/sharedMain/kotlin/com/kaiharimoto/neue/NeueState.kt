@@ -23,8 +23,9 @@ import kotlinx.coroutines.launch
 
 /** The rail's pages, numbered the way the family numbers them. Settings sits below the rail's rule, unnumbered. */
 enum class Page(val numeral: Int?, val title: String) {
-    DECKS(1, "Decks"),
-    BUILDER(2, "Builder"),
+    // The builder is home and first (1.0.89, kai: "have builder be 1 and decks to 2, default to the builder").
+    BUILDER(1, "Builder"),
+    DECKS(2, "Decks"),
 
     /**
      * Siding your decks against their web (1.0.40, kai: "3 should be Siding"): the editor
@@ -205,6 +206,12 @@ class NeueState(
 
     /** Which folded bars the pointer has brought out (`EdgeReveal`). */
     var revealed by mutableStateOf(Revealed.NONE)
+
+    /**
+     * The index rail held out by a click on the logo (1.0.89, kai: "when you click the program logo it should open the
+     * side bar"): out until a page is chosen, the logo is clicked again, or a press lands outside it.
+     */
+    var railHeld by mutableStateOf(false)
 
     /** Where the Export button is, in the window, so the keyboard opens its menu there too. Plain. */
     var exportAnchor: androidx.compose.ui.geometry.Offset = androidx.compose.ui.geometry.Offset(640f, 48f)
@@ -507,6 +514,7 @@ class NeueState(
     fun go(to: Page) {
         dismissTop()
         page = to
+        railHeld = false
     }
 
     fun focusSearch() {

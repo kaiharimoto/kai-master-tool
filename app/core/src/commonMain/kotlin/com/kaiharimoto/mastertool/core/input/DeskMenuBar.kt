@@ -72,8 +72,8 @@ object DeskMenuBar {
         DeskMenu(
             "View",
             listOf(
-                item(DeskAction.GO_DECKS, "Decks"),
                 item(DeskAction.GO_BUILDER, "Builder"),
+                item(DeskAction.GO_DECKS, "Decks"),
                 item(DeskAction.GO_SIDING, "Siding"),
                 item(DeskAction.GO_FORMAT, "Format"),
                 item(DeskAction.GO_PREP, "Prep"),

@@ -110,6 +110,29 @@ object ArtCrop {
         return CropBox((imageWidth - w) / 2f, (imageHeight - h) / 2f, w, h)
     }
 
+    /**
+     * Auto align (1.0.89, kai: "add an auto align button for the crop"): where the art most likely is. [content] is the
+     * picture without its plain margins ([ContentBounds]); when it has a card's shape ([cardAspect], within
+     * [CARD_TOLERANCE]) the picture is a whole card — a scan, a render, a screenshot of one — and the crop is its own art
+     * box ([window], the same fractions as the renders); anything else is art alone, and the crop is the largest box
+     * that fits inside it. Always the window's [aspect], and always inside the picture.
+     */
+    fun auto(imageWidth: Float, imageHeight: Float, aspect: Float, window: ArtWindow?, cardAspect: Float, content: CropBox? = null): CropBox {
+        val c = content?.takeIf { it.width >= MIN_WIDTH && it.height >= MIN_WIDTH } ?: CropBox(0f, 0f, imageWidth, imageHeight)
+        val whole = window != null && abs(c.width / c.height - cardAspect) / cardAspect <= CARD_TOLERANCE
+        val region = if (whole && window != null) {
+            CropBox(c.x + window.left * c.width, c.y + window.top * c.height, (window.right - window.left) * c.width, (window.bottom - window.top) * c.height)
+        } else c
+        // The largest box of the window's shape in that region, in its middle.
+        val w = min(region.width, region.height * aspect).coerceAtLeast(MIN_WIDTH)
+        val h = w / aspect
+        val box = CropBox(region.x + (region.width - w) / 2f, region.y + (region.height - h) / 2f, w, h)
+        return moved(box.copy(width = min(box.width, imageWidth), height = min(box.height, imageHeight)), 0f, 0f, imageWidth, imageHeight)
+    }
+
+    /** How far from a card's shape a picture may be and still be read as a whole card: four per cent. */
+    const val CARD_TOLERANCE = 0.04f
+
     /** [box] moved by ([dx], [dy]), stopping at the picture's edges. */
     fun moved(box: CropBox, dx: Float, dy: Float, imageWidth: Float, imageHeight: Float): CropBox =
         box.copy(
@@ -167,4 +190,34 @@ object ArtCrop {
             }
             abs(cx - x) <= reach && abs(cy - y) <= reach
         }
+}
+
+/**
+ * A picture without its plain margins (1.0.89, for [ArtCrop.auto]): the rows and columns, from each edge inwards, whose
+ * pixels all match that edge's colour (within [tolerance] on each channel) are margin; what is left is the content. A
+ * whole card has none to trim — its frame is printed — so only a screenshot's or a scan's surround goes. [pixel] is the
+ * colour at (x, y) as 0xAARRGGBB; [step] samples every n-th pixel along a line, for a large picture.
+ */
+object ContentBounds {
+    fun of(width: Int, height: Int, tolerance: Int = 24, step: Int = 1, pixel: (Int, Int) -> Int): CropBox? {
+        if (width <= 2 || height <= 2) return null
+        fun near(a: Int, b: Int): Boolean {
+            if ((a ushr 24) < 16 && (b ushr 24) < 16) return true // both transparent
+            return (0..2).all { k -> abs(((a shr (8 * k)) and 0xFF) - ((b shr (8 * k)) and 0xFF)) <= tolerance }
+        }
+        fun rowPlain(y: Int, c: Int) = (0 until width step step).all { near(pixel(it, y), c) }
+        fun colPlain(x: Int, c: Int, top: Int, bottom: Int) = (top..bottom step step).all { near(pixel(x, it), c) }
+        val corner = pixel(0, 0)
+        var top = 0
+        while (top < height - 1 && rowPlain(top, corner)) top++
+        var bottom = height - 1
+        val low = pixel(width - 1, height - 1)
+        while (bottom > top && rowPlain(bottom, low)) bottom--
+        var left = 0
+        while (left < width - 1 && colPlain(left, corner, top, bottom)) left++
+        var right = width - 1
+        while (right > left && colPlain(right, low, top, bottom)) right--
+        if (right - left < 2 || bottom - top < 2) return null
+        return CropBox(left.toFloat(), top.toFloat(), (right - left + 1).toFloat(), (bottom - top + 1).toFloat())
+    }
 }

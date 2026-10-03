@@ -1234,6 +1234,12 @@ private fun Shell(h: NeueHolders) {
                         // on a desktop nothing else takes focus from a text field, so the bar
                         // that is held out while you type would otherwise never fold away.
                         val typing = (state.textInputFocused && !neue.searchFocused) || (neue.page == Page.DUEL && h.textFocus.any)
+                        // The index held out by the logo folds at a press outside it (1.0.89).
+                        if (event.type == PointerEventType.Press && neue.railHeld && at != null &&
+                            at.x > (if (neue.touchFirst) MuShell.strip else MuShell.rail).toPx() && at.y > measured.top
+                        ) {
+                            neue.railHeld = false
+                        }
                         if (event.type == PointerEventType.Press && neue.immersive && neue.revealed.top &&
                             typing && at != null && at.y > measured.top
                         ) {
@@ -1376,7 +1382,7 @@ private fun Shell(h: NeueHolders) {
 
         // The bars that fold away slide over the page rather than pushing it:
         // a bar that pushed would re-fit the deck, and every card would jump.
-        val out = neue.revealed
+        val out = neue.revealed.let { if (neue.railHeld) it.copy(left = true) else it }
         if (immersive) {
             val top by animateFloatAsState(if (out.top) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "top")
             Column(

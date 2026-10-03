@@ -1152,8 +1152,9 @@ private fun DeckSectionPane(
                                     lean.copy(lift = lean.lift + pressed.lift + carried) + drift
                                 },
                                 format = state.format,
-                                // The artwork chip on hover — not in deep zen, where a press carries the card.
-                                artChip = neue.zen != ZenPhase.DEEP,
+                                // No artwork chip on the card (kai, 1.0.89: "distracting and not necessary"): the
+                                // inspector's arrows and A step the art.
+                                artChip = false,
                                 // In deep zen, the cards picked out to move together.
                                 selected = selected && neue.zen != ZenPhase.DEEP || zen.isSelected(zenKey),
                                 foil = neue.prefs.foil,

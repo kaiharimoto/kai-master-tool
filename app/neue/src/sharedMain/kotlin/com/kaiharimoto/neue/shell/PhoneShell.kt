@@ -123,7 +123,7 @@ fun PhoneBar(
 }
 
 /** The pages a phone's tab bar holds, in the rail's order, Settings last. */
-private val TABS = listOf(Page.DECKS, Page.BUILDER, Page.SIDING, Page.FORMAT, Page.PREP, Page.SETTINGS)
+private val TABS = listOf(Page.BUILDER, Page.DECKS, Page.SIDING, Page.FORMAT, Page.PREP, Page.SETTINGS)
 
 /**
  * The phone's index (v1.3.5): the rail's five pages as tabs along the bottom,

@@ -83,7 +83,7 @@ import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 
 /**
- * `01 Decks`: every saved deck as a ruled list, newest first. The deck on the
+ * `02 Decks`: every saved deck as a ruled list, newest first. The deck on the
  * builder is the inverted row. Click opens; the delete asks first, because it
  * is the one thing here that cannot be undone.
  *

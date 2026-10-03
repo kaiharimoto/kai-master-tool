@@ -172,8 +172,17 @@ fun ArtCropDialog(
         object : DragAndDropTarget {
             override fun onDrop(event: DragAndDropEvent): Boolean {
                 dropping = false
-                val picked = droppedPicture(event) ?: return false
-                takeNow(picked)
+                val picked = droppedPicture(event)
+                if (picked != null) {
+                    takeNow(picked)
+                    return true
+                }
+                // An image dragged out of a browser is its address: fetched, then taken (1.0.89).
+                val link = com.kaiharimoto.neue.platform.droppedLink(event) ?: return false
+                scope.launch {
+                    com.kaiharimoto.neue.platform.fetchPicture(link)?.let(takeNow)
+                        ?: onNote("That picture could not be fetched. Save it, then drop the file, or copy it and paste here.")
+                }
                 return true
             }
 
@@ -189,6 +198,19 @@ fun ArtCropDialog(
                 dropping = false
             }
         }
+    }
+
+    /** The crop where the art most likely is ([ArtCrop.auto]): margins trimmed off the pixels, a whole card's art box found. */
+    fun autoAlign() {
+        val image = picture ?: return
+        val w = window ?: return
+        val pixels = IntArray(image.width * image.height)
+        runCatching { image.readPixels(pixels) }.getOrElse { return }
+        val step = (maxOf(image.width, image.height) / 600).coerceAtLeast(1)
+        val bounds = com.kaiharimoto.mastertool.core.layout.ContentBounds.of(image.width, image.height, step = step) { x, y -> pixels[y * image.width + x] }
+        box = ArtCrop.auto(
+            image.width.toFloat(), image.height.toFloat(), w.aspect(RENDER_WIDTH, RENDER_HEIGHT), w, RENDER_WIDTH / RENDER_HEIGHT, bounds,
+        )
     }
 
     fun replace() {
@@ -227,6 +249,8 @@ fun ArtCropDialog(
         footer = {
             MuButton("Cancel", onDismiss, variant = BtnVariant.GHOST)
             MuButton("Whole card", ::whole, enabled = source != null, reason = "Add a picture first")
+            // Auto align (kai, 1.0.89): the art box of a whole card in the picture, or the art inside plain margins.
+            if (window != null) MuButton("Auto align", ::autoAlign, variant = BtnVariant.GHOST, enabled = picture != null, reason = "Add a picture first")
             if (window != null) {
                 MuButton(
                     if (saving) "Saving…" else "Replace art",
