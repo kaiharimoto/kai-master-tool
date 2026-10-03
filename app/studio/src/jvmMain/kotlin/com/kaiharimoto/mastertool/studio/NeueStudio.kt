@@ -158,6 +158,8 @@ fun neueMain(args: Array<String>) {
                         knowledge = if (map["duel-know"] == "seat") com.kaiharimoto.mastertool.core.duel.DuelPrefs.KNOW_SEAT else com.kaiharimoto.mastertool.core.duel.DuelPrefs.KNOW_ALL,
                         // --duel-facing=true: the far seat's cards turned to face them (1.0.78).
                         facing = map["duel-facing"] == "true",
+                        // --duel-coords=true: every place's coordinate at its corner (1.0.87).
+                        coordinates = map["duel-coords"] == "true",
                     ))
                 }
                 val solo = mode == "solo"
@@ -207,6 +209,26 @@ fun neueMain(args: Array<String>) {
                         h.duel.selection = setOf(uid)
                         h.duel.verbStrip = true
                     }
+                }
+                // --duel-focus=m3|h2|ogy|…: Command mode's ring on that coordinate, as the arrows would leave it (1.0.87);
+                // --duel-focus-menu=true opens the card's verbs as Enter does, --duel-pick=h2 picks that card up first.
+                map["duel-focus"]?.let { coord ->
+                    val d = h.duel
+                    val st = d.game!!.state
+                    val shape = com.kaiharimoto.mastertool.core.layout.DuelFocus.Shape(twoSided = h.neue.prefs.duel.twoSided)
+                    fun slotFor(c: String) = com.kaiharimoto.mastertool.core.layout.DuelFocus.cells(st, d.bottom, shape).map { it.slot }
+                        .firstOrNull { com.kaiharimoto.mastertool.core.layout.DuelFocus.label(it, d.bottom) == c }
+                    map["duel-pick"]?.let { p -> slotFor(p)?.let { d.picked = com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(st, it) } }
+                    val slot = slotFor(coord)
+                    d.focusOn(slot)
+                    val uid = d.focusUid()
+                    if (map["duel-focus-menu"] == "true" && uid != null) {
+                        d.inspected = uid
+                        d.selection = setOf(uid)
+                        d.verbStrip = true
+                        d.verbCursor = 1
+                    }
+                    println("[neue-studio] focus: $coord -> $slot, card $uid, picked ${d.picked}")
                 }
                 // --duel-replay=N: the duel as a replay, stood at entry N (or halfway), with a note there.
                 map["duel-replay"]?.let { spec ->

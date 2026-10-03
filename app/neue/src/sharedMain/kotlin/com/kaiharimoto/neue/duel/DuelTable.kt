@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -45,6 +46,7 @@ import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.input.DeskMouse
 import com.kaiharimoto.mastertool.core.layout.CardFrame
+import com.kaiharimoto.mastertool.core.layout.DuelFocus
 import com.kaiharimoto.mastertool.core.layout.DuelFrames
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.DuelSpot
@@ -88,7 +90,15 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     // A card carried out of an open pile: the pile steps aside, so the zones under it take the drop (1.0.78).
     var stripLeft by remember { mutableStateOf(false) }
     val facing = h.neue.prefs.duel.facing
-    val frames = remember(s, layout, viewers, duels.strip, facing, duels.stripRow) { DuelFrames.of(s, layout, viewers, duels.strip, facing, duels.stripRow) }
+    // A hand the viewers cannot see is drawn in its veils' order (1.0.87), as the focus walks it.
+    val secret = game.header.seed
+    val frames = remember(s, layout, viewers, duels.strip, facing, duels.stripRow, secret) { DuelFrames.of(s, layout, viewers, duels.strip, facing, duels.stripRow, secret) }
+    // Command mode (1.0.87): the focus reads its grid off the table as drawn, and goes with its card when the table changes.
+    SideEffect {
+        duels.tableLayout = layout
+        duels.eyes = DuelFocus.Eyes(viewers, secret)
+    }
+    LaunchedEffect(s, viewers, duels.strip, duels.bottom, layout) { duels.refocus() }
     val shownFrames = carry?.let { cr ->
         frames.map { f ->
             when {
@@ -225,12 +235,17 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
 
     val arbiter = Modifier.pointerInput(Unit) {
         val d = density.density
+        var lastPointer = Offset.Unspecified
         awaitPointerEventScope {
             while (true) {
                 var event = awaitPointerEvent()
                 // Hover, between presses: the card the keys act on.
                 if (event.type == PointerEventType.Move || event.type == PointerEventType.Enter) {
                     val p = event.changes.first().position
+                    // The pointer moved: the keys act on what it is over again (1.0.87), the ring put away. Only a real
+                    // move: the table re-laid under a still pointer sends a synthetic one, and the keys would lose the ring.
+                    if (event.type == PointerEventType.Move && p != lastPointer) duels.lastInput = Duels.Input.POINTER
+                    lastPointer = p
                     duels.hovered = DuelFrames.hit(framesNow, p.x / d, p.y / d)?.uid
                     continue
                 }
@@ -251,6 +266,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     continue
                 }
                 if (event.type != PointerEventType.Press) continue
+                duels.lastInput = Duels.Input.POINTER
                 val down = event.changes.first()
                 if (down.isConsumed) continue
                 val x0 = down.position.x / d
@@ -445,7 +461,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     inst = inst,
                     card = card,
                     name = duels.catalog.nameOf(inst),
-                    selected = f.uid in duels.selection || f.uid == duels.attaching || f.uid == attacker,
+                    selected = f.uid in duels.selection || f.uid == duels.attaching || f.uid == attacker || f.uid == duels.picked,
                     carried = carry?.uid == f.uid,
                     foil = h.neue.prefs.foil,
                     stats = stats,
@@ -457,6 +473,9 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         if (!stripLeft) duels.strip?.let { (seat, kind) -> StripGround(duels, s, layout, seat, kind) }
         ShuffleOffer(duels, s, layout)
         if (carry == null && duels.verbStrip) VerbStrip(duels, s, layout, shownFrames, playsBoth)
+        // Command mode (1.0.87): the coordinates at every place's corner, and the ring the arrows walk.
+        if (h.neue.prefs.duel.coordinates) Coordinates(duels, s, layout, shownFrames)
+        if (carry == null && duels.byKeys) FocusRing(duels, s, layout, shownFrames, viewers)
 
         // The chain, the arrows, the pings — over the cards.
         ChainWell(s, layout, duels, viewers)
@@ -632,3 +651,103 @@ internal fun stripGround(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: D
     val area = DuelFrames.stripBand(l, s.seats[strip.first].pile(strip.second).size).inflated(l.gap)
     return Slot(area.left, area.top - DuelFrames.STRIP_HEAD, area.width, area.height + DuelFrames.STRIP_HEAD)
 }
+
+// ---- Command mode (1.0.87): the focus ring and the coordinates ------------------------------------------
+
+/** The box a card is seen in: its frame, turned as it lies. */
+private fun seenBox(f: CardFrame): Slot {
+    val turned = f.rotation % 180f != 0f
+    val w = if (turned) f.h else f.w
+    val h = if (turned) f.w else f.h
+    return Slot(f.centerX - w / 2f, f.centerY - h / 2f, w, h)
+}
+
+/** Where [slot] is drawn: its card as it lies, else the zone or the pile's frame. */
+private fun boxOf(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>, slot: DuelFocus.Slot): Slot? {
+    val uid = DuelFocus.uidAt(s, slot, duels.eyes)
+    uid?.let { u -> frames.firstOrNull { it.uid == u && it.shown } }?.let { return seenBox(it) }
+    return when (slot) {
+        is DuelFocus.Slot.Zone -> l.zone(slot.place)
+        is DuelFocus.Slot.Pile -> l.pile(slot.seat, slot.kind)
+        else -> null
+    }
+}
+
+/**
+ * The focus (1.0.87): a ring in ink outside the card or the place — 2 dp of paper, then 2 dp of ink, so it
+ * reads on any art and never touches the card — and its tag above it: the coordinate, and the card's name
+ * when the table's eyes may see it ("oh2 · in hand", never its name). With a card picked, or an attack or an
+ * attach waiting, the tag says what Enter will do there. It moves nothing and fits nothing.
+ */
+@Composable
+private fun FocusRing(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>, viewers: Set<Int>) {
+    val c = Mu.colors
+    val focus = duels.focus ?: return
+    val box = boxOf(duels, s, l, frames, focus) ?: return
+    val uid = DuelFocus.uidAt(s, focus, duels.eyes)
+    val coord = DuelFocus.label(focus, duels.bottom)
+    val what = uid?.let { u ->
+        val inst = s.cards.getValue(u)
+        when {
+            viewers.any { com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, u, it) } -> duels.catalog.nameOf(inst)
+            s.placeOf(u).let { it is Place.Pile && it.kind == PileKind.HAND } -> "in hand"
+            s.placeOf(u) is Place.Zone -> "set"
+            else -> "face-down"
+        }
+    }
+    val count = (focus as? DuelFocus.Slot.Pile)?.let { s.seats[it.seat].pile(it.kind).size }
+    // What Enter does here, when something waits to be put down or aimed.
+    val waiting = duels.picked ?: duels.attacking
+    val intent = waiting?.takeIf { it in s.cards && it != uid }?.let { w ->
+        val spot = when (focus) {
+            is DuelFocus.Slot.Zone -> DropSpot.Zone(if (focus.place.kind == ZoneKind.EMZ) focus.place.copy(seat = duels.seatFor(w)) else focus.place)
+            is DuelFocus.Slot.Pile -> DropSpot.Pile(focus.seat, focus.kind)
+            is DuelFocus.Slot.HandCard -> DropSpot.Hand(focus.seat, focus.index)
+            is DuelFocus.Slot.PileCard -> DropSpot.Pile(focus.seat, focus.kind)
+        }
+        DuelDrop.intent(s, w, spot, duels.catalog).let { i -> if (i.none) "nothing to do here" else "Enter: ${i.label}" }
+    }
+    val text = listOfNotNull(coord, count?.let { "$it" }, what, intent).joinToString(" · ")
+    Box(Modifier.zIndex(FOCUS_Z).offset((box.left - 4).dp, (box.top - 4).dp).size((box.width + 8).dp, (box.height + 8).dp).border(2.dp, c.ink))
+    Box(Modifier.zIndex(FOCUS_Z).offset((box.left - 2).dp, (box.top - 2).dp).size((box.width + 4).dp, (box.height + 4).dp).border(2.dp, c.paper))
+    // Above the ring where there is room, else under it.
+    val above = box.top - 4 - TAG_H >= 0f
+    val tagTop = if (above) box.top - 4 - TAG_H else box.bottom + 4
+    Box(Modifier.zIndex(FOCUS_Z + 1f).offset((box.left - 4).dp.coerceAtLeast(0.dp), tagTop.dp).background(c.ink).padding(horizontal = 6.dp, vertical = 2.dp)) {
+        Mono(text, color = c.paper)
+    }
+}
+
+/**
+ * Every place's coordinate at its top-left corner, faint, as a chessboard's edge (1.0.87, `I`): the zones and
+ * piles, each card in a hand, and an open pile's cards. Over the cards on a paper ground, small enough to
+ * leave the art alone.
+ */
+@Composable
+private fun Coordinates(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>) {
+    val c = Mu.colors
+    val viewer = duels.bottom
+    val cells = DuelFocus.cells(s, viewer, duels.focusShape()).map { it.slot } +
+        (duels.strip?.let { (seat, kind) -> s.seats[seat].pile(kind).indices.map { DuelFocus.Slot.PileCard(seat, kind, it) } } ?: emptyList())
+    // Measured first, drawn after: no return out of a lambda that draws (NonLocalReturnTest).
+    val placed = cells.mapNotNull { slot ->
+        when (slot) {
+            is DuelFocus.Slot.Zone -> l.zone(slot.place)
+            is DuelFocus.Slot.Pile -> l.pile(slot.seat, slot.kind)
+            else -> boxOf(duels, s, l, frames, slot)
+        }?.let { slot to it }
+    }
+    placed.forEach { (slot, box) ->
+        val z = if (slot is DuelFocus.Slot.PileCard) DuelFrames.Z_STRIP + 1f else COORDS_Z
+        Box(Modifier.zIndex(z).offset((box.left + 2).dp, (box.top + 2).dp).background(c.paper).padding(horizontal = 2.dp)) {
+            Mono(DuelFocus.label(slot, viewer), color = c.ink45, size = androidx.compose.ui.unit.TextUnit(9f, androidx.compose.ui.unit.TextUnitType.Sp))
+        }
+    }
+}
+
+/** Over the open pile and the verb strip, under a carried card's hint. */
+private const val FOCUS_Z = 70f
+/** Over the hand's cards, under an open pile. */
+private const val COORDS_Z = 6f
+/** The focus tag's height. */
+private const val TAG_H = 20f

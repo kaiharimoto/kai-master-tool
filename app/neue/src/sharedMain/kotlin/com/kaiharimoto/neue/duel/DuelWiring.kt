@@ -1,13 +1,18 @@
 package com.kaiharimoto.neue.duel
 
 import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.duel.DropSpot
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelDrop
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
+import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
+import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.ai.AiCue
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
 import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.layout.DuelFocus
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.Page
@@ -74,12 +79,13 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
     }
     val game = duels.shown ?: return
     val s = game.state
+    if (runFocus(h, action)) return
     VERBS[action]?.let { verb ->
-        // The card under the pointer, else the one selected, else the one being read.
-        val uid = duels.hovered ?: duels.selection.singleOrNull() ?: duels.inspected ?: return
+        // The focus's card once the keys moved last (1.0.87); else the card under the pointer, the one selected, the one being read.
+        val uid = duels.keyTarget() ?: return
         if (uid !in s.cards) return
         // A card in another seat's open pile is the person's to play only when they play both seats (1.0.86).
-        val inStrip = duels.strip?.let { (seat, kind) -> s.placeOf(uid).let { it is com.kaiharimoto.mastertool.core.duel.Place.Pile && it.seat == seat && it.kind == kind } } == true
+        val inStrip = duels.strip?.let { (seat, kind) -> s.placeOf(uid).let { it is Place.Pile && it.seat == seat && it.kind == kind } } == true
         val mine = s.solo || duels.seatFor(uid) == duels.bottom || (inStrip && playsBoth(h))
         when {
             verb == DuelVerb.TARGET || (verb == DuelVerb.DEFAULT && !mine) -> duels.verb(uid, DuelVerb.TARGET, seat = duels.bottom)
@@ -93,6 +99,11 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         val digit = DIGITS[action]
         val placing = duels.placed?.let { Duels.now() < it.until } == true
         if (digit != null && !placing && answerByDigit(h, digit)) return
+        // No card just placed, and the keys lead (1.0.87): the focused card to that zone — focus h2, press 3.
+        if (!placing && duels.byKeys) {
+            duels.keyTarget()?.let { placeByKey(h, it, kind, index) }
+            return
+        }
         val p = duels.placed
         // Shift and a number is a Spell & Trap Zone; a plain number is the zone of the kind just placed in.
         val k = if (kind == ZoneKind.MONSTER && p?.kind == ZoneKind.SPELL) ZoneKind.SPELL else kind
@@ -107,7 +118,7 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_LP -> duels.lpPad = if (duels.lpPad == null) duels.bottom else null
         DeskAction.DUEL_THINK -> duels.act(DuelAction.Thinking(duels.bottom, duels.bottom !in s.thinking), duels.bottom)
         DeskAction.DUEL_COMMAND -> duels.commandFocus++
-        DeskAction.DUEL_CHAT -> if (!answerPicked(h)) duels.chatFocus++
+        DeskAction.DUEL_CHAT -> chatKey(h)
         DeskAction.DUEL_AI_ANSWER, DeskAction.DUEL_AI_CATCH_UP -> answerAi(h, game, catching = action == DeskAction.DUEL_AI_CATCH_UP)
         DeskAction.DUEL_SIDES -> h.neue.update { it.copy(duel = it.duel.copy(twoSided = !it.duel.twoSided)) }
         DeskAction.DUEL_SWAP -> duels.swap()
@@ -155,7 +166,10 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.attaching != null -> d.attaching = null
         d.attacking != null -> d.attacking = null
         d.drawer != null -> d.drawer = null
+        // Command mode (1.0.87): the verb menu Enter opened, then the open pile, then what was picked up.
+        d.verbStrip && d.verbCursor != null -> d.verbStrip = false
         d.strip != null -> d.closeStrip()
+        d.picked != null -> d.picked = null
         d.verbStrip -> d.verbStrip = false
         d.verbsOpen -> d.verbsOpen = false
         // Then Ai thinking at the table stops, and the moves it was playing out with it.
@@ -166,7 +180,143 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.playing -> d.stopRequested = true
         d.selection.isNotEmpty() -> d.selection = emptySet()
         d.replay != null -> d.closeReplay()
+        // The focus is let go last: the ring goes, and the keys act on the pointer's card again.
+        d.focus != null -> d.clearFocus()
         else -> return false
     }
     return true
+}
+
+// ---- Command mode (1.0.87): the table walked by the keys ------------------------------------------------
+
+/** Enter's duty before 1.0.87, and Ctrl Enter's: Ai's picked answers sent, else the chat. */
+private fun chatKey(h: NeueHolders) {
+    if (!answerPicked(h)) h.duel.chatFocus++
+}
+
+/** The focus's keys: the arrows, the row's ends, Enter, Shift Enter and I. False for any other action. */
+private fun runFocus(h: NeueHolders, action: DeskAction): Boolean {
+    val d = h.duel
+    val menuOpen = d.verbStrip && d.verbCursor != null
+    when (action) {
+        DeskAction.DUEL_FOCUS_UP, DeskAction.DUEL_FOCUS_DOWN -> if (menuOpen) {
+            val s = d.shown?.state ?: return true
+            val menu = d.inspected?.let { verbMenu(d, s, it, playsBoth(h)) }
+            if (menu == null) d.verbStrip = false
+            else d.verbCursor = ((d.verbCursor ?: 0) + if (action == DeskAction.DUEL_FOCUS_UP) -1 else 1).coerceIn(0, menu.size - 1)
+        } else d.walk(if (action == DeskAction.DUEL_FOCUS_UP) DuelFocus.Dir.UP else DuelFocus.Dir.DOWN)
+        DeskAction.DUEL_FOCUS_LEFT -> d.walk(DuelFocus.Dir.LEFT)
+        DeskAction.DUEL_FOCUS_RIGHT -> d.walk(DuelFocus.Dir.RIGHT)
+        DeskAction.DUEL_FOCUS_ROW_START -> d.walkRow(end = false)
+        DeskAction.DUEL_FOCUS_ROW_END -> d.walkRow(end = true)
+        DeskAction.DUEL_FOCUS_ACT -> enterOnFocus(h)
+        DeskAction.DUEL_PICK -> pickFocus(h)
+        DeskAction.DUEL_COORDINATES -> h.neue.update { it.copy(duel = it.duel.copy(coordinates = !it.duel.coordinates)) }
+        else -> return false
+    }
+    return true
+}
+
+/** Where a card put down at [slot] lands, as a drop there would ([DuelDrop.intent]). */
+private fun spotAt(d: Duels, slot: DuelFocus.Slot, uid: Int): DropSpot = when (slot) {
+    is DuelFocus.Slot.Zone -> DropSpot.Zone(if (slot.place.kind == ZoneKind.EMZ) slot.place.copy(seat = d.seatFor(uid)) else slot.place)
+    is DuelFocus.Slot.Pile -> DropSpot.Pile(slot.seat, slot.kind)
+    is DuelFocus.Slot.HandCard -> DropSpot.Hand(slot.seat, slot.index)
+    is DuelFocus.Slot.PileCard -> DropSpot.Pile(slot.seat, slot.kind)
+}
+
+/**
+ * Enter on the focus: the verb chosen in the menu; an attack or an attach waiting, aimed here; the picked card
+ * put down here; a pile opened onto its first card; a card's verbs as a menu. With no focus — the pointer moved
+ * last — or Ai's question in the log, Enter is what it was: the answer, else the chat.
+ */
+private fun enterOnFocus(h: NeueHolders) {
+    val d = h.duel
+    val s = d.shown?.state ?: return
+    val asking = h.ai.question != null && duelTalking(h)
+    val focus = d.focus
+    if (asking || !d.byKeys || focus == null) {
+        chatKey(h)
+        return
+    }
+    if (d.verbStrip && d.verbCursor != null) {
+        val menu = d.inspected?.let { verbMenu(d, s, it, playsBoth(h)) }
+        if (menu == null) d.verbStrip = false else runVerbItem(d, menu, d.verbCursor ?: 0)
+        return
+    }
+    val uid = d.focusUid()
+    val attacker = d.attacking
+    val attaching = d.attaching
+    val picked = d.picked
+    when {
+        attacker != null -> {
+            val aim = DuelDrop.intent(s, attacker, spotAt(d, focus, attacker), d.catalog).actions.singleOrNull() as? DuelAction.Attack
+            if (aim != null) d.attack(aim.target) else h.neue.note = Note("Not something to attack: their monster, or their hand to attack directly. Esc to stop.")
+        }
+        attaching != null -> {
+            if (uid != null && uid != attaching && focus is DuelFocus.Slot.Zone) d.verb(attaching, DuelVerb.ATTACH, host = uid)
+            else h.neue.note = Note("Walk to the monster it goes under, then Enter. Esc to stop.")
+        }
+        picked != null -> {
+            val intent = if (picked in s.cards) DuelDrop.intent(s, picked, spotAt(d, focus, picked), d.catalog, actor = d.dragActor()) else DuelDrop.NONE
+            when {
+                picked !in s.cards -> d.picked = null
+                intent.none -> h.neue.note = Note("Nothing to do with it there")
+                d.act(intent.actions, d.seatFor(picked)) -> {
+                    d.picked = null
+                    d.inspected = picked
+                }
+            }
+        }
+        focus is DuelFocus.Slot.Pile -> {
+            if (d.strip != focus.seat to focus.kind) d.openPile(focus.seat, focus.kind)
+            if (s.seats[focus.seat].pile(focus.kind).isNotEmpty()) d.focusOn(DuelFocus.Slot.PileCard(focus.seat, focus.kind, 0))
+        }
+        uid != null -> {
+            d.inspected = uid
+            d.selection = setOf(uid)
+            d.verbStrip = true
+            d.verbCursor = 0
+        }
+        else -> h.neue.note = Note("Empty. Shift Enter picks a card up; Enter here puts it down.")
+    }
+}
+
+/** Shift Enter: the focused card picked up (again: put back), to be put down where Enter is pressed next. */
+private fun pickFocus(h: NeueHolders) {
+    val d = h.duel
+    if (!d.byKeys) {
+        d.walk(DuelFocus.Dir.UP)
+        return
+    }
+    val uid = d.focusUid()
+    if (uid == null) {
+        h.neue.note = Note("Nothing here to pick up")
+        return
+    }
+    d.verbStrip = false
+    d.picked = if (d.picked == uid) null else uid
+}
+
+/**
+ * A number with the keys leading and no card just placed (1.0.87): the focused card into that zone. From the hand
+ * or a pile it does the obvious thing there (a monster Summoned, a Spell activated — a plain number is a Spell &
+ * Trap Zone for a card that goes in one); on the field it moves, as a drop would.
+ */
+private fun placeByKey(h: NeueHolders, uid: Int, kind: ZoneKind, index: Int) {
+    val d = h.duel
+    val s = d.shown?.state ?: return
+    val seat = d.seatFor(uid)
+    if (!s.solo && seat != d.bottom) {
+        h.neue.note = Note("That card is the other seat's")
+        return
+    }
+    if (s.placeOf(uid) is Place.Zone) {
+        val intent = DuelDrop.intent(s, uid, DropSpot.Zone(Place.Zone(seat, kind, index)), d.catalog)
+        if (intent.none) h.neue.note = Note("Nothing to do with it there") else d.act(intent.actions, seat)
+        return
+    }
+    val wants = DuelVerbs.zoneKind(s, seat, uid, DuelVerbs.default(s, seat, uid, d.catalog), d.catalog)
+    val k = if (kind == ZoneKind.MONSTER && wants == ZoneKind.SPELL) ZoneKind.SPELL else kind
+    d.verb(uid, DuelVerb.DEFAULT, zone = Place.Zone(seat, k, index))
 }

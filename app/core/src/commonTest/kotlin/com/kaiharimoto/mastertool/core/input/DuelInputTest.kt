@@ -51,6 +51,25 @@ class DuelInputTest {
     }
 
     @Test
+    fun commandModeWalksTheTableByKeys() {
+        // 1.0.87: the arrows walk the focus, Enter acts on it, Shift Enter picks up, I writes the coordinates.
+        assertEquals(DeskAction.DUEL_FOCUS_UP, DeskShortcuts.resolve(KeyChord("up"), duelling))
+        assertEquals(DeskAction.DUEL_FOCUS_LEFT, DeskShortcuts.resolve(KeyChord("left"), duelling))
+        assertEquals(DeskAction.DUEL_FOCUS_ROW_END, DeskShortcuts.resolve(KeyChord("right", shift = true), duelling))
+        assertEquals(DeskAction.DUEL_FOCUS_ACT, DeskShortcuts.resolve(KeyChord("enter"), duelling))
+        assertEquals(DeskAction.DUEL_PICK, DeskShortcuts.resolve(KeyChord("enter", shift = true), duelling))
+        assertEquals(DeskAction.DUEL_CHAT, DeskShortcuts.resolve(KeyChord("enter", ctrl = true), duelling))
+        assertEquals(DeskAction.DUEL_COORDINATES, DeskShortcuts.resolve(KeyChord("i"), duelling))
+        // A replay keeps its own arrows; the line and the chat keep theirs while typing.
+        assertEquals(DeskAction.REPLAY_BACK, DeskShortcuts.resolve(KeyChord("left"), duelling.copy(replaying = true)))
+        assertNull(DeskShortcuts.resolve(KeyChord("up"), chatting))
+        assertNull(DeskShortcuts.resolve(KeyChord("enter"), chatting))
+        assertNull(DeskShortcuts.resolve(KeyChord("i"), chatting))
+        // M is the voice's hold key, not the focus's.
+        assertTrue(DeskShortcuts.all.none { it.chord == KeyChord("m") && it.action.name.startsWith("DUEL_FOCUS") })
+    }
+
+    @Test
     fun noChordMeansTwoThingsWhileDuelling() {
         for (context in listOf(duelling, chatting, duelling.copy(overlayOpen = true))) {
             DeskShortcuts.live(context).groupBy { it.chord }.forEach { (chord, rows) ->

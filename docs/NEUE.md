@@ -3324,8 +3324,34 @@ an undo, a replay or a seat change, and only the turn player attacks (`DuelVerbs
 the table before it stops Ai; a held opening step Ai answered is not made again; several attackers at once say they go one
 at a time; Ai offers five answers at most at its table, so No response always has a digit.
 
+**Command mode: walking the table** (1.0.87, kai: "I can win with just typing too and not a mouse"):
+- **A focus the arrows walk** (`core/layout/DuelFocus`, tested on real layouts in `DuelFocusTest`): a logical grid over the
+  table as `DuelLayout` draws it — their hand, their S/T row (their Deck and Extra Deck at its ends), their monsters (GY,
+  Field Zone), the shared row (the Banished piles, the Extra Monster Zones), your monsters, your S/T, your hand — each cell at
+  its column, a hand card's where the fan puts it. ↑/↓ go to the nearest column in the next row (a tie to the middle), ←/→ along
+  it, `Shift ←/→` to the row's ends; empty zones are cells (cards are put down on them) and nothing wraps. The first press
+  starts on the card under the pointer, else your first card in hand, else `m1`. The focus goes with its card: summon `h2` and
+  it is on `m3`. A hand the table's eyes cannot see is walked — and drawn, `DuelFrames(secret)` — in `DuelView`'s veil order,
+  never its true one, so `oh5` is not "the card drawn last"; the tag names a card only when those eyes see it ("oh2 · in hand",
+  "os3 · set").
+- **Keys follow the focus once the keys moved last** (`Duels.lastInput`, `keyTarget()`): the verb keys, Space and the numbers act
+  on the focused card (focus `h2`, press `3`: the obvious thing into zone 3; a field card moves there). The pointer moving over
+  the table hands them back to the hover, exactly as before, and puts the ring away. The inspector reads the focus (`reading()`).
+- **Enter acts** (`DUEL_FOCUS_ACT`): on a card it opens the verb strip as a menu (↑/↓ choose — the chip in ink is the one Enter
+  does — Enter applies, each verb's own key still works, Esc closes); on a pile it opens it and the arrows walk its rows
+  (`DuelFrames.stripGrid`), Esc closing back to the pile; with an attack or an attach waiting it aims at the focus. **Shift
+  Enter picks** the focused card up; arrow anywhere and Enter puts it down there through `DuelDrop.intent`, so placing is two
+  keys, and the tag says what Enter will do ("m3 · Enter: Normal Summon"). With no focus, or Ai's question in the log, Enter is
+  what it was (the picked answers, else the chat); the chat also has **Ctrl Enter** of its own.
+- **Esc** backs out one layer: the menu, the open pile, what was picked, and — after every older layer — the focus itself.
+- **The ring and the coordinates**: 2 dp of paper then 2 dp of ink outside the card (or the empty zone's outline), its tag above;
+  it moves nothing and fits nothing. **I** (`DuelPrefs.coordinates`, also in Table ▾) writes every place's coordinate faintly at
+  its corner, as a chessboard's edge: `h1…`, `m1–m5`, `s1–s5`, `e1`/`e2` by absolute index, `fz`, `gy`, `ban`, `ex`, `dk`, an
+  open pile's `gy1…`, the other seat's with `o` (`DuelFocus.label`, the notation the command line reads).
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
---duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared`.
+--duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared --duel-focus=m3 --duel-coords=true
+--duel-focus-menu=true --duel-pick=h2`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

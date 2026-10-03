@@ -114,6 +114,8 @@ class OldDataTest {
         assertEquals(false, d.facing)
         assertEquals(true, d.keysShown)
         assertEquals(false, d.aiBothSeats)
+        // 1.0.87: duel settings from before Command mode read with the coordinates off.
+        assertEquals(false, d.coordinates)
         assertEquals(
             com.kaiharimoto.mastertool.core.duel.Place.Zone(1, com.kaiharimoto.mastertool.core.duel.ZoneKind.EMZ, 0),
             com.kaiharimoto.mastertool.core.duel.text.DuelCommand.zoneOf("el", 1),

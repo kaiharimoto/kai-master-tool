@@ -313,6 +313,10 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
             })
         }
         if (!s.solo && !online) add(MenuEntry("Sit at the other seat", hint = key(DeskAction.DUEL_SWAP)) { duels.swap() })
+        // Command mode (1.0.87): every place's coordinate, as a chessboard's edge.
+        add(MenuEntry(if (prefs.coordinates) "Hide the coordinates" else "Show the coordinates", hint = key(DeskAction.DUEL_COORDINATES)) {
+            neue.update { it.copy(duel = it.duel.copy(coordinates = !it.duel.coordinates)) }
+        })
         // Turns that start themselves (1.0.86); the help for it is in the Ai and combos dialog.
         if (!online) {
             add(MenuEntry(if (prefs.autoDraw) "Start turns in the Draw Phase" else "Start turns in Main Phase 1, drawn") {
