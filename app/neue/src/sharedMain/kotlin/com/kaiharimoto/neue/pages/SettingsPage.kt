@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.neue.ai.rename
+import com.kaiharimoto.neue.ai.openWizard
+import com.kaiharimoto.neue.ai.use
+import com.kaiharimoto.neue.ai.forget
 import androidx.compose.foundation.background
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.cursor.cursorPointer

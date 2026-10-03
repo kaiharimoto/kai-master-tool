@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai.reader
 
+import com.kaiharimoto.neue.ai.askTune
+import com.kaiharimoto.neue.ai.writing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background

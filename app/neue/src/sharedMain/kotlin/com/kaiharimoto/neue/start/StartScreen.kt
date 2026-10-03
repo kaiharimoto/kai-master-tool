@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.start
 
+import com.kaiharimoto.neue.ai.voiceModel
+import com.kaiharimoto.neue.ai.downloadForDuel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll

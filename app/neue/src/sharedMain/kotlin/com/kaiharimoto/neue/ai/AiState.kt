@@ -13,17 +13,13 @@ import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
-import com.kaiharimoto.mastertool.core.ai.mcp.McpServerCore
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
-import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
 import com.kaiharimoto.mastertool.core.ai.skills.Skill
 import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
-import com.kaiharimoto.mastertool.core.ai.wire.OpenAiChatBackend
-import com.kaiharimoto.mastertool.core.ai.wire.OpenAiEndpoint
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
@@ -35,7 +31,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 
@@ -77,14 +72,14 @@ class Question(
  * window swapped for immersive mode keeps the conversation mid-sentence.
  */
 class AiState(internal val h: NeueHolders) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     val files = AiFiles(File(Platform.dataDir, "ai"))
     internal val host = AiHost(h, this)
-    private val http by lazy { HttpClientFactory.create() }
+    internal val http by lazy { HttpClientFactory.create() }
 
     /** The conversation on screen. */
     var session by mutableStateOf<AiSession?>(null)
-        private set
+        internal set
 
     /** The answer being written, word by word. */
     var streaming by mutableStateOf("")
@@ -99,20 +94,20 @@ class AiState(internal val h: NeueHolders) {
         private set
 
     var running by mutableStateOf(false)
-        private set
+        internal set
 
     /** What went wrong last, and whether the connection is the problem (the wizard can fix it). */
     var problem by mutableStateOf<Pair<String, Boolean>?>(null)
-        private set
+        internal set
 
     var status by mutableStateOf<String?>(null)
-        private set
+        internal set
 
     var confirm by mutableStateOf<Confirm?>(null)
         private set
 
     var question by mutableStateOf<Question?>(null)
-        private set
+        internal set
 
     /** The model's thinking as it streams (1.0.47), shown above the words it leads to. */
     var reasoning by mutableStateOf("")
@@ -139,21 +134,6 @@ class AiState(internal val h: NeueHolders) {
     /** Where the wizard is, kept while the panel closes. */
     var wizard by mutableStateOf(WizardState(AiPrefs.DEFAULT_NAME))
 
-    /**
-     * Opens the wizard in the panel, from its start unless it is part-way through. With a
-     * connection already made, the start is the connections themselves (1.0.59): use one, or add.
-     */
-    fun openWizard(adding: Boolean = false) {
-        if (wizard.step == com.kaiharimoto.mastertool.core.ai.providers.SetupStep.NAME || adding) {
-            wizard.name = name
-            wizard.saved = configured && !adding
-            if (adding && configured) wizard.step = com.kaiharimoto.mastertool.core.ai.providers.SetupStep.CONNECT
-        }
-        wizardOpen = true
-        historyOpen = false
-        if (!prefs.panelOpen) h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true)) }
-    }
-
     /** The memory file open in "What it knows", by its path under the folder; null when closed. */
     var memoryOpen by mutableStateOf<String?>(null)
 
@@ -177,9 +157,9 @@ class AiState(internal val h: NeueHolders) {
     /** The release phase this build has shipped: which tools it offers (`AiTools.offered`). */
     val tools: List<ToolSpec> get() = AiTools.offered(PHASE)
 
-    private var job: Job? = null
-    private var backend: Pair<String, ModelBackend>? = null
-    private var mcp: McpHandle? = null
+    internal var job: Job? = null
+    internal var backend: Pair<String, ModelBackend>? = null
+    internal var mcp: McpHandle? = null
 
     // ---- the face (1.0.52) ------------------------------------------------------
 
@@ -276,294 +256,49 @@ class AiState(internal val h: NeueHolders) {
 
     /** An answer's claims are being checked. */
     var checking by mutableStateOf(false)
-        private set
+        internal set
 
     /** The next answer is the correction a check asked for, and is not checked itself. */
-    private var correcting = false
-
-    /**
-     * The last answer checked (1.0.58, kai's pick for "frontier level"): a helper with a fresh
-     * mind and only the tools that look up card text, rulings and numbers lists every claim and
-     * checks it. The result is kept with the conversation and drawn under the answer; if a claim
-     * was wrong, the model is told what the check found and writes a short correction. API
-     * connections only — a plan's command-line app runs its own loop.
-     */
-    private fun checkLastAnswer() {
-        if (correcting) {
-            correcting = false
-            return
-        }
-        if (!prefs.factCheck || AiState.PHASE < 3) return
-        val s = session ?: return
-        if (s.mode != AiSession.MODE_CHAT) return
-        val at = s.turns.indexOfLast { it.role == Role.ASSISTANT && it.text.isNotBlank() }
-        if (at < 0 || s.checks.any { it.turn == at }) return
-        val reply = s.turns[at].text
-        if (!com.kaiharimoto.mastertool.core.ai.check.FactCheck.worthChecking(reply)) return
-        val connection = prefs.connection ?: return
-        val model = runCatching { backendFor(connection) }.getOrNull() ?: return
-        if (model.runsOwnLoop) return
-        checking = true
-        scope.launch {
-            try {
-                val index = h.builder.index
-                val cards = com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown.cards(reply).mapNotNull { name ->
-                    (index.byName(name) ?: (com.kaiharimoto.mastertool.core.ai.CardWords.resolve(name, index) as? com.kaiharimoto.mastertool.core.ai.Resolved.Found)?.card)
-                        ?.let { it.name to it.description }
-                }
-                val look = setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
-                val runner = com.kaiharimoto.mastertool.core.ai.ToolRunner { call ->
-                    if (call.name.removePrefix("mcp__neue__") !in look) {
-                        Part.ToolResult(call.id, call.name, "A checker can only look up cards, rulings and numbers.", isError = true)
-                    } else {
-                        host.run(call)
-                    }
-                }
-                var said = ""
-                var spent = com.kaiharimoto.mastertool.core.ai.Usage()
-                AgentLoop(model, runner, maxSteps = 8, now = System::currentTimeMillis, budget = budgetFor(connection))
-                    .run(
-                        TurnRequest(
-                            com.kaiharimoto.mastertool.core.ai.check.FactCheck.CHECKER,
-                            listOf(ChatTurn.user(com.kaiharimoto.mastertool.core.ai.check.FactCheck.brief(reply, cards))),
-                            tools.filter { it.name in look },
-                            connection.model,
-                            "low",
-                        ),
-                    )
-                    .collect { e ->
-                        when (e) {
-                            is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
-                            is AgentEvent.Done -> spent = e.usage
-                            else -> Unit
-                        }
-                    }
-                val claims = com.kaiharimoto.mastertool.core.ai.check.FactCheck.parse(said)
-                if (claims.isEmpty()) return@launch
-                val check = com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check(at, claims)
-                val now = session?.takeIf { it.id == s.id } ?: return@launch
-                val next = now.copy(checks = now.checks + check, usage = now.usage + spent)
-                commit(next)
-                // Wrong: the model says so itself, briefly, in a reply of its own (the answer above is never rewritten).
-                if (check.wrong.isNotEmpty() && !running) {
-                    correcting = true
-                    val ask = ChatTurn(Role.USER, listOf(Part.Context(com.kaiharimoto.mastertool.core.ai.check.FactCheck.correction(check))), System.currentTimeMillis())
-                    val corrected = next.copy(turns = next.turns + ask, updatedAt = System.currentTimeMillis())
-                    commit(corrected)
-                    respond(corrected, connection)
-                }
-            } finally {
-                checking = false
-            }
-        }
-    }
+    internal var correcting = false
 
     // ---- voice (1.0.57) ---------------------------------------------------------
 
     /** The microphone is open. */
     var hearing by mutableStateOf(false)
-        private set
+        internal set
 
     /** What was said is being written out. */
     var transcribing by mutableStateOf(false)
-        private set
+        internal set
 
     /** How loud the microphone is now, 0–1, for the composer's meter. */
     var voiceLevel by mutableStateOf(0f)
-        private set
+        internal set
 
     /** Talk mode: listen, answer aloud, listen again, until it is ended. */
     var talkMode by mutableStateOf(false)
-        private set
+        internal set
 
     /** A reply is being spoken aloud. */
     var aloud by mutableStateOf(false)
-        private set
+        internal set
 
     /** The desk's speech model is missing: the dialog asking to download it is open. */
     var voiceAsk by mutableStateOf(false)
 
     /** The speech model downloading, 0–1; null when not. */
     var voiceDownload by mutableStateOf<Float?>(null)
-        private set
+        internal set
 
-    private var voiceJob: Job? = null
-    private var speakJob: Job? = null
-
-    val voiceModel: com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
-        get() = com.kaiharimoto.mastertool.core.ai.voice.VoiceModel.of(prefs.voiceModel)
-
-    /** The words a transcriber is primed with: the open deck's cards, and the game's. */
-    private fun hints(): String {
-        val index = h.builder.index
-        val deck = h.builder.deck
-        val names = (deck.main + deck.extra + deck.side).distinct().mapNotNull { index.byId(it)?.name }
-        return com.kaiharimoto.mastertool.core.ai.voice.Hints.prompt(names)
-    }
-
-    /** The microphone on or off: the words go into the composer, to read over before sending. */
-    fun toggleVoice() {
-        if (hearing || transcribing) com.kaiharimoto.neue.platform.Voice.stopListening() else listen(send = false)
-    }
-
-    /**
-     * Listening (1.0.57): the level as it goes, the words into the draft — after whatever was
-     * already written — and in talk mode sent as soon as they are written out.
-     */
-    fun listen(send: Boolean) {
-        val voice = com.kaiharimoto.neue.platform.Voice
-        if (hearing || transcribing || voiceJob?.isActive == true) return
-        if (!voice.canListen) {
-            h.neue.note = com.kaiharimoto.neue.Note("No microphone could be found")
-            if (talkMode) talkMode = false
-            return
-        }
-        if (voice.needsModel(voiceModel)) {
-            voiceAsk = true
-            return
-        }
-        stopSpeaking()
-        val before = draft.trimEnd()
-        fun joined(words: String) = if (before.isEmpty()) words.trim() else "$before ${words.trim()}"
-        hearing = true
-        // One microphone (1.0.87): the duel's push-to-talk, if it listens, is stopped first; holding M later takes it back.
-        voiceJob = com.kaiharimoto.neue.platform.Mic.listen(scope, "ai", onLost = { micTaken() }) {
-            try {
-                voice.listen(voiceModel, hints()).collect { heard ->
-                    when (heard) {
-                        is com.kaiharimoto.neue.platform.Heard.Level -> voiceLevel = heard.rms
-                        is com.kaiharimoto.neue.platform.Heard.Partial -> draft = joined(heard.text)
-                        com.kaiharimoto.neue.platform.Heard.Transcribing -> {
-                            hearing = false
-                            transcribing = true
-                        }
-                        is com.kaiharimoto.neue.platform.Heard.Final -> {
-                            draft = joined(heard.text)
-                            if (send) send(draft) else focusTick++
-                        }
-                        is com.kaiharimoto.neue.platform.Heard.Failed -> {
-                            if (talkMode) {
-                                talkMode = false
-                                notice = "Talk mode ended: ${heard.reason.replaceFirstChar { it.lowercase() }}"
-                            } else {
-                                h.neue.note = com.kaiharimoto.neue.Note(heard.reason.removeSuffix("."))
-                            }
-                        }
-                    }
-                }
-            } finally {
-                hearing = false
-                transcribing = false
-                voiceLevel = 0f
-            }
-        }
-    }
+    internal var voiceJob: Job? = null
+    internal var speakJob: Job? = null
 
     /**
      * The model asked for by the duel's push-to-talk (1.0.87): the same dialog, in the duel's words, and once it is
      * here nothing starts listening — the key was let go long ago — it is only read in, ready for the next hold.
      */
     var voiceForDuel by mutableStateOf(false)
-        private set
-
-    /** The download dialog, for Ai's voice or ([forDuel]) the duel's commands. */
-    fun askVoiceModel(forDuel: Boolean) {
-        if (voiceDownload != null) return
-        voiceForDuel = forDuel
-        voiceAsk = true
-    }
-
-    /** The model downloaded for the duel's commands with no dialog: the setup's "Duel by keys and voice" step said yes. */
-    fun downloadForDuel() {
-        if (voiceDownload != null) return
-        voiceForDuel = true
-        downloadVoiceModel()
-    }
-
-    /**
-     * Someone else took the microphone (1.0.87, the duel's M held): talk mode would only listen again over them,
-     * so it ends, and anything being said aloud stops.
-     */
-    fun micTaken() {
-        if (talkMode) {
-            talkMode = false
-            notice = "Talk mode ended: the duel's microphone is in use."
-        }
-        stopSpeaking()
-    }
-
-    /** The speech model, downloaded once with the person's yes; then the microphone opens (not for the duel: see [voiceForDuel]). */
-    fun downloadVoiceModel() {
-        voiceAsk = false
-        val model = voiceModel
-        val forDuel = voiceForDuel
-        voiceForDuel = false
-        voiceDownload = 0f
-        scope.launch {
-            val done = com.kaiharimoto.neue.platform.Voice.download(model) { bytes -> voiceDownload = (bytes.toFloat() / model.bytes).coerceIn(0f, 1f) }
-            voiceDownload = null
-            done.fold(
-                {
-                    if (forDuel) {
-                        h.neue.note = com.kaiharimoto.neue.Note("Voice is ready. Hold M, or the microphone, to speak a command")
-                        h.duelVoice.prewarm()
-                    } else {
-                        listen(send = talkMode)
-                    }
-                },
-                {
-                    talkMode = false
-                    h.neue.note = com.kaiharimoto.neue.Note("The speech model could not be downloaded: ${it.message ?: "try again"}")
-                },
-            )
-        }
-    }
-
-    /** Talk mode on or off (1.0.57): a conversation out loud. */
-    fun toggleTalk() {
-        if (talkMode) {
-            endTalk()
-        } else {
-            if (!configured) {
-                openWizard()
-                return
-            }
-            talkMode = true
-            notice = if (com.kaiharimoto.neue.platform.Voice.canSpeak || prefs.speakReplies == com.kaiharimoto.mastertool.core.prefs.AiPrefs.SPEAK_NEVER) null
-            else "This computer has no voice to speak with, so replies stay on screen."
-            listen(send = true)
-        }
-    }
-
-    fun endTalk() {
-        talkMode = false
-        com.kaiharimoto.neue.platform.Voice.stopListening()
-        stopSpeaking()
-    }
-
-    fun stopSpeaking() {
-        speakJob?.cancel()
-        speakJob = null
-        com.kaiharimoto.neue.platform.Voice.stopSpeaking()
-        aloud = false
-    }
-
-    /** In talk mode, after an answer: say it, then listen again. */
-    private fun answerAloud() {
-        val reply = session?.turns?.lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.text
-        speakJob = scope.launch {
-            val voice = com.kaiharimoto.neue.platform.Voice
-            if (reply != null && voice.canSpeak && prefs.speakReplies != com.kaiharimoto.mastertool.core.prefs.AiPrefs.SPEAK_NEVER) {
-                aloud = true
-                try {
-                    voice.speak(com.kaiharimoto.mastertool.core.ai.voice.Spoken.of(reply), prefs.speechRate)
-                } finally {
-                    aloud = false
-                }
-            }
-            if (talkMode) listen(send = true)
-        }
-    }
+        internal set
 
     // ---- pictures (1.0.55) -----------------------------------------------------
 
@@ -599,14 +334,6 @@ class AiState(internal val h: NeueHolders) {
 
     /** The system prompt a conversation on the connection in use would start with, for the studio's pictures. */
     fun previewSystem(): String = prefs.connection?.let { systemPrompt(it) }.orEmpty()
-
-    /** The studio's pictures of voice (1.0.57): listening at a level, talk mode, speaking aloud. */
-    fun previewVoice(listening: Boolean, level: Float, talk: Boolean, speaking: Boolean) {
-        hearing = listening
-        voiceLevel = level
-        talkMode = talk
-        aloud = speaking
-    }
 
     /** The studio's picture of pictures waiting in the composer. */
     fun previewAttached(list: List<Attachment>) {
@@ -693,7 +420,7 @@ class AiState(internal val h: NeueHolders) {
     }
 
     /** Starts the answer; false when it could not (no backend), so a caller never counts a cue that went nowhere. */
-    private fun respond(start: AiSession, connection: AiConnection): Boolean {
+    internal fun respond(start: AiSession, connection: AiConnection): Boolean {
         val model = runCatching { backendFor(connection) }.getOrElse {
             problem = (it.message ?: "Could not connect.") to true
             return false
@@ -881,239 +608,20 @@ class AiState(internal val h: NeueHolders) {
         send(brief.message())
     }
 
-    // ---- a helper with a fresh mind (1.0.47) --------------------------------------
-
-    /**
-     * A big reading job handed to a helper (`delegate`, after DeepSeek Harness's and Claude
-     * Code's sub-agents): the same model, a fresh history holding only [task], and only the
-     * tools that look — it reads twenty lists or a whole web and hands back one report, so
-     * the conversation carries the report, not the reading. API connections only: a CLI
-     * runs its own loop and has its own helpers.
-     */
-    suspend fun delegate(task: String, steps: Int): Result<String> = runCatching {
-        val connection = prefs.connection ?: error("No connection is set up.")
-        val model = backendFor(connection)
-        if (model.runsOwnLoop) error("A helper needs an API connection; on a plan's command-line app, do the reading yourself.")
-        val look = tools.filter { it.name in AiTools.readOnly }
-        val system = session?.system ?: systemPrompt(connection)
-        val ask = ChatTurn.user(
-            "You are a helper the assistant sent to do one job and report back. Nothing you say reaches the person directly; " +
-                "your final message is your report, so make it complete and plain: the facts, the numbers, the card names, the ids. " +
-                "You can only look, never change anything.\n\nThe job: " + task.trim(),
-        )
-        var report = ""
-        val runner = com.kaiharimoto.mastertool.core.ai.ToolRunner { call ->
-            if (call.name.removePrefix("mcp__neue__") !in AiTools.readOnly) {
-                Part.ToolResult(call.id, call.name, "A helper can only look; ${call.name} is not one of its tools.", isError = true)
-            } else {
-                host.run(call)
-            }
-        }
-        AgentLoop(model, runner, maxSteps = steps, now = System::currentTimeMillis, budget = budgetFor(connection))
-            .run(TurnRequest(system, listOf(ask), look, connection.model, "medium"))
-            .collect { e ->
-                when (e) {
-                    is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) report = e.turn.text
-                    is AgentEvent.Failed -> error(e.message)
-                    else -> Unit
-                }
-            }
-        report.ifBlank { error("The helper came back without a report.") }
-    }
-
     // ---- a long conversation (1.0.47) --------------------------------------------
-
-    /**
-     * How much a connection's model can read, in tokens (1.0.56: read off the model's name,
-     * `ContextWindows`, unless the person said): past most of it the oldest turns are summarised.
-     */
-    fun windowOf(connection: AiConnection): Int = connection.window?.takeIf { it > 0 } ?: com.kaiharimoto.mastertool.core.ai.ContextWindows.of(
-        connection.provider,
-        connection.model,
-        local = Providers.byId(connection.provider)?.kind == com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.LOCAL,
-    )
-
-    private fun budgetFor(connection: AiConnection): Int = windowOf(connection)
-
-    /** Whether the connection in use keeps its own history — a plan's command-line app — so the app cannot compact it. */
-    val ownsContext: Boolean
-        get() = prefs.connection?.let { Providers.byId(it.provider)?.wire.let { w -> w == Wire.CLAUDE_CLI || w == Wire.CODEX_CLI } } == true
-
-    /** The model's window for the connection in use, in tokens. */
-    val window: Int get() = prefs.connection?.let(::windowOf) ?: 0
-
-    /** What fills the conversation now, in tokens: the provider's count when it gave one, else an estimate. */
-    val contextUsed: Long
-        get() = session?.let { com.kaiharimoto.mastertool.core.ai.ContextBreakdown.total(it, tools) } ?: 0
-
-    /** Whether [contextUsed] is the provider's own count rather than an estimate. */
-    val contextMeasured: Boolean get() = (session?.context ?: 0) > 0
 
     /** The Context panel is open (1.0.56). */
     var contextOpen by mutableStateOf(false)
 
     /** A summary asked for (by Ai's `compact`, or while it was answering), made once the answer is done. */
-    private var pendingCompact: String? = null
-
-    /**
-     * [s] with its oldest turns folded into a summary the model writes, once they no longer
-     * fit — or now, when [force]d, keeping only the last few exchanges; [focus] says what the
-     * summary must keep. The summary is kept with the conversation, so it is written once.
-     */
-    private suspend fun summarizedIfLong(
-        s: AiSession,
-        model: ModelBackend,
-        connection: AiConnection,
-        budget: Int,
-        force: Boolean = false,
-        focus: String? = null,
-    ): AiSession {
-        val used = com.kaiharimoto.mastertool.core.ai.Compaction.estimate(s.system, s.sent, tools)
-        if (!force && used <= budget * com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARIZE_AT) return s
-        val keep = if (force) minOf((budget * 0.3).toInt(), used / 4) else (budget * 0.3).toInt()
-        val cut = com.kaiharimoto.mastertool.core.ai.Compaction.cutAt(s.turns, keep, from = s.summarized) ?: return s
-        if (cut <= s.summarized) return s
-        val summary = summarise(s, model, connection, cut, focus) ?: return s
-        val next = s.copy(summary = summary, summarized = cut, context = 0)
-        commit(next)
-        notice = null
-        return next
-    }
-
-    /** The conversation's turns before [cut], with what was summarised before, in the model's own summary. */
-    private suspend fun summarise(s: AiSession, model: ModelBackend, connection: AiConnection, cut: Int, focus: String?): String? {
-        status = "Summarising the start of this conversation to fit"
-        val earlier = buildString {
-            if (s.summary.isNotBlank()) appendLine("Summary so far: ${s.summary}\n")
-            append(com.kaiharimoto.mastertool.core.ai.Compaction.transcript(s.turns.subList(s.summarized.coerceAtMost(cut), cut)))
-        }
-        val keep = focus?.trim()?.takeIf { it.isNotEmpty() }?.let { "\n\nThe person asked that the summary keep: $it" }.orEmpty()
-        val ask = ChatTurn.user(com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARY_ASK + keep + "\n\n" + earlier)
-        var summary = ""
-        runCatching {
-            model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).collect { e ->
-                if (e is com.kaiharimoto.mastertool.core.ai.BackendEvent.Finished) {
-                    summary = e.turn?.text?.ifBlank { null } ?: e.text
-                    e.usage?.let { u -> session?.let { commit(it.copy(usage = it.usage + u)) } }
-                }
-            }
-        }
-        status = null
-        return summary.trim().takeIf { it.isNotEmpty() }
-    }
-
-    /**
-     * The start of the conversation summarised now (1.0.56, the Context panel's Compact now, or
-     * Ai's own `compact`): all but the last few exchanges, keeping [focus]. Waits for an answer
-     * under way to finish first.
-     */
-    fun compactNow(focus: String? = null) {
-        if (running) {
-            pendingCompact = focus.orEmpty()
-            return
-        }
-        val s = session ?: return
-        val connection = prefs.connection ?: return
-        if (ownsContext) {
-            notice = "${Providers.byId(connection.provider)?.label ?: "The command-line app"} keeps its own history and compacts it itself."
-            return
-        }
-        val model = runCatching { backendFor(connection) }.getOrElse {
-            problem = (it.message ?: "Could not connect.") to true
-            return
-        }
-        running = true
-        job = scope.launch {
-            try {
-                val next = summarizedIfLong(s, model, connection, budgetFor(connection), force = true, focus = focus)
-                notice = if (next.summarized > s.summarized) "The start of the conversation was summarised: ${next.summarized} messages in a few paragraphs." else "There was not enough to summarise yet."
-            } finally {
-                running = false
-                status = null
-                job = null
-            }
-        }
-    }
-
-    /** Every old tool result sent cut short from now on (1.0.56): the fastest room there is, and it costs nothing. */
-    fun clearToolResults() {
-        val s = session ?: return
-        commit(s.copy(clearedBefore = s.turns.size, context = 0))
-        notice = "Old tool results are sent cut short from now on; the conversation keeps them whole."
-    }
-
-    /**
-     * A new conversation that carries this one's summary (1.0.56): the room of a fresh start
-     * without losing the thread.
-     */
-    fun startFresh() {
-        val s = session ?: return
-        val connection = prefs.connection ?: return
-        if (s.turns.isEmpty() || running) return
-        if (ownsContext) {
-            newChat()
-            return
-        }
-        val model = runCatching { backendFor(connection) }.getOrElse {
-            problem = (it.message ?: "Could not connect.") to true
-            return
-        }
-        running = true
-        job = scope.launch {
-            try {
-                val summary = summarise(s, model, connection, s.turns.size, null)
-                running = false
-                newChat()
-                if (summary != null) session?.let { commit(it.copy(summary = summary, carriedFrom = s.id)) }
-                notice = if (summary != null) "A fresh conversation, carrying a summary of the last one." else "A fresh conversation; the summary could not be written."
-            } finally {
-                running = false
-                status = null
-                job = null
-            }
-        }
-    }
-
-    /** What `context_status` tells Ai, and the Context panel shows in words. */
-    fun contextReport(): String {
-        val s = session ?: return "No conversation yet."
-        val used = contextUsed
-        val w = window
-        val words = com.kaiharimoto.mastertool.core.ai.ContextWindows::words
-        return buildString {
-            if (ownsContext) {
-                appendLine("This connection's app keeps its own history and compacts it itself; the numbers below are the app's estimate.")
-            }
-            appendLine(
-                "Context: ${words(used)} of ${words(w.toLong())} tokens" + (if (w > 0) " (${used * 100 / w}%)" else "") +
-                    if (contextMeasured) ", as the provider counted last round." else ", estimated.",
-            )
-            com.kaiharimoto.mastertool.core.ai.ContextBreakdown.of(s, tools, s.context).forEach { appendLine("- ${it.label}: ${words(it.tokens)}") }
-            if (s.summarized > 0) appendLine("The first ${s.summarized} messages are summarised (${s.summary.length} characters); recall finds their words.")
-            if (s.carriedFrom != null) appendLine("This conversation carries on from an earlier one, whose summary it holds.")
-            if (s.clearedBefore > 0) appendLine("Tool results before message ${s.clearedBefore} are sent cut short.")
-            appendLine("Spent in this conversation: ${words(s.usage.read)} read, ${words(s.usage.output)} written" + (s.usage.costUsd?.let { ", about $" + "%.2f".format(it) }.orEmpty()) + ".")
-        }.trimEnd()
-    }
+    internal var pendingCompact: String? = null
 
     // ---- learning (phase 3) ----------------------------------------------------
 
     /** What Fine Tuning or a reflection changed in memory, waiting on the person's Keep or Undo. */
     var review by mutableStateOf<List<com.kaiharimoto.mastertool.core.ai.memory.MemoryChange>?>(null)
-        private set
-    private var reviewBefore: Map<String, String?> = emptyMap()
-
-    /** The memory files as they stand, by path: what a review compares against. */
-    private fun snapshot(): Map<String, String?> {
-        val paths = buildSet {
-            add(MemoryKind.USER.file)
-            add(MemoryKind.AGENT.file)
-            files.memoryFiles().forEach { add(it.relativeTo(files.root).invariantSeparatorsPath) }
-            host.scope()?.path?.let(::add)
-            h.builder.deckId?.let { add(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(it)) }
-        }
-        return paths.associateWith { files.read(it) }
-    }
+        internal set
+    internal var reviewBefore: Map<String, String?> = emptyMap()
 
     /** The Fine Tuning launcher is open: which way, and how hard (1.0.48). */
     var tuneAsk by mutableStateOf(false)
@@ -1121,148 +629,22 @@ class AiState(internal val h: NeueHolders) {
     /** The way the launcher opens on, when something asked for one (Refactor, from the guide). */
     var tuneMode by mutableStateOf<String?>(null)
 
-    /** Opens the Fine Tuning launcher, on [mode] when given. */
-    fun askTune(mode: String? = null) {
-        tuneMode = mode
-        tuneAsk = true
-    }
-
-    /**
-     * Fine Tuning (1.0.48, kai: "for me to teach it how to play my deck and have it ask me
-     * questions about my deck … or have the AI teach itself by reading the cards and going
-     * online"): a conversation of its own about the deck open in the builder, [study] or
-     * taught, at [intensity]; what it learns goes to the deck's guide.
-     */
-    fun startTuning(mode: String, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity) {
-        if (PHASE < 3) return
-        tuneAsk = false
-        val connection = prefs.connection ?: run {
-            openWizard()
-            return
-        }
-        val deck = h.builder.deckName
-        if (h.builder.deckId == null) {
-            h.neue.note = com.kaiharimoto.neue.Note("Save the deck first: Fine Tuning writes a guide to a saved deck")
-            return
-        }
-        stop()
-        h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true, tuneIntensity = intensity.id)) }
-        wizardOpen = false
-        historyOpen = false
-        demoOpen = false
-        tuneBefore = snapshot()
-        lastReport = null
-        val deckId = h.builder.deckId
-        // The guide's size now: the run may add its intensity's room to it, no more (1.0.66).
-        guideStart = if (mode in AiSession.DECK_MODES && deckId != null) Triple(files.memory(MemoryKind.GUIDE, deckId, deck).used, intensity.guideBudget, intensity.label) else null
-        session = begin(connection, mode)
-        val room = com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.brief(intensity)
-        send(
-            when (mode) {
-                AiSession.MODE_STUDY -> "Study “$deck” yourself, and think out loud so I can learn with you. Intensity: ${intensity.label} — ${intensity.studies} $room"
-                AiSession.MODE_PRINCIPLES -> "Learn “$deck” from first principles: its card text and the rules, no guides or lists. Work out its goals and how its cards pair, " +
-                    "interact and connect, and think out loud so I can learn with you. Intensity: ${intensity.label} — about ${intensity.steps} rounds. $room"
-                AiSession.MODE_REFACTOR -> refactorBrief(deck, deckId, intensity)
-                AiSession.MODE_WRITE -> writeBrief(deck, deckId, intensity)
-                else -> "Let's do Fine Tuning on “$deck”: I'll teach you how I play it. Intensity: ${intensity.label}, about ${intensity.questions} questions. $room"
-            },
-        )
-    }
-
-    /** The writing session's first message: the intensity's chapters, and what is written already. */
-    private fun writeBrief(deck: String, deckId: String?, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity): String {
-        val book = deckId?.let { com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.read(files.read(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(it))) }
-        val scope = when (intensity) {
-            com.kaiharimoto.mastertool.core.ai.TuneIntensity.QUICK -> "chapters 1 to 4 and 7, the main lines only"
-            com.kaiharimoto.mastertool.core.ai.TuneIntensity.STANDARD -> "every chapter but 9 to 11, every line you know"
-            com.kaiharimoto.mastertool.core.ai.TuneIntensity.DEEP -> "all eleven chapters, every line, every matchup in the field, every card"
-        }
-        val sofar = when {
-            book == null || book.chapters.isEmpty() -> "Nothing is written yet."
-            else -> "Written so far: ${book.chapters.count { it.written }} of ${book.chapters.size} chapters; continue from the outline."
-        }
-        return "Write the reader's guide for “$deck”: the book a player reads to master it. Intensity: ${intensity.label} — $scope. $sofar"
-    }
-
     /** Bumped when the open deck's book is written: the reader reads it again. */
     var bookVersion by mutableStateOf(0)
-        private set
-
-    fun bookChanged() {
-        bookVersion++
-    }
-
-    /** Opens the reader's guide (1.0.67) on [deckId], the builder's deck when not given. */
-    fun openBook(deckId: String? = null) {
-        val id = deckId ?: h.builder.deckId ?: run {
-            h.neue.note = com.kaiharimoto.neue.Note("Save the deck first: the guide belongs to a saved deck")
-            return
-        }
-        h.neue.reading = id
-    }
+        internal set
 
     /** Where the reader was in each deck's book, and the boxes ticked in it: kept while the app runs. */
     val bookPlaces = HashMap<String, Int>()
     val bookTicks = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
 
     /** The guide's size at the start of a Fine Tuning run, the run's room and its intensity's name; null outside one. */
-    private var guideStart: Triple<Int, Int, String>? = null
-
-    /** What the host checks a guide write against (1.0.66), while a Fine Tuning run is going. */
-    fun guideRoom(): Triple<Int, Int, String>? = guideStart?.takeIf { session?.mode in AiSession.DECK_MODES }
-
-    /** Refactor guide's first message: what the guide holds now, so Ai knows the size of the job. */
-    private fun refactorBrief(deck: String, deckId: String?, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity): String {
-        val text = deckId?.let { files.read(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(MemoryKind.GUIDE, it)) }
-        val doc = com.kaiharimoto.mastertool.core.ai.report.GuideDoc.parse(text)
-        val sections = doc.sections.joinToString(", ") { "${it.name} ${it.entries.size}" }
-        val used = deckId?.let { files.memory(MemoryKind.GUIDE, it, deck).used } ?: 0
-        val depth = when (intensity) {
-            com.kaiharimoto.mastertool.core.ai.TuneIntensity.QUICK -> "a quick pass: drop and merge, check only what looks wrong"
-            com.kaiharimoto.mastertool.core.ai.TuneIntensity.STANDARD -> "check the claims that matter against the cards"
-            com.kaiharimoto.mastertool.core.ai.TuneIntensity.DEEP -> "check every line and claim against the card text, step by step"
-        }
-        return "Refactor the guide for “$deck”: drop what is not helpful, sharpen what is, and put it in order. " +
-            "It has ${doc.entryCount} entries, ${com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.grouped(used)} characters ($sections). " +
-            "Intensity: ${intensity.label} — $depth."
-    }
-
-    /**
-     * Learn About You (1.0.54, kai: "the AI builds a profile of the user across sessions and
-     * interviews them about anything that would help the Ai understand what the user's goals and
-     * preferences are, as well as their workflow"): an interview about the person, not a deck, into
-     * USER.md — the memory in front of every conversation.
-     */
-    fun startProfile(intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity) {
-        if (PHASE < 3) return
-        profileAsk = false
-        val connection = prefs.connection ?: run {
-            openWizard()
-            return
-        }
-        stop()
-        h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true, tuneIntensity = intensity.id)) }
-        wizardOpen = false
-        historyOpen = false
-        demoOpen = false
-        tuneBefore = snapshot()
-        lastReport = null
-        session = begin(connection, AiSession.MODE_PROFILE)
-        val profile = files.entries(MemoryKind.USER)
-        // Where the profile is thin, so this interview starts there, not at the top of an outline (1.0.65).
-        val coverage = com.kaiharimoto.mastertool.core.ai.memory.ProfileCoverage.brief(com.kaiharimoto.mastertool.core.ai.memory.ProfileCoverage.of(profile))
-        send(
-            "Let's do Learn About You: interview me so you understand my goals, my preferences and how I work. " +
-                (if (profile.isNotBlank()) "Start from what you already know and fill the gaps. " else "") +
-                "$coverage Intensity: ${intensity.label}, about ${intensity.questions} questions.",
-        )
-    }
+    internal var guideStart: Triple<Int, Int, String>? = null
 
     /** Learn About You's launcher is open. */
     var profileAsk by mutableStateOf(false)
 
     /** Finish asked Ai to file its report; the session ends when that answer does. */
-    private var wrapping = false
+    internal var wrapping = false
 
     /** The report Ai filed in this session, when it did (the host sets it). */
     var lastReport by mutableStateOf<com.kaiharimoto.mastertool.core.ai.report.SessionReport?>(null)
@@ -1279,148 +661,7 @@ class AiState(internal val h: NeueHolders) {
     /** The living document open over the page: a deck's guide or the person's profile (1.0.54). */
     var docOpen by mutableStateOf<LivingDoc?>(null)
 
-    fun openGuide() {
-        val id = h.builder.deckId ?: run {
-            h.neue.note = com.kaiharimoto.neue.Note("Save the deck first: the guide belongs to a saved deck")
-            return
-        }
-        docOpen = LivingDoc.Guide(id, h.builder.deckName)
-    }
-
-    fun openProfile() {
-        docOpen = LivingDoc.Profile
-    }
-
-    private var tuneBefore: Map<String, String?>? = null
-
-    val tuning: Boolean get() = session?.mode.let { it in AiSession.DECK_MODES || it == AiSession.MODE_PROFILE || it == AiSession.MODE_REFACTOR || it == AiSession.MODE_WRITE }
-
-    /** Writing the reader's guide (1.0.67). */
-    val writing: Boolean get() = session?.mode == AiSession.MODE_WRITE
-
-    /** Rewriting the deck's guide (1.0.66). */
-    val refactoring: Boolean get() = session?.mode == AiSession.MODE_REFACTOR
-
-    /** Studying on its own rather than being taught. */
-    val studying: Boolean get() = session?.mode == AiSession.MODE_STUDY || session?.mode == AiSession.MODE_PRINCIPLES
-
-    /** Learning about the person rather than a deck. */
-    val profiling: Boolean get() = session?.mode == AiSession.MODE_PROFILE
-
-    /**
-     * Fine Tuning done: first, when the session taught Ai something and it has not filed its report,
-     * it is asked to (1.0.54) — the scores and the PDF come from that — then what it learned, to keep
-     * or undo, and an ordinary conversation.
-     */
-    fun finishTuning() {
-        val s = session
-        val asksReport = s != null && s.mode in AiSession.DECK_MODES && !running && !wrapping &&
-            !com.kaiharimoto.mastertool.core.ai.report.SessionQuestions.reported(s.turns) && s.turns.size > 2 && prefs.connection != null
-        if (asksReport) {
-            wrapping = true
-            send("We're finishing here. File your session report now with session_report — your honest scores and why — then say goodbye in one line.")
-            return
-        }
-        completeTuning()
-    }
-
-    private fun completeTuning() {
-        wrapping = false
-        guideStart = null
-        val ended = session
-        stop()
-        endReport = lastReport?.takeIf { r -> ended != null && ended.mode in AiSession.DECK_MODES && r.at >= ended.createdAt }
-        lastReport = null
-        val before = tuneBefore ?: snapshot()
-        tuneBefore = null
-        offerReview(before)
-        val connection = prefs.connection
-        session = if (connection != null) begin(connection) else null
-    }
-
-    private fun offerReview(before: Map<String, String?>) {
-        val after = snapshot()
-        // A book is JSON, not entries: its change is told section by section, and undone as the file it was.
-        fun isBook(path: String) = path.endsWith(".book.json")
-        val books = (before.keys + after.keys).filter(::isBook).distinct().mapNotNull { path ->
-            val (added, removed) = com.kaiharimoto.mastertool.core.ai.report.book.BookReview.diff(before[path], after[path])
-            com.kaiharimoto.mastertool.core.ai.memory.MemoryChange(path, added, removed).takeUnless { it.isEmpty }
-        }
-        val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before.filterKeys { !isBook(it) }, after.filterKeys { !isBook(it) }) + books
-        if (changes.isNotEmpty()) {
-            reviewBefore = before
-            review = changes
-        }
-    }
-
-    fun keepReview() {
-        review = null
-        reviewBefore = emptyMap()
-        endReport = null
-    }
-
-    /** Everything the review lists put back as it was. */
-    fun undoReview() {
-        val changed = review?.map { it.path }.orEmpty()
-        changed.forEach { path -> reviewBefore[path]?.let { files.write(path, it) } ?: files.delete(path) }
-        if (changed.any { it.endsWith(".book.json") }) bookChanged()
-        review = null
-        reviewBefore = emptyMap()
-        endReport = null
-    }
-
-    /**
-     * After a conversation, a short pass to keep what will matter (Hermes's nudge): the
-     * model reads the conversation back and writes durable facts to memory — and a
-     * skill, when it worked out a procedure. Quiet: a note says how many things were
-     * remembered, with Undo. Only for conversations long enough to teach something, and
-     * only on an API connection (a CLI would run a whole session for it).
-     */
-    private fun reflect(finished: AiSession) {
-        if (PHASE < 3 || finished.mode != AiSession.MODE_CHAT) return
-        if (finished.unreflected < REFLECT_AFTER) return
-        val connection = prefs.connection?.takeIf { it.id == finished.connection } ?: return
-        val model = runCatching { backendFor(connection) }.getOrNull()?.takeIf { !it.runsOwnLoop } ?: return
-        // Read once: a conversation reopened and left again is reflected on for what is new.
-        files.saveSession(finished.copy(reflected = finished.turns.size))
-        val transcript = finished.turns.drop(finished.reflected).filter { !it.isToolResults }.joinToString("\n") { t ->
-            (if (t.role == Role.USER) "Person: " else "$name: ") + t.text.take(1200)
-        }.takeLast(16_000)
-        val before = snapshot()
-        val allowed = tools.filter { it.name == "memory" || it.name == "skill_manage" || it.name == "memory_read" }
-        val request = TurnRequest(
-            finished.system,
-            listOf(
-                ChatTurn.user(
-                    "Our conversation just ended. Here it is:\n\n$transcript\n\n" +
-                        "Save to memory what will still matter next week about the person or about doing this job for them " +
-                        "(memory tool; replace what changed rather than adding duplicates). If you worked out a repeatable " +
-                        "procedure, write it as a skill (skill_manage). If nothing is worth keeping, do nothing. Then answer in one word: done.",
-                ),
-            ),
-            allowed,
-            connection.model,
-            "low",
-        )
-        scope.launch {
-            runCatching { AgentLoop(model, { call -> host.run(call) }, maxSteps = 6).run(request).collect { } }
-            val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before, snapshot())
-            if (changes.isNotEmpty()) {
-                val n = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(changes)
-                h.neue.note = com.kaiharimoto.neue.Note("$name remembered $n thing${if (n == 1) "" else "s"} from that conversation", "Undo", lastsMs = 10_000) {
-                    reviewBefore = before
-                    review = changes
-                    undoReview()
-                }
-            }
-        }
-    }
-
-    /** The studio's pictures of Fine Tuning: a question waiting, or a review to keep. */
-    fun previewTuning(asking: Question?, changes: List<com.kaiharimoto.mastertool.core.ai.memory.MemoryChange>?) {
-        question = asking
-        review = changes
-    }
+    internal var tuneBefore: Map<String, String?>? = null
 
     /** A conversation put on screen as it is, unsaved: the studio's pictures of the panel. */
     fun preview(sample: AiSession) {
@@ -1442,7 +683,7 @@ class AiState(internal val h: NeueHolders) {
         if (session?.id == id) session = null
     }
 
-    private fun begin(connection: AiConnection, mode: String = AiSession.MODE_CHAT): AiSession {
+    internal fun begin(connection: AiConnection, mode: String = AiSession.MODE_CHAT): AiSession {
         val now = System.currentTimeMillis()
         val s = AiSession(
             id = UUID.randomUUID().toString(),
@@ -1483,7 +724,7 @@ class AiState(internal val h: NeueHolders) {
 
     fun skills(): List<Skill> = Skills.merge(BuiltInSkills.upTo(PHASE), files.ownSkills())
 
-    private fun commit(next: AiSession) {
+    internal fun commit(next: AiSession) {
         session = next
         val snapshot = next
         scope.launch(Dispatchers.IO) { runCatching { files.saveSession(snapshot) } }
@@ -1536,121 +777,8 @@ class AiState(internal val h: NeueHolders) {
         if (backend?.second?.runsOwnLoop == true) activity = activity + line
     }
 
-    // ---- connections -----------------------------------------------------------
-
-    private fun backendFor(connection: AiConnection): ModelBackend {
-        val key = "${connection.id}:${connection.model}:${connection.baseUrl}:${connection.program}"
-        backend?.takeIf { it.first == key }?.let { return it.second }
-        val provider = Providers.byId(connection.provider) ?: error("Unknown provider ${connection.provider}")
-        val made: ModelBackend = when (provider.wire) {
-            Wire.ANTHROPIC -> AnthropicBackend(secret(connection) ?: error("No key saved for ${provider.label}."), connection.baseUrl)
-            Wire.OPENAI_COMPAT -> {
-                val base = connection.baseUrl?.takeIf { it.isNotBlank() } ?: provider.baseUrl ?: error("No server address.")
-                if (!Providers.plainHttpAllowed(base)) error("$base is not encrypted; use https, or a server on this machine or network.")
-                OpenAiChatBackend(http, OpenAiEndpoint(base, secret(connection), provider.headers, provider.sendsEffort), System::currentTimeMillis)
-            }
-            Wire.CLAUDE_CLI, Wire.CODEX_CLI -> {
-                if (!AiDesk.canRunCli) error("${provider.label} runs on the desktop app only.")
-                val program = connection.program ?: error("Set up ${provider.label} again: the app lost where it is installed.")
-                CliBackend(provider.wire, program, files.file("run"), mcpServer() ?: error("The app could not open its tools to ${provider.label}."))
-            }
-        }
-        (backend?.second as? AnthropicBackend)?.close()
-        backend = key to made
-        return made
-    }
-
-    /** The app's MCP server, started on first use by a CLI. */
-    private fun mcpServer(): McpHandle? {
-        mcp?.let { return it }
-        val core = McpServerCore(
-            tools = { tools },
-            call = { call -> withContext(Dispatchers.Main) { host.run(call) } },
-            serverName = "neue",
-            serverVersion = Platform.version,
-            instructions = "The tools of Neue Master Tool, a Yu-Gi-Oh! deck builder: read and change its decks, webs, siding plans and settings.",
-        )
-        mcp = AiDesk.startMcp { _, body -> core.handle(body) }
-        return mcp
-    }
-
-    fun secret(connection: AiConnection): String? = SecretStore.get(secretKey(connection.id))
-
-    fun secretKey(id: String) = "connection:$id"
-
-    /** A connection saved and made the one in use, its key (if any) in the secret store. */
-    fun connect(connection: AiConnection, key: String?) {
-        if (!key.isNullOrBlank()) SecretStore.put(secretKey(connection.id), key.trim())
-        h.neue.update { p ->
-            val others = p.ai.connections.filterNot { it.id == connection.id }
-            p.copy(ai = p.ai.copy(connections = others + connection, active = connection.id))
-        }
-        backend = null
-        wizardOpen = false
-        if (session?.connection != connection.id) newChat()
-    }
-
-    fun forget(connectionId: String) {
-        SecretStore.remove(secretKey(connectionId))
-        h.neue.update { p -> p.copy(ai = p.ai.copy(connections = p.ai.connections.filterNot { it.id == connectionId })) }
-        backend = null
-    }
-
-    /** A connection changed in place — its model, its label (quick settings, 1.0.54) — the conversation kept. */
-    fun tweak(connectionId: String, change: (AiConnection) -> AiConnection) {
-        h.neue.update { p -> p.copy(ai = p.ai.copy(connections = p.ai.connections.map { if (it.id == connectionId) change(it) else it })) }
-        backend = null
-    }
-
-    fun use(connectionId: String) {
-        h.neue.update { it.copy(ai = it.ai.copy(active = connectionId)) }
-        backend = null
-        newChat()
-    }
-
-    fun rename(to: String) {
-        val old = name
-        val clean = to.trim().take(AiPrefs.MAX_NAME).ifBlank { AiPrefs.DEFAULT_NAME }
-        if (clean == old) return
-        files.read(Persona.FILE)?.let { files.write(Persona.FILE, Persona.rename(it, old, clean)) }
-        h.neue.update { it.copy(ai = it.ai.copy(name = clean)) }
-        // The conversation on screen was begun under the old name, and its instructions are
-        // never rewritten (the cache): its next message says the new one (1.0.46).
-        if (session?.turns?.isNotEmpty() == true) renamedTo = clean
-    }
-
     /** A rename the conversation on screen has not been told of yet. */
-    private var renamedTo: String? = null
-
-    /** Ai off: every trace gone, nothing running, nothing listening. */
-    fun shutDown() {
-        stop()
-        mcp?.stop()
-        mcp = null
-        (backend?.second as? AnthropicBackend)?.close()
-        backend = null
-        wizardOpen = false
-    }
-
-    /**
-     * A library deck copied into a web: its notes go with it into the web's file, marked
-     * with its name, since from now on the web's notes are the ones read for it.
-     */
-    fun foldIntoWeb(deckId: String, deckName: String, webId: String) {
-        val deckNotes = files.read(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(MemoryKind.DECK, deckId)) ?: return
-        val deck = com.kaiharimoto.mastertool.core.ai.memory.AiMemory.parse(deckNotes)
-        if (deck.entries.isEmpty()) return
-        val webName = h.webs.library.byId(webId)?.name ?: "the web"
-        val web = files.memory(MemoryKind.WEB, webId, webName)
-        files.save(MemoryKind.WEB, webId, com.kaiharimoto.mastertool.core.ai.memory.AiMemory.fold(web, deck, deckName))
-    }
-
-    /** Memory, skills and conversations deleted; the connections stay. */
-    fun forgetEverything() {
-        stop()
-        files.forgetEverything()
-        session = null
-    }
+    internal var renamedTo: String? = null
 
     init {
         // While it works, on a phone or a tablet, a foreground service keeps the app's process and
