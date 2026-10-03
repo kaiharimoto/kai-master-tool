@@ -90,6 +90,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     suspend fun run(call: Part.ToolUse): Part.ToolResult {
         val spec = AiTools.named(call.name)?.takeIf { it in ai.tools }
             ?: return result(call, fail("There is no tool ${call.name} in this version of the app."))
+        // At the duel table only the table's tools answer — over a CLI too, whose MCP list is the whole catalogue (1.0.85).
+        if (ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL && spec.name !in AiTools.DUEL) {
+            return result(call, fail("${spec.name} is not used at the duel table."))
+        }
         if (OpenAiStream.BROKEN_ARGS in call.input) {
             return result(call, fail("The input for ${spec.name} arrived cut short or was not JSON. Send it again, whole."))
         }
@@ -261,7 +265,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         if (neue.page == Page.PREP) h.prep.active?.let { e -> add("Event being prepared for: “${e.name}” (id ${e.id}) on ${e.date}, tab ${h.prep.tab.title}; prep_state has the rest") }
         if (neue.page == Page.DUEL) h.duel.game?.let { g ->
             val d = neue.prefs.duel
-            add("Duel on the table: turn ${g.state.turn}, ${g.state.phase.label} Phase, ${if (g.state.solo) "one player's table" else "two seats"}; you play seat ${d.aiSeat} with ${d.aiKnowledge} knowledge; duel_state reads it, the duel-table skill says how")
+            add("Duel on the table: turn ${g.state.turn}, ${g.state.phase.label} Phase, ${if (g.state.solo) "one player's table" else "two seats"}; you play seat ${d.aiSeat} with ${d.aiKnowledge} knowledge; duel_state reads it")
         }
         if (neue.page == Page.PRESENT) h.present.open?.let { p ->
             add("Presentation open: “${p.name}” (id ${p.id}), ${p.slides.size} slides, on slide ${h.present.slideIndex + 1}${p.deck?.let { d -> "; profiles the deck “${d.name}”" } ?: ""}; present_state has the outline")

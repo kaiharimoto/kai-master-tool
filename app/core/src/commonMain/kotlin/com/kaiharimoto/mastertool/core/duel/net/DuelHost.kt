@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.DuelView
 import com.kaiharimoto.mastertool.core.duel.Outcome
+import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ResponseWindow
 import com.kaiharimoto.mastertool.core.duel.SeatState
@@ -44,13 +45,36 @@ object DuelHost {
             return byVeil[ref] ?: ref.also { problem = "That card has moved out of reach" }
         }
         fun place(p: Place): Place = if (p is Place.Under) p.copy(host = uid(p.host)) else p
+        // A host card the guest cannot see stays out of its sight (1.0.85, the red team's second pass): it may go to
+        // its owner's own piles or side of the field — destroyed, banished, milled — but never to the guest's side,
+        // into the guest's hand, or face-up by a flip the guest makes.
+        fun hidden(u: Int): Boolean = s.cards[u]?.let { it.owner != seat && it.controller != seat && !DuelSight.sees(s, u, seat) } == true
+        fun refuse(why: String) { if (problem == null) problem = why }
+        // The turn player through the batch: two End Turns in one intent must not end the host's turn too.
+        var active = s.active
         val out = actions.map { a ->
             when (a) {
-                is DuelAction.Move -> a.copy(uid = uid(a.uid), to = place(a.to))
-                is DuelAction.Position -> a.copy(uid = uid(a.uid))
+                is DuelAction.Move -> a.copy(uid = uid(a.uid), to = place(a.to)).also { m ->
+                    val to = m.to
+                    if (hidden(m.uid) && when (to) {
+                            is Place.Zone -> to.seat == seat
+                            // A graveyard or banishment is its owner's whoever's pile it was dropped on.
+                            is Place.Pile -> to.seat == seat && to.kind != PileKind.GY && to.kind != PileKind.BANISHED
+                            is Place.Under -> true
+                            Place.Void -> false
+                        }
+                    ) refuse("That card is not yours to take")
+                }
+                is DuelAction.Position -> a.copy(uid = uid(a.uid)).also { p ->
+                    if (hidden(p.uid) && p.pos.faceUp) refuse("Only its controller turns that card face-up")
+                }
                 is DuelAction.Counter -> a.copy(uid = uid(a.uid))
-                is DuelAction.ChainAdd -> a.copy(seat = seat, uid = a.uid?.let(::uid), targets = a.targets.map(::uid))
-                is DuelAction.Target -> a.copy(seat = seat, from = a.from?.let(::uid), to = a.to.map(::uid))
+                is DuelAction.ChainAdd -> a.copy(seat = seat, uid = a.uid?.let(::uid), targets = a.targets.map(::uid)).also { c ->
+                    if (c.targets.any { inHandOrDeck(s, it, seat) }) refuse("A card in their hand or Deck cannot be targeted")
+                }
+                is DuelAction.Target -> a.copy(seat = seat, from = a.from?.let(::uid), to = a.to.map(::uid)).also { t ->
+                    if (t.to.any { inHandOrDeck(s, it, seat) }) refuse("A card in their hand or Deck cannot be targeted")
+                }
                 is DuelAction.Reveal -> a.copy(seat = seat, uids = a.uids.map(::uid)).also { r ->
                     // A guest reveals its own cards only: never the host's deck, hand or set cards (1.0.85).
                     if (problem == null && r.uids.any { u -> s.cards[u]?.let { it.owner != seat && it.controller != seat } != false }) {
@@ -65,7 +89,10 @@ object DuelHost {
                 is DuelAction.Decline -> a.copy(seat = seat)
                 is DuelAction.Lock -> a.copy(seat = seat)
                 // The turn player moves the phase; the other player asks (Propose).
-                is DuelAction.Phase, DuelAction.EndTurn -> a.also { if (problem == null && s.active != seat) problem = "It is not your turn: ask them to move on" }
+                is DuelAction.Phase, DuelAction.EndTurn -> a.also {
+                    if (active != seat) refuse("It is not your turn: ask them to move on")
+                    if (a is DuelAction.EndTurn && !s.solo) active = 1 - active
+                }
                 is DuelAction.Ping -> a.copy(seat = seat, uid = a.uid?.let(::uid))
                 // What a guest says or does as itself is always its own seat's.
                 is DuelAction.Draw -> a.copy(seat = seat)
@@ -84,6 +111,14 @@ object DuelHost {
             }
         }
         return if (problem != null) null to problem else out to null
+    }
+
+    /** Whether [uid] is the other seat's, in its hand or Deck: never a guest's target. */
+    private fun inHandOrDeck(s: DuelState, uid: Int, seat: Int): Boolean {
+        val c = s.cards[uid] ?: return false
+        if (c.owner == seat) return false
+        val p = s.placeOf(uid)
+        return p is Place.Pile && (p.kind == PileKind.HAND || p.kind == PileKind.DECK)
     }
 
     /**

@@ -644,14 +644,16 @@ class AiState(internal val h: NeueHolders) {
         val turn = ChatTurn.user(text, block, System.currentTimeMillis())
         val next = current.copy(turns = current.turns + turn, updatedAt = System.currentTimeMillis()).titled()
         commit(next)
-        respond(next, connection)
+        // An answer that never started is no cue (1.0.85): the turn is asked again once the connection works.
+        if (!respond(next, connection)) return null
         return next.id
     }
 
-    private fun respond(start: AiSession, connection: AiConnection) {
+    /** Starts the answer; false when it could not (no backend), so a caller never counts a cue that went nowhere. */
+    private fun respond(start: AiSession, connection: AiConnection): Boolean {
         val model = runCatching { backendFor(connection) }.getOrElse {
             problem = (it.message ?: "Could not connect.") to true
-            return
+            return false
         }
         running = true
         streaming = ""
@@ -732,6 +734,7 @@ class AiState(internal val h: NeueHolders) {
                 finish()
             }
         }
+        return true
     }
 
     /** After an answer, or Stop: what was written is kept, and no tool call is left without its result. */

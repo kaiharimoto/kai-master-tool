@@ -46,6 +46,8 @@ data class Watch(
     val until: String = UNTIL_DUEL,
     /** The turn it was set in. */
     val turn: Int = 0,
+    /** Set on the watcher's own turn: "this turn only" then lasts through the opponent's next turn. */
+    val own: Boolean = false,
 ) {
     companion object {
         const val BY_OPPONENT = "opponent"
@@ -133,7 +135,7 @@ object DuelTriggers {
      */
     fun make(
         on: List<String>, by: String, card: String, phase: String, atLeast: Int, note: String, once: Boolean,
-        until: String, turn: Int, id: Int,
+        until: String, turn: Int, id: Int, own: Boolean = false,
     ): Pair<Watch?, String?> {
         val kinds = on.map { it to Trigger.of(it) }
         val bad = kinds.filter { it.second == null }.map { it.first }
@@ -146,28 +148,47 @@ object DuelTriggers {
         if (u !in setOf(Watch.UNTIL_DUEL, Watch.UNTIL_TURN)) return null to "until is duel or turn."
         return Watch(
             id = id, on = kinds.mapNotNull { it.second?.key }.distinct(), by = b, card = card.trim(), phase = phase.trim(),
-            atLeast = atLeast.coerceAtLeast(0), note = note.trim().take(300), once = once, until = u, turn = turn,
+            atLeast = atLeast.coerceAtLeast(0), note = note.trim().take(300), once = once, until = u, turn = turn, own = own,
         ) to null
     }
 
     fun known(): String = Trigger.entries.joinToString(", ") { it.key }
 
     /** Watches still standing on [turn]: a turn's watch ends with its turn. */
-    fun alive(watches: List<Watch>, turn: Int): List<Watch> = watches.filter { it.until != Watch.UNTIL_TURN || it.turn == turn }
+    fun alive(watches: List<Watch>, turn: Int): List<Watch> =
+        watches.filter { it.until != Watch.UNTIL_TURN || it.turn == turn || (it.own && turn == it.turn + 1) }
 
     /**
      * What [entries] did, entry by entry from [before], as [watcher] could see it. Stamped entries (a draw's
      * cards, a shuffle's salt) fold exactly as the log does.
      */
-    fun happenings(before: DuelState, entries: List<DuelEntry>, catalog: DuelCatalog, watcher: Int): List<Happening> {
+    fun happenings(before: DuelState, entries: List<DuelEntry>, catalog: DuelCatalog, watcher: Int, actor: Int? = null): List<Happening> {
         val out = ArrayList<Happening>()
         var s = before
         for (e in entries) {
             val after = (DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok)?.state ?: continue
-            out += of(s, after, e, catalog, watcher)
+            // [actor]: who really made the move — the person destroying Ai's card moves it as its controller's
+            // seat in the log, but it is the person's move (1.0.85). Phases stay the turn player's.
+            out += of(s, after, e, catalog, watcher).map { h ->
+                if (actor != null && h.kind != Trigger.PHASE_ENTER && h.kind != Trigger.PHASE_LEAVE) h.copy(seat = actor) else h
+            }
             s = after
         }
         return out
+    }
+
+    /**
+     * Each seat's Summons this turn, counted as the watches count them (1.0.85: the turn tally counted monster
+     * Sets as Normal Summons and missed Flip Summons, so Nibiru fired a Summon early).
+     */
+    fun summonsThisTurn(game: com.kaiharimoto.mastertool.core.duel.DuelGame, catalog: DuelCatalog): IntArray {
+        val played = game.played
+        val start = played.indexOfLast { it.action is DuelAction.EndTurn } + 1
+        val n = IntArray(2)
+        happenings(game.stateAt(start), played.subList(start, played.size), catalog, 0)
+            .filter { it.kind == Trigger.SUMMON }
+            .forEach { if (it.seat in 0..1) n[it.seat]++ }
+        return n
     }
 
     /** What one entry did. */
@@ -229,10 +250,16 @@ object DuelTriggers {
                 Happening(Trigger.PHASE_LEAVE, before.active, null, null, before.phase, words),
                 Happening(Trigger.PHASE_ENTER, before.active, null, null, a.phase, words),
             )
-            is DuelAction.EndTurn -> listOf(
-                Happening(Trigger.PHASE_LEAVE, before.active, null, null, before.phase, words),
-                Happening(Trigger.PHASE_ENTER, after.active, null, null, after.phase, words),
-            )
+            // Ending the turn from Main or Battle passes through the End Phase (1.0.85: "a trap at the End
+            // Phase" never fired when the person ended the turn straight from Main Phase 2).
+            is DuelAction.EndTurn -> buildList {
+                add(Happening(Trigger.PHASE_LEAVE, before.active, null, null, before.phase, words))
+                if (before.phase != DuelPhase.END) {
+                    add(Happening(Trigger.PHASE_ENTER, before.active, null, null, DuelPhase.END, words))
+                    add(Happening(Trigger.PHASE_LEAVE, before.active, null, null, DuelPhase.END, words))
+                }
+                add(Happening(Trigger.PHASE_ENTER, after.active, null, null, after.phase, words))
+            }
             else -> emptyList()
         }
     }

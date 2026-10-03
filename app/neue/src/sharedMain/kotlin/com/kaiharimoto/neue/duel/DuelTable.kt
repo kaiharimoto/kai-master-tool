@@ -315,7 +315,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                             val update = {
                                 if (fromStrip && open != null && !stripLeft && !stripGround(stateNow, layoutNow, open).contains(p.x, p.y)) stripLeft = true
                                 val spot = dropAt(uid, p.x, p.y)
-                                carry = Carry(uid, gx, gy, p.x, p.y, spot, DuelDrop.intent(stateNow, uid, spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed))
+                                carry = Carry(uid, gx, gy, p.x, p.y, spot, DuelDrop.intent(stateNow, uid, spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed, duels.dragActor()))
                             }
                             update()
                             try {
@@ -342,7 +342,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                             duels.carrying = false
                             if (done != null && !done.intent.none) {
                                 val targets = if (uid in duels.selection && duels.selection.size > 1 && done.spot is DropSpot.Pile) duels.selection.toList() else listOf(uid)
-                                val actions = targets.flatMap { t -> DuelDrop.intent(stateNow, t, done.spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed).actions }
+                                val actions = targets.flatMap { t -> DuelDrop.intent(stateNow, t, done.spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed, duels.dragActor()).actions }
                                 duels.act(actions, duels.seatFor(uid))
                                 duels.inspected = uid
                             }

@@ -119,4 +119,44 @@ class DuelRedTeamTest {
         }
         assertFalse(DuelSight.sees(bare(), ash, 1))
     }
+
+    // ---- the second pass (1.0.85, after the triggers' red team) ----------------------------------------------
+
+    @Test
+    fun anArrowAtAHandCardIsGoneWhenTheHandIsReveiled() {
+        var s = ok(bare(), DuelAction.Draw(0, 3))
+        s = ok(s, DuelAction.Target(1, null, listOf(ash)), by = 1)
+        assertEquals(1, s.arrows.size)
+        s = ok(s, DuelAction.Move(pot, Place.Zone(0, ZoneKind.SPELL, 0), CardPosition.FACE_DOWN_ATK))
+        assertTrue(s.arrows.isEmpty(), "an arrow kept would follow the card through its new veil")
+    }
+
+    @Test
+    fun aGuestCannotTakeFlipOrTargetTheHostsHiddenCards() {
+        var s = ok(bare(), DuelAction.Draw(0, 3))
+        s = ok(s, DuelAction.Move(pot, Place.Zone(0, ZoneKind.SPELL, 0), CardPosition.FACE_DOWN_ATK))
+        val setVeil = DuelView.veil(7L, pot, s.epoch[pot] ?: 0)
+        assertEquals("That card is not yours to take", DuelHost.resolve(s, 1, 7L, listOf(DuelAction.Move(setVeil, Place.Zone(1, ZoneKind.SPELL, 0)))).second)
+        assertEquals("That card is not yours to take", DuelHost.resolve(s, 1, 7L, listOf(DuelAction.Move(DuelMirror.deckRef(0, 0), Place.Pile(1, PileKind.HAND)))).second)
+        assertEquals("Only its controller turns that card face-up", DuelHost.resolve(s, 1, 7L, listOf(DuelAction.Position(setVeil, CardPosition.FACE_UP_ATK))).second)
+        val handVeil = DuelView.veil(7L, ash, s.epoch[ash] ?: 0)
+        assertEquals("A card in their hand or Deck cannot be targeted", DuelHost.resolve(s, 1, 7L, listOf(DuelAction.Target(1, null, listOf(handVeil)))).second)
+        // Destroying the Set card is still a guest's to do: to its owner's graveyard.
+        assertEquals(1, DuelHost.resolve(s, 1, 7L, listOf(DuelAction.Move(setVeil, Place.Pile(1, PileKind.GY)))).first?.size)
+    }
+
+    @Test
+    fun twoEndTurnsInOneIntentCannotEndTheHostsTurn() {
+        val guestsTurn = bare().copy(active = 1)
+        assertEquals("It is not your turn: ask them to move on", DuelHost.resolve(guestsTurn, 1, 7L, listOf(DuelAction.EndTurn, DuelAction.EndTurn)).second)
+        assertEquals(1, DuelHost.resolve(guestsTurn, 1, 7L, listOf(DuelAction.EndTurn)).first?.size)
+    }
+
+    @Test
+    fun aGuestDraggingTheHostsSetCardToTheChainDoesNotFlipIt() {
+        var s = ok(bare(), DuelAction.Draw(0, 3))
+        s = ok(s, DuelAction.Move(pot, Place.Zone(0, ZoneKind.SPELL, 0), CardPosition.FACE_DOWN_ATK))
+        val intent = DuelDrop.intent(s, pot, DropSpot.Chain, catalog, actor = 1)
+        assertTrue(intent.actions.none { it is DuelAction.Position })
+    }
 }

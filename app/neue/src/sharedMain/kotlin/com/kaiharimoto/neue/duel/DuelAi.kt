@@ -155,7 +155,7 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
         }
         add("The table now, as your seat sees it (duel_state only if you need it again):")
         add(DuelBrief.describe(s, viewer, duels.catalog, g.header.seed, seat, duels.tally(viewer), duels.rulings))
-        val watches = duels.watches
+        val watches = duels.liveWatches()
         if (d.aiTriggers) {
             add(
                 if (watches.isEmpty()) "Your watches: none. Leave one with duel_watch for each response your hand or set cards hold."
@@ -277,9 +277,11 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     if (d.aiTriggers) "${h.ai.name} leaves watches for what its hand could answer — a Summon, an activation, leaving a phase — and the table wakes it on those alone; your move waits for its answer."
                     else "${h.ai.name} reads the table only when you cue it.",
                 )
-                if (d.aiTriggers && duels.watches.isNotEmpty()) {
+                // Behind Thinking, as in the log: what Ai waits for tells what it holds (1.0.85).
+                val live = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.alive(duels.watches, g?.state?.turn ?: 0)
+                if (d.aiTriggers && d.aiThinking && live.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Small("Watching for ${com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.kindsWords(duels.watches).lowercase()}", Modifier.weight(1f), color = c.ink70)
+                        Small("Watching for ${com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.kindsWords(live).lowercase()}", Modifier.weight(1f), color = c.ink70)
                         MuButton("Clear", { duels.unwatch(null) }, size = BtnSize.SM, variant = BtnVariant.GHOST)
                     }
                 }

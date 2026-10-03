@@ -174,7 +174,7 @@ object DuelRules {
         } else if (hidesOnSet(from, to, pos)) {
             // Set from the hand: whatever was known of it is gone, and its veil is new, so the other seat
             // cannot tell which card it was (1.0.81, kai: a card searched, then Set, was named across the table).
-            next.copy(seen = next.seen - a.uid, epoch = next.epoch + (a.uid to ((next.epoch[a.uid] ?: 0) + 1)))
+            next.copy(seen = next.seen - a.uid)
         } else {
             next.copy(seen = next.seen.with(a.uid, knowers))
         }
@@ -183,13 +183,26 @@ object DuelRules {
             // A card that left the field no longer attacks or is attacked (1.0.85).
             attacks = next.attacks.filterNot { it.attacker == a.uid || it.target == a.uid },
         )
-        if (from is Place.Pile && from.kind == PileKind.HAND) {
-            // A card left the hand: every card still in it takes a new veil, so the other seat cannot follow
-            // one card from a search to its Set by which veil went missing (1.0.85).
-            val rest = next.seats[from.seat].hand
-            if (rest.isNotEmpty()) next = next.copy(epoch = next.epoch + rest.associateWith { (next.epoch[it] ?: 0) + 1 })
+        if (from is Place.Pile && from.kind == PileKind.HAND && !(to is Place.Pile && to.kind == PileKind.HAND && to.seat == from.seat)) {
+            // A card left the hand: it and every card still in it take a new veil, so the other seat cannot follow
+            // one card from a search to its Set — or a face-down banish — by which veil went missing (1.0.85).
+            next = next.reveiled(next.seats[from.seat].hand + a.uid)
         }
         return ok(next)
+    }
+
+    /**
+     * [uids] take new veils, and nothing still points at them by an old one: an arrow or a chain link's target
+     * drawn at a hidden card would follow it through every new veil (1.0.85, the red team's second pass).
+     */
+    private fun DuelState.reveiled(uids: Collection<Int>): DuelState {
+        if (uids.isEmpty()) return this
+        val set = uids.toSet()
+        return copy(
+            epoch = epoch + set.associateWith { (epoch[it] ?: 0) + 1 },
+            arrows = set.fold(arrows) { a, u -> a.dropUid(u) },
+            chain = chain.map { l -> if (l.targets.any { it in set }) l.copy(targets = l.targets - set) else l },
+        )
     }
 
     /**
@@ -218,10 +231,7 @@ object DuelRules {
         val pile = s.seats[a.seat].pile(a.pile)
         val shuffled = DuelRandom.riffle(pile, a.salt)
         return ok(
-            s.withSeat(a.seat) { it.withPile(a.pile, shuffled) }.copy(
-                seen = s.seen - pile.toSet(),
-                epoch = s.epoch + pile.associateWith { (s.epoch[it] ?: 0) + 1 },
-            ),
+            s.withSeat(a.seat) { it.withPile(a.pile, shuffled) }.copy(seen = s.seen - pile.toSet()).reveiled(pile),
         )
     }
 

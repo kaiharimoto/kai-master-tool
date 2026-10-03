@@ -181,7 +181,10 @@ internal fun DuelPage(h: NeueHolders) {
     }
     // Ai's response triggers (1.0.85): the table watches for it, and wakes it on what it could answer.
     val watching = aiAtTable(h) && prefs.aiTriggers && live?.state?.solo == false && duels.replay == null
+    // Ai changed seats: its watches were for the other hand (1.0.85).
+    LaunchedEffect(prefs.aiSeat) { duels.forgetTriggers() }
     SideEffect {
+        duels.stopAi = { h.ai.stop() }
         duels.watcher = if (watching) prefs.aiSeat else null
         duels.aiEngaged = aiAtTable(h) && live?.state?.solo == false && (prefs.aiPlays || duels.aiSession != null)
     }

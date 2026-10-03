@@ -39,12 +39,14 @@ internal class DuelLink(private val socket: Socket, private val onMessage: (Wire
                     val bytes = ByteArray(n)
                     input.readFully(bytes)
                     val w = WireCodec.decode(bytes.decodeToString()) ?: continue
-                    withContext(Dispatchers.Main) { onMessage(w) }
+                    // A link closed on this side delivers nothing more (1.0.85): a message read just before would
+                    // land on whatever link the table has now.
+                    withContext(Dispatchers.Main) { if (!closed) onMessage(w) }
                 }
             }.exceptionOrNull()
             if (!closed) {
-                closed = true
                 withContext(Dispatchers.Main) { onClosed(why?.message) }
+                close()
             }
         }
     }
@@ -52,13 +54,15 @@ internal class DuelLink(private val socket: Socket, private val onMessage: (Wire
     // One writer, in order (1.0.85): a coroutine per message let a later table overtake an earlier one.
     private val outbox = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.UNLIMITED)
     private val writer = scope.launch {
-        runCatching {
+        val failed = runCatching {
             for (bytes in outbox) {
                 out.writeInt(bytes.size)
                 out.write(bytes)
                 out.flush()
             }
-        }
+        }.isFailure
+        // A write that failed ends the link: the socket closes, so the reader wakes and says so (1.0.85).
+        if (failed) runCatching { socket.close() }
     }
 
     fun send(w: Wire) {

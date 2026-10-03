@@ -63,9 +63,13 @@ class DuelTriggersTest {
     fun ending_the_turn_enters_the_next_players_draw_phase() {
         val s = ok(bare(), DuelAction.Phase(DuelPhase.MAIN2))
         val h = happen(s, DuelAction.EndTurn)
-        assertEquals(Trigger.PHASE_ENTER, h[1].kind)
-        assertEquals(1, h[1].seat)
-        assertEquals(DuelPhase.DRAW, h[1].phase)
+        // Through the End Phase on the way (1.0.85).
+        assertEquals(
+            listOf(Trigger.PHASE_LEAVE to DuelPhase.MAIN2, Trigger.PHASE_ENTER to DuelPhase.END, Trigger.PHASE_LEAVE to DuelPhase.END, Trigger.PHASE_ENTER to DuelPhase.DRAW),
+            h.map { it.kind to it.phase },
+        )
+        assertEquals(1, h.last().seat)
+        assertEquals(1, DuelTriggers.hits(listOf(watch("phase_leave", phase = "end")), h, ai).size)
         // Ai's own Draw Phase is not the opponent's.
         assertTrue(DuelTriggers.hits(listOf(watch("phase_enter", phase = "draw")), h, ai).isEmpty())
         assertEquals(1, DuelTriggers.hits(listOf(watch("phase_enter", by = Watch.BY_SELF, phase = "draw")), h, ai).size)
@@ -134,5 +138,32 @@ class DuelTriggersTest {
         val words = DuelTriggers.kindsWords(listOf(w))
         assertEquals("Summons, activations", words)
         assertTrue(DuelTriggers.describe(w).contains("Ash Blossom in hand"))
+    }
+
+    @Test
+    fun aSummonCountCountsSummonsOnlyNotSets() {
+        var g = DuelGame(DuelFixtures.header(), emptyList(), 0, DuelSetup.initial(DuelFixtures.header()), 0)
+        g = g.act(DuelAction.Draw(0, 2), 0).game
+        g = g.act(DuelAction.Move(ash, m(0, 0), CardPosition.FACE_DOWN_DEF, how = "set"), 0).game
+        g = g.act(DuelAction.Move(zeus, m(0, 1), CardPosition.FACE_UP_ATK), 0).game
+        g = g.act(DuelAction.Position(ash, CardPosition.FACE_UP_ATK), 0).game
+        assertEquals(2, DuelTriggers.summonsThisTurn(g, catalog)[0])
+    }
+
+    @Test
+    fun theWatchersOwnTurnWatchLastsThroughTheOpponentsNextTurn() {
+        val w = DuelTriggers.make(listOf("attack"), "", "", "", 0, "", false, "turn", 3, 1, own = true).first!!
+        assertEquals(1, DuelTriggers.alive(listOf(w), 4).size)
+        assertTrue(DuelTriggers.alive(listOf(w), 5).isEmpty())
+    }
+
+    @Test
+    fun theActorIsWhoMadeTheMoveNotTheCardsSeat() {
+        // The person (seat 0) banishes Ai's card: logged as seat 1's card, but the person's move.
+        var s = ok(bare(), DuelAction.Draw(1, 1), by = 1)
+        val rival = uid(1, 0)
+        s = ok(s, DuelAction.Move(rival, Place.Zone(1, ZoneKind.MONSTER, 0), CardPosition.FACE_UP_ATK), by = 1)
+        val h = DuelTriggers.happenings(s, listOf(e(DuelAction.Move(rival, Place.Pile(1, PileKind.BANISHED)), seat = 1)), catalog, ai, actor = 0)
+        assertEquals(1, DuelTriggers.hits(listOf(watch("banish")), h, ai).size)
     }
 }

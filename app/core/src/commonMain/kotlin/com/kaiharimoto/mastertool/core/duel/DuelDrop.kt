@@ -26,7 +26,8 @@ object DuelDrop {
 
     val NONE = Intent(emptyList(), "")
 
-    fun intent(s: DuelState, uid: Int, spot: DropSpot?, catalog: DuelCatalog, alt: Boolean = false, shift: Boolean = false): Intent {
+    /** [actor]: the seat dragging, when it is known to be another than the card's (a guest); null for the card's own. */
+    fun intent(s: DuelState, uid: Int, spot: DropSpot?, catalog: DuelCatalog, alt: Boolean = false, shift: Boolean = false, actor: Int? = null): Intent {
         val card = s.cards[uid] ?: return NONE
         val from = s.placeOf(uid) ?: return NONE
         val kind = DuelVerbs.kindOf(card, catalog)
@@ -38,7 +39,7 @@ object DuelDrop {
             DropSpot.Chain -> if (from is Place.Pile && from.kind == PileKind.HAND) {
                 val r = DuelVerbs.actions(s, seat, uid, DuelVerb.ACTIVATE, catalog)
                 if (r.problem != null || r.actions.isEmpty()) NONE else Intent(r.actions, "Activate")
-            } else if (from is Place.Zone && !card.faceUp && from.kind != ZoneKind.MONSTER && from.kind != ZoneKind.EMZ) {
+            } else if (from is Place.Zone && !card.faceUp && from.kind != ZoneKind.MONSTER && from.kind != ZoneKind.EMZ && (actor == null || actor == card.controller)) {
                 // A Set card is activated face-up, as the verb does: never a chain link with a hidden name (1.0.85).
                 Intent(listOf(DuelAction.Position(uid, com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK), DuelAction.ChainAdd(seat, uid)), "Activate")
             } else Intent(listOf(DuelAction.ChainAdd(seat, uid)), "Activate")

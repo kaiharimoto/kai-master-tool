@@ -69,7 +69,7 @@ internal class AiDuel(private val h: NeueHolders) {
     private fun aiSeat(): Int = if (duels.game?.state?.solo == true) 0 else prefs.aiSeat
 
     private fun state(i: JsonObject): MetaAnswer {
-        val g = duels.game ?: return fail("There is no duel on the table. duel_setup starts one.")
+        val g = duels.game ?: return fail("There is no duel on the table: ask the person to start one (New duel).")
         val seat = readerSeat(i)
         val p = perspective(i)
         val text = DuelBrief.describe(g.state, DuelBrief.viewer(p, seat), duels.catalog, g.header.seed, seat, duels.tally(DuelBrief.viewer(p, seat)), duels.rulings) +
@@ -88,7 +88,7 @@ internal class AiDuel(private val h: NeueHolders) {
             } else op
         }
         if (ops.isEmpty()) return fail("No ops to play.")
-        if (duels.game == null) return fail("There is no duel on the table. duel_setup starts one.")
+        if (duels.game == null) return fail("There is no duel on the table: ask the person to start one (New duel).")
         if (duels.replay != null) return fail("A replay is open on the table; the person must close it first.")
         val seat = seat(i)
         val mine = aiSeat()
@@ -104,10 +104,14 @@ internal class AiDuel(private val h: NeueHolders) {
         val pace = (ToolArgs.int(i, "pace_ms") ?: prefs.aiPace).toLong().coerceIn(0, 5000)
         // What Ai is told comes through its knowledge setting, always as its own seat — never the acting seat's eyes.
         val viewer = DuelBrief.viewer(prefs.aiKnowledge, mine)
-        val report = duels.playOut(ops, seat, pace, viewer)
+        // Ai's own moves: never the person's, never a trigger for itself (1.0.85).
+        duels.aiActing = true
+        val report = try { duels.playOut(ops, seat, pace, viewer) } finally { duels.aiActing = false }
         val g = duels.game!!
         val after = DuelBrief.describe(g.state, viewer, duels.catalog, g.header.seed, mine, duels.tally(viewer), duels.rulings)
-        return MetaAnswer("${report.text}\n\nThe table now:\n$after", if (!report.played) "Could not play that" else "Played ${report.done} of ${ops.size} moves", isError = !report.played)
+        // Planned as the person's seat, a refusal could name their hidden cards ("Which one: …"): said plainly instead.
+        val text = if (seat != mine && !report.played) "Nothing was played for their seat: say the move with #uids you can see, or ask them to make it." else report.text
+        return MetaAnswer("$text\n\nThe table now:\n$after", if (!report.played) "Could not play that" else "Played ${report.done} of ${ops.size} moves", isError = !report.played)
     }
 
     private fun past(at: String, ops: List<String>, seat: Int): MetaAnswer {
@@ -118,7 +122,9 @@ internal class AiDuel(private val h: NeueHolders) {
         val before = g.stateAt(index)
         val plan = ComboRunner.plan(before, seat, ops, duels.catalog)
         if (!plan.ok) return fail("Nothing was put in. ${plan.problem}")
-        if (!duels.insertPast(index, plan.steps.flatMap { it.second }, seat)) return fail("Nothing was put in: ${duels.problem ?: "the table refused it"}.")
+        duels.aiActing = true
+        val put = try { duels.insertPast(index, plan.steps.flatMap { it.second }, seat) } finally { duels.aiActing = false }
+        if (!put) return fail("Nothing was put in: ${duels.problem ?: "the table refused it"}.")
         val struck = duels.game!!.let { now -> com.kaiharimoto.mastertool.core.duel.DuelSetup.fold(now.header, now.played).second.size }
         val viewer = DuelBrief.viewer(prefs.aiKnowledge, aiSeat())
         val after = DuelBrief.describe(duels.game!!.state, viewer, duels.catalog, g.header.seed, aiSeat(), duels.tally(viewer), duels.rulings)
@@ -194,7 +200,12 @@ internal class AiDuel(private val h: NeueHolders) {
 
     private suspend fun combo(i: JsonObject): MetaAnswer {
         val g = duels.game
-        val seat = seat(i)
+        // A combo is Ai's own seat's (1.0.85, the red team: recording or running the person's seat read their hidden cards
+        // and moved them). Another seat only with full knowledge, and running it only when Ai may move both seats.
+        val asked = seat(i)
+        val seat = if (prefs.aiKnowledge == DuelBrief.FULL) asked else aiSeat()
+        val action = ToolArgs.string(i, "action")
+        if (action == "run" && seat != aiSeat() && !prefs.aiBothSeats) return fail("You run combos for your own seat; ask the person to play theirs.")
         val deckId = ToolArgs.string(i, "deck_id") ?: g?.header?.seats?.getOrNull(if (g.state.solo) 0 else seat)?.deckId ?: h.builder.deckId
             ?: return fail("Which deck? Give deck_id — the deck must be saved in the library.")
         val book = duels.combos(deckId)
@@ -235,7 +246,10 @@ internal class AiDuel(private val h: NeueHolders) {
                 val missing = ComboRunner.missing(g.state, seat, c, duels.catalog)
                 if (missing.isNotEmpty()) return fail("${c.name} needs ${missing.joinToString()} in hand, which the hand does not hold.")
                 h.neue.go(Page.DUEL)
-                val said = duels.playOut(c.steps, seat, (ToolArgs.int(i, "pace_ms") ?: prefs.aiPace).toLong())
+                duels.aiActing = true
+                val said = try {
+                    duels.playOut(c.steps, seat, (ToolArgs.int(i, "pace_ms") ?: prefs.aiPace).toLong(), DuelBrief.viewer(prefs.aiKnowledge, aiSeat()))
+                } finally { duels.aiActing = false }
                 ok("${c.name}: ${said.text}", "Ran ${c.name}")
             }
             else -> fail("action is list, get, save, record or run.")
@@ -266,7 +280,7 @@ internal class AiDuel(private val h: NeueHolders) {
     /** Ai's response triggers (1.0.85): watches the table checks each move against, waking Ai only on a match. */
     private fun watch(i: JsonObject): MetaAnswer {
         val g = duels.game ?: return fail("There is no duel on the table.")
-        fun listed() = duels.watches.joinToString("\n") { "- " + com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.describe(it) }
+        fun listed() = duels.liveWatches().joinToString("\n") { "- " + com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.describe(it) }
             .ifBlank { "No watches." }
         return when (ToolArgs.string(i, "action")) {
             "list" -> ok(listed() + if (!prefs.aiTriggers) "\n(The person has turned response triggers off: watches do not fire.)" else "", "Read its watches")
@@ -287,6 +301,7 @@ internal class AiDuel(private val h: NeueHolders) {
                     until = ToolArgs.string(i, "until").orEmpty(),
                     turn = g.state.turn,
                     id = duels.nextWatchId(),
+                    own = g.state.active == aiSeat(),
                 )
                 if (w == null) return fail(problem ?: "That watch could not be set.")
                 if (duels.watches.size >= 12) return fail("You have 12 watches; clear some first.\n" + listed())
