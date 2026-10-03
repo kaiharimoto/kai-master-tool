@@ -142,36 +142,73 @@ object DuelCommand {
         return t.replace(Regex("(?i)\\b(o?)(h|m|s|e|gy|ban|ex|dk) (\\d{1,2})\\b")) { m -> m.groupValues[1] + m.groupValues[2] + m.groupValues[3] }
     }
 
-    /** What the line asks of the table (see the object's notes). [secret] is the duel's, for the order of their hand (`oh2`). */
-    fun parse(text: String, s: DuelState, seat: Int, catalog: DuelCatalog, secret: Long = 0L): Parsed {
+    /**
+     * What the line asks of the table (see the object's notes). [secret] is the duel's, for the order of their hand (`oh2`).
+     * [anyCopy]: copies of one name on the field are interchangeable to the caller — a saved combo, written by name
+     * so it plays against any shuffle, takes the first (1.0.87, the red team); a person at the table is asked which.
+     */
+    fun parse(text: String, s: DuelState, seat: Int, catalog: DuelCatalog, secret: Long = 0L, anyCopy: Boolean = false): Parsed {
         val line = clean(text)
         if (line.isEmpty()) return Parsed.Problem("Type a command, like “ash to hand”")
         val head = line.substringBefore(' ').lowercase()
         if (';' in line && head !in FREE_TEXT) {
             val lines = line.split(';').map { clean(it) }.filter { it.isNotEmpty() }
-            if (lines.size > 1) return many(lines, s, seat, catalog, secret)
+            if (lines.size > 1) return many(lines, s, seat, catalog, secret, anyCopy)
             if (lines.isEmpty()) return Parsed.Problem("Type a command, like “ash to hand”")
-            return Reader(s, seat, catalog, secret).single(lines.single())
+            return Reader(s, seat, catalog, secret, anyCopy).single(lines.single())
         }
-        return Reader(s, seat, catalog, secret).single(line)
+        return Reader(s, seat, catalog, secret, anyCopy).single(line)
     }
 
-    private fun many(lines: List<String>, s: DuelState, seat: Int, catalog: DuelCatalog, secret: Long): Parsed {
+    private fun many(lines: List<String>, s: DuelState, seat: Int, catalog: DuelCatalog, secret: Long, anyCopy: Boolean = false): Parsed {
         var state = s
         val parts = mutableListOf<Parsed.Actions>()
+        // What the seat knew as it typed the line (1.0.87, the red team): a later move is read on the table the earlier
+        // ones leave, where a card sent from their hand to the GY, a flipped set card or a drawn card is in view — so a
+        // later move may touch only cards the seat could see at the start (or its own Deck or Extra Deck, until a
+        // shuffle or a draw earlier in the line moves them), and a later move that cannot be read says nothing about why.
+        val start = s
+        var rolled = false
+        fun known(uid: Int): Boolean {
+            if (uid !in start.cards) return true // a token made earlier in the line
+            if (DuelSight.sees(start, uid, seat)) return true
+            val c = start.cards.getValue(uid)
+            val p = start.placeOf(uid)
+            return !rolled && c.owner == seat && p is Place.Pile && (p.kind == PileKind.DECK || p.kind == PileKind.EXTRA)
+        }
+        fun ahead(i: Int, l: String) = Parsed.Problem("Move ${i + 1} (“$l”) depends on the moves before it: make those first, then type it.")
         lines.forEachIndexed { i, l ->
-            when (val p = Reader(state, seat, catalog, secret).single(l)) {
+            when (val p = Reader(state, seat, catalog, secret, anyCopy).single(l)) {
                 is Parsed.Actions -> {
+                    if (i > 0 && touchedBy(p.actions).any { !known(it) }) return ahead(i, l)
                     val (next, why) = DuelRules.applyAll(state, p.actions, seat)
-                    if (next == null) return Parsed.Problem("Move ${i + 1} (“$l”): $why")
+                    if (next == null) return if (i == 0) Parsed.Problem("Move 1 (“$l”): $why") else ahead(i, l)
                     parts += p
                     state = next
+                    if (p.actions.any { it is DuelAction.Shuffle || it is DuelAction.Draw }) rolled = true
                 }
-                is Parsed.Problem -> return p.copy(text = "Move ${i + 1} (“$l”): ${p.text}")
+                is Parsed.Problem -> return if (i == 0) p.copy(text = "Move 1 (“$l”): ${p.text}") else ahead(i, l)
                 else -> return Parsed.Problem("“$l” is not a move: only moves join with ;")
             }
         }
         return Parsed.Many(parts, lines)
+    }
+
+    /** Every card [actions] name. */
+    fun touchedBy(actions: List<DuelAction>): Set<Int> = buildSet {
+        actions.forEach { a ->
+            when (a) {
+                is DuelAction.Move -> { add(a.uid); (a.to as? Place.Under)?.let { add(it.host) } }
+                is DuelAction.Position -> add(a.uid)
+                is DuelAction.Counter -> add(a.uid)
+                is DuelAction.ChainAdd -> { a.uid?.let(::add); addAll(a.targets) }
+                is DuelAction.Target -> { a.from?.let(::add); addAll(a.to) }
+                is DuelAction.Reveal -> addAll(a.uids)
+                is DuelAction.Attack -> { add(a.attacker); a.target?.let(::add) }
+                is DuelAction.Keep -> add(a.uid)
+                else -> Unit
+            }
+        }
     }
 
     /** The line's dry run: see [Preview]. Nothing is stamped or rolled, so it never tells a coming shuffle, coin or die. */
@@ -180,10 +217,10 @@ object DuelCommand {
 
     // ---- reading one move ----------------------------------------------------------------------------
 
-    private class Reader(val s: DuelState, val seat: Int, val catalog: DuelCatalog, val secret: Long) {
+    private class Reader(val s: DuelState, val seat: Int, val catalog: DuelCatalog, val secret: Long, val anyCopy: Boolean = false) {
 
         fun look(q: String, want: Want = Want.ANY, from: PileKind? = null, fieldOnly: Boolean = false, everywhere: Boolean = false) =
-            lookup(q, s, seat, catalog, want, from, fieldOnly, everywhere, secret)
+            lookup(q, s, seat, catalog, want, from, fieldOnly, everywhere, secret, anyCopy)
 
         /** Whether [line], whole, is a card's name the seat can reach — so a system word at its head is that card's. */
         fun namesCard(line: String): Boolean {
@@ -895,6 +932,7 @@ object DuelCommand {
         fieldOnly: Boolean = false,
         everywhere: Boolean = false,
         secret: Long = 0L,
+        anyCopy: Boolean = false,
     ): Lookup {
         val q0 = query.trim()
         // "#17": a card by its uid, as Ai is shown them — only one the seat may see (or its own deck's).
@@ -950,7 +988,7 @@ object DuelCommand {
             if (names.size > 1) return Lookup.Many(names)
             // Copies of one name on the field are different cards to a player: say which (1.0.87, the red team).
             val onField = best.filter { s.placeOf(it) is Place.Zone }.distinct()
-            if (onField.size > 1 && onField.size == best.size) {
+            if (!anyCopy && onField.size > 1 && onField.size == best.size) {
                 val coords = onField.mapNotNull { DuelNotation.coordOf(s, it, seat, secret) }
                 return Lookup.None("${names.single()} is on the field more than once: say which — ${coords.joinToString(" or ")}", coords, q)
             }

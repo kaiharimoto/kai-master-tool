@@ -70,7 +70,8 @@ object ComboRunner {
         var state = s
         val out = mutableListOf<Pair<String, List<DuelAction>>>()
         steps.forEachIndexed { i, text ->
-            when (val p = DuelCommand.parse(text, state, seat, catalog)) {
+            // A combo's steps name cards, never places: copies on the field are taken in turn (anyCopy).
+            when (val p = DuelCommand.parse(text, state, seat, catalog, anyCopy = true)) {
                 is DuelCommand.Parsed.Problem -> return ComboRun(out, i, "Step ${i + 1} (“$text”): ${p.text}")
                 // A house ruling is not a move: a combo has no use for one.
                 is DuelCommand.Parsed.Ruling -> return ComboRun(out, i, "Step ${i + 1} (“$text”): a ruling is kept with duel_ruling, not played")
@@ -80,12 +81,11 @@ object ComboRunner {
                     out += text to p.actions
                     state = next
                 }
-                // Moves joined with ";" (1.0.87): one step of the combo, each move in its order.
-                is DuelCommand.Parsed.Many -> {
-                    val all = p.parts.flatMap { it.actions }
-                    val (next, why) = DuelRules.applyAll(state, all, seat)
-                    if (next == null) return ComboRun(out, i, "Step ${i + 1} (“$text”): $why")
-                    out += text to all
+                // Moves joined with ";": each its own step, so a phase change is never one gesture with a move (1.0.87).
+                is DuelCommand.Parsed.Many -> p.parts.forEachIndexed { k, part ->
+                    val (next, why) = DuelRules.applyAll(state, part.actions, seat)
+                    if (next == null) return ComboRun(out, i, "Step ${i + 1} (“${p.lines.getOrElse(k) { text }}”): $why")
+                    out += p.lines.getOrElse(k) { text } to part.actions
                     state = next
                 }
                 is DuelCommand.Parsed.Query, is DuelCommand.Parsed.Ui ->

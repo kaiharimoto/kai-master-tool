@@ -6,6 +6,7 @@ import com.kaiharimoto.mastertool.core.ai.voice.Hints
 import com.kaiharimoto.mastertool.core.ai.voice.Pcm
 import com.kaiharimoto.mastertool.core.ai.voice.SpeechGate
 import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
+import com.kaiharimoto.mastertool.core.duel.voice.DuelSpeech
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import io.github.givimad.whisperjni.WhisperContext
 import io.github.givimad.whisperjni.WhisperFullParams
@@ -198,7 +199,7 @@ actual object Voice {
             return@flow
         }
         val text = if (command) CommandClip.unrepeat(written) else written
-        val nothing = if (command) CommandClip.isNothing(text) || CommandClip.echoes(text, hints, voiced) else Hints.isNothing(text)
+        val nothing = if (command) CommandClip.isNothing(text) || CommandClip.echoes(text, hints, voiced, DuelSpeech.WORDS) else Hints.isNothing(text)
         if (nothing) emit(Heard.Failed("Nothing was said.")) else emit(Heard.Final(text))
     }.flowOn(Dispatchers.IO)
 

@@ -147,7 +147,7 @@ class Duels(val dir: File) {
         lastInput = Input.KEYS
         val s = shown?.state
         focusCard = if (slot == null || s == null || slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile) null
-        else com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, slot, eyes)
+        else com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, slot, eyes)?.takeIf { followable(s, it) }
         if (slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.PileCard) {
             val l = tableLayout ?: return
             val n = s?.seats?.get(slot.seat)?.pile(slot.kind)?.size ?: return
@@ -191,8 +191,16 @@ class Duels(val dir: File) {
         val next = if (open != null) open else com.kaiharimoto.mastertool.core.layout.DuelFocus.follow(f, focusCard, s, bottom, focusShape(), strip, eyes)
         if (next != f) focus = next
         focusCard = next?.takeIf { it !is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile }?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, it, eyes) }
+            ?.takeIf { followable(s, it) }
         if (picked?.let { it !in s.cards } == true) picked = null
     }
+
+    /**
+     * Whether the ring may follow this card when it moves: only one the table's eyes can see (1.0.87, the red team). A
+     * hidden card is followed by place, never by uid — following it would show which one a re-veiled hand lost to a Set.
+     */
+    private fun followable(s: com.kaiharimoto.mastertool.core.duel.DuelState, uid: Int): Boolean =
+        eyes.viewers.isEmpty() || eyes.viewers.any { com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, uid, it) }
 
     /** Esc's last layer: the focus let go, and what was picked with it. */
     fun clearFocus() {

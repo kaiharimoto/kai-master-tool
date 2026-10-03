@@ -70,9 +70,9 @@ object DuelSpeech {
 
     /** The table's words and the command words, for the transcriber's prompt. */
     val WORDS = listOf(
-        "summon", "set", "activate", "attack", "directly", "target", "banish", "graveyard", "extra deck", "monster zone",
+        "yes", "undo", "summon", "set", "activate", "attack", "directly", "target", "banish", "graveyard", "extra deck", "monster zone",
         "spell zone", "battle phase", "main phase two", "end turn", "next phase", "resolve", "chain", "no response", "your move",
-        "yes", "undo", "life points", "their field", "my hand",
+        "life points", "their field", "my hand",
     )
 
     // ---- normalize -----------------------------------------------------------------------------------
@@ -137,7 +137,7 @@ object DuelSpeech {
         // One move, then another.
         Rule("\\s+(and then|then|after that|and after that)\\s+", " ; "),
         // Whose.
-        Rule("\\b(the opponent's|my opponent's|opponent's|opponents|opponent|theirs|their|his|her|enemy|the other player's|other player's)\\b", "their"),
+        Rule("\\b(the opponent's|my opponent's|opponent's|opponents|opponent|theirs|their|his|her|the other player's|other player's)\\b", "their"),
         Rule("\\bminus (\\d+)", "-$1"),
         Rule("\\bplus (\\d+)", "+$1"),
         // Life points.
@@ -283,6 +283,14 @@ object DuelSpeech {
         }
     }
 
+    private fun visibleNames(s: DuelState, seat: Int, catalog: DuelCatalog): Set<String> {
+        val own = s.seats[seat]
+        return (own.hand + s.onField() + own.gy + own.banished + (s.seats.getOrNull(1 - seat)?.let { it.gy + it.banished } ?: emptyList()))
+            .filter { DuelSight.sees(s, it, seat) }
+            .mapNotNull { uid -> s.cards[uid]?.let { catalog.nameOf(it) } }
+            .toSet()
+    }
+
     /**
      * The transcriber's hint for this table: the names the seat can see or knows (its own Deck and Extra Deck), the
      * Line's words, then the game's — names a hidden card never.
@@ -299,6 +307,9 @@ object DuelSpeech {
                 if (c.owner == seat && s.placeOf(uid).let { it is Place.Pile && (it.kind == PileKind.DECK || it.kind == PileKind.EXTRA) }) add(catalog.nameOf(c))
             }
         }.filterNot { it.startsWith("#") }.distinct()
-        return Hints.prompt(names + WORDS, most)
+        // The Line's words first, so a long decklist never pushes "yes" or "summon" past the hint's end; the names after,
+        // the seat's own list sorted so the Deck's order is not in it (1.0.87, the red team).
+        val (seen, listed) = names.partition { n -> n in visibleNames(s, seat, catalog) }
+        return Hints.prompt(WORDS + seen + listed.sorted(), most)
     }
 }

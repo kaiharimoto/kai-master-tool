@@ -151,12 +151,14 @@ object CommandClip {
     /**
      * Whether [text] is only one of the names in [hints] (a name of two words or more), from less than
      * [ECHO_UNDER] seconds of voice: Whisper echoing its priming, not someone saying a card. A one-word
-     * hint ("yes", "Nibiru") is never taken for an echo — it can be said that quickly.
+     * hint ("yes", "Nibiru") is never taken for an echo — it can be said that quickly. Nor is one of [words], the
+     * Line's own ("end turn", "no response"): those are said quickly too (1.0.87, the red team).
      */
-    fun echoes(text: String, hints: String, voiced: Double): Boolean {
+    fun echoes(text: String, hints: String, voiced: Double, words: Collection<String> = emptyList()): Boolean {
         if (voiced >= ECHO_UNDER) return false
         val t = norm(text)
-        return t.isNotEmpty() && hints.split(", ").any { h -> h.trim().contains(' ') && norm(h) == t }
+        val said = words.map { norm(it) }.toSet()
+        return t.isNotEmpty() && t !in said && hints.split(", ").any { h -> h.trim().contains(' ') && norm(h) == t }
     }
 
     /**
@@ -185,7 +187,8 @@ object CommandClip {
     private val INVENTED = setOf(
         "thanks for watching", "thank you for watching", "thank you so much for watching", "thanks for watching bye",
         "please subscribe", "subscribe", "like and subscribe", "bye", "bye bye", "goodbye", "you", "thank you", "thanks",
-        "the end", "so", "um", "uh", "hmm", "oh",
+        // Not "the end": that is how Whisper writes a spoken "end" (1.0.87, the red team).
+        "so", "um", "uh", "hmm", "oh",
     )
     private val INVENTED_STARTS = listOf("subtitles by", "transcribed by", "transcript by", "captions by", "translated by")
 }

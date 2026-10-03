@@ -102,7 +102,7 @@ object DuelComplete {
 
         // Cards in reach, by name or coordinate.
         fun cards(score: Int, filter: (Int) -> Boolean = { true }) {
-            reach(s, seat).filter(filter).forEach { uid ->
+            reach(s, seat, catalog, secret).filter(filter).forEach { uid ->
                 val coord = DuelNotation.coordOf(s, uid, seat, secret)
                 val seen = DuelSight.sees(s, uid, seat) || ownList(s, uid, seat)
                 val name = if (seen) s.cards[uid]?.let { catalog.nameOf(it) } else null
@@ -188,18 +188,21 @@ object DuelComplete {
     }
 
     /** Every card the seat could name or point at: its hand and piles, both fields, the other seat's open piles and hand by place. */
-    private fun reach(s: DuelState, seat: Int): List<Int> {
+    internal fun reach(s: DuelState, seat: Int, catalog: DuelCatalog, secret: Long): List<Int> {
         val other = 1 - seat
         val own = s.seats[seat]
         val theirs = s.seats.getOrNull(other)
+        // Never in an order the seat could not see (1.0.87, the red team): their hand as it is shown (by veil, so the
+        // card that came in last is not last), and the Deck and Extra Deck by name, never top first.
+        val byName = compareBy<Int> { s.cards[it]?.let { c -> catalog.nameOf(c) }.orEmpty() }
         return buildList {
             addAll(own.hand)
             addAll(s.onField())
             addAll(own.gy)
             addAll(own.banished)
-            theirs?.let { addAll(it.gy); addAll(it.banished); addAll(it.hand) }
-            addAll(own.extra)
-            addAll(own.deck.filter { ownList(s, it, seat) })
+            theirs?.let { addAll(it.gy); addAll(it.banished); addAll(DuelNotation.handOrder(s, other, seat, secret)) }
+            addAll(own.extra.sortedWith(byName))
+            addAll(own.deck.filter { ownList(s, it, seat) }.sortedWith(byName))
         }.distinct()
     }
 
