@@ -119,6 +119,11 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     MuSwitch(d.aiPlays, { v -> update { it.copy(aiPlays = v) } })
                     Small("Takes its seat's turns by itself", color = c.ink)
                 }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MuSwitch(d.aiBothSeats, { v -> update { it.copy(aiBothSeats = v) } })
+                    Small("May move your cards too", color = c.ink)
+                }
+                Help(if (d.aiBothSeats) "${h.ai.name} may move either seat's cards, when you ask it to." else "${h.ai.name} moves only its own seat's cards; on your turn it asks you to move the phase on.")
             }
             MuButton("Play this turn, ${h.ai.name}", { duels.combosOpen = false; askAiToPlay(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
             HRule()
@@ -141,7 +146,7 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     }
                     MuButton("Run", {
                         duels.combosOpen = false
-                        scope.launch { neue.note = Note("${combo.name}: ${duels.playOut(combo.steps, seat, d.aiPace.toLong().coerceAtLeast(250))}") }
+                        scope.launch { neue.note = Note("${combo.name}: ${duels.playOut(combo.steps, seat, d.aiPace.toLong().coerceAtLeast(250)).text.lineSequence().first()}") }
                     }, size = BtnSize.SM, enabled = g != null && missing.isEmpty() && !duels.playing, reason = if (missing.isNotEmpty()) "Not in hand: ${missing.joinToString()}" else null)
                     MuButton("Delete", {
                         scope.launch {

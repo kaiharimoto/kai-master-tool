@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelSetup
@@ -114,7 +115,16 @@ private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers:
             }
         }
         H2(if (sees) duels.catalog.nameOf(inst) else "A face-down card", maxLines = 2)
+        if (sees && inst.token && (inst.atk != null || inst.def != null)) Mono("ATK ${inst.atk ?: "?"} / DEF ${inst.def ?: "?"}", color = c.ink)
         if (card != null) Body(card.description, color = c.ink)
+        // What the two players agreed about this card (1.0.79).
+        if (sees && inst.code != 0) duels.rulings.forCode(inst.code).forEach { r ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.border(1.dp, c.ink).padding(horizontal = 4.dp)) { Mono("RULING", color = c.ink, size = 9.sp) }
+                Small(r.text, Modifier.weight(1f), color = c.ink)
+                com.kaiharimoto.neue.kit.IconButton(com.kaiharimoto.neue.kit.Icons.X, { duels.forgetRuling(r.id) }, size = 20.dp, label = "Forget the ruling")
+            }
+        }
         if (inst.under.isNotEmpty()) {
             Micro("Materials · ${inst.under.size}", color = c.ink70)
             inst.under.forEach { m ->
@@ -126,6 +136,31 @@ private fun InspectedCard(h: NeueHolders, duels: Duels, game: DuelGame, viewers:
         }
         if (duels.attaching == uid) Help("Now click the monster it goes under. Esc to stop.")
     }
+}
+
+/**
+ * This turn's counts and the locks written down (1.0.79, Ai: "a tracker for running counts and locks"):
+ * each seat's Summons and activations, and every lock with a way to lift it. Gone when there is nothing.
+ */
+@Composable
+private fun TurnTally(duels: Duels, game: DuelGame) {
+    val c = Mu.colors
+    val tally = remember(game) { duels.tally() } ?: return
+    val s = game.state
+    val lines = tally.words(s).dropLast(tally.locks.size)
+    if (lines.isEmpty() && s.locks.isEmpty()) return
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Micro("This turn", color = c.ink45)
+        lines.forEach { Small(it, color = c.ink, maxLines = 2) }
+        s.locks.forEach { l ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.border(1.dp, c.ink).padding(horizontal = 4.dp)) { Mono("LOCK", color = c.ink, size = 9.sp) }
+                Small("${l.text} · ${DuelWords.untilWords(l.until)}", Modifier.weight(1f), color = c.ink, maxLines = 2)
+                com.kaiharimoto.neue.kit.IconButton(com.kaiharimoto.neue.kit.Icons.X, { duels.act(DuelAction.Unlock(l.id)) }, size = 20.dp, label = "Lift the lock")
+            }
+        }
+    }
+    HRule()
 }
 
 /** The inspector's art: big enough to know the card, small enough that its text needs no scrolling. */
@@ -211,6 +246,7 @@ internal fun DuelLogRail(duels: Duels, game: DuelGame, viewer: Int?, modifier: M
             head()
         }
         HRule()
+        TurnTally(duels, game)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list) {
             itemsIndexed(lines) { _, line ->
                 when (line) {

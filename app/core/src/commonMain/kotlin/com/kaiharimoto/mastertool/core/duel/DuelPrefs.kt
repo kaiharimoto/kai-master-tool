@@ -33,6 +33,8 @@ data class DuelPrefs(
     val facing: Boolean = false,
     /** The keys pinned at the inspector's foot, or folded away (1.0.78). */
     val keysShown: Boolean = true,
+    /** Ai may move the other seat's cards too, not only its own (1.0.79; off: it asks the person). */
+    val aiBothSeats: Boolean = false,
 ) {
     companion object {
         const val KNOW_ALL = "all"

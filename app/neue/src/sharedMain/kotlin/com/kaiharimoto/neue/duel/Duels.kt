@@ -131,6 +131,7 @@ class Duels(val dir: File) {
 
     /** Reads the duel left in play, once. */
     fun load() {
+        loadRulings()
         if (loaded) return
         loaded = true
         scope.launch {
@@ -253,6 +254,12 @@ class Duels(val dir: File) {
         return when (val p = DuelCommand.parse(text, g.state, bottom, catalog)) {
             is DuelCommand.Parsed.Problem -> { problem = p.text; false }
             is DuelCommand.Parsed.Actions -> act(p.actions, bottom).also { if (it) command = "" }
+            is DuelCommand.Parsed.Ruling -> {
+                val r = keepRuling(p.code, p.card, p.text)
+                act(DuelAction.Note("House ruling: ${r.card?.let { "$it — " } ?: ""}${r.text}", bottom), bottom)
+                command = ""
+                true
+            }
         }
     }
 
@@ -769,24 +776,133 @@ class Duels(val dir: File) {
      * done), then one step at a time [paceMs] apart, each its own step of undo. Returns what happened in
      * words: the steps played, and where it stopped if the person stopped it or the table changed under it.
      */
-    suspend fun playOut(steps: List<String>, seat: Int, paceMs: Long): String {
-        val g = game ?: return "There is no duel on the table."
+    suspend fun playOut(steps: List<String>, seat: Int, paceMs: Long, viewer: Int? = seat): PlayReport {
+        val g = game ?: return PlayReport("There is no duel on the table.", 0, false)
         val plan = com.kaiharimoto.mastertool.core.duel.ai.ComboRunner.plan(g.state, seat, steps, catalog)
-        if (!plan.ok) return "Nothing was played. ${plan.problem}"
+        if (!plan.ok) return PlayReport("Nothing was played. ${plan.problem}", 0, false)
         playing = true
         stopRequested = false
         var done = 0
+        // What each step really did, in the log's words as [viewer] reads them (1.0.79, Ai: "report each op's
+        // real result … 'Played all N steps' showed up while the board hadn't changed").
+        val said = mutableListOf<String>()
+        fun report(head: String) = PlayReport((listOf(head) + said).joinToString("\n"), done, done > 0)
         try {
             for ((text, actions) in plan.steps) {
-                if (stopRequested) return "Stopped by the person after $done of ${plan.steps.size} steps."
-                if (!act(actions, seat)) return "Played $done of ${plan.steps.size}; “$text” no longer fits the table: ${problem ?: "refused"}."
+                if (stopRequested) return report("Stopped by the person after $done of ${plan.steps.size} steps:")
+                val before = game?.cursor ?: 0
+                if (!act(actions, seat)) return report("Played $done of ${plan.steps.size}; “$text” no longer fits the table: ${problem ?: "refused"}. What was played:")
                 done++
+                val now = game
+                val lines = if (role == NetRole.GUEST || now == null) listOf("sent to the host")
+                else com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(now, before, viewer, catalog).map { it.text }
+                said += "$done. $text → ${lines.joinToString("; ").ifBlank { "no change on the table" }}"
                 if (paceMs > 0) delay(paceMs)
             }
         } finally {
             playing = false
         }
-        return "Played all ${plan.steps.size} steps."
+        return report("Played all ${plan.steps.size} steps:")
+    }
+
+    /** What playing a batch out came to: each step's real effect, how many were played, whether any was. */
+    data class PlayReport(val text: String, val done: Int, val played: Boolean) {
+        override fun toString(): String = text
+    }
+
+    // ---- house rulings and the turn's tally (1.0.79) -------------------------------------------------
+
+    /** The rulings agreed at this table, kept in `<data>/duel/rulings.json` (synced, backed up). */
+    var rulings by mutableStateOf(com.kaiharimoto.mastertool.core.duel.HouseRulingBook())
+        private set
+    private var rulingsRead = false
+
+    fun loadRulings() {
+        if (rulingsRead) return
+        rulingsRead = true
+        scope.launch {
+            val text = withContext(Dispatchers.IO) { File(dir, com.kaiharimoto.mastertool.core.duel.HouseRulingCodec.PATH).takeIf { it.exists() }?.readText() }
+            if (text != null) rulings = com.kaiharimoto.mastertool.core.duel.HouseRulingCodec.decode(text)
+        }
+    }
+
+    /** Reads the rulings again: a sync or a restore brought new ones. */
+    fun reloadRulings() {
+        rulingsRead = false
+        loadRulings()
+    }
+
+    fun keepRuling(code: Int?, card: String?, text: String): com.kaiharimoto.mastertool.core.duel.HouseRuling {
+        val r = com.kaiharimoto.mastertool.core.duel.HouseRuling("r${now()}", text, code, card, now())
+        rulings = rulings.add(r)
+        writeRulings()
+        return r
+    }
+
+    fun forgetRuling(id: String): Boolean {
+        if (rulings.rulings.none { it.id == id }) return false
+        rulings = rulings.remove(id)
+        writeRulings()
+        return true
+    }
+
+    private fun writeRulings() {
+        val book = rulings
+        scope.launch {
+            io.withLock {
+                withContext(Dispatchers.IO) {
+                    dir.mkdirs()
+                    val target = File(dir, com.kaiharimoto.mastertool.core.duel.HouseRulingCodec.PATH)
+                    val temp = File(dir, "${target.name}.tmp")
+                    temp.writeText(com.kaiharimoto.mastertool.core.duel.HouseRulingCodec.encode(book))
+                    if (!temp.renameTo(target)) { target.delete(); temp.renameTo(target) }
+                }
+            }
+        }
+    }
+
+    private var tallyOf: Pair<DuelGame, com.kaiharimoto.mastertool.core.duel.Tally>? = null
+
+    /** This turn's counts and locks, for the table shown; read off the log, kept until it changes. */
+    fun tally(): com.kaiharimoto.mastertool.core.duel.Tally? {
+        val g = shown ?: return null
+        tallyOf?.let { (of, t) -> if (of === g) return t }
+        // A guest has no log of its own: the locks it was sent, nothing counted.
+        val t = if (role == NetRole.GUEST) com.kaiharimoto.mastertool.core.duel.Tally(g.state.turn, listOf(0, 0), listOf(0, 0), listOf(emptyMap(), emptyMap()), g.state.locks)
+        else com.kaiharimoto.mastertool.core.duel.DuelTally.of(g, catalog)
+        tallyOf = g to t
+        return t
+    }
+
+    /**
+     * The phase moved on, or the turn ended. At a hot-seat the turn player does it; at a networked table
+     * the player whose turn it is not asks instead, and the turn player answers (1.0.79).
+     */
+    fun goPhase(phase: com.kaiharimoto.mastertool.core.board.DuelPhase?, end: Boolean = false): Boolean {
+        val s = shown?.state ?: return false
+        val seat = if (role != null) mySeat else s.active
+        return when {
+            !s.solo && seat != s.active -> act(DuelAction.Propose(seat, phase, end), seat)
+            end -> act(DuelAction.EndTurn, seat)
+            phase != null -> act(DuelAction.Phase(phase), seat)
+            else -> false
+        }
+    }
+
+    /** The turn player's answer to an ask: yes moves the phase on, no says not yet. */
+    fun answerProposal(yes: Boolean): Boolean {
+        val s = shown?.state ?: return false
+        val p = s.proposal ?: return false
+        val seat = if (role != null) mySeat else s.active
+        return if (!yes) act(DuelAction.Decline(seat), seat)
+        else if (p.end) act(DuelAction.EndTurn, seat) else act(DuelAction.Phase(p.phase ?: s.phase), seat)
+    }
+
+    /** Resolves the newest chain link: a Normal Spell or Trap goes to the GY with it, unless [keep] (1.0.79). */
+    fun resolveChain(keep: Boolean = false): Boolean {
+        val s = shown?.state ?: return false
+        if (s.chain.isEmpty()) return false
+        return act(com.kaiharimoto.mastertool.core.duel.DuelVerbs.resolve(s, catalog, keep), bottom)
     }
 
     fun useIndex(index: com.kaiharimoto.mastertool.core.search.CardIndex) {

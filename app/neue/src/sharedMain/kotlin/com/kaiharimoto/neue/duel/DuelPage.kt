@@ -154,7 +154,13 @@ internal fun DuelPage(h: NeueHolders) {
                     }
                 }
                 // What a networked table waits on, over its top edge: never a row that pushes the cards down.
-                if (duels.role != null && !phone) Box(Modifier.zIndex(95f).fillMaxWidth()) { NetBar(h, duels, overlay = true) }
+                // Over the table's own width, between the rails, never over their heads.
+                val across = Modifier.offset(layout.field.left.dp, 4.dp).width((layout.phases.right - layout.field.left).dp)
+                if (duels.role != null && !phone) Box(Modifier.zIndex(95f).then(across)) { NetBar(h, duels, overlay = true) }
+                // The other seat's ask to move on, for the turn player to answer (1.0.79).
+                if (game.state.proposal != null && replay == null) {
+                    Box(Modifier.zIndex(96f).then(across)) { ProposalBar(duels, game.state) }
+                }
             }
         }
     }
@@ -299,6 +305,18 @@ private fun PhoneDuelBar(h: NeueHolders, duels: Duels) {
     }
 }
 
+/**
+ * The names the two seats sit down with (1.0.79): the names last typed, never the old "You" and
+ * "Opponent" (which read as "You's turn"), and Ai's own name at the seat it plays, when it plays one.
+ */
+internal fun seatNames(h: NeueHolders, aiAtSeat: Int? = null): List<String> {
+    val typed = h.neue.prefs.duel.names
+    fun legacy(n: String) = n.isBlank() || n.equals("You", true) || n.equals("Opponent", true)
+    val names = MutableList(2) { i -> typed.getOrNull(i)?.takeUnless(::legacy) ?: "Player ${i + 1}" }
+    if (aiAtSeat != null && aiAtSeat in 0..1 && h.neue.prefs.ai.enabled) names[aiAtSeat] = h.ai.name
+    return names
+}
+
 /** A test hand at once: the builder's deck, one player's table. */
 internal fun testHand(h: NeueHolders, solo: Boolean = true) {
     val b = h.builder
@@ -306,14 +324,14 @@ internal fun testHand(h: NeueHolders, solo: Boolean = true) {
         h.neue.note = Note("The builder's deck is empty. Build one, or set up a duel with a deck from the library.")
         return
     }
-    val names = h.neue.prefs.duel.names
+    val names = seatNames(h)
     h.duel.start(
         DuelHeader(
             id = "d${System.currentTimeMillis()}",
             seed = System.nanoTime(),
             seats = listOf(
-                SeatSetup(names.getOrElse(0) { "You" }, b.deck.main.map { it.value }, b.deck.extra.map { it.value }, b.deckId, b.deckName),
-                if (solo) SeatSetup(names.getOrElse(1) { "Opponent" }) else SeatSetup(names.getOrElse(1) { "Opponent" }, b.deck.main.map { it.value }, b.deck.extra.map { it.value }, b.deckId, b.deckName),
+                SeatSetup(names[0], b.deck.main.map { it.value }, b.deck.extra.map { it.value }, b.deckId, b.deckName),
+                if (solo) SeatSetup(names[1]) else SeatSetup(names[1], b.deck.main.map { it.value }, b.deck.extra.map { it.value }, b.deckId, b.deckName),
             ),
             solo = solo,
             created = System.currentTimeMillis(),
@@ -334,8 +352,8 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
     val nobody = DeckChoice("-", "No one: one player's table", Deck())
     var mine by remember(library) { mutableStateOf(choices.firstOrNull { it.id == prefs.deckId } ?: builderChoice) }
     var theirs by remember(library) { mutableStateOf(if (prefs.opponentDeckId == "-") nobody else choices.firstOrNull { it.id == prefs.opponentDeckId } ?: mine) }
-    var me by remember { mutableStateOf(prefs.names.getOrElse(0) { "You" }) }
-    var them by remember { mutableStateOf(prefs.names.getOrElse(1) { "Opponent" }) }
+    var me by remember { mutableStateOf(seatNames(h)[0]) }
+    var them by remember { mutableStateOf(seatNames(h)[1]) }
     val solo = theirs === nobody || theirs.id == "-"
     var where by remember { mutableStateOf(if (duels.role == Duels.NetRole.HOST) "host" else if (duels.role == Duels.NetRole.GUEST) "join" else "here") }
     val seat = { SeatSetup(me, mine.deck.main.map { it.value }, mine.deck.extra.map { it.value }, mine.id, mine.name) }

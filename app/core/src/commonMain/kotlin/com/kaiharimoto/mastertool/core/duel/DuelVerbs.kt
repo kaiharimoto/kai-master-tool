@@ -11,7 +11,14 @@ data class DuelCardInfo(
     val kind: CardKind,
     val pendulum: Boolean = false,
     val link: Boolean = false,
+    /** A Spell's or Trap's kind as printed — Normal, Quick-Play, Continuous, Equip, Field, Ritual, Counter (1.0.79). */
+    val sub: String? = null,
 ) {
+    /** A card that goes to the GY once it resolves: a Normal, Quick-Play or Ritual Spell, a Normal or Counter Trap. */
+    val leavesOnResolve: Boolean
+        get() = (kind == CardKind.SPELL || kind == CardKind.TRAP) && !pendulum &&
+            (sub?.lowercase() ?: "") in setOf("normal", "quick-play", "ritual", "counter")
+
     companion object {
         fun of(card: Card): DuelCardInfo {
             val frame = card.frameType.lowercase()
@@ -23,7 +30,8 @@ data class DuelCardInfo(
                 frame == "trap" -> CardKind.TRAP
                 else -> CardKind.MONSTER
             }
-            return DuelCardInfo(card.name, kind, pendulum = frame.contains("pendulum"), link = frame.contains("link"))
+            val sub = if (kind == CardKind.SPELL || kind == CardKind.TRAP || kind == CardKind.FIELD_SPELL) card.race?.takeIf { it.isNotBlank() } else null
+            return DuelCardInfo(card.name, kind, pendulum = frame.contains("pendulum"), link = frame.contains("link"), sub = sub)
         }
     }
 }
@@ -67,6 +75,10 @@ enum class DuelVerb(val label: String) {
     COUNTER_UP("Add a counter"),
     COUNTER_DOWN("Remove a counter"),
     TARGET("Target"),
+    /** Into a zone as it is, no chain link: a card placed face-up as a Continuous Spell, a Field Spell put down (1.0.79). */
+    PLACE("Place"),
+    /** From one zone on the field to another. */
+    MOVE("Move"),
 }
 
 object DuelVerbs {
@@ -126,6 +138,7 @@ object DuelVerbs {
                     if (monster) add(DuelVerb.SPECIAL)
                     if (!monster && p.kind != PileKind.EXTRA) add(DuelVerb.SET)
                 }
+                if (p.kind != PileKind.EXTRA || card.pendulum(catalog)) add(DuelVerb.PLACE)
                 if (p.kind != PileKind.HAND) add(DuelVerb.HAND)
                 if (p.kind != PileKind.GY) add(DuelVerb.GRAVE)
                 if (p.kind != PileKind.BANISHED) { add(DuelVerb.BANISH); add(DuelVerb.BANISH_DOWN) }
@@ -155,6 +168,7 @@ object DuelVerbs {
                 CardKind.FIELD_SPELL -> ZoneKind.FIELD
                 else -> ZoneKind.MONSTER
             }
+            DuelVerb.PLACE -> if (kind == CardKind.FIELD_SPELL) ZoneKind.FIELD else ZoneKind.SPELL
             DuelVerb.SET, DuelVerb.ACTIVATE -> when (kind) {
                 CardKind.SPELL, CardKind.TRAP -> ZoneKind.SPELL
                 CardKind.FIELD_SPELL -> ZoneKind.FIELD
@@ -187,6 +201,35 @@ object DuelVerbs {
         fun move(to: Place, pos: CardPosition? = null, how: String? = null) = DuelAction.Move(uid, to, pos, how)
         fun into(k: ZoneKind, preferEmz: Boolean = false): Place.Zone? = zone?.takeIf { it.kind == k || (k == ZoneKind.MONSTER && it.kind == ZoneKind.EMZ) }
             ?: nearestFree(s, seat, k, preferEmz)
+        // A zone named outright is where the card goes (1.0.79, Ai: "set #1045 to s2" set it in M3): a verb
+        // whose kind of zone differs from the one named puts the card there as it is, never somewhere else.
+        val named = zone
+        if (named != null && v in setOf(DuelVerb.SUMMON, DuelVerb.SPECIAL, DuelVerb.SET, DuelVerb.ACTIVATE, DuelVerb.PLACE, DuelVerb.MOVE)) {
+            val fits = when (v) {
+                DuelVerb.SUMMON, DuelVerb.SPECIAL -> named.kind == ZoneKind.MONSTER || named.kind == ZoneKind.EMZ ||
+                    (kind == CardKind.SPELL || kind == CardKind.TRAP || kind == CardKind.FIELD_SPELL)
+                DuelVerb.ACTIVATE -> from is Place.Pile && from.kind == PileKind.HAND && (kind == CardKind.SPELL || kind == CardKind.TRAP || kind == CardKind.FIELD_SPELL) &&
+                    named.kind == (if (kind == CardKind.FIELD_SPELL) ZoneKind.FIELD else ZoneKind.SPELL)
+                else -> false
+            }
+            if (!fits) {
+                if (from is Place.Zone && from == named) return VerbResult.no("It is already there")
+                val face = when (v) {
+                    DuelVerb.SET -> if (named.kind == ZoneKind.MONSTER || named.kind == ZoneKind.EMZ) CardPosition.FACE_DOWN_DEF else CardPosition.FACE_DOWN_ATK
+                    DuelVerb.MOVE -> null
+                    else -> CardPosition.FACE_UP_ATK
+                }
+                val how = when {
+                    from is Place.Zone -> "move"
+                    v == DuelVerb.SET -> "set"
+                    v == DuelVerb.ACTIVATE -> "activate"
+                    else -> "place"
+                }
+                val list = mutableListOf<DuelAction>(move(named, face, how))
+                if (v == DuelVerb.ACTIVATE) list += DuelAction.ChainAdd(seat, uid)
+                return VerbResult(list)
+            }
+        }
 
         return when (v) {
             DuelVerb.DEFAULT -> VerbResult.no("Nothing to do")
@@ -258,7 +301,12 @@ object DuelVerbs {
             DuelVerb.GRAVE -> pileMove(card, from, PileKind.GY, null, if (from is Place.Under) "detach" else "send")
             DuelVerb.BANISH -> pileMove(card, from, PileKind.BANISHED, CardPosition.FACE_UP_ATK, "banish")
             DuelVerb.BANISH_DOWN -> pileMove(card, from, PileKind.BANISHED, CardPosition.FACE_DOWN_DEF, "banish")
-            DuelVerb.HAND -> pileMove(card, from, PileKind.HAND, null, if (from is Place.Pile && from.kind == PileKind.DECK) "search" else "return")
+            DuelVerb.HAND -> {
+                // A card added from the Deck is shown to the other player, as at a table (1.0.79): it is known.
+                val search = from is Place.Pile && from.kind == PileKind.DECK
+                val r = pileMove(card, from, PileKind.HAND, null, if (search) "search" else "return")
+                if (search && r.problem == null) r.copy(actions = r.actions + DuelAction.Reveal(owner, listOf(uid))) else r
+            }
             DuelVerb.DECK_TOP -> pileMove(card, from, PileKind.DECK, null, "return", Place.TOP)
             DuelVerb.DECK_BOTTOM -> pileMove(card, from, PileKind.DECK, null, "return", Place.BOTTOM)
             // A Pendulum Monster goes to the Extra Deck face-up.
@@ -275,6 +323,15 @@ object DuelVerbs {
                 val k = card.counters.keys.firstOrNull() ?: return VerbResult.no("It has no counters")
                 VerbResult(listOf(DuelAction.Counter(uid, -1, k)))
             }
+            DuelVerb.PLACE -> {
+                val k = when (kind) {
+                    CardKind.FIELD_SPELL -> ZoneKind.FIELD
+                    else -> ZoneKind.SPELL
+                }
+                val z = nearestFree(s, seat, k) ?: return VerbResult.no(if (k == ZoneKind.FIELD) "The Field Zone is taken" else "No free Spell & Trap Zone")
+                VerbResult(listOf(move(z, CardPosition.FACE_UP_ATK, if (from is Place.Zone) "move" else "place")))
+            }
+            DuelVerb.MOVE -> VerbResult.no("Move it where? Name a zone: “move it to m4”")
             DuelVerb.TARGET -> {
                 // A second time takes the arrow away.
                 val drawn = s.arrows.firstOrNull { it.seat == seat && it.from == null && uid in it.to }
@@ -298,6 +355,24 @@ object DuelVerbs {
             if (emz != null) return emz
         }
         return order.firstOrNull()
+    }
+
+    /**
+     * What resolving the newest chain link comes to (1.0.79): the link leaves the chain, and a Normal or
+     * Quick-Play Spell, a Normal or Counter Trap face-up in its zone goes to the GY with it, unless [keep]
+     * ("resolve keep": a card whose text says it stays). The table stays physics; this is the verb.
+     */
+    fun resolve(s: DuelState, catalog: DuelCatalog, keep: Boolean = false): List<DuelAction> {
+        val top = s.chain.lastOrNull() ?: return emptyList()
+        val uid = top.uid
+        val card = uid?.let { s.cards[it] }
+        val leaves = !keep && card != null && card.faceUp && !card.token &&
+            s.placeOf(uid).let { it is Place.Zone && it.kind == ZoneKind.SPELL } &&
+            catalog.info(card.code)?.leavesOnResolve == true &&
+            // Only its last link: a card chained twice stays until both have resolved.
+            s.chain.count { it.uid == uid } == 1
+        return if (leaves) listOf(DuelAction.ChainResolve, DuelAction.Move(uid!!, Place.Pile(card!!.owner, PileKind.GY), how = "resolve"))
+        else listOf(DuelAction.ChainResolve)
     }
 
     fun kindOf(card: CardInst, catalog: DuelCatalog): CardKind =

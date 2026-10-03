@@ -45,6 +45,10 @@ data class DuelState(
     /** One player alone at the table: the turn never passes, the second seat stays empty. */
     val solo: Boolean = false,
     val nextUid: Int = TOKEN_UIDS,
+    /** The non-turn seat's ask to move the phase on, waiting for the turn player's answer (1.0.79). */
+    val proposal: Proposal? = null,
+    /** What players have said is locked for now — "Synchro Monsters only from the Extra Deck" (1.0.79). */
+    val locks: List<Lock> = emptyList(),
 ) {
     fun seat(i: Int): SeatState = seats[i]
 
@@ -143,6 +147,9 @@ data class CardInst(
     /** A token's name, when it has no passcode to look one up by. */
     val name: String? = null,
     val under: List<Int> = emptyList(),
+    /** A token's ATK and DEF, when its maker gave them (1.0.79). */
+    val atk: Int? = null,
+    val def: Int? = null,
 ) {
     val faceUp: Boolean get() = pos.faceUp
     val defense: Boolean get() = pos == CardPosition.FACE_UP_DEF || pos == CardPosition.FACE_DOWN_DEF
@@ -163,6 +170,23 @@ data class ChainLink(
     val note: String = "",
     val targets: List<Int> = emptyList(),
 )
+
+/** [seat] asks to go to [phase], or to end the turn when [end] (1.0.79). */
+@Serializable
+data class Proposal(val seat: Int, val phase: com.kaiharimoto.mastertool.core.board.DuelPhase? = null, val end: Boolean = false)
+
+/**
+ * A lock written down: [text] in the player's words, lasting until the end of the turn ([UNTIL_TURN]),
+ * the chain ([UNTIL_CHAIN]) or the duel ([UNTIL_DUEL]). The table never enforces it; it reminds.
+ */
+@Serializable
+data class Lock(val id: Int, val seat: Int, val text: String, val until: String = UNTIL_TURN) {
+    companion object {
+        const val UNTIL_TURN = "turn"
+        const val UNTIL_CHAIN = "chain"
+        const val UNTIL_DUEL = "duel"
+    }
+}
 
 /** A line one seat draws from a card (or from itself) to others: a target, a "this one". */
 @Serializable

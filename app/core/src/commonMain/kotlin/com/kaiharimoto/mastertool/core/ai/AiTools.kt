@@ -916,12 +916,13 @@ object AiTools {
 
     val duelAct = ToolSpec(
         "duel_act",
-        "Duel (07): plays moves on the table for a seat, each op a line of the duel's command line, checked all together before anything moves " +
-            "and then played out one by one at a pace the person can follow (each one step of their Undo). Ops say what a player says: " +
-            "'summon #12 to m3', 'set called by', 'activate pot', 'chain ash' (a hand trap: to the GY and on the chain), 'link #40' (an effect " +
-            "where it stands), 'attach #7 to #40', '#9 to gy', 'banish #3', 'ash to hand' (a search), 'draw', 'mill 2', 'shuffle', 'lp opp -1000', " +
-            "'bp', 'm2', 'end', 'resolve', 'coin', 'token', 'reveal #5', 'say ok?'. Use #uids from duel_state where a name could mean two cards. " +
-            "You can only name cards your seat may see (and your own deck's, to search it).",
+        "Duel (07): plays moves for your seat, each op a line of the duel's command line, checked together before anything moves, then " +
+            "played at a pace the person can follow. Ops as a player says them: 'summon #12 to m3', 'set called by', 'activate pot', " +
+            "'chain ash', 'link #40', 'attach #7 to #40', '#9 to gy', 'ash to hand' (a search: the Deck first), 'place #8 in s2' (face-up, " +
+            "no chain link), 'move #8 to m4', 'token sheep atk 0 def 0 def m2', 'resolve' ('resolve keep'), 'lock Synchro only', 'bp', " +
+            "'end', 'say ok?'. 'emz left'/'emz right' are your own. A name means your own cards ('their X' for theirs); one that could mean " +
+            "two cards fails and lists them, so use #uids. A phase op off your turn asks the turn player. The duel-table skill has the rest. " +
+            "The result is each op's real effect, read with your knowledge setting.",
         schema {
             strings("ops", "The moves, in order", required = true)
             integer("seat", "The seat acting; omit for the one set on the page", min = 0, max = 1)
@@ -990,6 +991,21 @@ object AiTools {
         phase = 3,
     )
 
+    val duelRuling = ToolSpec(
+        "duel_ruling",
+        "Duel (07): house rulings — what the two players agreed at this table about a card ('no free zone, can't activate'), kept for every " +
+            "duel after and read back with the table (duel_state) and the card. list; save {card, text} (card by name or #uid, or none for a " +
+            "general one); delete {id}. Save only what both of you agreed.",
+        schema {
+            enum("action", "What to do", listOf("list", "save", "delete"), required = true)
+            string("card", "save: the card it is about, by name or #uid")
+            string("text", "save: the ruling, in a sentence")
+            string("id", "delete: the ruling's id")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
     val readOnly: Set<String> = setOf(
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
@@ -1014,7 +1030,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo,
+        duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

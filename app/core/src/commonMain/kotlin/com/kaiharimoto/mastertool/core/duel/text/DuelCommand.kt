@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel.text
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.duel.CardKind
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelRules
@@ -29,6 +30,21 @@ object DuelCommand {
     sealed interface Parsed {
         data class Actions(val actions: List<DuelAction>, val said: String) : Parsed
         data class Problem(val text: String) : Parsed
+        /** A house ruling to keep (1.0.79): "ruling e4: no free zone, can't activate". Not an action on the table. */
+        data class Ruling(val code: Int?, val card: String?, val text: String) : Parsed
+    }
+
+    /**
+     * What a command wants of the card it names (1.0.79), so the lookup reaches where a player would:
+     * "e4 to hand" means the Deck's copy before the GY's, "summon droll" the hand's.
+     */
+    enum class Want { ANY, HAND, PLAY, AWAY, TARGET }
+
+    /** A name looked up: one card, none, or several different cards it could mean. */
+    sealed interface Lookup {
+        data class One(val uid: Int) : Lookup
+        data class None(val why: String) : Lookup
+        data class Many(val names: List<String>) : Lookup
     }
 
     /** One example per thing the line can do, for the help and the empty line's hint. */
@@ -36,7 +52,8 @@ object DuelCommand {
         "draw", "draw 2", "mill 3", "shuffle", "ash to hand", "summon droll to m3", "set called by", "activate pot",
         "chain ash", "banish ash", "gy ash", "ash to deck bottom", "attach ash to zeus", "lp -1000", "lp opp /2",
         "lp =4000", "bp", "m2", "ep", "next", "end", "coin", "dice", "token", "look 3", "excavate 3", "resolve",
-        "think", "say ok?",
+        "think", "say ok?", "place angelechy in s2", "move zeus to m4", "token atk 6500 def 8500 def",
+        "resolve keep", "lock synchro only", "unlock 1", "ruling e4: no free zone, can't activate",
     )
 
     fun parse(text: String, s: DuelState, seat: Int, catalog: DuelCatalog): Parsed {
@@ -69,17 +86,54 @@ object DuelCommand {
                 return one(DuelAction.Shuffle(seat, pile), "Shuffle ${pile.label}")
             }
             "lp", "life" -> return lp(rest, s, seat)
-            "dp", "draw-phase" -> return one(DuelAction.Phase(DuelPhase.DRAW), "Draw Phase")
-            "sp", "standby" -> return one(DuelAction.Phase(DuelPhase.STANDBY), "Standby Phase")
-            "m1", "mp1", "main1" -> return one(DuelAction.Phase(DuelPhase.MAIN1), "Main Phase 1")
-            "bp", "battle" -> return one(DuelAction.Phase(DuelPhase.BATTLE), "Battle Phase")
-            "m2", "mp2", "main2" -> return one(DuelAction.Phase(DuelPhase.MAIN2), "Main Phase 2")
-            "ep" -> return one(DuelAction.Phase(DuelPhase.END), "End Phase")
-            "next", "np" -> return one(DuelAction.Phase(s.phase.next()), s.phase.next().label)
-            "end", "pass", "et" -> if (rest.isEmpty() || rest == listOf("turn")) return one(DuelAction.EndTurn, "End turn")
+            "dp", "draw-phase" -> return phase(DuelPhase.DRAW, s, seat)
+            "sp", "standby" -> return phase(DuelPhase.STANDBY, s, seat)
+            "m1", "mp1", "main1" -> return phase(DuelPhase.MAIN1, s, seat)
+            "bp", "battle" -> return phase(DuelPhase.BATTLE, s, seat)
+            "m2", "mp2", "main2" -> return phase(DuelPhase.MAIN2, s, seat)
+            "ep" -> return phase(DuelPhase.END, s, seat)
+            // From the End Phase, next is the other player's turn.
+            "next", "np" -> return if (s.phase == DuelPhase.END) endTurn(s, seat) else phase(s.phase.next(), s, seat)
+            "end", "pass", "et" -> if (rest.isEmpty() || rest == listOf("turn")) return endTurn(s, seat)
+            "accept", "yes" -> {
+                val p = s.proposal ?: return Parsed.Problem("Nothing was asked")
+                if (seat == p.seat) return Parsed.Problem("The other player answers that")
+                return if (p.end) one(DuelAction.EndTurn, "End turn") else one(DuelAction.Phase(p.phase ?: s.phase), "${p.phase?.label} Phase")
+            }
+            "decline", "no" -> if (s.proposal != null) return one(DuelAction.Decline(seat), "Not yet")
+            "lock" -> {
+                var text = line.substringAfter(' ', "").trim()
+                var until = com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_TURN
+                Regex("\\s*\\((?:until )?(?:the )?(?:end of (?:the )?)?(turn|chain|duel)\\)\\s*$|\\s+until (?:the )?(?:end of (?:the )?)?(turn|chain|duel)\\s*$", RegexOption.IGNORE_CASE).find(text)?.let { m ->
+                    until = (m.groupValues[1].ifBlank { m.groupValues[2] }).lowercase()
+                    text = text.substring(0, m.range.first).trim()
+                }
+                if (text.isEmpty()) return Parsed.Problem("Lock what? “lock Synchro Monsters only from the Extra Deck”")
+                return one(DuelAction.Lock(seat, text, until), "Lock")
+            }
+            "unlock" -> {
+                val id = n ?: s.locks.lastOrNull()?.id ?: return Parsed.Problem("No lock to lift")
+                return one(DuelAction.Unlock(id), "Unlock")
+            }
+            "ruling", "rule" -> {
+                val body = line.substringAfter(' ', "").trim()
+                val colon = body.indexOf(':')
+                if (colon < 0) return if (body.isEmpty()) Parsed.Problem("“ruling <card>: what we agreed”") else Parsed.Ruling(null, null, body)
+                val q = body.substring(0, colon).trim()
+                val text = body.substring(colon + 1).trim().ifEmpty { return Parsed.Problem("What did you agree?") }
+                if (q.isEmpty()) return Parsed.Ruling(null, null, text)
+                return when (val l = lookup(q, s, seat, catalog, want = Want.ANY, everywhere = true)) {
+                    is Lookup.One -> s.cards.getValue(l.uid).let { Parsed.Ruling(it.code.takeIf { c -> c != 0 }, catalog.nameOf(it), text) }
+                    else -> Parsed.Ruling(null, q, text)
+                }
+            }
             "coin", "flip-coin" -> return one(DuelAction.Coin(seat), "Coin")
             "dice", "die", "roll" -> return one(DuelAction.Dice(seat), "Die")
-            "resolve", "res" -> return one(DuelAction.ChainResolve, "Resolve")
+            "resolve", "res" -> {
+                if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to resolve")
+                val keep = rest.firstOrNull() in setOf("keep", "stay", "stays")
+                return Parsed.Actions(DuelVerbs.resolve(s, catalog, keep), "Resolve")
+            }
             "think", "thinking", "wait" -> return one(DuelAction.Thinking(seat, true), "Thinking")
             "ready" -> return one(DuelAction.Thinking(seat, false), "Ready")
             "concede", "surrender" -> return one(DuelAction.Concede(seat), "Concede")
@@ -99,32 +153,74 @@ object DuelCommand {
                 if (top.isEmpty()) return Parsed.Problem("The deck is empty")
                 return one(DuelAction.Reveal(seat, top, to = if (head == "excavate") null else seat), "${head.replaceFirstChar { it.uppercase() }} $k")
             }
-            "token", "tokens" -> {
-                var args = rest
-                val zoneWord = args.lastOrNull()?.let { zoneOf(it, seat) }
-                if (zoneWord != null) args = args.dropLast(1)
-                val count = args.firstOrNull()?.toIntOrNull()?.also { args = args.drop(1) } ?: 1
-                val name = args.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }.ifBlank { "Token" }
-                val actions = mutableListOf<DuelAction>()
-                var state = s
-                repeat(count.coerceIn(1, 5)) {
-                    val z = (if (count == 1) zoneWord else null) ?: DuelVerbs.nearestFree(state, seat, ZoneKind.MONSTER)
-                        ?: return Parsed.Problem("No free Monster Zone")
-                    val a = DuelAction.Token(seat, z, name = name)
-                    actions += a
-                    state = (DuelRules.apply(state, a) as? Outcome.Ok)?.state ?: return Parsed.Problem("That zone is taken")
-                }
-                return Parsed.Actions(actions, if (count > 1) "$count tokens" else "Token")
-            }
+            "token", "tokens" -> return token(rest, s, seat)
             "clear" -> if (rest.firstOrNull() == "chain" || rest.isEmpty()) return one(DuelAction.ChainClear, "Clear the chain")
             // A chain link for a card where it stands (an effect on the field or in the GY), nothing moved.
             "link", "effect" -> {
                 val q = rest.joinToString(" ").ifBlank { return Parsed.Problem("Which card's effect?") }
-                val uid = find(q, s, seat, catalog, null, false) ?: return Parsed.Problem("No card you can see matches “$q”")
+                val uid = when (val l = lookup(q, s, seat, catalog, want = Want.ANY)) {
+                    is Lookup.One -> l.uid
+                    is Lookup.Many -> return Parsed.Problem(manyWords(q, l))
+                    is Lookup.None -> return Parsed.Problem(l.why)
+                }
                 return one(DuelAction.ChainAdd(seat, uid), "Effect: ${catalog.nameOf(s.cards.getValue(uid))}")
             }
         }
         return cardCommand(words, s, seat, catalog)
+    }
+
+    /**
+     * A phase change. The seat whose turn it is moves the phase; the other asks (1.0.79, Ai's feedback:
+     * acting as the other seat to move the phase is how hidden cards leaked).
+     */
+    private fun phase(p: DuelPhase, s: DuelState, seat: Int): Parsed =
+        if (!s.solo && seat != s.active) Parsed.Actions(listOf(DuelAction.Propose(seat, p)), "Ask for the ${p.label} Phase")
+        else Parsed.Actions(listOf(DuelAction.Phase(p)), "${p.label} Phase")
+
+    private fun endTurn(s: DuelState, seat: Int): Parsed =
+        if (!s.solo && seat != s.active) Parsed.Actions(listOf(DuelAction.Propose(seat, end = true)), "Ask to end the turn")
+        else Parsed.Actions(listOf(DuelAction.EndTurn), "End turn")
+
+    /**
+     * `token [n] [name] [atk N] [def N] [atk|def|def-pos] [their] [zone]` (1.0.79): a token's stats, its
+     * position, and the side it goes to ("their" puts it on the other player's field).
+     */
+    private fun token(rest: List<String>, s: DuelState, seat: Int): Parsed {
+        var count = 1
+        var atk: Int? = null
+        var def: Int? = null
+        var pos = CardPosition.FACE_UP_DEF
+        var side = seat
+        var zoneWord: Place.Zone? = null
+        val name = mutableListOf<String>()
+        var i = 0
+        while (i < rest.size) {
+            val w = rest[i]
+            val next = rest.getOrNull(i + 1)?.toIntOrNull()
+            when {
+                i == 0 && w.toIntOrNull() != null && w.toInt() in 1..5 -> count = w.toInt()
+                (w == "atk" || w == "attack") && next != null -> { atk = next; i++ }
+                (w == "def" || w == "defense") && next != null -> { def = next; i++ }
+                w in setOf("atk-pos", "atkpos", "atk", "attack", "attack-position") -> pos = CardPosition.FACE_UP_ATK
+                w in setOf("def-pos", "defpos", "def", "defense", "defense-position") -> pos = CardPosition.FACE_UP_DEF
+                w in setOf("their", "theirs", "opp", "opponent", "opponents", "opponent's") -> side = 1 - seat
+                zoneOf(w, seat) != null -> zoneWord = zoneOf(w, seat)
+                else -> name += w
+            }
+            i++
+        }
+        if (side != seat && s.solo) return Parsed.Problem("There is no other player at this table")
+        val label = name.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }.ifBlank { "Token" }
+        val actions = mutableListOf<DuelAction>()
+        var state = s
+        repeat(count) {
+            val z = (if (count == 1) zoneWord?.copy(seat = side) else null) ?: DuelVerbs.nearestFree(state, side, ZoneKind.MONSTER)
+                ?: return Parsed.Problem("No free Monster Zone")
+            val a = DuelAction.Token(seat, z, pos = pos, name = label, atk = atk, def = def)
+            actions += a
+            state = (DuelRules.apply(state, a) as? Outcome.Ok)?.state ?: return Parsed.Problem("That zone is taken")
+        }
+        return Parsed.Actions(actions, if (count > 1) "$count tokens" else "Token")
     }
 
     private fun lp(rest: List<String>, s: DuelState, seat: Int): Parsed {
@@ -165,6 +261,7 @@ object DuelCommand {
         "reveal" to DuelVerb.REVEAL, "show" to DuelVerb.REVEAL,
         "target" to DuelVerb.TARGET, "point" to DuelVerb.TARGET,
         "counter" to DuelVerb.COUNTER_UP, "uncounter" to DuelVerb.COUNTER_DOWN,
+        "place" to DuelVerb.PLACE, "put" to DuelVerb.PLACE, "move" to DuelVerb.MOVE,
     )
 
     private val pileWords: Map<String, PileKind> = mapOf(
@@ -173,55 +270,94 @@ object DuelCommand {
         "banish" to PileKind.BANISHED, "banished" to PileKind.BANISHED, "removed" to PileKind.BANISHED, "exile" to PileKind.BANISHED,
     )
 
+    /** Words that only say a placed card lies face-up as a Spell — "as continuous", "as a Continuous Spell". */
+    private val asContinuous = Regex("\\s+(as\\s+)?(an?\\s+)?(face-?up\\s+)?(continuous|face-?up)(\\s+(spell|trap|card))?$")
+
     private fun cardCommand(words: List<String>, s: DuelState, seat: Int, catalog: DuelCatalog): Parsed {
         var verb: DuelVerb? = verbWords[words.first()]
         var body = if (verb != null) words.drop(1) else words
-        // "ash gy", "ash banish": a verb after the name.
-        if (verb == null && body.size >= 2 && verbWords.containsKey(body.last()) && "to" !in body) {
-            verb = verbWords[body.last()]
-            body = body.dropLast(1)
-        }
         var defense = words.first() == "def"
 
-        // "… to <destination>"
+        // "… to <destination>" (also "in", "into", "on" for a zone): the last one whose rest is a place,
+        // so a name with "to" in it ("Back to Square One") stays whole.
         var dest: List<String> = emptyList()
-        val toAt = body.lastIndexOf("to")
-        if (toAt >= 0) {
-            dest = body.drop(toAt + 1)
-            body = body.take(toAt)
+        for (i in body.indices.reversed()) {
+            if (body[i] !in setOf("to", "in", "into", "on", "onto")) continue
+            val d = body.drop(i + 1).joinToString(" ").replace(asContinuous, "").split(" ").filter { it.isNotEmpty() }
+            if (d.isEmpty() || i == 0) continue
+            if (isPlace(d, s, seat, catalog) || (body[i] == "to" && attachHost(d.joinToString(" "), s, seat, catalog) is Lookup.One)) {
+                dest = d
+                body = body.take(i)
+                break
+            }
         }
-        // "… from <pile>"
+        // "… from <pile>": the last "from" followed by a pile.
         var from: PileKind? = null
         var fromField = false
-        val fromAt = body.lastIndexOf("from")
-        if (fromAt >= 0) {
-            val w = body.drop(fromAt + 1).joinToString(" ")
-            from = pileWords[w]
-            fromField = w == "field"
-            if (from == null && !fromField) return Parsed.Problem("From where? “$w” is not a hand, deck, GY, banished or Extra Deck")
-            body = body.take(fromAt)
+        for (i in body.indices.reversed()) {
+            if (body[i] != "from" || i == 0) continue
+            val w = body.drop(i + 1).joinToString(" ")
+            val pile = pileWords[w] ?: pileWords[w.removePrefix("the ")]
+            if (pile != null || w == "field") {
+                from = pile
+                fromField = w == "field"
+                body = body.take(i)
+                break
+            }
         }
-        // A trailing position word: "summon droll def".
+        // "ash gy", "ash banish": a verb after the name — unless the whole of it names a card ("Torrential Tribute").
+        if (verb == null && dest.isEmpty() && body.size >= 2 && verbWords.containsKey(body.last())) {
+            val whole = body.joinToString(" ")
+            val named = lookup(whole, s, seat, catalog, Want.ANY, everywhere = true)
+            val strong = named is Lookup.One && NameScore.of(whole, catalog.nameOf(s.cards.getValue(named.uid))) >= 70
+            if (!strong) {
+                verb = verbWords[body.last()]
+                body = body.dropLast(1)
+            }
+        }
+        // A trailing position or "as continuous": "summon droll def", "place angelechy as continuous".
+        body = body.joinToString(" ").replace(asContinuous, "").split(" ").filter { it.isNotEmpty() }
         if (body.lastOrNull() == "def" || body.lastOrNull() == "defense") { defense = true; body = body.dropLast(1) }
         if (body.lastOrNull() == "atk" || body.lastOrNull() == "attack") body = body.dropLast(1)
         if (body.lastOrNull() in setOf("facedown", "fd") && verb == DuelVerb.BANISH) { verb = DuelVerb.BANISH_DOWN; body = body.dropLast(1) }
 
         val query = body.joinToString(" ").trim()
         if (query.isEmpty()) return Parsed.Problem("Which card?")
-        val uid = find(query, s, seat, catalog, from, fromField)
-            ?: return Parsed.Problem("No card you can see matches “$query”")
+        val d = dest.joinToString(" ")
+        val zone = if (dest.isNotEmpty()) zoneOf(dest.joinToString(""), seat) else null
+        val want = wantOf(verb, d, zone)
+        val uid = when (val l = lookup(query, s, seat, catalog, want, from, fromField)) {
+            is Lookup.One -> l.uid
+            is Lookup.Many -> return Parsed.Problem(manyWords(query, l))
+            is Lookup.None -> return Parsed.Problem(l.why)
+        }
         val name = catalog.nameOf(s.cards.getValue(uid))
+        val kind = DuelVerbs.kindOf(s.cards.getValue(uid), catalog)
+        val spellish = kind == CardKind.SPELL || kind == CardKind.TRAP || kind == CardKind.FIELD_SPELL
+        val where = s.placeOf(uid)
+        val inHand = where is Place.Pile && where.kind == PileKind.HAND
 
-        var zone: Place.Zone? = null
         var host: Int? = null
+        var placeZone: Place.Zone? = zone
         if (dest.isNotEmpty()) {
-            val d = dest.joinToString(" ")
-            val z = zoneOf(dest.joinToString(""), seat)
             when {
-                z != null -> { zone = z; if (verb == null) verb = DuelVerbs.default(s, seat, uid, catalog).takeIf { it in placing } ?: DuelVerb.SPECIAL }
+                zone != null -> if (verb == null) verb = when {
+                    where is Place.Zone -> DuelVerb.MOVE
+                    zone.kind == ZoneKind.MONSTER || zone.kind == ZoneKind.EMZ -> if (spellish) DuelVerb.PLACE else DuelVerbs.default(s, seat, uid, catalog).takeIf { it in placing } ?: DuelVerb.SPECIAL
+                    // A Spell or Trap from the hand to its zone is played as it would be played; anything else is placed.
+                    inHand && spellish -> DuelVerbs.default(s, seat, uid, catalog).takeIf { it in placing } ?: DuelVerb.ACTIVATE
+                    else -> DuelVerb.PLACE
+                }
                 d == "deck" || d == "top" || d == "deck top" || d == "top of deck" -> if (verb == null || verb == DuelVerb.DEFAULT) verb = DuelVerb.DECK_TOP
                 d == "bottom" || d == "deck bottom" || d == "bottom of deck" -> verb = DuelVerb.DECK_BOTTOM
-                d == "field" -> if (verb == null) verb = DuelVerbs.default(s, seat, uid, catalog).takeIf { it in placing } ?: DuelVerb.SPECIAL
+                d == "field" -> {
+                    if (verb == DuelVerb.PLACE || (verb == null && kind == CardKind.FIELD_SPELL)) {
+                        verb = DuelVerb.PLACE
+                        if (kind == CardKind.FIELD_SPELL) placeZone = Place.Zone(seat, ZoneKind.FIELD, 0)
+                    } else if (verb == null) {
+                        verb = DuelVerbs.default(s, seat, uid, catalog).takeIf { it in placing } ?: DuelVerb.SPECIAL
+                    }
+                }
                 pileWords[d] != null -> verb = when (pileWords.getValue(d)) {
                     PileKind.HAND -> DuelVerb.HAND
                     PileKind.DECK -> DuelVerb.DECK_TOP
@@ -230,16 +366,24 @@ object DuelCommand {
                     PileKind.BANISHED -> if (verb == DuelVerb.BANISH_DOWN) DuelVerb.BANISH_DOWN else DuelVerb.BANISH
                 }
                 else -> {
-                    host = find(d, s, seat, catalog, null, true)?.takeIf { s.placeOf(it) is Place.Zone }
-                        ?: return Parsed.Problem("Where is “$d”? Try hand, gy, deck, m3, s2, emz, or a card on the field")
+                    host = when (val l = attachHost(d, s, seat, catalog)) {
+                        is Lookup.One -> l.uid
+                        is Lookup.Many -> return Parsed.Problem(manyWords(d, l))
+                        is Lookup.None -> return Parsed.Problem("Where is “$d”? Try hand, gy, deck, m3, s2, emz left, fz, or a card on the field")
+                    }
                     verb = DuelVerb.ATTACH
                 }
             }
         }
         val v = verb ?: DuelVerb.DEFAULT
-        val result = DuelVerbs.actions(s, seat, uid, v, catalog, zone, host)
+        if (v == DuelVerb.MOVE && placeZone == null) return Parsed.Problem("Move $name where? “move $query to m4”")
+        val result = DuelVerbs.actions(s, seat, uid, v, catalog, placeZone, host)
         if (result.needsHost) return Parsed.Problem("Attach $name to which card? “attach $query to <card>”")
         result.problem?.let { return Parsed.Problem(it) }
+        // A zone named outright is always where the card goes; a command that would move nothing there is refused (1.0.79).
+        if (placeZone != null && result.actions.none { it is DuelAction.Move && it.to is Place.Zone && (it.to as Place.Zone).let { z -> z.kind == placeZone.kind && z.index == placeZone.index } }) {
+            return Parsed.Problem("That would not put $name in ${DuelWords.zoneName(placeZone, s)}. Try “place $query in ${dest.joinToString(" ")}”")
+        }
         // "summon … def": the monster comes in face-up Defense.
         val actions = if (defense) result.actions.map {
             if (it is DuelAction.Move && it.pos == CardPosition.FACE_UP_ATK && it.to is Place.Zone) it.copy(pos = CardPosition.FACE_UP_DEF) else it
@@ -249,54 +393,135 @@ object DuelCommand {
 
     private val placing = setOf(DuelVerb.SUMMON, DuelVerb.SPECIAL, DuelVerb.SET, DuelVerb.ACTIVATE)
 
-    /** "m3", "s2", "st2", "s/t2", "emz", "el", "er", "fz" — a zone on the acting seat's side. */
+    /** Whether words after "to" are a place: a zone, a pile, the deck's ends, the field. */
+    private fun isPlace(d: List<String>, s: DuelState, seat: Int, catalog: DuelCatalog): Boolean {
+        val w = d.joinToString(" ")
+        return zoneOf(d.joinToString(""), seat) != null || pileWords[w] != null || w == "field" ||
+            w in setOf("deck", "top", "deck top", "top of deck", "bottom", "deck bottom", "bottom of deck")
+    }
+
+    private fun attachHost(d: String, s: DuelState, seat: Int, catalog: DuelCatalog): Lookup {
+        val l = lookup(d, s, seat, catalog, Want.ANY, fieldOnly = true)
+        return if (l is Lookup.One && s.placeOf(l.uid) !is Place.Zone) Lookup.None("Materials go under a card on the field") else l
+    }
+
+    private fun wantOf(verb: DuelVerb?, dest: String, zone: Place.Zone?): Want = when {
+        verb == DuelVerb.TARGET -> Want.TARGET
+        verb == DuelVerb.HAND || dest == "hand" -> Want.HAND
+        verb in setOf(DuelVerb.GRAVE, DuelVerb.BANISH, DuelVerb.BANISH_DOWN, DuelVerb.DECK_TOP, DuelVerb.DECK_BOTTOM, DuelVerb.EXTRA, DuelVerb.ATTACH, DuelVerb.FLIP, DuelVerb.POSITION, DuelVerb.MOVE) -> Want.AWAY
+        dest in setOf("gy", "grave", "graveyard", "banish", "banished", "deck", "bottom", "extra", "ed") -> Want.AWAY
+        verb in placing || verb == DuelVerb.PLACE || zone != null -> Want.PLAY
+        else -> Want.ANY
+    }
+
+    private fun manyWords(q: String, l: Lookup.Many): String =
+        "“$q” could be ${l.names.take(5).joinToString(", ")}${if (l.names.size > 5) ", …" else ""}. Say more of the name, or use its #number"
+
+    /**
+     * "m3", "s2", "st2", "s/t2", "fz", and the Extra Monster Zones: "emz left" / "emz right" (also
+     * "left emz", "emzl"…) are the acting seat's own left and right (1.0.79, Ai: "it's unclear whose left
+     * or right that is"); "el"/"er" and "emz1"/"emz2" keep their old meaning, the left and right as seat
+     * 0 sees them, so combos written before still replay.
+     */
     fun zoneOf(word: String, seat: Int): Place.Zone? {
-        val w = word.lowercase().replace("/", "").replace("-", "")
+        val w = word.lowercase().replace("/", "").replace("-", "").replace(" ", "")
         Regex("^(m|mz|monster)([1-5])$").find(w)?.let { return Place.Zone(seat, ZoneKind.MONSTER, it.groupValues[2].toInt() - 1) }
         Regex("^(s|st|sz|spell|trap)([1-5])$").find(w)?.let { return Place.Zone(seat, ZoneKind.SPELL, it.groupValues[2].toInt() - 1) }
         Regex("^(p|pz|pendulum)([12])$").find(w)?.let { return Place.Zone(seat, ZoneKind.SPELL, if (it.groupValues[2] == "1") 0 else 4) }
         Regex("^emz([12])$").find(w)?.let { return Place.Zone(seat, ZoneKind.EMZ, it.groupValues[1].toInt() - 1) }
+        // Seat 0's left is index 0; across the table, seat 1's left is index 1.
+        val myLeft = if (seat == 0) 0 else 1
         return when (w) {
-            "emz", "el", "emzl", "extramonster" -> Place.Zone(seat, ZoneKind.EMZ, 0)
+            "emz", "extramonster", "emzleft", "leftemz", "myleftemz", "emzmyleft", "emzmine", "myemz" -> Place.Zone(seat, ZoneKind.EMZ, myLeft)
+            "emzright", "rightemz", "myrightemz", "emzmyright" -> Place.Zone(seat, ZoneKind.EMZ, 1 - myLeft)
+            "el", "emzl" -> Place.Zone(seat, ZoneKind.EMZ, 0)
             "er", "emzr" -> Place.Zone(seat, ZoneKind.EMZ, 1)
-            "fz", "fieldzone", "fieldspell" -> Place.Zone(seat, ZoneKind.FIELD, 0)
+            "fz", "fieldzone", "fieldspell", "fieldspellzone" -> Place.Zone(seat, ZoneKind.FIELD, 0)
             else -> null
         }
     }
 
+    /** The card [query] names, or null — the old answer, for callers that only need one. */
+    fun find(query: String, s: DuelState, seat: Int, catalog: DuelCatalog, from: PileKind?, fieldOnly: Boolean): Int? =
+        (lookup(query, s, seat, catalog, Want.ANY, from, fieldOnly) as? Lookup.One)?.uid
+
     /**
-     * The card [query] names among those [seat] can see, preferring (on a tie) the hand, then the
-     * field, the graveyard, banishment, the Extra Deck and last the deck — the order a player reaches.
+     * The card [query] names (1.0.79, Ai's feedback). Only the acting seat's own cards unless the query
+     * says "their" (or "opp"), is a `#uid`, or the verb is a target; the places are tried in the order
+     * [want] reaches for — the Deck first for a search, the hand first to play, the field first to send
+     * away — and among equally good matches the first place wins. When the best match is shared by
+     * different cards' names, it is [Lookup.Many]: the command fails and lists them, never guesses.
+     * Only what the seat may see is ever matched, plus its own Deck and Extra Deck (it knows its list).
      */
-    fun find(query: String, s: DuelState, seat: Int, catalog: DuelCatalog, from: PileKind?, fieldOnly: Boolean): Int? {
+    fun lookup(
+        query: String,
+        s: DuelState,
+        seat: Int,
+        catalog: DuelCatalog,
+        want: Want = Want.ANY,
+        from: PileKind? = null,
+        fieldOnly: Boolean = false,
+        everywhere: Boolean = false,
+    ): Lookup {
+        val q0 = query.trim()
         // "#17": a card by its uid, as Ai is shown them — only one the seat may see (or its own deck's).
-        Regex("^#(\\d+)$").find(query.trim())?.let { m ->
+        Regex("^#(\\d+)$").find(q0)?.let { m ->
             val uid = m.groupValues[1].toInt()
             val own = s.cards[uid]?.owner == seat && s.placeOf(uid).let { it is Place.Pile && (it.kind == PileKind.DECK || it.kind == PileKind.EXTRA) }
-            return uid.takeIf { it in s.cards && (DuelSight.sees(s, uid, seat) || own) }
+            return if (uid in s.cards && (DuelSight.sees(s, uid, seat) || own)) Lookup.One(uid) else Lookup.None("No card #$uid you can see")
         }
+        var q = q0
+        var side: Int? = if (everywhere || want == Want.TARGET) null else seat
+        Regex("^(their|theirs|opp|opponent|opponents|opponent's|the opponent's)\\s+", RegexOption.IGNORE_CASE).find(q)?.let { side = 1 - seat; q = q.substring(it.range.last + 1) }
+        Regex("^(my|mine|own)\\s+", RegexOption.IGNORE_CASE).find(q)?.let { side = seat; q = q.substring(it.range.last + 1) }
+        if (q.isBlank()) return Lookup.None("Which card?")
         val other = 1 - seat
-        val mine = s.seats[seat]
-        val theirs = s.seats[other]
-        val order: List<Int> = when {
-            fieldOnly -> s.onField().sortedBy { if (s.cards[it]?.controller == seat) 0 else 1 }
-            from != null -> mine.pile(from) + (if (from == PileKind.GY || from == PileKind.BANISHED) theirs.pile(from) else emptyList())
-            else -> mine.hand + s.onField().sortedBy { if (s.cards[it]?.controller == seat) 0 else 1 } +
-                mine.gy + theirs.gy + mine.banished + theirs.banished + mine.extra + mine.deck +
-                s.onField().flatMap { s.cards[it]?.under ?: emptyList() }
+        fun field(of: Int) = s.onField().filter { s.cards[it]?.controller == of }
+        fun materials(of: Int) = field(of).flatMap { s.cards[it]?.under ?: emptyList() }
+        fun piles(of: Int, kinds: List<PileKind>) = kinds.flatMap { s.seats[of].pile(it) }
+        fun reach(of: Int): List<Int> = when {
+            fieldOnly -> field(of)
+            from != null -> s.seats[of].pile(from)
+            else -> when (want) {
+                Want.HAND -> piles(of, listOf(PileKind.DECK, PileKind.GY, PileKind.BANISHED)) + field(of) + piles(of, listOf(PileKind.EXTRA)) + materials(of)
+                Want.PLAY -> piles(of, listOf(PileKind.HAND)) + field(of) + piles(of, listOf(PileKind.GY, PileKind.BANISHED, PileKind.EXTRA, PileKind.DECK)) + materials(of)
+                Want.AWAY -> field(of) + piles(of, listOf(PileKind.HAND)) + materials(of) + piles(of, listOf(PileKind.GY, PileKind.BANISHED, PileKind.DECK, PileKind.EXTRA))
+                Want.TARGET -> field(of) + piles(of, listOf(PileKind.GY, PileKind.BANISHED, PileKind.HAND)) + materials(of)
+                Want.ANY -> piles(of, listOf(PileKind.HAND)) + field(of) + piles(of, listOf(PileKind.GY, PileKind.BANISHED)) + materials(of) + piles(of, listOf(PileKind.EXTRA, PileKind.DECK))
+            }
+        }
+        val order = when (side) {
+            seat -> reach(seat)
+            other -> reach(other)
+            else -> if (want == Want.TARGET) reach(other) + reach(seat) else reach(seat) + reach(other)
+        }.distinct().filter { uid ->
+            // A search reaches into the Deck: never for a card already in the hand.
+            !(want == Want.HAND && s.placeOf(uid).let { it is Place.Pile && it.kind == PileKind.HAND })
         }
         // The deck and Extra Deck are searchable by their owner, who knows the decklist; nothing else hidden is.
         val visible = order.filter { uid ->
             DuelSight.sees(s, uid, seat) || (s.cards[uid]?.owner == seat && s.placeOf(uid).let { it is Place.Pile && (it.kind == PileKind.DECK || it.kind == PileKind.EXTRA) })
         }
-        var best: Int? = null
-        var bestScore = 0
+        var best = 0
+        val top = mutableListOf<Int>()
         visible.forEach { uid ->
             val card = s.cards[uid] ?: return@forEach
-            val score = NameScore.of(query, catalog.nameOf(card))
-            if (score > bestScore) { best = uid; bestScore = score }
+            val score = NameScore.of(q, catalog.nameOf(card))
+            when {
+                score > best -> { best = score; top.clear(); top += uid }
+                score == best && score > 0 -> top += uid
+            }
         }
-        return best
+        if (top.isEmpty()) {
+            val whose = when (side) {
+                seat -> "of yours "
+                other -> "of theirs "
+                else -> ""
+            }
+            return Lookup.None("No card ${whose}you can see matches “$q”" + if (side == seat && want != Want.TARGET) " (theirs: “their $q”)" else "")
+        }
+        val names = top.map { catalog.nameOf(s.cards.getValue(it)) }.distinct()
+        return if (names.size > 1) Lookup.Many(names) else Lookup.One(top.first())
     }
 }
 

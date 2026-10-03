@@ -96,6 +96,31 @@ class OldDataTest {
     }
 
     @Test
+    fun aDuelFrom1077StillReads() {
+        // 1.0.77: a duel in play named the old way ("You"/"Opponent"), a token without stats, and duel settings
+        // without 1.0.78's facing or 1.0.79's aiBothSeats; and a 1.0.76 combo step to "el", seat 0's left EMZ.
+        val old = """{"header":{"id":"d3","seed":5,"seats":[{"name":"You","main":[1,2,3,4,5,6]},{"name":"Opponent","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},
+            {"i":1,"seat":0,"group":1,"action":{"t":"token","seat":0,"to":{"t":"zone","seat":0,"kind":"MONSTER","index":2},"name":"Sheep"}},
+            {"i":2,"seat":0,"group":2,"action":{"t":"phase","phase":"MAIN1"}}],"cursor":3}"""
+        val r = assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(old))
+        val g = com.kaiharimoto.mastertool.core.duel.DuelGame.of(r)
+        val token = g.state.cards.values.single { it.token }
+        assertEquals(null, token.atk)
+        assertEquals(emptyList(), g.state.locks)
+        assertEquals(null, g.state.proposal)
+        assertEquals("Player 1", com.kaiharimoto.mastertool.core.duel.text.DuelWords.seatName(g.state, 0))
+        val d = prefs.decodeFromString(NeuePreferences.serializer(), """{"duel":{"twoSided":true,"names":["You","Opponent"],"aiSeat":1}}""").duel
+        assertEquals(false, d.facing)
+        assertEquals(true, d.keysShown)
+        assertEquals(false, d.aiBothSeats)
+        assertEquals(
+            com.kaiharimoto.mastertool.core.duel.Place.Zone(1, com.kaiharimoto.mastertool.core.duel.ZoneKind.EMZ, 0),
+            com.kaiharimoto.mastertool.core.duel.text.DuelCommand.zoneOf("el", 1),
+        )
+    }
+
+    @Test
     fun aPresentationFrom1070StillReads() {
         // 1.0.70: the first shape Present wrote, a deck slide and a freeform one.
         val old = """{"id":"pabc","name":"Labrynth profile","style":"BUILD_UP","theme":"arena",

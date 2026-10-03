@@ -461,11 +461,26 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
   hidden card's name from anything else. **full** is for testing when the person asks. **auto** is self, plus `duel_peek` when you judge a
   hidden card would change your play; the peek and your reason go in the log, so peek rarely and say why.
 - Cards are `#uid` with their name. Use the uid in ops when a name could be two cards (two copies on the field).
+- Seats read "Seat 0 (Kai)" and "Seat 1 (Ai)". A card of yours marked "(they know it)" was searched or revealed: the other player knows it.
+- "This turn so far" counts each seat's Summons and activations and lists the locks written down; "House rulings" are what you and the
+  person agreed — follow them.
 
 ## Moving
 - `duel_act` with ops as a player says them: `summon #12 to m3`, `set called by`, `activate pot`, `chain ash`, `link #40` (an effect on the
   field or in the GY: a chain link, nothing moved), `attach #7 to #40`, `#9 to gy`, `banish #3`, `ash to hand`, `draw`, `mill 2`,
   `lp opp -1000`, `bp`, `end`, `resolve`.
+- A name means **your own** cards, reached where a player reaches: `X to hand` takes the Deck's copy first (a search), `summon X` the
+  hand's. `their X` for the other player's. A name that could mean two different cards fails and lists them: use the `#uid`.
+- A zone named is where the card goes: `place #8 in s2` puts it face-up with no chain link (a card "placed as a Continuous Spell");
+  `place X in field`; `set #8 to s2` sets it there whatever it is; `move #8 to m4` on the field. `emz left` / `emz right` are your own left
+  and right.
+- `resolve` sends a Normal or Quick-Play Spell, a Normal or Counter Trap to the GY as it resolves; `resolve keep` when its text says it stays.
+- Tokens: `token sheep atk 0 def 0 def m2` (stats, position, zone; `their` for their field).
+- Write locks down when a card applies one: `lock Synchro Monsters only from the Extra Deck` (until the turn ends; `until chain`, `until
+  duel`), `unlock 2`. Check "This turn so far" before a Summon a hand trap could punish.
+- Play only your own seat. A phase op when it is not your turn is an ask the turn player answers (`accept`/`decline`); never move their
+  cards unless they have said you may.
+- When you and the person agree a ruling the rulings tool cannot settle, keep it: `duel_ruling` save {card, text}.
 - Play a turn as a sequence of ops in one call: it is checked whole first, then played at a pace the person can watch. Pay costs as moves
   (discard, tribute, detach) before the effect; resolve the chain (`resolve`) in order.
 - In a duel against the person, stop where they could respond: after an activation or a summon that matters, end the call and say what

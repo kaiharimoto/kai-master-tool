@@ -31,6 +31,7 @@ class DuelTextTest {
         when (val p = DuelCommand.parse(text, s, seat, catalog)) {
             is DuelCommand.Parsed.Actions -> p.actions
             is DuelCommand.Parsed.Problem -> error("“$text”: ${p.text}")
+            is DuelCommand.Parsed.Ruling -> error("“$text” is a ruling")
         }
 
     private fun problem(text: String, s: DuelState = table): String =
@@ -64,7 +65,8 @@ class DuelTextTest {
     @Test
     fun theOwnersDeckIsSearchableByNameButNotTheOpponents() {
         val s = ok(table, DuelAction.Move(ash, Place.Pile(0, PileKind.DECK)))
-        assertEquals(listOf(DuelAction.Move(ash, Place.Pile(0, PileKind.HAND), null, "search")), run("ash to hand", s))
+        // A search shows the card to the other player (1.0.79): it is known from then on.
+        assertEquals(listOf(DuelAction.Move(ash, Place.Pile(0, PileKind.HAND), null, "search"), DuelAction.Reveal(0, listOf(ash))), run("ash to hand", s))
         // Seat 1 cannot name seat 0's hand or deck.
         assertIs<DuelCommand.Parsed.Problem>(DuelCommand.parse("droll to gy", table, 1, catalog))
     }
@@ -92,7 +94,7 @@ class DuelTextTest {
 
     @Test
     fun aProblemIsSaidNotThrown() {
-        assertTrue(problem("frobnicate the widget").startsWith("No card you can see"))
+        assertTrue(problem("frobnicate the widget").startsWith("No card of yours you can see"))
         assertTrue(problem("lp banana").contains("not an LP change"))
         val full = (0..4).fold(table) { s, i -> ok(s, DuelAction.Token(0, Place.Zone(0, ZoneKind.MONSTER, i))) }
         assertEquals("No free Monster Zone", problem("summon droll", full))

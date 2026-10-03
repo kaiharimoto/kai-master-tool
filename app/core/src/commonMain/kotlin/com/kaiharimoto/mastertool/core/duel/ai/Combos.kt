@@ -72,6 +72,8 @@ object ComboRunner {
         steps.forEachIndexed { i, text ->
             when (val p = DuelCommand.parse(text, state, seat, catalog)) {
                 is DuelCommand.Parsed.Problem -> return ComboRun(out, i, "Step ${i + 1} (“$text”): ${p.text}")
+                // A house ruling is not a move: a combo has no use for one.
+                is DuelCommand.Parsed.Ruling -> return ComboRun(out, i, "Step ${i + 1} (“$text”): a ruling is kept with duel_ruling, not played")
                 is DuelCommand.Parsed.Actions -> {
                     val (next, why) = DuelRules.applyAll(state, p.actions, seat)
                     if (next == null) return ComboRun(out, i, "Step ${i + 1} (“$text”): $why")
@@ -111,13 +113,16 @@ object ComboRecorder {
                         val z = when (to.kind) {
                             ZoneKind.MONSTER -> "m${to.index + 1}"
                             ZoneKind.SPELL -> "s${to.index + 1}"
-                            ZoneKind.EMZ -> if (to.index == 0) "el" else "er"
+                            // Its controller's own left or right (1.0.79), read back the same way by zoneOf.
+                            ZoneKind.EMZ -> if ((to.index == 0) == (to.seat == 0)) "emz left" else "emz right"
                             ZoneKind.FIELD -> "fz"
                         }
                         val verb = when {
+                            a.how == "place" -> if (a.pos?.faceUp == false) "set" else "place"
                             a.pos?.faceUp == false -> "set"
-                            from is Place.Zone -> "ss"
-                            to.kind == ZoneKind.SPELL || to.kind == ZoneKind.FIELD -> "activate"
+                            from is Place.Zone -> "move"
+                            a.how == "activate" && (to.kind == ZoneKind.SPELL || to.kind == ZoneKind.FIELD) -> "activate"
+                            to.kind == ZoneKind.SPELL || to.kind == ZoneKind.FIELD -> "place"
                             a.how == "normal" -> "summon"
                             else -> "ss"
                         }
@@ -142,7 +147,7 @@ object ComboRecorder {
                 DuelPhase.DRAW -> "dp"; DuelPhase.STANDBY -> "sp"; DuelPhase.MAIN1 -> "m1"
                 DuelPhase.BATTLE -> "bp"; DuelPhase.MAIN2 -> "m2"; DuelPhase.END -> "ep"
             }
-            is DuelAction.Token -> "token ${a.name}"
+            is DuelAction.Token -> "token ${a.name}" + (a.atk?.let { " atk $it" } ?: "") + (a.def?.let { " def $it" } ?: "") + (if (a.pos == CardPosition.FACE_UP_ATK) " atk-pos" else "")
             is DuelAction.Counter -> if (a.delta > 0) "counter ${n(a.uid)}" else "uncounter ${n(a.uid)}"
             is DuelAction.Reveal -> a.uids.firstOrNull()?.let { "reveal ${n(it)}" }
             is DuelAction.ChainResolve -> "resolve"

@@ -33,7 +33,12 @@ object DuelDrop {
         val seat = if (from is Place.Zone) card.controller else card.owner
         return when (spot) {
             null -> NONE
-            DropSpot.Chain -> Intent(listOf(DuelAction.ChainAdd(seat, uid)), "Activate")
+            // A card from the hand dropped on the chain is activated as the verb would: a hand trap goes to
+            // the GY and onto the chain (1.0.79, Ai: "your two Fuwalos went straight to the GY").
+            DropSpot.Chain -> if (from is Place.Pile && from.kind == PileKind.HAND) {
+                val r = DuelVerbs.actions(s, seat, uid, DuelVerb.ACTIVATE, catalog)
+                if (r.problem != null || r.actions.isEmpty()) NONE else Intent(r.actions, "Activate")
+            } else Intent(listOf(DuelAction.ChainAdd(seat, uid)), "Activate")
             is DropSpot.Zone -> {
                 val z = spot.zone
                 val there = s.at(z)
@@ -92,7 +97,7 @@ object DuelDrop {
                     PileKind.HAND -> if (from is Place.Pile && from.kind == PileKind.DECK) "search" else "return"
                     else -> "return"
                 }
-                Intent(listOf(DuelAction.Move(uid, Place.Pile(card.owner, target, at), pos, how)), label)
+                Intent(listOfNotNull(DuelAction.Move(uid, Place.Pile(card.owner, target, at), pos, how), searched(how, uid, card.owner)), label)
             }
             is DropSpot.Hand -> {
                 // The deck's top card carried to its owner's hand is a draw.
@@ -108,10 +113,13 @@ object DuelDrop {
                     return Intent(listOf(DuelAction.Move(uid, Place.Pile(card.owner, PileKind.HAND, index))), "Move in the hand")
                 }
                 val how = if (from is Place.Pile && from.kind == PileKind.DECK) "search" else "return"
-                Intent(listOf(DuelAction.Move(uid, Place.Pile(card.owner, PileKind.HAND, if (spot.seat == card.owner) spot.index else null), how = how)), "To the hand")
+                Intent(listOfNotNull(DuelAction.Move(uid, Place.Pile(card.owner, PileKind.HAND, if (spot.seat == card.owner) spot.index else null), how = how), searched(how, uid, card.owner)), "To the hand")
             }
         }
     }
+
+    /** A card searched from the Deck is shown to the other player (1.0.79): it is known from then on. */
+    private fun searched(how: String, uid: Int, owner: Int): DuelAction? = if (how == "search") DuelAction.Reveal(owner, listOf(uid)) else null
 
     fun zoneWords(z: Place.Zone): String = when (z.kind) {
         ZoneKind.MONSTER -> "M${z.index + 1}"

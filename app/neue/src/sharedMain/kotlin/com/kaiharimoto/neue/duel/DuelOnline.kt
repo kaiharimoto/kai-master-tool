@@ -103,6 +103,32 @@ internal fun NetBar(h: NeueHolders, duels: Duels, overlay: Boolean = false) {
 }
 
 /**
+ * The other seat asks to move on (1.0.79, `DuelAction.Propose`): a row over the table's top edge for the
+ * turn player to answer — Go on or Not yet — and, for the one who asked, that it is waiting. Never a dialog.
+ */
+@Composable
+internal fun ProposalBar(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState) {
+    val c = Mu.colors
+    val p = s.proposal ?: return
+    val asker = com.kaiharimoto.mastertool.core.duel.text.DuelWords.seatName(s, p.seat)
+    val what = if (p.end) "end the turn" else "go to the ${p.phase?.label} Phase"
+    // At a hot-seat the screen answers for the turn player; online only the turn player's screen does.
+    val answers = duels.role == null || duels.mySeat == s.active
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).background(if (answers) c.ink else c.paper).border(1.dp, c.ink).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        val ink = if (answers) c.paper else c.ink
+        Small(if (answers) "$asker asks to $what" else "Waiting for ${com.kaiharimoto.mastertool.core.duel.text.DuelWords.seatName(s, s.active)} to answer: $what", Modifier.weight(1f), color = ink, maxLines = 1)
+        if (answers) {
+            MuButton("Go on", { duels.answerProposal(true) }, size = BtnSize.SM)
+            MuButton("Not yet", { duels.answerProposal(false) }, size = BtnSize.SM)
+        }
+    }
+}
+
+/**
  * Hosting and joining, in the New duel dialog: the host opens the table and shares its code (or the
  * QR); the guest types the code. Both bring their own deck — the host never sees the guest's order,
  * and the guest's app is only ever told what its seat may see.

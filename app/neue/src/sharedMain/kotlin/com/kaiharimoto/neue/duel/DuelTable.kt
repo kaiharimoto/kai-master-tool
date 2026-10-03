@@ -196,7 +196,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 duels.verbStrip = true
             }
             is Hit.Pile -> if (alt) duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, place = Place.Pile(hit.seat, hit.kind))) else duels.openPile(hit.seat, hit.kind)
-            Hit.Chain -> if (stateNow.chain.isNotEmpty()) duels.act(DuelAction.ChainResolve)
+            Hit.Chain -> if (stateNow.chain.isNotEmpty()) duels.resolveChain()
             Hit.Table -> {
                 duels.selection = emptySet()
                 duels.attaching = null
@@ -379,9 +379,14 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
             key(f.uid) {
                 val inst = s.cards.getValue(f.uid)
                 val card = if (inst.token && inst.code == 0) null else index.byId(CardId(inst.code))
-                val stats = if (card != null && f.look != com.kaiharimoto.mastertool.core.layout.CardLook.BACK && inst.faceUp &&
-                    s.placeOf(f.uid).let { it is Place.Zone && (it.kind == ZoneKind.MONSTER || it.kind == ZoneKind.EMZ) } && card.atk != null
-                ) "${card.atk}" + (card.def?.let { " / $it" } ?: "") else null
+                val inMonsterZone = s.placeOf(f.uid).let { it is Place.Zone && (it.kind == ZoneKind.MONSTER || it.kind == ZoneKind.EMZ) }
+                val stats = when {
+                    f.look == com.kaiharimoto.mastertool.core.layout.CardLook.BACK || !inst.faceUp || !inMonsterZone -> null
+                    // A token's own numbers, when its maker gave them (1.0.79).
+                    inst.token && (inst.atk != null || inst.def != null) -> "${inst.atk ?: "?"} / ${inst.def ?: "?"}"
+                    card != null && card.atk != null -> "${card.atk}" + (card.def?.let { " / $it" } ?: "")
+                    else -> null
+                }
                 val caption = when {
                     !f.shown -> null
                     f.inStrip || s.placeOf(f.uid).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } ->
@@ -410,7 +415,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         if (carry == null && duels.verbStrip) VerbStrip(duels, s, layout, shownFrames)
 
         // The chain, the arrows, the pings — over the cards.
-        ChainWell(s, layout, duels)
+        ChainWell(s, layout, duels, viewers)
         // Under an open pile, which covers the cards they point at.
         Canvas(Modifier.fillMaxSize().zIndex(if (duels.strip != null) DuelFrames.Z_STRIP - 1f else 50f)) { arrows(s, layout, shownFrames, c.ink, c.paper) }
         Pings(game, layout, shownFrames)

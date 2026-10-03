@@ -54,19 +54,27 @@ object DuelWords {
                 if (a.delta > 0) subject("puts ${count(a.delta, kind)} on ${card(a.uid)} ($n)")
                 else subject("removes ${count(-a.delta, kind)} from ${card(a.uid)} ($n)")
             }
-            is DuelAction.Token -> subject("Special Summons ${if (a.name.isBlank()) "a Token" else "a ${a.name}"} to ${zoneName(a.to)}")
+            is DuelAction.Token -> {
+                val stats = if (a.atk != null || a.def != null) " (ATK ${a.atk ?: "?"} / DEF ${a.def ?: "?"})" else ""
+                val pos = if (a.pos == CardPosition.FACE_UP_ATK) " in Attack Position" else ""
+                subject("Special Summons ${if (a.name.isBlank()) "a Token" else "a ${a.name}"}$stats to ${zoneName(a.to, before)}$pos")
+            }
             is DuelAction.Lp -> {
                 val name = seatName(before, a.seat)
                 val was = before.seats[a.seat].lp
                 val now = after.seats[a.seat].lp
                 when {
-                    a.set != null -> "$name's LP become $now"
+                    a.set != null -> "${possessive(name)} LP become $now"
                     now < was -> "$name loses ${was - now} LP ($now)"
                     else -> "$name gains ${now - was} LP ($now)"
                 }
             }
             is DuelAction.Phase -> "${a.phase.label} Phase"
             DuelAction.EndTurn -> "${seatName(before, before.active)} ends the turn · Turn ${after.turn}"
+            is DuelAction.Propose -> "${seatName(before, a.seat)} asks to ${if (a.end) "end the turn" else "go to the ${a.phase?.label} Phase"}"
+            is DuelAction.Decline -> "${seatName(before, a.seat)} says not yet"
+            is DuelAction.Lock -> "${seatName(before, a.seat)} is locked: ${a.text} (${untilWords(a.until)})"
+            is DuelAction.Unlock -> "Lock ${a.id} lifted" + (before.locks.firstOrNull { it.id == a.id }?.let { ": ${it.text}" } ?: "")
             is DuelAction.ChainAdd -> {
                 val n = after.chain.size
                 val what = a.uid?.let(::card) ?: "an effect"
@@ -136,10 +144,11 @@ object DuelWords {
         }
         return when (to) {
             is Place.Zone -> {
-                val z = zoneName(to)
+                val z = zoneName(to, before)
                 val up = c?.faceUp == true
                 when {
                     from is Place.Zone -> subject("moves $name to $z")
+                    a.how == "place" -> subject(if (up) "places $name face-up in $z" else "places $name face-down in $z")
                     to.kind == ZoneKind.MONSTER || to.kind == ZoneKind.EMZ -> when {
                         !up -> subject("sets $name in $z")
                         a.how == "normal" -> subject("Normal Summons $name to $z")
@@ -155,6 +164,7 @@ object DuelWords {
             is Place.Pile -> {
                 when (to.kind) {
                     PileKind.GY -> when {
+                        a.how == "resolve" -> "$name goes to the GY as it resolves"
                         a.how == "tribute" -> subject("Tributes $name")
                         a.how == "detach" || from is Place.Under -> subject("detaches $name$fromWords")
                         fromPile == PileKind.HAND && a.how == "activate" -> subject("discards $name to activate it")
@@ -181,19 +191,50 @@ object DuelWords {
         }
     }
 
-    fun seatName(s: DuelState, seat: Int): String =
-        s.seats.getOrNull(seat)?.name?.takeIf { it.isNotBlank() } ?: if (seat == 0) "Player 1" else "Player 2"
+    /**
+     * A seat's name. 1.0.74–1.0.78 wrote "You" and "Opponent" as names, which read as "You draws" and
+     * "You's turn" (1.0.79, Ai's feedback): those read as Player 1 and Player 2.
+     */
+    fun seatName(s: DuelState, seat: Int): String {
+        val name = s.seats.getOrNull(seat)?.name?.trim().orEmpty()
+        return when {
+            name.isBlank() || name.equals("You", true) || name.equals("Opponent", true) -> if (seat == 0) "Player 1" else "Player 2"
+            else -> name
+        }
+    }
 
-    fun zoneName(z: Place.Zone): String = when (z.kind) {
+    /** "Kai's", "Marcus'" — the one possessive the log writes. */
+    fun possessive(name: String): String = if (name.endsWith("s") || name.endsWith("S")) "$name'" else "$name's"
+
+    /** "Seat 0 (Kai)": a seat as Ai reads it, its number and its name together (1.0.79). */
+    fun seatLabel(s: DuelState, seat: Int): String = "Seat $seat (${seatName(s, seat)})"
+
+    /**
+     * A zone's name. The Extra Monster Zones are shared and their sides depend on who looks, so with the
+     * table at hand they are named from both seats (1.0.79): "the Extra Monster Zone on Kai's left (Ai's right)".
+     */
+    fun zoneName(z: Place.Zone, s: DuelState? = null): String = when (z.kind) {
         ZoneKind.MONSTER -> "M${z.index + 1}"
         ZoneKind.SPELL -> "S/T ${z.index + 1}"
         ZoneKind.FIELD -> "the Field Zone"
-        ZoneKind.EMZ -> if (z.index == 0) "the left Extra Monster Zone" else "the right Extra Monster Zone"
+        ZoneKind.EMZ -> if (s == null || s.solo) {
+            if (z.index == 0) "the left Extra Monster Zone" else "the right Extra Monster Zone"
+        } else {
+            val a = if (z.index == 0) "left" else "right"
+            val b = if (z.index == 0) "right" else "left"
+            "the Extra Monster Zone on ${possessive(seatName(s, 0))} $a (${possessive(seatName(s, 1))} $b)"
+        }
+    }
+
+    fun untilWords(until: String): String = when (until) {
+        com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_CHAIN -> "for this chain"
+        com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_DUEL -> "for the duel"
+        else -> "until the end of the turn"
     }
 
     fun placeName(p: Place, s: DuelState): String = when (p) {
-        is Place.Zone -> zoneName(p)
-        is Place.Pile -> "${seatName(s, p.seat)}'s ${p.kind.label}"
+        is Place.Zone -> zoneName(p, s)
+        is Place.Pile -> "${possessive(seatName(s, p.seat))} ${p.kind.label}"
         is Place.Under -> "materials"
         Place.Void -> "nowhere"
     }

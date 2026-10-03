@@ -81,6 +81,8 @@ sealed class DuelAction {
         val pos: CardPosition = CardPosition.FACE_UP_DEF,
         val code: Int = 0,
         val name: String = "Token",
+        val atk: Int? = null,
+        val def: Int? = null,
     ) : DuelAction()
 
     // ---- life and flow -------------------------------------------------------------------------------
@@ -95,6 +97,24 @@ sealed class DuelAction {
     /** The turn passes to the other seat, in its Draw Phase. */
     @Serializable @SerialName("end")
     data object EndTurn : DuelAction()
+
+    /**
+     * The seat whose turn it is not asks to move on — to [phase], or to end the turn when [end] (1.0.79,
+     * Ai: "let the non-turn seat ask to advance the phase, and you confirm"). The turn player answers by
+     * moving the phase (yes) or [Decline].
+     */
+    @Serializable @SerialName("propose")
+    data class Propose(val seat: Int, val phase: DuelPhase? = null, val end: Boolean = false) : DuelAction()
+
+    @Serializable @SerialName("decline")
+    data class Decline(val seat: Int) : DuelAction()
+
+    /** Writes a lock down (1.0.79): "Synchro Monsters only", until the end of the turn, the chain or the duel. */
+    @Serializable @SerialName("lock")
+    data class Lock(val seat: Int, val text: String, val until: String = com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_TURN) : DuelAction()
+
+    @Serializable @SerialName("unlock")
+    data class Unlock(val id: Int) : DuelAction()
 
     // ---- the chain -----------------------------------------------------------------------------------
 
@@ -158,7 +178,8 @@ sealed class DuelAction {
 
     /** True for talk that never changes the table: it never ends a thinking mark or waits on a window. */
     val social: Boolean
-        get() = this is Chat || this is Ping || this is Thinking || this is Note || this is Unknown
+        get() = this is Chat || this is Ping || this is Thinking || this is Note || this is Unknown ||
+            this is Propose || this is Decline || this is Lock || this is Unlock
 
     companion object {
         const val PING_LOOK = "look"

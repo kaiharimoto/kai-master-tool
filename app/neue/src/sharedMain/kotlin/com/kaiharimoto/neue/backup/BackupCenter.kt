@@ -152,6 +152,7 @@ class BackupCenter(private val h: NeueHolders) {
                 h.customArt.reload()
                 h.present.reload()
                 h.duel.reload()
+                h.duel.reloadRulings()
                 h.neue.note = Note("Restored $decks decks from ${date(manifest.at)}")
             }
         } catch (e: Exception) {

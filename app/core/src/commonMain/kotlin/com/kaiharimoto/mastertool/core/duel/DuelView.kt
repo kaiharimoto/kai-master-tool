@@ -52,6 +52,8 @@ data class DuelView(
     val arrows: List<Arrow>,
     val thinking: Set<Int>,
     val solo: Boolean,
+    val proposal: Proposal? = null,
+    val locks: List<Lock> = emptyList(),
 ) {
     companion object {
         /** The table as [viewer] sees it; null sees everything. [secret] keys the veils (the duel's seed). */
@@ -59,7 +61,7 @@ data class DuelView(
             fun card(uid: Int): ViewCard {
                 val c = s.cards.getValue(uid)
                 return if (DuelSight.sees(s, uid, viewer)) {
-                    ViewCard(uid, c.code, c.pos, c.owner, c.controller, c.counters, c.token, c.name, c.under.map(::card))
+                    ViewCard(uid, c.code, c.pos, c.owner, c.controller, c.counters, c.token, c.name, c.under.map(::card), c.atk, c.def)
                 } else {
                     ViewCard(veil(secret, uid, s.epoch[uid] ?: 0), null, c.pos, c.owner, c.controller, c.counters, c.token, null, c.under.map(::card))
                 }
@@ -90,6 +92,8 @@ data class DuelView(
                 arrows = s.arrows.map { a -> a.copy(from = a.from?.let(::hide), to = a.to.map(::hide)) },
                 thinking = s.thinking,
                 solo = s.solo,
+                proposal = s.proposal,
+                locks = s.locks,
             )
         }
 
@@ -134,6 +138,8 @@ data class ViewCard(
     val token: Boolean = false,
     val name: String? = null,
     val under: List<ViewCard> = emptyList(),
+    val atk: Int? = null,
+    val def: Int? = null,
 ) {
     val hidden: Boolean get() = code == null
 }

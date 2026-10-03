@@ -1487,4 +1487,10 @@ private fun studioDuelMoves(h: com.kaiharimoto.neue.NeueHolders) {
     d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Lp(1, delta = -1500), 1)
     d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Thinking(1, true), 1)
     d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Chat(0, "Ash on that?"), 0)
+    // 1.0.79: a lock written down, a token with stats, and the other seat asking to move on.
+    d.run("lock Synchro Monsters only from the Extra Deck")
+    d.run("token sheep atk 0 def 0 def")
+    d.bottom = 1
+    d.run("bp")
+    d.bottom = 0
 }

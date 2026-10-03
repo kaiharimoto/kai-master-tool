@@ -3116,6 +3116,42 @@ direct play first and a relay later on the same messages:
   (`releasesTyping`), and Esc on the Duel page releases it first — before, a click on the table left every key
   typing into the field.
 
+**The command line does what it says** (1.0.79, Ai's playtest of 1.0.77 — every case in its table is a test in
+`DuelFeedbackTest`):
+- **Names reach your own cards, where a player reaches** (`DuelCommand.lookup`, a `Want` per verb): a search takes
+  the Deck's copy before the GY's, `summon X` the hand's, `X to gy` the field's. `their X` (or a `#uid`, or a target)
+  for the other seat's. A name the best match shares with a different card fails and lists them — never a guess.
+  "to"/"from" split only where the rest is a place, and a trailing verb only when the whole is not a card's name, so
+  Back to Square One and Torrential Tribute stay whole.
+- **A zone named is where the card goes** (`DuelVerbs.actions`): `set #8 to s2` sets it in S2 whatever it is; a
+  mismatched zone places the card there as it is. **`place`** (`DuelVerb.PLACE`: face-up, no chain link — a card
+  "placed as a Continuous Spell", `place X in field`), **`move`** (field to field), `activate X from deck to fz` (moved
+  and chained). A line that names a zone and would not put the card there is refused in words.
+- **The Extra Monster Zones are yours**: `emz left`/`emz right` are the acting seat's own left and right; `el`/`er`
+  and `emz1`/`emz2` keep their old meaning, so recorded combos replay (`ComboRecorder` writes the new words). The log
+  names an EMZ from both sides: "the Extra Monster Zone on Kai's left (Ai's right)".
+- **Resolve** (`DuelVerbs.resolve`): a Normal or Quick-Play Spell, a Normal or Counter Trap goes to the GY with its
+  link (`DuelCardInfo.sub`, from the card's printed kind); `resolve keep` when its text says it stays. The chain well
+  click and `Q` resolve the same way.
+- **Tokens** have ATK and DEF (`CardInst.atk/def`, `token sheep atk 0 def 0 def m2`, `their` for their field).
+- **A search is shown**: a card added from the Deck (verb, line or drag) is revealed in the same step, so the brief
+  marks it "(they know it)". A hand card dropped on the chain is activated as the verb would (a hand trap: to the GY
+  and chained), and each link in the well says where its card is now — named only for the eyes the table is drawn
+  through.
+- **The other seat asks** (`DuelAction.Propose`/`Decline`, `DuelState.proposal`): a phase change from the seat whose
+  turn it is not (a line, Ai, the phase strip online) is an ask; the turn player answers Go on / Not yet in a row
+  over the table (`ProposalBar`), or `accept`/`decline`. `next` at the End Phase ends the turn.
+- **This turn, counted** (`DuelTally`, read off the log): each seat's Normal and Special Summons and activations by
+  card, and **locks** written down (`lock … until turn|chain|duel`, `unlock n`; `DuelState.locks`, lapsing on their own)
+  — at the head of the log, and in what Ai reads.
+- **House rulings** (`HouseRulings`, `<data>/duel/rulings.json`, synced and backed up): `ruling e4: no free zone,
+  can't activate`, or Ai's `duel_ruling`; shown under the card in the inspector and in Ai's brief.
+- **Seat names**: never "You" and "Opponent" (which read "You's turn"): the names typed, Ai's own at its seat, and
+  1.0.74–1.0.78's defaults read as Player 1 and Player 2. Ai reads seats as "Seat 0 (Kai)".
+- **Ai plays fair** (`AiDuel`): `duel_act` is told the table through its knowledge setting as its own seat, never the
+  acting seat's eyes; it moves only its own seat unless the person allows both (`DuelPrefs.aiBothSeats`); and it is
+  told each op's real effect in the log's words (`Duels.playOut` → `PlayReport`), "no change on the table" included.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

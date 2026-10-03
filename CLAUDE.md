@@ -617,6 +617,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `DuelPrefs.facing` turns their cards round, the inspector is art and text with the keys pinned, verbs stand beside
   the selected card (`VerbStrip`), open piles lie in rows over the field (`DuelFrames.stripGrid`, ≥ 80 % of each card)
   and close on a press outside or a card carried out, and a press on the table releases a text field (`releasesTyping`).
+  **1.0.79, the line does what it says** (Ai's playtest; `DuelFeedbackTest`): `DuelCommand.lookup` reaches your own cards
+  where a player would and lists an ambiguous name instead of guessing; a zone named is where the card goes (`PLACE`,
+  `MOVE`); `emz left/right` are the actor's own (`el`/`er` stay absolute for old combos); `DuelVerbs.resolve` sends a
+  Normal Spell/Trap to the GY; token ATK/DEF; a search reveals; `Propose`/`Decline` for the other seat's phase asks;
+  `DuelTally` and `Lock`s; house rulings (`duel/rulings.json`, `duel_ruling`); Ai reads results through its knowledge
+  setting and moves only its own seat (`aiBothSeats`).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

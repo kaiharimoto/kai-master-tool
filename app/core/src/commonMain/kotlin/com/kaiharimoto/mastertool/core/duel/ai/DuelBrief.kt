@@ -2,6 +2,11 @@ package com.kaiharimoto.mastertool.core.duel.ai
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
+import com.kaiharimoto.mastertool.core.duel.DuelSight
+import com.kaiharimoto.mastertool.core.duel.HouseRulingBook
+import com.kaiharimoto.mastertool.core.duel.PileKind
+import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.Tally
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.DuelView
 import com.kaiharimoto.mastertool.core.duel.ViewCard
@@ -31,11 +36,25 @@ object DuelBrief {
         else -> seat
     }
 
-    fun describe(s: DuelState, viewer: Int?, catalog: DuelCatalog, secret: Long, seat: Int? = viewer): String {
+    fun describe(
+        s: DuelState,
+        viewer: Int?,
+        catalog: DuelCatalog,
+        secret: Long,
+        seat: Int? = viewer,
+        tally: Tally? = null,
+        rulings: HouseRulingBook = HouseRulingBook(),
+    ): String {
         val v = DuelView.of(s, viewer, secret)
         fun name(c: ViewCard): String {
             if (c.code == null) return "a face-down card [?${-c.ref}]"
-            val n = if (c.token) (c.name ?: "Token") else catalog.info(c.code)?.name ?: "#${c.code}"
+            val base = if (c.token) (c.name ?: "Token") else catalog.info(c.code)?.name ?: "#${c.code}"
+            val stats = if (c.token && (c.atk != null || c.def != null)) " ATK ${c.atk ?: "?"}/DEF ${c.def ?: "?"}" else ""
+            // A card of the reader's own the other player has seen (a search, a reveal): they know it (1.0.79).
+            val known = if (viewer != null && c.ref > 0 && c.owner == viewer && (1 - viewer) in (s.seen[c.ref] ?: emptySet()) &&
+                s.placeOf(c.ref).let { it is Place.Pile && (it.kind == PileKind.HAND || it.kind == PileKind.DECK || it.kind == PileKind.EXTRA) }
+            ) " (they know it)" else ""
+            val n = base + stats + known
             val pos = when (c.pos) {
                 CardPosition.FACE_UP_ATK -> ""
                 CardPosition.FACE_UP_DEF -> ", Defense"
@@ -52,23 +71,27 @@ object DuelBrief {
         fun zones(cards: List<ViewCard?>, prefix: String) =
             cards.mapIndexed { i, c -> "$prefix${i + 1} ${c?.let(::name) ?: "—"}" }.joinToString(" · ")
         return buildString {
-            val active = DuelWords.seatName(s, s.active)
-            appendLine("Turn ${s.turn} · $active's turn · ${s.phase.label} Phase" + if (s.solo) " · one player's table" else "")
-            appendLine("You read the table as: ${if (viewer == null) "everything (full knowledge)" else "${DuelWords.seatName(s, viewer)} (seat $viewer) — only what that player could see"}")
-            if (seat != null) appendLine("You act as: ${DuelWords.seatName(s, seat)} (seat $seat)")
+            appendLine("Turn ${s.turn} · ${DuelWords.seatLabel(s, s.active)} to play · ${s.phase.label} Phase" + if (s.solo) " · one player's table" else "")
+            appendLine("You read the table as: ${if (viewer == null) "everything (full knowledge)" else "${DuelWords.seatLabel(s, viewer)} — only what that player could see"}")
+            if (seat != null) appendLine("You act as: ${DuelWords.seatLabel(s, seat)}")
+            s.proposal?.let { p -> appendLine("Asked: ${DuelWords.seatLabel(s, p.seat)} asks to ${if (p.end) "end the turn" else "go to the ${p.phase?.label} Phase"} — the turn player answers (accept / decline)") }
             if (s.chain.isNotEmpty()) {
                 appendLine("Chain: " + v.chain.mapIndexed { i, l ->
                     val card = l.uid?.let { ref -> if (ref > 0) s.cards[ref]?.let { catalog.info(it.code)?.name ?: it.name } else "a face-down card" }
-                    "${i + 1}) ${card ?: l.note.ifBlank { "an effect" }} by ${DuelWords.seatName(s, l.seat)}"
+                    val where = l.uid?.takeIf { it > 0 }?.let { s.placeOf(it) }?.let { DuelWords.placeName(it, s) }?.let { " (now in $it)" } ?: ""
+                    "${i + 1}) ${card ?: l.note.ifBlank { "an effect" }}$where by ${DuelWords.seatLabel(s, l.seat)}"
                 }.joinToString("; "))
             }
-            val emz = v.emz.mapIndexed { i, c -> "${if (i == 0) "left" else "right"} ${c?.let { "${name(it)} (${DuelWords.seatName(s, it.controller)}'s)" } ?: "—"}" }
-            appendLine("Extra Monster Zones: ${emz.joinToString(" · ")}")
+            val emz = v.emz.mapIndexed { i, c ->
+                val side = if (s.solo) (if (i == 0) "left" else "right") else "${if (i == 0) "seat 0's left / seat 1's right" else "seat 0's right / seat 1's left"}"
+                "$side: ${c?.let { "${name(it)} (${DuelWords.possessive(DuelWords.seatName(s, it.controller))})" } ?: "—"}"
+            }
+            appendLine("Extra Monster Zones (\"emz left\" / \"emz right\" are your own left and right): ${emz.joinToString(" · ")}")
             appendLine()
             val seats = if (s.solo) listOf(0) else listOf(0, 1)
             seats.forEach { i ->
                 val st = v.seats[i]
-                appendLine("${DuelWords.seatName(s, i)} (seat $i) · ${st.lp} LP${if (i in s.thinking) " · thinking" else ""}")
+                appendLine("${DuelWords.seatLabel(s, i)} · ${st.lp} LP${if (i in s.thinking) " · thinking" else ""}")
                 appendLine("  Hand (${st.hand.size}): ${list(st.hand)}")
                 appendLine("  Monster Zones: ${zones(st.monsters, "M")}")
                 appendLine("  Spell & Trap Zones: ${zones(st.spells, "S")}")
@@ -80,6 +103,19 @@ object DuelBrief {
                 appendLine("  Deck: ${st.deck} cards${if (st.deckKnown.isNotEmpty()) " (known: " + st.deckKnown.entries.joinToString { (k, c) -> "${k + 1} from the top ${name(c)}" } + ")" else ""}")
             }
             if (s.arrows.isNotEmpty()) appendLine("Arrows: " + v.arrows.joinToString("; ") { a -> "${DuelWords.seatName(s, a.seat)} → ${a.to.joinToString { "#$it" }}" })
+            tally?.words(s)?.takeIf { it.isNotEmpty() }?.let { lines ->
+                appendLine()
+                appendLine("This turn so far:")
+                lines.forEach { appendLine("  $it") }
+            }
+            // House rulings for the cards the reader can see, and those for no card.
+            val seenCodes = s.cards.values.filter { DuelSight.sees(s, it.uid, viewer) }.map { it.code }.toSet()
+            val agreed = rulings.about(seenCodes)
+            if (agreed.isNotEmpty()) {
+                appendLine()
+                appendLine("House rulings (agreed at this table):")
+                agreed.forEach { r -> appendLine("  ${r.card?.let { "$it: " } ?: ""}${r.text}") }
+            }
         }.trimEnd()
     }
 }

@@ -92,8 +92,8 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
     when (action) {
         DeskAction.DUEL_DRAW -> duels.act(DuelAction.Draw(duels.bottom), duels.bottom)
         DeskAction.DUEL_SHUFFLE -> duels.act(DuelAction.Shuffle(duels.bottom, PileKind.DECK), duels.bottom)
-        DeskAction.DUEL_NEXT_PHASE -> if (s.phase == DuelPhase.END) duels.act(DuelAction.EndTurn, s.active) else duels.act(DuelAction.Phase(s.phase.next()), s.active)
-        DeskAction.DUEL_END_TURN -> duels.act(DuelAction.EndTurn, s.active)
+        DeskAction.DUEL_NEXT_PHASE -> if (s.phase == DuelPhase.END) duels.goPhase(null, end = true) else duels.goPhase(s.phase.next())
+        DeskAction.DUEL_END_TURN -> duels.goPhase(null, end = true)
         DeskAction.DUEL_LP -> duels.lpPad = if (duels.lpPad == null) duels.bottom else null
         DeskAction.DUEL_THINK -> duels.act(DuelAction.Thinking(duels.bottom, duels.bottom !in s.thinking), duels.bottom)
         DeskAction.DUEL_COMMAND -> duels.commandFocus++
@@ -101,7 +101,7 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_SIDES -> h.neue.update { it.copy(duel = it.duel.copy(twoSided = !it.duel.twoSided)) }
         DeskAction.DUEL_SWAP -> duels.swap()
         DeskAction.DUEL_FACING -> h.neue.update { it.copy(duel = it.duel.copy(facing = !it.duel.facing)) }
-        DeskAction.DUEL_RESOLVE -> if (s.chain.isNotEmpty()) duels.act(DuelAction.ChainResolve)
+        DeskAction.DUEL_RESOLVE -> duels.resolveChain()
         else -> Unit
     }
 }

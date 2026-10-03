@@ -120,7 +120,7 @@ internal fun PhaseStrip(duels: Duels, s: DuelState, l: DuelLayout) {
                     .background(if (on) c.ink else c.paper)
                     .border(1.dp, if (on) c.ink else c.ink25)
                     .cursorPointer(caption = p.label)
-                    .muClickable { if (!on) duels.act(DuelAction.Phase(p), s.active) },
+                    .muClickable { if (!on) duels.goPhase(p) },
                 contentAlignment = Alignment.Center,
             ) {
                 Mono(PHASE_SHORT.getValue(p), color = if (on) c.paper else c.ink, size = 11.sp)
@@ -129,7 +129,7 @@ internal fun PhaseStrip(duels: Duels, s: DuelState, l: DuelLayout) {
         Box(
             Modifier.weight(1.2f).fillMaxWidth().border(1.dp, c.ink)
                 .cursorPointer(caption = "End turn")
-                .muClickable { duels.act(DuelAction.EndTurn, s.active) },
+                .muClickable { duels.goPhase(null, end = true) },
             contentAlignment = Alignment.Center,
         ) {
             Micro(if (s.solo) "Next" else "End", color = c.ink, size = 9.sp)
@@ -137,9 +137,13 @@ internal fun PhaseStrip(duels: Duels, s: DuelState, l: DuelLayout) {
     }
 }
 
-/** The chain written down: its links, newest at the bottom. A click resolves the newest; a right-click clears it. */
+/**
+ * The chain written down: its links, newest at the bottom, each with where its card is now ("Fuwalo ·
+ * GY") — named only for the eyes the table is drawn through, so a face-down link stays "A set card".
+ * A click resolves the newest (a Normal Spell or Trap to the GY with it); a right-click clears it.
+ */
 @Composable
-internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels) {
+internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<Int>) {
     val c = Mu.colors
     val slot = l[DuelSpot.Chain] ?: return
     Column(
@@ -151,7 +155,21 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels) {
             val n = s.chain.size - minOf(6, s.chain.size) + i + 1
             Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.background(c.ink).padding(horizontal = 3.dp)) { Mono("$n", color = c.paper, size = 9.sp) }
-                Mono(link.uid?.let { s.cards[it] }?.let { duels.catalog.nameOf(it) } ?: link.note.ifBlank { "Effect" }, color = c.ink, size = 9.sp)
+                val card = link.uid?.let { s.cards[it] }
+                val sees = card != null && viewers.any { v -> com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, card.uid, v) }
+                val where = link.uid?.let { s.placeOf(it) }?.let { p ->
+                    when (p) {
+                        is Place.Pile -> p.kind.label
+                        is Place.Zone -> DuelWords.zoneName(p).removePrefix("the ")
+                        else -> null
+                    }
+                }
+                val name = when {
+                    card == null -> link.note.ifBlank { "Effect" }
+                    sees -> duels.catalog.nameOf(card)
+                    else -> "A set card"
+                }
+                Mono(name + (where?.let { " · $it" } ?: ""), color = c.ink, size = 9.sp)
             }
         }
     }

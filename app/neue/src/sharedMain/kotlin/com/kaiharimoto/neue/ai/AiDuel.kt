@@ -40,6 +40,7 @@ internal class AiDuel(private val h: NeueHolders) {
             "duel_log" -> log(i)
             "duel_setup" -> setup(i)
             "duel_combo" -> combo(i)
+            "duel_ruling" -> ruling(i)
             else -> null
         }
     }
@@ -54,11 +55,14 @@ internal class AiDuel(private val h: NeueHolders) {
     private fun perspective(i: JsonObject): String =
         ToolArgs.string(i, "perspective")?.takeIf { it in DuelBrief.PERSPECTIVES } ?: prefs.aiKnowledge
 
+    /** The seat Ai plays: the page's, or seat 0 on one player's table. */
+    private fun aiSeat(): Int = if (duels.game?.state?.solo == true) 0 else prefs.aiSeat
+
     private fun state(i: JsonObject): MetaAnswer {
         val g = duels.game ?: return fail("There is no duel on the table. duel_setup starts one.")
         val seat = seat(i)
         val p = perspective(i)
-        val text = DuelBrief.describe(g.state, DuelBrief.viewer(p, seat), duels.catalog, g.header.seed, seat) +
+        val text = DuelBrief.describe(g.state, DuelBrief.viewer(p, seat), duels.catalog, g.header.seed, seat, duels.tally(), duels.rulings) +
             if (p == DuelBrief.AUTO) "\n\nKnowledge: auto — duel_peek if a hidden card would change your play; every peek is logged." else ""
         return ok(text, "Read the duel table")
     }
@@ -68,14 +72,22 @@ internal class AiDuel(private val h: NeueHolders) {
         if (ops.isEmpty()) return fail("No ops to play.")
         if (duels.game == null) return fail("There is no duel on the table. duel_setup starts one.")
         if (duels.replay != null) return fail("A replay is open on the table; the person must close it first.")
-        h.neue.go(Page.DUEL)
         val seat = seat(i)
+        val mine = aiSeat()
+        // Ai plays its own seat (1.0.79, its own feedback: "I acted as your seat … and the result came back from seat 0's view").
+        if (seat != mine && !prefs.aiBothSeats) {
+            val s = duels.game!!.state
+            return fail("You play ${DuelWords.seatLabel(s, mine)}. ${DuelWords.seatLabel(s, seat)} is the person's: ask them to make that move, " +
+                "or to let you move both seats (Ai · Combos › Ai may move both seats). To move the phase on their turn, play the phase op as your own seat: it asks them.")
+        }
+        h.neue.go(Page.DUEL)
         val pace = (ToolArgs.int(i, "pace_ms") ?: prefs.aiPace).toLong().coerceIn(0, 5000)
-        val said = duels.playOut(ops, seat, pace)
+        // What Ai is told comes through its knowledge setting, always as its own seat — never the acting seat's eyes.
+        val viewer = DuelBrief.viewer(prefs.aiKnowledge, mine)
+        val report = duels.playOut(ops, seat, pace, viewer)
         val g = duels.game!!
-        val after = DuelBrief.describe(g.state, DuelBrief.viewer(prefs.aiKnowledge.takeIf { it != DuelBrief.FULL } ?: DuelBrief.FULL, seat), duels.catalog, g.header.seed, seat)
-        val failed = said.startsWith("Nothing was played")
-        return MetaAnswer("$said\n\nThe table now:\n$after", if (failed) "Could not play that" else "Played ${ops.size} moves", isError = failed)
+        val after = DuelBrief.describe(g.state, viewer, duels.catalog, g.header.seed, mine, duels.tally(), duels.rulings)
+        return MetaAnswer("${report.text}\n\nThe table now:\n$after", if (!report.played) "Could not play that" else "Played ${report.done} of ${ops.size} moves", isError = !report.played)
     }
 
     private fun peek(i: JsonObject): MetaAnswer {
@@ -88,9 +100,9 @@ internal class AiDuel(private val h: NeueHolders) {
         val s = g.state
         fun names(uids: List<Int>) = uids.joinToString(", ") { "#$it ${duels.catalog.nameOf(s.cards.getValue(it))}" }.ifBlank { "nothing" }
         val (what, seen) = when (ToolArgs.string(i, "what")) {
-            "their_hand" -> "${DuelWords.seatName(s, them)}'s hand" to names(s.seats[them].hand)
-            "their_set" -> "${DuelWords.seatName(s, them)}'s set cards" to names(s.onField().filter { s.cards[it]?.controller == them && s.cards[it]?.faceUp == false })
-            "their_deck_top" -> "the top $count of ${DuelWords.seatName(s, them)}'s deck" to names(s.seats[them].deck.take(count))
+            "their_hand" -> "${DuelWords.possessive(DuelWords.seatName(s, them))} hand" to names(s.seats[them].hand)
+            "their_set" -> "${DuelWords.possessive(DuelWords.seatName(s, them))} set cards" to names(s.onField().filter { s.cards[it]?.controller == them && s.cards[it]?.faceUp == false })
+            "their_deck_top" -> "the top $count of ${DuelWords.possessive(DuelWords.seatName(s, them))} deck" to names(s.seats[them].deck.take(count))
             "my_deck_top" -> "the top $count of its own deck" to names(s.seats[seat].deck.take(count))
             else -> return fail("Look at their_hand, their_set, their_deck_top or my_deck_top.")
         }
@@ -122,15 +134,16 @@ internal class AiDuel(private val h: NeueHolders) {
         if (mine.third.main.isEmpty()) return fail("${mine.second} has no Main Deck to draw from.")
         val solo = ToolArgs.bool(i, "solo") == true
         val theirs = if (solo) null else deck(ToolArgs.string(i, "opponent_deck_id") ?: mine.first) ?: return fail("No deck ${ToolArgs.string(i, "opponent_deck_id")}.")
-        val names = prefs.names
+        // The seats by name: Ai's own at its seat, the person's at the other (1.0.79: never "You", which read as "You's turn").
+        val names = com.kaiharimoto.neue.duel.seatNames(h, aiAtSeat = if (solo) null else prefs.aiSeat)
         duels.start(
             DuelHeader(
                 id = "d${System.currentTimeMillis()}",
                 seed = System.nanoTime(),
                 seats = listOf(
-                    SeatSetup(names.getOrElse(0) { "You" }, mine.third.main.map { it.value }, mine.third.extra.map { it.value }, mine.first, mine.second),
-                    if (theirs == null) SeatSetup(names.getOrElse(1) { "Opponent" })
-                    else SeatSetup(names.getOrElse(1) { "Opponent" }, theirs.third.main.map { it.value }, theirs.third.extra.map { it.value }, theirs.first, theirs.second),
+                    SeatSetup(names[0], mine.third.main.map { it.value }, mine.third.extra.map { it.value }, mine.first, mine.second),
+                    if (theirs == null) SeatSetup(names[1])
+                    else SeatSetup(names[1], theirs.third.main.map { it.value }, theirs.third.extra.map { it.value }, theirs.first, theirs.second),
                 ),
                 solo = solo,
                 created = System.currentTimeMillis(),
@@ -184,9 +197,30 @@ internal class AiDuel(private val h: NeueHolders) {
                 if (missing.isNotEmpty()) return fail("${c.name} needs ${missing.joinToString()} in hand, which the hand does not hold.")
                 h.neue.go(Page.DUEL)
                 val said = duels.playOut(c.steps, seat, (ToolArgs.int(i, "pace_ms") ?: prefs.aiPace).toLong())
-                ok("${c.name}: $said", "Ran ${c.name}")
+                ok("${c.name}: ${said.text}", "Ran ${c.name}")
             }
             else -> fail("action is list, get, save, record or run.")
         }
+    }
+
+    private suspend fun ruling(i: JsonObject): MetaAnswer = when (ToolArgs.string(i, "action")) {
+        "list" -> ok(
+            duels.rulings.rulings.joinToString("\n") { r -> "- ${r.id}: ${r.card?.let { "$it: " } ?: ""}${r.text}" }.ifBlank { "No house rulings kept yet." },
+            "Listed house rulings",
+        )
+        "save" -> {
+            val text = ToolArgs.string(i, "text")?.trim().orEmpty().ifBlank { return fail("Say the ruling in text.") }
+            val q = ToolArgs.string(i, "card")?.trim().orEmpty()
+            val s = duels.game?.state
+            val found = if (q.isBlank() || s == null) null
+            else (com.kaiharimoto.mastertool.core.duel.text.DuelCommand.lookup(q, s, aiSeat(), duels.catalog, everywhere = true) as? com.kaiharimoto.mastertool.core.duel.text.DuelCommand.Lookup.One)?.uid?.let { s.cards[it] }
+            val r = duels.keepRuling(found?.code?.takeIf { it != 0 }, found?.let { duels.catalog.nameOf(it) } ?: q.ifBlank { null }, text)
+            ok("Kept house ruling ${r.id}: ${r.card?.let { "$it: " } ?: ""}${r.text}", "Kept a house ruling")
+        }
+        "delete" -> {
+            val id = ToolArgs.string(i, "id") ?: return fail("Which ruling? Give its id (list shows them).")
+            if (duels.forgetRuling(id)) ok("Forgot house ruling $id.", "Forgot a house ruling") else fail("No house ruling $id.")
+        }
+        else -> fail("action is list, save or delete.")
     }
 }
