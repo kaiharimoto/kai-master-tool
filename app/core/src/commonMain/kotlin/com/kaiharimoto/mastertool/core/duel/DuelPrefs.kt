@@ -43,6 +43,8 @@ data class DuelPrefs(
     val aiTriggers: Boolean = true,
     /** Each turn starts in Main Phase 1 (1.0.86): after End Turn the table draws for the next player and moves on by itself. */
     val autoDraw: Boolean = true,
+    /** Every place's coordinate (`m3`, `os2`, `h4`) written faintly at its corner, as a chessboard's edge (1.0.87, `I`). */
+    val coordinates: Boolean = false,
 ) {
     companion object {
         const val KNOW_ALL = "all"

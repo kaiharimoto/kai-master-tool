@@ -368,21 +368,50 @@ internal fun ShuffleOffer(duels: Duels, s: DuelState, l: DuelLayout) {
 }
 
 /**
+ * The verbs the strip offers for [uid] (1.0.78), and whether the person plays the card or only points at it:
+ * the obvious verb first, then the rest; Target first for a card that is not theirs. The strip's last
+ * item, after [verbs], is Point at it. One list for the pointer's strip and the keyboard's menu (1.0.87).
+ */
+internal data class VerbMenu(val uid: Int, val verbs: List<com.kaiharimoto.mastertool.core.duel.DuelVerb>, val mine: Boolean) {
+    /** The verbs and Point at it. */
+    val size: Int get() = verbs.size + 1
+}
+
+internal fun verbMenu(duels: Duels, s: DuelState, uid: Int, playsBoth: Boolean): VerbMenu? {
+    if (uid !in s.cards) return null
+    val actor = duels.seatFor(uid)
+    val inStrip = duels.strip?.let { (seat, kind) -> s.placeOf(uid).let { it is Place.Pile && it.seat == seat && it.kind == kind } } == true
+    // Another seat's open pile is for pointing at, unless the person plays both seats (1.0.86).
+    val mine = s.solo || actor == duels.bottom || (inStrip && com.kaiharimoto.mastertool.core.duel.DuelSeats.stripPlays(s, actor, duels.bottom, playsBoth))
+    val offered = com.kaiharimoto.mastertool.core.duel.DuelVerbs.offered(s, actor, uid, duels.catalog)
+    val verbs = if (mine) offered else listOf(com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET) + offered.filter { it != com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET }
+    return if (verbs.isEmpty()) null else VerbMenu(uid, verbs, mine)
+}
+
+/** The menu's [i]-th item done: a verb, or (past the verbs) Point at it. The strip goes away. */
+internal fun runVerbItem(duels: Duels, menu: VerbMenu, i: Int) {
+    duels.verbStrip = false
+    val v = menu.verbs.getOrNull(i)
+    when {
+        v == null -> duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, uid = menu.uid))
+        v == com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET && !menu.mine -> duels.verb(menu.uid, v, seat = duels.bottom)
+        else -> duels.verb(menu.uid, v)
+    }
+}
+
+/**
  * What the selected card can do, standing beside it on the table (1.0.78, kai's pick of three): the
  * obvious verb first, in ink, every one with its key. Right of the card where there is room, else left;
- * above a card in the hand. Esc, a click on the table, or a verb run puts it away.
+ * above a card in the hand. Esc, a click on the table, or a verb run puts it away. Opened by Enter on the
+ * focus (1.0.87), it is a menu: the verb in ink is the one ↑/↓ have chosen and Enter does.
  */
 @Composable
 internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<com.kaiharimoto.mastertool.core.layout.CardFrame>, playsBoth: Boolean) {
     val c = Mu.colors
     val uid = duels.inspected?.takeIf { it in s.cards } ?: return
     val f = frames.firstOrNull { it.uid == uid && it.shown } ?: return
-    val actor = duels.seatFor(uid)
-    // Another seat's open pile is for pointing at, unless the person plays both seats (1.0.86).
-    val mine = s.solo || actor == duels.bottom || (f.inStrip && com.kaiharimoto.mastertool.core.duel.DuelSeats.stripPlays(s, actor, duels.bottom, playsBoth))
-    val offered = com.kaiharimoto.mastertool.core.duel.DuelVerbs.offered(s, actor, uid, duels.catalog)
-    val verbs = if (mine) offered else listOf(com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET) + offered.filter { it != com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET }
-    if (verbs.isEmpty()) return
+    val menu = verbMenu(duels, s, uid, playsBoth) ?: return
+    val cursor = duels.verbCursor?.coerceIn(0, menu.size - 1)
     val turned = f.rotation % 180f != 0f
     val vw = if (turned) f.h else f.w
     val vh = if (turned) f.w else f.h
@@ -395,17 +424,12 @@ internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<c
                 Modifier.width(VERB_STRIP_W.dp).background(c.paper).border(1.dp, c.ink).padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                verbs.forEachIndexed { i, v ->
+                menu.verbs.forEachIndexed { i, v ->
                     val key = VERB_KEYS[v]?.let { com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(it) }?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
-                    VerbChip(v.label, key, strong = i == 0, modifier = Modifier.fillMaxWidth()) {
-                        duels.verbStrip = false
-                        if (v == com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET && !mine) duels.verb(uid, v, seat = duels.bottom) else duels.verb(uid, v)
-                    }
+                    VerbChip(v.label, key, strong = if (cursor == null) i == 0 else i == cursor, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, i) }
                 }
-                VerbChip("Point at it", "Alt click", modifier = Modifier.fillMaxWidth()) {
-                    duels.verbStrip = false
-                    duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, uid = uid))
-                }
+                VerbChip("Point at it", "Alt click", strong = cursor == menu.verbs.size, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, menu.verbs.size) }
+                if (cursor != null) Mono("↑↓ choose · Enter · Esc", color = c.ink45, size = 9.sp)
             }
         },
         modifier = Modifier.zIndex(DuelFrames.Z_STRIP + 2f),

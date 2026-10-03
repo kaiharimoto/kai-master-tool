@@ -62,6 +62,8 @@ object DuelFrames {
         strip: Pair<Int, PileKind>? = null,
         facing: Boolean = false,
         stripRow: Int = 0,
+        /** The duel's secret (its seed): a hand the [viewers] cannot see is drawn in its veils' order (1.0.87). */
+        secret: Long = 0L,
     ): List<CardFrame> {
         val out = ArrayList<CardFrame>(s.cards.size)
         fun look(uid: Int): CardLook {
@@ -109,8 +111,10 @@ object DuelFrames {
             // The hand, fanned across its band.
             val band = l.pile(seat, PileKind.HAND)
             if (band != null) {
-                fan(st.hand.size, band, if (seat == l.bottom) l.card else band.height / DuelLayouter.CARD_RATIO)
-                    .forEachIndexed { i, slot -> place(st.hand[i], slot, Z_HAND + i * 0.001f, rotation = r) }
+                // Another seat's hidden hand in no order of its own, as DuelView sends it (1.0.87, the focus's `oh1…`).
+                val shown = DuelFocus.Eyes(viewers, secret).hand(s, seat)
+                fan(shown.size, band, if (seat == l.bottom) l.card else band.height / DuelLayouter.CARD_RATIO)
+                    .forEachIndexed { i, slot -> place(shown[i], slot, Z_HAND + i * 0.001f, rotation = r) }
             } else {
                 // A folded hand: its cards wait by the seat's score, out of sight.
                 val at = l.score[seat] ?: l.turn

@@ -239,6 +239,23 @@ enum class DeskAction {
     DUEL_ZONE_EMZ_RIGHT,
     DUEL_ZONE_FIELD,
 
+    /**
+     * Command mode (1.0.87): a focus that walks the table by the arrows (`DuelFocus`), so a whole duel is
+     * played without a mouse. The verbs, Space and the numbers act on it once the keys moved last.
+     */
+    DUEL_FOCUS_UP,
+    DUEL_FOCUS_DOWN,
+    DUEL_FOCUS_LEFT,
+    DUEL_FOCUS_RIGHT,
+    DUEL_FOCUS_ROW_START,
+    DUEL_FOCUS_ROW_END,
+    /** Enter: the focused card's verbs, the focused pile opened, the picked card put down — with no focus, chat. */
+    DUEL_FOCUS_ACT,
+    /** Pick up the focused card, to put it down where Enter is pressed next. */
+    DUEL_PICK,
+    /** Every place's coordinate written at its corner, as a chessboard's edge (`DuelPrefs.coordinates`). */
+    DUEL_COORDINATES,
+
     /** A replay (1.0.75): a step, a phase or a turn either way; the ends; play; edit. */
     REPLAY_BACK,
     REPLAY_FORWARD,
@@ -445,7 +462,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("l"), DeskAction.DUEL_LP, DeskScope.DUEL, "Change life points"),
         DeskShortcut(KeyChord("w"), DeskAction.DUEL_THINK, DeskScope.DUEL, "I'm thinking, or ready again"),
         DeskShortcut(KeyChord("slash"), DeskAction.DUEL_COMMAND, DeskScope.DUEL, "The command line"),
-        DeskShortcut(KeyChord("enter"), DeskAction.DUEL_CHAT, DeskScope.DUEL, "Chat"),
+        DeskShortcut(ctrl("enter"), DeskAction.DUEL_CHAT, DeskScope.DUEL, "Chat (Enter too, when nothing is focused)"),
         DeskShortcut(KeyChord("y"), DeskAction.DUEL_AI_ANSWER, DeskScope.DUEL, "Answer the assistant: No response, Over to you, Done, Don't wait or Your move"),
         DeskShortcut(KeyChord("y", shift = true), DeskAction.DUEL_AI_CATCH_UP, DeskScope.DUEL, "The assistant catches up: reads what you did, moves nothing"),
         DeskShortcut(KeyChord("v"), DeskAction.DUEL_SIDES, DeskScope.DUEL, "One player's table or two"),
@@ -485,6 +502,15 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("6"), DeskAction.DUEL_ZONE_EMZ_LEFT, DeskScope.DUEL, "To the left Extra Monster Zone"),
         DeskShortcut(KeyChord("7"), DeskAction.DUEL_ZONE_EMZ_RIGHT, DeskScope.DUEL, "To the right Extra Monster Zone"),
         DeskShortcut(KeyChord("0"), DeskAction.DUEL_ZONE_FIELD, DeskScope.DUEL, "To the Field Zone"),
+        DeskShortcut(KeyChord("up"), DeskAction.DUEL_FOCUS_UP, DeskScope.DUEL, "Walk the table: the place above, or the verb above in the menu", repeatable = true),
+        DeskShortcut(KeyChord("down"), DeskAction.DUEL_FOCUS_DOWN, DeskScope.DUEL, "Walk the table: the place below, or the verb below in the menu", repeatable = true),
+        DeskShortcut(KeyChord("left"), DeskAction.DUEL_FOCUS_LEFT, DeskScope.DUEL, "Walk the table: the place to the left", repeatable = true),
+        DeskShortcut(KeyChord("right"), DeskAction.DUEL_FOCUS_RIGHT, DeskScope.DUEL, "Walk the table: the place to the right", repeatable = true),
+        DeskShortcut(KeyChord("left", shift = true), DeskAction.DUEL_FOCUS_ROW_START, DeskScope.DUEL, "The row's first place"),
+        DeskShortcut(KeyChord("right", shift = true), DeskAction.DUEL_FOCUS_ROW_END, DeskScope.DUEL, "The row's last place"),
+        DeskShortcut(KeyChord("enter"), DeskAction.DUEL_FOCUS_ACT, DeskScope.DUEL, "Act on the focus: the card's verbs, the pile opened, the picked card put down; with nothing focused, chat"),
+        DeskShortcut(KeyChord("enter", shift = true), DeskAction.DUEL_PICK, DeskScope.DUEL, "Pick up the focused card: then Enter where it goes"),
+        DeskShortcut(KeyChord("i"), DeskAction.DUEL_COORDINATES, DeskScope.DUEL, "Coordinates on every place, or none"),
 
         DeskShortcut(KeyChord("left"), DeskAction.REPLAY_BACK, DeskScope.REPLAY, "A step back", repeatable = true),
         DeskShortcut(KeyChord("right"), DeskAction.REPLAY_FORWARD, DeskScope.REPLAY, "A step on", repeatable = true),

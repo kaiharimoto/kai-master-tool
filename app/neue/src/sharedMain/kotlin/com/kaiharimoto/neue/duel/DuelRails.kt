@@ -79,7 +79,8 @@ internal val VERB_KEYS = mapOf(
 internal fun DuelInspector(h: NeueHolders, duels: Duels, game: DuelGame, viewers: Set<Int>, modifier: Modifier = Modifier, fill: Boolean = true) {
     val c = Mu.colors
     val s = game.state
-    val uid = (duels.hovered ?: duels.inspected)?.takeIf { it in s.cards }
+    // The focus's card while the keys lead (1.0.87): the card is read without a mouse.
+    val uid = duels.reading()?.takeIf { it in s.cards }
     val body: @Composable () -> Unit = {
         if (uid == null) {
             Micro("The card", color = c.ink45)
@@ -164,6 +165,9 @@ internal fun TurnTally(duels: Duels, game: DuelGame, viewer: Int? = null) {
     HRule()
 }
 
+/** The four arrows, as the key cheat writes them. */
+private const val ARROWS = "← ↑ → ↓"
+
 /** The inspector's art: big enough to know the card, small enough that its text needs no scrolling. */
 private const val INSPECTOR_ART = 150
 
@@ -191,9 +195,11 @@ private fun KeyCheat(h: NeueHolders) {
         DeskAction.DUEL_ACTIVATE to "Activate", DeskAction.DUEL_GRAVE to "To GY", DeskAction.DUEL_BANISH to "Banish",
         DeskAction.DUEL_HAND to "To hand", DeskAction.DUEL_DRAW to "Draw", DeskAction.DUEL_NEXT_PHASE to "Next phase",
         DeskAction.DUEL_END_TURN to "End turn", DeskAction.DUEL_COMMAND to "Command", DeskAction.UNDO to "Undo",
+        // Command mode (1.0.87): the whole table without a mouse.
+        DeskAction.DUEL_FOCUS_ACT to "Act on the focus", DeskAction.DUEL_PICK to "Pick up", DeskAction.DUEL_COORDINATES to "Coordinates",
     ).mapNotNull { (a, words) ->
-        DeskShortcuts.all.firstOrNull { it.action == a && (it.scope == com.kaiharimoto.mastertool.core.input.DeskScope.DUEL || a == DeskAction.UNDO) }?.chord?.let { it to words }
-    }
+        DeskShortcuts.all.firstOrNull { it.action == a && (it.scope == com.kaiharimoto.mastertool.core.input.DeskScope.DUEL || a == DeskAction.UNDO) }?.chord?.let { DeskShortcuts.kbd(it) to words }
+    }.let { listOf(ARROWS to "Walk the table") + it }
     Column(Modifier.fillMaxWidth()) {
         HRule()
         Row(
@@ -211,7 +217,7 @@ private fun KeyCheat(h: NeueHolders) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         pair.forEach { (chord, words) ->
                             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Kbd(DeskShortcuts.kbd(chord), Modifier.widthIn(min = 36.dp))
+                                Kbd(chord, Modifier.widthIn(min = 36.dp))
                                 Small(words, color = c.ink70, maxLines = 1)
                             }
                         }

@@ -88,8 +88,119 @@ class Duels(val dir: File) {
     var drawer by mutableStateOf<String?>(null)
     /** The card whose every verb is shown, held open (a long press). */
     var verbsOpen by mutableStateOf(false)
-    /** The verb strip beside the selected card (1.0.78): shown for [inspected] while true. */
-    var verbStrip by mutableStateOf(false)
+    /** The verb strip beside the selected card (1.0.78): shown for [inspected] while true. Shown or put away, its keyboard cursor goes. */
+    var verbStrip: Boolean
+        get() = verbStripShown
+        set(v) { verbStripShown = v; verbCursor = null }
+    private var verbStripShown by mutableStateOf(false)
+
+    // ---- Command mode (1.0.87): a focus the arrows walk ------------------------------------------------
+
+    /** What moved last, the keys or the pointer: the keys act on the focus after the one, on the hover after the other. */
+    enum class Input { KEYS, POINTER }
+
+    /** Where the arrows stand on the table (`DuelFocus`), or nowhere yet. */
+    var focus by mutableStateOf<com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot?>(null)
+        private set
+    /** The card the focus was put on, so it goes with the card when the card moves; null on a place or a pile. */
+    private var focusCard: Int? = null
+    /** Set to [Input.KEYS] by the focus's keys, to [Input.POINTER] by the pointer moving over the table. */
+    var lastInput by mutableStateOf(Input.POINTER)
+    /** A card picked up by the keys (Shift Enter), put down where Enter is pressed next. */
+    var picked by mutableStateOf<Int?>(null)
+    /** The verb highlighted in the verb strip opened by Enter; null while the strip is the pointer's (or shut). */
+    var verbCursor by mutableStateOf<Int?>(null)
+    /** The table as last drawn (set by `DuelTable`): the focus's grid is read off its shape. */
+    var tableLayout: com.kaiharimoto.mastertool.core.layout.DuelLayout? = null
+    /** Whose eyes the table is drawn through, and the veils' secret (set by `DuelTable`): a hidden hand's order. */
+    var eyes: com.kaiharimoto.mastertool.core.layout.DuelFocus.Eyes = com.kaiharimoto.mastertool.core.layout.DuelFocus.Eyes.ALL
+
+    /** The keys are in charge: the ring is drawn and the keys act on it. */
+    val byKeys: Boolean get() = lastInput == Input.KEYS && focus != null
+
+    /** The grid's shape: the table as drawn, an open pile's cards to a row. */
+    fun focusShape(): com.kaiharimoto.mastertool.core.layout.DuelFocus.Shape {
+        val l = tableLayout ?: return com.kaiharimoto.mastertool.core.layout.DuelFocus.Shape(twoSided = shown?.state?.solo == false)
+        val per = strip?.let { (seat, kind) -> shown?.state?.seats?.get(seat)?.pile(kind)?.size }?.let { com.kaiharimoto.mastertool.core.layout.DuelFrames.stripGrid(it, l).perRow } ?: 1
+        return com.kaiharimoto.mastertool.core.layout.DuelFocus.Shape.of(l, per)
+    }
+
+    /** The card the focus stands on, or null for an empty place (or no focus). */
+    fun focusUid(): Int? {
+        val f = focus ?: return null
+        val s = shown?.state ?: return null
+        return com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, f, eyes)
+    }
+
+    /**
+     * The card a key acts on: the focus's once the keys moved last (null on an empty place — a key there does
+     * nothing), else the card under the pointer, the one selected, or the one being read, as before 1.0.87.
+     */
+    fun keyTarget(): Int? = if (byKeys) focusUid() else hovered ?: selection.singleOrNull() ?: inspected
+
+    /** The card the inspector reads: the focus's while the keys lead, else the hovered or the last clicked. */
+    fun reading(): Int? = (if (byKeys) focusUid() else null) ?: hovered ?: inspected
+
+    /** Puts the focus on [slot]: the keys lead, the card there is read, a pile's open strip scrolls to it. */
+    fun focusOn(slot: com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot?) {
+        focus = slot
+        lastInput = Input.KEYS
+        val s = shown?.state
+        focusCard = if (slot == null || s == null || slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile) null
+        else com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, slot, eyes)
+        if (slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.PileCard) {
+            val l = tableLayout ?: return
+            val n = s?.seats?.get(slot.seat)?.pile(slot.kind)?.size ?: return
+            val grid = com.kaiharimoto.mastertool.core.layout.DuelFrames.stripGrid(n, l)
+            val row = slot.index / grid.perRow
+            if (row < stripRow) stripRow = row
+            if (row >= stripRow + grid.visibleRows) stripRow = row - grid.visibleRows + 1
+        }
+    }
+
+    /** The arrows: a step on the table ([com.kaiharimoto.mastertool.core.layout.DuelFocus.step]); the first press starts at home. */
+    fun walk(dir: com.kaiharimoto.mastertool.core.layout.DuelFocus.Dir) {
+        val s = shown?.state ?: return
+        verbStrip = false
+        val shape = focusShape()
+        if (lastInput != Input.KEYS || focus == null) {
+            // The keys take over: on the card under the pointer, else where the ring was left, else home.
+            val start = hovered?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.slotOf(s, it, strip, eyes) }
+                ?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.settle(it, s, bottom, shape) }
+                ?: focus?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.settle(it, s, bottom, shape) }
+            focusOn(start ?: com.kaiharimoto.mastertool.core.layout.DuelFocus.home(s, bottom))
+            return
+        }
+        focusOn(com.kaiharimoto.mastertool.core.layout.DuelFocus.step(focus, dir, s, bottom, shape))
+    }
+
+    /** Shift ← / → : the row's first or last place. */
+    fun walkRow(end: Boolean) {
+        val s = shown?.state ?: return
+        verbStrip = false
+        val shape = focusShape()
+        focusOn(if (end) com.kaiharimoto.mastertool.core.layout.DuelFocus.rowEnd(focus, s, bottom, shape) else com.kaiharimoto.mastertool.core.layout.DuelFocus.rowStart(focus, s, bottom, shape))
+    }
+
+    /** The table changed: the focus goes with the card it was on, or stays where it was, made good. */
+    fun refocus() {
+        val f = focus ?: return
+        val s = shown?.state ?: return
+        val open = (f as? com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.PileCard)?.takeIf { strip != it.seat to it.kind }
+            ?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile(it.seat, it.kind) }
+        val next = if (open != null) open else com.kaiharimoto.mastertool.core.layout.DuelFocus.follow(f, focusCard, s, bottom, focusShape(), strip, eyes)
+        if (next != f) focus = next
+        focusCard = next?.takeIf { it !is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile }?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, it, eyes) }
+        if (picked?.let { it !in s.cards } == true) picked = null
+    }
+
+    /** Esc's last layer: the focus let go, and what was picked with it. */
+    fun clearFocus() {
+        focus = null
+        focusCard = null
+        picked = null
+        lastInput = Input.POINTER
+    }
 
     // ---- Ai in the log (1.0.80) ----------------------------------------------------------------------
 
@@ -661,6 +772,8 @@ class Duels(val dir: File) {
     fun closeStrip() {
         val open = strip ?: return
         strip = null
+        // A card focused in the pile: the focus goes back to the pile, shut (1.0.87).
+        (focus as? com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.PileCard)?.let { focus = com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile(it.seat, it.kind); focusCard = null }
         if (open.second == PileKind.DECK) offerShuffle = open.first to System.currentTimeMillis() + SHUFFLE_OFFER_MS
     }
 
