@@ -776,6 +776,25 @@ picture back), then the name, the numbers and the card's text, then the details
 (type, attribute, archetype, banlist) and the copies in the deck as sections that
 fold shut with a click and stay shut (`NeuePreferences.inspectorFolded`).
 
+**The text is read whole** (1.0.88, kai: "prioritize the effect text and try its best
+to fit all of it in the inspector so the user doesn't have to scroll down";
+`TextFirstCard`, the arithmetic `core/layout/TextFirst`, tested). The name, the type
+line, the numbers and the text are measured first — the text with a text measurer,
+never by counting characters — and the picture takes the height they leave of what
+the column shows unscrolled: at most its natural size (the column's width at 59:86),
+at least 140 dp (a deck card's height, still known on sight), centred. Only with the
+picture at its least does the text step down, a size at a time from 14 sp to 11 sp
+(in sp, so the Text size setting still multiplies it); only past 11 sp does the column
+scroll, as before. The folds (Details, In the deck, Artwork) come after the text and
+fall below the fold rather than costing it a line. The sizes come from measurements
+alone, so a card in a column of a given size always lays out the same. On a tablet the
+column keeps 48 dp at its foot for the Hide button's corner. The phone's viewer (a
+phone has no inspector) follows the same rule upright: its head, the picture in what
+the sheet leaves, the text from 15 sp down, then *Do* below it. The duel's inspector
+measures its words first the same way (1.0.87) but never steps its text down.
+`tools/shoot.sh --page=builder --inspect=<passcode>` puts any card in the inspector;
+`--inspect-view=true` opens it large too, as a phone reads it.
+
 **Contrast** is darker than the kit's ramp, in both themes, and Settings has a
 *High* setting on top of that (`MuColors.of(ink, high)`; the table of alphas and
 what each has to clear is on `MuColors`). The kit's `.60` meta text and `.25`

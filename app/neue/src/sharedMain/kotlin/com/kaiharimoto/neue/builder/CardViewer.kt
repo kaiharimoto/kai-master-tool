@@ -76,6 +76,7 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
         if (maxHeight > maxWidth) {
             val pad = 16.dp
             val artWidth = min(maxWidth - pad * 4, (maxHeight * 0.5f) * CARD_RATIO)
+            val sheet = maxHeight - 24.dp - pad * 2
             val scroll = rememberScrollState()
             Box(
                 Modifier
@@ -86,25 +87,31 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
             ) {
                 Column(Modifier.fillMaxWidth().verticalScroll(scroll).padding(pad), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        Box(Modifier.weight(1f).padding(end = 12.dp)) { CardHeading(card) }
-                        // Full screen, turning with the phone (v1.3.6).
-                        IconButton(Icons.Maximize, { neue.showcase = card }, size = 40.dp, label = "Full screen")
-                        IconButton(Icons.X, close, size = 40.dp, label = "Close")
-                    }
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        NeueCard(card = card, modifier = Modifier.size(artWidth, artWidth / CARD_RATIO), format = state.format, foil = neue.prefs.foil)
-                    }
+                    // The text first (1.0.88, as the inspector): the name, the art in the height the words
+                    // leave of the sheet, the text whole — then what to do with the card.
+                    val text = card.description.ifBlank { "No card text." }
+                    TextFirstCard(
+                        room = sheet,
+                        text = text,
+                        style = MuType.body(LocalMuFonts.current).copy(fontSize = 15.sp, lineHeight = 23.sp),
+                        artGap = 16.dp,
+                        headGap = 16.dp,
+                        headFirst = true,
+                        artMax = artWidth / CARD_RATIO,
+                        head = {
+                            Row(verticalAlignment = Alignment.Top) {
+                                Box(Modifier.weight(1f).padding(end = 12.dp)) { CardHeading(card) }
+                                // Full screen, turning with the phone (v1.3.6).
+                                IconButton(Icons.Maximize, { neue.showcase = card }, size = 40.dp, label = "Full screen")
+                                IconButton(Icons.X, close, size = 40.dp, label = "Close")
+                            }
+                        },
+                        art = { NeueCard(card = card, modifier = Modifier.fillMaxSize(), format = state.format, foil = neue.prefs.foil) },
+                        body = { style -> SelectionContainer { MuText(text, style = style, color = c.ink) } },
+                    )
+                    HRule(color = c.ink)
                     Micro("Do", color = c.ink70)
                     MenuColumn(entriesFor(viewing, state, neue), onDismiss = close, modifier = Modifier.fillMaxWidth())
-                    HRule(color = c.ink)
-                    SelectionContainer {
-                        MuText(
-                            card.description.ifBlank { "No card text." },
-                            style = MuType.body(LocalMuFonts.current).copy(fontSize = 15.sp, lineHeight = 23.sp),
-                            color = c.ink,
-                        )
-                    }
                     HRule()
                     ArtSwitch(card, neue)
                     CardTags(card, state)

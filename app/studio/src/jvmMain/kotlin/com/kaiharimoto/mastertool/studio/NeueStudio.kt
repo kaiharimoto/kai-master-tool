@@ -61,7 +61,7 @@ import java.util.UUID
  * ```
  *
  * `--page` is decks, builder, odds, stats or settings. `--select=main:3` puts
- * a card in the inspector; `--hover=x,y` moves the pointer there (fractions of
+ * a card in the inspector (`--inspect=<passcode>` any card of the pool); `--hover=x,y` moves the pointer there (fractions of
  * the frame); `--lens=roles`, `--palette`, `--drawer=issues|groups`,
  * `--query=ash` and `--scale=1.25` set the rest of the scene.
  */
@@ -596,6 +596,17 @@ fun neueMain(args: Array<String>) {
                 val id = h.builder.deck[section].getOrNull(index)
                 val card = id?.let(h.builder.index::byId)
                 if (card != null) h.neue.selection = Selection.InDeck(card, section, index)
+            }
+            // --inspect=72270339: that card, searched for in the pool and selected, so the inspector reads it (1.0.88).
+            map["inspect"]?.toIntOrNull()?.let { passcode ->
+                val card = h.builder.index.byId(com.kaiharimoto.mastertool.core.model.CardId(passcode))
+                if (card != null) {
+                    h.builder.onQueryChange(card.name)
+                    h.neue.selection = Selection.InPool(card, 0)
+                    // --inspect-view: opened large too, as a phone reads it (a phone has no inspector).
+                    if (map["inspect-view"] == "true") h.neue.viewing = com.kaiharimoto.neue.Viewing(card, null, 0)
+                }
+                println("[neue-studio] inspect: ${card?.name} (${card?.description?.length} characters)")
             }
             // Zen is set by hand here: idleness is measured in wall-clock time, and a
             // studio run is minutes of it for seconds of frames.
