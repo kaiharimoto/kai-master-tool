@@ -642,6 +642,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   prompt (`PromptBuilder.duel`, the duel-table skill written in), and every cue carries the table. The red team's fixes are held
   by `DuelRedTeamTest` (guest reveals, turn and window checks, take-back, rejoin, ordered wire, Ai's knowledge cap, hand
   veils, per-viewer tally).
+  **1.0.86** (three feature agents beside two red teams): attack is a verb (`DuelVerb.ATTACK`, `Shift A`, `Duels.attacking`,
+  `DropSpot.Score`) with a battle chip (`DuelBattle`, a suggestion only); the phone's phases fold to Next / End (`DuelLayout.phasesCompact`);
+  another seat's open pile is Target-only (`DuelSeats`); Ai's cues by key (`Y`, `Shift Y`, Esc stops, 1–6 answer; `AiCue.primary`);
+  undo skips talk (`DuelGame.undoMove`); turns open themselves to Main 1 (`TurnStart`, `DuelPrefs.autoDraw`); token uids and lock
+  ids are stamped on commit (`DuelIds`), dice keyed to the roll (`forRoll`); the log folded once (`DuelFolds`); `Secrets` covers
+  short names and Ai's questions. The second red-team pass on 1.0.85 is in `DuelRedTeamTest` and `DuelTriggersTest`.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

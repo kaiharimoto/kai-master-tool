@@ -179,6 +179,7 @@ object DuelWords {
                 when (to.kind) {
                     PileKind.GY -> when {
                         a.how == "resolve" -> "$name goes to the GY as it resolves"
+                        a.how == com.kaiharimoto.mastertool.core.duel.DuelBattle.HOW -> "${name.replaceFirstChar { it.uppercase() }} is destroyed by battle"
                         a.how == "tribute" -> subject("Tributes $name")
                         a.how == "detach" || from is Place.Under -> subject("detaches $name$fromWords")
                         fromPile == PileKind.HAND && a.how == "activate" -> subject("discards $name to activate it")

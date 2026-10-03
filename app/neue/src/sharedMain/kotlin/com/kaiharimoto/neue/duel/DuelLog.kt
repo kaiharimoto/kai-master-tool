@@ -201,7 +201,7 @@ private fun AiCues(h: NeueHolders, duels: Duels, game: DuelGame, talking: Boolea
         return
     }
     // What Ai's watches wait for, by kind, never by card — behind Thinking, as the rest of its plans are (1.0.85).
-    val live = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.alive(duels.watches, s.turn)
+    val live = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.alive(duels.watches, game.state.turn)
     if (h.neue.prefs.duel.aiThinking && h.neue.prefs.duel.aiTriggers && live.isNotEmpty() && !duels.aiAnswering) {
         Small(
             "${ai.name} is watching for ${com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.kindsWords(live).lowercase()}",

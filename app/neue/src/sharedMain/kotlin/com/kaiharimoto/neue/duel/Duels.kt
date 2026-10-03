@@ -72,6 +72,8 @@ class Duels(val dir: File) {
     var tableMenuAt = androidx.compose.ui.geometry.Offset(320f, 48f)
     /** A card waiting for the card it goes under (the O key, the inspector's Attach). */
     var attaching by mutableStateOf<Int?>(null)
+    /** A monster waiting for what it attacks (1.0.86): the next click on their monster, or their life points. */
+    var attacking by mutableStateOf<Int?>(null)
     var placed by mutableStateOf<Placed?>(null)
     /** What the table refused, said once. */
     var problem by mutableStateOf<String?>(null)
@@ -360,6 +362,7 @@ class Duels(val dir: File) {
         selection = emptySet()
         strip = null
         attaching = null
+        attacking = null
         placed = null
         problem = null
         inspected = null
@@ -469,10 +472,12 @@ class Duels(val dir: File) {
      * [verb] on [uid], or on the selection when [uid] is part of it. A verb that puts a card in a zone
      * remembers it for a moment, so the number keys can move it to the zone meant.
      */
-    fun verb(uid: Int, verb: DuelVerb, zone: Place.Zone? = null, host: Int? = null, seat: Int? = null): Boolean {
+    fun verb(uid: Int, verb: DuelVerb, zone: Place.Zone? = null, host: Int? = null, seat: Int? = null, direct: Boolean = false): Boolean {
         val g = shown ?: return false
+        // Any verb puts a waiting attack away (1.0.86); an attack verb arms it again below.
+        attacking = null
         val actor = seat ?: seatFor(uid)
-        val targets = if (uid in selection && selection.size > 1) selection.toList() else listOf(uid)
+        val targets = if (uid in selection && selection.size > 1 && verb != DuelVerb.ATTACK) selection.toList() else listOf(uid)
         if (targets.size > 1) {
             // Several at once: each in turn on the table as the one before left it, one group.
             var s = g.state
@@ -487,9 +492,17 @@ class Duels(val dir: File) {
             selection = emptySet()
             return act(all, seatFor(uid))
         }
-        val r = DuelVerbs.actions(g.state, actor, uid, verb, catalog, zone, host)
+        val r = DuelVerbs.actions(g.state, actor, uid, verb, catalog, zone, host, direct)
         if (r.needsHost) {
             attaching = uid
+            problem = null
+            return false
+        }
+        if (r.needsTarget) {
+            attacking = uid
+            attaching = null
+            inspected = uid
+            verbStrip = false
             problem = null
             return false
         }
@@ -502,6 +515,13 @@ class Duels(val dir: File) {
             } else null
         }
         return ok
+    }
+
+    /** The waiting attack declared (1.0.86): on [target], or directly when it is null. */
+    fun attack(target: Int?): Boolean {
+        val a = attacking ?: return false
+        attacking = null
+        return verb(a, DuelVerb.ATTACK, host = target, direct = target == null).also { if (it) inspected = a }
     }
 
     /**

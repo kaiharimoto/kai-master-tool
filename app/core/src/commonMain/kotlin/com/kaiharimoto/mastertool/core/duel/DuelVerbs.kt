@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.duel
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
+import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.model.Card
 
 /** What the table needs to know about a card to choose a zone for it — never what its text does. */
@@ -13,6 +14,9 @@ data class DuelCardInfo(
     val link: Boolean = false,
     /** A Spell's or Trap's kind as printed — Normal, Quick-Play, Continuous, Equip, Field, Ritual, Counter (1.0.79). */
     val sub: String? = null,
+    /** A monster's printed ATK and DEF, for the battle chip's suggestion (1.0.86); null when it has none. */
+    val atk: Int? = null,
+    val def: Int? = null,
 ) {
     /** A card that goes to the GY once it resolves: a Normal, Quick-Play or Ritual Spell, a Normal or Counter Trap. */
     val leavesOnResolve: Boolean
@@ -31,7 +35,7 @@ data class DuelCardInfo(
                 else -> CardKind.MONSTER
             }
             val sub = if (kind == CardKind.SPELL || kind == CardKind.TRAP || kind == CardKind.FIELD_SPELL) card.race?.takeIf { it.isNotBlank() } else null
-            return DuelCardInfo(card.name, kind, pendulum = frame.contains("pendulum"), link = frame.contains("link"), sub = sub)
+            return DuelCardInfo(card.name, kind, pendulum = frame.contains("pendulum"), link = frame.contains("link"), sub = sub, atk = card.atk, def = card.def)
         }
     }
 }
@@ -79,6 +83,8 @@ enum class DuelVerb(val label: String) {
     PLACE("Place"),
     /** From one zone on the field to another. */
     MOVE("Move"),
+    /** In the Battle Phase a face-up Attack Position monster attacks: then a click on their monster, or their life points (1.0.86). */
+    ATTACK("Attack"),
 }
 
 object DuelVerbs {
@@ -90,6 +96,8 @@ object DuelVerbs {
         return when (val p = s.placeOf(uid)) {
             is Place.Zone -> when {
                 card.controller != seat -> DuelVerb.TARGET
+                // The Battle Phase's obvious thing for the turn player's attacker is to attack (1.0.86).
+                (s.solo || s.active == seat) && canAttack(s, seat, uid) -> DuelVerb.ATTACK
                 !card.faceUp && (p.kind == ZoneKind.MONSTER || p.kind == ZoneKind.EMZ) -> DuelVerb.SUMMON
                 else -> DuelVerb.ACTIVATE
             }
@@ -117,6 +125,7 @@ object DuelVerbs {
             is Place.Zone -> buildList {
                 add(DuelVerb.ACTIVATE)
                 if (p.kind == ZoneKind.MONSTER || p.kind == ZoneKind.EMZ) {
+                    if (canAttack(s, seat, uid)) add(DuelVerb.ATTACK)
                     if (!card.faceUp) add(DuelVerb.SUMMON)
                     add(DuelVerb.POSITION)
                 }
@@ -192,6 +201,8 @@ object DuelVerbs {
         catalog: DuelCatalog,
         zone: Place.Zone? = null,
         host: Int? = null,
+        /** For [DuelVerb.ATTACK]: a direct attack. Otherwise [host] is the monster attacked. */
+        direct: Boolean = false,
     ): VerbResult {
         val card = s.cards[uid] ?: return VerbResult.no("No such card")
         val from = s.placeOf(uid) ?: return VerbResult.no("That card has left the duel")
@@ -332,6 +343,13 @@ object DuelVerbs {
                 VerbResult(listOf(move(z, CardPosition.FACE_UP_ATK, if (from is Place.Zone) "move" else "place")))
             }
             DuelVerb.MOVE -> VerbResult.no("Move it where? Name a zone: “move it to m4”")
+            DuelVerb.ATTACK -> when {
+                s.phase != DuelPhase.BATTLE -> VerbResult.no("Attacks are declared in the Battle Phase")
+                !canAttack(s, seat, uid) -> VerbResult.no("A monster you control attacks in face-up Attack Position")
+                host != null -> VerbResult(listOf(DuelAction.Attack(seat, uid, host)))
+                direct -> VerbResult(listOf(DuelAction.Attack(seat, uid, null)))
+                else -> VerbResult(emptyList(), needsTarget = true)
+            }
             DuelVerb.TARGET -> {
                 // A second time takes the arrow away.
                 val drawn = s.arrows.firstOrNull { it.seat == seat && it.from == null && uid in it.to }
@@ -381,6 +399,18 @@ object DuelVerbs {
         return out
     }
 
+    /**
+     * Whether [uid] could attack now (1.0.86): the Battle Phase, and a face-up Attack Position monster in a
+     * Monster Zone or an Extra Monster Zone that [seat] controls. Only what the table holds — whether it
+     * has attacked already, or may, is the players' to say.
+     */
+    fun canAttack(s: DuelState, seat: Int, uid: Int): Boolean {
+        val c = s.cards[uid] ?: return false
+        val at = s.placeOf(uid)
+        return s.phase == DuelPhase.BATTLE && at is Place.Zone && (at.kind == ZoneKind.MONSTER || at.kind == ZoneKind.EMZ) &&
+            c.controller == seat && c.faceUp && !c.defense
+    }
+
     fun kindOf(card: CardInst, catalog: DuelCatalog): CardKind =
         if (card.token) CardKind.TOKEN else catalog.info(card.code)?.kind ?: CardKind.MONSTER
 
@@ -393,6 +423,8 @@ data class VerbResult(
     val actions: List<DuelAction>,
     val problem: String? = null,
     val needsHost: Boolean = false,
+    /** An attack waiting for what it attacks: a monster, or the other player directly (1.0.86). */
+    val needsTarget: Boolean = false,
 ) {
     companion object {
         fun no(why: String) = VerbResult(emptyList(), why)

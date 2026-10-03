@@ -36,6 +36,7 @@ import com.kaiharimoto.mastertool.core.duel.DropSpot
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelDrop
 import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.DuelSeats
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
@@ -101,6 +102,9 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     val stateNow by rememberUpdatedState(s)
     val layoutNow by rememberUpdatedState(layout)
     val index = h.builder.index
+    // Another seat's open pile answers with its verbs only to someone who plays both seats (1.0.86).
+    val playsBoth = playsBoth(h)
+    val playsBothNow by rememberUpdatedState(playsBoth)
 
     // ---- the one arbiter ---------------------------------------------------------------------------
     fun hitAt(x: Float, y: Float): Hit {
@@ -132,6 +136,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 else -> Unit
             }
         }
+        // A player's life points: in the Battle Phase, somewhere to aim a direct attack (1.0.86).
+        l.score.entries.firstOrNull { it.value.contains(x, y) }?.let { return DropSpot.Score(it.key) }
         return when (val spot = l.spotAt(x, y)) {
             is DuelSpot.Zone -> DropSpot.Zone(if (spot.zone.kind == ZoneKind.EMZ) spot.zone.copy(seat = duels.seatFor(uid)) else spot.zone)
             is DuelSpot.Pile -> DropSpot.Pile(spot.seat, spot.kind)
@@ -153,11 +159,16 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
 
     fun mine(uid: Int) = stateNow.solo || duels.seatFor(uid) == duels.bottom
 
+    /** Whether the person plays [f]'s card, or only points at it: an open pile of theirs is target-only (1.0.86). */
+    fun plays(f: CardFrame) = if (f.inStrip) DuelSeats.stripPlays(stateNow, duels.seatFor(f.uid), duels.bottom, playsBothNow) else mine(f.uid)
+
     fun rightClick(hit: Hit, x: Float) {
+        // A right-click puts a waiting attack away, and does nothing else (1.0.86).
+        if (duels.attacking != null) { duels.attacking = null; return }
         when (hit) {
             is Hit.Card -> {
                 val uid = hit.frame.uid
-                if (!hit.frame.inStrip && !mine(uid)) duels.verb(uid, DuelVerb.TARGET, seat = duels.bottom)
+                if (!plays(hit.frame)) duels.verb(uid, DuelVerb.TARGET, seat = duels.bottom)
                 else {
                     val v = DuelVerbs.default(stateNow, duels.seatFor(uid), uid, duels.catalog)
                     duels.verb(uid, DuelVerb.DEFAULT, zone = zoneNear(uid, v, x))
@@ -169,7 +180,14 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         }
     }
 
-    fun click(hit: Hit, shift: Boolean, alt: Boolean, x: Float, at: Long) {
+    fun click(hit: Hit, shift: Boolean, alt: Boolean, x: Float, y: Float, at: Long) {
+        // An attack waiting for what it attacks (1.0.86): their monster, or their hand for a direct attack —
+        // the same answer a drag of the attacker there would give. Anywhere else puts it away.
+        duels.attacking?.let { a ->
+            val aim = DuelDrop.intent(stateNow, a, dropAt(a, x, y), duels.catalog).actions.singleOrNull() as? DuelAction.Attack
+            if (aim != null) { duels.attack(aim.target); return }
+            duels.attacking = null
+        }
         val key: Any? = when (hit) { is Hit.Card -> hit.frame.uid; else -> hit }
         val double = lastClick.first == key && at - lastClick.second < DeskMouse.DOUBLE_CLICK_MS && !lastClick.third
         lastClick = Triple(key, at, double)
@@ -284,7 +302,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     if (!dragged) continue
                 }
                 when {
-                    released -> click(hit, shift, alt, x0, down.uptimeMillis)
+                    released -> click(hit, shift, alt, x0, y0, down.uptimeMillis)
                     decided == null && moved == null -> {
                         // A hold: every verb for the card, beside it read large.
                         if (hit is Hit.Card) {
@@ -410,10 +428,13 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     card != null && card.atk != null -> "${card.atk}" + (card.def?.let { " / $it" } ?: "")
                     else -> null
                 }
+                val attacker = duels.attacking
                 val caption = when {
                     !f.shown -> null
+                    // What a click does while an attack waits: "Attack Arias", "Attack directly" (1.0.86).
+                    attacker != null && attacker != f.uid && !f.inStrip -> attackCaption(s, attacker, f.uid, duels)
                     f.inStrip || s.placeOf(f.uid).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } ->
-                        if (!f.inStrip && !(s.solo || duels.seatFor(f.uid) == duels.bottom)) DuelVerb.TARGET.label
+                        if (!(if (f.inStrip) DuelSeats.stripPlays(s, duels.seatFor(f.uid), duels.bottom, playsBoth) else s.solo || duels.seatFor(f.uid) == duels.bottom)) DuelVerb.TARGET.label
                         else DuelVerbs.default(s, duels.seatFor(f.uid), f.uid, duels.catalog).label
                     s.placeOf(f.uid).let { it is Place.Pile && it.kind == PileKind.DECK } -> "Draw"
                     else -> "Open"
@@ -424,7 +445,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     inst = inst,
                     card = card,
                     name = duels.catalog.nameOf(inst),
-                    selected = f.uid in duels.selection || f.uid == duels.attaching,
+                    selected = f.uid in duels.selection || f.uid == duels.attaching || f.uid == attacker,
                     carried = carry?.uid == f.uid,
                     foil = h.neue.prefs.foil,
                     stats = stats,
@@ -435,7 +456,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         // The open pile's own ground, over the table — gone while a card carried out of it looks for a place.
         if (!stripLeft) duels.strip?.let { (seat, kind) -> StripGround(duels, s, layout, seat, kind) }
         ShuffleOffer(duels, s, layout)
-        if (carry == null && duels.verbStrip) VerbStrip(duels, s, layout, shownFrames)
+        if (carry == null && duels.verbStrip) VerbStrip(duels, s, layout, shownFrames, playsBoth)
 
         // The chain, the arrows, the pings — over the cards.
         ChainWell(s, layout, duels, viewers)
@@ -449,9 +470,32 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
             Box(Modifier.zIndex(60f).offset(b.left.dp, b.top.dp).size(b.width.dp, b.height.dp).border(1.dp, c.ink).background(c.ink06))
         }
         ScoreColumn(h, duels, s, layout)
-        PhaseStrip(duels, s, layout)
+        PhaseStrip(h, duels, s, layout)
+        duels.attacking?.let { a -> if (a in s.cards) AttackBand(duels, s, layout, a) }
+        if (duels.replay == null && carry == null) BattleChip(h, duels, game, layout)
         duels.lpPad?.let { seat -> LpPad(duels, s, layout, seat) }
     }
+}
+
+/**
+ * The person at the table plays both seats (1.0.86): a hot-seat with both hands face-up and no Ai at the
+ * other seat, so another seat's open pile answers with its verbs, not only Target.
+ */
+internal fun playsBoth(h: NeueHolders): Boolean {
+    val prefs = h.neue.prefs
+    val aiSeated = prefs.ai.enabled && (prefs.duel.aiPlays || h.duel.aiSession != null)
+    return DuelSeats.playsBoth(prefs.duel, networked = h.duel.role != null, aiSeated = aiSeated)
+}
+
+/** A click on [uid] while [attacker] waits to attack: its words when the click would declare it, else null. */
+private fun attackCaption(s: com.kaiharimoto.mastertool.core.duel.DuelState, attacker: Int, uid: Int, duels: Duels): String? {
+    val spot = when (val p = s.placeOf(uid)) {
+        is Place.Zone -> DropSpot.Zone(p)
+        is Place.Pile -> if (p.kind == PileKind.HAND) DropSpot.Hand(p.seat, 0) else null
+        else -> null
+    }
+    val intent = DuelDrop.intent(s, attacker, spot, duels.catalog)
+    return intent.label.takeIf { intent.actions.singleOrNull() is DuelAction.Attack }
 }
 
 private fun DrawScope.frame(slot: Slot, color: androidx.compose.ui.graphics.Color) {
@@ -509,6 +553,7 @@ private fun DropHint(cr: Carry, l: DuelLayout, frames: List<CardFrame>, s: com.k
         is DropSpot.Pile -> l.pile(spot.seat, spot.kind)
         is DropSpot.Hand -> l.pile(spot.seat, PileKind.HAND)
         DropSpot.Chain -> l[DuelSpot.Chain]
+        is DropSpot.Score -> l.score[spot.seat]
         null -> null
     }
     slot ?: return

@@ -65,6 +65,7 @@ internal val VERB_KEYS = mapOf(
     DuelVerb.HAND to DeskAction.DUEL_HAND, DuelVerb.DECK_TOP to DeskAction.DUEL_DECK_TOP, DuelVerb.DECK_BOTTOM to DeskAction.DUEL_DECK_BOTTOM,
     DuelVerb.EXTRA to DeskAction.DUEL_EXTRA, DuelVerb.ATTACH to DeskAction.DUEL_ATTACH, DuelVerb.REVEAL to DeskAction.DUEL_REVEAL,
     DuelVerb.COUNTER_UP to DeskAction.DUEL_COUNTER_UP, DuelVerb.COUNTER_DOWN to DeskAction.DUEL_COUNTER_DOWN, DuelVerb.TARGET to DeskAction.DUEL_TARGET,
+    DuelVerb.ATTACK to DeskAction.DUEL_ATTACK,
 )
 
 /**

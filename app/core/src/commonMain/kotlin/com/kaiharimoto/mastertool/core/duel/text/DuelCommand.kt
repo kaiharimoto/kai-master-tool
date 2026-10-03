@@ -410,6 +410,7 @@ object DuelCommand {
         if (v == DuelVerb.MOVE && placeZone == null) return Parsed.Problem("Move $name where? “move $query to m4”")
         val result = DuelVerbs.actions(s, seat, uid, v, catalog, placeZone, host)
         if (result.needsHost) return Parsed.Problem("Attach $name to which card? “attach $query to <card>”")
+        if (result.needsTarget) return Parsed.Problem("Attack what with $name? “$query attacks <card>”, or “$query attacks directly”")
         result.problem?.let { return Parsed.Problem(it) }
         // A zone named outright is always where the card goes; a command that would move nothing there is refused (1.0.79).
         if (placeZone != null && result.actions.none { it is DuelAction.Move && it.to is Place.Zone && (it.to as Place.Zone).let { z -> z.kind == placeZone.kind && z.index == placeZone.index } }) {

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelBattle
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
@@ -37,6 +38,12 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.layout.DuelFrames
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.DuelSpot
+import com.kaiharimoto.mastertool.core.layout.PhaseBox
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
@@ -49,6 +56,7 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.RequestFocusOnce
 import com.kaiharimoto.neue.kit.RowText
+import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.theme.Mu
 
@@ -74,7 +82,12 @@ internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayo
         Column(
             Modifier.zIndex(30f).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp)
                 .background(if (turn) c.ink else c.paper).border(1.dp, if (turn) c.ink else c.ink25)
-                .cursorPointer(caption = "Change LP").muClickable { duels.lpPad = if (duels.lpPad == seat) null else seat }
+                .cursorPointer(caption = if (aimed(duels, s, seat)) "Attack directly" else "Change LP")
+                .muClickable {
+                    // An attack waiting (1.0.86): their life points take it directly.
+                    if (aimed(duels, s, seat)) duels.attack(null)
+                    else { duels.attacking = null; duels.lpPad = if (duels.lpPad == seat) null else seat }
+                }
                 .padding(horizontal = 4.dp, vertical = 3.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp, if (top) Alignment.Top else Alignment.Bottom),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -93,6 +106,8 @@ internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayo
             if (!top) name()
         }
     }
+    // A short column folds the turn into the phase now (1.0.86).
+    if (l.phasesCompact) return
     val t = l.turn
     Row(
         Modifier.zIndex(30f).offset(t.left.dp, t.top.dp).size(t.width.dp, t.height.dp),
@@ -104,38 +119,161 @@ internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayo
     }
 }
 
-/** The phases in the score column: the current one inverted, any of them a click away, End turn last. */
+/**
+ * The phases in the score column: the current one inverted, any of them a click away, End turn last.
+ * Where the column is short (1.0.86, a phone lying down gave each phase about 12 dp), it holds the phase
+ * now with the turn — its name opens every phase as a menu — one large Next phase, and End turn, each
+ * at least a finger's height ([DuelLayout.phaseBoxes]).
+ */
 @Composable
-internal fun PhaseStrip(duels: Duels, s: DuelState, l: DuelLayout) {
+internal fun PhaseStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
-    val slot = l.phases
-    Column(
-        Modifier.zIndex(30f).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        DuelPhase.entries.forEach { p ->
-            val on = s.phase == p
-            Box(
-                Modifier.weight(1f).fillMaxWidth()
-                    .background(if (on) c.ink else c.paper)
-                    .border(1.dp, if (on) c.ink else c.ink25)
-                    .cursorPointer(caption = p.label)
-                    .muClickable { if (!on) duels.goPhase(p) },
+    var menuAt by remember { mutableStateOf(Offset.Zero) }
+    l.phaseBoxes().forEach { b ->
+        val slot = b.slot
+        val place = Modifier.zIndex(30f).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp)
+        when (b.kind) {
+            PhaseBox.Kind.PHASE -> {
+                val p = b.phase ?: DuelPhase.DRAW
+                val on = s.phase == p
+                Box(
+                    place.background(if (on) c.ink else c.paper)
+                        .border(1.dp, if (on) c.ink else c.ink25)
+                        .cursorPointer(caption = p.label)
+                        .muClickable { if (!on) duels.goPhase(p) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Mono(PHASE_SHORT.getValue(p), color = if (on) c.paper else c.ink, size = 11.sp)
+                }
+            }
+            PhaseBox.Kind.NOW -> Column(
+                place.background(c.ink).border(1.dp, c.ink)
+                    .onGloballyPositioned { menuAt = it.boundsInWindow().topLeft }
+                    .cursorPointer(caption = "${s.phase.label} Phase · every phase")
+                    .muClickable { h.neue.menu = MenuSpec(menuAt, phaseMenu(duels, s)) },
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Micro("Turn ${s.turn}", color = c.paper, size = 8.sp, maxLines = 1)
+                Mono("${PHASE_SHORT.getValue(s.phase)} ▾", color = c.paper, size = 11.sp)
+            }
+            PhaseBox.Kind.NEXT -> {
+                // In the End Phase the next thing is the other player's turn.
+                val ends = s.phase == DuelPhase.END
+                val next = s.phase.next()
+                Column(
+                    place.background(c.paper).border(1.dp, c.ink)
+                        .cursorPointer(caption = if (ends) "End turn" else "Next phase: ${next.label}")
+                        .muClickable { if (ends) duels.goPhase(null, end = true) else duels.goPhase(next) },
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Micro(if (ends) "End" else "Next", color = c.ink, size = 9.sp, maxLines = 1)
+                    Mono(if (ends) "turn" else PHASE_SHORT.getValue(next), color = c.ink, size = 15.sp)
+                }
+            }
+            PhaseBox.Kind.END -> Box(
+                place.border(1.dp, c.ink)
+                    .cursorPointer(caption = "End turn")
+                    .muClickable { duels.goPhase(null, end = true) },
                 contentAlignment = Alignment.Center,
             ) {
-                Mono(PHASE_SHORT.getValue(p), color = if (on) c.paper else c.ink, size = 11.sp)
+                Micro(if (s.solo) "Next" else "End", color = c.ink, size = 9.sp)
             }
-        }
-        Box(
-            Modifier.weight(1.2f).fillMaxWidth().border(1.dp, c.ink)
-                .cursorPointer(caption = "End turn")
-                .muClickable { duels.goPhase(null, end = true) },
-            contentAlignment = Alignment.Center,
-        ) {
-            Micro(if (s.solo) "Next" else "End", color = c.ink, size = 9.sp)
         }
     }
 }
+
+/** Every phase, and End turn, from the phase now's name on a short column (a menu in the window's own layer). */
+private fun phaseMenu(duels: Duels, s: DuelState): List<MenuEntry> =
+    DuelPhase.entries.map { p ->
+        MenuEntry(
+            "${p.label} Phase",
+            hint = if (p == s.phase) "now" else PHASE_SHORT.getValue(p),
+            enabled = p != s.phase,
+            reason = if (p == s.phase) "The phase now" else null,
+        ) { duels.goPhase(p) }
+    } + MenuEntry("End turn", separatorBefore = true) { duels.goPhase(null, end = true) }
+
+/** Whether a click on [seat]'s life points would declare the waiting attack directly (1.0.86). */
+private fun aimed(duels: Duels, s: DuelState, seat: Int): Boolean {
+    val a = duels.attacking ?: return false
+    val by = duels.seatFor(a)
+    return seat != by && com.kaiharimoto.mastertool.core.duel.DuelVerbs.canAttack(s, by, a)
+}
+
+/**
+ * The band over the near hand while an attack waits for what it attacks (1.0.86): which monster, what to
+ * click, and a way out for a finger (Esc, Back or a right-click elsewhere).
+ */
+@Composable
+internal fun AttackBand(duels: Duels, s: DuelState, l: DuelLayout, attacker: Int) {
+    val c = Mu.colors
+    val hand = l.pile(l.bottom, PileKind.HAND) ?: l.field
+    val name = s.cards[attacker]?.let { duels.catalog.nameOf(it) } ?: return
+    Row(
+        Modifier.zIndex(DuelFrames.Z_STRIP + 3f).offset(l.field.left.dp, hand.top.dp).width(l.field.width.dp)
+            .background(c.ink).padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Small("Attacking with $name — click a monster, or their life points for a direct attack · Esc", Modifier.weight(1f), color = c.paper, maxLines = 2)
+        Box(
+            Modifier.border(1.dp, c.paper).cursorPointer(caption = "Stop attacking").muClickable { duels.attacking = null }
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        ) { Micro("Cancel", color = c.paper) }
+    }
+}
+
+/**
+ * The battle chip (1.0.86): after an attack is declared, what the printed numbers say battle comes to —
+ * "Apply 700 to Rival", "Destroy Spark" — as one press that commits the life points and the moves to the
+ * GY as one group. A suggestion only: it goes on the next move that changes the table, or by its ✕.
+ */
+@Composable
+internal fun BattleChip(h: NeueHolders, duels: Duels, game: com.kaiharimoto.mastertool.core.duel.DuelGame, l: DuelLayout) {
+    val c = Mu.colors
+    val outcome = remember(game.cursor, game.entries.size, game.state) { DuelBattle.pending(game, duels.catalog) } ?: return
+    var dismissed by remember(game.cursor) { mutableStateOf(false) }
+    if (dismissed) return
+    val s = game.state
+    val words = DuelBattle.words(s, outcome, duels.catalog)
+    // Beside the life points it changes, in the column's middle when it changes none.
+    val anchor = outcome.damaged?.let { l.score[it] } ?: l.turn
+    val nearSeat = outcome.damaged == l.bottom
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.ui.layout.Layout(
+        content = {
+            Row(Modifier.width(BATTLE_CHIP_W.dp).background(c.paper).border(1.dp, c.ink)) {
+                Column(
+                    Modifier.weight(1f).background(c.ink)
+                        .cursorPointer(caption = "Apply battle")
+                        .muClickable { duels.act(DuelBattle.actions(s, outcome), duels.bottom) }
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    words.forEach { Small(it, color = c.paper, maxLines = 2) }
+                }
+                IconButton(Icons.X, { dismissed = true }, size = 28.dp, label = "Not this time")
+            }
+        },
+        modifier = Modifier.zIndex(DuelFrames.Z_STRIP + 3f),
+    ) { measurables, constraints ->
+        val p = measurables.first().measure(androidx.compose.ui.unit.Constraints())
+        val px = density.density
+        val gap = l.gap * px
+        val w = p.width.toFloat()
+        val hgt = p.height.toFloat()
+        // Left of the score column, level with the seat's block: its top for the far seat, its bottom for the near.
+        val x = (anchor.left * px - gap - w).coerceAtLeast(0f)
+        val y = if (nearSeat) anchor.bottom * px - hgt else anchor.top * px
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            p.place(x.toInt(), y.coerceIn(0f, (l.height * px - hgt).coerceAtLeast(0f)).toInt())
+        }
+    }
+}
+
+private const val BATTLE_CHIP_W = 176
 
 /**
  * The chain written down: its links, newest at the bottom, each with where its card is now ("Fuwalo ·
@@ -147,7 +285,10 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
     val c = Mu.colors
     val slot = l[DuelSpot.Chain] ?: return
     Column(
-        Modifier.zIndex(20f).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp).padding(4.dp),
+        Modifier.zIndex(20f).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp)
+            // The table's one arbiter takes the press; this says what it will do (1.0.86).
+            .then(if (s.chain.isEmpty()) Modifier else Modifier.cursorPointer(caption = "Resolve · right-click clears"))
+            .padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Micro("Chain", color = if (s.chain.isEmpty()) c.ink45 else c.ink, size = 9.sp)
@@ -232,12 +373,13 @@ internal fun ShuffleOffer(duels: Duels, s: DuelState, l: DuelLayout) {
  * above a card in the hand. Esc, a click on the table, or a verb run puts it away.
  */
 @Composable
-internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<com.kaiharimoto.mastertool.core.layout.CardFrame>) {
+internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<com.kaiharimoto.mastertool.core.layout.CardFrame>, playsBoth: Boolean) {
     val c = Mu.colors
     val uid = duels.inspected?.takeIf { it in s.cards } ?: return
     val f = frames.firstOrNull { it.uid == uid && it.shown } ?: return
     val actor = duels.seatFor(uid)
-    val mine = s.solo || actor == duels.bottom || f.inStrip
+    // Another seat's open pile is for pointing at, unless the person plays both seats (1.0.86).
+    val mine = s.solo || actor == duels.bottom || (f.inStrip && com.kaiharimoto.mastertool.core.duel.DuelSeats.stripPlays(s, actor, duels.bottom, playsBoth))
     val offered = com.kaiharimoto.mastertool.core.duel.DuelVerbs.offered(s, actor, uid, duels.catalog)
     val verbs = if (mine) offered else listOf(com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET) + offered.filter { it != com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET }
     if (verbs.isEmpty()) return
