@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.layout
 
+import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
@@ -110,7 +111,7 @@ data class DuelLayout(
         if (!phasesCompact) {
             val unit = (phases.height - 6 * sp) / 7.2f
             var y = phases.top
-            return com.kaiharimoto.mastertool.core.board.DuelPhase.entries.map { p ->
+            return DuelPhase.entries.map { p ->
                 PhaseBox(PhaseBox.Kind.PHASE, Slot(x, y, w, unit), p).also { y += unit + sp }
             } + PhaseBox(PhaseBox.Kind.END, Slot(x, y, w, phases.bottom - y))
         }
@@ -128,7 +129,7 @@ data class DuelLayout(
 }
 
 /** One control in the phase column: a phase, End turn, or — compact — the phase now and Next phase. */
-data class PhaseBox(val kind: Kind, val slot: Slot, val phase: com.kaiharimoto.mastertool.core.board.DuelPhase? = null) {
+data class PhaseBox(val kind: Kind, val slot: Slot, val phase: DuelPhase? = null) {
     enum class Kind { PHASE, END, NOW, NEXT }
 }
 

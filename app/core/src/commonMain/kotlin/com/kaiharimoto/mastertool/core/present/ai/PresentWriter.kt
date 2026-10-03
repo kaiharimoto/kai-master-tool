@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.present.ai
 import com.kaiharimoto.mastertool.core.present.Anim
 import com.kaiharimoto.mastertool.core.present.DeckFocus
 import com.kaiharimoto.mastertool.core.present.Element
+import com.kaiharimoto.mastertool.core.present.Stat
 import com.kaiharimoto.mastertool.core.present.stage.Box
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.Geometry
@@ -328,7 +329,7 @@ object PresentWriter {
         }
         (slots["number"] as? JsonObject)?.let { n ->
             firstIndex { it.type == Element.STAT }.takeIf { it >= 0 }?.let { i ->
-                els[i] = els[i].copy(stat = com.kaiharimoto.mastertool.core.present.Stat(n.str("value").orEmpty(), n.str("label").orEmpty(), n.str("sub").orEmpty()))
+                els[i] = els[i].copy(stat = Stat(n.str("value").orEmpty(), n.str("label").orEmpty(), n.str("sub").orEmpty()))
             }
         }
         return s.copy(elements = els, title = slots.str("title")?.take(60) ?: s.title)

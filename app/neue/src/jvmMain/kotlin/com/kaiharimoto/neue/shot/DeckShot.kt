@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.deck.LensKeying
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
+import com.kaiharimoto.mastertool.core.layout.BandLayout
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.DeckSection
@@ -50,7 +51,7 @@ data class ShotSection(
     val cards: List<Card?>,
     val keying: LensKeying?,
     /** The main deck's bands of group blocks, when the builder shows them (1.0.37), else null: rows as they read. */
-    val bands: com.kaiharimoto.mastertool.core.layout.BandLayout? = null,
+    val bands: BandLayout? = null,
 )
 
 /** Everything the picture shows, gathered off the builder at the instant it was asked for. */

@@ -1,11 +1,20 @@
 package com.kaiharimoto.neue.shell
 
 import androidx.compose.foundation.layout.imePadding
+import com.kaiharimoto.mastertool.core.duel.text.CommandHelp
+import com.kaiharimoto.mastertool.core.input.DeskMenuBar
+import com.kaiharimoto.mastertool.core.input.DuelMouse
+import com.kaiharimoto.mastertool.core.input.DuelTarget
+import com.kaiharimoto.mastertool.core.input.DuelTouch
+import com.kaiharimoto.mastertool.core.input.PresentMouse
+import com.kaiharimoto.mastertool.core.input.PresentTarget
+import com.kaiharimoto.mastertool.core.input.PresentTouch
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.mastertool.core.input.DeskTouch
 import com.kaiharimoto.mastertool.core.input.DeskWords
+import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.reportsTextFocus
 import androidx.compose.animation.core.RepeatMode
@@ -249,7 +258,7 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
 fun HelpDialog(onDismiss: () -> Unit) {
     val c = Mu.colors
     val touch = LocalTouchFirst.current
-    val keyboard = com.kaiharimoto.neue.kit.LocalHardwareKeyboard.current
+    val keyboard = LocalHardwareKeyboard.current
     // On a tablet (touch swarm, rec 20) the finger's table leads, and the keyboard's is
     // there only when a keyboard is: the dialog is "Fingers", and tells what it is.
     val title = if (touch) "Fingers" else "Keyboard and mouse"
@@ -293,7 +302,7 @@ private fun KeyTable() {
                 pair.forEach { scope ->
                     Column {
                         SectionTitle(null, scope.heading)
-                        DeskShortcuts.all.filter { it.scope == scope && (it.action !in DeskAction.AI || com.kaiharimoto.mastertool.core.input.DeskMenuBar.aiShown) }.distinctBy { it.action to it.description }.forEach { row ->
+                        DeskShortcuts.all.filter { it.scope == scope && (it.action !in DeskAction.AI || DeskMenuBar.aiShown) }.distinctBy { it.action to it.description }.forEach { row ->
                             Row(
                                 Modifier.fillMaxWidth().padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -314,11 +323,11 @@ private fun KeyTable() {
 /** The duel's gestures (1.0.74), from its own tables: what a press means on the duel table. */
 @Composable
 private fun DuelGestureTable(touch: Boolean) {
-    val rows = if (touch) com.kaiharimoto.mastertool.core.input.DuelTouch.all else com.kaiharimoto.mastertool.core.input.DuelMouse.all
+    val rows = if (touch) DuelTouch.all else DuelMouse.all
     Column {
         SectionTitle(null, "Duel: the table")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-            com.kaiharimoto.mastertool.core.input.DuelTarget.entries.chunked(3).forEach { targets ->
+            DuelTarget.entries.chunked(3).forEach { targets ->
                 Column(Modifier.weight(1f)) {
                     targets.forEach { target ->
                         MuText(target.heading, Modifier.padding(top = 12.dp, bottom = 4.dp), style = MuType.help(LocalMuFonts.current), color = Mu.colors.ink70)
@@ -346,9 +355,9 @@ private fun DuelGestureTable(touch: Boolean) {
  */
 @Composable
 private fun CommandModeTable() {
-    val help = com.kaiharimoto.mastertool.core.duel.text.CommandHelp
+    val help = CommandHelp
     @Composable
-    fun Rows(title: String, rows: List<com.kaiharimoto.mastertool.core.duel.text.CommandHelp.Row>, mono: Boolean = true) {
+    fun Rows(title: String, rows: List<CommandHelp.Row>, mono: Boolean = true) {
         MuText(title, Modifier.padding(top = 12.dp, bottom = 4.dp), style = MuType.help(LocalMuFonts.current), color = Mu.colors.ink70)
         rows.forEach { row ->
             Row(
@@ -356,7 +365,7 @@ private fun CommandModeTable() {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (mono) com.kaiharimoto.neue.kit.Mono(row.left, color = Mu.colors.ink, size = 12.sp) else RowText(row.left)
+                if (mono) Mono(row.left, color = Mu.colors.ink, size = 12.sp) else RowText(row.left)
                 RowText(row.right, Modifier.weight(1f), color = Mu.colors.ink70, maxLines = 2)
             }
             HRule()
@@ -373,7 +382,7 @@ private fun CommandModeTable() {
             Column(Modifier.weight(1f)) {
                 Rows("The coordinates", help.notation)
                 Rows("Verb letters, before a coordinate", help.letters)
-                Rows("Opening the box", help.opening.map { com.kaiharimoto.mastertool.core.duel.text.CommandHelp.Row(DeskShortcuts.kbd(it.chord), it.description) })
+                Rows("Opening the box", help.opening.map { CommandHelp.Row(DeskShortcuts.kbd(it.chord), it.description) })
                 Rows("In the box", help.keys)
             }
             Column(Modifier.weight(1f)) {
@@ -387,11 +396,11 @@ private fun CommandModeTable() {
 /** Present's gestures (1.0.70), from its own tables: what a press means on a slide and while presenting. */
 @Composable
 private fun PresentGestureTable(touch: Boolean) {
-    val rows = if (touch) com.kaiharimoto.mastertool.core.input.PresentTouch.all else com.kaiharimoto.mastertool.core.input.PresentMouse.all
+    val rows = if (touch) PresentTouch.all else PresentMouse.all
     Column {
         SectionTitle(null, "Present: making and showing slides")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-            com.kaiharimoto.mastertool.core.input.PresentTarget.entries.chunked(3).forEach { targets ->
+            PresentTarget.entries.chunked(3).forEach { targets ->
                 Column(Modifier.weight(1f)) {
                     targets.forEach { target ->
                         MuText(target.heading, Modifier.padding(top = 12.dp, bottom = 4.dp), style = MuType.help(LocalMuFonts.current), color = Mu.colors.ink70)

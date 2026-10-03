@@ -193,7 +193,7 @@ data class Attack(val seat: Int, val attacker: Int, val target: Int? = null)
 
 /** [seat] asks to go to [phase], or to end the turn when [end] (1.0.79). */
 @Serializable
-data class Proposal(val seat: Int, val phase: com.kaiharimoto.mastertool.core.board.DuelPhase? = null, val end: Boolean = false)
+data class Proposal(val seat: Int, val phase: DuelPhase? = null, val end: Boolean = false)
 
 /**
  * A lock written down: [text] in the player's words, lasting until the end of the turn ([UNTIL_TURN]),

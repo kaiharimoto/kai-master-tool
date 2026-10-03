@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -208,7 +209,7 @@ sealed class DuelAction {
     data class OpeningRoll(
         val seat: Int,
         val values: List<Int> = emptyList(),
-        val toss: com.kaiharimoto.mastertool.core.duel.dice.DiceThrow? = null,
+        val toss: DiceThrow? = null,
     ) : DuelAction()
 
     /** The opening roll's winner [seat] goes first, or second when [first] is false: who has turn 1. */

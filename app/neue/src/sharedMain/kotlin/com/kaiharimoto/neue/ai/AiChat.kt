@@ -2,6 +2,25 @@ package com.kaiharimoto.neue.ai
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.composed
+import com.kaiharimoto.mastertool.core.ai.AiSession
+import com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay
+import com.kaiharimoto.mastertool.core.ai.avatar.Expression
+import com.kaiharimoto.mastertool.core.ai.check.FactCheck
+import com.kaiharimoto.mastertool.core.ai.text.CardLine
+import com.kaiharimoto.mastertool.core.ai.text.ChatFollow
+import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.neue.ai.avatar.AiAvatar
+import com.kaiharimoto.neue.ai.avatar.AiName
+import com.kaiharimoto.neue.ai.avatar.AvatarSizes
+import com.kaiharimoto.neue.kit.IconButton
+import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
+import com.kaiharimoto.neue.kit.MicroLink
+import com.kaiharimoto.neue.kit.MuInput
+import com.kaiharimoto.neue.kit.Tip
+import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.theme.MuMotion
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
@@ -86,7 +105,7 @@ import com.kaiharimoto.neue.theme.MuType
 /** One thing drawn in the transcript. */
 private sealed interface Entry {
     data class Person(val text: String, val images: List<Part.Image> = emptyList()) : Entry
-    data class Reply(val text: String, val check: com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check? = null) : Entry
+    data class Reply(val text: String, val check: FactCheck.Check? = null) : Entry
     data class Line(val summary: String, val isError: Boolean) : Entry
     data class Thought(val text: String) : Entry
 
@@ -100,7 +119,7 @@ private fun rows(
     summarized: Int = 0,
     summary: String = "",
     carried: Boolean = false,
-    checks: List<com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check> = emptyList(),
+    checks: List<FactCheck.Check> = emptyList(),
 ): List<Entry> = buildList {
     if (carried && summary.isNotBlank()) add(Entry.Summarized(summary, carried = true))
     turns.forEachIndexed { i, turn ->
@@ -133,7 +152,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
     val tail = rows.size + (if (ai.streaming.isNotEmpty()) 1 else 0) + (if (ai.reasoning.isNotEmpty()) 1 else 0) + ai.todos.size + (if (ai.confirm != null) 1 else 0) + (if (ai.question != null) 1 else 0) + (if (ai.problem != null) 1 else 0) + ai.activity.size
     // It keeps up with Ai only while the reader is at the end (1.0.61, `ChatFollow`): a scroll the
     // reader lets go of elsewhere is left alone, and the end is the end, not the newest item's top.
-    val follow = remember(session?.id) { com.kaiharimoto.mastertool.core.ai.text.ChatFollow() }
+    val follow = remember(session?.id) { ChatFollow() }
     // Which thoughts are open, by their start: one watched open as it streamed stays open when it is
     // filed after the step, or the conversation shrinks under whoever is reading it (1.0.61).
     val opened = remember(session?.id) { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
@@ -198,13 +217,13 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
     LaunchedEffect(Unit) {
         if (!ai.greeted) {
             ai.greeted = true
-            ai.express(com.kaiharimoto.mastertool.core.ai.avatar.Expression.WINK, 3)
+            ai.express(Expression.WINK, 3)
         }
     }
     Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        com.kaiharimoto.neue.ai.avatar.AiAvatar(
+        AiAvatar(
             ai.face,
-            com.kaiharimoto.neue.ai.avatar.AvatarSizes.greeting,
+            AvatarSizes.greeting,
             pointer = { ai.h.cursor.position },
             name = ai.name,
         )
@@ -215,7 +234,7 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
             color = c.ink70,
         )
         Suggestions(ai)
-        com.kaiharimoto.neue.kit.MicroLink("What can you do? →", { ai.demoOpen = true })
+        MicroLink("What can you do? →", { ai.demoOpen = true })
     }
 }
 
@@ -264,7 +283,7 @@ private fun PersonSays(ai: AiState, text: String, images: List<Part.Image>) {
  * opens to every claim, its verdict and where it was checked.
  */
 @Composable
-private fun CheckLine(check: com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check) {
+private fun CheckLine(check: FactCheck.Check) {
     val c = Mu.colors
     var open by remember { mutableStateOf(false) }
     val source = remember { MutableInteractionSource() }
@@ -280,7 +299,7 @@ private fun CheckLine(check: com.kaiharimoto.mastertool.core.ai.check.FactCheck.
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Mono(if (wrong) "✕" else if (check.unsure.isNotEmpty()) "?" else "✓", color = if (wrong) c.ink else c.ink70)
-            Mono(com.kaiharimoto.mastertool.core.ai.check.FactCheck.summary(check), color = animatedColor(if (hovered || wrong) c.ink else c.ink45))
+            Mono(FactCheck.summary(check), color = animatedColor(if (hovered || wrong) c.ink else c.ink45))
         }
         if (open) {
             Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -288,9 +307,9 @@ private fun CheckLine(check: com.kaiharimoto.mastertool.core.ai.check.FactCheck.
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Mono(
                             when (claim.verdict) {
-                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.OK -> "✓"
-                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.WRONG -> "✕"
-                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.UNSURE -> "?"
+                                FactCheck.Verdict.OK -> "✓"
+                                FactCheck.Verdict.WRONG -> "✕"
+                                FactCheck.Verdict.UNSURE -> "?"
                             },
                             color = c.ink,
                         )
@@ -357,7 +376,7 @@ internal fun ReplyView(ai: AiState, text: String, live: Boolean = false) {
     val c = Mu.colors
     val blocks = remember(text, live) { ChatMarkdown.parse(text, streaming = live) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        com.kaiharimoto.neue.ai.avatar.AiName(ai.name, c.ink45)
+        AiName(ai.name, c.ink45)
         SelectionContainer {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { blocks.forEach { MarkdownBlock(ai, it) } }
         }
@@ -496,7 +515,7 @@ private fun ConfirmCard(c: Confirm) {
 internal fun QuestionCard(ai: AiState, q: Question, numbered: Boolean = false) {
     val c = Mu.colors
     // [numbered]: the duel's log, where the digit keys pick its first six options (1.0.86) — shown with a keyboard only.
-    val keys = numbered && com.kaiharimoto.neue.kit.LocalHardwareKeyboard.current
+    val keys = numbered && LocalHardwareKeyboard.current
     // Kept on the question itself (1.0.63), so the row can be rebuilt without losing a word.
     var picked by q::picked
     var own by q::typed
@@ -521,7 +540,7 @@ internal fun QuestionCard(ai: AiState, q: Question, numbered: Boolean = false) {
         }
         // The cards it asks about, as their art (1.0.48): a question about a card shows the card.
         if (q.cards.isNotEmpty()) {
-            CardsBlock(ai, com.kaiharimoto.mastertool.core.ai.text.Block.Cards(q.cards.map { com.kaiharimoto.mastertool.core.ai.text.CardLine(1, it.name) }))
+            CardsBlock(ai, com.kaiharimoto.mastertool.core.ai.text.Block.Cards(q.cards.map { CardLine(1, it.name) }))
         }
         MuText(styled(ChatMarkdown.inline(q.question)), style = MuType.row(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium), color = c.ink)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -533,7 +552,7 @@ internal fun QuestionCard(ai: AiState, q: Question, numbered: Boolean = false) {
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            com.kaiharimoto.neue.kit.MuInput(own, { own = it }, Modifier.weight(1f), placeholder = "Or say it your way", dense = true, onSubmit = {
+            MuInput(own, { own = it }, Modifier.weight(1f), placeholder = "Or say it your way", dense = true, onSubmit = {
                 val answer = (picked + listOfNotNull(own.trim().takeIf { it.isNotEmpty() })).joinToString("; ")
                 if (answer.isNotBlank()) q.reply(answer)
             })
@@ -624,20 +643,20 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             // A picture: chosen here, pasted, or dropped anywhere on the panel (1.0.55).
-            com.kaiharimoto.neue.kit.Tip("Attach a picture — or paste one, or drop it on the panel", above = true) {
-                com.kaiharimoto.neue.kit.IconButton(
+            Tip("Attach a picture — or paste one, or drop it on the panel", above = true) {
+                IconButton(
                     com.kaiharimoto.neue.kit.Icons.Image,
                     { pasteScope.launch { choosePicture(ai) } },
                     label = "Attach",
                 )
             }
             // Speak instead of typing (1.0.57): the words go into the box to read over; talk mode sends them and answers aloud.
-            com.kaiharimoto.neue.kit.Tip(
+            Tip(
                 if (ai.hearing) "Stop listening" else "Speak to ${ai.name}",
-                kbd = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.AI_VOICE)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd),
+                kbd = DeskShortcuts.chordFor(DeskAction.AI_VOICE)?.let(DeskShortcuts::kbd),
                 above = true,
             ) {
-                com.kaiharimoto.neue.kit.IconButton(
+                IconButton(
                     com.kaiharimoto.neue.kit.Icons.Mic,
                     { ai.toggleVoice() },
                     toggled = ai.hearing || ai.transcribing,
@@ -646,8 +665,8 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                     reason = if (ai.talkMode) "Talk mode is listening" else "The speech model is downloading",
                 )
             }
-            com.kaiharimoto.neue.kit.Tip(if (ai.talkMode) "End talk mode" else "Talk mode: a conversation out loud — speak, hear the answer, speak again", above = true) {
-                com.kaiharimoto.neue.kit.IconButton(
+            Tip(if (ai.talkMode) "End talk mode" else "Talk mode: a conversation out loud — speak, hear the answer, speak again", above = true) {
+                IconButton(
                     com.kaiharimoto.neue.kit.Icons.AudioLines,
                     { ai.toggleTalk() },
                     toggled = ai.talkMode,
@@ -655,11 +674,11 @@ fun Composer(ai: AiState, modifier: Modifier = Modifier, phone: Boolean = false)
                 )
             }
             // A phone's or a tablet's camera: a photo of a paper decklist or a board, straight to Ai.
-            if (com.kaiharimoto.neue.platform.Platform.canTakePhoto) {
-                com.kaiharimoto.neue.kit.Tip("Take a photo for ${ai.name} to see", above = true) {
-                    com.kaiharimoto.neue.kit.IconButton(
+            if (Platform.canTakePhoto) {
+                Tip("Take a photo for ${ai.name} to see", above = true) {
+                    IconButton(
                         com.kaiharimoto.neue.kit.Icons.Camera,
-                        { pasteScope.launch { com.kaiharimoto.neue.platform.Platform.takePhoto()?.let(ai::attach) } },
+                        { pasteScope.launch { Platform.takePhoto()?.let(ai::attach) } },
                         label = "Photo",
                     )
                 }
@@ -718,15 +737,15 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
         }
         ai.handLine != null -> ai.handLine
         ai.problem != null -> "Could not finish"
-        face == com.kaiharimoto.mastertool.core.ai.avatar.Expression.DONE -> "Done"
-        face == com.kaiharimoto.mastertool.core.ai.avatar.Expression.SAD -> "Stopped"
-        face == com.kaiharimoto.mastertool.core.ai.avatar.Expression.SLEEPING -> "Asleep"
+        face == Expression.DONE -> "Done"
+        face == Expression.SAD -> "Stopped"
+        face == Expression.SLEEPING -> "Asleep"
         else -> null
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        com.kaiharimoto.neue.ai.avatar.AiAvatar(
+        AiAvatar(
             face,
-            if (phone) com.kaiharimoto.neue.ai.avatar.AvatarSizes.composerPhone else com.kaiharimoto.neue.ai.avatar.AvatarSizes.composer,
+            if (phone) AvatarSizes.composerPhone else AvatarSizes.composer,
             modifier = Modifier.avatarHand(ai),
             pointer = { ai.h.cursor.position },
             name = ai.name,
@@ -734,11 +753,11 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Micro(ai.name, color = c.ink)
-                androidx.compose.animation.Crossfade(face.kaomoji, animationSpec = androidx.compose.animation.core.tween(com.kaiharimoto.neue.theme.MuMotion.FAST), label = "kaomoji") {
+                androidx.compose.animation.Crossfade(face.kaomoji, animationSpec = androidx.compose.animation.core.tween(MuMotion.FAST), label = "kaomoji") {
                     Mono(it, color = c.ink45)
                 }
             }
-            androidx.compose.animation.Crossfade(status, animationSpec = androidx.compose.animation.core.tween(com.kaiharimoto.neue.theme.MuMotion.FAST), label = "status") { line ->
+            androidx.compose.animation.Crossfade(status, animationSpec = androidx.compose.animation.core.tween(MuMotion.FAST), label = "status") { line ->
                 if (line != null) MuText(line, style = MuType.small(LocalMuFonts.current), color = c.ink70, maxLines = 1)
             }
         }
@@ -773,13 +792,13 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
                     Small(s.title.ifBlank { "Untitled" }, color = c.ink, maxLines = 1)
                     Mono(
                         java.time.Instant.ofEpochMilli(s.updatedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString() +
-                            (if (s.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_TUNE) " · Fine Tuning" else "") +
-                            (if (s.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL) " · Duel" else "") +
+                            (if (s.mode == AiSession.MODE_TUNE) " · Fine Tuning" else "") +
+                            (if (s.mode == AiSession.MODE_DUEL) " · Duel" else "") +
                             " · ${s.turns.count { it.role == Role.USER && !it.isToolResults }} messages",
                         color = c.ink45,
                     )
                 }
-                com.kaiharimoto.neue.kit.IconButton(com.kaiharimoto.neue.kit.Icons.Trash, { ai.delete(s.id) }, size = 28.dp, label = "Delete")
+                IconButton(com.kaiharimoto.neue.kit.Icons.Trash, { ai.delete(s.id) }, size = 28.dp, label = "Delete")
             }
         }
     }
@@ -795,8 +814,8 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
 internal fun ReasoningView(ai: AiState, text: String, live: Boolean, opened: MutableMap<String, Boolean>) {
     val c = Mu.colors
     val how = ai.prefs.showReasoning
-    if (how == com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_HIDDEN) return
-    val startsOpen = live || how == com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_OPEN || ai.tuning
+    if (how == AiPrefs.REASONING_HIDDEN) return
+    val startsOpen = live || how == AiPrefs.REASONING_OPEN || ai.tuning
     val key = text.trim().take(200)
     if (live) androidx.compose.runtime.SideEffect { if (key !in opened) opened[key] = true }
     val open = opened[key] ?: startsOpen
@@ -863,10 +882,10 @@ private fun Modifier.avatarHand(ai: AiState): Modifier = composed {
             dwellAnswered = false
             return@LaunchedEffect
         }
-        kotlinx.coroutines.delay((com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.DWELL * 1000).toLong())
+        kotlinx.coroutines.delay((AvatarPlay.DWELL * 1000).toLong())
         if (hovering && !pressed && !dwellAnswered) {
             dwellAnswered = true
-            ai.touched(ai.play.dwell(com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.DWELL))
+            ai.touched(ai.play.dwell(AvatarPlay.DWELL))
         }
     }
     this
@@ -900,7 +919,7 @@ private fun Modifier.avatarHand(ai: AiState): Modifier = composed {
                 onLongPress = {
                     ai.touched(ai.play.hold(longer = false))
                     scope.launch {
-                        kotlinx.coroutines.delay(((com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.HOLD_LONGER - com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.HOLD) * 1000).toLong())
+                        kotlinx.coroutines.delay(((AvatarPlay.HOLD_LONGER - AvatarPlay.HOLD) * 1000).toLong())
                         if (pressed) ai.touched(ai.play.hold(longer = true))
                     }
                 },

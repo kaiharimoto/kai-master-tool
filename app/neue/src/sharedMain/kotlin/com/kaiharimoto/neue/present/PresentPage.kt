@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.PresentPrefs
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.SlideLayouts
@@ -49,7 +50,10 @@ import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.kit.FieldLabel
 import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
@@ -180,12 +184,12 @@ private fun LibraryTile(h: NeueHolders, p: Presentation) {
             MuButton("Open", { present.openIt(p) }, size = BtnSize.SM)
             MuButton("Present", { present.openIt(p); present.present() }, size = BtnSize.SM, variant = BtnVariant.GHOST)
             Box(Modifier.onGloballyPositioned { moreAt = it.positionInWindow() }) {
-                com.kaiharimoto.neue.kit.IconButton(Icons.More, {
-                    h.neue.menu = com.kaiharimoto.neue.kit.MenuSpec(
+                IconButton(Icons.More, {
+                    h.neue.menu = MenuSpec(
                         androidx.compose.ui.geometry.Offset(moreAt.x, moreAt.y + 30f),
                         listOf(
-                            com.kaiharimoto.neue.kit.MenuEntry("Duplicate") { present.duplicate(p) },
-                            com.kaiharimoto.neue.kit.MenuEntry("Delete", danger = true, separatorBefore = true) { present.confirmDelete = p },
+                            MenuEntry("Duplicate") { present.duplicate(p) },
+                            MenuEntry("Delete", danger = true, separatorBefore = true) { present.confirmDelete = p },
                         ),
                     )
                 }, label = "More")
@@ -211,7 +215,7 @@ private fun NewPresentationDialog(h: NeueHolders) {
     LaunchedEffect(decks) { if (deck == null) deck = decks.firstOrNull { it.entry.id == h.builder.deckId } ?: decks.firstOrNull() }
     var style by remember { mutableStateOf(prefs.style) }
     // Master UI unless the person has picked another theme themselves (kai, 1.0.72).
-    val appDark = neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK
+    val appDark = neue.prefs.theme == NeueTheme.INK
     var theme by remember { mutableStateOf(prefs.startTheme(appDark)) }
     var themeChosen by remember { mutableStateOf(prefs.themeChosen) }
     var camera by remember { mutableStateOf(prefs.webcam) }

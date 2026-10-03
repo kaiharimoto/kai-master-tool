@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import com.kaiharimoto.mastertool.core.input.DeskTouch
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -31,6 +32,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventType
+import com.kaiharimoto.neue.kit.LocalTilt
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.onPointer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
@@ -213,14 +216,14 @@ private fun NeueCardFace(
     // A finger's art chip (touch swarm, rec 7): it comes only once the selection has
     // stood past a double-tap, so the second tap lands on the card, and only on a
     // card wide enough for the chip not to be most of what the finger aims at.
-    val touch = com.kaiharimoto.neue.kit.LocalTouchFirst.current
+    val touch = LocalTouchFirst.current
     var widthDp by remember { mutableStateOf(0f) }
     var chipReady by remember { mutableStateOf(false) }
     if (touch) {
         LaunchedEffect(selected) {
             chipReady = false
             if (selected) {
-                kotlinx.coroutines.delay(com.kaiharimoto.mastertool.core.input.DeskTouch.CHIP_DELAY_MS)
+                kotlinx.coroutines.delay(DeskTouch.CHIP_DELAY_MS)
                 chipReady = true
             }
         }
@@ -228,7 +231,7 @@ private fun NeueCardFace(
     val density = androidx.compose.ui.platform.LocalDensity.current
     // The phone's tilt (v1.3.6): the light on a card no finger is over follows the hand.
     // Read in the draw below, so a turn redraws the foil and recomposes nothing.
-    val tilt = com.kaiharimoto.neue.kit.LocalTilt.current
+    val tilt = LocalTilt.current
     // The selected card stands up out of the page (1.0.41, kai: "it's a bit hard to tell
     // which card is being selected"): a little larger than its neighbours, and framed.
     val raise by androidx.compose.animation.core.animateFloatAsState(
@@ -406,7 +409,7 @@ private fun NeueCardFace(
         // because the inspector's arrows were a journey across other cards away. Its press
         // is spent here, so it never also selects, drags or opens the card under it.
         // On a touch screen, where nothing hovers, the chip is on the selected card.
-        val fingerChip = touch && selected && chipReady && widthDp >= com.kaiharimoto.mastertool.core.input.DeskTouch.CHIP_MIN_CARD_DP
+        val fingerChip = touch && selected && chipReady && widthDp >= DeskTouch.CHIP_MIN_CARD_DP
         if (artChip != null && (hovered || fingerChip)) {
             Inverted {
                 Box(

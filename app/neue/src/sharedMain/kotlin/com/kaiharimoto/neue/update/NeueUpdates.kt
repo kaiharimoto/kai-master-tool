@@ -6,6 +6,8 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.update.NeueUpdate
 import com.kaiharimoto.mastertool.core.update.NeueUpdateChecker
 import com.kaiharimoto.mastertool.core.update.NeueUpdateStatus
+import com.kaiharimoto.mastertool.core.update.Release
+import com.kaiharimoto.mastertool.core.update.ReleaseAsset
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.platform.downloadDir
 import com.kaiharimoto.neue.platform.handOffInstaller
@@ -82,9 +84,9 @@ class NeueUpdates(
 
     /** A made-up release with a page of notes, for [offer]. */
     fun sample(): NeueUpdate {
-        val asset = com.kaiharimoto.mastertool.core.update.ReleaseAsset("kai-master-tool-9.9.9.apk", "https://example.invalid/app.apk", 40_000_000)
+        val asset = ReleaseAsset("kai-master-tool-9.9.9.apk", "https://example.invalid/app.apk", 40_000_000)
         val notes = (1..24).joinToString("\n") { "- Line $it of the notes, long enough to wrap on a phone held upright." }
-        val release = com.kaiharimoto.mastertool.core.update.Release("9.9.9", "v9.9.9", notes, asset.url, asset.sizeBytes, "https://example.invalid", false, listOf(asset))
+        val release = Release("9.9.9", "v9.9.9", notes, asset.url, asset.sizeBytes, "https://example.invalid", false, listOf(asset))
         return NeueUpdate("9.9.9", release, asset)
     }
 

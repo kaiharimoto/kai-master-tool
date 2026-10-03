@@ -6,7 +6,12 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.DuelRandom
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
+import com.kaiharimoto.mastertool.core.duel.DuelRules
+import com.kaiharimoto.mastertool.core.duel.DuelTimeline
+import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
+import com.kaiharimoto.mastertool.core.duel.replay.Replays
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
@@ -25,7 +30,7 @@ internal class DuelReplays(private val d: Duels) {
     var libraryOpen by mutableStateOf(false)
     /** Where the duel in play came from, when it is a "what if" played on from a replay. */
     var origin: Pair<String, Int>? = null
-    private var timeline: com.kaiharimoto.mastertool.core.duel.DuelTimeline? = null
+    private var timeline: DuelTimeline? = null
     private var timelineOf: DuelRecord? = null
     private var refusedOf: Pair<DuelRecord, Set<Int>>? = null
 
@@ -33,14 +38,14 @@ internal class DuelReplays(private val d: Duels) {
     fun refused(): Set<Int> {
         val r = replay ?: return emptySet()
         refusedOf?.let { (rec, set) -> if (rec === r.record) return set }
-        val set = com.kaiharimoto.mastertool.core.duel.replay.Replays.refused(r.record)
+        val set = Replays.refused(r.record)
         refusedOf = r.record to set
         return set
     }
 
-    fun timelineFor(r: DuelRecord): com.kaiharimoto.mastertool.core.duel.DuelTimeline {
+    fun timelineFor(r: DuelRecord): DuelTimeline {
         if (timelineOf !== r) {
-            timeline = com.kaiharimoto.mastertool.core.duel.replay.Replays.timeline(r)
+            timeline = Replays.timeline(r)
             timelineOf = r
         }
         return timeline!!
@@ -116,11 +121,11 @@ internal class DuelReplays(private val d: Duels) {
         replay = r.copy(at = at.coerceIn(0, r.record.entries.size))
     }
 
-    fun step(unit: com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit, dir: Int) {
+    fun step(unit: ReplayUnit, dir: Int) {
         val r = replay ?: return
         val e = r.record.entries
-        val to = if (dir > 0) com.kaiharimoto.mastertool.core.duel.replay.Replays.next(e, r.at, unit)
-        else com.kaiharimoto.mastertool.core.duel.replay.Replays.previous(e, r.at, unit)
+        val to = if (dir > 0) Replays.next(e, r.at, unit)
+        else Replays.previous(e, r.at, unit)
         replay = r.copy(at = to, playing = 0)
     }
 
@@ -138,9 +143,9 @@ internal class DuelReplays(private val d: Duels) {
     fun tick(): Boolean {
         val r = replay ?: return false
         val e = r.record.entries
-        val unit = com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP
-        val to = if (r.playing > 0) com.kaiharimoto.mastertool.core.duel.replay.Replays.next(e, r.at, unit)
-        else com.kaiharimoto.mastertool.core.duel.replay.Replays.previous(e, r.at, unit)
+        val unit = ReplayUnit.GROUP
+        val to = if (r.playing > 0) Replays.next(e, r.at, unit)
+        else Replays.previous(e, r.at, unit)
         if (to == r.at) { replay = r.copy(playing = 0); return false }
         replay = r.copy(at = to)
         return true
@@ -157,10 +162,10 @@ internal class DuelReplays(private val d: Duels) {
     fun insert(actions: List<DuelAction>, seat: Int?): Boolean {
         val r = replay ?: return false
         val g = d.shown ?: return false
-        val stamped = actions.mapIndexed { k, a -> com.kaiharimoto.mastertool.core.duel.DuelRandom.stamp(a, com.kaiharimoto.mastertool.core.duel.DuelRandom.forEntry(r.record.header.seed, r.at + k + 7919)) }
-        val (ok, why) = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(g.state, stamped, seat)
+        val stamped = actions.mapIndexed { k, a -> DuelRandom.stamp(a, DuelRandom.forEntry(r.record.header.seed, r.at + k + 7919)) }
+        val (ok, why) = DuelRules.applyAll(g.state, stamped, seat)
         if (ok == null) { d.problem = why; return false }
-        edit(com.kaiharimoto.mastertool.core.duel.replay.Replays.insert(r.record, r.at, stamped, seat, Duels.now()), r.at + stamped.size)
+        edit(Replays.insert(r.record, r.at, stamped, seat, Duels.now()), r.at + stamped.size)
         return true
     }
 
@@ -173,11 +178,11 @@ internal class DuelReplays(private val d: Duels) {
         if (!d.aiWatch.aiActing && d.aiWatch.waitingOnAi) { d.problem = "Ai is answering your move — Don't wait first."; return false }
         val g = d.game ?: return false
         val k = at.coerceIn(g.floor, g.cursor)
-        val stamped = actions.mapIndexed { n, a -> com.kaiharimoto.mastertool.core.duel.DuelRandom.stamp(a, com.kaiharimoto.mastertool.core.duel.DuelRandom.forEntry(g.header.seed, g.cursor + n + 104729)) }
-        val (ok, why) = com.kaiharimoto.mastertool.core.duel.DuelRules.applyAll(d.folds(g).sync(g.entries).stateAt(k), stamped, seat)
+        val stamped = actions.mapIndexed { n, a -> DuelRandom.stamp(a, DuelRandom.forEntry(g.header.seed, g.cursor + n + 104729)) }
+        val (ok, why) = DuelRules.applyAll(d.folds(g).sync(g.entries).stateAt(k), stamped, seat)
         if (ok == null) { d.problem = why; return false }
         val record = g.record().copy(entries = g.played, cursor = g.cursor)
-        val inserted = com.kaiharimoto.mastertool.core.duel.replay.Replays.insert(record, k, stamped, seat, Duels.now())
+        val inserted = Replays.insert(record, k, stamped, seat, Duels.now())
         d.game = DuelGame.of(inserted)
         d.problem = null
         d.save()
@@ -188,14 +193,14 @@ internal class DuelReplays(private val d: Duels) {
     fun deleteStep() {
         val r = replay ?: return
         if (r.at <= 0) return
-        val start = com.kaiharimoto.mastertool.core.duel.replay.Replays.previous(r.record.entries, r.at, com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP)
-        edit(com.kaiharimoto.mastertool.core.duel.replay.Replays.deleteGroup(r.record, r.at - 1), start)
+        val start = Replays.previous(r.record.entries, r.at, ReplayUnit.GROUP)
+        edit(Replays.deleteGroup(r.record, r.at - 1), start)
     }
 
     fun note(text: String) {
         val r = replay ?: return
         if (text.isBlank()) return
-        edit(com.kaiharimoto.mastertool.core.duel.replay.Replays.annotate(r.record, r.at, text.trim(), d.bottom), r.at + 1)
+        edit(Replays.annotate(r.record, r.at, text.trim(), d.bottom), r.at + 1)
     }
 
     /** "What if": the duel as it stood here, as the duel in play, to play on from. */
@@ -203,7 +208,7 @@ internal class DuelReplays(private val d: Duels) {
         val r = replay ?: return
         d.aiWatch.forgetTriggers(clearWatches = true)
         d.attacking = null
-        d.game = com.kaiharimoto.mastertool.core.duel.replay.Replays.branch(r.record, r.at)
+        d.game = Replays.branch(r.record, r.at)
         origin = r.id to r.at
         closeReplay()
         d.picking.clearSelection()

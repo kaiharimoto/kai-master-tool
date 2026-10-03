@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
+import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Micro
 import androidx.compose.ui.Alignment
@@ -39,6 +43,7 @@ import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
+import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.muClickable
@@ -121,7 +126,7 @@ fun MemoryDialog(ai: AiState) {
                         MuText(label(ai, path), style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 1)
                         Mono(path + (fullness(path, text)?.let { " · $it" } ?: ""), color = c.ink45)
                     }
-                    com.kaiharimoto.neue.kit.Segmented(editing, listOf(false, true), { if (it) "Edit" else "Read" }, { editing = it }, small = true)
+                    Segmented(editing, listOf(false, true), { if (it) "Edit" else "Read" }, { editing = it }, small = true)
                 }
                 if (editing) {
                     val source = remember { MutableInteractionSource() }
@@ -147,7 +152,7 @@ fun MemoryDialog(ai: AiState) {
                     }
                 } else {
                     // Read: the file as a document, the way the chat draws Ai's answers.
-                    val blocks = remember(text) { com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown.parse(text) }
+                    val blocks = remember(text) { ChatMarkdown.parse(text) }
                     Column(
                         Modifier.fillMaxWidth().height(460.dp).border(1.dp, c.ink12).verticalScroll(rememberScrollState()).padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -181,10 +186,10 @@ private fun brainGroups(ai: AiState): List<Pair<String, List<String>>> {
 
 /** How full a bounded memory file is, in characters against its limit. */
 private fun fullness(path: String, text: String): String? {
-    val kind = com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.entries.firstOrNull { k ->
+    val kind = MemoryKind.entries.firstOrNull { k ->
         if (k.file.contains("%s")) path.startsWith(k.file.substringBefore("%s")) else path == k.file
     } ?: return null
-    val used = com.kaiharimoto.mastertool.core.ai.memory.AiMemory.parse(text).used
+    val used = AiMemory.parse(text).used
     // A guide has no cap (1.0.65): its size in words' worth of characters, not a share of one.
     if (!kind.bounded) return "${used / 1000}k characters".takeIf { used >= 1000 } ?: "$used characters"
     return "${used * 100 / kind.limit}% full"
@@ -244,7 +249,7 @@ fun ReviewDialog(ai: AiState) {
     val changes = ai.review
     if (report == null && changes == null) return
     val c = Mu.colors
-    val n = changes?.let { com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(it) } ?: 0
+    val n = changes?.let { MemoryReview.count(it) } ?: 0
     MuDialog(
         title = if (report != null) "Fine Tuning · ${report.deckName}" else "What ${ai.name} learned",
         onDismiss = { ai.keepReview() },

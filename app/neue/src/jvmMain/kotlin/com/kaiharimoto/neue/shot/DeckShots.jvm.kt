@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.shot
 
+import com.kaiharimoto.mastertool.core.layout.GroupArrangement
+import com.kaiharimoto.mastertool.core.layout.GroupRows
+import com.kaiharimoto.mastertool.core.model.CardArt
 import com.kaiharimoto.neue.cards.read
 import com.kaiharimoto.neue.builder.bandsOn
 import com.kaiharimoto.mastertool.core.layout.BandLayout
@@ -105,8 +108,8 @@ actual class DeckShots actual constructor(
         if (shown != null && shown.row.size == ids.size) return shown
         val keying = state.keying(DeckSection.MAIN)
         val fitted = state.groups.fitted.map { it.value }
-        if (neue.prefs.arrangement == com.kaiharimoto.mastertool.core.layout.GroupArrangement.SEPARATE) {
-            return com.kaiharimoto.mastertool.core.layout.GroupRows.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = fitted)
+        if (neue.prefs.arrangement == GroupArrangement.SEPARATE) {
+            return GroupRows.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = fitted)
         }
         return GroupBands.layout(ids.map { it.value }, keying.keyOfCell, keying.keyOrder, 1600f to 900f, setOrder = fitted)
     }
@@ -126,7 +129,7 @@ actual class DeckShots actual constructor(
                     cards = state.deck[section].map { id ->
                         state.index.byId(id)?.let { card ->
                             val choice = neue.prefs.arts[card.id.value]
-                            neue.customArt?.drawn(card, choice) ?: com.kaiharimoto.mastertool.core.model.CardArt.show(card, choice?.let(::CardId))
+                            neue.customArt?.drawn(card, choice) ?: CardArt.show(card, choice?.let(::CardId))
                         }
                     },
                     keying = if (showing) state.keying(section).takeIf { !it.isEmpty } else null,

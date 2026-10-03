@@ -4,6 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.TurnStart
+import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
+import com.kaiharimoto.neue.duel.dice.DiceCarry
 
 /**
  * How a turn opens, a part of [Duels]: the turns that start themselves (1.0.86) and the opening roll's dice (1.0.87).
@@ -47,7 +50,7 @@ internal class DuelOpening(private val d: Duels) {
             val g = d.game
             if (g == null || !autoDraw || d.network.role != null || d.replayer.replay != null || g.state.turn != turn) { autoTurn = null; return }
             if (d.aiWatch.held != null || d.aiWatch.aiAnswering || d.aiWatch.fired.isNotEmpty()) return
-            val step = com.kaiharimoto.mastertool.core.duel.TurnStart.next(g) ?: run { autoTurn = null; return }
+            val step = TurnStart.next(g) ?: run { autoTurn = null; return }
             // The opening is the table's, never a move put back in a phase gone by.
             val pastAt = d.insertAfter
             d.insertAfter = null
@@ -65,7 +68,7 @@ internal class DuelOpening(private val d: Duels) {
     /** `DuelPrefs.openingRoll`, set by the page: a new two-seat duel this table hosts opens with the dice. */
     var openingRoll = true
     /** The person's two dice in the hand, carried across the table before they are thrown; null when none are. */
-    var diceCarry by mutableStateOf<com.kaiharimoto.neue.duel.dice.DiceCarry?>(null)
+    var diceCarry by mutableStateOf<DiceCarry?>(null)
     /** The seats whose dice are still in the air: the log holds their numbers back until they land (1.0.87). */
     var diceRolling by mutableStateOf<Set<Int>>(emptySet())
     /** The seat Ai throws and chooses for, set by the page while Ai takes its seat's turns; null otherwise. */
@@ -86,7 +89,7 @@ internal class DuelOpening(private val d: Duels) {
      * [seat] throws its two dice: [toss] the person's own throw, or null for a fling with no hand behind it (a key,
      * `roll`, Ai), made from the same stamped randomness as the values. The guest's throw goes to the host, who stamps.
      */
-    fun throwDice(seat: Int, toss: com.kaiharimoto.mastertool.core.duel.dice.DiceThrow? = null): Boolean =
+    fun throwDice(seat: Int, toss: DiceThrow? = null): Boolean =
         d.act(listOf(DuelAction.OpeningRoll(seat, toss = toss)), seat)
 
     /** The roll's winner goes first, or second. */

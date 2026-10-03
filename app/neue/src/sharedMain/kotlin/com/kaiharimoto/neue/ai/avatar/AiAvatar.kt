@@ -38,6 +38,7 @@ import com.kaiharimoto.mastertool.core.ai.avatar.Expression
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkInk
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkList
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkShape
+import com.kaiharimoto.neue.kit.Micro
 
 /**
  * Ai's face (1.0.52), the approved mockup drawn live: a magatama head in flat colour
@@ -127,7 +128,7 @@ fun AiName(name: String, color: androidx.compose.ui.graphics.Color, modifier: Mo
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(5.dp),
     ) {
         AiMark(mark, name = name)
-        com.kaiharimoto.neue.kit.Micro(name, color = color)
+        Micro(name, color = color)
     }
 }
 

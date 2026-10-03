@@ -5,10 +5,12 @@ import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.present.DeckFocus
 import com.kaiharimoto.mastertool.core.present.DeckSnapshot
 import com.kaiharimoto.mastertool.core.present.Element
+import com.kaiharimoto.mastertool.core.present.Geometry
 import com.kaiharimoto.mastertool.core.present.Para
 import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.present.PresentIds
 import com.kaiharimoto.mastertool.core.present.Presentation
+import com.kaiharimoto.mastertool.core.present.RunStyle
 import com.kaiharimoto.mastertool.core.present.Slide
 import com.kaiharimoto.mastertool.core.present.SlideLayouts
 import com.kaiharimoto.mastertool.core.present.SnapGroup
@@ -68,7 +70,7 @@ object PresentEdits {
                 title = "Title",
                 elements = s.elements.mapIndexed { i, e ->
                     // The layout's own style (the headline's size) kept; only the words change.
-                    val style = e.paras.firstOrNull()?.runs?.firstOrNull()?.style ?: com.kaiharimoto.mastertool.core.present.RunStyle()
+                    val style = e.paras.firstOrNull()?.runs?.firstOrNull()?.style ?: RunStyle()
                     when (i) {
                         0 -> e.copy(paras = listOf(Para.of(deck?.name?.ifBlank { null } ?: name, style, Para.ALIGN_CENTER)))
                         1 -> e.copy(paras = listOf(Para.of(if (creator.isBlank()) "Deck profile" else "Deck profile · $creator", style, Para.ALIGN_CENTER)))
@@ -257,7 +259,7 @@ object SlideClip {
     fun readElements(text: String?): List<Element>? {
         if (text == null || !text.startsWith(ELEMENTS)) return null
         return try {
-            PresentCodec.json.decodeFromString(ListSerializer(Element.serializer()), text.removePrefix(ELEMENTS)).map(com.kaiharimoto.mastertool.core.present.Geometry::sane)
+            PresentCodec.json.decodeFromString(ListSerializer(Element.serializer()), text.removePrefix(ELEMENTS)).map(Geometry::sane)
         } catch (e: Exception) {
             null
         }
@@ -266,7 +268,7 @@ object SlideClip {
     fun readSlides(text: String?): List<Slide>? {
         if (text == null || !text.startsWith(SLIDES)) return null
         return try {
-            PresentCodec.json.decodeFromString(ListSerializer(Slide.serializer()), text.removePrefix(SLIDES)).map { sl -> sl.copy(elements = sl.elements.map(com.kaiharimoto.mastertool.core.present.Geometry::sane)) }
+            PresentCodec.json.decodeFromString(ListSerializer(Slide.serializer()), text.removePrefix(SLIDES)).map { sl -> sl.copy(elements = sl.elements.map(Geometry::sane)) }
         } catch (e: Exception) {
             null
         }

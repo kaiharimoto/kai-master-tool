@@ -35,20 +35,28 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DeckPart
 import com.kaiharimoto.mastertool.core.duel.DropSpot
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelDrop
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelSeats
+import com.kaiharimoto.mastertool.core.duel.DuelSight
+import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.dice.DiceStage
+import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
+import com.kaiharimoto.mastertool.core.duel.dice.Quat
+import com.kaiharimoto.mastertool.core.duel.dice.V3
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.input.DeskMouse
 import com.kaiharimoto.mastertool.core.layout.CardFrame
+import com.kaiharimoto.mastertool.core.layout.CardLook
 import com.kaiharimoto.mastertool.core.layout.DuelFocus
 import com.kaiharimoto.mastertool.core.layout.DuelFrames
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
@@ -56,6 +64,9 @@ import com.kaiharimoto.mastertool.core.layout.DuelSpot
 import com.kaiharimoto.mastertool.core.layout.Slot
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.duel.dice.DiceCarry
+import com.kaiharimoto.neue.duel.dice.OpeningDice
+import com.kaiharimoto.neue.duel.dice.RESTING
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.byFinger
@@ -180,7 +191,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     fun diceAt(x: Float, y: Float): Int? {
         val o = stateNow.opening ?: return null
         if (o.decided || duels.diceCarry != null) return null
-        val stage = com.kaiharimoto.mastertool.core.duel.dice.DiceStage(layoutNow)
+        val stage = DiceStage(layoutNow)
         return (0..1).firstOrNull { seat ->
             o.waitsOn(seat) && duels.mayRoll(seat, playsBothNow) && com.kaiharimoto.neue.duel.dice.restBox(stage, seat)?.contains(x, y) == true
         }
@@ -309,8 +320,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 val diceSeat = diceAt(x0, y0)
                 if (diceSeat != null) {
                     down.consume()
-                    val stage = com.kaiharimoto.mastertool.core.duel.dice.DiceStage(layoutNow)
-                    val held0 = com.kaiharimoto.neue.duel.dice.RESTING
+                    val stage = DiceStage(layoutNow)
+                    val held0 = RESTING
                     var held = held0
                     var p = Offset(x0, y0)
                     var moved = false
@@ -319,7 +330,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     // The pointer's last tenth of a second, for the speed it is let go at.
                     val trail = ArrayDeque<Triple<Long, Float, Float>>()
                     trail.addLast(Triple(down.uptimeMillis, x0, y0))
-                    duels.diceCarry = com.kaiharimoto.neue.duel.dice.DiceCarry(diceSeat, x0, y0, held)
+                    duels.diceCarry = DiceCarry(diceSeat, x0, y0, held)
                     duels.carrying = true
                     try {
                         while (true) {
@@ -334,12 +345,12 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                             if ((np - Offset(x0, y0)).getDistance() > viewConfiguration.touchSlop / d) moved = true
                             if (step.getDistance() > 0.01f) {
                                 // They tumble a little in the hand: a roll about the axis square to the motion.
-                                val v = stage.velocity(diceSeat, step.x, step.y, com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.HELD)
-                                val axis = com.kaiharimoto.mastertool.core.duel.dice.V3.UP.cross(v)
+                                val v = stage.velocity(diceSeat, step.x, step.y, DiceThrow.HELD)
+                                val axis = V3.UP.cross(v)
                                 val angle = axis.length * 0.5
                                 if (angle > 1e-6) {
                                     val n = axis.normalized()
-                                    val r = com.kaiharimoto.mastertool.core.duel.dice.Quat(kotlin.math.cos(angle / 2), n.x * kotlin.math.sin(angle / 2), n.y * kotlin.math.sin(angle / 2), n.z * kotlin.math.sin(angle / 2))
+                                    val r = Quat(kotlin.math.cos(angle / 2), n.x * kotlin.math.sin(angle / 2), n.y * kotlin.math.sin(angle / 2), n.z * kotlin.math.sin(angle / 2))
                                     held = held.map { q -> (r * q).normalized() }
                                 }
                                 // How the path curves: a twist for the throw.
@@ -348,7 +359,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                                 heading = dir
                             }
                             p = np
-                            duels.diceCarry = com.kaiharimoto.neue.duel.dice.DiceCarry(diceSeat, p.x, p.y, held)
+                            duels.diceCarry = DiceCarry(diceSeat, p.x, p.y, held)
                         }
                     } catch (gone: kotlinx.coroutines.CancellationException) {
                         duels.diceCarry = null
@@ -360,10 +371,10 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     val dt = (last.first - first.first) / 1000f
                     val vx = if (dt > 0.008f) (last.second - first.second) / dt else 0f
                     val vy = if (dt > 0.008f) (last.third - first.third) / dt else 0f
-                    val toss = if (!moved) null else com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.fromDrag(
-                        stage.under(diceSeat, p.x, p.y, com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.HELD),
+                    val toss = if (!moved) null else DiceThrow.fromDrag(
+                        stage.under(diceSeat, p.x, p.y, DiceThrow.HELD),
                         held,
-                        stage.velocity(diceSeat, vx, vy, com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.HELD),
+                        stage.velocity(diceSeat, vx, vy, DiceThrow.HELD),
                         wobble,
                     )
                     duels.diceCarry = null
@@ -554,7 +565,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 val card = if (inst.token && inst.code == 0) null else index.byId(CardId(inst.code))
                 val inMonsterZone = s.placeOf(f.uid).let { it is Place.Zone && (it.kind == ZoneKind.MONSTER || it.kind == ZoneKind.EMZ) }
                 val stats = when {
-                    f.look == com.kaiharimoto.mastertool.core.layout.CardLook.BACK || !inst.faceUp || !inMonsterZone -> null
+                    f.look == CardLook.BACK || !inst.faceUp || !inMonsterZone -> null
                     // A token's own numbers, when its maker gave them (1.0.79).
                     inst.token && (inst.atk != null || inst.def != null) -> TableStats("${inst.atk ?: "?"}", "${inst.def ?: "?"}", inst.defense)
                     card != null && card.atk != null -> TableStats("${card.atk}", card.def?.toString(), inst.defense)
@@ -605,7 +616,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         Canvas(Modifier.fillMaxSize().zIndex(if (duels.strip != null) DuelFrames.Z_STRIP - 1f else 50f)) { arrows(s, layout, shownFrames, c.ink, c.paper) }
         Pings(game, layout, shownFrames)
         // The opening roll (1.0.87): the dice in front of each field, in the hand, or tumbling across it; the result.
-        if (duels.replay == null) com.kaiharimoto.neue.duel.dice.OpeningDice(duels, s, layout, playsBoth)
+        if (duels.replay == null) OpeningDice(duels, s, layout, playsBoth)
 
         // What letting go will do, where it will happen.
         carry?.let { cr -> DropHint(cr, layout, shownFrames, s) }
@@ -633,7 +644,7 @@ internal fun playsBoth(h: NeueHolders): Boolean {
 }
 
 /** A click on [uid] while [attacker] waits to attack: its words when the click would declare it, else null. */
-private fun attackCaption(s: com.kaiharimoto.mastertool.core.duel.DuelState, attacker: Int, uid: Int, duels: Duels): String? {
+private fun attackCaption(s: DuelState, attacker: Int, uid: Int, duels: Duels): String? {
     val spot = when (val p = s.placeOf(uid)) {
         is Place.Zone -> DropSpot.Zone(p)
         is Place.Pile -> if (p.kind == PileKind.HAND) DropSpot.Hand(p.seat, 0) else null
@@ -649,7 +660,7 @@ private fun DrawScope.frame(slot: Slot, color: androidx.compose.ui.graphics.Colo
 
 /** Each pile's name over its frame when it is empty, and its count beneath it. */
 @Composable
-private fun PileLabels(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout) {
+private fun PileLabels(s: DuelState, l: DuelLayout) {
     val c = Mu.colors
     l.spots.entries.mapNotNull { (spot, slot) -> (spot as? DuelSpot.Pile)?.let { it to slot } }.forEach { (spot, slot) ->
         val n = s.seats[spot.seat].pile(spot.kind).size
@@ -673,7 +684,7 @@ private fun PileLabels(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: Due
 }
 
 @Composable
-private fun ZoneNumbers(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, placed: Placed) {
+private fun ZoneNumbers(s: DuelState, l: DuelLayout, placed: Placed) {
     val c = Mu.colors
     val zones = s.freeZones(placed.seat, placed.kind) + if (placed.kind == ZoneKind.MONSTER) s.freeZones(placed.seat, ZoneKind.EMZ) else emptyList()
     zones.mapNotNull { z -> l.zone(z)?.let { z to it } }.forEach { (z, slot) ->
@@ -690,7 +701,7 @@ private fun ZoneNumbers(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: Du
 
 /** The highlight under a carried card: the spot it will land in, framed, and what it will do there in words. */
 @Composable
-private fun DropHint(cr: Carry, l: DuelLayout, frames: List<CardFrame>, s: com.kaiharimoto.mastertool.core.duel.DuelState) {
+private fun DropHint(cr: Carry, l: DuelLayout, frames: List<CardFrame>, s: DuelState) {
     val c = Mu.colors
     if (cr.intent.none) return
     val slot: Slot? = when (val spot = cr.spot) {
@@ -728,7 +739,7 @@ private fun DropHint(cr: Carry, l: DuelLayout, frames: List<CardFrame>, s: com.k
 }
 
 /** Target arrows: from the card (or the seat's score) to each target, ink over a paper edge so they read on any art. */
-private fun DrawScope.arrows(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>, ink: androidx.compose.ui.graphics.Color, paper: androidx.compose.ui.graphics.Color) {
+private fun DrawScope.arrows(s: DuelState, l: DuelLayout, frames: List<CardFrame>, ink: androidx.compose.ui.graphics.Color, paper: androidx.compose.ui.graphics.Color) {
     fun centre(uid: Int): Offset? = frames.firstOrNull { it.uid == uid && it.shown }?.let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
     s.arrows.forEach { a ->
         val from = a.from?.let(::centre) ?: (l.score[a.seat] ?: l.turn).let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
@@ -749,10 +760,10 @@ private fun DrawScope.arrows(s: com.kaiharimoto.mastertool.core.duel.DuelState, 
     }
     // The attack declared last, while the Battle Phase lasts (1.0.83): a heavier arrow, to its target or, for
     // a direct attack, to the other player's life points.
-    if (s.phase == com.kaiharimoto.mastertool.core.board.DuelPhase.BATTLE) s.attacks.lastOrNull()?.let { atk ->
+    if (s.phase == DuelPhase.BATTLE) s.attacks.lastOrNull()?.let { atk ->
         val from = centre(atk.attacker) ?: return@let
         val to = atk.target?.let(::centre)
-            ?: (l.score[1 - atk.seat] ?: l.pile(1 - atk.seat, com.kaiharimoto.mastertool.core.duel.PileKind.HAND))?.let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
+            ?: (l.score[1 - atk.seat] ?: l.pile(1 - atk.seat, PileKind.HAND))?.let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
             ?: return@let
         drawLine(paper, from, to, 9.dp.toPx())
         drawLine(ink, from, to, 4.dp.toPx())
@@ -792,7 +803,7 @@ private fun Pings(game: DuelGame, l: DuelLayout, frames: List<CardFrame>) {
 private const val PING_MS = 3000L
 
 /** The ground an open pile covers, its head included: a press outside it closes the pile. */
-internal fun stripGround(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, strip: Pair<Int, PileKind>): Slot {
+internal fun stripGround(s: DuelState, l: DuelLayout, strip: Pair<Int, PileKind>): Slot {
     val area = DuelFrames.stripBand(l, s.seats[strip.first].pile(strip.second).size).inflated(l.gap)
     return Slot(area.left, area.top - DuelFrames.STRIP_HEAD, area.width, area.height + DuelFrames.STRIP_HEAD)
 }
@@ -808,7 +819,7 @@ internal fun seenBox(f: CardFrame): Slot {
 }
 
 /** Where [slot] is drawn: its card as it lies, else the zone or the pile's frame. */
-private fun boxOf(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>, slot: DuelFocus.Slot): Slot? {
+private fun boxOf(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, slot: DuelFocus.Slot): Slot? {
     // A link is in the chain well (1.0.90): the well is ringed, and the link's own line inverted in it.
     if (slot is DuelFocus.Slot.Link) return l[DuelSpot.Chain]
     val uid = DuelFocus.uidAt(s, slot, duels.eyes)
@@ -827,7 +838,7 @@ private fun boxOf(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelStat
  * attach waiting, the tag says what Enter will do there. It moves nothing and fits nothing.
  */
 @Composable
-private fun FocusRing(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>, viewers: Set<Int>) {
+private fun FocusRing(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, viewers: Set<Int>) {
     val c = Mu.colors
     val focus = duels.focus ?: return
     val box = boxOf(duels, s, l, frames, focus) ?: return
@@ -836,7 +847,7 @@ private fun FocusRing(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.Duel
     val what = uid?.let { u ->
         val inst = s.cards.getValue(u)
         when {
-            viewers.any { com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, u, it) } -> duels.catalog.nameOf(inst)
+            viewers.any { DuelSight.sees(s, u, it) } -> duels.catalog.nameOf(inst)
             s.placeOf(u).let { it is Place.Pile && it.kind == PileKind.HAND } -> "in hand"
             s.placeOf(u) is Place.Zone -> "set"
             else -> "face-down"
@@ -874,7 +885,7 @@ private fun FocusRing(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.Duel
  * leave the art alone.
  */
 @Composable
-private fun Coordinates(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState, l: DuelLayout, frames: List<CardFrame>) {
+private fun Coordinates(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>) {
     val c = Mu.colors
     val viewer = duels.bottom
     val cells = DuelFocus.cells(s, viewer, duels.focusShape()).map { it.slot }.filter { it !is DuelFocus.Slot.Link } +

@@ -37,6 +37,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
+import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.onPointer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -228,7 +229,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                     LaunchedEffect(query, filter, onlyList) { grid.scrollToItem(0) }
                     if (outcome.cards.isEmpty()) {
                         Column(Modifier.padding(32.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            com.kaiharimoto.neue.kit.MuText(if (onlyList) "Nothing on it yet." else "No matches.", style = MuType.h1(LocalMuFonts.current))
+                            MuText(if (onlyList) "Nothing on it yet." else "No matches.", style = MuType.h1(LocalMuFonts.current))
                             Small(if (onlyList) "Show every card, find one, and double-click it to put it on the list." else "Try fewer words, or turn off a filter.", color = c.ink70)
                         }
                     } else {

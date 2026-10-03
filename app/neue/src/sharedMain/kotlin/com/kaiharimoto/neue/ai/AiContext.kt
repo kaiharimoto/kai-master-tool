@@ -1,9 +1,14 @@
 package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.AiSession
+import com.kaiharimoto.mastertool.core.ai.BackendEvent
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.Compaction
+import com.kaiharimoto.mastertool.core.ai.ContextBreakdown
+import com.kaiharimoto.mastertool.core.ai.ContextWindows
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
+import com.kaiharimoto.mastertool.core.ai.providers.ConnectKind
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
@@ -16,10 +21,10 @@ import kotlinx.coroutines.launch
  * How much a connection's model can read, in tokens (1.0.56: read off the model's name,
  * `ContextWindows`, unless the person said): past most of it the oldest turns are summarised.
  */
-fun AiState.windowOf(connection: AiConnection): Int = connection.window?.takeIf { it > 0 } ?: com.kaiharimoto.mastertool.core.ai.ContextWindows.of(
+fun AiState.windowOf(connection: AiConnection): Int = connection.window?.takeIf { it > 0 } ?: ContextWindows.of(
     connection.provider,
     connection.model,
-    local = Providers.byId(connection.provider)?.kind == com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.LOCAL,
+    local = Providers.byId(connection.provider)?.kind == ConnectKind.LOCAL,
 )
 
 internal fun AiState.budgetFor(connection: AiConnection): Int = windowOf(connection)
@@ -33,7 +38,7 @@ val AiState.window: Int get() = prefs.connection?.let(::windowOf) ?: 0
 
 /** What fills the conversation now, in tokens: the provider's count when it gave one, else an estimate. */
 val AiState.contextUsed: Long
-    get() = session?.let { com.kaiharimoto.mastertool.core.ai.ContextBreakdown.total(it, tools) } ?: 0
+    get() = session?.let { ContextBreakdown.total(it, tools) } ?: 0
 
 /** Whether [contextUsed] is the provider's own count rather than an estimate. */
 val AiState.contextMeasured: Boolean get() = (session?.context ?: 0) > 0
@@ -51,10 +56,10 @@ internal suspend fun AiState.summarizedIfLong(
     force: Boolean = false,
     focus: String? = null,
 ): AiSession {
-    val used = com.kaiharimoto.mastertool.core.ai.Compaction.estimate(s.system, s.sent, tools)
-    if (!force && used <= budget * com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARIZE_AT) return s
+    val used = Compaction.estimate(s.system, s.sent, tools)
+    if (!force && used <= budget * Compaction.SUMMARIZE_AT) return s
     val keep = if (force) minOf((budget * 0.3).toInt(), used / 4) else (budget * 0.3).toInt()
-    val cut = com.kaiharimoto.mastertool.core.ai.Compaction.cutAt(s.turns, keep, from = s.summarized) ?: return s
+    val cut = Compaction.cutAt(s.turns, keep, from = s.summarized) ?: return s
     if (cut <= s.summarized) return s
     val summary = summarise(s, model, connection, cut, focus) ?: return s
     val next = s.copy(summary = summary, summarized = cut, context = 0)
@@ -68,14 +73,14 @@ private suspend fun AiState.summarise(s: AiSession, model: ModelBackend, connect
     status = "Summarising the start of this conversation to fit"
     val earlier = buildString {
         if (s.summary.isNotBlank()) appendLine("Summary so far: ${s.summary}\n")
-        append(com.kaiharimoto.mastertool.core.ai.Compaction.transcript(s.turns.subList(s.summarized.coerceAtMost(cut), cut)))
+        append(Compaction.transcript(s.turns.subList(s.summarized.coerceAtMost(cut), cut)))
     }
     val keep = focus?.trim()?.takeIf { it.isNotEmpty() }?.let { "\n\nThe person asked that the summary keep: $it" }.orEmpty()
-    val ask = ChatTurn.user(com.kaiharimoto.mastertool.core.ai.Compaction.SUMMARY_ASK + keep + "\n\n" + earlier)
+    val ask = ChatTurn.user(Compaction.SUMMARY_ASK + keep + "\n\n" + earlier)
     var summary = ""
     runCatching {
         model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).collect { e ->
-            if (e is com.kaiharimoto.mastertool.core.ai.BackendEvent.Finished) {
+            if (e is BackendEvent.Finished) {
                 summary = e.turn?.text?.ifBlank { null } ?: e.text
                 e.usage?.let { u -> session?.let { commit(it.copy(usage = it.usage + u)) } }
             }
@@ -162,7 +167,7 @@ fun AiState.contextReport(): String {
     val s = session ?: return "No conversation yet."
     val used = contextUsed
     val w = window
-    val words = com.kaiharimoto.mastertool.core.ai.ContextWindows::words
+    val words = ContextWindows::words
     return buildString {
         if (ownsContext) {
             appendLine("This connection's app keeps its own history and compacts it itself; the numbers below are the app's estimate.")
@@ -171,7 +176,7 @@ fun AiState.contextReport(): String {
             "Context: ${words(used)} of ${words(w.toLong())} tokens" + (if (w > 0) " (${used * 100 / w}%)" else "") +
                 if (contextMeasured) ", as the provider counted last round." else ", estimated.",
         )
-        com.kaiharimoto.mastertool.core.ai.ContextBreakdown.of(s, tools, s.context).forEach { appendLine("- ${it.label}: ${words(it.tokens)}") }
+        ContextBreakdown.of(s, tools, s.context).forEach { appendLine("- ${it.label}: ${words(it.tokens)}") }
         if (s.summarized > 0) appendLine("The first ${s.summarized} messages are summarised (${s.summary.length} characters); recall finds their words.")
         if (s.carriedFrom != null) appendLine("This conversation carries on from an earlier one, whose summary it holds.")
         if (s.clearedBefore > 0) appendLine("Tool results before message ${s.clearedBefore} are sent cut short.")

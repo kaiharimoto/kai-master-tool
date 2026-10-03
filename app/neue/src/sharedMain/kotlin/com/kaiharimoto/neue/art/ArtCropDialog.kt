@@ -63,8 +63,10 @@ import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.mastertool.core.layout.ArtCrop
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
 import com.kaiharimoto.mastertool.core.layout.ArtWindow
+import com.kaiharimoto.mastertool.core.layout.ContentBounds
 import com.kaiharimoto.mastertool.core.layout.CropBox
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.kit.Body
@@ -207,7 +209,7 @@ fun ArtCropDialog(
         val pixels = IntArray(image.width * image.height)
         runCatching { image.readPixels(pixels) }.getOrElse { return }
         val step = (maxOf(image.width, image.height) / 600).coerceAtLeast(1)
-        val bounds = com.kaiharimoto.mastertool.core.layout.ContentBounds.of(image.width, image.height, step = step) { x, y -> pixels[y * image.width + x] }
+        val bounds = ContentBounds.of(image.width, image.height, step = step) { x, y -> pixels[y * image.width + x] }
         box = ArtCrop.auto(
             image.width.toFloat(), image.height.toFloat(), w.aspect(RENDER_WIDTH, RENDER_HEIGHT), w, RENDER_WIDTH / RENDER_HEIGHT, bounds,
         )
@@ -235,7 +237,7 @@ fun ArtCropDialog(
 
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-    val shortcut = if (Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.MAC) "Cmd V" else "Ctrl V"
+    val shortcut = if (Platform.os == DesktopOs.MAC) "Cmd V" else "Ctrl V"
 
     MuDialog(
         title = "Your own art",

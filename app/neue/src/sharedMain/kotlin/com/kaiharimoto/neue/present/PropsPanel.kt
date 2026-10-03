@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.present.Anim
 import com.kaiharimoto.mastertool.core.present.Chart
@@ -42,6 +43,7 @@ import com.kaiharimoto.mastertool.core.present.SlideFonts
 import com.kaiharimoto.mastertool.core.present.SlideLayouts
 import com.kaiharimoto.mastertool.core.present.Stat
 import com.kaiharimoto.mastertool.core.present.Stroke
+import com.kaiharimoto.mastertool.core.present.Theme
 import com.kaiharimoto.mastertool.core.present.ThemeOverride
 import com.kaiharimoto.mastertool.core.present.Themes
 import com.kaiharimoto.mastertool.core.present.Transition
@@ -74,6 +76,8 @@ import com.kaiharimoto.neue.kit.Tag
 import com.kaiharimoto.neue.kit.WordToggle
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.pages.NotesField
+import com.kaiharimoto.neue.platform.PICTURE_EXTENSIONS
+import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.present.paint.ColorField
 import com.kaiharimoto.neue.present.paint.SlideContext
 import com.kaiharimoto.neue.present.paint.ThemeSwatch
@@ -152,7 +156,7 @@ private fun SlideProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Slide
         when (k) {
             "THEME" -> commitSlide(h, slide, "Background") { it.copy(background = null) }
             "PICTURE" -> scope.launch {
-                val picked = com.kaiharimoto.neue.platform.Platform.pick("Background picture", com.kaiharimoto.neue.platform.PICTURE_EXTENSIONS) ?: return@launch
+                val picked = Platform.pick("Background picture", PICTURE_EXTENSIONS) ?: return@launch
                 val name = h.present.putMedia(picked.bytes, picked.extension)
                 commitSlide(h, slide, "Background") { it.copy(background = Fill(Fill.SOLID, "@bg", media = name, scrim = 0.35f)) }
             }
@@ -275,7 +279,7 @@ private fun ElementProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Sli
             FieldLabel("Picture")
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 MuButton("Replace", { scope.launch {
-                    val picked = com.kaiharimoto.neue.platform.Platform.pick("Replace the picture", com.kaiharimoto.neue.platform.PICTURE_EXTENSIONS) ?: return@launch
+                    val picked = Platform.pick("Replace the picture", PICTURE_EXTENSIONS) ?: return@launch
                     val name = present.putMedia(picked.bytes, picked.extension)
                     commitElements(h, slide, ids, "Picture") { it.copy(media = name) }
                 } }, size = BtnSize.SM)
@@ -629,7 +633,7 @@ private fun DeckProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: SlideC
         MuButton("Refresh from the saved deck", {
             scope.launch {
                 val stored = h.deps.deckRepository.byId(id) ?: return@launch
-                val groups = com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec.read(stored.extended).groups
+                val groups = DeckGroupsCodec.read(stored.extended).groups
                 val snap = PresentEdits.snapshot(stored.entry.deck, groups, stored.entry.name, id, deck.arrangement, deck.arts, deck.palette, System.currentTimeMillis())
                 val o = present.open ?: return@launch
                 present.commit(o.copy(deck = snap), "Refresh the deck")
@@ -661,9 +665,9 @@ private fun ThemeProps(h: NeueHolders, p: Presentation, ctx: SlideContext) {
         }
     }
     FieldLabel("Its colours", hint = "change any")
-    com.kaiharimoto.mastertool.core.present.Theme.TOKENS.forEach { token ->
+    Theme.TOKENS.forEach { token ->
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Small(com.kaiharimoto.mastertool.core.present.Theme.tokenName(token), Modifier.width(92.dp))
+            Small(Theme.tokenName(token), Modifier.width(92.dp))
             ColorField(ctx.theme.color(token), Themes.of(p.theme), { v ->
                 present.commit(p.copy(themeOverride = o.copy(colors = if (v == null) o.colors - token else o.colors + (token to v))), "Theme colour")
             }, Modifier.weight(1f))

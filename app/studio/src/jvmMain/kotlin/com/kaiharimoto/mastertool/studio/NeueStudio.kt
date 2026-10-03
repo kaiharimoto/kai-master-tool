@@ -1,10 +1,83 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.ai.AiSession
+import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay
+import com.kaiharimoto.mastertool.core.ai.avatar.Expression
+import com.kaiharimoto.mastertool.core.ai.check.FactCheck
+import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryChange
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.providers.Providers
+import com.kaiharimoto.mastertool.core.ai.providers.SetupStep
+import com.kaiharimoto.mastertool.core.ai.report.SessionReport
+import com.kaiharimoto.mastertool.core.ai.report.book.BookSample
+import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
+import com.kaiharimoto.mastertool.core.board.CardPosition
+import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.data.PoolProgress
+import com.kaiharimoto.mastertool.core.deck.GroupStats
+import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
+import com.kaiharimoto.mastertool.core.duel.DuelCatalog
+import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.DuelHeader
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.duel.DuelVerb
+import com.kaiharimoto.mastertool.core.duel.DuelVerbs
+import com.kaiharimoto.mastertool.core.duel.PileKind
+import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.SeatSetup
+import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.dice.DiceStage
+import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
+import com.kaiharimoto.mastertool.core.duel.dice.Quat
+import com.kaiharimoto.mastertool.core.duel.dice.V3
+import com.kaiharimoto.mastertool.core.duel.net.DuelHost
+import com.kaiharimoto.mastertool.core.duel.net.DuelMirror
+import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
+import com.kaiharimoto.mastertool.core.layout.DuelFocus
+import com.kaiharimoto.mastertool.core.layout.FormFactor
+import com.kaiharimoto.mastertool.core.layout.Revealed
+import com.kaiharimoto.mastertool.core.model.CardArt
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.motion.ZenArrangement
+import com.kaiharimoto.mastertool.core.motion.ZenPhase
+import com.kaiharimoto.mastertool.core.motion.ZenPick
+import com.kaiharimoto.mastertool.core.prefs.AiConnection
+import com.kaiharimoto.mastertool.core.prep.DrillStat
+import com.kaiharimoto.mastertool.core.prep.IsoDate
+import com.kaiharimoto.mastertool.core.prep.PrepEvent
+import com.kaiharimoto.mastertool.core.prep.PrepProfile
+import com.kaiharimoto.mastertool.core.prep.TestGame
+import com.kaiharimoto.mastertool.core.present.Presentation
+import com.kaiharimoto.mastertool.core.present.Themes
+import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
+import com.kaiharimoto.mastertool.core.present.stage.WebcamZone
+import com.kaiharimoto.mastertool.core.search.EffectKind
+import com.kaiharimoto.mastertool.core.siding.SidingCodec
+import com.kaiharimoto.mastertool.core.start.StartPrefs
+import com.kaiharimoto.mastertool.core.start.StartStep
+import com.kaiharimoto.mastertool.core.sync.SyncPrefs
+import com.kaiharimoto.mastertool.core.ydk.YdkeCodec
+import com.kaiharimoto.neue.ai.AiDocs
+import com.kaiharimoto.neue.ai.Attachments
+import com.kaiharimoto.neue.ai.LivingDoc
+import com.kaiharimoto.neue.ai.Question
 import com.kaiharimoto.neue.ai.openWizard
 import com.kaiharimoto.neue.ai.previewTuning
 import com.kaiharimoto.neue.ai.bookChanged
 import com.kaiharimoto.neue.ai.previewVoice
 import com.kaiharimoto.neue.ai.askTune
+import com.kaiharimoto.neue.art.ArtCropping
+import com.kaiharimoto.neue.duel.Duels
+import com.kaiharimoto.neue.duel.Replay
+import com.kaiharimoto.neue.duel.dice.DiceCarry
+import com.kaiharimoto.neue.duel.dice.RESTING
+import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.pages.GuideExport
 import com.kaiharimoto.neue.phoneMenu
 import com.kaiharimoto.mastertool.core.present.modules.ModuleInput
 import com.kaiharimoto.mastertool.core.present.modules.SideMatchup
@@ -46,7 +119,11 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.NeueRoot
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.Selection
+import com.kaiharimoto.neue.platform.PickedFile
+import com.kaiharimoto.neue.prep.PrepTab
 import com.kaiharimoto.neue.rememberHolders
+import com.kaiharimoto.neue.shot.ShotStyle
+import com.kaiharimoto.neue.start.StudioStart
 import com.kaiharimoto.neue.update.NeueUpdates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -104,8 +181,8 @@ fun neueMain(args: Array<String>) {
             }
             // --form=phone: Neue as a phone draws itself (v1.3.5), whatever the desk is.
             if (map["form"] == "phone") {
-                h.neue.formOverride = com.kaiharimoto.mastertool.core.layout.FormFactor.PHONE
-                h.neue.form = com.kaiharimoto.mastertool.core.layout.FormFactor.PHONE
+                h.neue.formOverride = FormFactor.PHONE
+                h.neue.form = FormFactor.PHONE
             }
             // --lens=roles etc. is below; --dock=PEEK|HALF|FULL sets the phone's pool dock.
             map["dock"]?.let { d -> h.neue.update { it.copy(phoneDockStop = d.uppercase()) } }
@@ -156,13 +233,13 @@ fun neueMain(args: Array<String>) {
                 val main = b.deck.main.map { it.value }
                 val extra = b.deck.extra.map { it.value }
                 val index = b.index
-                h.duel.catalog = com.kaiharimoto.mastertool.core.duel.DuelCatalog { code ->
-                    index.byId(com.kaiharimoto.mastertool.core.model.CardId(code))?.let(com.kaiharimoto.mastertool.core.duel.DuelCardInfo::of)
+                h.duel.catalog = DuelCatalog { code ->
+                    index.byId(CardId(code))?.let(DuelCardInfo::of)
                 }
                 h.neue.update {
                     it.copy(duel = it.duel.copy(
                         twoSided = mode != "one",
-                        knowledge = if (map["duel-know"] == "seat") com.kaiharimoto.mastertool.core.duel.DuelPrefs.KNOW_SEAT else com.kaiharimoto.mastertool.core.duel.DuelPrefs.KNOW_ALL,
+                        knowledge = if (map["duel-know"] == "seat") DuelPrefs.KNOW_SEAT else DuelPrefs.KNOW_ALL,
                         // --duel-facing=true: the far seat's cards turned to face them (1.0.78).
                         facing = map["duel-facing"] == "true",
                         // --duel-coords=true: every place's coordinate at its corner (1.0.87).
@@ -174,31 +251,31 @@ fun neueMain(args: Array<String>) {
                 // field, held in the hand over the near field, the near seat's throw mid-flight (the far seat's landed),
                 // the near seat's landed (the far still to throw), or both landed and the near seat choosing.
                 val dice = map["duel-dice"]
-                fun header(seed: Long) = com.kaiharimoto.mastertool.core.duel.DuelHeader(
+                fun header(seed: Long) = DuelHeader(
                     id = "studio",
                     seed = seed,
                     seats = listOf(
-                        com.kaiharimoto.mastertool.core.duel.SeatSetup("Kai", main, extra),
-                        if (solo) com.kaiharimoto.mastertool.core.duel.SeatSetup("Rival") else com.kaiharimoto.mastertool.core.duel.SeatSetup("Rival", main, extra),
+                        SeatSetup("Kai", main, extra),
+                        if (solo) SeatSetup("Rival") else SeatSetup("Rival", main, extra),
                     ),
                     solo = solo,
                     openingRoll = dice != null,
                 )
                 // For the choice, a seed whose first round the near seat wins; for the flight, one that does not tie.
                 val seed = if (dice == null) 7L else (7L..400L).first { sd ->
-                    var g = com.kaiharimoto.mastertool.core.duel.DuelGame.start(header(sd))
-                    g = g.act(com.kaiharimoto.mastertool.core.duel.DuelAction.OpeningRoll(0), 0).game
-                    g = g.act(com.kaiharimoto.mastertool.core.duel.DuelAction.OpeningRoll(1), 1).game
+                    var g = DuelGame.start(header(sd))
+                    g = g.act(DuelAction.OpeningRoll(0), 0).game
+                    g = g.act(DuelAction.OpeningRoll(1), 1).game
                     g.state.opening?.winner == 0
                 }
                 h.duel.start(header(seed))
                 if (map["duel-play"] == "true") studioDuelMoves(h)
                 map["duel-strip"]?.let { k ->
                     val kind = when (k) {
-                        "deck" -> com.kaiharimoto.mastertool.core.duel.PileKind.DECK
-                        "extra" -> com.kaiharimoto.mastertool.core.duel.PileKind.EXTRA
-                        "banished" -> com.kaiharimoto.mastertool.core.duel.PileKind.BANISHED
-                        else -> com.kaiharimoto.mastertool.core.duel.PileKind.GY
+                        "deck" -> PileKind.DECK
+                        "extra" -> PileKind.EXTRA
+                        "banished" -> PileKind.BANISHED
+                        else -> PileKind.GY
                     }
                     h.duel.openPile(0, kind)
                 }
@@ -207,12 +284,12 @@ fun neueMain(args: Array<String>) {
                 map["duel-attack"]?.let { how ->
                     val d = h.duel
                     d.bottom = 0
-                    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Phase(com.kaiharimoto.mastertool.core.board.DuelPhase.BATTLE), 0)
+                    d.act(DuelAction.Phase(DuelPhase.BATTLE), 0)
                     val st = d.game!!.state
-                    val mine = st.onField().firstOrNull { com.kaiharimoto.mastertool.core.duel.DuelVerbs.canAttack(st, 0, it) }
-                    val theirs = st.onField().firstOrNull { u -> st.cards[u]?.controller == 1 && st.placeOf(u).let { it is com.kaiharimoto.mastertool.core.duel.Place.Zone && it.kind != com.kaiharimoto.mastertool.core.duel.ZoneKind.SPELL && it.kind != com.kaiharimoto.mastertool.core.duel.ZoneKind.FIELD } && st.cards[u]?.faceUp == true }
+                    val mine = st.onField().firstOrNull { DuelVerbs.canAttack(st, 0, it) }
+                    val theirs = st.onField().firstOrNull { u -> st.cards[u]?.controller == 1 && st.placeOf(u).let { it is Place.Zone && it.kind != ZoneKind.SPELL && it.kind != ZoneKind.FIELD } && st.cards[u]?.faceUp == true }
                     if (mine != null) {
-                        d.verb(mine, com.kaiharimoto.mastertool.core.duel.DuelVerb.DEFAULT)
+                        d.verb(mine, DuelVerb.DEFAULT)
                         if (how == "declared") d.attack(theirs)
                     }
                     println("[neue-studio] attack: ${how} with $mine at $theirs; attacking ${d.attacking}; chip ${d.game?.let { com.kaiharimoto.mastertool.core.duel.DuelBattle.pending(it, d.catalog) }}")
@@ -221,7 +298,7 @@ fun neueMain(args: Array<String>) {
                 // (1.0.87), for the ATK / DEF plate on a card lying across.
                 if (map["duel-defense"] == "true") {
                     val st = h.duel.game!!.state
-                    st.seats[0].monsters.filterNotNull().firstOrNull { st.cards[it]?.pos == com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK }
+                    st.seats[0].monsters.filterNotNull().firstOrNull { st.cards[it]?.pos == CardPosition.FACE_UP_ATK }
                         ?.let { println("[neue-studio] defense: $it turned ${h.duel.verb(it, com.kaiharimoto.mastertool.core.duel.DuelVerb.POSITION)}") }
                 }
                 // --duel-select=near|far: a card on that side's field selected, its verb strip out (1.0.78).
@@ -242,7 +319,7 @@ fun neueMain(args: Array<String>) {
                     val d = h.duel
                     d.bottom = 0
                     val st0 = d.game!!.state
-                    d.act(st0.seats[0].deck.take(2).map { com.kaiharimoto.mastertool.core.duel.DuelAction.Move(it, com.kaiharimoto.mastertool.core.duel.Place.Pile(0, com.kaiharimoto.mastertool.core.duel.PileKind.BANISHED), com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK, "banish") }, 0)
+                    d.act(st0.seats[0].deck.take(2).map { DuelAction.Move(it, Place.Pile(0, PileKind.BANISHED), CardPosition.FACE_UP_ATK, "banish") }, 0)
                     val st = d.game!!.state
                     val gy = st.seats[0].gy
                     val ban = st.seats[0].banished
@@ -252,10 +329,10 @@ fun neueMain(args: Array<String>) {
                         val three = listOfNotNull(gy.getOrNull(0), ban.getOrNull(0), st.seats[0].hand.firstOrNull())
                         d.clearSelection()
                         three.forEach { d.toggleSelect(it) }
-                        d.verbAll(if (map["duel-order"] == "bottom") com.kaiharimoto.mastertool.core.duel.DuelVerb.DECK_BOTTOM else com.kaiharimoto.mastertool.core.duel.DuelVerb.DECK_TOP)
+                        d.verbAll(if (map["duel-order"] == "bottom") DuelVerb.DECK_BOTTOM else DuelVerb.DECK_TOP)
                         d.orderMove(1)
                     } else {
-                        d.openPile(0, com.kaiharimoto.mastertool.core.duel.PileKind.BANISHED)
+                        d.openPile(0, PileKind.BANISHED)
                     }
                     println("[neue-studio] multi: selection ${d.selection}, ordering ${d.ordering}")
                 }
@@ -267,11 +344,11 @@ fun neueMain(args: Array<String>) {
                     val st = d.game!!.state
                     val near = st.seats[0].hand.firstOrNull()
                     val far = st.onField().firstOrNull { st.cards[it]?.controller == 1 }
-                    near?.let { d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.ChainAdd(0, it), 0) }
-                    st.onField().firstOrNull { st.cards[it]?.controller == 0 }?.let { d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.ChainAdd(0, it), 0) }
+                    near?.let { d.act(DuelAction.ChainAdd(0, it), 0) }
+                    st.onField().firstOrNull { st.cards[it]?.controller == 0 }?.let { d.act(DuelAction.ChainAdd(0, it), 0) }
                     val n = d.game!!.state.chain.size
                     val link = ((spec.toIntOrNull() ?: n) - 1).coerceIn(0, (n - 1).coerceAtLeast(0))
-                    d.focusOn(com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link(link))
+                    d.focusOn(DuelFocus.Slot.Link(link))
                     if (map["duel-chain-menu"] == "true") { d.chainMenu = link; d.chainCursor = 0 }
                     println("[neue-studio] chain: ${d.game!!.state.chain.size} links (far $far), focus ${d.focus}, menu ${d.chainMenu}")
                 }
@@ -280,10 +357,10 @@ fun neueMain(args: Array<String>) {
                 map["duel-focus"]?.let { coord ->
                     val d = h.duel
                     val st = d.game!!.state
-                    val shape = com.kaiharimoto.mastertool.core.layout.DuelFocus.Shape(twoSided = h.neue.prefs.duel.twoSided)
-                    fun slotFor(c: String) = com.kaiharimoto.mastertool.core.layout.DuelFocus.cells(st, d.bottom, shape).map { it.slot }
-                        .firstOrNull { com.kaiharimoto.mastertool.core.layout.DuelFocus.label(it, d.bottom) == c }
-                    map["duel-pick"]?.let { p -> slotFor(p)?.let { d.picked = com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(st, it) } }
+                    val shape = DuelFocus.Shape(twoSided = h.neue.prefs.duel.twoSided)
+                    fun slotFor(c: String) = DuelFocus.cells(st, d.bottom, shape).map { it.slot }
+                        .firstOrNull { DuelFocus.label(it, d.bottom) == c }
+                    map["duel-pick"]?.let { p -> slotFor(p)?.let { d.picked = DuelFocus.uidAt(st, it) } }
                     val slot = slotFor(coord)
                     d.focusOn(slot)
                     val uid = d.focusUid()
@@ -307,11 +384,11 @@ fun neueMain(args: Array<String>) {
                     // Shot arguments are split on spaces: an underscore stands for one ("s_h2_m3").
                     var line = map["duel-spot"]?.takeIf { it != "true" }?.replace('_', ' ') ?: ""
                     if (line == "attack") {
-                        d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Phase(com.kaiharimoto.mastertool.core.board.DuelPhase.BATTLE), 0)
+                        d.act(DuelAction.Phase(DuelPhase.BATTLE), 0)
                         val st = d.game!!.state
-                        val mine = st.onField().firstOrNull { com.kaiharimoto.mastertool.core.duel.DuelVerbs.canAttack(st, 0, it) }
-                        val theirs = st.onField().firstOrNull { u -> st.cards[u]?.controller == 1 && st.cards[u]?.faceUp == true && st.placeOf(u).let { it is com.kaiharimoto.mastertool.core.duel.Place.Zone && (it.kind == com.kaiharimoto.mastertool.core.duel.ZoneKind.MONSTER || it.kind == com.kaiharimoto.mastertool.core.duel.ZoneKind.EMZ) } }
-                        fun at(u: Int?) = u?.let { com.kaiharimoto.mastertool.core.duel.text.DuelNotation.coordOf(st, it, 0, d.game!!.header.seed) }
+                        val mine = st.onField().firstOrNull { DuelVerbs.canAttack(st, 0, it) }
+                        val theirs = st.onField().firstOrNull { u -> st.cards[u]?.controller == 1 && st.cards[u]?.faceUp == true && st.placeOf(u).let { it is Place.Zone && (it.kind == ZoneKind.MONSTER || it.kind == ZoneKind.EMZ) } }
+                        fun at(u: Int?) = u?.let { DuelNotation.coordOf(st, it, 0, d.game!!.header.seed) }
                         line = "a ${at(mine) ?: "m1"} ${at(theirs) ?: "direct"}"
                     }
                     val heard = map["duel-heard"]?.replace('_', ' ')
@@ -335,15 +412,15 @@ fun neueMain(args: Array<String>) {
                 map["duel-replay"]?.let { spec ->
                     val g = h.duel.game!!
                     val at = spec.toIntOrNull() ?: (g.cursor / 2)
-                    h.duel.replay = com.kaiharimoto.neue.duel.Replay("studio", g.record("Studio duel"), at)
+                    h.duel.replay = Replay("studio", g.record("Studio duel"), at)
                     h.duel.note("Ash here would have stopped the whole line")
                 }
                 // --duel-net=guest: the same duel as the guest's seat is sent it over the network — its own view only.
                 if (map["duel-net"] == "guest") {
                     val g = h.duel.game!!
-                    val u = com.kaiharimoto.mastertool.core.duel.net.DuelHost.update(g, 1, 0, g.header.seed, h.duel.catalog)
-                    h.duel.role = com.kaiharimoto.neue.duel.Duels.NetRole.GUEST
-                    h.duel.remote = com.kaiharimoto.mastertool.core.duel.net.DuelMirror.game(u.view, g.header)
+                    val u = DuelHost.update(g, 1, 0, g.header.seed, h.duel.catalog)
+                    h.duel.role = Duels.NetRole.GUEST
+                    h.duel.remote = DuelMirror.game(u.view, g.header)
                     h.duel.remoteLines = u.lines
                     h.duel.remoteWaiting = 1
                     h.duel.peer = "Kai"
@@ -363,25 +440,25 @@ fun neueMain(args: Array<String>) {
             // --present-module=TYPE: a module's slides from sample data.
             if (map["present"] == "demo") {
                 val style = when (map["present-style"]) {
-                    "slides" -> com.kaiharimoto.mastertool.core.present.Presentation.STYLE_SLIDES
-                    "buildup" -> com.kaiharimoto.mastertool.core.present.Presentation.STYLE_BUILD_UP
-                    else -> com.kaiharimoto.mastertool.core.present.Presentation.STYLE_SPOTLIGHT
+                    "slides" -> Presentation.STYLE_SLIDES
+                    "buildup" -> Presentation.STYLE_BUILD_UP
+                    else -> Presentation.STYLE_SPOTLIGHT
                 }
                 val webcam = when (map["present-webcam"] ?: "br") {
-                    "off" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone()
-                    "tr" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.TOP_RIGHT)
-                    "tl" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.TOP_LEFT)
-                    "bl" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.BOTTOM_LEFT)
-                    "left" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.LEFT_COLUMN)
-                    "right" -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.RIGHT_COLUMN)
-                    else -> com.kaiharimoto.mastertool.core.present.stage.WebcamZone(true, com.kaiharimoto.mastertool.core.present.stage.WebcamZone.BOTTOM_RIGHT)
+                    "off" -> WebcamZone()
+                    "tr" -> WebcamZone(true, WebcamZone.TOP_RIGHT)
+                    "tl" -> WebcamZone(true, WebcamZone.TOP_LEFT)
+                    "bl" -> WebcamZone(true, WebcamZone.BOTTOM_LEFT)
+                    "left" -> WebcamZone(true, WebcamZone.LEFT_COLUMN)
+                    "right" -> WebcamZone(true, WebcamZone.RIGHT_COLUMN)
+                    else -> WebcamZone(true, WebcamZone.BOTTOM_RIGHT)
                 }
-                val snap = com.kaiharimoto.mastertool.core.present.edit.PresentEdits.snapshot(
+                val snap = PresentEdits.snapshot(
                     h.builder.deck, h.builder.groups, h.builder.deckName, h.builder.deckId, h.neue.prefs.groupArrangement,
                     h.neue.prefs.arts, 0, System.currentTimeMillis(),
                 )
-                var p = com.kaiharimoto.mastertool.core.present.edit.PresentEdits.newProfile(
-                    "pstudio", "${h.builder.deckName} deck profile", snap, style, map["present-theme"]?.let { com.kaiharimoto.mastertool.core.present.Themes.named(it)?.id } ?: com.kaiharimoto.mastertool.core.present.Themes.MASTER,
+                var p = PresentEdits.newProfile(
+                    "pstudio", "${h.builder.deckName} deck profile", snap, style, map["present-theme"]?.let { Themes.named(it)?.id } ?: Themes.MASTER,
                     webcam, "kai", System.currentTimeMillis(), kotlin.random.Random(7),
                 )
                 // A note on each group's step, as a creator would write it.
@@ -415,14 +492,14 @@ fun neueMain(args: Array<String>) {
                         record = "3–1",
                         placement = "Top 8",
                         shoutouts = listOf(Shoutout(null, "Locals crew", "@locals", "Testing every week"), Shoutout(null, "Card shop", "@shop", "Hosting the event")),
-                        odds = com.kaiharimoto.mastertool.core.deck.GroupStats.of(h.builder.deck, h.builder.groups, { h.builder.index.byId(it) }).groups.map { g ->
+                        odds = GroupStats.of(h.builder.deck, h.builder.groups, { h.builder.index.byId(it) }).groups.map { g ->
                             GroupOdds(g.name, g.opening, g.openingSecond, g.main + g.extra + g.side, g.color)
                         },
-                        code = com.kaiharimoto.mastertool.core.ydk.YdkeCodec.encode(h.builder.deck),
+                        code = YdkeCodec.encode(h.builder.deck),
                     ).let { if (type == Modules.TOURNAMENT) it.copy(title = "Regional Qualifier", subtitle = "2026-09-20 · 120 players · Tier 2") else it }
                     val made = Modules.generate(type, input, System.currentTimeMillis(), kotlin.random.Random(4))
                     var after = 0
-                    made.forEach { sl -> p = com.kaiharimoto.mastertool.core.present.edit.PresentEdits.addSlide(p, sl, after); after++ }
+                    made.forEach { sl -> p = PresentEdits.addSlide(p, sl, after); after++ }
                     moduleFirst = made.firstOrNull()?.id
                 }
                 h.present.create(p)
@@ -462,10 +539,10 @@ fun neueMain(args: Array<String>) {
             map["start"]?.let { spec ->
                 val fresh = spec.startsWith("new")
                 h.decksKnown = !fresh
-                h.neue.update { it.copy(start = com.kaiharimoto.mastertool.core.start.StartPrefs(seen = if (fresh) "" else "1.0.60")) }
-                h.neue.startSteps = if (fresh) com.kaiharimoto.mastertool.core.start.StartStep.entries.toList()
-                else listOf(com.kaiharimoto.mastertool.core.start.StartStep.SYNC, com.kaiharimoto.mastertool.core.start.StartStep.AI, com.kaiharimoto.mastertool.core.start.StartStep.ART)
-                com.kaiharimoto.neue.start.StudioStart.at = spec.substringAfter(':', "0").toIntOrNull() ?: 0
+                h.neue.update { it.copy(start = StartPrefs(seen = if (fresh) "" else "1.0.60")) }
+                h.neue.startSteps = if (fresh) StartStep.entries.toList()
+                else listOf(StartStep.SYNC, StartStep.AI, StartStep.ART)
+                StudioStart.at = spec.substringAfter(':', "0").toIntOrNull() ?: 0
                 clock.run(20)
             }
             // --sync=<folder>: this run as a device syncing with a folder (1.0.68) — what it sent and took, and
@@ -475,7 +552,7 @@ fun neueMain(args: Array<String>) {
                 h.webs.load()
                 h.prep.load()
                 clock.run(30)
-                h.neue.update { it.copy(sync = it.sync.copy(service = com.kaiharimoto.mastertool.core.sync.SyncPrefs.FOLDER, folder = folder, deviceName = map["device"] ?: "Studio")) }
+                h.neue.update { it.copy(sync = it.sync.copy(service = SyncPrefs.FOLDER, folder = folder, deviceName = map["device"] ?: "Studio")) }
                 h.sync.syncNow()
                 clock.run(10)
                 var waited = 0
@@ -487,15 +564,15 @@ fun neueMain(args: Array<String>) {
             }
             // --book=pdf|json|all: the sample reader's guide (the Las Vegas Labrynth as a book) written to shots/ (1.0.67).
             map["book"]?.let { which ->
-                val book = com.kaiharimoto.mastertool.core.ai.report.book.BookSample.labrynth
+                val book = BookSample.labrynth
                 val dir = java.io.File(map["out"] ?: "shots").also { it.mkdirs() }
                 if (which == "pdf" || which == "all") {
-                    val bytes = kotlinx.coroutines.runBlocking { com.kaiharimoto.neue.ai.AiDocs.bookBytes(h, book) }
+                    val bytes = kotlinx.coroutines.runBlocking { AiDocs.bookBytes(h, book) }
                     java.io.File(dir, "book.pdf").writeBytes(bytes)
                     println("[neue-studio] book: ${bytes.size / 1024} KiB to ${dir}/book.pdf")
                 }
                 if (which == "json" || which == "all") {
-                    java.io.File(dir, "book.json").writeText(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.write(book))
+                    java.io.File(dir, "book.json").writeText(GuideBook.write(book))
                     println("[neue-studio] book: json to ${dir}/book.json")
                 }
             }
@@ -531,7 +608,7 @@ fun neueMain(args: Array<String>) {
                     if (web != null && id != null) {
                         val decks = h.webs.decks(web)
                         decks.firstOrNull { it.entry.id == id }?.let { me ->
-                            val bytes = com.kaiharimoto.neue.pages.GuideExport.build(h.webs, web, decks, me, h.builder, h.neue, h.art, h.customArt)
+                            val bytes = GuideExport.build(h.webs, web, decks, me, h.builder, h.neue, h.art, h.customArt)
                             java.io.File(path).writeBytes(bytes)
                             println("[neue-studio] guide: ${bytes.size / 1024} KiB to $path")
                         }
@@ -549,14 +626,14 @@ fun neueMain(args: Array<String>) {
                 val web = h.webs.selected
                 val mine = web?.entries?.firstOrNull { it.mine }?.deckId
                 val foes = web?.entries?.filter { it.deckId != mine }.orEmpty()
-                val today = com.kaiharimoto.mastertool.core.prep.IsoDate.epochDay(h.prep.today()) ?: 0L
-                val event = com.kaiharimoto.mastertool.core.prep.PrepEvent(
-                    "ev-demo", "Regional Qualifier", com.kaiharimoto.mastertool.core.prep.IsoDate.of(today + 12), tier = 2, attendance = 96,
-                    webId = web?.id, deckId = mine, decklist = com.kaiharimoto.mastertool.core.prep.PrepEvent.DECKLIST_PAPER,
-                    deadline = com.kaiharimoto.mastertool.core.prep.IsoDate.of(today + 10), checkIn = "Saturday 9:00, closes 9:45",
+                val today = IsoDate.epochDay(h.prep.today()) ?: 0L
+                val event = PrepEvent(
+                    "ev-demo", "Regional Qualifier", IsoDate.of(today + 12), tier = 2, attendance = 96,
+                    webId = web?.id, deckId = mine, decklist = PrepEvent.DECKLIST_PAPER,
+                    deadline = IsoDate.of(today + 10), checkIn = "Saturday 9:00, closes 9:45",
                     checked = listOf("id", "dice"),
                 )
-                var doc = h.prep.doc.put(event).copy(active = event.id, profile = com.kaiharimoto.mastertool.core.prep.PrepProfile("Kai Harimoto", "0412345678", "USA"))
+                var doc = h.prep.doc.put(event).copy(active = event.id, profile = PrepProfile("Kai Harimoto", "0412345678", "USA"))
                 // A week of practice: the mirror close, the loose matchup worse going second.
                 val results = listOf("W", "L", "W", "W", "L", "W", "L", "L", "W", "D", "W", "L")
                 val names = foes.map { f -> f.deckId to (h.webs.decks(web!!).firstOrNull { it.entry.id == f.deckId }?.entry?.name ?: "Opponent") } +
@@ -564,18 +641,18 @@ fun neueMain(args: Array<String>) {
                 results.forEachIndexed { n, r ->
                     val (key, name) = names[n % names.size]
                     doc = doc.record(
-                        com.kaiharimoto.mastertool.core.prep.TestGame(
+                        TestGame(
                             "g$n", 1_000L * n, mine, key, name,
-                            if (n % 2 == 0) com.kaiharimoto.mastertool.core.prep.TestGame.FIRST else com.kaiharimoto.mastertool.core.prep.TestGame.SECOND,
+                            if (n % 2 == 0) TestGame.FIRST else TestGame.SECOND,
                             game = 1 + n % 3, result = r, minutes = if (key == names.last().first) 19 else 12,
-                            reason = if (r == "L") com.kaiharimoto.mastertool.core.prep.TestGame.REASON_INTERRUPTED else null,
+                            reason = if (r == "L") TestGame.REASON_INTERRUPTED else null,
                         ),
                     )
                 }
-                doc = doc.record(com.kaiharimoto.mastertool.core.prep.TestGame("r1", 99_000, mine, names.first().first, names.first().second, "", result = "W", note = "2–1", eventId = event.id, round = 1))
-                doc = doc.copy(drills = mapOf("m1:FIRST" to com.kaiharimoto.mastertool.core.prep.DrillStat(3, 2, 1, 2)))
+                doc = doc.record(TestGame("r1", 99_000, mine, names.first().first, names.first().second, "", result = "W", note = "2–1", eventId = event.id, round = 1))
+                doc = doc.copy(drills = mapOf("m1:FIRST" to DrillStat(3, 2, 1, 2)))
                 h.prep.commit(doc)
-                map["prep-tab"]?.let { t -> h.prep.tab = com.kaiharimoto.neue.prep.PrepTab.valueOf(t.uppercase()) }
+                map["prep-tab"]?.let { t -> h.prep.tab = PrepTab.valueOf(t.uppercase()) }
                 h.neue.page = Page.PREP
                 clock.run(60)
             }
@@ -598,8 +675,8 @@ fun neueMain(args: Array<String>) {
                     clock.run(1)
                     waited++
                     val at = h.builder.poolProgress
-                    if (step == "saving" && at is com.kaiharimoto.mastertool.core.data.PoolProgress.Saving && at.done > 0) break
-                    if (step != "saving" && at is com.kaiharimoto.mastertool.core.data.PoolProgress.Downloading && at.bytes > 4_000_000) break
+                    if (step == "saving" && at is PoolProgress.Saving && at.done > 0) break
+                    if (step != "saving" && at is PoolProgress.Downloading && at.bytes > 4_000_000) break
                 }
                 println("[neue-studio] update: ${h.builder.poolProgress} after $waited frames")
             }
@@ -615,19 +692,19 @@ fun neueMain(args: Array<String>) {
             // with its second artwork chosen — the inspector shows "Art 2 of n" and the deck the picture.
             if (map["art"] == "auto") {
                 val ids = h.builder.deck[DeckSection.MAIN]
-                val at = ids.indexOfFirst { id -> (h.builder.index.byId(id)?.let { com.kaiharimoto.mastertool.core.model.CardArt.arts(it).size } ?: 0) > 1 }
+                val at = ids.indexOfFirst { id -> (h.builder.index.byId(id)?.let { CardArt.arts(it).size } ?: 0) > 1 }
                 val card = ids.getOrNull(at)?.let(h.builder.index::byId)
                 if (card != null) {
-                    val next = com.kaiharimoto.mastertool.core.model.CardArt.step(card, null, 1)
+                    val next = CardArt.step(card, null, 1)
                     h.neue.update { it.copy(arts = it.arts + (card.id.value to next.value)) }
                     h.neue.selection = Selection.InDeck(card, DeckSection.MAIN, at)
                 }
                 println("[neue-studio] art: ${card?.name} at main $at, ${card?.let { com.kaiharimoto.mastertool.core.model.CardArt.arts(it) }}")
             } else map["art"]?.toIntOrNull()?.let { passcode ->
                 // --art=46986414: that card, searched for in the pool and selected, on its second artwork.
-                val card = h.builder.index.byId(com.kaiharimoto.mastertool.core.model.CardId(passcode))
+                val card = h.builder.index.byId(CardId(passcode))
                 if (card != null) {
-                    val next = com.kaiharimoto.mastertool.core.model.CardArt.step(card, null, 1)
+                    val next = CardArt.step(card, null, 1)
                     h.neue.update { it.copy(arts = it.arts + (card.id.value to next.value)) }
                     h.builder.onQueryChange(card.name)
                     h.neue.selection = Selection.InPool(card, 0)
@@ -645,7 +722,7 @@ fun neueMain(args: Array<String>) {
             }
             // --inspect=72270339: that card, searched for in the pool and selected, so the inspector reads it (1.0.88).
             map["inspect"]?.toIntOrNull()?.let { passcode ->
-                val card = h.builder.index.byId(com.kaiharimoto.mastertool.core.model.CardId(passcode))
+                val card = h.builder.index.byId(CardId(passcode))
                 if (card != null) {
                     h.builder.onQueryChange(card.name)
                     h.neue.selection = Selection.InPool(card, 0)
@@ -661,13 +738,13 @@ fun neueMain(args: Array<String>) {
             if (map["pinned"] == "true") h.neue.update { it.copy(railPinned = true) }
             map["reveal"]?.let { spec ->
                 val parts = spec.split(",")
-                h.neue.revealed = com.kaiharimoto.mastertool.core.layout.Revealed(left = "left" in parts, top = "top" in parts, bottom = "bottom" in parts)
+                h.neue.revealed = Revealed(left = "left" in parts, top = "top" in parts, bottom = "bottom" in parts)
             }
             if (map["palette"] == "true") h.neue.paletteOpen = true
             // --updatedialog: the update dialog on a made-up release, as a phone must be able to reach its Install.
             if (map["updatedialog"] == "true") h.updates.offer(h.updates.sample())
             // --phonemenu: the phone's overflow menu, open.
-            if (map["phonemenu"] == "true") h.neue.menu = com.kaiharimoto.neue.kit.MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.phoneMenu(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f)))
+            if (map["phonemenu"] == "true") h.neue.menu = MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.phoneMenu(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f)))
             // --showcase=N (and --showart): main deck card N full screen, the whole card or its art.
             map["showcase"]?.toIntOrNull()?.let { i ->
                 h.builder.deck[DeckSection.MAIN].getOrNull(i)?.let(h.builder.index::byId)?.let { h.neue.showcase = it }
@@ -680,8 +757,8 @@ fun neueMain(args: Array<String>) {
             // --crop=N (and --crop-picture=path): your own art for main deck card N, the picture laid in (1.0.34).
             map["crop"]?.toIntOrNull()?.let { i ->
                 val id = h.builder.deck[DeckSection.MAIN].getOrNull(i)
-                val picture = map["crop-picture"]?.let { java.io.File(it) }?.takeIf { it.isFile }?.let { com.kaiharimoto.neue.platform.PickedFile(it.name, it.readBytes()) }
-                h.builder.index.byId(id ?: return@let)?.let { card -> h.neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card, picture) }
+                val picture = map["crop-picture"]?.let { java.io.File(it) }?.takeIf { it.isFile }?.let { PickedFile(it.name, it.readBytes()) }
+                h.builder.index.byId(id ?: return@let)?.let { card -> h.neue.cropping = ArtCropping(card, picture) }
             }
             // --group-palettes=true: the Groups panel's palettes opened out (with --groups).
             if (map["group-palettes"] == "true") h.neue.groupPalettesOpen = true
@@ -691,7 +768,7 @@ fun neueMain(args: Array<String>) {
                 deck.main.firstOrNull()?.let(h.builder.index::byId)?.let { c -> h.builder.addCard(c, DeckSection.MAIN) }
                 deck.side.firstOrNull()?.let(h.builder.index::byId)?.let { c -> h.builder.removeAt(c, DeckSection.SIDE, 0) }
                 clock.run(10)
-                h.neue.menu = com.kaiharimoto.neue.kit.MenuSpec(androidx.compose.ui.geometry.Offset(width * 0.5f, 48f), com.kaiharimoto.neue.builder.historyMenu(h.builder))
+                h.neue.menu = MenuSpec(androidx.compose.ui.geometry.Offset(width * 0.5f, 48f), com.kaiharimoto.neue.builder.historyMenu(h.builder))
             }
             // --groups: the Groups button pressed — the Roles lens, the deck in pieces, the panel.
             if (map["groups"] == "true") h.setGroups(true)
@@ -702,7 +779,7 @@ fun neueMain(args: Array<String>) {
             // Ai's face (1.0.52): --ai-face=wink (any of the twenty), --ai-working="Searching cards" for a turn at work.
             map["ai-working"]?.let { h.ai.pretendWorking(it) }
             map["ai-face"]?.let { id ->
-                com.kaiharimoto.mastertool.core.ai.avatar.Expression.byId(id)?.let { h.ai.express(it, 8) }
+                Expression.byId(id)?.let { h.ai.express(it, 8) }
             }
             if (map["ai"] != null || map["ai-face"] != null) {
                 h.lastInput = System.nanoTime()
@@ -719,7 +796,7 @@ fun neueMain(args: Array<String>) {
             // --filters=true: the pool's filter panel open; --effect=SEARCH,NEGATE picks effect kinds.
             if (map["filters"] == "true") h.neue.update { it.copy(filtersOpen = true) }
             map["effect"]?.let { spec ->
-                val kinds = spec.split(",").mapNotNull { k -> com.kaiharimoto.mastertool.core.search.EffectKind.entries.firstOrNull { it.name.equals(k.trim(), true) } }.toSet()
+                val kinds = spec.split(",").mapNotNull { k -> EffectKind.entries.firstOrNull { it.name.equals(k.trim(), true) } }.toSet()
                 h.builder.onFilterChange(h.builder.filter.copy(effects = kinds))
             }
             if (map["nopool"] == "true") h.neue.update { it.copy(poolVisible = false) }
@@ -732,7 +809,7 @@ fun neueMain(args: Array<String>) {
             map["zen"]?.let { phase ->
                 h.neue.immersive = true
                 clock.run(30)
-                h.neue.zen = if (phase == "quiet") com.kaiharimoto.mastertool.core.motion.ZenPhase.QUIET else com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP
+                h.neue.zen = if (phase == "quiet") ZenPhase.QUIET else ZenPhase.DEEP
                 // The fades take under three seconds; then the float runs for as long as asked.
                 clock.run(((map["zen-seconds"] ?: "4").toFloat() * 60).toInt())
                 // --zen-groups=true|false: the corner's Groups toggle, pressed, and time for the pieces to open.
@@ -748,7 +825,7 @@ fun neueMain(args: Array<String>) {
                     spec.split(";").filter { it.isNotBlank() }.forEach { step ->
                         val (n, d) = step.split(":")
                         val (dx, dy) = d.split(",").map { it.toFloat() }
-                        val key = com.kaiharimoto.mastertool.core.motion.ZenArrangement.key(0, n.toInt())
+                        val key = ZenArrangement.key(0, n.toInt())
                         h.zen.move(key, dx, dy)
                         val result = h.zen.arrangement.drop(key, h.zen.homes)
                         h.zen.arranged++
@@ -772,7 +849,7 @@ fun neueMain(args: Array<String>) {
                         fun point(p: String): Offset {
                             if (!p.startsWith("k")) return p.split(",").map { it.toFloat() }.let { Offset(it[0] * width, it[1] * height) }
                             val key = p.drop(1).substringBefore("+").toInt()
-                            val r = com.kaiharimoto.mastertool.core.motion.ZenPick.rectOf(key, h.zen.homes, h.zen.arrangement, h.zen.stage, h.zen.pivot.x, h.zen.pivot.y)
+                            val r = ZenPick.rectOf(key, h.zen.homes, h.zen.arrangement, h.zen.stage, h.zen.pivot.x, h.zen.pivot.y)
                                 ?: error("no card keyed $key")
                             val by = p.substringAfter("+", "").takeIf { it.isNotBlank() }?.split(",")?.map { it.toFloat() }
                             return Offset((r[0] + r[2]) / 2f + (by?.get(0) ?: 0f) * width, (r[1] + r[3]) / 2f + (by?.get(1) ?: 0f) * height)
@@ -855,10 +932,10 @@ fun neueMain(args: Array<String>) {
             // by name and three cards (1.0.42), and the Siding page open on it.
             map["matchup"]?.let { spec ->
                 val (who, cards) = spec.split(":")
-                val covers = cards.split(",").mapNotNull { it.trim().toIntOrNull() }.map { com.kaiharimoto.mastertool.core.model.CardId(it) }
+                val covers = cards.split(",").mapNotNull { it.trim().toIntOrNull() }.map { CardId(it) }
                 val id = h.builder.deckId
                 if (id != null) {
-                    val now = com.kaiharimoto.mastertool.core.siding.SidingCodec.read(h.builder.extendedNow())
+                    val now = SidingCodec.read(h.builder.extendedNow())
                     h.webs.saveSiding(id, now.put(com.kaiharimoto.mastertool.core.siding.Matchup("m-studio", who, covers = covers)), h.builder)
                 }
                 h.webs.load()
@@ -906,7 +983,7 @@ fun neueMain(args: Array<String>) {
                     scene.sendPointerEvent(PointerEventType.Release, to, timeMillis = t, buttons = none, button = androidx.compose.ui.input.pointer.PointerButton.Primary)
                     step(20)
                     val after = order(DeckSection.MAIN)
-                    val names = { ids: List<Int> -> ids.map { id -> h.builder.index.byId(com.kaiharimoto.mastertool.core.model.CardId(id))?.name?.take(10) ?: "$id" } }
+                    val names = { ids: List<Int> -> ids.map { id -> h.builder.index.byId(CardId(id))?.name?.take(10) ?: "$id" } }
                     val changed = before.indices.filter { before.getOrNull(it) != after.getOrNull(it) }
                     println("[neue-studio] drag $i $kind $a>$b: $mid")
                     println("[neue-studio] drag $i moved: ${if (before == after) "nothing" else "positions ${changed.first()}..${changed.last()}: ${names(before.slice(changed.first()..changed.last()))} -> ${names(after.slice(changed.first()..changed.last()))}"}")
@@ -959,7 +1036,7 @@ fun neueMain(args: Array<String>) {
             if (map["deckshot"] == "all") {
                 // Every shape the picture can take, from the one snapshot.
                 val model = h.shots.snapshot(h.builder, h.neue)
-                com.kaiharimoto.neue.shot.ShotStyle.entries.forEach { style ->
+                ShotStyle.entries.forEach { style ->
                     val (shot, missing) = h.shots.picture(model.copy(style = style))
                     val file = File(out, "$name-deckshot-${style.name.lowercase()}.png")
                     file.writeBytes(shot)
@@ -1045,7 +1122,7 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
     h.neue.update {
         it.copy(ai = it.ai.copy(
             panelOpen = true,
-            connections = listOf(com.kaiharimoto.mastertool.core.prefs.AiConnection("anthropic-demo", "anthropic", "Anthropic", "claude-opus-5-5")),
+            connections = listOf(AiConnection("anthropic-demo", "anthropic", "Anthropic", "claude-opus-5-5")),
             active = "anthropic-demo",
         ))
     }
@@ -1055,8 +1132,8 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
     if (mode == "saved") {
         h.neue.update {
             it.copy(ai = it.ai.copy(connections = it.ai.connections + listOf(
-                com.kaiharimoto.mastertool.core.prefs.AiConnection("compatible-mimo", "compatible", "Xiaomi MiMo", "mimo-v2-pro", "https://api.xiaomimimo.com/v1"),
-                com.kaiharimoto.mastertool.core.prefs.AiConnection("compatible-work", "compatible", "Work gateway", "gpt-5", "https://llm.example.com/v1"),
+                AiConnection("compatible-mimo", "compatible", "Xiaomi MiMo", "mimo-v2-pro", "https://api.xiaomimimo.com/v1"),
+                AiConnection("compatible-work", "compatible", "Work gateway", "gpt-5", "https://llm.example.com/v1"),
             )))
         }
     }
@@ -1066,7 +1143,7 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
             step?.let { spec ->
                 ai.wizard.saved = false
                 val (name, provider) = spec.split(':').let { it[0] to it.getOrNull(1) }
-                com.kaiharimoto.mastertool.core.ai.providers.Providers.byId(provider)?.let { p ->
+                Providers.byId(provider)?.let { p ->
                     ai.wizard.kind = p.kind
                     ai.wizard.choose(p)
                     if (name == "MODEL") {
@@ -1074,29 +1151,29 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
                         ai.wizard.model = "claude-opus-5-5"
                     }
                 }
-                com.kaiharimoto.mastertool.core.ai.providers.SetupStep.entries.firstOrNull { it.name == name }?.let { ai.wizard.step = it }
+                SetupStep.entries.firstOrNull { it.name == name }?.let { ai.wizard.step = it }
             }
         }
         "panel" -> {
             val now = System.currentTimeMillis()
-            fun result(name: String, summary: String) = com.kaiharimoto.mastertool.core.ai.Part.ToolResult("t-$name", name, "{}", summary = summary)
+            fun result(name: String, summary: String) = Part.ToolResult("t-$name", name, "{}", summary = summary)
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio",
                     title = "Tune for YCS",
                     connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Tune this for a field full of Maliss and Mitsurugi, and group it."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Let me look at the list first."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(result("get_deck", "Read the open deck"), result("search_cards", "Found 12 cards for “negate”"))),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                        ChatTurn.user("Tune this for a field full of Maliss and Mitsurugi, and group it."),
+                        ChatTurn.assistant("Let me look at the list first."),
+                        ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(result("get_deck", "Read the open deck"), result("search_cards", "Found 12 cards for “negate”"))),
+                        ChatTurn.assistant(
                             "## The plan\n\nYour engine is tight — the flex slots are the problem.\n\n" +
                                 "- **+1** [[Infinite Impermanence]]: Maliss lives on its link plays.\n" +
                                 "- **−1** [[Nibiru, the Primal Being]]: Mitsurugi rarely summons five times.\n\n" +
                                 "Grouped into *Starters*, *Extenders*, *Hand traps* and *Bricks*.",
                         ),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(result("edit_deck", "+1 Infinite Impermanence, −1 Nibiru, the Primal Being"), result("set_groups", "Grouped the deck: Starters, Extenders, Hand traps, Bricks"))),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Done — one step of undo if you want it back."),
+                        ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(result("edit_deck", "+1 Infinite Impermanence, −1 Nibiru, the Primal Being"), result("set_groups", "Grouped the deck: Starters, Extenders, Hand traps, Bricks"))),
+                        ChatTurn.assistant("Done — one step of undo if you want it back."),
                     ),
                     createdAt = now,
                     updatedAt = now,
@@ -1126,13 +1203,13 @@ private fun studioAi(h: com.kaiharimoto.neue.NeueHolders, mode: String, step: St
 
 The long reasons sit under the first table only where they must; the third is too wide for the panel, so it reads a row at a time."""
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-tables",
                     title = "Flex slots",
                     connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Compare my flex slots and the matchups."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(reply),
+                        ChatTurn.user("Compare my flex slots and the matchups."),
+                        ChatTurn.assistant(reply),
                     ),
                     createdAt = now,
                     updatedAt = now,
@@ -1143,21 +1220,21 @@ The long reasons sit under the first table only where they must; the third is to
         "heard" -> {
             val now = System.currentTimeMillis()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-heard",
                     title = "Learn About You",
                     connection = "anthropic-demo",
-                    mode = com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PROFILE,
+                    mode = AiSession.MODE_PROFILE,
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Let's do Learn About You."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("You've built three Labrynth lists this month and Las Vegas is on the 12th — let me check I've got you right."),
+                        ChatTurn.user("Let's do Learn About You."),
+                        ChatTurn.assistant("You've built three Labrynth lists this month and Las Vegas is on the 12th — let me check I've got you right."),
                     ),
                     createdAt = now,
                     updatedAt = now,
                 ),
             )
             ai.previewTuning(
-                com.kaiharimoto.neue.ai.Question(
+                Question(
                     "Anything to correct?",
                     listOf("All right", "Fix something"),
                     false,
@@ -1175,17 +1252,17 @@ The long reasons sit under the first table only where they must; the third is to
         "videokey" -> {
             val now = System.currentTimeMillis()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-video",
                     title = "Learn from a deck profile",
                     connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Learn the deck from this deck profile: https://youtu.be/fE-RsenvS5I"),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn(
+                        ChatTurn.user("Learn the deck from this deck profile: https://youtu.be/fE-RsenvS5I"),
+                        ChatTurn(
                             com.kaiharimoto.mastertool.core.ai.Role.USER,
-                            listOf(com.kaiharimoto.mastertool.core.ai.Part.ToolResult("t-video", "watch_video", "{}", isError = true, summary = "Watching a video needs a Gemini API key")),
+                            listOf(Part.ToolResult("t-video", "watch_video", "{}", isError = true, summary = "Watching a video needs a Gemini API key")),
                         ),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                        ChatTurn.assistant(
                             "To watch it I need a **Gemini key** — Gemini is the model that can watch a YouTube video, frames and sound. " +
                                 "It's free: make one below, paste it, and ask me again. We'll keep chatting on this model.",
                         ),
@@ -1207,20 +1284,20 @@ The long reasons sit under the first table only where they must; the third is to
         "study" -> {
             val now = System.currentTimeMillis()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-study",
                     title = "Study",
                     connection = "anthropic-demo",
-                    mode = com.kaiharimoto.mastertool.core.ai.AiSession.MODE_STUDY,
+                    mode = AiSession.MODE_STUDY,
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Study “lab” yourself, and think out loud so I can learn with you. Intensity: Standard."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn(
+                        ChatTurn.user("Study “lab” yourself, and think out loud so I can learn with you. Intensity: Standard."),
+                        ChatTurn(
                             com.kaiharimoto.mastertool.core.ai.Role.ASSISTANT,
                             listOf(
-                                com.kaiharimoto.mastertool.core.ai.Part.Reasoning("Labrynth is a trap deck: the Furniture monsters set traps and Lady Labrynth recycles them. The engine is 23 cards, so the ratio of Furniture to Normal Traps matters most."),
-                                com.kaiharimoto.mastertool.core.ai.Part.Activity("archetype_guide", "Read how Labrynth plays: Playing style, Weaknesses"),
-                                com.kaiharimoto.mastertool.core.ai.Part.Activity("rulings", "Read 14 rulings for Lady Labrynth of the Silver Castle"),
-                                com.kaiharimoto.mastertool.core.ai.Part.Text(
+                                Part.Reasoning("Labrynth is a trap deck: the Furniture monsters set traps and Lady Labrynth recycles them. The engine is 23 cards, so the ratio of Furniture to Normal Traps matters most."),
+                                Part.Activity("archetype_guide", "Read how Labrynth plays: Playing style, Weaknesses"),
+                                Part.Activity("rulings", "Read 14 rulings for Lady Labrynth of the Silver Castle"),
+                                Part.Text(
                                     "Reading [[Arianna the Labrynth Servant]]: when a Normal Trap resolves she adds a Labrynth card and can Special Summon — **so she is a one-card starter going first**.\n\n" +
                                         "The lists at recent events run 3 Arianna and 2 Ariane; yours runs 3 and 3. I'll ask you why.",
                                 ),
@@ -1233,27 +1310,27 @@ The long reasons sit under the first table only where they must; the third is to
             )
             ai.todos = listOf("[x] Read every card", "[x] Read the archetype's page", "[>] Check the key rulings", "[ ] Compare with tournament lists", "[ ] Write the guide")
             h.builder.index.byName("Arianna the Labrynth Servant")?.let { card ->
-                ai.previewTuning(com.kaiharimoto.neue.ai.Question("You run 3 [[Arianna the Labrynth Servant]] and 3 Ariane. Which is your real starter?", listOf("Arianna", "Ariane", "Both, depends on the hand"), false, listOf(card)), null)
+                ai.previewTuning(Question("You run 3 [[Arianna the Labrynth Servant]] and 3 Ariane. Which is your real starter?", listOf("Arianna", "Ariane", "Both, depends on the hand"), false, listOf(card)), null)
             }
         }
         // Its thinking above a reply, and a plan in hand (1.0.47).
         "reason" -> {
             val now = System.currentTimeMillis()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-reason",
                     title = "Ratios",
                     connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Should I play a third Called by the Grave?"),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn(
+                        ChatTurn.user("Should I play a third Called by the Grave?"),
+                        ChatTurn(
                             com.kaiharimoto.mastertool.core.ai.Role.ASSISTANT,
                             listOf(
-                                com.kaiharimoto.mastertool.core.ai.Part.Reasoning(
+                                Part.Reasoning(
                                     "The deck has 9 hand traps and 2 Called by the Grave. The field is mostly Snake-Eye and Yubel, which lean on hand traps less than on board breakers going second.\n" +
                                         "A third Called helps when they open Ash into my starter, which is 1 in 3 games at most. Worth checking the odds of drawing 2 with 3 in the deck.",
                                 ),
-                                com.kaiharimoto.mastertool.core.ai.Part.Text("Checking how often a third copy shows up next to the first.\n\nAt 3 copies you open at least one **33.8%** of the time going first, and two at once only **2.8%**: the third is live, not a brick. Keep it if Ash is common at your event."),
+                                Part.Text("Checking how often a third copy shows up next to the first.\n\nAt 3 copies you open at least one **33.8%** of the time going first, and two at once only **2.8%**: the third is live, not a brick. Keep it if Ash is common at your event."),
                             ),
                         ),
                     ),
@@ -1267,13 +1344,13 @@ The long reasons sit under the first table only where they must; the third is to
         "chart" -> {
             val now = System.currentTimeMillis()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-chart",
                     title = "Odds",
                     connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("How likely am I to open a starter, and what do I side against Snake-Eye?"),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                        ChatTurn.user("How likely am I to open a starter, and what do I side against Snake-Eye?"),
+                        ChatTurn.assistant(
                             "## Your openers\n\n| Starters | Going first | Going second |\n| --- | ---: | ---: |\n| 9 | 78% | 83% |\n| 12 | 88% | 91% |\n| 15 | 94% | 96% |\n\n" +
                                 "```chart\n{\"type\": \"bar\", \"title\": \"At least one starter in the opening hand\", \"labels\": [\"9\", \"12\", \"15\"], " +
                                 "\"series\": [{\"name\": \"Going first\", \"values\": [78, 88, 94]}, {\"name\": \"Going second\", \"values\": [83, 91, 96]}], \"unit\": \"%\"}\n```\n\n" +
@@ -1291,12 +1368,12 @@ The long reasons sit under the first table only where they must; the third is to
         // reader-lessons on the lessons, reader-empty is a deck with no book.
         "reader", "reader-lines", "reader-lessons", "reader-empty" -> {
             val deckId = h.builder.deckId ?: "studio-lab"
-            val path = com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(deckId)
+            val path = GuideBook.path(deckId)
             if (mode == "reader-empty") {
                 h.ai.files.delete(path)
             } else {
-                val book = com.kaiharimoto.mastertool.core.ai.report.book.BookSample.labrynth
-                h.ai.files.write(path, com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.write(book))
+                val book = BookSample.labrynth
+                h.ai.files.write(path, GuideBook.write(book))
                 // The reader's rows: the cover, then each chapter's opening, each section's head and each block.
                 var at = 1
                 var landed = 0
@@ -1323,11 +1400,11 @@ The long reasons sit under the first table only where they must; the third is to
         "listening", "talk", "voice" -> {
             val now = System.currentTimeMillis()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-157", title = "Voice", connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("What do I side in against Snake-Eye going second?"),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Two [[Infinite Impermanence]] for your two [[Labrynth Cooclock]]: their turn is a chain of Special Summons, and Impermanence stops the first one."),
+                        ChatTurn.user("What do I side in against Snake-Eye going second?"),
+                        ChatTurn.assistant("Two [[Infinite Impermanence]] for your two [[Labrynth Cooclock]]: their turn is a chain of Special Summons, and Impermanence stops the first one."),
                     ),
                     createdAt = now, updatedAt = now,
                 ),
@@ -1345,26 +1422,26 @@ The long reasons sit under the first table only where they must; the third is to
         "checked" -> {
             val now = System.currentTimeMillis()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-158", title = "Siding", connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("What do I side in against Snake-Eye going second?"),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                        ChatTurn.user("What do I side in against Snake-Eye going second?"),
+                        ChatTurn.assistant(
                             "Bring in two [[Infinite Impermanence]]: it negates their first monster's effect, and you can activate it from your hand at any time. " +
                                 "Keep [[Ash Blossom & Joyous Spring]] for [[Snake-Eye Ash]]'s search.",
                         ),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(com.kaiharimoto.mastertool.core.ai.Part.Context("check"))),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                        ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(Part.Context("check"))),
+                        ChatTurn.assistant(
                             "**Correction:** [[Infinite Impermanence]] can be activated from the hand only if you control no cards — so going second it works on your opponent's first turn, before you play anything. The siding advice stands.",
                         ),
                     ),
                     checks = listOf(
-                        com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check(
+                        FactCheck.Check(
                             1,
                             listOf(
-                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Claim("Infinite Impermanence negates a monster's effects", com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.OK, source = "card text"),
-                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Claim("It can be activated from the hand at any time", com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.WRONG, "only if you control no cards", "card text"),
-                                com.kaiharimoto.mastertool.core.ai.check.FactCheck.Claim("Ash Blossom negates Snake-Eye Ash's search", com.kaiharimoto.mastertool.core.ai.check.FactCheck.Verdict.OK, source = "rulings"),
+                                FactCheck.Claim("Infinite Impermanence negates a monster's effects", FactCheck.Verdict.OK, source = "card text"),
+                                FactCheck.Claim("It can be activated from the hand at any time", FactCheck.Verdict.WRONG, "only if you control no cards", "card text"),
+                                FactCheck.Claim("Ash Blossom negates Snake-Eye Ash's search", FactCheck.Verdict.OK, source = "rulings"),
                             ),
                         ),
                     ),
@@ -1376,17 +1453,17 @@ The long reasons sit under the first table only where they must; the third is to
             val now = System.currentTimeMillis()
             val talk = (1..8).flatMap { i ->
                 listOf(
-                    com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Question $i about the siding against Snake-Eye.", at = now - (9 - i) * 60_000L),
-                    com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Answer $i: bring in [[Infinite Impermanence]] going second, and keep the traps for their turn.", at = now - (9 - i) * 60_000L + 1),
+                    ChatTurn.user("Question $i about the siding against Snake-Eye.", at = now - (9 - i) * 60_000L),
+                    ChatTurn.assistant("Answer $i: bring in [[Infinite Impermanence]] going second, and keep the traps for their turn.", at = now - (9 - i) * 60_000L + 1),
                 )
             }
             val system = ai.previewSystem()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-156", title = "Siding", connection = "anthropic-demo", system = system,
                     turns = talk, summary = "They play Labrynth and are siding against Snake-Eye: Impermanence in going second, traps held for the opponent's turn; they fear backrow removal.",
                     summarized = 10, context = 128_400,
-                    usage = com.kaiharimoto.mastertool.core.ai.Usage(input = 180_000, output = 9_400, cacheRead = 610_000, cacheWrite = 90_000),
+                    usage = Usage(input = 180_000, output = 9_400, cacheRead = 610_000, cacheWrite = 90_000),
                     createdAt = now, updatedAt = now,
                 ),
             )
@@ -1396,29 +1473,29 @@ The long reasons sit under the first table only where they must; the third is to
         "tune", "review" -> {
             val now = System.currentTimeMillis()
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-tune",
                     title = "Fine Tuning",
                     connection = "anthropic-demo",
-                    mode = com.kaiharimoto.mastertool.core.ai.AiSession.MODE_TUNE,
+                    mode = AiSession.MODE_TUNE,
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Let's do Fine Tuning."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Good — a few questions, one at a time, and I'll remember the answers. First, the event."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("A regional in three weeks, about 200 players."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Noted. Which deck are you taking, and how well do you know it?"),
+                        ChatTurn.user("Let's do Fine Tuning."),
+                        ChatTurn.assistant("Good — a few questions, one at a time, and I'll remember the answers. First, the event."),
+                        ChatTurn.user("A regional in three weeks, about 200 players."),
+                        ChatTurn.assistant("Noted. Which deck are you taking, and how well do you know it?"),
                     ),
                     createdAt = now,
                     updatedAt = now,
                 ),
             )
             if (mode == "tune") {
-                ai.previewTuning(com.kaiharimoto.neue.ai.Question("Going first or second — which do you choose when you win the roll?", listOf("First", "Second", "Depends on the matchup"), false), null)
+                ai.previewTuning(Question("Going first or second — which do you choose when you win the roll?", listOf("First", "Second", "Depends on the matchup"), false), null)
             } else {
                 ai.previewTuning(
                     null,
                     listOf(
-                        com.kaiharimoto.mastertool.core.ai.memory.MemoryChange("USER.md", listOf("Regional in three weeks, about 200 players.", "Plays Branded Dracotail; knows it well.", "Chooses to go second."), listOf("Plays Branded.")),
-                        com.kaiharimoto.mastertool.core.ai.memory.MemoryChange("MEMORY.md", listOf("Explain lines with the cards named, not in general."), emptyList()),
+                        MemoryChange("USER.md", listOf("Regional in three weeks, about 200 players.", "Plays Branded Dracotail; knows it well.", "Chooses to go second."), listOf("Plays Branded.")),
+                        MemoryChange("MEMORY.md", listOf("Explain lines with the cards named, not in general."), emptyList()),
                     ),
                 )
             }
@@ -1451,15 +1528,15 @@ private fun studioAi154(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
 - Open questions: Which trap to set first when both Big Welcome and Welcome are in hand?
 - Sources: The card text and the rules primer; no guides or lists.
 """
-    ai.files.write(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, deckId), guide)
+    ai.files.write(AiMemory.path(MemoryKind.GUIDE, deckId), guide)
     val day = 86_400_000L
     val now = System.currentTimeMillis()
     val reports = listOf(
-        Triple(com.kaiharimoto.mastertool.core.ai.report.SessionReport.STUDIED, Triple(38, 30, 34), 9 * day),
-        Triple(com.kaiharimoto.mastertool.core.ai.report.SessionReport.TAUGHT, Triple(56, 44, 47), 4 * day),
-        Triple(com.kaiharimoto.mastertool.core.ai.report.SessionReport.PRINCIPLES, Triple(71, 55, 52), 0L),
+        Triple(SessionReport.STUDIED, Triple(38, 30, 34), 9 * day),
+        Triple(SessionReport.TAUGHT, Triple(56, 44, 47), 4 * day),
+        Triple(SessionReport.PRINCIPLES, Triple(71, 55, 52), 0L),
     ).mapIndexed { i, (m, s, ago) ->
-        com.kaiharimoto.mastertool.core.ai.report.SessionReport(
+        SessionReport(
             deckId, deckName, now - ago, m, "standard",
             summary = listOf(
                 "Read every card and the archetype's page; the spine is Furniture into Normal Traps.",
@@ -1471,9 +1548,9 @@ private fun studioAi154(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
             openQuestions = listOf("Which trap to set first with Big Welcome and Welcome in hand?"),
             understanding = s.first, playing = s.second, mirror = s.third,
             why = "The lines follow from the text and are legal; the timing against hand traps is untested, and a mirror turns on who sets first.",
-            questions = if (m == com.kaiharimoto.mastertool.core.ai.report.SessionReport.STUDIED) emptyList() else listOf(
-                com.kaiharimoto.mastertool.core.ai.report.SessionReport.Asked("You run 3 Arianna and 3 Ariane. Which is your real starter?", "Arianna, always; Ariane is for going second."),
-                com.kaiharimoto.mastertool.core.ai.report.SessionReport.Asked("What do you fear most across the table?", "Backrow removal before my Furniture resolve."),
+            questions = if (m == SessionReport.STUDIED) emptyList() else listOf(
+                SessionReport.Asked("You run 3 Arianna and 3 Ariane. Which is your real starter?", "Arianna, always; Ariane is for going second."),
+                SessionReport.Asked("What do you fear most across the table?", "Backrow removal before my Furniture resolve."),
             ),
             startedAt = now - ago - 1_500_000,
         )
@@ -1496,19 +1573,19 @@ private fun studioAi154(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
     )
     ai.deckNames = mapOf(deckId to deckName)
     when (mode) {
-        "guide" -> ai.docOpen = com.kaiharimoto.neue.ai.LivingDoc.Guide(deckId, deckName)
+        "guide" -> ai.docOpen = LivingDoc.Guide(deckId, deckName)
         // Refactor guide (1.0.66): the launcher, on its fourth way in.
-        "refactor" -> ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_REFACTOR)
-        "profile" -> ai.docOpen = com.kaiharimoto.neue.ai.LivingDoc.Profile
+        "refactor" -> ai.askTune(AiSession.MODE_REFACTOR)
+        "profile" -> ai.docOpen = LivingDoc.Profile
         "about" -> ai.profileAsk = true
         "quick" -> ai.quickOpen = true
-        "brain" -> ai.memoryOpen = com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, deckId)
+        "brain" -> ai.memoryOpen = AiMemory.path(MemoryKind.GUIDE, deckId)
         "end" -> {
             ai.endReport = reports.last()
             ai.previewTuning(
                 null,
-                listOf(com.kaiharimoto.mastertool.core.ai.memory.MemoryChange(
-                    com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, deckId),
+                listOf(MemoryChange(
+                    AiMemory.path(MemoryKind.GUIDE, deckId),
                     listOf("Connections: Lovely Labrynth of the Silver Castle sets any Normal Trap from the grave.", "Open questions: Which trap to set first?"),
                     emptyList(),
                 )),
@@ -1516,21 +1593,21 @@ private fun studioAi154(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
         }
         "petted" -> {
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = "studio-petted", title = "Hello", connection = "anthropic-demo",
-                    turns = listOf(com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Hi."), com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Hello — what are we building today?")),
+                    turns = listOf(ChatTurn.user("Hi."), ChatTurn.assistant("Hello — what are we building today?")),
                     createdAt = now, updatedAt = now,
                 ),
             )
-            ai.touched(com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.Reaction(com.kaiharimoto.mastertool.core.ai.avatar.Expression.LOVE, 600.0, "I could get used to this."))
+            ai.touched(AvatarPlay.Reaction(Expression.LOVE, 600.0, "I could get used to this."))
         }
     }
     // The guide and the last report as PDFs, in the real fonts and chosen art, beside the shots.
     if (mode == "guide" || mode == "end") runCatching {
         kotlinx.coroutines.runBlocking {
             val dir = java.io.File("../shots").apply { mkdirs() }
-            dir.resolve("ai-guide.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.guideBytes(h, deckId, deckName))
-            dir.resolve("ai-report.pdf").writeBytes(com.kaiharimoto.neue.ai.AiDocs.reportBytes(h, reports.last()))
+            dir.resolve("ai-guide.pdf").writeBytes(AiDocs.guideBytes(h, deckId, deckName))
+            dir.resolve("ai-report.pdf").writeBytes(AiDocs.reportBytes(h, reports.last()))
         }
     }.onFailure { System.err.println("studio: the PDFs failed: $it") }
 }
@@ -1542,36 +1619,36 @@ private fun studioAi155(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
     val now = System.currentTimeMillis()
     val shot = java.io.File("../docs/shots/neue-builder.png").takeIf { it.isFile }?.readBytes()
     val deck = h.builder.deck
-    fun name(id: com.kaiharimoto.mastertool.core.model.CardId) = h.builder.index.byId(id)?.name
-    fun counted(ids: List<com.kaiharimoto.mastertool.core.model.CardId>) =
+    fun name(id: CardId) = h.builder.index.byId(id)?.name
+    fun counted(ids: List<CardId>) =
         ids.groupingBy { it }.eachCount().entries.mapNotNull { (id, n) -> name(id)?.let { "$n $it" } }.joinToString("\n")
     val main = deck.main.mapNotNull(::name).distinct()
     val sessionId = "studio-155"
     when (mode) {
         "attach" -> {
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = sessionId, title = "Pictures", connection = "anthropic-demo",
-                    turns = listOf(com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Hi."), com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant("Hello — what are we building today?")),
+                    turns = listOf(ChatTurn.user("Hi."), ChatTurn.assistant("Hello — what are we building today?")),
                     createdAt = now, updatedAt = now,
                 ),
             )
             ai.draft = "Is this list any good against Snake-Eye?"
             shot?.let { bytes ->
-                kotlinx.coroutines.runBlocking { com.kaiharimoto.neue.ai.Attachments.prepare(com.kaiharimoto.neue.platform.PickedFile("screenshot.png", bytes)) }
+                kotlinx.coroutines.runBlocking { Attachments.prepare(PickedFile("screenshot.png", bytes)) }
                     ?.let { a -> ai.previewAttached(listOf(a, a)) }
             }
         }
         "picture" -> {
             val image = shot?.let { ai.files.putImage(sessionId, it, "image/png", 1920, 1080) }
-            val call = com.kaiharimoto.mastertool.core.ai.Part.ToolResult("t1", "resolve_cards", "{}", summary = "Read ${main.size} cards off the picture, 1 to check")
+            val call = Part.ToolResult("t1", "resolve_cards", "{}", summary = "Read ${main.size} cards off the picture, 1 to check")
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = sessionId, title = "A picture", connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("What deck is this? Build it for me.", images = listOfNotNull(image)),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(call)),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                        ChatTurn.user("What deck is this? Build it for me.", images = listOfNotNull(image)),
+                        ChatTurn(com.kaiharimoto.mastertool.core.ai.Role.USER, listOf(call)),
+                        ChatTurn.assistant(
                             "It's a **Labrynth** list with a hand-trap package — here is what I read off the screenshot:\n\n" +
                                 "```deck\nMain:\n${counted(deck.main)}\nExtra:\n${counted(deck.extra)}\nSide:\n${counted(deck.side)}\n```\n\n" +
                                 "One card I read from its art alone; say if it is wrong and I'll fix it before building.",
@@ -1588,11 +1665,11 @@ private fun studioAi155(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
             val d = main.getOrElse(3) { "Welcome Labrynth" }
             val e = main.getOrElse(4) { "Lady Labrynth of the Silver Castle" }
             ai.preview(
-                com.kaiharimoto.mastertool.core.ai.AiSession(
+                AiSession(
                     id = sessionId, title = "Lines", connection = "anthropic-demo",
                     turns = listOf(
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.user("Show me your best line, the board it ends on, and what you'd change."),
-                        com.kaiharimoto.mastertool.core.ai.ChatTurn.assistant(
+                        ChatTurn.user("Show me your best line, the board it ends on, and what you'd change."),
+                        ChatTurn.assistant(
                             "## The line\n\n```line\n1. [[$a]] — Normal Summon it; it searches the card that starts the chain.\n" +
                                 "2. [[$b]] — Activate it; the field spell sets up the rest of the turn.\n" +
                                 "3. [[$c]] — Set it; on their turn it summons from the deck.\n4. [[$d]] — The interruption: it answers their first play.\n```\n\n" +
@@ -1615,28 +1692,28 @@ private fun studioAi155(h: com.kaiharimoto.neue.NeueHolders, mode: String) {
 private fun studioDuelMoves(h: com.kaiharimoto.neue.NeueHolders) {
     val d = h.duel
     fun state() = d.game!!.state
-    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Phase(com.kaiharimoto.mastertool.core.board.DuelPhase.MAIN1), 0)
+    d.act(DuelAction.Phase(DuelPhase.MAIN1), 0)
     for (seat in 0..1) {
         if (state().solo && seat == 1) break
         d.bottom = seat
-        state().seats[seat].hand.take(3).forEach { uid -> d.verb(uid, com.kaiharimoto.mastertool.core.duel.DuelVerb.DEFAULT) }
+        state().seats[seat].hand.take(3).forEach { uid -> d.verb(uid, DuelVerb.DEFAULT) }
         state().seats[seat].extra.firstOrNull()?.let { x ->
-            if (d.verb(x, com.kaiharimoto.mastertool.core.duel.DuelVerb.SUMMON)) {
-                state().seats[seat].hand.firstOrNull()?.let { m -> d.verb(m, com.kaiharimoto.mastertool.core.duel.DuelVerb.ATTACH, host = x) }
+            if (d.verb(x, DuelVerb.SUMMON)) {
+                state().seats[seat].hand.firstOrNull()?.let { m -> d.verb(m, DuelVerb.ATTACH, host = x) }
             }
         }
-        d.act(state().seats[seat].deck.take(2).map { com.kaiharimoto.mastertool.core.duel.DuelAction.Move(it, com.kaiharimoto.mastertool.core.duel.Place.Pile(seat, com.kaiharimoto.mastertool.core.duel.PileKind.GY), how = "send") }, seat)
+        d.act(state().seats[seat].deck.take(2).map { DuelAction.Move(it, Place.Pile(seat, PileKind.GY), how = "send") }, seat)
     }
     d.bottom = 0
     val theirs = state().onField().firstOrNull { state().cards[it]?.controller == 1 }
     val mine = state().onField().firstOrNull { state().cards[it]?.controller == 0 }
     if (theirs != null && mine != null) {
-        d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.ChainAdd(1, theirs, targets = listOf(mine)), 1)
-        d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Ping(0, com.kaiharimoto.mastertool.core.duel.DuelAction.PING_WAIT, uid = theirs), 0)
+        d.act(DuelAction.ChainAdd(1, theirs, targets = listOf(mine)), 1)
+        d.act(DuelAction.Ping(0, DuelAction.PING_WAIT, uid = theirs), 0)
     }
-    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Lp(1, delta = -1500), 1)
-    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Thinking(1, true), 1)
-    d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Chat(0, "Ash on that?"), 0)
+    d.act(DuelAction.Lp(1, delta = -1500), 1)
+    d.act(DuelAction.Thinking(1, true), 1)
+    d.act(DuelAction.Chat(0, "Ash on that?"), 0)
     // 1.0.79: a lock written down, a token with stats, and the other seat asking to move on.
     d.run("lock Synchro Monsters only from the Extra Deck")
     d.run("token sheep atk 0 def 0 def")
@@ -1653,20 +1730,20 @@ private suspend fun studioDice(h: NeueHolders, how: String, clock: FrameClock) {
     val d = h.duel
     d.bottom = 0
     val layout = d.tableLayout ?: return
-    val stage = com.kaiharimoto.mastertool.core.duel.dice.DiceStage(layout)
-    val held = com.kaiharimoto.neue.duel.dice.RESTING
-    val near = com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.fromDrag(
-        com.kaiharimoto.mastertool.core.duel.dice.V3(6.5, 7.0), held, com.kaiharimoto.mastertool.core.duel.dice.V3(13.0, -21.0), 3.0,
+    val stage = DiceStage(layout)
+    val held = RESTING
+    val near = DiceThrow.fromDrag(
+        V3(6.5, 7.0), held, V3(13.0, -21.0), 3.0,
     )
-    val far = com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.fromDrag(
-        com.kaiharimoto.mastertool.core.duel.dice.V3(13.0, 7.0), held, com.kaiharimoto.mastertool.core.duel.dice.V3(-9.0, -19.0), -2.0,
+    val far = DiceThrow.fromDrag(
+        V3(13.0, 7.0), held, V3(-9.0, -19.0), -2.0,
     )
     when (how) {
         "held" -> {
             // Over the near field, a little turned in the hand.
-            val at = stage.toTable(0, com.kaiharimoto.mastertool.core.duel.dice.V3(9.0, 5.5, 0.0))
-            val turn = com.kaiharimoto.mastertool.core.duel.dice.Quat(0.93, 0.25, 0.2, 0.18).normalized()
-            d.diceCarry = com.kaiharimoto.neue.duel.dice.DiceCarry(0, at.x.toFloat(), at.y.toFloat(), held.map { (turn * it).normalized() })
+            val at = stage.toTable(0, V3(9.0, 5.5, 0.0))
+            val turn = Quat(0.93, 0.25, 0.2, 0.18).normalized()
+            d.diceCarry = DiceCarry(0, at.x.toFloat(), at.y.toFloat(), held.map { (turn * it).normalized() })
             clock.run(4)
         }
         "flying" -> {

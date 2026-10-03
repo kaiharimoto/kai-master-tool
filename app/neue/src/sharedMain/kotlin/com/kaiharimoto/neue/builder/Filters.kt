@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -152,12 +154,12 @@ private fun Facet(label: String, content: @Composable () -> Unit) {
 
 /** Chips 12dp apart both ways for a finger, 4 on the desk (touch swarm, rec 18). */
 @Composable
-private fun chipGap() = if (com.kaiharimoto.neue.kit.LocalTouchFirst.current) com.kaiharimoto.mastertool.core.input.TouchMetrics.CHIP_GAP.dp else 4.dp
+private fun chipGap() = if (LocalTouchFirst.current) TouchMetrics.CHIP_GAP.dp else 4.dp
 
 /** A facet's value: the kit's Tag, a size down on the desk, since a facet row holds a dozen; a finger's full size. */
 @Composable
 private fun Chip(label: String, on: Boolean, onClick: () -> Unit) {
-    val touch = com.kaiharimoto.neue.kit.LocalTouchFirst.current
+    val touch = LocalTouchFirst.current
     Tag(label, on, onClick, if (touch) Modifier else Modifier.height(24.dp), caption = if (on) "Clear" else "Filter")
 }
 

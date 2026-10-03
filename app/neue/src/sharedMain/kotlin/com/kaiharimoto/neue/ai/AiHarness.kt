@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
+import com.kaiharimoto.mastertool.core.ai.avatar.Expression
+import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
 import com.kaiharimoto.mastertool.core.ai.calc.Calc
 import com.kaiharimoto.mastertool.core.ai.rules.Wikitext
 import com.kaiharimoto.mastertool.core.ai.rules.Yugipedia
@@ -131,8 +133,8 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
 
     /** A face for a moment, on the avatar beside the chat and in the bar. */
     private fun express(face: String, seconds: Int): MetaAnswer {
-        val e = com.kaiharimoto.mastertool.core.ai.avatar.Expression.byId(face)
-            ?.takeIf { it in com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker.expressible }
+        val e = Expression.byId(face)
+            ?.takeIf { it in MoodTracker.expressible }
             ?: return fail("No face “$face”: wink, surprised, delighted, love or angry.")
         ai.express(e, seconds)
         return MetaAnswer("Showing ${e.id} for ${seconds.coerceIn(1, 8)} s.", "${e.title} ${e.kaomoji}")

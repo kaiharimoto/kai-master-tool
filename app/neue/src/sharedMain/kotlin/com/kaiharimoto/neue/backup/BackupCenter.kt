@@ -18,6 +18,7 @@ import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.platform.deliverFile
 import com.kaiharimoto.neue.sync.NeueSyncLocal
+import com.kaiharimoto.neue.sync.SyncPlatform
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -204,7 +205,7 @@ class BackupCenter(private val h: NeueHolders) {
                     BackupManifest.NAME,
                     Backups.json.encodeToString(
                         BackupManifest.serializer(),
-                        BackupManifest(version = Platform.version, at = now, reason = reason, device = com.kaiharimoto.neue.sync.SyncPlatform.deviceName, decks = decks, files = files),
+                        BackupManifest(version = Platform.version, at = now, reason = reason, device = SyncPlatform.deviceName, decks = decks, files = files),
                     ).encodeToByteArray(),
                 )
             }

@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.web.DeckWeb
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.kit.WordToggle
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.releasesTypingOnFinger
 import androidx.compose.foundation.background
@@ -44,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.kaiharimoto.neue.web.Webs
 import com.kaiharimoto.neue.zen.LocalZen
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.pointer.pointerInput
@@ -250,7 +255,7 @@ fun RowScope.BuilderBar(
     onScreenshot: () -> Unit,
     onSave: () -> Unit,
     narrow: Boolean,
-    webs: com.kaiharimoto.neue.web.Webs? = null,
+    webs: Webs? = null,
     onStepWeb: (Int) -> Unit = {},
     onOpenDeck: (String) -> Unit = {},
 ) {
@@ -268,7 +273,7 @@ fun RowScope.BuilderBar(
         Box(Modifier.onGloballyPositioned { historyAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
             IconButton(
                 Icons.History,
-                { neue.menu = com.kaiharimoto.neue.kit.MenuSpec(historyAt, historyMenu(state, touch = neue.touchFirst)) },
+                { neue.menu = MenuSpec(historyAt, historyMenu(state, touch = neue.touchFirst)) },
                 enabled = state.canUndo || state.canRedo,
                 size = 32.dp,
                 label = "History",
@@ -288,7 +293,7 @@ fun RowScope.BuilderBar(
     Box(Modifier.onGloballyPositioned { importAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
         if (touch) {
             Tool("Import", "Import a .ydk or .ydkx, or scan a deck's QR code", Icons.Import, kbd(DeskAction.IMPORT), true) {
-                neue.menu = com.kaiharimoto.neue.kit.MenuSpec(importAt, CardActions.importMenu(state, neue))
+                neue.menu = MenuSpec(importAt, CardActions.importMenu(state, neue))
             }
         } else {
             Tool("Import", "Import a .ydk or .ydkx", Icons.Import, kbd(DeskAction.IMPORT), false, state::importFromFile)
@@ -296,7 +301,7 @@ fun RowScope.BuilderBar(
     }
     Box(Modifier.onGloballyPositioned { neue.exportAnchor = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
         Tool("Export", "Export: a .ydk or .ydkx file, a YDKe code or a text list to paste, or a QR code to scan", Icons.Export, kbd(DeskAction.EXPORT), touch) {
-            neue.menu = com.kaiharimoto.neue.kit.MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
+            neue.menu = MenuSpec(neue.exportAnchor, CardActions.exportMenu(state, neue))
         }
     }
     // On the desk the tools are their icons, named by their tips (1.0.41, kai: the deck's name
@@ -306,7 +311,7 @@ fun RowScope.BuilderBar(
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     // Auto save (kai, 1.0.18): beside Save, and while it is on the deck is written a moment after each change.
     Tip(if (neue.prefs.autoSave) "Auto save: on. Every change is saved a moment after it is made. Click to turn off" else "Auto save: off. Click to save every change by itself") {
-        com.kaiharimoto.neue.kit.WordToggle(if (narrow && !touch) "Auto" else "Auto save", neue.prefs.autoSave) { neue.update { it.copy(autoSave = !it.autoSave) } }
+        WordToggle(if (narrow && !touch) "Auto" else "Auto save", neue.prefs.autoSave) { neue.update { it.copy(autoSave = !it.autoSave) } }
     }
     // Unlike neighbours a finger could take one for the other stand apart.
     if (touch) Box(Modifier.width(12.dp))
@@ -444,24 +449,24 @@ private fun ResizeRule(name: String, width: Float, scale: Float, touch: Boolean,
  * back, newest first, each in words (`DeckHistory`). A click on a step goes to the
  * deck as it was just after it — undoing or redoing everything in between.
  */
-fun historyMenu(state: DeckBuilderState, touch: Boolean = false): List<com.kaiharimoto.neue.kit.MenuEntry> {
+fun historyMenu(state: DeckBuilderState, touch: Boolean = false): List<MenuEntry> {
     val view = state.history()
     return buildList {
         // On the tablet the step a finger reaches for is the mistake, and says so (touch swarm, rec 22).
-        if (touch && view.done.isNotEmpty()) add(com.kaiharimoto.neue.kit.MenuEntry("Undo: ${view.done[0]}") { state.travel(1) })
+        if (touch && view.done.isNotEmpty()) add(MenuEntry("Undo: ${view.done[0]}") { state.travel(1) })
         if (view.undone.isNotEmpty()) {
-            add(com.kaiharimoto.neue.kit.MenuEntry("Undone"))
+            add(MenuEntry("Undone"))
             view.undone.take(HISTORY_SHOWN).forEachIndexed { i, text ->
-                add(com.kaiharimoto.neue.kit.MenuEntry(text, hint = "Redo ${i + 1}") { state.travel(-(i + 1)) })
+                add(MenuEntry(text, hint = "Redo ${i + 1}") { state.travel(-(i + 1)) })
             }
         }
-        add(com.kaiharimoto.neue.kit.MenuEntry("Done", separatorBefore = view.undone.isNotEmpty() || touch && view.done.isNotEmpty()))
-        if (view.done.isEmpty()) add(com.kaiharimoto.neue.kit.MenuEntry("Nothing yet", enabled = false))
+        add(MenuEntry("Done", separatorBefore = view.undone.isNotEmpty() || touch && view.done.isNotEmpty()))
+        if (view.done.isEmpty()) add(MenuEntry("Nothing yet", enabled = false))
         view.done.take(HISTORY_SHOWN).forEachIndexed { i, text ->
             // The newest is the deck as it is: going back to it is going nowhere.
-            add(com.kaiharimoto.neue.kit.MenuEntry(text, hint = if (i == 0) "Now" else "Undo $i", enabled = i > 0) { state.travel(i) })
+            add(MenuEntry(text, hint = if (i == 0) "Now" else "Undo $i", enabled = i > 0) { state.travel(i) })
         }
-        if (view.done.size > HISTORY_SHOWN) add(com.kaiharimoto.neue.kit.MenuEntry("${view.done.size - HISTORY_SHOWN} earlier", enabled = false))
+        if (view.done.size > HISTORY_SHOWN) add(MenuEntry("${view.done.size - HISTORY_SHOWN} earlier", enabled = false))
     }
 }
 
@@ -475,8 +480,8 @@ private const val HISTORY_SHOWN = 14
  */
 @Composable
 private fun WebSwitch(
-    web: com.kaiharimoto.mastertool.core.web.DeckWeb,
-    webs: com.kaiharimoto.neue.web.Webs,
+    web: DeckWeb,
+    webs: Webs,
     state: DeckBuilderState,
     neue: NeueState,
     onStep: (Int) -> Unit,
@@ -494,16 +499,16 @@ private fun WebSwitch(
             MuButton(
                 "${web.name.ifBlank { "Web" }} · ${web.position(id) ?: 1}/${web.entries.size}",
                 {
-                    neue.menu = com.kaiharimoto.neue.kit.MenuSpec(
+                    neue.menu = MenuSpec(
                         at,
                         web.entries.map { entry ->
-                            com.kaiharimoto.neue.kit.MenuEntry(
+                            MenuEntry(
                                 (if (entry.mine) "★ " else "") + (names[entry.deckId] ?: "…"),
                                 hint = if (entry.deckId == id) "✓" else "${web.position(entry.deckId)}",
                             ) { onOpen(entry.deckId) }
-                        } + com.kaiharimoto.neue.kit.MenuEntry("Side this deck", hint = "Matchups", separatorBefore = true) {
+                        } + MenuEntry("Side this deck", hint = "Matchups", separatorBefore = true) {
                             webs.side(id)
-                        } + com.kaiharimoto.neue.kit.MenuEntry("Open the web in Format") {
+                        } + MenuEntry("Open the web in Format") {
                             webs.selectedId = web.id
                             webs.sidingDeckId = null
                             neue.go(com.kaiharimoto.neue.Page.FORMAT)

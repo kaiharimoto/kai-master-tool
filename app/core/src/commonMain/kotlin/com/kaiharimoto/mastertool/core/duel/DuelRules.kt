@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import kotlin.random.Random
 
 /** What applying an action came to: the next table, or why the table could not do it. */
@@ -505,7 +506,7 @@ object DuelRandom {
         // throw made by hand never changes what the dice read.
         is DuelAction.OpeningRoll -> {
             val values = listOf(random.nextInt(1, 7), random.nextInt(1, 7))
-            a.copy(values = values, toss = a.toss?.takeIf { it.valid }?.rounded() ?: com.kaiharimoto.mastertool.core.duel.dice.DiceThrow.random(random))
+            a.copy(values = values, toss = a.toss?.takeIf { it.valid }?.rounded() ?: DiceThrow.random(random))
         }
         else -> a
     }

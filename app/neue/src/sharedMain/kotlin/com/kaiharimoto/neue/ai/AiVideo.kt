@@ -2,6 +2,7 @@ package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.video.GeminiVideo
 import com.kaiharimoto.mastertool.core.ai.video.YouTube
+import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
@@ -62,7 +63,7 @@ internal class AiVideo(private val ai: AiState) {
         }.getOrElse { Result.failure(it) }
         val text = said.getOrElse {
             // Gemini's own refusals are already in words; a network failure is said plainly.
-            return fail(if (it is IllegalStateException) it.message.orEmpty() else com.kaiharimoto.mastertool.core.ai.wire.Unreachable.say(GeminiVideo.BASE, it.message))
+            return fail(if (it is IllegalStateException) it.message.orEmpty() else Unreachable.say(GeminiVideo.BASE, it.message))
         }
         val head = buildString {
             append("Video: ").append(title?.let { "“$it”" } ?: YouTube.watch(id))
@@ -86,7 +87,7 @@ internal class AiVideo(private val ai: AiState) {
             val body = r.bodyAsText()
             if (r.status.value !in 200..299) GeminiVideo.read(r.status.value, body).getOrThrow()
             GeminiVideo.pick(body)
-        }.recoverCatching { if (it is IllegalStateException) throw it else error(com.kaiharimoto.mastertool.core.ai.wire.Unreachable.say(GeminiVideo.BASE, it.message)) }
+        }.recoverCatching { if (it is IllegalStateException) throw it else error(Unreachable.say(GeminiVideo.BASE, it.message)) }
 
         const val NEEDS_KEY = "Watching a video needs a Gemini API key: Gemini is the model that can watch a YouTube video, " +
             "frames and sound. A box for the key is now shown in the chat under your answer, with a link to make a free one at " +

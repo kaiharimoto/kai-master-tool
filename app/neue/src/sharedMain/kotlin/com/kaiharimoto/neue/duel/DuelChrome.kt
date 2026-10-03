@@ -30,11 +30,20 @@ import androidx.compose.ui.zIndex
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelBattle
+import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.DuelSeats
+import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
+import com.kaiharimoto.mastertool.core.duel.DuelVerb
+import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
+import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.layout.CardFrame
+import com.kaiharimoto.mastertool.core.layout.DuelFocus
 import com.kaiharimoto.mastertool.core.layout.DuelFrames
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.DuelSpot
@@ -199,7 +208,7 @@ private fun phaseMenu(duels: Duels, s: DuelState): List<MenuEntry> =
 private fun aimed(duels: Duels, s: DuelState, seat: Int): Boolean {
     val a = duels.attacking ?: return false
     val by = duels.seatFor(a)
-    return seat != by && com.kaiharimoto.mastertool.core.duel.DuelVerbs.canAttack(s, by, a)
+    return seat != by && DuelVerbs.canAttack(s, by, a)
 }
 
 /**
@@ -231,7 +240,7 @@ internal fun AttackBand(duels: Duels, s: DuelState, l: DuelLayout, attacker: Int
  * GY as one group. A suggestion only: it goes on the next move that changes the table, or by its ✕.
  */
 @Composable
-internal fun BattleChip(h: NeueHolders, duels: Duels, game: com.kaiharimoto.mastertool.core.duel.DuelGame, l: DuelLayout) {
+internal fun BattleChip(h: NeueHolders, duels: Duels, game: DuelGame, l: DuelLayout) {
     val c = Mu.colors
     val outcome = remember(game.cursor, game.entries.size, game.state) { DuelBattle.pending(game, duels.catalog) } ?: return
     var dismissed by remember(game.cursor) { mutableStateOf(false) }
@@ -293,7 +302,7 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
     ) {
         Micro("Chain", color = if (s.chain.isEmpty()) c.ink45 else c.ink, size = 9.sp)
         // The link the keys stand on (1.0.90): its line inverted, as the Spotlight's chosen row is.
-        val focused = (duels.focus as? com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link)?.takeIf { duels.byKeys }?.index ?: duels.chainMenu
+        val focused = (duels.focus as? DuelFocus.Slot.Link)?.takeIf { duels.byKeys }?.index ?: duels.chainMenu
         s.chain.takeLast(6).forEachIndexed { i, link ->
             val n = s.chain.size - minOf(6, s.chain.size) + i + 1
             val on = focused == n - 1
@@ -303,7 +312,7 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
             ) {
                 Box(Modifier.background(if (on) c.paper else c.ink).padding(horizontal = 3.dp)) { Mono("$n", color = if (on) c.ink else c.paper, size = 9.sp) }
                 val card = link.uid?.let { s.cards[it] }
-                val sees = card != null && viewers.any { v -> com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, card.uid, v) }
+                val sees = card != null && viewers.any { v -> DuelSight.sees(s, card.uid, v) }
                 val where = link.uid?.let { s.placeOf(it) }?.let { p ->
                     when (p) {
                         is Place.Pile -> p.kind.label
@@ -321,8 +330,8 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
         }
         // Its keys, while a chain stands (1.0.90).
         if (s.chain.isNotEmpty() && s.chain.size <= 4) {
-            val q = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.DUEL_RESOLVE)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
-            val all = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.DUEL_RESOLVE_ALL)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
+            val q = DeskShortcuts.chordFor(DeskAction.DUEL_RESOLVE)?.let(DeskShortcuts::kbd)
+            val all = DeskShortcuts.chordFor(DeskAction.DUEL_RESOLVE_ALL)?.let(DeskShortcuts::kbd)
             Mono("$q · $all all", color = c.ink45, size = 8.sp)
         }
     }
@@ -384,7 +393,7 @@ internal fun ShuffleOffer(duels: Duels, s: DuelState, l: DuelLayout) {
  * the obvious verb first, then the rest; Target first for a card that is not theirs. The strip's last
  * item, after [verbs], is Point at it. One list for the pointer's strip and the keyboard's menu (1.0.87).
  */
-internal data class VerbMenu(val uid: Int, val verbs: List<com.kaiharimoto.mastertool.core.duel.DuelVerb>, val mine: Boolean) {
+internal data class VerbMenu(val uid: Int, val verbs: List<DuelVerb>, val mine: Boolean) {
     /** The verbs and Point at it. */
     val size: Int get() = verbs.size + 1
 }
@@ -394,9 +403,9 @@ internal fun verbMenu(duels: Duels, s: DuelState, uid: Int, playsBoth: Boolean):
     val actor = duels.seatFor(uid)
     val inStrip = duels.strip?.let { (seat, kind) -> s.placeOf(uid).let { it is Place.Pile && it.seat == seat && it.kind == kind } } == true
     // Another seat's open pile is for pointing at, unless the person plays both seats (1.0.86).
-    val mine = s.solo || actor == duels.bottom || (inStrip && com.kaiharimoto.mastertool.core.duel.DuelSeats.stripPlays(s, actor, duels.bottom, playsBoth))
-    val offered = com.kaiharimoto.mastertool.core.duel.DuelVerbs.offered(s, actor, uid, duels.catalog)
-    val verbs = if (mine) offered else listOf(com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET) + offered.filter { it != com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET }
+    val mine = s.solo || actor == duels.bottom || (inStrip && DuelSeats.stripPlays(s, actor, duels.bottom, playsBoth))
+    val offered = DuelVerbs.offered(s, actor, uid, duels.catalog)
+    val verbs = if (mine) offered else listOf(DuelVerb.TARGET) + offered.filter { it != DuelVerb.TARGET }
     return if (verbs.isEmpty()) null else VerbMenu(uid, verbs, mine)
 }
 
@@ -406,7 +415,7 @@ internal fun runVerbItem(duels: Duels, menu: VerbMenu, i: Int) {
     val v = menu.verbs.getOrNull(i)
     when {
         v == null -> duels.act(DuelAction.Ping(duels.bottom, DuelAction.PING_LOOK, uid = menu.uid))
-        v == com.kaiharimoto.mastertool.core.duel.DuelVerb.TARGET && !menu.mine -> duels.verb(menu.uid, v, seat = duels.bottom)
+        v == DuelVerb.TARGET && !menu.mine -> duels.verb(menu.uid, v, seat = duels.bottom)
         else -> duels.verb(menu.uid, v)
     }
 }
@@ -418,7 +427,7 @@ internal fun runVerbItem(duels: Duels, menu: VerbMenu, i: Int) {
  * focus (1.0.87), it is a menu: the verb in ink is the one ↑/↓ have chosen and Enter does.
  */
 @Composable
-internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<com.kaiharimoto.mastertool.core.layout.CardFrame>, playsBoth: Boolean) {
+internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, playsBoth: Boolean) {
     val c = Mu.colors
     val uid = duels.inspected?.takeIf { it in s.cards } ?: return
     val f = frames.firstOrNull { it.uid == uid && it.shown } ?: return
@@ -437,7 +446,7 @@ internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<c
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 menu.verbs.forEachIndexed { i, v ->
-                    val key = VERB_KEYS[v]?.let { com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(it) }?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd)
+                    val key = VERB_KEYS[v]?.let { DeskShortcuts.chordFor(it) }?.let(DeskShortcuts::kbd)
                     VerbChip(verbWords(v, s), key, strong = if (cursor == null) i == 0 else i == cursor, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, i) }
                 }
                 VerbChip("Point at it", "Alt click", strong = cursor == menu.verbs.size, modifier = Modifier.fillMaxWidth()) { runVerbItem(duels, menu, menu.verbs.size) }

@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel.text
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelBattle
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelEntry
 import com.kaiharimoto.mastertool.core.duel.DuelRules
@@ -208,7 +209,7 @@ object DuelWords {
                     PileKind.GY -> when {
                         a.how == "resolve" -> "$name goes to the GY as it resolves"
                         a.how == "negate" -> "${name.replaceFirstChar { it.uppercase() }} goes to the GY, negated"
-                        a.how == com.kaiharimoto.mastertool.core.duel.DuelBattle.HOW -> "${name.replaceFirstChar { it.uppercase() }} is destroyed by battle"
+                        a.how == DuelBattle.HOW -> "${name.replaceFirstChar { it.uppercase() }} is destroyed by battle"
                         a.how == "tribute" -> subject("Tributes $name")
                         a.how == "detach" || from is Place.Under -> subject("detaches $name$fromWords")
                         fromPile == PileKind.HAND && a.how == "activate" -> subject("discards $name to activate it")

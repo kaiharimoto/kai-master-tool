@@ -56,6 +56,7 @@ import com.kaiharimoto.mastertool.core.present.Geometry
 import com.kaiharimoto.mastertool.core.present.Para
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.Slide
+import com.kaiharimoto.mastertool.core.present.SlideLayouts
 import com.kaiharimoto.mastertool.core.present.edit.Guide
 import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
 import com.kaiharimoto.mastertool.core.present.edit.RichText
@@ -376,7 +377,7 @@ internal fun canvasMenu(h: NeueHolders): List<MenuEntry> {
         MenuEntry("Select everything", hint = "Ctrl A") { selectAll(h) },
         MenuEntry("Background…", separatorBefore = true) { present.tab = PropsTab.SLIDE },
         MenuEntry("Theme…") { present.tab = PropsTab.THEME },
-        MenuEntry("New slide") { addSlide(h, com.kaiharimoto.mastertool.core.present.SlideLayouts.TITLE_BODY) },
+        MenuEntry("New slide") { addSlide(h, SlideLayouts.TITLE_BODY) },
     )
 }
 

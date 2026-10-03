@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.kaiharimoto.mastertool.core.motion.ZenShadow
+import com.kaiharimoto.neue.cards.GroupMarkers
 
 /**
  * The shadow under a floating card in deep zen — **kai's exception to Master
@@ -46,7 +47,7 @@ fun DrawScope.zenGlow(card: Rect, sides: BooleanArray, color: Color, amount: Flo
         if (!sides[i]) continue
         val r = strips[i]
         val phase = time * 1.3f + (r.left + r.top) / (cardWidth * 1.7f)
-        blurRect(r.left, r.top, r.right, r.bottom, com.kaiharimoto.neue.cards.GroupMarkers.shimmer(color, phase).copy(alpha = 0.62f * amount), band * 1.4f)
+        blurRect(r.left, r.top, r.right, r.bottom, GroupMarkers.shimmer(color, phase).copy(alpha = 0.62f * amount), band * 1.4f)
     }
 }
 

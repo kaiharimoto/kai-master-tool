@@ -1,6 +1,8 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.present.ai.PresentWriter
 import com.kaiharimoto.mastertool.core.search.EffectKind
 
 /**
@@ -841,7 +843,7 @@ object AiTools {
             "Slides by id or number; cards by printed name, checked. Read the deck-profile and slide-design skills first.",
         schema {
             objects("ops", "The operations, in order", required = true) {
-                enum("action", "What to do", listOf("create", "add_module", "refresh_module") + com.kaiharimoto.mastertool.core.present.ai.PresentWriter.ACTIONS, required = true)
+                enum("action", "What to do", listOf("create", "add_module", "refresh_module") + PresentWriter.ACTIONS, required = true)
                 any("slide", "A slide: its id or its number")
                 any("element", "An element's id; add_element: the element {type, text, box, role, cards, …}")
                 any("patch", "update_element: the fields to change")
@@ -907,7 +909,7 @@ object AiTools {
             "self (the seat you act as — the honest one, and the default), opponent (theirs), full (everything, for testing), auto (yours; " +
             "duel_peek when you judge you must know more). Follow the person's knowledge setting unless they say otherwise.",
         schema {
-            enum("perspective", "Whose eyes", com.kaiharimoto.mastertool.core.duel.ai.DuelBrief.PERSPECTIVES)
+            enum("perspective", "Whose eyes", DuelBrief.PERSPECTIVES)
             integer("seat", "The seat you act as: 0 the bottom player, 1 across the table; omit for the one set on the page", min = 0, max = 1)
         },
         ToolGroup.LOOK,
@@ -950,7 +952,7 @@ object AiTools {
         "duel_log",
         "Duel (07): the duel's log in words, as one seat saw it (perspective as duel_state), the last 'count' lines.",
         schema {
-            enum("perspective", "Whose eyes", com.kaiharimoto.mastertool.core.duel.ai.DuelBrief.PERSPECTIVES)
+            enum("perspective", "Whose eyes", DuelBrief.PERSPECTIVES)
             integer("count", "How many lines from the end; default 40", min = 1, max = 400)
         },
         ToolGroup.LOOK,

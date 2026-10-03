@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.kit
 
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.neue.cursor.cursorPointer
 
 import androidx.compose.animation.core.LinearEasing
@@ -49,8 +50,11 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuColors
+import com.kaiharimoto.neue.theme.MuMotion
+import com.kaiharimoto.neue.theme.MuType
 
 /** Badge (§6): micro caps in a 20px frame. Inverted is the only emphasis a badge gets. */
 @Composable
@@ -78,13 +82,13 @@ fun Tag(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier
     val touch = LocalTouchFirst.current
     Row(
         modifier
-            .let { if (touch) it.height(com.kaiharimoto.mastertool.core.input.TouchMetrics.CHIP.dp) else it.height(28.dp) }
+            .let { if (touch) it.height(TouchMetrics.CHIP.dp) else it.height(28.dp) }
             .background(animatedColor(if (selected) c.ink else Color.Transparent))
             .border(1.dp, animatedColor(if (selected || hovered) c.ink else c.ink25))
             .hoverable(source)
             .cursorPointer(caption = caption, showsWords = true)
             .muClickable(interactionSource = source, onClick = onClick)
-            .padding(horizontal = if (touch) com.kaiharimoto.mastertool.core.input.TouchMetrics.CHIP_PAD.dp else 10.dp),
+            .padding(horizontal = if (touch) TouchMetrics.CHIP_PAD.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -171,7 +175,7 @@ fun DrawScope.drawHatch(color: Color, shift: Float = 0f, period: Float = 8.dp.to
 fun Breathe(modifier: Modifier = Modifier, running: Boolean = true, color: Color = Mu.colors.ink) {
     val alpha = if (running) {
         val t = rememberInfiniteTransition(label = "breathe")
-        t.animateFloat(1f, 0.35f, infiniteRepeatable(tween(1200, easing = com.kaiharimoto.neue.theme.MuMotion.ease), RepeatMode.Reverse), label = "a").value
+        t.animateFloat(1f, 0.35f, infiniteRepeatable(tween(1200, easing = MuMotion.ease), RepeatMode.Reverse), label = "a").value
     } else {
         1f
     }
@@ -187,7 +191,7 @@ fun EmptyState(title: String, line: String, modifier: Modifier = Modifier, boxed
             .let { if (boxed) it.border(1.dp, c.ink).padding(40.dp) else it.padding(horizontal = 32.dp, vertical = 64.dp) },
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        MuText(title, Modifier.widthIn(max = 672.dp), com.kaiharimoto.neue.theme.MuType.display(com.kaiharimoto.neue.theme.LocalMuFonts.current))
+        MuText(title, Modifier.widthIn(max = 672.dp), MuType.display(LocalMuFonts.current))
         Body(line, Modifier.widthIn(max = 448.dp), color = c.ink70)
         if (action != null) Box(Modifier.padding(top = 8.dp)) { action() }
     }

@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.data.StoredDeck
+import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.siding.DeckSiding
 import com.kaiharimoto.mastertool.core.siding.SidingCodec
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
@@ -202,7 +203,7 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         if (state.deckId == stored.entry.id) state.extendedNow() else stored.extended
 
     /** A deck's cards as they stand, by the same rule. */
-    fun deckOf(stored: StoredDeck, state: DeckBuilderState): com.kaiharimoto.mastertool.core.model.Deck =
+    fun deckOf(stored: StoredDeck, state: DeckBuilderState): Deck =
         if (state.deckId == stored.entry.id) state.deck else stored.entry.deck
 
     /** Every plan written this session, by deck: newer than any copy read before it was written. */

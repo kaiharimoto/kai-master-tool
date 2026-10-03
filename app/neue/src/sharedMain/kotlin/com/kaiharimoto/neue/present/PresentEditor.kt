@@ -35,6 +35,8 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.present.Chart
 import com.kaiharimoto.mastertool.core.present.ChartSeries
@@ -42,11 +44,15 @@ import com.kaiharimoto.mastertool.core.present.DeckFocus
 import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.Fill
 import com.kaiharimoto.mastertool.core.present.Para
+import com.kaiharimoto.mastertool.core.present.PresentIds
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.Slide
 import com.kaiharimoto.mastertool.core.present.SlideLayouts
 import com.kaiharimoto.mastertool.core.present.Stat
+import com.kaiharimoto.mastertool.core.present.Stroke
+import com.kaiharimoto.mastertool.core.present.Themes
 import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
+import com.kaiharimoto.mastertool.core.present.modules.Modules
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.stage.Box as CanvasBox
 import com.kaiharimoto.mastertool.core.present.stage.DeckStage
@@ -58,6 +64,7 @@ import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.IconButton
+import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.Micro
@@ -98,7 +105,7 @@ internal fun PresentEditor(h: NeueHolders, p: Presentation) {
         return
     }
     val c = Mu.colors
-    val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+    val phone = LocalPhone.current
     Column(Modifier.fillMaxSize()) {
         EditorBar(h, p, ctx)
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink12))
@@ -171,8 +178,8 @@ private fun EditorBar(h: NeueHolders, p: Presentation, ctx: SlideContext) {
             MuButton("Module", {
                 neue.menu = MenuSpec(
                     Offset(moduleAt.x, moduleAt.y + 36f),
-                    com.kaiharimoto.mastertool.core.present.modules.Modules.all.map { t ->
-                        MenuEntry(com.kaiharimoto.mastertool.core.present.modules.Modules.name(t)) { present.addingModule = t }
+                    Modules.all.map { t ->
+                        MenuEntry(Modules.name(t)) { present.addingModule = t }
                     },
                 )
             }, size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.Plus)
@@ -182,12 +189,12 @@ private fun EditorBar(h: NeueHolders, p: Presentation, ctx: SlideContext) {
                 // Master UI first: the default look; the others are there when wanted (kai, 1.0.72).
                 neue.menu = MenuSpec(
                     Offset(styleAt.x, styleAt.y + 36f),
-                    com.kaiharimoto.mastertool.core.present.Themes.all.map { t ->
+                    Themes.all.map { t ->
                         MenuEntry(
                             t.name,
                             hint = when {
                                 t.id == p.theme -> "In use"
-                                t.id == com.kaiharimoto.mastertool.core.present.Themes.MASTER -> "Default"
+                                t.id == Themes.MASTER -> "Default"
                                 else -> null
                             },
                         ) { present.applyTheme(t.id) }
@@ -259,14 +266,14 @@ private fun insertMenu(h: NeueHolders, p: Presentation): List<MenuEntry> = listO
     },
     MenuEntry("Deck code (QR)", hint = "for viewers to scan", enabled = p.deck != null, reason = "This presentation has no deck") {
         val d = p.deck ?: return@MenuEntry
-        val code = YdkeCodec.encode(com.kaiharimoto.mastertool.core.model.Deck(d.main.map(::cid), d.extra.map(::cid), d.side.map(::cid)))
+        val code = YdkeCodec.encode(Deck(d.main.map(::cid), d.extra.map(::cid), d.side.map(::cid)))
         insertElement(h, Element(newElementId(), Element.QR, 760f, 240f, 400f, 400f, qr = code))
     },
 )
 
-private fun cid(i: Int) = com.kaiharimoto.mastertool.core.model.CardId(i)
+private fun cid(i: Int) = CardId(i)
 
-internal fun newElementId(): String = com.kaiharimoto.mastertool.core.present.PresentIds.next("e")
+internal fun newElementId(): String = PresentIds.next("e")
 
 private fun deckElement(): Element = Element(newElementId(), Element.DECK, 0f, 0f, 1f, 1f, anchor = Element.ANCHOR_STAGE, focus = DeckFocus(all = true))
 
@@ -295,7 +302,7 @@ private fun insertShape(h: NeueHolders, kind: String) {
             newElementId(), Element.SHAPE, 760f, if (line) 530f else 390f, 400f, if (line) 20f else 300f,
             shape = kind, corner = if (kind == Element.SHAPE_ROUNDED) 32f else 0f,
             fill = if (line) null else Fill.solid("@accent"),
-            stroke = if (line) com.kaiharimoto.mastertool.core.present.Stroke("@line", 6f) else null,
+            stroke = if (line) Stroke("@line", 6f) else null,
         ),
     )
 }

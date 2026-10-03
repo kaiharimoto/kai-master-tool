@@ -4,8 +4,18 @@ import com.kaiharimoto.mastertool.core.ai.AgentLoop
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.TuneIntensity
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
+import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
+import com.kaiharimoto.mastertool.core.ai.memory.GuideBudget
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryChange
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
+import com.kaiharimoto.mastertool.core.ai.memory.ProfileCoverage
+import com.kaiharimoto.mastertool.core.ai.report.GuideDoc
+import com.kaiharimoto.mastertool.core.ai.report.SessionQuestions
+import com.kaiharimoto.mastertool.core.ai.report.book.BookReview
+import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -19,7 +29,7 @@ private fun AiState.snapshot(): Map<String, String?> {
         add(MemoryKind.AGENT.file)
         files.memoryFiles().forEach { add(it.relativeTo(files.root).invariantSeparatorsPath) }
         host.scope()?.path?.let(::add)
-        h.builder.deckId?.let { add(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(it)) }
+        h.builder.deckId?.let { add(GuideBook.path(it)) }
     }
     return paths.associateWith { files.read(it) }
 }
@@ -36,7 +46,7 @@ fun AiState.askTune(mode: String? = null) {
  * online"): a conversation of its own about the deck open in the builder, [study] or
  * taught, at [intensity]; what it learns goes to the deck's guide.
  */
-fun AiState.startTuning(mode: String, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity) {
+fun AiState.startTuning(mode: String, intensity: TuneIntensity) {
     if (AiState.PHASE < 3) return
     tuneAsk = false
     val connection = prefs.connection ?: run {
@@ -59,7 +69,7 @@ fun AiState.startTuning(mode: String, intensity: com.kaiharimoto.mastertool.core
     // The guide's size now: the run may add its intensity's room to it, no more (1.0.66).
     guideStart = if (mode in AiSession.DECK_MODES && deckId != null) Triple(files.memory(MemoryKind.GUIDE, deckId, deck).used, intensity.guideBudget, intensity.label) else null
     session = begin(connection, mode)
-    val room = com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.brief(intensity)
+    val room = GuideBudget.brief(intensity)
     send(
         when (mode) {
             AiSession.MODE_STUDY -> "Study “$deck” yourself, and think out loud so I can learn with you. Intensity: ${intensity.label} — ${intensity.studies} $room"
@@ -73,12 +83,12 @@ fun AiState.startTuning(mode: String, intensity: com.kaiharimoto.mastertool.core
 }
 
 /** The writing session's first message: the intensity's chapters, and what is written already. */
-private fun AiState.writeBrief(deck: String, deckId: String?, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity): String {
-    val book = deckId?.let { com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.read(files.read(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(it))) }
+private fun AiState.writeBrief(deck: String, deckId: String?, intensity: TuneIntensity): String {
+    val book = deckId?.let { GuideBook.read(files.read(GuideBook.path(it))) }
     val scope = when (intensity) {
-        com.kaiharimoto.mastertool.core.ai.TuneIntensity.QUICK -> "chapters 1 to 4 and 7, the main lines only"
-        com.kaiharimoto.mastertool.core.ai.TuneIntensity.STANDARD -> "every chapter but 9 to 11, every line you know"
-        com.kaiharimoto.mastertool.core.ai.TuneIntensity.DEEP -> "all eleven chapters, every line, every matchup in the field, every card"
+        TuneIntensity.QUICK -> "chapters 1 to 4 and 7, the main lines only"
+        TuneIntensity.STANDARD -> "every chapter but 9 to 11, every line you know"
+        TuneIntensity.DEEP -> "all eleven chapters, every line, every matchup in the field, every card"
     }
     val sofar = when {
         book == null || book.chapters.isEmpty() -> "Nothing is written yet."
@@ -104,15 +114,15 @@ fun AiState.openBook(deckId: String? = null) {
 fun AiState.guideRoom(): Triple<Int, Int, String>? = guideStart?.takeIf { session?.mode in AiSession.DECK_MODES }
 
 /** Refactor guide's first message: what the guide holds now, so Ai knows the size of the job. */
-private fun AiState.refactorBrief(deck: String, deckId: String?, intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity): String {
-    val text = deckId?.let { files.read(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(MemoryKind.GUIDE, it)) }
-    val doc = com.kaiharimoto.mastertool.core.ai.report.GuideDoc.parse(text)
+private fun AiState.refactorBrief(deck: String, deckId: String?, intensity: TuneIntensity): String {
+    val text = deckId?.let { files.read(AiMemory.path(MemoryKind.GUIDE, it)) }
+    val doc = GuideDoc.parse(text)
     val sections = doc.sections.joinToString(", ") { "${it.name} ${it.entries.size}" }
     val used = deckId?.let { files.memory(MemoryKind.GUIDE, it, deck).used } ?: 0
     val depth = when (intensity) {
-        com.kaiharimoto.mastertool.core.ai.TuneIntensity.QUICK -> "a quick pass: drop and merge, check only what looks wrong"
-        com.kaiharimoto.mastertool.core.ai.TuneIntensity.STANDARD -> "check the claims that matter against the cards"
-        com.kaiharimoto.mastertool.core.ai.TuneIntensity.DEEP -> "check every line and claim against the card text, step by step"
+        TuneIntensity.QUICK -> "a quick pass: drop and merge, check only what looks wrong"
+        TuneIntensity.STANDARD -> "check the claims that matter against the cards"
+        TuneIntensity.DEEP -> "check every line and claim against the card text, step by step"
     }
     return "Refactor the guide for “$deck”: drop what is not helpful, sharpen what is, and put it in order. " +
         "It has ${doc.entryCount} entries, ${com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.grouped(used)} characters ($sections). " +
@@ -125,7 +135,7 @@ private fun AiState.refactorBrief(deck: String, deckId: String?, intensity: com.
  * preferences are, as well as their workflow"): an interview about the person, not a deck, into
  * USER.md — the memory in front of every conversation.
  */
-fun AiState.startProfile(intensity: com.kaiharimoto.mastertool.core.ai.TuneIntensity) {
+fun AiState.startProfile(intensity: TuneIntensity) {
     if (AiState.PHASE < 3) return
     profileAsk = false
     val connection = prefs.connection ?: run {
@@ -142,7 +152,7 @@ fun AiState.startProfile(intensity: com.kaiharimoto.mastertool.core.ai.TuneInten
     session = begin(connection, AiSession.MODE_PROFILE)
     val profile = files.entries(MemoryKind.USER)
     // Where the profile is thin, so this interview starts there, not at the top of an outline (1.0.65).
-    val coverage = com.kaiharimoto.mastertool.core.ai.memory.ProfileCoverage.brief(com.kaiharimoto.mastertool.core.ai.memory.ProfileCoverage.of(profile))
+    val coverage = ProfileCoverage.brief(ProfileCoverage.of(profile))
     send(
         "Let's do Learn About You: interview me so you understand my goals, my preferences and how I work. " +
             (if (profile.isNotBlank()) "Start from what you already know and fill the gaps. " else "") +
@@ -184,7 +194,7 @@ val AiState.profiling: Boolean get() = session?.mode == AiSession.MODE_PROFILE
 fun AiState.finishTuning() {
     val s = session
     val asksReport = s != null && s.mode in AiSession.DECK_MODES && !running && !wrapping &&
-        !com.kaiharimoto.mastertool.core.ai.report.SessionQuestions.reported(s.turns) && s.turns.size > 2 && prefs.connection != null
+        !SessionQuestions.reported(s.turns) && s.turns.size > 2 && prefs.connection != null
     if (asksReport) {
         wrapping = true
         send("We're finishing here. File your session report now with session_report — your honest scores and why — then say goodbye in one line.")
@@ -212,10 +222,10 @@ private fun AiState.offerReview(before: Map<String, String?>) {
     // A book is JSON, not entries: its change is told section by section, and undone as the file it was.
     fun isBook(path: String) = path.endsWith(".book.json")
     val books = (before.keys + after.keys).filter(::isBook).distinct().mapNotNull { path ->
-        val (added, removed) = com.kaiharimoto.mastertool.core.ai.report.book.BookReview.diff(before[path], after[path])
-        com.kaiharimoto.mastertool.core.ai.memory.MemoryChange(path, added, removed).takeUnless { it.isEmpty }
+        val (added, removed) = BookReview.diff(before[path], after[path])
+        MemoryChange(path, added, removed).takeUnless { it.isEmpty }
     }
-    val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before.filterKeys { !isBook(it) }, after.filterKeys { !isBook(it) }) + books
+    val changes = MemoryReview.diff(before.filterKeys { !isBook(it) }, after.filterKeys { !isBook(it) }) + books
     if (changes.isNotEmpty()) {
         reviewBefore = before
         review = changes
@@ -273,9 +283,9 @@ internal fun AiState.reflect(finished: AiSession) {
     )
     scope.launch {
         runCatching { AgentLoop(model, { call -> host.run(call) }, maxSteps = 6).run(request).collect { } }
-        val changes = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before, snapshot())
+        val changes = MemoryReview.diff(before, snapshot())
         if (changes.isNotEmpty()) {
-            val n = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(changes)
+            val n = MemoryReview.count(changes)
             h.neue.note = com.kaiharimoto.neue.Note("$name remembered $n thing${if (n == 1) "" else "s"} from that conversation", "Undo", lastsMs = 10_000) {
                 reviewBefore = before
                 review = changes
@@ -286,7 +296,7 @@ internal fun AiState.reflect(finished: AiSession) {
 }
 
 /** The studio's pictures of Fine Tuning: a question waiting, or a review to keep. */
-fun AiState.previewTuning(asking: Question?, changes: List<com.kaiharimoto.mastertool.core.ai.memory.MemoryChange>?) {
+fun AiState.previewTuning(asking: Question?, changes: List<MemoryChange>?) {
     question = asking
     review = changes
 }
@@ -296,12 +306,12 @@ fun AiState.previewTuning(asking: Question?, changes: List<com.kaiharimoto.maste
  * with its name, since from now on the web's notes are the ones read for it.
  */
 fun AiState.foldIntoWeb(deckId: String, deckName: String, webId: String) {
-    val deckNotes = files.read(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(MemoryKind.DECK, deckId)) ?: return
-    val deck = com.kaiharimoto.mastertool.core.ai.memory.AiMemory.parse(deckNotes)
+    val deckNotes = files.read(AiMemory.path(MemoryKind.DECK, deckId)) ?: return
+    val deck = AiMemory.parse(deckNotes)
     if (deck.entries.isEmpty()) return
     val webName = h.webs.library.byId(webId)?.name ?: "the web"
     val web = files.memory(MemoryKind.WEB, webId, webName)
-    files.save(MemoryKind.WEB, webId, com.kaiharimoto.mastertool.core.ai.memory.AiMemory.fold(web, deck, deckName))
+    files.save(MemoryKind.WEB, webId, AiMemory.fold(web, deck, deckName))
 }
 
 /** Memory, skills and conversations deleted; the connections stay. */

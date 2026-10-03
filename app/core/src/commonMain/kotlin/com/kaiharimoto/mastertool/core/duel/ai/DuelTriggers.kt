@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.duel.CardKind
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelEntry
+import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
@@ -181,7 +182,7 @@ object DuelTriggers {
      * Each seat's Summons this turn, counted as the watches count them (1.0.85: the turn tally counted monster
      * Sets as Normal Summons and missed Flip Summons, so Nibiru fired a Summon early).
      */
-    fun summonsThisTurn(game: com.kaiharimoto.mastertool.core.duel.DuelGame, catalog: DuelCatalog): IntArray {
+    fun summonsThisTurn(game: DuelGame, catalog: DuelCatalog): IntArray {
         val played = game.played
         val start = played.indexOfLast { it.action is DuelAction.EndTurn } + 1
         val n = IntArray(2)

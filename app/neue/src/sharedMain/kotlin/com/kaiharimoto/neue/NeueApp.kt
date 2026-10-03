@@ -1,9 +1,66 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
+import com.kaiharimoto.mastertool.core.data.PoolProgress
+import com.kaiharimoto.mastertool.core.haptics.DeskEvent
+import com.kaiharimoto.mastertool.core.input.DeskWords
+import com.kaiharimoto.mastertool.core.layout.FormFactor
+import com.kaiharimoto.mastertool.core.layout.GroupArrangement
+import com.kaiharimoto.mastertool.core.layout.Posture
+import com.kaiharimoto.mastertool.core.model.CardArt
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.offline.Offline
+import com.kaiharimoto.mastertool.core.start.StartPrefs
+import com.kaiharimoto.mastertool.core.start.StartSteps
+import com.kaiharimoto.mastertool.core.sync.SyncedPrefs
+import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.neue.ai.AiPanel
+import com.kaiharimoto.neue.ai.AiSetupScreen
+import com.kaiharimoto.neue.ai.AiState
+import com.kaiharimoto.neue.ai.ContextPanel
+import com.kaiharimoto.neue.ai.LivingDocDialog
+import com.kaiharimoto.neue.ai.MemoryDialog
+import com.kaiharimoto.neue.ai.PictureDialog
+import com.kaiharimoto.neue.ai.ProfileLauncher
+import com.kaiharimoto.neue.ai.QuickSettings
+import com.kaiharimoto.neue.ai.ReviewDialog
+import com.kaiharimoto.neue.ai.TuneLauncher
+import com.kaiharimoto.neue.ai.VoiceDialog
+import com.kaiharimoto.neue.ai.avatar.AiBadge
+import com.kaiharimoto.neue.ai.avatar.AiFaceClock
 import com.kaiharimoto.neue.ai.foldIntoWeb
+import com.kaiharimoto.neue.ai.reader.BookReader
 import com.kaiharimoto.neue.ai.shutDown
 import com.kaiharimoto.neue.ai.forgetEverything
 import androidx.compose.foundation.layout.imePadding
+import com.kaiharimoto.neue.art.ArtCropDialog
+import com.kaiharimoto.neue.art.CustomArt
+import com.kaiharimoto.neue.art.LocalCustomArt
+import com.kaiharimoto.neue.backup.BackupCenter
+import com.kaiharimoto.neue.builder.SearchStudio
+import com.kaiharimoto.neue.cards.Foils
+import com.kaiharimoto.neue.cards.GroupMarkers
+import com.kaiharimoto.neue.cards.LocalArtStep
+import com.kaiharimoto.neue.cards.LocalArts
+import com.kaiharimoto.neue.cards.LocalLimitMarks
+import com.kaiharimoto.neue.duel.DuelPage
+import com.kaiharimoto.neue.duel.DuelVoice
+import com.kaiharimoto.neue.duel.Duels
+import com.kaiharimoto.neue.kit.Hatch
+import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
+import com.kaiharimoto.neue.kit.LocalKeepCase
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.kit.LocalReasonNote
+import com.kaiharimoto.neue.kit.LocalTextFocus
+import com.kaiharimoto.neue.kit.LocalTilt
+import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.ProvideTextMenus
+import com.kaiharimoto.neue.kit.TextFocus
+import com.kaiharimoto.neue.pages.FormatPage
+import com.kaiharimoto.neue.pages.SidingPage
 import com.kaiharimoto.neue.platform.reportIssue
 import com.kaiharimoto.neue.cursor.CursorLayer
 import com.kaiharimoto.neue.cursor.FamilyCursor
@@ -16,6 +73,15 @@ import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.snapshotFlow
 import com.kaiharimoto.mastertool.core.motion.ZenPhase
+import com.kaiharimoto.neue.prep.Prep
+import com.kaiharimoto.neue.prep.PrepPage
+import com.kaiharimoto.neue.present.PresentOverlay
+import com.kaiharimoto.neue.present.PresentPage
+import com.kaiharimoto.neue.present.Presentations
+import com.kaiharimoto.neue.qr.QrDialog
+import com.kaiharimoto.neue.start.StartScreen
+import com.kaiharimoto.neue.sync.SyncCenter
+import com.kaiharimoto.neue.web.Webs
 import com.kaiharimoto.neue.zen.LocalZen
 import com.kaiharimoto.neue.zen.ZenReset
 import com.kaiharimoto.neue.zen.ZenLayer
@@ -130,9 +196,9 @@ class NeueHolders(
     val art: ArtLibrary,
     val shots: DeckShots,
     /** The webs of decks, for Format and the builder's switcher (1.0.33). */
-    val webs: com.kaiharimoto.neue.web.Webs,
+    val webs: Webs,
     /** Tournament prep (1.0.50): events, the test games log, drills. */
-    val prep: com.kaiharimoto.neue.prep.Prep,
+    val prep: Prep,
 ) {
     /** Keys down now; the key handler itself is `NeueKeys.kt`. */
     internal val held = mutableSetOf<androidx.compose.ui.input.key.Key>()
@@ -142,17 +208,17 @@ class NeueHolders(
     val zen = ZenLayer()
 
     /** Pictures the person added to cards themselves (1.0.18). */
-    val customArt = com.kaiharimoto.neue.art.CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
+    val customArt = CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
 
     /** Present (1.0.70): the presentations, the one open in the editor, and the one playing. */
-    val present: com.kaiharimoto.neue.present.Presentations by lazy { com.kaiharimoto.neue.present.Presentations(java.io.File(Platform.dataDir, "present")) }
+    val present: Presentations by lazy { Presentations(java.io.File(Platform.dataDir, "present")) }
 
     /** Duel (1.0.74): the duel in play, its table, its log; kept in `<data>/duel/`. */
-    private val duelHolder = lazy { com.kaiharimoto.neue.duel.Duels(java.io.File(Platform.dataDir, "duel")) }
-    val duel: com.kaiharimoto.neue.duel.Duels by duelHolder
+    private val duelHolder = lazy { Duels(java.io.File(Platform.dataDir, "duel")) }
+    val duel: Duels by duelHolder
 
     /** Command mode's voice (1.0.87): hold M, or the microphone beside the command line, to speak a move. */
-    val duelVoice: com.kaiharimoto.neue.duel.DuelVoice by lazy { com.kaiharimoto.neue.duel.DuelVoice(this) }
+    val duelVoice: DuelVoice by lazy { DuelVoice(this) }
 
     /** The duel in play written now, when there is one: the app closing (1.0.85; the last moves were lost in the save's debounce). */
     fun flushDuel() {
@@ -160,7 +226,7 @@ class NeueHolders(
     }
 
     /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
-    val backups: com.kaiharimoto.neue.backup.BackupCenter by lazy { com.kaiharimoto.neue.backup.BackupCenter(this) }
+    val backups: BackupCenter by lazy { BackupCenter(this) }
 
     /** Whether the library held a deck as the app opened: someone new has none (1.0.69, the setup). */
     var decksKnown = false
@@ -169,11 +235,11 @@ class NeueHolders(
     suspend fun offerStart(again: Boolean = false) {
         decksKnown = deps.deckRepository.all().isNotEmpty()
         val state = com.kaiharimoto.neue.start.startState(this)
-        val android = Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID
+        val android = Platform.os == DesktopOs.ANDROID
         val steps = if (again) {
-            com.kaiharimoto.mastertool.core.start.StartSteps.pending(Platform.version, com.kaiharimoto.mastertool.core.start.StartPrefs(), state, android)
+            StartSteps.pending(Platform.version, StartPrefs(), state, android)
         } else {
-            com.kaiharimoto.mastertool.core.start.StartSteps.pending(Platform.version, neue.prefs.start, state, android)
+            StartSteps.pending(Platform.version, neue.prefs.start, state, android)
         }
         if (steps.isEmpty()) {
             if (neue.prefs.start.seen != Platform.version) neue.update { it.copy(start = it.start.copy(seen = Platform.version)) }
@@ -183,10 +249,10 @@ class NeueHolders(
     }
 
     /** Sync across devices (1.0.68): where to, what the last sync did, signing in. */
-    val sync: com.kaiharimoto.neue.sync.SyncCenter by lazy { com.kaiharimoto.neue.sync.SyncCenter(this) }
+    val sync: SyncCenter by lazy { SyncCenter(this) }
 
     /** The assistant (Ai, 1.0.43): the conversation, its model and its tools, for the app's lifetime. */
-    val ai: com.kaiharimoto.neue.ai.AiState by lazy { com.kaiharimoto.neue.ai.AiState(this) }
+    val ai: AiState by lazy { AiState(this) }
 
     /** The family pointer, Crop caption: one per window. */
     val cursor = FamilyCursor()
@@ -235,7 +301,7 @@ class NeueHolders(
     internal val holding = mutableMapOf<androidx.compose.ui.input.key.Key, DeskAction>()
 
     /** Every kit text field's focus, reported by the fields themselves (touch swarm, rec 6). */
-    val textFocus = com.kaiharimoto.neue.kit.TextFocus()
+    val textFocus = TextFocus()
 
     internal val echo = ActionEcho()
 
@@ -281,7 +347,7 @@ class NeueHolders(
     }
 
     /** The foil on every card face, on or off (the shiny button beside Groups, 1.0.15). */
-    fun toggleFoil() = neue.update { it.copy(foil = if (it.foil == com.kaiharimoto.neue.cards.Foils.OFF) com.kaiharimoto.neue.cards.Foils.HOLO else com.kaiharimoto.neue.cards.Foils.OFF) }
+    fun toggleFoil() = neue.update { it.copy(foil = if (it.foil == Foils.OFF) Foils.HOLO else Foils.OFF) }
 
     /** What is open, as `BackChain` reads it (touch swarm, rec 2): Esc and Android's Back share one chain. */
     private fun backFlags() = BackFlags(
@@ -363,8 +429,8 @@ fun rememberHolders(deps: AppDependencies, makeUpdates: (kotlinx.coroutines.Coro
             updates = makeUpdates(scope),
             art = art,
             shots = DeckShots(art, scope),
-            webs = com.kaiharimoto.neue.web.Webs(deps, scope),
-            prep = com.kaiharimoto.neue.prep.Prep(deps, scope),
+            webs = Webs(deps, scope),
+            prep = Prep(deps, scope),
         )
     }
 }
@@ -428,7 +494,7 @@ fun NeueEffects(h: NeueHolders) {
             h.art.start()
             // Ai's notes follow a deck into a web, and go with a web that is deleted (1.0.43).
             h.webs.onJoined = { from, name, web -> if (neue.prefs.ai.enabled) h.ai.foldIntoWeb(from, name, web) }
-            h.webs.onDeleted = { web -> h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.WEB, web)) }
+            h.webs.onDeleted = { web -> h.ai.files.delete(AiMemory.path(MemoryKind.WEB, web)) }
             onDispose {
                 h.art.stop()
                 h.layout.flush()
@@ -473,7 +539,7 @@ fun NeueEffects(h: NeueHolders) {
             snapshotFlow { h.webs.loaded && h.prep.loaded }.first { it }
             while (true) {
                 h.sync.syncNow(quiet = true)
-                kotlinx.coroutines.delay(com.kaiharimoto.neue.sync.SyncCenter.EVERY_MS)
+                kotlinx.coroutines.delay(SyncCenter.EVERY_MS)
             }
         }
         // …and a little after anything that travels changes: a deck saved, a setting, a web, prep, Ai's notes.
@@ -481,7 +547,7 @@ fun NeueEffects(h: NeueHolders) {
             if (!neue.ready) return@LaunchedEffect
             snapshotFlow {
                 listOf(
-                    h.decksReload, com.kaiharimoto.mastertool.core.sync.SyncedPrefs.extract(neue.prefs).contentHashCode(),
+                    h.decksReload, SyncedPrefs.extract(neue.prefs).contentHashCode(),
                     h.layout.preferences.format, h.webs.revision, h.prep.doc.hashCode(), h.ai.bookVersion, h.customArt.version,
                 )
             }.drop(1).collectLatest {
@@ -506,7 +572,7 @@ fun NeueEffects(h: NeueHolders) {
 private fun NeueWindowContent(h: NeueHolders) {
     val neue = h.neue
     // The groups' palette: read wherever a group is coloured, so set once here.
-    SideEffect { com.kaiharimoto.neue.cards.GroupMarkers.palette = com.kaiharimoto.neue.cards.GroupMarkers.byId(neue.prefs.groupPalette) }
+    SideEffect { GroupMarkers.palette = GroupMarkers.byId(neue.prefs.groupPalette) }
     val base = LocalDensity.current
     // What the app is running on and which way round (the phone, v1.3.5): the window's size
     // in physical dp, before the interface scale — a phone does not become a tablet by zoom.
@@ -514,21 +580,21 @@ private fun NeueWindowContent(h: NeueHolders) {
         Modifier.fillMaxSize().onSizeChanged { px ->
             val w = px.width / base.density
             val h2 = px.height / base.density
-            neue.form = neue.formOverride ?: com.kaiharimoto.mastertool.core.layout.FormFactor.of(w, h2, neue.touchFirst)
-            neue.posture = com.kaiharimoto.mastertool.core.layout.Posture.of(w, h2)
+            neue.form = neue.formOverride ?: FormFactor.of(w, h2, neue.touchFirst)
+            neue.posture = Posture.of(w, h2)
         },
     ) {
     // The foil follows the phone's tilt (v1.3.6), while it is on and there is foil to light.
     val tilt = com.kaiharimoto.neue.kit.rememberDeviceTilt(
-        on = neue.touchFirst && neue.prefs.foilTilt && neue.prefs.foil != com.kaiharimoto.neue.cards.Foils.OFF,
+        on = neue.touchFirst && neue.prefs.foilTilt && neue.prefs.foil != Foils.OFF,
     )
-    CompositionLocalProvider(com.kaiharimoto.neue.kit.LocalTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, com.kaiharimoto.neue.cards.LocalLimitMarks provides neue.prefs.limitMarks, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, com.kaiharimoto.neue.kit.LocalTouchFirst provides neue.touchFirst, com.kaiharimoto.neue.kit.LocalPhone provides neue.phone, com.kaiharimoto.neue.kit.LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai") else emptySet()), com.kaiharimoto.neue.kit.LocalTextFocus provides h.textFocus, com.kaiharimoto.neue.kit.LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), com.kaiharimoto.neue.kit.LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, com.kaiharimoto.neue.cards.LocalArts provides neue.prefs.arts, com.kaiharimoto.neue.cards.LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+    CompositionLocalProvider(LocalTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalLimitMarks provides neue.prefs.limitMarks, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, LocalTouchFirst provides neue.touchFirst, LocalPhone provides neue.phone, LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai") else emptySet()), LocalTextFocus provides h.textFocus, LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, LocalArts provides neue.prefs.arts, LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
-        neue.actingBy(finger = neue.touchFirst) { neue.felt(com.kaiharimoto.mastertool.core.haptics.DeskEvent.ART_STEPPED) }
-    }, com.kaiharimoto.neue.art.LocalCustomArt provides h.customArt) {
+        neue.actingBy(finger = neue.touchFirst) { neue.felt(DeskEvent.ART_STEPPED) }
+    }, LocalCustomArt provides h.customArt) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
-            com.kaiharimoto.neue.kit.ProvideTextMenus {
+            ProvideTextMenus {
                 Shell(h)
             }
         }
@@ -559,8 +625,8 @@ private fun Shell(h: NeueHolders) {
         // What is being fetched, and how far it has got (kai: "a progress bar indicating if the
         // program is downloading images or updating the card pool"). Read here, in the bar's
         // own scope, so the art's arrivals redraw the bar and not the window.
-        val work = com.kaiharimoto.mastertool.core.offline.Offline.readout(
-            pool = state.poolProgress ?: if (state.isSyncing) com.kaiharimoto.mastertool.core.data.PoolProgress.Asking else null,
+        val work = Offline.readout(
+            pool = state.poolProgress ?: if (state.isSyncing) PoolProgress.Asking else null,
             art = h.art.count,
             artRunning = h.art.running && neue.prefs.hdArt,
             problem = h.art.problem,
@@ -574,7 +640,7 @@ private fun Shell(h: NeueHolders) {
                 menu = { h.phoneMenu(it) },
                 working = work != null,
                 ai = if (neue.prefs.ai.enabled) {
-                    { _ -> com.kaiharimoto.neue.ai.avatar.AiBadge(h, height = 40.dp) }
+                    { _ -> AiBadge(h, height = 40.dp) }
                 } else {
                     null
                 },
@@ -593,7 +659,7 @@ private fun Shell(h: NeueHolders) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Ai's face and name in a box on every platform (1.0.63, kai: "on desktop the app is not
                         // the marquee"); its brain is in its panel now, not beside it in the bar.
-                        com.kaiharimoto.neue.ai.avatar.AiBadge(h, height = 32.dp)
+                        AiBadge(h, height = 32.dp)
                     }
                 }
             },
@@ -630,7 +696,7 @@ private fun Shell(h: NeueHolders) {
     // card, once, with the way to the rest.
     LaunchedEffect(neue.ready) {
         if (neue.ready && neue.touchFirst && !neue.prefs.touchIntroSeen) {
-            neue.note = Note(com.kaiharimoto.mastertool.core.input.DeskWords.TOUCH_INTRO, "All gestures", lastsMs = 12_000) { neue.helpOpen = true }
+            neue.note = Note(DeskWords.TOUCH_INTRO, "All gestures", lastsMs = 12_000) { neue.helpOpen = true }
             neue.update { it.copy(touchIntroSeen = true) }
         }
     }
@@ -668,11 +734,11 @@ private fun Shell(h: NeueHolders) {
                         when (page) {
                             Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds)
                             Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
-                            Page.SIDING -> com.kaiharimoto.neue.pages.SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
-                            Page.FORMAT -> com.kaiharimoto.neue.pages.FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
-                            Page.PREP -> com.kaiharimoto.neue.prep.PrepPage(h.prep, h.webs, state, neue, h.decksReload)
-                            Page.PRESENT -> com.kaiharimoto.neue.present.PresentPage(h)
-                            Page.DUEL -> com.kaiharimoto.neue.duel.DuelPage(h)
+                            Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
+                            Page.FORMAT -> FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
+                            Page.PREP -> PrepPage(h.prep, h.webs, state, neue, h.decksReload)
+                            Page.PRESENT -> PresentPage(h)
+                            Page.DUEL -> DuelPage(h)
                             Page.SETTINGS -> SettingsPage(
                                 state,
                                 neue,
@@ -699,7 +765,7 @@ private fun Shell(h: NeueHolders) {
                 // Ai's panel (1.0.43): docked beside every page, the page re-fitting beside it —
                 // in immersive mode too (1.0.46); on a phone it is a sheet.
                 if (neue.aiDocked) {
-                    com.kaiharimoto.neue.ai.AiPanel(h, Modifier.width((neue.prefs.ai.panelWidth / neue.prefs.scale).dp).fillMaxHeight())
+                    AiPanel(h, Modifier.width((neue.prefs.ai.panelWidth / neue.prefs.scale).dp).fillMaxHeight())
                 }
             }
             // Put away while the keyboard is up: the dock's field sits on the keyboard, not on the tabs.
@@ -759,36 +825,36 @@ private fun Shell(h: NeueHolders) {
                 )
                 // A drop that would be refused says so on the card itself, where the eye is.
                 if (h.drag.refused) {
-                    com.kaiharimoto.neue.kit.Hatch(Modifier.matchParentSize(), color = c.ink25)
+                    Hatch(Modifier.matchParentSize(), color = c.ink25)
                     Box(Modifier.align(Alignment.Center).background(c.paper).padding(horizontal = 4.dp)) {
-                        com.kaiharimoto.neue.kit.Micro("✕", color = c.ink)
+                        Micro("✕", color = c.ink)
                     }
                 }
             }
         }
 
         // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
-        if (neue.aiSheet) com.kaiharimoto.neue.ai.AiPanel(h, Modifier.fillMaxSize(), phone = true)
+        if (neue.aiSheet) AiPanel(h, Modifier.fillMaxSize(), phone = true)
         // The setup offered on opening (1.0.69): under Ai's own setup, which its Ai step can open.
-        if (neue.starting) com.kaiharimoto.neue.start.StartScreen(h, Modifier.fillMaxSize())
+        if (neue.starting) StartScreen(h, Modifier.fillMaxSize())
         // Ai's first setup takes the whole window, bars and all (1.0.45).
-        if (neue.aiSetup) com.kaiharimoto.neue.ai.AiSetupScreen(h.ai, Modifier.fillMaxSize())
+        if (neue.aiSetup) AiSetupScreen(h.ai, Modifier.fillMaxSize())
         // The reader's guide, read as a book over the whole window (1.0.67); the card viewer opens over it.
-        neue.reading?.let { com.kaiharimoto.neue.ai.reader.BookReader(h, it, Modifier.fillMaxSize()) }
+        neue.reading?.let { BookReader(h, it, Modifier.fillMaxSize()) }
         if (neue.prefs.ai.enabled) {
-            com.kaiharimoto.neue.ai.avatar.AiFaceClock(h.ai)
-            com.kaiharimoto.neue.ai.MemoryDialog(h.ai)
-            com.kaiharimoto.neue.ai.ReviewDialog(h.ai)
-            com.kaiharimoto.neue.ai.TuneLauncher(h.ai)
-            com.kaiharimoto.neue.ai.ProfileLauncher(h.ai)
-            com.kaiharimoto.neue.ai.LivingDocDialog(h.ai)
-            com.kaiharimoto.neue.ai.PictureDialog(h.ai)
-            com.kaiharimoto.neue.ai.ContextPanel(h.ai)
-            com.kaiharimoto.neue.ai.VoiceDialog(h.ai)
-            com.kaiharimoto.neue.ai.QuickSettings(h.ai)
+            AiFaceClock(h.ai)
+            MemoryDialog(h.ai)
+            ReviewDialog(h.ai)
+            TuneLauncher(h.ai)
+            ProfileLauncher(h.ai)
+            LivingDocDialog(h.ai)
+            PictureDialog(h.ai)
+            ContextPanel(h.ai)
+            VoiceDialog(h.ai)
+            QuickSettings(h.ai)
         } else {
             // The duel's push-to-talk asks for the speech model whether or not Ai is on (1.0.87).
-            if (h.ai.voiceForDuel) com.kaiharimoto.neue.ai.VoiceDialog(h.ai)
+            if (h.ai.voiceForDuel) VoiceDialog(h.ai)
         }
         if (neue.prefs.ai.enabled) {
             if (h.ai.forgetAsked) {
@@ -810,7 +876,7 @@ private fun Shell(h: NeueHolders) {
         }
         if (neue.helpOpen) HelpDialog { neue.helpOpen = false }
         neue.qr?.let { shown ->
-            com.kaiharimoto.neue.qr.QrDialog(
+            QrDialog(
                 shown,
                 onCopy = {
                     CardActions.copy(shown.ydke)
@@ -848,9 +914,9 @@ private fun Shell(h: NeueHolders) {
                         scope.launch {
                             h.deps.deckRepository.delete(id)
                             // Ai's notes on the deck go with it (1.0.43).
-                            h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.DECK, id))
-                            h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, id))
-                            h.ai.files.delete(com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(id))
+                            h.ai.files.delete(AiMemory.path(MemoryKind.DECK, id))
+                            h.ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
+                            h.ai.files.delete(GuideBook.path(id))
                             h.ai.files.deleteReports(id)
                             if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                 neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
@@ -887,19 +953,19 @@ private fun Shell(h: NeueHolders) {
                 drawRect(c.ink, box.topLeft, box.size, style = Stroke(1.dp.toPx()))
             }
         }
-        com.kaiharimoto.neue.builder.SearchStudio(state, neue)
+        SearchStudio(state, neue)
         CardViewer(state, neue)
         // Over the viewer it was opened from (v1.3.6).
         com.kaiharimoto.neue.builder.Showcase(state, neue)
         // Over the viewer and the pop-out, whose art row opens it (1.0.34).
         neue.cropping?.let { (card, picture) ->
-            com.kaiharimoto.neue.art.ArtCropDialog(
+            ArtCropDialog(
                 card = card,
                 initial = picture,
                 // The printing whose frame is kept: the artwork chosen, when the pool knows it.
-                base = com.kaiharimoto.mastertool.core.model.CardArt.show(
+                base = CardArt.show(
                     card,
-                    neue.prefs.arts[card.id.value]?.takeIf { it > 0 }?.let { com.kaiharimoto.mastertool.core.model.CardId(it) },
+                    neue.prefs.arts[card.id.value]?.takeIf { it > 0 }?.let { CardId(it) },
                 ),
                 custom = h.customArt,
                 library = h.art,
@@ -913,7 +979,7 @@ private fun Shell(h: NeueHolders) {
             )
         }
         // A presentation playing, over everything but its own menus (1.0.70).
-        com.kaiharimoto.neue.present.PresentOverlay(h)
+        PresentOverlay(h)
         MenuLayer(neue.menu) { neue.menu = null }
         OverlayLayer(h.overlays)
 
@@ -998,7 +1064,7 @@ private fun Toasts(h: NeueHolders, modifier: Modifier) {
 private fun UpdateDialog(updates: NeueUpdates) {
     val update = updates.available ?: return
     val c = Mu.colors
-    val inPlace = update.installer != null && Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.WINDOWS
+    val inPlace = update.installer != null && Platform.os == DesktopOs.WINDOWS
     MuDialog(
         title = "Neue Master Tool ${update.versionName}",
         onDismiss = { updates.dialogOpen = false },
@@ -1043,8 +1109,8 @@ private fun UpdateDialog(updates: NeueUpdates) {
 }
 
 /** An arrangement in the words its switch shows. */
-internal fun arrangementWords(a: com.kaiharimoto.mastertool.core.layout.GroupArrangement): String = when (a) {
-    com.kaiharimoto.mastertool.core.layout.GroupArrangement.AS_IS -> "As is"
-    com.kaiharimoto.mastertool.core.layout.GroupArrangement.FITTED -> "Fitted"
-    com.kaiharimoto.mastertool.core.layout.GroupArrangement.SEPARATE -> "Separate"
+internal fun arrangementWords(a: GroupArrangement): String = when (a) {
+    GroupArrangement.AS_IS -> "As is"
+    GroupArrangement.FITTED -> "Fitted"
+    GroupArrangement.SEPARATE -> "Separate"
 }

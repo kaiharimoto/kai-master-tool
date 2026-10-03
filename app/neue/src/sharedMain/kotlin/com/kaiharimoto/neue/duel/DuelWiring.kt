@@ -1,9 +1,11 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DropSpot
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelDrop
+import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
@@ -141,7 +143,7 @@ private val DIGITS = mapOf(
  * Y and Shift Y (1.0.86): the log's first cue button, whatever it is now, or Catch up — at a table Ai sits at. While
  * Ai is busy the key says how to stop it rather than queue a cue nobody pressed a button for.
  */
-private fun answerAi(h: NeueHolders, game: com.kaiharimoto.mastertool.core.duel.DuelGame, catching: Boolean) {
+private fun answerAi(h: NeueHolders, game: DuelGame, catching: Boolean) {
     if (h.duel.replay != null) return
     // No Ai at this table (1.0.90): Y is No response across the hot-seat while a chain stands, as DUEL_PASS is with Ai off.
     if (!aiAtTable(h)) {
@@ -184,7 +186,7 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.verbStrip -> d.verbStrip = false
         d.verbsOpen -> d.verbsOpen = false
         // Then Ai thinking at the table stops, and the moves it was playing out with it.
-        aiAtTable(h) && h.ai.running && h.ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL -> {
+        aiAtTable(h) && h.ai.running && h.ai.session?.mode == AiSession.MODE_DUEL -> {
             h.ai.stop()
             if (d.playing) d.stopRequested = true
         }

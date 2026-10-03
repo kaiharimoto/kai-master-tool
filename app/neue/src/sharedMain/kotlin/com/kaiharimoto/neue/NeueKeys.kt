@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.input.KeyChord
+import com.kaiharimoto.mastertool.core.layout.GroupArrangement
 import com.kaiharimoto.neue.ai.toggleVoice
 import com.kaiharimoto.neue.ai.toggleTalk
 import androidx.compose.ui.input.key.KeyEvent
@@ -49,7 +51,7 @@ fun NeueHolders.onKey(event: KeyEvent): Boolean {
     val context = deskContext()
     // Command mode (1.0.87, the red team): in a Spotlight a voice filled — or one listening — M is the voice key
     // still, held to speak again ("yes"), never an m typed and repeated into the line.
-    if (neue.page == Page.DUEL && chord == com.kaiharimoto.mastertool.core.input.KeyChord("m") && !context.overlayOpen && !neue.hasTop) {
+    if (neue.page == Page.DUEL && chord == KeyChord("m") && !context.overlayOpen && !neue.hasTop) {
         val spot = duel.spotlight
         // Only while the box holds words heard (an edit makes them typed) and no other field has the keys: an m typed
         // into the chat beside an open box is an m (the red team).
@@ -90,7 +92,7 @@ fun NeueHolders.onKey(event: KeyEvent): Boolean {
  * A letter that is no duel key, typed at the table (1.0.87, the Spotlight): the box opens holding it, so a move is
  * typed straight onto the table. Only with nothing covering the page and no field taking the keys.
  */
-private fun NeueHolders.spotlightOn(chord: com.kaiharimoto.mastertool.core.input.KeyChord, context: com.kaiharimoto.mastertool.core.input.DeskContext): Boolean {
+private fun NeueHolders.spotlightOn(chord: KeyChord, context: DeskContext): Boolean {
     if (neue.page != Page.DUEL || context.textInputFocused || context.overlayOpen || neue.hasTop) return false
     if (chord.ctrl || chord.alt || chord.key.length != 1 || chord.key[0] !in 'a'..'z') return false
     if (duel.shown == null || duel.replay != null) return false
@@ -196,7 +198,7 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.TOGGLE_KEYS -> setGroups(!groupsOn(state))
         DeskAction.GROUP_ARRANGEMENT -> {
             // As is, fitted, separate, round (1.0.37); the groups come out if they were not.
-            val all = com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries
+            val all = GroupArrangement.entries
             val next = all[(all.indexOf(neue.prefs.arrangement) + 1) % all.size]
             neue.update { it.copy(groupArrangement = next.name) }
             if (!groupsOn(state)) setGroups(true)

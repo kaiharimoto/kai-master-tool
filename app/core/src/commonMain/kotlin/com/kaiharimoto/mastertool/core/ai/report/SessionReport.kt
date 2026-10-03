@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.report
 
+import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -164,12 +166,12 @@ data class GuideDoc(val title: String, val sections: List<Section>) {
 object SessionQuestions {
     private const val ANSWERED = "The person answered: "
 
-    fun of(turns: List<com.kaiharimoto.mastertool.core.ai.ChatTurn>): List<SessionReport.Asked> {
+    fun of(turns: List<ChatTurn>): List<SessionReport.Asked> {
         val parts = turns.flatMap { it.parts }
-        val answers = parts.filterIsInstance<com.kaiharimoto.mastertool.core.ai.Part.ToolResult>()
+        val answers = parts.filterIsInstance<Part.ToolResult>()
             .filter { it.name == "ask_user" && !it.isError }
             .associate { it.id to it.content.removePrefix(ANSWERED).trim() }
-        return parts.filterIsInstance<com.kaiharimoto.mastertool.core.ai.Part.ToolUse>()
+        return parts.filterIsInstance<Part.ToolUse>()
             .filter { it.name == "ask_user" }
             .mapNotNull { use ->
                 val question = (use.input["question"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.trim().orEmpty()
@@ -178,6 +180,6 @@ object SessionQuestions {
     }
 
     /** Whether Ai has filed its report in [turns] already. */
-    fun reported(turns: List<com.kaiharimoto.mastertool.core.ai.ChatTurn>): Boolean =
-        turns.any { t -> t.parts.any { it is com.kaiharimoto.mastertool.core.ai.Part.ToolUse && it.name == "session_report" } }
+    fun reported(turns: List<ChatTurn>): Boolean =
+        turns.any { t -> t.parts.any { it is Part.ToolUse && it.name == "session_report" } }
 }

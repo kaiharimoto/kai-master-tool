@@ -70,6 +70,7 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.ScrollbarFor
+import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.Tag
 import com.kaiharimoto.neue.kit.animatedColor
@@ -364,7 +365,7 @@ private fun WebBody(
         }
         val view = if (webs.showMatchups) WebView.MATCHUPS else WebView.FIELD
         Row(Modifier.fillMaxWidth().padding(horizontal = gutter).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            com.kaiharimoto.neue.kit.Segmented(view, WebView.entries, { it.title }, { webs.showMatchups = it == WebView.MATCHUPS }, small = true)
+            Segmented(view, WebView.entries, { it.title }, { webs.showMatchups = it == WebView.MATCHUPS }, small = true)
             if (!phone) {
                 Small(
                     when {

@@ -1,5 +1,11 @@
 package com.kaiharimoto.mastertool.core.prefs
 
+import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.layout.GroupArrangement
+import com.kaiharimoto.mastertool.core.present.PresentPrefs
+import com.kaiharimoto.mastertool.core.start.StartPrefs
+import com.kaiharimoto.mastertool.core.sync.SyncPrefs
 import kotlinx.serialization.Serializable
 
 /**
@@ -112,7 +118,7 @@ data class AiPrefs(
         connections = connections.distinctBy { it.id },
         showReasoning = showReasoning.takeIf { it in REASONINGS } ?: REASONING_FOLDED,
         tuneIntensity = tuneIntensity.takeIf { it in listOf("quick", "standard", "deep") } ?: "standard",
-        voiceModel = voiceModel.takeIf { id -> com.kaiharimoto.mastertool.core.ai.voice.VoiceModel.entries.any { it.id == id } } ?: com.kaiharimoto.mastertool.core.ai.voice.VoiceModel.DEFAULT.id,
+        voiceModel = voiceModel.takeIf { id -> VoiceModel.entries.any { it.id == id } } ?: VoiceModel.DEFAULT.id,
         speakReplies = speakReplies.takeIf { it in listOf(SPEAK_IN_TALK, SPEAK_NEVER) } ?: SPEAK_IN_TALK,
         speechRate = if (speechRate.isFinite()) speechRate.coerceIn(0.5f, 2f) else 1f,
     )
@@ -305,18 +311,18 @@ data class NeuePreferences(
     /** The assistant (1.0.43): on or off, its name, its connections, its panel. */
     val ai: AiPrefs = AiPrefs(),
     /** Where this device syncs to (1.0.68): this device's own, never synced. */
-    val sync: com.kaiharimoto.mastertool.core.sync.SyncPrefs = com.kaiharimoto.mastertool.core.sync.SyncPrefs(),
+    val sync: SyncPrefs = SyncPrefs(),
     /** The setup offered on opening (1.0.69): the version last opened here, and the steps done. This device's own. */
-    val start: com.kaiharimoto.mastertool.core.start.StartPrefs = com.kaiharimoto.mastertool.core.start.StartPrefs(),
+    val start: StartPrefs = StartPrefs(),
     /** Present (1.0.70): how a new deck profile starts — style, theme, camera, the creator's name. */
-    val present: com.kaiharimoto.mastertool.core.present.PresentPrefs = com.kaiharimoto.mastertool.core.present.PresentPrefs(),
+    val present: PresentPrefs = PresentPrefs(),
     /**
      * The 1 and 2 squares on Limited and Semi-Limited cards (1.0.73). Off by default, on kai's word:
      * players know the list. A Forbidden card's 0 always shows — the deck cannot be played with it.
      */
     val limitMarks: Boolean = false,
     /** Duel (1.0.74): one table or two, what the hot-seat shows, the decks chosen last. */
-    val duel: com.kaiharimoto.mastertool.core.duel.DuelPrefs = com.kaiharimoto.mastertool.core.duel.DuelPrefs(),
+    val duel: DuelPrefs = DuelPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's
@@ -341,7 +347,7 @@ data class NeuePreferences(
         sidingView = if (sidingView == SIDING_LIST) SIDING_LIST else SIDING_ART,
         deckZoom = if (deckZoom.isFinite()) deckZoom.coerceIn(MIN_ZOOM, 1f) else 1f,
         groupGap = if (groupGap.isFinite()) groupGap.coerceIn(MIN_GAP, MAX_GAP) else 1f,
-        groupArrangement = groupArrangement.takeIf { name -> com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries.any { it.name == name } } ?: "FITTED",
+        groupArrangement = groupArrangement.takeIf { name -> GroupArrangement.entries.any { it.name == name } } ?: "FITTED",
         covers = covers
             .mapValues { (_, cards) -> cards.distinct().takeLast(COVERS) }
             .filterValues { it.isNotEmpty() },
@@ -364,9 +370,9 @@ data class NeuePreferences(
 
 
     /** [groupArrangement], read. */
-    val arrangement: com.kaiharimoto.mastertool.core.layout.GroupArrangement
-        get() = com.kaiharimoto.mastertool.core.layout.GroupArrangement.entries.firstOrNull { it.name == groupArrangement }
-            ?: com.kaiharimoto.mastertool.core.layout.GroupArrangement.FITTED
+    val arrangement: GroupArrangement
+        get() = GroupArrangement.entries.firstOrNull { it.name == groupArrangement }
+            ?: GroupArrangement.FITTED
 
     companion object {
         const val KEY = "neue.ui"

@@ -4,11 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.layout.Revealed
 import com.kaiharimoto.mastertool.core.present.SlideLayouts
+import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.platform.pastedPicture
 import com.kaiharimoto.neue.present.play.PresentStage
+import com.kaiharimoto.neue.present.play.PresenterConsole
 
 /** Present's keys (1.0.70, `DeskShortcuts`' Making slides and Presenting rows), run on the window's holders. */
 internal fun runPresent(h: NeueHolders, action: DeskAction) {
@@ -30,10 +33,10 @@ internal fun runPresent(h: NeueHolders, action: DeskAction) {
         DeskAction.PRESENT_SELECT_ALL -> selectAll(h)
         DeskAction.PRESENT_GROUP -> group(h, true)
         DeskAction.PRESENT_UNGROUP -> group(h, false)
-        DeskAction.BRING_FORWARD -> reorder(h, com.kaiharimoto.mastertool.core.present.edit.PresentEdits.FORWARD)
-        DeskAction.SEND_BACKWARD -> reorder(h, com.kaiharimoto.mastertool.core.present.edit.PresentEdits.BACKWARD)
-        DeskAction.BRING_TO_FRONT -> reorder(h, com.kaiharimoto.mastertool.core.present.edit.PresentEdits.FRONT)
-        DeskAction.SEND_TO_BACK -> reorder(h, com.kaiharimoto.mastertool.core.present.edit.PresentEdits.BACK)
+        DeskAction.BRING_FORWARD -> reorder(h, PresentEdits.FORWARD)
+        DeskAction.SEND_BACKWARD -> reorder(h, PresentEdits.BACKWARD)
+        DeskAction.BRING_TO_FRONT -> reorder(h, PresentEdits.FRONT)
+        DeskAction.SEND_TO_BACK -> reorder(h, PresentEdits.BACK)
         DeskAction.NUDGE_LEFT -> nudge(h, -2f, 0f)
         DeskAction.NUDGE_RIGHT -> nudge(h, 2f, 0f)
         DeskAction.NUDGE_UP -> nudge(h, 0f, -2f)
@@ -96,9 +99,9 @@ internal fun PresentOverlay(h: NeueHolders) {
     DisposableEffect(pl) {
         if (!h.neue.immersive) {
             h.neue.immersive = true
-            h.neue.revealed = com.kaiharimoto.mastertool.core.layout.Revealed.NONE
+            h.neue.revealed = Revealed.NONE
         }
         onDispose { if (!wasImmersive) h.neue.immersive = false }
     }
-    if (h.present.audience && h.present.screens > 1) com.kaiharimoto.neue.present.play.PresenterConsole(h, ctx) else PresentStage(h.present, ctx)
+    if (h.present.audience && h.present.screens > 1) PresenterConsole(h, ctx) else PresentStage(h.present, ctx)
 }

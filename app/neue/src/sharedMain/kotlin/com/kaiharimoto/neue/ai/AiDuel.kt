@@ -11,8 +11,13 @@ import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRecorder
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
+import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
+import com.kaiharimoto.mastertool.core.duel.ai.Secrets
 import com.kaiharimoto.mastertool.core.duel.nameOf
+import com.kaiharimoto.mastertool.core.duel.replay.Past
+import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
+import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import kotlinx.serialization.json.JsonObject
@@ -84,7 +89,7 @@ internal class AiDuel(private val h: NeueHolders) {
             val g = duels.game
             val word = op.trim().substringBefore(' ').lowercase()
             if (g != null && (word == "say" || word == "chat" || word == "note" || word == "lock")) {
-                word + " " + com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact(op.trim().substringAfter(' ', ""), g.state, 1 - mineNow, mineNow, duels.catalog).text
+                word + " " + Secrets.redact(op.trim().substringAfter(' ', ""), g.state, 1 - mineNow, mineNow, duels.catalog).text
             } else op
         }
         if (ops.isEmpty()) return fail("No ops to play.")
@@ -116,8 +121,8 @@ internal class AiDuel(private val h: NeueHolders) {
 
     private fun past(at: String, ops: List<String>, seat: Int): MetaAnswer {
         val g = duels.game!!
-        val (turn, phase) = com.kaiharimoto.mastertool.core.duel.replay.Past.parse(at) ?: return fail("“$at” is not a turn and phase: say it like 't2 ep'.")
-        val index = com.kaiharimoto.mastertool.core.duel.replay.Past.indexOf(g.header, g.played, turn, phase)
+        val (turn, phase) = Past.parse(at) ?: return fail("“$at” is not a turn and phase: say it like 't2 ep'.")
+        val index = Past.indexOf(g.header, g.played, turn, phase)
             ?: return fail("Turn $turn's ${phase.label} Phase is now or still to come: play the moves without 'at'.")
         val before = g.stateAt(index)
         val plan = ComboRunner.plan(before, seat, ops, duels.catalog)
@@ -125,7 +130,7 @@ internal class AiDuel(private val h: NeueHolders) {
         duels.aiActing = true
         val put = try { duels.insertPast(index, plan.steps.flatMap { it.second }, seat) } finally { duels.aiActing = false }
         if (!put) return fail("Nothing was put in: ${duels.problem ?: "the table refused it"}.")
-        val struck = duels.game!!.let { now -> com.kaiharimoto.mastertool.core.duel.DuelSetup.fold(now.header, now.played).second.size }
+        val struck = duels.game!!.let { now -> DuelSetup.fold(now.header, now.played).second.size }
         val viewer = DuelBrief.viewer(prefs.aiKnowledge, aiSeat())
         val after = DuelBrief.describe(duels.game!!.state, viewer, duels.catalog, g.header.seed, aiSeat(), duels.tally(viewer), duels.rulings)
         return ok(
@@ -172,7 +177,7 @@ internal class AiDuel(private val h: NeueHolders) {
 
     private suspend fun setup(i: JsonObject): MetaAnswer {
         val b = h.builder
-        suspend fun deck(id: String?): Triple<String?, String, com.kaiharimoto.mastertool.core.model.Deck>? =
+        suspend fun deck(id: String?): Triple<String?, String, Deck>? =
             if (id == null) Triple(b.deckId, b.deckName, b.deck)
             else h.deps.deckRepository.byId(id)?.let { Triple(it.entry.id, it.entry.name, it.entry.deck) }
         val mine = deck(ToolArgs.string(i, "deck_id")) ?: return fail("No deck ${ToolArgs.string(i, "deck_id")}.")
@@ -267,7 +272,7 @@ internal class AiDuel(private val h: NeueHolders) {
             val q = ToolArgs.string(i, "card")?.trim().orEmpty()
             val s = duels.game?.state
             val found = if (q.isBlank() || s == null) null
-            else (com.kaiharimoto.mastertool.core.duel.text.DuelCommand.lookup(q, s, aiSeat(), duels.catalog, everywhere = true) as? com.kaiharimoto.mastertool.core.duel.text.DuelCommand.Lookup.One)?.uid?.let { s.cards[it] }
+            else (DuelCommand.lookup(q, s, aiSeat(), duels.catalog, everywhere = true) as? DuelCommand.Lookup.One)?.uid?.let { s.cards[it] }
             val r = duels.keepRuling(found?.code?.takeIf { it != 0 }, found?.let { duels.catalog.nameOf(it) } ?: q.ifBlank { null }, text)
             ok("Kept house ruling ${r.id}: ${r.card?.let { "$it: " } ?: ""}${r.text}", "Kept a house ruling")
         }
@@ -281,7 +286,7 @@ internal class AiDuel(private val h: NeueHolders) {
     /** Ai's response triggers (1.0.85): watches the table checks each move against, waking Ai only on a match. */
     private fun watch(i: JsonObject): MetaAnswer {
         val g = duels.game ?: return fail("There is no duel on the table.")
-        fun listed() = duels.liveWatches().joinToString("\n") { "- " + com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.describe(it) }
+        fun listed() = duels.liveWatches().joinToString("\n") { "- " + DuelTriggers.describe(it) }
             .ifBlank { "No watches." }
         return when (ToolArgs.string(i, "action")) {
             "list" -> ok(listed() + if (!prefs.aiTriggers) "\n(The person has turned response triggers off: watches do not fire.)" else "", "Read its watches")
@@ -291,7 +296,7 @@ internal class AiDuel(private val h: NeueHolders) {
             }
             "set" -> {
                 if (g.state.solo) return fail("One player's table: there is no opponent to watch.")
-                val (w, problem) = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.make(
+                val (w, problem) = DuelTriggers.make(
                     on = ToolArgs.strings(i, "on"),
                     by = ToolArgs.string(i, "by").orEmpty(),
                     card = ToolArgs.string(i, "card").orEmpty(),

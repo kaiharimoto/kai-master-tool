@@ -3,7 +3,11 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
+import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.DeckSnapshot
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.SlideLayouts
@@ -48,7 +52,7 @@ internal class AiPresent(private val h: NeueHolders) {
         else -> null
     }
 
-    private fun cardName(id: Int): String? = state.index.byId(com.kaiharimoto.mastertool.core.model.CardId(id))?.name
+    private fun cardName(id: Int): String? = state.index.byId(CardId(id))?.name
 
     private fun cardId(name: String): Int? = when (val r = CardWords.resolve(name, state.index)) {
         is Resolved.Found -> r.card.id.value
@@ -205,7 +209,7 @@ internal class AiPresent(private val h: NeueHolders) {
         } else null
         val style = ToolArgs.string(op, "style")?.let(PresentWriter::styleOf) ?: prefs.present.style
         val theme = ToolArgs.string(op, "theme")?.let { t -> Themes.named(t)?.id }
-            ?: prefs.present.startTheme(prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK)
+            ?: prefs.present.startTheme(prefs.theme == NeueTheme.INK)
         val base = WebcamZone(enabled = prefs.present.webcam, preset = prefs.present.webcamPreset)
         val webcam = (op["webcam"] as? JsonObject)?.let { w -> PresentWriter.webcamOf(base, w).getOrElse { throw ModuleProblem("create: ${it.message}") } } ?: base
         val enabled = webcam.enabled
@@ -221,7 +225,7 @@ internal class AiPresent(private val h: NeueHolders) {
         return p
     }
 
-    private fun snap(deck: com.kaiharimoto.mastertool.core.model.Deck, groups: com.kaiharimoto.mastertool.core.deck.DeckGroups, name: String, id: String?, now: Long): DeckSnapshot {
+    private fun snap(deck: Deck, groups: DeckGroups, name: String, id: String?, now: Long): DeckSnapshot {
         val prefs = h.neue.prefs
         val ids = (deck.main + deck.extra + deck.side).map { it.value }.toSet()
         return PresentEdits.snapshot(

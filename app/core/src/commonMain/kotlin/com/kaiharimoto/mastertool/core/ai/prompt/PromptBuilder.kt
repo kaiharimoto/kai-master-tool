@@ -1,6 +1,9 @@
 package com.kaiharimoto.mastertool.core.ai.prompt
 
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryScope
+import com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer
+import com.kaiharimoto.mastertool.core.ai.skills.DeckSkills
 
 /**
  * Ai's instructions. Two parts, kept apart for the cache's sake:
@@ -52,12 +55,12 @@ object PromptBuilder {
         appendLine("- Never work numbers out in your head: odds with hand_odds, anything else with calculate. A ruling you are not sure of: the rulings tool.")
         if (s.viaMcp) appendLine("- The app's tools are the ones named `mcp__neue__…`. You have no shell and no file access; you do not need them.")
         appendLine()
-        appendLine(com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer.TEXT.trim().replace("\n## ", "\n### ").replaceFirst("# Yu-Gi-Oh! TCG rules primer", "## The rules of the game"))
+        appendLine(RulesPrimer.TEXT.trim().replace("\n## ", "\n### ").replaceFirst("# Yu-Gi-Oh! TCG rules primer", "## The rules of the game"))
         appendLine()
         appendLine("## The person")
         appendLine(s.userMemory.trim().ifEmpty { "(nothing yet)" })
         appendLine()
-        appendLine(com.kaiharimoto.mastertool.core.ai.skills.DeckSkills.DUEL_TABLE.trim().replaceFirst("# At the duel table", "## At the duel table"))
+        appendLine(DeckSkills.DUEL_TABLE.trim().replaceFirst("# At the duel table", "## At the duel table"))
         appendLine()
         appendLine("## Talking at the table")
         appendLine(
@@ -129,7 +132,7 @@ object PromptBuilder {
         appendLine()
         // The game's rules, always (1.0.47, kai: "the AI tends to forget the game rules"): in the
         // app's own words, since Konami's rulebook may not be copied; card rulings come from a tool.
-        appendLine(com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer.TEXT.trim().replace("\n## ", "\n### ").replaceFirst("# Yu-Gi-Oh! TCG rules primer", "## The rules of the game"))
+        appendLine(RulesPrimer.TEXT.trim().replace("\n## ", "\n### ").replaceFirst("# Yu-Gi-Oh! TCG rules primer", "## The rules of the game"))
         appendLine("- A ruling you are not sure of: check it with the rulings tool and say so; never invent one. The edge cases are in the skill game-rules.")
         appendLine()
         appendLine("## Memory")
@@ -235,7 +238,7 @@ object PromptBuilder {
     fun context(lines: List<String>, scope: MemoryScope?, notes: String?, scopeChanged: Boolean): String = buildString {
         lines.forEach { appendLine(it) }
         if (scope != null && scopeChanged) {
-            val what = if (scope.kind == com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.WEB) "web" else "deck"
+            val what = if (scope.kind == MemoryKind.WEB) "web" else "deck"
             appendLine()
             appendLine("Your notes on the $what “${scope.name}” (memory scope $what):")
             appendLine(notes?.trim()?.takeIf { it.isNotEmpty() } ?: "(none yet)")

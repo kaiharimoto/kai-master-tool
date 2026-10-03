@@ -6,6 +6,12 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
+import com.kaiharimoto.mastertool.core.duel.SeatSetup
+import com.kaiharimoto.mastertool.core.duel.net.DuelHost
+import com.kaiharimoto.mastertool.core.duel.net.DuelMirror
+import com.kaiharimoto.mastertool.core.duel.net.Line
+import com.kaiharimoto.mastertool.core.duel.net.PairCode
+import com.kaiharimoto.mastertool.core.duel.net.Windows
 import com.kaiharimoto.neue.duel.Duels.NetRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,7 +30,7 @@ internal class DuelNet(private val d: Duels) {
     var peer by mutableStateOf<String?>(null)
     /** The guest's table: the host's duel as its seat sees it, rebuilt from every update. */
     var remote by mutableStateOf<DuelGame?>(null)
-    var remoteLines by mutableStateOf<List<com.kaiharimoto.mastertool.core.duel.net.Line>>(emptyList())
+    var remoteLines by mutableStateOf<List<Line>>(emptyList())
     /** Who a response window waits on, as the guest was told. */
     var remoteWaiting by mutableStateOf<Int?>(null)
     /** A seat asking to take back its last move, for the other player to answer. */
@@ -32,11 +38,11 @@ internal class DuelNet(private val d: Duels) {
     /** The next move goes ahead though a response window waits ("Go on anyway"). */
     var forceNext = false
     /** This player's own response windows, set by the page from its settings. */
-    var myWindows: String = com.kaiharimoto.mastertool.core.duel.net.Windows.ACTIVATIONS
-    private var guestWindows: String = com.kaiharimoto.mastertool.core.duel.net.Windows.ACTIVATIONS
+    var myWindows: String = Windows.ACTIVATIONS
+    private var guestWindows: String = Windows.ACTIVATIONS
     private var hosting: DuelHosting? = null
     private var link: DuelLink? = null
-    private var hostSeat: com.kaiharimoto.mastertool.core.duel.SeatSetup? = null
+    private var hostSeat: SeatSetup? = null
     private var guestToken: String? = null
     /** The duel [guestToken] sits in: a token is never a seat at another duel (1.0.85). */
     private var guestDuel: String? = null
@@ -65,7 +71,7 @@ internal class DuelNet(private val d: Duels) {
     fun dragActor(): Int? = if (role == NetRole.GUEST) mySeat else null
 
     /** Opens a table on the local network with [mine] at the host's seat; the code to share comes back in [netCode]. */
-    fun host(mine: com.kaiharimoto.mastertool.core.duel.SeatSetup) {
+    fun host(mine: SeatSetup) {
         leave()
         role = NetRole.HOST
         hostSeat = mine
@@ -100,7 +106,7 @@ internal class DuelNet(private val d: Duels) {
         val h = hosting ?: return
         when (w) {
             is com.kaiharimoto.mastertool.core.duel.net.Wire.Hello -> {
-                com.kaiharimoto.mastertool.core.duel.net.DuelHost.knows(w, h.secret)?.let { why ->
+                DuelHost.knows(w, h.secret)?.let { why ->
                     l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Rejected(why)); l.close(); link = null; return
                 }
                 // A guest who sat down before comes back to the duel in play — by its token, or, when its app
@@ -118,7 +124,7 @@ internal class DuelNet(private val d: Duels) {
                         DuelHeader(
                             id = "n${Duels.now()}",
                             seed = java.security.SecureRandom().nextLong(),
-                            seats = listOf(mine, com.kaiharimoto.mastertool.core.duel.SeatSetup(w.name.ifBlank { "Guest" }, w.main, w.extra, null, w.deckName)),
+                            seats = listOf(mine, SeatSetup(w.name.ifBlank { "Guest" }, w.main, w.extra, null, w.deckName)),
                             created = Duels.now(),
                             // The dice decide who goes first over the network too (1.0.87): each player throws their own.
                             openingRoll = d.opener.openingRoll,
@@ -136,9 +142,9 @@ internal class DuelNet(private val d: Duels) {
             }
             is com.kaiharimoto.mastertool.core.duel.net.Wire.Intent -> {
                 val g = d.game ?: return
-                val (resolved, why) = com.kaiharimoto.mastertool.core.duel.net.DuelHost.resolve(g.state, 1, g.header.seed, w.actions)
+                val (resolved, why) = DuelHost.resolve(g.state, 1, g.header.seed, w.actions)
                 if (resolved == null) { l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Refused(w.seq, why ?: "No")); return }
-                val r = com.kaiharimoto.mastertool.core.duel.net.DuelHost.act(g, 1, resolved, windows(), w.force, Duels.now())
+                val r = DuelHost.act(g, 1, resolved, windows(), w.force, Duels.now())
                 if (!r.ok) { l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Refused(w.seq, r.problem ?: "No")); return }
                 d.game = r.game
                 d.save()
@@ -163,7 +169,7 @@ internal class DuelNet(private val d: Duels) {
 
     fun hostAct(actions: List<DuelAction>, seat: Int): Boolean {
         val g = d.game ?: return false
-        val r = com.kaiharimoto.mastertool.core.duel.net.DuelHost.act(g, seat, actions, windows(), forceNext, Duels.now())
+        val r = DuelHost.act(g, seat, actions, windows(), forceNext, Duels.now())
         forceNext = false
         // A move made after asking to take back the last one: the ask is over.
         if (actions.any { !it.social }) hostAskedTakeBack = false
@@ -179,13 +185,13 @@ internal class DuelNet(private val d: Duels) {
         val g = d.game ?: return
         val l = link ?: return
         sentTo = minOf(sentTo, g.cursor)
-        l.send(com.kaiharimoto.mastertool.core.duel.net.DuelHost.update(g, 1, sentTo, g.header.seed, d.catalog, takeBackFrom, folds = d.folds(g)))
+        l.send(DuelHost.update(g, 1, sentTo, g.header.seed, d.catalog, takeBackFrom, folds = d.folds(g)))
         sentTo = g.cursor
     }
 
     /** Joins the table [code] names, with [mine] as this player's deck. */
-    fun join(code: String, mine: com.kaiharimoto.mastertool.core.duel.SeatSetup) {
-        val table = com.kaiharimoto.mastertool.core.duel.net.PairCode.decode(code) ?: run { d.problem = "That is not a table's code"; return }
+    fun join(code: String, mine: SeatSetup) {
+        val table = PairCode.decode(code) ?: run { d.problem = "That is not a table's code"; return }
         leave()
         role = NetRole.GUEST
         d.bottom = 1
@@ -221,7 +227,7 @@ internal class DuelNet(private val d: Duels) {
                 d.setupOpen = false
             }
             is com.kaiharimoto.mastertool.core.duel.net.Wire.Update -> {
-                remote = com.kaiharimoto.mastertool.core.duel.net.DuelMirror.game(w.view, DuelHeader(id = "remote"))
+                remote = DuelMirror.game(w.view, DuelHeader(id = "remote"))
                 val first = w.lines.firstOrNull()?.i ?: w.cursor
                 remoteLines = remoteLines.filter { it.i < first && it.i < w.cursor } + w.lines
                 remoteWaiting = w.waitingFor

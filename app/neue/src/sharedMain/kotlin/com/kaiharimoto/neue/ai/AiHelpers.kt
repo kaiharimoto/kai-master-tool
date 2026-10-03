@@ -4,10 +4,16 @@ import com.kaiharimoto.mastertool.core.ai.AgentEvent
 import com.kaiharimoto.mastertool.core.ai.AgentLoop
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.AiTools
+import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
+import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.check.FactCheck
+import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import kotlinx.coroutines.launch
 
 // Helpers with a fresh mind, on [AiState]: the fact-check pass after an answer (1.0.58) and `delegate` (1.0.47).
@@ -30,7 +36,7 @@ internal fun AiState.checkLastAnswer() {
     val at = s.turns.indexOfLast { it.role == Role.ASSISTANT && it.text.isNotBlank() }
     if (at < 0 || s.checks.any { it.turn == at }) return
     val reply = s.turns[at].text
-    if (!com.kaiharimoto.mastertool.core.ai.check.FactCheck.worthChecking(reply)) return
+    if (!FactCheck.worthChecking(reply)) return
     val connection = prefs.connection ?: return
     val model = runCatching { backendFor(connection) }.getOrNull() ?: return
     if (model.runsOwnLoop) return
@@ -38,12 +44,12 @@ internal fun AiState.checkLastAnswer() {
     scope.launch {
         try {
             val index = h.builder.index
-            val cards = com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown.cards(reply).mapNotNull { name ->
-                (index.byName(name) ?: (com.kaiharimoto.mastertool.core.ai.CardWords.resolve(name, index) as? com.kaiharimoto.mastertool.core.ai.Resolved.Found)?.card)
+            val cards = ChatMarkdown.cards(reply).mapNotNull { name ->
+                (index.byName(name) ?: (CardWords.resolve(name, index) as? Resolved.Found)?.card)
                     ?.let { it.name to it.description }
             }
             val look = setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
-            val runner = com.kaiharimoto.mastertool.core.ai.ToolRunner { call ->
+            val runner = ToolRunner { call ->
                 if (call.name.removePrefix("mcp__neue__") !in look) {
                     Part.ToolResult(call.id, call.name, "A checker can only look up cards, rulings and numbers.", isError = true)
                 } else {
@@ -51,12 +57,12 @@ internal fun AiState.checkLastAnswer() {
                 }
             }
             var said = ""
-            var spent = com.kaiharimoto.mastertool.core.ai.Usage()
+            var spent = Usage()
             AgentLoop(model, runner, maxSteps = 8, now = System::currentTimeMillis, budget = budgetFor(connection))
                 .run(
                     TurnRequest(
-                        com.kaiharimoto.mastertool.core.ai.check.FactCheck.CHECKER,
-                        listOf(ChatTurn.user(com.kaiharimoto.mastertool.core.ai.check.FactCheck.brief(reply, cards))),
+                        FactCheck.CHECKER,
+                        listOf(ChatTurn.user(FactCheck.brief(reply, cards))),
                         tools.filter { it.name in look },
                         connection.model,
                         "low",
@@ -69,16 +75,16 @@ internal fun AiState.checkLastAnswer() {
                         else -> Unit
                     }
                 }
-            val claims = com.kaiharimoto.mastertool.core.ai.check.FactCheck.parse(said)
+            val claims = FactCheck.parse(said)
             if (claims.isEmpty()) return@launch
-            val check = com.kaiharimoto.mastertool.core.ai.check.FactCheck.Check(at, claims)
+            val check = FactCheck.Check(at, claims)
             val now = session?.takeIf { it.id == s.id } ?: return@launch
             val next = now.copy(checks = now.checks + check, usage = now.usage + spent)
             commit(next)
             // Wrong: the model says so itself, briefly, in a reply of its own (the answer above is never rewritten).
             if (check.wrong.isNotEmpty() && !running) {
                 correcting = true
-                val ask = ChatTurn(Role.USER, listOf(Part.Context(com.kaiharimoto.mastertool.core.ai.check.FactCheck.correction(check))), System.currentTimeMillis())
+                val ask = ChatTurn(Role.USER, listOf(Part.Context(FactCheck.correction(check))), System.currentTimeMillis())
                 val corrected = next.copy(turns = next.turns + ask, updatedAt = System.currentTimeMillis())
                 commit(corrected)
                 respond(corrected, connection)
@@ -110,7 +116,7 @@ suspend fun AiState.delegate(task: String, steps: Int): Result<String> = runCatc
             "You can only look, never change anything.\n\nThe job: " + task.trim(),
     )
     var report = ""
-    val runner = com.kaiharimoto.mastertool.core.ai.ToolRunner { call ->
+    val runner = ToolRunner { call ->
         if (call.name.removePrefix("mcp__neue__") !in AiTools.readOnly) {
             Part.ToolResult(call.id, call.name, "A helper can only look; ${call.name} is not one of its tools.", isError = true)
         } else {

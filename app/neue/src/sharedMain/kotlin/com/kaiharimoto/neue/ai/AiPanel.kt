@@ -21,6 +21,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.kaiharimoto.mastertool.core.ai.AiSession
+import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.neue.ai.avatar.AiName
+import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.neue.kit.MuIcon
+import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.ui.input.key.type
@@ -111,10 +117,10 @@ private fun Head(ai: AiState, phone: Boolean) {
                 ai.profiling -> "Learn About You · " + provider.label
                 ai.refactoring -> "Refactor guide · " + provider.label
                 ai.writing -> "Reader's guide · " + provider.label
-                ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL -> "At the duel table · " + provider.label
+                ai.session?.mode == AiSession.MODE_DUEL -> "At the duel table · " + provider.label
                 ai.tuning -> "Fine Tuning · " + when (ai.session?.mode) {
-                    com.kaiharimoto.mastertool.core.ai.AiSession.MODE_STUDY -> "studying"
-                    com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PRINCIPLES -> "first principles"
+                    AiSession.MODE_STUDY -> "studying"
+                    AiSession.MODE_PRINCIPLES -> "first principles"
                     else -> "being taught"
                 } + " · " + provider.label
                 else -> provider.label + (connection?.model?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
@@ -181,9 +187,9 @@ private fun NameInHead(ai: AiState) {
             editing = false
         }
         LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
-        com.kaiharimoto.neue.kit.MuInput(
+        MuInput(
             draft,
-            { draft = it.take(com.kaiharimoto.mastertool.core.prefs.AiPrefs.MAX_NAME) },
+            { draft = it.take(AiPrefs.MAX_NAME) },
             Modifier.width(180.dp).onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) {
                     draft = ai.name
@@ -213,9 +219,9 @@ private fun NameInHead(ai: AiState) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            com.kaiharimoto.neue.ai.avatar.AiName(ai.name, c.ink)
-            if (hovered || com.kaiharimoto.neue.kit.LocalTouchFirst.current) {
-                com.kaiharimoto.neue.kit.MuIcon(Icons.Pencil, c.ink45, Modifier.size(11.dp))
+            AiName(ai.name, c.ink)
+            if (hovered || LocalTouchFirst.current) {
+                MuIcon(Icons.Pencil, c.ink45, Modifier.size(11.dp))
             }
         }
     }

@@ -16,12 +16,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.duel.TurnStart
 import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.ComboBook
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRecorder
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
+import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
+import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
+import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.kit.BtnSize
@@ -80,15 +85,15 @@ internal fun logFinishedDuel(h: NeueHolders) {
     val deckId = mine.deckId ?: return
     val foeName = theirs.deckName ?: return
     duels.loggedDuel = g.header.id
-    val game = com.kaiharimoto.mastertool.core.prep.TestGame(
+    val game = TestGame(
         id = h.prep.newId("g"),
         at = System.currentTimeMillis(),
         deckId = deckId,
         opponent = theirs.deckId ?: foeName,
         opponentName = foeName,
         // Seat 0 takes the first turn.
-        turn = if (me == 0) com.kaiharimoto.mastertool.core.prep.TestGame.FIRST else com.kaiharimoto.mastertool.core.prep.TestGame.SECOND,
-        result = if (loser == me) com.kaiharimoto.mastertool.core.prep.TestGame.LOSS else com.kaiharimoto.mastertool.core.prep.TestGame.WIN,
+        turn = if (me == 0) TestGame.FIRST else TestGame.SECOND,
+        result = if (loser == me) TestGame.LOSS else TestGame.WIN,
         note = "From the Duel page, turn ${s.turn}",
     )
     h.prep.log(game)
@@ -135,7 +140,7 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
     // Moves taken back since Ai last read leave its mark past the log's end (1.0.85: it was told "nothing new").
     val takenBack = (duels.aiRead ?: 0) > g.cursor
     val from = (duels.aiRead ?: g.floor).coerceIn(0, g.cursor)
-    val lines = com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(g, from, viewer, duels.catalog, duels.folds(g))
+    val lines = DuelHost.lines(g, from, viewer, duels.catalog, duels.folds(g))
         .filter { it.seat != seat }
         // The cue's own words reach Ai as the message; not twice.
         .filterNot { it.chat && it.text.endsWith(said) }
@@ -149,9 +154,9 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
         add("At the duel table: you are ${DuelWords.seatLabel(s, seat)}, with $knows. Turn ${s.turn}, ${DuelWords.seatLabel(s, s.active)} to play, ${s.phase.label} Phase.")
         // Turns that start themselves (1.0.86): the table has drawn for Ai's seat, so it must not draw again.
         if (d.autoDraw) {
-            add(com.kaiharimoto.mastertool.core.duel.TurnStart.FOR_AI)
+            add(TurnStart.FOR_AI)
             // Said only as it is (1.0.86, the red team): on Ai's turn with its opening not yet made, the next step is named.
-            if (s.active == seat) com.kaiharimoto.mastertool.core.duel.TurnStart.next(g)?.let { step ->
+            if (s.active == seat) TurnStart.next(g)?.let { step ->
                 add("Your turn's opening is not finished yet (next: ${step::class.simpleName}); the table makes it — wait for your Main Phase 1.")
             }
         }
@@ -168,7 +173,7 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
         if (d.aiTriggers) {
             add(
                 if (watches.isEmpty()) "Your watches: none. Leave one with duel_watch for each response your hand or set cards hold."
-                else "Your watches (private):\n" + watches.joinToString("\n") { "- " + com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.describe(it) },
+                else "Your watches (private):\n" + watches.joinToString("\n") { "- " + DuelTriggers.describe(it) },
             )
         }
         add(ask)
@@ -238,7 +243,7 @@ internal fun DuelAiDialog(h: NeueHolders) {
     var book by remember(deckId) { mutableStateOf(ComboBook()) }
     var name by remember { mutableStateOf("") }
     LaunchedEffect(deckId) { if (deckId != null) book = duels.combos(deckId) }
-    fun update(f: (com.kaiharimoto.mastertool.core.duel.DuelPrefs) -> com.kaiharimoto.mastertool.core.duel.DuelPrefs) = neue.update { it.copy(duel = f(it.duel)) }
+    fun update(f: (DuelPrefs) -> DuelPrefs) = neue.update { it.copy(duel = f(it.duel)) }
 
     MuDialog("Ai and combos", { duels.combosOpen = false }, width = 600.dp) {
         if (neue.prefs.ai.enabled && g != null) {
@@ -287,7 +292,7 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     else "${h.ai.name} reads the table only when you cue it.",
                 )
                 // Behind Thinking, as in the log: what Ai waits for tells what it holds (1.0.85).
-                val live = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.alive(duels.watches, g?.state?.turn ?: 0)
+                val live = DuelTriggers.alive(duels.watches, g?.state?.turn ?: 0)
                 if (d.aiTriggers && d.aiThinking && live.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Small("Watching for ${com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.kindsWords(live).lowercase()}", Modifier.weight(1f), color = c.ink70)
@@ -350,7 +355,7 @@ internal fun DuelAiDialog(h: NeueHolders) {
                     MuButton("Record this turn", {
                         // From the start of this turn (the last End Turn), past its draw and phases (1.0.86), the bottom seat's own moves.
                         val turnFrom = g.entries.subList(0, g.cursor).indexOfLast { it.action == DuelAction.EndTurn }.let { if (it < 0) g.floor else it + 1 }
-                        val from = com.kaiharimoto.mastertool.core.duel.TurnStart.afterOpening(g.entries, turnFrom, g.cursor)
+                        val from = TurnStart.afterOpening(g.entries, turnFrom, g.cursor)
                         val start = g.stateAt(from)
                         val span = g.entries.subList(from, g.cursor).filter { it.seat == seat }
                         val steps = ComboRecorder.steps(start, span, duels.catalog)

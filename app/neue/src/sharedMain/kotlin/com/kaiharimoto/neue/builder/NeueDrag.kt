@@ -12,6 +12,7 @@ import com.kaiharimoto.mastertool.core.layout.DeckReorder
 import com.kaiharimoto.mastertool.core.layout.GridDropResolver
 import com.kaiharimoto.mastertool.core.layout.ItemBox
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.mastertool.ui.dnd.DropHover
@@ -195,7 +196,7 @@ class NeueDrag(private val state: DeckBuilderState) {
                 }
                 is Sets -> {
                     if (shown.section != target) return null
-                    state.setFittedOrder(shown.sets.map { com.kaiharimoto.mastertool.core.model.CardId(it) })
+                    state.setFittedOrder(shown.sets.map { CardId(it) })
                     DeskEvent.DROPPED
                 }
                 // Let go where it started: nothing to do.

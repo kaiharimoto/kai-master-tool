@@ -1,5 +1,17 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.Recall
+import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
+import com.kaiharimoto.mastertool.core.ai.memory.GuideBudget
+import com.kaiharimoto.mastertool.core.ai.memory.GuideRewrite
+import com.kaiharimoto.mastertool.core.ai.report.ReaderGuide
+import com.kaiharimoto.mastertool.core.ai.report.SessionQuestions
+import com.kaiharimoto.mastertool.core.ai.report.SessionReport
+import com.kaiharimoto.mastertool.core.ai.report.book.BookWriter
+import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
+import com.kaiharimoto.mastertool.core.ai.vision.ReadCards
+import com.kaiharimoto.mastertool.core.duel.ai.Secrets
 import com.kaiharimoto.neue.run
 import com.kaiharimoto.mastertool.core.ai.AiSettings
 import com.kaiharimoto.mastertool.core.ai.AiTools
@@ -92,7 +104,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val spec = AiTools.named(call.name)?.takeIf { it in ai.tools }
             ?: return result(call, fail("There is no tool ${call.name} in this version of the app."))
         // At the duel table only the table's tools answer — over a CLI too, whose MCP list is the whole catalogue (1.0.85).
-        if (ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL && spec.name !in AiTools.DUEL) {
+        if (ai.session?.mode == AiSession.MODE_DUEL && spec.name !in AiTools.DUEL) {
             return result(call, fail("${spec.name} is not used at the duel table."))
         }
         if (OpenAiStream.BROKEN_ARGS in call.input) {
@@ -116,7 +128,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             ai.tool = null
         }
         // Something found: the face lights up for a moment.
-        if (!answer.isError && spec.name in com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker.finding && !answer.summary.startsWith("No ")) ai.mood.found(ai.clock())
+        if (!answer.isError && spec.name in MoodTracker.finding && !answer.summary.startsWith("No ")) ai.mood.found(ai.clock())
         ai.activity(Part.Activity(spec.name, answer.summary, answer.isError))
         return result(call, answer)
     }
@@ -920,14 +932,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "rewrite" -> when {
                 kind != MemoryKind.GUIDE -> return fail("rewrite is for the guide only.")
                 ai.session?.mode != AiSession.MODE_REFACTOR -> return fail("rewrite is for Refactor guide. Here, use replace and remove.")
-                else -> com.kaiharimoto.mastertool.core.ai.memory.GuideRewrite.rewrite(doc, text ?: return fail("rewrite needs text: the whole guide."), kind.entryLimit)
+                else -> GuideRewrite.rewrite(doc, text ?: return fail("rewrite needs text: the whole guide."), kind.entryLimit)
             }
             else -> return fail("Actions: add, replace, remove.")
         }
         // What one Fine Tuning run may add to the guide, by its intensity (1.0.66: Deep, 20,000 characters).
         if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && action != "rewrite") {
             ai.guideRoom()?.let { (start, budget, label) ->
-                com.kaiharimoto.mastertool.core.ai.memory.GuideBudget.refusal(start, write.doc.used, budget, label)?.let { return fail(it) }
+                GuideBudget.refusal(start, write.doc.used, budget, label)?.let { return fail(it) }
             }
         }
         return when (write) {
@@ -1002,10 +1014,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         if (query.isBlank()) return fail("Say what to find.")
         val current = ai.session
         val pool = if (scope == "all") (ai.files.sessions().filter { it.id != current?.id } + listOfNotNull(current)) else listOfNotNull(current)
-        val hits = com.kaiharimoto.mastertool.core.ai.Recall.search(pool, query, limit.coerceIn(1, 30))
+        val hits = Recall.search(pool, query, limit.coerceIn(1, 30))
         val day = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.withZone(java.time.ZoneId.systemDefault())
         val said = hits.joinToString("\n") { h ->
-            val who = if (h.who == com.kaiharimoto.mastertool.core.ai.Role.USER) "the person" else "you"
+            val who = if (h.who == Role.USER) "the person" else "you"
             val where = if (h.session == current?.id) "this conversation" else "“${h.title}”"
             "${day.format(java.time.Instant.ofEpochMilli(h.at))}, $where, $who: …${h.excerpt}…"
         }
@@ -1017,12 +1029,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         if (lines.isEmpty()) return fail("Give the cards you read.")
         val read = lines.take(80).mapNotNull { o ->
             val name = ToolArgs.string(o, "name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            com.kaiharimoto.mastertool.core.ai.vision.ReadCards.Read(name, ToolArgs.int(o, "count") ?: 1, ToolArgs.string(o, "section"))
+            ReadCards.Read(name, ToolArgs.int(o, "count") ?: 1, ToolArgs.string(o, "section"))
         }
-        val matches = com.kaiharimoto.mastertool.core.ai.vision.ReadCards.resolve(read, index)
+        val matches = ReadCards.resolve(read, index)
         val unsure = matches.count { !it.sure }
         return ok(
-            com.kaiharimoto.mastertool.core.ai.vision.ReadCards.describe(matches),
+            ReadCards.describe(matches),
             "Read ${matches.size} cards off the picture" + if (unsure > 0) ", $unsure to check" else "",
         )
     }
@@ -1030,27 +1042,27 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     /** The reader's guide (1.0.67): a book about the open deck, written a chapter at a time and checked as it goes. */
     private fun readerGuide(i: JsonObject): Answer {
         val deckId = state.deckId ?: return fail("Save the deck first: the guide belongs to a saved deck.")
-        val path = com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.path(deckId)
-        val book = com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.read(ai.files.read(path))
-            ?: com.kaiharimoto.mastertool.core.ai.report.book.GuideBook(state.deckName)
+        val path = GuideBook.path(deckId)
+        val book = GuideBook.read(ai.files.read(path))
+            ?: GuideBook(state.deckName)
         val main = state.deck.main.mapNotNull { state.index.byId(it)?.name }
-        val ctx = com.kaiharimoto.mastertool.core.ai.report.book.BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis())
-        val w = com.kaiharimoto.mastertool.core.ai.report.book.BookWriter
+        val ctx = BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis())
+        val w = BookWriter
         val result = when (ToolArgs.string(i, "action")) {
-            "outline" -> com.kaiharimoto.mastertool.core.ai.report.book.BookWriter.Result(book, w.outline(book))
+            "outline" -> BookWriter.Result(book, w.outline(book))
             "set_outline" -> w.setOutline(book, ToolArgs.objects(i, "chapters"))
             "set_front" -> w.setFront(book, i, ctx)
             "write_chapter" -> w.writeChapter(book, ToolArgs.element(i, "chapter"), ctx)
             "read_chapter" -> w.readChapter(book, ToolArgs.string(i, "id").orEmpty())
             "remove_chapter" -> w.removeChapter(book, ToolArgs.string(i, "id").orEmpty())
-            "facts" -> com.kaiharimoto.mastertool.core.ai.report.book.BookWriter.Result(book, w.facts(book, ctx))
+            "facts" -> BookWriter.Result(book, w.facts(book, ctx))
             else -> return fail("Actions: outline, set_outline, set_front, write_chapter, read_chapter, remove_chapter, facts.")
         }
         if (!result.ok) return fail(result.message)
         if (result.book != book) {
             // Which version of Ai's notes it was written from, so the app can say when it is out of date.
-            val notes = ai.files.read(com.kaiharimoto.mastertool.core.ai.memory.AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty()
-            ai.files.write(path, com.kaiharimoto.mastertool.core.ai.report.book.GuideBook.write(result.book.copy(notesHash = com.kaiharimoto.mastertool.core.ai.report.ReaderGuide.hashOf(notes))))
+            val notes = ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty()
+            ai.files.write(path, GuideBook.write(result.book.copy(notesHash = ReaderGuide.hashOf(notes))))
             ai.bookChanged()
         }
         val summary = when (ToolArgs.string(i, "action")) {
@@ -1068,7 +1080,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val deckId = state.deckId ?: return fail("There is no saved deck open to report on.")
         val s = ai.session ?: return fail("There is no session to report on.")
         fun num(key: String) = (ToolArgs.element(i, key) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
-        val report = com.kaiharimoto.mastertool.core.ai.report.SessionReport(
+        val report = SessionReport(
             deckId = deckId,
             deckName = state.deckName,
             at = System.currentTimeMillis(),
@@ -1078,11 +1090,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             learned = ToolArgs.strings(i, "learned"),
             insights = ToolArgs.strings(i, "insights"),
             openQuestions = ToolArgs.strings(i, "open_questions"),
-            understanding = com.kaiharimoto.mastertool.core.ai.report.SessionReport.score(num("understanding")),
-            playing = com.kaiharimoto.mastertool.core.ai.report.SessionReport.score(num("playing")),
-            mirror = com.kaiharimoto.mastertool.core.ai.report.SessionReport.score(num("mirror")),
+            understanding = SessionReport.score(num("understanding")),
+            playing = SessionReport.score(num("playing")),
+            mirror = SessionReport.score(num("mirror")),
             why = ToolArgs.string(i, "why").orEmpty(),
-            questions = com.kaiharimoto.mastertool.core.ai.report.SessionQuestions.of(s.turns),
+            questions = SessionQuestions.of(s.turns),
             startedAt = s.createdAt,
         )
         ai.files.addReport(report)
@@ -1095,10 +1107,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     private suspend fun askUser(question: String, options: List<String>, multiple: Boolean, cards: List<String> = emptyList(), heard: List<String> = emptyList()): Answer {
         // The cards a question is about, shown as their art (1.0.48): "what does this one do for you?"
-        val shown = cards.take(6).mapNotNull { (com.kaiharimoto.mastertool.core.ai.CardWords.resolve(it, index) as? com.kaiharimoto.mastertool.core.ai.Resolved.Found)?.card }
+        val shown = cards.take(6).mapNotNull { (CardWords.resolve(it, index) as? Resolved.Found)?.card }
         // At the duel table "No response" is always one of the answers (1.0.80, kai: "there was no 'No response'
         // option and I had to keep typing it out").
-        val duel = ai.session?.mode == com.kaiharimoto.mastertool.core.ai.AiSession.MODE_DUEL
+        val duel = ai.session?.mode == AiSession.MODE_DUEL
         // Five of Ai's own at most there, so No response always has a digit (1.0.86).
         val offered = if (duel && options.none { it.equals("No response", true) }) options.take(5) + "No response" else options.take(6)
         val said = heard.map { it.trim() }.filter { it.isNotEmpty() }.take(8)
@@ -1108,11 +1120,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val g = h.duel.game?.takeIf { duel && h.duel.role == null && !it.state.solo }
         if (g != null) {
             val aiSeat = h.neue.prefs.duel.aiSeat
-            val secret = { t: String -> com.kaiharimoto.mastertool.core.duel.ai.Secrets.redact(t, g.state, 1 - aiSeat, aiSeat, h.duel.catalog) }
-            val o = com.kaiharimoto.mastertool.core.duel.ai.Secrets.options(offered, g.state, 1 - aiSeat, aiSeat, h.duel.catalog)
+            val secret = { t: String -> Secrets.redact(t, g.state, 1 - aiSeat, aiSeat, h.duel.catalog) }
+            val o = Secrets.options(offered, g.state, 1 - aiSeat, aiSeat, h.duel.catalog)
             val art = shown.filterNot { secret(it.name).changed }
             val picked = ai.ask(Question(secret(question).text, o.shown, multiple, art, said.map { secret(it).text }))
-            val answer = com.kaiharimoto.mastertool.core.duel.ai.Secrets.answer(picked, o)
+            val answer = Secrets.answer(picked, o)
             return ok("The person answered: $answer", "${question.take(70)} → ${answer.take(90)}")
         }
         val answer = ai.ask(Question(question, offered, multiple, shown, said))

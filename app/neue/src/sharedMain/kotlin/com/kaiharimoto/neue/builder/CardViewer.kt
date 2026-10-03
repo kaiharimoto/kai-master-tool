@@ -41,6 +41,7 @@ import com.kaiharimoto.neue.kit.MenuColumn
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.ScrollbarFor
+import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuMotion
@@ -146,7 +147,7 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                 Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
                         Box(Modifier.weight(1f).padding(end = 16.dp)) { CardHeading(card, large = true) }
-                        com.kaiharimoto.neue.kit.Tip("Full screen: the card as large as it goes, turning with the pointer or the tablet") {
+                        Tip("Full screen: the card as large as it goes, turning with the pointer or the tablet") {
                             IconButton(Icons.Maximize, { neue.showcase = card }, size = 32.dp, label = "Full screen")
                         }
                         IconButton(Icons.X, close, size = 32.dp, label = "Close")

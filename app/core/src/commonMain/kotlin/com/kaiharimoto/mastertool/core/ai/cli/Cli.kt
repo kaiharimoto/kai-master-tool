@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.cli
 
 import com.kaiharimoto.mastertool.core.ai.BackendEvent
+import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.StopReason
 import com.kaiharimoto.mastertool.core.ai.Usage
 import kotlinx.serialization.json.Json
@@ -52,7 +53,7 @@ object ClaudeCli {
         model: String,
         effort: String,
         resume: String?,
-        images: List<com.kaiharimoto.mastertool.core.ai.Part.Image> = emptyList(),
+        images: List<Part.Image> = emptyList(),
     ): CliLaunch = CliLaunch(
         args = buildList {
             add(program)
@@ -81,7 +82,7 @@ object ClaudeCli {
     const val TOOL_WAIT_MS = 30 * 60 * 1000L
 
     /** One stream-json user message: the words, then each picture as a base64 image block. */
-    fun userLine(prompt: String, images: List<com.kaiharimoto.mastertool.core.ai.Part.Image>): String =
+    fun userLine(prompt: String, images: List<Part.Image>): String =
         kotlinx.serialization.json.buildJsonObject {
             put("type", kotlinx.serialization.json.JsonPrimitive("user"))
             put("message", kotlinx.serialization.json.buildJsonObject {

@@ -44,6 +44,7 @@ import com.kaiharimoto.mastertool.core.ai.providers.ConnectKind
 import com.kaiharimoto.mastertool.core.ai.providers.Provider
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.SavedConnections
+import com.kaiharimoto.mastertool.core.ai.providers.SetupGuide
 import com.kaiharimoto.mastertool.core.ai.providers.SetupStep
 import com.kaiharimoto.mastertool.core.ai.providers.SetupSteps
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
@@ -51,7 +52,10 @@ import com.kaiharimoto.mastertool.core.ai.schema
 import com.kaiharimoto.mastertool.core.ai.wire.AnthropicModels
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiChatBackend
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiEndpoint
+import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.input.CursorMode
+import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.mastertool.core.update.DesktopOs
@@ -61,13 +65,18 @@ import com.kaiharimoto.neue.kit.Badge
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
+import com.kaiharimoto.neue.kit.FieldLabel
+import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
+import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.kit.Tag
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.reportsTextFocus
@@ -203,8 +212,8 @@ internal fun WizardStep(ai: AiState, w: WizardState) {
 internal fun Needs(w: WizardState, title: Boolean = true) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (title) com.kaiharimoto.neue.kit.Micro("You will need", color = c.ink45)
-        com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.needs(w.kind, w.provider, onDevice).forEach { line ->
+        if (title) Micro("You will need", color = c.ink45)
+        SetupGuide.needs(w.kind, w.provider, onDevice).forEach { line ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Mono("–", color = c.ink45)
                 Small(line, color = c.ink70)
@@ -217,11 +226,11 @@ internal fun Needs(w: WizardState, title: Boolean = true) {
 @Composable
 internal fun Trouble(w: WizardState) {
     val c = Mu.colors
-    val trouble = com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.trouble(w.step, w.provider, onDevice)
+    val trouble = SetupGuide.trouble(w.step, w.provider, onDevice)
     if (trouble.isEmpty()) return
     Column(Modifier.fillMaxWidth().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        com.kaiharimoto.neue.kit.HRule()
-        com.kaiharimoto.neue.kit.Micro("If something goes wrong", color = c.ink45)
+        HRule()
+        Micro("If something goes wrong", color = c.ink45)
         trouble.forEach { t ->
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Small(t.problem, color = c.ink)
@@ -294,7 +303,7 @@ private fun ConnectStep(w: WizardState) {
     val desk = AiDesk.canRunCli
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        com.kaiharimoto.mastertool.core.ai.providers.SetupGuide.choosing.forEach { line ->
+        SetupGuide.choosing.forEach { line ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Mono("–", color = c.ink45)
                 Small(line, color = c.ink70)
@@ -470,11 +479,11 @@ private fun CompatibleFields(ai: AiState, w: WizardState) {
     // The person's own, saved before (1.0.59): a tap fills the address, the name, the model and the key.
     val mine = SavedConnections.presets(ai.prefs.connections)
     if (mine.isNotEmpty()) {
-        com.kaiharimoto.neue.kit.FieldLabel("Yours", hint = "saved before")
+        FieldLabel("Yours", hint = "saved before")
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             mine.forEach { conn ->
                 val address = conn.baseUrl.orEmpty()
-                com.kaiharimoto.neue.kit.Tag(conn.label.ifBlank { SavedConnections.address(address) }, SavedConnections.address(w.baseUrl) == SavedConnections.address(address) && w.label == conn.label, {
+                Tag(conn.label.ifBlank { SavedConnections.address(address) }, SavedConnections.address(w.baseUrl) == SavedConnections.address(address) && w.label == conn.label, {
                     w.baseUrl = address
                     w.label = conn.label
                     w.keyPage = Providers.compatiblePresets.firstOrNull { SavedConnections.address(it.baseUrl) == SavedConnections.address(address) }?.keyPage
@@ -484,11 +493,11 @@ private fun CompatibleFields(ai: AiState, w: WizardState) {
                 }, caption = "Fill in")
             }
         }
-        com.kaiharimoto.neue.kit.FieldLabel("Or a known provider")
+        FieldLabel("Or a known provider")
     }
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Providers.compatiblePresets.forEach { preset ->
-            com.kaiharimoto.neue.kit.Tag(preset.name, w.baseUrl == preset.baseUrl, {
+            Tag(preset.name, w.baseUrl == preset.baseUrl, {
                 w.baseUrl = preset.baseUrl
                 w.label = preset.name
                 w.keyPage = preset.keyPage
@@ -497,9 +506,9 @@ private fun CompatibleFields(ai: AiState, w: WizardState) {
             }, caption = "Fill in")
         }
     }
-    com.kaiharimoto.neue.kit.FieldLabel("Name", hint = "yours, for this connection")
+    FieldLabel("Name", hint = "yours, for this connection")
     MuInput(w.label, { w.label = it }, Modifier.fillMaxWidth(), placeholder = "DeepSeek, Groq, work gateway…")
-    com.kaiharimoto.neue.kit.FieldLabel("API address", hint = "up to /v1")
+    FieldLabel("API address", hint = "up to /v1")
     MuInput(w.baseUrl, { w.baseUrl = it.trim(); w.keyPage = Providers.compatiblePresets.firstOrNull { p -> p.baseUrl == it.trim() }?.keyPage }, Modifier.fillMaxWidth(), placeholder = "https://api.example.com/v1", mono = true)
     if (w.baseUrl.isNotBlank()) Providers.addressProblem(w.baseUrl)?.let { Help(it, color = Mu.colors.ink) }
 }
@@ -550,7 +559,7 @@ private fun ServerStep(w: WizardState) {
                     w.good = if (models.isEmpty()) "Found the server, with no models loaded." else "Found the server: ${models.size} models."
                     if (models.isNotEmpty()) w.next()
                 }.onFailure {
-                    w.message = com.kaiharimoto.mastertool.core.ai.wire.Unreachable.say(w.baseUrl, it.message ?: it::class.simpleName) +
+                    w.message = Unreachable.say(w.baseUrl, it.message ?: it::class.simpleName) +
                         if (onDevice) " — is the server listening on the network, and is this device on the same Wi-Fi?" else ""
                 }
                 w.checking = false
@@ -598,7 +607,7 @@ private fun ModelStep(w: WizardState) {
             ) {
                 Mono(m.ifBlank { "Default" }, color = if (w.model == m) c.paper else c.ink, modifier = Modifier.weight(1f))
                 if (m == recommended && m.isNotBlank()) {
-                    if (w.model == m) com.kaiharimoto.neue.kit.Micro("Recommended", color = c.paper) else Badge("Recommended")
+                    if (w.model == m) Micro("Recommended", color = c.paper) else Badge("Recommended")
                 }
             }
         }
@@ -607,7 +616,7 @@ private fun ModelStep(w: WizardState) {
     if (p.efforts.isNotEmpty()) {
         Help("How hard it thinks before answering. Higher is slower and costs more; medium suits most.")
         // A select, not a row of buttons: six efforts are wider than the panel.
-        com.kaiharimoto.neue.kit.MuSelect(w.effort, listOf("") + p.efforts, { if (it.isBlank()) "Default" else it.replaceFirstChar { ch -> ch.uppercase() } }, { w.effort = it })
+        MuSelect(w.effort, listOf("") + p.efforts, { if (it.isBlank()) "Default" else it.replaceFirstChar { ch -> ch.uppercase() } }, { w.effort = it })
     }
     if (p.kind == ConnectKind.LOCAL || p.id == Providers.compatible.id) {
         Help("${w.name.ifBlank { "Ai" }} needs a model that can call tools to act in the app. Try it:")
@@ -648,7 +657,7 @@ private fun PermissionsStep(ai: AiState, w: WizardState) {
 private fun DoneStep(ai: AiState, w: WizardState) {
     val p = w.provider ?: return
     Help("${w.name.ifBlank { ai.name }} will talk through ${w.label.trim().ifBlank { p.label }}${w.model.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}.")
-    Help("Open it any time with the ${ai.name} button in the bar${if (AiDesk.canRunCli) " or ${com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd).orEmpty()}" else ""}. It follows you to every page.")
+    Help("Open it any time with the ${ai.name} button in the bar${if (AiDesk.canRunCli) " or ${DeskShortcuts.chordFor(DeskAction.AI_PANEL)?.let(DeskShortcuts::kbd).orEmpty()}" else ""}. It follows you to every page.")
     val connect = {
         val made = AiConnection(
             id = "${p.id}-${UUID.randomUUID().toString().take(6)}",

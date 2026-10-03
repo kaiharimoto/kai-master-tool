@@ -34,12 +34,18 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.present.Ease
+import com.kaiharimoto.mastertool.core.present.Element
+import com.kaiharimoto.mastertool.core.present.Geometry
 import com.kaiharimoto.mastertool.core.present.Presentation
+import com.kaiharimoto.mastertool.core.present.Slide
 import com.kaiharimoto.mastertool.core.present.Transition
+import com.kaiharimoto.mastertool.core.present.edit.Transform
+import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.play.ElementState
 import com.kaiharimoto.mastertool.core.present.play.StageTween
 import com.kaiharimoto.mastertool.core.present.stage.DeckStage
 import com.kaiharimoto.mastertool.core.present.stage.StageFrame
+import com.kaiharimoto.mastertool.core.present.stage.WebcamLayout
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.neue.kit.Micro
@@ -195,7 +201,7 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
         val deckFrame: () -> StageFrame? = {
             if (overviewAmount() > 0.001f) null else if (fromSlide != null || fromFrame != null && from.slide != cursor.slide) StageTween.between(fromFrame, toFrame, arrived()) else toFrame
         }
-        val state: (com.kaiharimoto.mastertool.core.present.Element) -> ElementState = { e ->
+        val state: (Element) -> ElementState = { e ->
             show.state(cursor, e, if (pl.backward) Long.MAX_VALUE / 4 else (pl.ms - transitionLead(pl)).coerceAtLeast(0))
         }
 
@@ -243,11 +249,11 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
 }
 
 /** The slide an element at ([x], [y]) on slide [i] links to, if one does. */
-private fun linkAt(show: com.kaiharimoto.mastertool.core.present.play.CompiledShow, i: Int, x: Float, y: Float): String? {
+private fun linkAt(show: CompiledShow, i: Int, x: Float, y: Float): String? {
     val slide = show.slides.getOrNull(i) ?: return null
     val stage = show.stage(i)
     return slide.elements.asReversed().firstOrNull { e ->
-        e.link != null && com.kaiharimoto.mastertool.core.present.edit.Transform.hit(com.kaiharimoto.mastertool.core.present.Geometry.box(e, stage), e.rotation, x, y)
+        e.link != null && Transform.hit(Geometry.box(e, stage), e.rotation, x, y)
     }?.link
 }
 
@@ -316,10 +322,10 @@ private fun OverviewLayer(
         Canvas(Modifier.fillMaxSize()) { drawThemeBackground(ctx, amount()) }
         SlideView(
             ctx,
-            com.kaiharimoto.mastertool.core.present.Slide("overview"),
+            Slide("overview"),
             // The camera stays where it is: the creator is still talking.
             zone = zone,
-            stage = com.kaiharimoto.mastertool.core.present.stage.WebcamLayout.safe,
+            stage = WebcamLayout.safe,
             modifier = Modifier.fillMaxSize(),
             deck = { StageTween.between(slideFrame(), overview(), amount()) },
             deckKeys = keys,

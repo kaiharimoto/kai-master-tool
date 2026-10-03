@@ -32,6 +32,7 @@ import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.wire.AnthropicModels
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiWire
+import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
@@ -174,7 +175,7 @@ class AnthropicBackend(
         } catch (e: AnthropicServiceException) {
             emit(BackendEvent.Failed("Anthropic answered ${e.statusCode()}: ${e.message}", retryable = e.statusCode() >= 500))
         } catch (t: Throwable) {
-            emit(BackendEvent.Failed(com.kaiharimoto.mastertool.core.ai.wire.Unreachable.say("https://api.anthropic.com", t.message ?: t::class.simpleName), retryable = true))
+            emit(BackendEvent.Failed(Unreachable.say("https://api.anthropic.com", t.message ?: t::class.simpleName), retryable = true))
         }
     }.flowOn(Dispatchers.IO)
 

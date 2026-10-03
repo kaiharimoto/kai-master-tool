@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.neue.ai.openWizard
 import com.kaiharimoto.neue.ai.askTune
 import com.kaiharimoto.neue.ai.openGuide
@@ -14,9 +15,11 @@ import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.builder.groupsOn
 import com.kaiharimoto.neue.builder.historyMenu
+import com.kaiharimoto.neue.cards.Foils
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.platform.QrSource
 import com.kaiharimoto.neue.platform.reportIssue
 import com.kaiharimoto.neue.shell.Command
 
@@ -114,7 +117,7 @@ fun NeueHolders.commands(query: String): List<Command> {
         Command("Deck", "Show the deck as a QR code to scan") { CardActions.export(DeckExportFormat.QR, builder, neue) },
         Command("Deck", if (neue.prefs.extraVisible) "Hide the extra deck" else "Show the extra deck") { neue.update { it.copy(extraVisible = !it.extraVisible) } },
         Command("Deck", if (neue.prefs.sideVisible) "Hide the side deck" else "Show the side deck") { neue.update { it.copy(sideVisible = !it.sideVisible) } },
-        Command("Deck", if (neue.prefs.foil == com.kaiharimoto.neue.cards.Foils.OFF) "Foil on" else "Foil off") { toggleFoil() },
+        Command("Deck", if (neue.prefs.foil == Foils.OFF) "Foil on" else "Foil off") { toggleFoil() },
         cmd("Deck", "Undo", DeskAction.UNDO),
         cmd("Deck", "Redo", DeskAction.REDO),
         cmd("Deck", "Issues", DeskAction.ISSUES),
@@ -142,8 +145,8 @@ fun NeueHolders.commands(query: String): List<Command> {
         // The phone's and the tablet's screen, the one-tap toggle in words (v1.3.5).
         *(if (neue.touchFirst) arrayOf(Command("App", "Rotate the screen: ${neue.orientation.next().label}") { neue.rotate() }) else emptyArray()),
         // A deck's QR code, off another screen or out of a picture (v1.3.7).
-        *(if (com.kaiharimoto.neue.platform.QrSource.CAMERA in Platform.scanSources) arrayOf(Command("Deck", "Scan a deck's QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.CAMERA, builder, neue) }) else emptyArray()),
-        *(if (com.kaiharimoto.neue.platform.QrSource.PICTURE in Platform.scanSources) arrayOf(Command("Deck", "Import a picture of a QR code") { CardActions.scan(com.kaiharimoto.neue.platform.QrSource.PICTURE, builder, neue) }) else emptyArray()),
+        *(if (QrSource.CAMERA in Platform.scanSources) arrayOf(Command("Deck", "Scan a deck's QR code") { CardActions.scan(QrSource.CAMERA, builder, neue) }) else emptyArray()),
+        *(if (QrSource.PICTURE in Platform.scanSources) arrayOf(Command("Deck", "Import a picture of a QR code") { CardActions.scan(QrSource.PICTURE, builder, neue) }) else emptyArray()),
         Command("App", "Refresh the card pool") { builder.refreshCardPool(force = true) },
         // The assistant's own, while it is on (1.0.43).
         *(if (neue.prefs.ai.enabled) arrayOf(
@@ -156,11 +159,11 @@ fun NeueHolders.commands(query: String): List<Command> {
             Command(ai.name, "${ai.name}'s context: how full it is, and make room") { ai.contextOpen = true },
             Command(ai.name, "${ai.name}: settings — model, effort and the rest") { ai.quickOpen = true },
             Command(ai.name, "${ai.name}: Fine Tuning, teach it this deck") { ai.setOpen(true); ai.askTune() },
-            Command(ai.name, "${ai.name}: learn this deck from first principles") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_PRINCIPLES) },
-            Command(ai.name, "${ai.name}: refactor this deck's guide") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_REFACTOR) },
+            Command(ai.name, "${ai.name}: learn this deck from first principles") { ai.setOpen(true); ai.askTune(AiSession.MODE_PRINCIPLES) },
+            Command(ai.name, "${ai.name}: refactor this deck's guide") { ai.setOpen(true); ai.askTune(AiSession.MODE_REFACTOR) },
             Command(ai.name, "${ai.name}: this deck's guide") { ai.openGuide() },
             Command(ai.name, "${ai.name}: read this deck's reader's guide") { ai.openBook() },
-            Command(ai.name, "${ai.name}: write this deck's reader's guide") { ai.setOpen(true); ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_WRITE) },
+            Command(ai.name, "${ai.name}: write this deck's reader's guide") { ai.setOpen(true); ai.askTune(AiSession.MODE_WRITE) },
             Command(ai.name, "${ai.name}: learn about you") { ai.setOpen(true); ai.profileAsk = true },
             Command(ai.name, "${ai.name}: your profile") { ai.openProfile() },
             Command(ai.name, "${ai.name}: what can you do?") { ai.setOpen(true); ai.demoOpen = true },

@@ -20,6 +20,7 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import com.kaiharimoto.mastertool.core.input.DeskTouch
 
 /**
  * [onEvent] for every pointer event of [type] — Compose Desktop's
@@ -78,7 +79,7 @@ fun Modifier.onContextMenu(onOpen: (Offset) -> Unit): Modifier = composed {
             if (!change.byFinger) return@awaitEachGesture
             val slop = viewConfiguration.touchSlop
             // The platform's hold, as the cards use (touch swarm, rec 11).
-            val held = withTimeoutOrNull(com.kaiharimoto.mastertool.core.input.DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis)) {
+            val held = withTimeoutOrNull(DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis)) {
                 var total = Offset.Zero
                 while (true) {
                     val next = awaitPointerEvent()
@@ -248,14 +249,14 @@ fun Modifier.restingFingerFiresNothing(): Modifier = pointerInput(Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         if (!down.byFinger) return@awaitEachGesture
-        val hold = com.kaiharimoto.mastertool.core.input.DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis)
+        val hold = DeskTouch.holdMs(viewConfiguration.longPressTimeoutMillis)
         var travel = 0f
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val change = event.changes.firstOrNull { it.id == down.id } ?: break
             travel = maxOf(travel, (change.position - down.position).getDistance())
             if (!change.pressed) {
-                val tap = com.kaiharimoto.mastertool.core.input.DeskTouch.isTap(
+                val tap = DeskTouch.isTap(
                     down.uptimeMillis, change.uptimeMillis, travel, viewConfiguration.touchSlop, hold,
                 )
                 if (!tap) change.consume()

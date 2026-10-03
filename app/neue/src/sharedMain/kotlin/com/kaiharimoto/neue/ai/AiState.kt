@@ -12,18 +12,31 @@ import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
+import com.kaiharimoto.mastertool.core.ai.TuneIntensity
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
+import com.kaiharimoto.mastertool.core.ai.WorkNotice
+import com.kaiharimoto.mastertool.core.ai.avatar.AiSignals
+import com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay
+import com.kaiharimoto.mastertool.core.ai.avatar.Expression
+import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryChange
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
+import com.kaiharimoto.mastertool.core.ai.report.SessionReport
 import com.kaiharimoto.mastertool.core.ai.skills.Skill
 import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
+import com.kaiharimoto.mastertool.core.ai.vision.PictureFit
+import com.kaiharimoto.mastertool.core.ai.vision.Vision
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.mastertool.core.present.ai.PresentBrief
+import com.kaiharimoto.mastertool.core.present.ai.RestyleBrief
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.platform.PickedFile
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -164,13 +177,13 @@ class AiState(internal val h: NeueHolders) {
     // ---- the face (1.0.52) ------------------------------------------------------
 
     /** The face Ai wears now, beside the chat and in the bar alike: the mood table's, ticked by [AiFaceClock]. */
-    var face by mutableStateOf(com.kaiharimoto.mastertool.core.ai.avatar.Expression.IDLE)
+    var face by mutableStateOf(Expression.IDLE)
         internal set
 
-    internal val mood = com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker()
+    internal val mood = MoodTracker()
 
     /** How the face answers a hand (1.0.54): taps, petting, poking, holding. */
-    internal val play = com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay()
+    internal val play = AvatarPlay()
 
     /** What the face said to the hand, beside it for as long as the face is worn. */
     var playLine by mutableStateOf<String?>(null)
@@ -178,7 +191,7 @@ class AiState(internal val h: NeueHolders) {
     private var playLineUntil = 0.0
 
     /** The face answered a hand: worn for its moment, its line beside it. */
-    fun touched(r: com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay.Reaction?) {
+    fun touched(r: AvatarPlay.Reaction?) {
         r ?: return
         val now = clock()
         mood.moment(r.face, r.seconds, now)
@@ -216,12 +229,12 @@ class AiState(internal val h: NeueHolders) {
     }
 
     /** A face Ai chose for itself (the `express` tool). */
-    fun express(e: com.kaiharimoto.mastertool.core.ai.avatar.Expression, seconds: Int) = mood.express(e, seconds.toDouble(), clock())
+    fun express(e: Expression, seconds: Int) = mood.express(e, seconds.toDouble(), clock())
 
     /** The face now, from what Ai is doing. */
     fun tickFace() {
         face = mood.at(
-            com.kaiharimoto.mastertool.core.ai.avatar.AiSignals(
+            AiSignals(
                 running = running,
                 streaming = streaming.isNotEmpty(),
                 tool = tool,
@@ -311,8 +324,8 @@ class AiState(internal val h: NeueHolders) {
         private set
 
     /** [file] added to the next message, when it is a picture and there is room; a note says why not. */
-    fun attach(file: com.kaiharimoto.neue.platform.PickedFile) {
-        if (attached.size >= com.kaiharimoto.mastertool.core.ai.vision.PictureFit.MOST) {
+    fun attach(file: PickedFile) {
+        if (attached.size >= PictureFit.MOST) {
             h.neue.note = com.kaiharimoto.neue.Note("${com.kaiharimoto.mastertool.core.ai.vision.PictureFit.MOST} pictures at most in one message")
             return
         }
@@ -345,9 +358,9 @@ class AiState(internal val h: NeueHolders) {
     }
 
     /** Whether the model in use can see a picture: yes, no, or it cannot be told. */
-    val sight: com.kaiharimoto.mastertool.core.ai.vision.Vision.Sight
-        get() = prefs.connection?.let { com.kaiharimoto.mastertool.core.ai.vision.Vision.of(it.provider, it.model) }
-            ?: com.kaiharimoto.mastertool.core.ai.vision.Vision.Sight.MAYBE
+    val sight: Vision.Sight
+        get() = prefs.connection?.let { Vision.of(it.provider, it.model) }
+            ?: Vision.Sight.MAYBE
 
     /** The person's message, sent; Ai answers, acting through its tools. */
     fun send(text: String) {
@@ -363,7 +376,7 @@ class AiState(internal val h: NeueHolders) {
         notice = null
         draft = ""
         attached = emptyList()
-        if (com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker.isThanks(words)) mood.thanked(clock())
+        if (MoodTracker.isThanks(words)) mood.thanked(clock())
         val current = session?.takeIf { it.connection == connection.id } ?: begin(connection)
         val images = pictures.map { files.putImage(current.id, it.bytes, it.mime, it.width, it.height) }
         val scope = host.scope()
@@ -430,7 +443,7 @@ class AiState(internal val h: NeueHolders) {
         reasoning = ""
         activity = emptyList()
         val provider = Providers.byId(connection.provider)
-        val intensity = com.kaiharimoto.mastertool.core.ai.TuneIntensity.of(prefs.tuneIntensity)
+        val intensity = TuneIntensity.of(prefs.tuneIntensity)
         // A study runs as long and thinks as hard as its intensity says; an interview needs rounds for its questions.
         val studies = start.mode == AiSession.MODE_STUDY || start.mode == AiSession.MODE_PRINCIPLES || start.mode == AiSession.MODE_REFACTOR || start.mode == AiSession.MODE_WRITE
         val effort = when {
@@ -492,8 +505,8 @@ class AiState(internal val h: NeueHolders) {
                         is AgentEvent.Done -> session?.let { commit(it.copy(usage = it.usage + event.usage)) }
                         is AgentEvent.Failed -> problem = (
                             // A model that cannot see, sent a picture, says so in its own words; say it plainly.
-                            if (start.turns.any { t -> t.images.isNotEmpty() } && com.kaiharimoto.mastertool.core.ai.vision.Vision.refused(event.message)) {
-                                com.kaiharimoto.mastertool.core.ai.vision.Vision.REFUSED
+                            if (start.turns.any { t -> t.images.isNotEmpty() } && Vision.refused(event.message)) {
+                                Vision.REFUSED
                             } else {
                                 event.message
                             }
@@ -544,7 +557,7 @@ class AiState(internal val h: NeueHolders) {
         // Answered out of sight, on a phone or a tablet: a notification says so (1.0.61).
         if (!stopping) {
             val said = session?.turns?.lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.text?.let(::firstLine)
-            val (title, line) = com.kaiharimoto.mastertool.core.ai.WorkNotice.answered(name, said, problem?.first)
+            val (title, line) = WorkNotice.answered(name, said, problem?.first)
             Platform.answered(title, line)
         }
         val wasStopped = stopping
@@ -590,7 +603,7 @@ class AiState(internal val h: NeueHolders) {
      * Build with Ai on Present (1.0.71): a fresh Present conversation, opened with what the
      * launcher learned, so the deck-profile skill begins with the answers it would ask for.
      */
-    fun buildPresentation(brief: com.kaiharimoto.mastertool.core.present.ai.PresentBrief) {
+    fun buildPresentation(brief: PresentBrief) {
         setOpen(true)
         if (prefs.connection == null) return
         newChat(AiSession.MODE_PRESENT)
@@ -601,7 +614,7 @@ class AiState(internal val h: NeueHolders) {
      * Restyle on Present (1.0.72): a fresh restyle conversation opened with the person's words, and
      * the picture they attached if any — the look changes, the content does not.
      */
-    fun restyle(brief: com.kaiharimoto.mastertool.core.present.ai.RestyleBrief) {
+    fun restyle(brief: RestyleBrief) {
         setOpen(true)
         if (prefs.connection == null) return
         newChat(AiSession.MODE_RESTYLE)
@@ -619,7 +632,7 @@ class AiState(internal val h: NeueHolders) {
     // ---- learning (phase 3) ----------------------------------------------------
 
     /** What Fine Tuning or a reflection changed in memory, waiting on the person's Keep or Undo. */
-    var review by mutableStateOf<List<com.kaiharimoto.mastertool.core.ai.memory.MemoryChange>?>(null)
+    var review by mutableStateOf<List<MemoryChange>?>(null)
         internal set
     internal var reviewBefore: Map<String, String?> = emptyMap()
 
@@ -647,10 +660,10 @@ class AiState(internal val h: NeueHolders) {
     internal var wrapping = false
 
     /** The report Ai filed in this session, when it did (the host sets it). */
-    var lastReport by mutableStateOf<com.kaiharimoto.mastertool.core.ai.report.SessionReport?>(null)
+    var lastReport by mutableStateOf<SessionReport?>(null)
 
     /** The report shown at the session's end, beside what it learned (1.0.54). */
-    var endReport by mutableStateOf<com.kaiharimoto.mastertool.core.ai.report.SessionReport?>(null)
+    var endReport by mutableStateOf<SessionReport?>(null)
 
     /** Library decks by id, for naming their guides and notes in the brain. */
     var deckNames by mutableStateOf<Map<String, String>>(emptyMap())
@@ -787,7 +800,7 @@ class AiState(internal val h: NeueHolders) {
         scope.launch {
             androidx.compose.runtime.snapshotFlow { (running || checking) to (working ?: status) }
                 .collect { (on, doing) ->
-                    val (title, line) = com.kaiharimoto.mastertool.core.ai.WorkNotice.working(name, doing)
+                    val (title, line) = WorkNotice.working(name, doing)
                     Platform.working(on, title, line)
                 }
         }

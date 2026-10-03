@@ -40,12 +40,14 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.ai.text.MicroCaps
 import com.kaiharimoto.mastertool.core.input.CropCaption
 import com.kaiharimoto.mastertool.core.input.CursorBox
 import com.kaiharimoto.mastertool.core.input.CursorBusy
 import com.kaiharimoto.mastertool.core.input.CursorCaption
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.mastertool.core.input.CursorTarget
+import com.kaiharimoto.neue.kit.LocalKeepCase
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 
@@ -246,7 +248,7 @@ fun Modifier.cursorPointer(
 fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
     val c = Mu.colors
     val fonts = LocalMuFonts.current
-    val keep = com.kaiharimoto.neue.kit.LocalKeepCase.current
+    val keep = LocalKeepCase.current
     val measurer = rememberTextMeasurer()
     val motion = remember { CursorMotion() }
 
@@ -323,7 +325,7 @@ fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
         if (shown <= 0.001f) return@Canvas
         val text = buildAnnotatedString {
             // Caps, but the assistant's name as it is written (MicroCaps).
-            if (cap.text.isNotEmpty()) append(com.kaiharimoto.mastertool.core.ai.text.MicroCaps.of(cap.text, keep))
+            if (cap.text.isNotEmpty()) append(MicroCaps.of(cap.text, keep))
             if (cap.value.isNotEmpty()) {
                 if (cap.text.isNotEmpty()) append(" ")
                 withStyle(SpanStyle(fontFamily = fonts.mono, fontWeight = FontWeight.Normal, letterSpacing = 0.em)) { append(cap.value) }

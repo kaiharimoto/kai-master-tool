@@ -286,7 +286,7 @@ fun Rail(
         ) {
             // Light and dark, as a light: the sun on paper, the moon on ink (kai, 1.0.15).
             val paper = neue.prefs.theme == NeueTheme.PAPER
-            Tip(if (paper) "Switch to ink, the dark theme" else "Switch to paper, the light theme", kbd = com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(com.kaiharimoto.mastertool.core.input.DeskAction.TOGGLE_THEME)?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd), above = true) {
+            Tip(if (paper) "Switch to ink, the dark theme" else "Switch to paper, the light theme", kbd = DeskShortcuts.chordFor(DeskAction.TOGGLE_THEME)?.let(DeskShortcuts::kbd), above = true) {
                 IconButton(if (paper) Icons.Sun else Icons.Moon, neue::toggleTheme, size = 24.dp, label = if (paper) "Ink" else "Paper")
             }
             MicroLink("Keys", { neue.helpOpen = true })

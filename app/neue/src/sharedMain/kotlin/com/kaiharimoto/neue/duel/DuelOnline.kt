@@ -21,9 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.net.PairCode
 import com.kaiharimoto.mastertool.core.duel.net.Windows
+import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -107,10 +109,10 @@ internal fun NetBar(h: NeueHolders, duels: Duels, overlay: Boolean = false) {
  * turn player to answer — Go on or Not yet — and, for the one who asked, that it is waiting. Never a dialog.
  */
 @Composable
-internal fun ProposalBar(duels: Duels, s: com.kaiharimoto.mastertool.core.duel.DuelState) {
+internal fun ProposalBar(duels: Duels, s: DuelState) {
     val c = Mu.colors
     val p = s.proposal ?: return
-    val asker = com.kaiharimoto.mastertool.core.duel.text.DuelWords.seatName(s, p.seat)
+    val asker = DuelWords.seatName(s, p.seat)
     val what = if (p.end) "end the turn" else "go to the ${p.phase?.label} Phase"
     // At a hot-seat the screen answers for the turn player; online only the turn player's screen does.
     val answers = duels.role == null || duels.mySeat == s.active

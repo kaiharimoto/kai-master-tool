@@ -13,6 +13,7 @@ import com.kaiharimoto.mastertool.core.model.CardArt
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.pdf.PdfImage
 import com.kaiharimoto.mastertool.core.pdf.TrueType
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.siding.GuideCard
 import com.kaiharimoto.mastertool.core.siding.GuideContent
 import com.kaiharimoto.mastertool.core.siding.GuideFonts
@@ -122,7 +123,7 @@ object GuideExport {
         )
         // Every picture the guide prints, read before it is laid out: the layout itself never waits.
         // The guide is drawn as Siding is shown (1.0.49): art prints a picture per copy, a list only names.
-        val style = if (neue.prefs.sidingView == com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_LIST) GuideStyle.LIST else GuideStyle.ART
+        val style = if (neue.prefs.sidingView == NeuePreferences.SIDING_LIST) GuideStyle.LIST else GuideStyle.ART
         val wanted = content.matchups.flatMap { m ->
             m.covers + if (style == GuideStyle.LIST) emptyList() else m.turns.flatMap { t -> listOfNotNull(t.plan, t.theirs).flatMap { p -> (p.out + p.into).map { it.id } } }
         }.distinct()

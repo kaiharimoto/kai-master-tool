@@ -1,26 +1,30 @@
 package com.kaiharimoto.neue.ai
 
 import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.voice.Hints
+import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.neue.platform.Mic
+import com.kaiharimoto.neue.platform.Voice
 import kotlinx.coroutines.launch
 
 // Voice (1.0.57), on [AiState]: the microphone into the composer, talk mode, replies said aloud, and the speech
 // model's download (the duel's push-to-talk asks for it too). The state it moves is kept on [AiState].
 
-val AiState.voiceModel: com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
-    get() = com.kaiharimoto.mastertool.core.ai.voice.VoiceModel.of(prefs.voiceModel)
+val AiState.voiceModel: VoiceModel
+    get() = VoiceModel.of(prefs.voiceModel)
 
 /** The words a transcriber is primed with: the open deck's cards, and the game's. */
 private fun AiState.hints(): String {
     val index = h.builder.index
     val deck = h.builder.deck
     val names = (deck.main + deck.extra + deck.side).distinct().mapNotNull { index.byId(it)?.name }
-    return com.kaiharimoto.mastertool.core.ai.voice.Hints.prompt(names)
+    return Hints.prompt(names)
 }
 
 /** The microphone on or off: the words go into the composer, to read over before sending. */
 fun AiState.toggleVoice() {
-    if (hearing || transcribing) com.kaiharimoto.neue.platform.Voice.stopListening() else listen(send = false)
+    if (hearing || transcribing) Voice.stopListening() else listen(send = false)
 }
 
 /**
@@ -28,7 +32,7 @@ fun AiState.toggleVoice() {
  * already written — and in talk mode sent as soon as they are written out.
  */
 fun AiState.listen(send: Boolean) {
-    val voice = com.kaiharimoto.neue.platform.Voice
+    val voice = Voice
     if (hearing || transcribing || voiceJob?.isActive == true) return
     if (!voice.canListen) {
         h.neue.note = com.kaiharimoto.neue.Note("No microphone could be found")
@@ -44,7 +48,7 @@ fun AiState.listen(send: Boolean) {
     fun joined(words: String) = if (before.isEmpty()) words.trim() else "$before ${words.trim()}"
     hearing = true
     // One microphone (1.0.87): the duel's push-to-talk, if it listens, is stopped first; holding M later takes it back.
-    voiceJob = com.kaiharimoto.neue.platform.Mic.listen(scope, "ai", onLost = { micTaken() }) {
+    voiceJob = Mic.listen(scope, "ai", onLost = { micTaken() }) {
         try {
             voice.listen(voiceModel, hints()).collect { heard ->
                 when (heard) {
@@ -110,7 +114,7 @@ fun AiState.downloadVoiceModel() {
     voiceForDuel = false
     voiceDownload = 0f
     scope.launch {
-        val done = com.kaiharimoto.neue.platform.Voice.download(model) { bytes -> voiceDownload = (bytes.toFloat() / model.bytes).coerceIn(0f, 1f) }
+        val done = Voice.download(model) { bytes -> voiceDownload = (bytes.toFloat() / model.bytes).coerceIn(0f, 1f) }
         voiceDownload = null
         done.fold(
             {
@@ -139,7 +143,7 @@ fun AiState.toggleTalk() {
             return
         }
         talkMode = true
-        notice = if (com.kaiharimoto.neue.platform.Voice.canSpeak || prefs.speakReplies == com.kaiharimoto.mastertool.core.prefs.AiPrefs.SPEAK_NEVER) null
+        notice = if (Voice.canSpeak || prefs.speakReplies == AiPrefs.SPEAK_NEVER) null
         else "This computer has no voice to speak with, so replies stay on screen."
         listen(send = true)
     }
@@ -147,14 +151,14 @@ fun AiState.toggleTalk() {
 
 fun AiState.endTalk() {
     talkMode = false
-    com.kaiharimoto.neue.platform.Voice.stopListening()
+    Voice.stopListening()
     stopSpeaking()
 }
 
 fun AiState.stopSpeaking() {
     speakJob?.cancel()
     speakJob = null
-    com.kaiharimoto.neue.platform.Voice.stopSpeaking()
+    Voice.stopSpeaking()
     aloud = false
 }
 
@@ -162,8 +166,8 @@ fun AiState.stopSpeaking() {
 internal fun AiState.answerAloud() {
     val reply = session?.turns?.lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.text
     speakJob = scope.launch {
-        val voice = com.kaiharimoto.neue.platform.Voice
-        if (reply != null && voice.canSpeak && prefs.speakReplies != com.kaiharimoto.mastertool.core.prefs.AiPrefs.SPEAK_NEVER) {
+        val voice = Voice
+        if (reply != null && voice.canSpeak && prefs.speakReplies != AiPrefs.SPEAK_NEVER) {
             aloud = true
             try {
                 voice.speak(com.kaiharimoto.mastertool.core.ai.voice.Spoken.of(reply), prefs.speechRate)

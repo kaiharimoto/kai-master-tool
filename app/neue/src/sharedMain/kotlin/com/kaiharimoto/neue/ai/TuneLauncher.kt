@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.TuneIntensity
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
@@ -36,7 +37,7 @@ fun TuneLauncher(ai: AiState) {
     val saved = ai.h.builder.deckId != null
     var mode by remember { mutableStateOf(ai.tuneMode ?: AiSession.MODE_TUNE) }
     // Refactor guide (1.0.66) is offered once there is a guide to refactor.
-    val guided = remember(ai.h.builder.deckId) { ai.h.builder.deckId?.let { ai.files.entries(com.kaiharimoto.mastertool.core.ai.memory.MemoryKind.GUIDE, it).isNotBlank() } ?: false }
+    val guided = remember(ai.h.builder.deckId) { ai.h.builder.deckId?.let { ai.files.entries(MemoryKind.GUIDE, it).isNotBlank() } ?: false }
     val study = mode != AiSession.MODE_TUNE
     var intensity by remember { mutableStateOf(TuneIntensity.of(ai.prefs.tuneIntensity)) }
     MuDialog(

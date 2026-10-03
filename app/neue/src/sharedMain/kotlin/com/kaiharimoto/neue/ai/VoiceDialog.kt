@@ -13,6 +13,7 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.platform.Voice
 import com.kaiharimoto.neue.theme.Mu
 
 /**
@@ -71,9 +72,9 @@ internal fun VoiceSettings(ai: AiState) {
     val c = Mu.colors
     val prefs = ai.prefs
     // The desk's model choice; a phone's recogniser is the system's and has none.
-    if (com.kaiharimoto.neue.platform.Voice.usesModels) {
+    if (Voice.usesModels) {
         VoiceModelChoice(ai)
-        if (com.kaiharimoto.neue.platform.Voice.needsModel(ai.voiceModel)) Help("Downloaded the first time you speak.", color = c.ink45)
+        if (Voice.needsModel(ai.voiceModel)) Help("Downloaded the first time you speak.", color = c.ink45)
     }
     Micro("Talk mode", color = c.ink45)
     Segmented(prefs.speakReplies, listOf(AiPrefs.SPEAK_IN_TALK, AiPrefs.SPEAK_NEVER), { if (it == AiPrefs.SPEAK_IN_TALK) "Answers aloud" else "Answers on screen" }, { v ->
@@ -84,5 +85,5 @@ internal fun VoiceSettings(ai: AiState) {
             ai.h.neue.update { it.copy(ai = it.ai.copy(speechRate = v)) }
         }, small = true)
     }
-    if (!com.kaiharimoto.neue.platform.Voice.canSpeak) Help("This computer has no voice to speak with, so answers stay on screen.", color = c.ink45)
+    if (!Voice.canSpeak) Help("This computer has no voice to speak with, so answers stay on screen.", color = c.ink45)
 }

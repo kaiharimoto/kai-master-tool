@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.present.ModuleRef
 import com.kaiharimoto.mastertool.core.present.Para
 import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.present.PresentIds
+import com.kaiharimoto.mastertool.core.present.Run
 import com.kaiharimoto.mastertool.core.present.RunStyle
 import com.kaiharimoto.mastertool.core.present.Slide
 import com.kaiharimoto.mastertool.core.present.Stat
@@ -364,7 +365,7 @@ object Modules {
                 add(
                     Element(
                         id("$slot-why"), Element.TEXT, left, 0.68f, 0.48f, 0.32f, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_BODY,
-                        paras = lines.map { Para(listOf(com.kaiharimoto.mastertool.core.present.Run(it.note)), list = Para.LIST_BULLET) },
+                        paras = lines.map { Para(listOf(Run(it.note)), list = Para.LIST_BULLET) },
                     ),
                 )
             }

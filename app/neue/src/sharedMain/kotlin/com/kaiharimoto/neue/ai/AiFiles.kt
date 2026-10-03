@@ -7,6 +7,8 @@ import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryDoc
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
+import com.kaiharimoto.mastertool.core.ai.report.ReportLog
+import com.kaiharimoto.mastertool.core.ai.report.SessionReport
 import com.kaiharimoto.mastertool.core.ai.skills.Skill
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
 import kotlinx.serialization.json.Json
@@ -76,15 +78,15 @@ class AiFiles(val root: File) {
     // ---- Fine Tuning's reports (1.0.54) --------------------------------------
 
     /** Every report filed on [deckId], oldest first. */
-    fun reports(deckId: String): List<com.kaiharimoto.mastertool.core.ai.report.SessionReport> =
-        com.kaiharimoto.mastertool.core.ai.report.ReportLog.read(read(com.kaiharimoto.mastertool.core.ai.report.ReportLog.path(deckId)))
+    fun reports(deckId: String): List<SessionReport> =
+        ReportLog.read(read(ReportLog.path(deckId)))
 
-    fun addReport(report: com.kaiharimoto.mastertool.core.ai.report.SessionReport) = write(
-        com.kaiharimoto.mastertool.core.ai.report.ReportLog.path(report.deckId),
-        com.kaiharimoto.mastertool.core.ai.report.ReportLog.write(com.kaiharimoto.mastertool.core.ai.report.ReportLog.add(reports(report.deckId), report)),
+    fun addReport(report: SessionReport) = write(
+        ReportLog.path(report.deckId),
+        ReportLog.write(ReportLog.add(reports(report.deckId), report)),
     )
 
-    fun deleteReports(deckId: String) = delete(com.kaiharimoto.mastertool.core.ai.report.ReportLog.path(deckId))
+    fun deleteReports(deckId: String) = delete(ReportLog.path(deckId))
 
     /** Everything Ai remembers gone: memory, skills it wrote, conversations. The folder stays. */
     fun forgetEverything() {

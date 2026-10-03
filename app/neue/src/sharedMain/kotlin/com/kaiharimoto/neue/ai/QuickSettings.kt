@@ -15,7 +15,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.ai.ContextWindows
 import com.kaiharimoto.mastertool.core.ai.TuneIntensity
+import com.kaiharimoto.mastertool.core.ai.providers.ConnectKind
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
@@ -23,12 +25,16 @@ import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.FieldLabel
 import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.platform.Voice
 import com.kaiharimoto.neue.theme.Mu
 import kotlinx.coroutines.launch
 
@@ -109,7 +115,7 @@ fun QuickSettings(ai: AiState) {
                 }
                 // How much the model reads at once (1.0.56): read off its name, unless the person knows better.
                 if (provider.wire != com.kaiharimoto.mastertool.core.ai.providers.Wire.CLAUDE_CLI && provider.wire != com.kaiharimoto.mastertool.core.ai.providers.Wire.CODEX_CLI) {
-                    val guessed = com.kaiharimoto.mastertool.core.ai.ContextWindows.of(connection.provider, connection.model, provider.kind == com.kaiharimoto.mastertool.core.ai.providers.ConnectKind.LOCAL)
+                    val guessed = ContextWindows.of(connection.provider, connection.model, provider.kind == ConnectKind.LOCAL)
                     var windowText by remember(connection.id) { mutableStateOf(connection.window?.toString().orEmpty()) }
                     FieldLabel("Context window", hint = "tokens it reads at once · ${com.kaiharimoto.mastertool.core.ai.ContextWindows.words(guessed.toLong())} for this model")
                     MuInput(windowText, { v ->
@@ -126,7 +132,7 @@ fun QuickSettings(ai: AiState) {
                 }
             }
             // Voice (1.0.57): the speech model on the desk, and talk mode's answers.
-            FieldLabel("Voice", hint = if (com.kaiharimoto.neue.platform.Voice.usesModels) "written out on this computer" else "the system's recogniser")
+            FieldLabel("Voice", hint = if (Voice.usesModels) "written out on this computer" else "the system's recogniser")
             VoiceSettings(ai)
             // Videos (1.0.62): a YouTube link watched by Gemini, frames and sound, with this key.
             FieldLabel("Videos", hint = "YouTube links, watched by Gemini")
@@ -166,7 +172,7 @@ internal fun VideoKey(ai: AiState, explain: Boolean = true, onSaved: () -> Unit 
     var said by remember { mutableStateOf<String?>(null) }
     var trying by remember { mutableStateOf(false) }
     val viaConnection = ai.prefs.connections.any { it.provider == "gemini" && !ai.secret(it).isNullOrBlank() }
-    if (explain) com.kaiharimoto.neue.kit.Help(
+    if (explain) Help(
         when {
             SecretStore.get(AiVideo.KEY) != null -> "Link a YouTube video — a deck profile, a combo guide — and Ai watches it with this key, whatever model it chats with."
             viaConnection -> "Your Gemini connection's key is used to watch videos. Add one here to keep them apart."
@@ -194,9 +200,9 @@ internal fun VideoKey(ai: AiState, explain: Boolean = true, onSaved: () -> Unit 
                 trying = false
             }
         }, variant = BtnVariant.SECONDARY, size = BtnSize.SM, enabled = !trying, reason = "Trying the key")
-        com.kaiharimoto.neue.kit.MicroLink("Get a free key →", { com.kaiharimoto.neue.platform.Platform.browse(AiVideo.KEY_PAGE) })
+        MicroLink("Get a free key →", { Platform.browse(AiVideo.KEY_PAGE) })
     }
-    said?.let { com.kaiharimoto.neue.kit.Small(it, color = Mu.colors.ink) }
+    said?.let { Small(it, color = Mu.colors.ink) }
 }
 
 /**
@@ -212,10 +218,10 @@ internal fun VideoKeyCard(ai: AiState) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            com.kaiharimoto.neue.kit.Micro("Watch videos with Gemini", Modifier.weight(1f))
-            com.kaiharimoto.neue.kit.MicroLink("Not now", { ai.videoKeyAsked = false })
+            Micro("Watch videos with Gemini", Modifier.weight(1f))
+            MicroLink("Not now", { ai.videoKeyAsked = false })
         }
-        com.kaiharimoto.neue.kit.Small("1. Get a free key: a Google account, no card. 2. Paste it here and Save. 3. Ask again.", color = c.ink70)
+        Small("1. Get a free key: a Google account, no card. 2. Paste it here and Save. 3. Ask again.", color = c.ink70)
         VideoKey(ai, explain = false, onSaved = {
             ai.videoKeyAsked = false
             ai.notice = "Gemini key saved. Ask again, and ${ai.name} will watch the video."

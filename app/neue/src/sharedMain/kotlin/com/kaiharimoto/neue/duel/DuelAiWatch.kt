@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
+import com.kaiharimoto.mastertool.core.duel.ai.Watch
 
 /**
  * Ai's response triggers (1.0.85), a part of [Duels]: the watches Ai left, the hits waiting for it, a phase change held
@@ -11,7 +13,7 @@ import androidx.compose.runtime.setValue
  */
 internal class DuelAiWatch(private val d: Duels) {
     /** Ai's watches: its private plan for what it would answer. Never in the log, the record or the network. */
-    var watches by mutableStateOf<List<com.kaiharimoto.mastertool.core.duel.ai.Watch>>(emptyList())
+    var watches by mutableStateOf<List<Watch>>(emptyList())
     private var nextWatch = 1
     /** Watches that fired and wait for Ai: the page cues it with them as soon as it is free. */
     var fired by mutableStateOf<List<com.kaiharimoto.mastertool.core.duel.ai.Hit>>(emptyList())
@@ -29,7 +31,7 @@ internal class DuelAiWatch(private val d: Duels) {
     /** Stops Ai's answer, set by the page: Don't wait means Ai's late answer never lands (1.0.85). */
     var stopAi: (() -> Unit)? = null
 
-    fun watch(w: com.kaiharimoto.mastertool.core.duel.ai.Watch): com.kaiharimoto.mastertool.core.duel.ai.Watch {
+    fun watch(w: Watch): Watch {
         val kept = w.copy(id = nextWatch++)
         watches = watches + kept
         return kept
@@ -44,9 +46,9 @@ internal class DuelAiWatch(private val d: Duels) {
     fun nextWatchId(): Int = nextWatch
 
     /** Ai's watches as of now: a turn's watch is gone with its turn. */
-    fun liveWatches(): List<com.kaiharimoto.mastertool.core.duel.ai.Watch> {
+    fun liveWatches(): List<Watch> {
         val turn = d.game?.state?.turn ?: return emptyList()
-        val alive = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.alive(watches, turn)
+        val alive = DuelTriggers.alive(watches, turn)
         if (alive.size != watches.size) watches = alive
         return alive
     }
@@ -68,11 +70,11 @@ internal class DuelAiWatch(private val d: Duels) {
     val waitingOnAi: Boolean get() = aiAnswering || held != null || fired.isNotEmpty()
 
     fun summonsThisTurn(): (Int) -> Int {
-        val n by lazy { d.game?.let { com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.summonsThisTurn(it, d.catalog) } }
+        val n by lazy { d.game?.let { DuelTriggers.summonsThisTurn(it, d.catalog) } }
         return { seat -> n?.getOrNull(seat) ?: 0 }
     }
 
-    fun fire(hits: List<com.kaiharimoto.mastertool.core.duel.ai.Hit>): List<com.kaiharimoto.mastertool.core.duel.ai.Watch> {
+    fun fire(hits: List<com.kaiharimoto.mastertool.core.duel.ai.Hit>): List<Watch> {
         if (hits.isEmpty()) return emptyList()
         val gone = hits.filter { it.watch.once }.map { it.watch }
         if (gone.isNotEmpty()) watches = watches.filter { w -> gone.none { it.id == w.id } }

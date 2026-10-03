@@ -47,6 +47,7 @@ import com.kaiharimoto.mastertool.core.library.DeckCovers
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.siding.DeckSiding
 import com.kaiharimoto.mastertool.core.siding.Matchup
 import com.kaiharimoto.mastertool.core.siding.SidePlan
@@ -56,12 +57,15 @@ import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.mastertool.core.web.DeckWeb
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
+import com.kaiharimoto.neue.art.LocalArt
+import com.kaiharimoto.neue.art.LocalCustomArt
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
+import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.LocalTouchFirst
@@ -74,6 +78,7 @@ import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.ScrollbarFor
+import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.Tag
 import com.kaiharimoto.neue.kit.animatedColor
@@ -180,11 +185,11 @@ internal fun SidingEditor(
             choices.map { d -> MenuEntry(d.entry.name, hint = if (d.entry.id == m.deckId) "✓" else null) { save(siding.put(m.copy(deckId = d.entry.id))) } }
         })
     }
-    val art = neue.prefs.sidingView != com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_LIST
+    val art = neue.prefs.sidingView != NeuePreferences.SIDING_LIST
 
     Column(Modifier.fillMaxSize()) {
-        val arts = com.kaiharimoto.neue.art.LocalArt.current
-        val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+        val arts = LocalArt.current
+        val custom = LocalCustomArt.current
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         var making by remember { mutableStateOf(false) }
         // The guide reads every deck a matchup names: the web's, and any linked from the library.
@@ -216,7 +221,7 @@ internal fun SidingEditor(
             }
         }
         if (opponents.isEmpty() && loose.isEmpty()) {
-            com.kaiharimoto.neue.kit.EmptyState(
+            EmptyState(
                 "No matchups yet.",
                 if (web == null) {
                     "Add the decks you expect to face: a name and three cards to know each by. Side against it here, and link its decklist later if you get one."
@@ -265,7 +270,7 @@ internal fun SidingEditor(
                 )
                 PlanNote(matchup?.note.orEmpty(), { note -> edit { it.copy(note = note) } }, "The matchup: how it plays, what matters, what to hold.")
                 if (narrow) {
-                    com.kaiharimoto.neue.kit.Segmented(turn, Turn.entries, { it.title }, { turn = it })
+                    Segmented(turn, Turn.entries, { it.title }, { turn = it })
                     TurnColumn(turn, plan(turn), true, state, myDeck, art, { setPlan(turn, it) }, {})
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -381,10 +386,10 @@ private fun SidingBar(webs: Webs, web: DeckWeb?, decks: List<StoredDeck>, me: St
             // A deck on its own (1.0.42): the one in the builder, by name.
             MuText(me.entry.name, style = MuType.body(LocalMuFonts.current).copy(fontWeight = FontWeight.Bold), color = c.ink, maxLines = 1)
         }
-        com.kaiharimoto.neue.kit.Segmented(
+        Segmented(
             neue.prefs.sidingView,
-            listOf(com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_ART, com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_LIST),
-            { if (it == com.kaiharimoto.mastertool.core.prefs.NeuePreferences.SIDING_LIST) "List" else "Art" },
+            listOf(NeuePreferences.SIDING_ART, NeuePreferences.SIDING_LIST),
+            { if (it == NeuePreferences.SIDING_LIST) "List" else "Art" },
             { v -> neue.update { it.copy(sidingView = v) } },
             small = true,
         )

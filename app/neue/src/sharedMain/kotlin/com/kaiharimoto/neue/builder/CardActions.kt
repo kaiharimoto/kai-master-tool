@@ -1,12 +1,15 @@
 package com.kaiharimoto.neue.builder
 
 import com.kaiharimoto.mastertool.core.deck.DeckHistory
+import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.haptics.DeskEvent
+import com.kaiharimoto.mastertool.core.input.DeskTouch
 import com.kaiharimoto.mastertool.core.library.DeckCovers
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardArt
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.Drawer
 import com.kaiharimoto.neue.NeueState
@@ -25,8 +28,10 @@ import com.kaiharimoto.mastertool.core.ydk.DeckQrParts
 import com.kaiharimoto.mastertool.core.ydk.DeckRead
 import com.kaiharimoto.mastertool.core.ydk.JvmZlib
 import com.kaiharimoto.mastertool.core.ydk.YdkDocument
+import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.platform.QrScan
 import com.kaiharimoto.neue.platform.QrSource
+import com.kaiharimoto.neue.qr.QrShown
 
 /**
  * What a card can be asked to do, written once for the card viewer, the
@@ -49,8 +54,8 @@ object CardActions {
 
     /** The gesture beside a menu entry: a finger's on the tablet (`DeskTouch`), where there is one, else the mouse's. */
     private fun hint(target: MouseTarget, action: MouseAction): String? =
-        if (com.kaiharimoto.neue.platform.Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
-            com.kaiharimoto.mastertool.core.input.DeskTouch.all
+        if (Platform.os == DesktopOs.ANDROID) {
+            DeskTouch.all
                 .firstOrNull { it.target == target && it.action == action }?.gesture?.label
         } else {
             DeskMouse.gestureFor(target, action)?.label
@@ -145,7 +150,7 @@ object CardActions {
 
     fun copyName(card: Card) = copy(card.name)
 
-    fun copy(text: String) = com.kaiharimoto.neue.platform.Platform.copy(text)
+    fun copy(text: String) = Platform.copy(text)
 
     /**
      * Export, as kai asked for it in 1.0.15: a file — plain `.ydk`, or `.ydkx` with
@@ -182,7 +187,7 @@ object CardActions {
      */
     fun showQr(name: String, document: YdkDocument, covers: List<Int>, neue: NeueState) {
         val title = name.ifBlank { "Untitled Deck" }
-        neue.qr = com.kaiharimoto.neue.qr.QrShown(title, document.deck, DeckQr.write(title, document, covers, JvmZlib), YdkeCodec.encode(document.deck))
+        neue.qr = QrShown(title, document.deck, DeckQr.write(title, document, covers, JvmZlib), YdkeCodec.encode(document.deck))
     }
 
     /**
@@ -192,7 +197,7 @@ object CardActions {
      * at once and has no menu.
      */
     fun importMenu(state: DeckBuilderState, neue: NeueState): List<MenuEntry> {
-        val sources = com.kaiharimoto.neue.platform.Platform.scanSources
+        val sources = Platform.scanSources
         return buildList {
             add(MenuEntry("A .ydk or .ydkx file") { importFile(state, neue) })
             if (sources.isNotEmpty()) {
@@ -230,7 +235,7 @@ object CardActions {
     suspend fun readCode(from: QrSource, neue: NeueState): String? {
         val parts = DeckQrParts()
         while (true) {
-            when (val scan = com.kaiharimoto.neue.platform.Platform.scanQr(from)) {
+            when (val scan = Platform.scanQr(from)) {
                 is QrScan.Read -> {
                     val whole = scan.texts.map { parts.offer(it) }.filterIsInstance<DeckQrParts.Offer.Whole>().firstOrNull()?.text
                     if (whole != null) return whole
@@ -258,7 +263,7 @@ object CardActions {
      * meant leaving the app, finding the chat and pasting. Nothing on the desk.
      */
     fun shareEntries(code: () -> String, name: String, file: () -> Unit): List<MenuEntry> {
-        val platform = com.kaiharimoto.neue.platform.Platform
+        val platform = Platform
         if (!platform.canShare) return emptyList()
         return listOf(
             MenuEntry("Share YDKe code…", separatorBefore = true) { platform.shareText(code(), name.ifBlank { "Deck" }) },
@@ -359,7 +364,7 @@ object CardActions {
                     add(MenuEntry("Edit “${group.name}”") { state.editGroup(group) })
                 }
             }
-            add(MenuEntry("Manage groups", hint = "G") { state.useLens(com.kaiharimoto.mastertool.core.deck.Lens.ROLES) })
+            add(MenuEntry("Manage groups", hint = "G") { state.useLens(Lens.ROLES) })
             artEntry(card, neue)?.let(::add)
             removeArtEntry(card, neue)?.let(::add)
             add(coverEntry(section, index, state, neue))

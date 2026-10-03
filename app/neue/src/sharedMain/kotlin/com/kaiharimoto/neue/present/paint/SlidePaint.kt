@@ -60,12 +60,15 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.layout.GridFitter
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.present.Chart
+import com.kaiharimoto.mastertool.core.present.ChartSeries
 import com.kaiharimoto.mastertool.core.present.DeckSnapshot
 import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.Fill
+import com.kaiharimoto.mastertool.core.present.Geometry
 import com.kaiharimoto.mastertool.core.present.Para
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.RunStyle
@@ -280,7 +283,7 @@ private fun ElementView(
     editing: Boolean,
     camera: (@Composable () -> Unit)?,
 ) {
-    val box = com.kaiharimoto.mastertool.core.present.Geometry.box(e, stage)
+    val box = Geometry.box(e, stage)
     Box(
         Modifier
             .onCanvas(s) { box }
@@ -669,7 +672,7 @@ private fun CardsBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float, 
             }
         }
         e.cardLayout == Element.CARDS_GRID -> {
-            val fit = com.kaiharimoto.mastertool.core.layout.GridFitter.fit(n, area.w, area.h, gap, CARD_RATIO, 1, n)
+            val fit = GridFitter.fit(n, area.w, area.h, gap, CARD_RATIO, 1, n)
             val cols = fit.columns
             val rows = (n + cols - 1) / cols
             val w = min((area.w - gap * (cols - 1)) / cols, (area.h - gap * (rows - 1)) / rows * CARD_RATIO)
@@ -948,7 +951,7 @@ private fun ChartBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
         if (series.isEmpty()) return@Canvas
         val values = series.flatMap { it.values }
         val top = chart.max ?: (values.maxOrNull() ?: 1f).coerceAtLeast(0.0001f)
-        fun colorOf(i: Int, sr: com.kaiharimoto.mastertool.core.present.ChartSeries) = ctx.color(sr.color) ?: palette[i % palette.size]
+        fun colorOf(i: Int, sr: ChartSeries) = ctx.color(sr.color) ?: palette[i % palette.size]
         when (chart.kind) {
             Chart.PIE, Chart.DONUT -> {
                 val v = series.first().values

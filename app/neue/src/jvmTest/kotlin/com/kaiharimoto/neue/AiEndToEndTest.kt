@@ -14,6 +14,8 @@ import com.kaiharimoto.mastertool.core.data.PreferencesRepository
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
+import com.kaiharimoto.mastertool.core.present.Element
+import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.mastertool.core.remote.YgoProDeckApi
 import com.kaiharimoto.mastertool.core.siding.SidingCodec
@@ -21,6 +23,7 @@ import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.mastertool.core.update.GitHubReleaseApi
 import com.kaiharimoto.mastertool.core.update.NeueUpdateChecker
+import com.kaiharimoto.mastertool.core.update.Release
 import com.kaiharimoto.mastertool.core.update.UpdateChecker
 import com.kaiharimoto.mastertool.ui.AppDependencies
 import com.kaiharimoto.mastertool.ui.DeckFileAccess
@@ -33,6 +36,7 @@ import com.kaiharimoto.neue.ai.AiDesk
 import com.kaiharimoto.neue.ai.AnthropicBackend
 import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.builder.NeueDrag
+import com.kaiharimoto.neue.prep.Prep
 import com.kaiharimoto.neue.shot.DeckShots
 import com.kaiharimoto.neue.update.NeueUpdates
 import com.kaiharimoto.neue.web.Webs
@@ -110,7 +114,7 @@ class AiEndToEndTest {
             updater = object : AppUpdater {
                 override val currentVersionName = "test"
                 override val canInstallInPlace = false
-                override suspend fun downloadAndInstall(release: com.kaiharimoto.mastertool.core.update.Release, onProgress: (Float?) -> Unit) = InstallOutcome.HandedToInstaller
+                override suspend fun downloadAndInstall(release: Release, onProgress: (Float?) -> Unit) = InstallOutcome.HandedToInstaller
                 override fun openReleasePage(url: String) = Unit
             },
             newDeckId = { UUID.randomUUID().toString() },
@@ -128,7 +132,7 @@ class AiEndToEndTest {
             art = art,
             shots = DeckShots(art, scope),
             webs = Webs(deps, scope),
-            prep = com.kaiharimoto.neue.prep.Prep(deps, scope),
+            prep = Prep(deps, scope),
         )
         builder.start()
         h.webs.load()
@@ -295,7 +299,7 @@ class AiEndToEndTest {
             val made = h.tool("present_edit", "ops" to listOf(input("action" to "create", "deck_id" to deckId, "style" to "build_up", "creator" to "kai")))
             assertFalse(made.isError, made.content)
             val p = h.present.open ?: error("create opens the presentation")
-            assertEquals(com.kaiharimoto.mastertool.core.present.Presentation.STYLE_BUILD_UP, p.style)
+            assertEquals(Presentation.STYLE_BUILD_UP, p.style)
             assertEquals(deckId, p.deck?.deckId)
             assertEquals(Page.PRESENT, h.neue.page)
 
@@ -311,7 +315,7 @@ class AiEndToEndTest {
             assertTrue("Operation 2" in edit.content && "Stopped" in edit.content, edit.content)
             assertEquals(before + 1, h.present.open!!.slides.size)
             val focus = h.present.open!!.slides.first { it.title == "The hand trap" }
-            assertEquals(listOf(14558127), focus.elements.first { it.type == com.kaiharimoto.mastertool.core.present.Element.CARD }.cards)
+            assertEquals(listOf(14558127), focus.elements.first { it.type == Element.CARD }.cards)
             h.present.undo()
             assertEquals(before, h.present.open!!.slides.size, "the batch undoes as one")
 

@@ -4,6 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.prep.Drill
+import com.kaiharimoto.mastertool.core.prep.DrillStat
+import com.kaiharimoto.mastertool.core.prep.IsoDate
 import com.kaiharimoto.mastertool.core.prep.PrepDoc
 import com.kaiharimoto.mastertool.core.prep.PrepEvent
 import com.kaiharimoto.mastertool.core.prep.PrepProfile
@@ -48,7 +50,7 @@ class Prep(private val deps: AppDependencies, private val scope: CoroutineScope)
 
     fun newId(prefix: String): String = "$prefix-${deps.now().toString(36)}-${(0..0xffff).random().toString(36)}"
 
-    fun today(): String = com.kaiharimoto.mastertool.core.prep.IsoDate.of(Math.floorDiv(deps.now(), 86_400_000L))
+    fun today(): String = IsoDate.of(Math.floorDiv(deps.now(), 86_400_000L))
 
     fun putEvent(event: PrepEvent, activate: Boolean = true) =
         commit(doc.put(event).let { if (activate) it.copy(active = event.id) else it })
@@ -68,7 +70,7 @@ class Prep(private val deps: AppDependencies, private val scope: CoroutineScope)
 
     /** A drill answered: its Leitner box moves ([Drill.update]). */
     fun drilled(key: String, score: Drill.Score) {
-        val stat = doc.drills[key] ?: com.kaiharimoto.mastertool.core.prep.DrillStat()
+        val stat = doc.drills[key] ?: DrillStat()
         commit(doc.copy(drills = doc.drills + (key to Drill.update(stat, score, deps.now()))))
     }
 }

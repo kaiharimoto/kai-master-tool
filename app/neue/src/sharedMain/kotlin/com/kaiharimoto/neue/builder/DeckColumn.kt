@@ -1,7 +1,13 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.input.DeskTouch
+import com.kaiharimoto.mastertool.core.input.DeskWords
 import com.kaiharimoto.mastertool.core.input.TwoFinger
 import com.kaiharimoto.mastertool.core.haptics.DeskEvent
+import com.kaiharimoto.mastertool.ui.deckbuilder.RevealRequest
+import com.kaiharimoto.neue.kit.HRule
+import com.kaiharimoto.neue.kit.MenuEntry
+import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.releasesTypingOnFinger
@@ -726,8 +732,8 @@ private fun ArrangementMenu(state: DeckBuilderState, neue: NeueState) {
             .onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }
             .cursorPointer(caption = "Arrange")
             .muClickable {
-                neue.menu = com.kaiharimoto.neue.kit.MenuSpec(at, GroupArrangement.entries.map { a ->
-                    com.kaiharimoto.neue.kit.MenuEntry(com.kaiharimoto.neue.arrangementWords(a), hint = if (a == now) "Now" else null) { arrange(state, neue, a) }
+                neue.menu = MenuSpec(at, GroupArrangement.entries.map { a ->
+                    MenuEntry(com.kaiharimoto.neue.arrangementWords(a), hint = if (a == now) "Now" else null) { arrange(state, neue, a) }
                 })
             }
             .padding(horizontal = 10.dp),
@@ -794,15 +800,15 @@ private fun FoilToggle(neue: NeueState) {
  * swarm, rec 15): the add or drop a finger made, which the finger itself covers.
  */
 @Composable
-private fun rememberRing(state: DeckBuilderState): androidx.compose.runtime.State<com.kaiharimoto.mastertool.ui.deckbuilder.RevealRequest?> {
-    val ring = remember { mutableStateOf<com.kaiharimoto.mastertool.ui.deckbuilder.RevealRequest?>(null) }
+private fun rememberRing(state: DeckBuilderState): androidx.compose.runtime.State<RevealRequest?> {
+    val ring = remember { mutableStateOf<RevealRequest?>(null) }
     val request = state.revealRequest
     // One that was asked for before this deck was drawn (another page, a moment ago) is spent.
     val spent = remember { request }
     androidx.compose.runtime.LaunchedEffect(request) {
         if (request == null || request == spent) return@LaunchedEffect
         ring.value = request
-        kotlinx.coroutines.delay(com.kaiharimoto.mastertool.core.input.DeskTouch.REVEAL_MS)
+        kotlinx.coroutines.delay(DeskTouch.REVEAL_MS)
         if (ring.value == request) ring.value = null
     }
     return ring
@@ -1192,7 +1198,7 @@ private fun DeckSectionPane(
                 if (ids.isEmpty()) {
                     Box(Modifier.fillMaxSize().zenQuiet(), contentAlignment = Alignment.Center) {
                         Help(
-                            com.kaiharimoto.mastertool.core.input.DeskWords.emptySection(
+                            DeskWords.emptySection(
                                 touch = LocalTouchFirst.current,
                                 quickAddLandsHere = (section == DeckSection.SIDE) == neue.prefs.poolToSide,
                             ),
@@ -1201,7 +1207,7 @@ private fun DeckSectionPane(
                 }
             }
         }
-        com.kaiharimoto.neue.kit.HRule(Modifier.zenQuiet(), color = c.ink)
+        HRule(Modifier.zenQuiet(), color = c.ink)
     }
 }
 

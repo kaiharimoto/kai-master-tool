@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.duel.Duels
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -14,7 +15,7 @@ import kotlin.test.assertTrue
 class NonLocalReturnTest {
     @Test
     fun noClassCarriesTheMarker() {
-        val root = File(com.kaiharimoto.neue.duel.Duels::class.java.protectionDomain.codeSource.location.toURI())
+        val root = File(Duels::class.java.protectionDomain.codeSource.location.toURI())
         if (!root.isDirectory) return
         val marker = "NON_LOCAL_RETURN".toByteArray()
         val bad = root.walkTopDown().filter { it.isFile && it.name.endsWith(".class") }.filter { f ->

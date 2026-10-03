@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.sync
 
+import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.ai.bookChanged
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,7 +46,7 @@ class SyncCenter(private val h: NeueHolders) {
     private val seen = SeenTimes(File(dir, "seen.json")) { h.deps.now() }
     private val lock = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val http by lazy { com.kaiharimoto.mastertool.core.remote.HttpClientFactory.create() }
+    private val http by lazy { HttpClientFactory.create() }
 
     var running by mutableStateOf(false)
         private set
@@ -208,7 +210,7 @@ class SyncCenter(private val h: NeueHolders) {
             try {
                 val verifier = SyncPlatform.random(64)
                 val state = SyncPlatform.random(24)
-                val back = if (Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) RETURN else null
+                val back = if (Platform.os == DesktopOs.ANDROID) RETURN else null
                 val typed = CompletableDeferred<String>().also { pasted = it }
                 val query = kotlinx.coroutines.coroutineScope {
                     val reply = async { Loopback.await(page = Loopback.page(cloud.label, back)) }

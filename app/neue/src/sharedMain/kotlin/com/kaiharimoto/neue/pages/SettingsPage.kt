@@ -1,10 +1,27 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.mastertool.core.ai.memory.Persona
+import com.kaiharimoto.mastertool.core.ai.providers.Providers
+import com.kaiharimoto.mastertool.core.data.PoolCheck
+import com.kaiharimoto.mastertool.core.data.PoolProgress
+import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import com.kaiharimoto.mastertool.core.layout.ScreenOrientation
+import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.neue.ai.AiState
+import com.kaiharimoto.neue.ai.avatar.AiName
 import com.kaiharimoto.neue.ai.rename
 import com.kaiharimoto.neue.ai.openWizard
 import com.kaiharimoto.neue.ai.use
 import com.kaiharimoto.neue.ai.forget
 import androidx.compose.foundation.background
+import com.kaiharimoto.neue.backup.BackupCenter
+import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.neue.kit.MuDialog
+import com.kaiharimoto.neue.kit.MuInput
+import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -50,6 +67,10 @@ import com.kaiharimoto.neue.kit.RowText
 import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.SectionTitle
 import com.kaiharimoto.neue.kit.Segmented
+import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.sync.SyncCenter
+import com.kaiharimoto.neue.sync.SyncSection
+import com.kaiharimoto.neue.theme.Inverted
 import com.kaiharimoto.neue.theme.Mu
 
 /** What Settings needs from outside the deck: the updater, the folders, the way to write back. */
@@ -64,11 +85,11 @@ class SettingsHost(
     val onSearchEffects: (Boolean) -> Unit,
     val art: ArtLibrary? = null,
     /** The assistant, for its section (1.0.43). */
-    val ai: com.kaiharimoto.neue.ai.AiState? = null,
+    val ai: AiState? = null,
     /** Sync across devices, for its section (1.0.68). */
-    val sync: com.kaiharimoto.neue.sync.SyncCenter? = null,
+    val sync: SyncCenter? = null,
     /** Backups, for theirs (1.0.69). */
-    val backups: com.kaiharimoto.neue.backup.BackupCenter? = null,
+    val backups: BackupCenter? = null,
     /** Shows the setup offered on opening again (1.0.69). */
     val onSetupAgain: (() -> Unit)? = null,
 )
@@ -99,7 +120,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                     // Which way the screen turns (kai, v1.3.5): also one tap in the bar's menu.
                     if (touch) SettingRow("Screen", "Portrait stands the phone up, Landscape lays it down, Auto follows how it is held. The rotation lock is respected.") {
-                        Segmented(neue.orientation, com.kaiharimoto.mastertool.core.layout.ScreenOrientation.entries, { it.label }, { o -> neue.update { it.copy(orientation = o.key) } })
+                        Segmented(neue.orientation, ScreenOrientation.entries, { it.label }, { o -> neue.update { it.copy(orientation = o.key) } })
                     }
                     SettingRow("Contrast", "High darkens the grey text, the outlines of controls and the rules between rows, in both themes.") {
                         Segmented(prefs.contrast, listOf(NeuePreferences.CONTRAST_STANDARD, NeuePreferences.CONTRAST_HIGH), { if (it == NeuePreferences.CONTRAST_HIGH) "High" else "Standard" }, { v -> neue.update { it.copy(contrast = v) } })
@@ -123,7 +144,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     }
                     // The foil follows the phone's tilt (kai, v1.3.6).
                     if (touch) SettingRow("Foil follows the tilt", "Turn the phone and the light on every card moves with it, as a real foil catches a lamp. Held still, it settles in the middle.", onToggle = { neue.update { it.copy(foilTilt = !it.foilTilt) } }) {
-                        com.kaiharimoto.neue.kit.MuSwitch(prefs.foilTilt, { on -> neue.update { it.copy(foilTilt = on) } })
+                        MuSwitch(prefs.foilTilt, { on -> neue.update { it.copy(foilTilt = on) } })
                     }
                     SettingRow("Card names", "The name printed across the top of a card, stamped in the same foil as its border. Holographic foil only.") {
                         Segmented(prefs.foilNames, NameStyles.all, NameStyles::label, { n -> neue.update { it.copy(foilNames = n) } })
@@ -149,7 +170,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         Segmented(prefs.poolColumns, listOf(0, 3, 4, 5, 6, 8), { if (it == 0) "Auto" else it.toString() }, { n -> neue.update { it.copy(poolColumns = n) } }, small = true)
                     }
                     // The deck's picture is the desktop's: the tablet has no screenshot yet.
-                    if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
+                    if (Platform.os != DesktopOs.ANDROID) {
                         SettingRow("Screenshot", "Picture is the deck as the builder draws it, groups and all. List is a decklist, each card once with its count and name, made to be read on a phone.") {
                             Segmented(prefs.shotStyle, listOf(NeuePreferences.SHOT_PICTURE, NeuePreferences.SHOT_LIST), { if (it == NeuePreferences.SHOT_LIST) "List" else "Picture" }, { v -> neue.update { it.copy(shotStyle = v) } })
                         }
@@ -163,7 +184,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                 host.sync?.let { sync ->
                     Column {
                         SectionTitle(4, "Sync")
-                        com.kaiharimoto.neue.sync.SyncSection(sync) { label, help, onToggle, control -> SettingRow(label, help, onToggle = onToggle, control = control) }
+                        SyncSection(sync) { label, help, onToggle, control -> SettingRow(label, help, onToggle = onToggle, control = control) }
                     }
                 }
                 // Backups (1.0.69): everything made, kept safe across versions.
@@ -179,7 +200,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     SectionTitle(6, "Offline")
                     val check = state.poolCheck
                     val clock = check?.let { checkedClock(it.checkedAt) }
-                    val updating = state.poolProgress ?: if (state.isSyncing) com.kaiharimoto.mastertool.core.data.PoolProgress.Asking else null
+                    val updating = state.poolProgress ?: if (state.isSyncing) PoolProgress.Asking else null
                     SettingRow("Card pool", Offline.poolLine(check, state.index.size, clock, updating)) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (updating != null) {
@@ -197,7 +218,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                                 MuButton(
                                     "Update now",
                                     { state.refreshCardPool(force = true) },
-                                    variant = if (check is com.kaiharimoto.mastertool.core.data.PoolCheck.Behind) BtnVariant.SECONDARY else BtnVariant.SUBTLE,
+                                    variant = if (check is PoolCheck.Behind) BtnVariant.SECONDARY else BtnVariant.SUBTLE,
                                     size = BtnSize.SM,
                                     icon = Icons.Refresh,
                                 )
@@ -232,8 +253,8 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                                     )
                                 }
                                 // A folder is a desktop's to open; Android has nothing to hand one to.
-                                if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
-                                    MuButton("Open folder", { com.kaiharimoto.neue.platform.Platform.open(art.dir) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+                                if (Platform.os != DesktopOs.ANDROID) {
+                                    MuButton("Open folder", { Platform.open(art.dir) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
                                 }
                             }
                         }
@@ -245,7 +266,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (ready.ready) {
-                                com.kaiharimoto.neue.theme.Inverted {
+                                Inverted {
                                     Box(Modifier.background(Mu.colors.paper).padding(horizontal = 6.dp, vertical = 2.dp)) {
                                         Mono("Ready", color = Mu.colors.ink)
                                     }
@@ -274,7 +295,7 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
                         MuButton("Report", host.onReportIssue, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
                     }
                     SettingRow("Data folder", host.dataDir) {
-                        if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
+                        if (Platform.os != DesktopOs.ANDROID) {
                             MuButton("Open", host.onOpenDataDir, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
                         }
                     }
@@ -295,11 +316,11 @@ fun SettingsPage(state: DeckBuilderState, neue: NeueState, host: SettingsHost) {
  * its voice and what it knows.
  */
 @Composable
-private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueState) {
+private fun AssistantSection(ai: AiState, neue: NeueState) {
     val prefs = neue.prefs.ai
     SectionTitle(3, "Assistant")
     // Ai's mark by its name, for flavour (1.0.63).
-    if (prefs.enabled) com.kaiharimoto.neue.ai.avatar.AiName(prefs.name, com.kaiharimoto.neue.theme.Mu.colors.ink, mark = 28.dp)
+    if (prefs.enabled) AiName(prefs.name, Mu.colors.ink, mark = 28.dp)
     SettingRow(
         "Assistant",
         if (prefs.enabled) "${prefs.name} is on: in the bar, on ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL).ifEmpty { "its button" }}, beside every page. Off hides every trace of it; what it remembers is kept."
@@ -312,12 +333,12 @@ private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueStat
     var name by androidx.compose.runtime.remember(prefs.name) { androidx.compose.runtime.mutableStateOf(prefs.name) }
     SettingRow("Name", "What it is called. Ai by default, after the Ignis of VRAINS.") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            com.kaiharimoto.neue.kit.MuInput(name, { name = it.take(com.kaiharimoto.mastertool.core.prefs.AiPrefs.MAX_NAME) }, Modifier.width(220.dp), placeholder = "Ai", onSubmit = { if (name.isNotBlank()) ai.rename(name) })
+            MuInput(name, { name = it.take(AiPrefs.MAX_NAME) }, Modifier.width(220.dp), placeholder = "Ai", onSubmit = { if (name.isNotBlank()) ai.rename(name) })
             if (name.trim() != prefs.name && name.isNotBlank()) MuButton("Rename", { ai.rename(name) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
         }
     }
     val connection = prefs.connection
-    val provider = com.kaiharimoto.mastertool.core.ai.providers.Providers.byId(connection?.provider)
+    val provider = Providers.byId(connection?.provider)
     SettingRow(
         "Connection",
         if (provider == null) "Not connected yet. The wizard walks you through a Claude or ChatGPT plan, an API key, or a model on your own machine."
@@ -326,7 +347,7 @@ private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueStat
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MuButton(if (provider == null) "Set up" else "Change", { ai.openWizard() }, variant = if (provider == null) BtnVariant.PRIMARY else BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
             if (prefs.connections.size > 1) {
-                com.kaiharimoto.neue.kit.MuSelect(
+                MuSelect(
                     connection,
                     prefs.connections,
                     { c -> (c?.label ?: "").ifBlank { c?.provider.orEmpty() } + (c?.model?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") },
@@ -344,8 +365,8 @@ private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueStat
     SettingRow("Reasoning", "How its thinking shows above an answer, where the model shares it: its first lines, all of it, or none. Reading it is a way to learn along.") {
         Segmented(
             prefs.showReasoning,
-            com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONINGS,
-            { when (it) { com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_OPEN -> "Open"; com.kaiharimoto.mastertool.core.prefs.AiPrefs.REASONING_HIDDEN -> "Hidden"; else -> "Folded" } },
+            AiPrefs.REASONINGS,
+            { when (it) { AiPrefs.REASONING_OPEN -> "Open"; AiPrefs.REASONING_HIDDEN -> "Hidden"; else -> "Folded" } },
             { r -> neue.update { it.copy(ai = it.ai.copy(showReasoning = r)) } },
             small = true,
         )
@@ -356,9 +377,9 @@ private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueStat
     SettingRow("What it knows", "Its voice, what it has learned about you, its own notes, and notes on your decks and webs: markdown files you can read and edit.") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MuButton("Open", { ai.memoryOpen = "USER.md" }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
-            MuButton("Voice", { ai.memoryOpen = com.kaiharimoto.mastertool.core.ai.memory.Persona.FILE }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
-            if (com.kaiharimoto.neue.platform.Platform.os != com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID) {
-                MuButton("Open folder", { ai.files.root.mkdirs(); com.kaiharimoto.neue.platform.Platform.open(ai.files.root) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+            MuButton("Voice", { ai.memoryOpen = Persona.FILE }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+            if (Platform.os != DesktopOs.ANDROID) {
+                MuButton("Open folder", { ai.files.root.mkdirs(); Platform.open(ai.files.root) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
             }
             MuButton("Forget everything", { ai.forgetAsked = true }, variant = BtnVariant.GHOST, size = BtnSize.SM)
         }
@@ -370,7 +391,7 @@ private fun AssistantSection(ai: com.kaiharimoto.neue.ai.AiState, neue: NeueStat
  * the last one and why it was made, Back up now, Export, and Restore from the list or a file.
  */
 @Composable
-private fun BackupsSection(b: com.kaiharimoto.neue.backup.BackupCenter) {
+private fun BackupsSection(b: BackupCenter) {
     val c = Mu.colors
     val list = androidx.compose.runtime.remember(b.revision) { b.list() }
     var choosing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -389,7 +410,7 @@ private fun BackupsSection(b: com.kaiharimoto.neue.backup.BackupCenter) {
         }
     }
     if (choosing) {
-        com.kaiharimoto.neue.kit.MuDialog(
+        MuDialog(
             title = "Restore a backup",
             onDismiss = { choosing = false },
             width = 560.dp,
@@ -408,7 +429,7 @@ private fun BackupsSection(b: com.kaiharimoto.neue.backup.BackupCenter) {
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            RowText(com.kaiharimoto.neue.backup.BackupCenter.date(e.manifest.at))
+                            RowText(BackupCenter.date(e.manifest.at))
                             Help("${e.manifest.reason} · ${e.manifest.decks} decks · v${e.manifest.version}".trim())
                         }
                         MuButton("Restore", { choosing = false; b.restore(e) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
@@ -426,13 +447,13 @@ private fun BackupsSection(b: com.kaiharimoto.neue.backup.BackupCenter) {
 @Composable
 private fun SettingRow(label: String, help: String, helpLines: Int = 3, onToggle: (() -> Unit)? = null, control: @Composable () -> Unit) {
     val c = Mu.colors
-    val whole = onToggle != null && com.kaiharimoto.neue.kit.LocalTouchFirst.current
+    val whole = onToggle != null && LocalTouchFirst.current
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
     // Narrow (a phone, v1.3.5), the label and its help stand over the control rather than
     // in a 260 column beside it, which left the control a sliver.
     val stacked = maxWidth < 600.dp
     val row = Modifier.fillMaxWidth()
-        .let { if (whole) it.defaultMinSize(minHeight = com.kaiharimoto.mastertool.core.input.TouchMetrics.SETTING_ROW.dp).muClickable(onClick = onToggle!!).cursorPointer(showsWords = true) else it }
+        .let { if (whole) it.defaultMinSize(minHeight = TouchMetrics.SETTING_ROW.dp).muClickable(onClick = onToggle!!).cursorPointer(showsWords = true) else it }
         .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
         .padding(vertical = 12.dp)
     if (stacked) {
@@ -475,6 +496,6 @@ private fun checkedClock(epochMs: Long): String =
         .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
 
 /** A chord as this machine writes it, for the settings' own sentences. */
-private fun chord(action: com.kaiharimoto.mastertool.core.input.DeskAction): String =
-    com.kaiharimoto.mastertool.core.input.DeskShortcuts.chordFor(action)
-        ?.let(com.kaiharimoto.mastertool.core.input.DeskShortcuts::kbd).orEmpty()
+private fun chord(action: DeskAction): String =
+    DeskShortcuts.chordFor(action)
+        ?.let(DeskShortcuts::kbd).orEmpty()

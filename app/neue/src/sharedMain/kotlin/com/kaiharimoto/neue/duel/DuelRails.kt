@@ -29,6 +29,8 @@ import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.input.DeskScope
+import com.kaiharimoto.neue.kit.IconButton
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
@@ -154,7 +156,7 @@ private fun InspectedWords(duels: Duels, game: DuelGame, uid: Int, sees: Boolean
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.border(1.dp, c.ink).padding(horizontal = 4.dp)) { Mono("RULING", color = c.ink, size = 9.sp) }
                 Small(r.text, Modifier.weight(1f), color = c.ink)
-                com.kaiharimoto.neue.kit.IconButton(com.kaiharimoto.neue.kit.Icons.X, { duels.forgetRuling(r.id) }, size = 20.dp, label = "Forget the ruling")
+                IconButton(com.kaiharimoto.neue.kit.Icons.X, { duels.forgetRuling(r.id) }, size = 20.dp, label = "Forget the ruling")
             }
         }
         if (inst.under.isNotEmpty()) {
@@ -188,7 +190,7 @@ internal fun TurnTally(duels: Duels, game: DuelGame, viewer: Int? = null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.border(1.dp, c.ink).padding(horizontal = 4.dp)) { Mono("LOCK", color = c.ink, size = 9.sp) }
                 Small("${l.text} · ${DuelWords.untilWords(l.until)}", Modifier.weight(1f), color = c.ink, maxLines = 2)
-                com.kaiharimoto.neue.kit.IconButton(com.kaiharimoto.neue.kit.Icons.X, { duels.act(DuelAction.Unlock(l.id)) }, size = 20.dp, label = "Lift the lock")
+                IconButton(com.kaiharimoto.neue.kit.Icons.X, { duels.act(DuelAction.Unlock(l.id)) }, size = 20.dp, label = "Lift the lock")
             }
         }
     }
@@ -231,7 +233,7 @@ private fun KeyCheat(h: NeueHolders) {
         // Command mode (1.0.87): the whole table without a mouse.
         DeskAction.DUEL_FOCUS_ACT to "Act on the focus", DeskAction.DUEL_PICK to "Pick up", DeskAction.DUEL_COORDINATES to "Coordinates",
     ).mapNotNull { (a, words) ->
-        DeskShortcuts.all.firstOrNull { it.action == a && (it.scope == com.kaiharimoto.mastertool.core.input.DeskScope.DUEL || a == DeskAction.UNDO) }?.chord?.let { DeskShortcuts.kbd(it) to words }
+        DeskShortcuts.all.firstOrNull { it.action == a && (it.scope == DeskScope.DUEL || a == DeskAction.UNDO) }?.chord?.let { DeskShortcuts.kbd(it) to words }
     }.let { listOf(ARROWS to "Walk the table") + it }
     Column(Modifier.fillMaxWidth()) {
         HRule()

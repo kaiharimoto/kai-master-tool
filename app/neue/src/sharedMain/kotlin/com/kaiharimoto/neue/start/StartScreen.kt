@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.start
 
+import com.kaiharimoto.mastertool.core.start.StartState
+import com.kaiharimoto.neue.ai.VoiceModelChoice
 import com.kaiharimoto.neue.ai.voiceModel
 import com.kaiharimoto.neue.ai.downloadForDuel
 import androidx.compose.foundation.background
@@ -48,6 +50,8 @@ import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.VRule
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.platform.Voice
+import com.kaiharimoto.neue.sync.SyncSection
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
@@ -147,13 +151,13 @@ object StudioStart {
 }
 
 /** What is set up here already: the steps that are done are never offered. */
-fun startState(h: NeueHolders) = com.kaiharimoto.mastertool.core.start.StartState(
+fun startState(h: NeueHolders) = StartState(
     hasDecks = h.decksKnown,
     syncOn = h.sync.on,
     aiEnabled = h.neue.prefs.ai.enabled,
     aiConnected = h.neue.prefs.ai.connection != null,
     artSettled = !h.neue.prefs.hdArt || h.art.count.complete,
-    voiceReady = !com.kaiharimoto.neue.platform.Voice.usesModels || !com.kaiharimoto.neue.platform.Voice.needsModel(h.ai.voiceModel),
+    voiceReady = !Voice.usesModels || !Voice.needsModel(h.ai.voiceModel),
 )
 
 private fun short(step: StartStep, h: NeueHolders) = when (step) {
@@ -199,7 +203,7 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
         }
         // The section says what sync is itself: the step adds nothing to it.
         StartStep.SYNC -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            com.kaiharimoto.neue.sync.SyncSection(h.sync) { label, help, _, control ->
+            SyncSection(h.sync) { label, help, _, control ->
                 Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     RowText(label)
                     Help(help)
@@ -234,7 +238,7 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
                 color = c.ink70,
             )
             Small("Your words are written out on this computer, never sent anywhere. That needs a speech model, downloaded once.", color = c.ink70)
-            com.kaiharimoto.neue.ai.VoiceModelChoice(h.ai)
+            VoiceModelChoice(h.ai)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuButton("Download ${h.ai.voiceModel.megabytes} MB", {
                     h.ai.downloadForDuel()

@@ -1,6 +1,9 @@
 package com.kaiharimoto.neue.builder
 
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import com.kaiharimoto.neue.kit.Breathe
+import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
+import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.Gap
 import com.kaiharimoto.neue.cursor.cursorPointer
@@ -103,7 +106,7 @@ fun PoolPane(
     val c = Mu.colors
     val focus = remember { FocusRequester() }
     val touch = neue.touchFirst
-    val keyboard = com.kaiharimoto.neue.kit.LocalHardwareKeyboard.current
+    val keyboard = LocalHardwareKeyboard.current
     LaunchedEffect(neue.focusSearchTick) {
         if (neue.focusSearchTick > 0) runCatching { focus.requestFocus() }
     }
@@ -175,7 +178,7 @@ fun PoolPane(
                     if (touch && neue.prefs.poolToSide) append(" · double-tap adds to side")
                 }
                 // The pool's size lives here since the title bar gave it up, and so does its sync.
-                if (state.isSyncing) com.kaiharimoto.neue.kit.Breathe(running = true)
+                if (state.isSyncing) Breathe(running = true)
                 Mono(if (drag.overPool) "Let go to remove" else meta, Modifier.weight(1f), color = if (drag.overPool) c.ink else c.ink70)
                 Tip("Also match the words printed on the card. Prefix name: or text: to choose one") {
                     // On a tablet the word and its switch are one target (rec 17).
@@ -254,11 +257,11 @@ fun PoolPane(
                 state.results.isEmpty() -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val list = neue.list(neue.prefs.poolList)
                     if (list != null && list.ids.isEmpty()) {
-                        com.kaiharimoto.neue.kit.MuText("Nothing on it yet.", style = MuType.h1(LocalMuFonts.current))
+                        MuText("Nothing on it yet.", style = MuType.h1(LocalMuFonts.current))
                         Small("Press L on any card, or use its menu, to put it on ${list.name}. Or search for cards to add.", color = c.ink70)
                         MicroLink("Add cards", { neue.studio = Studio(list.id, focus = !neue.touchFirst) }, color = c.ink)
                     } else {
-                        com.kaiharimoto.neue.kit.MuText("No matches.", style = MuType.h1(LocalMuFonts.current))
+                        MuText("No matches.", style = MuType.h1(LocalMuFonts.current))
                         Small("Try fewer words, or turn off a filter.", color = c.ink70)
                     }
                 }

@@ -9,6 +9,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.ai.text.MicroCaps
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.LocalMuText
 import com.kaiharimoto.neue.theme.Mu
@@ -66,7 +67,7 @@ fun Micro(
     size: TextUnit = 11.sp,
     maxLines: Int = 1,
 ) {
-    MuText(com.kaiharimoto.mastertool.core.ai.text.MicroCaps.of(text, LocalKeepCase.current), modifier, MuType.micro(LocalMuFonts.current, size), color, maxLines)
+    MuText(MicroCaps.of(text, LocalKeepCase.current), modifier, MuType.micro(LocalMuFonts.current, size), color, maxLines)
 }
 
 /**

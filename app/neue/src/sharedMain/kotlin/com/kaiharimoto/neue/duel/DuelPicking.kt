@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.duel.DuelSelection
+import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 
 /**
@@ -29,7 +31,7 @@ internal class DuelPicking(private val d: Duels) {
 
     /** [uid] into the selection, or out of it (a Ctrl-click, a tap in select mode, Shift Space). The order picked is kept. */
     fun toggleSelect(uid: Int) {
-        d.selection = com.kaiharimoto.mastertool.core.duel.DuelSelection.toggle(d.selection.toList(), uid).toSet()
+        d.selection = DuelSelection.toggle(d.selection.toList(), uid).toSet()
         d.inspected = uid
         // One card: its verbs beside it, as a click; several: the selection's bar says what they can do.
         d.verbStrip = d.selection.size == 1
@@ -40,7 +42,7 @@ internal class DuelPicking(private val d: Duels) {
     fun rangeSelect(uid: Int) {
         val s = d.shown?.state ?: return
         val anchor = d.selection.lastOrNull()
-        d.selection = com.kaiharimoto.mastertool.core.duel.DuelSelection.range(s, d.selection.toList(), anchor, uid) { seat -> d.eyes.hand(s, seat) }.toSet()
+        d.selection = DuelSelection.range(s, d.selection.toList(), anchor, uid) { seat -> d.eyes.hand(s, seat) }.toSet()
         d.inspected = uid
         d.verbStrip = d.selection.size == 1
     }
@@ -67,10 +69,10 @@ internal class DuelPicking(private val d: Duels) {
             return uids.singleOrNull()?.let { d.verb(it, verb, host = host) } ?: false
         }
         d.attacking = null
-        val sees = { u: Int -> d.eyes.viewers.isEmpty() || d.eyes.viewers.any { com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, u, it) } }
-        if (verb in com.kaiharimoto.mastertool.core.duel.DuelSelection.ORDERED) {
+        val sees = { u: Int -> d.eyes.viewers.isEmpty() || d.eyes.viewers.any { DuelSight.sees(s, u, it) } }
+        if (verb in DuelSelection.ORDERED) {
             // Only what goes into a Deck is ordered: a token or an Extra Deck monster is said, and left.
-            val (fit, not) = com.kaiharimoto.mastertool.core.duel.DuelSelection.deckable(s, uids, d.catalog, sees)
+            val (fit, not) = DuelSelection.deckable(s, uids, d.catalog, sees)
             if (fit.isEmpty()) { d.problem = "None of these go into the Deck"; return false }
             d.problem = if (not.isEmpty()) null else "${not.size} of them do not go into the Deck: left out"
             ordering = Duels.Ordering(fit, bottom = verb == DuelVerb.DECK_BOTTOM)
@@ -83,7 +85,7 @@ internal class DuelPicking(private val d: Duels) {
             d.problem = null
             return false
         }
-        val plan = com.kaiharimoto.mastertool.core.duel.DuelSelection.actions(s, uids, verb, d.catalog, seat = d.bottom, seatFor = d::seatFor, host = host, sees = sees)
+        val plan = DuelSelection.actions(s, uids, verb, d.catalog, seat = d.bottom, seatFor = d::seatFor, host = host, sees = sees)
         if (!plan.ok) {
             d.problem = plan.skipped.firstOrNull()?.second?.let { "${verb.label}: $it" } ?: "Nothing to do with these together"
             return false
@@ -107,7 +109,7 @@ internal class DuelPicking(private val d: Duels) {
         val o = ordering ?: return
         val i = from ?: o.cursor
         val j = (i + delta).coerceIn(0, o.order.size - 1)
-        ordering = o.copy(order = com.kaiharimoto.mastertool.core.duel.DuelSelection.reorder(o.order, i, j), cursor = j)
+        ordering = o.copy(order = DuelSelection.reorder(o.order, i, j), cursor = j)
     }
 
     /** The strip's Top / Bottom switch (K, Shift K while it is open). */
@@ -119,7 +121,7 @@ internal class DuelPicking(private val d: Duels) {
     fun commitOrdering(): Boolean {
         val o = ordering ?: return false
         val s = d.shown?.state ?: return false
-        val ok = d.act(com.kaiharimoto.mastertool.core.duel.DuelSelection.toDeck(s, o.order, o.bottom), d.seatFor(o.order.first()))
+        val ok = d.act(DuelSelection.toDeck(s, o.order, o.bottom), d.seatFor(o.order.first()))
         if (ok) clearSelection()
         return ok
     }
@@ -128,7 +130,7 @@ internal class DuelPicking(private val d: Duels) {
     fun orderRandom(): Boolean {
         val o = ordering ?: return false
         val s = d.shown?.state ?: return false
-        val ok = d.act(com.kaiharimoto.mastertool.core.duel.DuelSelection.randomToDeck(s, d.bottom, o.order, o.bottom), d.bottom)
+        val ok = d.act(DuelSelection.randomToDeck(s, d.bottom, o.order, o.bottom), d.bottom)
         if (ok) clearSelection()
         return ok
     }
@@ -137,7 +139,7 @@ internal class DuelPicking(private val d: Duels) {
     fun orderShuffle(): Boolean {
         val o = ordering ?: return false
         val s = d.shown?.state ?: return false
-        val ok = d.act(com.kaiharimoto.mastertool.core.duel.DuelSelection.shuffledIn(s, o.order), d.seatFor(o.order.first()))
+        val ok = d.act(DuelSelection.shuffledIn(s, o.order), d.seatFor(o.order.first()))
         if (ok) clearSelection()
         return ok
     }

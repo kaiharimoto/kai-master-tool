@@ -29,10 +29,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.report.GuideDoc
 import com.kaiharimoto.mastertool.core.ai.report.ReportLog
+import com.kaiharimoto.mastertool.core.ai.report.ReportPdf
 import com.kaiharimoto.mastertool.core.ai.report.SessionReport
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import com.kaiharimoto.neue.cards.CARD_RATIO
@@ -41,6 +43,7 @@ import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Icons
+import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
@@ -84,7 +87,7 @@ fun LivingDocDialog(ai: AiState) {
                     // Refactor guide (1.0.66): drop what does not help, sharpen the rest, put it in order.
                     MuButton("Refactor", {
                         ai.docOpen = null
-                        ai.askTune(com.kaiharimoto.mastertool.core.ai.AiSession.MODE_REFACTOR)
+                        ai.askTune(AiSession.MODE_REFACTOR)
                     }, variant = BtnVariant.GHOST, enabled = h.builder.deckId == open.deckId && !doc.isEmpty, reason = if (doc.isEmpty) "Nothing to refactor yet" else "Open the deck in the builder first")
                     // The reader's guide (1.0.67): the book written for people from these notes.
                     MuButton("Reader's guide", {
@@ -161,7 +164,7 @@ internal fun ScoresRow(r: SessionReport, log: List<SessionReport>) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     // A phone's column is a third of 360 dp: the short words, or "Understanding" is cut.
-    val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+    val phone = LocalPhone.current
     Row(horizontalArrangement = Arrangement.spacedBy(if (phone) 14.dp else 20.dp)) {
         listOf(
             Triple(if (phone) "Knows it" else "Understanding", r.understanding, "What the deck is for, and how its cards fit") to ReportLog.change(log, r) { it.understanding },
@@ -225,7 +228,7 @@ private fun HistoryBars(reports: List<SessionReport>) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun KeyCards(ai: AiState, cards: List<com.kaiharimoto.mastertool.core.ai.report.ReportPdf.KeyCard>) {
+private fun KeyCards(ai: AiState, cards: List<ReportPdf.KeyCard>) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro("Key cards", color = c.ink70)

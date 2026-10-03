@@ -10,6 +10,8 @@ import androidx.compose.ui.input.pointer.areAnyPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.input.DeskTouch
+import com.kaiharimoto.mastertool.core.input.MultiTap
 import com.kaiharimoto.mastertool.core.layout.EdgeReveal
 import com.kaiharimoto.mastertool.core.motion.ZenCorner
 import com.kaiharimoto.mastertool.core.motion.ZenGestures
@@ -188,7 +190,7 @@ internal fun Modifier.windowPointer(h: NeueHolders, neue: NeueState, state: Deck
                     if (!change.pressed && change.previousPressed && change.id in tapDowns) tapUps[change.id] = change.uptimeMillis
                 }
                 if (tapDowns.isNotEmpty() && tapUps.size == tapDowns.size) {
-                    val gesture = com.kaiharimoto.mastertool.core.input.MultiTap.classify(
+                    val gesture = MultiTap.classify(
                         downs = tapDowns.values.map { it.first },
                         ups = tapDowns.keys.map { tapUps.getValue(it) },
                         travel = tapTravel,
@@ -199,7 +201,7 @@ internal fun Modifier.windowPointer(h: NeueHolders, neue: NeueState, state: Deck
                     if (tapDowns.size > 1) neue.fingersAt = System.nanoTime() / 1_000_000
                     tapDowns.clear()
                     tapUps.clear()
-                    com.kaiharimoto.mastertool.core.input.DeskTouch.window.firstOrNull { it.gesture == gesture }?.let { h.run(it.action) }
+                    DeskTouch.window.firstOrNull { it.gesture == gesture }?.let { h.run(it.action) }
                 }
                 // A finger cannot reach an edge the system does not take, so in immersive a
                 // tap on the paper strip along the top, or in the gutter down the left,
@@ -213,7 +215,7 @@ internal fun Modifier.windowPointer(h: NeueHolders, neue: NeueState, state: Deck
                     fingerFrom = null
                     if (from0 != null && neue.immersive && neue.zen != ZenPhase.DEEP && h.drag.held == null &&
                         (finger.position - from0).getDistance() < viewConfiguration.touchSlop &&
-                        finger.uptimeMillis - fingerAt < com.kaiharimoto.mastertool.core.input.DeskTouch.DOUBLE_TAP_MS
+                        finger.uptimeMillis - fingerAt < DeskTouch.DOUBLE_TAP_MS
                     ) {
                         neue.revealed = EdgeReveal.onTap(
                             current = neue.revealed,

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.deck.DeckGroup
+import com.kaiharimoto.mastertool.core.input.DeskWords
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.collectIsHotAsState
@@ -186,7 +188,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
         }
         if (groups.isNotEmpty()) {
             Small(
-                com.kaiharimoto.mastertool.core.input.DeskWords.groupsHelp(LocalTouchFirst.current),
+                DeskWords.groupsHelp(LocalTouchFirst.current),
                 Modifier.padding(top = 4.dp),
                 color = c.ink45,
             )
@@ -203,7 +205,7 @@ fun GroupsPanel(state: DeckBuilderState, neue: NeueState, modifier: Modifier = M
 private fun GroupRow(
     state: DeckBuilderState,
     neue: NeueState,
-    group: com.kaiharimoto.mastertool.core.deck.DeckGroup,
+    group: DeckGroup,
     count: Int,
     odds: Double?,
     first: Boolean,

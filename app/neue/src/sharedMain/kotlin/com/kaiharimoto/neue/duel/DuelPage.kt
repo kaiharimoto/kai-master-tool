@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.duel
 
+import com.kaiharimoto.neue.ai.avatar.AiBadge
+import com.kaiharimoto.neue.kit.Kbd
 import com.kaiharimoto.neue.run
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -299,7 +301,7 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
 private fun LogHead(h: NeueHolders) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         MuButton("Combos", { h.duel.combosOpen = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-        if (h.neue.prefs.ai.enabled) com.kaiharimoto.neue.ai.avatar.AiBadge(h, height = 28.dp)
+        if (h.neue.prefs.ai.enabled) AiBadge(h, height = 28.dp)
     }
 }
 
@@ -320,7 +322,7 @@ private fun SpotlightOpener(duels: Duels, modifier: Modifier, short: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Mono(if (short) "Type a command" else "Type a command · s h2 m3 · a m3 om1 · hand", Modifier.weight(1f), color = c.ink45, size = 12.sp)
-        com.kaiharimoto.neue.kit.Kbd("/")
+        Kbd("/")
     }
 }
 

@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.skills
 
+import com.kaiharimoto.mastertool.core.ai.rules.GameRulesSkill
+
 /**
  * The skills the app ships (kai: "skills that teach it how to use YGOProDeck to find
  * tournaments and look at deck lists… and know intimately how to create format webs
@@ -14,9 +16,9 @@ object BuiltInSkills {
     private val catalogue: List<Pair<Int, Skill>> = listOf(
         // The rules' edge cases, beyond the primer always in the prompt (1.0.47).
         2 to Skill(
-            com.kaiharimoto.mastertool.core.ai.rules.GameRulesSkill.NAME,
-            com.kaiharimoto.mastertool.core.ai.rules.GameRulesSkill.DESCRIPTION,
-            com.kaiharimoto.mastertool.core.ai.rules.GameRulesSkill.BODY.trim(),
+            GameRulesSkill.NAME,
+            GameRulesSkill.DESCRIPTION,
+            GameRulesSkill.BODY.trim(),
             builtIn = true,
         ),
         skill(

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.update.CpuArch
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import androidx.compose.foundation.background
@@ -20,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
+import com.kaiharimoto.neue.present.play.PresentAudience
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.getValue
@@ -295,7 +297,7 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
             onPreviewKeyEvent = h::onKey,
         ) {
             val pl = h.present.playing
-            if (pl != null) com.kaiharimoto.neue.present.play.PresentAudience(h, com.kaiharimoto.neue.present.rememberSlideContext(h, pl.show.presentation))
+            if (pl != null) PresentAudience(h, com.kaiharimoto.neue.present.rememberSlideContext(h, pl.show.presentation))
         }
     }
     for (me in shown) key(me.id) {
@@ -330,7 +332,7 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
             LaunchedEffect(Unit) {
                 host = window
                 window.minimumSize = Dimension(1024, 680)
-                window.background = if (h.neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK) java.awt.Color.BLACK else java.awt.Color.WHITE
+                window.background = if (h.neue.prefs.theme == NeueTheme.INK) java.awt.Color.BLACK else java.awt.Color.WHITE
                 // On screen and painted: the window it takes over from may go.
                 while (!window.isShowing) delay(16)
                 withFrameNanos { }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import com.kaiharimoto.mastertool.core.deck.KeyPaint
 import com.kaiharimoto.mastertool.core.deck.KeyTone
+import com.kaiharimoto.mastertool.core.model.Hsb
 
 /**
  * The colours of the deck's own markers — the second and last place this app
@@ -81,9 +82,9 @@ object GroupMarkers {
      * as another group's colour.
      */
     fun shimmer(color: Color, phase: Float): Color {
-        val hsv = com.kaiharimoto.mastertool.core.model.Hsb.fromRgb((color.red * 255).toInt(), (color.green * 255).toInt(), (color.blue * 255).toInt())
+        val hsv = Hsb.fromRgb((color.red * 255).toInt(), (color.green * 255).toInt(), (color.blue * 255).toInt())
         val turn = SHIMMER / 360f * kotlin.math.sin(phase)
-        val rgb = com.kaiharimoto.mastertool.core.model.Hsb.toRgb(((hsv[0] + turn) % 1f + 1f) % 1f, hsv[1], hsv[2])
+        val rgb = Hsb.toRgb(((hsv[0] + turn) % 1f + 1f) % 1f, hsv[1], hsv[2])
         return Color(rgb).copy(alpha = color.alpha)
     }
 

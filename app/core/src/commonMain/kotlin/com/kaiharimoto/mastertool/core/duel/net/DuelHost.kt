@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.duel.CardInst
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
@@ -256,6 +257,6 @@ object DuelMirror {
     }
 
     /** A guest's game to draw: the mirror, with no log of its own (the host keeps the log). */
-    fun game(v: DuelView, header: com.kaiharimoto.mastertool.core.duel.DuelHeader): DuelGame =
+    fun game(v: DuelView, header: DuelHeader): DuelGame =
         DuelGame(header, emptyList(), 0, state(v), 0)
 }

@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.mcp.McpServerCore
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
+import com.kaiharimoto.mastertool.core.ai.providers.SetupStep
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiChatBackend
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiEndpoint
@@ -21,10 +22,10 @@ import kotlinx.coroutines.withContext
  * connection already made, the start is the connections themselves (1.0.59): use one, or add.
  */
 fun AiState.openWizard(adding: Boolean = false) {
-    if (wizard.step == com.kaiharimoto.mastertool.core.ai.providers.SetupStep.NAME || adding) {
+    if (wizard.step == SetupStep.NAME || adding) {
         wizard.name = name
         wizard.saved = configured && !adding
-        if (adding && configured) wizard.step = com.kaiharimoto.mastertool.core.ai.providers.SetupStep.CONNECT
+        if (adding && configured) wizard.step = SetupStep.CONNECT
     }
     wizardOpen = true
     historyOpen = false

@@ -33,6 +33,8 @@ import com.kaiharimoto.mastertool.core.duel.CardInst
 import com.kaiharimoto.mastertool.core.layout.CardFrame
 import com.kaiharimoto.mastertool.core.layout.CardLook
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.neue.cards.CARD_RATIO
+import com.kaiharimoto.neue.cards.ClassicCardBack
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Micro
@@ -70,7 +72,7 @@ internal fun TableCard(
         Modifier
             .zIndex(if (carried) 100f else frame.z)
             .offset { with(density) { IntOffset(x.dp.roundToPx(), y.dp.roundToPx()) } }
-            .size(w.dp, (w / com.kaiharimoto.neue.cards.CARD_RATIO).dp)
+            .size(w.dp, (w / CARD_RATIO).dp)
             .graphicsLayer { rotationZ = rot }
             .then(if (frame.shown && caption != null) Modifier.cursorPointer(caption = caption, emphasis = true, holdOnPress = true) else Modifier),
     ) {
@@ -97,7 +99,7 @@ internal fun TableCard(
                 // Its numbers read upright along the foot of the card as it lies — in Defense, or turned
                 // to face the other seat (1.0.78) — so the plate is counter-turned inside the turned card,
                 // across the bottom of the box the card fills as it lies.
-                val h = w / com.kaiharimoto.neue.cards.CARD_RATIO
+                val h = w / CARD_RATIO
                 val across = frame.rotation % 180f != 0f
                 val boxW = if (across) h else w
                 // Inside the card's frame on every side, so the border and its foil stay whole round the card
@@ -161,7 +163,7 @@ private fun StatPlate(stats: TableStats, width: Float, modifier: Modifier) {
  */
 @Composable
 internal fun CardBack(modifier: Modifier) {
-    com.kaiharimoto.neue.cards.ClassicCardBack(modifier)
+    ClassicCardBack(modifier)
 }
 
 /** A card face-down that its controller may read: its face dimmed under the hatch, marked "Set". */

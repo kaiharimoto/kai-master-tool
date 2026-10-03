@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai.reader
 
+import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.ai.askTune
 import com.kaiharimoto.neue.ai.writing
 import androidx.compose.animation.core.Animatable
@@ -451,7 +452,7 @@ private fun Head(book: GuideBook, ci: Int, si: Int) {
 
 /** One block: words set by the app; a picture painted from its drawings; a line with its board after each play. */
 @Composable
-private fun Piece(ai: com.kaiharimoto.neue.ai.AiState, art: BookArt, b: Block, z: Float, width: Float, column: Dp, cards: (String) -> Card?, open: (String) -> Unit) {
+private fun Piece(ai: AiState, art: BookArt, b: Block, z: Float, width: Float, column: Dp, cards: (String) -> Card?, open: (String) -> Unit) {
     val onTag: (String) -> Unit = { tag -> if (tag.startsWith("card:")) open(tag.substringAfter(':')) }
     Box(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         when (b) {

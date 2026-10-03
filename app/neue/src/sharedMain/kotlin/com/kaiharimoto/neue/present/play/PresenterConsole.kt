@@ -25,11 +25,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.play.ElementState
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.art.LocalCustomArt
 import com.kaiharimoto.neue.art.LocalArt
 import com.kaiharimoto.neue.cards.LocalArts
+import com.kaiharimoto.neue.cards.LocalLimitMarks
 import com.kaiharimoto.neue.cards.LocalNameStyle
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -139,9 +141,9 @@ fun PresentAudience(h: NeueHolders, ctx: SlideContext) {
         LocalArts provides neue.prefs.arts,
         LocalCustomArt provides h.customArt,
         LocalNameStyle provides neue.prefs.foilNames,
-        com.kaiharimoto.neue.cards.LocalLimitMarks provides neue.prefs.limitMarks,
+        LocalLimitMarks provides neue.prefs.limitMarks,
     ) {
-        MuTheme(ink = neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.INK) {
+        MuTheme(ink = neue.prefs.theme == NeueTheme.INK) {
             PresentStage(h.present, ctx)
         }
     }

@@ -33,6 +33,8 @@ import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.mastertool.core.web.DeckWeb
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
+import com.kaiharimoto.neue.art.LocalArt
+import com.kaiharimoto.neue.art.LocalCustomArt
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -96,8 +98,8 @@ internal fun MatchupTable(webs: Webs, web: DeckWeb, decks: List<StoredDeck>, sta
                 if (mine.size > 1) mine.forEach { d -> Tag("★ ${d.entry.name}", d.entry.id == me.entry.id, { asId = d.entry.id }, caption = "Side as") }
                 else Micro("★ ${me.entry.name}", color = c.ink)
                 Small("$written of ${opponents.size * 2} plans written", Modifier.padding(start = 8.dp, end = 8.dp), color = c.ink70)
-                val library = com.kaiharimoto.neue.art.LocalArt.current
-                val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+                val library = LocalArt.current
+                val custom = LocalCustomArt.current
                 val scope = androidx.compose.runtime.rememberCoroutineScope()
                 var making by remember { mutableStateOf(false) }
                 GuideButton(making) {

@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.kit
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import com.kaiharimoto.mastertool.core.input.CursorMode
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
 
@@ -203,7 +204,7 @@ fun MicroLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, 
     val touch = LocalTouchFirst.current
     Box(
         modifier
-            .let { if (touch) it.heightIn(min = com.kaiharimoto.mastertool.core.input.TouchMetrics.LINK.dp) else it }
+            .let { if (touch) it.heightIn(min = TouchMetrics.LINK.dp) else it }
             .hoverable(source)
             .cursorPointer(showsWords = true)
             .muClickable(interactionSource = source, onClick = onClick),
@@ -443,7 +444,7 @@ fun <T> Segmented(
     val c = Mu.colors
     // Outside the deck a finger gets 36dp and 11sp, where ≥ and ≤ looked alike (touch swarm, rec 18).
     val tall = !small || LocalTouchFirst.current && !compact
-    Row(modifier.height(if (tall) com.kaiharimoto.mastertool.core.input.TouchMetrics.SEGMENT.dp else 28.dp).border(1.dp, c.ink)) {
+    Row(modifier.height(if (tall) TouchMetrics.SEGMENT.dp else 28.dp).border(1.dp, c.ink)) {
         options.forEachIndexed { i, option ->
             if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(c.ink))
             val selected = option == value

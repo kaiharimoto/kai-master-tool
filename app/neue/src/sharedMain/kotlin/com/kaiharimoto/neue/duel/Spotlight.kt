@@ -62,10 +62,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelBattle
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.text.DuelAnswer
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.duel.text.Spotlight
@@ -194,7 +196,7 @@ internal fun SpotlightLayer(h: NeueHolders, game: DuelGame, phone: Boolean) {
 /** The box's view of its line on this table, with the battle an attack just declared comes to (offered on an empty box). */
 private fun spotView(duels: Duels, st: Spotlight.State, game: DuelGame): Spotlight.View = Spotlight.view(
     st.text, st.cursor, game.state, duels.bottom, duels.catalog, duels.lineHistory, game.header.seed,
-    battle = com.kaiharimoto.mastertool.core.duel.DuelBattle.pending(game, duels.catalog)?.takeIf { it.attack.seat == duels.bottom || game.state.solo },
+    battle = DuelBattle.pending(game, duels.catalog)?.takeIf { it.attack.seat == duels.bottom || game.state.solo },
 )
 
 /** The vertical spans (dp, from the table's top) of what [marks] light: each card's place and each place marked. */
@@ -514,7 +516,7 @@ internal fun SpotlightDim(duels: Duels, s: DuelState, l: DuelLayout, frames: Lis
 
 /** Where a place is drawn: a zone's frame, a pile's, a hand's band. Under a card is that card's place (the preview says so). */
 private fun placeBox(l: DuelLayout, p: Place): Slot? = when (p) {
-    is Place.Zone -> l.zone(if (p.kind == com.kaiharimoto.mastertool.core.duel.ZoneKind.EMZ) p.copy(seat = 0) else p)
+    is Place.Zone -> l.zone(if (p.kind == ZoneKind.EMZ) p.copy(seat = 0) else p)
     is Place.Pile -> l.pile(p.seat, p.kind)
     else -> null
 }

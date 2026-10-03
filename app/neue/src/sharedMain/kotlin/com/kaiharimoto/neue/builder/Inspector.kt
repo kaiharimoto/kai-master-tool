@@ -1,5 +1,10 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.input.DeskWords
+import com.kaiharimoto.mastertool.core.input.TouchMetrics
+import com.kaiharimoto.neue.art.ArtCropping
+import com.kaiharimoto.neue.art.LocalCustomArt
+import com.kaiharimoto.neue.kit.MuText
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import com.kaiharimoto.neue.kit.BtnSize
@@ -114,9 +119,9 @@ fun Inspector(state: DeckBuilderState, neue: NeueState, modifier: Modifier = Mod
         if (card == null) {
             hide()
             Column(Modifier.zenQuiet().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                com.kaiharimoto.neue.kit.MuText("Nothing here.", style = MuType.h1(LocalMuFonts.current))
+                MuText("Nothing here.", style = MuType.h1(LocalMuFonts.current))
                 Body(
-                    com.kaiharimoto.mastertool.core.input.DeskWords.inspectorEmpty(LocalTouchFirst.current),
+                    DeskWords.inspectorEmpty(LocalTouchFirst.current),
                     color = c.ink70,
                 )
             }
@@ -141,20 +146,20 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
         val room = if (constraints.hasBoundedHeight) maxHeight - 20.dp - (if (neue.touchFirst) 48.dp else 16.dp) else null
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 24.dp)) {
             // A picture dropped on the card is its own art, cropped in (1.0.34).
-            val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+            val custom = LocalCustomArt.current
             val fetching = androidx.compose.runtime.rememberCoroutineScope()
             val drop = remember(card) {
                 object : androidx.compose.ui.draganddrop.DragAndDropTarget {
                     override fun onDrop(event: androidx.compose.ui.draganddrop.DragAndDropEvent): Boolean {
                         val picked = com.kaiharimoto.neue.platform.droppedPicture(event)
                         if (picked != null) {
-                            neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card, picked)
+                            neue.cropping = ArtCropping(card, picked)
                             return true
                         }
                         // An image dragged out of a browser is its address: fetched, then cropped in (1.0.89).
                         val link = com.kaiharimoto.neue.platform.droppedLink(event) ?: return false
                         fetching.launch {
-                            com.kaiharimoto.neue.platform.fetchPicture(link)?.let { neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card, it) }
+                            com.kaiharimoto.neue.platform.fetchPicture(link)?.let { neue.cropping = ArtCropping(card, it) }
                                 ?: run { neue.note = com.kaiharimoto.neue.Note("That picture could not be fetched. Save it, then drop the file") }
                         }
                         return true
@@ -181,7 +186,7 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
                 },
                 body = { style ->
                     Box(Modifier.zenQuiet()) {
-                        SelectionContainer { com.kaiharimoto.neue.kit.MuText(card.description.ifBlank { "No card text." }, style = style, color = c.ink) }
+                        SelectionContainer { MuText(card.description.ifBlank { "No card text." }, style = style, color = c.ink) }
                     }
                 },
             )
@@ -206,7 +211,7 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
 @Composable
 internal fun ArtSwitch(card: Card, neue: NeueState, modifier: Modifier = Modifier) {
     val c = Mu.colors
-    val custom = com.kaiharimoto.neue.art.LocalCustomArt.current
+    val custom = LocalCustomArt.current
     // Read, so adding or removing a picture redraws the count.
     val own = custom?.version
     val arts = remember(card, own) { neue.artChoices(card) }
@@ -224,11 +229,11 @@ internal fun ArtSwitch(card: Card, neue: NeueState, modifier: Modifier = Modifie
                 MicroLink("Remove", { neue.confirmRemoveArt = card to -chosen })
             }
             // A picture picked, dropped or pasted, cropped into the art box or kept whole (1.0.34).
-            val add = { neue.cropping = com.kaiharimoto.neue.art.ArtCropping(card) }
+            val add = { neue.cropping = ArtCropping(card) }
             if (touch) MuButton("+ Your own", add, variant = BtnVariant.GHOST, size = BtnSize.SM) else MicroLink("+ Your own", add)
         }
         if (arts.size > 1) {
-            val arrow = if (touch) com.kaiharimoto.mastertool.core.input.TouchMetrics.ICON.dp else 28.dp
+            val arrow = if (touch) TouchMetrics.ICON.dp else 28.dp
             IconButton(Icons.ChevronLeft, { neue.stepArt(card, -1) }, size = arrow, label = "Previous art")
             IconButton(Icons.ChevronRight, { neue.stepArt(card, 1) }, size = arrow, label = "Next art")
         }
@@ -271,7 +276,7 @@ internal fun CardHeading(card: Card, large: Boolean = false) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (large) {
-            com.kaiharimoto.neue.kit.MuText(card.name, style = MuType.h1(LocalMuFonts.current).copy(lineHeight = 38.sp), maxLines = 3)
+            MuText(card.name, style = MuType.h1(LocalMuFonts.current).copy(lineHeight = 38.sp), maxLines = 3)
         } else {
             H2(card.name, maxLines = 3)
         }

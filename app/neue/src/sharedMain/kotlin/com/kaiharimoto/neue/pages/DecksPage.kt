@@ -1,5 +1,10 @@
 package com.kaiharimoto.neue.pages
 
+import com.kaiharimoto.mastertool.core.ydk.YdkDocument
+import com.kaiharimoto.neue.cards.CARD_RATIO
+import com.kaiharimoto.neue.kit.IconButton
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.neue.cursor.cursorPointer
@@ -154,7 +159,7 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             // The live deck when it is the one on the builder, as the share does.
             DeckExportFormat.QR -> CardActions.showQr(
                 if (stored.entry.id == state.deckId) state.deckName else stored.entry.name,
-                if (stored.entry.id == state.deckId) state.document() else com.kaiharimoto.mastertool.core.ydk.YdkDocument(deck, extended = stored.extended),
+                if (stored.entry.id == state.deckId) state.document() else YdkDocument(deck, extended = stored.extended),
                 neue.prefs.covers[stored.entry.id].orEmpty(),
                 neue,
             )
@@ -233,7 +238,7 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
             title = "Decks",
             subtitle = decks?.let { "${it.size} saved" } ?: "Loading",
         ) {
-            MuInput(filter, { filter = it }, if (com.kaiharimoto.neue.kit.LocalPhone.current) Modifier.fillMaxWidth() else Modifier.width(320.dp), placeholder = "A deck, a card in one, or a tag", imeAction = androidx.compose.ui.text.input.ImeAction.Search)
+            MuInput(filter, { filter = it }, if (LocalPhone.current) Modifier.fillMaxWidth() else Modifier.width(320.dp), placeholder = "A deck, a card in one, or a tag", imeAction = androidx.compose.ui.text.input.ImeAction.Search)
             // On a phone or a tablet Import is a menu: a file, or a deck's QR code (v1.3.7).
             var importAt by remember { mutableStateOf(Offset.Zero) }
             MuButton(
@@ -255,7 +260,7 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
         // Every tag in the library, most used first: one click keeps the decks carrying it.
         if (allTags.isNotEmpty()) {
             FlowRow(
-                Modifier.fillMaxWidth().padding(horizontal = if (com.kaiharimoto.neue.kit.LocalPhone.current) 16.dp else 32.dp).padding(vertical = if (com.kaiharimoto.neue.kit.LocalPhone.current) 8.dp else 0.dp).padding(bottom = 12.dp),
+                Modifier.fillMaxWidth().padding(horizontal = if (LocalPhone.current) 16.dp else 32.dp).padding(vertical = if (LocalPhone.current) 8.dp else 0.dp).padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
@@ -372,7 +377,7 @@ private fun CoverPicker(stored: StoredDeck, state: DeckBuilderState, neue: NeueS
                     Box(
                         Modifier
                             .fillMaxWidth()
-                            .aspectRatio(com.kaiharimoto.neue.cards.CARD_RATIO)
+                            .aspectRatio(CARD_RATIO)
                             .cursorPointer(caption = if (order >= 0) "Take off" else "Cover")
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                 neue.update { p -> p.copy(covers = p.covers + (id to DeckCovers.toggle(p.covers[id].orEmpty(), raw.value))) }
@@ -418,7 +423,7 @@ private fun DeckRow(
     val c = Mu.colors
     val touch = LocalTouchFirst.current
     // A phone's row (v1.3.5): one cover, the name and its line, and More — no numeral, no gaps to spare.
-    val phone = com.kaiharimoto.neue.kit.LocalPhone.current
+    val phone = LocalPhone.current
     var rowAt by remember { mutableStateOf(Offset.Zero) }
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
@@ -497,7 +502,7 @@ private fun DeckRow(
             if (touch || phone) {
                 var moreAt by remember { mutableStateOf(Offset.Zero) }
                 Box(Modifier.onGloballyPositioned { moreAt = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
-                    if (phone) com.kaiharimoto.neue.kit.IconButton(Icons.More, { onMenu(moreAt) }, size = 40.dp, label = "More")
+                    if (phone) IconButton(Icons.More, { onMenu(moreAt) }, size = 40.dp, label = "More")
                     else MuButton("More", { onMenu(moreAt) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, icon = Icons.More)
                 }
             } else Row(Modifier.alpha(actions), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -538,7 +543,7 @@ private fun TagChip(text: String, on: Boolean, onClick: (() -> Unit)?) {
             .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
-        com.kaiharimoto.neue.kit.Micro(text, color = if (on) c.paper else c.ink70)
+        Micro(text, color = if (on) c.paper else c.ink70)
     }
 }
 

@@ -4,7 +4,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.data.PreferencesRepository
+import com.kaiharimoto.mastertool.core.data.StoredDeck
+import com.kaiharimoto.mastertool.core.haptics.DeskEvent
+import com.kaiharimoto.mastertool.core.haptics.DeskFeel
+import com.kaiharimoto.mastertool.core.haptics.Haptic
+import com.kaiharimoto.mastertool.core.input.DeskTouch
+import com.kaiharimoto.mastertool.core.layout.FormFactor
+import com.kaiharimoto.mastertool.core.layout.Posture
 import com.kaiharimoto.mastertool.core.layout.Revealed
+import com.kaiharimoto.mastertool.core.layout.ScreenOrientation
 import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardArt
@@ -14,7 +22,15 @@ import com.kaiharimoto.mastertool.core.prefs.CardList
 import com.kaiharimoto.mastertool.core.prefs.CardLists
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
+import com.kaiharimoto.mastertool.core.search.CardFilter
+import com.kaiharimoto.mastertool.core.start.StartStep
+import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.neue.art.ArtCropping
+import com.kaiharimoto.neue.art.CustomArt
+import com.kaiharimoto.neue.builder.BandCache
 import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.neue.qr.QrShown
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -86,7 +102,7 @@ data class Studio(val listId: String? = null, val focus: Boolean = true)
 /** What the search pop-out was searching when it closed, so reopening it carries on (touch swarm, rec 10). */
 data class StudioMemory(
     val query: String,
-    val filter: com.kaiharimoto.mastertool.core.search.CardFilter,
+    val filter: CardFilter,
     val onlyList: Boolean,
 )
 
@@ -140,17 +156,17 @@ class NeueState(
     var confirmRemoveArt by mutableStateOf<Pair<Card, Int>?>(null)
 
     /** The card whose own art is being cropped in, and the picture it came with (1.0.34, `ArtCropDialog`). */
-    var cropping by mutableStateOf<com.kaiharimoto.neue.art.ArtCropping?>(null)
+    var cropping by mutableStateOf<ArtCropping?>(null)
 
     /** The main deck's bands of group blocks, and what keeps an edit from reshuffling them (1.0.37). */
-    internal val bandCache = com.kaiharimoto.neue.builder.BandCache()
+    internal val bandCache = BandCache()
 
     /** A deck shown as a QR code for a phone or a tablet to scan (1.0.30), while it is. */
-    var qr by mutableStateOf<com.kaiharimoto.neue.qr.QrShown?>(null)
+    var qr by mutableStateOf<QrShown?>(null)
 
     /** The card under the pointer, which the inspector shows. Hover is the desktop's cheapest question. */
     /** The window's haptics (touch swarm, rec 13): set by the window, nothing on the desk. */
-    var feel: (com.kaiharimoto.mastertool.core.haptics.Haptic) -> Unit = {}
+    var feel: (Haptic) -> Unit = {}
 
     /** Whether the gesture being acted on is a finger's or a pen's: the only hands the tablet answers with a buzz or a ring. */
     var fingerActing = false
@@ -168,8 +184,8 @@ class NeueState(
     }
 
     /** Plays [event] for a finger's gesture; "no buzz" always means "not in the deck" (DeskFeel). */
-    fun felt(event: com.kaiharimoto.mastertool.core.haptics.DeskEvent?) {
-        if (fingerActing && event != null) com.kaiharimoto.mastertool.core.haptics.DeskFeel.of(event)?.let(feel)
+    fun felt(event: DeskEvent?) {
+        if (fingerActing && event != null) DeskFeel.of(event)?.let(feel)
     }
 
     /** The art library is on and waiting for a network that costs nothing (touch swarm, rec 27). */
@@ -220,13 +236,13 @@ class NeueState(
      * The setup offered on opening (1.0.69): the steps still to show, over the whole window, while there
      * are any. Esc and Back are "later": the steps stay undone, and Settings can show them again.
      */
-    var startSteps by mutableStateOf<List<com.kaiharimoto.mastertool.core.start.StartStep>>(emptyList())
+    var startSteps by mutableStateOf<List<StartStep>>(emptyList())
     val starting: Boolean get() = startSteps.isNotEmpty()
 
     /** The setup put away for now: this version counts as seen, the steps not done. */
     fun startLater() {
         startSteps = emptyList()
-        update { it.copy(start = it.start.copy(seen = com.kaiharimoto.neue.platform.Platform.version)) }
+        update { it.copy(start = it.start.copy(seen = Platform.version)) }
     }
 
     /** The reader's guide open over the window, on this deck's book (1.0.67); Esc and Back close it. */
@@ -268,29 +284,29 @@ class NeueState(
      * to read a card by, so the rail stays out and the inspector follows the
      * selection. A mouse plugged into the tablet still works as a mouse.
      */
-    val touchFirst: Boolean get() = com.kaiharimoto.neue.platform.Platform.os == com.kaiharimoto.mastertool.core.update.DesktopOs.ANDROID
+    val touchFirst: Boolean get() = Platform.os == DesktopOs.ANDROID
 
     /**
      * What the app is running on (the phone, v1.3.5): read off the window in physical dp
      * by `NeueWindowContent`. The desk is always [FormFactor.DESK].
      */
-    var form by mutableStateOf(com.kaiharimoto.mastertool.core.layout.FormFactor.DESK)
+    var form by mutableStateOf(FormFactor.DESK)
 
     /** The studio's way to draw a phone on the desk (`--form=phone`); null reads the window. */
-    var formOverride: com.kaiharimoto.mastertool.core.layout.FormFactor? = null
+    var formOverride: FormFactor? = null
 
     /** Which way round the window is: on a phone, which builder is drawn. */
-    var posture by mutableStateOf(com.kaiharimoto.mastertool.core.layout.Posture.WIDE)
+    var posture by mutableStateOf(Posture.WIDE)
 
     /** A phone: the tab bar, the slim bar and its overflow, the docked pool, no inspector. */
-    val phone: Boolean get() = form == com.kaiharimoto.mastertool.core.layout.FormFactor.PHONE
+    val phone: Boolean get() = form == FormFactor.PHONE
 
     /** The deck's row width on a phone (`DeckFitter.phoneColumns`), set by the deck as it fits; null elsewhere. */
     var phoneColumns by mutableStateOf<Int?>(null)
 
     /** Which way the screen may turn, the stored choice or the device's default. */
-    val orientation: com.kaiharimoto.mastertool.core.layout.ScreenOrientation
-        get() = com.kaiharimoto.mastertool.core.layout.ScreenOrientation.resolve(prefs.orientation, form)
+    val orientation: ScreenOrientation
+        get() = ScreenOrientation.resolve(prefs.orientation, form)
 
     /** The one-tap toggle: Portrait → Landscape → Auto (kai, v1.3.5). */
     fun rotate() {
@@ -312,18 +328,18 @@ class NeueState(
         // when the timer fired, a busy phone's late timer let the second finger's tap
         // outlive the mark and open the card after the undo.
         val sinceFingersNow = System.nanoTime() / 1_000_000 - fingersAt
-        if (sinceFingersNow < com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS) {
+        if (sinceFingersNow < DeskTouch.PHONE_VIEW_MS) {
             trace("skip ${v.card.id.value}@${v.index}, fingers ${sinceFingersNow}ms ago")
             viewJob = null
             return
         }
         trace("soon ${v.card.id.value}@${v.index}")
         viewJob = scope.launch {
-            delay(com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS)
+            delay(DeskTouch.PHONE_VIEW_MS)
             // A two- or three-finger tap is undo or redo, and each finger is also a card's tap:
             // none of them opens the card.
             val sinceFingers = System.nanoTime() / 1_000_000 - fingersAt
-            if (sinceFingers < com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS * 2) {
+            if (sinceFingers < DeskTouch.PHONE_VIEW_MS * 2) {
                 trace("skip, fingers ${sinceFingers}ms ago")
                 return@launch
             }
@@ -371,7 +387,7 @@ class NeueState(
         val opened = softOpened
         softOpened = null
         if (secondTap && opened != null && viewing === opened &&
-            System.nanoTime() / 1_000_000 - softOpenedAt < com.kaiharimoto.mastertool.core.input.DeskTouch.PHONE_VIEW_MS
+            System.nanoTime() / 1_000_000 - softOpenedAt < DeskTouch.PHONE_VIEW_MS
         ) {
             trace("close, a second tap")
             viewing = null
@@ -434,7 +450,7 @@ class NeueState(
     }
 
     /** The pictures the person added to cards (1.0.18). Set by the window. */
-    var customArt: com.kaiharimoto.neue.art.CustomArt? = null
+    var customArt: CustomArt? = null
 
     /** Every artwork [card] can be drawn with: the pool's, then its own pictures. */
     fun artChoices(card: Card): List<Int> = customArt?.choices(card) ?: CardArt.arts(card).map { it.value }
@@ -448,7 +464,7 @@ class NeueState(
     var studioMemory by mutableStateOf<StudioMemory?>(null)
 
     /** The Decks page's cover picker, here rather than in the page so Back can close it (touch swarm, rec 2). */
-    var coverPicking by mutableStateOf<com.kaiharimoto.mastertool.core.data.StoredDeck?>(null)
+    var coverPicking by mutableStateOf<StoredDeck?>(null)
 
     /** Whether [dismissTop] has something to close. */
     val hasTop: Boolean

@@ -3,19 +3,47 @@ package com.kaiharimoto.neue.duel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
+import com.kaiharimoto.mastertool.core.duel.DuelEntry
+import com.kaiharimoto.mastertool.core.duel.DuelFolds
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
+import com.kaiharimoto.mastertool.core.duel.DuelSight
+import com.kaiharimoto.mastertool.core.duel.DuelState
+import com.kaiharimoto.mastertool.core.duel.DuelTally
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
+import com.kaiharimoto.mastertool.core.duel.HouseRuling
+import com.kaiharimoto.mastertool.core.duel.HouseRulingBook
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.SeatSetup
+import com.kaiharimoto.mastertool.core.duel.Tally
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.ai.AiCue
+import com.kaiharimoto.mastertool.core.duel.ai.Combo
+import com.kaiharimoto.mastertool.core.duel.ai.ComboBook
+import com.kaiharimoto.mastertool.core.duel.ai.ComboCodec
+import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
+import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
+import com.kaiharimoto.mastertool.core.duel.ai.Trigger
+import com.kaiharimoto.mastertool.core.duel.ai.Watch
+import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
+import com.kaiharimoto.mastertool.core.duel.net.DuelHost
+import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
+import com.kaiharimoto.mastertool.core.duel.text.DuelAnswer
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
+import com.kaiharimoto.mastertool.core.layout.DuelFocus
+import com.kaiharimoto.mastertool.core.layout.DuelFrames
+import com.kaiharimoto.mastertool.core.layout.DuelLayout
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.search.CardIndex
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -107,7 +135,7 @@ class Duels(val dir: File) {
     enum class Input { KEYS, POINTER }
 
     /** Where the arrows stand on the table (`DuelFocus`), or nowhere yet. */
-    var focus by mutableStateOf<com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot?>(null)
+    var focus by mutableStateOf<DuelFocus.Slot?>(null)
         private set
     /** The card the focus was put on, so it goes with the card when the card moves; null on a place or a pile. */
     private var focusCard: Int? = null
@@ -118,25 +146,25 @@ class Duels(val dir: File) {
     /** The verb highlighted in the verb strip opened by Enter; null while the strip is the pointer's (or shut). */
     var verbCursor by mutableStateOf<Int?>(null)
     /** The table as last drawn (set by `DuelTable`): the focus's grid is read off its shape. */
-    var tableLayout by mutableStateOf<com.kaiharimoto.mastertool.core.layout.DuelLayout?>(null)
+    var tableLayout by mutableStateOf<DuelLayout?>(null)
     /** Whose eyes the table is drawn through, and the veils' secret (set by `DuelTable`): a hidden hand's order. */
-    var eyes by mutableStateOf(com.kaiharimoto.mastertool.core.layout.DuelFocus.Eyes.ALL)
+    var eyes by mutableStateOf(DuelFocus.Eyes.ALL)
 
     /** The keys are in charge: the ring is drawn and the keys act on it. */
     val byKeys: Boolean get() = lastInput == Input.KEYS && focus != null
 
     /** The grid's shape: the table as drawn, an open pile's cards to a row. */
-    fun focusShape(): com.kaiharimoto.mastertool.core.layout.DuelFocus.Shape {
-        val l = tableLayout ?: return com.kaiharimoto.mastertool.core.layout.DuelFocus.Shape(twoSided = shown?.state?.solo == false)
-        val per = strip?.let { (seat, kind) -> shown?.state?.seats?.get(seat)?.pile(kind)?.size }?.let { com.kaiharimoto.mastertool.core.layout.DuelFrames.stripGrid(it, l).perRow } ?: 1
-        return com.kaiharimoto.mastertool.core.layout.DuelFocus.Shape.of(l, per)
+    fun focusShape(): DuelFocus.Shape {
+        val l = tableLayout ?: return DuelFocus.Shape(twoSided = shown?.state?.solo == false)
+        val per = strip?.let { (seat, kind) -> shown?.state?.seats?.get(seat)?.pile(kind)?.size }?.let { DuelFrames.stripGrid(it, l).perRow } ?: 1
+        return DuelFocus.Shape.of(l, per)
     }
 
     /** The card the focus stands on, or null for an empty place (or no focus). */
     fun focusUid(): Int? {
         val f = focus ?: return null
         val s = shown?.state ?: return null
-        return com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, f, eyes)
+        return DuelFocus.uidAt(s, f, eyes)
     }
 
     /**
@@ -149,16 +177,16 @@ class Duels(val dir: File) {
     fun reading(): Int? = (if (byKeys) focusUid() else null) ?: hovered ?: inspected
 
     /** Puts the focus on [slot]: the keys lead, the card there is read, a pile's open strip scrolls to it. */
-    fun focusOn(slot: com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot?) {
+    fun focusOn(slot: DuelFocus.Slot?) {
         focus = slot
         lastInput = Input.KEYS
         val s = shown?.state
-        focusCard = if (slot == null || s == null || slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile || slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link) null
-        else com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, slot, eyes)?.takeIf { followable(s, it) }
-        if (slot is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.PileCard) {
+        focusCard = if (slot == null || s == null || slot is DuelFocus.Slot.Pile || slot is DuelFocus.Slot.Link) null
+        else DuelFocus.uidAt(s, slot, eyes)?.takeIf { followable(s, it) }
+        if (slot is DuelFocus.Slot.PileCard) {
             val l = tableLayout ?: return
             val n = s?.seats?.get(slot.seat)?.pile(slot.kind)?.size ?: return
-            val grid = com.kaiharimoto.mastertool.core.layout.DuelFrames.stripGrid(n, l)
+            val grid = DuelFrames.stripGrid(n, l)
             val row = slot.index / grid.perRow
             if (row < stripRow) stripRow = row
             if (row >= stripRow + grid.visibleRows) stripRow = row - grid.visibleRows + 1
@@ -166,20 +194,20 @@ class Duels(val dir: File) {
     }
 
     /** The arrows: a step on the table ([com.kaiharimoto.mastertool.core.layout.DuelFocus.step]); the first press starts at home. */
-    fun walk(dir: com.kaiharimoto.mastertool.core.layout.DuelFocus.Dir) {
+    fun walk(dir: DuelFocus.Dir) {
         val s = shown?.state ?: return
         verbStrip = false
         chainMenu = null
         val shape = focusShape()
         if (lastInput != Input.KEYS || focus == null) {
             // The keys take over: on the card under the pointer, else where the ring was left, else home.
-            val start = hovered?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.slotOf(s, it, strip, eyes) }
-                ?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.settle(it, s, bottom, shape) }
-                ?: focus?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.settle(it, s, bottom, shape) }
-            focusOn(start ?: com.kaiharimoto.mastertool.core.layout.DuelFocus.home(s, bottom))
+            val start = hovered?.let { DuelFocus.slotOf(s, it, strip, eyes) }
+                ?.let { DuelFocus.settle(it, s, bottom, shape) }
+                ?: focus?.let { DuelFocus.settle(it, s, bottom, shape) }
+            focusOn(start ?: DuelFocus.home(s, bottom))
             return
         }
-        focusOn(com.kaiharimoto.mastertool.core.layout.DuelFocus.step(focus, dir, s, bottom, shape))
+        focusOn(DuelFocus.step(focus, dir, s, bottom, shape))
     }
 
     /** Shift ← / → : the row's first or last place. */
@@ -187,18 +215,18 @@ class Duels(val dir: File) {
         val s = shown?.state ?: return
         verbStrip = false
         val shape = focusShape()
-        focusOn(if (end) com.kaiharimoto.mastertool.core.layout.DuelFocus.rowEnd(focus, s, bottom, shape) else com.kaiharimoto.mastertool.core.layout.DuelFocus.rowStart(focus, s, bottom, shape))
+        focusOn(if (end) DuelFocus.rowEnd(focus, s, bottom, shape) else DuelFocus.rowStart(focus, s, bottom, shape))
     }
 
     /** The table changed: the focus goes with the card it was on, or stays where it was, made good. */
     fun refocus() {
         val f = focus ?: return
         val s = shown?.state ?: return
-        val open = (f as? com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.PileCard)?.takeIf { strip != it.seat to it.kind }
-            ?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile(it.seat, it.kind) }
-        val next = if (open != null) open else com.kaiharimoto.mastertool.core.layout.DuelFocus.follow(f, focusCard, s, bottom, focusShape(), strip, eyes)
+        val open = (f as? DuelFocus.Slot.PileCard)?.takeIf { strip != it.seat to it.kind }
+            ?.let { DuelFocus.Slot.Pile(it.seat, it.kind) }
+        val next = if (open != null) open else DuelFocus.follow(f, focusCard, s, bottom, focusShape(), strip, eyes)
         if (next != f) focus = next
-        focusCard = next?.takeIf { it !is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile && it !is com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Link }?.let { com.kaiharimoto.mastertool.core.layout.DuelFocus.uidAt(s, it, eyes) }
+        focusCard = next?.takeIf { it !is DuelFocus.Slot.Pile && it !is DuelFocus.Slot.Link }?.let { DuelFocus.uidAt(s, it, eyes) }
             ?.takeIf { followable(s, it) }
         if (picked?.let { it !in s.cards } == true) picked = null
     }
@@ -207,8 +235,8 @@ class Duels(val dir: File) {
      * Whether the ring may follow this card when it moves: only one the table's eyes can see (1.0.87, the red team). A
      * hidden card is followed by place, never by uid — following it would show which one a re-veiled hand lost to a Set.
      */
-    private fun followable(s: com.kaiharimoto.mastertool.core.duel.DuelState, uid: Int): Boolean =
-        eyes.viewers.isEmpty() || eyes.viewers.any { com.kaiharimoto.mastertool.core.duel.DuelSight.sees(s, uid, it) }
+    private fun followable(s: DuelState, uid: Int): Boolean =
+        eyes.viewers.isEmpty() || eyes.viewers.any { DuelSight.sees(s, uid, it) }
 
     /** Esc's last layer: the focus let go, and what was picked with it. */
     fun clearFocus() {
@@ -246,10 +274,10 @@ class Duels(val dir: File) {
     var watchSeat by aiWatch::watchSeat
     var aiTookBack by aiWatch::aiTookBack
     val waitingOnAi: Boolean get() = aiWatch.waitingOnAi
-    fun watch(w: com.kaiharimoto.mastertool.core.duel.ai.Watch): com.kaiharimoto.mastertool.core.duel.ai.Watch = aiWatch.watch(w)
+    fun watch(w: Watch): Watch = aiWatch.watch(w)
     fun unwatch(id: Int?): Int = aiWatch.unwatch(id)
     fun nextWatchId(): Int = aiWatch.nextWatchId()
-    fun liveWatches(): List<com.kaiharimoto.mastertool.core.duel.ai.Watch> = aiWatch.liveWatches()
+    fun liveWatches(): List<Watch> = aiWatch.liveWatches()
     fun forgetTriggers(clearWatches: Boolean = true) = aiWatch.forgetTriggers(clearWatches)
     fun releaseHeld() = aiWatch.releaseHeld()
     fun dontWait() = aiWatch.dontWait()
@@ -307,7 +335,7 @@ class Duels(val dir: File) {
         val seat: Int?,
         val cursor: Int,
         val game: DuelGame,
-        val spent: List<com.kaiharimoto.mastertool.core.duel.ai.Watch> = emptyList(),
+        val spent: List<Watch> = emptyList(),
         val auto: Boolean = false,
     )
 
@@ -321,7 +349,7 @@ class Duels(val dir: File) {
     var diceRolling by opener::diceRolling
     var aiOpeningSeat by opener::aiOpeningSeat
     fun mayRoll(seat: Int, playsBoth: Boolean): Boolean = opener.mayRoll(seat, playsBoth)
-    fun throwDice(seat: Int, toss: com.kaiharimoto.mastertool.core.duel.dice.DiceThrow? = null): Boolean = opener.throwDice(seat, toss)
+    fun throwDice(seat: Int, toss: DiceThrow? = null): Boolean = opener.throwDice(seat, toss)
     fun goFirst(seat: Int, first: Boolean): Boolean = opener.goFirst(seat, first)
     fun aiOpening(): Boolean = opener.aiOpening()
 
@@ -338,7 +366,7 @@ class Duels(val dir: File) {
     fun saveSpan(deckId: String, name: String, needs: List<String>, steps: List<String>, done: (String) -> Unit) {
         scope.launch {
             val book = combos(deckId)
-            val combo = com.kaiharimoto.mastertool.core.duel.ai.Combo("c${now()}", name, deckId, needs, steps, created = now())
+            val combo = Combo("c${now()}", name, deckId, needs, steps, created = now())
             saveCombos(deckId, book.copy(combos = book.combos + combo))
             done(name)
         }
@@ -367,7 +395,7 @@ class Duels(val dir: File) {
     fun deleteReplay(id: String) = replayer.deleteReplay(id)
     fun closeReplay() = replayer.closeReplay()
     fun seek(at: Int) = replayer.seek(at)
-    fun step(unit: com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit, dir: Int) = replayer.step(unit, dir)
+    fun step(unit: ReplayUnit, dir: Int) = replayer.step(unit, dir)
     fun play(direction: Int) = replayer.play(direction)
     fun speed(s: Float) = replayer.speed(s)
     fun tick(): Boolean = replayer.tick()
@@ -489,11 +517,11 @@ class Duels(val dir: File) {
             }
             if (actions.any { it is DuelAction.Phase || it is DuelAction.EndTurn }) {
                 val live = aiWatch.liveWatches()
-                if (live.any { com.kaiharimoto.mastertool.core.duel.ai.Trigger.PHASE_LEAVE.key in it.on }) {
-                    val leaving = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.happenings(
-                        g.state, actions.map { com.kaiharimoto.mastertool.core.duel.DuelEntry(0, 0L, seat, 0, it) }, catalog, w!!, person,
-                    ).filter { it.kind == com.kaiharimoto.mastertool.core.duel.ai.Trigger.PHASE_LEAVE }
-                    val hits = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.hits(live, leaving, w)
+                if (live.any { Trigger.PHASE_LEAVE.key in it.on }) {
+                    val leaving = DuelTriggers.happenings(
+                        g.state, actions.map { DuelEntry(0, 0L, seat, 0, it) }, catalog, w!!, person,
+                    ).filter { it.kind == Trigger.PHASE_LEAVE }
+                    val hits = DuelTriggers.hits(live, leaving, w)
                     if (hits.isNotEmpty()) {
                         // Checked whole first, so a held change is one the table will take.
                         val check = g.act(actions, seat, now())
@@ -526,9 +554,9 @@ class Duels(val dir: File) {
             val live = aiWatch.liveWatches()
             if (live.isNotEmpty()) {
                 val fresh = r.game.entries.subList(g.cursor, r.game.cursor)
-                val seen = com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.happenings(g.state, fresh, catalog, w!!, person)
-                    .filter { !aiWatch.releasing || it.kind != com.kaiharimoto.mastertool.core.duel.ai.Trigger.PHASE_LEAVE }
-                aiWatch.fire(com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers.hits(live, seen, w, aiWatch.summonsThisTurn()))
+                val seen = DuelTriggers.happenings(g.state, fresh, catalog, w!!, person)
+                    .filter { !aiWatch.releasing || it.kind != Trigger.PHASE_LEAVE }
+                aiWatch.fire(DuelTriggers.hits(live, seen, w, aiWatch.summonsThisTurn()))
             }
         }
         // The turn passed: the next one opens by itself (1.0.86), after what this move fired. So does turn 1, once the
@@ -689,7 +717,7 @@ class Duels(val dir: File) {
             }
             // A question is answered to this seat alone: never a Chat or a Note, which the log keeps for both seats.
             is DuelCommand.Parsed.Query -> {
-                val said = com.kaiharimoto.mastertool.core.duel.text.DuelAnswer.answer(p, g.state, bottom, catalog, g.header.seed)
+                val said = DuelAnswer.answer(p, g.state, bottom, catalog, g.header.seed)
                 answer = said
                 if (!quiet) problem = said
                 if (p.uid != null) inspected = p.uid
@@ -708,7 +736,7 @@ class Duels(val dir: File) {
                     DuelCommand.UiKind.CUE -> if (cueAi?.invoke(p) != true) {
                         // No Ai at the table (1.0.87, the red team): "pass" and "no response" with a chain open pass
                         // priority across a hot-seat, as the response window's own No response does.
-                        val passes = p.cue == com.kaiharimoto.mastertool.core.duel.ai.AiCue.PASS || p.cue == com.kaiharimoto.mastertool.core.duel.ai.AiCue.NO_RESPONSE
+                        val passes = p.cue == AiCue.PASS || p.cue == AiCue.NO_RESPONSE
                         if (passes && !g.state.solo && g.state.chain.isNotEmpty()) {
                             if (!act(DuelAction.Answer(bottom, respond = false), bottom)) why = problem ?: "The table refused that"
                         } else why = "No Ai sits at this table."
@@ -763,7 +791,7 @@ class Duels(val dir: File) {
     }
 
     fun undo() {
-        if (replayer.replay != null) { replayer.step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, -1); return }
+        if (replayer.replay != null) { replayer.step(ReplayUnit.GROUP, -1); return }
         if (network.role != null) { network.askTakeBack(); return }
         // A phase change held for Ai is not on the table yet: undo takes it back first.
         if (aiWatch.held != null) { aiWatch.dropHeld(); opener.autoTurn = null; return }
@@ -791,7 +819,7 @@ class Duels(val dir: File) {
     }
 
     fun redo() {
-        if (replayer.replay != null) { replayer.step(com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit.GROUP, 1); return }
+        if (replayer.replay != null) { replayer.step(ReplayUnit.GROUP, 1); return }
         if (network.role != null) return
         if (aiWatch.waitingOnAi) { problem = "Ai is answering your move — Don't wait first."; return }
         val g = game ?: return
@@ -834,7 +862,7 @@ class Duels(val dir: File) {
         val open = strip ?: return
         strip = null
         // A card focused in the pile: the focus goes back to the pile, shut (1.0.87).
-        (focus as? com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.PileCard)?.let { focus = com.kaiharimoto.mastertool.core.layout.DuelFocus.Slot.Pile(it.seat, it.kind); focusCard = null }
+        (focus as? DuelFocus.Slot.PileCard)?.let { focus = DuelFocus.Slot.Pile(it.seat, it.kind); focusCard = null }
         if (open.second == PileKind.DECK) offerShuffle = open.first to System.currentTimeMillis() + SHUFFLE_OFFER_MS
     }
 
@@ -895,8 +923,8 @@ class Duels(val dir: File) {
     val mySeat: Int get() = network.mySeat
     val waitingFor: Int? get() = network.waitingFor
     fun dragActor(): Int? = network.dragActor()
-    fun host(mine: com.kaiharimoto.mastertool.core.duel.SeatSetup) = network.host(mine)
-    fun join(code: String, mine: com.kaiharimoto.mastertool.core.duel.SeatSetup) = network.join(code, mine)
+    fun host(mine: SeatSetup) = network.host(mine)
+    fun join(code: String, mine: SeatSetup) = network.join(code, mine)
     fun answerTakeBack(yes: Boolean) = network.answerTakeBack(yes)
     fun leave() = network.leave()
 
@@ -912,18 +940,18 @@ class Duels(val dir: File) {
     /** The deck a seat is playing, for its combos: the duel's own, else none. */
     fun deckOf(seat: Int): String? = shown?.header?.seats?.getOrNull(seat)?.deckId
 
-    suspend fun combos(deckId: String): com.kaiharimoto.mastertool.core.duel.ai.ComboBook = withContext(Dispatchers.IO) {
-        File(dir, com.kaiharimoto.mastertool.core.duel.ai.ComboCodec.path(deckId)).takeIf { it.exists() }
-            ?.readText()?.let(com.kaiharimoto.mastertool.core.duel.ai.ComboCodec::decode)
-            ?: com.kaiharimoto.mastertool.core.duel.ai.ComboBook()
+    suspend fun combos(deckId: String): ComboBook = withContext(Dispatchers.IO) {
+        File(dir, ComboCodec.path(deckId)).takeIf { it.exists() }
+            ?.readText()?.let(ComboCodec::decode)
+            ?: ComboBook()
     }
 
-    suspend fun saveCombos(deckId: String, book: com.kaiharimoto.mastertool.core.duel.ai.ComboBook) = withContext(Dispatchers.IO) {
+    suspend fun saveCombos(deckId: String, book: ComboBook) = withContext(Dispatchers.IO) {
         io.withLock {
-            val target = File(dir, com.kaiharimoto.mastertool.core.duel.ai.ComboCodec.path(deckId))
+            val target = File(dir, ComboCodec.path(deckId))
             target.parentFile?.mkdirs()
             val temp = File(target.parentFile, "${target.name}.tmp")
-            temp.writeText(com.kaiharimoto.mastertool.core.duel.ai.ComboCodec.encode(book))
+            temp.writeText(ComboCodec.encode(book))
             if (!temp.renameTo(target)) { target.delete(); temp.renameTo(target) }
         }
     }
@@ -937,7 +965,7 @@ class Duels(val dir: File) {
         val g = game ?: return PlayReport("There is no duel on the table.", 0, false)
         // Played on the live table only: never into an open replay (1.0.85).
         if (replayer.replay != null) return PlayReport("A replay is open on the table; close it first.", 0, false)
-        val plan = com.kaiharimoto.mastertool.core.duel.ai.ComboRunner.plan(g.state, seat, steps, catalog)
+        val plan = ComboRunner.plan(g.state, seat, steps, catalog)
         if (!plan.ok) return PlayReport("Nothing was played. ${plan.problem}", 0, false)
         playing = true
         stopRequested = false
@@ -959,7 +987,7 @@ class Duels(val dir: File) {
                 done++
                 val now = game
                 val lines = if (network.role == NetRole.GUEST || now == null) listOf("sent to the host")
-                else com.kaiharimoto.mastertool.core.duel.net.DuelHost.lines(now, before, viewer, catalog, folds(now)).map { it.text }
+                else DuelHost.lines(now, before, viewer, catalog, folds(now)).map { it.text }
                 said += "$done. $text → ${lines.joinToString("; ").ifBlank { "no change on the table" }}"
                 if (paceMs > 0 && done < plan.steps.size) delay(paceMs)
             }
@@ -977,42 +1005,42 @@ class Duels(val dir: File) {
 
     // ---- house rulings (1.0.79): DuelRulings, and the turn's tally ---------------------------------------
 
-    val rulings: com.kaiharimoto.mastertool.core.duel.HouseRulingBook get() = houseRulings.rulings
+    val rulings: HouseRulingBook get() = houseRulings.rulings
     fun loadRulings() = houseRulings.loadRulings()
     fun reloadRulings() = houseRulings.reloadRulings()
-    fun keepRuling(code: Int?, card: String?, text: String): com.kaiharimoto.mastertool.core.duel.HouseRuling = houseRulings.keepRuling(code, card, text)
+    fun keepRuling(code: Int?, card: String?, text: String): HouseRuling = houseRulings.keepRuling(code, card, text)
     fun forgetRuling(id: String): Boolean = houseRulings.forgetRuling(id)
 
-    private var tallyOf: Triple<DuelGame, Int?, com.kaiharimoto.mastertool.core.duel.Tally>? = null
+    private var tallyOf: Triple<DuelGame, Int?, Tally>? = null
 
     /**
      * This turn's counts and locks, for the table shown, as [viewer] may read them (an activation of a card
      * they could not see is "a card"); read off the log, kept until it changes.
      */
-    fun tally(viewer: Int? = null): com.kaiharimoto.mastertool.core.duel.Tally? {
+    fun tally(viewer: Int? = null): Tally? {
         val g = shown ?: return null
         tallyOf?.let { (of, v, t) -> if (of === g && v == viewer) return t }
         // A guest has no log of its own: the locks it was sent, nothing counted.
-        val t = if (network.role == NetRole.GUEST) com.kaiharimoto.mastertool.core.duel.Tally(g.state.turn, listOf(0, 0), listOf(0, 0), listOf(emptyMap(), emptyMap()), g.state.locks)
-        else com.kaiharimoto.mastertool.core.duel.DuelTally.of(g, catalog, viewer, folds(g))
+        val t = if (network.role == NetRole.GUEST) Tally(g.state.turn, listOf(0, 0), listOf(0, 0), listOf(emptyMap(), emptyMap()), g.state.locks)
+        else DuelTally.of(g, catalog, viewer, folds(g))
         tallyOf = Triple(g, viewer, t)
         return t
     }
 
-    private var folds: com.kaiharimoto.mastertool.core.duel.DuelFolds<Unit>? = null
+    private var folds: DuelFolds<Unit>? = null
 
     /**
      * The tables of [g]'s log, folded once and kept (1.0.86): the tally, Insert here and the lines sent to
      * a guest or read to Ai start from it, never from the deal again. One per duel; a new one for a new header.
      */
-    internal fun folds(g: DuelGame): com.kaiharimoto.mastertool.core.duel.DuelFolds<Unit> =
-        folds?.takeIf { it.header == g.header } ?: com.kaiharimoto.mastertool.core.duel.DuelFolds.states(g.header).also { folds = it }
+    internal fun folds(g: DuelGame): DuelFolds<Unit> =
+        folds?.takeIf { it.header == g.header } ?: DuelFolds.states(g.header).also { folds = it }
 
     /**
      * The phase moved on, or the turn ended. At a hot-seat the turn player does it; at a networked table
      * the player whose turn it is not asks instead, and the turn player answers (1.0.79).
      */
-    fun goPhase(phase: com.kaiharimoto.mastertool.core.board.DuelPhase?, end: Boolean = false): Boolean {
+    fun goPhase(phase: DuelPhase?, end: Boolean = false): Boolean {
         val s = shown?.state ?: return false
         val seat = if (network.role != null) network.mySeat else s.active
         return when {
@@ -1036,11 +1064,11 @@ class Duels(val dir: File) {
     fun resolveChain(keep: Boolean = false): Boolean {
         val s = shown?.state ?: return false
         if (s.chain.isEmpty()) return false
-        return act(com.kaiharimoto.mastertool.core.duel.DuelVerbs.resolve(s, catalog, keep), bottom)
+        return act(DuelVerbs.resolve(s, catalog, keep), bottom)
     }
 
-    fun useIndex(index: com.kaiharimoto.mastertool.core.search.CardIndex) {
-        catalog = DuelCatalog { code -> index.byId(com.kaiharimoto.mastertool.core.model.CardId(code))?.let(com.kaiharimoto.mastertool.core.duel.DuelCardInfo::of) }
+    fun useIndex(index: CardIndex) {
+        catalog = DuelCatalog { code -> index.byId(CardId(code))?.let(DuelCardInfo::of) }
     }
 
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */

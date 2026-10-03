@@ -9,6 +9,8 @@ import com.kaiharimoto.mastertool.core.sync.SyncedDeck
 import com.kaiharimoto.mastertool.core.sync.SyncedPrefs
 import com.kaiharimoto.mastertool.core.web.DeckWeb
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.duel.Duels
+import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.serializer
@@ -28,13 +30,13 @@ import java.io.File
  */
 class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : SyncLocal {
     private val ai get() = h.ai.files.root
-    private val art = File(com.kaiharimoto.neue.platform.Platform.dataDir, "custom-art")
+    private val art = File(Platform.dataDir, "custom-art")
 
     /** Present's presentations and their pictures (1.0.70): files, the newer one kept. */
-    private val present = File(com.kaiharimoto.neue.platform.Platform.dataDir, "present")
+    private val present = File(Platform.dataDir, "present")
 
     /** Duel's replays (1.0.75) and combos (1.0.76): files, the newer one kept. The duel in play is this device's own. */
-    private val duel = File(com.kaiharimoto.neue.platform.Platform.dataDir, "duel")
+    private val duel = File(Platform.dataDir, "duel")
 
     /** What came in this sync, so the screens showing it can be told once at the end. */
     val changed = mutableSetOf<String>()
@@ -57,7 +59,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
             files(ai, "ai/") { rel -> !privateToDevice(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(art, "art/") { true }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(present, "present/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
-            files(duel, "duel/") { rel -> !rel.endsWith(".tmp") && rel.substringAfterLast('/') != com.kaiharimoto.neue.duel.Duels.CURRENT }.forEach { (path, f) -> out[path] = seen.file(path, f) }
+            files(duel, "duel/") { rel -> !rel.endsWith(".tmp") && rel.substringAfterLast('/') != Duels.CURRENT }.forEach { (path, f) -> out[path] = seen.file(path, f) }
         }
         return out
     }

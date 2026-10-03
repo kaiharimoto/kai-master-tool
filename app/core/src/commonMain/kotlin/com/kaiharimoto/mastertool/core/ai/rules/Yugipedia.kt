@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.rules
 
 import com.kaiharimoto.mastertool.core.ai.web.HtmlText
+import com.kaiharimoto.mastertool.core.ai.web.SearchResults
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -38,13 +39,13 @@ object Yugipedia {
         "$API?action=query&list=search&srsearch=${title(query).replace("_", "%20")}&srlimit=$limit&format=json&formatversion=2"
 
     /** A search answer's hits: title, page URL and the snippet as plain text. */
-    fun searchHits(json: String): List<com.kaiharimoto.mastertool.core.ai.web.SearchResults.Hit> {
+    fun searchHits(json: String): List<SearchResults.Hit> {
         val hits = (root(json)?.get("query") as? JsonObject)?.get("search") as? JsonArray ?: return emptyList()
         return hits.mapNotNull { el ->
             val o = el as? JsonObject ?: return@mapNotNull null
             val t = (o["title"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
             val snippet = (o["snippet"] as? JsonPrimitive)?.contentOrNull.orEmpty()
-            com.kaiharimoto.mastertool.core.ai.web.SearchResults.Hit(
+            SearchResults.Hit(
                 t,
                 "https://yugipedia.com/wiki/${title(t)}",
                 HtmlText.decode(snippet.replace(Regex("<[^>]+>"), "")),

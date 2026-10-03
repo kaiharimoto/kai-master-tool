@@ -66,8 +66,10 @@ import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.kit.FieldLabel
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.kit.MenuRow
 import com.kaiharimoto.neue.kit.Meter
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
@@ -85,6 +87,7 @@ import com.kaiharimoto.neue.kit.Tag
 import com.kaiharimoto.neue.kit.percent
 import com.kaiharimoto.neue.pages.NotesField
 import com.kaiharimoto.neue.pages.SidingBoard
+import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
@@ -186,7 +189,7 @@ private fun EventList(prep: Prep, active: PrepEvent, onNew: () -> Unit, modifier
             val today = prep.today()
             prep.doc.events.forEach { e ->
                 val days = IsoDate.daysBetween(today, e.date)
-                com.kaiharimoto.neue.kit.MenuRow(
+                MenuRow(
                     text = e.name.ifBlank { "Untitled event" },
                     onClick = { prep.select(e.id) },
                     hint = days?.let { if (it >= 0) "${it}d" else "past" },
@@ -553,7 +556,7 @@ private fun RecentGames(prep: Prep, games: List<TestGame>) {
                     Modifier.weight(1f),
                     color = c.ink,
                 )
-                com.kaiharimoto.neue.kit.IconButton(Icons.X, { prep.removeGame(g.id) }, size = 28.dp, label = "Remove")
+                IconButton(Icons.X, { prep.removeGame(g.id) }, size = 28.dp, label = "Remove")
             }
         }
     }
@@ -723,7 +726,7 @@ private fun DecklistTab(prep: Prep, event: PrepEvent, webs: Webs, mine: StoredDe
                 }
             }, variant = BtnVariant.PRIMARY, icon = Icons.Export, enabled = !making, reason = "The decklist is being made")
             MuButton("Copy as text", {
-                com.kaiharimoto.neue.platform.Platform.copy(DecklistSheet.plainText(content))
+                Platform.copy(DecklistSheet.plainText(content))
                 neue.note = Note("The decklist is on the clipboard")
             }, variant = BtnVariant.SECONDARY, icon = Icons.Copy)
         }
@@ -811,7 +814,7 @@ private fun DayTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, libr
                         Mono("R${r.round}", Modifier.width(36.dp), color = c.ink70)
                         Mono(r.result, Modifier.width(22.dp), color = c.ink)
                         Small(listOf(r.opponentName, r.note).filter { it.isNotBlank() }.joinToString(" · "), Modifier.weight(1f), color = c.ink)
-                        com.kaiharimoto.neue.kit.IconButton(Icons.X, { prep.removeGame(r.id) }, size = 28.dp, label = "Remove")
+                        IconButton(Icons.X, { prep.removeGame(r.id) }, size = 28.dp, label = "Remove")
                     }
                 }
                 val next = (rounds.maxOfOrNull { it.round ?: 0 } ?: 0) + 1

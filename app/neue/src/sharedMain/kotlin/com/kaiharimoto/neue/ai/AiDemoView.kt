@@ -23,10 +23,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.ai.AiDemo
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
+import com.kaiharimoto.neue.ai.avatar.AiName
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuText
@@ -80,7 +82,7 @@ internal fun AiDemoView(ai: AiState, modifier: Modifier = Modifier) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Mono("${(at + 1).toString().padStart(2, '0')} / ${scenes.size.toString().padStart(2, '0')}", color = c.ink45, modifier = Modifier.weight(1f))
-                com.kaiharimoto.neue.kit.MicroLink("Skip", { ai.demoOpen = false })
+                MicroLink("Skip", { ai.demoOpen = false })
             }
             MuText(scene.title, style = MuType.h2(LocalMuFonts.current), color = c.ink)
             Help(scene.caption, color = c.ink70)
@@ -99,7 +101,7 @@ internal fun AiDemoView(ai: AiState, modifier: Modifier = Modifier) {
                 val text = reply.take(shown)
                 val blocks = remember(text, done) { ChatMarkdown.parse(text, streaming = !done) }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    com.kaiharimoto.neue.ai.avatar.AiName(ai.name, c.ink45)
+                    AiName(ai.name, c.ink45)
                     blocks.forEach { MarkdownBlock(ai, it) }
                 }
             }

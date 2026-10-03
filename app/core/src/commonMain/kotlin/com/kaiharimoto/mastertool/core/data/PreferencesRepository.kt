@@ -3,6 +3,8 @@ package com.kaiharimoto.mastertool.core.data
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.UiPreferences
+import com.kaiharimoto.mastertool.core.prep.PrepCodec
+import com.kaiharimoto.mastertool.core.prep.PrepDoc
 import com.kaiharimoto.mastertool.core.web.WebLibrary
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -96,16 +98,16 @@ class PreferencesRepository(
      * details, one document under its own key — a row, never a schema change. It reads
      * forgivingly ([PrepCodec]): a broken row opens an empty page, not a crash.
      */
-    suspend fun loadPrep(): com.kaiharimoto.mastertool.core.prep.PrepDoc = withContext(ioDispatcher) {
-        val stored = database.preferenceQueries.selectByKey(com.kaiharimoto.mastertool.core.prep.PrepDoc.KEY).executeAsOneOrNull()
-        com.kaiharimoto.mastertool.core.prep.PrepCodec.decode(stored)
+    suspend fun loadPrep(): PrepDoc = withContext(ioDispatcher) {
+        val stored = database.preferenceQueries.selectByKey(PrepDoc.KEY).executeAsOneOrNull()
+        PrepCodec.decode(stored)
     }
 
-    suspend fun savePrep(doc: com.kaiharimoto.mastertool.core.prep.PrepDoc) {
+    suspend fun savePrep(doc: PrepDoc) {
         withContext(ioDispatcher) {
             database.preferenceQueries.upsert(
-                prefKey = com.kaiharimoto.mastertool.core.prep.PrepDoc.KEY,
-                prefValue = com.kaiharimoto.mastertool.core.prep.PrepCodec.encode(doc),
+                prefKey = PrepDoc.KEY,
+                prefValue = PrepCodec.encode(doc),
             )
         }
     }
