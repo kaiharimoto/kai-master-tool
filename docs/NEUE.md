@@ -3427,7 +3427,68 @@ too and not a mouse"): one language for the Line and for the voice, all of it pu
   chain well, the LP pad, the piles, phases, asks, cues and seats — a new gesture fails the test until it can be typed.
   `TypedDuelTest` plays a whole duel to a win from typed lines alone.
 
-**Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
+**Command mode: the Spotlight** (1.0.87, kai chose direction C on the design canvas): the Line is a big box over the
+table (`neue/duel/Spotlight.kt`; its arithmetic is core's `duel/text/Spotlight`, tested in `SpotlightTest`).
+- **Opening it:** `/`, `Ctrl L` (from anywhere on the Duel page, a field included), any letter that is no duel key — `j`,
+  `u` — typed straight in (the box opens holding it; the same keystroke arriving again as typing is dropped once,
+  `Duels.spotlightSeed`), the bar's slim "Type a command" line (where the command line stood; on a phone, the row under
+  the bar), a right-click or a finger's hold on the empty table, and holding **M**, which opens it listening. It is drawn
+  in the window's own layer, never a `Popup`, so the family cursor stays over it; a press outside closes it, spent on
+  closing, as a menu's layer does. Esc and Back close it before anything else on the table.
+- **The box:** about 760 dp wide (the window less 16 dp a side on a phone, at the top), a 2 dp ink frame, square, no
+  shadow. A head of "DO" (or "ASK" for a question), the line in JetBrains Mono 26 sp bold, the microphone and `Esc`.
+  Under a rule, the results as whole sentences — "Blue-Eyes White Dragon attacks Dark Magician" over its consequence
+  "3000 vs 2500 · Dark Magician is destroyed, they take 500", the coordinates at the right ("m1 → om1") — with the card's
+  own art at its left when the seat may see it (its back when not; a plain box for a move with no card). The chosen row
+  is ink-filled with paper text (`Inverted`). An attack is worded as a player says it (`Spotlight.sentence`), its battle
+  read off the printed numbers (`Spotlight.consequence`, `DuelBattle`); a face-down defender is "a face-down monster",
+  never named. The rows: the line's own move first; a `;` line's steps numbered; "did you mean" numbered 1–3; then
+  completions, each worded as the move it would make where it would make one (`DuelComplete` applied and previewed,
+  at most five rows). The foot: `↑↓ choose · ⏎ make it · Tab take`, and `⇧⏎ make it, keep typing`.
+- **The table behind it** (`SpotlightDim`): paper at 82 % over all of it, so it reads at about 18 %, holed for the cards
+  the chosen row touches — ringed in the focus ring's look — and its destinations, outlined by a 2 dp dashed ink line.
+  The box stands where it hides none of them: high by default, at the very top or the foot when a mark would be under it.
+- **Its four states:** *just opened* — "Recent" (the lines made before, `Duels.lineHistory`, the last fifty, kept in
+  `<data>/duel/lines.txt`; ↑ recalls them) and "Try" (two or three lines this table accepts, made from `DuelComplete`'s
+  own suggestions; after an attack is declared, the battle's outcome first, as typed words — "g om1; lp o -2700", the
+  battle chip without the mouse, `Spotlight.battleLine`); *listening* — the microphone square filled in ink, square
+  level bars, the words so far in italics, "Let go to send"; on letting go the words heard stand faint and italic over
+  the line they became (`DuelSpeech.normalize`) and the preview fills the results; *several moves* — numbered steps, and
+  "did you mean" choices picked with 1–3 (a digit types when it is a coordinate's: `m` then `3` is `m3`,
+  `Spotlight.digitPicks`) or Tab; *a question* — answered in words in the box (`DuelAnswer`, through the seat's eyes),
+  read aloud when "Say the moves aloud" is on, and never written into the log as a Chat or a Note.
+- **Keys in the box:** typing edits; ↑/↓ choose the row (↑ on an empty box walks the history); Tab takes the chosen row
+  into the line; Enter makes it through `Duels.runLine` (the duel's one door for lines, which says what came of it:
+  moved, answered, the chrome's words done, refused, or a `;` line stopped partway) and closes the box — fast play —
+  while Shift Enter makes it and keeps typing; Ctrl Enter says the words in the chat instead (to Ai at its table); Esc
+  closes. A refusal stays in the box, in ink under the line.
+- **Voice** (`spotHeard`, wired by `wireSpotlightVoice`): what M heard is normalized and sorted (`DuelSpeech.classify`).
+  A move is shown with the words heard above it and waits for Enter or a held-M "yes" (kai: show, then confirm;
+  `DuelPrefs.voiceConfirm`, Table ▾ "Make spoken moves at once" turns it off); "no" closes; "undo" undoes; a cue goes
+  to Ai (with no Ai and a chain open, "no response" passes priority across the hot-seat); a question is answered in
+  the box; "Ai, …" goes to Ai at its table; anything else is "Didn't catch that" with the words heard. The transcriber
+  is primed with `DuelSpeech.hints` for the table. While the box holds a heard line, M is the voice key still (held to
+  say "yes"), never an m typed and repeated into it; Alt M listens while typing.
+- **The red team's findings on wave one**, fixed here: the far hand is drawn and walked in the notation's order for the
+  seat at the bottom whether both hands are face-up or not (`DuelFocus.Eyes.viewer`, `DuelFrames.of(viewer)`), so the
+  third card drawn there is the `oh3` typed (`SpotlightTest.theirHandIsOneOrderEverywhere`); `DuelFocus.label` is
+  `DuelNotation.slotCoord`; a `;` line stopped partway keeps only its rest ("1 of 2 made — the rest waits on Ai"), in
+  the box and in the chat's `/` line; Insert here takes a `;` line into the past whole; the table's eyes and shape are
+  state, so the ring follows "Both hands face-up"; `pass` with a chain open and no Ai passes priority.
+- **The help** (F1) has a "Duel: command mode" section rendered from `CommandHelp` — the coordinates, the verb letters
+  (read off `DuelCommand.VERB_WORDS`), lines to type (`DuelCommand.EXAMPLES`), phrases to say (`CommandHelp.SPOKEN`,
+  each held to its line by a test), the keys that open the box (`DeskShortcuts`) and the box's own.
+
+**The 60-second demo**, two takes of one duel (`SpotlightTest.theDemosTypedTake` is the typed take, run in CI):
+- **Typed, the microphone off:** `s h2 m3` ⏎ · `bp` ⏎ · `a m3 om1` ⏎ (the box said "3000 vs 300 · Kuriboh is
+  destroyed, they take 2700") · `/` ↓ ⏎ (the battle, first to try: `g om1; lp o -2700`) · `end` ⏎.
+- **Spoken:** hold M "summon h2 to m3" → hold M "yes" → "go to battle" → "yes" → "my monster three attacks their
+  monster one" → "yes" → `/` ↓ ⏎ for the battle → "end turn" → "yes". (Every move heard waits for its "yes"; turn
+  "Make spoken moves at once" on for a faster take.)
+
+**Pictures**: `tools/shoot.sh --page=duel --duel=two --duel-play=true --duel-spot=attack|s_h2_m3 (underscores for
+spaces; alone: empty) --duel-spot-state=listening|answer|many --duel-heard=summon_ash_blossom_to_monster_three`, and
+`tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared --duel-focus=m3 --duel-coords=true
 --duel-focus-menu=true --duel-pick=h2`.
 

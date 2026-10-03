@@ -50,6 +50,11 @@ data class DuelPrefs(
      * moves as they land, the answers to questions — in this seat's own words, never naming a card it cannot see.
      */
     val speak: Boolean = false,
+    /**
+     * A spoken move is shown in the Spotlight and waits for Enter or "yes" (1.0.87, kai: "show, then confirm"); off, a
+     * move heard is made at once. Questions, cues to Ai and undo never wait.
+     */
+    val voiceConfirm: Boolean = true,
 ) {
     companion object {
         const val KNOW_ALL = "all"

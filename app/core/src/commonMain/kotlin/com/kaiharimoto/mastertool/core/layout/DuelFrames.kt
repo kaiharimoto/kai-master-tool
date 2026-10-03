@@ -64,6 +64,8 @@ object DuelFrames {
         stripRow: Int = 0,
         /** The duel's secret (its seed): a hand the [viewers] cannot see is drawn in its veils' order (1.0.87). */
         secret: Long = 0L,
+        /** The seat the notation counts from (1.0.87): every other seat's hand drawn in its `oh1…` order ([DuelFocus.Eyes.viewer]). */
+        viewer: Int? = null,
     ): List<CardFrame> {
         val out = ArrayList<CardFrame>(s.cards.size)
         fun look(uid: Int): CardLook {
@@ -112,7 +114,7 @@ object DuelFrames {
             val band = l.pile(seat, PileKind.HAND)
             if (band != null) {
                 // Another seat's hidden hand in no order of its own, as DuelView sends it (1.0.87, the focus's `oh1…`).
-                val shown = DuelFocus.Eyes(viewers, secret).hand(s, seat)
+                val shown = DuelFocus.Eyes(viewers, secret, viewer).hand(s, seat)
                 fan(shown.size, band, if (seat == l.bottom) l.card else band.height / DuelLayouter.CARD_RATIO)
                     .forEachIndexed { i, slot -> place(shown[i], slot, Z_HAND + i * 0.001f, rotation = r) }
             } else {

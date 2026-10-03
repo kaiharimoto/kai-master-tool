@@ -92,11 +92,14 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     val facing = h.neue.prefs.duel.facing
     // A hand the viewers cannot see is drawn in its veils' order (1.0.87), as the focus walks it.
     val secret = game.header.seed
-    val frames = remember(s, layout, viewers, duels.strip, facing, duels.stripRow, secret) { DuelFrames.of(s, layout, viewers, duels.strip, facing, duels.stripRow, secret) }
+    // Every hand but the bottom seat's in the notation's order (1.0.87, the red team): the third card drawn there is the `oh3`
+    // the Spotlight reads, both hands face-up or not.
+    val notationSeat = duels.bottom
+    val frames = remember(s, layout, viewers, duels.strip, facing, duels.stripRow, secret, notationSeat) { DuelFrames.of(s, layout, viewers, duels.strip, facing, duels.stripRow, secret, notationSeat) }
     // Command mode (1.0.87): the focus reads its grid off the table as drawn, and goes with its card when the table changes.
     SideEffect {
         duels.tableLayout = layout
-        duels.eyes = DuelFocus.Eyes(viewers, secret)
+        duels.eyes = DuelFocus.Eyes(viewers, secret, notationSeat)
     }
     LaunchedEffect(s, viewers, duels.strip, duels.bottom, layout) { duels.refocus() }
     val shownFrames = carry?.let { cr ->
@@ -186,7 +189,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
             }
             is Hit.Pile -> if (hit.kind == PileKind.DECK) duels.act(DuelAction.Draw(hit.seat), hit.seat) else duels.openPile(hit.seat, hit.kind)
             Hit.Chain -> if (stateNow.chain.isNotEmpty()) duels.act(DuelAction.ChainClear)
-            Hit.Table -> duels.commandFocus++
+            Hit.Table -> duels.openSpotlight()
         }
     }
 
@@ -325,7 +328,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                             duels.inspected = hit.frame.uid
                             duels.selection = setOf(hit.frame.uid)
                             duels.verbStrip = true
-                        } else if (hit is Hit.Table && finger) duels.commandFocus++
+                        } else if (hit is Hit.Table && finger) duels.openSpotlight()
                         do { event = awaitPointerEvent(); event.changes.forEach { it.consume() } } while (event.changes.any { it.pressed })
                     }
                     moved != null -> {
@@ -493,6 +496,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         duels.attacking?.let { a -> if (a in s.cards) AttackBand(duels, s, layout, a) }
         if (duels.replay == null && carry == null) BattleChip(h, duels, game, layout)
         duels.lpPad?.let { seat -> LpPad(duels, s, layout, seat) }
+        // Command mode's Spotlight (1.0.87): the table dims but for what the line touches and where it goes.
+        if (duels.spotlight != null) SpotlightDim(duels, s, layout, shownFrames)
     }
 }
 
@@ -655,7 +660,7 @@ internal fun stripGround(s: com.kaiharimoto.mastertool.core.duel.DuelState, l: D
 // ---- Command mode (1.0.87): the focus ring and the coordinates ------------------------------------------
 
 /** The box a card is seen in: its frame, turned as it lies. */
-private fun seenBox(f: CardFrame): Slot {
+internal fun seenBox(f: CardFrame): Slot {
     val turned = f.rotation % 180f != 0f
     val w = if (turned) f.h else f.w
     val h = if (turned) f.w else f.h

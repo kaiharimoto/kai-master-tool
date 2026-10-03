@@ -230,6 +230,42 @@ fun neueMain(args: Array<String>) {
                     }
                     println("[neue-studio] focus: $coord -> $slot, card $uid, picked ${d.picked}")
                 }
+                // Command mode's Spotlight (1.0.87): --duel-spot=s_h2_m3 (underscores for spaces) opens it holding that line (--duel-spot alone: empty;
+                // --duel-spot=attack: the Battle Phase and an attack the table can make); --duel-spot-state=listening|answer|many
+                // (listening: the microphone's bars, the words so far from --duel-heard; answer: the line made, so a question
+                // answers; many: the line as given, joined with ";"); --duel-heard="summon ash blossom to monster three" runs
+                // the heard words through the real wiring (normalize, classify, shown to confirm).
+                val spotState = map["duel-spot-state"]
+                if (map["duel-spot"] != null || map["duel-heard"] != null || spotState != null) {
+                    val d = h.duel
+                    d.bottom = 0
+                    // Shot arguments are split on spaces: an underscore stands for one ("s_h2_m3").
+                    var line = map["duel-spot"]?.takeIf { it != "true" }?.replace('_', ' ') ?: ""
+                    if (line == "attack") {
+                        d.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Phase(com.kaiharimoto.mastertool.core.board.DuelPhase.BATTLE), 0)
+                        val st = d.game!!.state
+                        val mine = st.onField().firstOrNull { com.kaiharimoto.mastertool.core.duel.DuelVerbs.canAttack(st, 0, it) }
+                        val theirs = st.onField().firstOrNull { u -> st.cards[u]?.controller == 1 && st.cards[u]?.faceUp == true && st.placeOf(u).let { it is com.kaiharimoto.mastertool.core.duel.Place.Zone && (it.kind == com.kaiharimoto.mastertool.core.duel.ZoneKind.MONSTER || it.kind == com.kaiharimoto.mastertool.core.duel.ZoneKind.EMZ) } }
+                        fun at(u: Int?) = u?.let { com.kaiharimoto.mastertool.core.duel.text.DuelNotation.coordOf(st, it, 0, d.game!!.header.seed) }
+                        line = "a ${at(mine) ?: "m1"} ${at(theirs) ?: "direct"}"
+                    }
+                    val heard = map["duel-heard"]?.replace('_', ' ')
+                    // A few lines made before, for the empty box's Recent.
+                    listOf("draw", "s h1 m3", "bp").forEach { d.rememberLine(it) }
+                    when (spotState) {
+                        "listening" -> {
+                            d.openSpotlight(mode = com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.LISTENING)
+                            d.spotlight = d.spotlight?.copy(heard = heard ?: "summon ash blossom to")
+                            d.spotlightLevels = listOf(0.02f, 0.05f, 0.11f, 0.16f, 0.09f, 0.14f, 0.12f, 0.06f, 0.15f, 0.1f, 0.04f, 0.13f, 0.08f, 0.03f)
+                        }
+                        "answer" -> {
+                            if (heard != null) com.kaiharimoto.neue.duel.spotHeard(h, heard)
+                            else { d.openSpotlight(line.ifEmpty { "their field" }, swallow = null); com.kaiharimoto.neue.duel.spotEnter(h, keep = false) }
+                        }
+                        else -> if (heard != null) com.kaiharimoto.neue.duel.spotHeard(h, heard) else d.openSpotlight(line, swallow = null)
+                    }
+                    println("[neue-studio] spotlight: ${d.spotlight}")
+                }
                 // --duel-replay=N: the duel as a replay, stood at entry N (or halfway), with a note there.
                 map["duel-replay"]?.let { spec ->
                     val g = h.duel.game!!

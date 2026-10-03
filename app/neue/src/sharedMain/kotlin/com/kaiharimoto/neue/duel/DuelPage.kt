@@ -22,6 +22,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.unit.sp
+import com.kaiharimoto.neue.cursor.cursorPointer
+import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.muClickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.boundsInWindow
@@ -164,6 +169,8 @@ internal fun DuelPage(h: NeueHolders) {
                 if (game.state.proposal != null && replay == null) {
                     Box(Modifier.zIndex(96f).then(across)) { ProposalBar(duels, game.state) }
                 }
+                // Command mode's Spotlight (1.0.87): over the table and its rails, in the window's own layer.
+                if (duels.spotlight != null && replay == null) SpotlightLayer(h, game, phone)
             }
         }
     }
@@ -183,6 +190,8 @@ internal fun DuelPage(h: NeueHolders) {
         duels.watchSeat = prefs.aiSeat
     }
     SideEffect {
+        // Holding M opens the Spotlight listening, and what is heard is understood there (1.0.87).
+        wireSpotlightVoice(h)
         duels.stopAi = { h.ai.stop() }
         duels.cueAi = { u -> lineCue(h, u) }
         duels.watcher = if (watching) prefs.aiSeat else null
@@ -254,7 +263,7 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
                 Box(Modifier.weight(1f))
                 IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
             } else {
-                CommandLine(duels, Modifier.weight(1f), short = narrow)
+                SpotlightOpener(duels, Modifier.weight(1f), short = narrow)
                 // Hold to speak a command (1.0.87): the M key for a hand on the mouse.
                 DuelMic(h)
             }
@@ -278,21 +287,25 @@ private fun LogHead(h: NeueHolders) {
     }
 }
 
-/** The command line: type what you would say across the table. */
+/**
+ * Where the command line stood (1.0.87): a slim line that opens the Spotlight, for a mouse or a finger — the keys open it
+ * themselves (`/`, `Ctrl L`, any letter that is no duel key).
+ */
 @Composable
-private fun CommandLine(duels: Duels, modifier: Modifier, short: Boolean) {
-    val focus = remember { FocusRequester() }
-    val askedBefore = remember { duels.commandFocus }
-    LaunchedEffect(duels.commandFocus) { if (duels.commandFocus > askedBefore) runCatching { focus.requestFocus() } }
-    MuInput(
-        duels.command,
-        { duels.command = it },
-        modifier,
-        placeholder = if (short) "Type a command: ash to hand   ( / )" else "Type a command: ash to hand · summon droll to m3 · lp -1000 · mill 3   ( / )",
-        dense = true,
-        focusRequester = focus,
-        onSubmit = { duels.run(duels.command) },
-    )
+private fun SpotlightOpener(duels: Duels, modifier: Modifier, short: Boolean) {
+    val c = Mu.colors
+    Row(
+        modifier
+            .height(28.dp)
+            .cursorPointer(caption = "Type a command")
+            .muClickable { duels.openSpotlight() }
+            .drawBehind { drawLine(c.ink25, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1f) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Mono(if (short) "Type a command" else "Type a command · s h2 m3 · a m3 om1 · hand", Modifier.weight(1f), color = c.ink45, size = 12.sp)
+        com.kaiharimoto.neue.kit.Kbd("/")
+    }
 }
 
 /** The Table menu: the switches that change how the table is shown, not what is on it. */
@@ -332,6 +345,10 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         add(MenuEntry(if (prefs.speak) "Keep the moves silent" else "Say the moves aloud") {
             neue.update { it.copy(duel = it.duel.copy(speak = !it.duel.speak)) }
         })
+        // Show, then confirm (1.0.87, kai's choice): a spoken move waits for Enter or "yes" — or is made at once.
+        add(MenuEntry(if (prefs.voiceConfirm) "Make spoken moves at once" else "Confirm spoken moves first") {
+            neue.update { it.copy(duel = it.duel.copy(voiceConfirm = !it.duel.voiceConfirm)) }
+        })
         add(MenuEntry("The card", separatorBefore = true, hint = "Read it large") { duels.drawer = "card" })
         add(MenuEntry("Log and chat") { duels.drawer = "log" })
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
@@ -350,7 +367,7 @@ private fun PhoneDuelBar(h: NeueHolders, duels: Duels) {
         ) { DuelBarItems(h, narrow = true, phone = true) }
         if (duels.shown != null && duels.replay == null) {
             Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CommandLine(duels, Modifier.weight(1f), short = true)
+                SpotlightOpener(duels, Modifier.weight(1f), short = true)
                 // A phone has no M key: the microphone is held instead (1.0.87).
                 DuelMic(h, size = 36.dp)
             }

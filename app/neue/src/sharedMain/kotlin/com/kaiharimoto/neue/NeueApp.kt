@@ -284,7 +284,18 @@ class NeueHolders(
         // The key's own repeats while a held row is down are nothing: never a second start.
         if (event.key in holding) return true
         val chord = DeskKeys.chord(event) ?: return false
-        val shortcut = DeskShortcuts.resolveShortcut(chord, deskContext()) ?: return false
+        val context = deskContext()
+        // Command mode (1.0.87, the red team): in a Spotlight a voice filled — or one listening — M is the voice key
+        // still, held to speak again ("yes"), never an m typed and repeated into the line.
+        if (neue.page == Page.DUEL && chord == com.kaiharimoto.mastertool.core.input.KeyChord("m") && !context.overlayOpen && !neue.hasTop) {
+            val spot = duel.spotlight
+            if (spot != null && (spot.heard != null || spot.mode == com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.LISTENING)) {
+                holding[event.key] = DeskAction.DUEL_VOICE
+                hold(DeskAction.DUEL_VOICE, down = true)
+                return true
+            }
+        }
+        val shortcut = DeskShortcuts.resolveShortcut(chord, context) ?: return spotlightOn(chord, context)
         if (repeat && !shortcut.repeatable) return true
         if (shortcut.hold) {
             holding[event.key] = shortcut.action
@@ -292,6 +303,18 @@ class NeueHolders(
             return true
         }
         if (echo.admit(shortcut.action, System.currentTimeMillis())) run(shortcut.action)
+        return true
+    }
+
+    /**
+     * A letter that is no duel key, typed at the table (1.0.87, the Spotlight): the box opens holding it, so a move is
+     * typed straight onto the table. Only with nothing covering the page and no field taking the keys.
+     */
+    private fun spotlightOn(chord: com.kaiharimoto.mastertool.core.input.KeyChord, context: com.kaiharimoto.mastertool.core.input.DeskContext): Boolean {
+        if (neue.page != Page.DUEL || context.textInputFocused || context.overlayOpen || neue.hasTop) return false
+        if (chord.ctrl || chord.alt || chord.key.length != 1 || chord.key[0] !in 'a'..'z') return false
+        if (duel.shown == null || duel.replay != null) return false
+        duel.openSpotlight(chord.key)
         return true
     }
 
@@ -579,6 +602,8 @@ class NeueHolders(
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
     private fun dismiss() {
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
+        // The Spotlight closes first, its field with it (1.0.87).
+        if (neue.page == Page.DUEL && duel.spotlight != null && com.kaiharimoto.neue.duel.dismissDuel(this)) return
         // On the Duel page Esc first lets go of the command line or the chat (1.0.78), so the keys go back to the table.
         if (neue.page == Page.DUEL && textFocus.any) { focus?.clearFocus(); return }
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return

@@ -6,6 +6,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelView
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
 import kotlin.math.abs
 
 /**
@@ -74,10 +75,20 @@ object DuelFocus {
      * by veil, never in its true order: which card came in last is not theirs to see (the 1.0.85 rule,
      * kept by the focus in 1.0.87). Empty [viewers] see everything.
      */
-    data class Eyes(val viewers: Set<Int> = emptySet(), val secret: Long = 0L) {
+    data class Eyes(
+        val viewers: Set<Int> = emptySet(),
+        val secret: Long = 0L,
+        /**
+         * The seat the table is drawn for (at its bottom), when the notation counts from it (1.0.87, the Spotlight):
+         * every other seat's hand is then in [DuelNotation.handOrder] for it — face-up to a hot-seat or not — so the
+         * third card drawn there is the `oh3` the Line reads. Null: [viewers] alone decide, as before.
+         */
+        val viewer: Int? = null,
+    ) {
         /** The uids of [seat]'s hand, left to right as these eyes are shown it. */
         fun hand(s: DuelState, seat: Int): List<Int> {
             val h = s.seats[seat].hand
+            if (viewer != null) return if (seat == viewer) h else DuelNotation.handOrder(s, seat, viewer, secret)
             if (viewers.isEmpty() || seat in viewers) return h
             return h.sortedBy { u -> if (viewers.any { DuelSight.sees(s, u, it) }) u else DuelView.veil(secret, u, s.epoch[u] ?: 0) }
         }
@@ -272,21 +283,15 @@ object DuelFocus {
 
     /** The coordinate of [slot] from [viewer]'s seat: `m3`, `os2`, `e1`, `h4`, `ogy`, `gy3`. */
     fun label(slot: Slot, viewer: Int): String {
-        fun o(seat: Int) = if (seat == viewer) "" else "o"
-        return when (slot) {
-            is Slot.Zone -> {
-                val z = slot.place
-                when (z.kind) {
-                    ZoneKind.EMZ -> "e${z.index + 1}"
-                    ZoneKind.MONSTER -> "${o(z.seat)}m${z.index + 1}"
-                    ZoneKind.SPELL -> "${o(z.seat)}s${z.index + 1}"
-                    ZoneKind.FIELD -> "${o(z.seat)}fz"
-                }
-            }
-            is Slot.Pile -> o(slot.seat) + pileWord(slot.kind)
-            is Slot.HandCard -> "${o(slot.seat)}h${slot.index + 1}"
-            is Slot.PileCard -> "${o(slot.seat)}${pileWord(slot.kind)}${slot.index + 1}"
+        // One notation (1.0.87, the Spotlight): the ring's tag, the faint coordinates and the Line all say what
+        // DuelNotation says, so `oh3` on the table is the `oh3` typed.
+        val place = when (slot) {
+            is Slot.Zone -> slot.place
+            is Slot.Pile -> Place.Pile(slot.seat, slot.kind)
+            is Slot.HandCard -> Place.Pile(slot.seat, PileKind.HAND, slot.index)
+            is Slot.PileCard -> Place.Pile(slot.seat, slot.kind, slot.index)
         }
+        return DuelNotation.slotCoord(place, viewer) ?: pileWord(PileKind.HAND)
     }
 
     /** A pile's short name in the notation. */

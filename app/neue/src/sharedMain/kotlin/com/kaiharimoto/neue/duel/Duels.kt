@@ -78,10 +78,8 @@ class Duels(val dir: File) {
     /** What the table refused, said once. */
     var problem by mutableStateOf<String?>(null)
     var lpPad by mutableStateOf<Int?>(null)
-    var command by mutableStateOf("")
     var chat by mutableStateOf("")
-    /** Bumped to take the keyboard to the command line or the chat. */
-    var commandFocus by mutableStateOf(0)
+    /** Bumped to take the keyboard to the chat (the Spotlight has its own, [spotlightFocus]). */
     var chatFocus by mutableStateOf(0)
     var setupOpen by mutableStateOf(false)
     /** On a narrow window, the rail shown as a drawer: "card", "log" or null. */
@@ -111,9 +109,9 @@ class Duels(val dir: File) {
     /** The verb highlighted in the verb strip opened by Enter; null while the strip is the pointer's (or shut). */
     var verbCursor by mutableStateOf<Int?>(null)
     /** The table as last drawn (set by `DuelTable`): the focus's grid is read off its shape. */
-    var tableLayout: com.kaiharimoto.mastertool.core.layout.DuelLayout? = null
+    var tableLayout by mutableStateOf<com.kaiharimoto.mastertool.core.layout.DuelLayout?>(null)
     /** Whose eyes the table is drawn through, and the veils' secret (set by `DuelTable`): a hidden hand's order. */
-    var eyes: com.kaiharimoto.mastertool.core.layout.DuelFocus.Eyes = com.kaiharimoto.mastertool.core.layout.DuelFocus.Eyes.ALL
+    var eyes by mutableStateOf(com.kaiharimoto.mastertool.core.layout.DuelFocus.Eyes.ALL)
 
     /** The keys are in charge: the ring is drawn and the keys act on it. */
     val byKeys: Boolean get() = lastInput == Input.KEYS && focus != null
@@ -251,6 +249,81 @@ class Duels(val dir: File) {
 
     /** The Line's last answer to a question (1.0.87): `hand`, `their field`, `?m3` — through this seat's eyes. */
     var answer by mutableStateOf<String?>(null)
+
+    // ---- Command mode (1.0.87): the Spotlight ----------------------------------------------------------
+
+    /** The Spotlight (kai's direction C): open with its line, or shut (null). The page draws it over the table. */
+    var spotlight by mutableStateOf<com.kaiharimoto.mastertool.core.duel.text.Spotlight.State?>(null)
+
+    /** The lines made from the Spotlight, oldest first, the last fifty kept (`<data>/duel/lines.txt`): ↑ on an empty box. */
+    var lineHistory by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    /** Bumped to take the keyboard to the Spotlight's field. */
+    var spotlightFocus by mutableStateOf(0)
+
+    /** What the Spotlight's chosen row touches and where it goes, set by the box for the table's dim (`SpotlightDim`). */
+    internal var spotlightMarks by mutableStateOf<SpotMarks?>(null)
+
+    /** The listening bars' levels, set only by the studio (it has no microphone); null: the microphone's own. */
+    var spotlightLevels by mutableStateOf<List<Float>?>(null)
+
+    /**
+     * What opened the box and when: a letter key opens it holding that letter, and the same keystroke's typed
+     * character can reach the field a moment later — the field drops it once (`SpotlightBox`).
+     */
+    var spotlightSeed: Triple<String, Char, Long>? = null
+
+    /**
+     * Opens the Spotlight on [text] (the letter that opened it, or a line), in [mode] — listening when M is held. An
+     * open box keeps its line when it only changes mode. Nothing opens over a replay, or with no duel.
+     */
+    fun openSpotlight(
+        text: String = "",
+        mode: com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode = com.kaiharimoto.mastertool.core.duel.text.Spotlight.Mode.TYPING,
+        /** The character the opening keystroke may still type into the field (the letter, or `/`). */
+        swallow: Char? = text.lastOrNull(),
+    ) {
+        if (shown == null || replay != null) return
+        val was = spotlight
+        spotlight = if (was != null && text.isEmpty()) was.copy(mode = mode, answer = null, problem = null)
+        else com.kaiharimoto.mastertool.core.duel.text.Spotlight.State(text).copy(mode = mode)
+        spotlightSeed = swallow?.let { Triple(text, it, now()) }
+        spotlightFocus++
+    }
+
+    fun closeSpotlight() {
+        spotlight = null
+        spotlightSeed = null
+    }
+
+    /** [line] made: kept in the history, newest last. */
+    fun rememberLine(line: String) {
+        val next = com.kaiharimoto.mastertool.core.duel.text.Spotlight.remember(lineHistory, line)
+        if (next == lineHistory) return
+        lineHistory = next
+        val text = next.joinToString("\n")
+        scope.launch { withContext(Dispatchers.IO) { runCatching { File(dir, LINES).also { it.parentFile?.mkdirs() }.writeText(text) } } }
+    }
+
+    /** What a line run from the Spotlight came to: a move made, a question answered, the chrome's words done, or refused. */
+    sealed interface Ran {
+        /** Everything the line asked was done. */
+        val ok: Boolean get() = this !is Refused && this !is Partial
+
+        data object Moved : Ran
+        data class Answered(val text: String) : Ran
+        data object Chrome : Ran
+        data class Refused(val why: String) : Ran
+
+        /**
+         * A `;` line stopped after [made] of [total] steps: [rest] is the line still to make — waiting on Ai when
+         * [waiting], else refused for [why].
+         */
+        data class Partial(val made: Int, val total: Int, val rest: String, val waiting: Boolean, val why: String?) : Ran {
+            val words: String get() = "$made of $total made — " + if (waiting) "the rest waits on Ai" else "move ${made + 1}: ${why ?: "refused"}"
+        }
+    }
 
     /**
      * A phase change held for Ai: the moves, who made them, and the table it was made against — released only onto
@@ -476,6 +549,10 @@ class Duels(val dir: File) {
         if (loaded) return
         loaded = true
         scope.launch {
+            val lines = withContext(Dispatchers.IO) { runCatching { File(dir, LINES).takeIf { it.exists() }?.readLines() }.getOrNull() }
+            if (lines != null && lineHistory.isEmpty()) lineHistory = lines.map { it.trim() }.filter { it.isNotEmpty() }.takeLast(com.kaiharimoto.mastertool.core.duel.text.Spotlight.HISTORY)
+        }
+        scope.launch {
             val text = withContext(Dispatchers.IO) { File(dir, CURRENT).takeIf { it.exists() }?.readText() }
             val record = text?.let(DuelCodec::decode) ?: return@launch
             if (game == null) {
@@ -497,6 +574,7 @@ class Duels(val dir: File) {
     fun start(header: DuelHeader) {
         game = DuelGame.start(header, now())
         origin = null
+        closeSpotlight()
         closeReplay()
         bottom = 0
         selection = emptySet()
@@ -697,33 +775,41 @@ class Duels(val dir: File) {
     }
 
     /** The command line's text, run for the seat at the bottom. */
-    fun run(text: String): Boolean {
-        val g = shown ?: return false
-        return when (val p = DuelCommand.parse(text, g.state, bottom, catalog, g.header.seed)) {
-            is DuelCommand.Parsed.Problem -> { problem = p.text; false }
-            is DuelCommand.Parsed.Actions -> act(p.actions, bottom).also { if (it) command = "" }
+    fun run(text: String): Boolean = runLine(text).ok
+
+    /**
+     * A line run for the seat at the bottom (1.0.87: the Spotlight's, the log's `/` lines, the LP pad's), saying what it
+     * came to. [quiet]: the Spotlight shows the refusal or the answer itself, so nothing is said at the window's foot,
+     * and the line goes into [lineHistory] when it does something.
+     */
+    fun runLine(text: String, quiet: Boolean = false): Ran {
+        val g = shown ?: return Ran.Refused("No duel")
+        /** The table's own refusal ([act] says it once), taken back into the box when it is the box's. */
+        fun refused(): Ran {
+            val why = problem ?: "The table refused that"
+            if (quiet) problem = null
+            return Ran.Refused(why)
+        }
+        val ran: Ran = when (val p = DuelCommand.parse(text, g.state, bottom, catalog, g.header.seed)) {
+            is DuelCommand.Parsed.Problem -> { if (!quiet) problem = p.text; Ran.Refused(p.text) }
+            is DuelCommand.Parsed.Actions -> if (act(p.actions, bottom)) Ran.Moved else refused()
             // Moves joined with ";" (1.0.87): each its own step, in order, stopping at the first the table refuses.
-            is DuelCommand.Parsed.Many -> {
-                var all = true
-                for (part in p.parts) if (!act(part.actions, bottom)) { all = false; break }
-                if (all) command = ""
-                all
-            }
+            is DuelCommand.Parsed.Many -> many(p, quiet, ::refused)
             is DuelCommand.Parsed.Ruling -> {
                 val r = keepRuling(p.code, p.card, p.text)
                 act(DuelAction.Note("House ruling: ${r.card?.let { "$it — " } ?: ""}${r.text}", bottom), bottom)
-                command = ""
-                true
+                Ran.Chrome
             }
+            // A question is answered to this seat alone: never a Chat or a Note, which the log keeps for both seats.
             is DuelCommand.Parsed.Query -> {
                 val said = com.kaiharimoto.mastertool.core.duel.text.DuelAnswer.answer(p, g.state, bottom, catalog, g.header.seed)
                 answer = said
-                problem = said
+                if (!quiet) problem = said
                 if (p.uid != null) inspected = p.uid
-                command = ""
-                true
+                Ran.Answered(said)
             }
             is DuelCommand.Parsed.Ui -> {
+                var why: String? = null
                 when (p.kind) {
                     DuelCommand.UiKind.OPEN -> {
                         val seat = p.seat
@@ -732,15 +818,55 @@ class Duels(val dir: File) {
                     }
                     DuelCommand.UiKind.CLOSE -> closeStrip()
                     DuelCommand.UiKind.READ -> inspected = p.uid
-                    DuelCommand.UiKind.CUE -> if (cueAi?.invoke(p) != true) problem = "No Ai sits at this table."
+                    DuelCommand.UiKind.CUE -> if (cueAi?.invoke(p) != true) {
+                        // No Ai at the table (1.0.87, the red team): "pass" and "no response" with a chain open pass
+                        // priority across a hot-seat, as the response window's own No response does.
+                        val passes = p.cue == com.kaiharimoto.mastertool.core.duel.ai.AiCue.PASS || p.cue == com.kaiharimoto.mastertool.core.duel.ai.AiCue.NO_RESPONSE
+                        if (passes && !g.state.solo && g.state.chain.isNotEmpty()) {
+                            if (!act(DuelAction.Answer(bottom, respond = false), bottom)) why = problem ?: "The table refused that"
+                        } else why = "No Ai sits at this table."
+                    }
                     DuelCommand.UiKind.SWAP -> swap()
                     DuelCommand.UiKind.UNDO -> undo()
                     DuelCommand.UiKind.REDO -> redo()
                 }
-                command = ""
-                true
+                if (why != null) {
+                    if (quiet) problem = null else problem = why
+                    Ran.Refused(why)
+                } else Ran.Chrome
             }
         }
+        if (quiet && ran.ok) rememberLine(text)
+        return ran
+    }
+
+    /**
+     * A `;` line, made a step at a time (1.0.87). Into the past with Insert here, the steps go in together, once (the red
+     * team: only the first went back). Stopped partway — Ai's watch fired on a step, a phase change held for it, or the
+     * table refused one — the steps made stay made and [Ran.Partial] carries the rest, never the whole line, so Enter
+     * again does not make the first step twice.
+     */
+    private fun many(p: DuelCommand.Parsed.Many, quiet: Boolean, refused: () -> Ran): Ran {
+        val flat = p.parts.flatMap { it.actions }
+        insertAfter?.let { at ->
+            if (role == null && !playing && flat.any { !it.social }) {
+                insertAfter = null
+                return if (insertPast(at, flat, bottom)) Ran.Moved else refused()
+            }
+        }
+        p.parts.forEachIndexed { k, part ->
+            val rest = p.lines.drop(k).joinToString("; ")
+            if (k > 0 && waitingOnAi) return Ran.Partial(k, p.parts.size, rest, waiting = true, why = null)
+            if (!act(part.actions, bottom)) {
+                if (k == 0) return refused()
+                val why = problem
+                if (quiet) problem = null
+                return Ran.Partial(k, p.parts.size, rest, waiting = waitingOnAi, why = why)
+            }
+            // A phase change held for Ai holds the steps after it too.
+            if (held != null && k < p.parts.size - 1) return Ran.Partial(k + 1, p.parts.size, p.lines.drop(k + 1).joinToString("; "), waiting = true, why = null)
+        }
+        return Ran.Moved
     }
 
     fun say(text: String) {
@@ -1516,6 +1642,8 @@ class Duels(val dir: File) {
         /** How long "Shuffle Deck" stands by a deck after it was looked through. */
         const val SHUFFLE_OFFER_MS = 6000L
         const val CURRENT = "current.json"
+        /** The Spotlight's history (1.0.87): one line made per line of text. */
+        const val LINES = "lines.txt"
         const val PLACED_MS = 2500L
         fun now(): Long = System.currentTimeMillis()
     }

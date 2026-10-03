@@ -269,6 +269,7 @@ fun HelpDialog(onDismiss: () -> Unit) {
             if (!touch || keyboard) KeyTable()
             PresentGestureTable(touch)
             DuelGestureTable(touch)
+            CommandModeTable()
             if (!touch) {
                 GestureTable(touch = false)
                 MuText(
@@ -334,6 +335,50 @@ private fun DuelGestureTable(touch: Boolean) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Command mode (1.0.87): the duel played by typing and by voice — the coordinates, the verb letters, lines to type,
+ * phrases to say and the Spotlight's keys, all read from the tables the Line itself reads (`CommandHelp`).
+ */
+@Composable
+private fun CommandModeTable() {
+    val help = com.kaiharimoto.mastertool.core.duel.text.CommandHelp
+    @Composable
+    fun Rows(title: String, rows: List<com.kaiharimoto.mastertool.core.duel.text.CommandHelp.Row>, mono: Boolean = true) {
+        MuText(title, Modifier.padding(top = 12.dp, bottom = 4.dp), style = MuType.help(LocalMuFonts.current), color = Mu.colors.ink70)
+        rows.forEach { row ->
+            Row(
+                Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (mono) com.kaiharimoto.neue.kit.Mono(row.left, color = Mu.colors.ink, size = 12.sp) else RowText(row.left)
+                RowText(row.right, Modifier.weight(1f), color = Mu.colors.ink70, maxLines = 2)
+            }
+            HRule()
+        }
+    }
+    Column {
+        SectionTitle(null, "Duel: command mode")
+        MuText(
+            "Type a move, or hold M and say it: the Spotlight shows what it will do, and Enter makes it. Places are coordinates from your side of the table, as a chessboard's squares are.",
+            style = MuType.help(LocalMuFonts.current),
+            color = Mu.colors.ink45,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            Column(Modifier.weight(1f)) {
+                Rows("The coordinates", help.notation)
+                Rows("Verb letters, before a coordinate", help.letters)
+                Rows("Opening the box", help.opening.map { com.kaiharimoto.mastertool.core.duel.text.CommandHelp.Row(DeskShortcuts.kbd(it.chord), it.description) })
+                Rows("In the box", help.keys)
+            }
+            Column(Modifier.weight(1f)) {
+                Rows("Lines to type", help.examples)
+                Rows("Hold M and say", help.spoken, mono = false)
             }
         }
     }
