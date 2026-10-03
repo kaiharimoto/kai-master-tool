@@ -66,7 +66,7 @@ object DuelMouse {
         DuelBinding(DuelTarget.MY_CARD, CLICK, DuelInputAction.INSPECT, "Select it: what it can do stands beside it, and the inspector reads it"),
         DuelBinding(DuelTarget.MY_CARD, RIGHT, DuelInputAction.DEFAULT_VERB, "The obvious thing: summon, activate, set, flip summon"),
         DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The obvious thing, as a right-click"),
-        DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it; Alt sets it, Shift puts it under a pile"),
+        DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it — in the Battle Phase onto theirs attacks it, onto their hand attacks directly; Alt sets it, Shift puts it under a pile"),
         DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, beside it"),
         DuelBinding(DuelTarget.MY_CARD, SHIFT_CLICK, DuelInputAction.ADD_TO_SELECTION, "Select several; a key or a drag then moves them all"),
         DuelBinding(DuelTarget.MY_CARD, ALT_CLICK, DuelInputAction.PING, "Point at it for the other player"),
@@ -106,7 +106,7 @@ object DuelTouch {
     val all: List<DuelBinding> = listOf(
         DuelBinding(DuelTarget.MY_CARD, TAP, DuelInputAction.INSPECT, "Select it: what it can do stands beside it, and the inspector reads it"),
         DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The obvious thing: summon, activate, set, flip summon"),
-        DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it"),
+        DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it — in the Battle Phase onto theirs attacks it, onto their hand attacks directly"),
         DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, beside it, Point among them"),
         DuelBinding(DuelTarget.MY_CARD, SEVERAL, DuelInputAction.ADD_TO_SELECTION, "Select several"),
         DuelBinding(DuelTarget.MY_CARD, "Hold, then Point", DuelInputAction.PING, "Point at it for the other player"),

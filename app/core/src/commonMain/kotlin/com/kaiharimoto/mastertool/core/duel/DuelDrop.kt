@@ -44,6 +44,12 @@ object DuelDrop {
                 val there = s.at(z)
                 when {
                     there == uid -> NONE
+                    // In the Battle Phase, a monster dropped on one the other player controls attacks it (1.0.83).
+                    there != null && attacks(s, uid, seat) && s.cards[there]?.controller != seat &&
+                        (z.kind == ZoneKind.MONSTER || z.kind == ZoneKind.EMZ) -> {
+                        val target = s.cards.getValue(there)
+                        Intent(listOf(DuelAction.Attack(seat, uid, there)), "Attack ${if (target.faceUp) catalog.nameOf(target) else "the set monster"}")
+                    }
                     there != null -> {
                         val host = s.cards.getValue(there)
                         val monsterZone = z.kind == ZoneKind.MONSTER || z.kind == ZoneKind.EMZ
@@ -99,7 +105,10 @@ object DuelDrop {
                 }
                 Intent(listOfNotNull(DuelAction.Move(uid, Place.Pile(card.owner, target, at), pos, how), searched(how, uid, card.owner)), label)
             }
-            is DropSpot.Hand -> {
+            // Dropped on the other player's hand in the Battle Phase: a direct attack (1.0.83).
+            is DropSpot.Hand -> if (spot.seat != seat && attacks(s, uid, seat)) {
+                Intent(listOf(DuelAction.Attack(seat, uid, null)), "Attack directly")
+            } else {
                 // The deck's top card carried to its owner's hand is a draw.
                 if (from is Place.Pile && from.kind == PileKind.DECK && from.at == 0 && spot.seat == card.owner) {
                     return Intent(listOf(DuelAction.Draw(card.owner)), "Draw")
@@ -116,6 +125,14 @@ object DuelDrop {
                 Intent(listOfNotNull(DuelAction.Move(uid, Place.Pile(card.owner, PileKind.HAND, if (spot.seat == card.owner) spot.index else null), how = how), searched(how, uid, card.owner)), "To the hand")
             }
         }
+    }
+
+    /** Whether [uid] could attack now: the Battle Phase, a face-up Attack Position monster [seat] controls. */
+    private fun attacks(s: DuelState, uid: Int, seat: Int): Boolean {
+        val c = s.cards[uid] ?: return false
+        val at = s.placeOf(uid)
+        return s.phase == com.kaiharimoto.mastertool.core.board.DuelPhase.BATTLE && at is Place.Zone &&
+            (at.kind == ZoneKind.MONSTER || at.kind == ZoneKind.EMZ) && c.controller == seat && c.faceUp && !c.defense
     }
 
     /** A card searched from the Deck is shown to the other player (1.0.79): it is known from then on. */

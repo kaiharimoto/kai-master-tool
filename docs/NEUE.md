@@ -3197,6 +3197,13 @@ Quick-Play Spell, Normal or Counter Trap of the chain still face-up in its zone 
 (`DuelVerbs.resolve`). `resolve keep` keeps that link's card (`DuelAction.Keep`); a card that left the field
 mid-chain is no longer waiting; a new chain starts with nothing waiting.
 
+**Attacks by drag** (1.0.83, kai: "in the battle phase let me declare attacks with monsters by dragging the monster on
+top of another"): in the Battle Phase a face-up Attack Position monster dropped on a monster the other player controls
+attacks it, and dropped on their hand attacks directly (`DuelDrop`, the highlight saying "Attack …"); outside it, the
+same drop still attaches. `DuelAction.Attack` is a declaration only — damage is the players' to apply — kept for the
+turn in `DuelState.attacks`, the newest drawn as a heavy arrow while the Battle Phase lasts, written in the log and told
+to Ai. The line says it too: `zeus attacks arias`, `zeus attacks directly`, `attack arias with zeus`.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
 --duel-replay=N --duel-facing=true --duel-select=near|far`.
 

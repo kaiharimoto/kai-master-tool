@@ -187,6 +187,7 @@ object DuelMirror {
             proposal = v.proposal,
             locks = v.locks,
             resolved = v.resolved,
+            attacks = v.attacks,
         )
     }
 

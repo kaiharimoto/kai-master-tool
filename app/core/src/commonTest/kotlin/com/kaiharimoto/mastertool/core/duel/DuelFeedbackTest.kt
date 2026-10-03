@@ -335,4 +335,29 @@ class DuelFeedbackTest {
         // A new chain starts with nothing waiting.
         assertTrue(play(done, run("link #$angel", done)).resolved.isEmpty())
     }
+
+    @Test
+    fun aMonsterDraggedOntoTheirsInTheBattlePhaseAttacksIt() {
+        // kai: "in the battle phase let me declare attacks with monsters by dragging the monster on top of another".
+        var s = ok(table, DuelAction.Move(angel, Place.Zone(0, ZoneKind.MONSTER, 2), CardPosition.FACE_UP_ATK, "special"))
+        val theirs = uid(1, 5)
+        s = ok(s, DuelAction.Move(theirs, Place.Zone(1, ZoneKind.MONSTER, 2), CardPosition.FACE_UP_ATK, "special"), 1)
+        // Not in the Battle Phase: dropped on their monster it becomes material, as before.
+        assertTrue(DuelDrop.intent(s, angel, DropSpot.Zone(Place.Zone(1, ZoneKind.MONSTER, 2)), catalog).actions.single() is DuelAction.Move)
+        s = ok(s, DuelAction.Phase(DuelPhase.BATTLE))
+        val onto = DuelDrop.intent(s, angel, DropSpot.Zone(Place.Zone(1, ZoneKind.MONSTER, 2)), catalog)
+        assertEquals(listOf(DuelAction.Attack(0, angel, theirs)), onto.actions)
+        assertTrue(onto.label.startsWith("Attack"))
+        assertEquals(listOf(DuelAction.Attack(0, angel, null)), DuelDrop.intent(s, angel, DropSpot.Hand(1, 0), catalog).actions)
+        val attacked = ok(s, onto.actions.single())
+        assertEquals(Attack(0, angel, theirs), attacked.attacks.single())
+        assertEquals("Kai's Angelechy attacks Filler", DuelWords.say(s, attacked, DuelEntry(0, 0, 0, 0, onto.actions.single()), 1, catalog))
+        // The line says it too, and the turn's end forgets it.
+        assertEquals(listOf(DuelAction.Attack(0, angel, null)), run("angelechy attacks directly", s))
+        assertEquals(listOf(DuelAction.Attack(0, angel, theirs)), run("attack filler with angelechy", s))
+        assertTrue(ok(attacked, DuelAction.EndTurn).attacks.isEmpty())
+        // A monster in Defense Position does not attack.
+        val def = ok(s, DuelAction.Position(angel, CardPosition.FACE_UP_DEF))
+        assertTrue(DuelRules.apply(def, DuelAction.Attack(0, angel, null)) is Outcome.Refused)
+    }
 }

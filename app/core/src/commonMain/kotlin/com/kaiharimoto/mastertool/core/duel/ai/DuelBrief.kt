@@ -103,6 +103,9 @@ object DuelBrief {
                 appendLine("  Deck: ${st.deck} cards${if (st.deckKnown.isNotEmpty()) " (known: " + st.deckKnown.entries.joinToString { (k, c) -> "${k + 1} from the top ${name(c)}" } + ")" else ""}")
             }
             if (s.arrows.isNotEmpty()) appendLine("Arrows: " + v.arrows.joinToString("; ") { a -> "${DuelWords.seatName(s, a.seat)} → ${a.to.joinToString { "#$it" }}" })
+            if (v.attacks.isNotEmpty()) appendLine("Attacks this turn: " + v.attacks.joinToString("; ") { a ->
+                "#${a.attacker} → ${a.target?.let { "#$it" } ?: "directly"}"
+            })
             tally?.words(s)?.takeIf { it.isNotEmpty() }?.let { lines ->
                 appendLine()
                 appendLine("This turn so far:")

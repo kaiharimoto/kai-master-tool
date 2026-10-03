@@ -128,6 +128,14 @@ sealed class DuelAction {
     @Serializable @SerialName("clear")
     data object ChainClear : DuelAction()
 
+    /**
+     * [seat]'s [attacker] attacks [target], or the other player directly when [target] is null (1.0.83,
+     * kai: "let me declare attacks with monsters by dragging the monster on top of another"). A declaration
+     * only: damage is the players' to work out, as every effect is.
+     */
+    @Serializable @SerialName("attack")
+    data class Attack(val seat: Int, val attacker: Int, val target: Int? = null) : DuelAction()
+
     /** A resolved link's card stays on the field when the chain is over ("resolve keep", 1.0.83). */
     @Serializable @SerialName("keep")
     data class Keep(val uid: Int) : DuelAction()

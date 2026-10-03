@@ -478,6 +478,8 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
 - `resolve` resolves the newest link; its card stays on the field until the whole chain has resolved, and then every
   Normal or Quick-Play Spell, Normal or Counter Trap of the chain goes to the GY together. `resolve keep` when a card's
   text says it stays.
+- Attacks, in the Battle Phase: `zeus attacks arias`, `zeus attacks directly` (a declaration; damage is yours to apply
+  with `lp`).
 - Tokens: `token sheep atk 0 def 0 def m2` (stats, position, zone; `their` for their field).
 - Write locks down when a card applies one: `lock Synchro Monsters only from the Extra Deck` (until the turn ends; `until chain`, `until
   duel`), `unlock 2`. Check "This turn so far" before a Summon a hand trap could punish.

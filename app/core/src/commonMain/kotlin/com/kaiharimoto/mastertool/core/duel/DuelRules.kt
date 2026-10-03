@@ -41,6 +41,7 @@ object DuelRules {
                     window = null,
                     proposal = null,
                     resolved = emptyList(),
+                    attacks = emptyList(),
                     // What lasted the turn (or a chain) is over.
                     locks = s.locks.filter { it.until == Lock.UNTIL_DUEL },
                 ),
@@ -72,6 +73,7 @@ object DuelRules {
             }
             is DuelAction.Keep -> ok(s.copy(resolved = s.resolved - a.uid))
             is DuelAction.Target -> target(s, a)
+            is DuelAction.Attack -> attack(s, a)
             is DuelAction.Reveal -> reveal(s, a)
             is DuelAction.Coin, is DuelAction.Dice, is DuelAction.Chat, is DuelAction.Ping, is DuelAction.Note,
             is DuelAction.Unknown -> ok(s)
@@ -235,6 +237,25 @@ object DuelRules {
         val uid = s.nextUid
         val card = CardInst(uid, a.code, owner = a.seat, controller = a.to.seat, pos = positionFor(a.to, a.pos, null, false), token = true, name = a.name, atk = a.atk, def = a.def)
         return ok(s.copy(cards = s.cards + (uid to card), nextUid = uid + 1).inZone(a.to, uid))
+    }
+
+    private fun attack(s: DuelState, a: DuelAction.Attack): Outcome {
+        seatOk(s, a.seat)?.let { return it }
+        if (s.phase != DuelPhase.BATTLE) return Outcome.Refused("Attacks are declared in the Battle Phase")
+        val attacker = s.cards[a.attacker] ?: return Outcome.Refused("No such card")
+        val at = s.placeOf(a.attacker)
+        if (at !is Place.Zone || (at.kind != ZoneKind.MONSTER && at.kind != ZoneKind.EMZ) || attacker.controller != a.seat) {
+            return Outcome.Refused("Only a monster you control attacks")
+        }
+        if (!attacker.faceUp || attacker.defense) return Outcome.Refused("A monster attacks in face-up Attack Position")
+        if (a.target != null) {
+            val target = s.cards[a.target] ?: return Outcome.Refused("No such card")
+            val there = s.placeOf(a.target)
+            if (there !is Place.Zone || (there.kind != ZoneKind.MONSTER && there.kind != ZoneKind.EMZ) || target.controller == a.seat) {
+                return Outcome.Refused("It attacks a monster the other player controls")
+            }
+        }
+        return ok(s.copy(attacks = s.attacks + Attack(a.seat, a.attacker, a.target)))
     }
 
     private fun chainAdd(s: DuelState, a: DuelAction.ChainAdd): Outcome {

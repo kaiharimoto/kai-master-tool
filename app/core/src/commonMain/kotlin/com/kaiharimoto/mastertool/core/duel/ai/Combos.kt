@@ -153,6 +153,7 @@ object ComboRecorder {
             is DuelAction.Reveal -> a.uids.firstOrNull()?.let { "reveal ${n(it)}" }
             is DuelAction.ChainResolve -> "resolve"
             is DuelAction.ChainClear -> "clear chain"
+            is DuelAction.Attack -> "${n(a.attacker)} attacks ${a.target?.let(::n) ?: "directly"}"
             else -> null
         }
     }

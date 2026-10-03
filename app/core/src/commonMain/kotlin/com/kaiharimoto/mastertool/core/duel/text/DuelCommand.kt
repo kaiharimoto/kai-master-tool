@@ -54,6 +54,7 @@ object DuelCommand {
         "lp =4000", "bp", "m2", "ep", "next", "end", "coin", "dice", "token", "look 3", "excavate 3", "resolve",
         "think", "say ok?", "place angelechy in s2", "move zeus to m4", "token atk 6500 def 8500 def",
         "resolve keep", "lock synchro only", "unlock 1", "ruling e4: no free zone, can't activate",
+        "zeus attacks arias", "zeus attacks directly",
     )
 
     fun parse(text: String, s: DuelState, seat: Int, catalog: DuelCatalog): Parsed {
@@ -65,6 +66,10 @@ object DuelCommand {
         val n = rest.firstOrNull()?.toIntOrNull()
 
         fun one(a: DuelAction, said: String) = Parsed.Actions(listOf(a), said)
+
+        // "zeus attacks arias", "zeus attacks directly", "attack arias with zeus", "attack directly with zeus" (1.0.83).
+        val lower = line.lowercase()
+        if (head == "attack" || " attacks " in " $lower ") return attack(lower, s, seat, catalog)
 
         when (head) {
             "draw", "d", "dr" -> {
@@ -167,6 +172,32 @@ object DuelCommand {
             }
         }
         return cardCommand(words, s, seat, catalog)
+    }
+
+    private fun attack(line: String, s: DuelState, seat: Int, catalog: DuelCatalog): Parsed {
+        val (by, at) = when {
+            line.startsWith("attack ") -> {
+                val rest = line.removePrefix("attack ").trim()
+                val with = rest.lastIndexOf(" with ")
+                when {
+                    rest.startsWith("with ") -> rest.removePrefix("with ").removeSuffix(" directly").trim() to "directly"
+                    with >= 0 -> rest.substring(with + 6).trim() to rest.substring(0, with).trim()
+                    else -> return Parsed.Problem("Attack with which monster? “attack arias with zeus”, or “zeus attacks directly”")
+                }
+            }
+            else -> line.substringBefore(" attacks ").trim() to line.substringAfter(" attacks ").trim()
+        }
+        val attacker = when (val l = lookup(by, s, seat, catalog, Want.ANY, fieldOnly = true)) {
+            is Lookup.One -> l.uid
+            is Lookup.Many -> return Parsed.Problem(manyWords(by, l))
+            is Lookup.None -> return Parsed.Problem("No monster of yours on the field matches “$by”")
+        }
+        val target = if (at == "directly" || at == "direct" || at.isBlank()) null else when (val l = lookup(at, s, seat, catalog, Want.TARGET, fieldOnly = true)) {
+            is Lookup.One -> l.uid.takeIf { s.cards[it]?.controller != seat } ?: return Parsed.Problem("Attack a monster the other player controls")
+            is Lookup.Many -> return Parsed.Problem(manyWords(at, l))
+            is Lookup.None -> return Parsed.Problem("No monster of theirs matches “$at”")
+        }
+        return Parsed.Actions(listOf(DuelAction.Attack(seat, attacker, target)), "Attack")
     }
 
     /**

@@ -91,6 +91,12 @@ object DuelWords {
                 "Chain Link ${before.chain.size} resolves${link?.uid?.let { ": ${card(it)}" } ?: ""}"
             }
             DuelAction.ChainClear -> "The chain is cleared"
+            is DuelAction.Attack -> {
+                val by = card(a.attacker)
+                val whose = possessive(seatName(before, a.seat))
+                if (a.target == null) "$whose $by attacks directly"
+                else "$whose $by attacks ${a.target.let { t -> if (card(t) == "a card") "a face-down monster" else card(t) }}"
+            }
             is DuelAction.Keep -> "${card(a.uid).replaceFirstChar { it.uppercase() }} stays on the field"
             is DuelAction.Target -> {
                 val names = a.to.joinToString(", ") { card(it) }

@@ -515,6 +515,25 @@ private fun DrawScope.arrows(s: com.kaiharimoto.mastertool.core.duel.DuelState, 
             drawPath(path, ink)
         }
     }
+    // The attack declared last, while the Battle Phase lasts (1.0.83): a heavier arrow, to its target or, for
+    // a direct attack, to the other player's life points.
+    if (s.phase == com.kaiharimoto.mastertool.core.board.DuelPhase.BATTLE) s.attacks.lastOrNull()?.let { atk ->
+        val from = centre(atk.attacker) ?: return@let
+        val to = atk.target?.let(::centre)
+            ?: (l.score[1 - atk.seat] ?: l.pile(1 - atk.seat, com.kaiharimoto.mastertool.core.duel.PileKind.HAND))?.let { Offset(it.centerX.dp.toPx(), it.centerY.dp.toPx()) }
+            ?: return@let
+        drawLine(paper, from, to, 9.dp.toPx())
+        drawLine(ink, from, to, 4.dp.toPx())
+        val angle = atan2(to.y - from.y, to.x - from.x)
+        val head = 20.dp.toPx()
+        val path = Path().apply {
+            moveTo(to.x, to.y)
+            lineTo(to.x - head * cos(angle - 0.5f), to.y - head * sin(angle - 0.5f))
+            lineTo(to.x - head * cos(angle + 0.5f), to.y - head * sin(angle + 0.5f))
+            close()
+        }
+        drawPath(path, ink)
+    }
 }
 
 /** A ping, for three seconds: a frame round what was pointed at and the word, in ink. */

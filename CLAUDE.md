@@ -632,7 +632,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`Secrets.redact`, the original behind Thinking). **1.0.82**: a hand is its owner's alone (`DuelSight`): a search or a
   reveal names a card in the log for that moment, never after; what was seen of a card is forgotten as it enters a hand.
   The chain resolves whole: a resolved link's card waits (`DuelState.resolved`) and the chain's Normal Spells and Traps go
-  to the GY together with the last link (`DuelVerbs.resolve`, `Keep`).
+  to the GY together with the last link (`DuelVerbs.resolve`, `Keep`). **1.0.83**: attacks by drag in the Battle Phase
+  (onto their monster, or their hand for a direct attack; `DuelAction.Attack`, `DuelState.attacks`, a heavy arrow).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

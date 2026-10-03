@@ -54,6 +54,8 @@ data class DuelState(
      * (1.0.83, kai: "spells and traps should stay on field until the whole chain has resolved").
      */
     val resolved: List<Int> = emptyList(),
+    /** The attacks declared this turn, the newest last (1.0.83). */
+    val attacks: List<Attack> = emptyList(),
 ) {
     fun seat(i: Int): SeatState = seats[i]
 
@@ -175,6 +177,10 @@ data class ChainLink(
     val note: String = "",
     val targets: List<Int> = emptyList(),
 )
+
+/** [attacker] attacks [target], or directly when there is none (1.0.83). */
+@Serializable
+data class Attack(val seat: Int, val attacker: Int, val target: Int? = null)
 
 /** [seat] asks to go to [phase], or to end the turn when [end] (1.0.79). */
 @Serializable
