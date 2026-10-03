@@ -3486,6 +3486,26 @@ table (`neue/duel/Spotlight.kt`; its arithmetic is core's `duel/text/Spotlight`,
   monster one" → "yes" → `/` ↓ ⏎ for the battle → "end turn" → "yes". (Every move heard waits for its "yes"; turn
   "Make spoken moves at once" on for a faster take.)
 
+**1.0.87, the numbers on the card and the art in the inspector** (kai: the ATK/DEF readout "cuts the bottom of the card
+off and blends in with the background"; the inspector's art should "grow to fill leftover space"):
+- **The stat plate** (`StatPlate` in `neue/duel/DuelCards.kt`): a monster's ATK / DEF is a solid ink plate inside the
+  card's own bottom edge, the card's full width, paper numerals in JetBrains Mono sized from the card's width to fit
+  (at most 13 sp), and a paper hairline round it so a dark frame (Xyz, Link) does not run into it, nor the plate of a
+  card lying across beside it (a card in Defense is wider than its zone, so two such plates meet). It never leaves
+  the card's bounds, so it reads against the art and against the table in both themes (ink on paper, paper on ink).
+  The number that battles is full paper — ATK in Attack Position, DEF in Defense — and the other, with the slash, at the
+  ramp's meta weight (`TableStats.defense`); a Link Monster shows its ATK alone. A card lying across in Defense, or
+  turned to face the other seat, keeps the plate upright along the foot of the box it fills as it lies. The rule for who
+  sees it is unchanged: face-up in a Monster Zone only (so never on a set card, a back, or an open pile's strip), and
+  only on cards at least 40 dp wide. A materials badge moves to the top corner when a plate takes the foot. The plate
+  is inside the card, so `DuelLayout`'s lanes are untouched.
+- **The inspector's art grows** (`InspectedCard` in `DuelRails.kt`): the column's height is measured
+  (`BoxWithConstraints`), the words under the art — name, text, rulings, materials — are measured first
+  (`SubcomposeLayout`), and the art takes the height they leave, 59:86, between `INSPECTOR_ART` (150 dp, or the column's
+  width if narrower) and the column's width. Long text keeps the old size and scrolls as before; the keys stay pinned at
+  the foot. The drawer (a narrow window, the phone) has no height to share and keeps 150 dp.
+- **Pictures:** `--duel-defense=true` turns the near seat's first face-up Attack Position monster to Defense.
+
 **Pictures**: `tools/shoot.sh --page=duel --duel=two --duel-play=true --duel-spot=attack|s_h2_m3 (underscores for
 spaces; alone: empty) --duel-spot-state=listening|answer|many --duel-heard=summon_ash_blossom_to_monster_three`, and
 `tools/shoot.sh --page=duel --duel=two|one|solo --duel-play=true --duel-know=seat --duel-strip=gy
