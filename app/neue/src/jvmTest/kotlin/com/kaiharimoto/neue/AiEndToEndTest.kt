@@ -66,6 +66,17 @@ import java.net.http.HttpResponse
 import java.nio.file.Files
 import java.util.Properties
 import java.util.UUID
+import com.kaiharimoto.mastertool.core.ai.BackendEvent
+import com.kaiharimoto.mastertool.core.ai.ModelBackend
+import com.kaiharimoto.mastertool.core.ai.StopReason
+import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.eval.EvalLog
+import com.kaiharimoto.mastertool.core.ai.eval.EvalSets
+import com.kaiharimoto.mastertool.core.ai.eval.Grader
+import com.kaiharimoto.mastertool.core.prefs.AiConnection
+import com.kaiharimoto.neue.ai.evalRuns
+import com.kaiharimoto.neue.ai.startEval
+import kotlinx.coroutines.flow.flow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -370,6 +381,37 @@ class AiEndToEndTest {
         }
         assertTrue("contradicted" in h.ai.guideForPrompt(deckId))
         assertTrue("estimate" in h.ai.guideForPrompt(deckId))
+    }
+
+    @Test
+    fun trustRunsASetThroughTheRealRunnerAndKeepsTheScore() = runBlocking {
+        val h = holders()
+        val conn = AiConnection("c-test", "anthropic", model = "scripted")
+        h.neue.update { it.copy(ai = it.ai.copy(connections = listOf(conn), active = conn.id)) }
+        // A scripted model: "yes" to every question; to the fact-checker, nothing wrong.
+        val scripted = object : ModelBackend {
+            override val runsOwnLoop = false
+            override fun turn(request: TurnRequest) = flow {
+                val checking = request.system.startsWith("You check")
+                val text = if (checking) "{\"claims\": []}" else "I am sure.\nANSWER: yes"
+                emit(BackendEvent.Finished(StopReason.END, ChatTurn.assistant(text), usage = Usage(input = 100, output = 10)))
+            }
+        }
+        h.ai.backend = "${conn.id}:${conn.model}:${conn.baseUrl}:${conn.program}" to scripted
+        val rulings = EvalSets.rulings()
+        h.ai.startEval(rulings, conn, tries = 2)
+        withTimeout(20_000) { while (h.ai.evalProgress != null || h.ai.evalJob != null) delay(20) }
+        val run = h.ai.evalRuns(conn.id).single()
+        val yes = rulings.items.count { (it.grader as Grader.YesNo).expected }
+        assertEquals(yes, run.items.count { it.firstPass }, "every yes right, every no wrong")
+        assertEquals(yes.toDouble() / rulings.items.size, run.passAll, 1e-9, "the same both tries")
+        assertEquals(2, run.tries)
+        assertTrue(run.tokensIn > 0)
+        // The fact-checker that finds nothing: every clean answer left alone, every planted mistake missed.
+        h.ai.startEval(EvalSets.planted(), conn)
+        withTimeout(20_000) { while (h.ai.evalJob != null) delay(20) }
+        val checked = EvalLog.latest(h.ai.evalRuns(conn.id))[EvalSets.PLANTED]!!
+        assertEquals(12, checked.items.count { it.firstPass }, "12 clean answers left alone, 12 mistakes missed")
     }
 
     @Test

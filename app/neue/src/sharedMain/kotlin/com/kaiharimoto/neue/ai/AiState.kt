@@ -572,6 +572,13 @@ class AiState(internal val h: NeueHolders) {
      */
     internal val backgroundJobs = mutableListOf<Job>()
 
+    /** Trust (1.0.99): its dialog, the run under way (set, done, of), a word when a run could not start, and a count of runs kept. */
+    var trustOpen by mutableStateOf(false)
+    var evalProgress by mutableStateOf<Triple<String, Int, Int>?>(null)
+    var evalNote by mutableStateOf<String?>(null)
+    var evalVersion by mutableStateOf(0)
+    internal var evalJob: Job? = null
+
     /** The guide's stale numbers are being computed again (1.0.98). */
     internal var rechecking = false
 

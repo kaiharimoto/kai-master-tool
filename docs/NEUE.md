@@ -2550,6 +2550,24 @@ only for judgment, outcomes over time, the person last. This release builds its 
   guide put back after; the estimate counts an Anthropic turn once and prefers the provider's measure; MCP results are
   capped; `open_deck` and `save_deck` say when they did not.
 
+#### Trust (1.0.99, Phase A, `docs/phases/A.md`)
+
+How far to trust a connection, measured — Settings › Assistant › Trust (`TrustDialog`):
+- **The sets** (`core/ai/eval/EvalSets`): 40 hand-odds questions whose keys the app's own counter computes (`HandOdds`, so
+  a key can never be wrong); 30 rules and rulings with one settled answer each and the source named; 20 decklists as people
+  write them (nicknames, typos, counts before and after), read back card by card; and 24 answers for the fact-checker,
+  half with one planted mistake.
+- **Graded by code, never a model** (`Grading`): a percentage at the precision asked, a yes or no, a decklist exactly,
+  and for the checker its claims — a mistake caught, a clean answer left alone.
+- **The runner** (`AiEval.kt`, `startEval`): each question asked as a person's is — the rules primer in, the look-up
+  tools only (`EVAL_TOOLS`) — on API connections (a plan's command-line app runs its own loop and every tool); the
+  planted set through the very checker the chat uses (`runChecker`). k tries an item gives pass^k as well as pass@1. A run
+  says what it will spend before it starts, can be stopped, and is kept in `ai/evals/<connection>.json` (`EvalLog`, the
+  last 50 runs).
+- **The dialog**: per set, the last score large, its details (pass@1, every-try, tokens, when, the model), and the first
+  items missed with what the grader read; for the checker, mistakes caught of those planted and false alarms of the clean.
+- `tools/shoot.sh --ai=trust` photographs it with sample runs.
+
 #### Going further — the roadmap
 
 The roadmap lives in `docs/AI-INTELLIGENCE.md` (1.0.97), built on the research: lessons that cite their runs and an

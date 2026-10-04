@@ -378,6 +378,9 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
     SettingRow("Ask before deleting", "Deleting a deck, a web, or a deck from a web waits for your OK in the chat. Every other change can be undone.", onToggle = { neue.update { it.copy(ai = it.ai.copy(alwaysAllow = !it.ai.alwaysAllow)) } }) {
         MuSwitch(!prefs.alwaysAllow, { on -> neue.update { it.copy(ai = it.ai.copy(alwaysAllow = !on)) } })
     }
+    SettingRow("Trust", "How far to trust this connection, measured: questions with known answers on odds, rulings and decklists, and mistakes planted for the fact-checker, all graded by the app.") {
+        MuButton("Open", { ai.trustOpen = true }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
+    }
     SettingRow("What it knows", "Its voice, what it has learned about you, its own notes, and notes on your decks and webs: markdown files you can read and edit.") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MuButton("Open", { ai.memoryOpen = "USER.md" }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)

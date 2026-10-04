@@ -1,5 +1,10 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.ai.eval.EvalLog
+import com.kaiharimoto.mastertool.core.ai.eval.EvalSets
+import com.kaiharimoto.mastertool.core.ai.eval.ItemOutcome
+import com.kaiharimoto.mastertool.core.ai.eval.EvalRun
+import com.kaiharimoto.mastertool.core.ai.eval.EvalSet
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
@@ -1377,6 +1382,29 @@ The long reasons sit under the first table only where they must; the third is to
         }
         // 1.0.54: the living guide, the session's end, the brain, quick settings, the profile, a petted face.
         "guide", "refactor", "end", "brain", "quick", "profile", "about", "petted" -> studioAi154(h, mode)
+        // 1.0.99: Trust, with sample runs — hand odds and rulings scored, decklists not run yet, the checker's catch rate.
+        "trust" -> {
+            val ai = h.ai
+            val conn = ai.prefs.connection?.id ?: "anthropic-demo"
+            fun sample(set: EvalSet, missEvery: Int, tries: Int, at: Long) =
+                EvalRun(
+                    set.id, conn, "claude-opus-5-5", at, tries,
+                    set.items.mapIndexed { i, item ->
+                        val pass = (i + 1) % missEvery != 0
+                        ItemOutcome(item.id, if (pass) tries else 0, tries, pass, if (pass) "right" else "74.5% (expected 74.2%)")
+                    },
+                    tokensIn = set.items.size * 5_200L * tries, tokensOut = set.items.size * 420L * tries,
+                )
+            val now = System.currentTimeMillis()
+            val runs = listOf(
+                sample(EvalSets.handOdds(), 6, 3, now - 86_400_000),
+                sample(EvalSets.rulings(), 10, 1, now - 3_600_000),
+                sample(EvalSets.planted(), 5, 1, now - 600_000),
+            )
+            ai.files.write(EvalLog.path(conn), EvalLog.write(runs))
+            ai.evalVersion++
+            ai.trustOpen = true
+        }
         // 1.0.67: the reader's guide, the sample book open in the reader; --ai=reader-lines lands on the first line,
         // reader-lessons on the lessons, reader-empty is a deck with no book.
         "reader", "reader-lines", "reader-lessons", "reader-empty" -> {

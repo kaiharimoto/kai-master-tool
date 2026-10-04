@@ -92,6 +92,7 @@ import com.kaiharimoto.neue.ai.TuneLauncher
 import com.kaiharimoto.neue.ai.VoiceDialog
 import com.kaiharimoto.neue.ai.avatar.AiBadge
 import com.kaiharimoto.neue.ai.avatar.AiFaceClock
+import com.kaiharimoto.neue.ai.TrustDialog
 import com.kaiharimoto.neue.ai.carryLearning
 import com.kaiharimoto.neue.ai.foldIntoWeb
 import com.kaiharimoto.neue.ai.forgetEverything
@@ -849,6 +850,7 @@ private fun Shell(h: NeueHolders) {
             TuneLauncher(h.ai)
             ProfileLauncher(h.ai)
             LivingDocDialog(h.ai)
+            TrustDialog(h.ai)
             PictureDialog(h.ai)
             ContextPanel(h.ai)
             VoiceDialog(h.ai)

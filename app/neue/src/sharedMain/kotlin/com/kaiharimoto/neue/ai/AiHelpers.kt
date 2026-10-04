@@ -15,6 +15,8 @@ import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.check.FactCheck
 import com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
+import com.kaiharimoto.mastertool.core.ai.ModelBackend
+import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import kotlinx.coroutines.launch
 
 // Helpers with a fresh mind, on [AiState]: the fact-check pass after an answer (1.0.58) and `delegate` (1.0.47).
@@ -45,41 +47,7 @@ internal fun AiState.checkLastAnswer() {
     backgroundJobs.removeAll { it.isCompleted }
     backgroundJobs += scope.launch {
         try {
-            val index = h.builder.index
-            val cards = ChatMarkdown.cards(reply).mapNotNull { name ->
-                (index.byName(name) ?: (CardWords.resolve(name, index) as? Resolved.Found)?.card)
-                    ?.let { it.name to it.description }
-            }
-            val look = setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
-            // What the checker's look-ups said: its "ok"s are held to these (FactCheck.ground), not taken on its word.
-            val looked = mutableListOf<String>()
-            val runner = ToolRunner { call ->
-                if (call.name.removePrefix("mcp__neue__") !in look) {
-                    Part.ToolResult(call.id, call.name, "A checker can only look up cards, rulings and numbers.", isError = true)
-                } else {
-                    host.run(call).also { if (!it.isError) looked += it.content }
-                }
-            }
-            var said = ""
-            var spent = Usage()
-            AgentLoop(model, runner, maxSteps = 8, now = System::currentTimeMillis, budget = budgetFor(connection))
-                .run(
-                    TurnRequest(
-                        FactCheck.CHECKER,
-                        listOf(ChatTurn.user(FactCheck.brief(reply, cards))),
-                        tools.filter { it.name in look },
-                        connection.model,
-                        "low",
-                    ),
-                )
-                .collect { e ->
-                    when (e) {
-                        is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
-                        is AgentEvent.Done -> spent = e.usage
-                        else -> Unit
-                    }
-                }
-            val claims = FactCheck.ground(FactCheck.parse(said), looked, cards.map { it.second }).ifEmpty { FactCheck.unreadable(said) }
+            val (claims, spent) = runChecker(model, connection, reply)
             if (claims.isEmpty()) return@launch
             val check = FactCheck.Check(at, claims)
             val now = session?.takeIf { it.id == s.id } ?: return@launch
@@ -97,6 +65,49 @@ internal fun AiState.checkLastAnswer() {
             checking = false
         }
     }
+}
+
+/**
+ * The checker run on [reply] (1.0.58; one function since 1.0.99, so Trust's planted errors test exactly the checker the
+ * chat uses): a fresh mind with the look-up tools only, its "ok"s held to what it looked up ([FactCheck.ground]).
+ */
+internal suspend fun AiState.runChecker(model: ModelBackend, connection: AiConnection, reply: String): Pair<List<FactCheck.Claim>, Usage> {
+    val index = h.builder.index
+    val cards = ChatMarkdown.cards(reply).mapNotNull { name ->
+        (index.byName(name) ?: (CardWords.resolve(name, index) as? Resolved.Found)?.card)
+            ?.let { it.name to it.description }
+    }
+    val look = setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
+    // What the checker's look-ups said: its "ok"s are held to these (FactCheck.ground), not taken on its word.
+    val looked = mutableListOf<String>()
+    val runner = ToolRunner { call ->
+        if (call.name.removePrefix("mcp__neue__") !in look) {
+            Part.ToolResult(call.id, call.name, "A checker can only look up cards, rulings and numbers.", isError = true)
+        } else {
+            host.run(call).also { if (!it.isError) looked += it.content }
+        }
+    }
+    var said = ""
+    var spent = Usage()
+    AgentLoop(model, runner, maxSteps = 8, now = System::currentTimeMillis, budget = budgetFor(connection))
+        .run(
+            TurnRequest(
+                FactCheck.CHECKER,
+                listOf(ChatTurn.user(FactCheck.brief(reply, cards))),
+                tools.filter { it.name in look },
+                connection.model,
+                "low",
+            ),
+        )
+        .collect { e ->
+            when (e) {
+                is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) said = e.turn.text
+                is AgentEvent.Done -> spent = e.usage
+                else -> Unit
+            }
+        }
+    val claims = FactCheck.ground(FactCheck.parse(said), looked, cards.map { it.second }).ifEmpty { FactCheck.unreadable(said) }
+    return claims to spent
 }
 
 // ---- a helper with a fresh mind (1.0.47) --------------------------------------
