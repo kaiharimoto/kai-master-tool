@@ -351,6 +351,8 @@ said so, and so does this list.
 
 ## 3. The roadmap
 
+The whole program's phased plan, with the foundation tracks under it, is `docs/ROADMAP.md` (from 1.0.98); this section is the Ai part of it as first written.
+
 Each phase is one or a few releases, ordered by what it unlocks. Each item names the goal it serves:
 - **L**: Ai learns;
 - **P**: Ai plays;
