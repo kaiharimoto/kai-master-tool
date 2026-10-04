@@ -3,6 +3,10 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.Recall
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
+import com.kaiharimoto.mastertool.core.ai.evidence.Evidence
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
+import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
+import com.kaiharimoto.mastertool.core.ai.evidence.Proven
 import com.kaiharimoto.mastertool.core.ai.memory.GuideBudget
 import com.kaiharimoto.mastertool.core.ai.memory.GuideRewrite
 import com.kaiharimoto.mastertool.core.ai.report.ReaderGuide
@@ -922,6 +926,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     // ---- memory and skills ------------------------------------------------------------
 
+    private companion object {
+        /** The guide as it was, as a source: a number an entry keeps from it keeps its proof. */
+        const val CARRIED = "the guide"
+    }
+
     /**
      * The deck a guide, report or book write is about (1.0.98, the red team): a Fine Tuning run's own deck to its end,
      * whatever the builder shows meanwhile; else the builder's.
@@ -950,6 +959,39 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         else -> null
     }
 
+    /**
+     * The guide's ledger after a write (1.0.98): each new entry judged against what this conversation computed and what
+     * the person said ([Evidence.judge]); an entry that kept a number from the one it replaces, or from the guide as it
+     * was, keeps that number's proof. A failure is the refusal, in words for Ai.
+     */
+    private fun proveGuide(deckId: String, before: List<String>, after: List<String>, replaced: String?): Result<List<Proven>> = runCatching {
+        val was = Ledger.read(ai.files.read(Ledger.path(deckId)))
+        val deck = if (deckId == state.deckId) Ledger.fingerprint(state.deck) else ""
+        val now = System.currentTimeMillis()
+        // What the guide already held is a source for the numbers it keeps: their proofs go with them.
+        val carried = before.joinToString("\n")
+        val sources = Evidence.sources(ai.session?.turns.orEmpty()) + Evidence.Source(CARRIED, "", carried)
+        var next = Ledger.prune(was, after)
+        after.filter { it !in before }.forEach { entry ->
+            when (val v = Evidence.judge(entry, sources, deck, now)) {
+                Evidence.Verdict.Words -> Unit
+                is Evidence.Verdict.Refused -> error(v.message)
+                is Evidence.Verdict.Proved -> {
+                    // A number carried from the guide keeps the proof it had there.
+                    val earlier = was.filter { p -> p.entry == replaced || p.entry in before }.flatMap { it.proofs }
+                    val proofs = v.proven.proofs.flatMap { p -> if (p.tool == CARRIED) earlier.ifEmpty { listOf(p) } else listOf(p) }.distinct()
+                    val status = if (proofs.any { it.tool == CARRIED } && v.proven.status == Proven.Status.CHECKED) {
+                        was.firstOrNull { it.entry == replaced }?.status ?: Proven.Status.CHECKED
+                    } else {
+                        v.proven.status
+                    }
+                    next = Ledger.put(next, v.proven.copy(proofs = proofs, status = status), replaced)
+                }
+            }
+        }
+        next
+    }
+
     private fun memory(action: String, scope: String, text: String?, old: String?): Answer {
         val (kind, id, name) = memoryTarget(scope) ?: return fail(
             if (scope == "web") "No web is in scope: the open deck is in no web, and none is on screen." else "Save the deck first; a deck never saved has no notes or guide yet.",
@@ -969,6 +1011,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
             else -> return fail("Actions: add, replace, remove.")
         }
+        // The guide's numbers carry their proof (1.0.98, the evidence ledger): a percentage or odds nobody computed is refused.
+        var ledger: List<Proven>? = null
+        if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && id != null) {
+            ledger = proveGuide(id, doc.entries, write.doc.entries, old).getOrElse { return fail(it.message ?: "Not written.") }
+        }
         // What one Fine Tuning run may add to the guide, by its intensity (1.0.66: Deep, 20,000 characters).
         if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && action != "rewrite") {
             ai.guideRoom()?.let { (start, budget, label) ->
@@ -978,6 +1025,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return when (write) {
             is MemoryWrite.Done -> {
                 ai.files.save(kind, id, write.doc)
+                if (ledger != null && id != null) ai.files.write(Ledger.path(id), Ledger.write(ledger))
                 ok(write.message, when (action) {
                     "add" -> "Remembered: ${entry.orEmpty().take(100)}"
                     "replace" -> "Updated a memory"
@@ -1095,6 +1143,18 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val main = deck.main.mapNotNull { state.index.byId(it)?.name }
         val ctx = BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis())
         val w = BookWriter
+        // A chapter's percentages and odds are the deck's facts or a check's (1.0.98, the evidence ledger), like the guide's.
+        if (ToolArgs.string(i, "action") == "write_chapter") {
+            val facts = w.facts(book, ctx)
+            val sources = Evidence.sources(ai.session?.turns.orEmpty()).map { it.content } + facts + ai.files.entries(MemoryKind.GUIDE, deckId)
+            val unsourced = textsOf(ToolArgs.element(i, "chapter")).filter { !Numbers.isEstimate(it) }.flatMap { Numbers.unsourced(it, sources) }
+            if (unsourced.isNotEmpty()) {
+                return fail(
+                    "Not written: the book's numbers are the deck's facts (the facts action) or a check's, and nothing computed " +
+                        unsourced.distinctBy { it.written }.joinToString { "“${it.written}”" } + ". Compute it first, or leave the number out, or mark the line “(estimate)”.",
+                )
+            }
+        }
         val result = when (ToolArgs.string(i, "action")) {
             "outline" -> BookWriter.Result(book, w.outline(book))
             "set_outline" -> w.setOutline(book, ToolArgs.objects(i, "chapters"))
@@ -1121,6 +1181,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             else -> "Read the guide"
         }
         return ok(result.message, summary)
+    }
+
+    /** Every string in a chapter's JSON, for the number check. */
+    private fun textsOf(e: kotlinx.serialization.json.JsonElement?): List<String> = when (e) {
+        null -> emptyList()
+        is JsonObject -> e.values.flatMap { textsOf(it) }
+        is kotlinx.serialization.json.JsonArray -> e.flatMap { textsOf(it) }
+        is kotlinx.serialization.json.JsonPrimitive -> if (e.isString) listOf(e.content) else emptyList()
     }
 
     private fun sessionReport(i: JsonObject): Answer {

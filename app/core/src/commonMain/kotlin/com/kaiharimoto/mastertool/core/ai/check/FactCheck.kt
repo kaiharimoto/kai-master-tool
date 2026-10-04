@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai.check
 
+import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -85,6 +86,30 @@ Answer with JSON alone, no other words: {"claims": [{"claim": "...", "verdict": 
             }
             Claim(claim, verdict, s("correction"), s("source"))
         }.take(20)
+    }
+
+    /** The checker's answer when it could not be read at all (1.0.98): said, never dropped as if nothing was checked. */
+    fun unreadable(said: String): List<Claim> =
+        if (said.isBlank() || parse(said).isNotEmpty() || Regex(""""claims"\s*:\s*\[\s*]""").containsMatchIn(said)) emptyList()
+        else listOf(Claim("The check itself could not be read", Verdict.UNSURE, source = "the checker's answer was not the JSON asked for"))
+
+    /**
+     * The checker's verdicts held to what it looked at (1.0.98, the red team: an "ok" was tied to nothing). An "ok" stands
+     * only where something backs it — every number in the claim among the numbers its tools computed or the card text it
+     * was given ([Numbers]), and for a claim without numbers, at least one look-up made or the card text given. Otherwise
+     * it is "unsure", with why. "wrong" stands as said: a wrong caught is worth more than a wrong missed.
+     */
+    fun ground(claims: List<Claim>, looked: List<String>, cardText: List<String>): List<Claim> = claims.map { c ->
+        if (c.verdict != Verdict.OK) return@map c
+        val sources = looked + cardText
+        val numbers = Numbers.claimed(c.claim)
+        when {
+            numbers.isNotEmpty() && Numbers.unsourced(c.claim, sources).isNotEmpty() ->
+                c.copy(verdict = Verdict.UNSURE, source = "its number was not in anything the check computed")
+            numbers.isEmpty() && looked.isEmpty() && cardText.isEmpty() ->
+                c.copy(verdict = Verdict.UNSURE, source = "nothing was looked up to check it")
+            else -> c
+        }
     }
 
     /** The line under a checked answer, in words. */

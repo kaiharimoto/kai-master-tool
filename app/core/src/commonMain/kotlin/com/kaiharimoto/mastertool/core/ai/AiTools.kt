@@ -356,7 +356,10 @@ object AiTools {
             "deck / web: notes about the deck or web in scope (the open deck, or the web it belongs to). " +
             "add a new entry; replace an entry (old_text is a unique part of it); remove one. Keep entries short and durable: " +
             "facts that will still matter next week, never a transcript. rewrite (scope guide, in Refactor guide only): text is the whole " +
-            "new guide, one \"- \" entry per line, replacing every entry.",
+            "new guide, one \"- \" entry per line, replacing every entry. A guide entry's percentages, odds and probabilities " +
+            "must be numbers a tool computed in this conversation (hand_odds, calculate, world_tool) or the person said: " +
+            "anything else is refused, unless the entry says it is your estimate with “(estimate)”. Entries read back marked " +
+            "[checked], [stale] or [contradicted]: re-check a stale one before relying on it.",
         schema {
             enum("action", "What to do", listOf("add", "replace", "remove", "rewrite"), required = true)
             enum("scope", "Which memory", listOf("user", "agent", "deck", "web", "guide"), required = true)

@@ -2,10 +2,13 @@ package com.kaiharimoto.neue
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.kaiharimoto.mastertool.core.ai.AiTools
+import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
+import com.kaiharimoto.mastertool.core.ai.evidence.Proven
 import com.kaiharimoto.mastertool.core.ai.mcp.McpServerCore
 import com.kaiharimoto.mastertool.core.data.CardRepository
 import com.kaiharimoto.mastertool.core.data.DatabaseFactory
@@ -33,6 +36,7 @@ import com.kaiharimoto.mastertool.ui.deckbuilder.DeckLayoutState
 import com.kaiharimoto.mastertool.ui.update.AppUpdater
 import com.kaiharimoto.mastertool.ui.update.InstallOutcome
 import com.kaiharimoto.neue.ai.AiDesk
+import com.kaiharimoto.neue.ai.guideForPrompt
 import com.kaiharimoto.neue.ai.AnthropicBackend
 import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.builder.NeueDrag
@@ -334,6 +338,38 @@ class AiEndToEndTest {
         } finally {
             h.present.open?.let { h.present.delete(it) }
         }
+    }
+
+    @Test
+    fun aGuideNumberCarriesItsProofAndGoesStaleWithTheDeck() = runBlocking {
+        val h = holders()
+        h.tool("new_deck", "name" to "Odds deck", "main" to listOf("3 Ash Blossom & Joyous Spring", "3 Infinite Impermanence", "3 Raigeki"))
+        withTimeout(5_000) { while (h.builder.deckId == null) delay(20) }
+        val deckId = h.builder.deckId!!
+        // A number nobody computed is not written.
+        val naked = h.tool("memory", "action" to "add", "scope" to "guide", "text" to "Opens Ash 95.2% of the time going first.")
+        assertTrue(naked.isError && "Not written" in naked.content, naked.content)
+        // Computed in the conversation, it is — with its proof.
+        val args = arrayOf("cards" to listOf("Ash Blossom & Joyous Spring"), "turn" to "first")
+        val odds = h.tool("hand_odds", *args)
+        assertTrue("95.2381%" in odds.content, odds.content)
+        val call = Part.ToolUse("o1", "hand_odds", input(*args))
+        h.ai.session = AiSession("s1", turns = listOf(ChatTurn(Role.ASSISTANT, listOf(call)), ChatTurn(Role.USER, listOf(odds.copy(id = "o1")))))
+        val proved = h.tool("memory", "action" to "add", "scope" to "guide", "text" to "Opens Ash 95.2% of the time going first.")
+        assertFalse(proved.isError, proved.content)
+        val proof = Ledger.read(h.ai.files.read(Ledger.path(deckId))).single()
+        assertEquals(Proven.Status.CHECKED, proof.status)
+        assertEquals("hand_odds", proof.proofs.single().tool)
+        // An estimate said to be one is kept as one.
+        assertFalse(h.tool("memory", "action" to "add", "scope" to "guide", "text" to "Bricks maybe 10% of games (estimate).").isError)
+        // The deck changes: the number is stale where Ai reads it, and checked again it no longer holds.
+        h.tool("edit_deck", "ops" to listOf(input("op" to "set", "card" to "Ash Blossom & Joyous Spring", "count" to 1)))
+        assertTrue("stale" in h.ai.guideForPrompt(deckId), h.ai.guideForPrompt(deckId))
+        withTimeout(10_000) {
+            while (Ledger.read(h.ai.files.read(Ledger.path(deckId))).none { it.status == Proven.Status.CONTRADICTED }) delay(50)
+        }
+        assertTrue("contradicted" in h.ai.guideForPrompt(deckId))
+        assertTrue("estimate" in h.ai.guideForPrompt(deckId))
     }
 
     @Test

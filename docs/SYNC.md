@@ -37,7 +37,9 @@ out (kai: not popular enough); their desktop apps still work as a synced folder.
 - Each device keeps what it last agreed (`<data>/sync/state.json`) and decides each item three ways
   (`SyncPlan`): changed here only → send; changed elsewhere only → take; both, the same → agree; both,
   differently → a conflict, by the item's rule: **decks** keep both (the newer wins, the other becomes
-  "Name (from Phone)"), **settings and Prep** merge key by key (`JsonMerge`), **files** go to the newer.
+  "Name (from Phone)"), **settings and Prep** merge key by key (`JsonMerge`), **Ai's memory** (its `.md` files but
+  `SOUL.md` and skills) merges entry by entry against the version both started from, and **a deck's session reports** are
+  both devices' filings (1.0.98, `SyncMerges`: learning on one device never erases another's), **files** go to the newer.
   An edit always beats a deletion. A device meeting a store for the first time takes what is there.
 - Blobs go up before the manifest that names them; the state is saved only at the end; a failure part
   way is redone next time. A pulled blob is checked against its hash.

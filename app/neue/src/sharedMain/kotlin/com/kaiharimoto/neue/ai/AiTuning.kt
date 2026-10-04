@@ -20,6 +20,19 @@ import com.kaiharimoto.mastertool.core.ai.report.SessionQuestions
 import com.kaiharimoto.mastertool.core.ai.report.book.BookReview
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
+import com.kaiharimoto.mastertool.core.ai.evidence.Evidence
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
+import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
+import com.kaiharimoto.mastertool.core.ai.evidence.Proof
+import com.kaiharimoto.mastertool.core.ai.evidence.Proven
+import com.kaiharimoto.mastertool.core.world.Instruments
+import com.kaiharimoto.neue.world.WorldSnapshot
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -58,6 +71,76 @@ fun AiState.saveByHand(path: String, loaded: String?, text: String) {
     files.write(path, if (isMemory) MemoryReview.merge(loaded, now, text) else text)
     val baseline = tuneBefore ?: return
     tuneBefore = baseline + (path to if (isMemory) MemoryReview.merge(loaded, baseline[path], text) else text)
+}
+
+/**
+ * A deck's guide as Ai reads it (1.0.98, the evidence ledger): each entry with a number wears what its proof says now —
+ * checked, stale since the deck changed, contradicted, or an estimate — so Ai knows which of its own numbers to trust.
+ * Numbers computed on another deck than the builder's are marked stale here, and checked again in the background.
+ */
+fun AiState.guideForPrompt(deckId: String): String {
+    val entries = files.read(AiMemory.path(MemoryKind.GUIDE, deckId))?.let { AiMemory.parse(it).entries }.orEmpty()
+    if (entries.isEmpty()) return ""
+    var ledger = Ledger.read(files.read(Ledger.path(deckId)))
+    if (deckId == h.builder.deckId && ledger.isNotEmpty()) {
+        val marked = Ledger.staleAgainst(ledger, Ledger.fingerprint(h.builder.deck))
+        if (marked != ledger) {
+            ledger = marked
+            files.write(Ledger.path(deckId), Ledger.write(marked))
+        }
+        if (ledger.any { it.status == Proven.Status.STALE }) recheckGuide(deckId)
+    }
+    return Ledger.annotate(entries, ledger).joinToString("\n") { "- $it" }
+}
+
+/**
+ * The guide's stale numbers computed again on the deck as it is (1.0.98): each proof by a tool the app can run alone —
+ * hand_odds, an instrument — asked the same question; the number found again is checked, a different one contradicted.
+ */
+fun AiState.recheckGuide(deckId: String) {
+    if (rechecking) return
+    rechecking = true
+    scope.launch {
+        try {
+            val ledger = Ledger.read(files.read(Ledger.path(deckId)))
+            val print = Ledger.fingerprint(h.builder.deck)
+            val next = ledger.map entry@{ p ->
+                if (p.status != Proven.Status.STALE || p.proofs.any { it.deck.isNotEmpty() && it.tool !in Evidence.RERUNNABLE }) return@entry p
+                val again = mutableListOf<String>()
+                for (proof in p.proofs.filter { it.deck.isNotEmpty() }) again += rerun(proof, deckId) ?: return@entry p
+                // What it says now, with what never depended on the deck (the person's words, a calculation) as it was.
+                val missing = Numbers.unsourced(p.entry, again + p.proofs.filter { it.deck.isEmpty() }.map { it.excerpt })
+                val now = System.currentTimeMillis()
+                if (missing.isEmpty()) {
+                    p.copy(status = Proven.Status.CHECKED, checkedAt = now, note = "", proofs = p.proofs.map { if (it.deck.isEmpty()) it else it.copy(deck = print, at = now) })
+                } else {
+                    p.copy(status = Proven.Status.CONTRADICTED, checkedAt = now, note = "the check now says: " + again.joinToString(" / ") { it.lines().firstOrNull { l -> Numbers.values(l).isNotEmpty() }.orEmpty().take(160) })
+                }
+            }
+            if (next != ledger && deckId == h.builder.deckId) files.write(Ledger.path(deckId), Ledger.write(next))
+        } finally {
+            rechecking = false
+        }
+    }
+}
+
+/** A proof's question asked again on the builder's deck, its answer's text; null when it cannot be. */
+private suspend fun AiState.rerun(proof: Proof, deckId: String): String? {
+    val input = runCatching { Json.parseToJsonElement(proof.input).jsonObject }.getOrNull() ?: return null
+    val asked = when (proof.tool) {
+        "hand_odds" -> JsonObject(input + ("deck_id" to JsonPrimitive(deckId)))
+        "world_tool" -> input
+        else -> return null
+    }
+    return when (proof.tool) {
+        "world_tool" -> {
+            val name = input["name"]?.jsonPrimitive?.contentOrNull ?: return null
+            val args = (input["args"] as? JsonObject) ?: JsonObject(emptyMap())
+            val withDeck = if ("deck" in args) args else JsonObject(args + ("deck" to JsonPrimitive(deckId)))
+            runCatching { Instruments.run(name, withDeck, WorldSnapshot.of(h)).lines.joinToString("\n") }.getOrNull()
+        }
+        else -> host.run(Part.ToolUse("recheck-${System.nanoTime()}", proof.tool, asked)).takeIf { !it.isError }?.content
+    }
 }
 
 /** Opens the Fine Tuning launcher, on [mode] when given. */
@@ -384,6 +467,7 @@ fun AiState.carryLearning(from: String, to: String) {
     copy(AiMemory.path(MemoryKind.GUIDE, from), AiMemory.path(MemoryKind.GUIDE, to))
     copy(GuideBook.path(from), GuideBook.path(to))
     copy(ReportLog.path(from), ReportLog.path(to)) { text -> ReportLog.write(ReportLog.read(text).map { it.copy(deckId = to) }) }
+    copy(Ledger.path(from), Ledger.path(to))
 }
 
 /** Memory, skills and conversations deleted; the connections stay. */

@@ -418,7 +418,7 @@ class AiState(internal val h: NeueHolders) {
         val deckId = pinned?.deckId ?: h.builder.deckId
         val deckName = pinned?.deckName ?: h.builder.deckName
         val guide = if (deckId != null && deckId != current.guideShown) {
-            files.entries(MemoryKind.GUIDE, deckId).takeIf { it.isNotBlank() }?.let { listOf("", "Your guide to how “$deckName” plays (memory scope guide):", it) }.orEmpty()
+            guideForPrompt(deckId).takeIf { it.isNotBlank() }?.let { listOf("", "Your guide to how “$deckName” plays (memory scope guide; a mark in brackets says whether its number still holds):", it) }.orEmpty()
         } else {
             emptyList()
         }
@@ -571,6 +571,9 @@ class AiState(internal val h: NeueHolders) {
      * Forget everything and turning Ai off cancel them, or they write memory back after it was cleared.
      */
     internal val backgroundJobs = mutableListOf<Job>()
+
+    /** The guide's stale numbers are being computed again (1.0.98). */
+    internal var rechecking = false
 
     internal fun cancelBackground() {
         backgroundJobs.forEach { it.cancel() }

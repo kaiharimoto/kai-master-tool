@@ -51,11 +51,13 @@ internal fun AiState.checkLastAnswer() {
                     ?.let { it.name to it.description }
             }
             val look = setOf("card_info", "rulings", "calculate", "hand_odds", "search_cards")
+            // What the checker's look-ups said: its "ok"s are held to these (FactCheck.ground), not taken on its word.
+            val looked = mutableListOf<String>()
             val runner = ToolRunner { call ->
                 if (call.name.removePrefix("mcp__neue__") !in look) {
                     Part.ToolResult(call.id, call.name, "A checker can only look up cards, rulings and numbers.", isError = true)
                 } else {
-                    host.run(call)
+                    host.run(call).also { if (!it.isError) looked += it.content }
                 }
             }
             var said = ""
@@ -77,7 +79,7 @@ internal fun AiState.checkLastAnswer() {
                         else -> Unit
                     }
                 }
-            val claims = FactCheck.parse(said)
+            val claims = FactCheck.ground(FactCheck.parse(said), looked, cards.map { it.second }).ifEmpty { FactCheck.unreadable(said) }
             if (claims.isEmpty()) return@launch
             val check = FactCheck.Check(at, claims)
             val now = session?.takeIf { it.id == s.id } ?: return@launch

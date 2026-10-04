@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.evidence.Proven
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -122,7 +124,14 @@ fun LivingDocDialog(ai: AiState) {
                     }
                     val cards = remember(doc) { AiDocs.keyCards(h, doc) }
                     if (cards.isNotEmpty()) KeyCards(ai, cards)
-                    Sections(doc, empty = "The guide is empty. Teach ${ai.name} the deck, let it study it, or have it learn it from first principles.")
+                    // Each number's proof, as it stands (1.0.98, the evidence ledger): checked, stale, contradicted, estimate.
+                    val ledger = remember(open, stamp.intValue) {
+                        val print = h.builder.deck.takeIf { h.builder.deckId == open.deckId }?.let(Ledger::fingerprint)
+                        Ledger.read(ai.files.read(Ledger.path(open.deckId))).let { l -> print?.let { Ledger.staleAgainst(l, it) } ?: l }
+                    }
+                    Sections(doc, empty = "The guide is empty. Teach ${ai.name} the deck, let it study it, or have it learn it from first principles.") { e ->
+                        ledger.firstOrNull { it.entry == e || it.entry.endsWith(e) }
+                    }
                 }
             }
         }
@@ -246,7 +255,7 @@ private fun KeyCards(ai: AiState, cards: List<ReportPdf.KeyCard>) {
 
 /** Each section numbered over a rule, its entries as hanging lines with their cards in bold. */
 @Composable
-private fun Sections(doc: GuideDoc, empty: String) {
+private fun Sections(doc: GuideDoc, empty: String, proofOf: (String) -> Proven? = { null }) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     if (doc.isEmpty) {
@@ -265,12 +274,30 @@ private fun Sections(doc: GuideDoc, empty: String) {
                 s.entries.forEach { e ->
                     Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Mono("–", color = c.ink45)
-                        MuText(styled(ChatMarkdown.inline(e)), Modifier.weight(1f), style = MuType.body(f).copy(fontSize = 14.sp), color = c.ink)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            MuText(styled(ChatMarkdown.inline(e)), Modifier.fillMaxWidth(), style = MuType.body(f).copy(fontSize = 14.sp), color = c.ink)
+                            proofOf(e)?.let { p -> ProofLine(p) }
+                        }
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Where a guide entry's number came from (1.0.98): what checked it and on what, or why it no longer holds. Ink only:
+ * a contradicted number is set in bold, never in colour.
+ */
+@Composable
+private fun ProofLine(p: Proven) {
+    val c = Mu.colors
+    val words = when (p.status) {
+        Proven.Status.CHECKED -> "Checked · " + p.proofs.joinToString(" · ") { proof -> proof.tool + proof.input.takeIf { it.length in 3..80 }?.let { " $it" }.orEmpty() }
+        else -> Ledger.mark(p).orEmpty().replaceFirstChar { it.uppercase() }
+    }
+    val style = MuType.small(LocalMuFonts.current).let { if (p.status == Proven.Status.CONTRADICTED) it.copy(fontWeight = FontWeight.Bold) else it }
+    MuText(words, style = style, color = if (p.status == Proven.Status.CHECKED) c.ink45 else c.ink)
 }
 
 /**

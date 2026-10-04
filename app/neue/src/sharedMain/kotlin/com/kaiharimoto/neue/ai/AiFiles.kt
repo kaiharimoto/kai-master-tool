@@ -8,6 +8,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryDoc
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.ai.report.ReportLog
 import com.kaiharimoto.mastertool.core.ai.report.SessionReport
 import com.kaiharimoto.mastertool.core.ai.skills.Skill
@@ -91,7 +92,11 @@ class AiFiles(val root: File) {
         ReportLog.write(ReportLog.add(reports(report.deckId), report)),
     )
 
-    fun deleteReports(deckId: String) = delete(ReportLog.path(deckId))
+    fun deleteReports(deckId: String) {
+        delete(ReportLog.path(deckId))
+        // The guide's proofs go with its deck (1.0.98).
+        delete(Ledger.path(deckId))
+    }
 
     /** Everything Ai remembers gone: memory, skills it wrote, conversations. The folder stays. */
     fun forgetEverything() {

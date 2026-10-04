@@ -114,7 +114,7 @@ private suspend fun AiState.summarise(s: AiSession, model: ModelBackend, connect
 private fun AiState.standingContext(s: AiSession): String {
     val deckId = s.deckId?.takeIf { s.mode in AiSession.DECK_MODES } ?: s.guideShown
     val deckName = s.deckName ?: h.builder.deckName.takeIf { deckId == h.builder.deckId } ?: "the deck"
-    val guide = deckId?.let { files.entries(MemoryKind.GUIDE, it) }?.takeIf { it.isNotBlank() }
+    val guide = deckId?.let { guideForPrompt(it) }?.takeIf { it.isNotBlank() }
     val scope = host.scope()
     val notes = scope?.let { host.notes(it) }?.takeIf { it.isNotBlank() }
     if (guide == null && notes == null) return ""

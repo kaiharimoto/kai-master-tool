@@ -743,6 +743,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   time, off the main thread; Ai's code typed into the editor), `AiWorld` Ai's tools (`world_state/new/write/read/run/tool/show`),
   `MODE_WORLD` and the `ai-world` skill; `WorldPaint.kt` is the World's one file allowed colour. `<data>/world/` is
   synced and backed up; the `WORLD` start step asks about Python on the desk. `tools/shoot.sh --page=world --world=demo`.
+- **Numbers carry their proof** (1.0.98, the evidence ledger, `core/ai/evidence`): a percentage, odds or probability in a
+  guide entry or a book chapter must be one a tool computed in the conversation or the person said (`Numbers`,
+  `Evidence.judge`), else it is refused unless marked "(estimate)"; its proof is kept in `ai/evidence/<deck>.json`
+  (`Ledger`), marked stale when the deck changes and checked again (`recheckGuide`). The fact-check's "ok" is held to what
+  it looked up (`FactCheck.ground`). Rulings read Konami's OCG Q&A from YGOrganization first (`YgoOrg`), always with the
+  OCG caveat, then Yugipedia. A new place Ai writes numbers people rely on goes through the same check.
 - **Outside text is in an envelope** (1.0.97): every tool result read from outside the app goes through `Untrusted.wrap`,
   and `web_fetch` through `UrlGuard`; a new tool that brings outside text in must do the same. The red team on Ai's
   learning and real-world intelligence, its research and the roadmap: `docs/AI-INTELLIGENCE.md`.

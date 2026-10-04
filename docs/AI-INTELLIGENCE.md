@@ -92,7 +92,12 @@ The roadmap below builds the rest on that foundation, in order:
 | **The OpenAI-compatible wire sent an all-thought turn as `{content: null}`**, and every later message failed with HTTP 400 (medium, 3/3) | such a turn is not sent |
 | **Leaving a Fine Tuning run by anything but Finish skipped the review** (New, Start fresh, a connection switch, another conversation from history) (high, 3/3) | `settleTuning()`: every exit offers the review |
 
-### Confirmed, open: the next fixes
+### Fixed in 1.0.98
+
+Every confirmed open finding below except the CLI shell's reach and the MCP token's file, with the evidence ledger (Phase 1,
+items 1–3 of the roadmap) and the fact-check held to what it looked up. `NEUE.md` §4k has the details.
+
+### Confirmed, open: the next fixes (as of 1.0.97)
 
 All confirmed by three verifiers, all judged small, local fixes. They are Phase 1 of the roadmap.
 
@@ -360,7 +365,7 @@ Each phase is one or a few releases, ordered by what it unlocks. Each item names
   - `ygo.use` lets Ai build its own library in `lib/`, to the same standard.
 - **The fixes above.**
 
-### Phase 1: lessons that cite their evidence (L, small to medium)
+### Phase 1: lessons that cite their evidence (L, small to medium; items 1–3 shipped in 1.0.98)
 1. **The confirmed open fixes** in §1, the learning-integrity ones first:
    - the run pinned to its deck;
    - sync merging memory by entry;

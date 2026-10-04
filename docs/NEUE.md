@@ -2519,6 +2519,37 @@ whole report, its research and the roadmap that replaced the one below: `docs/AI
   as `{content: null}`; and a Fine Tuning run left by anything but Finish still goes to the review (`settleTuning`).
   What is confirmed and still open is listed in the report, as the roadmap's first phase.
 
+#### The evidence ledger, and the rest of the red team's fixes (1.0.98)
+
+kai asked "how can we have a reliable way to check the work of an AI?" — and the answer is a ladder of checkers, strongest
+first: code computes (a model never types a number), the rules engine replays, sources are cited per claim, a second model
+only for judgment, outcomes over time, the person last. This release builds its first rung:
+- **The evidence ledger** (`core/ai/evidence`): a percentage, odds ("1 in 4") or probability in a guide entry must be one a
+  tool computed in the conversation, or one the person said — `Numbers` reads the numbers and matches them at the
+  precision written (74 % is 0.742, never 0.75), `Evidence.judge` traces each to its newest source, and a number nobody
+  computed is refused with what to do instead (compute it, drop it, or write "(estimate)"). What passes is kept with its
+  proof — the tool, what it was asked, the deck's `Ledger.fingerprint` — in `ai/evidence/<deck>.json` (synced, backed up,
+  deleted with the deck, carried to its copies). **When the deck changes**, a number computed on the old one is *stale*
+  where Ai reads it (`guideForPrompt`: each entry wears `[checked by …]`, `[stale …]`, `[contradicted …]` or
+  `[estimate …]`), and is asked again in the background (`recheckGuide`: `hand_odds`, or the instrument with the same
+  arguments) — the same number found is checked, another is *contradicted*, with what the check says now. The guide's view
+  shows the same under each entry (`ProofLine`). The reader's guide's chapters are held to the same rule
+  (`write_chapter`; the deck's facts count as a source).
+- **The fact-check is held to what it looked up** (`FactCheck.ground`): an "ok" stands only when its numbers are in what its
+  tools computed or the card text it was given, and a claim without numbers only when something was looked up; otherwise
+  it is "unsure", with why. A checker's answer that cannot be read is said (`FactCheck.unreadable`), never dropped.
+- **Official rulings first** — see "Official rulings" above (`YgoOrg`, OCG with the caveat).
+- **Learning integrity**: a Fine Tuning run is about its own deck to its end (`AiSession.deckId`); the review's snapshot holds
+  every book, so Undo all never deletes another deck's; the reflection measures and undoes only its own entries
+  (`MemoryReview.revert`) and, with the fact-check, is cancelled by Forget everything and turning Ai off; a hand edit in the
+  brain merges onto what Ai wrote meanwhile (`MemoryReview.merge`); a copied deck takes its guide, book, reports and ledger
+  (`carryLearning`); and sync merges memory by entry and reports by filing (`SyncMerges`, `docs/SYNC.md`).
+- **Harness**: Stop ends its run at once (a run token), so what follows finds Ai idle; each tool result is told as it lands
+  (`AgentEvent.ToolDone`), so a Stop keeps the real results and calls an interrupted one interrupted; a cut answer says
+  so; one retry layer, the network's failures only; summaries are written a piece at a time (`Compaction.chunks`) with the
+  guide put back after; the estimate counts an Anthropic turn once and prefers the provider's measure; MCP results are
+  capped; `open_deck` and `save_deck` say when they did not.
+
 #### Going further — the roadmap
 
 The roadmap lives in `docs/AI-INTELLIGENCE.md` (1.0.97), built on the research: lessons that cite their runs and an
