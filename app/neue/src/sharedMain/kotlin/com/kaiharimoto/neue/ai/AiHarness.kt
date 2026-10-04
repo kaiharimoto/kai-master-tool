@@ -11,6 +11,8 @@ import com.kaiharimoto.mastertool.core.ai.rules.Yugipedia
 import com.kaiharimoto.mastertool.core.ai.web.HtmlText
 import com.kaiharimoto.mastertool.core.ai.web.SearchResults
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
+import com.kaiharimoto.mastertool.core.ai.web.Untrusted
+import com.kaiharimoto.mastertool.core.ai.web.UrlGuard
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.hand.HandConstraint
@@ -21,6 +23,7 @@ import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.mastertool.core.sync.Sha256
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.platform.Platform
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
@@ -147,21 +150,30 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
     private val agent = "NeueMasterTool/${Platform.version} (Yu-Gi-Oh! deck builder; https://github.com/kaiharimoto/kai-master-tool)"
 
     /**
+     * For an address Ai chose (`web_fetch`): redirects followed by hand, each checked by
+     * [UrlGuard] before it is asked, so a public page cannot bounce the request onto the network.
+     */
+    private val guarded by lazy { HttpClientFactory.create().config { followRedirects = false } }
+
+    /**
      * A page's body, or why not; a Yugipedia answer kept a week when [keep]. The file is named by
      * the address's SHA-256 (a 32-bit hash let two addresses share a file, and one served the
      * other's page), and an API error — a page that does not exist yet, answered 200 — is never kept.
+     * [chosen] is an address Ai chose, read only where [UrlGuard] allows, every redirect too; the
+     * app's own addresses (the search engine, Yugipedia) are fixed hosts and go straight.
      */
-    private suspend fun get(url: String, keep: Boolean = false): Result<String> = withContext(Dispatchers.IO) {
+    private suspend fun get(url: String, keep: Boolean = false, chosen: Boolean = false): Result<String> = withContext(Dispatchers.IO) {
         val key = File(cache, Sha256.hex(url) + ".txt")
         if (keep && key.isFile && System.currentTimeMillis() - key.lastModified() < WEEK) {
             return@withContext Result.success(key.readText())
         }
         oneAtATime.withLock {
             runCatching {
-                val r = http.get(url) {
+                val headers: HttpRequestBuilder.() -> Unit = {
                     header("User-Agent", agent)
                     header("Accept", "text/html,application/json;q=0.9,*/*;q=0.5")
                 }
+                val r = if (chosen) UrlGuard.get(guarded, url, block = headers).getOrThrow() else http.get(url, headers)
                 val body = r.bodyAsText()
                 if (r.status.value !in 200..299) error("${Unreachable.host(url)} answered ${r.status.value} ${r.status.description}")
                 if (body.length > MAX_BODY) body.take(MAX_BODY) else body
@@ -171,15 +183,16 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
 
     private suspend fun fetch(url: String): MetaAnswer {
         val u = url.trim()
-        if (!u.startsWith("https://")) return fail("Only https pages: “$u”.")
-        val body = get(u).getOrElse { return fail("Could not read $u. ${Unreachable.of(u, it)}") }
+        // Public https pages only: never this computer, its network, or a cloud's metadata service.
+        UrlGuard.refusal(u)?.let { return fail(it) }
+        val body = get(u, chosen = true).getOrElse { return fail("Could not read $u. ${Unreachable.of(u, it)}") }
         val text = if (body.trimStart().startsWith("{") || body.trimStart().startsWith("[")) {
             HtmlText.truncate(body, 12_000)
         } else {
             HtmlText.text(body)
         }
         val title = HtmlText.title(body)
-        return MetaAnswer("$u\n\n$text", "Read ${title ?: u.substringAfter("://").substringBefore('/')}")
+        return MetaAnswer(Untrusted.wrap(u, text), "Read ${title ?: u.substringAfter("://").substringBefore('/')}")
     }
 
     private suspend fun search(query: String): MetaAnswer {
@@ -198,7 +211,9 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
             from = "Yugipedia (the web search did not answer)"
         }
         if (hits.isEmpty()) return fail("Nothing found for “$q”.")
-        val text = "Results for “$q” from $from:\n" + hits.joinToString("\n") { "- ${it.title} — ${it.url}\n  ${it.snippet}" }
+        // The titles and snippets are whoever wrote the pages': outside text.
+        val text = "Results for “$q” from $from:\n" +
+            Untrusted.wrap("search results: $from", hits.joinToString("\n") { "- ${it.title} — ${it.url}\n  ${it.snippet}" })
         return MetaAnswer(text, "Searched for “$q”: ${hits.size} results")
     }
 
@@ -211,14 +226,16 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         val wikitext = Yugipedia.wikitextOf(json) ?: return fail("Yugipedia has no rulings page for “$name”.")
         val list = Wikitext.rulings(wikitext)
         if (list.isEmpty()) return MetaAnswer("No rulings listed for “$name”.\n${Yugipedia.ATTRIBUTION}", "No rulings for $name")
-        val text = buildString {
-            // Each with the headings it stands under (TCG and OCG rulings can differ) and its source.
-            appendLine("Rulings for “$name”, each with its section and source:")
+        // A wiki anyone can edit: the rulings go in the envelope, cut to size first so its end is never cut off.
+        // Each with the headings it stands under (TCG and OCG rulings can differ) and its source.
+        val read = buildString {
             list.take(40).forEach { appendLine(it.line()) }
             if (list.size > 40) appendLine("(${list.size - 40} more on the page)")
-            append(Yugipedia.ATTRIBUTION)
         }
-        return MetaAnswer(HtmlText.truncate(text, 14_000), "Read ${list.size} rulings for $name")
+        val text = "Rulings for “$name”, each with its section and source:\n" +
+            Untrusted.wrap("Yugipedia rulings: $name", HtmlText.truncate(read.trimEnd(), 13_500)) + "\n" +
+            Yugipedia.ATTRIBUTION
+        return MetaAnswer(text, "Read ${list.size} rulings for $name")
     }
 
     private suspend fun archetype(name: String, wanted: List<String>): MetaAnswer {
@@ -228,19 +245,21 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         val want = wanted.ifEmpty { listOf("Playing style", "Combo", "Recommended", "Weakness") }
         val found = Yugipedia.sectionIndex(sections, want)
         if (found.isEmpty()) return fail("Yugipedia has no ${want.joinToString("/")} sections for “$page” (is it the archetype's exact name?).")
-        val text = buildString {
-            appendLine("“$page” on Yugipedia:")
+        // A wiki anyone can edit: the sections go in the envelope, cut to size first so its end is never cut off.
+        val read = buildString {
             found.take(6).forEach { (index, title) ->
                 val body = get(Yugipedia.parseUrl(page, index), keep = true).getOrNull()?.let(Yugipedia::wikitextOf)?.let(Wikitext::plain)
                 if (!body.isNullOrBlank()) {
-                    appendLine()
                     appendLine("## $title")
                     appendLine(HtmlText.truncate(body.trim(), 5_000))
+                    appendLine()
                 }
             }
-            append(Yugipedia.ATTRIBUTION)
         }
-        return MetaAnswer(HtmlText.truncate(text, 16_000), "Read how $page plays: ${found.joinToString { it.second }}")
+        val text = "“$page” on Yugipedia:\n" +
+            Untrusted.wrap("Yugipedia: $page", HtmlText.truncate(read.trimEnd(), 15_500)) + "\n" +
+            Yugipedia.ATTRIBUTION
+        return MetaAnswer(text, "Read how $page plays: ${found.joinToString { it.second }}")
     }
 
     // ---- a helper with a fresh mind --------------------------------------------------------

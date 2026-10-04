@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.meta.DeckAnalysis
 import com.kaiharimoto.mastertool.core.ai.meta.FieldBuilder
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
+import com.kaiharimoto.mastertool.core.ai.web.Untrusted
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.remote.DeckFormat
@@ -102,7 +103,7 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         }
         val head = "${shown.size} ${format.name} tournament decks, tier $tier and up, $window (YGOPRODeck):"
         return MetaAnswer(
-            head + "\n" + shown.take(60).joinToString("\n") { line(it) } +
+            head + "\n" + Untrusted.wrap(SOURCE, shown.take(60).joinToString("\n") { line(it) }) +
                 (if (shown.size > 60) "\n(${shown.size - 60} more not shown: narrow with archetype, event or days.)" else "") +
                 (if (problems.isNotEmpty()) "\n(Some pages failed: ${problems.joinToString("; ")})" else "") +
                 (if (cut.isNotEmpty()) "\n(${cut.trim()})" else ""),
@@ -138,7 +139,10 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
     private suspend fun deck(number: Int): MetaAnswer {
         val d = listNumbered(number).getOrElse { return fail("Could not read deck #$number. ${Unreachable.of(YgoProDeckDecks.SITE, it)}") }
         return MetaAnswer(
-            "${line(d)}\nPilot: ${d.pilot ?: "unknown"} · ${d.url}\n\nMain (${d.deck.main.size}):\n${counted(d.deck.main)}\n\nExtra (${d.deck.extra.size}):\n${counted(d.deck.extra)}\n\nSide (${d.deck.side.size}):\n${counted(d.deck.side)}",
+            Untrusted.wrap(
+                "$SOURCE deck #${d.number}",
+                "${line(d)}\nPilot: ${d.pilot ?: "unknown"} · ${d.url}\n\nMain (${d.deck.main.size}):\n${counted(d.deck.main)}\n\nExtra (${d.deck.extra.size}):\n${counted(d.deck.extra)}\n\nSide (${d.deck.side.size}):\n${counted(d.deck.side)}",
+            ),
             "Read #${d.number}, ${d.name}",
         )
     }
@@ -159,14 +163,18 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             return MetaAnswer(
                 "${found.size} players on YGOPRODeck match “$name”; ask again with one full name" +
                     (if (found.size >= 25) " (the site shows at most 25 matches, so the one meant may not be among these — use more of the name)" else "") + ":\n" +
-                    found.take(30).joinToString("\n") { "- ${it.name}${it.country?.let { c -> " ($c)" }.orEmpty()}, last top ${it.lastSeen}" },
+                    Untrusted.wrap(
+                        "$SOURCE player search",
+                        found.take(30).joinToString("\n") { "- ${it.name}${it.country?.let { c -> " ($c)" }.orEmpty()}, last top ${it.lastSeen}" },
+                    ),
                 "${found.size} players match “$name”",
             )
         }
         val career = source.career(path).getOrElse { return fail("Could not read the player's page. ${Unreachable.of(YgoProDeckDecks.SITE, it)}") }
             ?: return MetaAnswer("YGOPRODeck lists no results for “$name”.", "No results for “$name”")
         val results = career.results.filter { r -> archetype == null || r.archetypes.any { PlayerPages.names(archetype, it) } }
-        val text = buildString {
+        // The player's name, events and decks are what people typed into the site: outside text.
+        val record = buildString {
             append("${career.name}${career.country?.let { " ($it)" }.orEmpty()} on YGOPRODeck")
             if (career.tally.isNotEmpty()) append(" — ").append(career.tally.joinToString("; "))
             appendLine(". ${results.size} results${archetype?.let { " with $it" }.orEmpty()}, newest first:")
@@ -174,8 +182,9 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
                 append(r.date).append(" | ").append(r.placement).append(" | ").append(r.event).append(" | ").append(r.archetypes.joinToString(" / ").ifEmpty { "?" })
                 appendLine(if (r.deckNumber != null) " | list #${r.deckNumber}" else " | no list published")
             }
-            append("Read a list with ygopro_deck and its number. Source: ${PlayerPages.absolute(path)}")
         }
+        val text = Untrusted.wrap(PlayerPages.absolute(path), record) +
+            "\nRead a list with ygopro_deck and its number. Source: ${PlayerPages.absolute(path)}"
         return MetaAnswer(text, "Read ${career.name}'s ${results.size} results")
     }
 
@@ -185,17 +194,20 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val name = ToolArgs.string(i, "name") ?: "${d.name} (${d.placement}, ${d.event})"
         val webId = ToolArgs.string(i, "web_id")
         val notes = "From YGOPRODeck: ${d.url} — ${d.placement} of ${d.players ?: "?"} at ${d.event}${d.date?.let { " ($it)" }.orEmpty()}, piloted by ${d.pilot ?: "?"}."
+        // The deck's name, event and pilot are what people typed into the site: in the answer they are
+        // outside text; the notes kept with the deck stay as they were, plain.
+        val from = "$SOURCE deck #${d.number}"
         if (webId != null) {
             val web = h.webs.library.byId(webId) ?: return fail("No web $webId.")
             val id = suspendCancellableCoroutine<String> { cont -> h.webs.add(webId, name, YdkDocument(d.deck)) { if (cont.isActive) cont.resume(it) } }
             ToolArgs.int(i, "share")?.let { h.webs.share(webId, id, it) }
             h.decksReload++
-            return MetaAnswer("Added “$name” to “${web.name}” as deck $id. $notes", "Imported #${d.number} into “${web.name}”")
+            return MetaAnswer("Added it to “${web.name}” as deck $id:\n" + Untrusted.wrap(from, "“$name”\n$notes"), "Imported #${d.number} into “${web.name}”")
         }
         val id = h.deps.newDeckId()
         h.deps.deckRepository.save(id, name, d.deck, null, notes)
         h.decksReload++
-        return MetaAnswer("Saved “$name” to the library as deck $id. $notes", "Imported #${d.number} to the library")
+        return MetaAnswer("Saved it to the library as deck $id:\n" + Untrusted.wrap(from, "“$name”\n$notes"), "Imported #${d.number} to the library")
     }
 
     private suspend fun field(i: JsonObject): MetaAnswer {
@@ -210,15 +222,19 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             else MetaAnswer("No ${format.name} results at tier $tier+ in the last $days days.", "No results to build a field from")
         }
         val clusters = FieldBuilder.build(decks, top)
-        val text = buildString {
-            appendLine("What topped in ${format.name} from ${decks.size} tournament decks (tier $tier+, last $days days, YGOPRODeck), by strategy; share is of top cuts, weighted by placement and event size.")
-            appendLine(FieldBuilder.SHARE_CAVEAT)
+        // The strategies are named from the lists' own names, and the events are the site's: outside text.
+        val strategies = buildString {
             clusters.forEachIndexed { n, c ->
-                appendLine()
+                if (n > 0) appendLine()
                 appendLine("${n + 1}. ${c.name} — ${c.share}% (${c.decks.size} lists). Representative: #${c.representative.number} (${c.representative.name}, ${c.representative.placement} at ${c.representative.event}).")
                 appendLine("   Best: " + c.best.joinToString("; ") { "${it.placement} of ${it.players ?: "?"} at ${it.event}" })
                 if (c.core.isNotEmpty()) appendLine("   Core: " + c.core.take(10).joinToString { index.byId(it)?.name ?: it.value.toString() })
             }
+        }
+        val text = buildString {
+            appendLine("What topped in ${format.name} from ${decks.size} tournament decks (tier $tier+, last $days days, YGOPRODeck), by strategy; share is of top cuts, weighted by placement and event size.")
+            appendLine(FieldBuilder.SHARE_CAVEAT)
+            appendLine(Untrusted.wrap("$SOURCE field", strategies))
             val covered = clusters.sumOf { it.share }
             appendLine()
             append("These ${clusters.size} strategies are $covered% of the weighted top cuts.")
@@ -226,5 +242,10 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             append(cutShort(unread, "a shorter days window reads all of it"))
         }
         return MetaAnswer(text, "Read what topped in ${format.name}: ${clusters.take(3).joinToString { "${it.name} ${it.share}%" }} of top cuts")
+    }
+
+    private companion object {
+        /** Where the lists come from, for the envelope round what people typed into the site. */
+        const val SOURCE = "YGOPRODeck"
     }
 }

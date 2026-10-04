@@ -20,7 +20,9 @@ import kotlinx.serialization.json.longOrNull
  * (`codex exec`). Each runs its own agent loop and reaches the app's tools through
  * the app's MCP server, named [MCP_NAME]; the app reads the CLI's event stream
  * line by line. Their shell and file tools are never offered — only the app's own
- * tools and web search — because Ai's job is the app, not the computer.
+ * tools and web search — because Ai's job is the app, not the computer. And their
+ * web tools only when the app offered the turn its own ([CliWeb]): a conversation
+ * that bars the web (From first principles) bars the CLI's too.
  *
  * The flags are the ones the CLIs print in `--help` (claude 2.1, codex 0.159);
  * the wizard shows the version it found so a mismatch is easy to see.
@@ -30,6 +32,21 @@ object CliNames {
 
     /** The prefix a CLI puts before the app's tools. */
     const val CLAUDE_PREFIX = "mcp__${MCP_NAME}__"
+}
+
+/**
+ * Which of a CLI's own web tools a turn may use: those whose twins the app offered it,
+ * `web_search` and `web_fetch`. The CLIs search and read the web themselves, past the app's
+ * tools, so without this a mode that closes the web (From first principles) or a helper kept
+ * to cards and numbers (the fact-check) would have it open anyway. None unless offered.
+ */
+data class CliWeb(val search: Boolean = false, val fetch: Boolean = false) {
+    companion object {
+        val NONE = CliWeb()
+
+        /** From the names of the tools the turn offers. */
+        fun offered(tools: Collection<String>) = CliWeb(search = "web_search" in tools, fetch = "web_fetch" in tools)
+    }
 }
 
 /** One launch of a CLI: the program's arguments, what to write to its stdin, and its environment. */
@@ -54,6 +71,7 @@ object ClaudeCli {
         effort: String,
         resume: String?,
         images: List<Part.Image> = emptyList(),
+        web: CliWeb = CliWeb.NONE,
     ): CliLaunch = CliLaunch(
         args = buildList {
             add(program)
@@ -64,9 +82,15 @@ object ClaudeCli {
             if (images.any { it.data != null }) addAll(listOf("--input-format", "stream-json"))
             addAll(listOf("--system-prompt-file", systemFile))
             addAll(listOf("--mcp-config", mcpFile, "--strict-mcp-config"))
-            // Only web search and fetch of Claude Code's own tools; the app's through MCP.
-            addAll(listOf("--tools", "WebSearch,WebFetch"))
-            addAll(listOf("--allowedTools", "mcp__${CliNames.MCP_NAME},WebSearch,WebFetch"))
+            // Of Claude Code's own tools at most web search and fetch, and only those the turn was
+            // offered; the app's through MCP. An empty --tools turns every built-in tool off — written
+            // `--tools=`, since an empty argument goes to the program as `""` and Windows' .cmd shims
+            // mangle quotes — and the barred ones are disallowed by name too, so they are not even described.
+            val own = listOfNotNull("WebSearch".takeIf { web.search }, "WebFetch".takeIf { web.fetch })
+            if (own.isEmpty()) add("--tools=") else addAll(listOf("--tools", own.joinToString(",")))
+            addAll(listOf("--allowedTools", (listOf("mcp__${CliNames.MCP_NAME}") + own).joinToString(",")))
+            val barred = listOf("WebSearch", "WebFetch") - own.toSet()
+            if (barred.isNotEmpty()) addAll(listOf("--disallowedTools", barred.joinToString(",")))
             // Nobody is at the terminal to answer a prompt: anything not allowed is refused.
             addAll(listOf("--permission-prompts", "none"))
             if (model.isNotBlank()) addAll(listOf("--model", model))
@@ -243,7 +267,8 @@ object CodexCli {
     /**
      * `codex exec --json`, the prompt on stdin (`-`), in a read-only sandbox in the
      * app's own folder, never asking for approval (no one is there to give it), with
-     * the app's MCP server and live web search. The token is read from [TOKEN_ENV].
+     * the app's MCP server, and live web search when the turn was offered `web_search`
+     * ([CliWeb]). The token is read from [TOKEN_ENV].
      */
     fun launch(
         program: String,
@@ -256,13 +281,15 @@ object CodexCli {
         resume: String?,
         /** Pictures the message carries (1.0.55), as files Codex reads itself. */
         imageFiles: List<String> = emptyList(),
+        web: CliWeb = CliWeb.NONE,
     ): CliLaunch {
         // Values without quotes: Codex reads a value that is not TOML as a plain string, and
         // a quote is the one thing Windows' .cmd shims mangle on the way to the program.
         val config = listOf(
             "approval_policy=never",
-            // `codex exec` has no --search; the setting is how live web search is turned on there.
-            "web_search=live",
+            // `codex exec` has no --search; the setting is how live web search is turned on there,
+            // and off. Its search reads pages as well, so it follows the app's web_search.
+            "web_search=" + if (web.search) "live" else "disabled",
             "mcp_servers.${CliNames.MCP_NAME}.url=$mcpUrl",
             "mcp_servers.${CliNames.MCP_NAME}.bearer_token_env_var=$TOKEN_ENV",
             "mcp_servers.${CliNames.MCP_NAME}.tool_timeout_sec=1800",

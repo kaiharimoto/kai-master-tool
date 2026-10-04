@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.ai
 
 import com.kaiharimoto.mastertool.core.ai.cli.ClaudeCli
 import com.kaiharimoto.mastertool.core.ai.cli.ClaudeStream
+import com.kaiharimoto.mastertool.core.ai.cli.CliWeb
 import com.kaiharimoto.mastertool.core.ai.cli.CodexCli
 import com.kaiharimoto.mastertool.core.ai.cli.CodexStream
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiChatBackend
@@ -166,13 +167,49 @@ class WireTest {
 
     @Test
     fun claudeLaunchesWithTheAppsToolsOnly() {
-        val l = ClaudeCli.launch("claude", "hi", "/tmp/s.md", "/tmp/m.json", model = "opus", effort = "high", resume = "s1")
+        val l = ClaudeCli.launch("claude", "hi", "/tmp/s.md", "/tmp/m.json", model = "opus", effort = "high", resume = "s1", web = CliWeb(search = true, fetch = true))
         val a = l.args
         assertEquals("hi", l.stdin)
         assertTrue(a.containsAll(listOf("-p", "--strict-mcp-config", "--permission-prompts", "none")))
         assertEquals("WebSearch,WebFetch", a[a.indexOf("--tools") + 1])
+        assertEquals("mcp__neue,WebSearch,WebFetch", a[a.indexOf("--allowedTools") + 1])
+        assertTrue("--disallowedTools" !in a)
         assertEquals("s1", a[a.indexOf("--resume") + 1])
         assertTrue("Bearer tok" in ClaudeCli.mcpConfig("http://127.0.0.1:5/mcp", "tok"))
+    }
+
+    @Test
+    fun theClisWebFollowsTheAppsOwn() {
+        // A turn offered the web: the CLI's own web tools with it.
+        val all = AiTools.all.map { it.name }
+        assertEquals(CliWeb(search = true, fetch = true), CliWeb.offered(all))
+        // From first principles bars the web: the CLI's goes with it.
+        val principles = CliWeb.offered(all.filter { it !in AiTools.FIRST_PRINCIPLES_BARRED })
+        assertEquals(CliWeb.NONE, principles)
+        assertEquals(CliWeb(search = true), CliWeb.offered(listOf("web_search", "card_info")))
+
+        val closed = ClaudeCli.launch("claude", "hi", "/s", "/m", "", "", null, web = principles).args
+        assertTrue("--tools=" in closed, "every built-in tool off, in one argument with no quotes: $closed")
+        assertTrue("--tools" !in closed)
+        assertTrue(closed.none { it.isEmpty() }, "no empty argument for a .cmd shim to mangle")
+        assertEquals("mcp__neue", closed[closed.indexOf("--allowedTools") + 1])
+        assertEquals("WebSearch,WebFetch", closed[closed.indexOf("--disallowedTools") + 1])
+        assertTrue(closed.none { "WebSearch" in it && it != "WebSearch,WebFetch" })
+
+        // Nothing said, nothing open: the default is closed.
+        assertEquals(closed, ClaudeCli.launch("claude", "hi", "/s", "/m", "", "", null).args)
+
+        val searchOnly = ClaudeCli.launch("claude", "hi", "/s", "/m", "", "", null, web = CliWeb(search = true)).args
+        assertEquals("WebSearch", searchOnly[searchOnly.indexOf("--tools") + 1])
+        assertEquals("mcp__neue,WebSearch", searchOnly[searchOnly.indexOf("--allowedTools") + 1])
+        assertEquals("WebFetch", searchOnly[searchOnly.indexOf("--disallowedTools") + 1])
+
+        val codexOpen = CodexCli.launch("codex", "hi", "/w", "u", "t", "", "", null, web = CliWeb(search = true, fetch = true)).args
+        assertTrue("web_search=live" in codexOpen, codexOpen.toString())
+        val codexClosed = CodexCli.launch("codex", "hi", "/w", "u", "t", "", "", null, web = principles).args
+        assertTrue("web_search=disabled" in codexClosed, codexClosed.toString())
+        assertTrue(codexClosed.none { it == "web_search=live" })
+        assertEquals(codexClosed, CodexCli.launch("codex", "hi", "/w", "u", "t", "", "", null).args)
     }
 
     @Test
