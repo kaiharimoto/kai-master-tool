@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryDoc
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
@@ -13,6 +14,7 @@ import com.kaiharimoto.mastertool.core.ai.skills.Skill
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Ai's folder, `<data>/ai`: the memory files, the skills it wrote, the saved
@@ -92,6 +94,7 @@ class AiFiles(val root: File) {
     fun forgetEverything() {
         listOf(Persona.FILE, MemoryKind.USER.file, MemoryKind.AGENT.file).forEach(::delete)
         listOf("decks", "guides", "reports", "webs", "skills", "sessions", "images", "run", "cache").forEach { file(it).deleteRecursively() }
+        listed.clear()
     }
 
     // ---- skills -------------------------------------------------------------
@@ -108,13 +111,20 @@ class AiFiles(val root: File) {
 
     // ---- conversations -------------------------------------------------------
 
-    fun saveSession(session: AiSession) = write("sessions/${AiMemory.safeId(session.id)}.json", json.encodeToString(AiSession.serializer(), session))
+    fun saveSession(session: AiSession) {
+        val path = "sessions/${AiMemory.safeId(session.id)}.json"
+        write(path, json.encodeToString(AiSession.serializer(), session))
+        // The list's line for it, from the conversation in hand rather than read back.
+        val f = file(path)
+        listed[f.name] = Listed(f.lastModified(), f.length(), SessionSummary.of(session))
+    }
 
     fun loadSession(id: String): AiSession? =
         read("sessions/${AiMemory.safeId(id)}.json")?.let { runCatching { json.decodeFromString(AiSession.serializer(), it) }.getOrNull() }
 
     fun deleteSession(id: String) {
         delete("sessions/${AiMemory.safeId(id)}.json")
+        listed.remove("${AiMemory.safeId(id)}.json")
         file("images/${AiMemory.safeId(id)}").deleteRecursively()
     }
 
@@ -164,9 +174,46 @@ class AiFiles(val root: File) {
     /** A picture's bytes, for drawing it in the chat. */
     fun imageBytes(path: String): ByteArray? = file(path).takeIf { it.isFile }?.readBytes()
 
+    /**
+     * The saved conversations as the history lists them, newest first (1.0.92): each file read once and
+     * remembered by its size and time, so opening the list reads only what changed since — the whole of
+     * every conversation was decoded on the main thread each time. [warm] reads them ahead, off it.
+     */
+    fun summaries(): List<SessionSummary> = file("sessions").listFiles { f -> f.extension == "json" }
+        ?.mapNotNull { f -> summary(f) }
+        ?.sortedByDescending { it.updatedAt }
+        .orEmpty()
+
+    private fun summary(f: File): SessionSummary? {
+        val modified = f.lastModified()
+        val length = f.length()
+        val known = listed[f.name]
+        if (known != null && known.modified == modified && known.length == length) return known.summary
+        val summary = runCatching { SessionSummary.of(json.decodeFromString(AiSession.serializer(), f.readText())) }.getOrNull()
+        listed[f.name] = Listed(modified, length, summary)
+        return summary
+    }
+
+    /** Reads the list ahead (off the main thread), so it opens at once. */
+    fun warm() {
+        summaries()
+    }
+
+    private class Listed(val modified: Long, val length: Long, val summary: SessionSummary?)
+
+    /** By file name; null for a file that did not read. Written from the save thread and read from the main one. */
+    private val listed = ConcurrentHashMap<String, Listed>()
+
     /** The saved conversations, newest first: id, title, when. Read lazily, turns and all, only when opened. */
     fun sessions(): List<AiSession> = file("sessions").listFiles { f -> f.extension == "json" }
         ?.mapNotNull { f -> runCatching { json.decodeFromString(AiSession.serializer(), f.readText()) }.getOrNull() }
         ?.sortedByDescending { it.updatedAt }
         .orEmpty()
+}
+
+/** One saved conversation as the history shows it: what its line needs, not its turns. */
+class SessionSummary(val id: String, val title: String, val updatedAt: Long, val mode: String, val messages: Int) {
+    companion object {
+        fun of(s: AiSession) = SessionSummary(s.id, s.title, s.updatedAt, s.mode, s.turns.count { it.role == Role.USER && !it.isToolResults })
+    }
 }

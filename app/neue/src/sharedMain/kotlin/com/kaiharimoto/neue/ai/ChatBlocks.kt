@@ -84,8 +84,15 @@ internal fun TableBlock(block: Block.Table, styled: @Composable (List<Inline>) -
     val density = androidx.compose.ui.platform.LocalDensity.current
     // One cell's padding each side; a little over for card names set in medium weight.
     val pad = with(density) { 16.dp.toPx() }
+    // Each cell and word measured once (1.0.92): a table streaming in was measured whole at every
+    // word, far more texts than the measurer's own small cache keeps.
+    val measured = remember(measurer, headStyle, bodyStyle) { HashMap<Pair<Boolean, String>, Float>() }
     val (natural, minimum) = remember(plain, f) {
-        fun width(t: String, style: TextStyle) = if (t.isBlank()) 0f else measurer.measure(t, style, maxLines = 1, softWrap = false).size.width * 1.04f
+        fun width(t: String, style: TextStyle) = if (t.isBlank()) {
+            0f
+        } else {
+            measured.getOrPut((style === headStyle) to t) { measurer.measure(t, style, maxLines = 1, softWrap = false).size.width * 1.04f }
+        }
         val nat = (0 until columns).map { col -> plain.withIndex().maxOf { (r, row) -> width(row.getOrNull(col).orEmpty(), if (r == 0) headStyle else bodyStyle) } + pad }
         val min = (0 until columns).map { col ->
             plain.withIndex().maxOf { (r, row) -> row.getOrNull(col).orEmpty().split(' ').maxOfOrNull { w -> width(w, if (r == 0) headStyle else bodyStyle) } ?: 0f } + pad

@@ -98,7 +98,14 @@ object ChatMarkdown {
      * held back rather than drawn raw (1.0.46) — an unclosed `**`, `` ` `` or `[[`, a table
      * whose rule line has not come yet, a chart whose fence is still open.
      */
-    fun parse(text: String, streaming: Boolean = false): List<Block> {
+    fun parse(text: String, streaming: Boolean = false): List<Block> = blocks(text, streaming, null)
+
+    /**
+     * [parse], noting in [marks] each line where a block may begin afresh — the line after a blank
+     * one, nothing half-read before it — as (line, blocks so far). What follows such a line parses
+     * the same alone, which is what lets [MarkdownMemo] keep the blocks before it while a reply streams.
+     */
+    internal fun blocks(text: String, streaming: Boolean, marks: MutableList<IntArray>?): List<Block> {
         val blocks = mutableListOf<Block>()
         val lines = (if (streaming) settled(text) else text).replace("\r\n", "\n").lines()
         var i = 0
@@ -110,6 +117,7 @@ object ChatMarkdown {
             }
         }
         while (i < lines.size) {
+            if (marks != null && i > 0 && paragraph.isEmpty() && lines[i - 1].isBlank()) marks += intArrayOf(i, blocks.size)
             val line = lines[i]
             val t = line.trim()
             when {
@@ -134,7 +142,7 @@ object ChatMarkdown {
                     }
                 }
                 t.isEmpty() -> flush()
-                t.matches(Regex("#{1,6} .*")) -> {
+                t.matches(HEADING) -> {
                     flush()
                     val level = t.takeWhile { it == '#' }.length
                     blocks += Block.Heading(level, inline(t.drop(level).trim()))
@@ -213,9 +221,15 @@ object ChatMarkdown {
     )
     private val DRAWN = PENDING.keys
 
+    // Compiled once: parse runs on every frame of a streaming reply.
+    private val HEADING = Regex("#{1,6} .*")
+    private val RULE = Regex("^\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?$")
+    private val BOLD = Regex("\\*\\*")
+    private val NUMBERED = Regex("^(\\d{1,3})[.)] (.*)")
+
     /** `| --- | :---: | ---: |`, with or without the outer pipes. */
     private fun isRule(t: String): Boolean =
-        '-' in t && t.matches(Regex("^\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?$"))
+        '-' in t && t.matches(RULE)
 
     private fun cells(row: String): List<List<Inline>> = split(row).map { inline(it.trim()) }
 
@@ -411,7 +425,7 @@ object ChatMarkdown {
             if (at >= 0 && last.indexOf(close, at + open.length) < 0) last = last.substring(0, at)
         }
         cut("[[", "]]")
-        if (Regex("\\*\\*").findAll(last).count() % 2 == 1) last = last.substring(0, last.lastIndexOf("**"))
+        if (BOLD.findAll(last).count() % 2 == 1) last = last.substring(0, last.lastIndexOf("**"))
         if (last.count { it == '`' } % 2 == 1) last = last.substring(0, last.lastIndexOf('`'))
         lines += last
         return lines.joinToString("\n")
@@ -421,7 +435,7 @@ object ChatMarkdown {
         if ((t.startsWith("- ") || t.startsWith("* ") || t.startsWith("• ")) && t.length > 2) t.drop(2).trim() else null
 
     private fun numbered(t: String): Pair<Int, String>? {
-        val m = Regex("^(\\d{1,3})[.)] (.*)").find(t) ?: return null
+        val m = NUMBERED.find(t) ?: return null
         return m.groupValues[1].toInt() to m.groupValues[2]
     }
 
@@ -437,15 +451,16 @@ object ChatMarkdown {
             out += i
         }
         var i = 0
+        // Read in place: a copy of the rest at every character made long paragraphs quadratic.
         while (i < text.length) {
-            val rest = text.substring(i)
+            val c = text[i]
             val mark = when {
-                rest.startsWith("[[") -> close(text, i + 2, "]]")?.let { end -> Inline.Card(text.substring(i + 2, end).trim()) to end + 2 }
-                rest.startsWith("**") -> close(text, i + 2, "**")?.let { end -> Inline.Bold(text.substring(i + 2, end)) to end + 2 }
-                rest.startsWith("`") -> close(text, i + 1, "`")?.let { end -> Inline.Code(text.substring(i + 1, end)) to end + 1 }
-                (rest.startsWith("*") || rest.startsWith("_")) && rest.length > 1 && !rest[1].isWhitespace() &&
+                text.startsWith("[[", i) -> close(text, i + 2, "]]")?.let { end -> Inline.Card(text.substring(i + 2, end).trim()) to end + 2 }
+                text.startsWith("**", i) -> close(text, i + 2, "**")?.let { end -> Inline.Bold(text.substring(i + 2, end)) to end + 2 }
+                c == '`' -> close(text, i + 1, "`")?.let { end -> Inline.Code(text.substring(i + 1, end)) to end + 1 }
+                (c == '*' || c == '_') && text.length - i > 1 && !text[i + 1].isWhitespace() &&
                     (i == 0 || !text[i - 1].isLetterOrDigit()) ->
-                    close(text, i + 1, rest.substring(0, 1))?.takeIf { end -> end > i + 1 && !text[end - 1].isWhitespace() }
+                    close(text, i + 1, c.toString())?.takeIf { end -> end > i + 1 && !text[end - 1].isWhitespace() }
                         ?.let { end -> Inline.Italic(text.substring(i + 1, end)) to end + 1 }
                 else -> null
             }

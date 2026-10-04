@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.ai
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.ai.AgentEvent
@@ -8,6 +9,7 @@ import com.kaiharimoto.mastertool.core.ai.AgentLoop
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.LatestWrites
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
@@ -94,9 +96,36 @@ class AiState(internal val h: NeueHolders) {
     var session by mutableStateOf<AiSession?>(null)
         internal set
 
-    /** The answer being written, word by word. */
-    var streaming by mutableStateOf("")
-        private set
+    /**
+     * The answer being written, word by word. Its words gather in [written] and the screen is told by
+     * a number (1.0.92): the old `streaming += delta` copied the whole answer at every word; now it is
+     * copied once per read that finds it changed — once a frame — and reads the same at every moment.
+     */
+    val streaming: String
+        get() {
+            val v = writtenVersion
+            if (v != shownVersion) {
+                shown = written.toString()
+                shownVersion = v
+            }
+            return shown
+        }
+    private val written = StringBuilder()
+    private var writtenVersion by mutableIntStateOf(0)
+    private var shown = ""
+    private var shownVersion = 0
+
+    private fun appendWritten(delta: String) {
+        if (delta.isEmpty()) return
+        written.append(delta)
+        writtenVersion++
+    }
+
+    private fun clearWritten() {
+        if (written.isEmpty()) return
+        written.setLength(0)
+        writtenVersion++
+    }
 
     /** A tool running now, in words. */
     var working by mutableStateOf<String?>(null)
@@ -236,7 +265,7 @@ class AiState(internal val h: NeueHolders) {
         face = mood.at(
             AiSignals(
                 running = running,
-                streaming = streaming.isNotEmpty(),
+                streaming = written.isNotEmpty(),
                 tool = tool,
                 waiting = confirm != null || question != null,
                 problem = problem?.first,
@@ -421,7 +450,7 @@ class AiState(internal val h: NeueHolders) {
         status = null
         notice = null
         val current = (if (fresh) null else session?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL && (sessionId == null || it.id == sessionId) })
-            ?: sessionId?.takeUnless { fresh }?.let { id -> files.loadSession(id)?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL } }?.also { session = it }
+            ?: sessionId?.takeUnless { fresh }?.let { id -> stored(id)?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL } }?.also { session = it }
             ?: begin(connection, AiSession.MODE_DUEL)
         val block = PromptBuilder.context(context + host.situation(), null, null, false)
         val turn = ChatTurn.user(text, block, System.currentTimeMillis())
@@ -439,7 +468,7 @@ class AiState(internal val h: NeueHolders) {
             return false
         }
         running = true
-        streaming = ""
+        clearWritten()
         reasoning = ""
         activity = emptyList()
         val provider = Providers.byId(connection.provider)
@@ -475,7 +504,7 @@ class AiState(internal val h: NeueHolders) {
                 val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
                 AgentLoop(model, { call -> host.run(call) }, maxSteps = steps, now = System::currentTimeMillis, budget = budget).run(request).collect { event ->
                     when (event) {
-                        is AgentEvent.Text -> streaming += event.delta
+                        is AgentEvent.Text -> appendWritten(event.delta)
                         is AgentEvent.Reasoning -> reasoning += event.delta
                         is AgentEvent.Status -> status = event.text
                         is AgentEvent.Notice -> notice = event.text
@@ -494,7 +523,7 @@ class AiState(internal val h: NeueHolders) {
                                 event.turn
                             }
                             if (turn.role == Role.ASSISTANT) {
-                                streaming = ""
+                                clearWritten()
                                 reasoning = ""
                             }
                             activity = emptyList()
@@ -533,7 +562,7 @@ class AiState(internal val h: NeueHolders) {
             }
             if (turns != s.turns) commit(s.copy(turns = turns))
         }
-        streaming = ""
+        clearWritten()
         reasoning = ""
         activity = emptyList()
         working = null
@@ -684,7 +713,7 @@ class AiState(internal val h: NeueHolders) {
     fun open(id: String) {
         if (running) return
         session?.takeIf { it.id != id }?.let(::reflect)
-        files.loadSession(id)?.let {
+        stored(id)?.let {
             session = it
             problem = null
         }
@@ -692,7 +721,10 @@ class AiState(internal val h: NeueHolders) {
     }
 
     fun delete(id: String) {
+        saves.drop(id)
         files.deleteSession(id)
+        // A save already on its way would bring the file back: the deletion goes in after it.
+        if (saves.has(id)) saves.put(id, null)
         if (session?.id == id) session = null
     }
 
@@ -739,9 +771,23 @@ class AiState(internal val h: NeueHolders) {
 
     internal fun commit(next: AiSession) {
         session = next
-        val snapshot = next
-        scope.launch(Dispatchers.IO) { runCatching { files.saveSession(snapshot) } }
+        save(next)
     }
+
+    /**
+     * Conversations saved one at a time, each one's newest last (1.0.92): saves launched side by side
+     * could land out of order, an older turn written over a newer one. A null is a deletion, in turn.
+     */
+    private val saves = LatestWrites<String, AiSession?>(scope, Dispatchers.IO) { id, s -> if (s == null) files.deleteSession(id) else files.saveSession(s) }
+
+    /** Saves [s] behind whatever is being saved now. */
+    internal fun save(s: AiSession) = saves.put(s.id, s)
+
+    /** A saved conversation, the newest copy: one still on its way to the disk before the file. */
+    internal fun stored(id: String): AiSession? = if (saves.has(id)) saves.pending(id) else files.loadSession(id)
+
+    /** Nothing waiting to be saved is saved after all (everything is being forgotten). */
+    internal fun forgetSaves() = saves.dropAll()
 
     // ---- waiting on the person -------------------------------------------------
 
