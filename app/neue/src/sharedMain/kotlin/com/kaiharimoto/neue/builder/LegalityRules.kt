@@ -77,7 +77,7 @@ internal fun RulesPicker(state: DeckBuilderState, neue: NeueState) {
             }
         }
         var day by remember { mutableStateOf(p.legalAsOf) }
-        FieldLabel("On", hint = if (day.isBlank()) "today" else if (Legality.isDate(day)) Legality.readable(day) else "yyyy-mm-dd")
+        FieldLabel("On", Modifier.padding(top = if (p.genesys) 8.dp else 0.dp), hint = if (day.isBlank()) "today" else if (Legality.isDate(day)) Legality.readable(day) else "yyyy-mm-dd")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MuInput(day, { v ->
                 day = v.trim().take(10)
