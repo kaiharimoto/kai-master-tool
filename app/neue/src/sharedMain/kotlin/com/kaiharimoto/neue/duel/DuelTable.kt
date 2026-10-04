@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -684,8 +685,13 @@ private fun CarriedCard(
     stats: TableStats?,
 ) {
     val cr = follow?.value
-    val frame = if (cr != null && cr.uid == base.uid) carriedFrame(base, cr, stripLeft = false, layout) else base
-    TableCard(frame = frame, caption = caption, inst = inst, card = card, name = name, selected = selected, carried = carried, foil = foil, stats = stats)
+    val held = cr != null && cr.uid == base.uid
+    val frame = if (held) carriedFrame(base, cr, stripLeft = false, layout) else base
+    // Over a Deck's top / shuffle / bottom, the card gets out of the way of the choice (1.0.93).
+    val overDeck = if (held && !cr.intent.none && (cr.spot as? DropSpot.Pile)?.part != null) {
+        TransformOrigin((cr.grabX / layout.card).coerceIn(0f, 1f), (cr.grabY / layout.cardHeight).coerceIn(0f, 1f))
+    } else null
+    TableCard(frame = frame, caption = caption, inst = inst, card = card, name = name, selected = selected, carried = carried, foil = foil, stats = stats, overDeck = overDeck)
 }
 
 /**

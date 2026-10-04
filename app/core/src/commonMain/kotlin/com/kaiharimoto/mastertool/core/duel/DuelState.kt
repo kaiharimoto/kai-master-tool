@@ -198,6 +198,13 @@ data class CardInst(
     /** A token's ATK and DEF, when its maker gave them (1.0.79). */
     val atk: Int? = null,
     val def: Int? = null,
+    /**
+     * Dealt into the Extra Deck (1.0.93): the only cards that go back there face-down. A Main Deck card goes to the Extra
+     * Deck only face-up — a Pendulum Monster (kai: "I am able to put maindeck monsters in the extra deck, which should never
+     * happen unless a pendulum monster is in the extra deck face up"). Set by the deal, which every table is folded from,
+     * so a duel saved before it reads right too.
+     */
+    val extraDeck: Boolean = false,
 ) {
     val faceUp: Boolean get() = pos.faceUp
     val defense: Boolean get() = pos == CardPosition.FACE_UP_DEF || pos == CardPosition.FACE_DOWN_DEF

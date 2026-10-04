@@ -22,10 +22,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
@@ -45,7 +45,6 @@ import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
-import com.kaiharimoto.neue.kit.drawHatch
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuMotion
 
@@ -67,8 +66,15 @@ internal fun TableCard(
     foil: String,
     /** The card's ATK/DEF, shown on a monster face-up on the field. */
     stats: TableStats?,
+    /**
+     * Carried over a Deck's three places (kai, 1.0.93: "have the card itself shrink in size and become semi transparent to
+     * see the button choice better"): the card draws small and see-through, shrinking toward this point — where it is held.
+     */
+    overDeck: TransformOrigin? = null,
 ) {
     val density = LocalDensity.current
+    val small by animateFloatAsState(if (overDeck != null) 1f else 0f, tween(MuMotion.FAST, easing = MuMotion.ease), label = "deck")
+    val pivot = overDeck ?: TransformOrigin.Center
     val spec = if (carried) snap<Float>() else tween(MuMotion.BASE, easing = MuMotion.ease)
     val x by animateFloatAsState(frame.x, spec, label = "x")
     val y by animateFloatAsState(frame.y, spec, label = "y")
@@ -83,7 +89,16 @@ internal fun TableCard(
             .zIndex(if (carried) 100f else frame.z)
             .offset { with(density) { IntOffset(x.dp.roundToPx(), y.dp.roundToPx()) } }
             .cardSize { width.value }
-            .graphicsLayer { rotationZ = rot }
+            .graphicsLayer {
+                rotationZ = rot
+                if (small > 0f) {
+                    transformOrigin = pivot
+                    val scale = 1f - (1f - OVER_DECK_SCALE) * small
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = 1f - (1f - OVER_DECK_ALPHA) * small
+                }
+            }
             .then(if (frame.shown && caption != null) Modifier.cursorPointer(caption = caption, emphasis = true, holdOnPress = true) else Modifier),
     ) {
         if (frame.shown || carried) {
@@ -91,7 +106,7 @@ internal fun TableCard(
                 CardLook.BACK -> CardBack(Modifier.fillMaxSize())
                 CardLook.FACE, CardLook.SET -> {
                     if (card != null) {
-                        NeueCard(card, Modifier.fillMaxSize(), selected = selected, dimmed = frame.look == CardLook.SET, foil = if (frame.look == CardLook.SET) "off" else foil)
+                        NeueCard(card, Modifier.fillMaxSize(), selected = selected, foil = if (frame.look == CardLook.SET) "off" else foil)
                     } else {
                         TokenFace(name, Modifier.fillMaxSize())
                     }
@@ -112,6 +127,13 @@ internal fun TableCard(
         }
     }
 }
+
+/** A card carried over a Deck draws at this share of its size and this opacity, so the Deck's choices show (1.0.93). */
+private const val OVER_DECK_SCALE = 0.45f
+private const val OVER_DECK_ALPHA = 0.45f
+
+/** How much of the card back lies over a set card's face: enough to read as face-down, little enough to read the card. */
+private const val SET_BACK_ALPHA = 0.5f
 
 /** A card's printed frame, as a share of its width: the plate stays inside it. */
 private const val FRAME_INSET = 0.065f
@@ -140,6 +162,10 @@ private fun PlateOn(stats: TableStats, width: State<Float>, rotation: Float, rot
     // across the bottom of the box the card fills as it lies.
     val h = w / CARD_RATIO
     val across = rotation % 180f != 0f
+    // Upside down (turned to face the other seat): the card's foot, where its effect text and printed ATK / DEF are, is at
+    // the top of the box as you see it, so the plate is too (kai, 1.0.93: a card facing the other way "has the statline on
+    // the top of the card by the name instead of by the effect area"). Its numbers still read upright.
+    val turned = ((rotation % 360f) + 360f) % 360f in 135f..225f
     val boxW = if (across) h else w
     // Inside the card's frame on every side, so the border and its foil stay whole round the card
     // (kai, 1.0.87: the plate across the foot "covers the border foiling … the card is being cut off").
@@ -148,7 +174,11 @@ private fun PlateOn(stats: TableStats, width: State<Float>, rotation: Float, rot
         Box(Modifier.requiredSize(boxW.dp, (if (across) w else h).dp)) {
             StatPlate(
                 stats, boxW - frameInset * 2,
-                Modifier.align(Alignment.BottomCenter).padding(start = frameInset.dp, end = frameInset.dp, bottom = (frameInset * 1.15f).dp),
+                if (turned && !across) {
+                    Modifier.align(Alignment.TopCenter).padding(start = frameInset.dp, end = frameInset.dp, top = (frameInset * 1.15f).dp)
+                } else {
+                    Modifier.align(Alignment.BottomCenter).padding(start = frameInset.dp, end = frameInset.dp, bottom = (frameInset * 1.15f).dp)
+                },
             )
         }
     }
@@ -200,7 +230,10 @@ internal fun CardBack(modifier: Modifier) {
 @Composable
 private fun SetMark(modifier: Modifier) {
     val c = Mu.colors
-    Box(modifier.drawBehind { drawHatch(c.paper.copy(alpha = 0.55f), period = 6.dp.toPx(), stroke = 1.dp.toPx()) }, contentAlignment = Alignment.TopStart) {
+    // The card's own back, see-through, over its face (kai, 1.0.93: "instead of white stripes, have it be a transparent
+    // version of the card back"): it reads as face-down at a glance, and its controller still reads the card beneath.
+    Box(modifier, contentAlignment = Alignment.TopStart) {
+        ClassicCardBack(Modifier.fillMaxSize().graphicsLayer { alpha = SET_BACK_ALPHA })
         Box(Modifier.background(c.ink).padding(horizontal = 3.dp, vertical = 1.dp)) {
             Micro("Set", color = c.paper, size = 8.sp)
         }

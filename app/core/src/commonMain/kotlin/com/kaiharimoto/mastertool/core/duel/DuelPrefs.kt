@@ -18,7 +18,7 @@ data class DuelPrefs(
     val opponentDeckId: String? = null,
     /** The names each seat goes by in the log. */
     val names: List<String> = listOf("You", "Opponent"),
-    /** Whether the log and chat stand beside the table. */
+    /** Whether the log and chat and the card inspector stand beside the table — put away together (1.0.93), they are drawers. */
     val logShown: Boolean = true,
     /** Ai at the table (1.0.76): what it may know (`DuelBrief`: self, opponent, full, auto), the seat it plays, its pace. */
     val aiKnowledge: String = "self",
@@ -41,7 +41,11 @@ data class DuelPrefs(
     val logGames: Boolean = true,
     /** Ai's response triggers (1.0.85): its watches wake it on the moves it could answer, and the person's moves wait for it. */
     val aiTriggers: Boolean = true,
-    /** Each turn starts in Main Phase 1 (1.0.86): after End Turn the table draws for the next player and moves on by itself. */
+    /**
+     * The table draws for each turn's player (1.0.86): after End Turn it draws one card for the next player. From 1.0.93 the
+     * draw alone (kai: "let the player manually do that") — the turn waits in the Draw Phase; 1.0.86–1.0.92 also went on
+     * through the Standby Phase to Main Phase 1.
+     */
     val autoDraw: Boolean = true,
     /** Every place's coordinate (`m3`, `os2`, `h4`) written faintly at its corner, as a chessboard's edge (1.0.87, `I`). */
     val coordinates: Boolean = false,

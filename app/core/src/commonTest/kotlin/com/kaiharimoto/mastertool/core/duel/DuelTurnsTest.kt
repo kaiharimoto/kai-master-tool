@@ -122,13 +122,14 @@ class DuelTurnsTest {
     }
 
     @Test
-    fun theNextTurnOpensDrawnInMainPhaseOne() {
+    fun theNextTurnOpensDrawnAndWaitsInTheDrawPhase() {
+        // kai, 1.0.93: the table draws, and the phases are the player's to move through.
         var g = DuelGame.start(header())
         val deck = g.state.seats[1].deck.size
         g = open(g.go(DuelAction.EndTurn))
         assertEquals(2, g.state.turn)
         assertEquals(1, g.state.active)
-        assertEquals(DuelPhase.MAIN1, g.state.phase)
+        assertEquals(DuelPhase.DRAW, g.state.phase)
         assertEquals(6, g.state.seats[1].hand.size)
         assertEquals(deck - 1, g.state.seats[1].deck.size)
         assertNull(TurnStart.next(g), "an opening is made once")
@@ -137,7 +138,7 @@ class DuelTurnsTest {
     @Test
     fun theFirstTurnNeverDraws() {
         val g = open(DuelGame.start(header()))
-        assertEquals(DuelPhase.MAIN1, g.state.phase)
+        assertEquals(DuelPhase.DRAW, g.state.phase)
         assertEquals(5, g.state.seats[0].hand.size)
     }
 
@@ -146,7 +147,7 @@ class DuelTurnsTest {
         var g = DuelGame.start(header()).go(DuelAction.EndTurn)
         g = g.act(DuelAction.Draw(1), 1).game
         assertTrue(TurnStart.drewThisTurn(g))
-        assertEquals(DuelAction.Phase(DuelPhase.STANDBY), TurnStart.next(g))
+        assertNull(TurnStart.next(g), "drawn: nothing more for the table to do")
         g = open(g)
         assertEquals(6, g.state.seats[1].hand.size)
         // The other seat drawing (an effect) is not the turn player's draw.
@@ -163,13 +164,18 @@ class DuelTurnsTest {
         assertNull(TurnStart.next(g.state.copy(proposal = Proposal(0, DuelPhase.STANDBY)), drawn = false))
         assertNull(TurnStart.next(g.state.copy(conceded = 0), drawn = false))
         assertNull(TurnStart.next(g.state.withSeat(1) { it.copy(deck = emptyList()) }, drawn = false))
-        // Past Main 1 it has nothing to do.
+        // Past the draw it has nothing to do: never the Standby Phase, never Main Phase 1 (1.0.93).
         assertNull(TurnStart.next(g.state.copy(phase = DuelPhase.BATTLE), drawn = true))
+        assertNull(TurnStart.next(g.state.copy(phase = DuelPhase.STANDBY), drawn = true))
+        assertNull(TurnStart.next(g.state, drawn = true))
     }
 
     @Test
     fun aTurnRecordedAsAComboStartsAfterItsOpening() {
         var g = open(DuelGame.start(header()).go(DuelAction.EndTurn))
+        // The player moves on through the phases by hand.
+        g = g.act(DuelAction.Phase(DuelPhase.STANDBY), 1).game
+        g = g.act(DuelAction.Phase(DuelPhase.MAIN1), 1).game
         val from = g.played.indexOfLast { it.action == DuelAction.EndTurn } + 1
         val card = g.state.seats[1].hand[0]
         g = g.act(DuelAction.Move(card, Place.Zone(1, ZoneKind.MONSTER, 0)), 1).game
@@ -183,12 +189,12 @@ class DuelTurnsTest {
         val g = open(DuelGame.start(header(solo = true)).go(DuelAction.EndTurn))
         assertEquals(0, g.state.active)
         assertEquals(6, g.state.seats[0].hand.size)
-        assertEquals(DuelPhase.MAIN1, g.state.phase)
+        assertEquals(DuelPhase.DRAW, g.state.phase)
     }
 
     @Test
     fun aiIsToldItsTurnStartsDrawn() {
-        assertTrue("Main Phase 1" in TurnStart.FOR_AI && "never" in TurnStart.FOR_AI)
+        assertTrue("Draw Phase" in TurnStart.FOR_AI && "never `draw`" in TurnStart.FOR_AI && "yourself" in TurnStart.FOR_AI)
         assertTrue(DuelPrefs().autoDraw, "on by default")
         val old = DuelCodecForPrefs.decode("""{"aiSeat":0}""")
         assertTrue(old.autoDraw, "an older document reads with it on")

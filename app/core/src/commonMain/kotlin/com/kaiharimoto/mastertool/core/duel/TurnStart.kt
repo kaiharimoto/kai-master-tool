@@ -3,10 +3,12 @@ package com.kaiharimoto.mastertool.core.duel
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 
 /**
- * Turns that start themselves (1.0.86, `DuelPrefs.autoDraw`): End Turn leaves the next player in the Draw Phase with
- * nothing drawn, so every turn began D, N, N. With it on, the table makes the incoming player's opening itself — the
- * draw (one card, never on the first turn), the Standby Phase, Main Phase 1 — a step at a time, each step a move like
- * any other, so Ai's watches see the draw and each phase entered and left.
+ * Turns that draw for themselves (1.0.86, `DuelPrefs.autoDraw`): End Turn leaves the next player in the Draw Phase with
+ * nothing drawn. With it on, the table makes the incoming player's draw itself (one card, never on the first turn), a
+ * move like any other, so Ai's watches see it. The phases are the player's (kai, 1.0.93: "I don't like that it's
+ * automatically skipping to standby phase and main phase, let the player manually do that"): the turn stays in the Draw
+ * Phase, where the other seat may still answer the draw, until its player moves on (N) — 1.0.86–1.0.92 went on through
+ * the Standby Phase to Main Phase 1 by themselves.
  *
  * [next] is the step to make now, read off the table and the log alone, so a draw already made (by hand, or before a
  * pause for Ai) is never made twice; null when the turn is under way, or cannot go on by itself — a chain or an ask
@@ -16,9 +18,9 @@ object TurnStart {
 
     /** What every cue tells Ai while turns start themselves, so it never draws twice for its own seat. */
     const val FOR_AI: String =
-        "Turns start themselves at this table: after End Turn the table draws for the player whose turn begins (never on turn 1) " +
-            "and moves through the Standby Phase to Main Phase 1. Your turn starts in Main Phase 1 with your draw done — never " +
-            "`draw` or move the phase to start it."
+        "The table draws for each turn's player at this table: after End Turn it draws one card for the player whose turn begins " +
+            "(never on turn 1) and leaves the turn in the Draw Phase. On your turn your draw is done for you — never `draw` for it — " +
+            "and you move on through the Standby Phase to Main Phase 1 yourself, as a player does."
 
     fun next(g: DuelGame): DuelAction? = next(g.state, drewThisTurn(g))
 
@@ -28,12 +30,12 @@ object TurnStart {
         if (s.chain.isNotEmpty() || s.proposal != null || s.window != null) return null
         if (s.conceded != null || s.seats.any { it.lp <= 0 }) return null
         return when (s.phase) {
+            // The draw alone: the phases from here are the player's (1.0.93).
             DuelPhase.DRAW -> when {
-                drawn || s.turn <= 1 -> DuelAction.Phase(DuelPhase.STANDBY)
+                drawn || s.turn <= 1 -> null
                 s.seats[s.active].deck.isEmpty() -> null
                 else -> DuelAction.Draw(s.active, 1)
             }
-            DuelPhase.STANDBY -> DuelAction.Phase(DuelPhase.MAIN1)
             else -> null
         }
     }

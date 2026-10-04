@@ -19,7 +19,7 @@ internal class DuelOpening(private val d: Duels) {
 
     // ---- turns that start themselves (1.0.86) ----------------------------------------------------------
 
-    /** `DuelPrefs.autoDraw`, set by the page: after End Turn the next player's draw, Standby and Main 1 are made here. */
+    /** `DuelPrefs.autoDraw`, set by the page: after End Turn the next player's draw is made here (the phases are theirs, 1.0.93). */
     var autoDraw = true
     /** The turn whose opening is being made; null when none is. */
     var autoTurn by mutableStateOf<Int?>(null)

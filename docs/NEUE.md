@@ -3629,6 +3629,32 @@ spaces; alone: empty) --duel-spot-state=listening|answer|many --duel-heard=summo
 --duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared --duel-focus=m3 --duel-coords=true
 --duel-focus-menu=true --duel-pick=h2`.
 
+**1.0.93, kai's table notes** (seven, from playing it):
+- **The phases are the player's.** "I don't like that it's automatically skipping to standby phase and main phase, let the
+  player manually do that": `TurnStart.next` makes the draw alone (`DuelPrefs.autoDraw`, now "Draw for each turn"); the
+  turn waits in the Draw Phase — where the other seat may still answer the draw — until its player moves on (N). Ai is told
+  so (`TurnStart.FOR_AI`).
+- **The roll first, the hands unseen.** "have both players' hands hidden until a player chooses first or second":
+  `DuelSight.sees` answers no for every hand card while `DuelState.beforeTurnOne`, its owner and the all-seeing eye
+  included, so the table draws backs, the log names nothing, a guest is sent veils and Ai reads nothing. The deal itself
+  is where it was, so every saved duel folds the same.
+- **The Extra Deck takes back its own.** "I am able to put maindeck monsters in the extra deck, which should never happen
+  unless a pendulum monster is in the extra deck face up": `CardInst.extraDeck` is set by the deal (every table is folded
+  from it, so an old saved duel knows too) and travels in a `ViewCard` only for a card the viewer sees; `DuelRules` refuses
+  a Main Deck card going there face-down (`MAIN_TO_EXTRA`), and the drop target and the verb are not there for a Main
+  Deck card that is no Pendulum Monster (`DuelDrop`, `DuelVerbs.offered`). `DuelExtraDeckTest`.
+- **The plate where the card prints it.** A card turned to face the other seat wears its ATK / DEF at its own foot, by the
+  effect text (`PlateOn`: upside down, the plate stands at the top of the box as you see it), its numbers still upright.
+- **Set cards wear their back, see-through** ("instead of white stripes, have it be a transparent version of the card
+  back"): `SetMark` lays `ClassicCardBack` at half opacity over the face; the face is no longer dimmed under it.
+- **A card over the Deck gets out of the way** ("have the card itself shrink in size and become semi transparent to see
+  the button choice better"): carried over a Deck's three places it draws at 45 % of its size and opacity, shrinking toward
+  where it is held (`TableCard.overDeck`).
+- **The log and the card, put away together** ("let me toggle the log and card inspector to show or hide both at the same
+  time"): a button in the duel's bar beside full screen and an entry in the Table menu set `DuelPrefs.logShown` (stored
+  since 1.0.74 and read by nothing until now), which the layout reads as `wantRails`: put away, the table takes their room
+  and both open from the Table menu as drawers.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

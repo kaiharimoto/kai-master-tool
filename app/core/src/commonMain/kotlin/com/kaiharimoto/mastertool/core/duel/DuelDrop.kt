@@ -124,6 +124,8 @@ object DuelDrop {
             is DropSpot.Pile -> {
                 val target = spot.kind
                 if (from is Place.Pile && from.kind == target && target != PileKind.DECK) return NONE
+                // A Main Deck card is no Extra Deck's but as a face-up Pendulum Monster (1.0.93): no target, no highlight.
+                if (target == PileKind.EXTRA && !card.token && !card.extraDeck && !card.pendulumIn(catalog)) return NONE
                 val part = spot.part ?: when {
                     shift -> DeckPart.BOTTOM
                     alt -> DeckPart.SHUFFLE

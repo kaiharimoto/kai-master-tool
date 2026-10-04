@@ -210,7 +210,7 @@ object DuelMirror {
         val seen = HashMap<Int, Set<Int>>()
         val viewer = v.viewer
         fun add(c: ViewCard, inHidden: Boolean = false): Int {
-            cards[c.ref] = CardInst(c.ref, c.code ?: 0, c.owner, c.controller, c.pos, c.counters, c.token, c.name, c.under.map { add(it) }, c.atk, c.def)
+            cards[c.ref] = CardInst(c.ref, c.code ?: 0, c.owner, c.controller, c.pos, c.counters, c.token, c.name, c.under.map { add(it) }, c.atk, c.def, c.extraDeck)
             // A card the viewer knows in a place it could not otherwise see (revealed, seen go back).
             if (inHidden && c.code != null && viewer != null) seen[c.ref] = setOf(viewer)
             return c.ref

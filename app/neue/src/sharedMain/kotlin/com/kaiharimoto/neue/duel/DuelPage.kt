@@ -137,6 +137,9 @@ internal fun DuelPage(h: NeueHolders) {
                         twoSided = prefs.twoSided && !game.state.solo,
                         form = neue.form,
                         bottom = duels.bottom,
+                        // The log and the card beside the table, or both put away together (kai, 1.0.93): the table takes
+                        // their room, and they open from the Table menu as drawers.
+                        wantRails = prefs.logShown,
                     )
                 }
                 // The same eyes as the last frame are the same set (1.0.92): a new one equal to it each time made every
@@ -299,6 +302,19 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
             Box(Modifier.weight(1f))
         }
     }
+    if (!phone && game != null && duels.replay == null) {
+        // The log and the card inspector, put away and brought back together (kai, 1.0.93).
+        val shown = neue.prefs.duel.logShown
+        Tip(if (shown) "Put the log and the card away: the table takes their room" else "Bring back the log and the card") {
+            IconButton(
+                if (shown) Icons.PanelLeftClose else Icons.PanelLeftOpen,
+                { neue.update { it.copy(duel = it.duel.copy(logShown = !it.duel.logShown)) } },
+                toggled = !shown,
+                size = 32.dp,
+                label = if (shown) "Hide the log and the card" else "Show the log and the card",
+            )
+        }
+    }
     if (!phone) {
         Tip(if (neue.immersive) "Leave immersive mode" else "Immersive mode: full screen, the bar out of the way", kbd = DeskShortcuts.chordFor(DeskAction.IMMERSIVE)?.let(DeskShortcuts::kbd)) {
             IconButton(if (neue.immersive) Icons.Minimize else Icons.Maximize, { h.run(DeskAction.IMMERSIVE) }, toggled = neue.immersive, size = 32.dp, label = if (neue.immersive) "Leave full screen" else "Full screen")
@@ -363,9 +379,9 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         add(MenuEntry(if (prefs.coordinates) "Hide the coordinates" else "Show the coordinates", hint = key(DeskAction.DUEL_COORDINATES)) {
             neue.update { it.copy(duel = it.duel.copy(coordinates = !it.duel.coordinates)) }
         })
-        // Turns that start themselves (1.0.86); the help for it is in the Ai and combos dialog.
+        // The table draws for each turn (1.0.86; the draw alone from 1.0.93); the help for it is in the Ai and combos dialog.
         if (!online) {
-            add(MenuEntry(if (prefs.autoDraw) "Start turns in the Draw Phase" else "Start turns in Main Phase 1, drawn") {
+            add(MenuEntry(if (prefs.autoDraw) "Don't draw for each turn" else "Draw for each turn") {
                 neue.update { it.copy(duel = it.duel.copy(autoDraw = !it.duel.autoDraw)) }
             })
         }
@@ -383,7 +399,10 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         add(MenuEntry(if (prefs.voiceConfirm) "Make spoken moves at once" else "Confirm spoken moves first") {
             neue.update { it.copy(duel = it.duel.copy(voiceConfirm = !it.duel.voiceConfirm)) }
         })
-        add(MenuEntry("The card", separatorBefore = true, hint = "Read it large") { duels.drawer = "card" })
+        add(MenuEntry(if (prefs.logShown) "Hide the log and the card" else "Show the log and the card", separatorBefore = true) {
+            neue.update { it.copy(duel = it.duel.copy(logShown = !it.duel.logShown)) }
+        })
+        add(MenuEntry("The card", hint = "Read it large") { duels.drawer = "card" })
         add(MenuEntry("Log and chat") { duels.drawer = "log" })
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
         if (online) add(MenuEntry("Leave the table", separatorBefore = true, danger = true) { duels.leave() })

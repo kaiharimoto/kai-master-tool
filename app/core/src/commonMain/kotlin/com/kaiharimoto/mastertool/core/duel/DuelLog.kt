@@ -86,7 +86,7 @@ object DuelSetup {
             val setup = h.seats.getOrNull(s) ?: SeatSetup()
             var uid = 1 + s * DuelState.SEAT_UIDS
             val deck = setup.main.map { code -> (uid++).also { cards[it] = CardInst(it, code, owner = s, pos = CardPosition.FACE_DOWN_DEF) } }
-            val extra = setup.extra.map { code -> (uid++).also { cards[it] = CardInst(it, code, owner = s, pos = CardPosition.FACE_DOWN_DEF) } }
+            val extra = setup.extra.map { code -> (uid++).also { cards[it] = CardInst(it, code, owner = s, pos = CardPosition.FACE_DOWN_DEF, extraDeck = true) } }
             SeatState(name = setup.name, lp = h.startLp, deck = deck, extra = extra)
         }
         return DuelState(cards = cards, seats = seats, active = h.first, solo = h.solo, opening = if (h.openingRoll && !h.solo) Opening() else null)

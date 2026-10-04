@@ -16,6 +16,9 @@ import kotlinx.serialization.Serializable
  */
 object DuelSight {
     fun sees(s: DuelState, uid: Int, viewer: Int?): Boolean {
+        // Before the opening roll is decided no hand is looked at, its owner's either (kai, 1.0.93: "have both players'
+        // hands hidden until a player chooses first or second"): the roll comes first, and the choice is made blind.
+        if (s.beforeTurnOne && s.placeOf(uid).let { it is Place.Pile && it.kind == PileKind.HAND }) return false
         if (viewer == null) return true
         val card = s.cards[uid] ?: return false
         val place = s.placeOf(uid) ?: return false
@@ -73,7 +76,7 @@ data class DuelView(
             fun card(uid: Int): ViewCard {
                 val c = s.cards.getValue(uid)
                 return if (DuelSight.sees(s, uid, viewer)) {
-                    ViewCard(uid, c.code, c.pos, c.owner, c.controller, c.counters, c.token, c.name, c.under.map(::card), c.atk, c.def)
+                    ViewCard(uid, c.code, c.pos, c.owner, c.controller, c.counters, c.token, c.name, c.under.map(::card), c.atk, c.def, c.extraDeck)
                 } else {
                     ViewCard(veil(secret, uid, s.epoch[uid] ?: 0), null, c.pos, c.owner, c.controller, c.counters, c.token, null, c.under.map(::card))
                 }
@@ -159,6 +162,8 @@ data class ViewCard(
     val under: List<ViewCard> = emptyList(),
     val atk: Int? = null,
     val def: Int? = null,
+    /** [CardInst.extraDeck], sent only with a card the viewer sees (1.0.93): where a hidden card was dealt is not said. */
+    val extraDeck: Boolean = false,
 ) {
     val hidden: Boolean get() = code == null
 }

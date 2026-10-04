@@ -172,6 +172,10 @@ object DuelRules {
         }
         val onField = from is Place.Zone
         val pos = positionFor(to, a.pos, card, onField)
+        // The Extra Deck takes back its own cards; a Main Deck card only face-up, as a Pendulum Monster goes there (1.0.93).
+        if (to is Place.Pile && to.kind == PileKind.EXTRA && !card.extraDeck && !pos.faceUp) {
+            return Outcome.Refused(MAIN_TO_EXTRA)
+        }
         next = when (to) {
             is Place.Zone -> next.inZone(to, a.uid).let { n -> if (beneath.isEmpty()) n else n.withCard(a.uid) { it.copy(under = it.under + beneath) } }
             is Place.Pile -> next.insertInPile(to.seat, to.kind, a.uid, to.at)
@@ -414,6 +418,10 @@ object DuelRules {
     }
 
     private fun ok(s: DuelState) = Outcome.Ok(s)
+
+    /** Why a Main Deck card face-down is refused the Extra Deck. */
+    const val MAIN_TO_EXTRA = "A Main Deck card goes to the Extra Deck only face-up, as a Pendulum Monster does"
+
 
     private fun seatOk(s: DuelState, seat: Int): Outcome? = if (seat !in s.seats.indices) Outcome.Refused("No such seat") else null
 

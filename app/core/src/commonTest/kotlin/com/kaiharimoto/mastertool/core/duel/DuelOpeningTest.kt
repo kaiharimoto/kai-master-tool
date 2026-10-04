@@ -94,6 +94,36 @@ class DuelOpeningTest {
     }
 
     @Test
+    fun noHandIsSeenUntilTheChoiceIsMade() {
+        // kai, 1.0.93: "have the dice roll first and have both players' hands hidden until a player chooses first or second".
+        val dealt = start()
+        assertTrue(dealt.state.beforeTurnOne)
+        for (seat in 0..1) {
+            val hand = dealt.state.seats[seat].hand
+            assertEquals(5, hand.size)
+            hand.forEach { uid ->
+                assertFalse(DuelSight.sees(dealt.state, uid, seat), "its own owner does not look yet")
+                assertFalse(DuelSight.sees(dealt.state, uid, null), "nor does the table's all-seeing eye")
+            }
+        }
+        // Rolled, but not yet chosen: still hidden.
+        for (winner in 0..1) {
+            val rolled = firstRoundTo(winner)
+            assertTrue(rolled.state.beforeTurnOne)
+            assertFalse(DuelSight.sees(rolled.state, rolled.state.seats[winner].hand[0], winner))
+            // Chosen: each seat picks up its own hand, and only its own.
+            val chosen = rolled.act(DuelAction.GoFirst(winner, true), winner).game
+            for (seat in 0..1) chosen.state.seats[seat].hand.forEach { uid ->
+                assertTrue(DuelSight.sees(chosen.state, uid, seat))
+                assertFalse(DuelSight.sees(chosen.state, uid, 1 - seat))
+            }
+        }
+        // A duel without the roll deals its hands as it always has.
+        val plain = DuelGame.start(header())
+        assertTrue(DuelSight.sees(plain.state, plain.state.seats[0].hand[0], 0))
+    }
+
+    @Test
     fun theHigherSumChoosesAndSetsWhoGoesFirst() {
         for (winner in 0..1) {
             val g = firstRoundTo(winner)
@@ -106,7 +136,8 @@ class DuelOpeningTest {
             val second = g.act(DuelAction.GoFirst(winner, false), winner).game
             assertEquals(1 - winner, second.state.active)
             assertFalse(second.state.beforeTurnOne)
-            assertEquals(DuelAction.Phase(DuelPhase.STANDBY), TurnStart.next(second))
+            // Turn 1 never draws, and the phases are the player's (1.0.93).
+            assertNull(TurnStart.next(second))
             val first = g.act(DuelAction.GoFirst(winner, true), winner).game
             assertEquals(winner, first.state.active)
             assertFalse(first.act(DuelAction.GoFirst(winner, false), winner).ok, "decided once")

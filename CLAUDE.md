@@ -646,7 +646,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **1.0.86** (three feature agents beside two red teams): attack is a verb (`DuelVerb.ATTACK`, `Shift A`, `Duels.attacking`,
   `DropSpot.Score`) with a battle chip (`DuelBattle`, a suggestion only); the phone's phases fold to Next / End (`DuelLayout.phasesCompact`);
   another seat's open pile is Target-only (`DuelSeats`); Ai's cues by key (`Y`, `Shift Y`, Esc stops, 1–6 answer; `AiCue.primary`);
-  undo skips talk (`DuelGame.undoMove`); turns open themselves to Main 1 (`TurnStart`, `DuelPrefs.autoDraw`); token uids and lock
+  undo skips talk (`DuelGame.undoMove`); the table draws for a turn (`TurnStart`, `DuelPrefs.autoDraw`; to Main 1 by itself until 1.0.93); token uids and lock
   ids are stamped on commit (`DuelIds`), dice keyed to the roll (`forRoll`); the log folded once (`DuelFolds`); `Secrets` covers
   short names and Ai's questions. The second red-team pass on 1.0.85 is in `DuelRedTeamTest` and `DuelTriggersTest`.
   **1.0.87, Command mode** (kai: "like Magnus Carlsen … I can win with just typing too and not a mouse"): a duel played by
@@ -682,6 +682,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   takes (a card the eyes cannot see only `blindVerbs`), one verb one group; K / Shift K on several opens the **ordering strip**
   (top first as they will stand; Alt ←/→, drag, R random, Alt K shuffle in). Typed: `g gy1 h2 ban1`, `k gy1 gy3` (gy1 on top),
   `kb …`, `negate 2`, `resolve all`. `--duel-multi=true`, `--duel-order=top|bottom`, `--duel-chain-focus=N --duel-chain-menu=true`.
+  **kai's table notes (1.0.93)**: the table draws for a turn and the phases are the player's (`TurnStart` makes the draw
+  alone); no hand is seen before the opening roll is decided (`DuelSight.sees`, `beforeTurnOne`); a Main Deck card goes to the
+  Extra Deck only face-up (`CardInst.extraDeck` from the deal, `DuelRules.MAIN_TO_EXTRA`; the drop and verb only for a
+  Pendulum); a card facing the other seat wears its plate at its own foot; a set card wears its back at half opacity; a card
+  over the Deck shrinks and fades (`overDeck`); one button puts the log and the card away together (`DuelPrefs.logShown`).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

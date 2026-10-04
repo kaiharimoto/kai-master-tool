@@ -157,7 +157,7 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
             add(TurnStart.FOR_AI)
             // Said only as it is (1.0.86, the red team): on Ai's turn with its opening not yet made, the next step is named.
             if (s.active == seat) TurnStart.next(g)?.let { step ->
-                add("Your turn's opening is not finished yet (next: ${step::class.simpleName}); the table makes it — wait for your Main Phase 1.")
+                add("Your turn's draw is not made yet; the table makes it — wait for it, then move on through the phases yourself.")
             }
         }
         if (takenBack || duels.aiTookBack) add("Moves were taken back since you last read: the table below is how it stands now.")
@@ -303,17 +303,18 @@ internal fun DuelAiDialog(h: NeueHolders) {
             MuButton("Play this turn, ${h.ai.name}", { duels.combosOpen = false; askAiToPlay(h) }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
             HRule()
         }
-        // Turns that start themselves (1.0.86): a table setting, here beside Ai because it decides who draws for Ai.
+        // The table draws for each turn (1.0.86; the draw alone from 1.0.93): a table setting, here beside Ai because it decides
+        // who draws for Ai.
         FieldLabel("Turns")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MuSwitch(d.autoDraw, { v -> update { it.copy(autoDraw = v) } })
-            Small("Start each turn in Main Phase 1", color = c.ink)
+            Small("Draw for each turn's player", color = c.ink)
         }
         Help(
             if (d.autoDraw) {
-                "After End Turn the table draws for the next player — never on the first turn — and moves through the Standby Phase " +
-                    "to Main Phase 1, as one step of undo." +
-                    if (neue.prefs.ai.enabled) " A response ${h.ai.name} is watching for in the Draw or Standby Phase pauses it until ${h.ai.name} has answered." else ""
+                "After End Turn the table draws one card for the next player — never on the first turn — and the turn waits in the " +
+                    "Draw Phase: move on (N) through the Standby Phase to Main Phase 1 yourself." +
+                    if (neue.prefs.ai.enabled) " A response ${h.ai.name} is watching for in the Draw Phase pauses the draw until ${h.ai.name} has answered." else ""
             } else {
                 "Each turn starts in the Draw Phase with nothing drawn: draw (D) and move on (N) yourself."
             },
