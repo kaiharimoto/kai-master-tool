@@ -8,7 +8,7 @@ package com.kaiharimoto.mastertool.core.duel.ai
  */
 object AiTable {
     /** The tools that read or move the table in play. */
-    val TABLE_TOOLS: Set<String> = setOf("duel_state", "duel_act", "duel_peek", "duel_log", "duel_watch", "duel_setup")
+    val TABLE_TOOLS: Set<String> = setOf("duel_state", "duel_moves", "duel_act", "duel_peek", "duel_log", "duel_watch", "duel_setup")
 
     /** `duel_combo`'s actions that read the log or move the table. */
     val COMBO_ON_TABLE: Set<String> = setOf("record", "run")

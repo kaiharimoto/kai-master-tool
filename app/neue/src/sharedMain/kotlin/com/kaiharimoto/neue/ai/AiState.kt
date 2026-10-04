@@ -446,7 +446,17 @@ class AiState(internal val h: NeueHolders) {
      * moves never reach Ai except through a cue like this. Returns the conversation's id, or null when
      * nothing was sent (no connection, or Ai still answering).
      */
-    fun sendDuel(words: String, context: List<String>, sessionId: String?, fresh: Boolean = false): String? {
+    fun sendDuel(
+        words: String,
+        context: List<String>,
+        sessionId: String?,
+        fresh: Boolean = false,
+        /**
+         * Ai's guide at the table (Phase C stage 2): its key — the decks it is for — and the block, made only when the
+         * conversation has not been given that key yet, so the guide is read once a conversation, not every cue.
+         */
+        guide: Pair<String, () -> String>? = null,
+    ): String? {
         val text = words.trim()
         if (text.isEmpty() || running) return null
         val connection = prefs.connection ?: run {
@@ -459,9 +469,10 @@ class AiState(internal val h: NeueHolders) {
         val current = (if (fresh) null else session?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL && (sessionId == null || it.id == sessionId) })
             ?: sessionId?.takeUnless { fresh }?.let { id -> stored(id)?.takeIf { it.connection == connection.id && it.mode == AiSession.MODE_DUEL } }?.also { session = it }
             ?: begin(connection, AiSession.MODE_DUEL)
-        val block = PromptBuilder.context(context + host.situation(), null, null, false)
+        val guideBlock = guide?.takeIf { it.first != current.guideShown }?.second?.invoke()?.takeIf { it.isNotBlank() }
+        val block = PromptBuilder.context(listOfNotNull(guideBlock) + context + host.situation(), null, null, false)
         val turn = ChatTurn.user(text, block, System.currentTimeMillis())
-        val next = current.copy(turns = current.turns + turn, updatedAt = System.currentTimeMillis()).titled()
+        val next = current.copy(turns = current.turns + turn, updatedAt = System.currentTimeMillis(), guideShown = guide?.first ?: current.guideShown).titled()
         commit(next)
         // An answer that never started is no cue (1.0.85): the turn is asked again once the connection works.
         if (!respond(next, connection)) return null

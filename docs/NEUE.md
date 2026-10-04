@@ -3820,6 +3820,17 @@ the table sees and does only what a player would"):
   the past may not re-deal any later draw (`Past.redeals`) and takes its chance from that place's own roll count
   (`Past.stamp`); `duel_peek`'s reason goes through `Secrets`. Held by `DuelRecordTest` and `DuelLeadsTest`.
 
+**The table in full for Ai, stage 2** (Phase C, `docs/phases/C.md` §4): the brief (`duel_state`, every cue) says who has
+priority, gives every card the reader sees its coordinate from Ai's side and its printed facts (Level/Rank/Link, Scale,
+Attribute, Type, ATK/DEF, `DuelBrief.facts`; `DuelCardInfo` carries them), both GYs and banished piles whole, the Extra
+Deck, and this turn's moves in the words Ai's seat saw (`DuelBrief.turnLines`) — never a hidden card's name or facts.
+`duel_moves` (`DuelMoves`, read-only) is the menu of legal moves: each card's `DuelVerbs` where it stands, the phases, the
+chain and the attacks, each the exact op `duel_act` takes, kept only when it plans and `DuelReach` allows it. The guide to
+the deck Ai plays and its combos are put before a duel conversation once, within a budget (`DuelGuide`; the other deck's
+only with full knowledge). The leads closed: one coordinate convention (`ComboRunner.plan` takes the duel's secret, so
+`oh2` is the card the brief shows there), every word in Ai's lines through `Secrets` (`ComboRunner.redacted`), and a cue
+keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held by `DuelTableTest`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

@@ -149,7 +149,9 @@ All confirmed by three verifiers, all judged small, local fixes. They are Phase 
 
 Read the code before acting on any of these.
 
-**At the duel table** (the first four, and `duel_peek`'s reason, closed in Phase C's first stage: `docs/phases/C.md` §3)
+**At the duel table** (the first four, and `duel_peek`'s reason, closed in Phase C's first stage: `docs/phases/C.md` §3;
+the rest but Ai World's tables in its second, §4 — one coordinate convention, every word of Ai's lines through `Secrets`,
+the person's moves on Ai's cards in its cues, the guide at the table, the brief in full)
 - Ai's own-seat moves may reveal, flip or take the opponent's hidden cards. The knowledge cap covers reads only.
 - On a networked table, Ai's tools read and move the guest's seat (`aiSeat` defaults to 1).
 - `duel_combo` records name hidden cards Ai touched.

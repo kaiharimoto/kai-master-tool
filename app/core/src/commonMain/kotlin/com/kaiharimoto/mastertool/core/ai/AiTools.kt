@@ -986,13 +986,29 @@ object AiTools {
 
     val duelState = ToolSpec(
         "duel_state",
-        "Duel (07): the table as one seat sees it — whose turn, the phase, the chain, each seat's LP, hand, zones, GY, banished, Extra Deck " +
-            "and deck count. Cards you can see are written #uid with their name; hidden ones are 'a face-down card [?veil]'. perspective: " +
+        "Duel (07): the table as one seat sees it — whose turn, the phase, who has priority, the chain, each seat's LP, hand, zones, GY, " +
+            "banished, Extra Deck and deck count, and this turn's moves. Cards you can see are written with their coordinate, #uid, name and " +
+            "printed facts (Level/Rank/Link, Attribute, Type, ATK/DEF); hidden ones are 'a face-down card [?veil]'. perspective: " +
             "self (the seat you act as — the honest one, and the default), opponent (theirs), full (everything, for testing), auto (yours; " +
             "duel_peek when you judge you must know more). Follow the person's knowledge setting unless they say otherwise.",
         schema {
             enum("perspective", "Whose eyes", DuelBrief.PERSPECTIVES)
             integer("seat", "The seat you act as: 0 the bottom player, 1 across the table; omit for the one set on the page", min = 0, max = 1)
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val duelMoves = ToolSpec(
+        "duel_moves",
+        "Duel (07), read-only (Phase C): the moves your seat may make now, each the exact op duel_act takes — the phases ahead and the " +
+            "end, the chain (resolve, negate), the attacks, and every card you may touch by its coordinate with its verbs (s h2 Summon to " +
+            "m3, a s1 Activate, g om1 Send to GY). Every move listed plans on the table as it stands and never touches a card you cannot " +
+            "see beyond what a player may. Physics, not card text: whether a card's effect allows a move is yours to judge. card: one " +
+            "card's every move (a coordinate like h2 or om1, or #uid), with each free zone and host spelled out.",
+        schema {
+            string("card", "One card: its coordinate (h2, m3, ogy1) or #uid; omit for the whole menu")
+            integer("limit", "How many moves at most; default 160", min = 10, max = 600)
         },
         ToolGroup.LOOK,
         phase = 3,
@@ -1005,7 +1021,7 @@ object AiTools {
             "'chain ash', 'link #40', 'attach #7 to #40', '#9 to gy', 'ash to hand' (a search: the Deck first), 'place #8 in s2' (face-up, " +
             "no chain link), 'move #8 to m4', 'token sheep atk 0 def 0 def m2', 'resolve' ('resolve keep'), 'lock Synchro only', 'bp', " +
             "'end', 'say ok?'. 'emz left'/'emz right' are your own. A name means your own cards ('their X' for theirs); one that could mean " +
-            "two cards fails and lists them, so use #uids. A phase op off your turn asks the turn player. The duel-table skill has the rest. " +
+            "two cards fails and lists them, so use #uids or coordinates (s h2 m3, g om1: duel_moves lists every move as an op). A phase op off your turn asks the turn player. The duel-table skill has the rest. " +
             "The result is each op's real effect, read with your knowledge setting.",
         schema {
             strings("ops", "The moves, in order", required = true)
@@ -1237,7 +1253,7 @@ object AiTools {
      * Sending all of them cost every round about twelve thousand tokens the table never used.
      */
     val DUEL: Set<String> = setOf(
-        "duel_state", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch", "duel_records",
+        "duel_state", "duel_moves", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch", "duel_records",
         "ask_user", "card_info", "search_cards", "rulings", "calculate", "hand_odds", "express",
     )
 
@@ -1248,7 +1264,7 @@ object AiTools {
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
-        "duel_state", "duel_log", "duel_records",
+        "duel_state", "duel_moves", "duel_log", "duel_records",
         "world_state", "world_read",
     )
 
@@ -1266,7 +1282,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords,
+        duelState, duelMoves, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow,
     )
 

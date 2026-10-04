@@ -68,12 +68,13 @@ object ComboRunner {
      * Each step parsed on the table as the steps before it left it — dry-run all the way, so a combo
      * that would stop halfway says where before anything moves.
      */
-    fun plan(s: DuelState, seat: Int, steps: List<String>, catalog: DuelCatalog): ComboRun {
+    fun plan(s: DuelState, seat: Int, steps: List<String>, catalog: DuelCatalog, secret: Long = 0L): ComboRun {
         var state = s
         val out = mutableListOf<Pair<String, List<DuelAction>>>()
         steps.forEachIndexed { i, text ->
-            // A combo's steps name cards, never places: copies on the field are taken in turn (anyCopy).
-            when (val p = DuelCommand.parse(text, state, seat, catalog, anyCopy = true)) {
+            // A combo's steps name cards, never places: copies on the field are taken in turn (anyCopy). [secret] is the
+            // duel's (its seed), so `oh2` is the card the brief and DuelView show there (Phase C stage 2; it was 0: another order).
+            when (val p = DuelCommand.parse(text, state, seat, catalog, secret, anyCopy = true)) {
                 is DuelCommand.Parsed.Problem -> return ComboRun(out, i, "Step ${i + 1} (“$text”): ${p.text}")
                 // A house ruling is not a move: a combo has no use for one.
                 is DuelCommand.Parsed.Ruling -> return ComboRun(out, i, "Step ${i + 1} (“$text”): a ruling is kept with duel_ruling, not played")
@@ -102,6 +103,33 @@ object ComboRunner {
      * network's guest is — its knowledge covers what it reads, never what it does. The first step that would take, turn
      * up, show or target a card hidden from [seat], with why; null when none would.
      */
+    /**
+     * A planned line's words — what it says (`say`, `note`), the locks it writes, its chain links' notes — kept from naming
+     * [seat]'s cards its opponent cannot see ([Secrets]; Phase C stage 2: Ai's text after a `;` and in a combo's steps
+     * reached the record as typed, since only an op that began with `say` was guarded). Each step is judged on the table
+     * the steps before it leave; the moves themselves are unchanged.
+     */
+    fun redacted(s: DuelState, seat: Int, run: ComboRun, catalog: DuelCatalog): ComboRun {
+        if (s.solo) return run
+        var state = s
+        val steps = run.steps.map { (text, actions) ->
+            fun hide(words: String) = Secrets.redact(words, state, 1 - seat, seat, catalog).text
+            val said = actions.map { a ->
+                when (a) {
+                    is DuelAction.Chat -> a.copy(text = hide(a.text))
+                    is DuelAction.Note -> a.copy(text = hide(a.text))
+                    is DuelAction.Lock -> a.copy(text = hide(a.text))
+                    is DuelAction.ChainAdd -> if (a.note.isBlank()) a else a.copy(note = hide(a.note))
+                    else -> a
+                }
+            }
+            val shown = if (said != actions) hide(text) else text
+            state = DuelRules.applyAll(state, said, seat).first ?: state
+            shown to said
+        }
+        return run.copy(steps = steps)
+    }
+
     fun reach(s: DuelState, seat: Int, run: ComboRun): String? {
         var state = s
         run.steps.forEachIndexed { i, (text, actions) ->

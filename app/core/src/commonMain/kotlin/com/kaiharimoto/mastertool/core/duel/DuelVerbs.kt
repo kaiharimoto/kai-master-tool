@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.model.Attribute
 import com.kaiharimoto.mastertool.core.model.Card
 import kotlin.concurrent.Volatile
 
@@ -25,6 +26,20 @@ data class DuelCardInfo(
      * A reading of the text for the obvious thing, never a rule: the card can always be moved by hand.
      */
     val handCost: PileKind? = null,
+    /** A monster's Level, or an Xyz Monster's Rank ([xyz]), as printed (Phase C stage 2: what Ai reads at the table). */
+    val level: Int? = null,
+    /** The Level above is a Rank. */
+    val xyz: Boolean = false,
+    /** A Link Monster's Link rating. */
+    val linkRating: Int? = null,
+    /** A monster's Attribute as printed (DARK, LIGHT…); null for a Spell, a Trap or when unknown. */
+    val attribute: String? = null,
+    /** A monster's Type as printed (Pyro, Spellcaster…); null for a Spell or a Trap. */
+    val race: String? = null,
+    /** The card's kind line as printed, "Effect Monster", "Synchro Tuner Monster"; null when unknown. */
+    val typeLine: String? = null,
+    /** A Pendulum Monster's Scale. */
+    val scale: Int? = null,
 ) {
     /** A card that goes to the GY once it resolves: a Normal, Quick-Play or Ritual Spell, a Normal or Counter Trap. */
     val leavesOnResolve: Boolean
@@ -42,10 +57,18 @@ data class DuelCardInfo(
                 frame == "trap" -> CardKind.TRAP
                 else -> CardKind.MONSTER
             }
+            val monster = kind == CardKind.MONSTER || kind == CardKind.EXTRA_MONSTER || kind == CardKind.TOKEN
             val sub = if (kind == CardKind.SPELL || kind == CardKind.TRAP || kind == CardKind.FIELD_SPELL) card.race?.takeIf { it.isNotBlank() } else null
             return DuelCardInfo(
                 card.name, kind, pendulum = frame.contains("pendulum"), link = frame.contains("link"), sub = sub, atk = card.atk, def = card.def,
                 handCost = if (kind == CardKind.MONSTER || kind == CardKind.EXTRA_MONSTER) handCost(card.description) else null,
+                level = card.level?.takeIf { monster && card.linkValue == null && !frame.contains("link") },
+                xyz = frame.contains("xyz"),
+                linkRating = card.linkValue?.takeIf { monster },
+                attribute = card.attribute.takeIf { monster && it != Attribute.UNKNOWN }?.name,
+                race = card.race?.takeIf { monster && it.isNotBlank() },
+                typeLine = card.type.takeIf { it.isNotBlank() },
+                scale = card.pendulumScale?.takeIf { frame.contains("pendulum") },
             )
         }
 
