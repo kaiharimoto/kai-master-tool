@@ -54,6 +54,7 @@ object DeskKeys {
         Key.Six to "6",
         Key.Seven to "7",
         Key.Eight to "8",
+        Key.Nine to "9",
         Key.Tab to "tab",
         Key.A to "a",
         Key.B to "b",

@@ -16,6 +16,8 @@ class DeskShortcutsTest {
     private val editingSlides = DeskContext(onBuilder = false, onPresent = true)
     private val typingOnASlide = DeskContext(onBuilder = false, onPresent = true, textInputFocused = true)
     private val presenting = DeskContext(onBuilder = false, onPresent = true, presenting = true)
+    private val shootout = DeskContext(onBuilder = false, onShootout = true)
+    private val typingInAShootout = DeskContext(onBuilder = false, onShootout = true, textInputFocused = true)
 
     @Test
     fun everyActionIsBound() {
@@ -28,7 +30,7 @@ class DeskShortcutsTest {
     fun noChordMeansTwoThingsAtOnce() {
         // Two rows sharing a chord are only a bug if some context makes both
         // live, because then the first one silently wins.
-        for (context in listOf(builder, typingName, searching, covered, decksPage, editingSlides, typingOnASlide, presenting)) {
+        for (context in listOf(builder, typingName, searching, covered, decksPage, editingSlides, typingOnASlide, presenting, shootout, typingInAShootout)) {
             DeskShortcuts.live(context).groupBy { it.chord }.forEach { (chord, rows) ->
                 val actions = rows.map { it.action }.toSet()
                 if (actions.size > 1) fail("${DeskShortcuts.kbd(chord)} means $actions in $context")
@@ -38,7 +40,7 @@ class DeskShortcutsTest {
 
     @Test
     fun thePaletteAndEscapeWorkOverEverything() {
-        for (context in listOf(builder, typingName, searching, covered, decksPage, editingSlides, typingOnASlide, presenting)) {
+        for (context in listOf(builder, typingName, searching, covered, decksPage, editingSlides, typingOnASlide, presenting, shootout, typingInAShootout)) {
             assertEquals(DeskAction.PALETTE, DeskShortcuts.resolve(KeyChord("k", ctrl = true), context))
             assertEquals(DeskAction.DISMISS, DeskShortcuts.resolve(KeyChord("escape"), context))
         }
@@ -108,7 +110,7 @@ class DeskShortcutsTest {
     fun typingNeverRunsALetterOrDeletesACard() {
         // A keyboard cover on a tablet types into a field while the table listens
         // (touch swarm, rec 6): nothing it types may act on the deck.
-        for (context in listOf(typingName, searching, typingOnASlide)) {
+        for (context in listOf(typingName, searching, typingOnASlide, typingInAShootout)) {
             DeskShortcuts.live(context).forEach { row ->
                 val chord = row.chord
                 val bare = !chord.ctrl && !chord.alt
@@ -139,5 +141,20 @@ class DeskShortcutsTest {
         assertEquals(DeskAction.PRESENT_PREVIOUS, DeskShortcuts.resolve(KeyChord("pageup"), presenting))
         assertEquals(DeskAction.PRESENT_DECK, DeskShortcuts.resolve(KeyChord("d"), presenting))
         assertNull(DeskShortcuts.resolve(KeyChord("left", shift = true), presenting))
+    }
+
+    @Test
+    fun shootoutKeysStayOnTheShootout() {
+        assertEquals(DeskAction.GO_SHOOTOUT, DeskShortcuts.resolve(KeyChord("9", ctrl = true), builder))
+        assertEquals(DeskAction.GO_SHOOTOUT, DeskShortcuts.resolve(KeyChord("9", ctrl = true), typingName))
+        assertEquals(DeskAction.SHOOTOUT_ANSWER_1, DeskShortcuts.resolve(KeyChord("1"), shootout))
+        assertEquals(DeskAction.SHOOTOUT_ANSWER_5, DeskShortcuts.resolve(KeyChord("5"), shootout))
+        assertEquals(DeskAction.SHOOTOUT_LEFT, DeskShortcuts.resolve(KeyChord("left"), shootout))
+        assertEquals(DeskAction.SHOOTOUT_RIGHT, DeskShortcuts.resolve(KeyChord("right"), shootout))
+        assertEquals(DeskAction.SHOOTOUT_START, DeskShortcuts.resolve(KeyChord("enter"), shootout))
+        assertEquals(DeskAction.SHOOTOUT_STOP, DeskShortcuts.resolve(KeyChord("period", ctrl = true), shootout))
+        assertNull(DeskShortcuts.resolve(KeyChord("1"), builder))
+        assertNull(DeskShortcuts.resolve(KeyChord("1"), typingInAShootout), "a digit typed is a digit")
+        assertNull(DeskShortcuts.resolve(KeyChord("1"), DeskContext(onBuilder = false, onShootout = true, overlayOpen = true)))
     }
 }

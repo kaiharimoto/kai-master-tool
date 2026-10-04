@@ -314,7 +314,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     still `AiMark` stands by the name (`AiName`: replies, the panel's head, Settings) — kai: "every
     mention of Ai is a chance for the art".
   - Only the whole head moves; the net never distorts.
-- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World** (1.0.40, kai:
+- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
@@ -743,6 +743,15 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   time, off the main thread; Ai's code typed into the editor), `AiWorld` Ai's tools (`world_state/new/write/read/run/tool/show`),
   `MODE_WORLD` and the `ai-world` skill; `WorldPaint.kt` is the World's one file allowed colour. `<data>/world/` is
   synced and backed up; the `WORLD` start step asks about Python on the desk. `tools/shoot.sh --page=world --world=demo`.
+- **Shootout** (1.1.2, `09`, `Ctrl 9`, Phase S stage 2, `NEUE.md` §4t, `docs/phases/S.md`): hands judged one at a time, every card
+  rated with its range. `core/shootout/bench`: `Bench` (canonical cards, roles from the groups, sided strata only with **both**
+  plans — else *waiting*, never game-one hands), `ShootoutRun` (a session; the picker at its tuned settings, `STOP` ±5),
+  `ShootoutResults` (every number opens its trials, `Behind`), `ShootoutWords` (keys 1–5 best to worst, the phone's swipe).
+  `core/shootout/store`: `<data>/shootout/<deck>/alone.json` and `<opponent deck>.json`, an append-only versioned
+  `ShootoutLog` keeping Ai's fields (`judge`, `sawAi`, `ai`) and plan fingerprints from day one (`OldDataTest`); synced,
+  backed up, deleted with the deck. `neue/shootout/Shootouts` (lazy, `h.shootout`) runs every fit off the frame thread and
+  writes each answer as it is given. Keys `DeskScope.SHOOTOUT`; mouse and finger `ShootoutMouse`/`ShootoutTouch`.
+  `tools/shoot.sh --page=shootout --shootout=demo --shootout-target=matchup --shootout-view=trial|results`.
 - **Numbers carry their proof** (1.0.98, the evidence ledger, `core/ai/evidence`): a percentage, odds or probability in a
   guide entry or a book chapter must be one a tool computed in the conversation or the person said (`Numbers`,
   `Evidence.judge`), else it is refused unless marked "(estimate)"; its proof is kept in `ai/evidence/<deck>.json`

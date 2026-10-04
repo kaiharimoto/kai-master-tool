@@ -800,6 +800,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
         }
         ai.files.delete(AiMemory.path(MemoryKind.DECK, id))
+        h.shootout.forgetDeck(id)
         if (state.deckId == id) {
             val next = StartingDeck.pick(h.deps.deckRepository.all().map { it.entry }, neue.prefs.defaultDeckId)
             if (next != null) state.load(next) else state.newDeck()

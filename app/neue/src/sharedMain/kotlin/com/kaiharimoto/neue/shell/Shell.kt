@@ -318,6 +318,7 @@ private fun RailRow(page: Page, active: Boolean, count: String?, onClick: () -> 
         Page.PRESENT -> DeskAction.GO_PRESENT
         Page.DUEL -> DeskAction.GO_DUEL
         Page.WORLD -> DeskAction.GO_WORLD
+        Page.SHOOTOUT -> DeskAction.GO_SHOOTOUT
         Page.SETTINGS -> DeskAction.GO_SETTINGS
     }.let { DeskShortcuts.chordFor(it)?.let(DeskShortcuts::kbd) }
     Inverted(active) {

@@ -63,6 +63,9 @@ enum class Page(val numeral: Int?, val title: String) {
 
     /** Ai World (1.0.97): Ai's own computer — its files, its runs, its reasoning, its boards — watched as it works. */
     WORLD(8, "World"),
+
+    /** Shootout (1.1.2, Phase S): hands judged one at a time, and every card of the deck rated with its range. */
+    SHOOTOUT(9, "Shootout"),
     SETTINGS(null, "Settings"),
 }
 

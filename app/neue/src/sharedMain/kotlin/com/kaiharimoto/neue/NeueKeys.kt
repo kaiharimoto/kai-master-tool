@@ -20,6 +20,7 @@ import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.neue.builder.CardActions
 import com.kaiharimoto.neue.builder.groupsOn
 import com.kaiharimoto.neue.kit.MenuSpec
+import com.kaiharimoto.neue.shootout.runShootout
 
 // The window's keyboard, on [NeueHolders]: the key handler, the held rows, what the shortcut table reads, and the
 // one dispatch every action goes through — keys, menus, the palette and gestures alike. Its state (the keys down,
@@ -123,13 +124,15 @@ fun NeueHolders.keysLost() {
 fun NeueHolders.deskContext() = DeskContext(
     textInputFocused = textFocus.any || builder.textInputFocused || neue.searchFocused,
     searchFocused = neue.searchFocused,
-    overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen,
+    overlayOpen = neue.overlayOpen || overlays.isOpen || builder.editingGoal != null || updates.dialogOpen ||
+        (shootoutStarted && shootout.behind != null),
     onBuilder = neue.page == Page.BUILDER && present.playing == null,
     ai = neue.prefs.ai.enabled,
     onPresent = neue.page == Page.PRESENT,
     presenting = present.playing != null,
     onDuel = neue.page == Page.DUEL,
     onWorld = neue.page == Page.WORLD,
+    onShootout = neue.page == Page.SHOOTOUT,
     replaying = neue.page == Page.DUEL && duel.replay != null,
 )
 
@@ -156,6 +159,11 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.GO_PRESENT -> neue.go(Page.PRESENT)
         DeskAction.GO_DUEL -> neue.go(Page.DUEL)
         DeskAction.GO_WORLD -> neue.go(Page.WORLD)
+        // Shootout's own (1.1.2): from its keys, the palette and the menus alike.
+        DeskAction.GO_SHOOTOUT, DeskAction.SHOOTOUT_ANSWER_1, DeskAction.SHOOTOUT_ANSWER_2, DeskAction.SHOOTOUT_ANSWER_3,
+        DeskAction.SHOOTOUT_ANSWER_4, DeskAction.SHOOTOUT_ANSWER_5, DeskAction.SHOOTOUT_LEFT, DeskAction.SHOOTOUT_RIGHT,
+        DeskAction.SHOOTOUT_START, DeskAction.SHOOTOUT_STOP, DeskAction.SHOOTOUT_RESULTS,
+        -> runShootout(this, action)
         // Ai World's own (1.0.97): from its keys, the palette and the menus alike.
         DeskAction.WORLD_RUN, DeskAction.WORLD_STOP, DeskAction.WORLD_FOLLOW, DeskAction.WORLD_NEW,
         DeskAction.WORLD_PANE_FILES, DeskAction.WORLD_PANE_EDITOR, DeskAction.WORLD_PANE_TERMINAL,

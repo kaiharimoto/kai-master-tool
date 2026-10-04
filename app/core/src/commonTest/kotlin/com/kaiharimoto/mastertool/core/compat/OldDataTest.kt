@@ -9,6 +9,7 @@ import com.kaiharimoto.mastertool.core.cards.BanlistCodec
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.present.PresentCodec
+import com.kaiharimoto.mastertool.core.shootout.store.ShootoutCodec
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.sync.Manifest
 import com.kaiharimoto.mastertool.core.sync.Sync
@@ -113,6 +114,28 @@ class OldDataTest {
         val p = prefs.decodeFromString(NeuePreferences.serializer(), """{"duel":{"twoSided":false,"knowledge":"seat","names":["Kai","Rival"]}}""").duel
         assertEquals(false, p.twoSided)
         assertEquals("seat", p.knowledge)
+    }
+
+    @Test
+    fun aShootoutFrom112StillReads() {
+        // 1.1.2 (Phase S stage 2): a matchup's trials in `<data>/shootout/<deck>/<opponent>.json` — a rating, a comparison, a
+        // sided trial with its plans, Ai's answer kept apart — and a key and a trial kind from a later build.
+        val old = """{"version":1,"deck":"d-1","opponent":"o-2","opponentName":"Yubel","trials":[
+            {"id":"s1-0","at":1760000000000,"stratum":"G1_FIRST","hand":[14558127,1,2,3,4],"opponent":[5,6,7,8,9,10],"answer":"LEAN_WIN","reason":"plain","ms":4100,"session":"s1"},
+            {"id":"s1-1","at":1760000004000,"stratum":"G1_SECOND","kind":"compare","left":[1,2,3,4,5,6],"right":[1,2,3,4,5,7],"opponent":[5,6,7,8,9],"prefer":"right","session":"s1"},
+            {"id":"s1-2","at":1760000009000,"stratum":"SIDED_FIRST","hand":[1,2,3,4,5],"opponent":[5,6,7,8,9,10],"answer":"CLEAR_LOSS","plans":{"mine":"-3 +11","theirs":"="},"ai":{"answer":"LEAN_LOSS","sure":0.6},"tags":["interrupted"],"decisive":3},
+            {"id":"s2-0","stratum":"G1_FIRST","kind":"triple","hands":[[1],[2],[3]],"glow":2}
+        ],"fit":{"cached":true}}"""
+        val log = assertNotNull(ShootoutCodec.decode(old))
+        assertEquals("o-2", log.opponent)
+        assertEquals(4, log.trials.size)
+        assertEquals("LEAN_WIN", log.trials[0].answer)
+        assertEquals("right", log.trials[1].prefer)
+        assertEquals("-3 +11", log.trials[2].plans?.mine)
+        assertEquals("LEAN_LOSS", log.trials[2].ai?.answer)
+        assertTrue(log.trials.take(3).all { it.blind })
+        // Written again, it reads the same.
+        assertEquals(log, ShootoutCodec.decode(ShootoutCodec.encode(log)))
     }
 
     @Test

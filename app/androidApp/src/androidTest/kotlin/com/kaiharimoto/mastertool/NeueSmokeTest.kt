@@ -507,9 +507,9 @@ class NeueSmokeTest {
             tap(later!!.exactCenterX() / density, later!!.exactCenterY() / density)
             assertTrue("Later did not close the update dialog", until { !on { it.neue!!.updates.dialogOpen } })
 
-            // The tabs along the bottom, six of equal width: Decks is the second (Builder, Decks, Siding, Format, Prep,
-            // Settings — Builder first since 1.0.89).
-            tap(w * 1.5f / 6f, h - bottom - 28f)
+            // The tabs along the bottom, seven of equal width: Decks is the second (Builder, Decks, Siding, Format, Prep,
+            // Shootout, Settings — Builder first since 1.0.89, Shootout since 1.1.2).
+            tap(w * 1.5f / 7f, h - bottom - 28f)
             assertTrue("the Decks tab did not open Decks", until { on { it.neue!!.neue.page } == Page.DECKS })
             shoot("05-decks.png")
             on { it.neue!!.neue.go(Page.SETTINGS) }

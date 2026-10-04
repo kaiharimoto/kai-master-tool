@@ -203,6 +203,7 @@ fun neueMain(args: Array<String>) {
                 "present" -> Page.PRESENT
                 "duel" -> Page.DUEL
                 "world" -> Page.WORLD
+                "shootout" -> Page.SHOOTOUT
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
             }
@@ -552,6 +553,9 @@ fun neueMain(args: Array<String>) {
                 h.neue.page = Page.WORLD
                 clock.run(120)
             }
+            // --shootout=demo: Shootout's page with answers given (1.1.2, `ShootoutStudio.kt`): --shootout-target=alone|matchup,
+            // --shootout-view=trial|results|setup, --shootout-answers=N.
+            if (map["shootout"] == "demo") studioShootout(h, map, clock)
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
             // --start=new|update[:N]: the setup offered on opening (1.0.69), as someone new sees it or someone
