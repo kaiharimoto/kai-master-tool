@@ -356,7 +356,7 @@ class Worlds(val dir: File) {
         line(TermLine.Kind.COMMAND, "${if (language == WorldPaths.LANG_PY) "python" else "js"} $label")
         val started = now()
         try {
-            val api = WorldApi(host())
+            val api = WorldApi(hostIn(w))
             val outcome = if (language == WorldPaths.LANG_PY) runPython(w, safe, source, limit, api) else runJs(label, source, limit, api)
             val boards = pin(api.shown, safe, by)
             val record = outcome.first.copy(path = safe, boards = boards.map { it.id }, ms = now() - started)
@@ -428,9 +428,12 @@ class Worlds(val dir: File) {
         }.onFailure { line(TermLine.Kind.ERR, "show: ${it.message}") }
     }
 
+    /** The app as [w]'s code reads it, its own files included (`ygo.use`). */
+    private suspend fun hostIn(w: World): WorldHost = host().let { (it as? WorldSnapshot)?.reading(filesDir(w)) ?: it }
+
     /** Runs an instrument in the open world: its lines in the terminal, its boards pinned. */
     suspend fun tool(name: String, args: JsonObject, by: String = WorldEvent.AI): Result<RunOutcome> = runCatching {
-        open ?: error("No world is open: world_new makes one.")
+        val w = open ?: error("No world is open: world_new makes one.")
         check(running == null) { "Something is running already: wait for it, or stop it." }
         if (by == WorldEvent.AI) arrive(WorldPane.TERMINAL)
         running = "instrument $name"
@@ -438,7 +441,7 @@ class Worlds(val dir: File) {
         line(TermLine.Kind.COMMAND, "instrument $name ${args.toString().take(200)}")
         val started = now()
         try {
-            val h = host()
+            val h = hostIn(w)
             val result = withContext(Dispatchers.Default) { Instruments.run(name, args, h) }
             result.lines.forEach { line(TermLine.Kind.OUT, it) }
             val boards = pin(result.boards, null, by)

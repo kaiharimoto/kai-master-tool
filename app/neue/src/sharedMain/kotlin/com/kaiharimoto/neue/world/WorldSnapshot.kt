@@ -2,6 +2,8 @@ package com.kaiharimoto.neue.world
 
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
+import com.kaiharimoto.mastertool.core.duel.ai.Combo
+import com.kaiharimoto.mastertool.core.duel.ai.ComboCodec
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckEntry
@@ -9,12 +11,16 @@ import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.search.SearchScope
 import com.kaiharimoto.mastertool.core.world.WorldHost
+import com.kaiharimoto.mastertool.core.world.WorldPaths
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.platform.Platform
+import java.io.File
 
 /**
  * The app as a world's scripts read it (1.0.97), taken once as a run starts: the pool's index (never changed in
  * place), the library, the builder's open deck as it stands, unsaved edits and all, every deck's groups, and the
- * practice games. Plain values, so a script's thread reads them while the app goes on changing its own.
+ * practice games, the active event's field. Plain values, so a script's thread reads them while the app goes on
+ * changing its own; a deck's combos and the world's own files are read from disk on that thread, when asked.
  */
 class WorldSnapshot private constructor(
     private val index: CardIndex,
@@ -22,6 +28,9 @@ class WorldSnapshot private constructor(
     private val library: List<DeckEntry>,
     private val groupsOf: Map<String, DeckGroups>,
     private val logged: List<TestGame>,
+    private val shares: Map<String, Int>,
+    private val comboDir: File?,
+    private val filesDir: File? = null,
 ) : WorldHost {
     override fun cardById(id: Int): Card? = index.byId(CardId(id))
     override fun cardNamed(name: String): Card? = index.byName(name)
@@ -32,6 +41,17 @@ class WorldSnapshot private constructor(
         g.ordered().associate { group -> group.name to g.assignments.filterValues { it == group.id }.keys.map { it.value } }
     }.orEmpty()
     override fun games(): List<TestGame> = logged
+    override fun combos(deckId: String): List<Combo> = comboDir?.let { dir ->
+        runCatching { File(dir, ComboCodec.path(deckId)).takeIf { it.isFile }?.readText()?.let(ComboCodec::decode)?.combos }.getOrNull()
+    }.orEmpty()
+    override fun field(deckId: String?): Map<String, Int> = shares
+    override fun file(path: String): String? {
+        val safe = WorldPaths.safe(path) ?: return null
+        return filesDir?.let { runCatching { File(it, safe).takeIf { f -> f.isFile }?.readText() }.getOrNull() }
+    }
+
+    /** This snapshot reading a world's own files, for `ygo.use`. */
+    fun reading(files: File): WorldSnapshot = WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files)
 
     companion object {
         /** Read on the main thread, where the builder's state lives; the library from its repository. */
@@ -41,7 +61,10 @@ class WorldSnapshot private constructor(
             val openId = b.deckId ?: "open"
             val open = if (b.deck.isEmpty) null else DeckEntry(openId, b.deckName, b.deck, 0, 0)
             val groups = stored.associate { it.entry.id to DeckGroupsCodec.read(it.extended).groups } + (openId to b.groups)
-            return WorldSnapshot(b.index, open, stored.map { it.entry }, groups, h.prep.doc.games)
+            // The field: the active event's web, every deck in it not yours that has a share.
+            val web = h.webs.library.byId(h.prep.active?.webId)
+            val shares = web?.entries.orEmpty().filter { !it.mine && (it.share ?: 0) > 0 }.associate { it.deckId to it.share!! }
+            return WorldSnapshot(b.index, open, stored.map { it.entry }, groups, h.prep.doc.games, shares, File(Platform.dataDir, "duel"))
         }
     }
 }

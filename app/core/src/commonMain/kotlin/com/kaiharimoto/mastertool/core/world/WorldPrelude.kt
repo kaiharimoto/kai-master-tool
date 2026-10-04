@@ -137,8 +137,8 @@ object WorldPrelude {
       });
       return t;
     })(),
-    // One of your own instruments (a file under lib/, say): run in the script's own scope, its functions yours to call.
-    use: function (path) { (0, eval)(call('file', { path: String(path) })); return true; },
+    // One of your own instruments (a file under lib/, say): run in the global scope, its functions yours to call; its last value returned.
+    use: function (path) { return (0, eval)(call('file', { path: String(path) })); },
     duel: {
       start: function (o) {
         var h = call('duelNew', o || {});

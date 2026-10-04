@@ -31,6 +31,7 @@ class JsRuntimeTest {
         override fun deck(id: String?) = if (id == null || id == "d1") deck else null
         override fun decks() = listOf(deck)
         override fun groups(deckId: String) = mapOf("Starters" to listOf(2))
+        override fun file(path: String) = if (path == "lib/odds.js") "var lib = { twice: function (x) { return 2 * x; } }; lib;" else null
     }
 
     private fun run(code: String, limits: JsRuntime.Limits = JsRuntime.Limits(), stop: () -> Boolean = { false }): Pair<JsRuntime.Result, WorldApi> {
@@ -196,5 +197,14 @@ class JsRuntimeTest {
         val data = WorldApi(host).pythonData()
         assertTrue("\"open\":\"d1\"" in data)
         assertTrue("Ash Blossom" in data)
+    }
+
+    @Test
+    fun aScriptUsesTheWorldsOwnLibrary() {
+        val (r, _) = run("var lib = ygo.use('lib/odds.js'); print(lib.twice(21));")
+        assertTrue(r.ok, r.err)
+        assertTrue("42" in r.out, r.out)
+        val (missing, _) = run("ygo.use('lib/none.js');")
+        assertFalse(missing.ok)
     }
 }
