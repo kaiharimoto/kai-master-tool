@@ -3629,6 +3629,45 @@ spaces; alone: empty) --duel-spot-state=listening|answer|many --duel-heard=summo
 --duel-replay=N --duel-facing=true --duel-select=near|far --duel-attack=arm|declared --duel-focus=m3 --duel-coords=true
 --duel-focus-menu=true --duel-pick=h2`.
 
+### 4q. Performance: fast without a pixel lost (1.0.92)
+
+kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five
+auditors read the builder, the duel, images and memory, startup and background work, and the GPU; five agents fixed what
+they found, each fix held to **the same pixels** (raster comparisons in `CardDrawingCacheTest`, memo-against-old tests in
+core, before/after studio shots). What was wrong was never the design — the foil compiled once, art decoded at its drawn
+size, loops that sleep — but a few patterns repeated over every card or every frame. The rules that keep it fast:
+
+- **Nothing asks for frames for ever.** Ai's face sleeps until its next step is due (`AiAvatar`); a loop that runs while
+  nothing moves repaints the whole window on the desk. The frame meter (palette: *Show frame times*, `FrameStats`,
+  `shell/FrameMeter.kt`) is how to look.
+- **A modifier used on every card is a `Modifier.Node`**, never a keyless `composed {}`: an unequal modifier makes the
+  card unskippable. `cursor`/`cursorPointer` (`CursorNode`) and `onPointer` are nodes; the cursor hook keeps its bounds
+  out of composition (`target()` puts the live box in).
+- **Read what moves where it is used**: a pointer, a drag, an animation, a z-order — in `offset {}`, `layout {}`,
+  `graphicsLayer {}` or the draw, not the body (`CarriedCard`, `zIndexAsPlaced`, `FollowLight`/`FollowRaise`, the duel's
+  `CarriedCard`, `FocusRing`, `SpotlightDim`). Deck cards are `key`ed by copy.
+- **Each card's lean is one derived value**, so the bump moving elsewhere redraws only the cards it changes; a lean under
+  `DeskLean.FLAT_DEGREES` (0.05°) is flat, keeping far cards off the perspective path.
+- **The foil keeps its work**: `HoloCache` (the path per size and frame), `BrushMemo` (the desk's shader reused while its
+  uniforms are bit-for-bit the same); name masks are alpha-only in a 600-entry, 24 MB `SizedLru`; zen's blur paints are
+  kept per sigma.
+- **The phone's tilt** moves the light past a quarter of a degree (`STEP` 0.012), and holds it under the full-screen
+  card (`LocalDeviceTilt` for the showcase, `NeueState.showcaseCovers`); deep zen asks a fast screen for 60 Hz.
+- **The duel remembers**: `DuelCatalog.cached` (one per index, `useIndex` a no-op for the same), `Secrets.Redactor`,
+  `DuelCheckpoints` (a table every 32 entries, for undo and `stateAt`), the replay's shown game per position,
+  `DiceRuns`, a lazy `placeOf` index.
+- **Ai**: the stream is a `StringBuilder` behind a version; `MarkdownMemo` re-parses only the last block; table cells
+  are measured once; the history reads `AiFiles.summaries()`; conversations are written by one `LatestWrites`, newest
+  last (it fixed an older save landing over a newer one).
+- **Off the frame thread**: the card pool's download and decode, the palette's and pickers' searches (130 ms after the
+  last key; Enter works out a list not yet settled), auto align, the art library's counts. Backups read their manifest
+  through the zip's directory (`ZipFile`) and are written streaming; sync lists blobs only when it sends, skips a
+  device's manifest whose Drive checksum is unchanged, and writes its state only when it changed; Prep's typing saves
+  400 ms after the last key and on close.
+
+Left for later, because they could change a pixel: the foil name masked inside the shader instead of a layer per card,
+dimming pool cards with an overlay instead of a layer, smaller decoded art on the desk.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

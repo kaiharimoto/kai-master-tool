@@ -733,6 +733,20 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 - **Imports, not inline names**: write `import …Name`, not `com.kaiharimoto….Name` in code, except for the short names
   that clash (`Wire`, `Slot`, `Showcase`, `Block`, `Lock`, `Spoken`, `Heard`, `Card`, `Spotlight`, `Mode`).
 
+## Keeping it fast (1.0.92, `NEUE.md` §4q)
+
+kai's ask: "run the best while maintaining the graphics quality". A performance change keeps **the same pixels**, and
+proves it (a raster comparison, a memo-against-old test, studio shots). The rules the red team left:
+- Nothing requests frames while nothing moves (`AiAvatar` sleeps to its next step). Measure with the palette's *Show
+  frame times* (`FrameStats`, `FrameMeter`).
+- A modifier on every card is a `Modifier.Node` (`CursorNode`, `onPointer`), never a keyless `composed {}`; never read
+  layout-written state (bounds) in composition.
+- Pointer, drag, animation and z-order values are read in `offset {}`/`layout {}`/`graphicsLayer {}`/draw
+  (`CarriedCard`, `zIndexAsPlaced`); deck cards are `key`ed.
+- The foil keeps its path and brush (`HoloCache`, `BrushMemo`); name masks are alpha-only in a bounded `SizedLru`.
+- The duel's lookups are cached (`DuelCatalog.cached`, `Secrets.Redactor`, `DuelCheckpoints`, `DiceRuns`).
+- Heavy work is off the frame thread: the pool download, searches (debounced), backups (`ZipFile`), sync, Prep's writes.
+
 ## Stored data outlives versions — a rule
 
 kai's progress lives in what older builds wrote; every release must read it. So:
