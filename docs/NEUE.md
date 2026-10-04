@@ -3669,6 +3669,24 @@ bottom cut off by the edge of the screen by 20%":
   card in hand through one derived value, so only a change of it composes the table again.
 - **The life-point pad closes on a press outside it**, as the open piles do (`lpPadSlot`, shared by the pad and the arbiter).
 
+**1.0.95, kai's next notes**:
+- **Their hand is held too** ("have the changes for hands also apply for the opponent's hand"): the far hand's card is
+  `HAND_SCALE` of the far card, standing on the window's top edge with `HAND_CUT` above it (`DuelLayout.farHandCard`),
+  overlapping and riffling the same way, rising downward (`DuelFrames.held(fromTop)`). The table is centred between the two
+  hands (`slack`), so on a short window the far side's taller band can take a little from the field.
+- **The card back wears the foil** ("have the foiling for the outer border apply to the card back as well"):
+  `ClassicCardBack` draws the setting's foil (`LocalCardFoil`, provided from `NeuePreferences.foil`) over the back, lit by
+  the pointer as a face is; a Set card's half-opacity back stays plain.
+- **A face-up Normal Trap's Default is Set** (`DuelVerbs.default`, unless it is on the chain), and the word for the
+  verb a press makes is **Default**, never "obvious", in the keys, the help and the rails.
+- **A card activating shines** ("lift and shine a holographic glimmer in the same texture as the foiling in a star + shape"):
+  as a card joins the chain it lifts (`GLINT_LIFT`) and a four-point star of the holo sheet (`drawFoilStar`, in `Foil.kt`, the
+  file allowed colour) grows and fades on it over `GLINT_MS`; a card already on the chain when the table is drawn does not.
+- **The opening dice rest on the Spell & Trap row**, in front of the hand, either side of its middle zone (`DiceStage`),
+  framed by crop marks with "Drag to throw" toward the middle of the table (`RestMarks`) while they wait on that seat; and
+  they **roll over the middle row** instead of bouncing off its edge: the arena's far wall is `DiceSim.INNER` (4.5 die edges)
+  past the field. The values are still stamped before the throw, so only the picture changed.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

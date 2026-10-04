@@ -41,6 +41,7 @@ import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Small
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
@@ -130,7 +131,9 @@ internal fun DuelPage(h: NeueHolders) {
                 }
             }
         } else {
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            // Clipped (1.0.95): their hand stands a fifth past the table's top edge, which is the bar's foot, and must go
+            // under the bar as yours goes under the window's edge.
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                 val layout = remember(maxWidth, maxHeight, prefs.twoSided, game.state.solo, neue.form, duels.bottom, prefs.logShown) {
                     DuelLayouter.solve(
                         maxWidth.value, maxHeight.value,

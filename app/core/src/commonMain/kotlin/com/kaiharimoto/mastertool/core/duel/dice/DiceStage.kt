@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.duel.dice
 
 import com.kaiharimoto.mastertool.core.duel.PileKind
+import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.DuelSpot
@@ -11,8 +12,8 @@ import com.kaiharimoto.mastertool.core.layout.Slot
  *
  * Each seat's [DiceSim] arena is laid over that seat's own field — its two rows of zones and its piles — at one
  * scale (a die's edge in dp), centred; the far seat's turned half round, as across a real table, so a throw is the
- * same throw drawn on either side. Before a throw the dice rest in front of the field, at the far end of the seat's
- * hand ([restAt]).
+ * same throw drawn on either side. Before a throw the dice rest on the seat's Spell & Trap row, in front of its hand
+ * (1.0.95). The table runs [DiceSim.INNER] past the field's far edge, over the middle row, before a wall.
  *
  * The camera ([project]) looks down on the table from above the person's own side: the picture plane is the table,
  * so anything lying on it is drawn exactly where the 2-D table is (a die at rest sits on its zone), and anything
@@ -51,10 +52,11 @@ class DiceStage(private val layout: DuelLayout) {
         val top = box.top + (box.height - scale * DiceSim.ARENA_D.toFloat()) / 2f
         val turned = layout.twoSided && seat != layout.bottom
         val base = Arena(seat, left, top, scale, turned, emptyList())
-        // In front of the field, at the far end of the hand: its middle when the hand is a band, else just off the edge.
-        val hand = layout.pile(seat, PileKind.HAND)
-        val y = if (hand != null) toArena(base, hand.centerX, hand.centerY).y else DiceSim.ARENA_D + 0.9
-        val rest = listOf(V3(DiceSim.ARENA_W - 2.1, y, 0.5), V3(DiceSim.ARENA_W - 0.8, y, 0.5))
+        // On the Spell & Trap row, in front of the hand, in its middle (kai, 1.0.95: "when the duel starts have the dice in
+        // front of the hand where the spell and trap zone are"); 1.0.88–1.0.94 kept them at the far end of the hand.
+        val middle = layout.zone(Place.Zone(seat, ZoneKind.SPELL, 2))
+        val at = if (middle != null) toArena(base, middle.centerX, middle.centerY) else V3(DiceSim.ARENA_W / 2, DiceSim.ARENA_D * 0.75, 0.0)
+        val rest = listOf(V3(at.x - 0.8, at.y, 0.5), V3(at.x + 0.8, at.y, 0.5))
         return base.copy(rest = rest)
     }
 
