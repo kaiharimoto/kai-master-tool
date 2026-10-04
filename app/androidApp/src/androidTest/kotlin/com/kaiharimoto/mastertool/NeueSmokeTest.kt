@@ -580,6 +580,7 @@ private fun seedPool(app: MasterToolApplication, ids: List<Int>) {
                 linkValue = null, linkMarkers = "", pendulumScale = null, archetype = null,
                 imageUrl = null, imageUrlSmall = null, tcgBanStatus = "UNLIMITED", ocgBanStatus = "UNLIMITED",
                 alternateIds = "$id",
+                konamiId = null, tcgDate = null, ocgDate = null, formats = "", genesysPoints = null,
             )
         }
     }

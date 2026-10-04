@@ -17,9 +17,7 @@ import com.kaiharimoto.mastertool.core.ai.web.Untrusted
 import com.kaiharimoto.mastertool.core.ai.web.UrlGuard
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
-import com.kaiharimoto.mastertool.core.hand.HandConstraint
-import com.kaiharimoto.mastertool.core.hand.HandOdds
-import com.kaiharimoto.mastertool.core.hand.HandQuery
+import com.kaiharimoto.mastertool.core.hand.CardSetOdds
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.mastertool.core.sync.Sha256
@@ -94,39 +92,57 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         }
         val main = deck.main
         if (main.isEmpty()) return fail("“$name” has no Main Deck yet.")
-        fun set(cards: List<String>, group: String?): Pair<String, Set<CardId>>? {
+        val groupNames = groups.groups.joinToString { it.name }.ifBlank { "it has none" }
+
+        /** A set to count: its words, its cards, and the names that found no card (said, never dropped in silence). */
+        class Asked(val label: String, val ids: Set<CardId>, val missing: List<String>)
+
+        /** The set [cards] or [group] names; null when neither is given; a failure in words when it names nothing. */
+        fun set(cards: List<String>, group: String?, which: String): Result<Asked?> {
             if (!group.isNullOrBlank()) {
-                val g = groups.groups.firstOrNull { it.name.equals(group.trim(), ignoreCase = true) } ?: return null
-                return g.name to groups.assignments.filterValues { it == g.id }.keys
+                val g = groups.groups.firstOrNull { it.name.equals(group.trim(), ignoreCase = true) }
+                    ?: return Result.failure(IllegalArgumentException("“$name” has no group “${group.trim()}”. Its groups: $groupNames."))
+                return Result.success(Asked(g.name, groups.assignments.filterValues { it == g.id }.keys, emptyList()))
             }
-            if (cards.isEmpty()) return null
-            val ids = cards.mapNotNull { (CardWords.resolve(it, state.index) as? Resolved.Found)?.card?.id }.toSet()
-            return cards.joinToString(", ") to ids
+            val named = cards.map { it.trim() }.filter { it.isNotEmpty() }
+            if (named.isEmpty()) return Result.success(null)
+            val found = named.map { it to (CardWords.resolve(it, state.index) as? Resolved.Found)?.card?.id }
+            val missing = found.filter { it.second == null }.map { it.first }
+            // None of a set found is no question to answer: refused, never worked out over nothing.
+            if (missing.size == named.size) {
+                return Result.failure(
+                    IllegalArgumentException(
+                        "Could not find ${if (named.size == 1) "a card named" else "any of"} ${named.joinToString(", ") { "“$it”" }} " +
+                            "(the $which). search_cards finds a card's exact name.",
+                    ),
+                )
+            }
+            return Result.success(Asked(named.joinToString(", "), found.mapNotNull { it.second }.toSet(), missing))
         }
-        val first = set(ToolArgs.strings(i, "cards"), ToolArgs.string(i, "group"))
-            ?: return fail("Name the cards that count, or one of the deck's groups: ${groups.groups.joinToString { it.name }.ifBlank { "it has none" }}.")
-        val second = set(ToolArgs.strings(i, "and_cards"), ToolArgs.string(i, "and_group"))
+        val first = set(ToolArgs.strings(i, "cards"), ToolArgs.string(i, "group"), "cards").getOrElse { return fail(it.message!!) }
+            ?: return fail("Name the cards that count, or one of the deck's groups: $groupNames.")
+        val second = set(ToolArgs.strings(i, "and_cards"), ToolArgs.string(i, "and_group"), "and_cards").getOrElse { return fail(it.message!!) }
         val atLeast = ToolArgs.int(i, "at_least") ?: 1
         val andAtLeast = ToolArgs.int(i, "and_at_least") ?: 1
-        fun copies(ids: Set<CardId>) = main.count { it in ids }
-        val sizes = buildMap {
-            put("a", copies(first.second))
-            if (second != null) put("b", copies(second.second - first.second))
-        }
-        val query = HandQuery(
-            buildList {
-                add(HandConstraint("a", atLeast, 60))
-                if (second != null) add(HandConstraint("b", andAtLeast, 60))
-            },
-        )
+        // By card, not printing, and exact when the two sets share cards (Phase B): CardSetOdds, through HandCounter.
+        val needs = listOfNotNull(CardSetOdds.Need(first.ids, atLeast), second?.let { CardSetOdds.Need(it.ids, andAtLeast) })
+        val odds = CardSetOdds.of(main, needs, state.index::byId)
         val turn = ToolArgs.string(i, "turn") ?: "both"
         val lines = buildList {
-            if (turn != "second") add("going first (5 cards): ${pct(HandOdds.probability(sizes, main.size, 5, query))}")
-            if (turn != "first") add("going second (6 cards): ${pct(HandOdds.probability(sizes, main.size, 6, query))}")
+            if (turn != "second") add("going first (5 cards): ${pct(odds.first)}")
+            if (turn != "first") add("going second (6 cards): ${pct(odds.second)}")
         }
-        val what = "at least $atLeast of ${first.first} (${sizes["a"]} in ${main.size})" +
-            (second?.let { " and at least $andAtLeast of ${it.first} (${sizes["b"]} more)" } ?: "")
-        return MetaAnswer("“$name”, $what:\n" + lines.joinToString("\n"), "Worked out the odds of $what")
+        val what = "at least $atLeast of ${first.label} (${odds.copies[0]} in ${main.size})" +
+            (
+                second?.let {
+                    val b = odds.copies[1]
+                    " and at least $andAtLeast of ${it.label} " +
+                        if (odds.shared == 0) "($b more)" else "($b, ${odds.shared} of them in both sets: a card in both counts for each)"
+                } ?: ""
+                )
+        val missing = first.missing + second?.missing.orEmpty()
+        val notFound = if (missing.isEmpty()) "" else "\nNot found, so not counted: ${missing.joinToString(", ") { "“$it”" }}."
+        return MetaAnswer("“$name”, $what:\n" + lines.joinToString("\n") + notFound, "Worked out the odds of $what")
     }
 
     private fun pct(p: Double) = Calc.format(p * 100) + "%"

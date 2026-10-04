@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.library
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardCategory
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 
 /**
@@ -53,7 +54,8 @@ object DeckSearch {
         val q = query.trim()
         if (q.isEmpty()) return Match(byName = true, cards = emptyList(), tags = emptyList())
         val byName = name.contains(q, ignoreCase = true)
-        val cards = (deck.main + deck.extra + deck.side).distinct()
+        // Each card once, whatever its printings (Phase B): an Ash and an alternate-art Ash are one Ash.
+        val cards = CardIdentity.distinct(deck.main + deck.extra + deck.side, card)
             .mapNotNull { card(it)?.name }
             .filter { it.contains(q, ignoreCase = true) }
         val tagged = tags.filter { it.contains(q, ignoreCase = true) }

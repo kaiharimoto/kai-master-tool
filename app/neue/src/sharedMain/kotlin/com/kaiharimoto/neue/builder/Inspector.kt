@@ -354,7 +354,9 @@ internal fun Copies(card: Card, state: DeckBuilderState) {
                 )
             }
         }
-        val inMain = state.copiesIn(card.id, DeckSection.MAIN)
+        // Every printing of the card is a copy you can draw (Phase B).
+        val printings = card.passcodes
+        val inMain = state.deck.main.count { it in printings }
         val size = state.deck.main.size
         if (home == DeckSection.MAIN && inMain > 0 && size > 0) {
             Help(

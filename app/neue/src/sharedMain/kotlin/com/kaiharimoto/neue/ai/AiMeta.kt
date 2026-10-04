@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.meta.DeckAnalysis
 import com.kaiharimoto.mastertool.core.ai.meta.FieldBuilder
+import com.kaiharimoto.mastertool.core.ai.meta.FieldLegality
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.ai.web.Untrusted
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
@@ -78,9 +79,7 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val event = ToolArgs.string(i, "event")?.lowercase()
         val pilot = ToolArgs.string(i, "player")
         val page = ToolArgs.int(i, "page") ?: 0
-        // An older page is read whole, whatever its age, unless days was asked for; a page that fails fails the answer.
-        val window = if (page > 0 && daysGiven == null) "page $page of each tier, any age" else "last $days days" + if (page > 0) ", page $page" else ""
-        val (decks, problems, unread) = if (page > 0) {
+        val read = if (page > 0) {
             val got = (tier..4).flatMap { t ->
                 source.page(t, page).getOrElse { return fail("Could not read YGOPRODeck's tournament decks (tier $t, page $page). ${Unreachable.of(YgoProDeckDecks.SITE, it)}") }
             }
@@ -88,10 +87,14 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         } else {
             source.recent(tier, days, format, maxPages = RECENT_PAGES)
         }
+        val (decks, problems) = read
+        // An older page is read whole, whatever its age, unless days was asked for; a page that fails fails the answer.
+        // The window said is the one really read: every tier cut to the same date when one stopped short (Phase B).
+        val window = if (page > 0 && daysGiven == null) "page $page of each tier, any age" else read.windowWords(days) + if (page > 0) ", page $page" else ""
         decks.forEach { seen[it.number] = it }
         val shown = decks.filter { d -> (archetype == null || archetype in d.name.lowercase()) && (event == null || event in d.event.lowercase()) && (pilot == null || PlayerPages.names(pilot, d.pilot)) }
             .sortedBy { it.daysAgo }
-        val cut = cutShort(unread, "ask again with page $RECENT_PAGES and up to read further back")
+        val cut = read.cutWords(days, "ask again with page $RECENT_PAGES and up to read further back")
         if (shown.isEmpty()) {
             val why = if (problems.isNotEmpty()) " YGOPRODeck: ${problems.joinToString("; ")}." else ""
             return if (problems.isNotEmpty() && decks.isEmpty()) fail("Could not read YGOPRODeck's tournament decks.$why")
@@ -109,13 +112,6 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
                 (if (cut.isNotEmpty()) "\n(${cut.trim()})" else ""),
             "Read ${shown.size} tournament decks from YGOPRODeck",
         )
-    }
-
-    /** What [YgoProDeckDecks.recent] left unread, in words — empty when it read the whole window. */
-    private fun cutShort(unread: List<Int>, next: String): String {
-        if (unread.isEmpty()) return ""
-        val tiers = unread.joinToString(", ") { "tier $it" }
-        return " Not every list in the window was read at $tiers: the last page read was still inside it, so older lists in it were left out — $next."
     }
 
     private companion object {
@@ -218,13 +214,22 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val format = formatOf(ToolArgs.string(i, "format"))
         val days = (ToolArgs.int(i, "days") ?: 45).coerceIn(7, 365)
         val top = (ToolArgs.int(i, "top") ?: 12).coerceIn(3, 30)
-        val (decks, problems, unread) = source.recent(tier, days, format, maxPages = FIELD_PAGES)
-        decks.forEach { seen[it.number] = it }
-        if (decks.isEmpty()) {
+        val read = source.recent(tier, days, format, maxPages = FIELD_PAGES)
+        val (all, problems) = read
+        all.forEach { seen[it.number] = it }
+        val window = read.windowWords(days)
+        if (all.isEmpty()) {
             return if (problems.isNotEmpty()) fail("Could not read YGOPRODeck's tournament decks: ${problems.joinToString("; ")}")
-            else MetaAnswer("No ${format.name} results at tier $tier+ in the last $days days.", "No results to build a field from")
+            else MetaAnswer("No ${format.name} results at tier $tier+ in the $window.${read.cutWords(days, "a shorter days window reads all of it")}", "No results to build a field from")
         }
-        val clusters = FieldBuilder.build(decks, top)
+        // Lists the current banlist no longer allows are not the field (Phase B): dropped, and said. Genesys has no list.
+        val legal = FieldLegality.formatOf(format)?.let { f -> FieldLegality.check(all, index::byId, f) } ?: FieldLegality.Reading(all, emptyList())
+        val decks = legal.kept
+        val dropped = FieldLegality.words(legal.dropped, "today's ${format.name} Forbidden & Limited list")
+        if (decks.isEmpty()) {
+            return MetaAnswer("Every ${format.name} list read at tier $tier+ in the $window is illegal under today's list. $dropped", "No legal lists to build a field from")
+        }
+        val clusters = FieldBuilder.build(decks, top, index::byId)
         // The strategies are named from the lists' own names, and the events are the site's: outside text.
         val strategies = buildString {
             clusters.forEachIndexed { n, c ->
@@ -235,14 +240,15 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             }
         }
         val text = buildString {
-            appendLine("What topped in ${format.name} from ${decks.size} tournament decks (tier $tier+, last $days days, YGOPRODeck), by strategy; share is of top cuts, weighted by placement and event size.")
+            appendLine("What topped in ${format.name} from ${decks.size} tournament decks (tier $tier+, $window, YGOPRODeck), by strategy; share is of top cuts, weighted by placement and event size.")
+            if (dropped.isNotEmpty()) appendLine(dropped)
             appendLine(FieldBuilder.SHARE_CAVEAT)
             appendLine(Untrusted.wrap("$SOURCE field", strategies))
             val covered = clusters.sumOf { it.share }
             appendLine()
             append("These ${clusters.size} strategies are $covered% of the weighted top cuts.")
             if (problems.isNotEmpty()) append(" (Some pages failed: ${problems.joinToString("; ")}.)")
-            append(cutShort(unread, "a shorter days window reads all of it"))
+            append(read.cutWords(days, "a shorter days window reads all of it"))
         }
         return MetaAnswer(text, "Read what topped in ${format.name}: ${clusters.take(3).joinToString { "${it.name} ${it.share}%" }} of top cuts")
     }

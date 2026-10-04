@@ -1,6 +1,5 @@
 package com.kaiharimoto.mastertool.ui.deckbuilder
 
-import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.prep.IsoDate
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -34,6 +33,7 @@ import com.kaiharimoto.mastertool.core.hand.HandGoal
 import com.kaiharimoto.mastertool.core.hand.HandGoals
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format

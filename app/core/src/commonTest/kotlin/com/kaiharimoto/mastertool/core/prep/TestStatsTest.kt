@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.prep
 
 import com.kaiharimoto.mastertool.core.prep.TestStats.Rate
+import com.kaiharimoto.mastertool.core.web.WebEntry
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -113,6 +114,73 @@ class TestStatsTest {
         near(0.5, TestStats.expected(rows, emptyMap()))
         // No smoothing: two from two is certain.
         near(1.0, TestStats.expected(rows, mapOf("a" to 10), priorWeight = 0))
+    }
+
+    @Test
+    fun gameOneIsPlayedAtItsOwnRatesAndTheSidedGamesAtTheirs() {
+        // Equal rates throughout: the four-rate walk is the two-rate one.
+        near(TestStats.matchWin(0.7, 0.4), TestStats.matchWin(0.7, 0.4, 0.7, 0.4))
+        // By hand: Game 1 at (0.3 first, 0.2 second), so won (0.3 + 0.2) / 2 = 0.25. Sided at 0.8 first, 0.6 second.
+        // Won G1, you go second: 0.6 + 0.4 × 0.8 = 0.92. Lost G1, you go first: 0.8 × 0.6 = 0.48.
+        near(0.25 * 0.92 + 0.75 * 0.48, TestStats.matchWin(0.3, 0.2, 0.8, 0.6))
+        // A deck that only wins after siding loses Game 1 and must win both of the others.
+        near(0.8 * 0.6, TestStats.matchWin(0.0, 0.0, 0.8, 0.6))
+    }
+
+    @Test
+    fun theMatrixKeepsGameOneAndTheSidedGamesApartByTurn() {
+        val rows = TestStats.matrix(
+            listOf(
+                game("a", TestGame.FIRST, TestGame.LOSS),
+                game("a", TestGame.SECOND, TestGame.LOSS),
+                game("a", TestGame.FIRST, TestGame.WIN, game = 2),
+                game("a", TestGame.SECOND, TestGame.WIN, game = 3),
+                game("a", TestGame.SECOND, TestGame.WIN, game = 2),
+            ),
+        )
+        val a = rows.single()
+        assertEquals(Rate(0, 1), a.preFirst)
+        assertEquals(Rate(0, 1), a.preSecond)
+        assertEquals(Rate(1, 1), a.postFirst)
+        assertEquals(Rate(2, 2), a.postSecond)
+        // Each smoothed by four games at 0.5, Game 1 at its own rates, the sided games at theirs.
+        fun s(w: Int, n: Int) = (w + 2.0) / (n + 4)
+        near(TestStats.matchWin(s(0, 1), s(0, 1), s(1, 1), s(2, 2)), TestStats.expected(rows, mapOf("a" to 1)))
+        // Pooled, the old reading is another number: 55.4 % against 58.7 %.
+        assertTrue(abs(TestStats.expected(rows, mapOf("a" to 1)) - TestStats.matchWin(s(1, 2), s(2, 3))) > 0.03)
+        // A row with no splits — as an older caller builds it — reads exactly as before.
+        val old = TestStats.Row("b", "B", Rate(3, 4), Rate(1, 4), Rate.NONE, Rate.NONE, Rate(4, 8), null)
+        near(TestStats.matchWin(s(3, 4), s(1, 4)), TestStats.expected(listOf(old), mapOf("b" to 1)))
+        // A split with no games falls back to its turn's pooled rate: only Game 1 played, the sided games use it too.
+        val g1 = TestStats.matrix(listOf(game("c", TestGame.FIRST, TestGame.WIN), game("c", TestGame.SECOND, TestGame.LOSS)))
+        near(TestStats.matchWin(s(1, 1), s(0, 1)), TestStats.expected(g1, mapOf("c" to 1)))
+    }
+
+    @Test
+    fun theMirrorStaysInTheFieldAtItsShare() {
+        val web = listOf(
+            WebEntry("mine", mine = true, share = 20),
+            WebEntry("snake", share = 80),
+            WebEntry("unknown"),
+        )
+        val shares = TestStats.field(web)
+        assertEquals(mapOf("mine" to 20, "snake" to 80), shares)
+        // Snake-Eye always beaten; the mirror never played counts at 50 %.
+        val rows = TestStats.matrix(List(6) { game("snake", if (it % 2 == 0) TestGame.FIRST else TestGame.SECOND, TestGame.WIN) })
+        val snake = TestStats.expected(rows, mapOf("snake" to 1))
+        near(0.8 * snake + 0.2 * 0.5, TestStats.expected(rows, shares))
+        // Dropping the mirror and renormalising read the field as all Snake-Eye: too high.
+        assertTrue(TestStats.expected(rows, mapOf("snake" to 80)) > TestStats.expected(rows, shares))
+        // The mirror's games — logged by the deck's id, or typed by its name — are its rate.
+        val logged = listOf(
+            game("mine", TestGame.FIRST, TestGame.LOSS),
+            game("My Deck", TestGame.SECOND, TestGame.LOSS, name = "My Deck"),
+            game("snake", TestGame.FIRST, TestGame.WIN),
+        )
+        val folded = TestStats.matrix(TestStats.mirrored(logged, "mine", listOf("my deck")))
+        assertEquals(Rate(0, 2), folded.single { it.opponent == "mine" }.all)
+        assertTrue(folded.none { it.opponent == "My Deck" })
+        assertEquals(logged, TestStats.mirrored(logged, null, listOf("my deck")))
     }
 
     @Test

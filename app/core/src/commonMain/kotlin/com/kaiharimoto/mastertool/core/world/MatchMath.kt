@@ -74,9 +74,13 @@ object MatchMath {
         val xs = DoubleArray(draws) {
             weighed.entries.sumOf { (k, share) ->
                 val row = byKey[k]
-                val f = beta(random, (row?.first?.wins ?: 0) + 2.0, (row?.first?.let { it.games - it.wins } ?: 0) + 2.0)
-                val s = beta(random, (row?.second?.wins ?: 0) + 2.0, (row?.second?.let { it.games - it.wins } ?: 0) + 2.0)
-                share / total * TestStats.matchWin(f, s)
+                fun draw(rate: TestStats.Rate?) = beta(random, (rate?.wins ?: 0) + 2.0, (rate?.let { it.games - it.wins } ?: 0) + 2.0)
+                val f = draw(row?.first)
+                val s = draw(row?.second)
+                // Game 1 and the sided games at their own rates, as the point is (Phase B): a split with games drawn from
+                // its own posterior, one without played at the turn's pooled draw — so a log with no splits reads as before.
+                fun split(rate: TestStats.Rate?, pooled: Double) = if ((rate?.games ?: 0) > 0) draw(rate) else pooled
+                share / total * TestStats.matchWin(split(row?.preFirst, f), split(row?.preSecond, s), split(row?.postFirst, f), split(row?.postSecond, s))
             }
         }
         xs.sort()
