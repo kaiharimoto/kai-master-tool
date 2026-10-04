@@ -333,5 +333,6 @@ These change what gets built. Each has a default the plan assumes until you say 
 |---|---|
 | 0 Foundation (Ai World, instruments, red team) | Shipped 1.0.97 |
 | Evidence ledger, YGOrg rulings, harness fixes | Shipped 1.0.98 |
-| **A Trust** | **Next** |
-| B, S, C to G | Planned |
+| A Trust | Shipped 1.0.99 / v1.3.77 |
+| **B Card truth** | **Next**, from 1.1.0 (the Neue patch would reach 100) |
+| S, C to G | Planned |
