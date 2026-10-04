@@ -128,6 +128,7 @@ import com.kaiharimoto.neue.duel.DuelBarItems
 import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
 import com.kaiharimoto.neue.duel.Duels
+import com.kaiharimoto.neue.duel.duelContext
 import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.LocalDeviceTilt
@@ -222,7 +223,7 @@ class NeueHolders(
     val present: Presentations by lazy { Presentations(java.io.File(Platform.dataDir, "present")) }
 
     /** Duel (1.0.74): the duel in play, its table, its log; kept in `<data>/duel/`. */
-    private val duelHolder = lazy { Duels(java.io.File(Platform.dataDir, "duel")) }
+    private val duelHolder = lazy { Duels(java.io.File(Platform.dataDir, "duel")).also { d -> d.context = { duelContext(this) } } }
     val duel: Duels by duelHolder
 
     /** Ai World (1.0.97): Ai's own computer — its files, runs and boards — in `<data>/world/`. */

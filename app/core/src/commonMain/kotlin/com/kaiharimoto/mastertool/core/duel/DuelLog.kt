@@ -52,6 +52,11 @@ data class DuelEntry(
     val seat: Int? = null,
     val group: Int = 0,
     @Serializable(with = LenientAction::class) val action: DuelAction,
+    /**
+     * Who made it and how the table was set (Phase C, 1.1.x, [Provenance]): stamped on commit. Absent on every entry
+     * written before, and on the deal's — the table's own.
+     */
+    val by: Provenance? = null,
 )
 
 /** A duel as written to a file: how it began, and everything that happened. */
@@ -143,7 +148,7 @@ data class DuelGame(
      * Commits [actions] as one group by [seat], all or nothing. What they leave to chance is stamped
      * here. Anything undone is dropped: acting after an undo starts a new future.
      */
-    fun act(actions: List<DuelAction>, seat: Int?, at: Long = 0L, join: Boolean = false): Result {
+    fun act(actions: List<DuelAction>, seat: Int?, at: Long = 0L, join: Boolean = false, by: Provenance? = null): Result {
         if (actions.isEmpty()) return Result(this, null)
         // [join]: one gesture made in steps (a turn's opening, 1.0.86) — the last group grows, never one behind the deal.
         val last = entries.getOrNull(cursor - 1)
@@ -156,11 +161,13 @@ data class DuelGame(
         val stamped = DuelIds.stamp(state, rolled, DuelIds.next(state, played))
         val (next, problem) = DuelRules.applyAll(state, stamped, seat)
         if (next == null) return Result(this, problem)
-        val added = stamped.mapIndexed { k, a -> DuelEntry(cursor + k, at, seat, group, a) }
+        // Who moved, stamped as the dice are (Phase C): an Ai move with the fingerprint of the view it acted on.
+        val sealed = Provenance.seal(by, state, header, played)
+        val added = stamped.mapIndexed { k, a -> DuelEntry(cursor + k, at, seat, group, a, sealed) }
         return Result(copy(entries = played + added, cursor = cursor + added.size, state = next), null)
     }
 
-    fun act(action: DuelAction, seat: Int?, at: Long = 0L): Result = act(listOf(action), seat, at)
+    fun act(action: DuelAction, seat: Int?, at: Long = 0L, by: Provenance? = null): Result = act(listOf(action), seat, at, by = by)
 
     fun undo(): DuelGame {
         if (!canUndo) return this

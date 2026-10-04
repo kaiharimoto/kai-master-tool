@@ -5,6 +5,12 @@ import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.backup.Backups
 import com.kaiharimoto.mastertool.core.data.PoolRecord
+import com.kaiharimoto.mastertool.core.duel.DuelCodec
+import com.kaiharimoto.mastertool.core.duel.DuelGame
+import com.kaiharimoto.mastertool.core.duel.Provenance
+import com.kaiharimoto.mastertool.core.duel.record.DuelResult
+import com.kaiharimoto.mastertool.core.duel.record.DuelResultCodec
+import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.cards.BanlistCodec
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
@@ -318,5 +324,46 @@ class OldDataTest {
         // A later build's fields are skipped, and a broken file is no cache at all, never a crash.
         assertNotNull(BanlistCodec.decode("""{"version":2,"region":"OCG","lists":[],"source":"elsewhere"}"""))
         assertEquals(null, BanlistCodec.decode("{\"version\":1,\"lists\":[{]"))
+    }
+
+    @Test
+    fun aDuelAndAReplayWithoutProvenanceStillReadAnd112sShapeReadsBack() {
+        // Up to 1.1.1: no entry says who made it. Read with no provenance, counted as no one's; a result of it has no Ai.
+        val old = """{"header":{"id":"d7","seed":5,"seats":[{"name":"Kai","main":[1,2,3,4,5,6],"deckId":"k"},{"name":"Ai","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},{"i":1,"seat":1,"group":1,"action":{"t":"lp","seat":0,"delta":-8000}}],
+            "cursor":2,"name":"Old game","saved":1760000000000}"""
+        val g = DuelGame.of(assertNotNull(DuelCodec.decode(old)))
+        assertTrue(g.entries.all { it.by == null })
+        val r = assertNotNull(DuelResults.of(g, 1L))
+        assertEquals(1, r.winner)
+        assertEquals(null, r.ai)
+        assertEquals(DuelResult.UNKNOWN, r.player(1))
+        // 1.1.2 (Phase C): each entry carries `by`; an older build ignores the key, and this one reads it back.
+        val now = """{"header":{"id":"d8","seed":5,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Ai","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},
+            {"i":1,"seat":1,"group":1,"action":{"t":"lp","seat":0,"delta":-100},"by":{"by":"ai","aiSeat":1,"aiKnows":"auto","eyes":"seat","view":"0123456789abcdef","peeks":1}},
+            {"i":2,"seat":0,"group":2,"action":{"t":"chat","seat":0,"text":"hi"},"by":{"aiSeat":1,"aiKnows":"auto","eyes":"seat","later":true}}],"cursor":3}"""
+        val n = DuelGame.of(assertNotNull(DuelCodec.decode(now)))
+        val ai = assertNotNull(n.entries[1].by)
+        assertEquals(Provenance.AI, ai.by)
+        assertEquals("0123456789abcdef", ai.view)
+        assertEquals(1, ai.peeks)
+        // `by` left out is the person; a later build's key is skipped.
+        assertEquals(Provenance.PERSON, n.entries[2].by?.by)
+        // 1.1.2: a result in `<data>/duel/records/<id>.json`, as it is first written.
+        val record = """{"id":"d8","duel":"d8","ended":1760000000000,"seats":[{"name":"Kai","deckId":"k","deckName":"Labrynth","player":"person",
+            "moves":{"person":12}},{"name":"Ai","player":"ai","moves":{"ai":14,"table":2}}],"first":1,"firstBy":"roll","rolls":[[7,7],[5,9]],
+            "rollWinner":1,"choseFirst":true,"chosenBy":"ai","winner":1,"turns":6,"ai":{"seat":1,"knows":"self","moves":14},"eyes":"seat"}"""
+        val res = assertNotNull(DuelResultCodec.decode(record))
+        assertEquals(1, res.ai?.seat)
+        assertEquals(listOf(listOf(7, 7), listOf(5, 9)), res.rolls)
+        assertEquals(
+            "Ai won 1 of 1 against Kai, with these settings: Ai's knowledge its own seat's eyes; Kai seeing only their own hand; " +
+                "the dice deciding who went first (Ai first in 1).",
+            DuelResults.summary(listOf(res)),
+        )
+        // Not a record at all: none, never a crash.
+        assertEquals(null, DuelResultCodec.decode("""{"ended":1}"""))
+        assertEquals(null, DuelResultCodec.decode("{"))
     }
 }

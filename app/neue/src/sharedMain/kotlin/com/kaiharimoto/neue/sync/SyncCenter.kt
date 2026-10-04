@@ -177,7 +177,7 @@ class SyncCenter(private val h: NeueHolders) {
         if ("ai" in changed) h.ai.bookChanged()
         if ("art" in changed) h.customArt.reload()
         if ("present" in changed) h.present.reload()
-        if ("replays" in changed) { h.duel.loadReplays(); h.duel.reloadRulings() }
+        if ("replays" in changed) { h.duel.loadReplays(); h.duel.reloadRulings(); h.duel.reloadResults() }
         if ("world" in changed) h.world.reload()
     }
 

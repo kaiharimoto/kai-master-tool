@@ -1115,6 +1115,22 @@ object AiTools {
         phase = 3,
     )
 
+    val duelRecords = ToolSpec(
+        "duel_records",
+        "Duel (07), read-only (Phase C): the finished duels kept as records — who sat where and played (the person, you, a network " +
+            "guest), the decks, who went first and whether the dice decided it, who won and how, the turns, and how the table was set (your " +
+            "seat, your knowledge, your peeks, the person's eyes, networked or a hot-seat). With no action, the summary: \"Ai won N of M " +
+            "against <person>, with these settings\", one line per person and setting. list: the newest 'count' records, one a line.",
+        schema {
+            enum("action", "summary (default) or list", listOf("summary", "list"))
+            string("person", "Only duels against this person (their seat's name)")
+            integer("count", "list: how many, newest first; default 20", min = 1, max = 200)
+            boolean("what_ifs", "Count duels played on from a replay too; default false")
+        },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
     // ---- Ai World (1.0.97): a computer of Ai's own that the person watches --------------------------------------
 
     val worldState = ToolSpec(
@@ -1221,7 +1237,7 @@ object AiTools {
      * Sending all of them cost every round about twelve thousand tokens the table never used.
      */
     val DUEL: Set<String> = setOf(
-        "duel_state", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch",
+        "duel_state", "duel_act", "duel_peek", "duel_log", "duel_combo", "duel_ruling", "duel_watch", "duel_records",
         "ask_user", "card_info", "search_cards", "rulings", "calculate", "hand_odds", "express",
     )
 
@@ -1232,7 +1248,7 @@ object AiTools {
         "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
-        "duel_state", "duel_log",
+        "duel_state", "duel_log", "duel_records",
         "world_state", "world_read",
     )
 
@@ -1250,7 +1266,7 @@ object AiTools {
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
-        duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch,
+        duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch, duelRecords,
         worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow,
     )
 

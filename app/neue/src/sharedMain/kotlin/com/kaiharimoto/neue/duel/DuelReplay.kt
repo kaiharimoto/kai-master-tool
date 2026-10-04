@@ -27,9 +27,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
+import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.replay.Replays
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.neue.ai.avatar.AiName
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.neue.kit.BtnSize
@@ -146,15 +148,27 @@ private fun Timeline(duels: Duels, replay: Replay, modifier: Modifier) {
 
 /** The library of replays: save the duel in play as one, open one, or let one go. */
 @Composable
-internal fun ReplayLibrary(duels: Duels) {
+internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
     val c = Mu.colors
     var name by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { duels.loadReplays() }
+    LaunchedEffect(Unit) {
+        duels.loadReplays()
+        duels.loadResults()
+    }
+    // The finished duels against Ai, counted (Phase C): one quiet line per person and setting, read off the records.
+    val scores = remember(duels.results) { DuelResults.aiAgainst(duels.results) }
     MuDialog("Replays", { duels.libraryOpen = false }, width = 560.dp, description = "Every duel can be kept and watched again, a step, a phase or a turn at a time, either way — and edited, noted, or played on from any point.") {
         if (duels.game != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MuInput(name, { name = it }, Modifier.weight(1f), placeholder = "Name this duel", dense = true, onSubmit = { duels.saveReplay(name); name = "" })
                 MuButton("Keep the duel in play", { duels.saveReplay(name); name = "" }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
+            }
+            HRule()
+        }
+        if (scores.isNotEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                AiName(aiName, c.ink)
+                scores.forEach { Small(DuelResults.words(it, aiName), color = c.ink70) }
             }
             HRule()
         }

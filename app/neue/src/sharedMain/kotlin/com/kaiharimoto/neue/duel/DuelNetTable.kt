@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
+import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.net.DuelMirror
@@ -144,7 +145,8 @@ internal class DuelNet(private val d: Duels) {
                 val g = d.game ?: return
                 val (resolved, why) = DuelHost.resolve(g.state, 1, g.header.seed, w.actions)
                 if (resolved == null) { l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Refused(w.seq, why ?: "No")); return }
-                val r = DuelHost.act(g, 1, resolved, windows(), w.force, Duels.now())
+                // The guest's own move, written as the guest's (Phase C): the host's log keeps whose seat was whose.
+                val r = DuelHost.act(g, 1, resolved, windows(), w.force, Duels.now(), by = d.provenance().copy(by = Provenance.GUEST))
                 if (!r.ok) { l.send(com.kaiharimoto.mastertool.core.duel.net.Wire.Refused(w.seq, r.problem ?: "No")); return }
                 d.game = r.game
                 d.save()
@@ -169,7 +171,7 @@ internal class DuelNet(private val d: Duels) {
 
     fun hostAct(actions: List<DuelAction>, seat: Int): Boolean {
         val g = d.game ?: return false
-        val r = DuelHost.act(g, seat, actions, windows(), forceNext, Duels.now())
+        val r = DuelHost.act(g, seat, actions, windows(), forceNext, Duels.now(), by = d.provenance())
         forceNext = false
         // A move made after asking to take back the last one: the ask is over.
         if (actions.any { !it.social }) hostAskedTakeBack = false

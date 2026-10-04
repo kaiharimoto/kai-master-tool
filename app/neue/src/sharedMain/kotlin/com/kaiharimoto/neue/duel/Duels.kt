@@ -24,6 +24,7 @@ import com.kaiharimoto.mastertool.core.duel.HouseRuling
 import com.kaiharimoto.mastertool.core.duel.HouseRulingBook
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.Tally
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
@@ -37,6 +38,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.Trigger
 import com.kaiharimoto.mastertool.core.duel.ai.Watch
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
+import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
 import com.kaiharimoto.mastertool.core.duel.text.DuelAnswer
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
@@ -89,6 +91,7 @@ class Duels(val dir: File) {
     internal val aiWatch = DuelAiWatch(this)
     internal val opener = DuelOpening(this)
     internal val picking = DuelPicking(this)
+    internal val records = DuelRecords(this)
 
     var game by mutableStateOf<DuelGame?>(null)
     /** The seat drawn at the bottom of the table: the one acting, in a hot-seat. */
@@ -360,6 +363,36 @@ class Duels(val dir: File) {
     /** The duel already logged to Prep as a practice game, so it is logged once. */
     var loggedDuel: String? = null
 
+    // ---- who moved (Phase C): every entry's provenance, and the results: DuelRecords --------------------------------
+
+    /**
+     * How the table is set now, as the app sees it (set by `NeueHolders`): the seat Ai holds and its knowledge when Ai
+     * sits at the table, and the person's eyes. [provenance] adds who is moving.
+     */
+    var context: () -> Provenance = { Provenance() }
+
+    /**
+     * Who is making the move now and how the table is set, for the log ([DuelEntry.by], stamped on commit): Ai while it
+     * acts, the table while a turn opens itself, else the person; [peek] marks one of Ai's peeks.
+     */
+    internal fun provenance(peek: Boolean = false): Provenance {
+        val who = when {
+            aiWatch.aiActing -> Provenance.AI
+            opener.autoActing -> Provenance.TABLE
+            else -> Provenance.PERSON
+        }
+        return context().copy(by = who, peek = peek, net = network.role != null)
+    }
+
+    /** Every finished duel's result, newest first (`<data>/duel/records/`). */
+    val results: List<DuelResult> get() = records.results
+    fun loadResults() = records.load()
+    /** Every result, once read from disk (Ai's `duel_records`). */
+    suspend fun readResults(): List<DuelResult> = records.read()
+    fun reloadResults() = records.reload()
+    /** The duel in play looked at again: its result written when it has ended, taken away when the end was undone. */
+    fun noteResult() = records.note(game)
+
     /** A log line picked or let go; two at most, for a span. */
     fun pickLine(i: Int) {
         logPick = if (i in logPick) logPick - i else (logPick + i).takeLast(2)
@@ -411,6 +444,7 @@ class Duels(val dir: File) {
     /** Reads the duel left in play, once. */
     fun load() {
         houseRulings.loadRulings()
+        records.load()
         if (loaded) return
         loaded = true
         scope.launch {
@@ -493,8 +527,11 @@ class Duels(val dir: File) {
         return if (g.state.placeOf(uid) is Place.Zone) card.controller else card.owner
     }
 
-    /** Commits [actions] as one group by [seat]. False, and the reason said, when the table refuses. */
-    fun act(actions: List<DuelAction>, seat: Int? = bottom): Boolean {
+    /**
+     * Commits [actions] as one group by [seat]. False, and the reason said, when the table refuses. Who made it is
+     * written with it ([provenance]); [peek] marks one of Ai's peeks.
+     */
+    fun act(actions: List<DuelAction>, seat: Int? = bottom, peek: Boolean = false): Boolean {
         if (replayer.replay != null) return replayer.insert(actions, seat)
         // Insert here takes the person's next move only — never a step of Ai's or a combo's play-out (1.0.85).
         insertAfter?.let { at -> if (network.role == null && !playing && !aiWatch.releasing && actions.any { !it.social }) { insertAfter = null; return replayer.insertPast(at, actions, seat) } }
@@ -536,7 +573,11 @@ class Duels(val dir: File) {
                 }
             }
         }
-        val r = g.act(actions, seat, now(), join = opener.autoActing && opener.autoGroup != null && g.entries.getOrNull(g.cursor - 1)?.group == opener.autoGroup)
+        val r = g.act(
+            actions, seat, now(),
+            join = opener.autoActing && opener.autoGroup != null && g.entries.getOrNull(g.cursor - 1)?.group == opener.autoGroup,
+            by = provenance(peek),
+        )
         if (!r.ok) {
             problem = r.problem
             return false
@@ -683,7 +724,7 @@ class Duels(val dir: File) {
         val zone = Place.Zone(p.seat, kind, index)
         val moved = group.map { a -> if (a is DuelAction.Move && a.uid == p.uid && a.to is Place.Zone) a.copy(to = zone) else a }
         val undone = g.undo()
-        val r = undone.act(moved, last.seat, now())
+        val r = undone.act(moved, last.seat, now(), by = last.by)
         if (!r.ok) { problem = r.problem; return false }
         game = r.game
         placed = p.copy(kind = if (kind == ZoneKind.EMZ) ZoneKind.MONSTER else kind, until = now() + PLACED_MS)
@@ -963,12 +1004,16 @@ class Duels(val dir: File) {
      * done), then one step at a time [paceMs] apart, each its own step of undo. Returns what happened in
      * words: the steps played, and where it stopped if the person stopped it or the table changed under it.
      */
-    suspend fun playOut(steps: List<String>, seat: Int, paceMs: Long, viewer: Int? = seat): PlayReport {
+    suspend fun playOut(steps: List<String>, seat: Int, paceMs: Long, viewer: Int? = seat, guard: Boolean = false): PlayReport {
         val g = game ?: return PlayReport("There is no duel on the table.", 0, false)
         // Played on the live table only: never into an open replay (1.0.85).
         if (replayer.replay != null) return PlayReport("A replay is open on the table; close it first.", 0, false)
         val plan = ComboRunner.plan(g.state, seat, steps, catalog)
         if (!plan.ok) return PlayReport("Nothing was played. ${plan.problem}", 0, false)
+        // Ai's lines do only what a player may to cards it cannot see, as the network's guest's do (Phase C, DuelReach).
+        if (guard) ComboRunner.reach(g.state, seat, plan)?.let { why ->
+            return PlayReport("Nothing was played. $why: a player does not do that to a card they cannot see.", 0, false)
+        }
         playing = true
         stopRequested = false
         // Ai's play-out marks its own moves only, never the person's made between its paced steps (1.0.85).

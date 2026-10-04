@@ -3801,6 +3801,25 @@ dragging them from the corner also works. the coin is thrown by dragging and thr
   and **T** on tails, labelled so the face the physics leaves up reads the stamped side; the die is the opening roll's.
   `DuelTarget.CHANCE` in the mouse and finger tables. `tools/shoot.sh --page=duel --duel=two --duel-chance=landed|flying|held`.
 
+**The measured duel, stage 1** (Phase C, `docs/phases/C.md`; ROADMAP: "every duel is a record you can measure, and Ai at
+the table sees and does only what a player would"):
+- **Who moved** (`Provenance`, `DuelEntry.by`): the person, Ai, the network's guest or the table; the seat Ai held and its
+  knowledge then; the person's eyes; for Ai's own moves the SHA-256 fingerprint of the `DuelView` it acted on and the peeks
+  it had taken — never a copy of anything hidden. Stamped on commit (`Provenance.seal` in `DuelGame.act`, `Replays.insert`,
+  `DuelHost.act`) from `Duels.provenance`, which `NeueHolders` points at the settings (`duelContext`). Older duels and
+  replays carry none and read as before (`OldDataTest`).
+- **Results** (`DuelResult`, `DuelResults`, `DuelRecords`): a duel that ends — a concession, life points at 0, both at 0
+  a draw — is kept as `<data>/duel/records/<id>.json` (synced and backed up as replays are; a what-if under its own id),
+  and taken away when Undo takes the end back. `DuelResults.aiAgainst`/`summary` count "Ai won N of M against kai, with
+  these settings", grouped by Ai's knowledge, the person's eyes, networked or not, peeks, clean seats and the dice; Ai
+  reads it with `duel_records`, the person in **Replays** above the list. Prep's practice game takes going first or second
+  from who had turn 1 (`DuelResults.practice`), not from seat 0.
+- **The leads closed**: Ai is held to the guest's rules for hidden cards (`DuelReach`, shared with `DuelHost.resolve`;
+  `ComboRunner.reach` before `duel_act`, its `at`, and a combo Ai runs); at a networked table Ai holds no seat
+  (`AiTable.refusal`); a recorded combo names only cards its seat knew (`ComboRecorder.steps(seat = …)`); a move put into
+  the past may not re-deal any later draw (`Past.redeals`) and takes its chance from that place's own roll count
+  (`Past.stamp`); `duel_peek`'s reason goes through `Secrets`. Held by `DuelRecordTest` and `DuelLeadsTest`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

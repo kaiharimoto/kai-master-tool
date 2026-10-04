@@ -194,12 +194,16 @@ internal fun DuelPage(h: NeueHolders) {
         }
     }
     if (duels.setupOpen) SetupDialog(h, duels)
-    if (duels.libraryOpen) ReplayLibrary(duels)
+    if (duels.libraryOpen) ReplayLibrary(duels, h.ai.name)
     if (duels.combosOpen) DuelAiDialog(h)
     // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
     val live = duels.game
     // A duel that ends against a known deck is a practice game on Prep (1.0.80).
-    LaunchedEffect(live?.state?.conceded, live?.state?.seats?.map { it.lp }) { logFinishedDuel(h) }
+    // Every finished duel is a result too (Phase C): written as it ends, taken away if Undo takes the end back.
+    LaunchedEffect(live?.state?.conceded, live?.state?.seats?.map { it.lp }) {
+        logFinishedDuel(h)
+        duels.noteResult()
+    }
     // Ai's response triggers (1.0.85): the table watches for it, and wakes it on what it could answer.
     val watching = aiAtTable(h) && prefs.aiTriggers && live?.state?.solo == false && duels.replay == null
     // Ai changed seats: its watches were for the other hand (1.0.85).

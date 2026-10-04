@@ -697,6 +697,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **1.0.96, a die and a coin at the table**: each seat's beside its Extra Deck (`DiceStage.home`); click to roll or flip from
   the corner, drag to carry and throw (`TableChance`, `fling`); `DiceSim.Shape.COIN`, `Toss`, `TossRuns`; `Dice`/`Coin` carry
   an optional `toss` stamped after the value, `DuelState.chance` holds where they landed until the next move (`DuelChanceTest`).
+  **Phase C, the measured duel** (`docs/phases/C.md`): every entry carries who made it (`DuelEntry.by`, `Provenance`: person,
+  Ai, guest or table; Ai's seat and knowledge; the person's eyes; for Ai's moves a hash of the `DuelView` it acted on, never
+  the view), stamped on commit — **a new way into the log passes a `by`**. A finished duel is a `DuelResult` in
+  `<data>/duel/records/<id>.json` (one file a duel), counted by `DuelResults` ("Ai won N of M against kai, with these
+  settings"; `duel_records`). Ai is held to the guest's rules for hidden cards (`DuelReach`), holds no seat at a networked
+  table (`AiTable`), and a move put into the past never re-deals a later draw (`Past.redeals`).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
