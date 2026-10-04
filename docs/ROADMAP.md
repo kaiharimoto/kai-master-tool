@@ -340,6 +340,6 @@ These change what gets built. Each has a default the plan assumes until you say 
 | Evidence ledger, YGOrg rulings, harness fixes | Shipped 1.0.98 |
 | A Trust | Shipped 1.0.99 / v1.3.77 |
 | B Card truth | **Done**: 1.1.0 / v1.3.78 (card identity, release data, banlists by date, the field read honestly) and 1.1.1 / v1.3.79 (the builder's dated legality and Genesys, the field as of a date, the Card truth set in Trust) |
-| S Shootout | **Started**: the simulation study, model and picker in core (`docs/phases/S.md`) |
+| S Shootout | **Under way**: stage 1 the simulation study, model and picker in core; stage 2 page `09` (1.1.2: sessions, storage, results); stage 3 Ai learns to judge — the rubric, example bank and prediction, the calibration set and exam, apprentice, supervised and the interview, Ai's answers as their own judge, the per-kind confidence score, the gate and audits, the trust panel (`docs/phases/S.md` §7) |
 | C The measured duel | **Started**: stage 1 — provenance on every move, results and "Ai won N of M" (`duel_records`), Prep's first or second, the four duel leads (`docs/phases/C.md`) |
 | D to G | Planned |

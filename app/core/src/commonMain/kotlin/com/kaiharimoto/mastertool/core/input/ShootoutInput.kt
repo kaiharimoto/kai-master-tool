@@ -13,6 +13,7 @@ enum class ShootoutTarget(val heading: String) {
     HAND("A hand in a comparison"),
     CARD("A card in a hand"),
     NUMBER("A number in the results"),
+    VERDICT("Ai's answer, supervised"),
 }
 
 enum class ShootoutAction {
@@ -27,6 +28,9 @@ enum class ShootoutAction {
 
     /** The trials behind the number, listed. */
     OPEN_TRIALS,
+
+    /** Ai's answer taken as the person's (supervised, stage 3). */
+    ACCEPT,
 }
 
 data class ShootoutBinding(
@@ -43,6 +47,7 @@ object ShootoutMouse {
         ShootoutBinding(ShootoutTarget.HAND, "Click", ShootoutAction.PREFER, "Open with this hand rather than the other"),
         ShootoutBinding(ShootoutTarget.CARD, "Hover", ShootoutAction.READ, "Read it below the hands"),
         ShootoutBinding(ShootoutTarget.NUMBER, "Click", ShootoutAction.OPEN_TRIALS, "List the trials behind it"),
+        ShootoutBinding(ShootoutTarget.VERDICT, "Click Accept", ShootoutAction.ACCEPT, "Take Ai's answer as yours; an answer box corrects it"),
     )
 }
 
@@ -54,5 +59,6 @@ object ShootoutTouch {
         ShootoutBinding(ShootoutTarget.HAND, "Tap", ShootoutAction.PREFER, "Open with this hand rather than the other"),
         ShootoutBinding(ShootoutTarget.CARD, "Press and hold", ShootoutAction.READ, "Read it below the hands"),
         ShootoutBinding(ShootoutTarget.NUMBER, "Tap", ShootoutAction.OPEN_TRIALS, "List the trials behind it"),
+        ShootoutBinding(ShootoutTarget.VERDICT, "Tap Accept", ShootoutAction.ACCEPT, "Take Ai's answer as yours; an answer box corrects it"),
     )
 }

@@ -55,6 +55,9 @@ class JudgeBrief(
     )
 
     companion object {
+        /** A card's text as handed with a hand, in characters. */
+        const val CARD_TEXT = 600
+
         /** Ai's reason and question are one line each. */
         const val WHY = 240
 
@@ -72,9 +75,15 @@ class JudgeBrief(
             name: (Int) -> String,
             asked: Long,
             fitted: Int,
+            /** A card's printed text by its passcode, handed with the hand so Ai never guesses what a card does. */
+            cardText: (Int) -> String? = { null },
         ): JudgeBrief {
             val kind = bench.kindOf(proposal)
             val alone = bench.alone
+            val shown = when (proposal) {
+                is Proposal.Rate -> bench.ids(proposal.hand)
+                is Proposal.Compare -> bench.ids(proposal.left) + bench.ids(proposal.right)
+            } + proposal.opponent?.let(bench::opponentIds).orEmpty()
             val text = buildString {
                 appendLine("Judge this hand as the person would, then answer with shootout_judge (once).")
                 appendLine()
@@ -98,6 +107,12 @@ class JudgeBrief(
                         appendLine()
                         appendLine("Answer prefer: left or right — the hand the person would rather open with.")
                     }
+                }
+                val texts = shown.distinct().mapNotNull { id -> cardText(id)?.takeIf { it.isNotBlank() }?.let { name(id) to it } }
+                if (texts.isNotEmpty()) {
+                    appendLine()
+                    appendLine("## The cards")
+                    texts.forEach { (n, t) -> appendLine("- $n: ${t.replace('\n', ' ').take(CARD_TEXT)}") }
                 }
                 appendLine()
                 appendLine("## The model's prediction (one input among the others)")

@@ -5,6 +5,8 @@ import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.RealWorld
 import com.kaiharimoto.mastertool.core.shootout.select.StopRule
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
+import com.kaiharimoto.mastertool.core.shootout.teach.JudgedPair
+import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
 
 /** One card's number in one stratum: its worth per copy with its ranges, how often it is drawn, and the trials behind it. */
 class CardCell(val estimate: Estimate, val drawShare: Double, val trials: Int)
@@ -37,6 +39,19 @@ sealed interface Behind {
 
     /** Every trial kept. */
     data object All : Behind {
+        override val stratum: Stratum? = null
+    }
+
+    /**
+     * The hands of one kind both the person and Ai answered (stage 3, the trust panel's agreement): [key] is a
+     * [com.kaiharimoto.mastertool.core.shootout.teach.HandKind.key]; [audits] lists only the audits.
+     */
+    data class Kind(val key: String, val audits: Boolean = false) : Behind {
+        override val stratum: Stratum? = null
+    }
+
+    /** Ai's answers alone (stage 3): every trial Ai judged, solo or beside the person. */
+    data object Ai : Behind {
         override val stratum: Stratum? = null
     }
 }
@@ -112,14 +127,27 @@ class ShootoutResults(
             )
         }
 
-        /** The kept trials [behind] a number, newest first. */
-        fun trialsBehind(trials: List<StoredTrial>, behind: Behind): List<StoredTrial> = trials.filter { t ->
-            when (behind) {
-                is Behind.Card -> t.stratum == behind.stratum.name && t.holds(behind.card)
-                is Behind.Pair -> t.stratum == behind.stratum.name && t.holdsBoth(behind.a, behind.b)
-                is Behind.WinRate -> t.stratum == behind.stratum.name
-                Behind.All -> true
+        /**
+         * The kept trials [behind] a number, newest first. [kindOf] names a trial's kind of hand, for [Behind.Kind]: the
+         * pairs of that kind — each of the person's trials Ai answered, and Ai's answer beside it.
+         */
+        fun trialsBehind(trials: List<StoredTrial>, behind: Behind, kindOf: (StoredTrial) -> String? = { null }): List<StoredTrial> {
+            if (behind is Behind.Kind) {
+                val pairs = JudgedPair.all(trials, kindOf).filter { p ->
+                    p.kind == behind.key && (if (behind.audits) p.person.mode == TeachModes.AUDIT else p.counts)
+                }
+                return pairs.flatMap { listOfNotNull(it.person, it.aiTrial) }.asReversed()
             }
-        }.asReversed()
+            return trials.filter { t ->
+                when (behind) {
+                    is Behind.Card -> t.stratum == behind.stratum.name && t.holds(behind.card)
+                    is Behind.Pair -> t.stratum == behind.stratum.name && t.holdsBoth(behind.a, behind.b)
+                    is Behind.WinRate -> t.stratum == behind.stratum.name
+                    Behind.All -> true
+                    Behind.Ai -> t.judge == StoredTrial.AI
+                    is Behind.Kind -> false
+                }
+            }.asReversed()
+        }
     }
 }

@@ -278,6 +278,15 @@ data class AiSession(
         /** In Ai World (1.0.97): a question answered by code Ai writes and runs where the person watches. */
         const val MODE_WORLD = "world"
 
+        /**
+         * Shootout (Phase S stage 3): one hand judged as Ai's own judge — a request of its own, handed the examples, the
+         * rubric and the model's prediction, never the person's answer (skill `shootout-judge`).
+         */
+        const val MODE_SHOOTOUT = "shootout"
+
+        /** Shootout's interview (Phase S stage 3): how the person judges a matchup, written as its rubric and reviewed on Finish. */
+        const val MODE_RUBRIC = "rubric"
+
         /** What an old tool result is cut to once the person clears them. */
         const val CLEARED = 200
 

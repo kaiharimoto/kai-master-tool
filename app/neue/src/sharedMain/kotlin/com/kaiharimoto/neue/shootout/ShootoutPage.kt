@@ -104,9 +104,12 @@ fun ShootoutPage(h: NeueHolders) {
                     Shootouts.View.SETUP -> SetupView(h)
                     Shootouts.View.TRIAL -> TrialView(h, phone)
                     Shootouts.View.RESULTS -> ResultsView(h, phone)
+                    Shootouts.View.EXAM -> ExamView(h)
                 }
             }
         }
+        if (s.teach.trustOpen) TrustDialog(h)
+        if (s.teach.rubricOpen) RubricDialog(h)
         s.behind?.let { TrialsDialog(h, it) }
     }
 }
@@ -131,6 +134,7 @@ private fun HeaderActions(h: NeueHolders) {
         MuSelect(s.opponentId, options, { id -> if (id == null) "The deck alone" else "Against " + (s.opponents.firstOrNull { it.id == id }?.name ?: "?") }, s::chooseOpponent, Modifier.width(240.dp), small = true)
     }
     MuButton(if (s.view == Shootouts.View.RESULTS) "Trials" else "Results", s::toggleResults, size = BtnSize.SM, enabled = s.bench != null, reason = s.problem)
+    if (h.ai.enabled) MuButton("Trust", s.teach::openTrust, size = BtnSize.SM, variant = BtnVariant.GHOST, enabled = s.bench != null, reason = s.problem)
     if (s.running) {
         MuButton("Stop", s::stop, size = BtnSize.SM)
     } else {
@@ -193,8 +197,10 @@ private fun SetupView(h: NeueHolders) {
                 if (deck != null) MicroLink("Write the plans on Siding", { h.webs.side(deck, s.opponentId) })
             }
         }
+        // Teaching Ai (Phase S stage 3): how the session teaches, the interview, the rubric, the trust panel.
+        TeachSetup(h)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            MuButton("Begin a session", s::start, variant = BtnVariant.PRIMARY, arrow = true, enabled = !s.thinking)
+            MuButton(if (s.teach.mode == ShootoutTeach.Mode.CALIBRATION && h.ai.enabled) "Begin the calibration set" else "Begin a session", s::start, variant = BtnVariant.PRIMARY, arrow = true, enabled = !s.thinking)
             Kbd(DeskShortcuts.chordFor(DeskAction.SHOOTOUT_START)?.let(DeskShortcuts::kbd) ?: "Enter")
             if ((s.log?.trials?.size ?: 0) > 0) MuButton("Results", s::showResults, variant = BtnVariant.GHOST)
         }
@@ -213,7 +219,7 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
     if (p == null || bench == null) {
         Row(Modifier.padding(32.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Breathe()
-            Small("Choosing a hand")
+            Small(if (s.teach.routing) "${h.ai.name} is judging a hand of a kind it has earned" else "Choosing a hand")
         }
         return
     }
@@ -226,6 +232,7 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
             if (!phone) Mono(progressWords(s), color = c.ink45)
         }
         if (phone) Small(progressWords(s), color = c.ink45, maxLines = 2)
+        TeachBanner(h)
         if (s.sessionMs >= ShootoutRun.SESSION_MS) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Small("Ten minutes in: a good place to stop. Every answer is kept.")
@@ -248,7 +255,9 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
                 }
             }
         }
-        ReadingStrip(s.reading)
+        AskCard(h)
+        if (h.shootout.teach.ask == null) ReadingStrip(s.reading)
+        VerdictBox(h, bench.alone)
         when (p) {
             is Proposal.Rate -> AnswerScale(s, bench.alone, phone)
             is Proposal.Compare -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -482,7 +491,14 @@ private fun AnswerBox(s: Shootouts, a: Answer, alone: Boolean, phone: Boolean, m
 internal fun runShootout(h: NeueHolders, action: DeskAction) {
     val s = h.shootout
     if (s.behind != null && action != DeskAction.SHOOTOUT_RESULTS) return
+    // The trust panel and the rubric stand over the trial: nothing under them answers (stage 3).
+    if ((s.teach.trustOpen || s.teach.rubricOpen) && action != DeskAction.SHOOTOUT_TRUST) return
     when (action) {
+        DeskAction.SHOOTOUT_ACCEPT -> if (s.running && h.ai.enabled) s.teach.accept()
+        DeskAction.SHOOTOUT_TRUST -> if (h.ai.enabled) {
+            h.neue.go(Page.SHOOTOUT)
+            if (s.teach.trustOpen) s.teach.trustOpen = false else s.teach.openTrust()
+        }
         DeskAction.GO_SHOOTOUT -> h.neue.go(Page.SHOOTOUT)
         DeskAction.SHOOTOUT_ANSWER_1, DeskAction.SHOOTOUT_ANSWER_2, DeskAction.SHOOTOUT_ANSWER_3,
         DeskAction.SHOOTOUT_ANSWER_4, DeskAction.SHOOTOUT_ANSWER_5,
@@ -510,9 +526,12 @@ internal fun dismissShootout(h: NeueHolders): Boolean {
     val s = h.shootout
     when {
         s.behind != null -> s.behind = null
+        s.teach.trustOpen -> s.teach.trustOpen = false
+        s.teach.rubricOpen -> s.teach.rubricOpen = false
+        s.teach.ask != null -> s.teach.skipAsk()
         s.reading != null -> s.reading = null
         s.running -> s.stop()
-        s.view == Shootouts.View.RESULTS -> s.view = Shootouts.View.SETUP
+        s.view == Shootouts.View.RESULTS || s.view == Shootouts.View.EXAM -> s.view = Shootouts.View.SETUP
         else -> return false
     }
     return true

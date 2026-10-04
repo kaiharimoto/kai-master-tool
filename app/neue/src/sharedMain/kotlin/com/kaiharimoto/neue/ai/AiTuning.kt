@@ -26,6 +26,7 @@ import com.kaiharimoto.mastertool.core.ai.evidence.Numbers
 import com.kaiharimoto.mastertool.core.ai.evidence.Proof
 import com.kaiharimoto.mastertool.core.ai.evidence.Proven
 import com.kaiharimoto.mastertool.core.world.Instruments
+import com.kaiharimoto.neue.shootout.Shootouts
 import com.kaiharimoto.neue.world.WorldSnapshot
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -44,6 +45,8 @@ import java.io.File
  * in it too, so a skill written or patched in a session is shown at its end and Undo puts it back —
  * or deletes it, when it was not there before.
  */
+internal fun AiState.reviewSnapshot(): Map<String, String?> = snapshot()
+
 private fun AiState.snapshot(): Map<String, String?> {
     val paths = buildSet {
         add(MemoryKind.USER.file)
@@ -56,6 +59,8 @@ private fun AiState.snapshot(): Map<String, String?> {
         files.file("guides").listFiles { f -> f.name.endsWith(".book.json") }?.forEach { add("guides/${it.name}") }
         h.builder.deckId?.let { add(GuideBook.path(it)) }
         session?.deckId?.let { add(GuideBook.path(it)) }
+        // The Shootout rubric an interview writes (Phase S stage 3): reviewed like the guide.
+        if (h.shootoutStarted) h.shootout.interviewing?.let { add(Shootouts.reviewPath(it)) }
     }
     return paths.associateWith { files.read(it) }
 }
@@ -284,7 +289,7 @@ fun AiState.openProfile() {
     docOpen = LivingDoc.Profile
 }
 
-val AiState.tuning: Boolean get() = session?.mode.let { it in AiSession.DECK_MODES || it == AiSession.MODE_PROFILE || it == AiSession.MODE_REFACTOR || it == AiSession.MODE_WRITE }
+val AiState.tuning: Boolean get() = session?.mode.let { it in AiSession.DECK_MODES || it == AiSession.MODE_PROFILE || it == AiSession.MODE_REFACTOR || it == AiSession.MODE_WRITE || it == AiSession.MODE_RUBRIC }
 
 /** Writing the reader's guide (1.0.67). */
 val AiState.writing: Boolean get() = session?.mode == AiSession.MODE_WRITE

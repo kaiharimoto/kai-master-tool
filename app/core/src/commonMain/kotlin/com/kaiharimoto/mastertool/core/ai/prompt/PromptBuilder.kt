@@ -271,6 +271,15 @@ object PromptBuilder {
                     "before you take it: they are watching. Do not change their decks in this conversation.",
             )
         }
+        if (s.mode == "rubric") {
+            appendLine()
+            appendLine("## This conversation is Shootout's interview: how the person judges a matchup")
+            appendLine(
+                "Read the skill shootout-interview with skill_view first and follow it: one question at a time with ask_user, " +
+                    "writing the matchup's rubric with shootout_rubric as you go. The person reviews it on Finish. " +
+                    "Do not change their decks or settings in this conversation.",
+            )
+        }
         if (s.mode == "profile") {
             appendLine()
             appendLine("## This conversation is Learn About You: you interview the person")

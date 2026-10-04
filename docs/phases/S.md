@@ -324,6 +324,55 @@ recurring ones are offered for the rubric.
    - **What Ai's answers moved:** how much each card's rating would change if they were taken out. A large change is
      flagged for a look.
 
+### 6¾. Stage 3: what was built, and what the simulation showed
+
+`core/shootout/teach` holds it, plain Kotlin, tested; `neue/shootout/ShootoutTeach` is the page's part.
+
+**What Ai is handed** (`JudgeBrief`): the hand and the cards' printed text; the model's prediction (`ShootoutRun.predict`:
+the win chance, the likeliest answer, how sure the fit is); the rubric (`Rubric`, `<deck>/<matchup>.rubric.md`, written by
+the interview through `shootout_rubric`, every number through `Evidence.judge`, reviewed on Finish like Fine Tuning); and
+the six nearest of the person's judged hands with their notes (`ExampleBank`, `Similarity`: 0.4 cards by weighted Jaccard,
+0.2 the mix of roles, 0.2 the turn, 0.2 the opponent's interaction and hand). **The bank is taken as of the hand**: only
+the person's answers given before it, never its own, never Ai's. Ai answers through `shootout_judge` (five points or
+left/right, how sure 0–1, why, an optional question) in a request of its own, so no conversation and no answer of the
+person's reaches it; on an API connection (a plan's command-line app runs its own loop).
+
+**What is kept** (append-only, `OldDataTest`): Ai's answer is a trial of its own — `judge: ai`, `of` the person's trial,
+`mode` (calibration, exam, apprentice, supervised, solo, audit) — and its `AiVerdict` records what it was shown (the example
+ids, the rubric's hash, the model's prediction, the kind of hand, the decks' print, when it was asked). The person's notes
+sit beside the trials (`ShootoutLog.notes`), the gate's settings too (`trust`). A 1.1.2 verdict kept on the person's own
+trial is read as Ai's answer, never as held out.
+
+**Each kind of answer is its own judge** (`Bench.PERSON`, `AI`, `SEEN`). Two things the stage-1 seam lacked, found by the
+simulation: with the lean's prior at ±0.25 a judge a band optimistic moved the win rate 8 points, so other judges' cut-offs
+are now ±0.8; and a judge with a blind spot (a brick rated as a starter) moved that card's rating *more* weighted than
+pooled, because a steady judge is precise — so every other judge reads each card with a deviation of its own (±0.5,
+`Layout.judgeCard`), the card's rating staying the person's. An unmeasured judge starts half as precise as the person.
+
+**The confidence score** (`Trust`): agreement is within one step of the person's blind answer, counted only on held-out
+pairs (`JudgedPair.heldOut`: Ai's record says what it was shown, and none of it was this answer or anything after it),
+per kind (`HandKind`: first or second, a starter or none, interaction or none), with an 80 % Wilson range, so its bottom is a
+one-sided 90 % bound. **The gate** opens a kind when that bottom, counted on the hands Ai said it was sure of (0.8 by
+default), clears the person's bar (90 %) over at least 10 such hands. **Audits**: one in three of a kind's first 20 solo
+hands, then one in ten, go back blind; two misses beyond what the range allows close the kind, and only pairs after that
+count toward opening it again. **A deck change** halves the older pairs and asks 3 hands per kind on today's decks before a
+kind opens again (`CalibrationSet.short`). Ai's certainty is scored (Brier, and the calibration error over four bins).
+
+**The person is the ceiling.** Agreement is measured against a noisy reference: in the stage-1 judge's noise a perfect Ai
+agrees within one step only about 85 % of the time, and the person agrees with themselves about 72 %. A 90 % bar is
+unreachable for so noisy a person, whoever the judge is, so the trust panel shows the person's own agreement on repeats
+beside the kinds, and the bar is theirs to set (80–95 %).
+
+**The simulation** (`ShootoutTrustSimulationTest`, `TrustStudy`; a steady person at noise 0.2 + 0.2, plain hands):
+- **the gate**: over three matchups and 400 apprentice hands each, a good judge (noise 0.1 + 0.1) earned 4, 5 and 4 of the 8
+  kinds — the common ones, 97–99 % agreement on 100+ hands — and a poor one (0.6 + 0.6, 8 % slips) none, at 72–87 %
+  agreement; the poor one's Brier score is more than twice the good one's.
+- **audits**: alone for 150 hands, the good judge kept its kinds (23 audits, none closed); made worse (as noisy as the poor
+  one and a band gloomier), its busiest kind closed after 43 more solo hands.
+- **the weighting**: a judge a band optimistic with a blind spot on one card, answering the same 200 hands as the person:
+  pooled as the person's, it moved the win rate 12.2 points and the card 9.9; weighted as its own judge, 0.7 and 3.5.
+- **help**: a good judge's 240 extra answers took the card error after 120 of the person's from 6.3 to 3.8 points.
+
 **Is it better?** Every change to how Ai learns (the rubric, the example bank, the model's prediction) is measured on the
 person's held-out blind trials, by agreement and calibration, with and without each piece (ablation). So "exponentially
 better" is a number, the same discipline as Trust (Phase A), whose runner it reuses.
@@ -347,6 +396,17 @@ better" is a number, the same discipline as Trust (Phase A), whose runner it reu
    copy's worth, opening patterns, the guide link through the evidence ledger, siding plans compared.
 5. Ai's parts: the calibration set and apprentice mode first (they make the blind data the trust score needs), then the
    interview and notes, then supervised runs, then the gate and audits that let Ai run alone.
+   **Done (stage 3, §6¾):** the rubric, the example bank and the model's prediction handed with every hand (`JudgeBrief`);
+   Ai's answer through `shootout_judge` in a request of its own, kept as a trial of its own with what it was shown; each
+   kind of answer its own judge in the fit; the four ways to teach on the page (calibration set and Ai's exam, apprentice
+   and its one question, supervised with `Space`, the interview in the Ai panel, `MODE_RUBRIC`, reviewed on Finish); notes on
+   trials, the recurring ones offered for the rubric; the per-kind confidence score, the gate, audits and a deck change
+   re-earned; the trust panel (`T`: the kinds and their ranges, the audits, how much of the data is Ai's raw and weighted,
+   how Ai and the seen answers lean, Ai's certainty scored, what Ai's answers moved, every number opening its trials);
+   `shootout_state` for Ai. Proven in simulation (§6¾). **Left:** Ai's priors from the cards (§6 1: role groups and pairs
+   proposed); asking why on an answer the *model* did not expect, as a tag (§6 3); the ablation runner (§6½ "Is it
+   better?" on held-out blind trials, Trust's runner); the write-up through the evidence ledger; Ai judging on a plan's
+   command-line app; the goldfish simulator as one more judge (after Phase D).
 
 **Needs:** Phase B (alternate arts counted as one card, legality); the evidence ledger (1.0.98); F1's runner style for the simulation; siding plans for both decks for the sided strata (Siding today, the two-deck siding tool when it is built).
 **Done when:** the simulation's recovery and calibration tests pass; a real session gives ratings with ranges; and every number opens its trials.

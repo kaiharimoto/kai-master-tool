@@ -324,6 +324,10 @@ enum class DeskAction {
     SHOOTOUT_STOP,
     /** The results, or back to the trials. */
     SHOOTOUT_RESULTS,
+    /** Supervised (stage 3): Ai's answer taken as the person's, seen. */
+    SHOOTOUT_ACCEPT,
+    /** The trust panel (stage 3): how far Ai is trusted on this matchup. */
+    SHOOTOUT_TRUST,
     ;
 
     companion object {
@@ -644,6 +648,8 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("enter"), DeskAction.SHOOTOUT_START, DeskScope.SHOOTOUT, "Begin a session, or carry on"),
         DeskShortcut(ctrl("period"), DeskAction.SHOOTOUT_STOP, DeskScope.SHOOTOUT, "Stop the session, every answer kept", allowedInTextInput = true),
         DeskShortcut(KeyChord("r"), DeskAction.SHOOTOUT_RESULTS, DeskScope.SHOOTOUT, "The results, or back to the trials"),
+        DeskShortcut(KeyChord("space"), DeskAction.SHOOTOUT_ACCEPT, DeskScope.SHOOTOUT, "Supervised: take Ai's answer as yours"),
+        DeskShortcut(KeyChord("t"), DeskAction.SHOOTOUT_TRUST, DeskScope.SHOOTOUT, "How far Ai is trusted on this matchup"),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action
