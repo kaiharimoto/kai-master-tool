@@ -2550,6 +2550,20 @@ only for judgment, outcomes over time, the person last. This release builds its 
   guide put back after; the estimate counts an Anthropic turn once and prefers the provider's measure; MCP results are
   capped; `open_deck` and `save_deck` say when they did not.
 
+#### The keys, the CLIs' folder and the MCP token (1.0.99)
+
+The last two confirmed security findings, closed; `docs/SECURITY.md` is the threat model. **The keys left Ai's folder**:
+`SecretStore` keeps them in `<data>/secrets/` (`SecretFiles`; `credentials.json` owner-only on the desk, `credentials.bin`
+under the Keystore on Android), the first read moving a pre-1.0.99 `ai/credentials.*` across byte for byte and deleting it.
+**The CLIs run in `<data>/cli-run/`** (`CliRun`), outside Ai's folder and the keys', owner-only, holding only a Claude Code
+turn's instructions and MCP configuration while it runs — each file named for its turn, written owner-only and deleted
+when the turn ends; the old `ai/run/` is deleted, and a crash's leftovers swept. Codex keeps `-s read-only`, its strictest
+sandbox, which stops writes, not reads. A Claude Code conversation begun in the old folder is not found by `--resume` in the
+new one, so its words are carried into a new session (`CliCarry`). **The MCP token is in memory** for the app's lifetime,
+on disk only in that per-turn file, never on a command line; and **the Origin check is exact**
+(`McpServerCore.originAllowed`: none, or a loopback origin parsed whole). Sync and backups never walk `secrets/` or
+`cli-run/`, the old places stay excluded, and `InboundPath` refuses all four.
+
 #### Going further — the roadmap
 
 The roadmap lives in `docs/AI-INTELLIGENCE.md` (1.0.97), built on the research: lessons that cite their runs and an

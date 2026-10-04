@@ -25,7 +25,8 @@ import javax.crypto.spec.GCMParameterSpec
  */
 actual object SecretStore {
     private const val ALIAS = "neue-ai-secrets"
-    private val file get() = File(Platform.dataDir, "ai/credentials.bin")
+    /** `<data>/secrets/credentials.bin` since 1.0.99, moved from `<data>/ai/` on first read ([SecretFiles]). */
+    private val file by lazy { SecretFiles.file(Platform.dataDir, "credentials.bin") }
     private val json = Json { ignoreUnknownKeys = true }
 
     private fun key(): SecretKey {
@@ -56,7 +57,7 @@ actual object SecretStore {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key()) }
         val sealed = cipher.iv + cipher.doFinal(JsonObject(values.mapValues { JsonPrimitive(it.value) }).toString().toByteArray())
         file.parentFile?.mkdirs()
-        val temp = File(file.parentFile, ".credentials.tmp")
+        val temp = File(file.parentFile, SecretFiles.TEMP)
         temp.writeBytes(sealed)
         if (!temp.renameTo(file)) {
             file.delete()

@@ -25,4 +25,14 @@ class InboundPathTest {
         listOf("ai/run/.claude/settings.json", "ai/run/CLAUDE.md", "ai/credentials.json", "ai/cache/x", "world/w/.py/ygo.py", "art/.hidden")
             .forEach { assertNull(InboundPath.safe(it), it) }
     }
+
+    @Test
+    fun theKeysAndTheCommandLineFolderNeverTravelOldPlaceOrNew() {
+        // 1.0.99: the keys moved to secrets/ and the CLIs to cli-run/; the pre-1.0.99 places stay refused too.
+        listOf(
+            "secrets/credentials.json", "secrets/credentials.bin", "cli-run/mcp-1.json", "cli-run/system-1.md",
+            "ai/credentials.json", "ai/credentials.bin", "ai/run/mcp.json", "ai/run/system.md",
+        ).forEach { assertNull(InboundPath.safe(it), it) }
+        listOf("ai/secrets/x.md", "ai/cli-run.md", "world/secrets/notes.md").forEach { assertEquals(it, InboundPath.safe(it)) }
+    }
 }

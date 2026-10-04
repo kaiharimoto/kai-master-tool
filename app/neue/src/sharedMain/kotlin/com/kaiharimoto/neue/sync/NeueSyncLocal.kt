@@ -22,8 +22,9 @@ import java.io.File
  * - `decks/<id>.json`: every saved deck ([SyncedDeck]);
  * - `prefs/neue.json` and `prefs/format.json`: the settings that travel ([SyncedPrefs]);
  * - `webs/<id>.json`: each web of decks, `prefs/prep.json`: tournament prep;
- * - `ai/…`: Ai's memory, guides, books, reports, skills and conversations — never its keys
- *   (`credentials.*`), its working folder or its caches;
+ * - `ai/…`: Ai's memory, guides, books, reports, skills and conversations — never its keys,
+ *   the CLIs' working folder (since 1.0.99 `secrets/` and `cli-run/`, outside `ai/` and never
+ *   walked; their pre-1.0.99 places `ai/credentials.*` and `ai/run/` still left out) or its caches;
  * - `art/<passcode>/<file>`: the pictures the person gave cards.
  *
  * Card art downloaded from YGOPRODeck and the card pool are not items: every device fetches its own.
@@ -181,6 +182,8 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
         /**
          * What in Ai's folder is this device's alone: its keys (encrypted to this device on Android, and
          * never to leave any device), the command-line apps' working folder, and caches fetched again.
+         * Since 1.0.99 the keys and the working folder live outside Ai's folder (`secrets/`, `cli-run/`), which
+         * neither a sync nor a backup walks; their old places here stay excluded, for a device not yet migrated.
          */
         fun privateToDevice(rel: String): Boolean = InboundPath.aiPrivate(rel)
 

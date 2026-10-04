@@ -68,4 +68,18 @@ class McpServerCoreTest {
         assertTrue(!McpServerCore.authorised("Bearer abd", "abc"))
         assertTrue(!McpServerCore.authorised(null, "abc"))
     }
+
+    @Test
+    fun theOriginIsParsedWholeNeverSearched() {
+        // No Origin is a CLI's request; an exact loopback origin is allowed.
+        listOf(null, "http://127.0.0.1", "http://127.0.0.1:53682", "https://localhost", "http://LOCALHOST:8080", "http://[::1]:9000")
+            .forEach { assertTrue(McpServerCore.originAllowed(it), "$it should pass") }
+        // 1.0.99, the red team: the old check was a substring match, and each of these contains a loopback name.
+        listOf(
+            "http://127.0.0.1.evil.com", "http://localhost.attacker", "http://localhost.attacker:80", "https://evil.com/127.0.0.1",
+            "http://evil.com?localhost", "http://127.0.0.1@evil.com", "http://localhost:80@evil.com", "http://evil-localhost",
+            "http://127.0.0.1:99999", "http://127.0.0.1:0", "http://127.0.0.1:", "http://localhost/", "ws://localhost",
+            "file://localhost", "null", "", " http://localhost", "http://127.0.0.2", "http://0.0.0.0",
+        ).forEach { assertTrue(!McpServerCore.originAllowed(it), "$it should be refused") }
+    }
 }

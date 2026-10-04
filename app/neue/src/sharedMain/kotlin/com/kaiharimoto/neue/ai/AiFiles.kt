@@ -28,8 +28,10 @@ import java.util.concurrent.ConcurrentHashMap
  * ai/decks/<deck id>.md   ai/webs/<web id>.md
  * ai/skills/<name>/SKILL.md
  * ai/sessions/<id>.json
- * ai/run/            (a CLI's working folder: its prompt and MCP config)
  * ```
+ *
+ * Not here since 1.0.99: the keys (`<data>/secrets/`, [SecretFiles]) and the CLIs' working folder
+ * (`<data>/cli-run/`, [CliRun]), which until 1.0.98 were `ai/credentials.*` and `ai/run/`.
  */
 class AiFiles(val root: File) {
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; prettyPrint = false }

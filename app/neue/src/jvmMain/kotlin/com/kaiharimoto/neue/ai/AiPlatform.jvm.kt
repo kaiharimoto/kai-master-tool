@@ -23,14 +23,28 @@ import kotlinx.serialization.json.jsonObject
 import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.nio.file.Files
-import java.nio.file.attribute.PosixFilePermissions
 import java.security.SecureRandom
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 actual object SecretStore {
-    private val file get() = File(Platform.dataDir, "ai/credentials.json")
+    /** The keys file's name; its place is [SecretFiles] (`<data>/secrets/`, until 1.0.98 `<data>/ai/`). */
+    const val NAME = "credentials.json"
+
+    private val store by lazy { SecretFileStore(SecretFiles.file(Platform.dataDir, NAME)) }
+
+    actual fun get(key: String): String? = store.get(key)
+
+    actual fun put(key: String, value: String) = store.put(key, value)
+
+    actual fun remove(key: String) = store.remove(key)
+}
+
+/**
+ * The desk's keys: one plain JSON object of names to values in [file], readable by its owner alone (as Hermes
+ * keeps `~/.hermes/.env`), every write whole and atomic.
+ */
+class SecretFileStore(private val file: File) {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Synchronized
@@ -41,31 +55,20 @@ actual object SecretStore {
     @Synchronized
     private fun write(values: Map<String, String>) {
         file.parentFile.mkdirs()
-        val temp = File(file.parentFile, ".credentials.tmp")
-        temp.writeText(JsonObject(values.mapValues { JsonPrimitive(it.value) }).toString())
-        ownerOnly(temp)
+        val temp = File(file.parentFile, SecretFiles.TEMP)
+        OwnerOnly.writeText(temp, JsonObject(values.mapValues { JsonPrimitive(it.value) }).toString())
         if (!temp.renameTo(file)) {
             file.delete()
             temp.renameTo(file)
         }
-        ownerOnly(file)
+        OwnerOnly.apply(file)
     }
 
-    /** Readable and writable by its owner alone, where the file system can say so. */
-    private fun ownerOnly(f: File) {
-        runCatching { Files.setPosixFilePermissions(f.toPath(), PosixFilePermissions.fromString("rw-------")) }.onFailure {
-            f.setReadable(false, false)
-            f.setReadable(true, true)
-            f.setWritable(false, false)
-            f.setWritable(true, true)
-        }
-    }
+    fun get(key: String): String? = all()[key]
 
-    actual fun get(key: String): String? = all()[key]
+    fun put(key: String, value: String) = write(all() + (key to value))
 
-    actual fun put(key: String, value: String) = write(all() + (key to value))
-
-    actual fun remove(key: String) = write(all() - key)
+    fun remove(key: String) = write(all() - key)
 }
 
 actual object AiDesk {
@@ -236,10 +239,10 @@ actual object AiDesk {
         server.executor = pool
         server.createContext("/mcp") { exchange ->
             try {
-                val origin = exchange.requestHeaders.getFirst("Origin")
                 val reply = when {
-                    // A web page's request carries an Origin: refused, the spec's guard against DNS rebinding.
-                    origin != null && !origin.contains("127.0.0.1") && !origin.contains("localhost") -> McpReply(403, null)
+                    // A web page's request carries an Origin: refused unless exactly loopback, the spec's guard against
+                    // DNS rebinding. Parsed whole (1.0.99): `http://127.0.0.1.evil.com` passed the old substring test.
+                    !McpServerCore.originAllowed(exchange.requestHeaders.getFirst("Origin")) -> McpReply(403, null)
                     !McpServerCore.authorised(exchange.requestHeaders.getFirst("Authorization"), token) -> McpReply(401, null)
                     exchange.requestMethod == "DELETE" -> McpReply(200, null)
                     exchange.requestMethod != "POST" -> McpReply(405, null)

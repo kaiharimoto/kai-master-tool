@@ -5,8 +5,9 @@ import kotlinx.coroutines.flow.Flow
 import java.io.File
 
 /**
- * Where Ai's keys are kept: outside the database and outside every export. On the
- * desk, a file only its owner can read in the app's data folder (as Hermes keeps
+ * Where Ai's keys are kept: outside the database and outside every export, in
+ * `<data>/secrets/` ([SecretFiles], 1.0.99; `<data>/ai/` before), which sync, backups and
+ * the CLIs never touch. On the desk, a file only its owner can read (as Hermes keeps
  * `~/.hermes/.env`); on Android, encrypted with a key in the Android Keystore.
  */
 expect object SecretStore {

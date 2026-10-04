@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.ai
 
 import com.kaiharimoto.mastertool.core.ai.cli.ClaudeCli
 import com.kaiharimoto.mastertool.core.ai.cli.ClaudeStream
+import com.kaiharimoto.mastertool.core.ai.cli.CliCarry
 import com.kaiharimoto.mastertool.core.ai.cli.CliWeb
 import com.kaiharimoto.mastertool.core.ai.cli.CodexCli
 import com.kaiharimoto.mastertool.core.ai.cli.CodexStream
@@ -210,6 +211,43 @@ class WireTest {
         assertTrue("web_search=disabled" in codexClosed, codexClosed.toString())
         assertTrue(codexClosed.none { it == "web_search=live" })
         assertEquals(codexClosed, CodexCli.launch("codex", "hi", "/w", "u", "t", "", "", null).args)
+    }
+
+    @Test
+    fun theTokenNeverRidesOnTheCommandLine() {
+        // 1.0.99, the red team: anything on the command line is in every process listing.
+        val codex = CodexCli.launch("codex", "hi", "/run", "http://127.0.0.1:5/mcp", "secret-token", "", "", null)
+        assertTrue(codex.args.none { "secret-token" in it }, codex.args.toString())
+        assertEquals("secret-token", codex.env[CodexCli.TOKEN_ENV])
+        // The strictest sandbox Codex has, in the working folder it was given.
+        assertEquals("read-only", codex.args[codex.args.indexOf("-s") + 1])
+        assertEquals("/run", codex.args[codex.args.indexOf("-C") + 1])
+        val claude = ClaudeCli.launch("claude", "hi", "/run/system-1.md", "/run/mcp-1.json", "", "", null)
+        assertTrue(claude.args.none { "Bearer" in it }, claude.args.toString())
+    }
+
+    @Test
+    fun aConversationTheCliLostIsCarriedIntoANewSession() {
+        assertTrue(CliCarry.lostSession("No conversation found with session ID: 1b2c"))
+        assertTrue(!CliCarry.lostSession("Invalid API key"))
+        assertTrue(!CliCarry.lostSession(null))
+        val history = listOf(
+            ChatTurn.user("Build me a deck", "Page: Builder"),
+            ChatTurn(Role.ASSISTANT, listOf(Part.Text("Looking."), Part.ToolUse("t1", "app_state", JsonObject(emptyMap())))),
+            ChatTurn(Role.USER, listOf(Part.ToolResult("t1", "app_state", "{\"secret\":1}"))),
+            ChatTurn(Role.ASSISTANT, listOf(Part.Text("Here it is."))),
+            ChatTurn.user("Now side it"),
+        )
+        val carried = CliCarry.message(history, "Now side it")
+        assertTrue(carried.endsWith("Now side it"), carried)
+        assertTrue("Person: Build me a deck" in carried && "Ai: Looking." in carried && "Ai: Here it is." in carried, carried)
+        // Tool traffic and the page's context stay behind; the new message is not carried twice.
+        assertTrue("secret" !in carried && "Page: Builder" !in carried, carried)
+        assertEquals(1, Regex("Now side it").findAll(carried).count())
+        // Nothing before: the message alone. Over the cap: the newest kept.
+        assertEquals("hi", CliCarry.message(listOf(ChatTurn.user("hi")), "hi"))
+        val capped = CliCarry.message(history, "Now side it", cap = 30)
+        assertTrue("Ai: Here it is." in capped && "Build me a deck" !in capped, capped)
     }
 
     @Test
