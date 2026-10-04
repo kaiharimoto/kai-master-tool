@@ -2549,6 +2549,19 @@ only for judgment, outcomes over time, the person last. This release builds its 
   so; one retry layer, the network's failures only; summaries are written a piece at a time (`Compaction.chunks`) with the
   guide put back after; the estimate counts an Anthropic turn once and prefers the provider's measure; MCP results are
   capped; `open_deck` and `save_deck` say when they did not.
+- **The reader's guide knows its deck** (1.0.99, `BookFreshness`): each chapter keeps the deck and Ai's notes it was
+  written on (`GuideBook.Chapter.deckPrint`, `notesHash`), and the front the deck its roles were set on
+  (`GuideBook.deckPrint`) — `Ledger.fingerprint`, stamped by `BookWriter` from the host's `Context`, never from what Ai
+  sends. A write makes only its own chapter current. The reader checks every chapter against the deck as it is (the
+  builder's, else the saved one), says in ink which were written on an older deck (the bar, the chapter's opening, the
+  contents), and under each of their blocks names the numbers Ai typed there as the older deck's
+  (`BookFreshness.typedNumbers`); the pictures' numbers are `GuideFacts` worked out from the deck as it is, in the PDF
+  too. A book from before 1.0.99 reads "deck unknown" — neither current nor stale — until a chapter is written again
+  (`OldDataTest`). Ai's `outline` marks the chapters to write again.
+- **Only a rulings reply that reads is cached** (1.0.99, `ReplyCache`): `get(…, keep = true, readable = …)` keeps
+  YGOrganization's index, card and Q&A replies and Yugipedia's rulings, archetype sections and section bodies for the
+  week only when the parser the caller uses reads them, and throws away a kept one it cannot read (an older build's)
+  instead of serving it; a caller without a reader keeps what it kept before.
 
 #### Going further — the roadmap
 

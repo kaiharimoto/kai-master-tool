@@ -28,12 +28,27 @@ data class GuideBook(
     val chapters: List<Chapter> = emptyList(),
     val sources: List<String> = emptyList(),
     val updatedAt: Long = 0,
-    /** Which version of Ai's notes it was written from: when the notes change, it is out of date. */
+    /** Which version of Ai's notes it was last written from (every write stamps it; each chapter keeps its own, [Chapter.notesHash]). */
     val notesHash: String = "",
+    /**
+     * The deck its front — the roles the cells and odds are read through — was set on, as `Ledger.fingerprint` (1.0.99).
+     * Empty in a book written before the app recorded it: the deck is then unknown, never stale for ever ([BookFreshness]).
+     */
+    val deckPrint: String = "",
 ) {
-    /** A chapter; planned (its outline set, nothing written yet) while it has no sections. */
+    /**
+     * A chapter; planned (its outline set, nothing written yet) while it has no sections. [deckPrint] and [notesHash] are
+     * the deck and Ai's notes it was written on (1.0.99), stamped by the app as it is written, never taken from what Ai sends.
+     */
     @Serializable
-    data class Chapter(val id: String = "", val title: String, val summary: String = "", val sections: List<Section> = emptyList()) {
+    data class Chapter(
+        val id: String = "",
+        val title: String,
+        val summary: String = "",
+        val sections: List<Section> = emptyList(),
+        val deckPrint: String = "",
+        val notesHash: String = "",
+    ) {
         val written: Boolean get() = sections.isNotEmpty()
     }
 

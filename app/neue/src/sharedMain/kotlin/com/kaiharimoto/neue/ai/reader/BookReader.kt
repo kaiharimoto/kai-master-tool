@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,16 +54,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.ai.AiSession
+import com.kaiharimoto.mastertool.core.ai.evidence.Ledger
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.report.ReaderGuide
 import com.kaiharimoto.mastertool.core.ai.report.book.Block
 import com.kaiharimoto.mastertool.core.ai.report.book.BookArt
+import com.kaiharimoto.mastertool.core.ai.report.book.BookFreshness
 import com.kaiharimoto.mastertool.core.ai.report.book.BookPdf
 import com.kaiharimoto.mastertool.core.ai.report.book.Faces
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Viewing
 import com.kaiharimoto.neue.ai.AiDocs
@@ -87,8 +91,10 @@ import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuMotion
 import com.kaiharimoto.neue.theme.MuType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The reader's guide, read in the app (1.0.67, kai: "In the full app ready, it's interactable/animated
@@ -109,24 +115,34 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
     val version = ai.bookVersion
     val book = remember(deckId, version) { ai.files.read(GuideBook.path(deckId)).let(GuideBook::read)?.withIds() }
     val fonts by produceState<Faces?>(null) { value = Faces.of(AiDocs.fonts()) }
-    val deck = remember(deckId, h.builder.deck) { AiDocs.deckNames(h, deckId) }
+    val onBuilder = h.builder.deckId == deckId
+    // The deck as it is now: the builder's while it is open there, else the saved one (1.0.99).
+    val saved by produceState<Deck?>(null, deckId, onBuilder) {
+        value = if (onBuilder) null else withContext(Dispatchers.IO) { runCatching { h.deps.deckRepository.byId(deckId)?.entry?.deck }.getOrNull() }
+    }
+    val current = if (onBuilder) h.builder.deck else saved
+    // The numbers the pictures draw are worked out from that deck, never the one the book was written on.
+    val deck = remember(current, h.builder.index) { current?.main?.mapNotNull { h.builder.index.byId(it)?.name }?.takeIf { it.isNotEmpty() } }
     val art = remember(fonts, book, deck) {
         val f = fonts
         if (f != null && book != null) BookArt.of(f, book, deck, AiDocs.kind(h)) else null
     }
     val cards: (String) -> Card? = remember(h.builder.index) { { name -> h.builder.index.byName(name) } }
     val open: (String) -> Unit = { name -> cards(name)?.let { h.neue.viewing = Viewing(it, null, 0) } }
-    val onBuilder = h.builder.deckId == deckId
     val write = {
         h.neue.reading = null
         ai.setOpen(true)
         ai.askTune(AiSession.MODE_WRITE)
     }
-    // Out of date when Ai's notes on the deck have changed since it was written.
-    val stale = remember(book, version) {
+    // Out of date when the deck has changed since a chapter was written, or Ai's notes on it (BookFreshness).
+    val print = remember(current) { current?.let(Ledger::fingerprint) }
+    val fresh = remember(book, version, print) {
         val notes = ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty()
-        book != null && book.notesHash.isNotBlank() && notes.isNotBlank() && book.notesHash != ReaderGuide.hashOf(notes)
+        book?.let { BookFreshness.of(it, print, notes.takeIf { n -> n.isNotBlank() }?.let(ReaderGuide::hashOf)) }
     }
+    val stale = fresh?.stale == true
+    val staleWords = remember(book, fresh, ai.name) { if (book != null && fresh != null) BookFreshness.words(book, fresh, ai.name) else emptyList() }
+    val older = remember(book, fresh) { book?.chapters?.mapIndexedNotNull { i, ch -> i.takeIf { ch.id in fresh?.olderDeck.orEmpty() } }.orEmpty().toSet() }
 
     BoxWithConstraints(
         modifier
@@ -161,7 +177,7 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
                 if (book != null && book.chapters.isNotEmpty()) {
                     Mono("${two(chapter + 1)}/${two(book.chapters.size)}".takeIf { chapter >= 0 } ?: "––/${two(book.chapters.size)}", color = c.ink45)
                 }
-                if (book != null && !phone) Exports(h, deckId, book)
+                if (book != null && !phone) Exports(h, deckId, book, deck)
                 // With nothing written the page's own button says it; the bar's would repeat it.
                 if (!phone && !ai.writing && book != null && book.chapters.isNotEmpty()) {
                     MuButton(
@@ -181,7 +197,9 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Small("${ai.name}'s notes on this deck have changed since this was written.", Modifier.weight(1f), color = c.ink)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        staleWords.forEach { Small(it, color = c.ink) }
+                    }
                     if (onBuilder) MuButton("Update it", write, variant = BtnVariant.GHOST, size = BtnSize.SM)
                 }
             }
@@ -191,7 +209,7 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
             }
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 if (contents && wide) {
-                    Box(Modifier.width(300.dp).fillMaxHeight()) { Contents(book, chapter, jump, Modifier.fillMaxSize()) }
+                    Box(Modifier.width(300.dp).fillMaxHeight()) { Contents(book, chapter, jump, Modifier.fillMaxSize(), older) }
                     VRule(color = c.ink12)
                 }
                 BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
@@ -206,9 +224,14 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
                                 Box(Modifier.width(column)) {
                                     when (item) {
                                         is Item.Cover -> Cover(book, column, jump, cards)
-                                        is Item.Opener -> Opener(book, item.chapter, jump, onBuilder, ai.name, write)
+                                        is Item.Opener -> Opener(book, item.chapter, jump, onBuilder, ai.name, write, olderDeck = item.chapter in older)
                                         is Item.Head -> Head(book, item.chapter, item.section)
-                                        is Item.Piece -> if (art != null) Piece(ai, art, item.block, z, width, column, cards, open)
+                                        is Item.Piece -> if (art != null) {
+                                            Column {
+                                                Piece(ai, art, item.block, z, width, column, cards, open)
+                                                if (item.chapter in older) TypedOnOlderDeck(item.block, ai.name)
+                                            }
+                                        }
                                         is Item.Sources -> Sources(book)
                                     }
                                 }
@@ -222,10 +245,10 @@ fun BookReader(h: NeueHolders, deckId: String, modifier: Modifier = Modifier) {
         if (book != null && contents && !wide) {
             Box(Modifier.fillMaxSize().padding(top = 49.dp).background(c.ink.copy(alpha = 0.12f)).muClickable { contents = false })
             Column(Modifier.padding(top = 49.dp).width(minOf(maxWidth - 48.dp, 340.dp)).fillMaxHeight().background(c.paper)) {
-                Contents(book, chapter, jump, Modifier.weight(1f))
+                Contents(book, chapter, jump, Modifier.weight(1f), older)
                 HRule()
                 Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Exports(h, deckId, book)
+                    Exports(h, deckId, book, deck)
                     if (!ai.writing) MuButton("Update", write, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = onBuilder && ai.configured, reason = "Open the deck in the builder first")
                 }
             }
@@ -268,14 +291,14 @@ private fun itemsOf(book: GuideBook): List<Item> = buildList {
 }
 
 @Composable
-private fun Exports(h: NeueHolders, deckId: String, book: GuideBook) {
+private fun Exports(h: NeueHolders, deckId: String, book: GuideBook, deck: List<String>?) {
     val scope = rememberCoroutineScope()
     var making by remember { mutableStateOf(false) }
     MuButton(if (making) "Making…" else "PDF", {
         making = true
         scope.launch {
             try {
-                AiDocs.deliverBook(h, deckId, book)
+                AiDocs.deliverBook(h, deckId, book, deck)
             } finally {
                 making = false
             }
@@ -308,7 +331,7 @@ private fun Empty(h: NeueHolders, onBuilder: Boolean, write: () -> Unit) {
 
 /** Every chapter numbered and its sections under it; the chapter being read marked with a bar. */
 @Composable
-private fun Contents(book: GuideBook, at: Int, jump: (String) -> Unit, modifier: Modifier = Modifier) {
+private fun Contents(book: GuideBook, at: Int, jump: (String) -> Unit, modifier: Modifier = Modifier, older: Set<Int> = emptySet()) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     Column(modifier.verticalScroll(rememberScrollState()).padding(vertical = 16.dp)) {
@@ -333,6 +356,7 @@ private fun Contents(book: GuideBook, at: Int, jump: (String) -> Unit, modifier:
                     color = if (ch.written) c.ink else c.ink45,
                 )
                 if (!ch.written) Mono("planned", color = c.ink45)
+                if (ci in older) Mono("older deck", color = c.ink)
             }
             if (here) {
                 ch.sections.forEachIndexed { si, s ->
@@ -394,7 +418,7 @@ private fun Cover(book: GuideBook, column: Dp, jump: (String) -> Unit, cards: (S
 
 /** A chapter's opening: its number large, its title, what it holds, its sections to jump to. */
 @Composable
-private fun Opener(book: GuideBook, ci: Int, jump: (String) -> Unit, onBuilder: Boolean, name: String, write: () -> Unit) {
+private fun Opener(book: GuideBook, ci: Int, jump: (String) -> Unit, onBuilder: Boolean, name: String, write: () -> Unit, olderDeck: Boolean = false) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     val ch = book.chapters[ci]
@@ -404,6 +428,10 @@ private fun Opener(book: GuideBook, ci: Int, jump: (String) -> Unit, onBuilder: 
         Micro("Chapter", color = c.ink45)
         MuText(two(ci + 1), style = MuType.mono(f, 72.sp).copy(lineHeight = 76.sp, letterSpacing = (-0.04).em), color = c.ink)
         MuText(ch.title, style = MuType.h1(f).copy(fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 36.sp, letterSpacing = (-0.025).em), color = c.ink)
+        if (olderDeck) {
+            Box(Modifier.height(10.dp))
+            InkNote("Written on an older deck. The numbers $name typed here are from that deck; the pictures' are worked out from the deck as it is.")
+        }
         if (ch.summary.isNotBlank()) {
             Box(Modifier.height(10.dp))
             MuText(ch.summary, style = MuType.body(f).copy(fontSize = 16.sp, lineHeight = 23.sp, fontWeight = FontWeight.Medium), color = c.ink70)
@@ -428,6 +456,26 @@ private fun Opener(book: GuideBook, ci: Int, jump: (String) -> Unit, onBuilder: 
                 MuText(s.title, Modifier.weight(1f), style = MuType.body(f).copy(fontSize = 15.sp), color = c.ink)
             }
         }
+    }
+}
+
+/** A line in ink beside a rule in the margin: what the reader says of the deck the words were written on (1.0.99). */
+@Composable
+private fun InkNote(text: String) {
+    val c = Mu.colors
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.width(2.dp).fillMaxHeight().background(c.ink))
+        Small(text, Modifier.weight(1f), color = c.ink)
+    }
+}
+
+/** Under a block of a chapter written on an older deck: the numbers Ai typed into it, said to be that deck's. */
+@Composable
+private fun TypedOnOlderDeck(block: Block, name: String) {
+    val typed = remember(block) { BookFreshness.typedNumbers(block) }
+    if (typed.isEmpty()) return
+    Box(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+        InkNote("From an older deck: ${typed.joinToString(", ")}, as $name typed ${if (typed.size == 1) "it" else "them"}, not worked out again.")
     }
 }
 
