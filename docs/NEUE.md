@@ -2477,6 +2477,27 @@ and extensive, which is good, and why we need Ai").
 - Release note: a new file per deck, `guides/<deck>.book.json`; no preference, schema or deck-file
   change.
 
+#### The red team on learning and real-world intelligence (1.0.97)
+
+kai asked for a red team of the harness "for learning and real world intelligence". What it found and what changed (the
+whole report, its research and the roadmap that replaced the one below: `docs/AI-INTELLIGENCE.md`):
+- **Learning**: a score of `1` was stored as 100 (`SessionReport.score` takes 0–100 as given now); Ai's own skills
+  escaped the review and Undo (they are in the snapshot, reviewed line by line; shadowing a built-in asks first; the
+  unattended reflection no longer writes skills); a helper got the whole conversation's prompt and passed a cut-off line
+  off as its report (`PromptBuilder.helper`, `AgentEvent.Done.outOfSteps`); "do not change their decks" was only words
+  (`AiTools.barredIn(mode)` closes the deck tools, and `open_deck` in the deck modes, offered and answered); `Recall`
+  matched "it" inside "with" (whole words).
+- **Outside text and the network**: everything read from outside — pages, search results, Yugipedia, YGOPRODeck's
+  lists and players, a video's report — arrives in an `<untrusted source="…">` envelope (`Untrusted`, look-alike tags
+  defused) that every prompt names (`PromptBuilder.UNTRUSTED_RULE`); `web_fetch` never reaches this computer, its network
+  or a cloud's metadata service, every redirect checked (`UrlGuard`, no DNS); a command-line app's own web tools follow
+  the app's (`CliWeb`), so first principles is first principles there too.
+- **Real-world data**: a failure is said as one — an answer in an unknown shape, a page whose layout changed, a page
+  past the first that failed, a window read only in part (`PlayerPages.LayoutChanged`, `RecentDecks.unread`,
+  `Unreachable.of`); Yugipedia's cache is keyed by SHA-256 and never keeps an error; each ruling keeps its section
+  (TCG/OCG) and its source (`Ruling.line`); and the field snapshot's shares are named for what they are, shares of top
+  cuts (`FieldBuilder.SHARE_CAVEAT`), in the tool, `expected_winrate` and the format-webs skill.
+
 #### Going further — the roadmap
 
 What else would make Ai frontier-level here, in the order it would pay off, with what each needs:
@@ -3725,6 +3746,78 @@ size, loops that sleep — but a few patterns repeated over every card or every 
 
 Left for later, because they could change a pixel: the foil name masked inside the shader instead of a layer per card,
 dimming pool cards with an overlay instead of a layer, smaller decoded art on the desk.
+
+### 4r. Ai World: Ai's own computer, watched (1.0.97)
+
+kai: "design and build an 'A.I. World (Sandbox)' where Ai has a free environment to build using coding tools to figure
+out high level math, probability, card web/flowcharts, and visualized data … that the user can see and watch live", and
+"I want to see everything the Ai is doing … operating the computer and coding things, and looking through what it's
+building, its reasoning, and its output". Then: "we can provide it tools it can operate that we design and engineer
+ourselves to save tokens and start with a strong foundation". Page `08`, `Ctrl 8`; the name is **Ai World**, never "AI".
+
+**Why it exists.** The red team (`docs/AI-INTELLIGENCE.md`) found that nothing Ai learned was ever checked against
+ground truth: its scores were its own, its odds one-line `calculate` calls, its lines unverified. A world is where a
+claim becomes a run — written, seeded, printed, pinned, and watched.
+
+**What a world is** (`core/world/World.kt`): a folder, `<data>/world/<id>/` — `world.json` (title, scope `deck:<id>` or
+`web:<id>`, boards), `files/` (the code and data, the files themselves), `files/out/` (pictures a run saved) and
+`log.jsonl` (every `WorldEvent`, append-only). `WorldCodec` reads like `PresentCodec`: a newer build's keys skipped, a
+board that will not read dropped alone; **a board's kind is kept as its word** (`Board.kind`, `Board.type`), so a newer
+build's kind survives an older build's save. `WorldPaths.safe` keeps every path inside `files/`.
+
+**Engines.**
+- **JavaScript everywhere** (`core/src/jvmMain/.../world/JsRuntime.kt`, Mozilla Rhino **1.7.15** — 1.8+ need
+  `jdk.dynalink` and `java.beans`, which Android lacks). Interpreted; `initSafeStandardObjects`, a class shutter that
+  refuses every class, no files, no network; an instruction count, a wall clock, a heap budget (a quarter of the VM's at
+  most) and the person's Stop all end a run from inside the interpreter, past any `catch`; out-of-memory and stack
+  overflow are caught; a run that will not stop (a regular expression inside Java) is given up on, its daemon thread left
+  to finish. The prelude guards the one-call allocations the count cannot see (`repeat`, `padStart`, `fill`, `join`).
+  `JsRuntimeTest` holds all of it.
+- **Python on the desk** (`neue/world/WorldPython`, expect/actual; none on Android). Off until the person allows it —
+  the `WORLD` start step, or Settings › Assistant — because a process runs as them; `WorldPrefs` is device-only and in
+  `AiSettings.INTERNAL`, so **Ai can never switch Python on**. `-I`, a stripped environment, `HOME` the world's folder,
+  the files folder as working directory, a time limit that kills the process tree. A boot script puts the helper on the
+  path (`-I` keeps the script's own folder off it from 3.11) and runs the script as `__main__`.
+
+**The `ygo` API** (`WorldApi`, one door: a name and JSON in, JSON out; `WorldPrelude` builds `ygo.*` over it in
+JavaScript and writes `ygo.py` beside a Python run with the decks as data): cards and decks (the builder's open deck,
+unsaved edits and all, every library deck, groups — `WorldSnapshot`, plain values taken as a run starts); exact maths
+(`comb`, `hypergeo`, `atLeast`, `atMost`, `handOdds` — `HandOdds`); seeded chance (mulberry32 `rng`, `hand` — a partial
+Fisher–Yates, a tenth of a full shuffle — `deal`, `simulate`, `rate` with Wilson's interval); `stats` (`WorldStats`:
+summaries, histogram, Wilson, binomial, normal, chi-square with its p-value); a duel table of the script's own on the real
+rules (`duel.start`, `do`, `brief`, `state` — physics only, as the Duel page); and `show.*`, which pins boards.
+
+**Boards** (`WorldShow.kt`, painted by `neue/world/WorldPaint.kt`, the World's one file allowed colour — charts and webs
+read better in it, kai's call): markdown (the chat's renderer), chart (the chat's bar, hbar, line and stacked, plus
+scatter, heatmap and a histogram binned into bars), graph (a card web, `GraphLayout`'s seeded force layout), flow
+(`EngineLayout`'s layers — whose hub count is now a path-count product, not a walk of every route, which was exponential
+in a dense web), table, stat, cards, board, line, image. Every payload is checked as it is pinned, and a broken one says
+why in words.
+
+**Instruments** (`Instruments.kt`, kai's "strong foundation"): studies engineered and tested in core, run at the app's
+speed, by Ai in one step (`world_tool`) or from a script (`ygo.tools.*`): openings (exact odds of each condition going
+first and second, checked by a seeded simulation, sample hands), ratios (a condition as copies change or the deck grows),
+card_web (who names, searches or summons whom, read off the text), composition and matchups (Prep's logged games as a
+heatmap, best-of-three). Conditions keep a quoted card name whole, `&` and all. Their red team and upgrades are in
+`docs/world/INSTRUMENTS-REDTEAM.md`. The `ai-world` skill tells Ai to reach for an instrument first and to write its
+own in the same shape when none fits.
+
+**Ai's tools** (`neue/ai/AiWorld.kt` over the `Worlds` holder, the same state the person's clicks change):
+`world_state`, `world_new`, `world_write` (the whole file, or exact edits), `world_read`, `world_run`, `world_tool`,
+`world_show`. `MODE_WORLD` (twice the rounds; "In Ai World" on the panel; `AiState.startWorld`) and the `ai-world` skill:
+say the question, start small, run, read, check against an independent method, pin one board per finding with a note,
+and never tell a number no run computed.
+
+**Watching it** (`neue/world/`): Files, Editor (Ai's code typed in at `WorldPrefs.typing`, at most a few seconds a file,
+with Skip), Terminal (each run's command and its output streaming), Boards, Thoughts (Ai's reasoning and words) and
+Activity; the pane Ai works in wears "Ai is here" with the still `AiMark` — focus jumps, nothing glides. Follow
+(`WorldPrefs.follow`, `F`) brings the page forward when Ai starts work. Keys: `DeskScope.WORLD` — `Ctrl Enter` run,
+`Ctrl .` stop, `Alt 1`–`6` the panes, `Alt N` a new world. On a phone the panes are tabs.
+
+**Kept like the rest**: synced and backed up (`NeueSyncLocal.worldSyncs`: never `.tmp` or the Python helper's folder),
+reloaded after a sync or a restore; `OldDataTest.aWorldFrom1097StillReads`; `WorldsTest` runs a world end to end
+(typed, run, streamed, pinned, an instrument, Python allowed or not and its odds agreeing with the app's).
+`tools/shoot.sh --page=world --world=demo` photographs it.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 
