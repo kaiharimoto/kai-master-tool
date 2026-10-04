@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.shootout
 
+import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -277,26 +278,59 @@ private fun progressWords(s: Shootouts): String {
     return parts.joinToString(" · ")
 }
 
-/** A rating's hands: theirs above (smaller), yours below, each as large as the room allows. */
+/**
+ * A rating's hands: theirs above (smaller), yours below, each as large as the room allows. A hand of six is the player
+ * going second's, and its turn's draw stands last, marked; cards turned up for draws by effects follow it, marked +1, +2…
+ * (1.1.5, kai: "The sixth card should be marked as their top deck").
+ */
 @Composable
 private fun RateHands(h: NeueHolders, p: Proposal.Rate, width: Dp, height: Dp, phone: Boolean) {
     val s = h.shootout
-    val bench = s.bench ?: return
-    val mine = bench.ids(p.hand)
-    val theirs = p.opponent?.let(bench::opponentIds)
+    val mine = s.myHand(p)
+    val myDrawn = s.myDrawn(p)
+    val theirs = s.theirHand(p)
+    val theirDrawn = s.theirDrawn(p)
     val gap = if (phone) 6.dp else 12.dp
-    val label = 22.dp
+    val label = 28.dp
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
         if (theirs != null) {
             val rowH = (height - label * 2 - gap * 3) * 0.38f
-            Micro("Their hand · ${theirs.size} cards", color = Mu.colors.ink45)
-            Hand(h, theirs, cardWidth(width, rowH, theirs.size, gap, phone), gap, phone)
-            Micro("Your hand · ${mine.size} cards", color = Mu.colors.ink45)
-            Hand(h, mine, cardWidth(width, (height - label * 2 - gap * 3) * 0.62f, mine.size, gap, phone), gap, phone)
+            val shown = theirs.opening + listOfNotNull(theirs.draw) + theirDrawn
+            HandHead(handWords("Their hand", theirs, theirDrawn), "Draw for them", "Shift D", phone) { s.drawTheirs() }
+            Hand(h, shown, marks(theirs, theirDrawn), cardWidth(width, rowH, shown.size, gap, phone), gap, phone)
+            val myShown = mine.opening + listOfNotNull(mine.draw) + myDrawn
+            HandHead(handWords("Your hand", mine, myDrawn), "Draw for you", "D", phone) { s.drawMine() }
+            Hand(h, myShown, marks(mine, myDrawn), cardWidth(width, (height - label * 2 - gap * 3) * 0.62f, myShown.size, gap, phone), gap, phone)
         } else {
-            Micro("Your hand · ${mine.size} cards", color = Mu.colors.ink45)
-            Hand(h, mine, cardWidth(width, height - label - gap, mine.size, gap, phone), gap, phone)
+            val myShown = mine.opening + listOfNotNull(mine.draw) + myDrawn
+            HandHead(handWords("Your hand", mine, myDrawn), "Draw a card", "D", phone) { s.drawMine() }
+            Hand(h, myShown, marks(mine, myDrawn), cardWidth(width, height - label - gap, myShown.size, gap, phone), gap, phone)
         }
+    }
+}
+
+/** "Their hand · 6 cards · the last is their draw · 2 drawn by effects". */
+private fun handWords(whose: String, hand: TrialDraws.Ordered, drawn: List<Int>): String = buildList {
+    add("$whose · ${hand.opening.size + (if (hand.draw != null) 1 else 0)} cards")
+    if (hand.draw != null) add(if (whose == "Your hand") "the last is your draw for the turn" else "the last is their draw for the turn")
+    if (drawn.isNotEmpty()) add("${drawn.size} drawn by effects")
+}.joinToString(" · ")
+
+/** Each card's mark: none for the opening five, Draw for the turn's draw, +1, +2… for cards drawn by effects. */
+private fun marks(hand: TrialDraws.Ordered, drawn: List<Int>): List<String?> =
+    List(hand.opening.size) { null } + listOfNotNull(hand.draw?.let { "Draw" }) + drawn.indices.map { "+${it + 1}" }
+
+/**
+ * A hand's label and its draw button: a card turned up off that side's deck for an effect that draws — a look ahead
+ * only, the opening hand is still what is rated.
+ */
+@Composable
+private fun HandHead(words: String, draw: String, key: String, phone: Boolean, onDraw: () -> Unit) {
+    val c = Mu.colors
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Micro(words, Modifier.weight(1f), color = c.ink45, maxLines = if (phone) 2 else 1)
+        MuButton(draw, onDraw, variant = BtnVariant.GHOST, size = BtnSize.SM)
+        if (!phone) Kbd(key)
     }
 }
 
@@ -310,8 +344,11 @@ private fun CompareHands(h: NeueHolders, p: Proposal.Compare, width: Dp, height:
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
         val room = if (theirs != null) height * 0.72f else height
         if (theirs != null) {
-            Micro("Their hand · ${theirs.size} cards", color = Mu.colors.ink45)
-            Hand(h, theirs, cardWidth(width, height * 0.22f, theirs.size, gap, phone), gap, phone)
+            val ordered = s.theirHand(p) ?: TrialDraws.Ordered(theirs, null)
+            val drawn = s.theirDrawn(p)
+            val shown = ordered.opening + listOfNotNull(ordered.draw) + drawn
+            HandHead(handWords("Their hand", ordered, drawn), "Draw for them", "Shift D", phone) { s.drawTheirs() }
+            Hand(h, shown, marks(ordered, drawn), cardWidth(width, height * 0.22f, shown.size, gap, phone), gap, phone)
         }
         val stacked = phone || width < 900.dp
         val pairs = listOf(true to bench.ids(p.left), false to bench.ids(p.right))
@@ -350,7 +387,7 @@ private fun Choice(h: NeueHolders, left: Boolean, ids: List<Int>, cardW: Dp, gap
             Micro(if (left) "This hand" else "Or this hand", Modifier.weight(1f), color = c.ink70)
             Kbd(if (left) "←" else "→")
         }
-        Hand(h, ids, cardW, gap, phone)
+        Hand(h, ids, List(ids.size) { null }, cardW, gap, phone)
     }
 }
 
@@ -363,35 +400,45 @@ private fun cardWidth(width: Dp, height: Dp, n: Int, gap: Dp, phone: Boolean): D
     return min(min(byWidth, byHeight), 260.dp).coerceAtLeast(24.dp)
 }
 
-/** A hand as card art, in rows of three on a phone. */
+/** A hand as card art, in rows of three on a phone; [marks] says which cards are draws (1.1.5). */
 @Composable
-private fun Hand(h: NeueHolders, ids: List<Int>, cardW: Dp, gap: Dp, phone: Boolean) {
-    val rows = if (phone && ids.size > 3) ids.chunked(3) else listOf(ids)
+private fun Hand(h: NeueHolders, ids: List<Int>, marks: List<String?>, cardW: Dp, gap: Dp, phone: Boolean) {
+    val cards = ids.mapIndexed { i, id -> id to marks.getOrNull(i) }
+    val rows = if (phone && cards.size > 3) cards.chunked(3) else listOf(cards)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap), horizontalAlignment = Alignment.CenterHorizontally) {
         rows.forEachIndexed { r, row ->
             key(r) {
                 Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    row.forEachIndexed { i, id -> key(i, id) { HandCard(h, id, cardW) } }
+                    row.forEachIndexed { i, (id, mark) -> key(i, id) { HandCard(h, id, cardW, mark) } }
                 }
             }
         }
     }
 }
 
+/** One card, with its mark under it when it was drawn rather than dealt: ink on paper, the page's own tag. */
 @Composable
-private fun HandCard(h: NeueHolders, id: Int, width: Dp) {
+private fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null) {
     val s = h.shootout
+    val c = Mu.colors
     val card = s.card(id)
     val size = Modifier.size(width, width / CARD_RATIO)
-    if (card == null) {
-        Box(size.border(1.dp, Mu.colors.ink25), contentAlignment = Alignment.Center) { Mono(id.toString()) }
-    } else {
-        NeueCard(
-            card,
-            size.reads(s, card),
-            format = h.builder.format,
-            foil = h.neue.prefs.foil,
-        )
+    Box {
+        if (card == null) {
+            Box(size.border(1.dp, c.ink25), contentAlignment = Alignment.Center) { Mono(id.toString()) }
+        } else {
+            NeueCard(
+                card,
+                size.reads(s, card),
+                format = h.builder.format,
+                foil = h.neue.prefs.foil,
+            )
+        }
+        if (mark != null) {
+            Box(Modifier.align(Alignment.TopStart).background(c.ink).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                Micro(mark, color = c.paper)
+            }
+        }
     }
 }
 
@@ -495,6 +542,8 @@ internal fun runShootout(h: NeueHolders, action: DeskAction) {
     if ((s.teach.trustOpen || s.teach.rubricOpen) && action != DeskAction.SHOOTOUT_TRUST) return
     when (action) {
         DeskAction.SHOOTOUT_ACCEPT -> if (s.running && h.ai.enabled) s.teach.accept()
+        DeskAction.SHOOTOUT_DRAW_MINE -> if (s.running) s.drawMine()
+        DeskAction.SHOOTOUT_DRAW_THEIRS -> if (s.running) s.drawTheirs()
         DeskAction.SHOOTOUT_TRUST -> if (h.ai.enabled) {
             h.neue.go(Page.SHOOTOUT)
             if (s.teach.trustOpen) s.teach.trustOpen = false else s.teach.openTrust()

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.shootout
 
+import com.kaiharimoto.mastertool.core.shootout.bench.SeenDraws
+import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -292,8 +294,54 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
 
     private fun nextId(): String = "${teach.sessionId(sessionId) ?: "s"}-$given"
 
+    /** Cards turned up for draws by effects on the trial on screen (1.1.5): how many off each deck. */
+    var myDraws by mutableStateOf(0)
+        private set
+    var theirDraws by mutableStateOf(0)
+        private set
+
+    /** One more card off your deck for an effect that draws; a comparison has two hands of yours, so none. */
+    fun drawMine() {
+        val p = proposal as? Proposal.Rate ?: return
+        if (myDraws < myRest(p).size) myDraws++
+    }
+
+    /** One more card off their deck. */
+    fun drawTheirs() {
+        val p = proposal ?: return
+        if (theirDraws < theirRest(p).size) theirDraws++
+    }
+
+    private fun myRest(p: Proposal.Rate): List<Int> = bench?.restIds(p.stratum, p.hand).orEmpty()
+
+    private fun theirRest(p: Proposal): List<Int> = bench?.theirRestIds(p.stratum, p.opponent).orEmpty()
+
+    /** Your hand on screen, the turn's draw last and marked when you went second. */
+    fun myHand(p: Proposal.Rate): TrialDraws.Ordered =
+        TrialDraws.ordered(bench?.ids(p.hand).orEmpty(), TrialDraws.seed(shownId, TrialDraws.MINE))
+
+    /** Their hand on screen, likewise. */
+    fun theirHand(p: Proposal): TrialDraws.Ordered? =
+        p.opponent?.let { o -> bench?.opponentIds(o) }?.let { TrialDraws.ordered(it, TrialDraws.seed(shownId, TrialDraws.THEIRS)) }
+
+    /** The cards turned up so far for your draws, in order. */
+    fun myDrawn(p: Proposal.Rate): List<Int> = TrialDraws.drawn(myRest(p), myDraws, TrialDraws.seed(shownId, TrialDraws.MY_DRAWS))
+
+    /** The cards turned up so far for theirs. */
+    fun theirDrawn(p: Proposal): List<Int> = TrialDraws.drawn(theirRest(p), theirDraws, TrialDraws.seed(shownId, TrialDraws.THEIR_DRAWS))
+
+    /** What the trial on screen showed beyond its hands, kept with the answer. */
+    private fun seen(p: Proposal): SeenDraws = SeenDraws(
+        turnDraw = (p as? Proposal.Rate)?.let { myHand(it).draw },
+        theirTurnDraw = theirHand(p)?.draw,
+        drew = (p as? Proposal.Rate)?.let(::myDrawn).orEmpty(),
+        theyDrew = theirDrawn(p),
+    )
+
     private fun show(r: ShootoutRun, p: Proposal) {
         shownId = nextId()
+        myDraws = 0
+        theirDraws = 0
         proposal = p
         shownAt = h.deps.now()
         teach.shown(r, p, shownId)
@@ -302,13 +350,15 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     /** The hand on screen answered on the five-point scale. */
     fun answer(answer: Answer) {
         val p = proposal as? Proposal.Rate ?: return
-        commit(p) { r, id, at, ms, saw, mode -> r.answer(p, answer, id, at, ms, teach.sessionId(sessionId), saw, mode) }
+        val draws = seen(p)
+        commit(p) { r, id, at, ms, saw, mode -> r.answer(p, answer, id, at, ms, teach.sessionId(sessionId), saw, mode, draws) }
     }
 
     /** One of the two hands on screen chosen. */
     fun prefer(left: Boolean) {
         val p = proposal as? Proposal.Compare ?: return
-        commit(p) { r, id, at, ms, saw, mode -> r.prefer(p, left, id, at, ms, teach.sessionId(sessionId), saw, mode) }
+        val draws = seen(p)
+        commit(p) { r, id, at, ms, saw, mode -> r.prefer(p, left, id, at, ms, teach.sessionId(sessionId), saw, mode, draws) }
     }
 
     private fun commit(p: Proposal, record: (ShootoutRun, String, Long, Long, Boolean, String?) -> StoredTrial) {

@@ -70,6 +70,12 @@ internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, cl
     h.shootout.demo(me, opponent, map["shootout-answers"]?.toIntOrNull() ?: 60, view)
     h.neue.page = Page.SHOOTOUT
     clock.run(160)
+    // Draws by effects (1.1.5): --shootout-draws=MINE,THEIRS turns that many cards up off each deck.
+    map["shootout-draws"]?.split(",")?.mapNotNull { it.trim().toIntOrNull() }?.let { (mine, theirs) ->
+        repeat(mine) { h.shootout.drawMine() }
+        repeat(theirs) { h.shootout.drawTheirs() }
+        clock.run(30)
+    }
     val log = h.shootout.log
     println("[neue-studio] shootout: ${log?.trials?.size} trials, strata ${h.shootout.bench?.strata}, waiting ${h.shootout.bench?.waiting?.keys}, settled ${h.shootout.settled ?: h.shootout.results?.settled}")
 }

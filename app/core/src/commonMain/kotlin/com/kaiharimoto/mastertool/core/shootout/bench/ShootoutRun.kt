@@ -95,14 +95,14 @@ class ShootoutRun(
     /** The person's answer to a rating, kept and fitted; the kept trial. */
     fun answer(
         p: Proposal.Rate, answer: Answer, id: String, at: Long, ms: Long? = null, session: String? = null,
-        sawAi: Boolean = false, mode: String? = null,
-    ): StoredTrial = bench.rated(p, answer, id, at, ms, session, sawAi, mode).also(::record)
+        sawAi: Boolean = false, mode: String? = null, draws: SeenDraws = SeenDraws.NONE,
+    ): StoredTrial = bench.rated(p, answer, id, at, ms, session, sawAi, mode, draws).also(::record)
 
     /** The person's choice in a comparison, kept and fitted; the kept trial. */
     fun prefer(
         p: Proposal.Compare, leftPreferred: Boolean, id: String, at: Long, ms: Long? = null, session: String? = null,
-        sawAi: Boolean = false, mode: String? = null,
-    ): StoredTrial = bench.compared(p, leftPreferred, id, at, ms, session, sawAi, mode).also(::record)
+        sawAi: Boolean = false, mode: String? = null, draws: SeenDraws = SeenDraws.NONE,
+    ): StoredTrial = bench.compared(p, leftPreferred, id, at, ms, session, sawAi, mode, draws).also(::record)
 
     /** Each judge's noise on the five-point scale, in log-odds (1 / precision), by [Bench.PERSON], [Bench.AI], [Bench.SEEN]. */
     fun noiseOf(judge: Int): Double = exp(-fit.theta[bench.spec.layout.precision(judge)])

@@ -65,6 +65,14 @@ data class StoredTrial(
     val of: String? = null,
     /** How the answer was given (stage 3): one of [TeachModes] — `calibration`, `apprentice`, `supervised`, `solo`, `audit`, `exam`. */
     val mode: String? = null,
+    /** Your turn's draw, marked on screen, when you went second (1.1.5, `TrialDraws`); one of [hand]. */
+    val turnDraw: Int? = null,
+    /** Their turn's draw, when they went second; one of [opponent]. */
+    val theirTurnDraw: Int? = null,
+    /** Cards turned up for your draws by card effects (1.1.5): a look ahead, never part of the rated hand. */
+    val drew: List<Int> = emptyList(),
+    /** Cards turned up for their draws by card effects. */
+    val theyDrew: List<Int> = emptyList(),
 ) {
     /** Every hand of yours it shows. */
     val hands: List<List<Int>> get() = if (kind == COMPARE) listOf(left, right) else listOf(hand)

@@ -328,6 +328,10 @@ enum class DeskAction {
     SHOOTOUT_ACCEPT,
     /** The trust panel (stage 3): how far Ai is trusted on this matchup. */
     SHOOTOUT_TRUST,
+    /** A card turned up off your deck, for a draw by a card's effect (1.1.5, kai): a look ahead, not the rated hand. */
+    SHOOTOUT_DRAW_MINE,
+    /** A card turned up off their deck, likewise. */
+    SHOOTOUT_DRAW_THEIRS,
     ;
 
     companion object {
@@ -650,6 +654,8 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("r"), DeskAction.SHOOTOUT_RESULTS, DeskScope.SHOOTOUT, "The results, or back to the trials"),
         DeskShortcut(KeyChord("space"), DeskAction.SHOOTOUT_ACCEPT, DeskScope.SHOOTOUT, "Supervised: take Ai's answer as yours"),
         DeskShortcut(KeyChord("t"), DeskAction.SHOOTOUT_TRUST, DeskScope.SHOOTOUT, "How far Ai is trusted on this matchup"),
+        DeskShortcut(KeyChord("d"), DeskAction.SHOOTOUT_DRAW_MINE, DeskScope.SHOOTOUT, "Draw a card off your deck, for an effect that draws"),
+        DeskShortcut(KeyChord("d", shift = true), DeskAction.SHOOTOUT_DRAW_THEIRS, DeskScope.SHOOTOUT, "Draw a card off their deck"),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action

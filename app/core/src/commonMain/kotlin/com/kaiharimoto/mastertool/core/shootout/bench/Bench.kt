@@ -108,6 +108,19 @@ class Bench private constructor(
     /** The opponent's hand as passcodes. */
     fun opponentIds(hand: Hand): List<Int> = hand.cards.flatMap { c -> List(hand[c]) { theirs[c] } }
 
+    /** Your deck in [stratum] after [hand], one passcode a copy: what a draw by an effect comes from (1.1.5). */
+    fun restIds(stratum: Stratum, hand: Hand): List<Int> {
+        val rest = decks.own(stratum).rest(hand)
+        return rest.indices.flatMap { c -> List(rest[c]) { own[c] } }
+    }
+
+    /** Their deck in [stratum] after [hand], one passcode a copy; empty for the deck alone. */
+    fun theirRestIds(stratum: Stratum, hand: Hand?): List<Int> {
+        val deck = decks.theirs(stratum) ?: return emptyList()
+        val rest = if (hand == null) IntArray(deck.universe) { deck[it] } else deck.rest(hand)
+        return rest.indices.flatMap { c -> List(rest[c]) { theirs[c] } }
+    }
+
     /**
      * A kept trial as the model reads it, or null when this model does not read it: another stratum, one waiting now,
      * or a shape no build knows. Each kind of answer is its own judge (stage 3, S.md §6½, Dawid–Skene): the person's
@@ -200,12 +213,16 @@ class Bench private constructor(
      */
     fun rated(
         p: Proposal.Rate, answer: Answer, id: String, at: Long, ms: Long?, session: String?,
-        sawAi: Boolean = false, mode: String? = null,
+        sawAi: Boolean = false, mode: String? = null, draws: SeenDraws = SeenDraws.NONE,
     ): StoredTrial = StoredTrial(
         id = id,
         at = at,
         stratum = p.stratum.name,
         kind = StoredTrial.RATE,
+        turnDraw = draws.turnDraw,
+        theirTurnDraw = draws.theirTurnDraw,
+        drew = draws.drew,
+        theyDrew = draws.theyDrew,
         hand = ids(p.hand),
         opponent = p.opponent?.let(::opponentIds),
         answer = answer.name,
@@ -220,12 +237,14 @@ class Bench private constructor(
     /** A comparison answered by the person, ready to keep, blind unless [sawAi]. */
     fun compared(
         p: Proposal.Compare, leftPreferred: Boolean, id: String, at: Long, ms: Long?, session: String?,
-        sawAi: Boolean = false, mode: String? = null,
+        sawAi: Boolean = false, mode: String? = null, draws: SeenDraws = SeenDraws.NONE,
     ): StoredTrial = StoredTrial(
         id = id,
         at = at,
         stratum = p.stratum.name,
         kind = StoredTrial.COMPARE,
+        theirTurnDraw = draws.theirTurnDraw,
+        theyDrew = draws.theyDrew,
         left = ids(p.left),
         right = ids(p.right),
         opponent = p.opponent?.let(::opponentIds),

@@ -123,6 +123,20 @@ class OldDataTest {
     }
 
     @Test
+    fun aShootoutTrialFrom114ReadsWithNoDrawsAndATrialWithDrawsReadsBack() {
+        // 1.1.4 kept no turn's draw and no draws by effects: read as none.
+        val old = ShootoutCodec.decode("""{"version":1,"deck":"d","trials":[{"id":"s-1","stratum":"G1_FIRST","hand":[1,2,3,4,5],"opponent":[6,7,8,9,10,11],"answer":"LEAN_WIN"}]}""")
+        val t = old!!.trials.single()
+        assertEquals(null, t.theirTurnDraw)
+        assertEquals(emptyList(), t.theyDrew)
+        val withDraws = t.copy(theirTurnDraw = 11, theyDrew = listOf(40, 41), drew = listOf(30))
+        val back = ShootoutCodec.decode(ShootoutCodec.encode(old.copy(trials = listOf(withDraws))))!!.trials.single()
+        assertEquals(11, back.theirTurnDraw)
+        assertEquals(listOf(40, 41), back.theyDrew)
+        assertEquals(listOf(30), back.drew)
+    }
+
+    @Test
     fun aShootoutFrom112StillReads() {
         // 1.1.2 (Phase S stage 2): a matchup's trials in `<data>/shootout/<deck>/<opponent>.json` — a rating, a comparison, a
         // sided trial with its plans, Ai's answer kept apart — and a key and a trial kind from a later build.

@@ -163,6 +163,7 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.GO_SHOOTOUT, DeskAction.SHOOTOUT_ANSWER_1, DeskAction.SHOOTOUT_ANSWER_2, DeskAction.SHOOTOUT_ANSWER_3,
         DeskAction.SHOOTOUT_ANSWER_4, DeskAction.SHOOTOUT_ANSWER_5, DeskAction.SHOOTOUT_LEFT, DeskAction.SHOOTOUT_RIGHT,
         DeskAction.SHOOTOUT_START, DeskAction.SHOOTOUT_STOP, DeskAction.SHOOTOUT_RESULTS, DeskAction.SHOOTOUT_ACCEPT, DeskAction.SHOOTOUT_TRUST,
+        DeskAction.SHOOTOUT_DRAW_MINE, DeskAction.SHOOTOUT_DRAW_THEIRS,
         -> runShootout(this, action)
         // Ai World's own (1.0.97): from its keys, the palette and the menus alike.
         DeskAction.WORLD_RUN, DeskAction.WORLD_STOP, DeskAction.WORLD_FOLLOW, DeskAction.WORLD_NEW,
