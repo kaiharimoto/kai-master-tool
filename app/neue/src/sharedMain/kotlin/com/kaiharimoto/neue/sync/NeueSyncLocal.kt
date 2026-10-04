@@ -38,6 +38,9 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     /** Duel's replays (1.0.75) and combos (1.0.76): files, the newer one kept. The duel in play is this device's own. */
     private val duel = File(Platform.dataDir, "duel")
 
+    /** Ai World's worlds (1.0.97): files, the newer one kept; the Python helper's folder is rewritten before every run. */
+    private val world = File(Platform.dataDir, "world")
+
     /** What came in this sync, so the screens showing it can be told once at the end. */
     val changed = mutableSetOf<String>()
 
@@ -60,6 +63,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
             files(art, "art/") { true }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(present, "present/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(duel, "duel/") { rel -> !rel.endsWith(".tmp") && rel.substringAfterLast('/') != Duels.CURRENT }.forEach { (path, f) -> out[path] = seen.file(path, f) }
+            files(world, "world/") { rel -> worldSyncs(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
         }
         return out
     }
@@ -117,6 +121,11 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
                 seen.forget(path)
                 changed += "present"
             }
+            path.startsWith("world/") && worldSyncs(path.removePrefix("world/")) -> {
+                write(File(world, path.removePrefix("world/")), bytes)
+                seen.forget(path)
+                changed += "world"
+            }
             path.startsWith("duel/") && path != "duel/${com.kaiharimoto.neue.duel.Duels.CURRENT}" -> {
                 write(File(duel, path.removePrefix("duel/")), bytes)
                 seen.forget(path)
@@ -172,6 +181,13 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
          */
         fun privateToDevice(rel: String): Boolean =
             rel.startsWith("credentials.") || rel.startsWith("run/") || rel.startsWith("cache/")
+
+        /**
+         * What of a world travels (1.0.97), [rel] under `world/`: its record, log, files and pictures; never a half-written
+         * file or the Python helper's folder, which every run writes afresh.
+         */
+        fun worldSyncs(rel: String): Boolean =
+            !rel.endsWith(".tmp") && "/.py/" !in "/$rel" && rel.split('/').none { it == ".." }
     }
 }
 

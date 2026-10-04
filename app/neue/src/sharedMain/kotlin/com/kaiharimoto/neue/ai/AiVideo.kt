@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.video.GeminiVideo
 import com.kaiharimoto.mastertool.core.ai.video.YouTube
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
+import com.kaiharimoto.mastertool.core.ai.web.Untrusted
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
@@ -65,13 +66,14 @@ internal class AiVideo(private val ai: AiState) {
             // Gemini's own refusals are already in words; a network failure is said plainly.
             return fail(if (it is IllegalStateException) it.message.orEmpty() else Unreachable.say(GeminiVideo.BASE, it.message))
         }
-        val head = buildString {
+        // The title, the channel and everything said or shown in the video are its maker's: outside text.
+        val seen = buildString {
             append("Video: ").append(title?.let { "“$it”" } ?: YouTube.watch(id))
             about?.second?.let { append(" by ").append(it) }
-            append(" — ").append(YouTube.watch(id)).append('\n')
-            append("Watched by Gemini ($chosen): what it saw on screen and heard. The player's view, not the rules.\n\n")
+            append("\n\n").append(text.take(MAX_REPORT))
         }
-        return MetaAnswer(head + text.take(MAX_REPORT), "Watched ${title?.let { "“$it”" } ?: "the video"}")
+        val head = "${YouTube.watch(id)}, watched by Gemini ($chosen): what it saw on screen and heard. The player's view, not the rules.\n"
+        return MetaAnswer(head + Untrusted.wrap("YouTube video ${YouTube.watch(id)}", seen), "Watched ${title?.let { "“$it”" } ?: "the video"}")
     }
 
     companion object {

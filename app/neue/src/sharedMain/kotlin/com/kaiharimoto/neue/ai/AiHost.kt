@@ -25,6 +25,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryScope
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryWrite
+import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
 import com.kaiharimoto.mastertool.core.ai.skills.Skill
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiStream
@@ -113,10 +114,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             return result(call, fail("The input for ${spec.name} arrived cut short or was not JSON. Send it again, whole."))
         }
         ToolArgs.problem(spec, call.input)?.let { return result(call, fail(it)) }
-        // First principles (1.0.54): the web and the community's lists are closed, whatever the model tries.
-        if (ai.session?.mode == AiSession.MODE_PRINCIPLES && spec.name in AiTools.FIRST_PRINCIPLES_BARRED) {
-            return result(call, fail("${spec.name} is closed in this session: the deck is learned from its card text and the rules alone. Reason it out."))
-        }
+        // What the mode closes, whatever the model tries — over a CLI too, whose MCP list is the whole catalogue: the decks
+        // while Ai learns one or the person, and from first principles (1.0.54) the web and the community's lists.
+        ai.session?.mode?.let { mode -> AiTools.barredWhy(mode, spec.name) }?.let { return result(call, fail(it)) }
         ai.working(describe(spec, call.input))
         ai.tool = spec.name
         val answer = try {
@@ -206,7 +206,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
             "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
-            else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
+            else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
@@ -225,6 +225,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** Duel's (1.0.76): the table, moves played out, a logged peek, the log, a new duel, combos. */
     private val duelTools = AiDuel(h)
+
+    /** Ai World (1.0.97): its own computer, watched. */
+    private val worldTools = AiWorld(h)
 
     /** What a destructive tool will do, for the confirm card. */
     private suspend fun consequence(spec: ToolSpec, i: JsonObject): Pair<String, String> = when (spec.name) {
@@ -284,6 +287,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         }
         if (neue.page == Page.PRESENT) h.present.open?.let { p ->
             add("Presentation open: “${p.name}” (id ${p.id}), ${p.slides.size} slides, on slide ${h.present.slideIndex + 1}${p.deck?.let { d -> "; profiles the deck “${d.name}”" } ?: ""}; present_state has the outline")
+        }
+        if (neue.page == Page.WORLD) {
+            val w = h.world.open
+            add(
+                if (w == null) "On Ai World, with no world open: world_new makes one."
+                else "On Ai World: “${w.title}” (id ${w.id}) is open, ${h.world.files.size} files, ${w.boards.size} boards" +
+                    (h.world.editorPath?.let { "; the editor shows $it" } ?: "") + "; world_state has the rest",
+            )
         }
     }
 
@@ -968,11 +979,24 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return ok(skill.body, "Read the skill ${skill.name}")
     }
 
-    private fun skillManage(i: JsonObject): Answer {
+    private suspend fun skillManage(i: JsonObject): Answer {
         val name = Skills.slug(ToolArgs.string(i, "name")!!)
         if (name.isEmpty()) return fail("A skill needs a name.")
         val own = ai.files.ownSkills().firstOrNull { it.name == name }
-        return when (ToolArgs.string(i, "action")) {
+        val action = ToolArgs.string(i, "action")
+        // A skill of the app's name stands in for the app's own (`Skills.merge`), changing how Ai does a whole
+        // kind of task from then on: the person says yes first, the way a destructive tool asks.
+        val builtIn = BuiltInSkills.all.firstOrNull { it.name == name }
+        if (builtIn != null && (action == "create" || action == "patch") && !ai.prefs.alwaysAllow) {
+            val confirm = Confirm(
+                "Change how ${ai.name} does “$name”?",
+                "“$name” is one of the app's own skills: ${builtIn.description.trimEnd('.')}. ${ai.name}'s version is used in its place " +
+                    "from now on, until it is deleted.",
+                action = "skill_manage",
+            )
+            if (!ai.ask(confirm)) return fail("The person said no: $name stays the app's. Don't change it unless they ask.")
+        }
+        return when (action) {
             "create" -> {
                 val body = ToolArgs.string(i, "body") ?: return fail("create needs body.")
                 val description = ToolArgs.string(i, "description") ?: return fail("create needs description.")

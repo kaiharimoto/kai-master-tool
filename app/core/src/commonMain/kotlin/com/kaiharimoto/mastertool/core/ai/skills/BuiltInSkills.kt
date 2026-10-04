@@ -128,20 +128,26 @@ object BuiltInSkills {
 
             1. **Ask what you need**, one question at a time when it is missing: the event (name, date), the format
                (TCG/OCG), its size, and which deck the person will play (a library deck, or one to build).
-            2. **Read the field**: `ygopro_field_snapshot` for the format and a window of recent results (30–60 days;
-              shorter right after a banlist). It groups decks into strategies with a share of results.
-            3. **Choose the decks**: the strategies that together cover about 85% of the field, usually 5–9. Fold a
+            2. **Read what is topping**: `ygopro_field_snapshot` for the format and a window of recent results (30–60 days;
+              shorter right after a banlist). It groups decks into strategies with a **share of top cuts** — not a share
+              of the field. Strong decks top more often than they are played, so they look bigger there than they are at
+              the tables, and a popular deck that rarely tops looks smaller.
+            3. **Choose the decks**: the strategies that together cover about 85% of the top cuts, usually 5–9. Fold a
                strategy under 3% into "other" unless the person asks for it. Adjust for what you know of the event
                (a local skews to what its players own; the person may know their scene — ask).
-            4. **Make it**: `create_web` (named after the event, notes with the date, format, size and your sources), then
-               for each strategy `import_ygopro_deck` with its representative deck number into the web, with its `share`.
-               Add the person's own deck with `add_deck_to_web` (deck_id from the library) and `mine: true`.
-               Shares should sum to about 100.
-            5. **Write the web's notes** with `memory` (scope web): per deck, its plan, what it fears, and the choke points
+            4. **Set the shares as the field, not the tops**: a web's share is the share of the *players* expected at
+               the event, and it weights the expected win rate and the practice plan. When that matters, ask the person
+               what their scene plays, or estimate the field separately (pull strong decks down, popular rogue decks up)
+               and say it is an estimate; never copy top-cut shares in as the field without saying so in the web's notes.
+            5. **Make it**: `create_web` (named after the event, notes with the date, format, size and your sources — say
+               whether the shares are top cuts or a field estimate), then for each strategy `import_ygopro_deck` with its
+               representative deck number into the web, with its `share`. Add the person's own deck with `add_deck_to_web`
+               (deck_id from the library) and `mine: true`. Shares should sum to about 100.
+            6. **Write the web's notes** with `memory` (scope web): per deck, its plan, what it fears, and the choke points
                that matter for the person's deck. Short entries.
-            6. **Offer siding**: for each matchup with a real share, a plan going first and going second
+            7. **Offer siding**: for each matchup with a real share, a plan going first and going second
                (`set_siding_plan`), from the person's side deck; balanced in and out; the why in a sentence.
-            7. **Tell the person** what the web says in three lines: the top decks, the person's hardest matchup, and the
+            8. **Tell the person** what the web says in three lines: the top decks, the person's hardest matchup, and the
                side-deck cards that matter most. Take them to Format (`navigate`).
 
             Rebuild, don't pile on: when asked to update a web, adjust shares and swap lists rather than adding duplicates.
@@ -189,6 +195,8 @@ object BuiltInSkills {
         3 to Skill(DeckSkills.RESTYLE_NAME, DeckSkills.RESTYLE_DESCRIPTION, DeckSkills.RESTYLE.trim(), builtIn = true),
         // Duel (1.0.76): Ai at the table — honest knowledge, moves as a player says them, combos.
         3 to Skill(DeckSkills.DUEL_TABLE_NAME, DeckSkills.DUEL_TABLE_DESCRIPTION, DeckSkills.DUEL_TABLE.trim(), builtIn = true),
+        // Ai World (1.0.97): answering by experiment, in code the person watches.
+        3 to Skill(DeckSkills.AI_WORLD_NAME, DeckSkills.AI_WORLD_DESCRIPTION, DeckSkills.AI_WORLD.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

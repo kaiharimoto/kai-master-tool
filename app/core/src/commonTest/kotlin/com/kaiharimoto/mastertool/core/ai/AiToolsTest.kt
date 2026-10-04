@@ -57,6 +57,32 @@ class AiToolsTest {
     }
 
     @Test
+    fun theDecksAreClosedWhileAiLearnsADeckOrThePerson() {
+        val names = AiTools.all.map { it.name }.toSet()
+        assertTrue(names.containsAll(AiTools.DECK_CHANGING), "every deck-changing name is a tool: ${AiTools.DECK_CHANGING - names}")
+        val learning = listOf(AiSession.MODE_TUNE, AiSession.MODE_STUDY, AiSession.MODE_PRINCIPLES, AiSession.MODE_REFACTOR, AiSession.MODE_WRITE, AiSession.MODE_PROFILE)
+        learning.forEach { mode ->
+            assertTrue(AiTools.barredIn(mode).containsAll(AiTools.DECK_CHANGING), "$mode leaves a deck tool open")
+            assertTrue("edit_deck" in AiTools.barredIn(mode) && "memory" !in AiTools.barredIn(mode), mode)
+            assertTrue(AiTools.barredWhy(mode, "edit_deck")!!.contains("not changed"), mode)
+            assertNull(AiTools.barredWhy(mode, "card_info"), "$mode: looking stays open")
+        }
+        // The guide follows the builder's deck: no other deck is opened while one is learned.
+        listOf(AiSession.MODE_TUNE, AiSession.MODE_STUDY, AiSession.MODE_PRINCIPLES, AiSession.MODE_REFACTOR, AiSession.MODE_WRITE).forEach { mode ->
+            assertTrue("open_deck" in AiTools.barredIn(mode), mode)
+        }
+        assertFalse("open_deck" in AiTools.barredIn(AiSession.MODE_PROFILE), "the person's profile follows no deck")
+        // First principles keeps its own bar and its own words.
+        assertTrue(AiTools.barredIn(AiSession.MODE_PRINCIPLES).containsAll(AiTools.FIRST_PRINCIPLES_BARRED))
+        assertFalse("web_search" in AiTools.barredIn(AiSession.MODE_STUDY), "a study reads online")
+        assertTrue(AiTools.barredWhy(AiSession.MODE_PRINCIPLES, "web_search")!!.contains("card text and the rules"))
+        // An ordinary conversation, a presentation and the duel close nothing here.
+        listOf(AiSession.MODE_CHAT, AiSession.MODE_PRESENT, AiSession.MODE_RESTYLE, AiSession.MODE_DUEL).forEach { mode ->
+            assertTrue(AiTools.barredIn(mode).isEmpty(), mode)
+        }
+    }
+
+    @Test
     fun theFirstReleaseOffersTheHarnessAndLaterPhasesAddToIt() {
         val first = AiTools.offered(1).map { it.name }
         assertTrue("edit_deck" in first && "set_setting" in first)

@@ -269,6 +269,9 @@ data class AiSession(
         /** At the duel table (1.0.80): Ai talks in the duel's log, reading the table only when cued. */
         const val MODE_DUEL = "duel"
 
+        /** In Ai World (1.0.97): a question answered by code Ai writes and runs where the person watches. */
+        const val MODE_WORLD = "world"
+
         /** What an old tool result is cut to once the person clears them. */
         const val CLEARED = 200
 

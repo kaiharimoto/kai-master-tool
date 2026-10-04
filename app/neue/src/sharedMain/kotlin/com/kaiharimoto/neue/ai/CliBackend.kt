@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.cli.ClaudeCli
 import com.kaiharimoto.mastertool.core.ai.cli.ClaudeStream
+import com.kaiharimoto.mastertool.core.ai.cli.CliWeb
 import com.kaiharimoto.mastertool.core.ai.cli.CodexCli
 import com.kaiharimoto.mastertool.core.ai.cli.CodexStream
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
@@ -43,11 +44,13 @@ class CliBackend(
             }
         }?.joinToString("\n\n").orEmpty()
         workDir.mkdirs()
+        // The CLI's own web tools only where the app offered its own: a mode that closes the web closes the CLI's.
+        val web = CliWeb.offered(request.tools.map { it.name })
         val launch = when (wire) {
             Wire.CLAUDE_CLI -> {
                 val system = File(workDir, "system.md").apply { writeText(request.system) }
                 val config = File(workDir, "mcp.json").apply { writeText(ClaudeCli.mcpConfig(mcp.url, mcp.token)) }
-                ClaudeCli.launch(program, message, system.absolutePath, config.absolutePath, request.model, request.effort, request.resume, last?.images.orEmpty())
+                ClaudeCli.launch(program, message, system.absolutePath, config.absolutePath, request.model, request.effort, request.resume, last?.images.orEmpty(), web)
             }
             else -> {
                 // Codex takes no system prompt from the command line: the first message of a
@@ -55,7 +58,7 @@ class CliBackend(
                 val prompt = if (request.resume.isNullOrBlank()) "<instructions>\n${request.system}\n</instructions>\n\n$message" else message
                 // Pictures are files under Ai's folder, beside this run folder.
                 val pictures = last?.images.orEmpty().map { File(workDir.parentFile, it.file) }.filter { it.isFile }.map { it.absolutePath }
-                CodexCli.launch(program, prompt, workDir.absolutePath, mcp.url, mcp.token, request.model, request.effort, request.resume, pictures)
+                CodexCli.launch(program, prompt, workDir.absolutePath, mcp.url, mcp.token, request.model, request.effort, request.resume, pictures, web)
             }
         }
         val claude = ClaudeStream()

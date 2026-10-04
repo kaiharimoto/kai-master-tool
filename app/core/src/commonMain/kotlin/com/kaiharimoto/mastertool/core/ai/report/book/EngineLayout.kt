@@ -82,18 +82,22 @@ data class EngineLayout(
             down()
             up()
             down()
-            // Routes from a source to an end, and how many pass through each card.
-            val ends = nodes.filter { n -> acyclic.none { it.from == n } }
-            val through = HashMap<String, Int>()
-            fun routes(n: String, path: List<String>) {
-                if (n in ends) {
-                    path.drop(1).dropLast(1).forEach { through[it] = (through[it] ?: 0) + 1 }
-                    return
-                }
-                acyclic.filter { it.from == n }.forEach { routes(it.to, path + it.to) }
+            // Routes from a source to an end, and how many pass through each card: the routes into a card times the
+            // routes out of it, counted once per card (1.0.97). Walking every route, as before, is exponential in a
+            // dense web, and Ai World draws any web a script makes; the counts are the same.
+            val routesIn = HashMap<String, Double>()
+            fun inCount(n: String): Double = routesIn.getOrPut(n) {
+                val preds = acyclic.filter { it.to == n }
+                if (preds.isEmpty()) 1.0 else preds.sumOf { inCount(it.from) }
             }
-            nodes.filter { n -> acyclic.none { it.to == n } }.forEach { routes(it, listOf(it)) }
-            val most = through.values.maxOrNull() ?: 0
+            val routesOut = HashMap<String, Double>()
+            fun outCount(n: String): Double = routesOut.getOrPut(n) {
+                val next = acyclic.filter { it.from == n }
+                if (next.isEmpty()) 1.0 else next.sumOf { outCount(it.to) }
+            }
+            val through = nodes.filter { n -> acyclic.any { it.to == n } && acyclic.any { it.from == n } }
+                .associateWith { inCount(it) * outCount(it) }
+            val most = through.values.maxOrNull() ?: 0.0
             val hubs = if (most >= 2) through.filterValues { it == most }.keys else emptySet()
             return EngineLayout(rows.map { it.toList() }, clean, hubs)
         }

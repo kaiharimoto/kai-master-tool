@@ -75,6 +75,13 @@ object Yugipedia {
     private const val SAFE = "-_.~:/()!,'*;@"
     private const val HEX = "0123456789ABCDEF"
 
+    /**
+     * Whether an answer is the API's error, not a page: a page that does not exist comes back
+     * 200 with `{"error":{"code":"missingtitle",…}}`, and must never be kept as if it were the
+     * page — it may be written tomorrow. Anything that is not JSON is not a page either.
+     */
+    fun isError(json: String): Boolean = root(json)?.let { "error" in it } ?: true
+
     /** The wikitext in a `parse` answer, or null for an error (a missing page) or anything else. */
     fun wikitextOf(json: String): String? {
         val parse = root(json)?.takeIf { "error" !in it }?.get("parse") as? JsonObject ?: return null

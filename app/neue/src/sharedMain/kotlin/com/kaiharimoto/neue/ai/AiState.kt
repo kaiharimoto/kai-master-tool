@@ -486,6 +486,8 @@ class AiState(internal val h: NeueHolders) {
             // A book is written a chapter at a time, each read up on first: twice a study's rounds.
             AiSession.MODE_WRITE -> intensity.steps * 2
             AiSession.MODE_TUNE, AiSession.MODE_PROFILE -> intensity.questions * 3 + 8
+            // An experiment is write, run, read, fix, show — several rounds a question (1.0.97).
+            AiSession.MODE_WORLD -> AgentLoop.MAX_STEPS * 2
             else -> AgentLoop.MAX_STEPS
         }
         val budget = if (model.runsOwnLoop) 0 else budgetFor(connection)
@@ -493,12 +495,12 @@ class AiState(internal val h: NeueHolders) {
             try {
                 // Past most of the model's window, the oldest turns become a summary first (1.0.47).
                 val ready = if (budget > 0) summarizedIfLong(start, model, connection, budget) else start
-                // From first principles (1.0.54) the model is never offered the web or the community's lists.
+                // What the mode closes is never offered (`AiTools.barredIn`): the decks while Ai learns one or the person,
+                // and from first principles (1.0.54) the web and the community's lists too.
                 val offered = when (start.mode) {
-                    AiSession.MODE_PRINCIPLES -> tools.filter { it.name !in AiTools.FIRST_PRINCIPLES_BARRED }
                     // At the table, the table's tools only (1.0.85): the rest cost every round thousands of tokens.
                     AiSession.MODE_DUEL -> tools.filter { it.name in AiTools.DUEL }
-                    else -> tools
+                    else -> AiTools.barredIn(start.mode).let { barred -> tools.filter { it.name !in barred } }
                 }
                 // The pictures' bytes, read from their files just now: they are never kept in the conversation.
                 val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
@@ -565,6 +567,8 @@ class AiState(internal val h: NeueHolders) {
         clearWritten()
         reasoning = ""
         activity = emptyList()
+        // Nobody is working in Ai World now (1.0.97): its "Ai is here" comes off.
+        if (h.worldStarted) h.world.leave()
         working = null
         tool = null
         running = false
@@ -632,6 +636,17 @@ class AiState(internal val h: NeueHolders) {
      * Build with Ai on Present (1.0.71): a fresh Present conversation, opened with what the
      * launcher learned, so the deck-profile skill begins with the answers it would ask for.
      */
+    /**
+     * Ai World (1.0.97): a question answered by experiment — a fresh world conversation, opened with the person's words,
+     * worked in the World where they watch.
+     */
+    fun startWorld(question: String) {
+        setOpen(true)
+        if (prefs.connection == null) return
+        newChat(AiSession.MODE_WORLD)
+        send(question.trim())
+    }
+
     fun buildPresentation(brief: PresentBrief) {
         setOpen(true)
         if (prefs.connection == null) return

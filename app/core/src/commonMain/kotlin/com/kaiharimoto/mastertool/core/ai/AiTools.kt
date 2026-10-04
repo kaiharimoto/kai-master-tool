@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.present.ai.PresentWriter
 import com.kaiharimoto.mastertool.core.search.EffectKind
+import com.kaiharimoto.mastertool.core.world.Instruments
 
 /**
  * Everything Ai can do in the app, as data: the prompt lists it, every backend
@@ -16,7 +17,7 @@ import com.kaiharimoto.mastertool.core.search.EffectKind
  * a passcode, or with a count in front, `"3 Ash Blossom"` / `"3x Ash Blossom"`.
  */
 object AiTools {
-    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "PRESENT", "DUEL", "SETTINGS")
+    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "PRESENT", "DUEL", "WORLD", "SETTINGS")
     val SECTIONS = listOf("main", "extra", "side")
     val EXPORTS = listOf("ydk", "ydkx", "ydke", "text", "qr")
 
@@ -325,7 +326,7 @@ object AiTools {
 
     val navigate = ToolSpec(
         "navigate",
-        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), PRESENT (deck profiles as slides), DUEL (the duel simulator), SETTINGS.",
+        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), PRESENT (deck profiles as slides), DUEL (the duel simulator), WORLD (Ai World, your own computer the person watches), SETTINGS.",
         schema { enum("page", "The page", PAGES, required = true) },
         ToolGroup.APP,
     )
@@ -446,7 +447,7 @@ object AiTools {
             string("event", "Only events whose name has this")
             string("player", "Only lists this player piloted (a part of the name is enough). For a player's whole record, use ygopro_player")
             integer("days", "Only the last this many days (default 60)", min = 1, max = 365)
-            integer("page", "Older results, from 0", min = 0, max = 20)
+            integer("page", "Older results, from 0: page N is each tier's Nth page of twenty lists, of any age unless days is given", min = 0, max = 20)
         },
         ToolGroup.META,
         phase = 2,
@@ -490,8 +491,9 @@ object AiTools {
 
     val fieldSnapshot = ToolSpec(
         "ygopro_field_snapshot",
-        "What the field looks like: recent tournament decks grouped into strategies, each with its share of results " +
+        "What has been topping: recent tournament decks grouped into strategies, each with its share of top cuts " +
             "(weighted by placement and event size), its best finishes and one representative list's deck number. " +
+            "A share of top cuts is not a share of the field — strong decks top more often than they are played. " +
             "The first step in building a web of decks for an event.",
         schema {
             integer("tier", "Lowest event tier (default 2)", min = 1, max = 4)
@@ -658,7 +660,9 @@ object AiTools {
     val expectedWinrate = ToolSpec(
         "expected_winrate",
         "The match win rate to expect at the event: each opponent's best-of-three win rate from the logged games " +
-            "(few games pulled toward even), weighted by its share of the field's web.",
+            "(few games pulled toward even), weighted by its share in the field's web. Only as good as those shares: " +
+            "taken from ygopro_field_snapshot they are shares of top cuts, which over-represent strong decks, so say so " +
+            "when you quote the rate, and ask the person what their event's field really looks like.",
         schema { string("event_id", "Omit for the one being prepared for") },
         ToolGroup.LOOK,
         phase = 3,
@@ -699,7 +703,7 @@ object AiTools {
     val sessionReport = ToolSpec(
         "session_report",
         "Files this Fine Tuning session's report, as its last act; the person gets it as a PDF and the deck's guide shows the scores. " +
-            "Your honest confidence, 0-100: understanding (what the deck is for and how its cards fit), playing (how well you could " +
+            "Your honest confidence, each a whole number from 0 to 100 (62, never 0.62): understanding (what the deck is for and how its cards fit), playing (how well you could " +
             "pilot it yourself, turn by turn) and mirror (the share of best-of-three matches you expect to win against a competent " +
             "player piloting the same deck; 50 is even). Undersell rather than oversell, and say why.",
         schema {
@@ -707,9 +711,9 @@ object AiTools {
             strings("learned", "What you learned, one line each")
             strings("insights", "Deckbuilding insights, as suggestions")
             strings("open_questions", "What is still open")
-            integer("understanding", "0-100", required = true, min = 0, max = 100)
-            integer("playing", "0-100", required = true, min = 0, max = 100)
-            integer("mirror", "0-100: expected best-of-three win rate in the mirror", required = true, min = 0, max = 100)
+            integer("understanding", "A whole number, 0-100", required = true, min = 0, max = 100)
+            integer("playing", "A whole number, 0-100", required = true, min = 0, max = 100)
+            integer("mirror", "A whole number, 0-100: expected best-of-three win rate in the mirror", required = true, min = 0, max = 100)
             string("why", "What the scores rest on, and what would raise them", required = true)
         },
         ToolGroup.MEMORY,
@@ -821,6 +825,45 @@ object AiTools {
         "ygopro_tournament_decks", "ygopro_deck", "import_ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
         "watch_video",
     )
+
+    /**
+     * Every tool that changes the person's decks: edits, groups, names, saves, new and deleted
+     * decks, the builder's undo — and run_action, which reaches the same through the app's own
+     * actions (Remove selected, Undo, New deck…).
+     */
+    val DECK_CHANGING: Set<String> = setOf(
+        "edit_deck", "set_groups", "rename_deck", "save_deck", "delete_deck", "import_deck", "new_deck", "undo", "run_action",
+    )
+
+    /**
+     * Opening another deck mid-way through Fine Tuning, Refactor guide or the reader's guide: the
+     * guide, the book and the session report all follow the builder's deck, so the rest of the run
+     * would write to a deck the person never chose (and the review's budget would be the wrong
+     * one's). Learn About You is about the person, not a deck, and may open one.
+     */
+    private val SWITCHING_DECKS: Set<String> = setOf("open_deck")
+
+    /**
+     * The tools closed in a conversation of [mode], whatever the model tries (offered and answered
+     * alike): the decks are never changed while Ai learns a deck, rewrites its guide, writes its
+     * book or interviews the person — "do not change their decks" was the prompt's word alone —
+     * and from first principles the web is closed too ([FIRST_PRINCIPLES_BARRED]).
+     */
+    fun barredIn(mode: String): Set<String> = when (mode) {
+        AiSession.MODE_PRINCIPLES -> FIRST_PRINCIPLES_BARRED + DECK_CHANGING + SWITCHING_DECKS
+        AiSession.MODE_TUNE, AiSession.MODE_STUDY, AiSession.MODE_REFACTOR, AiSession.MODE_WRITE -> DECK_CHANGING + SWITCHING_DECKS
+        AiSession.MODE_PROFILE -> DECK_CHANGING
+        else -> emptySet()
+    }
+
+    /** Why [tool] is closed in [mode], for the model; null when it is open. */
+    fun barredWhy(mode: String, tool: String): String? = when {
+        tool !in barredIn(mode) -> null
+        mode == AiSession.MODE_PRINCIPLES && tool in FIRST_PRINCIPLES_BARRED ->
+            "$tool is closed in this session: the deck is learned from its card text and the rules alone. Reason it out."
+        tool in SWITCHING_DECKS -> "$tool is closed in this session: it is about the deck open now, and its guide is written to that deck. Stay on it."
+        else -> "$tool is closed in this session: the person's decks are not changed here. Suggest the change in words instead."
+    }
 
     /** The tools a delegated helper may use: every one that only looks. */
     val presentState = ToolSpec(
@@ -1033,6 +1076,107 @@ object AiTools {
         phase = 3,
     )
 
+    // ---- Ai World (1.0.97): a computer of Ai's own that the person watches --------------------------------------
+
+    val worldState = ToolSpec(
+        "world_state",
+        "Ai World (08), your own small computer, which the person watches live: with no id, every world; with one (or the open " +
+            "one), its files, its boards (id, kind, title, note) and its last runs with their output. Read it before you work in a world.",
+        schema { string("world_id", "One world; omit for the open one, or the list when none is open") },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val worldNew = ToolSpec(
+        "world_new",
+        "Ai World (08): a new world to work in, opened, for one question — 'Opening odds of Snake-Eye', 'Who beats whom in the " +
+            "field'. scope ties it to a deck or a web (deck:<id>, web:<id>, or 'open' for the builder's deck). Or open {world_id} " +
+            "to go back to one.",
+        schema {
+            string("title", "What the world is for, in a few words")
+            string("scope", "deck:<id>, web:<id>, or open")
+            string("world_id", "Open this existing world instead of making one")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val worldWrite = ToolSpec(
+        "world_write",
+        "Ai World (08): writes a file in the open world's files, typed out live for the person. text replaces the file (creating " +
+            "it); edits [{find, replace}] change it in place, each find exact and once; delete removes it. Code is .js (runs " +
+            "everywhere) or .py (the desk, when the person allowed Python); notes are .md, data .json or .csv. Paths are relative, " +
+            "like sim/openings.js.",
+        schema {
+            string("path", "The file, relative to the world, e.g. sim/openings.js", required = true)
+            string("text", "The whole file")
+            objects("edits", "Changes in place, in order") {
+                string("find", "Exact text that appears once", required = true)
+                string("replace", "What it becomes", required = true)
+            }
+            boolean("delete", "Remove the file")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val worldRead = ToolSpec(
+        "world_read",
+        "Ai World (08): reads a file of the open world, with line numbers.",
+        schema { string("path", "The file, relative to the world", required = true) },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val worldRun = ToolSpec(
+        "world_run",
+        "Ai World (08): runs a file (path) or a snippet (code, with lang js or py) in the open world, its output streaming into the " +
+            "world's terminal as the person watches. JavaScript has ygo.*: card, search, deck, decks, comb, hypergeo, atLeast, " +
+            "atMost, handOdds, rng(seed), hand(cards, rng, n), deal, simulate(n, seed, fn), rate, stats.*, show.{chart, graph, flow, " +
+            "table, stat, markdown, cards, board, line} and duel.start (a headless table on the real rules). Python imports ygo with " +
+            "the same names. Seed every simulation. Returns the output, an error with its line, and the boards the run pinned.",
+        schema {
+            string("path", "A file to run")
+            string("code", "Or a snippet to run without saving it")
+            enum("lang", "The snippet's language; a file's comes from its name", listOf("js", "py"))
+            integer("seconds", "Time limit, at most 120; default 30", min = 1, max = 120)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val worldTool = ToolSpec(
+        "world_tool",
+        "Ai World (08): runs one of the app's instruments in the open world — studies engineered and tested in the app, faster and " +
+            "surer than code written on the spot, and cheaper: one step, no script. Its lines stream to the world's terminal and its " +
+            "boards are pinned. Reach for one before writing your own; write your own (world_write) for what none of them does, " +
+            "to the same standard. ygo.tools.list() or world_tool list gives each one's arguments. The instruments: " + Instruments.brief() + ".",
+        schema {
+            enum("name", "The instrument, or list for every instrument's arguments", Instruments.ALL.map { it.name } + "list", required = true)
+            any("args", "Its arguments, as an object")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val worldShow = ToolSpec(
+        "world_show",
+        "Ai World (08): pins a board to the open world's canvas without running code, or takes one down. put {id, kind, title, body, " +
+            "note}: kind is markdown, chart (bar, hbar, line, stacked, scatter, heatmap, histogram — JSON as the chat's chart), graph " +
+            "or flow ({nodes, edges: [[from, to, label]]}), table ({columns, rows}), stat ({value, label, detail}), cards, board or " +
+            "line (the chat's fences' text) or image (a path under out/). A board with an id that exists is replaced. remove {id}.",
+        schema {
+            enum("action", "What to do", listOf("put", "remove"), required = true)
+            string("id", "The board's id: put replaces the board with it; remove takes it down")
+            string("kind", "put: what the board draws")
+            string("title", "put: its title")
+            any("body", "put: the board's JSON, or text for markdown, cards, board and line")
+            string("note", "put: one line on what it shows and why")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
     /**
      * What a duel conversation is offered (1.0.85): the table's tools and the few a player reaches for at it.
      * Sending all of them cost every round about twelve thousand tokens the table never used.
@@ -1050,6 +1194,7 @@ object AiTools {
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
         "duel_state", "duel_log",
+        "world_state", "world_read",
     )
 
     /** Every tool, in the order they are offered. */
@@ -1067,6 +1212,7 @@ object AiTools {
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
         duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch,
+        worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

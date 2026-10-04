@@ -50,7 +50,10 @@ class AiFiles(val root: File) {
     }
 
     fun delete(path: String) {
-        file(path).delete()
+        val target = file(path)
+        target.delete()
+        // A skill's folder goes with its SKILL.md, so a skill undone leaves nothing behind.
+        if (Skills.isPath(path)) target.parentFile?.takeIf { it.list()?.isEmpty() == true }?.delete()
     }
 
     // ---- memory -------------------------------------------------------------
@@ -103,7 +106,14 @@ class AiFiles(val root: File) {
         File(dir, "SKILL.md").takeIf { it.isFile }?.let { Skills.parse(it.readText(), dir.name) }
     }.orEmpty()
 
-    fun saveSkill(skill: Skill) = write("skills/${skill.name}/SKILL.md", skill.render())
+    fun saveSkill(skill: Skill) = write(Skills.path(skill.name), skill.render())
+
+    /** The paths of the skills Ai wrote, for a review to compare and an Undo to put back. */
+    fun skillPaths(): List<String> = file("skills").listFiles { f -> f.isDirectory }
+        ?.filter { File(it, "SKILL.md").isFile }
+        ?.map { Skills.path(it.name) }
+        ?.sorted()
+        .orEmpty()
 
     fun deleteSkill(name: String) {
         file("skills/${Skills.slug(name)}").deleteRecursively()

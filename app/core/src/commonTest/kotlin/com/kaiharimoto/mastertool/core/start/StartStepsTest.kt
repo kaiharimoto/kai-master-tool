@@ -7,13 +7,22 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StartStepsTest {
-    private val nothing = StartState(hasDecks = false, syncOn = false, aiEnabled = true, aiConnected = false, artSettled = false, voiceReady = false)
+    private val nothing = StartState(hasDecks = false, syncOn = false, aiEnabled = true, aiConnected = false, artSettled = false, voiceReady = false, worldReady = false)
     private val someone = nothing.copy(hasDecks = true)
 
     @Test
     fun someoneNewIsWalkedThroughEverything() {
         assertEquals(StartStep.entries, StartSteps.pending("1.0.69", StartPrefs(), nothing, android = false))
         assertTrue(StartSteps.isNew(StartPrefs(), nothing))
+    }
+
+    @Test
+    fun aiWorldAsksAboutPythonOnTheDeskOnly() {
+        // 1.0.97: the desk asks whether Python may run; a phone or tablet has none, so nothing is asked there.
+        assertEquals(listOf(StartStep.WORLD), StartSteps.pending("1.0.97", StartPrefs(seen = "1.0.96"), someone.copy(voiceReady = true), android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.3.75", StartPrefs(seen = "1.3.74"), someone.copy(voiceReady = true, worldReady = true), android = true))
+        // With Ai off there is no World to set up.
+        assertEquals(emptyList(), StartSteps.pending("1.0.97", StartPrefs(seen = "1.0.96"), someone.copy(voiceReady = true, aiEnabled = false), android = false))
     }
 
     @Test

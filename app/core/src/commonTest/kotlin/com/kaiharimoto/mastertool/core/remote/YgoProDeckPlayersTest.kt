@@ -7,6 +7,7 @@ import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -30,6 +31,71 @@ var deckname = "@Ignister Maliss""""
 
     /** A player the search matches alone, whose page the site redirects to: two tiers of tops. */
     private val onlyOne = """<h1 class="mt-5">Kaihuang Zhang's Tournament Results</h1> <p>Tournament results and decklists from Kaihuang Zhang's Yu-Gi-Oh! tournament career.</p> <div class="container-card mb-3"> <div class="d-flex flex-column flex-lg-row p-3" style="gap: 16px;"> <span> <b>Nationality:</b> <span class="country-flag" title="United States" alt="United States">🇺🇸</span> United States </span> <span> <b><abbr title="Tier 3 events are Yu-Gi-Oh! Championship Series events, National Championships and World Championship Qualifiers.">Tier 3</abbr> events:</b> 1 tops </span> <span> <b><abbr title="Tier 2 events are Regional Qualifiers">Tier 2</abbr> events:</b> 4 tops </span> </div> </div> <div id="tournament_table" style="width: 100%" class="as-table" role="grid"> <div id="tournament_table_header" class="as-tablerow" role="row"> <span class="as-tablecell" role="columnheader">Date</span> <span class="as-tablecell" role="columnheader">Placement</span> <span class="as-tablecell" role="columnheader">Tournament</span> <span class="as-tablecell" role="columnheader">Archetypes</span> <span class="as-tablecell" role="columnheader">Deck Price</span> </div> <a class="tournament_table_row as-tablerow even" role="row" href="/deck/labrynth-711878" data-deckurl="/deck/labrynth-711878" target="_blank"> <span class="as-tablecell" role="gridcell">May 16, 2026</span> <span class="as-tablecell" role="gridcell"><b>Top 8</b></span> <span class="as-tablecell" role="gridcell">Las Vegas WCQ Regional</span> <span class="as-tablecell" role="gridcell"> <div class="d-flex align-content-start flex-wrap arch-link"> <span class="badge badge-ygoprodeck"><img class="tournament-badge-img-crop" src="https://images.ygoprodeck.com/images/cards_cropped_200/2347656.jpg">Labrynth</span> </div> </span> <span class="as-tablecell" role="gridcell"> $161.57 </span> </a> <a class="tournament_table_row as-tablerow even" role="row" href="/deck/labrynth-610922" data-deckurl="/deck/labrynth-610922" target="_blank"> <span class="as-tablecell" role="gridcell">Jun 7, 2025</span> <span class="as-tablecell" role="gridcell"><b>Top 8</b></span> <span class="as-tablecell" role="gridcell">Santa Clara WCQ Regional</span> <span class="as-tablecell" role="gridcell"> <div class="d-flex align-content-start flex-wrap arch-link"> <span class="badge badge-ygoprodeck"><img class="tournament-badge-img-crop" src="https://images.ygoprodeck.com/images/cards_cropped_200/2347656.jpg">Labrynth</span> </div> </span> <span class="as-tablecell" role="gridcell"> $104.82 </span> </a></div>"""
+
+    /** The player search with no match, captured live (October 2026): the site's own "No results." */
+    private val nobody = """<h1 class="mt-5">Player Search Results</h1>
+
+                <form method="GET">
+                <input type="text" class="form-control" name="search" value="zzqxjvwk qqzzv" placeholder="Enter (partial) player name...">
+                </form>
+
+
+                <p class="mt-5">Tournament players matching 'zzqxjvwk qqzzv':</p>
+
+                No results.
+            </div>"""
+
+    /** Where a player or deck that does not exist is sent (a 303 or 302 to `/not-found/`), captured live. */
+    private val notFound = """<div class="info-area">
+                <h1 class="mt-5">Not Found</h1>
+
+                <p>The page you were looking for could not be found.</p>"""
+
+    /** A real page with none of what the app reads on it: the site redesigned. */
+    private val redesigned = """<h1 class="mt-5">Matthew Cane's Tournament Results</h1> <div class="results-grid"><div class="result-card"><time>Sep 27, 2026</time> Top 4 · Chelmsford WCQ Regional</div></div>"""
+
+    @Test
+    fun nobodyIsAnAnswerAndAPageTheAppCannotReadIsAnError() = runTest {
+        // Red team: a page whose layout changed read as "no such player", for ever.
+        assertTrue(PlayerPages.noMatches(nobody))
+        assertTrue(!PlayerPages.noMatches(search))
+        assertTrue(PlayerPages.notFound(notFound))
+        assertTrue(PlayerPages.notFound("", "https://ygoprodeck.com/not-found/"))
+        assertTrue(!PlayerPages.notFound(player))
+        assertNull(PlayerPages.readCareer(notFound))
+        assertEquals(3, PlayerPages.readCareer(player)!!.results.size)
+        assertFailsWith<PlayerPages.LayoutChanged> { PlayerPages.readCareer(redesigned) }
+        assertFailsWith<PlayerPages.LayoutChanged> { PlayerPages.readCareer("<html><body>Something else</body></html>") }
+        // The table there, every row in a shape it cannot read: changed, not empty.
+        assertFailsWith<PlayerPages.LayoutChanged> { PlayerPages.readCareer(player.replace("as-tablecell", "cell")) }
+        assertNull(PlayerPages.readDeck(notFound, "https://ygoprodeck.com/not-found/", 1))
+        assertEquals(42, PlayerPages.readDeck(deck, "https://ygoprodeck.com/deck/735623", 735623)!!.deck.main.size)
+        val changed = assertFailsWith<PlayerPages.LayoutChanged> { PlayerPages.readDeck("<h1>@Ignister Maliss</h1><script>const main = []</script>", "https://ygoprodeck.com/deck/735623", 735623) }
+        assertTrue("changed its layout" in changed.message!!)
+
+        val source = YgoProDeckDecks(
+            HttpClientFactory.create(
+                MockEngine { request ->
+                    val url = request.url.toString()
+                    when {
+                        "search=zzqxjvwk" in url -> respond(nobody, HttpStatusCode.OK)
+                        "search=matthew" in url -> respond(redesigned.replace("Matthew Cane's Tournament Results", "Player Search Results"), HttpStatusCode.OK)
+                        "by-player/Nobody" in url -> respond("", HttpStatusCode.SeeOther, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.Location, "/not-found/"))
+                        "by-player/Matthew" in url -> respond(redesigned, HttpStatusCode.OK)
+                        "/not-found" in url -> respond(notFound, HttpStatusCode.OK)
+                        "/deck/1" in url -> respond("", HttpStatusCode.Found, io.ktor.http.headersOf(io.ktor.http.HttpHeaders.Location, "/not-found/"))
+                        else -> respond("", HttpStatusCode.NotFound)
+                    }
+                },
+            ),
+            clock = { 0L },
+        )
+        assertEquals(emptyList(), source.players("zzqxjvwk qqzzv").getOrThrow(), "the site said nobody")
+        assertTrue(source.players("matthew").exceptionOrNull() is PlayerPages.LayoutChanged, "a search page without its table")
+        assertNull(source.career("Nobody").getOrThrow(), "a missing player is the Not Found page")
+        assertTrue(source.career("Matthew Cane").exceptionOrNull() is PlayerPages.LayoutChanged)
+        assertNull(source.deck(1).getOrThrow(), "a missing deck is the Not Found page")
+    }
 
     @Test
     fun theSearchListsEachPlayerWithWhereTheyAreFrom() {

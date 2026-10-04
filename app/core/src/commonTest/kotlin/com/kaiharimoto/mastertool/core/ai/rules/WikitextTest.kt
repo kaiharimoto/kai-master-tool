@@ -61,6 +61,11 @@ class WikitextTest {
         assertEquals("y", Yugipedia.wikitextOf("""{"parse":{"title":"T","pageid":1,"wikitext":{"*":"y"}}}"""))
         assertNull(Yugipedia.wikitextOf(YugipediaFixture.MISSING))
         assertNull(Yugipedia.wikitextOf("not json"))
+        // A missing page answers 200 with an error: never kept in the week's cache as if it were the page.
+        assertTrue(Yugipedia.isError(YugipediaFixture.MISSING))
+        assertTrue(Yugipedia.isError("<html>Too many requests</html>"))
+        assertFalse(Yugipedia.isError(v2("Card Rulings:Ash Blossom & Joyous Spring", YugipediaFixture.ASH_RULINGS)))
+        assertFalse(Yugipedia.isError(YugipediaFixture.SNAKE_EYE_SECTIONS))
         assertNull(Yugipedia.wikitextOf(YugipediaFixture.SNAKE_EYE_SECTIONS))
     }
 
@@ -91,7 +96,7 @@ class WikitextTest {
         assertEquals(4 + 19, rulings.size)
         // The OCG bullets first: plain answers, links and references gone.
         val bullets = rulings.take(4)
-        assertTrue(bullets.all { it.question == null && it.cite == null })
+        assertTrue(bullets.all { it.question == null })
         assertEquals("The effect of \"Ash Blossom & Joyous Spring\" is a Quick Effect that activates in the hand.", bullets[0].answer)
         assertEquals("Discarding \"Ash Blossom & Joyous Spring\" is a cost to activate its effect.", bullets[1].answer)
         assertEquals("It cannot be activated during the Damage Step.", bullets[2].answer)
@@ -179,13 +184,50 @@ class WikitextTest {
         """.trimIndent()
         assertEquals(
             listOf(
-                Wikitext.Ruling(null, "First ruling, about Chain Links.\n- A note on it.", null),
-                Wikitext.Ruling(null, "Second ruling.", null),
-                Wikitext.Ruling("Does Ash target?", "No.", null),
+                Wikitext.Ruling(null, "First ruling, about Chain Links.\n- A note on it.", null, "OCG Rulings"),
+                Wikitext.Ruling(null, "Second ruling.", null, "OCG Rulings"),
+                Wikitext.Ruling("Does Ash target?", "No.", null, "OCG Rulings"),
             ),
             Wikitext.rulings(page),
         )
         assertTrue(Wikitext.rulings("").isEmpty())
         assertTrue(Wikitext.rulings("{{Ruling|Q=never closed").isEmpty())
+    }
+
+    @Test
+    fun eachRulingKeepsItsSectionAndItsSource() {
+        // Red team: the rulings tool dropped both, so a TCG ruling and an OCG one read the same, unsourced.
+        val rulings = Wikitext.rulings(YugipediaFixture.ASH_RULINGS)
+        val bullets = rulings.take(4)
+        assertTrue(bullets.all { it.section == "OCG Rulings" })
+        // A bullet's source is its reference, written on the first and only named on the rest.
+        assertTrue(bullets.all { it.cite == "Konami OCG Card Database: Ash Blossom & Joyous Spring" }, bullets.map { it.cite }.toString())
+        val macro = rulings[4]
+        assertEquals("OCG Rulings › Q&A Rulings", macro.section)
+        assertEquals("Konami OCG Card Database, Q&A #7315", macro.source)
+        assertEquals(
+            "- [OCG Rulings › Q&A Rulings] Q: ${macro.question}\n  A: ${macro.answer} (source: Konami OCG Card Database, Q&A #7315)",
+            macro.line(),
+        )
+        assertEquals(
+            "- [OCG Rulings] It cannot be activated during the Damage Step. (source: Konami OCG Card Database: Ash Blossom & Joyous Spring)",
+            bullets[2].line(),
+        )
+        // A level-2 heading after a level-3 one closes it; TCG rulings are told from OCG ones.
+        val page = """
+            == TCG Rulings ==
+            === Q&A ===
+            * A TCG ruling.<ref>[https://www.yugioh-card.com/en/ Konami TCG FAQ]</ref>
+            == OCG Rulings ==
+            {{Ruling|Does it?|Yes.|1234}}
+        """.trimIndent()
+        assertEquals(
+            listOf(
+                Wikitext.Ruling(null, "A TCG ruling.", "Konami TCG FAQ", "TCG Rulings › Q&A"),
+                Wikitext.Ruling("Does it?", "Yes.", "1234", "OCG Rulings"),
+            ),
+            Wikitext.rulings(page),
+        )
+        assertEquals("- No section, no source.", Wikitext.Ruling(null, "No section, no source.", null).line())
     }
 }

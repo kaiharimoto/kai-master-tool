@@ -1,9 +1,5 @@
 package com.kaiharimoto.neue.start
 
-import com.kaiharimoto.mastertool.core.start.StartState
-import com.kaiharimoto.neue.ai.VoiceModelChoice
-import com.kaiharimoto.neue.ai.voiceModel
-import com.kaiharimoto.neue.ai.downloadForDuel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -32,10 +28,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
+import com.kaiharimoto.mastertool.core.start.StartState
 import com.kaiharimoto.mastertool.core.start.StartStep
 import com.kaiharimoto.mastertool.core.start.StartSteps
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.ai.VoiceModelChoice
+import com.kaiharimoto.neue.ai.downloadForDuel
+import com.kaiharimoto.neue.ai.voiceModel
 import com.kaiharimoto.neue.cards.Foils
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -55,6 +55,7 @@ import com.kaiharimoto.neue.sync.SyncSection
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
+import com.kaiharimoto.neue.world.WorldPython
 
 /**
  * The setup offered on opening (1.0.69): over the whole window, the steps still to do — all of them for
@@ -158,6 +159,7 @@ fun startState(h: NeueHolders) = StartState(
     aiConnected = h.neue.prefs.ai.connection != null,
     artSettled = !h.neue.prefs.hdArt || h.art.count.complete,
     voiceReady = !Voice.usesModels || !Voice.needsModel(h.ai.voiceModel),
+    worldReady = !WorldPython.possible || h.neue.prefs.world.python,
 )
 
 private fun short(step: StartStep, h: NeueHolders) = when (step) {
@@ -167,6 +169,7 @@ private fun short(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.AI -> h.neue.prefs.ai.name
     StartStep.ART -> "Offline art"
     StartStep.VOICE -> "Keys and voice"
+    StartStep.WORLD -> "Ai World"
 }
 
 private fun title(step: StartStep, h: NeueHolders) = when (step) {
@@ -176,6 +179,7 @@ private fun title(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.AI -> "Meet ${h.neue.prefs.ai.name}"
     StartStep.ART -> "Every card's picture, offline"
     StartStep.VOICE -> "Duel by keys and voice"
+    StartStep.WORLD -> "${h.neue.prefs.ai.name}'s own computer"
 }
 
 @Composable
@@ -247,6 +251,27 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
                 MuButton("Typing is enough", { next() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
             }
             Help("Fast is quickest for short commands. Holding M without the model asks again.")
+        }
+        StartStep.WORLD -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Small(
+                "Ai World (Ctrl 8) is a small computer of ${prefs.ai.name}'s own: it writes code, runs it and pins what it finds — odds, " +
+                    "simulations, card webs, charts — and you watch every keystroke, run and thought as it works.",
+                color = c.ink70,
+            )
+            Small(
+                "JavaScript always runs there, shut away from your files and the network. Python runs too if you allow it, with numpy " +
+                    "and matplotlib if you have them — but Python runs as you, with your permissions, so only allow it if you are happy for " +
+                    "${prefs.ai.name}'s code to run on this computer.",
+                color = c.ink70,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MuButton("Allow Python", {
+                    neue.update { it.copy(world = it.world.copy(python = true)) }
+                    next()
+                }, variant = BtnVariant.SECONDARY, size = BtnSize.SM)
+                MuButton("JavaScript is enough", { next() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            }
+            Help("Change it any time in Settings › Ai World.")
         }
         StartStep.ART -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Small(

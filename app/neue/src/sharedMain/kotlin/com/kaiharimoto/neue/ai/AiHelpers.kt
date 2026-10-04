@@ -13,6 +13,7 @@ import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.check.FactCheck
+import com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import kotlinx.coroutines.launch
 
@@ -109,13 +110,11 @@ suspend fun AiState.delegate(task: String, steps: Int): Result<String> = runCatc
     val model = backendFor(connection)
     if (model.runsOwnLoop) error("A helper needs an API connection; on a plan's command-line app, do the reading yourself.")
     val look = tools.filter { it.name in AiTools.readOnly }
-    val system = session?.system ?: systemPrompt(connection)
-    val ask = ChatTurn.user(
-        "You are a helper the assistant sent to do one job and report back. Nothing you say reaches the person directly; " +
-            "your final message is your report, so make it complete and plain: the facts, the numbers, the card names, the ids. " +
-            "You can only look, never change anything.\n\nThe job: " + task.trim(),
-    )
+    // Its own lean prompt: the conversation's carries its mode (an interview, a study), which is not the helper's job.
+    val system = PromptBuilder.helper(name, files.soul(name))
+    val ask = ChatTurn.user("The job: " + task.trim())
     var report = ""
+    var cutShort = false
     val runner = ToolRunner { call ->
         if (call.name.removePrefix("mcp__neue__") !in AiTools.readOnly) {
             Part.ToolResult(call.id, call.name, "A helper can only look; ${call.name} is not one of its tools.", isError = true)
@@ -129,8 +128,14 @@ suspend fun AiState.delegate(task: String, steps: Int): Result<String> = runCatc
             when (e) {
                 is AgentEvent.Appended -> if (e.turn.role == Role.ASSISTANT && e.turn.text.isNotBlank()) report = e.turn.text
                 is AgentEvent.Failed -> error(e.message)
+                is AgentEvent.Done -> cutShort = e.outOfSteps
                 else -> Unit
             }
         }
-    report.ifBlank { error("The helper came back without a report.") }
+    // Stopped at its cap, its last words are a note on the way, not a report: the assistant is told so.
+    if (cutShort) {
+        "${PromptBuilder.HELPER_CUT_SHORT}\n\n" + report.ifBlank { "(Nothing written yet.)" }
+    } else {
+        report.ifBlank { error("The helper came back without a report.") }
+    }
 }

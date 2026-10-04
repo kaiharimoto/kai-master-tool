@@ -88,6 +88,24 @@ class ContextTest {
     }
 
     @Test
+    fun recallMatchesWholeWordsOnly() {
+        val s = AiSession(
+            "s", turns = listOf(
+                ChatTurn(Role.USER, listOf(Part.Text("Go with the flash of light")), at = 10),
+                ChatTurn(Role.USER, listOf(Part.Text("Is it Ash Blossom? (Snake-Eye Ash too)")), at = 11),
+            ),
+        )
+        val it = Recall.search(listOf(s), "it")
+        assertEquals(1, it.size, "\"it\" is not found inside \"with\"")
+        assertEquals(11L, it.single().at)
+        assertEquals(listOf(11L), Recall.search(listOf(s), "ash").map { h -> h.at }, "nor \"ash\" inside \"flash\"")
+        assertTrue(Recall.search(listOf(s), "snake").isNotEmpty(), "a hyphen breaks words, as the query is split")
+        assertEquals(-1, Recall.wordAt("without", "with"))
+        assertEquals(8, Recall.wordAt("without with", "with"))
+        assertEquals(0, Recall.wordAt("with", "with"))
+    }
+
+    @Test
     fun openAiUsageKeepsTheCacheApartAsAnthropicDoes() {
         val stream = OpenAiStream()
         stream.line("""data: {"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1000,"completion_tokens":20,"prompt_tokens_details":{"cached_tokens":800}}}""")
