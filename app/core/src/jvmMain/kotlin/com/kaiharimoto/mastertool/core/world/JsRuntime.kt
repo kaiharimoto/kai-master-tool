@@ -59,8 +59,28 @@ class JsRuntime(private val limits: Limits = Limits()) {
                 stop() -> throw Stop("Stopped.")
                 count > limits.instructions -> throw Stop("Stopped: past ${limits.instructions / 1_000_000} million steps. Fewer trials, or a cheaper loop.")
                 System.currentTimeMillis() - started > limits.millis -> throw Stop("Stopped: past ${limits.millis / 1000} seconds.")
-                used() - heapAtStart > heapCap -> throw Stop("Stopped: past ${heapCap / MB} MB of memory. Keep less at once.")
+                used() - heapAtStart > heapCap && kept() - heapAtStart > heapCap ->
+                    throw Stop("Stopped: past ${heapCap / MB} MB of memory. Keep less at once.")
             }
+        }
+
+        private var collectedAt = 0L
+        private var lastKept = 0L
+
+        /**
+         * The heap after a collection: what is really kept, not the garbage the run (or anything else in the app) left
+         * lying about. The heap counts every thread's leftovers, so read raw it stopped a harmless Monte Carlo whenever
+         * the JVM had not collected lately (1.1.1, the flaky `aMonteCarloAgreesWithTheExactOdds`). At most one
+         * collection a second; between them the last reading after one stands, so a real hoard is stopped within the second.
+         */
+        private fun kept(): Long {
+            val now = System.currentTimeMillis()
+            if (now - collectedAt >= 1_000) {
+                collectedAt = now
+                System.gc()
+                lastKept = used()
+            }
+            return lastKept
         }
 
         private fun used(): Long = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
