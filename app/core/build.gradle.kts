@@ -73,6 +73,11 @@ kotlin {
             implementation(libs.ktor.client.mock)
         }
 
+        // Ai World's scripts (1.0.95): the engine is plain Java, so it lives on the JVM side, which the APK shares.
+        jvmMain.dependencies {
+            implementation(libs.rhino)
+        }
+
         // HTTP engines and SQL drivers are chosen by each application, not here,
         // so a JDBC driver never ends up inside the APK.
         jvmTest.dependencies {

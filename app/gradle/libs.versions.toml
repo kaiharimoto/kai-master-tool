@@ -12,6 +12,9 @@ zxing = "3.5.4"
 zxingAndroid = "4.3.0"
 # Whisper (whisper.cpp) for the desk's on-device voice input, natives bundled for Windows, macOS and Linux (1.0.57).
 whisperJni = "1.7.1"
+# Ai World's JavaScript (1.0.95): Mozilla Rhino, MPL-2.0, pure Java, interpreted on Android too. 1.7.15 on purpose:
+# 1.8+ require jdk.dynalink and java.beans, which Android does not have.
+rhino = "1.7.15.1"
 
 # JDK used for every module's toolchain and bytecode target.
 jdk = "21"
@@ -24,6 +27,7 @@ compileSdk = "36"
 
 [libraries]
 whisper-jni = { module = "io.github.givimad:whisper-jni", version.ref = "whisperJni" }
+rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
