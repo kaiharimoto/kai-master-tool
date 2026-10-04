@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.world
 
+import com.kaiharimoto.mastertool.core.cards.BanlistHistory
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.duel.ai.Combo
@@ -7,6 +8,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.ComboCodec
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckEntry
+import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.search.SearchScope
@@ -15,6 +17,7 @@ import com.kaiharimoto.mastertool.core.world.WorldPaths
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.platform.Platform
 import java.io.File
+import java.time.LocalDate
 
 /**
  * The app as a world's scripts read it (1.0.97), taken once as a run starts: the pool's index (never changed in
@@ -31,6 +34,10 @@ class WorldSnapshot private constructor(
     private val shares: Map<String, Int>,
     private val comboDir: File?,
     private val filesDir: File? = null,
+    /** The banlists kept (1.1.1): read on the script's thread, as it asks; never fetched there. */
+    private val bans: (Format) -> BanlistHistory? = { null },
+    private val region: Format = Format.TCG,
+    private val day: String? = null,
 ) : WorldHost {
     override fun cardById(id: Int): Card? = index.byId(CardId(id))
     override fun cardNamed(name: String): Card? = index.byName(name)
@@ -45,13 +52,16 @@ class WorldSnapshot private constructor(
         runCatching { File(dir, ComboCodec.path(deckId)).takeIf { it.isFile }?.readText()?.let(ComboCodec::decode)?.combos }.getOrNull()
     }.orEmpty()
     override fun field(deckId: String?): Map<String, Int> = shares
+    override fun banlists(region: Format): BanlistHistory? = bans(region)
+    override fun format(): Format = region
+    override fun today(): String? = day
     override fun file(path: String): String? {
         val safe = WorldPaths.safe(path) ?: return null
         return filesDir?.let { runCatching { File(it, safe).takeIf { f -> f.isFile }?.readText() }.getOrNull() }
     }
 
     /** This snapshot reading a world's own files, for `ygo.use`. */
-    fun reading(files: File): WorldSnapshot = WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files)
+    fun reading(files: File): WorldSnapshot = WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files, bans, region, day)
 
     companion object {
         /** Read on the main thread, where the builder's state lives; the library from its repository. */
@@ -64,7 +74,13 @@ class WorldSnapshot private constructor(
             // The field: the active event's web, every deck in it not yours that has a share.
             val web = h.webs.library.byId(h.prep.active?.webId)
             val shares = web?.entries.orEmpty().filter { !it.mine && (it.share ?: 0) > 0 }.associate { it.deckId to it.share!! }
-            return WorldSnapshot(b.index, open, stored.map { it.entry }, groups, h.prep.doc.games, shares, File(Platform.dataDir, "duel"))
+            // The banlists as kept; one due a refresh is fetched in the background, for the next run.
+            val banlists = h.banlists
+            banlists.warm(b.format)
+            return WorldSnapshot(
+                b.index, open, stored.map { it.entry }, groups, h.prep.doc.games, shares, File(Platform.dataDir, "duel"),
+                bans = banlists::history, region = b.format, day = LocalDate.now().toString(),
+            )
         }
     }
 }

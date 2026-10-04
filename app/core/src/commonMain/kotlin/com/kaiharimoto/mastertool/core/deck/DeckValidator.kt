@@ -40,12 +40,16 @@ object DeckValidator {
     /**
      * [asOf] (`yyyy-MM-dd`) checks each card's release against that day as well as its region (Phase B); without it
      * only the region is checked, so an OCG-only card is still caught.
+     *
+     * [limits] is the list the copies are held to (Phase B §3): by default the pool's own status in [format], or a
+     * dated list ([BanSource], `LimitationList.match`), whose name goes into the words.
      */
     fun validate(
         deck: Deck,
         cards: (CardId) -> Card?,
         format: Format = Format.TCG,
         asOf: String? = null,
+        limits: BanSource? = null,
     ): DeckValidation {
         val issues = mutableListOf<DeckIssue>()
 
@@ -85,12 +89,13 @@ object DeckValidator {
             if (!seen.add(card.id)) return@forEach
             val copies = CardIdentity.copiesOf(deck, card)
 
-            val limit = DeckEditor.copyLimit(card, format)
+            val limit = if (limits == null) DeckEditor.copyLimit(card, format) else minOf(Deck.MAX_COPIES, limits.statusOf(card).maxCopies)
             if (copies > limit) {
                 val label = if (limit == 0) "is Forbidden" else "is limited to $limit"
+                val on = limits?.label?.let { " on the $it" }.orEmpty()
                 issues += DeckIssue(
                     IssueSeverity.ERROR,
-                    "${card.name} $label, deck has $copies.",
+                    "${card.name} $label$on, deck has $copies.",
                     cardId = id,
                 )
             }

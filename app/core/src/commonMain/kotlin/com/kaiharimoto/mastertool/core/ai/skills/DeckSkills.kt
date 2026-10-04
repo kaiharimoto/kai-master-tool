@@ -541,6 +541,7 @@ Ai World is your own small computer. The person watches every file you write, ev
 
 ## JavaScript (everywhere)
 - Data: `ygo.deck()` (the open deck: main/extra/side as names, groups, cards with text), `ygo.deck(id)`, `ygo.decks()`, `ygo.card(name)`, `ygo.search(q)`.
+- The Forbidden & Limited lists by date (Yugipedia, CC BY-SA — cite the list's title): `ygo.banlist('2025-05-01', 'tcg')` (the list in force that day: title, start, end, forbidden/limited/semiLimited names, `l.status(name)`), `ygo.legal(ygo.deck(), '2025-05-01')` (that deck checked against that day's list and releases → {legal, list, issues}).
 - Exact maths: `ygo.comb`, `ygo.hypergeo(N,K,n,k)`, `ygo.atLeast`, `ygo.atMost`, `ygo.handOdds({groups:{starters:12,traps:9}, deck:40, hand:5, need:[{group:'starters',min:1},{group:'traps',min:1}]})`.
 - Chance, always seeded: `var r = ygo.rng(1)`; `ygo.hand(cards, r, 5)` is the fast opening hand; `ygo.deal(cards, seed, 5)` gives hand and the shuffled library; `ygo.simulate(n, seed, function (r, i) { … })`; `ygo.rate(booleans)` → {p, low, high}.
 - Statistics: `ygo.stats.mean/sd/median/quantile/histogram/correlation/wilson/binomPmf/binomCdf/normalCdf/chiSquare`.

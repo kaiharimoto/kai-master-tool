@@ -1,9 +1,13 @@
 package com.kaiharimoto.mastertool.core.world
 
+import com.kaiharimoto.mastertool.core.cards.BanlistHistory
+import com.kaiharimoto.mastertool.core.cards.LimitationList
+import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.DeckEntry
+import com.kaiharimoto.mastertool.core.model.Format
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -225,5 +229,42 @@ class JsRuntimeTest {
         }
         val (fine, _) = run("print(ygo.comb(40, 5))")
         assertTrue(fine.ok && "658008" in fine.out, fine.out + fine.err)
+    }
+
+    @Test
+    fun aScriptAsksForTheBanlistOnADayAndChecksADeckAgainstIt() {
+        val lists = listOf(
+            LimitationList(Format.TCG, "January 2025 Lists (TCG)", "2025-01-01", "2025-03-31", mapOf("Pot of Desires" to BanStatus.LIMITED)),
+            LimitationList(Format.TCG, "April 2025 Lists (TCG)", "2025-04-01", null, mapOf("Ash Blossom & Joyous Spring" to BanStatus.SEMI_LIMITED, "Pot of Desires" to BanStatus.UNLIMITED, "Not In The Pool" to BanStatus.FORBIDDEN)),
+        )
+        val dated = object : WorldHost by host {
+            override fun banlists(region: Format) = if (region == Format.TCG) BanlistHistory(Format.TCG, lists) else null
+            override fun today() = "2026-10-04"
+        }
+        fun go(code: String): JsRuntime.Result = JsRuntime().run(code, "ban.js", WorldApi(dated))
+
+        val l = go("var l = ygo.banlist('2025-02-01'); print(l.title, l.start, l.end, l.limited.join('|'), l.status('pot of desires'), l.status('Brick')); l.source")
+        assertTrue(l.ok, l.err)
+        assertEquals("January 2025 Lists (TCG) 2025-01-01 2025-03-31 Pot of Desires limited unlimited\n", l.out)
+        assertTrue("Yugipedia" in l.value!!)
+        // Today's, by default; what the pool could not match is said.
+        val now = go("var l = ygo.banlist(); print(l.title, l.end, l.semiLimited[0], l.unmatched.join('|'), l.offList.join('|'))")
+        assertEquals("April 2025 Lists (TCG) null Ash Blossom & Joyous Spring Not In The Pool Pot of Desires\n", now.out, now.err)
+        assertEquals("null", go("JSON.stringify(ygo.banlist('2001-01-01'))").value, "before the first list")
+
+        // The test deck has 3 Pot of Desires and 3 Ash (and a dozen of a starter, never legal): the Pot is over in February, the Ash in April.
+        val feb = go("var r = ygo.legal(ygo.deck(), '2025-02-01'); print(r.legal, r.list); r.issues.map(function (i) { return i.message; }).join('|')")
+        assertTrue(feb.ok, feb.err)
+        assertEquals("false January 2025 Lists (TCG)\n", feb.out)
+        assertTrue("Pot of Desires is limited to 1 on the January 2025 Lists (TCG), deck has 3." in feb.value!!, feb.value)
+        assertFalse("Ash Blossom" in feb.value!!)
+        val apr = go("ygo.legal('d1', '2025-05-01').issues.map(function (i) { return i.message; }).join('|')")
+        assertTrue("Ash Blossom & Joyous Spring is limited to 2 on the April 2025 Lists (TCG), deck has 3." in apr.value!!, apr.value)
+
+        // Asked wrongly, or of a region with nothing kept: the script's error, in words.
+        assertTrue("yyyy-MM-dd" in go("ygo.banlist('May 2025')").err)
+        assertTrue("'tcg' or 'ocg'" in go("ygo.banlist('2025-05-01', 'md')").err)
+        assertTrue("no OCG banlists are kept yet" in go("ygo.banlist('2025-05-01', 'ocg')").err)
+        assertTrue("no TCG list was in force then" in go("ygo.legal(null, '1999-01-01')").err)
     }
 }

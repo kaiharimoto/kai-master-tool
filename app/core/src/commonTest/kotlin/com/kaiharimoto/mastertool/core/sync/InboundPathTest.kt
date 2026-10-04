@@ -35,4 +35,11 @@ class InboundPathTest {
         ).forEach { assertNull(InboundPath.safe(it), it) }
         listOf("ai/secrets/x.md", "ai/cli-run.md", "world/secrets/notes.md").forEach { assertEquals(it, InboundPath.safe(it)) }
     }
+
+    @Test
+    fun theBanlistCacheIsThisDevicesAlone() {
+        // 1.1.1: each device fetches its own lists; one planted from outside could hold a deck to a false list.
+        listOf("banlists/tcg.json", "banlists/ocg.json", "banlists/tcg.json.tmp").forEach { assertNull(InboundPath.safe(it), it) }
+        assertEquals("ai/banlists.md", InboundPath.safe("ai/banlists.md"))
+    }
 }
