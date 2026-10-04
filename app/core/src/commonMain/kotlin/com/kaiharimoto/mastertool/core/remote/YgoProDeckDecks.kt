@@ -127,11 +127,18 @@ class YgoProDeckDecks(
      * Recent results at tier [minTier] and above, back [days] days, in [format]; up to
      * [maxPages] pages a tier. The decks, what could not be read, in words, and the tiers
      * whose window held more lists than [maxPages] pages — never cut short in silence.
+     *
+     * **One window for all tiers** (Phase B §4): a busy tier fills its pages in days while a quiet
+     * one reaches back the whole window, and read as they came, "the last 45 days" was a week or
+     * two of regionals beside 45 days of YCS. So when a tier's reading stops at the page cap still
+     * inside the window, every tier is cut to the same date ([RecentDecks.window]): the days before
+     * the newest of the capped tiers' oldest dates, since lists of that day itself may be left unread.
      */
     suspend fun recent(minTier: Int, days: Int, format: DeckFormat?, maxPages: Int = 4): RecentDecks {
         val out = mutableListOf<TournamentDeck>()
         val problems = mutableListOf<String>()
         val unread = mutableListOf<Int>()
+        val reached = LinkedHashMap<Int, Int>()
         for (tier in minTier.coerceIn(1, 4)..4) {
             for (p in 0 until maxPages) {
                 val got = page(tier, p).getOrElse {
@@ -143,10 +150,15 @@ class YgoProDeckDecks(
                 // Newest first: a page with nothing recent means there is nothing newer after it.
                 if (got.isEmpty() || fresh.size < got.size) break
                 // A last page still all inside the window: older lists in it were left unread.
-                if (p == maxPages - 1) unread += tier
+                if (p == maxPages - 1) {
+                    unread += tier
+                    reached[tier] = got.maxOf { it.daysAgo }
+                }
             }
         }
-        return RecentDecks(out.distinctBy { it.number }, problems, unread)
+        val window = reached.values.minOrNull()?.let { (it - 1).coerceAtLeast(0) }
+        val kept = out.distinctBy { it.number }.filter { window == null || it.daysAgo <= window }
+        return RecentDecks(kept, problems, unread, window, reached)
     }
 
     companion object {
@@ -162,7 +174,36 @@ class YgoProDeckDecks(
  * whose last page read was still inside the window — older lists there may not have been read,
  * and an answer built on them must say so.
  */
-data class RecentDecks(val decks: List<TournamentDeck>, val problems: List<String>, val unread: List<Int> = emptyList())
+data class RecentDecks(
+    val decks: List<TournamentDeck>,
+    val problems: List<String>,
+    val unread: List<Int> = emptyList(),
+    /**
+     * The days every tier was cut to because a tier in [unread] stopped short (Phase B §4), or null when the whole
+     * window asked for was read.
+     */
+    val window: Int? = null,
+    /** How far back, in days, each tier in [unread] was read. */
+    val reached: Map<Int, Int> = emptyMap(),
+) {
+    /** The days the lists really cover: the window asked for, or the one every tier was cut to. */
+    fun covers(asked: Int): Int = window ?: asked
+
+    /** "last 12 days" — the window as an answer says it. */
+    fun windowWords(asked: Int): String = covers(asked).let { if (it == 0) "today" else if (it == 1) "last 1 day" else "last $it days" }
+
+    /**
+     * Why the window is shorter than [asked], in words, then [next] (what reads further); empty when the whole window
+     * was read.
+     */
+    fun cutWords(asked: Int, next: String): String {
+        if (unread.isEmpty()) return ""
+        val tiers = reached.entries.joinToString(", ") { (t, d) -> "tier $t reached back only ${if (d == 0) "to today" else "$d days"}" }
+            .ifEmpty { unread.joinToString(", ") { "tier $it" } }
+        return " Not every list in the window was read ($tiers before the pages ran out), so every tier is cut to the same " +
+            "window — the ${windowWords(asked)}, not the last $asked asked for — to compare like with like; $next."
+    }
+}
 
 /** Reading YGOPRODeck's answer, apart from the network, so it is tested on a captured one. */
 object TournamentDecks {

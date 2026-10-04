@@ -81,14 +81,14 @@ and `unlimited` (the last only for changes), each line optionally `// prev::Stat
 
 | Lead | Fix |
 |---|---|
-| Lists illegal under the current list are counted. | Dropped (or under the `as_of` list), and the count dropped said. |
-| Each tier is cut at a page cap, so one tier's window is days and another's weeks. | One window for all tiers: where any tier's reading stopped short, every tier is cut to the same date, and the answer says the window it really covers. |
-| Clustering chains hybrids into one strategy (a list joins if it is like **any** member). | Average linkage: a list joins a strategy only if it is like the strategy **as a whole**; two strategies merge only on their average. |
-| Copies counted by passcode. | By card (§1). |
-| Expected match win drops the mirror and renormalises. | The mirror stays in the field at its share, at the logged mirror rate, else 50 %. |
-| Game 1 pooled with sided games. | Game 1 is played at the pre-side rates and games 2 and 3 at the post-side ones, each going first and second (`matchWin` with four rates; the old two-rate form stays for callers that have only two). |
-| `hand_odds` drops names it cannot resolve. | It says which it could not find, and refuses if none resolved. |
-| `hand_odds` is wrong when its two sets overlap. | Counted by `HandCounter`, exact with overlap. |
+| Lists illegal under the current list are counted. | Dropped, and the count dropped said with the cards that dropped them (`FieldLegality.check`/`words`: copies by card across Main, Extra and Side over `limitOf`, today's `DeckEditor.copyLimit` by default — the `as_of` list plugs in there; a card the pool does not know drops nothing; Genesys lists are not checked, having no list). |
+| Each tier is cut at a page cap, so one tier's window is days and another's weeks. | One window for all tiers (`YgoProDeckDecks.recent`, `RecentDecks.window`): where any tier's reading stopped short, every tier is cut to the same date — the day before the newest of the capped tiers' oldest dates, since that day itself may be part-read — and the answer says the window it really covers (`windowWords`, `cutWords`: "the last 11 days, not the last 45 asked for"). |
+| Clustering chains hybrids into one strategy (a list joins if it is like **any** member). | Average linkage (`FieldBuilder.build`): a list joins a strategy only if it is like the strategy **as a whole**; two strategies merge only on their average (a merge pass on summed similarities kept up to date). |
+| Copies counted by passcode. | By card (§1): `FieldBuilder` takes the pool's lookup (`AS_PRINTED` by default, for callers with none) for similarity, weights, staples and cores; `DeckSearch` names a card once; the builder's copy badge and the inspector's opening odds count every printing. |
+| Expected match win drops the mirror and renormalises. | The mirror stays in the field at its share (`TestStats.field`), at the logged mirror rate, else 50 %; games typed against the deck's own name are folded under its id (`TestStats.mirrored`). Prep, `expected_winrate`, Present's practice module and the World's matchups all read it so. |
+| Game 1 pooled with sided games. | Game 1 is played at the pre-side rates and games 2 and 3 at the post-side ones, each going first and second (`Row.preFirst/preSecond/postFirst/postSecond`, `matchWin` with four rates; the old two-rate form stays for callers that have only two). A split with no games falls back to its turn's pooled rate, so an old log reads as before; `MatchMath.field` draws the four the same way. |
+| `hand_odds` drops names it cannot resolve. | It says which it could not find ("Not found, so not counted"), and refuses if none of a set resolved; an `and_group` it cannot find is refused, not ignored. |
+| `hand_odds` is wrong when its two sets overlap. | Counted by `HandCounter` through `core/hand/CardSetOdds`, exact with overlap: a card in both sets counts for each, and the answer says how many are shared. |
 | `watch_video` returns a cut report as complete. | Already carried by the cut-off notices (1.0.98); checked again here. |
 
 ## 5. Releases

@@ -8,6 +8,7 @@ import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckEntry
 import com.kaiharimoto.mastertool.core.prep.TestGame
+import com.kaiharimoto.mastertool.core.prep.TestStats
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.search.SearchScope
 import com.kaiharimoto.mastertool.core.world.WorldHost
@@ -61,10 +62,13 @@ class WorldSnapshot private constructor(
             val openId = b.deckId ?: "open"
             val open = if (b.deck.isEmpty) null else DeckEntry(openId, b.deckName, b.deck, 0, 0)
             val groups = stored.associate { it.entry.id to DeckGroupsCodec.read(it.extended).groups } + (openId to b.groups)
-            // The field: the active event's web, every deck in it not yours that has a share.
+            // The field: the active event's web, every deck in it that has a share — yours too, as the mirror (Phase B),
+            // its games typed by name folded under its id.
             val web = h.webs.library.byId(h.prep.active?.webId)
-            val shares = web?.entries.orEmpty().filter { !it.mine && (it.share ?: 0) > 0 }.associate { it.deckId to it.share!! }
-            return WorldSnapshot(b.index, open, stored.map { it.entry }, groups, h.prep.doc.games, shares, File(Platform.dataDir, "duel"))
+            val shares = TestStats.field(web?.entries.orEmpty())
+            val mine = h.prep.active?.deckId
+            val games = TestStats.mirrored(h.prep.doc.games, mine, listOfNotNull(stored.firstOrNull { it.entry.id == mine }?.entry?.name))
+            return WorldSnapshot(b.index, open, stored.map { it.entry }, groups, games, shares, File(Platform.dataDir, "duel"))
         }
     }
 }

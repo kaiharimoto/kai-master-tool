@@ -177,9 +177,15 @@ internal class AiPrep(private val h: NeueHolders) {
     private suspend fun expected(eventId: String?): MetaAnswer {
         val e = event(eventId) ?: return fail("No event to expect a result at. Make one with set_event.")
         val web = webs.library.byId(e.webId) ?: return fail("${e.name} has no web of the field linked: set_event with web_id.")
-        val shares = web.entries.filter { it.deckId != e.deckId }.mapNotNull { en -> en.share?.let { en.deckId to it } }.toMap()
+        // The person's own deck stays in the field at its share: that much of the room is the mirror (TestStats.field).
+        val shares = TestStats.field(web.entries)
         if (shares.isEmpty()) return fail("The web ${web.name} has no shares: give its decks their share of the field (set_web_entry).")
-        val games = prep.doc.games.filter { it.round == null && (e.deckId == null || it.deckId == e.deckId) }
+        val mine = deck(e.deckId)
+        val games = TestStats.mirrored(
+            prep.doc.games.filter { it.round == null && (e.deckId == null || it.deckId == e.deckId) },
+            e.deckId,
+            listOfNotNull(mine?.entry?.name),
+        )
         val rows = TestStats.matrix(games)
         val total = TestStats.expected(rows, shares)
         val text = buildString {
@@ -187,10 +193,14 @@ internal class AiPrep(private val h: NeueHolders) {
             appendLine("Per opponent (share · games · best-of-three win):")
             shares.entries.sortedByDescending { it.value }.forEach { (id, share) ->
                 val row = rows.firstOrNull { it.opponent == id }
-                val name = row?.name ?: deck(id)?.entry?.name ?: id
+                val name = (row?.name ?: deck(id)?.entry?.name ?: id) + if (id == e.deckId) " (the mirror)" else ""
                 val one = TestStats.expected(rows, mapOf(id to 1))
                 appendLine("- $name: $share% · ${row?.all?.games ?: 0} games · ${(one * 1000).toInt() / 10.0}%")
             }
+            if (e.deckId != null && e.deckId in shares) {
+                appendLine("Your own deck's share is the mirror: played at the games logged against it, else 50%.")
+            }
+            appendLine("Game 1 is played at the Game 1 rates and games 2 and 3 at the sided ones, going first and second.")
             appendLine("Few games are pulled toward 50%: log more against the big shares to firm these up.")
             append(
                 "The rate is only as good as the web's shares: if they were taken from ygopro_field_snapshot they are shares of " +

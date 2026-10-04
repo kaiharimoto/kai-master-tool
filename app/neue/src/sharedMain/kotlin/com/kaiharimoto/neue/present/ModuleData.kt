@@ -54,11 +54,13 @@ internal object ModuleData {
     suspend fun practice(h: NeueHolders, p: Presentation): Pair<List<MatchRow>, Double?> {
         val doc = h.deps.preferencesRepository.loadPrep()
         val deckId = p.deck?.deckId
-        val games = doc.games.filter { it.round == null && (deckId == null || it.deckId == deckId) }
+        val own = deckId?.let { h.deps.deckRepository.byId(it)?.entry?.name }
+        val games = TestStats.mirrored(doc.games.filter { it.round == null && (deckId == null || it.deckId == deckId) }, deckId, listOfNotNull(own))
         val rows = TestStats.matrix(games, deckId)
         val event = doc.events.firstOrNull { it.deckId == deckId && it.webId != null } ?: doc.activeEvent
         val web = event?.webId?.let { h.webs.library.byId(it) }
-        val shares = web?.entries?.filter { !it.mine }?.associate { it.deckId to (it.share ?: 0) }.orEmpty()
+        // Every deck of the field at its share, the person's own as the mirror (Phase B, TestStats.field).
+        val shares = TestStats.field(web?.entries.orEmpty())
         val expected = if (rows.isEmpty()) null else if (shares.values.sum() > 0) TestStats.expected(rows, shares) else null
         return rows.map { r ->
             MatchRow(

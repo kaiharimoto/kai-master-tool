@@ -497,6 +497,7 @@ object AiTools {
         "What has been topping: recent tournament decks grouped into strategies, each with its share of top cuts " +
             "(weighted by placement and event size), its best finishes and one representative list's deck number. " +
             "A share of top cuts is not a share of the field — strong decks top more often than they are played. " +
+            "Lists illegal under today's banlist are left out, and every tier is read over the same window (said when shorter than asked). " +
             "The first step in building a web of decks for an event.",
         schema {
             integer("tier", "Lowest event tier (default 2)", min = 1, max = 4)
@@ -523,7 +524,8 @@ object AiTools {
     val handOdds = ToolSpec(
         "hand_odds",
         "The exact chance of an opening hand, from a deck's own counts: at least `at_least` of `cards` " +
-            "(and, if given, at least `and_at_least` of `and_cards`). Cards by name; each counts every copy in the Main Deck. " +
+            "(and, if given, at least `and_at_least` of `and_cards`). Cards by name; each counts every copy in the Main Deck, " +
+            "any artwork; a card in both sets counts for each. " +
             "Or name one of the deck's groups instead of listing cards. Going first draws 5, second 6.",
         schema {
             string("deck_id", "Omit for the open deck")

@@ -33,6 +33,7 @@ import com.kaiharimoto.mastertool.core.hand.HandGoal
 import com.kaiharimoto.mastertool.core.hand.HandGoals
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format
@@ -1173,7 +1174,8 @@ class DeckBuilderState(
         if (current.index != index) inspection = current.copy(index = index)
     }
 
-    fun copiesInDeck(id: CardId): Int = deck.copiesOf(id)
+    /** Copies of the card [id] names across the deck, by card: an alternate artwork counts too (Phase B). */
+    fun copiesInDeck(id: CardId): Int = CardIdentity.copiesOf(deck, id, index::byId)
 
     fun remaining(card: Card): Int = DeckEditor.remainingCopies(deck, card, format)
 

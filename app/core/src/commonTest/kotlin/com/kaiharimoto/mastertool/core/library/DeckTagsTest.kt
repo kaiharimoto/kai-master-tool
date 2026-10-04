@@ -46,6 +46,15 @@ class DeckTagsTest {
     }
 
     @Test
+    fun aCardFoundInTwoPrintingsIsNamedOnce() {
+        // Phase B: an Ash and an alternate-art Ash are one Ash; the row says it once.
+        val ash = card(3, "Ash Blossom & Joyous Spring", "Effect Monster", "effect").copy(alternateIds = listOf(CardId(3), CardId(33)))
+        val pool = cards + (CardId(3) to ash) + (CardId(33) to ash)
+        val mixed = deck.copy(main = deck.main + CardId(33))
+        assertEquals(listOf("Ash Blossom & Joyous Spring"), DeckSearch.match("My deck", mixed, emptyList(), "ash", pool::get)!!.cards)
+    }
+
+    @Test
     fun aGroupsNumbersAreItsCountsItsTypesAndItsOdds() {
         val groups = DeckGroups(
             groups = listOf(DeckGroup("g", "Engine", color = 0, order = 0)),

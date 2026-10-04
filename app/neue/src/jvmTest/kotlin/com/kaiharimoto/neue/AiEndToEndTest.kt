@@ -16,6 +16,7 @@ import com.kaiharimoto.mastertool.core.data.DeckRepository
 import com.kaiharimoto.mastertool.core.data.PreferencesRepository
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.Presentation
@@ -97,7 +98,7 @@ class AiEndToEndTest {
         val database = DatabaseFactory.create { driver }
         database.transaction {
             listOf(
-                Seed(14558127, "Ash Blossom & Joyous Spring", "Effect Monster", "effect"),
+                Seed(14558127, "Ash Blossom & Joyous Spring", "Effect Monster", "effect", alts = listOf(14558128)),
                 Seed(27204311, "Nibiru, the Primal Being", "Effect Monster", "effect"),
                 Seed(23434538, "Maxx \"C\"", "Effect Monster", "effect", tcg = "FORBIDDEN"),
                 Seed(86066372, "Accesscode Talker", "Link Monster", "link"),
@@ -110,7 +111,7 @@ class AiEndToEndTest {
                     description = "Text of ${s.name}.", race = if (s.frame == "spell") "Normal" else "Spellcaster", attribute = "DARK",
                     atk = 0L, def = 0L, level = if (s.frame == "link") null else 4L,
                     linkValue = if (s.frame == "link") 4L else null, linkMarkers = "", pendulumScale = null, archetype = null,
-                    imageUrl = null, imageUrlSmall = null, tcgBanStatus = s.tcg, ocgBanStatus = "UNLIMITED", alternateIds = "${s.id}",
+                    imageUrl = null, imageUrlSmall = null, tcgBanStatus = s.tcg, ocgBanStatus = "UNLIMITED", alternateIds = (listOf(s.id) + s.alts).joinToString(","),
                 )
             }
         }
@@ -155,7 +156,7 @@ class AiEndToEndTest {
         return h
     }
 
-    private class Seed(val id: Int, val name: String, val type: String, val frame: String, val tcg: String = "UNLIMITED")
+    private class Seed(val id: Int, val name: String, val type: String, val frame: String, val tcg: String = "UNLIMITED", val alts: List<Int> = emptyList())
 
     private fun input(vararg pairs: Pair<String, Any?>): JsonObject = buildJsonObject {
         pairs.forEach { (k, v) ->
@@ -349,6 +350,33 @@ class AiEndToEndTest {
         } finally {
             h.present.open?.let { h.present.delete(it) }
         }
+    }
+
+    @Test
+    fun handOddsCountsByCardSaysWhatItCouldNotFindAndCountsOverlapExactly() = runBlocking {
+        val h = holders()
+        // Phase B: two Ash and one of its alternate artwork are three Ash; nine cards in all.
+        val ash = CardId(14558127)
+        val alt = CardId(14558128)
+        val imperm = CardId(10045474)
+        val raigeki = CardId(12580477)
+        val main = listOf(ash, ash, alt) + List(3) { imperm } + List(3) { raigeki }
+        h.deps.deckRepository.save("alt-deck", "Alt deck", Deck(main, emptyList(), emptyList()))
+        val odds = h.tool("hand_odds", "deck_id" to "alt-deck", "cards" to listOf("Ash Blossom & Joyous Spring"), "turn" to "first")
+        assertFalse(odds.isError, odds.content)
+        assertTrue("(3 in 9)" in odds.content && "95.2381%" in odds.content, "the alternate counts: ${odds.content}")
+        // Overlap: Ash is among the second set too, so one Ash meets both — the odds are Ash's alone.
+        val both = h.tool("hand_odds", "deck_id" to "alt-deck", "cards" to listOf("Ash Blossom & Joyous Spring"),
+            "and_cards" to listOf("Ash Blossom & Joyous Spring", "Infinite Impermanence"), "turn" to "first")
+        assertTrue("95.2381%" in both.content && "in both sets" in both.content, both.content)
+        // A name it cannot find is said; a set with none found is refused.
+        val partly = h.tool("hand_odds", "deck_id" to "alt-deck", "cards" to listOf("Ash Blossom & Joyous Spring", "Qwxzv Plorbington"), "turn" to "first")
+        assertFalse(partly.isError, partly.content)
+        assertTrue("Not found, so not counted: “Qwxzv Plorbington”" in partly.content, partly.content)
+        val none = h.tool("hand_odds", "deck_id" to "alt-deck", "cards" to listOf("Qwxzv Plorbington"))
+        assertTrue(none.isError && "Could not find" in none.content, none.content)
+        val noGroup = h.tool("hand_odds", "deck_id" to "alt-deck", "cards" to listOf("Ash Blossom & Joyous Spring"), "and_group" to "Nope")
+        assertTrue(noGroup.isError && "no group" in noGroup.content, noGroup.content)
     }
 
     @Test

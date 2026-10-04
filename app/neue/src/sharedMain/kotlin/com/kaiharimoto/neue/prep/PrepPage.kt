@@ -444,17 +444,22 @@ private fun PracticeTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?,
             }
         }
         HRule()
-        Summary(games, field, mine)
+        Summary(games, field, mine, web)
         HRule()
         RecentGames(prep, games)
     }
 }
 
 @Composable
-private fun Summary(games: List<TestGame>, field: List<Foe>, mine: StoredDeck?) {
+private fun Summary(games: List<TestGame>, field: List<Foe>, mine: StoredDeck?, web: DeckWeb?) {
     val c = Mu.colors
-    val rows = remember(games) { TestStats.matrix(games) }
-    val shares = field.mapNotNull { f -> f.share?.let { f.key to it } }.toMap()
+    // The mirror's games under the deck's own id, whether logged by it or typed by name (TestStats.mirrored).
+    val rows = remember(games, mine?.entry?.id, mine?.entry?.name) {
+        TestStats.matrix(TestStats.mirrored(games, mine?.entry?.id, listOfNotNull(mine?.entry?.name)))
+    }
+    // The person's own deck stays in the field at its share, as the mirror (Phase B): never dropped and renormalised.
+    val own = mine?.entry?.id?.let { id -> web?.entry(id)?.share?.takeIf { it > 0 }?.let { id to it } }
+    val shares = field.mapNotNull { f -> f.share?.let { f.key to it } }.toMap() + listOfNotNull(own)
     val expected = TestStats.expected(rows, shares)
     val risk = TestStats.timeRisk(rows).toSet()
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -468,7 +473,8 @@ private fun Summary(games: List<TestGame>, field: List<Foe>, mine: StoredDeck?) 
         }
         Help(
             if (shares.isEmpty()) "Give the field's decks their shares on Format and the match win to expect against it follows."
-            else "Best of three against the field by its shares: game 1's turn a coin flip, then the loser of each duel going first. Few games are pulled toward even.",
+            else "Best of three against the field by its shares: game 1's turn a coin flip at the Game 1 rates, then the loser of each duel going first at the sided ones. " +
+                "Your own deck's share is the mirror, at its games or else even. Few games are pulled toward even.",
         )
         if (rows.isEmpty()) {
             Small("No games logged yet.", color = c.ink45)
