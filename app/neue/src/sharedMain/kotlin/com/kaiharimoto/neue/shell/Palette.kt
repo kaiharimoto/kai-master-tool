@@ -48,6 +48,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -110,7 +113,21 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var highlighted by remember { mutableStateOf(0) }
     val focus = remember { FocusRequester() }
-    val rows = remember(query) { commands(query) }
+    // A card search over the whole pool is too much for the frame thread on every key (1.0.92): from two letters on,
+    // the list settles 130 ms after the last key, worked out off it, as the pool's does; shorter queries (commands
+    // only) answer at once, and Enter on a list not yet settled works out the current one first.
+    var settled by remember { mutableStateOf("" to emptyList<Command>()) }
+    val quick = query.trim().length < 2
+    val instant = remember(query) { if (quick) commands(query) else null }
+    LaunchedEffect(query) {
+        if (!quick) {
+            delay(130)
+            val made = withContext(Dispatchers.Default) { commands(query) }
+            settled = query to made
+        }
+    }
+    val rows = instant ?: settled.second
+    fun current(): List<Command> = instant ?: if (settled.first == query) settled.second else commands(query).also { settled = query to it }
     val list = rememberLazyListState()
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     // The list follows the keys' highlight only (kai, 1.0.24): the pointer's is under it
@@ -171,7 +188,7 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                             // The palette is a command line: the soft keyboard's key reads Go and runs
                             // the highlighted row, as a hardware Enter does (touch swarm, rec 9).
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Go),
-                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { rows.getOrNull(highlighted)?.let { run(it, false) } }),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { current().getOrNull(highlighted)?.let { run(it, false) } }),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .cursor(CursorMode.TEXT, fontSize = 15.sp, focused = true)
@@ -182,7 +199,7 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                                     when (e.key) {
                                         Key.DirectionDown -> { step(1); true }
                                         Key.DirectionUp -> { step(-1); true }
-                                        Key.Enter, Key.NumPadEnter -> { rows.getOrNull(highlighted)?.let { run(it, e.isShiftPressed) }; true }
+                                        Key.Enter, Key.NumPadEnter -> { current().getOrNull(highlighted)?.let { run(it, e.isShiftPressed) }; true }
                                         Key.Escape -> { onDismiss(); true }
                                         else -> false
                                     }
