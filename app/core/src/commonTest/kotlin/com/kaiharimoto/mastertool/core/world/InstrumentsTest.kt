@@ -16,7 +16,6 @@ import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** The instruments are only worth having if they are right: each is checked against arithmetic done another way. */
@@ -67,20 +66,25 @@ class InstrumentsTest {
 
     @Test
     fun conditionsRead() {
-        assertEquals(listOf(Instruments.Clause("Starters", 1, 60), Instruments.Clause("Hand traps", 1, 60)), Instruments.parseCondition("Starters>=1 & Hand traps>=1"))
-        assertEquals(listOf(Instruments.Clause("Bricks", 0, 1)), Instruments.parseCondition("Bricks < 2"))
-        // A name with an & in it, quoted, stays one name.
+        fun all(text: String) = Goals.parse(text).any.single()
+        val most = Goals.NO_MAX
+        assertEquals(listOf(Instruments.Clause("Starters", 1, most), Instruments.Clause("Hand traps", 1, most)), all("Starters>=1 & Hand traps>=1"))
+        assertEquals(listOf(Instruments.Clause("Bricks", 0, 1)), all("Bricks < 2"))
+        // A name with an & in it stays one name, quoted or not: a clause only ends at its number.
         assertEquals(
             listOf(Instruments.Clause("Ash Blossom & Joyous Spring", 1, 1), Instruments.Clause("Bricks", 0, 0)),
-            Instruments.parseCondition("\"Ash Blossom & Joyous Spring\"=1 and Bricks<=0"),
+            all("\"Ash Blossom & Joyous Spring\"=1 and Bricks<=0"),
         )
-        assertFailsWith<IllegalArgumentException> { Instruments.parseCondition("Starters") }
+        assertEquals(listOf(Instruments.Clause("Ash Blossom & Joyous Spring", 1, most)), all("Ash Blossom & Joyous Spring>=1"))
+        // Or: either alternative will do.
+        assertEquals(2, Goals.parse("Starters>=1 | Extenders>=2").any.size)
+        assertFailsWith<IllegalArgumentException> { Goals.parse("Starters") }
     }
 
     @Test
     fun openingsAgreesWithTheHypergeometricAndItsOwnSimulation() {
         val r = Instruments.run("openings", args("conditions" to listOf("Starters>=1", "Starters>=1 & Hand traps>=1"), "trials" to 40_000), host)
-        val rows = r.answer.jsonArray.map { it.jsonObject }
+        val rows = r.answer.jsonObject["rows"]!!.jsonArray.map { it.jsonObject }
         // 9 starters in 40, five cards: 1 − C(31,5)/C(40,5).
         val exact = 1 - 169_911.0 / 658_008.0
         assertTrue(abs(rows[0]["exactFirst"]!!.jsonPrimitive.double - exact) < 1e-9)
@@ -89,12 +93,14 @@ class InstrumentsTest {
             assertTrue(abs(row["exactSecond"]!!.jsonPrimitive.double - row["simSecond"]!!.jsonPrimitive.double) < 0.01, row.toString())
             assertTrue(row["exactSecond"]!!.jsonPrimitive.double > row["exactFirst"]!!.jsonPrimitive.double)
         }
-        assertEquals(listOf(BoardKind.TABLE, BoardKind.CHART, BoardKind.CARDS), r.boards.map { it.kind })
+        rows.forEach { assertEquals(true, it["check"]!!.jsonPrimitive.content.toBoolean(), it.toString()) }
+        assertEquals(BoardKind.STAT, r.boards.first().kind)
+        assertTrue(listOf(BoardKind.TABLE, BoardKind.CHART, BoardKind.CARDS).all { k -> r.boards.any { it.kind == k } }, r.boards.map { it.kind }.toString())
         r.boards.filter { it.kind == BoardKind.CHART }.forEach { assertTrue(WorldChart.parse(it.payload).isSuccess) }
     }
 
     @Test
-    fun overlappingSetsAreSimulatedNotMiscounted() {
+    fun overlappingSetsAreCountedExactly() {
         val r = Instruments.run(
             "openings",
             JsonObject(mapOf(
@@ -106,9 +112,9 @@ class InstrumentsTest {
             )),
             host,
         )
-        val row = r.answer.jsonArray.single().jsonObject
-        assertNull(row["exactFirst"])
-        assertTrue("simulated" in r.lines.joinToString())
+        // Ash is inside Snakes: the condition is P(at least one Ash), 1 − C(37,5)/C(40,5), counted exactly (1.0.97).
+        val row = r.answer.jsonObject["rows"]!!.jsonArray.single().jsonObject
+        assertTrue(abs(row["exactFirst"]!!.jsonPrimitive.double - (1 - 435_897.0 / 658_008.0)) < 1e-12, row.toString())
     }
 
     @Test
@@ -134,18 +140,18 @@ class InstrumentsTest {
     fun theCardWebReadsWhoNamesWhom() {
         val r = Instruments.run("card_web", JsonObject(emptyMap()), host)
         val edges = r.answer.jsonObject["edges"]!!.jsonArray.map { e -> e.jsonArray.map { it.jsonPrimitive.content } }
-        assertTrue(listOf("Original Sinful Spoils - Snake-Eye", "Snake-Eye Ash", "searches") in edges, edges.toString())
-        assertTrue(listOf("Snake-Eye Oak", "Snake-Eye Ash", "summons") in edges, edges.toString())
+        assertTrue(edges.any { it[0] == "Original Sinful Spoils - Snake-Eye" && it[1] == "Snake-Eye Ash" && "searches" in it[2] }, edges.toString())
+        assertTrue(edges.any { it[0] == "Snake-Eye Oak" && it[1] == "Snake-Eye Ash" && "summons" in it[2] }, edges.toString())
         // An archetype named in quotes reaches every card of it but the card itself.
         assertTrue(edges.none { it[0] == it[1] })
-        assertTrue(WorldGraph.parse(r.boards.single().payload).isSuccess)
+        assertTrue(WorldGraph.parse(r.boards.single { it.kind == BoardKind.GRAPH }.payload).isSuccess)
     }
 
     @Test
     fun compositionAndMatchupsDrawWhatTheyCount() {
         val c = Instruments.run("composition", JsonObject(emptyMap()), host)
         assertEquals(2, c.answer.jsonObject["kinds"]!!.jsonObject.size) // monsters and spells; no traps
-        c.boards.forEach { assertTrue(WorldChart.parse(it.payload).isSuccess, it.title) }
+        c.boards.filter { it.kind == BoardKind.CHART }.forEach { assertTrue(WorldChart.parse(it.payload).isSuccess, it.title) }
         val m = Instruments.run("matchups", JsonObject(emptyMap()), host)
         val heat = WorldChart.parse(m.boards.first().payload).getOrThrow() as WorldChart.Heatmap
         assertEquals(listOf("A", "B"), heat.rows)

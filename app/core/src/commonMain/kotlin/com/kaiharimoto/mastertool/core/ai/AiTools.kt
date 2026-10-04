@@ -1152,7 +1152,7 @@ object AiTools {
             "boards are pinned. Reach for one before writing your own; write your own (world_write) for what none of them does, " +
             "to the same standard. ygo.tools.list() or world_tool list gives each one's arguments. The instruments: " + Instruments.brief() + ".",
         schema {
-            enum("name", "The instrument, or list for every instrument's arguments", Instruments.ALL.map { it.name } + "list", required = true)
+            enum("name", "The instrument; list for every instrument's arguments; guide for how to build your own", Instruments.ALL.map { it.name } + "list" + "guide", required = true)
             any("args", "Its arguments, as an object")
         },
         ToolGroup.APP,

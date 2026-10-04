@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.text.ChatChart
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -219,7 +220,8 @@ sealed interface WorldChart {
                 put("unit", c.unit)
                 put("rows", buildJsonArray { c.rows.forEach { add(JsonPrimitive(it)) } })
                 put("cols", buildJsonArray { c.cols.forEach { add(JsonPrimitive(it)) } })
-                put("values", buildJsonArray { c.values.forEach { r -> add(buildJsonArray { r.forEach { add(JsonPrimitive(it)) } }) } })
+                // An empty cell is null: JSON has no NaN, and JavaScript's JSON.parse refuses it (the red team's R9).
+                put("values", buildJsonArray { c.values.forEach { r -> add(buildJsonArray { r.forEach { add(if (it.isFinite()) JsonPrimitive(it) else JsonNull) } }) } })
             }
         }.toString()
     }

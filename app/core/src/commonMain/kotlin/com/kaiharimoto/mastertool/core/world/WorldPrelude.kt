@@ -131,12 +131,14 @@ object WorldPrelude {
     },
     tools: (function () {
       // The app's instruments (Instruments.kt): engineered, tested, run at the app's speed. ygo.tools.list() names them.
-      var t = { list: function () { return call('tools'); } };
-      ['openings', 'ratios', 'card_web', 'composition', 'matchups'].forEach(function (n) {
+      var t = { list: function () { return call('tools'); }, guide: function () { return call('guide'); } };
+      [${Instruments.ALL.joinToString(", ") { "'" + it.name + "'" }}].forEach(function (n) {
         t[n] = function (args) { return call('tool', { name: n, args: args || {} }); };
       });
       return t;
     })(),
+    // One of your own instruments (a file under lib/, say): run in the script's own scope, its functions yours to call.
+    use: function (path) { (0, eval)(call('file', { path: String(path) })); return true; },
     duel: {
       start: function (o) {
         var h = call('duelNew', o || {});
