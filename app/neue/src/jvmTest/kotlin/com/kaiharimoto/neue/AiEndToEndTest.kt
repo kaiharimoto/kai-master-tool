@@ -26,7 +26,9 @@ import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import com.kaiharimoto.mastertool.core.remote.TournamentDecks
 import com.kaiharimoto.mastertool.core.remote.YgoProDeckApi
+import com.kaiharimoto.mastertool.core.remote.YgoProDeckDecks
 import com.kaiharimoto.mastertool.core.siding.SidingCodec
 import com.kaiharimoto.mastertool.core.siding.Turn
 import com.kaiharimoto.mastertool.core.update.DesktopOs
@@ -51,6 +53,7 @@ import com.kaiharimoto.neue.shot.DeckShots
 import com.kaiharimoto.neue.update.NeueUpdates
 import com.kaiharimoto.neue.web.Webs
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.respondError
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineScope
@@ -70,6 +73,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.file.Files
+import java.time.LocalDate
 import java.util.Properties
 import java.util.UUID
 import com.kaiharimoto.mastertool.core.ai.BackendEvent
@@ -279,6 +283,83 @@ class AiEndToEndTest {
         assertTrue("Genesys, 100 points" in h.tool("validate_deck").content)
         h.builder.rules = h.legalityRules(h.neue.prefs, Format.TCG)
         assertEquals("TCG", h.builder.rulesInForce.words())
+    }
+
+    @Test
+    fun theFieldIsReadAsOfAPastDayOnThatDaysList() = runBlocking {
+        val h = holders()
+        h.banlists.use(
+            Format.TCG,
+            BanlistDoc(
+                region = Format.TCG,
+                lists = listOf(
+                    LimitationList(Format.TCG, "January 2025 Lists (TCG)", "2025-01-01", "2025-03-31", mapOf("Pot of Greed" to BanStatus.LIMITED, "Maxx \"C\"" to BanStatus.FORBIDDEN)),
+                    LimitationList(Format.TCG, "April 2025 Lists (TCG)", "2025-04-01", null, mapOf("Pot of Greed" to BanStatus.FORBIDDEN, "Maxx \"C\"" to BanStatus.FORBIDDEN, "Raigeki" to BanStatus.FORBIDDEN)),
+                ),
+                checked = System.currentTimeMillis(),
+            ),
+        )
+        // YGOPRODeck as it pages: tier 2 newest first, twenty lists a page, two a day, each dated by its event in the
+        // description. Three strategies: Raigeki (legal until April 2025), one Pot (legal on the January list, Forbidden
+        // today) and two Pots (over January's Limited). A clock inside today that steps past the one-a-second pacing.
+        val today = LocalDate.now()
+        val names = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+        fun list(n: Int, age: Int): String {
+            val day = today.minusDays(age.toLong())
+            val (name, main) = when (n % 3) {
+                0 -> "Raigeki Burn" to List(3) { 12580477 } + 14558127 + 27204311
+                1 -> "Pot Control" to listOf(55144522, 14558127, 10045474, 10045474)
+                else -> "Greedy Pots" to listOf(55144522, 55144522, 86066372, 27204311)
+            }
+            return """{"deck_name":"$name","deck_description":"<p>Tournament: Event $n &ndash; ${names[day.monthValue - 1]} ${day.dayOfMonth}th ${day.year}</p>",""" +
+                """"main_deck":"[${main.joinToString(",") { "\\\"$it\\\"" }}]","deckNum":$n,"format":"Tournament Meta Decks","submit_date":"$age days ago",""" +
+                """"tournamentName":"Event $n","tournamentPlayerCount":64,"tournamentPlacement":"Top 8"}"""
+        }
+        val pages = (today.toEpochDay() - LocalDate.parse("2024-12-01").toEpochDay()).toInt() / 10
+        var asked = 0
+        var tick = 0L
+        h.ai.tournaments = YgoProDeckDecks(
+            HttpClientFactory.create(
+                MockEngine { req ->
+                    val url = req.url.toString()
+                    val p = Regex("offset=(\\d+)").find(url)!!.groupValues[1].toInt() / YgoProDeckDecks.PAGE
+                    val body = if ("tier-2" in url && p < pages) {
+                        asked++
+                        (0 until YgoProDeckDecks.PAGE).joinToString(",", "[", "]") { i -> list(p * YgoProDeckDecks.PAGE + i, 10 * p + i / 2) }
+                    } else "[]"
+                    respond(body, HttpStatusCode.OK)
+                },
+            ),
+            clock = { today.toEpochDay() * YgoProDeckDecks.DAY_MS + 3_600_000L + 1_001L * tick++ },
+        )
+
+        val feb = h.tool("ygopro_field_snapshot", "as_of" to "2025-02-15", "format" to "tcg")
+        assertFalse(feb.isError, feb.content)
+        assertTrue("45 days to 15 Feb 2025" in feb.content, feb.content)
+        assertTrue("illegal under the January 2025 Lists (TCG) were left out" in feb.content && "more than 1 Pot of Greed (Limited)" in feb.content, feb.content)
+        assertTrue("Legal as of 15 Feb 2025: the January 2025 Lists (TCG)" in feb.content, feb.content)
+        assertTrue("CC BY-SA" in feb.content && "yugipedia.com/wiki/January_2025_Lists_(TCG)" in feb.content, feb.content)
+        assertTrue("Pot Control" in feb.content && "Raigeki Burn" in feb.content, "one Pot was legal then: ${feb.content}")
+        assertTrue(asked < 60, "found by a search: $asked pages")
+        // Today the one-Pot lists are Forbidden too, and the window is the last days.
+        val now = h.tool("ygopro_field_snapshot", "format" to "tcg")
+        assertTrue("last 45 days" in now.content && "today's TCG Forbidden & Limited list" in now.content, now.content)
+        assertFalse("Pot Control" in now.content, now.content)
+        // On the April list Raigeki is Forbidden.
+        val may = h.tool("ygopro_field_snapshot", "as_of" to "2025-05-01")
+        assertTrue("illegal under the April 2025 Lists (TCG)" in may.content && "Raigeki (Forbidden)" in may.content, may.content)
+
+        // The lists themselves, as of the day: none newer, dated by the event; the window cut where the pages ran out, said.
+        val lists = h.tool("ygopro_tournament_decks", "as_of" to "2025-02-15", "tier" to 2)
+        assertFalse(lists.isError, lists.content)
+        val days = Regex("""(\w+ \d+th \d{4})""").findAll(lists.content).mapNotNull { TournamentDecks.eventDay(it.value) }.toList()
+        assertTrue(days.isNotEmpty() && days.all { it <= "2025-02-15" }, days.toString())
+        assertTrue("ask again with as_of" in lists.content && "not the 60 days to 15 Feb 2025 asked for" in lists.content, lists.content)
+        assertTrue("Legal as of 15 Feb 2025" in lists.content, lists.content)
+
+        assertTrue(h.tool("ygopro_field_snapshot", "as_of" to "Feb 2025").isError)
+        assertTrue(h.tool("ygopro_field_snapshot", "as_of" to today.plusDays(3).toString()).isError, "after today")
+        assertTrue(h.tool("ygopro_field_snapshot", "as_of" to "2024-06-01").isError, "before the first list kept")
     }
 
     @Test

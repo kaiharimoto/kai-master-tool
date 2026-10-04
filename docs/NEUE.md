@@ -3946,6 +3946,10 @@ The card data everything stands on, made correct:
   average-linkage clustering that keeps hybrids apart, the mirror kept in the expected match win, Game 1 played at the
   pre-side rates and games 2–3 at the sided ones (`TestStats`), `hand_odds` exact with overlapping sets and naming what
   it could not find, and a Gemini video report cut short said to be cut.
+- **The field as of a date** (1.1.1): `ygopro_field_snapshot` and `ygopro_tournament_decks` take `as_of` — the window
+  ends that day, lists dated by their event (read from YGOPRODeck's description), the page found by a search rather
+  than read in turn (`YgoProDeckDecks.recent`), the honest window kept; lists held to that day's list and to the cards
+  out by then (`FieldLegality.asOf`), each kind left out said, the list named and Yugipedia cited.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

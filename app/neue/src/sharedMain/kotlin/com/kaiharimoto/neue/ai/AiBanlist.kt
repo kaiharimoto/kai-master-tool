@@ -22,7 +22,7 @@ import java.time.LocalDate
  * Ai's `banlist` (1.1.1, Phase B §3): any Forbidden & Limited list by date, a card's history through them, and what
  * moved between two — read from Yugipedia's list pages ([com.kaiharimoto.neue.banlist.BanlistCenter]), the names in
  * the envelope (outside text) and the list and its source cited in every answer. Also the dated list
- * `validate_deck`'s `as_of` checks against ([listOn]).
+ * `validate_deck`'s, `hand_odds`' and the field's `as_of` check against ([listOn]).
  */
 internal class AiBanlist(private val h: NeueHolders) {
     private fun fail(message: String) = MetaAnswer(message, message, isError = true)
@@ -60,7 +60,8 @@ internal class AiBanlist(private val h: NeueHolders) {
 
     private fun stale(problem: String) = "(The lists could not be refreshed just now, so these are the ones kept: $problem)"
 
-    private fun cite(list: LimitationList) = "${Yugipedia.ATTRIBUTION} ${YugipediaLists.pageUrl(list.title)}"
+    /** The list's source, cited as Yugipedia's licence asks: "Source: Yugipedia …, CC BY-SA 4.0. https://yugipedia.com/wiki/…". */
+    fun cite(list: LimitationList) = "${Yugipedia.ATTRIBUTION} ${YugipediaLists.pageUrl(list.title)}"
 
     private suspend fun banlist(i: JsonObject): MetaAnswer {
         val region = region(ToolArgs.string(i, "region")) ?: return fail("region is tcg or ocg.")

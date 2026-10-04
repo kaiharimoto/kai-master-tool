@@ -6,8 +6,13 @@ import com.kaiharimoto.mastertool.core.ai.meta.FieldBuilder
 import com.kaiharimoto.mastertool.core.ai.meta.FieldLegality
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.ai.web.Untrusted
+import com.kaiharimoto.mastertool.core.cards.BanlistMatch
+import com.kaiharimoto.mastertool.core.cards.BanlistWords
+import com.kaiharimoto.mastertool.core.cards.LimitationList
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
+import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.remote.DeckFormat
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
 import com.kaiharimoto.mastertool.core.remote.PlayerPages
@@ -19,6 +24,7 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.platform.Platform
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.JsonObject
+import java.time.LocalDate
 import kotlin.coroutines.resume
 
 /** What a meta tool answered: for the model, for the chat, and whether it failed. */
@@ -30,9 +36,11 @@ internal class MetaAnswer(val content: String, val summary: String, val isError:
  * by its number, so a list named in one answer can be read or imported in the next.
  */
 internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
-    private val source by lazy {
+    private val ygoProDeck by lazy {
         YgoProDeckDecks(HttpClientFactory.create(), userAgent = "NeueMasterTool/${Platform.version}", clock = System::currentTimeMillis)
     }
+    private val source: YgoProDeckDecks get() = ai.tournaments ?: ygoProDeck
+    private val bans by lazy { AiBanlist(h) }
     private val seen = LinkedHashMap<Int, TournamentDeck>()
     private val index get() = h.builder.index
 
@@ -66,6 +74,51 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         else -> if (h.builder.format.name == "OCG") DeckFormat.OCG else DeckFormat.TCG
     }
 
+    /**
+     * A past format (1.1.1, Phase B): the day the window ends, and the list in force then in the lists' region (none for
+     * Genesys, which has no Forbidden & Limited list).
+     */
+    private class AsOf(val day: String, val region: Format?, val list: LimitationList?, val match: BanlistMatch?, val note: String?)
+
+    /** The `as_of` asked for, its region's list that day; null when none was asked; a failure in words. */
+    private suspend fun asOf(i: JsonObject, format: DeckFormat): Result<AsOf?> {
+        val day = ToolArgs.string(i, "as_of")?.trim()?.ifEmpty { null } ?: return Result.success(null)
+        fun no(why: String) = Result.failure<AsOf?>(IllegalArgumentException(why))
+        if (!Legality.isDate(day)) return no("as_of is a day, yyyy-MM-dd (it was “$day”).")
+        if (day > LocalDate.now().toString()) return no("as_of is ${Legality.readable(day)}, after today: there are no results from then yet.")
+        val region = FieldLegality.formatOf(format) ?: return Result.success(AsOf(day, null, null, null, null))
+        val dated = bans.listOn(region, day)
+        val list = dated.list ?: return no(dated.problem ?: "No ${region.name} list for ${Legality.readable(day)}.")
+        val match = dated.match ?: return no(dated.problem ?: "The ${list.title} could not be matched to the app's pool.")
+        return Result.success(AsOf(day, region, list, match, dated.note))
+    }
+
+    /** What was left out for [at]'s day, and the list it was judged by, in words; the lists kept. */
+    private fun judged(all: List<TournamentDeck>, at: AsOf): Pair<List<TournamentDeck>, String> {
+        val region = at.region
+        val list = at.list
+        val match = at.match
+        if (region == null || list == null || match == null) {
+            return all to "Genesys has no Forbidden & Limited list, so the lists are read for the window alone."
+        }
+        val read = FieldLegality.asOf(all, index::byId, region, at.day, match)
+        val unmatched = match.unmatched.size
+        val words = listOfNotNull(
+            FieldLegality.unreleasedWords(read.unreleased, region, at.day).ifEmpty { null },
+            FieldLegality.words(read.dropped, "the ${list.title}").ifEmpty { null },
+            "Legal as of ${Legality.readable(at.day)}: the ${list.title} (${BanlistWords.span(list)}) and the cards released " +
+                "in the ${Legality.word(region)} by then. ${bans.cite(list)}",
+            if (unmatched > 0) "($unmatched ${if (unmatched == 1) "name" else "names"} on that list matched no card in the app's pool, so " +
+                "${if (unmatched == 1) "it was" else "they were"} not checked; banlist names them.)" else null,
+            at.note,
+        )
+        return read.kept to words.joinToString("\n")
+    }
+
+    /** What reads the part of a past window that was cut: an earlier as_of. */
+    private fun earlierWords(read: RecentDecks, fallback: String): String =
+        read.earlier()?.takeIf { read.asOf != null }?.let { "ask again with as_of $it to read the days before" } ?: fallback
+
     private fun line(d: TournamentDeck): String =
         "#${d.number} | ${d.name} | ${d.placement} of ${d.players ?: "?"} at ${d.event} | ${d.pilot ?: "pilot unknown"} | ${d.format.name.lowercase()} | " +
             (d.date ?: if (d.daysAgo == 0) "today" else if (d.daysAgo >= 999) "date unknown" else "${d.daysAgo}d ago")
@@ -79,27 +132,34 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val event = ToolArgs.string(i, "event")?.lowercase()
         val pilot = ToolArgs.string(i, "player")
         val page = ToolArgs.int(i, "page") ?: 0
-        val read = if (page > 0) {
+        val at = asOf(i, format).getOrElse { return fail(it.message!!) }
+        // A past format is a window ending on its day, found by searching back; page does not apply to it.
+        val paged = page > 0 && at == null
+        val read = if (paged) {
             val got = (tier..4).flatMap { t ->
                 source.page(t, page).getOrElse { return fail("Could not read YGOPRODeck's tournament decks (tier $t, page $page). ${Unreachable.of(YgoProDeckDecks.SITE, it)}") }
             }
             RecentDecks(got.filter { it.format == format && (daysGiven == null || it.daysAgo <= days) }, emptyList())
         } else {
-            source.recent(tier, days, format, maxPages = RECENT_PAGES)
+            source.recent(tier, days, format, maxPages = RECENT_PAGES, asOf = at?.day)
         }
-        val (decks, problems) = read
+        val (read0, problems) = read
+        // As of a day, only the lists legal then: that day's list and the cards out by then (Phase B, 1.1.1).
+        val (decks, legality) = at?.let { judged(read0, it) } ?: (read0 to "")
         // An older page is read whole, whatever its age, unless days was asked for; a page that fails fails the answer.
         // The window said is the one really read: every tier cut to the same date when one stopped short (Phase B).
-        val window = if (page > 0 && daysGiven == null) "page $page of each tier, any age" else read.windowWords(days) + if (page > 0) ", page $page" else ""
+        val window = if (paged && daysGiven == null) "page $page of each tier, any age" else read.windowWords(days) + if (paged) ", page $page" else ""
         decks.forEach { seen[it.number] = it }
         val shown = decks.filter { d -> (archetype == null || archetype in d.name.lowercase()) && (event == null || event in d.event.lowercase()) && (pilot == null || PlayerPages.names(pilot, d.pilot)) }
-            .sortedBy { it.daysAgo }
-        val cut = read.cutWords(days, "ask again with page $RECENT_PAGES and up to read further back")
+            .sortedBy { RecentDecks.ageOf(it, LocalDate.now().toEpochDay()) }
+        val cut = read.cutWords(days, earlierWords(read, "ask again with page $RECENT_PAGES and up to read further back")) + read.endsWords()
+        val ignored = if (page > 0 && at != null) " (page is not used with as_of: an earlier as_of reads further back.)" else ""
         if (shown.isEmpty()) {
             val why = if (problems.isNotEmpty()) " YGOPRODeck: ${problems.joinToString("; ")}." else ""
-            return if (problems.isNotEmpty() && decks.isEmpty()) fail("Could not read YGOPRODeck's tournament decks.$why")
+            return if (problems.isNotEmpty() && read0.isEmpty()) fail("Could not read YGOPRODeck's tournament decks.$why")
             else MetaAnswer(
-                "No ${format.name} tournament decks match (tier $tier+, $window).$why$cut" +
+                "No ${format.name} tournament decks match (tier $tier+, $window).$why$cut$ignored" +
+                    (if (legality.isNotEmpty()) "\n$legality" else "") +
                     if (pilot != null) " These are only the recent pages; ygopro_player reads $pilot's whole record." else "",
                 "No matching tournament decks",
             )
@@ -108,9 +168,10 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         return MetaAnswer(
             head + "\n" + Untrusted.wrap(SOURCE, shown.take(60).joinToString("\n") { line(it) }) +
                 (if (shown.size > 60) "\n(${shown.size - 60} more not shown: narrow with archetype, event or days.)" else "") +
+                (if (legality.isNotEmpty()) "\n$legality" else "") +
                 (if (problems.isNotEmpty()) "\n(Some pages failed: ${problems.joinToString("; ")})" else "") +
-                (if (cut.isNotEmpty()) "\n(${cut.trim()})" else ""),
-            "Read ${shown.size} tournament decks from YGOPRODeck",
+                (if (cut.isNotEmpty()) "\n(${cut.trim()})" else "") + ignored,
+            "Read ${shown.size} tournament decks from YGOPRODeck" + (at?.let { " as of ${Legality.readable(it.day)}" } ?: ""),
         )
     }
 
@@ -214,20 +275,25 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
         val format = formatOf(ToolArgs.string(i, "format"))
         val days = (ToolArgs.int(i, "days") ?: 45).coerceIn(7, 365)
         val top = (ToolArgs.int(i, "top") ?: 12).coerceIn(3, 30)
-        val read = source.recent(tier, days, format, maxPages = FIELD_PAGES)
+        val at = asOf(i, format).getOrElse { return fail(it.message!!) }
+        val read = source.recent(tier, days, format, maxPages = FIELD_PAGES, asOf = at?.day)
         val (all, problems) = read
         all.forEach { seen[it.number] = it }
         val window = read.windowWords(days)
+        val cut = read.cutWords(days, earlierWords(read, "a shorter days window reads all of it")) + read.endsWords()
         if (all.isEmpty()) {
             return if (problems.isNotEmpty()) fail("Could not read YGOPRODeck's tournament decks: ${problems.joinToString("; ")}")
-            else MetaAnswer("No ${format.name} results at tier $tier+ in the $window.${read.cutWords(days, "a shorter days window reads all of it")}", "No results to build a field from")
+            else MetaAnswer("No ${format.name} results at tier $tier+ in the $window.$cut", "No results to build a field from")
         }
-        // Lists the current banlist no longer allows are not the field (Phase B): dropped, and said. Genesys has no list.
-        val legal = FieldLegality.formatOf(format)?.let { f -> FieldLegality.check(all, index::byId, f) } ?: FieldLegality.Reading(all, emptyList())
-        val decks = legal.kept
-        val dropped = FieldLegality.words(legal.dropped, "today's ${format.name} Forbidden & Limited list")
+        // Lists the banlist does not allow are not the field (Phase B): dropped, and said. Genesys has no list. As of a
+        // past day (1.1.1), that day's list, and lists holding cards not out yet set aside first.
+        val (decks, dropped) = if (at != null) judged(all, at) else {
+            val legal = FieldLegality.formatOf(format)?.let { f -> FieldLegality.check(all, index::byId, f) } ?: FieldLegality.Reading(all, emptyList())
+            legal.kept to FieldLegality.words(legal.dropped, "today's ${format.name} Forbidden & Limited list")
+        }
         if (decks.isEmpty()) {
-            return MetaAnswer("Every ${format.name} list read at tier $tier+ in the $window is illegal under today's list. $dropped", "No legal lists to build a field from")
+            val list = at?.list?.let { "the ${it.title}" } ?: "today's list"
+            return MetaAnswer("Every ${format.name} list read at tier $tier+ in the $window is illegal under $list. $dropped", "No legal lists to build a field from")
         }
         val clusters = FieldBuilder.build(decks, top, index::byId)
         // The strategies are named from the lists' own names, and the events are the site's: outside text.
@@ -248,8 +314,9 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             appendLine()
             append("These ${clusters.size} strategies are $covered% of the weighted top cuts.")
             if (problems.isNotEmpty()) append(" (Some pages failed: ${problems.joinToString("; ")}.)")
-            append(read.cutWords(days, "a shorter days window reads all of it"))
+            append(cut)
         }
-        return MetaAnswer(text, "Read what topped in ${format.name}: ${clusters.take(3).joinToString { "${it.name} ${it.share}%" }} of top cuts")
+        val asOfWords = at?.let { " as of ${Legality.readable(it.day)}" }.orEmpty()
+        return MetaAnswer(text, "Read what topped in ${format.name}$asOfWords: ${clusters.take(3).joinToString { "${it.name} ${it.share}%" }} of top cuts")
     }
 }

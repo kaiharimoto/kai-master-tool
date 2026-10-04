@@ -5,11 +5,17 @@ import com.kaiharimoto.mastertool.core.ai.meta.DeckAnalysis
 import com.kaiharimoto.mastertool.core.ai.meta.FieldBuilder
 import com.kaiharimoto.mastertool.core.ai.meta.FieldLegality
 import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
+import com.kaiharimoto.mastertool.core.deck.BanSource
+import com.kaiharimoto.mastertool.core.deck.Legality
+import com.kaiharimoto.mastertool.core.model.BanStatus
+import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.Format
+import com.kaiharimoto.mastertool.core.prep.IsoDate
 import com.kaiharimoto.mastertool.core.remote.DeckFormat
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import com.kaiharimoto.mastertool.core.remote.RecentDecks
 import com.kaiharimoto.mastertool.core.remote.TournamentDeck
 import com.kaiharimoto.mastertool.core.remote.TournamentDecks
 import com.kaiharimoto.mastertool.core.remote.YgoProDeckDecks
@@ -265,6 +271,154 @@ class MetaTest {
         assertEquals("last 45 days", whole.windowWords(45))
         assertEquals("", whole.cutWords(45, "x"))
         assertEquals(listOf(100, 101, 102, 103), whole.decks.map { it.number })
+    }
+
+    @Test
+    fun theEventsDayIsReadFromTheDescription() {
+        // As YGOPRODeck answered on 4 Oct 2026: the site's age is "1 week ago", the event's own day is in the description.
+        val body = """
+            [{"deck_name":"Azamina Mitsurugi","deck_description":"<p>Category: Tournament Meta Decks (TCG)</p><p>Creator: Jose Carlo Carrillo Toscano</p><p>Tournament: Mexico City WCQ Regional &ndash; September 27th 2026</p><p>Placement: Top 8</p>",
+              "main_deck":"[\"9674034\"]","deckNum":736326,"format":"Tournament Meta Decks","submit_date":"1 week ago","tournamentName":"Mexico City WCQ Regional","tournamentPlacement":"Top 8"},
+             {"deck_name":"Old","deck_description":"<p>Tournament: B&egrave;gles WCQ Regional &ndash; September 14th 2025</p>","main_deck":"[\"1\"]","deckNum":2,"submit_date":"1 year ago"},
+             {"deck_name":"No date","deck_description":"<p>Placement: Top 8</p>","main_deck":"[\"1\"]","deckNum":3,"submit_date":"2 months ago"}]
+        """
+        val decks = TournamentDecks.parse(body, tier = 2)
+        assertEquals("September 27th 2026", decks[0].date)
+        assertEquals("2026-09-27", decks[0].day)
+        assertEquals("2025-09-14", decks[1].day)
+        assertEquals(null, decks[2].day)
+        assertEquals("2026-02-28", TournamentDecks.eventDay("Feb. 28, 2026"))
+        assertEquals("2026-03-01", TournamentDecks.eventDay("1st March 2026"))
+        assertEquals(null, TournamentDecks.eventDay("February 30th 2026"), "a day that does not exist")
+        // The event's day decides the age, not the site's month-wide "2 months ago".
+        val today = IsoDate.epochDay("2026-10-04")!!
+        assertEquals(7, RecentDecks.ageOf(decks[0], today))
+        assertEquals(385, RecentDecks.ageOf(decks[1], today))
+        assertEquals(60, RecentDecks.ageOf(decks[2], today), "no day read: the site's age")
+    }
+
+    /**
+     * A tier of [pages] pages of twenty, newest first, two event days a page (page p: days 2p and 2p + 1 before
+     * 4 Oct 2026), each list's description carrying its day and its posting said the site's rough way; tiers 3 and 4
+     * have nothing. [late] lists are an old event posted late: [late] maps a list's number to its event's age.
+     */
+    private class History(val pages: Int = 300, val late: Map<Int, Int> = emptyMap()) {
+        val today = IsoDate.epochDay("2026-10-04")!!
+        var asked = 0
+        private val months = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+        private fun written(age: Int): String {
+            val (y, m, d) = IsoDate.of(today - age).split('-')
+            return "${months[m.toInt() - 1]} ${d.toInt()}th $y"
+        }
+        private fun posted(age: Int) = when {
+            age < 7 -> "$age days ago"
+            age < 30 -> "${age / 7} weeks ago"
+            age < 365 -> "${age / 30} months ago"
+            else -> "${age / 365} years ago"
+        }
+        fun page(p: Int): String = if (p >= pages) "[]" else (0 until YgoProDeckDecks.PAGE).joinToString(",", "[", "]") { i ->
+            val n = p * YgoProDeckDecks.PAGE + i
+            val age = 2 * p + i / 10
+            val event = late[n] ?: age
+            """{"deck_name":"D$n","deck_description":"<p>Tournament: Event $n &ndash; ${written(event)}</p>","main_deck":"[\"1\"]","deckNum":$n,"submit_date":"${posted(age)}"}"""
+        }
+        val source = YgoProDeckDecks(
+            HttpClientFactory.create(
+                MockEngine { req ->
+                    val url = req.url.toString()
+                    if ("tier-2" in url) asked++
+                    val p = Regex("offset=(\\d+)").find(url)!!.groupValues[1].toInt() / YgoProDeckDecks.PAGE
+                    respond(if ("tier-2" in url) page(p) else "[]", HttpStatusCode.OK)
+                },
+            ),
+            clock = { today * YgoProDeckDecks.DAY_MS + 12 * 60 * 60 * 1000L },
+        )
+        fun age(d: TournamentDeck) = RecentDecks.ageOf(d, today)
+    }
+
+    @Test
+    fun aPastWindowIsFoundBySearchingNotByReadingEveryPage() = runTest {
+        // A year back: page 182 holds the lists of 364 and 365 days ago. Four pages from there do not reach the window's
+        // start, so it is cut — and said — like any other.
+        val h = History()
+        val read = h.source.recent(minTier = 2, days = 30, format = null, maxPages = 4, asOf = "2025-10-04")
+        assertEquals(365, read.end)
+        assertEquals("2025-10-04", read.asOf)
+        assertTrue(h.asked <= YgoProDeckDecks.MAX_PROBES + 5, "found by a search, not 182 pages read in turn: ${h.asked} requests")
+        assertTrue(h.asked < 30, "${h.asked} requests")
+        val ages = read.decks.map(h::age)
+        assertEquals((365..370).toSet(), ages.toSet(), "nothing newer than the day asked; cut to the days read whole")
+        assertEquals(60, read.decks.size)
+        assertEquals(listOf(2), read.unread)
+        assertEquals(370, read.window)
+        assertEquals(5, read.covers(30))
+        assertEquals("5 days to 4 Oct 2025", read.windowWords(30))
+        assertEquals("2025-09-28", read.earlier(), "the day before the part read begins")
+        val said = read.cutWords(30, "x")
+        assertTrue("tier 2 reached back only to 28 Sep 2025" in said && "the 5 days to 4 Oct 2025, not the 30 days to 4 Oct 2025 asked for" in said, said)
+
+        // Enough pages: the whole window, and one old event posted late inside it neither ends the reading nor counts.
+        val stray = 190 * YgoProDeckDecks.PAGE + 19
+        val whole = History(late = mapOf(stray to 900)).source.recent(minTier = 2, days = 30, format = null, maxPages = 20, asOf = "2025-10-04")
+        assertEquals(null, whole.window)
+        assertTrue(whole.unread.isEmpty())
+        assertEquals("30 days to 4 Oct 2025", whole.windowWords(30))
+        assertEquals(31 * 10 - 1, whole.decks.size)
+        assertFalse(stray in whole.decks.map { it.number })
+        assertEquals("", whole.cutWords(30, "x"))
+        assertEquals("", whole.endsWords())
+    }
+
+    @Test
+    fun aDayBeforeTheSiteListsAnythingIsSaidAsSuch() = runTest {
+        val h = History()
+        val read = h.source.recent(minTier = 2, days = 30, format = null, maxPages = 4, asOf = "2020-01-01")
+        assertTrue(read.decks.isEmpty())
+        assertTrue(read.problems.isEmpty(), read.problems.toString())
+        assertEquals(mapOf(2 to 599), read.ends, "tier 2's oldest list is 599 days old")
+        assertTrue(h.asked <= YgoProDeckDecks.MAX_PROBES, "${h.asked} requests")
+        val oldest = Legality.readable(IsoDate.of(h.today - 599))
+        assertTrue("tier 2's to $oldest" in read.endsWords() && "nothing in the window" in read.endsWords(), read.endsWords())
+        // As of today is the last days, said as ever.
+        val now = History().source.recent(minTier = 2, days = 3, format = null, maxPages = 4, asOf = "2026-10-04")
+        assertEquals(null, now.asOf)
+        assertEquals("last 3 days", now.windowWords(3))
+        assertEquals((0..3).toSet(), now.decks.map(h::age).toSet())
+    }
+
+    @Test
+    fun aPastFieldIsHeldToThatDaysListAndTheCardsOutThen() {
+        val day = "2025-10-04"
+        val ash = TestCards.ashBlossom.copy(formats = listOf("TCG", "OCG"), tcgDate = "2017-01-12")
+        val nibiru = TestCards.nibiru.copy(formats = listOf("TCG", "OCG"), tcgDate = "2026-01-15")
+        val japan = TestCards.maxxC.copy(formats = listOf("OCG"), ocgDate = "2015-01-01")
+        val pool = listOf(ash, nibiru, japan).flatMap { c -> c.passcodes.map { it to c } }.toMap()
+        // On that day's list Ash is Limited; today's pool says nothing of it.
+        val list = object : BanSource {
+            override fun statusOf(card: Card) = if (card.id == ash.id) BanStatus.LIMITED else BanStatus.UNLIMITED
+            override val label = "April 2025 Lists (TCG)"
+        }
+        val decks = listOf(
+            td(1, "Legal", listOf(ash.id.value, 1, 2)),
+            td(2, "Two Ash", listOf(ash.id.value, ash.id.value, 1)),
+            td(3, "From a later format", listOf(nibiru.id.value, ash.id.value, ash.id.value)),
+            td(4, "OCG only", listOf(japan.id.value, 1)),
+            td(5, "Unknown", listOf(999_999, 999_999, 999_999, 999_999)),
+        )
+        val read = FieldLegality.asOf(decks, pool::get, Format.TCG, day, list)
+        assertEquals(listOf(1, 5), read.kept.map { it.number })
+        assertEquals(listOf(3, 4), read.unreleased.map { it.deck.number }, "set aside first, counted once")
+        assertEquals(listOf(2), read.dropped.map { it.deck.number })
+        val words = FieldLegality.unreleasedWords(read.unreleased, Format.TCG, day)
+        assertTrue(words.startsWith("2 lists held cards not out in the TCG on 4 Oct 2025 and were left out:"), words)
+        assertTrue("1 plays ${nibiru.name} (out 15 Jan 2026)" in words && "1 plays ${japan.name} (never released in the TCG)" in words, words)
+        assertEquals("", FieldLegality.unreleasedWords(emptyList(), Format.TCG, day))
+        assertTrue(FieldLegality.words(read.dropped, "the April 2025 Lists (TCG)").startsWith("1 list illegal under the April 2025 Lists (TCG) was left out: 1 plays more than 1 "), FieldLegality.words(read.dropped, "x"))
+        // Never more than three, whatever a source says.
+        val loose = BanSource { BanStatus.UNLIMITED }
+        val four = FieldLegality.asOf(listOf(decks[1], td(6, "Four", List(4) { ash.id.value })), pool::get, Format.TCG, day, loose)
+        assertEquals(listOf(2), four.kept.map { it.number })
+        assertEquals(3, four.dropped.single().limit)
     }
 
     @Test
