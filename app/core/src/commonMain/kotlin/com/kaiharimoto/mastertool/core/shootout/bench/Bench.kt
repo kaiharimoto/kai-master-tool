@@ -18,10 +18,13 @@ import com.kaiharimoto.mastertool.core.shootout.model.Trial
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
 import com.kaiharimoto.mastertool.core.shootout.select.Reason
 import com.kaiharimoto.mastertool.core.shootout.store.PlanPrint
+import com.kaiharimoto.mastertool.core.shootout.store.AiVerdict
 import com.kaiharimoto.mastertool.core.shootout.store.PlanPrints
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
 import com.kaiharimoto.mastertool.core.siding.SidePlan
 import com.kaiharimoto.mastertool.core.siding.Turn
+import com.kaiharimoto.mastertool.core.shootout.teach.HandKind
+import com.kaiharimoto.mastertool.core.shootout.teach.HandKinds
 
 /** The other deck of a matchup, as it stands: its id (the log's file), its name and its cards. */
 class Opponent(val id: String, val name: String, val deck: Deck)
@@ -73,6 +76,13 @@ class Bench private constructor(
     val opponentName: String?,
     /** Any passcode to its card's canonical one: a kept trial may name a printing. */
     private val canon: (Int) -> Int,
+    /** Sorts hands into kinds for Ai's confidence score (stage 3): starters yours, interaction theirs. */
+    val kinds: HandKinds = HandKinds(emptySet(), emptySet()),
+    /**
+     * The decks as they stand, as a short name (stage 3): both main decks and both plans. Kept on each of Ai's answers,
+     * so a change to either deck re-earns every kind of hand (S.md §6½ "Audits keep the gate honest").
+     */
+    val print: String = "",
 ) {
     private val ownAt: Map<Int, Int> = own.withIndex().associate { it.value to it.index }
     private val theirAt: Map<Int, Int> = theirs.withIndex().associate { it.value to it.index }
@@ -100,30 +110,98 @@ class Bench private constructor(
 
     /**
      * A kept trial as the model reads it, or null when this model does not read it: another stratum, one waiting now,
-     * an answer not the person's own blind one (Ai's parts come later, S.md §6), or a shape no build knows.
+     * or a shape no build knows. Each kind of answer is its own judge (stage 3, S.md §6½, Dawid–Skene): the person's
+     * blind answers are [PERSON], the reference; Ai's are [AI]; the person's after seeing Ai's are [SEEN] — each with its
+     * own fitted noise and lean, so Ai's count only as much as they have shown they deserve.
      */
-    fun trial(t: StoredTrial): Trial? {
-        if (!t.blind) return null
+    fun trial(t: StoredTrial): Trial? = read(t, t.answer, t.prefer, judgeOf(t))
+
+    /**
+     * Every answer a kept trial holds: its own, and Ai's verdict when a 1.1.2 log kept one on the person's trial (an
+     * observation of Ai's on the same hand). With [withAi] false, Ai's are left out — what the ratings would be without
+     * them (the trust panel's "what Ai's answers moved").
+     */
+    fun observations(t: StoredTrial, withAi: Boolean = true): List<Trial> {
+        val own = if (!withAi && judgeOf(t) == AI) null else trial(t)
+        val kept = t.ai?.takeIf { withAi && t.judge == StoredTrial.PERSON }?.let { v -> read(t, v.answer, v.prefer, AI) }
+        return listOfNotNull(own, kept)
+    }
+
+    /** The model's judge for a kept trial. */
+    fun judgeOf(t: StoredTrial): Int = when {
+        t.judge == StoredTrial.AI -> AI
+        t.sawAi -> SEEN
+        else -> PERSON
+    }
+
+    private fun read(t: StoredTrial, answerName: String?, prefer: String?, judge: Int): Trial? {
         val stratum = Stratum.entries.firstOrNull { it.name == t.stratum }?.takeIf { it in spec.strata } ?: return null
         val opp = if (alone) null else (t.opponent ?: return null).let { opponentHand(it) ?: return null }
         return when (t.kind) {
             StoredTrial.RATE -> {
-                val answer = Answer.entries.firstOrNull { it.name == t.answer } ?: return null
+                val answer = Answer.entries.firstOrNull { it.name == answerName } ?: return null
                 val hand = hand(t.hand)?.takeIf { it.size > 0 } ?: return null
-                Rated(hand, opp, stratum, answer, plain = t.reason == PLAIN)
+                Rated(hand, opp, stratum, answer, judge = judge, plain = t.reason == PLAIN && judge == PERSON)
             }
             StoredTrial.COMPARE -> {
                 val left = hand(t.left)?.takeIf { it.size > 0 } ?: return null
                 val right = hand(t.right)?.takeIf { it.size > 0 } ?: return null
-                val prefer = t.prefer ?: return null
-                Compared(left, right, opp, stratum, leftPreferred = prefer == StoredTrial.LEFT)
+                val p = prefer ?: return null
+                Compared(left, right, opp, stratum, leftPreferred = p == StoredTrial.LEFT, judge = judge)
             }
             else -> null
         }
     }
 
-    /** A rating answered by the person, blind, ready to keep. */
-    fun rated(p: Proposal.Rate, answer: Answer, id: String, at: Long, ms: Long?, session: String?): StoredTrial = StoredTrial(
+    /** The kind of hand a proposal shows (a comparison's left hand). */
+    fun kindOf(p: Proposal): HandKind = when (p) {
+        is Proposal.Rate -> kinds.of(p.stratum, ids(p.hand), p.opponent?.let(::opponentIds))
+        is Proposal.Compare -> kinds.of(p.stratum, ids(p.left), p.opponent?.let(::opponentIds))
+    }
+
+    /** The kind of hand a kept trial shows, or null when its stratum is not one this build knows. */
+    fun kindOf(t: StoredTrial): HandKind? {
+        val stratum = Stratum.entries.firstOrNull { it.name == t.stratum } ?: return null
+        val hand = (if (t.kind == StoredTrial.COMPARE) t.left else t.hand).map(canon)
+        return kinds.of(stratum, hand, t.opponent?.map(canon))
+    }
+
+    /** A kept trial as a proposal again, to show it (an audit, the calibration set's exam); null if it will not read. */
+    fun proposal(t: StoredTrial): Proposal? = when (val m = read(t, t.answer ?: Answer.COIN_FLIP.name, t.prefer ?: StoredTrial.LEFT, PERSON)) {
+        is Rated -> Proposal.Rate(m.hand, m.opponent, m.stratum, if (t.reason == PLAIN) Reason.PLAIN else Reason.CHOSEN)
+        is Compared -> Proposal.Compare(m.left, m.right, m.opponent, m.stratum)
+        null -> null
+    }
+
+    /** Ai's answer to a rating or a comparison, ready to keep as a trial of its own (stage 3). */
+    fun aiAnswer(p: Proposal, verdict: AiVerdict, id: String, at: Long, of: String?, mode: String, session: String?): StoredTrial = StoredTrial(
+        id = id,
+        at = at,
+        stratum = p.stratum.name,
+        kind = if (p is Proposal.Compare) StoredTrial.COMPARE else StoredTrial.RATE,
+        hand = (p as? Proposal.Rate)?.let { ids(it.hand) }.orEmpty(),
+        left = (p as? Proposal.Compare)?.let { ids(it.left) }.orEmpty(),
+        right = (p as? Proposal.Compare)?.let { ids(it.right) }.orEmpty(),
+        opponent = p.opponent?.let(::opponentIds),
+        answer = verdict.answer.takeIf { p is Proposal.Rate },
+        prefer = verdict.prefer.takeIf { p is Proposal.Compare },
+        judge = StoredTrial.AI,
+        ai = verdict,
+        reason = reasonWord(p.reason),
+        plans = prints[p.stratum],
+        session = session,
+        of = of,
+        mode = mode,
+    )
+
+    /**
+     * A rating answered by the person, ready to keep: blind unless [sawAi] (they were shown Ai's answer first), given in
+     * teaching [mode] when one is under way.
+     */
+    fun rated(
+        p: Proposal.Rate, answer: Answer, id: String, at: Long, ms: Long?, session: String?,
+        sawAi: Boolean = false, mode: String? = null,
+    ): StoredTrial = StoredTrial(
         id = id,
         at = at,
         stratum = p.stratum.name,
@@ -135,10 +213,15 @@ class Bench private constructor(
         plans = prints[p.stratum],
         ms = ms,
         session = session,
+        sawAi = sawAi,
+        mode = mode,
     )
 
-    /** A comparison answered by the person, blind, ready to keep. */
-    fun compared(p: Proposal.Compare, leftPreferred: Boolean, id: String, at: Long, ms: Long?, session: String?): StoredTrial = StoredTrial(
+    /** A comparison answered by the person, ready to keep, blind unless [sawAi]. */
+    fun compared(
+        p: Proposal.Compare, leftPreferred: Boolean, id: String, at: Long, ms: Long?, session: String?,
+        sawAi: Boolean = false, mode: String? = null,
+    ): StoredTrial = StoredTrial(
         id = id,
         at = at,
         stratum = p.stratum.name,
@@ -151,6 +234,8 @@ class Bench private constructor(
         plans = prints[p.stratum],
         ms = ms,
         session = session,
+        sawAi = sawAi,
+        mode = mode,
     )
 
     /** Whether a kept sided trial was dealt under plans other than today's: kept, labelled, pooled (S.md §1½). */
@@ -176,6 +261,12 @@ class Bench private constructor(
 
         /** The smallest deck a hand of six can be dealt from. */
         const val SMALLEST = 6
+
+        /** The model's judges (stage 3, S.md §6½): the person blind (the reference), Ai, the person after seeing Ai. */
+        const val PERSON = 0
+        const val AI = 1
+        const val SEEN = 2
+        const val JUDGES = 3
 
         private const val PLAIN = "plain"
 
@@ -287,8 +378,28 @@ class Bench private constructor(
                 roles = roles,
                 opponentCards = if (opponent == null) 0 else theirList.size,
                 pairs = pairs(mainList),
+                judges = JUDGES,
             )
-            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name) { canon(CardId(it)).value }
+            // The kinds of hand Ai's agreement is counted by (stage 3): your starters, their interaction.
+            val roleByCard = ownList.withIndex().associate { it.value to names[roles[it.index]] }
+            val lookup: (Int) -> Card? = { input.cards(CardId(it)) }
+            val theirMainIds = opponent?.deck?.main?.map { canon(it).value }.orEmpty()
+            val kinds = HandKinds(
+                HandKinds.starters(main.distinct(), roleByCard::get, lookup),
+                HandKinds.interaction(theirMainIds.distinct(), lookup),
+            )
+            val print = fingerprint(main.sorted().joinToString(",") + "|" + theirMainIds.sorted().joinToString(",") + "|" + prints.entries.sortedBy { it.key }.joinToString(";") { "${it.key}:${it.value.mine}/${it.value.theirs}" })
+            return Bench(spec, decks, ownList, theirList, names, strata, waiting, prints, opponent?.name, { canon(CardId(it)).value }, kinds, print)
+        }
+
+        /** A short stable name for [text] (FNV-1a, 48 bits in hexadecimal). */
+        private fun fingerprint(text: String): String {
+            var h = -0x340d631b7bdddcdbL
+            for (ch in text) {
+                h = h xor ch.code.toLong()
+                h *= 0x100000001b3L
+            }
+            return h.toULong().toString(16).padStart(16, '0').take(12)
         }
 
         /** The [PAIRS] pairs most often in an opening hand together, by the deck's real odds. */

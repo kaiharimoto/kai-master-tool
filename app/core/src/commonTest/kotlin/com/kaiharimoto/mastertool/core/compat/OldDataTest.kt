@@ -145,6 +145,43 @@ class OldDataTest {
     }
 
     @Test
+    fun aShootoutTeachingAiStillReads() {
+        // Phase S stage 3: Ai's answers as trials of their own (`judge: ai`, `of` the person's trial, `mode`), with what it
+        // was shown (examples, rubric, the model's prediction, the kind, the decks' print, when asked) and the question it
+        // would ask; the person's notes beside the trials; the gate's settings — and a key from a later build in each.
+        val old = """{"version":1,"deck":"d-1","opponent":"o-2","opponentName":"Yubel","trials":[
+            {"id":"s1-0","at":1760000000000,"stratum":"G1_FIRST","hand":[1,2,3,4,5],"opponent":[5,6,7,8,9,10],"answer":"LEAN_WIN","mode":"apprentice","session":"s1"},
+            {"id":"s1-0a","at":1760000000500,"stratum":"G1_FIRST","hand":[1,2,3,4,5],"opponent":[5,6,7,8,9,10],"answer":"CLEAR_WIN","judge":"ai","of":"s1-0","mode":"apprentice",
+             "ai":{"answer":"CLEAR_WIN","sure":0.85,"why":"a starter into one hand trap","model":"m","examples":["s0-3","s0-9"],"rubric":"a1b2c3d4e5f6","predicted":0.66,"kind":"first·starter·interaction","print":"0123456789ab","asked":1759999999000,"question":"Does Ash on the search stop it?","glow":1}},
+            {"id":"s1-1","at":1760000004000,"stratum":"G1_SECOND","hand":[1,2,3,4,5,6],"opponent":[5,6,7,8,9],"answer":"LEAN_LOSS","sawAi":true,"mode":"supervised"},
+            {"id":"s1-2","at":1760000009000,"stratum":"G1_SECOND","hand":[1,2,3,4,5,6],"opponent":[5,6,7,8,9],"answer":"COIN_FLIP","judge":"ai","mode":"solo","ai":{"answer":"COIN_FLIP","sure":0.92}}
+        ],"notes":[{"trial":"s1-0","text":"only wins if they have no Imperm","at":1760000001000,"question":"Does Ash on the search stop it?","mood":"x"},{"broken":true}],
+        "trust":{"bar":0.85,"sure":0.75,"solo":true,"later":"yes"}}"""
+        val log = assertNotNull(ShootoutCodec.decode(old))
+        assertEquals(4, log.trials.size)
+        val ai = log.trials[1]
+        assertEquals("ai", ai.judge)
+        assertEquals("s1-0", ai.of)
+        assertEquals("apprentice", ai.mode)
+        assertEquals(listOf("s0-3", "s0-9"), ai.ai?.examples)
+        assertEquals("first·starter·interaction", ai.ai?.kind)
+        assertEquals(1759999999000, ai.ai?.asked)
+        assertEquals("Does Ash on the search stop it?", ai.ai?.question)
+        assertTrue(log.trials[2].sawAi && !log.trials[2].blind)
+        assertEquals("solo", log.trials[3].mode)
+        assertEquals(1, log.notes.size, "a note that will not read is dropped alone")
+        assertEquals("only wins if they have no Imperm", log.notesOn("s1-0").single().text)
+        assertEquals(0.85, log.trusted.bar)
+        assertEquals(true, log.trusted.solo)
+        // A 1.1.2 log has neither, and reads with the defaults.
+        val older = assertNotNull(ShootoutCodec.decode("""{"version":1,"deck":"d","trials":[]}"""))
+        assertTrue(older.notes.isEmpty())
+        assertEquals(0.9, older.trusted.bar)
+        assertEquals(false, older.trusted.solo)
+        assertEquals(log, ShootoutCodec.decode(ShootoutCodec.encode(log)))
+    }
+
+    @Test
     fun aWorldFrom1097StillReads() {
         // 1.0.97: Ai World's record in `<data>/world/<id>/world.json`, a board from a later build among its own, a line of its
         // log with a kind this build does not know, and its device-only settings.

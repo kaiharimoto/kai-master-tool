@@ -144,7 +144,7 @@ class Posterior(val spec: ModelSpec, trials: List<Trial>) {
         val j = trial.judge
         return when (trial) {
             is Rated -> {
-                val x = value.features(s, trial.hand, trial.opponent)
+                val x = value.features(s, trial.hand, trial.opponent, j)
                 val k = trial.answer.ordinal
                 val locals = arrayOf(
                     Local(x.index, x.value),
@@ -162,7 +162,7 @@ class Posterior(val spec: ModelSpec, trials: List<Trial>) {
                 }
             }
             is Compared -> {
-                val x = value.features(s, trial.left, trial.opponent).minus(value.features(s, trial.right, trial.opponent))
+                val x = value.features(s, trial.left, trial.opponent, j).minus(value.features(s, trial.right, trial.opponent, j))
                 val locals = arrayOf(Local(x.index, x.value), one(layout.comparePrecision(j)))
                 object : Prepared(locals, x, layout.comparePrecision(j)) {
                     override fun at(theta: DoubleArray, eta: Double, logPrecision: Double, d: DoubleArray, h: DoubleArray): Double =

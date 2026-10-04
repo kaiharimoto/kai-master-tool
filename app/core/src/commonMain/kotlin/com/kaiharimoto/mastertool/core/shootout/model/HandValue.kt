@@ -122,8 +122,11 @@ class HandValue(private val spec: ModelSpec) {
         return (if (now) 1 else 0) - (if (before) 1 else 0)
     }
 
-    /** The value's features, sorted by parameter. */
-    fun features(s: Int, hand: Hand, opponent: Hand?): Sparse {
+    /**
+     * The value's features, sorted by parameter, as [judge] reads the hand: a judge other than the reference adds its own
+     * reading of each card held ([Layout.judgeCard]), so its blind spots are its own (stage 3).
+     */
+    fun features(s: Int, hand: Hand, opponent: Hand?, judge: Int = 0): Sparse {
         val idx = ArrayList<Int>(2 * hand.cards.size + 8)
         val v = ArrayList<Double>(idx.size)
         for (c in hand.cards) { idx += layout.card(c); v += spec.copies(hand[c]) }
@@ -134,6 +137,7 @@ class HandValue(private val spec: ModelSpec) {
         }
         if (opponent != null) for (o in opponent.cards) { idx += layout.opponent(o); v += -spec.copies(opponent[o]) }
         idx += layout.intercept(s); v += 1.0
+        if (judge > 0) for (c in hand.cards) { idx += layout.judgeCard(judge, c); v += spec.copies(hand[c]) }
         return Sparse(idx.toIntArray(), v.toDoubleArray())
     }
 }

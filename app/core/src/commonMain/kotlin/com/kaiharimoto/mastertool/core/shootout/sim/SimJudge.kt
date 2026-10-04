@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.shootout.sim
 
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.model.Compared
+import com.kaiharimoto.mastertool.core.shootout.model.Hand
 import com.kaiharimoto.mastertool.core.shootout.model.HandValue
 import com.kaiharimoto.mastertool.core.shootout.model.ModelSpec
 import com.kaiharimoto.mastertool.core.shootout.model.Rated
@@ -32,6 +33,12 @@ class SimJudge(
     val fatigue: Double = 0.3,
     val lean: Double = 0.1,
     val fatigueOver: Int = 300,
+    /** A steady lean, in log-odds, added to every reading: a judge always a little optimistic (stage 3, a biased Ai). */
+    val offset: Double = 0.0,
+    /** Cards this judge rates wrongly, by how many log-odds per copy: a judge with a blind spot. */
+    val favour: Map<Int, Double> = emptyMap(),
+    /** The judge's number in the model: 0 the person blind, 1 Ai, 2 the person after seeing Ai. */
+    val judge: Int = 0,
 ) {
     private val random = Random(seed)
     private val value = HandValue(world.spec)
@@ -46,20 +53,29 @@ class SimJudge(
         val slipped = random.nextDouble() < slips
         return when (proposal) {
             is Proposal.Rate -> {
-                val eta = value.of(world.truth, s, proposal.hand, proposal.opponent)
+                val eta = value.of(world.truth, s, proposal.hand, proposal.opponent) + offset + favoured(proposal.hand)
                 val read = eta + context + grow * handNoise * logistic(random)
+                lastRead = read
                 val band = ModelSpec.NOMINAL_CUTS.count { read > it + drift }
                 val answer = if (slipped) random.nextInt(5) else band
-                Rated(proposal.hand, proposal.opponent, proposal.stratum, Answer.entries[answer], plain = proposal.reason == Reason.PLAIN)
+                Rated(proposal.hand, proposal.opponent, proposal.stratum, Answer.entries[answer], judge = judge, plain = proposal.reason == Reason.PLAIN)
             }
             is Proposal.Compare -> {
-                val left = value.of(world.truth, s, proposal.left, proposal.opponent) + grow * handNoise * logistic(random)
-                val right = value.of(world.truth, s, proposal.right, proposal.opponent) + grow * handNoise * logistic(random)
+                val left = value.of(world.truth, s, proposal.left, proposal.opponent) + favoured(proposal.left) + grow * handNoise * logistic(random)
+                val right = value.of(world.truth, s, proposal.right, proposal.opponent) + favoured(proposal.right) + grow * handNoise * logistic(random)
+                lastRead = left - right
                 val prefersLeft = if (slipped) random.nextBoolean() else left > right
-                Compared(proposal.left, proposal.right, proposal.opponent, proposal.stratum, prefersLeft)
+                Compared(proposal.left, proposal.right, proposal.opponent, proposal.stratum, prefersLeft, judge = judge)
             }
         }
     }
+
+    /** The reading behind the last answer, in log-odds (a comparison's: left less right): how near a cut-off it fell. */
+    var lastRead: Double = 0.0
+        private set
+
+    private fun favoured(hand: Hand): Double =
+        if (favour.isEmpty()) 0.0 else hand.cards.sumOf { c -> (favour[c] ?: 0.0) * hand[c] }
 
     /** A standard logistic draw. */
     private fun logistic(random: Random): Double {
