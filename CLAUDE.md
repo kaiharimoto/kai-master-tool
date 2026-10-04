@@ -314,7 +314,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     still `AiMark` stands by the name (`AiName`: replies, the panel's head, Settings) — kai: "every
     mention of Ai is a chance for the art".
   - Only the whole head moves; the net never distorts.
-- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel** (1.0.40, kai:
+- **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;
   a deck in no web is sided against opponents made there — a name and three cards
@@ -729,6 +729,23 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `SlidePaintTest`). Next: 1.0.74 recording (JavaCV/FFmpeg, LGPL; `core/present/record` holds the take timeline,
   chapters and encoder choice already), 1.0.75 Android recording and extras. `tools/shoot.sh --page=present --present=demo …` photographs it
   (`--present-mode=restyle` the dialog).
+
+- **Ai World** (1.0.97, `08`, `Ctrl 8`, `NEUE.md` §4r; kai: "a free environment to build using coding tools … that the
+  user can see and watch live"): Ai's own computer. `core/world` is the model (`World`, `Board` — its kind kept as its
+  word, `Board.type` — `WorldEvent`, `WorldCodec`, `WorldPaths`), the boards (`ShowSpec`, `WorldChart`, `WorldGraph`,
+  `GraphLayout`), the maths (`WorldStats`), the one door scripts use (`WorldApi`, with `WorldHost` = `neue/world/WorldSnapshot`,
+  plain values for a script's thread), the prelude (`ygo.*` in JavaScript, `ygo.py`) and **the instruments**
+  (`Instruments`: engineered, tested studies run in one step — reach for one before writing a script, and write new ones
+  to its standard; `docs/world/INSTRUMENTS-REDTEAM.md`). **JavaScript** is Rhino **1.7.15** (never 1.8+: Android has no
+  `jdk.dynalink`/`java.beans`), interpreted and shut in (`JsRuntime`, jvmMain, `JsRuntimeTest`); **Python** is the desk's
+  own process (`WorldPython`, expect/actual), off until the person allows it — `WorldPrefs` is device-only and
+  `AiSettings.INTERNAL`, so Ai can never turn it on. `neue/world/Worlds` is the holder (lazy, `h.world`; one run at a
+  time, off the main thread; Ai's code typed into the editor), `AiWorld` Ai's tools (`world_state/new/write/read/run/tool/show`),
+  `MODE_WORLD` and the `ai-world` skill; `WorldPaint.kt` is the World's one file allowed colour. `<data>/world/` is
+  synced and backed up; the `WORLD` start step asks about Python on the desk. `tools/shoot.sh --page=world --world=demo`.
+- **Outside text is in an envelope** (1.0.97): every tool result read from outside the app goes through `Untrusted.wrap`,
+  and `web_fetch` through `UrlGuard`; a new tool that brings outside text in must do the same. The red team on Ai's
+  learning and real-world intelligence, its research and the roadmap: `docs/AI-INTELLIGENCE.md`.
 
 ## Where the big holders' code lives (1.0.91, the cleanup)
 
