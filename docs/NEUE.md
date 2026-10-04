@@ -2497,47 +2497,19 @@ whole report, its research and the roadmap that replaced the one below: `docs/AI
   `Unreachable.of`); Yugipedia's cache is keyed by SHA-256 and never keeps an error; each ruling keeps its section
   (TCG/OCG) and its source (`Ruling.line`); and the field snapshot's shares are named for what they are, shares of top
   cuts (`FieldBuilder.SHARE_CAVEAT`), in the tool, `expected_winrate` and the format-webs skill.
+- **The run's own confirmed findings**: paths arriving by sync or restored from a backup pass `InboundPath` (core) —
+  no backslash, colon, dot or hidden segment, nothing of Ai's device-private folder, and the file inside the data
+  folder (a Windows traversal, and a planted `ai/run/.claude/settings.json`); `ai.alwaysAllow` and `ai.factCheck` are
+  `AiSettings.GUARDS`, read by Ai and set only by the person; the OpenAI-compatible wire never sends an all-thought turn
+  as `{content: null}`; and a Fine Tuning run left by anything but Finish still goes to the review (`settleTuning`).
+  What is confirmed and still open is listed in the report, as the roadmap's first phase.
 
 #### Going further — the roadmap
 
-What else would make Ai frontier-level here, in the order it would pay off, with what each needs:
-
-1. **A goldfish simulator.** Ai draws thousands of opening hands from the real deck and plays
-   out its lines by the card text, reporting how often each line gets there and the end boards
-   it reaches.
-   - *Needs:* a rules engine over a subset of card effects — the play stage's `core/board` and
-     `scene` are the start — or Ai itself stepping through each hand with a legality checker;
-     `hand_odds` already does the counting.
-   - *Cost:* the biggest item here, and the most valuable. It turns "I think this line works"
-     into "this line gets there 63% of the time".
-2. **Art recognition for screenshots without names** (Master Duel). Perceptual hashes of every
-   card's art in the local library, matched against the art boxes found in a screenshot.
-   - *Needs:* a hash per card, computed once from `ArtLibrary` (about 14k × 8 bytes), and a
-     box-finder for a grid of cards.
-   - *Cost:* medium. It makes `deck-from-picture` exact where names are not printed.
-3. **Parallel helpers.** `delegate` fanned out: five decklists read at once, a web's matchups
-   studied side by side, the fact-check run beside the next answer.
-   - *Needs:* the loop's single-helper call made a list, with a combined report.
-   - *Cost:* small; the time saved is the gain.
-4. **Model routing.** A cheaper, faster model for look-ups, summaries and checks; the strong
-   one for plans and teaching.
-   - *Needs:* a second connection chosen per job (quick settings: "for small jobs, use…").
-   - *Cost:* small; it halves what a long session costs.
-5. **A rulings benchmark.** A fixed set of hard ruling questions with known answers (from
-   Yugipedia's rulings pages), run against a connection to score it before relying on it.
-   - *Needs:* the questions, and a runner that uses the fact-check's parser.
-   - *Cost:* small; it answers "which model should I use for this game?".
-6. **Proactive notes while building.** Ai watches deck edits and says once, quietly, when an
-   edit breaks a combo the guide depends on, or pushes a ratio past what the guide says.
-   - *Needs:* the guide's lines read as card dependencies, and a debounce.
-7. **Long-running research with a notification.** "Study the top ten lists of this weekend's
-   Regional overnight": a background job that writes to the web's notes and says when it is done.
-8. **Duel logs.** Replays from DuelingBook or Master Duel read into the Prep page's practice
-   log, with the misplays Ai finds.
-9. **Memory across conversations by meaning,** not only by words: embeddings of past turns so
-   `recall` finds "that thing about going second" without the exact words.
-10. **Live event mode.** Between rounds, the siding plan for the next opponent, spoken, with
-    the three-minute timer; results logged by voice.
+The roadmap lives in `docs/AI-INTELLIGENCE.md` (1.0.97), built on the research: lessons that cite their runs and an
+evaluation harness first, then a duel record that can measure "Ai beats players", a forward model of the deck's own
+cards written by Ai in Ai World and tested against its combos and replays, search over it, and coaching and building
+on the numbers that search makes. The ten items that stood here are carried there.
 
 **Pictures**: `tools/shoot.sh --ai=panel` (a sample conversation), `--ai=empty`,
 `--ai=wizard --ai-step=KEY:anthropic`, `--ai=setup` (the first setup; `--ai-step` too), `--ai=tune` (a question waiting), `--ai=review`, `--ai=chart`, `--ai=demo --ai-step=N`, `--ai=reason`, `--ai=teach`, `--ai=study`, and from 1.0.54 `--ai=guide` (also writes `shots/ai-guide.pdf` and `shots/ai-report.pdf`), `--ai=end`, `--ai=brain`, `--ai=quick`, `--ai=profile`, `--ai=about`, `--ai=petted`, and from 1.0.55 `--ai=picture` (a screenshot read into a deck), `--ai=visual` (line, board, compare), `--ai=attach` (pictures waiting in the composer), and from 1.0.56 `--ai=summarised` (a long conversation, its start summarised, the gauge) and `--ai=context` (the Context panel); from 1.0.57 `--ai=listening`, `--ai=talk` and `--ai=voice` (the model's download); from 1.0.58 `--ai=checked` (an answer checked, one claim wrong, its correction).
@@ -3792,8 +3764,10 @@ build's kind survives an older build's save. `WorldPaths.safe` keeps every path 
   refuses every class, no files, no network; an instruction count, a wall clock, a heap budget (a quarter of the VM's at
   most) and the person's Stop all end a run from inside the interpreter, past any `catch`; out-of-memory and stack
   overflow are caught; a run that will not stop (a regular expression inside Java) is given up on, its daemon thread left
-  to finish. The prelude guards the one-call allocations the count cannot see (`repeat`, `padStart`, `fill`, `join`).
-  `JsRuntimeTest` holds all of it.
+  to finish. The prelude guards the one-call allocations the count cannot see (`repeat`, `padStart`, `fill`, `join`),
+  and the door holds every count a host loop walks to a deck's scale (`JsonObject.size`: a deck 10,000, a hand 60,
+  `handOdds`' walk bounded before it starts; `Calc` counts to ten million at most) — the budget cannot stop a loop in
+  Kotlin (the red team). `JsRuntimeTest` holds all of it.
 - **Python on the desk** (`neue/world/WorldPython`, expect/actual; none on Android). Off until the person allows it —
   the `WORLD` start step, or Settings › Assistant — because a process runs as them; `WorldPrefs` is device-only and in
   `AiSettings.INTERNAL`, so **Ai can never switch Python on**. `-I`, a stripped environment, `HOME` the world's folder,
@@ -3818,8 +3792,10 @@ why in words.
 **Instruments** (`Instruments.kt`, kai's "strong foundation"): studies engineered and tested in core, run at the app's
 speed, by Ai in one step (`world_tool`) or from a script (`ygo.tools.*`): openings (exact odds of each condition going
 first and second, checked by a seeded simulation, sample hands), ratios (a condition as copies change or the deck grows),
-card_web (who names, searches or summons whom, read off the text), composition and matchups (Prep's logged games as a
-heatmap, best-of-three). Conditions keep a quoted card name whole, `&` and all. Their red team and upgrades are in
+optimize (the best counts under a deck's size), draws, combos (the deck's saved combos, from `<data>/duel/combos`),
+siding, card_web (who names, searches or summons whom, read off the text), composition and matchups (Prep's logged games
+as a heatmap, best-of-three, against the active event's field). **Ai's own library**: a file under `lib/` is run by
+`ygo.use('lib/x.js')`, its last value returned — the instruments' standard is the one Ai writes to. Conditions keep a quoted card name whole, `&` and all. Their red team and upgrades are in
 `docs/world/INSTRUMENTS-REDTEAM.md`. The `ai-world` skill tells Ai to reach for an instrument first and to write its
 own in the same shape when none fits.
 
