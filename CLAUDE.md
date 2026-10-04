@@ -125,8 +125,8 @@ in-app updater installs from. Two hard-learned rules:
   (`100000 + major*10000 + minor*100 + patch`). It must only ever go up;
   v1.1.0 shipped as 281 from a commit-count scheme, which is why the floor
   exists. Never revert to commit counts.
-- **SQLite schema version is 3** and can never decrease — devices that
-  installed v1.1.0 are stamped at `user_version 3`
+- **SQLite schema version is 4** (from Neue 1.1.0 / APK v1.3.78, `migrations/3.sqm`: card release data) and can
+  never decrease — devices that installed v1.1.0 are stamped at `user_version 3`
   (see `core/.../db/migrations/2.sqm`). SQLDelight derives the version from
   the number of `.sqm` files: adding a table means adding a `.sq` change AND a
   new `.sqm`, and `MigrationTest` must prove upgrade == fresh create. Never
@@ -749,6 +749,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`Ledger`), marked stale when the deck changes and checked again (`recheckGuide`). The fact-check's "ok" is held to what
   it looked up (`FactCheck.ground`). Rulings read Konami's OCG Q&A from YGOrganization first (`YgoOrg`), always with the
   OCG caveat, then Yugipedia. A new place Ai writes numbers people rely on goes through the same check.
+- **Card truth** (1.1.0, Phase B, `docs/phases/B.md`, `NEUE.md` §4s): **count copies by card, never by passcode** —
+  `CardIdentity` (an alternate artwork is the same card); a new count of copies or "does the deck hold X" goes through it.
+  **Legality is region and date too** (`Legality`, from each card's `formats`/`tcgDate`/`ocgDate`, schema 4); missing
+  release data is *unknown*, never illegal. **Banlists by date** are `core/cards` (Yugipedia's lists, a device-only cache in
+  `<data>/banlists/`, never synced) behind `BanSource`; a new place that checks copy limits takes a `BanSource`.
 - **Outside text is in an envelope** (1.0.97): every tool result read from outside the app goes through `Untrusted.wrap`,
   and `web_fetch` through `UrlGuard`; a new tool that brings outside text in must do the same. The red team on Ai's
   learning and real-world intelligence, its research and the roadmap: `docs/AI-INTELLIGENCE.md`.

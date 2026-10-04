@@ -1,8 +1,11 @@
 package com.kaiharimoto.mastertool.core.hand
 
 import com.kaiharimoto.mastertool.core.TestCards
+import com.kaiharimoto.mastertool.core.deck.BanSource
+import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Deck
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -58,5 +61,20 @@ class CardSetOddsTest {
         val p = CardSetOdds.probability(main, listOf(CardSetOdds.Need(setOf(ash.id, nibiru.id), atLeast = 2)), 5, lookup)
         val q = HandQuery(listOf(HandConstraint("x", 2, 60)))
         assertEquals(HandOdds.probability(mapOf("x" to 5), 40, 5, q), p, 1e-12)
+    }
+
+    @Test
+    fun aDeckCutToADatedListLosesItsLastCopiesAndSaysWhich() {
+        // Ash limited to one that day; one copy already in the Side Deck uses it, so every Main Deck copy goes.
+        val limits = BanSource { if (it.id == ash.id) BanStatus.LIMITED else BanStatus.UNLIMITED }
+        val d = Deck(main = listOf(CardId(14558127), CardId(10045474), CardId(14558128), CardId(10045474)), side = listOf(CardId(14558128)))
+        val cut = CardSetOdds.legalised(d, lookup, limits)
+        assertEquals(listOf(CardId(10045474), CardId(10045474)), cut.main)
+        assertEquals(listOf(ash.name to 2), cut.removed)
+        // Semi-limited with none elsewhere: the first two printings stay, the third goes.
+        val semi = CardSetOdds.legalised(Deck(main = listOf(CardId(14558128), CardId(14558127), CardId(14558127))), lookup) { BanStatus.SEMI_LIMITED }
+        assertEquals(listOf(CardId(14558128), CardId(14558127)), semi.main)
+        // A card the pool does not know stays.
+        assertEquals(listOf(CardId(1)), CardSetOdds.legalised(Deck(main = listOf(CardId(1))), lookup) { BanStatus.FORBIDDEN }.main)
     }
 }

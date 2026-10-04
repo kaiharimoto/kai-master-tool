@@ -539,6 +539,8 @@ object AiTools {
             string("and_group", "Or: a second group by name")
             integer("and_at_least", "How many of the second set; default 1", min = 1, max = 6)
             enum("turn", "first draws 5, second draws 6; default both", listOf("first", "second", "both"))
+            string("as_of", "A day, yyyy-MM-dd: the odds of the deck as that day's banlist allowed it (copies over its limits taken out first)")
+            enum("format", "Which region's banlist for as_of; default the builder's", listOf("tcg", "ocg"))
         },
         ToolGroup.LOOK,
         phase = 2,

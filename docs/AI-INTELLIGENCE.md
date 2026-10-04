@@ -172,7 +172,7 @@ Read the code before acting on any of these.
 - A fact-check "OK" is not tied to the tool calls it claims.
 - Drills stay "known" after the plan changes.
 
-**Real-world data**
+**Real-world data** (every lead below closed in 1.1.0, Phase B: `docs/phases/B.md` §1, §2 and §4)
 - Alternate-art passcodes break copy limits, `hand_odds` and the field: copies are counted by passcode, not by card.
 - OCG-only and unreleased cards read as TCG-legal.
 - The field snapshot cuts each tier at 120 lists, so "last 45 days" mixes one or two weeks of regionals with 45 days of

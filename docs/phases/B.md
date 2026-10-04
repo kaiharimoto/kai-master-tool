@@ -37,8 +37,8 @@ ruling or a list from Konami's site can be matched to a card without its name.
 - `formats` (`TCG`, `OCG`, `Master Duel`, …);
 - `genesys_points`.
 
-Kept on `Card` as `tcgDate`, `ocgDate`, `formats`, `genesysPoints`, `konamiId`, stored in four new columns
-(**schema 4**, `migrations/3.sqm`, held by `MigrationTest`). A pool stored by an older build has none of them; the
+Kept on `Card` as `tcgDate`, `ocgDate`, `formats`, `genesysPoints`, `konamiId`, stored in five new columns
+(**schema 4**, five columns, `migrations/3.sqm`, held by `MigrationTest`). A pool stored by an older build has none of them; the
 app reads that as *unknown*, never as illegal, and refreshes the pool once (`PoolRecord.misc`) so the data arrives.
 
 **Legality.** `Legality.of(card, format, asOf)` says one of:
@@ -102,8 +102,11 @@ one OCG name is written `Allure of Darkness|sc`. The API answers 50 pages' wikit
   source) and `ygo.legal(deck, date)` (→ `{legal, list, issues}`), through `WorldApi`'s `banlist`/`banStatus`/`legal`
   and `WorldHost.banlists` — read from what is kept, never fetched on a script's thread (`WorldSnapshot.of` starts a
   background refresh when one is due). JavaScript only: Python cannot call back into the app.
-- Still to come: the builder's own legality against a dated list (a choice in the UI), `hand_odds` with `as_of`, and
-  the field, `expected_winrate` and `field_snapshot` with `as_of` (the meta's own work, §4).
+- `hand_odds` with `as_of` (and `format`): the deck cut to that day's list first (`CardSetOdds.legalised`: a card's
+  allowance counted across the deck by card, the Extra and Side Decks' copies first, the Main Deck's last copies taken
+  out), the answer naming the list and what was taken out — "odds as of the March list".
+- Still to come (1.1.1): the builder's own legality against a dated list (a choice in the UI), and the field,
+  `expected_winrate` and `field_snapshot` with `as_of` (`FieldLegality.check`'s `limitOf` is where the list plugs in).
 
 ## 4. The field, read honestly (`core/ai/meta`, `core/prep/TestStats.kt`)
 
@@ -117,12 +120,15 @@ one OCG name is written `Allure of Darkness|sc`. The API answers 50 pages' wikit
 | Game 1 pooled with sided games. | Game 1 is played at the pre-side rates and games 2 and 3 at the post-side ones, each going first and second (`Row.preFirst/preSecond/postFirst/postSecond`, `matchWin` with four rates; the old two-rate form stays for callers that have only two). A split with no games falls back to its turn's pooled rate, so an old log reads as before; `MatchMath.field` draws the four the same way. |
 | `hand_odds` drops names it cannot resolve. | It says which it could not find ("Not found, so not counted"), and refuses if none of a set resolved; an `and_group` it cannot find is refused, not ignored. |
 | `hand_odds` is wrong when its two sets overlap. | Counted by `HandCounter` through `core/hand/CardSetOdds`, exact with overlap: a card in both sets counts for each, and the answer says how many are shared. |
-| `watch_video` returns a cut report as complete. | Already carried by the cut-off notices (1.0.98); checked again here. |
+| `watch_video` returns a cut report as complete. | It was not carried: a Gemini answer that stopped for any reason but `STOP` now ends with a cut-off note saying the rest is missing and not to treat the decklist or plan as complete (`GeminiVideo.cutNote`). |
 
 ## 5. Releases
 
-- **1.1.0** — §1, §2, the `hand_odds` leads, and §4. Stored-data changes: schema 4 (four columns), the pool refreshed once.
-- **1.1.1** — §3, banlist history and "as of" everywhere.
-- **1.1.2** — what the first two leave, and a legality-and-odds regression set in Trust (F1).
+- **1.1.0** (shipped together, as one release) — §1, §2, §3 and §4: counting by card, release data (schema 4, the pool
+  fetched once more), every banlist by date with `banlist`, `validate_deck`/`hand_odds` `as_of` and `ygo.banlist`/`legal`,
+  and the field read honestly. Stored-data changes: schema 4 (five columns), `PoolRecord.misc`, a new device-only cache
+  `<data>/banlists/`.
+- **1.1.1** — the builder's dated legality, the field and `expected_winrate` as of a date, and the Genesys switch.
+- **1.1.2** — a legality-and-odds regression set in Trust (F1).
 
 **Needs:** F3's versioned documents (the banlist file), Phase A's runner (the regression set).

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
@@ -90,8 +91,24 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
             val s = h.deps.deckRepository.byId(id) ?: return fail("No deck $id. list_decks shows the ids.")
             Triple(s.entry.name, s.entry.deck, DeckGroupsCodec.read(s.extended).groups)
         }
-        val main = deck.main
-        if (main.isEmpty()) return fail("“$name” has no Main Deck yet.")
+        if (deck.main.isEmpty()) return fail("“$name” has no Main Deck yet.")
+        // "Odds as of the March list" (Phase B): the deck with the copies that list does not allow taken out.
+        val asOf = ToolArgs.string(i, "as_of")?.trim()?.ifEmpty { null }
+        var main = deck.main
+        var dated = ""
+        if (asOf != null) {
+            val bans = AiBanlist(h)
+            val region = bans.region(ToolArgs.string(i, "format")) ?: state.format
+            val got = bans.listOn(region, asOf)
+            val list = got.list ?: return fail(got.problem ?: "No ${region.name} list for $asOf.")
+            val match = got.match ?: return fail(got.problem ?: "The ${list.title} could not be matched to the pool.")
+            val cut = CardSetOdds.legalised(deck, state.index::byId, match)
+            main = cut.main
+            if (main.isEmpty()) return fail("On the ${list.title} nothing of “$name”'s Main Deck is allowed.")
+            dated = "\nAs of ${Legality.readable(asOf)}, on the ${list.title} (Yugipedia, CC BY-SA): " +
+                (if (cut.removed.isEmpty()) "every copy allowed." else "taken out first: " + cut.removed.joinToString(", ") { (n, k) -> "$k × $n" } + ".") +
+                (got.note?.let { " $it" } ?: "")
+        }
         val groupNames = groups.groups.joinToString { it.name }.ifBlank { "it has none" }
 
         /** A set to count: its words, its cards, and the names that found no card (said, never dropped in silence). */
@@ -142,7 +159,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
                 )
         val missing = first.missing + second?.missing.orEmpty()
         val notFound = if (missing.isEmpty()) "" else "\nNot found, so not counted: ${missing.joinToString(", ") { "“$it”" }}."
-        return MetaAnswer("“$name”, $what:\n" + lines.joinToString("\n") + notFound, "Worked out the odds of $what")
+        return MetaAnswer("“$name”, $what:\n" + lines.joinToString("\n") + notFound + dated, "Worked out the odds of $what")
     }
 
     private fun pct(p: Double) = Calc.format(p * 100) + "%"

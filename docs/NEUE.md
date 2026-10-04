@@ -3913,6 +3913,29 @@ reloaded after a sync or a restore; `OldDataTest.aWorldFrom1097StillReads`; `Wor
 (typed, run, streamed, pinned, an instrument, Python allowed or not and its odds agreeing with the app's).
 `tools/shoot.sh --page=world --world=demo` photographs it.
 
+### 4s. Card truth (1.1.0, Phase B; `docs/phases/B.md`)
+
+The card data everything stands on, made correct:
+
+- **One card, whatever its printing** (`core/model/CardIdentity`): a card is the canonical passcode the index resolves
+  any printing to. The copy limit, the editor, the pool's badge, the inspector, `hand_odds`, the field and the library's
+  search all count by card, so two Ash and two alternate-art Ash are four. The deck keeps the printing chosen.
+- **Released where, and by when** (`Legality`): the pool is fetched with `misc=yes&format=genesys` and keeps each card's
+  Konami id, TCG and OCG dates, formats and Genesys points (schema 4, `migrations/3.sqm`; a pool from before is fetched
+  once more, `PoolRecord.misc`). The `formats` list decides where — a Speed Duel card has a TCG date and is no Advanced
+  card — and the date when. The builder checks as of today, Prep as of the event's day; the inspector badges "Not in the
+  TCG" or "Out 8 Oct 2026". A pool without the data is *unknown*, never illegal. `GenesysRules` (points, no Link or
+  Pendulum) is in core; the builder's Genesys switch waits for a format choice older builds can read.
+- **Every banlist, by date** (`core/cards`, `neue/banlist/BanlistCenter`): Yugipedia's `{{Limitation list}}` pages, 82
+  TCG and 88 OCG, parsed and kept as a device-only cache in `<data>/banlists/`; `BanSource` lets the validator check a
+  dated list. Ai's `banlist` (a day's list, a card's history, what moved), `validate_deck` and `hand_odds` with `as_of`
+  ("odds as of the March list": the deck cut to that list first, `CardSetOdds.legalised`), and the World's
+  `ygo.banlist`/`ygo.legal`.
+- **The field read honestly**: illegal lists dropped (`FieldLegality`), one window for every tier (`RecentDecks.window`),
+  average-linkage clustering that keeps hybrids apart, the mirror kept in the expected match win, Game 1 played at the
+  pre-side rates and games 2–3 at the sided ones (`TestStats`), `hand_odds` exact with overlapping sets and naming what
+  it could not find, and a Gemini video report cut short said to be cut.
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

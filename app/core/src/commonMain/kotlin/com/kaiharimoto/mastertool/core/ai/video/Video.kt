@@ -102,11 +102,16 @@ object GeminiVideo {
         val first = candidates.firstOrNull() as? JsonObject ?: error("Gemini sent no answer.")
         val parts = ((first["content"] as? JsonObject)?.get("parts") as? JsonArray).orEmpty()
         val text = parts.mapNotNull { ((it as? JsonObject)?.get("text") as? JsonPrimitive)?.contentOrNull }.joinToString("").trim()
-        if (text.isEmpty()) {
-            val why = (first["finishReason"] as? JsonPrimitive)?.contentOrNull
-            error("Gemini watched it and said nothing${why?.let { " ($it)" }.orEmpty()}.")
-        }
-        text
+        val why = (first["finishReason"] as? JsonPrimitive)?.contentOrNull
+        if (text.isEmpty()) error("Gemini watched it and said nothing${why?.let { " ($it)" }.orEmpty()}.")
+        // A report Gemini stopped short is never handed on as whole (red team, real-world data): said, at its end.
+        if (why != null && why != "STOP") text + "\n\n" + cutNote(why) else text
+    }
+
+    /** The words under a report Gemini did not finish: why it stopped, and that what follows is missing. */
+    fun cutNote(finishReason: String): String = when (finishReason) {
+        "MAX_TOKENS" -> "[Cut off: Gemini reached its length limit here, so the rest of the report is missing. Do not treat the decklist or plan above as complete.]"
+        else -> "[Cut off: Gemini stopped early ($finishReason), so the report may be incomplete. Do not treat it as complete.]"
     }
 
     /**

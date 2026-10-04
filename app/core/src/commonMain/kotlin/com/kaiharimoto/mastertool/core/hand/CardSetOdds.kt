@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.hand
 
+import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.deck.BanSource
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.CardIdentity
@@ -56,5 +58,34 @@ object CardSetOdds {
         val sets = needs.map { n -> CardIdentity.distinct(n.cards, cards).mapTo(HashSet()) { it.value.toString() } }
         val goal = listOf(needs.mapIndexed { i, n -> Bound(i, n.atLeast.coerceAtLeast(0), Goals.NO_MAX) })
         return HandCounter.of(deck, sets) to goal
+    }
+
+    /** A Main Deck cut to a list's limits, and what was taken out (each card's name and how many). */
+    data class Legalised(val main: List<CardId>, val removed: List<Pair<String, Int>>)
+
+    /**
+     * "Odds as of the March list" (Phase B): [deck]'s Main Deck with the copies that list does not allow taken out,
+     * so the odds are those of the deck as it could be played then. A card's allowance is counted across the whole
+     * deck by card (any printing); copies in the Extra and Side Decks use theirs first, and the Main Deck's last
+     * copies are the ones taken. A card the pool does not know is left as it is.
+     */
+    fun legalised(deck: Deck, cards: (CardId) -> Card?, limits: BanSource): Legalised {
+        val elsewhere = HashMap<CardId, Int>()
+        (deck.extra + deck.side).forEach { id -> CardIdentity.canonical(id, cards).let { elsewhere[it] = (elsewhere[it] ?: 0) + 1 } }
+        val allowed = HashMap<CardId, Int>()
+        val keep = BooleanArray(deck.main.size) { true }
+        val removed = LinkedHashMap<String, Int>()
+        deck.main.forEachIndexed { i, id ->
+            val card = cards(id) ?: return@forEachIndexed
+            val left = allowed.getOrPut(card.id) {
+                (minOf(Deck.MAX_COPIES, limits.statusOf(card).maxCopies) - (elsewhere[card.id] ?: 0)).coerceAtLeast(0)
+            }
+            if (left > 0) allowed[card.id] = left - 1
+            else {
+                keep[i] = false
+                removed[card.name] = (removed[card.name] ?: 0) + 1
+            }
+        }
+        return Legalised(deck.main.filterIndexed { i, _ -> keep[i] }, removed.toList())
     }
 }

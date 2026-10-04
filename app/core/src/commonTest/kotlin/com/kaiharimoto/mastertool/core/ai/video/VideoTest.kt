@@ -51,6 +51,9 @@ class VideoTest {
     fun geminisAnswerAndItsRefusalsAreRead() {
         val ok = """{"candidates":[{"content":{"parts":[{"text":"DECKLIST:\n3 x Arianna the Labrynth Servant"},{"text":"\nPLAN: grind"}]},"finishReason":"STOP"}]}"""
         assertEquals("DECKLIST:\n3 x Arianna the Labrynth Servant\nPLAN: grind", GeminiVideo.read(200, ok).getOrThrow())
+        val cut = """{"candidates":[{"content":{"parts":[{"text":"DECKLIST:\n3 x Arianna"}]},"finishReason":"MAX_TOKENS"}]}"""
+        val read = GeminiVideo.read(200, cut).getOrThrow()
+        assertTrue(read.startsWith("DECKLIST:\n3 x Arianna") && "Cut off: Gemini reached its length limit" in read, read)
         // As Google answers a bad key (September 2026).
         val badKey = """{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}"""
         assertTrue(GeminiVideo.read(400, badKey).exceptionOrNull()!!.message!!.startsWith("The Gemini key was refused"))

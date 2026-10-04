@@ -1,6 +1,5 @@
 package com.kaiharimoto.neue.ai
 
-import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.ai.Recall
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker

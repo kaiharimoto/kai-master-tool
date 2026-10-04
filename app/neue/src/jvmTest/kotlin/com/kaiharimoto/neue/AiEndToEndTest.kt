@@ -253,6 +253,18 @@ class AiEndToEndTest {
         assertFalse("Raigeki is" in feb2.content, feb2.content)
         assertFalse("Raigeki is" in h.tool("validate_deck").content, "today's pool has Raigeki unlimited")
         assertTrue(h.tool("validate_deck", "as_of" to "1999-01-01").isError)
+
+        // "Odds as of the March list": the copies that list forbids are out of the deck first.
+        val today = h.tool("hand_odds", "cards" to listOf("Raigeki"))
+        assertTrue("(3 in 4)" in today.content, today.content)
+        val may2 = h.tool("hand_odds", "cards" to listOf("Ash Blossom & Joyous Spring"), "as_of" to "2025-05-01")
+        assertFalse(may2.isError, may2.content)
+        assertTrue("(1 in 1)" in may2.content, may2.content)
+        assertTrue("on the April 2025 Lists (TCG) (Yugipedia, CC BY-SA): taken out first: 3 × Raigeki." in may2.content, may2.content)
+        val feb3 = h.tool("hand_odds", "cards" to listOf("Raigeki"), "as_of" to "2025-02-01")
+        assertTrue("every copy allowed." in feb3.content && "(3 in 4)" in feb3.content, feb3.content)
+        val gone = h.tool("hand_odds", "cards" to listOf("Raigeki"), "as_of" to "2025-05-01")
+        assertTrue("(0 in 1)" in gone.content, "a forbidden card is a chance of nothing, said as such: " + gone.content)
     }
 
     @Test
