@@ -74,7 +74,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventType
 import com.kaiharimoto.neue.kit.onPointer
 import androidx.compose.ui.input.pointer.isShiftPressed
-import androidx.compose.ui.zIndex
+import androidx.compose.runtime.key
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.unit.Constraints
+import com.kaiharimoto.mastertool.core.model.CardId
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import com.kaiharimoto.mastertool.core.motion.ZenFloat
@@ -931,11 +938,14 @@ private fun DeckSectionPane(
     }
 
     // In zen a card carried out of this section, or put down beyond it, is drawn over
-    // the sections below it: the pane is as high as its highest card.
-    val paneLayer = if (zen.deep > 0f) ids.indices.maxOfOrNull { zen.layerOf(ZenArrangement.key(section.ordinal, it)) } ?: 0f else 0f
+    // the sections below it: the pane is as high as its highest card. Worked out as the
+    // pane is placed, and only told when it changes, so zen's fade never recomposes the pane.
+    val paneLayer = remember(zen, section, ids.size) {
+        derivedStateOf { if (zen.deep > 0f) (0 until ids.size).maxOfOrNull { zen.layerOf(ZenArrangement.key(section.ordinal, it)) } ?: 0f else 0f }
+    }
     Column(
         Modifier
-            .zIndex(paneLayer)
+            .zIndexAsPlaced { paneLayer.value }
             .fillMaxWidth()
             .onGloballyPositioned { coords ->
                 laid.pane = coords.boundsInWindow()
@@ -1080,7 +1090,10 @@ private fun DeckSectionPane(
                     }
                 }
 
-                ids.forEachIndexed { position, id ->
+                // Each card keyed by its passcode and which copy it is (1.0.92), so what a card
+                // remembers (its press, its art, its glide) stays with it when the deck is edited.
+                val copyOf = remember(ids) { copyNumbers(ids) }
+                ids.forEachIndexed { position, id -> key(id, copyOf[position]) {
                     val card = state.index.byId(id)
                     val keyId = keying.keyAt(position)
                     val key = keying.keyById(keyId)
@@ -1115,7 +1128,12 @@ private fun DeckSectionPane(
                             }
                             .size(with(density) { (r - l).toDp() }, with(density) { (b - t).toDp() })
                             // A selected card over its neighbours, so its frame is seen whole (1.0.41).
-                            .zIndex(zen.layerOf(zenKey).takeIf { it > 0f } ?: if ((neue.selection as? Selection.InDeck)?.let { it.section == section && it.index == position } == true) 2f else if (position == onTop) 1f else 0f)
+                            // Read as the card is placed: the bump crossing a card, or zen's layers
+                            // shifting, places the cards again and recomposes none of them.
+                            .zIndexAsPlaced {
+                                zen.layerOf(zenKey).takeIf { it > 0f }
+                                    ?: if ((neue.selection as? Selection.InDeck)?.let { it.section == section && it.index == position } == true) 2f else if (position == onTop) 1f else 0f
+                            }
                             // The carried card's own place is the slot it will land in: a faint ghost of it.
                             .alpha(if (held) 0.3f else if (covered) 0.3f else 1f),
                     ) {
@@ -1174,7 +1192,7 @@ private fun DeckSectionPane(
                             }
                         }
                     }
-                }
+                } }
 
                 // Where a card from elsewhere will land: a 2px ink bar in the gap, on the row the
                 // pointer is in (1.0.39). A card of this section opens its own slot instead, and
@@ -1208,6 +1226,38 @@ private fun DeckSectionPane(
             }
         }
         HRule(Modifier.zenQuiet(), color = c.ink)
+    }
+}
+
+/**
+ * `Modifier.zIndex`, with the index worked out as the element is placed (1.0.92): what it
+ * reads places the element again when it changes, rather than recomposing what wears it.
+ * Measured and placed exactly as `zIndex` does it — at the origin, at [z].
+ */
+private fun Modifier.zIndexAsPlaced(z: () -> Float): Modifier = this then ZIndexAsPlacedElement(z)
+
+private data class ZIndexAsPlacedElement(val z: () -> Float) : ModifierNodeElement<ZIndexAsPlacedNode>() {
+    override fun create() = ZIndexAsPlacedNode(z)
+
+    override fun update(node: ZIndexAsPlacedNode) {
+        node.z = z
+    }
+}
+
+private class ZIndexAsPlacedNode(var z: () -> Float) : Modifier.Node(), LayoutModifierNode {
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val placeable = measurable.measure(constraints)
+        return layout(placeable.width, placeable.height) { placeable.place(0, 0, zIndex = z()) }
+    }
+}
+
+/** Which copy of its card each position holds, 0 for the first: with the passcode, a card's key in its section. */
+private fun copyNumbers(ids: List<CardId>): IntArray {
+    val seen = HashMap<CardId, Int>()
+    return IntArray(ids.size) { i ->
+        val n = seen[ids[i]] ?: 0
+        seen[ids[i]] = n + 1
+        n
     }
 }
 

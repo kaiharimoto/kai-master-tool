@@ -83,6 +83,20 @@ data class BandLayout(
 data class BandMemory(val columns: Int, val shapes: Map<String, Pair<Int, Int>>)
 
 /**
+ * A deck's bands as solved at each width, kept from one [GroupBands.layout] to the next
+ * (1.0.92). The solutions depend only on the deck, its keys, the groups' order, the Fitted
+ * order and the memory; the pane, the other rows and the gaps only weigh them. So a pinch
+ * or a Shift-wheel opening the gaps weighs the same solutions again instead of solving the
+ * deck at every width on every step — the layout it picks is the same either way. Kept for
+ * one deck at a time; not for use from two threads at once.
+ */
+class BandSolves {
+    internal var from: List<Any?>? = null
+    internal val byWidth = HashMap<Int, GroupBands.Solved?>()
+    internal var packs: GroupBands.PackMemo? = null
+}
+
+/**
  * The band layout (1.0.37), found over a long design run with kai:
  *
  * 1. **A copy set is one thing to the eye.** A 3-of is a strip of three and never
@@ -150,10 +164,49 @@ object GroupBands {
         gapY: Float = 0f,
         /** The Fitted order (`DeckGroups.fitted`): a group's copy sets in this order, any not in it after, as the deck reads. */
         setOrder: List<Int> = emptyList(),
+        /** The deck's bands solved before, kept for the next layout of the same deck ([BandSolves]); null keeps nothing. */
+        solves: BandSolves? = null,
+    ): BandLayout? = solveLayout(ids, keys, order, pane, otherRows, cardAspect, memory, widths, gapX, gapY, setOrder, solves, packMemo = true)
+
+    /**
+     * [layout], with every block packed afresh when [packMemo] is false: the arithmetic as it
+     * was before 1.0.92, which the tests hold the memoised one to.
+     */
+    internal fun solveLayout(
+        ids: List<Int>,
+        keys: List<String?>,
+        order: List<String>,
+        pane: Pair<Float, Float>,
+        otherRows: Int,
+        cardAspect: Float,
+        memory: BandMemory?,
+        widths: IntRange?,
+        gapX: Float,
+        gapY: Float,
+        setOrder: List<Int>,
+        solves: BandSolves?,
+        packMemo: Boolean,
     ): BandLayout? {
         if (ids.isEmpty() || ids.size != keys.size) return null
         val groups = groupsOf(ids, keys, order, setOrder)
         val n = ids.size
+        // What the solutions are worked out from: the pane, the other rows and the gaps only weigh them.
+        val solvedFrom = listOf(ids, keys, order, setOrder, memory)
+        if (solves != null && solves.from != solvedFrom) {
+            solves.from = solvedFrom
+            solves.byWidth.clear()
+            solves.packs = PackMemo(groups)
+        }
+        val packs: (Int, Int) -> Block? = when {
+            !packMemo -> { q, w -> pack(groups[q].sets, w) }
+            solves != null -> solves.packs!!::get
+            else -> PackMemo(groups)::get
+        }
+        fun solve(w: Int): Solved? {
+            if (solves == null) return Solver(groups, w, memory, packs).solve()
+            if (solves.byWidth.containsKey(w)) return solves.byWidth[w]
+            return Solver(groups, w, memory, packs).solve().also { solves.byWidth[w] = it }
+        }
         val range = widths ?: (min(MIN_WIDTH, n)..min(MAX_WIDTH, max(n, 1)))
         // The card each shape leaves room for: across, the cards and the gaps between stacks;
         // down, the rows, the gaps between bands, and the other sections' rows at this width.
@@ -165,7 +218,7 @@ object GroupBands {
         // whole row appearing at the forty-first card would move the floor, and the deck, at once.
         val plainRows = max(n, PLAIN_BASELINE).toFloat() / PLAIN_COLUMNS
         val candidates = range.mapNotNull { w ->
-            Solver(groups, w, memory).solve()?.let { it to card(w, it.rows.toFloat(), it.spanX, it.spanY) }
+            solve(w)?.let { it to card(w, it.rows.toFloat(), it.spanX, it.spanY) }
         }
         val plain = card(PLAIN_COLUMNS, plainRows, 0, 0)
         val floor = plain * AS_IS_SHARE
@@ -304,11 +357,11 @@ object GroupBands {
 
     // ---- the deck's bands ------------------------------------------------------
 
-    private class Placed(val group: Int, val block: Block)
+    internal class Placed(val group: Int, val block: Block)
 
-    private class Band(val height: Int, val stacks: List<List<Placed>>)
+    internal class Band(val height: Int, val stacks: List<List<Placed>>)
 
-    private class Solved(val cost: Float, val width: Int, val bands: List<Band>) {
+    internal class Solved(val cost: Float, val width: Int, val bands: List<Band>) {
         val rows: Int get() = bands.sumOf { it.height }
 
         /** The most gaps across any band (between its stacks), and down the deck (between bands and stacked blocks). */
@@ -349,11 +402,26 @@ object GroupBands {
         }
     }
 
-    private class Solver(val groups: List<Group>, val width: Int, val memory: BandMemory?) {
+    /**
+     * Each group's best block at each width, packed once (1.0.92): every width the deck is
+     * tried at asks for the same blocks again, and [pack] is a search.
+     */
+    internal class PackMemo(private val groups: List<Group>) {
+        private val packs = HashMap<Long, Block?>()
+
+        fun get(group: Int, width: Int): Block? {
+            val key = (group.toLong() shl 32) or width.toLong()
+            if (packs.containsKey(key)) return packs[key]
+            return pack(groups[group].sets, width).also { packs[key] = it }
+        }
+    }
+
+    /** [packs] is [pack] for group q at a width: packed afresh, or remembered ([PackMemo]). */
+    private class Solver(val groups: List<Group>, val width: Int, val memory: BandMemory?, packs: (Int, Int) -> Block?) {
         val k = groups.size
-        val options: List<List<Block>> = groups.map { g ->
+        val options: List<List<Block>> = groups.mapIndexed { q, g ->
             val widest = g.sets.maxOf { it.second }
-            (widest..min(g.size, width)).mapNotNull { pack(g.sets, it) }
+            (widest..min(g.size, width)).mapNotNull { packs(q, it) }
         }
 
         fun cost(q: Int, b: Block): Float {

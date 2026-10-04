@@ -157,6 +157,7 @@ import com.kaiharimoto.neue.shell.PhoneBar
 import com.kaiharimoto.neue.shell.TabBar
 import com.kaiharimoto.neue.builder.NeueDrag
 import com.kaiharimoto.neue.builder.rememberCarryMotion
+import com.kaiharimoto.neue.builder.CarriedCard
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Body
@@ -711,7 +712,8 @@ private fun Shell(h: NeueHolders) {
             .onSizeChanged { h.zen.window = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }
             // The family cursor draws the pointer; the system's is hidden everywhere in the
             // window, over every child's own icon, unless the cursor has stepped aside.
-            .pointerHoverIcon(if (h.cursor.native) PointerIcon.Default else FamilyCursor.BLANK, overrideDescendants = true)
+            // Read through a derived state, so the shell recomposes when it changes, not on every move.
+            .pointerHoverIcon(if (h.cursor.nativeNow.value) PointerIcon.Default else FamilyCursor.BLANK, overrideDescendants = true)
             .windowPointer(h, neue, state, measured),
     ) {
         // A phone (v1.3.5): the slim bar, and the pages as tabs along the bottom — or,
@@ -807,31 +809,10 @@ private fun Shell(h: NeueHolders) {
         // exception to Master UI's stillness, and only ever on a card.
         // A finger's card rides above the finger, where it can be seen, and lands where it
         // is drawn (touch swarm, rec 12: CarryOffset); a mouse's is centred on the pointer.
+        // Its own composable (1.0.92): the pointer is read as it is placed, not here, so the
+        // shell does not recompose on every move of a carried card.
         val carry = rememberCarryMotion(h.drag)
-        h.drag.held?.let { held ->
-            val drawn = h.drag.drawn() ?: return@let
-            Box(
-                Modifier
-                    .offset { IntOffset(drawn.left.toInt(), drawn.top.toInt()) }
-                    .size(with(density) { drawn.width.toDp() }, with(density) { drawn.height.toDp() }),
-            ) {
-                NeueCard(
-                    held.card,
-                    Modifier.fillMaxSize(),
-                    format = state.format,
-                    foil = neue.prefs.foil,
-                    outlined = true,
-                    motion = { carry.pose(drawn.width) },
-                )
-                // A drop that would be refused says so on the card itself, where the eye is.
-                if (h.drag.refused) {
-                    Hatch(Modifier.matchParentSize(), color = c.ink25)
-                    Box(Modifier.align(Alignment.Center).background(c.paper).padding(horizontal = 4.dp)) {
-                        Micro("✕", color = c.ink)
-                    }
-                }
-            }
-        }
+        h.drag.held?.let { held -> CarriedCard(h.drag, held, carry, state.format, neue.prefs.foil) }
 
         // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
         if (neue.aiSheet) AiPanel(h, Modifier.fillMaxSize(), phone = true)

@@ -3,6 +3,7 @@ package com.kaiharimoto.neue.builder
 import com.kaiharimoto.mastertool.core.deck.Lens
 import com.kaiharimoto.mastertool.core.layout.BandLayout
 import com.kaiharimoto.mastertool.core.layout.BandMemory
+import com.kaiharimoto.mastertool.core.layout.BandSolves
 import com.kaiharimoto.mastertool.core.layout.GroupArrangement
 import com.kaiharimoto.mastertool.core.layout.GroupBands
 import com.kaiharimoto.mastertool.core.layout.GroupRows
@@ -28,6 +29,9 @@ internal class BandCache {
     val last: BandLayout? get() = result
     private var memory: BandMemory? = null
     private var room: Any? = null
+
+    /** The deck's bands as solved at each width (1.0.92): a pinch on the gaps re-weighs them rather than solving again. */
+    private val solves = BandSolves()
 
     fun layout(
         deckId: String?,
@@ -57,7 +61,7 @@ internal class BandCache {
         result = if (separate) {
             GroupRows.layout(ids, keys, order, pane, otherRows, gapY = gaps.second, setOrder = setOrder)
         } else {
-            GroupBands.layout(ids, keys, order, pane, otherRows, memory = memory, gapX = gaps.first, gapY = gaps.second, setOrder = setOrder)
+            GroupBands.layout(ids, keys, order, pane, otherRows, memory = memory, gapX = gaps.first, gapY = gaps.second, setOrder = setOrder, solves = solves)
         }
         result?.let { memory = it.memory }
         return result

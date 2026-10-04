@@ -150,13 +150,14 @@ fun Meter(on: Int, cells: Int, modifier: Modifier = Modifier) {
  */
 @Composable
 fun Hatch(modifier: Modifier = Modifier, live: Boolean = false, color: Color = Mu.colors.ink) {
+    // The drift is read in the draw, so a live hatch redraws without recomposing.
     val shift = if (live) {
         val t = rememberInfiniteTransition(label = "hatch")
-        t.animateFloat(0f, 16f, infiniteRepeatable(tween(600, easing = LinearEasing)), label = "drift").value
+        t.animateFloat(0f, 16f, infiniteRepeatable(tween(600, easing = LinearEasing)), label = "drift")
     } else {
-        0f
+        null
     }
-    Canvas(modifier.clipToBounds()) { drawHatch(color, shift.dp.toPx()) }
+    Canvas(modifier.clipToBounds()) { drawHatch(color, (shift?.value ?: 0f).dp.toPx()) }
 }
 
 fun DrawScope.drawHatch(color: Color, shift: Float = 0f, period: Float = 8.dp.toPx(), stroke: Float = 1.dp.toPx()) {
@@ -173,13 +174,20 @@ fun DrawScope.drawHatch(color: Color, shift: Float = 0f, period: Float = 8.dp.to
 /** The 6px square that breathes while something runs (§7). Never on text. */
 @Composable
 fun Breathe(modifier: Modifier = Modifier, running: Boolean = true, color: Color = Mu.colors.ink) {
+    // The breath is read in the draw, so the square redraws without recomposing.
     val alpha = if (running) {
         val t = rememberInfiniteTransition(label = "breathe")
-        t.animateFloat(1f, 0.35f, infiniteRepeatable(tween(1200, easing = MuMotion.ease), RepeatMode.Reverse), label = "a").value
+        t.animateFloat(1f, 0.35f, infiniteRepeatable(tween(1200, easing = MuMotion.ease), RepeatMode.Reverse), label = "a")
     } else {
-        1f
+        null
     }
-    Box(modifier.size(6.dp).background(color.copy(alpha = color.alpha * alpha)))
+    Box(
+        modifier.size(6.dp).drawBehind {
+            // What `background` draws: the colour over the whole box, unless it is unspecified.
+            val shown = color.copy(alpha = color.alpha * (alpha?.value ?: 1f))
+            if (shown != Color.Unspecified) drawRect(shown)
+        },
+    )
 }
 
 /** Empty state (§6): a display sentence with a full stop, one line under it, an optional action. */

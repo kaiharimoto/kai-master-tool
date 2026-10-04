@@ -3,8 +3,9 @@ package com.kaiharimoto.neue.cursor
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -15,7 +16,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -26,10 +26,18 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.pointer.PointerInputEventHandler
+import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
+import androidx.compose.ui.node.DelegatingNode
+import androidx.compose.ui.node.GlobalPositionAwareModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.currentValueOf
+import androidx.compose.ui.node.requireDensity
+import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -37,6 +45,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -50,6 +59,7 @@ import com.kaiharimoto.mastertool.core.input.CursorTarget
 import com.kaiharimoto.neue.kit.LocalKeepCase
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
+import com.kaiharimoto.neue.theme.MuFonts
 
 /**
  * The Master UI family cursor, **Crop caption**, in Compose — the same pointer
@@ -115,6 +125,12 @@ class FamilyCursor {
     val native: Boolean
         get() = resolve().first == CursorMode.NATIVE
 
+    /**
+     * [native] as a state that changes only when it does: what the shell's pointer icon
+     * reads, so the window does not recompose on every move of the pointer.
+     */
+    val nativeNow: State<Boolean> = derivedStateOf { native }
+
     /** The window's pointer watcher reports here. */
     fun moved(at: Offset?, buttonsDown: Boolean) {
         position = at
@@ -141,13 +157,21 @@ class FamilyCursor {
 /** A target the cursor knows about: what it is, and where it is. */
 internal class CursorHook {
     var holdOnPress = false
-    var spec by mutableStateOf(CursorTarget(CursorMode.DEFAULT, CursorBox(0f, 0f, 0f, 0f)))
+
+    /**
+     * What the target is, with no bounds of its own: [target] puts in where it is now. Kept
+     * apart from [bounds] so a target that moves (every card on a scroll or a glide) changes
+     * only [bounds], which only the cursor's layer reads, in its draw.
+     */
+    var spec by mutableStateOf(CursorTarget(CursorMode.DEFAULT, NO_BOX))
     var bounds by mutableStateOf(Rect.Zero)
 
     fun box(): CursorBox = CursorBox(bounds.left, bounds.top, bounds.width, bounds.height)
 
     fun target(): CursorTarget = spec.copy(bounds = box())
 }
+
+private val NO_BOX = CursorBox(0f, 0f, 0f, 0f)
 
 val LocalCursor = staticCompositionLocalOf<FamilyCursor?> { null }
 
@@ -161,6 +185,10 @@ val LocalCursor = staticCompositionLocalOf<FamilyCursor?> { null }
  * - [value]: `data-cursor-value`, a drag's live value as people read it: `440 px`.
  * - [fontSize], [singleLine], [focused]: what a text field's caret needs.
  * - [slider]: a horizontal range.
+ *
+ * A modifier node (1.0.92), not `composed {}`: two calls with the same words are equal,
+ * so what wears one (every card) can skip recomposing, and nothing here is read in
+ * composition — where the target is goes to the cursor without a recomposition.
  */
 fun Modifier.cursor(
     mode: CursorMode,
@@ -176,46 +204,140 @@ fun Modifier.cursor(
     emphasis: Boolean = false,
     /** Keep the cursor on this target while the button is held, as a drag does: a thing carried under the pointer. */
     holdOnPress: Boolean = false,
-): Modifier = composed {
-    val cursor = LocalCursor.current ?: return@composed Modifier
-    val density = LocalDensity.current
-    val hook = remember { CursorHook() }
-    val px = with(density) { if (fontSize.isSp) fontSize.toPx() else 14.sp.toPx() }
-    hook.spec = CursorTarget(
+): Modifier = this then CursorElement(
+    CursorWords(mode, caption, label, showsWords, reason, value, fontSize, singleLine, focused, slider, emphasis),
+    holdOnPress,
+)
+
+/** Everything a target says about itself, as given: its font size still in its own unit. */
+private data class CursorWords(
+    val mode: CursorMode,
+    val caption: String?,
+    val label: String?,
+    val showsWords: Boolean,
+    val reason: String?,
+    val value: String?,
+    val fontSize: TextUnit,
+    val singleLine: Boolean,
+    val focused: Boolean,
+    val slider: Boolean,
+    val emphasis: Boolean,
+) {
+    /** The target at [density]: a font size not in sp is the kit's 14 sp. */
+    fun spec(density: Density): CursorTarget = CursorTarget(
         mode = mode,
-        bounds = hook.box(),
+        bounds = NO_BOX,
         caption = caption,
         label = label,
         showsWords = showsWords,
         reason = reason,
         value = value,
-        fontSize = px,
+        fontSize = with(density) { if (fontSize.isSp) fontSize.toPx() else 14.sp.toPx() },
         singleLine = singleLine,
         focused = focused,
         slider = slider,
         emphasis = emphasis,
     )
-    hook.holdOnPress = holdOnPress
-    DisposableEffect(hook) {
-        onDispose {
-            cursor.hovered.remove(hook)
-            if (cursor.locked === hook) cursor.locked = null
-        }
+}
+
+private data class CursorElement(val words: CursorWords, val holdOnPress: Boolean) : ModifierNodeElement<CursorNode>() {
+    override fun create() = CursorNode(words, holdOnPress)
+
+    override fun update(node: CursorNode) = node.update(words, holdOnPress)
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "cursor"
+        properties["words"] = words
+        properties["holdOnPress"] = holdOnPress
     }
-    Modifier
-        .onGloballyPositioned { hook.bounds = it.boundsInWindow() }
-        .pointerInput(hook) {
-            // Hover, as Compose's hit testing sees it: what occludes a click occludes this.
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    when (event.type) {
-                        PointerEventType.Exit -> cursor.hovered.remove(hook)
-                        else -> if (hook !in cursor.hovered) cursor.hovered.add(hook)
+}
+
+/**
+ * A target's hook: hovered as Compose's hit testing sees it, its bounds kept as it is
+ * placed, and let go of as it leaves — what `composed {}` did with a remembered hook, a
+ * `DisposableEffect` and a `pointerInput` keyed on the hook.
+ */
+private class CursorNode(
+    private var words: CursorWords,
+    private var holdOnPress: Boolean,
+) : DelegatingNode(), CompositionLocalConsumerModifierNode, GlobalPositionAwareModifierNode {
+    private var cursor: FamilyCursor? = null
+    private var hook = CursorHook()
+
+    /** The density the spec was worked out at: a new one (the scale setting) works it out again. */
+    private var specDensity = Float.NaN
+    private var specFontScale = Float.NaN
+
+    // Nothing here draws, measures or places: an update has nothing to invalidate.
+    override val shouldAutoInvalidate: Boolean get() = false
+
+    init {
+        delegate(
+            SuspendingPointerInputModifierNode(
+                PointerInputEventHandler {
+                    val cursor = cursor ?: return@PointerInputEventHandler
+                    // Hover, as Compose's hit testing sees it: what occludes a click occludes this.
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val hook = hook
+                            when (event.type) {
+                                PointerEventType.Exit -> cursor.hovered.remove(hook)
+                                else -> if (hook !in cursor.hovered) cursor.hovered.add(hook)
+                            }
+                        }
                     }
-                }
-            }
-        }
+                },
+            ),
+        )
+    }
+
+    override fun onAttach() {
+        cursor = currentValueOf(LocalCursor)
+        hook.holdOnPress = holdOnPress
+        respec(force = true)
+    }
+
+    fun update(words: CursorWords, holdOnPress: Boolean) {
+        val changed = words != this.words
+        this.words = words
+        this.holdOnPress = holdOnPress
+        hook.holdOnPress = holdOnPress
+        if (changed && isAttached) respec(force = true)
+    }
+
+    /** The spec, worked out again when the words or the density changed; an equal spec writes nothing. */
+    private fun respec(force: Boolean) {
+        val density = requireDensity()
+        if (!force && density.density == specDensity && density.fontScale == specFontScale) return
+        specDensity = density.density
+        specFontScale = density.fontScale
+        hook.spec = words.spec(density)
+    }
+
+    override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
+        // A new density moves everything, so it is seen here.
+        respec(force = false)
+        hook.bounds = coordinates.boundsInWindow()
+    }
+
+    private fun letGo() {
+        val cursor = cursor ?: return
+        cursor.hovered.remove(hook)
+        if (cursor.locked === hook) cursor.locked = null
+    }
+
+    override fun onReset() {
+        // Reused for another item (a lazy list's): a new target, as a new composition had.
+        letGo()
+        hook = CursorHook().also { it.holdOnPress = holdOnPress }
+        respec(force = true)
+    }
+
+    override fun onDetach() {
+        letGo()
+        cursor = null
+    }
 }
 
 /** A clickable thing: framed, captioned with [caption] (or [label] when it shows no words), `✕` and [reason] when not [enabled]. */
@@ -251,6 +373,10 @@ fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
     val keep = LocalKeepCase.current
     val measurer = rememberTextMeasurer()
     val motion = remember { CursorMotion() }
+    // Made once, not on every move: the styles, and the caption's text while its words stand.
+    val crossStyle = remember(fonts) { TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Bold, fontSize = 9.sp) }
+    val captionStyle = remember(fonts) { TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.08.em) }
+    val captionText = remember { CaptionText() }
 
     // A frame clock only while something is moving on its own: a snap, a caption
     // fading, or busy. Following the pointer needs none — every move redraws.
@@ -301,7 +427,7 @@ fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
             rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(Color.White.copy(alpha = alpha), r.topLeft, r.size, blendMode = BlendMode.Difference) } }
         }
         if (mode == CursorMode.NO) {
-            val cross = measurer.measure("✕", TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Bold, fontSize = 9.sp))
+            val cross = measurer.measure("✕", crossStyle)
             drawText(
                 cross,
                 color = Color.White,
@@ -323,18 +449,8 @@ fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
         val shown = motion.caption(words, clock)
         val cap = motion.lastCaption ?: return@Canvas
         if (shown <= 0.001f) return@Canvas
-        val text = buildAnnotatedString {
-            // Caps, but the assistant's name as it is written (MicroCaps).
-            if (cap.text.isNotEmpty()) append(MicroCaps.of(cap.text, keep))
-            if (cap.value.isNotEmpty()) {
-                if (cap.text.isNotEmpty()) append(" ")
-                withStyle(SpanStyle(fontFamily = fonts.mono, fontWeight = FontWeight.Normal, letterSpacing = 0.em)) { append(cap.value) }
-            }
-        }
-        val layout = measurer.measure(
-            text,
-            TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.08.em),
-        )
+        val text = captionText.of(cap, keep, fonts)
+        val layout = measurer.measure(text, captionStyle)
         val busyNow = mode == CursorMode.BUSY
         // The breathing square and its 6 px gap, when busy.
         val square = if (busyNow) 12f else 0f
@@ -390,6 +506,31 @@ private fun markRects(corner: Offset, dir: Pair<Float, Float>, arm: Float, weigh
     val vx = if (dx > 0) corner.x else corner.x - weight
     val vy = if (dy > 0) corner.y + weight else corner.y - arm
     return listOf(Rect(Offset(x0, hy), Size(arm, weight)), Rect(Offset(vx, vy), Size(weight, arm - weight)))
+}
+
+/** The caption's text, built again only when its words, the kept names or the fonts change. Plain: read in the draw. */
+private class CaptionText {
+    private var cap: CursorCaption? = null
+    private var keep: Set<String>? = null
+    private var fonts: MuFonts? = null
+    private var text: AnnotatedString? = null
+
+    fun of(cap: CursorCaption, keep: Set<String>, fonts: MuFonts): AnnotatedString {
+        text?.let { if (cap == this.cap && keep == this.keep && fonts == this.fonts) return it }
+        val built = buildAnnotatedString {
+            // Caps, but the assistant's name as it is written (MicroCaps).
+            if (cap.text.isNotEmpty()) append(MicroCaps.of(cap.text, keep))
+            if (cap.value.isNotEmpty()) {
+                if (cap.text.isNotEmpty()) append(" ")
+                withStyle(SpanStyle(fontFamily = fonts.mono, fontWeight = FontWeight.Normal, letterSpacing = 0.em)) { append(cap.value) }
+            }
+        }
+        this.cap = cap
+        this.keep = keep
+        this.fonts = fonts
+        text = built
+        return built
+    }
 }
 
 /** The cursor's own transitions, advanced by the clock the layer is drawn at. */
