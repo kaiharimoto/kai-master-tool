@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.dice.Toss
 import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
@@ -346,6 +347,9 @@ class Duels(val dir: File) {
     fun resumeTurn() = opener.resumeTurn()
     var openingRoll by opener::openingRoll
     var diceCarry by opener::diceCarry
+    var chanceCarry by opener::chanceCarry
+    var chanceRolling by opener::chanceRolling
+    fun throwChance(seat: Int, coin: Boolean, toss: Toss? = null) = opener.throwChance(seat, coin, toss)
     var diceRolling by opener::diceRolling
     var aiOpeningSeat by opener::aiOpeningSeat
     fun mayRoll(seat: Int, playsBoth: Boolean): Boolean = opener.mayRoll(seat, playsBoth)

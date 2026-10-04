@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.duel
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
+import com.kaiharimoto.mastertool.core.duel.dice.Toss
 import kotlin.random.Random
 
 /** What applying an action came to: the next table, or why the table could not do it. */
@@ -83,7 +84,9 @@ object DuelRules {
             is DuelAction.Target -> target(s, a)
             is DuelAction.Attack -> attack(s, a)
             is DuelAction.Reveal -> reveal(s, a)
-            is DuelAction.Coin, is DuelAction.Dice, is DuelAction.Chat, is DuelAction.Ping, is DuelAction.Note,
+            is DuelAction.Coin -> ok(thrown(s, a.seat, coin = true, if (a.heads) 1 else 0, a.toss))
+            is DuelAction.Dice -> ok(thrown(s, a.seat, coin = false, a.value, a.toss))
+            is DuelAction.Chat, is DuelAction.Ping, is DuelAction.Note,
             is DuelAction.Unknown -> ok(s)
             is DuelAction.Thinking -> ok(s.copy(thinking = if (a.on) s.thinking + a.seat else s.thinking - a.seat))
             is DuelAction.Answer -> ok(s.copy(window = null))
@@ -91,11 +94,21 @@ object DuelRules {
             is DuelAction.OpeningRoll -> Opening.roll(s, a)
             is DuelAction.GoFirst -> Opening.choose(s, a)
         }
+        // The die and the coin are put back by the next move that is not talk or chance (1.0.96).
+        val moved = out is Outcome.Ok && out.state.chance.isNotEmpty() && !a.social &&
+            a !is DuelAction.Coin && a !is DuelAction.Dice && a !is DuelAction.Thinking && a !is DuelAction.Answer
+        val after = if (moved) Outcome.Ok((out as Outcome.Ok).state.copy(chance = emptyList())) else out
         // A seat that acts is no longer thinking.
-        if (out is Outcome.Ok && by != null && !a.social && by in out.state.thinking) {
-            return Outcome.Ok(out.state.copy(thinking = out.state.thinking - by))
+        if (after is Outcome.Ok && by != null && !a.social && by in after.state.thinking) {
+            return Outcome.Ok(after.state.copy(thinking = after.state.thinking - by))
         }
-        return out
+        return after
+    }
+
+    /** [seat]'s die or coin landed on the table, in place of the last one; a roll with no throw (before 1.0.96) lies nowhere. */
+    private fun thrown(s: DuelState, seat: Int, coin: Boolean, value: Int, toss: Toss?): DuelState {
+        if (toss == null || seat !in s.seats.indices) return s
+        return s.copy(chance = s.chance.filterNot { it.seat == seat && it.coin == coin } + Chance(seat, coin, value, toss))
     }
 
     /** Applies [actions] in order, all or nothing: the first refusal names its index. */
@@ -507,8 +520,9 @@ object DuelRandom {
     /** Fills in what [a] leaves to chance: a shuffle's salt, a coin, a die. Everything else is returned as it came. */
     fun stamp(a: DuelAction, random: Random): DuelAction = when (a) {
         is DuelAction.Shuffle -> a.copy(salt = random.nextLong())
-        is DuelAction.Coin -> a.copy(heads = random.nextBoolean())
-        is DuelAction.Dice -> a.copy(value = random.nextInt(1, 7))
+        // The value first, then the throw when no hand made one (1.0.96): what it reads is what it read before throws.
+        is DuelAction.Coin -> a.copy(heads = random.nextBoolean()).let { c -> c.copy(toss = a.toss?.takeIf { it.valid }?.rounded() ?: Toss.randomCoin(random)) }
+        is DuelAction.Dice -> a.copy(value = random.nextInt(1, 7)).let { d -> d.copy(toss = a.toss?.takeIf { it.valid }?.rounded() ?: Toss.randomDie(random)) }
         is DuelAction.Pick -> a.copy(salt = random.nextLong())
         // The opening roll's two dice (1.0.87), and a throw for them when no hand made one: the values first, so a
         // throw made by hand never changes what the dice read.

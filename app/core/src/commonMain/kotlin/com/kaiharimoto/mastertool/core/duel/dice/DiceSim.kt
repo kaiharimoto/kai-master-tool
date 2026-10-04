@@ -48,7 +48,6 @@ object DiceSim {
     /** Below this closing speed a contact does not bounce: resting dice do not chatter. */
     private const val BOUNCE_FLOOR = 1.2
     private const val INV_MASS = 1.0
-    private const val INV_INERTIA = 6.0
     private const val PASSES = 8
     private const val BIAS = 0.25
     private const val SLOP = 0.004
@@ -65,6 +64,27 @@ object DiceSim {
      * corner met before it lands takes the bounce out of the landing, and the dice slid instead of tumbling.
      */
     private const val AHEAD = 0.2
+
+    /** A coin's radius and half its thickness, in die edges (1.0.96): a coin a little wider than the die, as on a real table. */
+    const val COIN_R = 0.75
+    const val COIN_H = 0.06
+
+    /**
+     * What is thrown (1.0.96): the die — a unit cube, its eight corners met — or the coin, a thin disc met at points round
+     * both its rims. The coin's spin is taken as the same about every axis, as the die's is: wrong for a disc by a little,
+     * which no eye can tell in a flip, and it keeps the step free of the gyroscopic term.
+     */
+    enum class Shape(internal val invInertia: Double, internal val restZ: Double) {
+        DIE(6.0, 0.5),
+        COIN(1.0 / (COIN_R * COIN_R / 3.0), COIN_H);
+
+        internal val points: List<V3> by lazy {
+            when (this) {
+                DIE -> CORNERS
+                COIN -> RIM
+            }
+        }
+    }
 
     /** A die's place and turn. */
     data class Pose(val p: V3, val q: Quat)
@@ -93,7 +113,7 @@ object DiceSim {
         }
     }
 
-    private class Body(var p: V3, var q: Quat, var v: V3, var w: V3) {
+    private class Body(var p: V3, var q: Quat, var v: V3, var w: V3, val shape: Shape = Shape.DIE) {
         var grounded = false
         var quiet = 0.0
     }
@@ -122,13 +142,40 @@ object DiceSim {
         for (x in listOf(-0.5, 0.5)) for (y in listOf(-0.5, 0.5)) for (z in listOf(-0.5, 0.5)) add(V3(x, y, z))
     }
 
+    /**
+     * Twenty-four points round each of a coin's two rims, in its own frame (its faces square to z). Worked out once with
+     * `cos`/`sin` and rounded, so every device holds the same points; the step itself still uses none.
+     */
+    private val RIM: List<V3> = buildList {
+        for (z in listOf(-COIN_H, COIN_H)) for (i in 0 until 24) {
+            val a = i * kotlin.math.PI / 12
+            add(V3(COIN_R * kotlin.math.cos(a), COIN_R * kotlin.math.sin(a), z).rounded(6))
+        }
+    }
+
     /** Plays [toss] out to rest. A throw that is not [DiceThrow.valid] lies where it was put. */
     fun run(toss: DiceThrow): Run {
         if (!toss.valid) {
             val poses = List(2) { i -> Pose(V3(ARENA_W / 2 + (i - 0.5) * 1.6, ARENA_D / 2, 0.5), Quat.IDENTITY) }
             return Run(listOf(Frame(0.0, poses)), List(2) { DieFaces.PZ }, true)
         }
-        val bodies = toss.dice.map { Body(it.p, it.q.normalized(), it.v, it.w) }
+        return play(toss.dice.map { Body(it.p, it.q.normalized(), it.v, it.w) })
+    }
+
+    /**
+     * One thing thrown on its own (1.0.96, the table's die and coin): [start] played out to rest as a [shape]. [Run.up] is
+     * the die's face on top, or for the coin 0 when its +z face is up and 1 when its −z face is.
+     */
+    fun run(shape: Shape, start: DieStart): Run {
+        val ok = listOf(start.p.x, start.p.y, start.p.z, start.q.w, start.q.x, start.q.y, start.q.z, start.v.x, start.v.y, start.v.z, start.w.x, start.w.y, start.w.z).all { it.isFinite() }
+        if (!ok) {
+            val pose = Pose(V3(ARENA_W / 2, ARENA_D / 2, shape.restZ), Quat.IDENTITY)
+            return Run(listOf(Frame(0.0, listOf(pose))), listOf(upOf(shape, pose.q)), true)
+        }
+        return play(listOf(Body(start.p, start.q.normalized(), start.v, start.w, shape)))
+    }
+
+    private fun play(bodies: List<Body>): Run {
         val frames = ArrayList<Frame>()
         frames += Frame(0.0, bodies.map { Pose(it.p, it.q) })
         val steps = (MAX_TIME / DT).toInt()
@@ -143,7 +190,7 @@ object DiceSim {
         if (step % FRAME_EVERY != 0) frames += Frame(frames.last().t + FRAME_DT, bodies.map { Pose(it.p, it.q) })
         // Exactly flat, apart, inside the walls; blended in over a few frames.
         val last = frames.last().dice
-        val flat = separate(last.map { flatten(it) })
+        val flat = separate(last.mapIndexed { d, pose -> flatten(bodies[d].shape, pose) }, bodies.map { it.shape })
         for (k in 1..BLEND_FRAMES) {
             val s = k.toDouble() / BLEND_FRAMES
             frames += Frame(
@@ -153,7 +200,7 @@ object DiceSim {
         }
         // The blend's last frame is the rest pose itself, bit for bit.
         frames[frames.size - 1] = Frame(frames.last().t, flat)
-        return Run(frames, flat.map { DieFaces.upFace(it.q) }, settled)
+        return Run(frames, flat.indices.map { d -> upOf(bodies[d].shape, flat[d].q) }, settled)
     }
 
     private fun step(bodies: List<Body>) {
@@ -161,7 +208,7 @@ object DiceSim {
         val contacts = ArrayList<Contact>()
         bodies.forEach { it.grounded = false }
         bodies.forEach { b -> boundaries(b, contacts) }
-        if (bodies.size == 2) between(bodies[0], bodies[1], contacts)
+        if (bodies.size == 2 && bodies.all { it.shape == Shape.DIE }) between(bodies[0], bodies[1], contacts)
         repeat(PASSES) { contacts.forEach(::solve) }
         bodies.forEach { b ->
             val air = 1.0 - AIR_DAMP * DT
@@ -176,7 +223,7 @@ object DiceSim {
             b.w = w
             b.p = b.p + b.v * DT
             b.q = b.q.integrate(b.w, DT)
-            val still = b.grounded && b.v.length < QUIET_V && b.w.length < QUIET_W && DieFaces.tilt(b.q) < QUIET_TILT
+            val still = b.grounded && b.v.length < QUIET_V && b.w.length < QUIET_W && tiltOf(b.shape, b.q) < QUIET_TILT
             b.quiet = if (still) b.quiet + DT else 0.0
         }
     }
@@ -186,7 +233,7 @@ object DiceSim {
      * met before it crosses (a speculative contact: it may close the gap, and bounces if it would cross this step).
      */
     private fun boundaries(b: Body, out: MutableList<Contact>) {
-        CORNERS.forEach { c ->
+        b.shape.points.forEach { c ->
             val r = b.q.rotate(c)
             val at = b.p + r
             if (at.z < 0.0) {
@@ -240,8 +287,8 @@ object DiceSim {
     }
 
     private fun mass(a: Body, b: Body?, ra: V3, rb: V3, d: V3): Double {
-        var k = INV_MASS + INV_INERTIA * (ra cross d).let { it dot it }
-        if (b != null) k += INV_MASS + INV_INERTIA * (rb cross d).let { it dot it }
+        var k = INV_MASS + a.shape.invInertia * (ra cross d).let { it dot it }
+        if (b != null) k += INV_MASS + b.shape.invInertia * (rb cross d).let { it dot it }
         return k
     }
 
@@ -264,10 +311,10 @@ object DiceSim {
 
     private fun apply(c: Contact, j: V3) {
         c.a.v = c.a.v + j * INV_MASS
-        c.a.w = c.a.w + (c.ra cross j) * INV_INERTIA
+        c.a.w = c.a.w + (c.ra cross j) * c.a.shape.invInertia
         val b = c.b ?: return
         b.v = b.v - j * INV_MASS
-        b.w = b.w - (c.rb cross j) * INV_INERTIA
+        b.w = b.w - (c.rb cross j) * b.shape.invInertia
     }
 
     private fun solve(c: Contact) {
@@ -287,6 +334,28 @@ object DiceSim {
         val o2 = c.j2
         c.j2 = (o2 - v2 / c.k2).coerceIn(-limit, limit)
         if (c.j2 != o2) apply(c, c.t2 * (c.j2 - o2))
+    }
+
+    /** Which way up a [shape] lies: the die's face on top; the coin's 0 (+z up) or 1 (−z up). */
+    fun upOf(shape: Shape, q: Quat): Int = when (shape) {
+        Shape.DIE -> DieFaces.upFace(q)
+        Shape.COIN -> if (q.rotate(V3.UP).z >= 0) 0 else 1
+    }
+
+    /** How far a [shape] leans from lying flat: 0 flat. */
+    private fun tiltOf(shape: Shape, q: Quat): Double = when (shape) {
+        Shape.DIE -> DieFaces.tilt(q)
+        Shape.COIN -> 1.0 - abs(q.rotate(V3.UP).z)
+    }
+
+    /** [pose] set down flat as a [shape]: the die on its nearest face, the coin on whichever face is down. */
+    fun flatten(shape: Shape, pose: Pose): Pose = when (shape) {
+        Shape.DIE -> flatten(pose)
+        Shape.COIN -> {
+            val axis = pose.q.rotate(V3.UP).normalized()
+            val turn = Quat.between(axis, if (axis.z >= 0) V3.UP else -V3.UP)
+            Pose(V3(pose.p.x, pose.p.y, COIN_H), (turn * pose.q).normalized())
+        }
     }
 
     /** [pose] set down exactly on its nearest face, keeping which way it faces. */
@@ -328,7 +397,8 @@ object DiceSim {
     }
 
     /** Flat dice moved apart (and inside the walls) until neither footprint overlaps the other. */
-    private fun separate(poses: List<Pose>): List<Pose> {
+    private fun separate(poses: List<Pose>, shapes: List<Shape>): List<Pose> {
+        if (shapes.any { it != Shape.DIE }) return poses.mapIndexed { d, p -> if (shapes[d] == Shape.COIN) insideCoin(p) else inside(p) }
         var ps = poses.map { inside(it) }
         if (ps.size != 2) return ps
         repeat(12) {
@@ -340,6 +410,9 @@ object DiceSim {
         val dx = if (ps[0].p.x <= ps[1].p.x) -1.0 else 1.0
         return listOf(inside(ps[0].copy(p = ps[0].p + V3(dx * 0.8, 0.0, 0.0))), inside(ps[1].copy(p = ps[1].p - V3(dx * 0.8, 0.0, 0.0))))
     }
+
+    private fun insideCoin(pose: Pose): Pose =
+        pose.copy(p = V3(pose.p.x.coerceIn(COIN_R, ARENA_W - COIN_R), pose.p.y.coerceIn(-INNER + COIN_R, ARENA_D - COIN_R), COIN_H))
 
     private fun inside(pose: Pose): Pose {
         val (_, u, v) = footprint(pose)

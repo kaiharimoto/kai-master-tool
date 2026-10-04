@@ -35,6 +35,7 @@ import com.kaiharimoto.mastertool.core.duel.dice.DiceStage
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import com.kaiharimoto.mastertool.core.duel.dice.Quat
 import com.kaiharimoto.mastertool.core.duel.dice.V3
+import com.kaiharimoto.mastertool.core.duel.dice.Toss
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.net.DuelMirror
 import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
@@ -76,6 +77,7 @@ import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.duel.Replay
 import com.kaiharimoto.neue.duel.dice.DiceCarry
 import com.kaiharimoto.neue.duel.dice.RESTING
+import com.kaiharimoto.neue.duel.dice.DIE_HOME
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.pages.GuideExport
 import com.kaiharimoto.neue.phoneMenu
@@ -430,6 +432,9 @@ fun neueMain(args: Array<String>) {
                 h.neue.page = Page.DUEL
                 clock.run(120)
                 if (dice != null) studioDice(h, dice, clock)
+                // --duel-chance=landed|flying|held: the table's die and coin (1.0.96) — both seats' thrown and lying on the
+                // field, the near seat's coin mid-flip, or the near seat's die carried in the hand.
+                map["duel-chance"]?.let { studioChance(h, it, clock) }
                 val g = h.duel.game!!
                 println("[neue-studio] duel: ${g.cursor} entries, field ${g.state.onField().size}, hands ${g.state.seats.map { it.hand.size }}, lp ${g.state.seats.map { it.lp }}")
             }
@@ -1767,6 +1772,35 @@ private suspend fun studioDice(h: NeueHolders, how: String, clock: FrameClock) {
         else -> clock.run(2)
     }
     println("[neue-studio] dice: $how · ${d.game?.state?.opening}")
+}
+
+/** The table's die and coin photographed (1.0.96, `--duel-chance`): fixed throws through the real holder. */
+private suspend fun studioChance(h: NeueHolders, how: String, clock: FrameClock) {
+    val d = h.duel
+    d.bottom = 0
+    val layout = d.tableLayout ?: return
+    val stage = DiceStage(layout)
+    when (how) {
+        "held" -> {
+            val at = stage.toTable(0, V3(6.0, 5.0, 0.0))
+            d.chanceCarry = com.kaiharimoto.neue.duel.dice.ChanceCarry(0, false, at.x.toFloat(), at.y.toFloat(), Quat(0.93, 0.25, 0.2, 0.18).normalized())
+            clock.run(4)
+        }
+        "flying" -> {
+            val toss = Toss.coin(V3(5.0, 6.5), Quat.IDENTITY, V3(8.0, -14.0), 2.0)
+            d.throwChance(0, coin = true, toss = toss)
+            clock.run(diceFrames ?: 14)
+            println("[neue-studio] chance in the air: ${d.chanceRolling}; run ${com.kaiharimoto.mastertool.core.duel.dice.TossRuns.of(com.kaiharimoto.mastertool.core.duel.dice.DiceSim.Shape.COIN, toss).duration}s; stamped ${d.game?.state?.chance?.firstOrNull()?.toss == toss}")
+        }
+        else -> {
+            d.throwChance(0, coin = false, toss = Toss.die(V3(5.0, 6.5), DIE_HOME, V3(12.0, -16.0), 3.0))
+            d.throwChance(0, coin = true, toss = Toss.coin(V3(4.0, 6.5), Quat.IDENTITY, V3(10.0, -12.0), -2.0))
+            d.throwChance(1, coin = false)
+            d.throwChance(1, coin = true)
+            clock.run(420)
+        }
+    }
+    println("[neue-studio] chance: $how · ${d.game?.state?.chance?.map { "${it.seat}:${if (it.coin) (if (it.heads) "heads" else "tails") else it.value}" }}")
 }
 
 /** `--duel-dice-frames=N`: how many frames into the near seat's throw a flying shot is taken. */

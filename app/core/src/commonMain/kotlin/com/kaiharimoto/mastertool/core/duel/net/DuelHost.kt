@@ -253,6 +253,7 @@ object DuelMirror {
             resolved = v.resolved,
             attacks = v.attacks,
             opening = v.opening,
+            chance = v.chance,
         )
     }
 

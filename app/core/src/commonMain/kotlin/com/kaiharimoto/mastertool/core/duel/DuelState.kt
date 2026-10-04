@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.duel.dice.Toss
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
@@ -61,6 +62,11 @@ data class DuelState(
     val attacks: List<Attack> = emptyList(),
     /** The opening roll for who goes first (1.0.87): null when the duel has none, as every duel before it. */
     val opening: Opening? = null,
+    /**
+     * The die and the coin lying on the table where they landed (1.0.96), each seat's latest of each: put back by the
+     * next move that is not talk or chance.
+     */
+    val chance: List<Chance> = emptyList(),
 ) {
     /** The opening roll is still to be decided: turn 1 has not begun. */
     val beforeTurnOne: Boolean get() = opening != null && !opening.decided
@@ -256,3 +262,12 @@ data class Arrow(val seat: Int, val from: Int? = null, val to: List<Int> = empty
 /** [opener] did something [responder] may answer before play goes on; [entry] is the log entry that opened it. */
 @Serializable
 data class ResponseWindow(val opener: Int, val responder: Int, val entry: Int, val what: String = "")
+
+/**
+ * A die or a coin thrown on the table (1.0.96): whose, which, what it reads ([value]: the die's number; the coin's 1 for
+ * heads, 0 for tails) and the [toss] it was thrown with, which every screen plays out the same.
+ */
+@Serializable
+data class Chance(val seat: Int, val coin: Boolean, val value: Int, val toss: Toss) {
+    val heads: Boolean get() = coin && value == 1
+}

@@ -27,8 +27,10 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.isAltPressed
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
@@ -54,9 +56,12 @@ import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.dice.DiceSim
 import com.kaiharimoto.mastertool.core.duel.dice.DiceStage
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import com.kaiharimoto.mastertool.core.duel.dice.Quat
+import com.kaiharimoto.mastertool.core.duel.dice.Toss
+import com.kaiharimoto.mastertool.core.duel.dice.TossRuns
 import com.kaiharimoto.mastertool.core.duel.dice.V3
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.input.DeskMouse
@@ -71,9 +76,14 @@ import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.duel.dice.ChanceCarry
+import com.kaiharimoto.neue.duel.dice.DIE_HOME
 import com.kaiharimoto.neue.duel.dice.DiceCarry
 import com.kaiharimoto.neue.duel.dice.OpeningDice
 import com.kaiharimoto.neue.duel.dice.RESTING
+import com.kaiharimoto.neue.duel.dice.TableChance
+import com.kaiharimoto.neue.duel.dice.drawnAt
+import com.kaiharimoto.neue.duel.dice.shapeOf
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.byFinger
@@ -226,6 +236,30 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         }
     }
 
+    /**
+     * The table's die or coin under (x, y) that the person may throw now (1.0.96): one lying where it landed first, then
+     * the ones kept beside each Extra Deck. Never while the opening roll is in play.
+     */
+    fun chanceAt(x: Float, y: Float): Triple<Int, Boolean, DiceSim.Pose?>? {
+        if (stateNow.opening?.decided == false || duels.chanceCarry != null || duels.diceCarry != null) return null
+        val stage = DiceStage(layoutNow)
+        val seats = (0..1).filter { duels.mayRoll(it, playsBothNow) && stage.home(it) != null }
+        for (seat in seats) for (ch in stateNow.chance.filter { it.seat == seat }) {
+            val rest = TossRuns.of(shapeOf(ch.coin), ch.toss).rest.single()
+            val at = drawnAt(stage, seat, rest.p)
+            val home = stage.home(seat) ?: continue
+            val r = if (ch.coin) home.coinRadius + home.size * 0.2f else home.size * 0.75f
+            if (kotlin.math.abs(x - at.x) <= r && kotlin.math.abs(y - at.y) <= r) return Triple(seat, ch.coin, rest)
+        }
+        for (seat in seats) {
+            val home = stage.home(seat) ?: continue
+            val out = stateNow.chance.filter { it.seat == seat }.map { it.coin }.toSet()
+            if (false !in out && home.onDie(x, y)) return Triple(seat, false, null)
+            if (true !in out && home.onCoin(x, y)) return Triple(seat, true, null)
+        }
+        return null
+    }
+
     fun mine(uid: Int) = stateNow.solo || duels.seatFor(uid) == duels.bottom
 
     /** Whether the person plays [f]'s card, or only points at it: an open pile of theirs is target-only (1.0.86). */
@@ -350,65 +384,54 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 if (diceSeat != null) {
                     down.consume()
                     val stage = DiceStage(layoutNow)
-                    val held0 = RESTING
-                    var held = held0
-                    var p = Offset(x0, y0)
-                    var moved = false
-                    var wobble = 0.0
-                    var heading: Offset? = null
-                    // The pointer's last tenth of a second, for the speed it is let go at.
-                    val trail = ArrayDeque<Triple<Long, Float, Float>>()
-                    trail.addLast(Triple(down.uptimeMillis, x0, y0))
-                    duels.diceCarry = DiceCarry(diceSeat, x0, y0, held)
+                    duels.diceCarry = DiceCarry(diceSeat, x0, y0, RESTING)
                     duels.carrying = true
-                    try {
-                        while (true) {
-                            val e = awaitPointerEvent()
-                            val ch = e.changes.firstOrNull { it.id == down.id } ?: break
-                            ch.consume()
-                            val np = ch.position / d
-                            trail.addLast(Triple(ch.uptimeMillis, np.x, np.y))
-                            while (trail.size > 2 && ch.uptimeMillis - trail.first().first > 100) trail.removeFirst()
-                            if (!ch.pressed) break
-                            val step = np - p
-                            if ((np - Offset(x0, y0)).getDistance() > viewConfiguration.touchSlop / d) moved = true
-                            if (step.getDistance() > 0.01f) {
-                                // They tumble a little in the hand: a roll about the axis square to the motion.
-                                val v = stage.velocity(diceSeat, step.x, step.y, DiceThrow.HELD)
-                                val axis = V3.UP.cross(v)
-                                val angle = axis.length * 0.5
-                                if (angle > 1e-6) {
-                                    val n = axis.normalized()
-                                    val r = Quat(kotlin.math.cos(angle / 2), n.x * kotlin.math.sin(angle / 2), n.y * kotlin.math.sin(angle / 2), n.z * kotlin.math.sin(angle / 2))
-                                    held = held.map { q -> (r * q).normalized() }
-                                }
-                                // How the path curves: a twist for the throw.
-                                val dir = step / step.getDistance()
-                                heading?.let { h0 -> wobble = (wobble + (h0.x * dir.y - h0.y * dir.x) * 3.0).coerceIn(-24.0, 24.0) }
-                                heading = dir
-                            }
-                            p = np
-                            duels.diceCarry = DiceCarry(diceSeat, p.x, p.y, held)
-                        }
-                    } catch (gone: kotlinx.coroutines.CancellationException) {
+                    val f = try {
+                        fling(down, d, stage, diceSeat, RESTING, viewConfiguration.touchSlop / d) { p, held -> duels.diceCarry = DiceCarry(diceSeat, p.x, p.y, held) }
+                    } finally {
                         duels.diceCarry = null
                         duels.carrying = false
-                        throw gone
                     }
-                    val first = trail.first()
-                    val last = trail.last()
-                    val dt = (last.first - first.first) / 1000f
-                    val vx = if (dt > 0.008f) (last.second - first.second) / dt else 0f
-                    val vy = if (dt > 0.008f) (last.third - first.third) / dt else 0f
-                    val toss = if (!moved) null else DiceThrow.fromDrag(
-                        stage.under(diceSeat, p.x, p.y, DiceThrow.HELD),
-                        held,
-                        stage.velocity(diceSeat, vx, vy, DiceThrow.HELD),
-                        wobble,
+                    val toss = if (!f.moved) null else DiceThrow.fromDrag(
+                        stage.under(diceSeat, f.p.x, f.p.y, DiceThrow.HELD),
+                        f.held,
+                        stage.velocity(diceSeat, f.vx, f.vy, DiceThrow.HELD),
+                        f.wobble,
                     )
-                    duels.diceCarry = null
-                    duels.carrying = false
                     duels.throwDice(diceSeat, toss)
+                    continue
+                }
+                // The table's die and coin (1.0.96): picked up from beside the Extra Deck, or where one lies, and thrown
+                // the same way; a press let go without moving throws it from the corner (or, lying out, where it lies).
+                val chanceHit = chanceAt(x0, y0)
+                if (chanceHit != null) {
+                    down.consume()
+                    val stage = DiceStage(layoutNow)
+                    val (seat, coin, lying) = chanceHit
+                    val start = lying?.q ?: if (coin) Quat.IDENTITY else DIE_HOME
+                    duels.chanceCarry = ChanceCarry(seat, coin, x0, y0, start)
+                    duels.carrying = true
+                    val f = try {
+                        fling(down, d, stage, seat, listOf(start), viewConfiguration.touchSlop / d) { p, held -> duels.chanceCarry = ChanceCarry(seat, coin, p.x, p.y, held.first()) }
+                    } finally {
+                        duels.chanceCarry = null
+                        duels.carrying = false
+                    }
+                    val toss = when {
+                        f.moved -> {
+                            val at = stage.under(seat, f.p.x, f.p.y, DiceThrow.HELD)
+                            val v = stage.velocity(seat, f.vx, f.vy, DiceThrow.HELD)
+                            if (coin) Toss.coin(at, f.held.first(), v, f.wobble) else Toss.die(at, f.held.first(), v, f.wobble)
+                        }
+                        // Lying out: thrown again from where it lies, a short hop any way.
+                        lying != null -> {
+                            val r = kotlin.random.Random.Default
+                            val v = V3((r.nextDouble() - 0.5) * 10.0, (r.nextDouble() - 0.5) * 10.0)
+                            if (coin) Toss.coin(lying.p, lying.q, v, (r.nextDouble() - 0.5) * 8.0) else Toss.die(lying.p, lying.q, v, (r.nextDouble() - 0.5) * 16.0)
+                        }
+                        else -> null
+                    }
+                    duels.throwChance(seat, coin, toss)
                     continue
                 }
                 val hit = hitAt(x0, y0)
@@ -647,6 +670,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         Pings(game, layout, shownFrames)
         // The opening roll (1.0.87): the dice in front of each field, in the hand, or tumbling across it; the result.
         if (duels.replay == null) OpeningDice(duels, s, layout, playsBoth)
+        // The table's die and coin (1.0.96): beside each Extra Deck, in the hand, in the air, or where they landed.
+        TableChance(duels, s, layout, playsBoth)
 
         // What letting go will do, where it will happen.
         DropHint(carry, layout)
@@ -1060,3 +1085,65 @@ private const val FOCUS_Z = 70f
 private const val COORDS_Z = 6f
 /** The focus tag's height. */
 private const val TAG_H = 20f
+
+/** How a hand let go of what it carried: where, turned how, whether it moved at all, its speed and how its path curved. */
+private class Flung(val p: Offset, val held: List<Quat>, val moved: Boolean, val vx: Float, val vy: Float, val wobble: Double)
+
+/**
+ * Follows a press on dice or a coin (1.0.87; shared with the table's die and coin, 1.0.96) until it lets go: [held] tumbles
+ * a little as the pointer moves — a roll about the axis square to the motion — and [onMove] is told where it is. The speed
+ * is the pointer's over its last tenth of a second; [slop] (dp) is how far it may wander and still be a click.
+ */
+private suspend fun AwaitPointerEventScope.fling(
+    down: PointerInputChange,
+    d: Float,
+    stage: DiceStage,
+    seat: Int,
+    start: List<Quat>,
+    slop: Float,
+    onMove: (Offset, List<Quat>) -> Unit,
+): Flung {
+    val x0 = down.position.x / d
+    val y0 = down.position.y / d
+    var held = start
+    var p = Offset(x0, y0)
+    var moved = false
+    var wobble = 0.0
+    var heading: Offset? = null
+    val trail = ArrayDeque<Triple<Long, Float, Float>>()
+    trail.addLast(Triple(down.uptimeMillis, x0, y0))
+    while (true) {
+        val e = awaitPointerEvent()
+        val ch = e.changes.firstOrNull { it.id == down.id } ?: break
+        ch.consume()
+        val np = ch.position / d
+        trail.addLast(Triple(ch.uptimeMillis, np.x, np.y))
+        while (trail.size > 2 && ch.uptimeMillis - trail.first().first > 100) trail.removeFirst()
+        if (!ch.pressed) break
+        val step = np - p
+        if ((np - Offset(x0, y0)).getDistance() > slop) moved = true
+        if (step.getDistance() > 0.01f) {
+            // They tumble a little in the hand: a roll about the axis square to the motion.
+            val v = stage.velocity(seat, step.x, step.y, DiceThrow.HELD)
+            val axis = V3.UP.cross(v)
+            val angle = axis.length * 0.5
+            if (angle > 1e-6) {
+                val n = axis.normalized()
+                val r = Quat(kotlin.math.cos(angle / 2), n.x * kotlin.math.sin(angle / 2), n.y * kotlin.math.sin(angle / 2), n.z * kotlin.math.sin(angle / 2))
+                held = held.map { q -> (r * q).normalized() }
+            }
+            // How the path curves: a twist for the throw.
+            val dir = step / step.getDistance()
+            heading?.let { h0 -> wobble = (wobble + (h0.x * dir.y - h0.y * dir.x) * 3.0).coerceIn(-24.0, 24.0) }
+            heading = dir
+        }
+        p = np
+        onMove(p, held)
+    }
+    val first = trail.first()
+    val last = trail.last()
+    val dt = (last.first - first.first) / 1000f
+    val vx = if (dt > 0.008f) (last.second - first.second) / dt else 0f
+    val vy = if (dt > 0.008f) (last.third - first.third) / dt else 0f
+    return Flung(p, held, moved, vx, vy, wobble)
+}
