@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.shell
 
+import com.kaiharimoto.neue.builder.RulesPicker
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -81,8 +82,9 @@ private fun Issues(state: DeckBuilderState, neue: NeueState) {
     val scroll = rememberScrollState()
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
+            RulesPicker(state, neue)
             if (validation.issues.isEmpty()) {
-                Small("Nothing. The deck is legal in ${state.format.name}.", Modifier.padding(24.dp), color = c.ink70)
+                Small("Nothing. The deck is legal in ${state.rulesInForce.words()}.", Modifier.padding(24.dp), color = c.ink70)
             }
             listOf(IssueSeverity.ERROR to "Not legal", IssueSeverity.WARNING to "Worth a look").forEach { (severity, heading) ->
                 val rows = validation.issues.filter { it.severity == severity }

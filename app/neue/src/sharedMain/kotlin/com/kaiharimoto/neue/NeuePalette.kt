@@ -50,9 +50,9 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
             add(MenuEntry("Format: ${state.format.name}", hint = "Switch to ${if (state.format == Format.TCG) "OCG" else "TCG"}") {
                 setFormat(if (state.format == Format.TCG) Format.OCG else Format.TCG)
             })
-            if (state.validation.errors.isNotEmpty() || state.validation.warnings.isNotEmpty()) {
-                add(MenuEntry("Issues", hint = "${state.validation.errors.size + state.validation.warnings.size}") { neue.drawer = Drawer.ISSUES })
-            }
+            // Always there (1.1.1): what the deck is checked against is chosen in the drawer.
+            val count = state.validation.errors.size + state.validation.warnings.size
+            add(MenuEntry(if (count > 0) "Issues" else "Legality", hint = if (count > 0) "$count" else state.rulesInForce.words()) { neue.drawer = Drawer.ISSUES })
         }
         add(MenuEntry(if (state.dirty) "Save" else "Saved", separatorBefore = true, enabled = state.dirty || !neue.prefs.autoSave) { run(DeskAction.SAVE) })
         add(MenuEntry("Auto save: ${if (neue.prefs.autoSave) "on" else "off"}", hint = "Turn ${if (neue.prefs.autoSave) "off" else "on"}") {
@@ -138,6 +138,10 @@ fun NeueHolders.commands(query: String): List<Command> {
         cmd("Cards", if (neue.prefs.poolList != null) "Show every card in the pool" else "Show the list in the pool", DeskAction.SHOW_LIST),
         Command("Cards", "New list of cards") { neue.showList(neue.newList()) },
         cmd("Deck", "New group", DeskAction.NEW_GROUP),
+        Command("Deck", if (neue.prefs.genesys) "Check against the Forbidden & Limited list" else "Check against Genesys") {
+            neue.update { it.copy(genesys = !it.genesys) }
+        },
+        Command("Deck", "Legality: what the deck is checked against…") { neue.drawer = Drawer.ISSUES },
         Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}") {
             setFormat(if (builder.format == Format.TCG) Format.OCG else Format.TCG)
         },

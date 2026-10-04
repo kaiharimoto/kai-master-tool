@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.model.Format
+import com.kaiharimoto.mastertool.core.deck.GenesysRules
 import com.kaiharimoto.mastertool.core.prep.IsoDate
 import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.input.DeskWords
@@ -311,19 +313,29 @@ internal fun CardTags(card: Card, state: DeckBuilderState) {
             }
             card.archetype?.let { archetype -> Tag(archetype, false, { state.onFilterChange(CardFilter(archetypes = setOf(archetype), format = state.format)) }, caption = "Search") }
         }
-        val ban = card.banStatus(state.format)
+        val rules = state.rulesInForce
+        // The status on the list checked against: a dated one when chosen (1.1.1), else the pool's.
+        val ban = rules.limits?.statusOf(card) ?: card.banStatus(state.format)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Badge(state.format.name)
-            when (ban) {
-                BanStatus.UNLIMITED -> Mono("Unlimited", color = c.ink70)
-                BanStatus.FORBIDDEN -> Badge("✕ Forbidden", inverted = true)
-                BanStatus.LIMITED -> Badge("Limited · 1", inverted = true)
-                BanStatus.SEMI_LIMITED -> Badge("Semi-limited · 2", inverted = true)
+            if (rules.genesys) {
+                // Genesys (1.1.1): no list, a card's points instead, and Link and Pendulum monsters barred.
+                Badge("Genesys")
+                Mono(card.genesysPoints?.let { "$it point${if (it == 1) "" else "s"}" } ?: "points unknown", color = c.ink70)
+                if (GenesysRules.isBarred(card)) Badge("✕ Not in Genesys", inverted = true)
+            } else {
+                Badge(state.format.name)
+                when (ban) {
+                    BanStatus.UNLIMITED -> Mono("Unlimited", color = c.ink70)
+                    BanStatus.FORBIDDEN -> Badge("✕ Forbidden", inverted = true)
+                    BanStatus.LIMITED -> Badge("Limited · 1", inverted = true)
+                    BanStatus.SEMI_LIMITED -> Badge("Semi-limited · 2", inverted = true)
+                }
             }
-            // Released here, and by today (Phase B): only said when it is not, so a playable card shows nothing more.
-            val today = IsoDate.of(System.currentTimeMillis().floorDiv(86_400_000L))
-            when (val release = Legality.release(card, state.format, today)) {
-                is Legality.Release.NotReleased -> Badge("Not in the ${Legality.word(state.format)}", inverted = true)
+            // Released here, and by the day checked (Phase B): only said when it is not, so a playable card shows nothing more.
+            val region = if (rules.genesys) Format.TCG else state.format
+            val day = rules.asOf ?: IsoDate.of(System.currentTimeMillis().floorDiv(86_400_000L))
+            when (val release = Legality.release(card, region, day)) {
+                is Legality.Release.NotReleased -> Badge("Not in the ${Legality.word(region)}", inverted = true)
                 is Legality.Release.NotYet -> Badge("Out ${Legality.readable(release.date)}", inverted = true)
                 else -> Unit
             }

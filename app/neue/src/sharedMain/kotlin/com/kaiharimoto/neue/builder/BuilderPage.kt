@@ -387,23 +387,27 @@ internal fun Standing(state: DeckBuilderState, neue: NeueState, compact: Boolean
     val validation = state.validation
     val issues = validation.errors.size
     val notes = validation.warnings.size
+    val rules = state.rulesInForce.words()
     when {
-        issues > 0 -> Tip("${if (issues == 1) "An issue" else "$issues issues"} stop this deck being played in ${state.format.name}. Click to read them") {
+        issues > 0 -> Tip("${if (issues == 1) "An issue" else "$issues issues"} stop this deck being played in $rules. Click to read them") {
             MicroLink(
                 if (compact) "✕ $issues" else "✕ $issues ${if (issues == 1) "issue" else "issues"} →",
                 { neue.drawer = Drawer.ISSUES },
                 color = c.ink,
             )
         }
-        notes > 0 -> Tip("Legal in ${state.format.name}, with ${if (notes == 1) "a note" else "$notes notes"}. Click to read") {
+        notes > 0 -> Tip("Legal in $rules, with ${if (notes == 1) "a note" else "$notes notes"}. Click to read") {
             MicroLink(
                 if (compact) "✓ $notes" else "Legal · $notes ${if (notes == 1) "note" else "notes"} →",
                 { neue.drawer = Drawer.ISSUES },
                 color = c.ink70,
             )
         }
-        compact -> Tip("Legal in ${state.format.name}") { Micro("✓", color = c.ink70) }
-        else -> Micro("Legal in ${state.format.name}", color = c.ink70)
+        // The ✓ opens the drawer too (1.1.1): what it is checked against is chosen there.
+        compact -> Tip("Legal in $rules. Click to choose what it is checked against") {
+            MicroLink("✓", { neue.drawer = Drawer.ISSUES }, color = c.ink70)
+        }
+        else -> MicroLink("Legal in $rules", { neue.drawer = Drawer.ISSUES }, color = c.ink70)
     }
 }
 

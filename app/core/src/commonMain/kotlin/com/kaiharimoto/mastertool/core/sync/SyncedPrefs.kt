@@ -51,6 +51,7 @@ object SyncedPrefs {
         "theme", "foil", "foilNames", "limitMarks", "contrast", "groupPalette", "groupArrangement", "slidesAutoplay",
         "autoSaveOn", "shotStyle", "sidingView", "sidingExtra", "autoZen", "zenLabels", "poolToSide",
         "defaultDeckId", "covers", "arts", "cardLists", "activeList", "ai", "present", "duel",
+        "legalAsOf", "genesys", "genesysCap",
     )
 
     val DEVICE = setOf(

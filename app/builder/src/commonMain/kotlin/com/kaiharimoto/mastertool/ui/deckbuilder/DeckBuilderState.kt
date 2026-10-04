@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.ui.deckbuilder
 
+import com.kaiharimoto.mastertool.core.deck.DeckRules
 import com.kaiharimoto.mastertool.core.prep.IsoDate
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -358,9 +359,19 @@ class DeckBuilderState(
      * distinct card scanning all three sections.
      */
     val validation: DeckValidation by derivedStateOf {
-        // Released by today, too: an OCG-only card, or one not out yet, is no TCG card (Phase B).
-        DeckValidator.validate(deck, index::byId, format, IsoDate.of(deps.now().floorDiv(86_400_000L)))
+        // Released by the day, too: an OCG-only card, or one not out yet, is no TCG card (Phase B); and the list of
+        // that day, or Genesys, when the person chose one (1.1.1).
+        rulesInForce.validate(deck, index::byId, IsoDate.of(deps.now().floorDiv(86_400_000L)))
     }
+
+    /**
+     * What the deck is checked against beyond its format (1.1.1): a day and its list, or Genesys. Set by the app from
+     * the person's choice; its format is ignored, [format] stands.
+     */
+    var rules: DeckRules by mutableStateOf(DeckRules())
+
+    /** [rules] in the builder's format: what [validation] checks, and the words for it ("TCG on 1 May 2025 …"). */
+    val rulesInForce: DeckRules get() = rules.copy(format = format)
 
     val statistics: DeckStatistics by derivedStateOf {
         DeckStatistics.of(deck, index::byId, statsSection)

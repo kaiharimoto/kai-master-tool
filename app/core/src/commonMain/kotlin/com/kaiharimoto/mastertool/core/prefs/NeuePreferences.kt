@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.prefs
 
+import com.kaiharimoto.mastertool.core.deck.Legality
+import com.kaiharimoto.mastertool.core.deck.GenesysRules
 import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.layout.GroupArrangement
@@ -326,6 +328,15 @@ data class NeuePreferences(
     val duel: DuelPrefs = DuelPrefs(),
     /** Ai World (1.0.97): whether Python may run on this computer, how fast code types in, whether the page follows Ai. */
     val world: WorldPrefs = WorldPrefs(),
+    /**
+     * The day the builder checks legality on (1.1.1, Phase B): `yyyy-MM-dd`, the list in force then and the cards
+     * released by then; blank is today.
+     */
+    val legalAsOf: String = "",
+    /** The builder checks Konami's Genesys format (points, no Link or Pendulum) instead of the Forbidden & Limited list. */
+    val genesys: Boolean = false,
+    /** The Genesys points cap: 100 unless an event sets another. */
+    val genesysCap: Int = GenesysRules.CAP,
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's
@@ -334,6 +345,8 @@ data class NeuePreferences(
     fun textScaleOn(touch: Boolean, phone: Boolean = false): Float = textScale ?: if (touch && !phone) TABLET_TEXT_SCALE else 1f
 
     fun sanitised(): NeuePreferences = copy(
+        legalAsOf = legalAsOf.trim().takeIf { Legality.isDate(it) }.orEmpty(),
+        genesysCap = genesysCap.coerceIn(MIN_GENESYS_CAP, MAX_GENESYS_CAP),
         scale = if (scale.isFinite()) scale.coerceIn(SCALES.first(), SCALES.last()) else 1f,
         poolWidth = if (poolWidth.isFinite()) poolWidth.coerceIn(MIN_POOL_WIDTH, MAX_POOL_WIDTH) else DEFAULT_POOL_WIDTH,
         inspectorWidth = if (inspectorWidth.isFinite()) {
@@ -378,6 +391,8 @@ data class NeuePreferences(
             ?: GroupArrangement.FITTED
 
     companion object {
+        const val MIN_GENESYS_CAP = 10
+        const val MAX_GENESYS_CAP = 1000
         const val KEY = "neue.ui"
         const val SIDING_ART = "art"
         const val SIDING_LIST = "list"

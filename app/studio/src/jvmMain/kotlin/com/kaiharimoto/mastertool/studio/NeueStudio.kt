@@ -153,7 +153,7 @@ import java.util.UUID
  *
  * `--page` is decks, builder, odds, stats or settings. `--select=main:3` puts
  * a card in the inspector (`--inspect=<passcode>` any card of the pool); `--hover=x,y` moves the pointer there (fractions of
- * the frame); `--lens=roles`, `--palette`, `--drawer=issues|groups`,
+ * the frame); `--lens=roles`, `--palette`, `--drawer=issues|groups`, `--genesys=true`, `--legal-as-of=`,
  * `--query=ash` and `--scale=1.25` set the rest of the scene.
  */
 fun neueMain(args: Array<String>) {
@@ -823,6 +823,9 @@ fun neueMain(args: Array<String>) {
             // --studio=deck|list: the search pop-out, adding to the deck or to the list made by --list.
             map["studio"]?.let { mode -> h.neue.studio = com.kaiharimoto.neue.Studio(if (mode == "list") h.neue.prefs.poolList else null) }
             map["drawer"]?.let { h.neue.drawer = Drawer.ISSUES }
+            // --genesys=true / --legal-as-of=2025-05-01: what the builder checks against (1.1.1).
+            if (map["genesys"] == "true") h.neue.update { it.copy(genesys = true) }
+            map["legal-as-of"]?.let { day -> h.neue.update { it.copy(legalAsOf = day) } }
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())
             map["zen"]?.let { phase ->

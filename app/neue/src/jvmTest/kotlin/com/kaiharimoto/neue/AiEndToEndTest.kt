@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.builder.legalityRules
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.ai.AiSession
@@ -265,6 +266,19 @@ class AiEndToEndTest {
         assertTrue("every copy allowed." in feb3.content && "(3 in 4)" in feb3.content, feb3.content)
         val gone = h.tool("hand_odds", "cards" to listOf("Raigeki"), "as_of" to "2025-05-01")
         assertTrue("(0 in 1)" in gone.content, "a forbidden card is a chance of nothing, said as such: " + gone.content)
+
+        // The builder checks a chosen day (1.1.1): its list, named, and validate_deck reads the same.
+        h.builder.rules = h.legalityRules(h.neue.prefs.copy(legalAsOf = "2025-05-01"), Format.TCG)
+        assertEquals("TCG on 1 May 2025 (the April 2025 Lists (TCG))", h.builder.rulesInForce.words())
+        assertTrue(h.builder.validation.errors.any { it.message == "Raigeki is Forbidden on the April 2025 Lists (TCG), deck has 3." }, h.builder.validation.errors.toString())
+        val asBuilder = h.tool("validate_deck")
+        assertTrue("in TCG on 1 May 2025 (the April 2025 Lists (TCG))" in asBuilder.content && "Raigeki is Forbidden" in asBuilder.content, asBuilder.content)
+        // Genesys: no list, so Raigeki is fine.
+        h.builder.rules = h.legalityRules(h.neue.prefs.copy(genesys = true), Format.TCG)
+        assertTrue(h.builder.validation.errors.none { "Raigeki" in it.message }, h.builder.validation.errors.toString())
+        assertTrue("Genesys, 100 points" in h.tool("validate_deck").content)
+        h.builder.rules = h.legalityRules(h.neue.prefs, Format.TCG)
+        assertEquals("TCG", h.builder.rulesInForce.words())
     }
 
     @Test

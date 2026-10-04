@@ -284,7 +284,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         add(
             "Open deck: “${state.deckName}” (${state.deckId?.let { "id $it" } ?: "never saved"}${if (state.dirty) ", unsaved changes" else ""}) — " +
                 "main ${state.deck.main.size}, extra ${state.deck.extra.size}, side ${state.deck.side.size}; " +
-                (if (v.isLegal) "legal in ${state.format.name}" else "${v.errors.size} rule problems") +
+                (if (v.isLegal) "legal in ${state.rulesInForce.words()}" else "${v.errors.size} rule problems in ${state.rulesInForce.words()}") +
                 (web?.let { "; in the web “${it.name}” (id ${it.id})" } ?: ""),
         )
         pinned?.takeIf { it.deckId != state.deckId }?.let {
@@ -387,6 +387,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val (name, deck) = deckOf(id) ?: return fail("No deck $id.")
         val f = format?.let { runCatching { Format.valueOf(it.uppercase()) }.getOrNull() } ?: state.format
         val day = asOf?.trim()?.ifEmpty { null }
+        if (day == null && format == null && (id == null || id == state.deckId)) {
+            // The open deck, asked plainly: checked as the builder checks it (1.1.1), a chosen day or Genesys included.
+            val rules = state.rulesInForce
+            val v = state.validation
+            val text = if (v.issues.isEmpty()) "“$name” is legal in ${rules.words()}: main ${deck.main.size}, extra ${deck.extra.size}, side ${deck.side.size}." else
+                "“$name” in ${rules.words()}:\n" + v.issues.joinToString("\n") { "- ${it.severity.name.lowercase()}: ${it.message}" }
+            return ok(text, if (v.isLegal) "“$name” is legal in ${rules.words()}" else "“$name”: ${v.errors.size} problems in ${rules.words()}")
+        }
         if (day == null) {
             val v = DeckValidator.validate(deck, index::byId, f)
             val text = if (v.issues.isEmpty()) "“$name” is legal in ${f.name}: main ${deck.main.size}, extra ${deck.extra.size}, side ${deck.side.size}." else

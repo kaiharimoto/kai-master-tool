@@ -23,6 +23,8 @@ object GenesysRules {
         val problems: List<String>,
         /** Passcodes whose points the pool does not know: counted as 0, and said. */
         val unknown: List<CardId>,
+        /** The Link and Pendulum monsters in it, each once: a printing of it and its name. */
+        val barred: List<Pair<CardId, String>> = emptyList(),
     ) {
         val legal: Boolean get() = problems.isEmpty()
     }
@@ -34,7 +36,7 @@ object GenesysRules {
         val all = deck.main + deck.extra + deck.side
         var points = 0
         val unknown = mutableListOf<CardId>()
-        val barred = LinkedHashSet<String>()
+        val barred = LinkedHashMap<CardId, Pair<CardId, String>>()
         all.forEach { id ->
             val card = cards(id)
             if (card == null) {
@@ -43,12 +45,12 @@ object GenesysRules {
             }
             val p = card.genesysPoints
             if (p == null) unknown += id else points += p
-            if (isBarred(card)) barred += card.name
+            if (isBarred(card) && card.id !in barred) barred[card.id] = id to card.name
         }
         val problems = buildList {
             if (points > cap) add("The deck costs $points points; the cap is $cap.")
-            barred.forEach { add("$it is a Link or Pendulum monster, which Genesys does not allow.") }
+            barred.values.forEach { (_, name) -> add("$name is a Link or Pendulum monster, which Genesys does not allow.") }
         }
-        return Result(points, cap, problems, unknown.distinct())
+        return Result(points, cap, problems, unknown.distinct(), barred.values.toList())
     }
 }

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.builder.legalityRules
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -532,6 +533,14 @@ fun NeueEffects(h: NeueHolders) {
                 h.prep.flush()
                 h.flushDuel()
             }
+        }
+    }
+
+    run {
+        // What the builder checks the deck against (1.1.1): a day's list, or Genesys, from the person's choice.
+        val p = neue.prefs
+        LaunchedEffect(p.legalAsOf, p.genesys, p.genesysCap, state.format, state.index) {
+            state.rules = h.legalityRules(p, state.format)
         }
     }
 
