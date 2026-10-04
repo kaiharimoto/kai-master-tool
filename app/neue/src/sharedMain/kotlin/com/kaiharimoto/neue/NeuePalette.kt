@@ -42,6 +42,7 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
         add(MenuEntry("Present", hint = "Deck profiles as slides") { neue.go(Page.PRESENT) })
         add(MenuEntry("Duel", hint = "The duel simulator") { neue.go(Page.DUEL) })
         add(MenuEntry("Ai World", hint = "Ai's own computer, watched") { neue.go(Page.WORLD) })
+        add(MenuEntry("Shootout", hint = "Hands judged, cards rated") { neue.go(Page.SHOOTOUT) })
         if (onBuilder) {
             add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
             add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
@@ -93,6 +94,12 @@ fun NeueHolders.commands(query: String): List<Command> {
         cmd("Go", "Present", DeskAction.GO_PRESENT),
         cmd("Go", "Duel", DeskAction.GO_DUEL),
         cmd("Go", "Ai World", DeskAction.GO_WORLD),
+        cmd("Go", "Shootout", DeskAction.GO_SHOOTOUT),
+        cmd("Shootout", "Begin a session, or carry on", DeskAction.SHOOTOUT_START),
+        cmd("Shootout", "The results, or back to the trials", DeskAction.SHOOTOUT_RESULTS),
+        *(if (neue.page == Page.SHOOTOUT && shootoutStarted && shootout.running) arrayOf(
+            cmd("Shootout", "Stop the session, every answer kept", DeskAction.SHOOTOUT_STOP),
+        ) else emptyArray()),
         Command("World", "New world") { neue.go(Page.WORLD); com.kaiharimoto.neue.world.newWorld(this) },
         *(if (neue.page == Page.WORLD) arrayOf(
             cmd("World", "Run the file in the editor", DeskAction.WORLD_RUN),

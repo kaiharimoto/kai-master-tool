@@ -285,7 +285,7 @@ and the app could not update itself. kai's four choices are what follows.
   chip whenever there is one (never in the overflow), and ⋯, the overflow, which
   holds every tool of the desk's bar (`NeueHolders.phoneMenu`: search, advanced
   search, groups, history, format, save, auto save, new, import, export, rotate,
-  full screen, theme, gestures, check for updates). The pages are `TabBar`, five tabs
+  full screen, theme, gestures, check for updates). The pages are `TabBar`, tabs (Shootout joined them in 1.1.2, seven with Settings, their words at 9 sp)
   along the bottom, hidden while the soft keyboard is up; lying down they are a
   strip down the left, where the height is the deck's.
 - **The builder upright** (`builder/TallBuilder.kt`): the deck on top, the pool docked
@@ -3971,6 +3971,70 @@ The card data everything stands on, made correct:
   ends that day, lists dated by their event (read from YGOPRODeck's description), the page found by a search rather
   than read in turn (`YgoProDeckDecks.recent`), the honest window kept; lists held to that day's list and to the cards
   out by then (`FieldLegality.asOf`), each kind left out said, the list named and Yugipedia cited.
+
+### 4t. Shootout: hands judged, cards rated (1.1.2, Phase S; `docs/phases/S.md`)
+
+kai: "a data proven rating for each card/card pair in a deck, gathered by comparing hands", the hands "chosen smartly,
+reactive, and adapting to the user as the runs are conducted". Page `09`, `Ctrl 9`. Stage 1 (`core/shootout/model`,
+`select`, `sim`, `math`) proved and tuned the method in a simulation; stage 2 is the page a person runs it on.
+
+**What is run** (`core/shootout/bench`):
+- **The deck** is the builder's unless another is chosen (the header's select); it must be saved, since its trials are
+  kept with it. **The target** is the deck alone or an opponent: a deck of the same Format web (`DeckWeb`), or, for a
+  deck in no web, a library deck its siding links to.
+- **`Bench`** turns the decks into the model: cards by their **canonical passcode** (`CardIdentity`, so an alternate
+  artwork is the same card), only the main deck dealt (the Extra Deck never opens), **roles from the deck's groups** in
+  their order (a card no group holds is Ungrouped; no groups, one role), the twelve pairs most often drawn together until
+  Ai names better ones (S.md §6), and the strata. A matchup's **sided strata need both plans** — yours for your turn
+  (`SidingCodec`; the legacy `sidingPatterns` read, never written) and theirs for the answering turn — and without them a
+  stratum is **waiting**, shown with why and a link to Siding, never filled with game-one hands. Cards a plan brings in
+  and cards only old trials hold join the numbering, so a card cut since is still the card that was in the hand.
+- **`ShootoutRun`** is a session: the kept trials, the fit, the picker at the simulation's tuning (`PickerSettings()`),
+  an answer kept and refitted, `next()`. Plain Kotlin, no clock or thread: the page runs it on `Dispatchers.Default`.
+  **`ShootoutRun.STOP`** is the stop rule at the tuned ±5 points for 21 of 24 cards; **`SESSION_MS`** is ten minutes.
+- **`ShootoutResults`**: per card and stratum its worth per copy (`Estimate`: 80 % and 95 % ranges), draw rate and the
+  trials behind it; the pairs whose 95 % range excludes zero; each stratum's win rate over real hands and the plain hands'
+  check (`RealWorld`); what is settled; the person's measured noise. `trialsBehind(Behind)` is "every number opens its
+  trials" (`Behind.Card`, `Pair`, `WinRate`).
+- **`ShootoutWords`**: the one scale — keys 1 to 5 from clear win to clear loss (for the deck alone, "plays through" to
+  "bricks"), each a band of win chance — the strata's words, and a phone's swipe onto the scale (right a win, left a
+  loss, long the clear one, up a coin flip).
+
+**Stored** (`core/shootout/store`): `<data>/shootout/<deck>/alone.json` and `<data>/shootout/<deck>/<opponent deck>.json`
+(`ShootoutPaths`, ids escaped so nothing leaves the folder and no deck takes `alone`). A `ShootoutLog` is versioned and
+**append-only**: each `StoredTrial` keeps its stratum, the hands as canonical passcodes (one per copy), the answer, why it
+was shown (`chosen`, `plain`, `repeat`), how long the answer took, its session, and — so no later stage rewrites an old
+file — **who answered** (`judge`) and **whether they had seen Ai's answer** (`sawAi`), **Ai's own answer apart** (`ai`),
+**both plans' fingerprints** when sided (`PlanPrint`: `-14558127x2 +9822220`, cards and counts, not the note), the decisive
+card and the reason tags. Only the person's blind answers are fitted for now. `ShootoutCodec` reads forgivingly (a newer
+build's keys skipped, a trial that will not read dropped alone); `OldDataTest.aShootoutFrom112StillReads`. The log is
+written whole and renamed into place after every answer. **Synced and backed up** (`NeueSyncLocal`, `BackupCenter`,
+reloaded after either), and **deleted with the deck** (the library's Delete and Ai's `delete_deck`).
+
+**The page** (`neue/shootout`: `Shootouts` the holder, lazy in `NeueHolders`; `ShootoutPage`, `ShootoutResultsView`):
+- **Setup**: the target's words, which hands ("Let the picker choose" or one stratum, `pinned`), the waiting strata,
+  Begin (`Enter`).
+- **A trial**: the situation (game one or sided, who goes first), the progress line ("6 of 24 cards known within ±5
+  points · 14 this session · 6 min" — read at each answer, no clock ticking), their hand smaller above yours, both as
+  **`NeueCard` art with the foil**, sized to the room (three to a row on a phone); a card is read below the hands on
+  hover (a finger holds it). A rating is **five boxes** under keys 1–5 (a click, or a swipe on a phone, its answer named
+  over the hands while the finger moves); a comparison is **two hands**, `←`/`→` or a press on either. After ten minutes
+  stopping is suggested; `Stop`, `Ctrl .` or `Esc` stops at once, every answer already on disk.
+- **Results** (`R`): the strata as tiles side by side (win rate, its range, trials; a waiting one says why), the settled
+  line and the noise; the cards grouped by role, one column per stratum, each cell a number, its ± and **a range bar in
+  ink** (zero a faint rule, 95 % thin, 80 % thick, the value a square); the pairs that earned a place. **A press on any
+  number lists the trials behind it** (`TrialsDialog`: when, stratum, the hands by name, the answer, marked shuffled,
+  shown again, older plan).
+
+**Idioms**: `DeskScope.SHOOTOUT` (1–5, ←/→, Enter, `Ctrl .`, R), `ShootoutMouse`/`ShootoutTouch` (`core/input/ShootoutInput.kt`,
+in the help dialog; `ShootoutInputTest` holds every mouse action to a finger's form), the palette, the Mac's View menu,
+a phone tab and the ⋯ menu, `navigate`'s `SHOOTOUT`. Master UI throughout: ink only but the card art, square, nothing moves.
+
+**Left** (S.md §7): Ai's parts (§6, §6½ — the stored fields wait for them), fatigue from answer times, the reason tags and
+decisive card on screen, per-plan cards for the sided strata (old-plan trials are pooled today), opening patterns and
+the next copy's worth (§5), the guide link with the evidence ledger, siding plans compared.
+
+`tools/shoot.sh --page=shootout --shootout=demo --shootout-target=alone|matchup --shootout-view=trial|results|setup`.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

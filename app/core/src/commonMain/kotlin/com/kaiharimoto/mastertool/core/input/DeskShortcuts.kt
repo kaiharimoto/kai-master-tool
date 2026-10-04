@@ -306,6 +306,24 @@ enum class DeskAction {
     WORLD_PANE_BOARDS,
     WORLD_PANE_THOUGHTS,
     WORLD_PANE_ACTIVITY,
+
+    // Shootout (1.1.2, Phase S): hands judged, cards rated.
+    GO_SHOOTOUT,
+    /** The five answers, best to worst: keys 1 to 5. */
+    SHOOTOUT_ANSWER_1,
+    SHOOTOUT_ANSWER_2,
+    SHOOTOUT_ANSWER_3,
+    SHOOTOUT_ANSWER_4,
+    SHOOTOUT_ANSWER_5,
+    /** A comparison: the hand on the left, or the right. */
+    SHOOTOUT_LEFT,
+    SHOOTOUT_RIGHT,
+    /** A session begun, or carried on. */
+    SHOOTOUT_START,
+    /** The session ended, every answer kept. */
+    SHOOTOUT_STOP,
+    /** The results, or back to the trials. */
+    SHOOTOUT_RESULTS,
     ;
 
     companion object {
@@ -355,6 +373,9 @@ enum class DeskScope(val heading: String) {
 
     /** On Ai World, with nothing covering it (1.0.97). */
     WORLD("In Ai World"),
+
+    /** On Shootout, with nothing covering it (1.1.2). */
+    SHOOTOUT("In a Shootout"),
 }
 
 /** What is on screen, which decides which desk shortcuts are live. */
@@ -379,6 +400,8 @@ data class DeskContext(
     val replaying: Boolean = false,
     /** Ai World is the page on screen (1.0.97). */
     val onWorld: Boolean = false,
+    /** Shootout is the page on screen (1.1.2). */
+    val onShootout: Boolean = false,
 )
 
 data class DeskShortcut(
@@ -413,6 +436,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("6"), DeskAction.GO_PRESENT, DeskScope.APP, "Present: deck profiles as slides", allowedInTextInput = true),
         DeskShortcut(ctrl("7"), DeskAction.GO_DUEL, DeskScope.APP, "Duel: the duel simulator", allowedInTextInput = true),
         DeskShortcut(ctrl("8"), DeskAction.GO_WORLD, DeskScope.APP, "Ai World: Ai's own computer, watched", allowedInTextInput = true),
+        DeskShortcut(ctrl("9"), DeskAction.GO_SHOOTOUT, DeskScope.APP, "Shootout: hands judged, cards rated", allowedInTextInput = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),
@@ -609,6 +633,17 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("4", alt = true), DeskAction.WORLD_PANE_BOARDS, DeskScope.WORLD, "Boards", allowedInTextInput = true),
         DeskShortcut(KeyChord("5", alt = true), DeskAction.WORLD_PANE_THOUGHTS, DeskScope.WORLD, "Thoughts", allowedInTextInput = true),
         DeskShortcut(KeyChord("6", alt = true), DeskAction.WORLD_PANE_ACTIVITY, DeskScope.WORLD, "Activity", allowedInTextInput = true),
+        // Shootout (1.1.2): one key per answer, so a trial is a glance and a press.
+        DeskShortcut(KeyChord("1"), DeskAction.SHOOTOUT_ANSWER_1, DeskScope.SHOOTOUT, "Clear win, or the hand plays through"),
+        DeskShortcut(KeyChord("2"), DeskAction.SHOOTOUT_ANSWER_2, DeskScope.SHOOTOUT, "Lean win"),
+        DeskShortcut(KeyChord("3"), DeskAction.SHOOTOUT_ANSWER_3, DeskScope.SHOOTOUT, "Coin flip"),
+        DeskShortcut(KeyChord("4"), DeskAction.SHOOTOUT_ANSWER_4, DeskScope.SHOOTOUT, "Lean loss"),
+        DeskShortcut(KeyChord("5"), DeskAction.SHOOTOUT_ANSWER_5, DeskScope.SHOOTOUT, "Clear loss, or the hand bricks"),
+        DeskShortcut(KeyChord("left"), DeskAction.SHOOTOUT_LEFT, DeskScope.SHOOTOUT, "The hand on the left"),
+        DeskShortcut(KeyChord("right"), DeskAction.SHOOTOUT_RIGHT, DeskScope.SHOOTOUT, "The hand on the right"),
+        DeskShortcut(KeyChord("enter"), DeskAction.SHOOTOUT_START, DeskScope.SHOOTOUT, "Begin a session, or carry on"),
+        DeskShortcut(ctrl("period"), DeskAction.SHOOTOUT_STOP, DeskScope.SHOOTOUT, "Stop the session, every answer kept", allowedInTextInput = true),
+        DeskShortcut(KeyChord("r"), DeskAction.SHOOTOUT_RESULTS, DeskScope.SHOOTOUT, "The results, or back to the trials"),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action
@@ -638,6 +673,7 @@ object DeskShortcuts {
         DeskScope.DUEL -> !context.overlayOpen && context.onDuel && !context.onBuilder && !context.replaying
         DeskScope.REPLAY -> !context.overlayOpen && context.onDuel && !context.onBuilder && context.replaying
         DeskScope.WORLD -> !context.overlayOpen && context.onWorld && !context.onBuilder
+        DeskScope.SHOOTOUT -> !context.overlayOpen && context.onShootout && !context.onBuilder
     }
 
     /**

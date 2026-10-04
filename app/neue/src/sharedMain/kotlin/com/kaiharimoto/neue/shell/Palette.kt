@@ -9,6 +9,9 @@ import com.kaiharimoto.mastertool.core.input.DuelTouch
 import com.kaiharimoto.mastertool.core.input.PresentMouse
 import com.kaiharimoto.mastertool.core.input.PresentTarget
 import com.kaiharimoto.mastertool.core.input.PresentTouch
+import com.kaiharimoto.mastertool.core.input.ShootoutMouse
+import com.kaiharimoto.mastertool.core.input.ShootoutTarget
+import com.kaiharimoto.mastertool.core.input.ShootoutTouch
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.mastertool.core.input.CursorMode
@@ -295,6 +298,7 @@ fun HelpDialog(onDismiss: () -> Unit) {
             if (!touch || keyboard) KeyTable()
             PresentGestureTable(touch)
             DuelGestureTable(touch)
+            ShootoutGestureTable(touch)
             CommandModeTable()
             if (!touch) {
                 GestureTable(touch = false)
@@ -405,6 +409,38 @@ private fun CommandModeTable() {
             Column(Modifier.weight(1f)) {
                 Rows("Lines to type", help.examples)
                 Rows("Hold M and say", help.spoken, mono = false)
+            }
+        }
+    }
+}
+
+/** Shootout's gestures (1.1.2), from its own tables: answering a hand, choosing one of two, reading a card. */
+@Composable
+private fun ShootoutGestureTable(touch: Boolean) {
+    val rows = if (touch) ShootoutTouch.all else ShootoutMouse.all
+    Column {
+        SectionTitle(null, "Shootout: judging hands")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            ShootoutTarget.entries.chunked(3).forEach { targets ->
+                Column(Modifier.weight(1f)) {
+                    targets.forEach { target ->
+                        val mine = rows.filter { it.target == target }
+                        if (mine.isNotEmpty()) {
+                            MuText(target.heading, Modifier.padding(top = 12.dp, bottom = 4.dp), style = MuType.help(LocalMuFonts.current), color = Mu.colors.ink70)
+                            mine.forEach { row ->
+                                Row(
+                                    Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    RowText(row.description, Modifier.weight(1f))
+                                    Kbd(row.gesture, always = true)
+                                }
+                                HRule()
+                            }
+                        }
+                    }
+                }
             }
         }
     }

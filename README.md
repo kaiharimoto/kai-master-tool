@@ -95,6 +95,10 @@ with FBI. See [`3ds/README.md`](3ds/README.md).
 - **Tournament prep.** An event's countdown and what the rules mean for it, practice
   logged against the field with the match win to expect, siding drills against the
   three-minute clock (no notes are allowed at the table), and a printable decklist.
+- **Shootout: cards rated by evidence.** Judge opening hands one at a time — alone, or against each deck of
+  your field, going first and second, game one and after siding — with a key from 1 to 5, and every card gets a
+  rating per copy with its range. The hands are chosen for what they would teach, so the ratings settle in far
+  fewer hands than random deals, and every number opens the hands behind it.
 - **Zen.** Leave it alone in full screen and the deck floats to the middle of the
   window; the cards are yours to arrange.
 - **Ai, an assistant that acts.** A panel beside every page (`Ctrl I`): chat about

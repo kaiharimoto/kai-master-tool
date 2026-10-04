@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.Page
@@ -122,8 +123,11 @@ fun PhoneBar(
     }
 }
 
-/** The pages a phone's tab bar holds, in the rail's order, Settings last. */
-private val TABS = listOf(Page.BUILDER, Page.DECKS, Page.SIDING, Page.FORMAT, Page.PREP, Page.SETTINGS)
+/**
+ * The pages a phone's tab bar holds, in the rail's order, Settings last. Shootout (1.1.2) is a thumb's page — a
+ * trial is a glance and a swipe — so it has a tab; Present, Duel and Ai World are in the ⋯ menu.
+ */
+private val TABS = listOf(Page.BUILDER, Page.DECKS, Page.SIDING, Page.FORMAT, Page.PREP, Page.SHOOTOUT, Page.SETTINGS)
 
 /**
  * The phone's index (v1.3.5): the rail's five pages as tabs along the bottom,
@@ -187,7 +191,8 @@ private fun Tab(page: Page, active: Boolean, modifier: Modifier, compact: Boolea
             } else {
                 MuIcon(Icons.Settings, if (active) c.ink else c.ink45, Modifier.size(14.dp))
             }
-            if (!compact) Micro(page.title, Modifier.padding(top = 2.dp), color = c.ink)
+            // Seven tabs across 360 dp: the words a size smaller, so "Settings" and "Shootout" fit their tab.
+            if (!compact) Micro(page.title, Modifier.padding(top = 2.dp), color = c.ink, size = 9.sp)
         }
     }
 }

@@ -333,7 +333,18 @@ better" is a number, the same discipline as Trust (Phase A), whose runner it reu
 1. This note, then the simulation study (core, tests): the method proven and tuned.
 2. The model and the picker in core, held by the simulation's tests.
 3. The trial screens: keyboard, mouse and finger; sessions of about ten minutes; Present-quality card art.
+   **Done (stage 2, 1.1.2):** page `09 Shootout` (`NEUE.md` §4t) — the deck (the builder's by default) alone or against
+   an opponent of its web, a stratum pinned or the picker's choice, one trial at a time as `NeueCard` art, keys 1–5,
+   clicks or a phone's swipe, comparisons by ←/→, the stop rule's line as progress, ten-minute sessions, stop at any
+   moment; storage (`core/shootout/store`, §5's paths, versioned, append-only, synced, backed up, deleted with the
+   deck, `OldDataTest`); cards by `CardIdentity`, roles from the groups, sided strata from both plans and waiting
+   without them. **Left:** fatigue from answer times (the times are stored), the reason tags and decisive card on screen
+   (stored fields wait), per-plan cards for the sided strata (older-plan trials are pooled and labelled).
 4. Results, the guide link, siding.
+   **A first cut done (1.1.2):** the deck alone and each matchup's strata side by side, each card's worth per copy with
+   80 %/95 % ranges, trial count and draw rate, pairs only when their 95 % range excludes zero, win rates with the plain
+   hands' check, and every number opening its trials. **Left:** verdicts ("cut one copy"), dead-in-hand rates, the next
+   copy's worth, opening patterns, the guide link through the evidence ledger, siding plans compared.
 5. Ai's parts: the calibration set and apprentice mode first (they make the blind data the trust score needs), then the
    interview and notes, then supervised runs, then the gate and audits that let Ai run alone.
 

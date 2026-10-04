@@ -179,6 +179,7 @@ class SyncCenter(private val h: NeueHolders) {
         if ("present" in changed) h.present.reload()
         if ("replays" in changed) { h.duel.loadReplays(); h.duel.reloadRulings(); h.duel.reloadResults() }
         if ("world" in changed) h.world.reload()
+        if ("shootout" in changed && h.shootoutStarted) h.shootout.reload()
     }
 
     /** The store [prefs] names, or null when there is none to sync with. */

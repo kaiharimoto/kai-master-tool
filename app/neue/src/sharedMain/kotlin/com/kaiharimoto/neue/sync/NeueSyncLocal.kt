@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.sync
 
 import com.kaiharimoto.mastertool.core.prep.PrepCodec
+import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
 import com.kaiharimoto.mastertool.core.sync.InboundPath
 import com.kaiharimoto.mastertool.core.sync.LocalItem
 import com.kaiharimoto.mastertool.core.sync.Sha256
@@ -43,6 +44,9 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     /** Ai World's worlds (1.0.97): files, the newer one kept; the Python helper's folder is rewritten before every run. */
     private val world = File(Platform.dataDir, "world")
 
+    /** Shootout's trials (1.1.2): one file per deck and target, the newer one kept. */
+    private val shootout = File(Platform.dataDir, ShootoutPaths.FOLDER)
+
     /** What came in this sync, so the screens showing it can be told once at the end. */
     val changed = mutableSetOf<String>()
 
@@ -66,6 +70,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
             files(present, "present/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(duel, "duel/") { rel -> !rel.endsWith(".tmp") && rel.substringAfterLast('/') != Duels.CURRENT }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(world, "world/") { rel -> worldSyncs(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
+            files(shootout, "${ShootoutPaths.FOLDER}/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
         }
         return out
     }
@@ -127,6 +132,11 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
                 write(File(world, path.removePrefix("world/")), bytes)
                 seen.forget(path)
                 changed += "world"
+            }
+            path.startsWith("${ShootoutPaths.FOLDER}/") -> {
+                write(File(shootout, path.removePrefix("${ShootoutPaths.FOLDER}/")), bytes)
+                seen.forget(path)
+                changed += "shootout"
             }
             path.startsWith("duel/") && path != "duel/${com.kaiharimoto.neue.duel.Duels.CURRENT}" -> {
                 write(File(duel, path.removePrefix("duel/")), bytes)

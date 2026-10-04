@@ -185,6 +185,9 @@ import com.kaiharimoto.neue.update.NeueUpdates
 import com.kaiharimoto.neue.web.Webs
 import com.kaiharimoto.neue.banlist.BanlistCenter
 import com.kaiharimoto.neue.world.WorldPage
+import com.kaiharimoto.neue.shootout.ShootoutPage
+import com.kaiharimoto.neue.shootout.Shootouts
+import com.kaiharimoto.neue.shootout.dismissShootout
 import com.kaiharimoto.neue.world.WorldSnapshot
 import com.kaiharimoto.neue.world.Worlds
 import com.kaiharimoto.neue.zen.LocalZen
@@ -239,6 +242,13 @@ class NeueHolders(
 
     /** Whether Ai World has been opened this run: what only touches it when it exists asks this first. */
     val worldStarted: Boolean get() = worldHolder.isInitialized()
+
+    /** Shootout (1.1.2, Phase S): hands judged, cards rated; its trials in `<data>/shootout/<deck>/`. */
+    private val shootoutHolder = lazy { Shootouts(Platform.dataDir, this) }
+    val shootout: Shootouts by shootoutHolder
+
+    /** Whether Shootout has been opened this run. */
+    val shootoutStarted: Boolean get() = shootoutHolder.isInitialized()
 
     /** Command mode's voice (1.0.87): hold M, or the microphone beside the command line, to speak a move. */
     val duelVoice: DuelVoice by lazy { DuelVoice(this) }
@@ -405,6 +415,7 @@ class NeueHolders(
         if (neue.page == Page.DUEL && textFocus.any) { focus?.clearFocus(); return }
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return
         if (com.kaiharimoto.neue.world.dismissWorld(this)) return
+        if (dismissShootout(this)) return
         BackChain.esc(backFlags())?.let(::unwind)
     }
 
@@ -417,6 +428,7 @@ class NeueHolders(
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return true
         if (com.kaiharimoto.neue.world.dismissWorld(this)) return true
+        if (dismissShootout(this)) return true
         val step = BackChain.back(backFlags()) ?: return false
         unwind(step)
         return true
@@ -785,6 +797,7 @@ private fun Shell(h: NeueHolders) {
                             Page.PRESENT -> PresentPage(h)
                             Page.DUEL -> DuelPage(h)
                             Page.WORLD -> WorldPage(h)
+                            Page.SHOOTOUT -> ShootoutPage(h)
                             Page.SETTINGS -> SettingsPage(
                                 state,
                                 neue,
@@ -944,6 +957,8 @@ private fun Shell(h: NeueHolders) {
                             h.ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
                             h.ai.files.delete(GuideBook.path(id))
                             h.ai.files.deleteReports(id)
+                            // Its Shootout trials too (1.1.2).
+                            h.shootout.forgetDeck(id)
                             if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
                                 neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
                             }
