@@ -45,6 +45,15 @@ actual fun StageShader.brush(uniforms: ShaderUniforms.() -> Unit): Brush {
     return ShaderBrush(builder.makeShader().asComposeShader())
 }
 
+// A new native shader only when the uniforms differ from the ones [memo]'s last was made
+// from: the builder is shared, so on a miss every uniform recorded is set on it again, as
+// every draw did before.
+actual fun StageShader.brush(memo: BrushMemo, uniforms: ShaderUniforms.() -> Unit): Brush {
+    memo.reuse(uniforms)?.let { return it }
+    memo.replay(DesktopUniforms(builder))
+    return ShaderBrush(builder.makeShader().asComposeShader()).also { memo.made(it) }
+}
+
 actual val runtimeShadersAvailable: Boolean get() = true
 
 actual class StageEffect internal constructor(internal val builder: RuntimeShaderBuilder)

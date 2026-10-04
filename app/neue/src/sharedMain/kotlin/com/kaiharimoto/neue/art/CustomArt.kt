@@ -30,14 +30,23 @@ class CustomArt(private val dir: File) {
 
     private val cache = HashMap<Int, List<File>>()
 
+    /**
+     * The cards with a folder of their own pictures, read once from [dir] (1.0.92) rather than a
+     * folder looked for on disk for every card the window shows; null until first asked.
+     */
+    private var folders: Set<Int>? = null
+
     /** Pictures came in from another device (sync, 1.0.68): read the folders again. */
     fun reload() {
         cache.clear()
+        folders = null
         version++
     }
 
     fun files(card: Int): List<File> {
         if (version < 0) return emptyList()
+        val known = folders ?: (dir.list()?.mapNotNullTo(HashSet()) { it.toIntOrNull() } ?: emptySet()).also { folders = it }
+        if (card !in known) return emptyList()
         return cache.getOrPut(card) {
             File(dir, card.toString()).listFiles { f -> f.isFile && f.extension.lowercase() in EXTENSIONS }
                 ?.sortedBy { it.name }.orEmpty()
@@ -70,6 +79,7 @@ class CustomArt(private val dir: File) {
         val target = File(into, "${System.currentTimeMillis()}.$extension")
         runCatching { target.writeBytes(picked.bytes) }.getOrElse { return null }
         cache.remove(card)
+        folders = null
         version++
         return -files(card).indexOf(target).plus(1)
     }

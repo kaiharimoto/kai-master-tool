@@ -14,6 +14,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 
@@ -73,7 +74,13 @@ internal fun Handover(me: Shown, content: @Composable () -> Unit) {
     ) {
         if (me.frozen) {
             val picture = still
-            if (picture != null) Canvas(Modifier.fillMaxSize()) { drawImage(picture) }
+            if (picture != null) {
+                Canvas(Modifier.fillMaxSize()) { drawImage(picture) }
+                // A whole window of pixels: given back the moment it leaves the screen (1.0.92) — the next
+                // window is up, or the handover was called off — not whenever the collector comes by.
+                // What has already drawn it keeps its own reference to the pixels.
+                DisposableEffect(picture) { onDispose { runCatching { picture.asSkiaBitmap().close() } } }
+            }
         } else {
             content()
             // Let go of in the same pass as everything in the tree: by the time anyone

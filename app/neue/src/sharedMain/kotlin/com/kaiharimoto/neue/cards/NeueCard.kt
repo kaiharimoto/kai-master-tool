@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.cards
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -44,6 +45,8 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.rememberUpdatedState
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.memory.MemoryCache
@@ -206,13 +209,18 @@ private fun NeueCardFace(
         derivedStateOf { library?.let { it.version; it.fileFor(card.id.value) } }
     }
     // Where the pointer is over the card, -1..1 on each axis; null when it is not.
-    var feel by remember { mutableStateOf<Offset?>(null) }
+    val feelState = remember { mutableStateOf<Offset?>(null) }
+    var feel by feelState
     var hovered by remember { mutableStateOf(false) }
     // The light follows the pointer and settles back when it leaves, over the
     // family's base duration: light moving, never the card.
     // The frame round the artwork moves with the card's template, so the foil lands on it.
     val artFrame = remember(card.frameType) { ArtFrame.of(card.frameType) }
-    val light by animateOffsetAsState(feel ?: Offset.Zero, tween(MuMotion.BASE, easing = MuMotion.ease), label = "light")
+    // Animated in a scope of its own (1.0.92), so a pointer moving over the card recomposes
+    // that and not the whole card; the light is read in the draw below.
+    val animated = remember { Animated() }
+    FollowLight(feelState, animated)
+    val light by animated.light!!
     // A finger's art chip (touch swarm, rec 7): it comes only once the selection has
     // stood past a double-tap, so the second tap lands on the card, and only on a
     // card wide enough for the chip not to be most of what the finger aims at.
@@ -234,17 +242,24 @@ private fun NeueCardFace(
     val tilt = LocalTilt.current
     // The selected card stands up out of the page (1.0.41, kai: "it's a bit hard to tell
     // which card is being selected"): a little larger than its neighbours, and framed.
-    val raise by androidx.compose.animation.core.animateFloatAsState(
-        if (selected) SELECT_RAISE else 0f,
-        tween(MuMotion.BASE, easing = MuMotion.ease),
-        label = "raise",
-    )
+    // Animated in its own scope too, and read in the layer: only its leaving and reaching
+    // zero recomposes the card (whether the card needs a layer at all).
+    FollowRaise(selected, animated)
+    val raiseState = animated.raise!!
+    val raised by remember(raiseState) { derivedStateOf { raiseState.value != 0f } }
+    // How the card leans, read in the layer and the draw: through one derived value per card
+    // (1.0.92), so the deck's lean moving elsewhere redraws only the cards whose pose it changes.
+    val currentMotion = rememberUpdatedState(motion)
+    val leanPose = remember { derivedStateOf { currentMotion.value?.invoke() } }
+    // The foil's path and brushes, kept between draws for this card's size and frame.
+    val holo = remember { HoloCache() }
 
     Box(
         modifier
             .let { base ->
-                if (motion == null && !selected && raise == 0f) base else base.graphicsLayer {
-                    val pose = motion?.invoke() ?: LeanPose.REST
+                if (motion == null && !selected && !raised) base else base.graphicsLayer {
+                    val pose = leanPose.value ?: LeanPose.REST
+                    val raise = raiseState.value
                     // Compose turns a positive rotationY right-edge-away; the pose
                     // is written the other way round, nearest edge up.
                     rotationX = pose.rotationX
@@ -312,7 +327,7 @@ private fun NeueCardFace(
                     if (art == ArtState.READY || original == ArtState.READY) {
                         // The pointer's own light on this card, plus the lean it shares with its
                         // neighbours — so a card beside the pointer catches light as it turns.
-                        val lean = motion?.invoke()?.light(DeskLean.MAX_DEGREES)
+                        val lean = leanPose.value?.light(DeskLean.MAX_DEGREES)
                         val tipped = if (feel == null) tilt?.value else null
                         val own = when {
                             tipped != null -> Offset(tipped.x, tipped.y)
@@ -324,10 +339,10 @@ private fun NeueCardFace(
                             own == null -> Offset(lean.first, lean.second)
                             else -> Offset((own.x + lean.first).coerceIn(-1f, 1f), (own.y + lean.second).coerceIn(-1f, 1f))
                         }
-                        drawFoil(foil, lit, artFrame)
+                        drawFoil(foil, lit, artFrame, holo)
                         val mask = nameMask
                         if (mask != null && foil == Foils.HOLO && names != NameStyles.PRINTED) {
-                            drawFoilName(mask, lit ?: Offset.Zero, outlined = names == NameStyles.OUTLINE)
+                            drawFoilName(mask, lit ?: Offset.Zero, outlined = names == NameStyles.OUTLINE, holo)
                         }
                     }
                 },
@@ -370,6 +385,9 @@ private fun NeueCardFace(
                     onState = { state ->
                         if (state is AsyncImagePainter.State.Success) {
                             hdImage = state.result.image
+                            // The original is what the name is read off from now on: the small render is
+                            // let go (1.0.92) rather than held for the card's lifetime.
+                            smallImage = null
                             shownKeys.hd = state.result.memoryCacheKey
                         }
                         original = when (state) {
@@ -456,6 +474,27 @@ private fun NeueCardFace(
             },
         )
     }
+}
+
+/** A card's two animations, each set by the small composable that runs it ([FollowLight], [FollowRaise]). */
+private class Animated {
+    var light: State<Offset>? = null
+    var raise: State<Float>? = null
+}
+
+/**
+ * The light following the pointer over the card ([feel]), settling back when it leaves, over the
+ * family's base duration. A scope of its own, so each move recomposes this and nothing else.
+ */
+@Composable
+private fun FollowLight(feel: State<Offset?>, into: Animated) {
+    into.light = animateOffsetAsState(feel.value ?: Offset.Zero, tween(MuMotion.BASE, easing = MuMotion.ease), label = "light")
+}
+
+/** The selected card standing up out of the page, as it rises and settles: a scope of its own. */
+@Composable
+private fun FollowRaise(selected: Boolean, into: Animated) {
+    into.raise = animateFloatAsState(if (selected) SELECT_RAISE else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "raise")
 }
 
 /** The memory-cache keys of the decodes a card last showed: the placeholders for its next, sharper ones. */

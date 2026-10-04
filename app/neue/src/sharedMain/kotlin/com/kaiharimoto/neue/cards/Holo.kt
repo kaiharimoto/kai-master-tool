@@ -2,10 +2,13 @@ package com.kaiharimoto.neue.cards
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
+import com.kaiharimoto.mastertool.ui.gpu.BrushMemo
+import com.kaiharimoto.mastertool.ui.gpu.ShaderUniforms
 import com.kaiharimoto.mastertool.ui.gpu.StageShader
 import com.kaiharimoto.mastertool.ui.gpu.brush
 import com.kaiharimoto.mastertool.ui.gpu.compileStageShader
@@ -208,14 +211,14 @@ half4 main(float2 at) {
      * pointer is across the card (−1..1), or zero at rest. Returns false when
      * there is no shader, so the caller can draw its fallback.
      */
-    fun DrawScope.drawHolo(feel: Offset, frame: ArtFrame? = null): Boolean {
+    fun DrawScope.drawHolo(feel: Offset, frame: ArtFrame? = null, cache: HoloCache? = null): Boolean {
         val program = shader ?: return false
         val w = size.width
         if (w < 8f) return true
         val band = max(1f, w * BAND)
         val line = max(1f, w * 0.0012f)
         val bevel = max(1.5f, w * 0.006f)
-        val brush = program.brush {
+        val brush = program.brushOf(cache?.border) {
             float2("uSize", size.width, size.height)
             float2("uFeel", feel.x, feel.y)
             float("uBand", band)
@@ -233,7 +236,17 @@ half4 main(float2 at) {
         }
         // Only the border, the art frame and their hairlines are shaded: the print is
         // left alone. Nested rectangles under even-odd: card, print, frame, picture.
-        val region = Path().apply {
+        val region = cache?.region(size, frame) ?: regionOf(size, frame)
+        drawPath(region, brush)
+        return true
+    }
+
+    /** The shaded region of a card [size] wide and high with [frame]: see [drawHolo]. */
+    internal fun regionOf(size: Size, frame: ArtFrame?): Path {
+        val w = size.width
+        val band = max(1f, w * BAND)
+        val line = max(1f, w * 0.0012f)
+        return Path().apply {
             fillType = PathFillType.EvenOdd
             addRect(Rect(Offset.Zero, size))
             addRect(Rect(band + line, band + line, size.width - band - line, size.height - band - line))
@@ -244,19 +257,20 @@ half4 main(float2 at) {
                 addRect(outer.deflate(bevel + line))
             }
         }
-        drawPath(region, brush)
-        return true
     }
+
+    private fun StageShader.brushOf(memo: BrushMemo?, uniforms: ShaderUniforms.() -> Unit) =
+        if (memo == null) brush(uniforms) else brush(memo, uniforms)
 
     /**
      * The same stamp over all of [area], lit as though it were part of a card
      * this size — for a shape the caller then masks. The foil-name exploration
      * draws it under a mask of the printed letters.
      */
-    fun DrawScope.drawHoloSheet(area: Rect, feel: Offset): Boolean {
+    fun DrawScope.drawHoloSheet(area: Rect, feel: Offset, cache: HoloCache? = null): Boolean {
         val program = shader ?: return false
         val w = size.width
-        val brush = program.brush {
+        val brush = program.brushOf(cache?.sheet) {
             float2("uSize", size.width, size.height)
             float2("uFeel", feel.x, feel.y)
             float("uBand", max(1f, w * BAND))
@@ -273,5 +287,30 @@ half4 main(float2 at) {
         }
         drawRect(brush, topLeft = area.topLeft, size = area.size)
         return true
+    }
+}
+
+/**
+ * One card face's foil, kept between its draws (1.0.92): the shaded region for the
+ * size and frame it was last drawn at, and the brushes for the border and the
+ * stamped name, which are made again only when their light or size changes. The
+ * same path and the same uniforms, so the same pixels. One per card, drawn on the
+ * thread that draws it.
+ */
+class HoloCache {
+    internal val border = BrushMemo()
+    internal val sheet = BrushMemo()
+    private var path: Path? = null
+    private var pathSize = Size.Unspecified
+    private var pathFrame: ArtFrame? = null
+
+    internal fun region(size: Size, frame: ArtFrame?): Path {
+        val kept = path
+        if (kept != null && size == pathSize && frame == pathFrame) return kept
+        return Holo.regionOf(size, frame).also {
+            path = it
+            pathSize = size
+            pathFrame = frame
+        }
     }
 }

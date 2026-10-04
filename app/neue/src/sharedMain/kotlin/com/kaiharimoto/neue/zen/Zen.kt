@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
@@ -292,9 +293,17 @@ private fun Modifier.unplacedWhile(gone: State<Boolean>): Modifier = layout { me
     }
 }
 
-/** Fades with the second: the pool and the inspector, cards and all. */
+/**
+ * Fades with the second: the pool and the inspector, cards and all.
+ *
+ * Faded all the way, at an alpha of exactly zero, what is inside is not drawn
+ * (1.0.92): it would add nothing to a pixel, and drawing it kept every card in the
+ * pool redrawing unseen. It is still laid out and still placed, so nothing moves
+ * and the pointer meets it as before (`ZenShield` is what keeps it from the pointer).
+ */
 @Composable
 fun Modifier.zenDeep(): Modifier {
     val zen = LocalZen.current
-    return graphicsLayer { alpha = (1f - zen.deep).coerceIn(0f, 1f) }
+    val unseen = remember(zen) { derivedStateOf { 1f - zen.deep <= 0f } }
+    return graphicsLayer { alpha = (1f - zen.deep).coerceIn(0f, 1f) }.drawWithContent { if (!unseen.value) drawContent() }
 }
