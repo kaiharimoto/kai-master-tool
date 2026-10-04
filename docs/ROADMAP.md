@@ -243,8 +243,16 @@ Every phase lists:
   - **Results:** ratings with ranges, a pair grid, the next copy's worth, and opening patterns; every number opens its trials.
   - **Ai's parts:**
     - starting guesses from the cards;
-    - a second judge, trusted only as far as its measured agreement;
-    - one question of why on a surprising answer;
+    - **Ai learns to judge**, through four ways to teach:
+      - a calibration set;
+      - an interview;
+      - apprentice mode (it watches and asks);
+      - supervised runs (you correct it).
+
+      What it learns is a rubric, an example bank and the model's prediction. Your notes go into both.
+    - **A confidence score per kind of hand**, measured only on hands Ai never learned from. Ai runs alone only where the
+      bottom of that range clears your bar, with blind audits, and its answers are weighted by its measured accuracy, so
+      they never dilute yours;
     - the write-up, from the numbers.
 - **Needs:** Phase B (cards counted by card), the evidence ledger, F1.
 - **Done when:** a simulation with known true values shows the picker recovers them in far fewer trials than random hands, and

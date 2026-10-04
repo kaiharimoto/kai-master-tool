@@ -115,13 +115,80 @@ The same simulation tunes the settings: the share of random hands, how tightly p
 4. **Writing it up**, from the computed numbers only, held by the evidence ledger.
 5. **Later, a simulated judge (after Phase D):** the goldfish simulator plays the hand out as one more judge, weighted by its own measured agreement.
 
+## 6½. Teaching Ai to run it (kai, after the first draft)
+
+kai's ideas:
+- teach Ai with a preset data set, an interview and written notes;
+- a supervised run where the person corrects Ai as it goes;
+- an apprentice mode where Ai watches and asks questions to check its own knowledge;
+- a confidence score, so the person knows when Ai can run alone "without muddying the data with misjudgements".
+
+**What Ai learns, and where it is kept.** No model weights change; three things do:
+1. **The rubric:** how this person judges this matchup, in words. "A hand with a starter and a hand trap beats their turn
+   one unless it is Ash-only."
+   - It is written from the interview and the person's notes.
+   - It is kept beside the guide (`shootout/<deck>/<matchup>.rubric.md`) and reviewed like the guide.
+   - Under the evidence ledger, any number in it carries its proof.
+2. **The example bank:** every trial the person judged. The most similar ones (by cards, roles, turn and the opponent's
+   interaction) are shown to Ai with each new hand.
+3. **The model's own prediction:** the card ratings so far, given to Ai as one input among the others.
+
+The person's note on a trial ("this only wins if they have no Imperm") goes with that trial into the example bank. The
+recurring ones are offered for the rubric.
+
+**The four ways to teach**, all feeding the same three things:
+
+| Mode | The person | Ai | What the data is marked |
+|---|---|---|---|
+| **Calibration set** (the preset) | judges a fixed set of 24–40 hands, chosen by the picker to cover the matchup's kinds of hand (with and without a starter, interaction or none, first and second) | answers the same set blind afterwards, as its first exam | the person's, blind |
+| **Interview** | answers Ai's questions about how they judge, with chips and words | writes the rubric as it goes; reviewed on Finish | rubric only, no trials |
+| **Apprentice** | judges as normal, never shown Ai's answer first | predicts silently. Where it disagreed or was unsure it may ask one question after the person answers, at most one every few trials | the person's, blind; Ai's prediction kept apart |
+| **Supervised** | sees Ai's verdict and reason, and accepts with one key or corrects | judges first, explaining in one line | the person's, **seen** (they saw Ai's answer, so it may be anchored) |
+
+**Keeping the data clean.**
+- **Every answer is labelled:** by the person blind, by the person after seeing Ai, or by Ai alone.
+- **Each judge has its own measured accuracy.** The rating model treats each kind as its own judge, with its own noise and
+  its own lean toward win or loss, estimated from where they overlap (Dawid–Skene). So:
+  - an Ai answer counts only as much as Ai has shown it can be trusted;
+  - a consistent lean (always a little optimistic, say) is measured and corrected, not averaged into the ratings.
+- **Supervised answers are kept, but marked.** Their trust is measured against the person's blind answers on the same
+  kinds of hand. If seeing Ai's verdict first moves the person's answers, it shows and they count for less.
+
+**The confidence score: when Ai may run alone.**
+1. **Agreement is measured only on hands Ai never learned from.** Each blind answer by the person is compared with
+   what Ai would have said, using only the examples and rubric it had before. A score from its own examples would
+   flatter it.
+2. **Per kind of hand, not one number.** Agreement is counted per kind (first or second, starter or none, the
+   opponent's interaction), each with a range from its count. For example:
+   - "Agrees with you 93 % (87–97 %) on going-first hands with a starter."
+   - "Not yet on bricks into interaction: 64 %, 25 hands."
+3. **Ai's own certainty is scored too.** Ai states how sure it is, and that is checked against the person's answers. A
+   well-calibrated Ai can be routed by its certainty: it keeps what it is sure of and sends the rest to the person.
+4. **The gate.** Ai runs a kind of hand alone only when the bottom of its agreement range is above the person's chosen
+   bar (90 % by default) and it is itself sure. Everything else goes to the person.
+5. **Audits keep the gate honest.**
+   - A share of Ai's solo hands (one in ten, more early on) come back to the person blind.
+   - Two misses beyond the range close that kind again until it is earned back.
+   - When the deck or the opponent's deck changes, every kind is re-earned from a short calibration set.
+6. **What the person sees:** a trust panel per matchup.
+   - **The open kinds:** each one Ai may judge, with its agreement range.
+   - **The audit record.**
+   - **How much of the data is Ai's:** "38 % of trials judged by Ai, weighted to 27 % by its accuracy".
+   - **What Ai's answers moved:** how much each card's rating would change if they were taken out. A large change is
+     flagged for a look.
+
+**Is it better?** Every change to how Ai learns (the rubric, the example bank, the model's prediction) is measured on the
+person's held-out blind trials, by agreement and calibration, with and without each piece (ablation). So "exponentially
+better" is a number, the same discipline as Trust (Phase A), whose runner it reuses.
+
 ## 7. Order of work
 
 1. This note, then the simulation study (core, tests): the method proven and tuned.
 2. The model and the picker in core, held by the simulation's tests.
 3. The trial screens: keyboard, mouse and finger; sessions of about ten minutes; Present-quality card art.
 4. Results, the guide link, siding.
-5. Ai's parts.
+5. Ai's parts: the calibration set and apprentice mode first (they make the blind data the trust score needs), then the
+   interview and notes, then supervised runs, then the gate and audits that let Ai run alone.
 
 **Needs:** Phase B (alternate arts counted as one card, legality); the evidence ledger (1.0.98); F1's runner style for the simulation.
 **Done when:** the simulation's recovery and calibration tests pass; a real session gives ratings with ranges; and every number opens its trials.
