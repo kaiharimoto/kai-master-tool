@@ -169,7 +169,7 @@ Every phase lists:
     - a menu of legal moves from `DuelVerbs`;
     - its guide at the table.
   - **Puzzles:** positions with a known best line, checked by `DuelRules`, as an evaluation set.
-  - **Self-play tables in Ai World:** a seed, who goes first, and a fork of the live position.
+  - **Ai vs Ai:** two independent Ai sessions, one a seat, each seeing only its own, refereed and watched; Ai World's duel tables a sandbox for scripts (a seed, who goes first, a fork of the live position).
 - **Needs:** F1 (puzzle set), F4 (Ai's permissions at the table), Phase B (correct cards).
 - **Done when:** "Ai won N of M against kai, with these settings" can be read from the records; the puzzle set has a baseline score.
 - **Size:** 2 to 3 releases.
@@ -200,9 +200,9 @@ Every phase lists:
 - **Builds:**
   - **Determinised search over the opponent's interruptions**, sampled from the field (Phase B) and weighted by what the opponent has shown. Lines are scored by regret, within a phone's budget of about one CPU second per decision.
   - **IS-MCTS (search over what Ai can actually know)** for play-around decisions, such as which card to lead into a possible Ash.
-  - **The model inside the search:** it proposes moves, models the opponent, and writes and tunes the value function from self-play.
-  - **A rating per Ai version:** Elo from self-play and puzzles, so each change is a number.
-- **Needs:** Phase D (a forward model), Phase C (self-play tables, provenance).
+  - **The model inside the search:** it proposes moves, models the opponent, and writes and tunes the value function from Ai vs Ai matches.
+  - **A rating per Ai version:** Elo from Ai vs Ai matches and puzzles, so each change is a number.
+- **Needs:** Phase D (a forward model), Phase C (Ai vs Ai matches, provenance).
 - **Done when:** Ai plays a whole turn by search; its rating rises version over version; it beats its own pre-search version over a fixed set of seeds.
 - **Size:** 3 to 4 releases.
 
@@ -341,5 +341,5 @@ These change what gets built. Each has a default the plan assumes until you say 
 | A Trust | Shipped 1.0.99 / v1.3.77 |
 | B Card truth | **Done**: 1.1.0 / v1.3.78 (card identity, release data, banlists by date, the field read honestly) and 1.1.1 / v1.3.79 (the builder's dated legality and Genesys, the field as of a date, the Card truth set in Trust) |
 | S Shootout | **Done**, stages 1–3 (`docs/phases/S.md` §7): the simulation study, model and picker; page `09` (1.1.3: sessions, storage, results); Ai learns to judge — the rubric, example bank and prediction, the calibration set and exam, apprentice, supervised and the interview, Ai's answers as their own judge, the per-kind confidence score, the gate and audits, the trust panel. Left: Ai's priors from the cards, asking why, the ablation runner, fatigue |
-| C The measured duel | **Done** (`docs/phases/C.md`): stage 1 — provenance on every move, results and "Ai won N of M" (`duel_records`), Prep's first or second, the four duel leads; stage 2 — the table in full for Ai, `duel_moves`, its guide at the table; stage 3 — the duel puzzle set in Trust with its baseline (nothing 0, battle-only greedy 2, solutions 17 of 17), the red team on the phase; **Ai vs Ai** (kai: two Ai sessions play each other, replacing self-play) in progress |
+| C The measured duel | **Done** (`docs/phases/C.md`): stage 1 — provenance on every move, results and "Ai won N of M" (`duel_records`), Prep's first or second, the four duel leads; stage 2 — the table in full for Ai, `duel_moves`, its guide at the table; stage 3 — the duel puzzle set in Trust with its baseline (nothing 0, battle-only greedy 2, solutions 17 of 17), Ai vs Ai — two sessions, one a seat, refereed and watched, its records counted apart ("Ai vs Ai: … beat … N of M") — with Ai World's duel tables a sandbox for scripts, the red team on the phase |
 | D to G | Planned |

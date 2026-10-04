@@ -236,8 +236,6 @@ class NeueHolders(
     private val worldHolder = lazy {
         Worlds(java.io.File(Platform.dataDir, "world")).also { w ->
             w.host = { WorldSnapshot.of(this) }
-            // A self-play table that ends is a duel record of its own kind (Phase C stage 3).
-            w.keepDuel = { r -> duel.keepResult(r) }
             w.prefs = { neue.prefs.world }
             w.comeForward = { if (neue.page != Page.WORLD) neue.go(Page.WORLD) }
             w.load()

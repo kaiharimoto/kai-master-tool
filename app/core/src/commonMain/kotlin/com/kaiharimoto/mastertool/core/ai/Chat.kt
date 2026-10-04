@@ -287,6 +287,12 @@ data class AiSession(
         /** Shootout's interview (Phase S stage 3): how the person judges a matchup, written as its rubric and reviewed on Finish. */
         const val MODE_RUBRIC = "rubric"
 
+        /**
+         * One seat of an Ai vs Ai match (`docs/phases/C.md` §6): the conversation a seat's session had with the referee,
+         * kept for the person to read. Read-only: a message typed into it starts a new conversation.
+         */
+        const val MODE_MATCH = "ai-vs-ai"
+
         /** What an old tool result is cut to once the person clears them. */
         const val CLEARED = 200
 

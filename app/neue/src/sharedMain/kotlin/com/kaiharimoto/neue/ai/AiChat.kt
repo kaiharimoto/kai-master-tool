@@ -797,7 +797,7 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
                     Mono(
                         java.time.Instant.ofEpochMilli(s.updatedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString() +
                             (if (s.mode == AiSession.MODE_TUNE) " · Fine Tuning" else "") +
-                            (if (s.mode == AiSession.MODE_DUEL) " · Duel" else if (s.mode == AiSession.MODE_WORLD) " · World" else "") +
+                            (if (s.mode == AiSession.MODE_DUEL) " · Duel" else if (s.mode == AiSession.MODE_WORLD) " · World" else if (s.mode == AiSession.MODE_MATCH) " · Ai vs Ai" else "") +
                             " · ${s.messages} messages",
                         color = c.ink45,
                     )

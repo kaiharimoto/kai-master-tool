@@ -244,10 +244,13 @@ object DuelBrief {
         return lines.zip(game.entries.subList(from, game.cursor)).filterNot { (_, e) -> aisOwn(e, aiSeat) }.map { it.first }
     }
 
-    /** Whether [e] was Ai's own: made by Ai, or the table's for Ai's seat; an entry with no provenance by its seat. */
+    /**
+     * Whether [e] was Ai's own: made by Ai at [aiSeat], or the table's for Ai's seat; an entry with no provenance by its
+     * seat. An Ai at the other seat — the other session of an Ai vs Ai match (`docs/phases/C.md` §6) — is the opponent.
+     */
     fun aisOwn(e: DuelEntry, aiSeat: Int): Boolean {
         val by = e.by ?: return e.seat == aiSeat
-        return by.byAi || (by.by == Provenance.TABLE && e.seat == aiSeat)
+        return (by.byAi && (by.aiSeat == null || by.aiSeat == aiSeat)) || (by.by == Provenance.TABLE && e.seat == aiSeat)
     }
 
     fun turnLines(game: DuelGame, viewer: Int?, catalog: DuelCatalog, folds: DuelFolds<*>? = null, cap: Int = 40): List<String> {

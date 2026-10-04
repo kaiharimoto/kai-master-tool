@@ -190,7 +190,7 @@ class JsRuntimeTest {
     }
 
     @Test
-    fun aScriptPlaysAiAgainstItselfToTheEnd() {
+    fun aScriptPlaysASandboxTableToTheEnd() {
         val (r, api) = run(
             """
             var t = ygo.duel.start({a: 'd1', b: 'd1', seed: 21, first: 1});
@@ -203,8 +203,7 @@ class JsRuntimeTest {
             """.trimIndent(),
         )
         assertTrue(r.ok, r.err)
-        assertEquals("21 1 1\ntrue true null\n1 self-play 1 false\ntrue\n", r.out)
-        assertEquals(1, api.finished.size)
+        assertEquals("21 1 1\ntrue true null\n1 scripted 1 false\ntrue\n", r.out)
     }
 
     @Test

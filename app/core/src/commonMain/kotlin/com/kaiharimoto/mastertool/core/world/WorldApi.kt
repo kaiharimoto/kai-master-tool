@@ -13,13 +13,11 @@ import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelFork
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
-import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.ai.DuelMoves
-import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import kotlin.random.Random
 import com.kaiharimoto.mastertool.core.hand.HandConstraint
@@ -62,15 +60,6 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
     private val duels = mutableListOf<DuelGame>()
     /** The tables forked from the duel in play: the table's handle → that duel's id. */
     private val forkOf = HashMap<Int, String>()
-    /** The tables whose end is already kept in [finished]. */
-    private val ended = HashSet<Int>()
-
-    /**
-     * Each self-play table that finished in this run, as a result of its own kind (Phase C stage 3): the world keeps them
-     * with the duel records, apart from games against people.
-     */
-    val finished = mutableListOf<DuelResult>()
-
     // A fork's cards its seat never saw are unknown cards (DuelFork): they read as such, never as a passcode.
     private val catalog = DuelCatalog.cached { code -> if (code == DuelFork.UNKNOWN) DuelFork.UNKNOWN_INFO else host.cardById(code)?.let(DuelCardInfo::of) }
 
@@ -306,10 +295,12 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
 
     // ---- A duel table of the script's own: the real rules, headless, both seats the script's. -------------------
     //
-    // Self-play (Phase C stage 3, `docs/phases/C.md` §6): a table takes a seed (a fresh one when none is given, always
+    // A sandbox for scripts (`docs/phases/C.md` §6): a table to test lines on, never a game — Ai's games are Ai vs Ai, two
+    // sessions one a seat, on the Duel page. A table takes a seed (a fresh one when none is given, always
     // returned — the tables were all seed 1 before, every game the same deal), who goes first, or a fork of the duel in
     // play as the seat Ai would hold sees it (DuelFork). Moves go through the line Ai plays kai with (ComboRunner.plan),
-    // each Ai's own (provenance `ai` on both seats), and a table that ends becomes a self-play result ([finished]).
+    // the script's, so no one's (no provenance: no player made them), and a table that ends says how ([ending]) — kept
+    // nowhere, never a duel record, never in any summary.
 
     private fun duelNew(a: JsonObject): JsonElement {
         require(duels.size < limits.duels) { "a run may open at most ${limits.duels} duel tables" }
@@ -363,45 +354,35 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             val why = plan.problem.orEmpty().substringAfter("): ", plan.problem.orEmpty())
             return refused(if ("a question or the table's chrome" in why) "“$line” asks the table something; ygo.duel takes moves — read the table with brief() or state()" else why)
         }
-        val by = Provenance(Provenance.AI, aiSeat = seat, aiKnows = DuelBrief.FULL)
         var g = game
         for ((_, actions) in plan.steps) {
-            val r = g.act(actions, seat, at = host.now(), by = by)
+            val r = g.act(actions, seat, at = host.now())
             if (r.problem != null) return refused(r.problem)
             g = r.game
         }
         duels[h] = g
-        val result = noteEnd(h, g)
         return buildJsonObject {
             put("ok", true)
             put("said", plan.steps.joinToString("; ") { it.first })
-            result?.let { put("ended", resultJson(it)) }
+            ending(g)?.let { put("ended", it) }
         }
     }
 
-    /** A table that has just ended, kept once as a self-play result. */
-    private fun noteEnd(h: Int, g: DuelGame): DuelResult? {
-        if (h in ended || g.state.solo) return null
-        val r = DuelResults.selfPlay(g, host.now(), "${g.header.id}-s${g.header.seed}", forkOf[h]) ?: return null
-        ended += h
-        finished += r
-        return r
+    /** How a sandbox table ended, for the script alone: never a duel record (`docs/phases/C.md` §6). Null while it goes on. */
+    private fun ending(g: DuelGame): JsonElement? {
+        if (g.state.solo) return null
+        val (winner, how) = DuelResults.ending(g.state) ?: return null
+        return buildJsonObject {
+            put("winner", winner?.let(::JsonPrimitive) ?: JsonNull)
+            put("how", how)
+            put("turns", g.state.turn)
+            put("first", DuelResults.firstSeat(g.header, g.state))
+            put("kind", SCRIPTED)
+            put("seed", g.header.seed)
+        }
     }
 
-    private fun duelResult(a: JsonObject): JsonElement {
-        val h = a.int("h") ?: -1
-        duel(a)
-        return finished.firstOrNull { it.duel == duels[h].header.id }?.let(::resultJson) ?: JsonNull
-    }
-
-    private fun resultJson(r: DuelResult): JsonElement = buildJsonObject {
-        put("winner", r.winner?.let(::JsonPrimitive) ?: JsonNull)
-        put("how", r.how)
-        put("turns", r.turns)
-        put("first", r.first)
-        put("kind", r.kind)
-        put("seed", r.seed)
-    }
+    private fun duelResult(a: JsonObject): JsonElement = ending(duel(a)) ?: JsonNull
 
     /** The moves [seat] may make now (`DuelMoves`, the menu Ai reads at kai's table): each line exactly as `do` takes it. */
     private fun duelMoves(a: JsonObject): JsonElement {
@@ -503,6 +484,9 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
     companion object {
         const val MAX_SAMPLE = 1_000_000
 
+        /** What a sandbox table's ending says it is: a script's, never a game (`docs/phases/C.md` §6). */
+        const val SCRIPTED = "scripted"
+
         /** A deck's scale, for every count a host loop walks: a deck, its copies, a hand, a draw. */
         const val MAX_DECK = 10_000
         const val MAX_COMB = 100_000
@@ -552,7 +536,7 @@ interface WorldHost {
     /** Today, `yyyy-MM-dd`, for a script that names no day; null reads the newest list kept (1.1.1). */
     fun today(): String? = null
 
-    /** The time now, in ms: when a self-play table began and ended (Phase C stage 3). */
+    /** The time now, in ms: when a script's duel table was dealt. */
     fun now(): Long = 0L
 
     /**

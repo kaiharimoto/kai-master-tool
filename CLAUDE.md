@@ -703,7 +703,17 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `<data>/duel/records/<id>.json` (one file a duel), counted by `DuelResults` ("Ai won N of M against kai, with these
   settings"; `duel_records`). Ai is held to the guest's rules for hidden cards (`DuelReach`), holds no seat at a networked
   table (`AiTable`), and a move put into the past never re-deals a later draw (`Past.redeals`).
-  `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
+  **Ai vs Ai** (kai: "have two different Ai sessions play each other"; `C.md` §6): two independent sessions, one a seat
+  (`core/duel/match`: `AiMatch`, `AgentPlayer`, `MatchReferee`, `MatchTable`), each with its own backend
+  (`AiState.newBackend`, never the panel's cached one), history and conversation (`AiSession.MODE_MATCH`), told only its own
+  seat — its `DuelView`, its own deck's guide, four tools scoped to it, `DuelReach` and `Secrets` — **nothing of one session
+  reaches the other but the table**. The referee keeps the roll, turn, windows, priority and chain, bounds each cue, says
+  every pass, ended turn and forfeit in the log; a match is watched live on its own table (`DuelMatches`, `Duels.spectating`:
+  the person's moves refused), API connections only, never networked; a finished one is a `DuelResult` of kind `ai-vs-ai`
+  with each seat's connection and model, counted apart. Ai World's duel tables are a sandbox for scripts (kind `scripted`,
+  never a record).
+  `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`;
+  `--duel-match=dialog|live|over` for Ai vs Ai.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is
   the model (`Presentation`, `Slide`, one flat `Element`, `DeckFocus`, `DeckSnapshot` — the deck kept inside,

@@ -184,8 +184,10 @@ internal fun DuelPage(h: NeueHolders) {
                 // Over the table's own width, between the rails, never over their heads.
                 val across = Modifier.offset(layout.field.left.dp, 4.dp).width((layout.phases.right - layout.field.left).dp)
                 if (duels.role != null && !phone) Box(Modifier.zIndex(95f).then(across)) { NetBar(h, duels, overlay = true) }
+                // Ai vs Ai being watched (`docs/phases/C.md` §6): who plays whom, who is moving, Stop.
+                if (duels.spectating) Box(Modifier.zIndex(97f).then(across)) { MatchBar(h) }
                 // The other seat's ask to move on, for the turn player to answer (1.0.79).
-                if (game.state.proposal != null && replay == null) {
+                if (game.state.proposal != null && replay == null && !duels.spectating) {
                     Box(Modifier.zIndex(96f).then(across)) { ProposalBar(duels, game.state) }
                 }
                 // Command mode's Spotlight (1.0.87): over the table and its rails, in the window's own layer.
@@ -194,6 +196,7 @@ internal fun DuelPage(h: NeueHolders) {
         }
     }
     if (duels.setupOpen) SetupDialog(h, duels)
+    if (duels.matches.dialogOpen) AiVsAiDialog(h)
     if (duels.libraryOpen) ReplayLibrary(duels, h.ai.name)
     if (duels.combosOpen) DuelAiDialog(h)
     // Ai takes its seat's turns by itself when asked to (1.0.76): once a turn, when the turn passes to it.
@@ -238,8 +241,10 @@ internal fun DuelPage(h: NeueHolders) {
     // One effect, in order (1.0.86, the red team): Ai's answer is settled — the person's moves go on, a held change is
     // made, the turn's opening resumes — before Ai is woken on its watches, a kept cue, or its own turn. Two effects
     // raced, and Ai was asked to play its turn while its opening still waited.
-    LaunchedEffect(duels.fired, duels.queuedCue, h.ai.running, watching, live?.state?.turn, live?.state?.active, prefs.aiPlays, duels.aiAnswering, duels.held) {
+    LaunchedEffect(duels.fired, duels.queuedCue, h.ai.running, watching, live?.state?.turn, live?.state?.active, prefs.aiPlays, duels.aiAnswering, duels.held, duels.spectating) {
         if (h.ai.running) return@LaunchedEffect
+        // An Ai vs Ai match on the table: the duel in play waits behind it, and no one is asked to play it.
+        if (duels.spectating) return@LaunchedEffect
         // Ai has answered (or stopped): the person's moves go on, and a phase change held for it is made.
         if (duels.aiAnswering || (!watching && duels.held != null)) duels.dontWait()
         if (!watching && duels.fired.isNotEmpty()) duels.fired = emptyList()
@@ -288,15 +293,16 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
                     MuButton("Table ▾", { neue.menu = MenuSpec(duels.tableMenuAt, tableMenu(h)) }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
                 }
             }
-            if (!game.state.solo && !online) {
+            // Watching Ai vs Ai there is no seat of the person's to sit at, and nothing of theirs to take back.
+            if (!game.state.solo && !online && !duels.spectating) {
                 Tip("Sit at the other seat", kbd = DeskShortcuts.chordFor(DeskAction.DUEL_SWAP)?.let(DeskShortcuts::kbd)) {
                     MuButton("Seat: ${DuelWords.seatName(game.state, duels.bottom)}", { duels.swap() }, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
                 }
             }
             if (online) Small("Online · ${duels.peer ?: "waiting"}", color = c.ink70, maxLines = 1)
             VRule(Modifier.height(24.dp), color = c.ink12)
-            IconButton(Icons.Undo, { duels.undo() }, enabled = game.canUndoMove || online || duels.held != null, label = if (online) "Ask to take back" else "Undo", reason = "Nothing to take back")
-            if (!online) IconButton(Icons.Redo, { duels.redo() }, enabled = game.canRedo, label = "Redo", reason = "Nothing to put back")
+            IconButton(Icons.Undo, { duels.undo() }, enabled = !duels.spectating && (game.canUndoMove || online || duels.held != null), label = if (online) "Ask to take back" else "Undo", reason = if (duels.spectating) "Ai vs Ai is on the table" else "Nothing to take back")
+            if (!online) IconButton(Icons.Redo, { duels.redo() }, enabled = !duels.spectating && game.canRedo, label = "Redo", reason = if (duels.spectating) "Ai vs Ai is on the table" else "Nothing to put back")
             if (phone) {
                 Box(Modifier.weight(1f))
                 IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
@@ -412,6 +418,8 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         add(MenuEntry("The card", hint = "Read it large") { duels.drawer = "card" })
         add(MenuEntry("Log and chat") { duels.drawer = "log" })
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
+        // Two Ai sessions, one a seat (`docs/phases/C.md` §6): never on a networked table, never with Ai off.
+        if (!online && neue.prefs.ai.enabled && !duels.matches.running) add(MenuEntry("Ai vs Ai…", hint = "Two sessions, one a seat") { duels.matches.dialogOpen = true })
         if (online) add(MenuEntry("Leave the table", separatorBefore = true, danger = true) { duels.leave() })
     }
 }
@@ -497,6 +505,10 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
                 MuButton("Close", { duels.setupOpen = false }, variant = BtnVariant.GHOST)
             } else {
             MuButton("Cancel", { duels.setupOpen = false }, variant = BtnVariant.GHOST)
+            // A quiet way to a match of two Ai sessions instead (`docs/phases/C.md` §6).
+            if (neue.prefs.ai.enabled && !duels.matches.running) {
+                MuButton("Ai vs Ai…", { duels.setupOpen = false; duels.matches.dialogOpen = true }, variant = BtnVariant.GHOST)
+            }
             MuButton("Shuffle and draw", {
                 if (mine.deck.main.isEmpty()) { neue.note = Note("That deck has no Main Deck to draw from."); return@MuButton }
                 neue.update { it.copy(duel = it.duel.copy(deckId = mine.id, opponentDeckId = if (solo) "-" else theirs.id, names = listOf(me, them))) }

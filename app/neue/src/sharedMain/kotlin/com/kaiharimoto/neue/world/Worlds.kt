@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.world.Board
 import com.kaiharimoto.mastertool.core.world.Instruments
 import com.kaiharimoto.mastertool.core.world.JsRuntime
@@ -85,9 +84,6 @@ class Worlds(val dir: File) {
 
     /** Asked when Ai starts work in a world with [WorldPrefs.follow] on: brings the World page forward. */
     var comeForward: () -> Unit = {}
-
-    /** Keeps a self-play table's result with the duel records (Phase C stage 3): set by the app's holders. */
-    var keepDuel: (DuelResult) -> Unit = {}
 
     var list by mutableStateOf<List<World>>(emptyList())
         private set
@@ -363,11 +359,6 @@ class Worlds(val dir: File) {
             val api = WorldApi(hostIn(w))
             val outcome = if (language == WorldPaths.LANG_PY) runPython(w, safe, source, limit, api) else runJs(label, source, limit, api)
             val boards = pin(api.shown, safe, by)
-            // Self-play tables that ended (Phase C stage 3): kept with the duel records, as Ai against itself.
-            if (api.finished.isNotEmpty()) {
-                api.finished.forEach { keepDuel(it) }
-                line(TermLine.Kind.NOTE, "— ${api.finished.size} self-play duel${if (api.finished.size == 1) "" else "s"} kept in the duel records")
-            }
             val record = outcome.first.copy(path = safe, boards = boards.map { it.id }, ms = now() - started)
             line(if (record.ok) TermLine.Kind.NOTE else TermLine.Kind.ERR, if (record.ok) "— done in ${record.ms} ms" + (if (boards.isNotEmpty()) ", ${boards.size} board(s)" else "") else record.err)
             log(WorldEvent(now(), WorldEvent.Kind.RUN, by, path = safe, text = (if (record.ok) "Ran " else "Failed ") + label, run = record.copy(out = record.out.take(4_000))))

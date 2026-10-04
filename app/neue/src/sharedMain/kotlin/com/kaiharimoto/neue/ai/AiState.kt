@@ -410,7 +410,8 @@ class AiState(internal val h: NeueHolders) {
         draft = ""
         attached = emptyList()
         if (MoodTracker.isThanks(words)) mood.thanked(clock())
-        val current = session?.takeIf { it.connection == connection.id } ?: begin(connection)
+        // A seat's conversation of an Ai vs Ai match is read, never carried on: a message starts a new one.
+        val current = session?.takeIf { it.connection == connection.id && it.mode != AiSession.MODE_MATCH } ?: begin(connection)
         val images = pictures.map { files.putImage(current.id, it.bytes, it.mime, it.width, it.height) }
         val scope = host.scope()
         val scopeChanged = scope?.path != current.scopeShown
