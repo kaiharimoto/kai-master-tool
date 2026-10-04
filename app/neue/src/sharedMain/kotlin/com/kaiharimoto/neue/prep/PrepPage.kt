@@ -360,12 +360,14 @@ private fun ReadyBox(event: PrepEvent, webs: Webs, mine: StoredDeck?, state: Dec
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro("Ready to register", color = c.ink70)
         if (mine == null) {
-            Small("Choose your deck, and it is checked here: its legality today and every siding plan.", color = c.ink45)
+            Small("Choose your deck, and it is checked here: its legality on the day and every siding plan.", color = c.ink45)
             return@Column
         }
         val deck = webs.deckOf(mine, state)
-        val items = remember(deck, state.index, state.format, webs.revision, event.tier) {
-            EventCheck.check(deck, DeckValidator.validate(deck, state.index::byId, state.format), webs.sidingOf(mine, state), event.tier)
+        val items = remember(deck, state.index, state.format, webs.revision, event.tier, event.date) {
+            // As of the event's day (Phase B): a card out by then is legal there, one not yet out is not.
+            val onTheDay = event.date.takeIf { IsoDate.epochDay(it) != null }
+            EventCheck.check(deck, DeckValidator.validate(deck, state.index::byId, state.format, onTheDay), webs.sidingOf(mine, state), event.tier)
         }
         items.forEach { item ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
