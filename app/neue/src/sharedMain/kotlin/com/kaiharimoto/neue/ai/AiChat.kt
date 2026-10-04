@@ -82,6 +82,7 @@ import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.text.Block
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import com.kaiharimoto.mastertool.core.ai.text.Inline
+import com.kaiharimoto.mastertool.core.ai.text.MarkdownMemo
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.neue.Viewing
 import com.kaiharimoto.neue.cursor.cursor
@@ -374,7 +375,9 @@ internal fun ActivityLine(summary: String, isError: Boolean) {
 @Composable
 internal fun ReplyView(ai: AiState, text: String, live: Boolean = false) {
     val c = Mu.colors
-    val blocks = remember(text, live) { ChatMarkdown.parse(text, streaming = live) }
+    // While it streams only the end changes: the blocks before it are kept, the same objects (1.0.92).
+    val memo = remember { MarkdownMemo() }
+    val blocks = remember(text, live) { if (live) memo.parse(text, streaming = true) else ChatMarkdown.parse(text) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         AiName(ai.name, c.ink45)
         SelectionContainer {
@@ -768,7 +771,8 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
 @Composable
 fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
     val c = Mu.colors
-    val sessions = remember(ai.historyOpen) { ai.files.sessions() }
+    // Each conversation's line is read once and kept (1.0.92), and read ahead off the main thread by the panel.
+    val sessions = remember(ai.historyOpen) { ai.files.summaries() }
     if (sessions.isEmpty()) {
         Box(modifier.padding(16.dp)) { Small("No conversations yet.", color = c.ink70) }
         return
@@ -794,7 +798,7 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
                         java.time.Instant.ofEpochMilli(s.updatedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString() +
                             (if (s.mode == AiSession.MODE_TUNE) " · Fine Tuning" else "") +
                             (if (s.mode == AiSession.MODE_DUEL) " · Duel" else "") +
-                            " · ${s.turns.count { it.role == Role.USER && !it.isToolResults }} messages",
+                            " · ${s.messages} messages",
                         color = c.ink45,
                     )
                 }

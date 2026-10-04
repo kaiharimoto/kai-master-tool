@@ -62,8 +62,10 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.builder.CardActions
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -994,9 +996,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         }
     }
 
-    private fun sessionSearch(query: String, limit: Int): Answer {
+    private suspend fun sessionSearch(query: String, limit: Int): Answer {
         val words = query.lowercase().split(' ').filter { it.isNotBlank() }
-        val hits = ai.files.sessions().flatMap { s ->
+        val hits = withContext(Dispatchers.IO) { ai.files.sessions() }.flatMap { s ->
             s.turns.filter { !it.isToolResults }.mapNotNull { t ->
                 val text = t.text
                 if (words.all { text.lowercase().contains(it) }) {
@@ -1010,10 +1012,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** Fine Tuning's report (1.0.54): kept beside the deck's guide, and a PDF when the session ends. */
     /** Words found in this conversation's saved history, the summarised part too, or in every conversation (1.0.56). */
-    private fun recall(query: String, scope: String, limit: Int): Answer {
+    private suspend fun recall(query: String, scope: String, limit: Int): Answer {
         if (query.isBlank()) return fail("Say what to find.")
         val current = ai.session
-        val pool = if (scope == "all") (ai.files.sessions().filter { it.id != current?.id } + listOfNotNull(current)) else listOfNotNull(current)
+        val pool = if (scope == "all") (withContext(Dispatchers.IO) { ai.files.sessions() }.filter { it.id != current?.id } + listOfNotNull(current)) else listOfNotNull(current)
         val hits = Recall.search(pool, query, limit.coerceIn(1, 30))
         val day = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE.withZone(java.time.ZoneId.systemDefault())
         val said = hits.joinToString("\n") { h ->

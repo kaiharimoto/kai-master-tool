@@ -261,7 +261,7 @@ internal fun AiState.reflect(finished: AiSession) {
     val connection = prefs.connection?.takeIf { it.id == finished.connection } ?: return
     val model = runCatching { backendFor(connection) }.getOrNull()?.takeIf { !it.runsOwnLoop } ?: return
     // Read once: a conversation reopened and left again is reflected on for what is new.
-    files.saveSession(finished.copy(reflected = finished.turns.size))
+    save(finished.copy(reflected = finished.turns.size))
     val transcript = finished.turns.drop(finished.reflected).filter { !it.isToolResults }.joinToString("\n") { t ->
         (if (t.role == Role.USER) "Person: " else "$name: ") + t.text.take(1200)
     }.takeLast(16_000)
@@ -317,6 +317,7 @@ fun AiState.foldIntoWeb(deckId: String, deckName: String, webId: String) {
 /** Memory, skills and conversations deleted; the connections stay. */
 fun AiState.forgetEverything() {
     stop()
+    forgetSaves()
     files.forgetEverything()
     session = null
 }

@@ -39,6 +39,7 @@ import com.kaiharimoto.mastertool.core.ai.avatar.MarkInk
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkList
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkShape
 import com.kaiharimoto.neue.kit.Micro
+import kotlinx.coroutines.delay
 
 /**
  * Ai's face (1.0.52), the approved mockup drawn live: a magatama head in flat colour
@@ -75,6 +76,14 @@ fun AiAvatar(
         // The glyph is small: thirty frames a second are all it can show.
         val every = if (glyph) 1f / 30f else 1f / 60f
         while (true) {
+            // Asleep until the next step is nearly due (1.0.92): a frame asked for that steps nothing
+            // still redraws the window, and the bar's glyph asked for one every vsync. It wakes early
+            // enough to ask for the same vsync the step fell on before, so the face moves as it did.
+            if (last != 0L) {
+                val since = System.nanoTime() - last
+                val wait = (every * 1e9f).toLong() - (owed * 1e9f).toLong() - since.coerceAtLeast(0L) - WAKE_EARLY_NANOS
+                if (since in 0L until 1_000_000_000L && wait > 0L) delay(wait / 1_000_000L)
+            }
             withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else ((now - last) / 1e9f).coerceIn(0f, .1f)
                 last = now
@@ -131,6 +140,12 @@ fun AiName(name: String, color: androidx.compose.ui.graphics.Color, modifier: Mo
         Micro(name, color = color)
     }
 }
+
+/**
+ * How long before a step is due the face asks for its frame: half a 60 Hz frame, slack for a late
+ * timer and for the frame's time standing a little behind the clock.
+ */
+private const val WAKE_EARLY_NANOS = 8_000_000L
 
 // ---- the palette: the reference's own colours, flat ------------------------------------
 

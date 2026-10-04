@@ -58,6 +58,8 @@ import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.VRule
 import com.kaiharimoto.neue.kit.WordToggle
 import com.kaiharimoto.neue.theme.Mu
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Ai's panel (1.0.43), docked down the right of every page on the desk and the
@@ -70,6 +72,8 @@ import com.kaiharimoto.neue.theme.Mu
 fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = false) {
     val ai = h.ai
     val c = Mu.colors
+    // The history's lines read ahead, off the main thread, so the list opens at once (1.0.92).
+    LaunchedEffect(ai) { withContext(Dispatchers.IO) { runCatching { ai.files.warm() } } }
     Row(modifier.background(c.paper)) {
         if (!phone) PanelEdge(h)
         Column(
