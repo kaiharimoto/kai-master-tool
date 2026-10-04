@@ -80,9 +80,13 @@ class SyncEngine(
                     val mine = snapshot.getValue(step.path).bytes()
                     val theirs = fetch(step.remote)
                     when (local.rule(step.path)) {
-                        ConflictRule.MERGE -> {
+                        ConflictRule.MERGE, ConflictRule.ENTRIES, ConflictRule.REPORTS -> {
                             val base = step.base?.takeIf { it.content != null && it.hash in blobs() }?.let { runCatching { fetch(it) }.getOrNull() }
-                            val result = merge(base, mine, theirs, step.localWins)
+                            val result = when (local.rule(step.path)) {
+                                ConflictRule.ENTRIES -> SyncMerges.entries(base, mine, theirs, step.localWins)
+                                ConflictRule.REPORTS -> SyncMerges.reports(mine, theirs)
+                                else -> merge(base, mine, theirs, step.localWins)
+                            }
                             if (result == null) {
                                 // Not JSON on one side: the newer wins whole.
                                 if (step.localWins) agreed[step.path] = send(step.path, mine, step.local!!.at) else take(step.path, step.remote)

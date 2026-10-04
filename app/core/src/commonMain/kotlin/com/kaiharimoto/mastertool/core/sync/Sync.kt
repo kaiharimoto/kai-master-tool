@@ -100,6 +100,15 @@ enum class ConflictRule {
 
     /** The newer edit wins. */
     NEWER,
+
+    /**
+     * A markdown memory file of Ai's merged entry by entry against the version both started from (1.0.98, the red team):
+     * what either side added stays, what either removed goes, so learning on one device never erases another's.
+     */
+    ENTRIES,
+
+    /** A deck's session reports, both sides' kept, one per moment filed (1.0.98). */
+    REPORTS,
 }
 
 /** This device's side of a sync: what it holds, and how it takes in what others changed. */
@@ -129,6 +138,9 @@ object Sync {
     fun rule(path: String): ConflictRule = when {
         path.startsWith("decks/") -> ConflictRule.KEEP_BOTH
         path.startsWith("prefs/") -> ConflictRule.MERGE
+        // Ai's memory: entries (USER.md, MEMORY.md, decks/, webs/, guides/); its voice and its skills stay whole.
+        path.startsWith("ai/") && path.endsWith(".md") && !path.startsWith("ai/skills/") && path != "ai/SOUL.md" -> ConflictRule.ENTRIES
+        path.startsWith("ai/reports/") && path.endsWith(".json") -> ConflictRule.REPORTS
         else -> ConflictRule.NEWER
     }
 
