@@ -1,6 +1,13 @@
 package com.kaiharimoto.mastertool.core.world
 
 import com.kaiharimoto.mastertool.core.ai.calc.Calc
+import com.kaiharimoto.mastertool.core.ai.rules.Yugipedia
+import com.kaiharimoto.mastertool.core.cards.BanlistHistory
+import com.kaiharimoto.mastertool.core.cards.BanlistMatch
+import com.kaiharimoto.mastertool.core.cards.LimitationList
+import com.kaiharimoto.mastertool.core.cards.YugipediaLists
+import com.kaiharimoto.mastertool.core.deck.DeckValidator
+import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelGame
@@ -12,9 +19,11 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.hand.HandConstraint
 import com.kaiharimoto.mastertool.core.hand.HandOdds
 import com.kaiharimoto.mastertool.core.hand.HandQuery
+import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckEntry
+import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.prep.TestGame
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -65,6 +74,9 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             }
         })
         "deck" -> host.deck(args.str("id"))?.let(::deckJson) ?: JsonNull
+        "banlist" -> banlist(args)
+        "banStatus" -> banStatus(args)
+        "legal" -> legal(args)
         "comb" -> num(Calc.choose(args.size("n", MAX_COMB), args.size("k", MAX_COMB)))
         "hypergeo" -> num(Calc.hypergeo(args.size("N"), args.size("K"), args.size("n"), args.size("k")))
         "atLeast" -> num(Calc.atLeast(args.size("N"), args.size("K"), args.size("n"), args.size("k")))
@@ -121,6 +133,81 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
     }
 
     private fun find(q: String): Card? = q.trim().toIntOrNull()?.let(host::cardById) ?: host.cardNamed(q)
+
+    // ---- The Forbidden & Limited lists by date (1.1.1): what the app keeps from Yugipedia, never fetched here. ----
+
+    private val matches = HashMap<String, BanlistMatch>()
+
+    private fun regionOf(a: JsonObject): Format = when (val r = a.str("region")?.trim()?.lowercase()) {
+        null, "" -> host.format()
+        "tcg" -> Format.TCG
+        "ocg" -> Format.OCG
+        else -> throw IllegalArgumentException("region is 'tcg' or 'ocg' (it was “$r”)")
+    }
+
+    private fun history(region: Format): BanlistHistory =
+        host.banlists(region)?.takeIf { !it.isEmpty }
+            ?: throw IllegalArgumentException("no ${region.name} banlists are kept yet: the app reads them from Yugipedia in the background — run again in a minute")
+
+    /** The list in force on the args' date (today's when none), or null before the first. */
+    private fun listOn(a: JsonObject, h: BanlistHistory): LimitationList? {
+        val date = a.str("date")?.trim()?.takeIf { it.isNotEmpty() } ?: host.today() ?: return h.latest
+        require(Legality.isDate(date)) { "a date is yyyy-MM-dd, like '2025-05-01' (it was “$date”)" }
+        return h.asOf(date)
+    }
+
+    private fun matched(list: LimitationList): BanlistMatch =
+        matches.getOrPut(list.region.name + "/" + list.title) { list.match { name -> host.cardNamed(name) } }
+
+    private fun banlist(a: JsonObject): JsonElement {
+        val list = listOn(a, history(regionOf(a))) ?: return JsonNull
+        fun names(s: BanStatus) = JsonArray(list.at(s).map(::JsonPrimitive))
+        return buildJsonObject {
+            put("title", list.title)
+            put("region", list.region.name.lowercase())
+            put("start", list.start)
+            put("end", list.end?.let(::JsonPrimitive) ?: JsonNull)
+            put("forbidden", names(BanStatus.FORBIDDEN))
+            put("limited", names(BanStatus.LIMITED))
+            put("semiLimited", names(BanStatus.SEMI_LIMITED))
+            put("offList", names(BanStatus.UNLIMITED))
+            put("unmatched", JsonArray(matched(list).unmatched.map(::JsonPrimitive)))
+            put("source", Yugipedia.ATTRIBUTION)
+            put("url", YugipediaLists.pageUrl(list.title))
+        }
+    }
+
+    private fun banStatus(a: JsonObject): JsonElement {
+        val h = history(regionOf(a))
+        val title = a.str("title") ?: throw IllegalArgumentException("status needs the list's title")
+        val list = h.named(title) ?: throw IllegalArgumentException("no list “$title” is kept")
+        val name = a.str("name") ?: throw IllegalArgumentException("status needs a card's name")
+        val card = find(name)
+        val s = if (card != null) matched(list).statusOf(card) else list.statusOf(name)
+        return JsonPrimitive(s.name.lowercase())
+    }
+
+    private fun legal(a: JsonObject): JsonElement {
+        val region = regionOf(a)
+        val d = host.deck(a.str("id")) ?: throw IllegalArgumentException(if (a.str("id") == null) "no deck is open: give legal a deck from ygo.decks()" else "no deck “${a.str("id")}”: ygo.decks() lists them")
+        val h = history(region)
+        val list = listOn(a, h) ?: throw IllegalArgumentException("no ${region.name} list was in force then: the first kept is ${h.lists.first().title}, from ${h.lists.first().start}")
+        val day = a.str("date")?.trim()?.takeIf { it.isNotEmpty() } ?: host.today()
+        val v = DeckValidator.validate(d.deck, { host.cardById(it.value) }, region, asOf = day, limits = matched(list))
+        return buildJsonObject {
+            put("deck", d.name)
+            put("legal", v.isLegal)
+            put("list", list.title)
+            day?.let { put("date", it) }
+            put("issues", JsonArray(v.issues.map { i ->
+                buildJsonObject {
+                    put("severity", i.severity.name.lowercase())
+                    put("message", i.message)
+                }
+            }))
+            put("source", Yugipedia.ATTRIBUTION)
+        }
+    }
 
     private fun handOdds(a: JsonObject): Double {
         val groups = (a["groups"] as? JsonObject ?: throw IllegalArgumentException("handOdds needs groups: {name: copies}"))
@@ -369,6 +456,15 @@ interface WorldHost {
 
     /** A file of the open world by its path under `files/` (`lib/x.js`), for `ygo.use`; null when there is none (1.0.97). */
     fun file(path: String): String? = null
+
+    /** The Forbidden & Limited lists the app keeps for [region] (`<data>/banlists`), for `ygo.banlist`; null when none yet (1.1.1). */
+    fun banlists(region: Format): BanlistHistory? = null
+
+    /** The app's format: whose list `ygo.banlist` and `ygo.legal` read when a script names none (1.1.1). */
+    fun format(): Format = Format.TCG
+
+    /** Today, `yyyy-MM-dd`, for a script that names no day; null reads the newest list kept (1.1.1). */
+    fun today(): String? = null
 }
 
 internal fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull

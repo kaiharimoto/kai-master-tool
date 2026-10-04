@@ -12,8 +12,11 @@ package com.kaiharimoto.mastertool.core.sync
  * so an item from a device still on 1.0.98 cannot plant one there either.
  */
 object InboundPath {
-    /** Folders of the data folder that are this device's alone (1.0.99): its keys, and the command-line apps' working folder. */
-    val DEVICE_FOLDERS = setOf("secrets", "cli-run")
+    /**
+     * Folders of the data folder that are this device's alone (1.0.99): its keys, and the command-line apps' working
+     * folder — and (1.1.1) the banlists read from Yugipedia, a cache each device fetches for itself.
+     */
+    val DEVICE_FOLDERS = setOf("secrets", "cli-run", "banlists")
 
     /** Under Ai's folder (`ai/`), what never travels: [rel] is the path inside it. */
     fun aiPrivate(rel: String): Boolean =

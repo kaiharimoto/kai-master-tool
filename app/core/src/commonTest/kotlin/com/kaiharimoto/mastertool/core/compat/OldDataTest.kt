@@ -4,6 +4,8 @@ import com.kaiharimoto.mastertool.core.ai.report.book.BookFreshness
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.backup.Backups
+import com.kaiharimoto.mastertool.core.cards.BanlistCodec
+import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
@@ -284,5 +286,25 @@ class OldDataTest {
         assertEquals("CANVAS", e.anchor)
         assertEquals(800f, e.w)
         assertEquals("Hi", e.plainText)
+    }
+
+    @Test
+    fun aBanlistCacheFrom111StillReads() {
+        // 1.1.1: `<data>/banlists/tcg.json` as the first build with the banlist history writes it (a cache; never synced).
+        val old = """{"version":1,"region":"TCG","lists":[{"region":"TCG","title":"April 2025 Lists (TCG)","start":"2025-04-07",
+            "end":"2025-09-14","statuses":{"Abyss Dweller":"FORBIDDEN","Bystial Druiswurm":"LIMITED","Snake-Eye Ash":"SEMI_LIMITED",
+            "Cyber Jar":"UNLIMITED"},"prev":"December 2024 Lists (TCG)","next":"September 2025 Lists (TCG)"},{"region":"TCG",
+            "title":"September 2026 Lists (TCG)","start":"2026-09-21","end":null,"statuses":{"Maxx \"C\"":"FORBIDDEN"},"prev":null,
+            "next":null}],"unreadable":{"X Lists":"X Lists names no cards."},"fetched":{"April 2025 Lists (TCG)":1759000000000},
+            "checked":1759000000000}"""
+        val doc = assertNotNull(BanlistCodec.decode(old))
+        val h = doc.history()
+        assertEquals("April 2025 Lists (TCG)", h.asOf("2025-05-01")?.title)
+        assertEquals(BanStatus.LIMITED, h.statusOf("Bystial Druiswurm", "2025-05-01"))
+        assertEquals(BanStatus.FORBIDDEN, h.statusOf("Maxx \"C\"", "2026-10-01"))
+        assertEquals(1759000000000, doc.checked)
+        // A later build's fields are skipped, and a broken file is no cache at all, never a crash.
+        assertNotNull(BanlistCodec.decode("""{"version":2,"region":"OCG","lists":[],"source":"elsewhere"}"""))
+        assertEquals(null, BanlistCodec.decode("{\"version\":1,\"lists\":[{]"))
     }
 }

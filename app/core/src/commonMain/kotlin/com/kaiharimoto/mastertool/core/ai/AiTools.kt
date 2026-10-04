@@ -50,10 +50,13 @@ object AiTools {
 
     val validateDeck = ToolSpec(
         "validate_deck",
-        "Checks a deck against the format's banlist and the size rules and lists every issue. Without deck_id, the open deck.",
+        "Checks a deck against the format's banlist and the size rules and lists every issue. Without deck_id, the open deck. " +
+            "With as_of, against the Forbidden & Limited list in force that day (from Yugipedia, see banlist) and the cards " +
+            "released by then.",
         schema {
             string("deck_id", "Omit for the open deck")
             enum("format", "Which banlist; defaults to the app's format", listOf("TCG", "OCG"))
+            string("as_of", "A day, yyyy-MM-dd: check against the list in force then; omit for today's")
         },
         ToolGroup.LOOK,
     )
@@ -578,6 +581,22 @@ object AiTools {
             string("card", "The card's name", required = true)
             string("with", "Another card's name: only the official Q&As about the two together")
             enum("source", "Which source; default all", listOf("all", "ygorg", "yugipedia"))
+        },
+        ToolGroup.CARDS,
+        phase = 2,
+    )
+
+    val banlist = ToolSpec(
+        "banlist",
+        "Any Forbidden & Limited list by date, TCG or OCG, every list since 1999, read from Yugipedia's list pages: the list in " +
+            "force on a day (its title, the days it held, every card at its status), a card's history of statuses through the " +
+            "lists (card), or what moved between two days' lists (compare_to). Cite the list by its title and Yugipedia " +
+            "(CC BY-SA) when you use it. A card not on a list is Unlimited on it.",
+        schema {
+            string("date", "The day, yyyy-MM-dd; default today")
+            enum("region", "Whose list; default the app's format", listOf("tcg", "ocg"))
+            string("card", "One card: its status on the day and its history through every list")
+            string("compare_to", "Another day, yyyy-MM-dd: what changed between that day's list and date's")
         },
         ToolGroup.CARDS,
         phase = 2,
@@ -1201,7 +1220,7 @@ object AiTools {
         "app_state", "list_decks", "get_deck", "validate_deck", "analyze_deck", "get_settings", "list_webs", "get_web",
         "get_siding", "search_cards", "card_info", "memory_read", "skill_view", "session_search",
         "ygopro_tournament_decks", "ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
-        "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide",
+        "calculate", "hand_odds", "web_search", "web_fetch", "rulings", "archetype_guide", "banlist",
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
         "duel_state", "duel_log",
@@ -1218,7 +1237,7 @@ object AiTools {
         memory, memoryRead, skillView, skillManage, sessionSearch,
         askUser,
         tournamentDecks, tournamentDeck, tournamentPlayer, importTournamentDeck, fieldSnapshot,
-        calculate, handOdds, todoWrite, webSearch, webFetch, rulings, archetypeGuide, delegate,
+        calculate, handOdds, todoWrite, webSearch, webFetch, rulings, banlist, archetypeGuide, delegate,
         prepState, setEvent, logGame, matchupMatrix, expectedWinrate, drill,
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,

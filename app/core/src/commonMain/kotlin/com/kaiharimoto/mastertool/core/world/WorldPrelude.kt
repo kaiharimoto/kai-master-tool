@@ -91,6 +91,17 @@ object WorldPrelude {
     search: function (q, limit) { return call('search', { q: String(q), limit: limit || 20 }); },
     deck: function (id) { return call('deck', id === undefined || id === null ? {} : { id: String(id) }); },
     decks: function () { return call('decks'); },
+    // The Forbidden & Limited list in force on a day (yyyy-MM-dd; default today), 'tcg' or 'ocg' (default the app's format).
+    banlist: function (date, region) {
+      var l = call('banlist', { date: date === undefined || date === null ? null : String(date), region: region || null });
+      if (l) l.status = function (name) { return call('banStatus', { title: l.title, region: l.region, name: String(name) }); };
+      return l;
+    },
+    // A deck (ygo.deck()'s, or an id; null the open one) checked against that day's list and the cards released by then.
+    legal: function (deck, date, region) {
+      var id = deck !== null && typeof deck === 'object' ? deck.id : deck;
+      return call('legal', { id: id === undefined || id === null ? null : String(id), date: date === undefined || date === null ? null : String(date), region: region || null });
+    },
     comb: function (n, k) { return call('comb', { n: n, k: k }); },
     hypergeo: function (N, K, n, k) { return call('hypergeo', { N: N, K: K, n: n, k: k }); },
     atLeast: function (N, K, n, k) { return call('atLeast', { N: N, K: K, n: n, k: k }); },
