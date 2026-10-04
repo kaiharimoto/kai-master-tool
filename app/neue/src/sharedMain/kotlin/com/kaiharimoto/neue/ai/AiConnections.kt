@@ -35,8 +35,19 @@ fun AiState.openWizard(adding: Boolean = false) {
 internal fun AiState.backendFor(connection: AiConnection): ModelBackend {
     val key = "${connection.id}:${connection.model}:${connection.baseUrl}:${connection.program}"
     backend?.takeIf { it.first == key }?.let { return it.second }
+    val made = newBackend(connection)
+    (backend?.second as? AnthropicBackend)?.close()
+    backend = key to made
+    return made
+}
+
+/**
+ * A backend of [connection]'s own, never the panel's kept one (an Ai vs Ai match's seats, `docs/phases/C.md` §6): two
+ * seats on two connections would otherwise close each other's. The caller closes it when done ([closeBackend]).
+ */
+internal fun AiState.newBackend(connection: AiConnection): ModelBackend {
     val provider = Providers.byId(connection.provider) ?: error("Unknown provider ${connection.provider}")
-    val made: ModelBackend = when (provider.wire) {
+    return when (provider.wire) {
         Wire.ANTHROPIC -> AnthropicBackend(secret(connection) ?: error("No key saved for ${provider.label}."), connection.baseUrl)
         Wire.OPENAI_COMPAT -> {
             val base = connection.baseUrl?.takeIf { it.isNotBlank() } ?: provider.baseUrl ?: error("No server address.")
@@ -50,9 +61,11 @@ internal fun AiState.backendFor(connection: AiConnection): ModelBackend {
             CliBackend(provider.wire, program, CliRun.folder(Platform.dataDir), files.root, mcpServer() ?: error("The app could not open its tools to ${provider.label}."))
         }
     }
-    (backend?.second as? AnthropicBackend)?.close()
-    backend = key to made
-    return made
+}
+
+/** A backend made by [newBackend], let go. */
+internal fun closeBackend(b: ModelBackend) {
+    (b as? AnthropicBackend)?.close()
 }
 
 /** The app's MCP server, started on first use by a CLI. */

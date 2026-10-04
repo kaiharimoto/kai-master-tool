@@ -151,9 +151,10 @@ object WorldPrelude {
     // One of your own instruments (a file under lib/, say): run in the global scope, its functions yours to call; its last value returned.
     use: function (path) { return (0, eval)(call('file', { path: String(path) })); },
     duel: (function () {
-      // A table of the script's own (self-play, Phase C): a seed (a fresh one when none is given; t.seed says which), first
-      // (the seat that has turn 1), or fork: true for the duel in play as Ai's seat sees it. Both seats are Ai's; a table that
-      // ends is kept as a self-play result.
+      // A table of the script's own, a sandbox for testing lines (Phase C): a seed (a fresh one when none is given; t.seed
+      // says which), first (the seat that has turn 1), or fork: true for the duel in play as Ai's seat sees it. The script
+      // moves both seats; how a table ended is the script's to read (kind 'scripted'), never a duel record — Ai's games
+      // are Ai vs Ai on the Duel page, two sessions, one a seat.
       function table(t) {
         var h = t.h;
         return {

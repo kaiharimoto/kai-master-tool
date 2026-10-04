@@ -157,8 +157,8 @@ internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
     }
     // The finished duels against Ai, counted (Phase C): one quiet line per person and setting, read off the records.
     val scores = remember(duels.results) { DuelResults.aiAgainst(duels.results) }
-    // Ai against itself on Ai World's tables (Phase C stage 3): counted apart, a line per pairing of decks.
-    val selfPlay = remember(duels.results) { DuelResults.againstItself(duels.results) }
+    // Ai vs Ai (two sessions, one a seat): counted apart, a line per pairing of models.
+    val matches = remember(duels.results) { DuelResults.aiVsAi(duels.results) }
     MuDialog("Replays", { duels.libraryOpen = false }, width = 560.dp, description = "Every duel can be kept and watched again, a step, a phase or a turn at a time, either way — and edited, noted, or played on from any point.") {
         if (duels.game != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -167,11 +167,11 @@ internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
             }
             HRule()
         }
-        if (scores.isNotEmpty() || selfPlay.isNotEmpty()) {
+        if (scores.isNotEmpty() || matches.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AiName(aiName, c.ink)
                 scores.forEach { Small(DuelResults.words(it, aiName), color = c.ink70) }
-                selfPlay.forEach { Small(DuelResults.selfWords(it, aiName), color = c.ink45) }
+                matches.forEach { Small(DuelResults.matchWords(it), color = c.ink45) }
             }
             HRule()
         }

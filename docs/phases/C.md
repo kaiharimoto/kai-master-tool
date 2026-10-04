@@ -208,31 +208,83 @@ doing nothing **0 of 17**; a battle-only greedy player (into the Battle Phase, e
 weakest monster it destroys without loss, else directly at an empty field) **2 of 17** (p01, p02); the recorded solutions
 **17 of 17**. A model's score is read between those bounds. Trust estimates 30,000 tokens a puzzle.
 
-## 6. Self-play tables in Ai World (stage 3, done)
+## 6. Ai vs Ai: two sessions, one a seat (stage 3, reworked)
 
-**The lead, verified first:** `WorldApi.duelNew` read `seed ?: 1L` — every table opened without a seed dealt the same
-hands — with no way to say who went first and no fork. **Closed:**
+kai: "Instead of having Ai play itself, have two different Ai sessions play each other." Stage 3 first shipped (unreleased)
+"self-play" as one script — or one Ai — moving both seats with full knowledge. That is gone: Ai's games against Ai are now
+**two independent sessions, each a player in its own right**, on the Duel page, refereed, watched by the person.
 
-- **A seed** (`ygo.duel.start({seed})`), or a fresh one when none is given (a 31-bit number, so JavaScript keeps it
-  exactly), always returned as `t.seed`; **who goes first** (`first: 0|1`; the header's `first`, the table's active seat).
-- **A fork of the duel in play** (`ygo.duel.fork()`, `core/duel/DuelFork.kt`): built only from the `DuelView` of the seat
-  Ai would hold (its seat and knowledge setting from the Duel prefs) and that seat's own decklist (`DuelFork.source`, taken
-  on the main thread by `WorldSnapshot`, or read from `current.json` when the Duel page has not been opened, only if a
-  script forks). What the seat sees is kept as it stands; what it cannot see becomes an **unknown card** (passcode 0, read
-  "An unknown card"), kept by count and place — their hand, Deck and set cards; its own Deck and unseen own cards are its
-  list less every own card it sees. Both Decks are shuffled by the fork's seed (known positions kept). With full knowledge
-  the fork is the table, its Decks shuffled. The live table is read, never changed; a networked duel is never forked.
-- **Moves for both seats** through the line Ai plays kai with (`ComboRunner.plan` on the table, then `DuelGame.act`), each
-  stamped `Provenance(ai, aiSeat = that seat, aiKnows = full)` — the script reads both seats. `t.moves(seat)` is the
-  `DuelMoves` menu, each line as `t.do` takes it. A finished table takes no more moves.
-- **Finished:** a table that ends (life points at 0, a concession) becomes a `DuelResult` of **its own kind**
-  (`kind: "self-play"`, its `seed`, and `forkOf` for a fork; `DuelResults.selfPlay`), returned by `t.do` and `t.result()`,
-  collected in `WorldApi.finished` and kept by the World (`Worlds.keepDuel` → `Duels.keepResult` →
-  `<data>/duel/records/`, as the table's are). **Counted apart:** `aiAgainst` skips it; `againstItself`/`selfWords` read
-  "Ai against itself: Branded won 3 of 5 against Snake-Eye (1 drawn); going first won 4." — in `duel_records`' summary
-  after the games against people, in `duel_records list` marked "self-play in Ai World, seed …", and in Replays.
+**Two sessions, two seats.** Each seat is a headless agent run of its own (`core/duel/match/AiMatch.kt`, `AgentPlayer`): the
+real `AgentLoop` with its own history, its own backend — the same connection or another, chosen per seat from the person's
+connections (`AiState.newBackend`, never the panel's cached one, so two seats on two connections never close each other's)
+— and its own `AiSession` (mode `ai-vs-ai`, `AiSession.MODE_MATCH`), kept with Ai's conversations so kai can read each
+side afterwards (the bar's "Seat N's side"; a message typed into one starts a new conversation). What a session is given:
 
-Held by `SelfPlayTest` (core), `JsRuntimeTest.aScriptPlaysAiAgainstItselfToTheEnd` and `WorldsTest` (neue).
+- **Its instructions** (`MatchPrompt.system`): who it is, the table's rules, the rules primer, and **its own deck's** guide
+  and combos (`DuelGuide.block` of its seat's deck) — never the other's. The other deck's name is not told either.
+- **Each cue** (`MatchPrompt.cue`): what happened since its last cue as its seat saw it (`DuelBrief.since` — every entry
+  but its own; `aisOwn` now counts an Ai move as the reader's only when its `aiSeat` is the reader's, so the other session's
+  moves are the opponent's), the brief through its own `DuelView` (knowledge self, no peeks: `MatchTable.brief`), and the ask.
+- **Four tools, scoped to its seat** (`MatchTable.runner`): `duel_state`, `duel_moves`, `duel_act` — the very specs Ai plays
+  kai with — and `card_info`, a card's printed text by name or by a coordinate the seat can see (the lookup never finds a
+  hidden card). `duel_act` plans each op as at kai's table (`ComboRunner.plan` with the duel's secret), puts its words
+  through `Secrets` on the table they are made on (`ComboRunner.redacted`), holds it to `DuelReach` exactly as Ai against a
+  person and the network's guest, refuses a phase or End Turn off the seat's turn, a die (the table throws), a concession
+  for the other seat, and a move while the seat's own response window waits on the other — and commits through
+  `DuelHost.act`, so a move opens the other seat's response window as at a networked table. Every move carries
+  `Provenance(ai, aiSeat = that seat, aiKnows = self)` and its view's fingerprint.
+- **Nothing else crosses.** A session's reasoning and replies stay in its own conversation; only the table — its moves, as
+  the other seat sees them, and its `say` lines, redacted — reaches the other.
+
+**The referee** (`MatchReferee`, pure; `AiMatch`, the loop): the opening roll is played — the table throws each seat's dice
+(`OpeningRoll`, stamped), the winner's session is cued to choose (`go first` / `go second`), and makes no choice → it goes
+first, said. Then whose move it is: a response window's responder (`DuelState.window`; the windows a match opens are the
+dialog's: on activations, or summons too), the turn player for an ask, the seat that may chain to the other's link, the
+seat whose link resolves once both have passed (newest first; a negated link the table resolves itself), else the turn
+player — with the turn's draw made by the table (`TurnStart`) and a Deck that cannot give it losing the duel (decked out).
+**Bounded per cue**: at most `cueMoves` (12) table moves, `cueSteps` (10) rounds of tools, `cueMillis` (4 minutes). **A
+seat that stalls**: a response or chain cue with no move is a pass (the table answers the window for it, said); the turn
+player that makes no move twice, or stops five times without `end`, has its turn ended by the table, said; a seat that
+does not resolve its link has it resolved; an ask unanswered is declined. **A seat that errors** (a failed call, a
+timeout) three cues in a row forfeits (`Concede`, said). **The end**: life points at 0 or a concession; past the turn cap,
+the token budget or the cue cap, a draw by limit, said in the log and in the record (`DuelResult.how = "limit"`, `said`).
+**Stop** (the person's) cancels the referee's coroutine: the run in flight ends where it stands (its open tool calls
+answered "Stopped by the person", its conversation kept), the log says so, no result is kept.
+
+**Watching** (`neue/duel/DuelMatches.kt`, a part of `Duels`): the match runs off the main thread on a table of its own,
+never the duel in play, which waits untouched behind it. While it is on the table (`Duels.spectating`) the page shows it
+as a spectator sees it — both hands face-up, the person's view, never handed to either session — every move as it is made
+at a pace (`MatchRules.paceMs`), and refuses the person's moves, undo, redo and the seat swap ("Ai vs Ai is on the table").
+The bar over the table (`MatchBar`) says who plays whom, the turn and who is moving, with **Stop**; once over, how it ended,
+each seat's conversation and **Back to your duel**. The finished (or stopped) match is kept as a replay.
+
+**Starting one** (`AiVsAiDialog`, from the Table menu's "Ai vs Ai…" or the New duel dialog): each seat's deck and
+connection (the active connection for both by default), a seed (optional), the turn cap (6/12/20/40), the response windows
+and the token budget (250k–2M, both seats). **What it may spend is said before it starts** (`AiMatch.cost`: about four cues
+a turn to the cap at about 18k tokens a cue, never past the budget, where it stops as a draw by limit). It refuses to start
+with Ai off, at a networked table, with an empty deck, or with **a plan's command-line app** for a seat: Claude Code and
+Codex run their own loop and reach the app's tools through its MCP server, which answers for the duel in play — they cannot
+be held to one seat of a match's table (`DuelMatches.unusable`); the dialog says so. API connections only.
+
+**Records** (`DuelResults.aiVsAi`): a finished match is a `DuelResult` of kind `ai-vs-ai`, each seat carrying its
+connection's label and model (`ResultSeat.connection`, `model`, `engine`), its seed, and `said` when the table ended it.
+Counted apart: `aiAgainst` skips every record with a kind; `aiVsAi(results)`/`matchWords` read "Ai vs Ai: claude-opus-5-5
+beat gpt-x 3 of 5 (1 drawn; going first won 4)." — in `duel_records`' summary after the games against people, in its list
+("Ai vs Ai: … v …, seed …"), and in Replays.
+
+**Ai World's script tables are a sandbox now.** `ygo.duel.start/fork` keep their seed, `first` and fork (`DuelFork`), but a
+script moves both seats as itself (no provenance: no player made those moves), and how a table ended (`t.result()`, the
+`ended` of `t.do`) is the script's to read — kind `scripted`, never a `DuelResult`, never kept, never in a summary.
+`WorldApi.finished`, `Worlds.keepDuel`, `DuelResults.selfPlay`, `againstItself` and `selfWords` are deleted. Scripts no
+longer play duels for Ai: a script tests lines.
+
+Held by `AiMatchTest` (core: the opening roll and the winner's choice, the turn cap → a draw by limit, a stalled seat's
+turn ended and no choice going first, a response window cueing the other seat and both passing resolving the chain, a
+failing session forfeiting, and each seat told only what its own seat sees), `AiVsAiTest` (neue: two scripted backends
+play a match to the end through `Duels`, every request each was sent read — no card of the other's it could not see, no
+guide of the other's, only the four tools — the record `ai-vs-ai` with both connections, a replay, both conversations
+kept; and Stop ending both runs cleanly), `ScriptTableTest`, `JsRuntimeTest.aScriptPlaysASandboxTableToTheEnd`,
+`WorldsTest` and `OldDataTest`.
 
 ## 7. The red team on Phase C (stage 3)
 
@@ -244,31 +296,38 @@ Held by `SelfPlayTest` (core), `JsRuntimeTest.aScriptPlaysAiAgainstItselfToTheEn
 | **A hidden card through the brief's facts.** | Facts given once could leak if a hidden card took a fact slot. | **Held:** a hidden card has neither name nor facts (`DuelTableTest`, `PhaseCRedTeamTest`). |
 | **Provenance: a number key after a placement re-made the log's last group under that group's provenance.** | With Ai's move logged since the person placed a card, the person's number key undid Ai's group and wrote it again as Ai's. | **Fixed:** the key moves only its own placement, never a group of Ai's (`Duels.replace`; `DuelNumberKeyTest`). |
 | Provenance on the other commit paths. | Checked: `Duels.act` (person, Ai, the table's draw), a held phase change released (the person's, as made), `Replays.insert` and Insert here, `DuelHost.act` (host and guest), Ai's peeks, combos and lines (Ai). | Held as they were. |
-| A fork leaking the person's cards. | The fork reads one seat's `DuelView` and that seat's decklist only. | **Held** by construction and `SelfPlayTest.aForkHoldsWhatAisSeatSeesAndNothingElse` (no passcode of a card the seat could not see). |
+| A fork leaking the person's cards. | The fork reads one seat's `DuelView` and that seat's decklist only. | **Held** by construction and `ScriptTableTest.aForkHoldsWhatAisSeatSeesAndNothingElse` (no passcode of a card the seat could not see). |
+| One Ai session reading the other's seat in Ai vs Ai. | Every request two scripted backends were sent in a whole match, read word by word. | **Held:** each seat's cue, brief and tool results come through its own view, its guide is its own, its words to the other go through `Secrets` (`AiVsAiTest`, `AiMatchTest.eachSeatIsToldOnlyWhatItsOwnSeatSees`). |
 
 ## 8. Order of work
 
 1. **Stage 1 (this note's §1–§3):** provenance, results and the summary, Prep's first or second, the four leads.
 2. **Stage 2 (done, §4):** the table in full for Ai, the legal-move menu, its guide at the table; the rest of the leads.
-3. **Stage 3 (done, §5–§7):** the puzzle set and its baseline; self-play tables in Ai World; the red team on the phase.
+3. **Stage 3 (done, §5–§7):** the puzzle set and its baseline; Ai vs Ai — two sessions, one a seat — in place of self-play
+   (Ai World's tables a sandbox for scripts); the red team on the phase.
 
-**Phase C is done:** "Ai won N of M against kai, with these settings" reads from the records, and "Ai against itself" beside
-it; every duel lead is closed and held by a test; the puzzle set has its baseline (0 / 2 / 17 of 17).
+**Phase C is done:** "Ai won N of M against kai, with these settings" reads from the records, and Ai vs Ai beside it ("Ai
+vs Ai: claude-opus-5-5 beat gpt-x 3 of 5"); every duel lead is closed and held by a test; the puzzle set has its baseline
+(0 / 2 / 17 of 17).
 
 **What Phase C leaves for later:**
 - Puzzles with effect monsters, the Extra Deck, the opponent's responses and more than one turn: they need effects as code
   (Phase D). A puzzle is still a turn by the numbers.
 - A model's score on the puzzle set: run in Trust per connection (cost); no live model runs on push.
 - A cheaper legality check for `duel_moves` than a whole plan per move, if a phone shows the half second.
-- Self-play from Python (it cannot call back into the app), and an Elo per Ai version from self-play and puzzles (Phase E).
+- An Elo per Ai version from Ai vs Ai matches and puzzles (Phase E); Ai vs Ai for a plan's command-line app (it would need
+  an MCP server answering one seat of a match's table); a cheaper cue (the brief as a diff) for long matches.
 
 **Stored-data changes in stage 1** (for the release notes): every new duel entry may carry `by` (provenance); a new
 folder `<data>/duel/records/` (one JSON file per finished duel, synced and backed up). Old duels, replays and settings
 read unchanged; no preference and no schema change.
 
-**Stored-data changes in stage 3:** a duel record may carry `kind` (`"self-play"`), `seed` and `forkOf`, each left out
-when empty; a record without them is a duel at the table, as before, and an older build reading a self-play record skips
-the keys and still never counts it against a person (both seats are Ai's). `OldDataTest` holds both. No preference, no
-schema change; Trust's runs of the puzzle set are ordinary `ai/evals/<connection>.json` runs.
+**Stored-data changes in stage 3:** a duel record may carry `kind` (`"ai-vs-ai"`), `seed` and `said`, and each of its seats
+`connection` and `model` — each left out when empty; `how` may be `"limit"` (a draw by limit). A record without them is a
+duel at the table, as before, and an older build reading an Ai vs Ai record skips the keys and still never counts it against
+a person (both seats are Ai's). A record of kind `"self-play"` (with `forkOf`), written only by the unreleased first cut of
+this stage, is still read — and counted nowhere. A new conversation mode, `ai-vs-ai`, in `<data>/ai/sessions/`. A finished
+or stopped match is a replay in `<data>/duel/replays/`. `OldDataTest` holds the shapes. No preference, no schema change;
+Trust's runs of the puzzle set are ordinary `ai/evals/<connection>.json` runs.
 
 **Needs:** F1 (the puzzle set), F4 (Ai's permissions at the table), Phase B (correct cards).

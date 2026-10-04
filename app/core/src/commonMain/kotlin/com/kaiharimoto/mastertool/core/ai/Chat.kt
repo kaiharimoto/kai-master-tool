@@ -278,6 +278,12 @@ data class AiSession(
         /** In Ai World (1.0.97): a question answered by code Ai writes and runs where the person watches. */
         const val MODE_WORLD = "world"
 
+        /**
+         * One seat of an Ai vs Ai match (`docs/phases/C.md` §6): the conversation a seat's session had with the referee,
+         * kept for the person to read. Read-only: a message typed into it starts a new conversation.
+         */
+        const val MODE_MATCH = "ai-vs-ai"
+
         /** What an old tool result is cut to once the person clears them. */
         const val CLEARED = 200
 

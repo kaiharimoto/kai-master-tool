@@ -2590,6 +2590,10 @@ How far to trust a connection, measured — Settings › Assistant › Trust (`T
   planted set through the very checker the chat uses (`runChecker`). k tries an item gives pass^k as well as pass@1. A run
   says what it will spend before it starts, can be stopped, and is kept in `ai/evals/<connection>.json` (`EvalLog`, the
   last 50 runs).
+- **Ai vs Ai runs headless too** (Phase C, `docs/phases/C.md` §6): each seat of a match is an `AgentPlayer` — the same
+  `AgentLoop`, its own backend from `AiState.newBackend` (never the panel's cached one), its own history and `AiSession`
+  (mode `ai-vs-ai`, `MODE_MATCH`, kept and read-only) — answered by its seat's `MatchTable` tools, never `AiHost`; API
+  connections only, for the same reason as Trust.
 - **The dialog**: per set, the last score large, its details (pass@1, every-try, tokens, when, the model), and the first
   items missed with what the grader read; for the checker, mistakes caught of those planted and false alarms of the clean.
 - `tools/shoot.sh --ai=trust` photographs it with sample runs.
@@ -3835,16 +3839,28 @@ only with full knowledge). The leads closed: one coordinate convention (`ComboRu
 `oh2` is the card the brief shows there), every word in Ai's lines through `Secrets` (`ComboRunner.redacted`), and a cue
 keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held by `DuelTableTest`.
 
-**Puzzles, self-play and the red team, stage 3** (Phase C, `docs/phases/C.md` §5–§7; Phase C done):
+**Puzzles, Ai vs Ai and the red team, stage 3** (Phase C, `docs/phases/C.md` §5–§7; Phase C done):
 - **Duel puzzles in Trust** (`EvalSets.PUZZLES`): 17 one-turn positions of Normal Monsters and a few Normal Spells, played
   by Ai on tables of their own through `duel_state`/`duel_moves`/`duel_act` (`PuzzleTable`, `AiEval.playPuzzle`) under a
   referee (`PuzzleReferee`: one Normal Summon with its Tributes, a position change once, attacks once and directly only at
   an empty field, battle worked out by `DuelBattle`, the puzzle's Spells resolved as written; `lp` and moves by hand
   refused), graded on the table. Baselines: nothing 0, battle-only greedy 2, the solutions 17 of 17.
-- **Self-play** (`ygo.duel.start({seed, first})`, `ygo.duel.fork()` in Ai World, §4r): both seats Ai's, a finished table a
-  `DuelResult` with `kind: "self-play"` (and its `seed`, `forkOf`), kept with the records by `Duels.keepResult` and counted
-  apart: "Ai against itself: … won N of M against …" (`DuelResults.againstItself`, `selfWords`) in `duel_records` and
-  Replays.
+- **Ai vs Ai** (kai: "have two different Ai sessions play each other"; `docs/phases/C.md` §6), in place of the first cut's
+  self-play: two independent sessions, one a seat (`core/duel/match`: `AiMatch`, `AgentPlayer`, `MatchReferee`,
+  `MatchTable`, `MatchPrompt`), each its own backend, history and conversation (mode `ai-vs-ai`), each told only its own seat
+  — its view (knowledge self), its own deck's guide and combos, four tools scoped to it (`duel_state`, `duel_moves`,
+  `duel_act`, `card_info`), `DuelReach` and `Secrets` as against a person — and nothing of the other's but the table. The
+  referee plays the opening roll (the winner's session chooses, else goes first), keeps the turn, the response windows
+  (`DuelHost.act`, the dialog's `Windows`), priority and the chain's resolution, bounds each cue (moves, rounds, time),
+  passes, ends a stalled turn or forfeits a failing seat — each said in the log — and ends at life points 0, a concession,
+  or a draw by limit (turn cap, token budget). Started from the Table menu's **Ai vs Ai…** or New duel (`AiVsAiDialog`: decks,
+  a connection per seat, seed, turn cap, windows, budget, the spend said first; API connections only, never at a networked
+  table, never with Ai off), run off the main thread on a table of its own (`DuelMatches`, a part of `Duels`) and watched
+  live as a spectator — both hands face-up, the person's moves refused (`Duels.spectating`), `MatchBar` with Stop, each
+  seat's conversation, Back to your duel. A finished match is a `DuelResult` of kind `ai-vs-ai` with each seat's connection
+  and model, counted apart ("Ai vs Ai: claude-opus-5-5 beat gpt-x 3 of 5 (1 drawn; going first won 4)." —
+  `DuelResults.aiVsAi`, `matchWords`, in `duel_records` and Replays), and a replay. `tools/shoot.sh --page=duel
+  --duel-match=dialog|live|over`.
 - **The red team:** the brief on a very full table was 12,501 characters a cue; a card's facts are now at its first mention
   only (8,934, `DuelScaleTest` bounds it at 10,000). `duel_moves` there: 424 moves in about 0.6 s on the desktop. The menu,
   `card=` and a card asked for by name name no hidden card (`PhaseCRedTeamTest`). A number key after a placement no longer
@@ -3930,13 +3946,13 @@ unsaved edits and all, every library deck, groups — `WorldSnapshot`, plain val
 Fisher–Yates, a tenth of a full shuffle — `deal`, `simulate`, `rate` with Wilson's interval); `stats` (`WorldStats`:
 summaries, histogram, Wilson, binomial, normal, chi-square with its p-value); a duel table of the script's own on the real
 rules (`duel.start`, `do`, `brief`, `state` — physics only, as the Duel page); and `show.*`, which pins boards.
-**Self-play tables** (Phase C stage 3, `docs/phases/C.md` §6): `duel.start({a, b, seed, first})` takes a seed (a fresh one
-when none is given, `t.seed` — every table was seed 1 before) and who has turn 1; `duel.fork()` copies the duel in play as
-the seat Ai would hold sees it (`DuelFork`: that seat's `DuelView` and its own decklist, the rest unknown cards, both Decks
-shuffled by the fork's seed; never a networked duel); `t.do(line, seat)` moves either seat through `ComboRunner.plan`, each
-move Ai's (`Provenance` ai, that seat); `t.moves(seat)` is the `DuelMoves` menu; `t.result()`. A table that ends is a
-`DuelResult` of kind `self-play` (`WorldApi.finished`), kept with the duel records by the run (`Worlds.keepDuel`) and counted
-apart from games against kai.
+**Script tables, a sandbox** (`docs/phases/C.md` §6): `duel.start({a, b, seed, first})` takes a seed (a fresh one when none
+is given, `t.seed` — every table was seed 1 before) and who has turn 1; `duel.fork()` copies the duel in play as the seat Ai
+would hold sees it (`DuelFork`: that seat's `DuelView` and its own decklist, the rest unknown cards, both Decks shuffled by
+the fork's seed; never a networked duel); `t.do(line, seat)` moves either seat through `ComboRunner.plan`, as the script (no
+provenance); `t.moves(seat)` is the `DuelMoves` menu; `t.result()` and `t.do`'s `ended` say how a table ended — kind
+`scripted`, for the script alone, never a duel record. Scripts test lines; Ai's games against Ai are Ai vs Ai on the Duel
+page (§4p), two sessions, one a seat.
 
 **Boards** (`WorldShow.kt`, painted by `neue/world/WorldPaint.kt`, the World's one file allowed colour — charts and webs
 read better in it, kai's call): markdown (the chat's renderer), chart (the chat's bar, hbar, line and stacked, plus

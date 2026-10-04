@@ -391,13 +391,14 @@ class OldDataTest {
     }
 
     @Test
-    fun aDuelRecordWithoutAKindIsATableDuelAndASelfPlayRecordIsNeverAGameAgainstAPerson() {
+    fun aDuelRecordWithoutAKindIsATableDuelAndAnAiVsAiRecordIsNeverAGameAgainstAPerson() {
         // Up to 1.1.2 a record has no `kind`: a duel at the table, counted as it was.
         val table = assertNotNull(DuelResultCodec.decode("""{"id":"d9","duel":"d9","ended":1,"seats":[{"name":"Kai","player":"person"},
             {"name":"Ai","player":"ai"}],"winner":0,"turns":5,"ai":{"seat":1,"knows":"self","moves":9}}"""))
         assertEquals(null, table.kind)
         assertEquals(1, DuelResults.aiAgainst(listOf(table)).single().lost)
-        // Phase C stage 3: a self-play record of Ai World's carries its kind, seed and fork, and is counted apart.
+        // An unreleased build (Phase C stage 3) wrote "self-play" records of Ai World's script tables: never shipped, but
+        // read forgivingly — decoded, counted nowhere, neither against a person nor as Ai vs Ai.
         val selfPlay = """{"id":"world-1-0-s7","duel":"world-1-0","ended":2,"seats":[{"name":"Branded","deckName":"Branded","player":"ai",
             "moves":{"ai":30}},{"name":"Snake-Eye","deckName":"Snake-Eye","player":"ai","moves":{"ai":28}}],"winner":0,"turns":7,
             "kind":"self-play","seed":7,"forkOf":"d9"}"""
@@ -406,9 +407,27 @@ class OldDataTest {
         assertEquals(7L, r.seed)
         assertEquals("d9", r.forkOf)
         assertTrue(DuelResults.aiAgainst(listOf(r)).isEmpty())
-        assertEquals("Ai against itself: Branded won 1 of 1 against Snake-Eye; going first won 1.", DuelResults.summary(listOf(r)))
+        assertTrue(DuelResults.aiVsAi(listOf(r)).isEmpty())
+        assertEquals("No finished duels against Ai yet.", DuelResults.summary(listOf(r)))
         // An older build skips the keys it does not know: both seats Ai's, it is still no game against a person.
         val older = assertNotNull(DuelResultCodec.decode(selfPlay.replace("\"kind\":\"self-play\",", "")))
         assertTrue(DuelResults.aiAgainst(listOf(older)).isEmpty())
+        // Ai vs Ai (two sessions, one a seat): its kind, each seat's connection and model, how the table ended it — and an
+        // older build reads it as a record with both seats Ai's, which no summary of its counts against a person.
+        val match = """{"id":"m1","duel":"m1","ended":3,"seats":[{"name":"Opus","deckName":"Branded","player":"ai","moves":{"ai":40},
+            "connection":"Anthropic","model":"claude-opus-5-5"},{"name":"GPT","deckName":"Snake-Eye","player":"ai","moves":{"ai":35},
+            "connection":"OpenAI","model":"gpt-x"}],"first":1,"firstBy":"roll","winner":0,"how":"lp","turns":6,"kind":"ai-vs-ai","seed":42}"""
+        val m = assertNotNull(DuelResultCodec.decode(match))
+        assertEquals(DuelResult.AI_VS_AI, m.kind)
+        assertEquals(listOf("claude-opus-5-5", "gpt-x"), m.seats.map { it.engine })
+        assertEquals("Anthropic", m.seats[0].connection)
+        assertTrue(DuelResults.aiAgainst(listOf(m)).isEmpty())
+        assertEquals("Ai vs Ai: claude-opus-5-5 beat gpt-x 1 of 1 (going first won 0).", DuelResults.summary(listOf(m)))
+        val limit = assertNotNull(DuelResultCodec.decode(match.replace("\"winner\":0,\"how\":\"lp\"", "\"how\":\"limit\",\"said\":\"A draw by limit: turn 13 reached.\"")))
+        assertEquals(null, limit.winner)
+        assertEquals(DuelResult.LIMIT, limit.how)
+        assertEquals("A draw by limit: turn 13 reached.", limit.said)
+        val older2 = assertNotNull(DuelResultCodec.decode(match.replace("\"kind\":\"ai-vs-ai\",", "")))
+        assertTrue(DuelResults.aiAgainst(listOf(older2)).isEmpty())
     }
 }

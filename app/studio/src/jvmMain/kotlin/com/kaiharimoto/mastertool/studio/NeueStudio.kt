@@ -447,6 +447,9 @@ fun neueMain(args: Array<String>) {
                 val g = h.duel.game!!
                 println("[neue-studio] duel: ${g.cursor} entries, field ${g.state.onField().size}, hands ${g.state.seats.map { it.hand.size }}, lp ${g.state.seats.map { it.lp }}")
             }
+            // --duel-match=dialog|live|over: Ai vs Ai (`docs/phases/C.md` §6) — the start dialog, a match being watched (the second
+            // seat mid-turn), or one played to its end; scripted players through the real referee, no model called.
+            map["duel-match"]?.let { studioMatch(h, it, clock) }
             // --present=demo: a deck profile of the builder's deck (1.0.70), opened in the editor;
             // --present-style=spotlight|slides|buildup, --present-theme=arena|neon|…, --present-webcam=tr|tl|br|bl|left|right|off,
             // --present-slide=N the slide in view, --present-mode=library|edit|play|overview|notes, and

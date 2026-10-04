@@ -12,13 +12,12 @@ import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
-import com.kaiharimoto.mastertool.core.duel.record.DuelResult
-import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.DeckEntry
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.int
@@ -27,17 +26,16 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Self-play tables in Ai World (Phase C stage 3, `docs/phases/C.md` §6): a seed (never seed 1 for every table — the lead),
- * who goes first, a fork of the duel in play through the seat Ai would hold, moves for both seats as Ai's, and a table that
- * ends kept as a result of its own kind.
+ * Script tables in Ai World (`docs/phases/C.md` §6): a sandbox for testing lines, never a game. A seed (never seed 1 for
+ * every table — the lead), who goes first, a fork of the duel in play through the seat Ai would hold, moves for both seats
+ * as the script's, and a table that ends says how to the script alone — never a duel record (Ai's games are Ai vs Ai).
  */
-class SelfPlayTest {
+class ScriptTableTest {
     private val cards = (1..12).map { Card(CardId(it), "Card $it", "Normal Monster", "normal", "", atk = 1000 + it * 100, def = 1000, level = 4) }
 
     private val branded = DeckEntry("b", "Branded", Deck(main = (1..6).flatMap { id -> List(5) { CardId(id) } } + List(10) { CardId(7) }), 0, 0)
@@ -82,7 +80,7 @@ class SelfPlayTest {
     }
 
     @Test
-    fun bothSeatsAreAisAndATableThatEndsIsASelfPlayResult() {
+    fun theScriptMovesBothSeatsAndATableThatEndsIsNoRecord() {
         val api = WorldApi(host())
         api.call("duelNew", args("a" to "b", "b" to "s", "seed" to 11))
         // Each seat moved by the script, through the line Ai plays kai with; the menu's lines are what `do` takes.
@@ -92,23 +90,16 @@ class SelfPlayTest {
         assertTrue(api.call("duelDo", args("h" to 0, "line" to summon, "seat" to 0)).toString().contains("\"ok\":true"))
         assertTrue(api.call("duelDo", args("h" to 0, "line" to "end", "seat" to 0)).toString().contains("\"ok\":true"))
         assertTrue(api.call("duelDo", args("h" to 0, "line" to "draw", "seat" to 1)).toString().contains("\"ok\":true"))
-        assertTrue(api.finished.isEmpty())
+        assertEquals(JsonNull, api.call("duelResult", args("h" to 0)), "no ending while it goes on")
         val end = api.call("duelDo", args("h" to 0, "line" to "concede", "seat" to 1)).jsonObject
-        assertEquals(0, end["ended"]!!.jsonObject["winner"]!!.jsonPrimitive.int)
-        val r = api.finished.single()
-        assertEquals(DuelResult.SELF_PLAY, r.kind)
-        assertEquals(11L, r.seed)
-        assertEquals(null, r.ai, "no seat is a person's: there is no Ai-against-someone to count")
-        assertEquals(listOf("ai", "ai"), r.seats.map { it.player }, "provenance ai on both seats")
-        assertTrue(r.seats.all { s -> s.moves.keys == setOf("ai") }, r.seats.toString())
-        assertEquals(listOf("Branded", "Snake-Eye"), r.seats.map { it.deckName })
-        // Counted apart: "Ai won N of M" reads for self-play too, never as a game against kai.
-        assertTrue(DuelResults.aiAgainst(api.finished).isEmpty())
-        assertEquals("Ai against itself: Branded won 1 of 1 against Snake-Eye; going first won 1.", DuelResults.summary(api.finished))
+        val ended = end["ended"]!!.jsonObject
+        assertEquals(0, ended["winner"]!!.jsonPrimitive.int)
+        // A sandbox: its ending is the script's to read, kind "scripted" — never a DuelResult, never kept, never counted.
+        assertEquals(WorldApi.SCRIPTED, ended["kind"]!!.jsonPrimitive.content)
+        assertEquals(11L, ended["seed"]!!.jsonPrimitive.long)
         assertEquals(0, api.call("duelResult", args("h" to 0)).jsonObject["winner"]!!.jsonPrimitive.int)
-        // A finished table takes no more moves, and is kept once.
+        // A finished table takes no more moves.
         assertTrue(api.call("duelDo", args("h" to 0, "line" to "draw", "seat" to 0)).toString().contains("the duel is over"))
-        assertEquals(1, api.finished.size)
         // A question is still no move.
         api.call("duelNew", args("a" to "b", "b" to "s", "seed" to 12))
         assertTrue("asks the table something" in api.call("duelDo", args("h" to 1, "line" to "?hand", "seat" to 0)).toString())
@@ -172,21 +163,18 @@ class SelfPlayTest {
     }
 
     @Test
-    fun aForkIsATableOfItsOwnAndItsResultSaysWhereItCameFrom() {
+    fun aForkIsATableOfItsOwnAndSaysWhereItCameFrom() {
         val src = DuelFork.source(live(), 1, DuelBrief.SELF)
         val api = WorldApi(host(src))
         val t = api.call("duelNew", args("fork" to true, "seed" to 3)).jsonObject
         assertEquals("live-1", t["forkOf"]!!.jsonPrimitive.content)
         assertEquals(1, t["active"]!!.jsonPrimitive.int, "the turn as it stands")
-        assertTrue("\"ok\":true" in api.call("duelDo", args("h" to 0, "line" to "concede", "seat" to 0)).toString())
-        val r = api.finished.single()
-        assertEquals("live-1", r.forkOf)
-        assertEquals(DuelResult.SELF_PLAY, r.kind)
+        val end = api.call("duelDo", args("h" to 0, "line" to "concede", "seat" to 0)).jsonObject
+        assertEquals(WorldApi.SCRIPTED, end["ended"]!!.jsonObject["kind"]!!.jsonPrimitive.content)
         // No duel in play: a fork is refused in words.
         val none = WorldApi(host())
         val e = runCatching { none.call("duelNew", args("fork" to true)) }.exceptionOrNull()
         assertNotNull(e)
         assertTrue("no duel in play" in e.message.orEmpty(), e.message)
-        assertFalse(none.finished.isNotEmpty())
     }
 }

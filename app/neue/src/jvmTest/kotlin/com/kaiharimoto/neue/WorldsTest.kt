@@ -1,6 +1,5 @@
 package com.kaiharimoto.neue
 
-import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
@@ -61,24 +60,21 @@ class WorldsTest {
     private suspend fun settle() = withContext(Dispatchers.Main) { delay(150) }
 
     @Test
-    fun aSelfPlayTableThatEndsIsKeptWithTheDuelRecords() = runBlocking {
+    fun aScriptTableThatEndsIsASandboxAndNoDuelRecord() = runBlocking {
         val w = worlds()
-        val kept = mutableListOf<DuelResult>()
-        w.keepDuel = { kept += it }
-        withContext(Dispatchers.Main) { w.create("Self-play", null) }
+        withContext(Dispatchers.Main) { w.create("Sandbox", null) }
         val code = """
             var t = ygo.duel.start({a: 'd1', b: 'd1', seed: 4});
             t.do('draw', 0); t.do('end', 0); t.do('draw', 1);
-            t.do('concede', 1).ended.winner
+            var e = t.do('concede', 1).ended;
+            e.winner + ' ' + e.kind
         """.trimIndent()
         val run = withContext(Dispatchers.Main) { w.run(null, code, "js") }.getOrThrow()
         settle()
         assertTrue(run.record.ok, run.record.err)
-        assertEquals("0", run.value)
-        val r = kept.single()
-        assertEquals(DuelResult.SELF_PLAY, r.kind)
-        assertEquals(4L, r.seed)
-        assertTrue(w.terminal.any { "1 self-play duel kept" in it.text }, w.terminal.toString())
+        // Ai's games are Ai vs Ai on the Duel page: a script's table says how it ended to the script, and is kept nowhere.
+        assertEquals("0 scripted", run.value)
+        assertTrue(w.terminal.none { "kept in the duel records" in it.text }, w.terminal.toString())
     }
 
     @Test

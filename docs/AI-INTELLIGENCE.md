@@ -162,8 +162,8 @@ the person's moves on Ai's cards in its cues, the guide at the table, the brief 
 - **Ai has no access to its guide at the table.**
 - The brief gives names only: no ATK/DEF, Level, Attribute or Type.
 - Ai World's duel tables are seed 1 by default, with no choice of who goes first and no fork of the live position.
-  (Closed, Phase C stage 3, `docs/phases/C.md` §6: a fresh seed returned, `first`, `ygo.duel.fork()`; self-play results
-  counted apart.)
+  (Closed, Phase C stage 3, `docs/phases/C.md` §6: a fresh seed returned, `first`, `ygo.duel.fork()` — a sandbox for
+  scripts; Ai's games against Ai are Ai vs Ai, two sessions, one a seat, counted apart.)
 
 **Evaluability**
 - Duel games are logged to Prep with the wrong first/second whenever the opening roll decided it. (Closed, Phase C §2.)
@@ -464,7 +464,7 @@ app's own, because the engines that exist are copyleft.
 - **Checkpoints**: files, boards and the conversation, previewable before restoring.
 - **A number in the chat links to the run** that made it.
 - **Python's limits**: Job Objects on Windows, `RLIMIT_*` on Linux, descendants killed first.
-- **Seeded self-play tables** with a choice of who goes first, and a fork of the live position.
+- **Seeded sandbox tables** with a choice of who goes first, and a fork of the live position; **Ai vs Ai**, two sessions, one a seat (Phase C §6).
 
 ### What the app will not do
 - Bundle or link ygopro-core's scripts, EDOPro's core or Project Ignis' scripts (GPL/AGPL).

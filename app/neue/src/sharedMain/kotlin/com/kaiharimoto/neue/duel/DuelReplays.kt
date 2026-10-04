@@ -101,6 +101,16 @@ internal class DuelReplays(private val d: Duels) {
         }
     }
 
+    /** A game played elsewhere — an Ai vs Ai match (`docs/phases/C.md` §6) — kept as a replay under [name]. */
+    fun keepReplay(name: String, g: DuelGame) {
+        val id = "r${Duels.now()}"
+        val record = g.record(name, saved = Duels.now())
+        d.scope.launch {
+            writeReplay(id, record)
+            loadReplays()
+        }
+    }
+
     fun openReplay(id: String) {
         // A replay is not the table Ai's answer was for (1.0.85): what waited on it goes, and the Spotlight with it.
         d.aiWatch.forgetTriggers(clearWatches = false)

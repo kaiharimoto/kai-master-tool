@@ -56,14 +56,20 @@ data class DuelResult(
     val whatIf: Boolean = false,
     val version: Int = VERSION,
     /**
-     * What kind of game (Phase C stage 3): null for a duel at the table, [SELF_PLAY] for Ai against itself on a table of
-     * Ai World's — counted apart, never as a game against a person. Absent on every record written before.
+     * What kind of game: null for a duel at the table; [AI_VS_AI] for two Ai sessions playing each other, one a seat
+     * (`docs/phases/C.md` §6) — counted apart, never as a game against a person. Absent on every record written before.
+     * [SELF_PLAY] was written only by an unreleased build (Phase C stage 3's script tables) and is counted nowhere.
      */
     val kind: String? = null,
-    /** A self-play table's seed: the same seed and moves play the same game again. */
+    /** The table's seed: the same seed and moves play the same game again (an Ai vs Ai match's). */
     val seed: Long? = null,
-    /** A self-play table forked from the duel in play: that duel's id. */
+    /** An unreleased build's script table forked from the duel in play: that duel's id. Read, never written now. */
     val forkOf: String? = null,
+    /**
+     * How it ended in words, when the table ended it rather than the players (an Ai vs Ai match): a turn cap or a token
+     * budget reached ([LIMIT]), a session that failed or ran its deck out forfeiting.
+     */
+    val said: String? = null,
 ) {
     /** The seats played by people (this device's person or the network's guest), and Ai's. */
     fun player(seat: Int): String = seats.getOrNull(seat)?.player ?: UNKNOWN
@@ -76,7 +82,11 @@ data class DuelResult(
         const val LP = "lp"
         const val DRAW = "draw"
         const val UNKNOWN = "unknown"
-        /** Ai against itself, on a table of Ai World's ([kind]). */
+        /** A draw by limit: an Ai vs Ai match's turn cap or token budget reached ([said] says which). */
+        const val LIMIT = "limit"
+        /** Two Ai sessions, one a seat ([kind]). */
+        const val AI_VS_AI = "ai-vs-ai"
+        /** An unreleased build's script table ([kind]): read, never written, counted nowhere. */
         const val SELF_PLAY = "self-play"
     }
 }
@@ -90,7 +100,13 @@ data class ResultSeat(
     val player: String = DuelResult.UNKNOWN,
     /** Its moves (talk left out), by who made them. */
     val moves: Map<String, Int> = emptyMap(),
-)
+    /** An Ai vs Ai match: the connection that played the seat, by the person's label for it, and its model. */
+    val connection: String? = null,
+    val model: String? = null,
+) {
+    /** What an Ai vs Ai summary calls the seat's player: its model, else its connection, else Ai. */
+    val engine: String get() = model?.takeIf { it.isNotBlank() } ?: connection?.takeIf { it.isNotBlank() } ?: "Ai"
+}
 
 @Serializable
 data class AiPlay(
@@ -145,9 +161,9 @@ object DuelResults {
      * The duel as a result, or null while it goes on. [id] names the record (a what-if's carries where it branched);
      * [ended] is when.
      */
-    fun of(game: DuelGame, ended: Long, id: String = game.header.id, whatIf: Boolean = false): DuelResult? {
+    fun of(game: DuelGame, ended: Long, id: String = game.header.id, whatIf: Boolean = false, end: Pair<Int?, String>? = null): DuelResult? {
         val s = game.state
-        val (winner, how) = ending(s) ?: return null
+        val (winner, how) = ending(s) ?: end ?: return null
         val played = game.played
         val moves = played.filter { it.seat != null && !DuelGame.isTalk(it.action) }
         // Each seat's moves by who made them (a move with no provenance — an older build's — by no one).
@@ -196,44 +212,62 @@ object DuelResults {
         )
     }
 
-    /**
-     * A self-play table's game as a result (Phase C stage 3, Ai World): both seats Ai's, its own [DuelResult.kind] so it is
-     * never counted as a game against a person; its [DuelResult.seed] and, when it was forked from the duel in play, that
-     * duel's id. Null while it goes on.
-     */
-    fun selfPlay(game: DuelGame, ended: Long, id: String, forkOf: String? = null): DuelResult? =
-        of(game, ended, id)?.copy(kind = DuelResult.SELF_PLAY, ai = null, seed = game.header.seed, forkOf = forkOf)
+    /** One seat of an Ai vs Ai match as its record names it: the connection's label and the model. */
+    data class Engine(val connection: String, val model: String)
 
-    /** Ai against itself, by the decks that met: [first] the deck first in name order, its wins, the other's, draws. */
-    data class SelfScore(val first: String, val second: String, val firstWon: Int, val secondWon: Int, val drawn: Int, val goingFirstWon: Int) {
-        val played: Int get() = firstWon + secondWon + drawn
+    /**
+     * An Ai vs Ai match's game as a result (`docs/phases/C.md` §6): two Ai sessions, one a seat, each named by its
+     * connection and model, its own [DuelResult.kind] so it is never counted as a game against a person. [end] and [said]
+     * when the table ended it (a draw by limit, a forfeit); null while it goes on and nothing ended it.
+     */
+    fun aiVsAi(game: DuelGame, ended: Long, id: String, engines: List<Engine>, end: Pair<Int?, String>? = null, said: String? = null): DuelResult? =
+        of(game, ended, id, end = end)?.let { r ->
+            r.copy(
+                kind = DuelResult.AI_VS_AI,
+                ai = null,
+                seed = game.header.seed,
+                said = said,
+                seats = r.seats.mapIndexed { i, seat -> engines.getOrNull(i)?.let { seat.copy(connection = it.connection, model = it.model) } ?: seat },
+            )
+        }
+
+    /**
+     * Ai vs Ai by the two engines that met, in name order (so the seats do not split a pairing): [a]'s wins, [b]'s,
+     * draws, and how often going first won.
+     */
+    data class MatchScore(val a: String, val b: String, val aWon: Int, val bWon: Int, val drawn: Int, val goingFirstWon: Int) {
+        val played: Int get() = aWon + bWon + drawn
     }
 
-    /** Every self-play result, grouped by the two decks that met (in name order, so the seats do not split a pairing). */
-    fun againstItself(results: List<DuelResult>): List<SelfScore> =
-        results.filter { it.kind == DuelResult.SELF_PLAY && it.seats.size == 2 }.groupBy { r ->
-            r.seats.map { deckOf(it) }.sorted().let { it[0] to it[1] }
+    /** Every Ai vs Ai result, grouped by the engines that met; a result of any other kind is never among them. */
+    fun aiVsAi(results: List<DuelResult>): List<MatchScore> =
+        results.filter { it.kind == DuelResult.AI_VS_AI && it.seats.size == 2 && !it.whatIf }.groupBy { r ->
+            r.seats.map { it.engine }.sorted().let { it[0] to it[1] }
         }.map { (pair, rs) ->
-            fun deckWon(r: DuelResult) = r.winner?.let { deckOf(r.seats[it]) }
             val mirror = pair.first == pair.second
-            SelfScore(
+            fun won(r: DuelResult) = r.winner?.let { r.seats[it].engine }
+            MatchScore(
                 pair.first, pair.second,
-                firstWon = if (mirror) rs.count { it.winner != null } else rs.count { deckWon(it) == pair.first },
-                secondWon = if (mirror) 0 else rs.count { deckWon(it) == pair.second },
+                aWon = if (mirror) rs.count { it.winner != null } else rs.count { won(it) == pair.first },
+                bWon = if (mirror) 0 else rs.count { won(it) == pair.second },
                 drawn = rs.count { it.winner == null },
                 goingFirstWon = rs.count { it.winner != null && it.winner == it.first },
             )
         }.sortedByDescending { it.played }
 
-    /** "Ai against itself: Branded won 3 of 5 against Snake-Eye (1 drawn); going first won 4." */
-    fun selfWords(score: SelfScore, aiName: String = "Ai"): String {
-        val drawn = if (score.drawn > 0) " (${score.drawn} drawn)" else ""
-        val head = if (score.first == score.second) "$aiName against itself, ${score.first} in the mirror: ${score.played} played$drawn"
-        else "$aiName against itself: ${score.first} won ${score.firstWon} of ${score.played} against ${score.second}$drawn"
-        return "$head; going first won ${score.goingFirstWon}."
+    /** "Ai vs Ai: claude-opus-5-5 beat gpt-x 3 of 5 (1 drawn; going first won 4)." */
+    fun matchWords(score: MatchScore): String {
+        val tail = listOfNotNull(
+            if (score.drawn > 0) "${score.drawn} drawn" else null,
+            "going first won ${score.goingFirstWon}",
+        ).joinToString("; ")
+        return when {
+            score.a == score.b -> "Ai vs Ai: ${score.a} against itself, two sessions, ${score.played} played ($tail)."
+            score.aWon == score.bWon -> "Ai vs Ai: ${score.a} and ${score.b} won ${score.aWon} each of ${score.played} ($tail)."
+            score.aWon > score.bWon -> "Ai vs Ai: ${score.a} beat ${score.b} ${score.aWon} of ${score.played} ($tail)."
+            else -> "Ai vs Ai: ${score.b} beat ${score.a} ${score.bWon} of ${score.played} ($tail)."
+        }
     }
-
-    private fun deckOf(s: ResultSeat): String = s.deckName.ifBlank { s.name }.ifBlank { "a deck" }
 
     /** The opening roll's rounds as both seats' sums: a seat's second throw in a round (after a tie) starts the next. */
     fun rounds(played: List<DuelEntry>): List<List<Int>> {
@@ -309,7 +343,8 @@ object DuelResults {
     fun aiAgainst(results: List<DuelResult>, person: String? = null, whatIfs: Boolean = false): List<Score> {
         val games = results.mapNotNull { r ->
             if (r.whatIf && !whatIfs) return@mapNotNull null
-            if (r.kind == DuelResult.SELF_PLAY) return@mapNotNull null
+            // Only duels at the table: an Ai vs Ai match (and an unreleased build's script table) is never a game against a person.
+            if (r.kind != null) return@mapNotNull null
             val ai = r.ai ?: return@mapNotNull null
             val other = 1 - ai.seat
             val p = r.player(other)
@@ -356,8 +391,8 @@ object DuelResults {
     /** Every person and setting in words, one line each; [none] when there is nothing to count. */
     fun summary(results: List<DuelResult>, person: String? = null, aiName: String = "Ai", whatIfs: Boolean = false): String {
         val scores = aiAgainst(results, person, whatIfs)
-        // Ai against itself (Phase C stage 3), counted apart: after the games against people, never among them.
-        val self = if (person == null) againstItself(results).map { selfWords(it, aiName) } else emptyList()
+        // Ai vs Ai (two sessions, one a seat), counted apart: after the games against people, never among them.
+        val self = if (person == null) aiVsAi(results).map(::matchWords) else emptyList()
         if (scores.isEmpty() && self.isEmpty()) return if (person != null) "No finished duels between $aiName and $person yet." else "No finished duels against $aiName yet."
         return (scores.map { words(it, aiName) } + self).joinToString("\n")
     }

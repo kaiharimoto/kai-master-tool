@@ -356,10 +356,15 @@ internal class AiDuel(private val h: NeueHolders) {
         val date = java.text.SimpleDateFormat("d MMM yyyy").format(java.util.Date(r.ended))
         val first = "${r.seats.getOrNull(r.first)?.name ?: "Player ${r.first + 1}"} first" +
             if (r.firstBy == DuelResult.ROLL) " (the dice: ${r.rolls.joinToString(", ") { it.joinToString("–") }}${r.chosenBy?.let { ", chosen by the $it" } ?: ""})" else ""
-        val won = r.winner?.let { "${r.seats.getOrNull(it)?.name ?: "Player ${it + 1}"} won by ${if (r.how == DuelResult.CONCEDE) "concession" else "life points"}" } ?: "a draw"
+        val won = r.winner?.let { "${r.seats.getOrNull(it)?.name ?: "Player ${it + 1}"} won by ${if (r.how == DuelResult.CONCEDE) "concession" else "life points"}" }
+            ?: if (r.how == DuelResult.LIMIT) "a draw by limit" else "a draw"
         val ai = r.ai?.let { a -> "; ${h.ai.name} at seat ${a.seat}, knowledge ${a.knows}, ${a.peeks} peeks${if (!a.clean) ", a seat moved by the other side" else ""}" } ?: ""
         val where = if (r.net) "; networked" else r.eyes?.let { "; the person's eyes: $it" } ?: ""
-        val self = if (r.kind == DuelResult.SELF_PLAY) " · self-play in Ai World, seed ${r.seed}${r.forkOf?.let { ", forked from $it" } ?: ""}" else ""
+        val self = when (r.kind) {
+            DuelResult.AI_VS_AI -> " · Ai vs Ai: ${r.seats.joinToString(" v ") { it.engine }}, seed ${r.seed}${r.said?.let { " · $it" } ?: ""}"
+            null -> ""
+            else -> " · a ${r.kind} table of an unreleased build, counted nowhere"
+        }
         return "${r.id} · $date · ${seat(0)} v ${seat(1)} · $first · $won in turn ${r.turns}$ai$where${if (r.whatIf) " · a what-if" else ""}$self"
     }
 

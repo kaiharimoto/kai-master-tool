@@ -92,6 +92,7 @@ class Duels(val dir: File) {
     internal val opener = DuelOpening(this)
     internal val picking = DuelPicking(this)
     internal val records = DuelRecords(this)
+    val matches = DuelMatches(this)
 
     var game by mutableStateOf<DuelGame?>(null)
     /** The seat drawn at the bottom of the table: the one acting, in a hot-seat. */
@@ -390,7 +391,7 @@ class Duels(val dir: File) {
     /** Every result, once read from disk (Ai's `duel_records`). */
     suspend fun readResults(): List<DuelResult> = records.read()
     fun reloadResults() = records.reload()
-    /** A self-play table's result from Ai World (Phase C stage 3), kept with the rest. */
+    /** A result made away from the duel in play (an Ai vs Ai match's), kept with the rest. */
     fun keepResult(r: DuelResult) = records.keep(r)
     /** The duel in play looked at again: its result written when it has ended, taken away when the end was undone. */
     fun noteResult() = records.note(game)
@@ -412,13 +413,22 @@ class Duels(val dir: File) {
     }
     var catalog: DuelCatalog = DuelCatalog.NONE
 
-    /** What the table shows: the replay where it stands, the guest's view of the host's duel, or the duel in play. */
+    /**
+     * What the table shows: an Ai vs Ai match being watched, the replay where it stands, the guest's view of the host's
+     * duel, or the duel in play.
+     */
     val shown: DuelGame?
         get() {
             if (network.role == NetRole.GUEST) return network.remote
+            matches.live?.let { return it }
             val r = replayer.replay ?: return game
             return replayer.shown(r)
         }
+
+    // ---- Ai vs Ai (`docs/phases/C.md` §6): DuelMatches ---------------------------------------------------------------
+
+    /** An Ai vs Ai match is on the table: watched, never played into. */
+    val spectating: Boolean get() = matches.live != null
 
     // ---- replays (1.0.75): DuelReplays -------------------------------------------------------------------
 
@@ -486,6 +496,8 @@ class Duels(val dir: File) {
     }
 
     fun start(header: DuelHeader) {
+        // A finished Ai vs Ai match being read is put away for the new duel (a running one stays on the table).
+        matches.close()
         game = DuelGame.start(header, now())
         replayer.origin = null
         spot.closeSpotlight()
@@ -534,6 +546,8 @@ class Duels(val dir: File) {
      * written with it ([provenance]); [peek] marks one of Ai's peeks.
      */
     fun act(actions: List<DuelAction>, seat: Int? = bottom, peek: Boolean = false): Boolean {
+        // An Ai vs Ai match on the table is watched, never played into (`docs/phases/C.md` §6).
+        if (matches.live != null) { problem = DuelMatches.ON_THE_TABLE; return false }
         if (replayer.replay != null) return replayer.insert(actions, seat)
         // Insert here takes the person's next move only — never a step of Ai's or a combo's play-out (1.0.85).
         insertAfter?.let { at -> if (network.role == null && !playing && !aiWatch.releasing && actions.any { !it.social }) { insertAfter = null; return replayer.insertPast(at, actions, seat) } }
@@ -718,7 +732,7 @@ class Duels(val dir: File) {
      */
     fun replace(kind: ZoneKind, index: Int): Boolean {
         // The live table on this device only: never a networked one or a replay, nor under Ai's answer (1.0.85).
-        if (network.role != null || replayer.replay != null || aiWatch.waitingOnAi) return false
+        if (network.role != null || replayer.replay != null || aiWatch.waitingOnAi || matches.live != null) return false
         val p = placed?.takeIf { now() < it.until } ?: return false
         val g = game ?: return false
         val last = g.entries.getOrNull(g.cursor - 1) ?: return false
@@ -839,6 +853,7 @@ class Duels(val dir: File) {
     }
 
     fun undo() {
+        if (matches.live != null) { problem = DuelMatches.ON_THE_TABLE; return }
         if (replayer.replay != null) { replayer.step(ReplayUnit.GROUP, -1); return }
         if (network.role != null) { network.askTakeBack(); return }
         // A phase change held for Ai is not on the table yet: undo takes it back first.
@@ -867,6 +882,7 @@ class Duels(val dir: File) {
     }
 
     fun redo() {
+        if (matches.live != null) return
         if (replayer.replay != null) { replayer.step(ReplayUnit.GROUP, 1); return }
         if (network.role != null) return
         if (aiWatch.waitingOnAi) { problem = "Ai is answering your move — Don't wait first."; return }
@@ -883,7 +899,7 @@ class Duels(val dir: File) {
     var aiEngaged = false
 
     fun swap() {
-        if (network.role != null) return
+        if (network.role != null || matches.live != null) return
         val g = game ?: return
         if (g.state.solo) return
         if (aiEngaged) { problem = "Ai plays the other seat: sitting there would show you its hand."; return }
@@ -1143,6 +1159,8 @@ class Duels(val dir: File) {
 
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */
     fun viewers(prefs: DuelPrefs): Set<Int> = when {
+        // The person watching Ai vs Ai is a spectator: both hands face-up, their view alone, never either session's.
+        matches.live != null -> setOf(0, 1)
         // At a networked table each player sees through their own seat's eyes, whatever the hot-seat setting.
         network.role != null -> setOf(network.mySeat)
         shown?.state?.solo == true -> setOf(0)

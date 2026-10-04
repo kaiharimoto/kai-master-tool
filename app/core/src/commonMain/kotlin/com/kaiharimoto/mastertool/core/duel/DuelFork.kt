@@ -4,7 +4,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import kotlin.random.Random
 
 /**
- * A fork of the duel in play for a self-play table (Phase C stage 3, Ai World, `docs/phases/C.md` §6): the position as the
+ * A fork of the duel in play for a script's sandbox table (Ai World, `docs/phases/C.md` §6): the position as the
  * seat Ai would hold sees it, and nothing more. Built only from that seat's [DuelView] and its own decklist, so a fork can
  * never hold a card that seat could not see — the live table is read, never changed, and never handed over whole.
  *
