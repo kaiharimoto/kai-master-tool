@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Ai World (1.0.95, kai: "a free environment to build using coding tools … that the user can see and watch live"):
+ * Ai World (1.0.97, kai: "a free environment to build using coding tools … that the user can see and watch live"):
  * a small computer of Ai's own. It writes files, runs them — JavaScript everywhere, Python on the desk — and pins
  * what it found to the world's boards, and the person watches every keystroke, run and board as it happens.
  *

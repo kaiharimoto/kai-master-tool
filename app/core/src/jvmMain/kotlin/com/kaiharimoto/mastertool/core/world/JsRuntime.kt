@@ -13,7 +13,7 @@ import org.mozilla.javascript.Undefined
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * A world's JavaScript (1.0.95): Mozilla Rhino, interpreted (Android cannot load generated classes), shut in.
+ * A world's JavaScript (1.0.97): Mozilla Rhino, interpreted (Android cannot load generated classes), shut in.
  *
  * - **Nothing of Java**: only the safe standard objects, no `Packages`, `java` or `JavaAdapter`, and a class shutter
  *   that refuses every class, so even a Java object that leaked in could not be reached through.

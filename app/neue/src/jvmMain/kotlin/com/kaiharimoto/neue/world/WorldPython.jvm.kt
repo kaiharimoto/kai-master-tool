@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
- * Python on the desk (1.0.95). It runs with the person's own permissions — no sandbox can be promised for a
+ * Python on the desk (1.0.97). It runs with the person's own permissions — no sandbox can be promised for a
  * process — which is why it is off until they allow it. What the World does do:
  * - `-I`, isolated: no user site-packages, no PYTHON* variables, the script's folder not on the path ahead of the
  *   standard library;

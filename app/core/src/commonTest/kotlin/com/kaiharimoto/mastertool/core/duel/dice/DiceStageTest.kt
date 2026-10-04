@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.duel.dice
 
+import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.layout.DuelLayouter
 import com.kaiharimoto.mastertool.core.layout.FormFactor
 import kotlin.math.abs
@@ -29,10 +31,12 @@ class DiceStageTest {
                     if (seat == l.bottom) assertTrue(p.y >= mid - 1, "near y ${p.y} above the middle at $w×$h")
                     else assertTrue(p.y <= mid + 1, "far y ${p.y} below the middle at $w×$h")
                 }
-                // The dice rest in front of the field: past its near edge, toward the seat's player.
-                val rest = stage.toTable(seat, a.rest.first())
-                val edge = stage.toTable(seat, V3(DiceSim.ARENA_W / 2, DiceSim.ARENA_D))
-                if (seat == l.bottom) assertTrue(rest.y > edge.y) else assertTrue(rest.y < edge.y)
+                // The dice rest on the seat's Spell & Trap row, in front of its hand, either side of its middle zone (1.0.95).
+                val zone = assertNotNull(l.zone(Place.Zone(seat, ZoneKind.SPELL, 2)))
+                a.rest.map { stage.toTable(seat, it) }.forEach { p ->
+                    assertTrue(p.y >= zone.top && p.y <= zone.bottom, "rest y ${p.y} off the S/T row at $w×$h")
+                    assertTrue(p.x >= zone.left - zone.width && p.x <= zone.right + zone.width, "rest x ${p.x} at $w×$h")
+                }
             }
         }
     }

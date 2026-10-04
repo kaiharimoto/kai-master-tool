@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -103,5 +105,30 @@ fun FoilGlyph(on: Boolean, feel: Offset?, ink: Color, paper: Color, modifier: an
         if (on) with(Holo) { if (!drawHoloSheet(Rect(Offset.Zero, size), feel ?: Offset(-0.4f, -0.6f))) drawFoil(Foils.CLASSIC, feel) }
         // A 1 dp edge, inside the glyph.
         drawRect(ink, topLeft = Offset(density / 2f, density / 2f), size = androidx.compose.ui.geometry.Size(size.width - density, size.height - density), style = androidx.compose.ui.graphics.drawscope.Stroke(density))
+    }
+}
+
+/**
+ * A glint of foil in the shape of a four-point star — a plus drawn to a point (kai, 1.0.95: "a holographic glimmer in the
+ * same texture as the foiling in a star + shape when a card is activating"): the holographic sheet the stamped names are
+ * cut from, kept inside the star centred on [center], its points [radius] out, its light at [light]. Nothing where there is
+ * no runtime shader: a glint is a flourish, never information.
+ */
+fun DrawScope.drawFoilStar(center: Offset, radius: Float, light: Offset, cache: HoloCache? = null) {
+    if (!Holo.available || radius < 1f) return
+    val waist = radius * 0.16f
+    val path = Path().apply {
+        moveTo(center.x, center.y - radius)
+        lineTo(center.x + waist, center.y - waist)
+        lineTo(center.x + radius, center.y)
+        lineTo(center.x + waist, center.y + waist)
+        lineTo(center.x, center.y + radius)
+        lineTo(center.x - waist, center.y + waist)
+        lineTo(center.x - radius, center.y)
+        lineTo(center.x - waist, center.y - waist)
+        close()
+    }
+    clipPath(path) {
+        with(Holo) { drawHoloSheet(Rect(center.x - radius, center.y - radius, center.x + radius, center.y + radius), light, cache) }
     }
 }

@@ -225,7 +225,7 @@ class BackupCenter(private val h: NeueHolders) {
                         tree(File(Platform.dataDir, "present")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("present/$rel", f.readBytes()); files++ }
                         // The duel in play (1.0.74), and later its replays and combos.
                         tree(File(Platform.dataDir, "duel")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("duel/$rel", f.readBytes()); files++ }
-                        // Ai World's worlds (1.0.95): their files, boards and logs.
+                        // Ai World's worlds (1.0.97): their files, boards and logs.
                         tree(File(Platform.dataDir, "world")).filter { NeueSyncLocal.worldSyncs(it.first) }.forEach { (rel, f) -> add("world/$rel", f.readBytes()); files++ }
                         add(
                             BackupManifest.NAME,

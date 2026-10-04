@@ -38,7 +38,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     /** Duel's replays (1.0.75) and combos (1.0.76): files, the newer one kept. The duel in play is this device's own. */
     private val duel = File(Platform.dataDir, "duel")
 
-    /** Ai World's worlds (1.0.95): files, the newer one kept; the Python helper's folder is rewritten before every run. */
+    /** Ai World's worlds (1.0.97): files, the newer one kept; the Python helper's folder is rewritten before every run. */
     private val world = File(Platform.dataDir, "world")
 
     /** What came in this sync, so the screens showing it can be told once at the end. */
@@ -183,7 +183,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
             rel.startsWith("credentials.") || rel.startsWith("run/") || rel.startsWith("cache/")
 
         /**
-         * What of a world travels (1.0.95), [rel] under `world/`: its record, log, files and pictures; never a half-written
+         * What of a world travels (1.0.97), [rel] under `world/`: its record, log, files and pictures; never a half-written
          * file or the Python helper's folder, which every run writes afresh.
          */
         fun worldSyncs(rel: String): Boolean =

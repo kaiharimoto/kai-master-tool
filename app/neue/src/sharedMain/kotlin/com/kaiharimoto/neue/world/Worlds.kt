@@ -65,7 +65,7 @@ data class RunOutcome(val record: RunRecord, val boards: List<Board>, val value:
 }
 
 /**
- * Ai World for the app's lifetime (1.0.95): the worlds in `<data>/world/<id>/`, the one open, and everything the
+ * Ai World for the app's lifetime (1.0.97): the worlds in `<data>/world/<id>/`, the one open, and everything the
  * person watches — the editor's text as it is typed, the terminal as a run prints, the boards, the activity, and the
  * pane Ai is working in. Ai's tools (`AiWorld`) and the person's clicks change the same state, as the duel's do.
  *

@@ -29,7 +29,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Ai World end to end, headless (1.0.95): a world made, a script typed in and run with its output streamed to the
+ * Ai World end to end, headless (1.0.97): a world made, a script typed in and run with its output streamed to the
  * terminal and its boards pinned, an instrument run, Python where this machine has it, and everything kept on disk
  * as the next start reads it.
  */

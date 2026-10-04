@@ -486,7 +486,7 @@ class AiState(internal val h: NeueHolders) {
             // A book is written a chapter at a time, each read up on first: twice a study's rounds.
             AiSession.MODE_WRITE -> intensity.steps * 2
             AiSession.MODE_TUNE, AiSession.MODE_PROFILE -> intensity.questions * 3 + 8
-            // An experiment is write, run, read, fix, show — several rounds a question (1.0.95).
+            // An experiment is write, run, read, fix, show — several rounds a question (1.0.97).
             AiSession.MODE_WORLD -> AgentLoop.MAX_STEPS * 2
             else -> AgentLoop.MAX_STEPS
         }
@@ -567,7 +567,7 @@ class AiState(internal val h: NeueHolders) {
         clearWritten()
         reasoning = ""
         activity = emptyList()
-        // Nobody is working in Ai World now (1.0.95): its "Ai is here" comes off.
+        // Nobody is working in Ai World now (1.0.97): its "Ai is here" comes off.
         if (h.worldStarted) h.world.leave()
         working = null
         tool = null
@@ -637,7 +637,7 @@ class AiState(internal val h: NeueHolders) {
      * launcher learned, so the deck-profile skill begins with the answers it would ask for.
      */
     /**
-     * Ai World (1.0.95): a question answered by experiment — a fresh world conversation, opened with the person's words,
+     * Ai World (1.0.97): a question answered by experiment — a fresh world conversation, opened with the person's words,
      * worked in the World where they watch.
      */
     fun startWorld(question: String) {

@@ -83,7 +83,7 @@ data class EngineLayout(
             up()
             down()
             // Routes from a source to an end, and how many pass through each card: the routes into a card times the
-            // routes out of it, counted once per card (1.0.95). Walking every route, as before, is exponential in a
+            // routes out of it, counted once per card (1.0.97). Walking every route, as before, is exponential in a
             // dense web, and Ai World draws any web a script makes; the counts are the same.
             val routesIn = HashMap<String, Double>()
             fun inCount(n: String): Double = routesIn.getOrPut(n) {

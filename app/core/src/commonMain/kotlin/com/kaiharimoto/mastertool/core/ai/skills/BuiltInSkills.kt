@@ -195,7 +195,7 @@ object BuiltInSkills {
         3 to Skill(DeckSkills.RESTYLE_NAME, DeckSkills.RESTYLE_DESCRIPTION, DeckSkills.RESTYLE.trim(), builtIn = true),
         // Duel (1.0.76): Ai at the table — honest knowledge, moves as a player says them, combos.
         3 to Skill(DeckSkills.DUEL_TABLE_NAME, DeckSkills.DUEL_TABLE_DESCRIPTION, DeckSkills.DUEL_TABLE.trim(), builtIn = true),
-        // Ai World (1.0.95): answering by experiment, in code the person watches.
+        // Ai World (1.0.97): answering by experiment, in code the person watches.
         3 to Skill(DeckSkills.AI_WORLD_NAME, DeckSkills.AI_WORLD_DESCRIPTION, DeckSkills.AI_WORLD.trim(), builtIn = true),
     )
 

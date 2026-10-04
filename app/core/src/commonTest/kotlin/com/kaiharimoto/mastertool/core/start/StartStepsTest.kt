@@ -18,11 +18,11 @@ class StartStepsTest {
 
     @Test
     fun aiWorldAsksAboutPythonOnTheDeskOnly() {
-        // 1.0.95: the desk asks whether Python may run; a phone or tablet has none, so nothing is asked there.
-        assertEquals(listOf(StartStep.WORLD), StartSteps.pending("1.0.95", StartPrefs(seen = "1.0.94"), someone.copy(voiceReady = true), android = false))
-        assertEquals(emptyList(), StartSteps.pending("1.3.73", StartPrefs(seen = "1.3.72"), someone.copy(voiceReady = true, worldReady = true), android = true))
+        // 1.0.97: the desk asks whether Python may run; a phone or tablet has none, so nothing is asked there.
+        assertEquals(listOf(StartStep.WORLD), StartSteps.pending("1.0.97", StartPrefs(seen = "1.0.96"), someone.copy(voiceReady = true), android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.3.75", StartPrefs(seen = "1.3.74"), someone.copy(voiceReady = true, worldReady = true), android = true))
         // With Ai off there is no World to set up.
-        assertEquals(emptyList(), StartSteps.pending("1.0.95", StartPrefs(seen = "1.0.94"), someone.copy(voiceReady = true, aiEnabled = false), android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.0.97", StartPrefs(seen = "1.0.96"), someone.copy(voiceReady = true, aiEnabled = false), android = false))
     }
 
     @Test

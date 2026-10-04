@@ -3,7 +3,7 @@ package com.kaiharimoto.neue.world
 import java.io.File
 
 /**
- * Python for Ai World (1.0.95): on the desk a real Python, found on the PATH or where the person pointed, run as a
+ * Python for Ai World (1.0.97): on the desk a real Python, found on the PATH or where the person pointed, run as a
  * process of its own; on a phone or tablet there is none, and the World offers JavaScript alone.
  */
 expect object WorldPython {

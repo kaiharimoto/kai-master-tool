@@ -392,7 +392,7 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
 }
 
 /**
- * Ai World's settings (1.0.95): whether the page follows Ai, how fast its code types in, and — on the desk only —
+ * Ai World's settings (1.0.97): whether the page follows Ai, how fast its code types in, and — on the desk only —
  * whether Python may run, which is the person's decision and never Ai's (`AiSettings.INTERNAL`).
  */
 @Composable

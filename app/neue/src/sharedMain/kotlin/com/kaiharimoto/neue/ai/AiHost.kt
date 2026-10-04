@@ -226,7 +226,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     /** Duel's (1.0.76): the table, moves played out, a logged peek, the log, a new duel, combos. */
     private val duelTools = AiDuel(h)
 
-    /** Ai World (1.0.95): its own computer, watched. */
+    /** Ai World (1.0.97): its own computer, watched. */
     private val worldTools = AiWorld(h)
 
     /** What a destructive tool will do, for the confirm card. */

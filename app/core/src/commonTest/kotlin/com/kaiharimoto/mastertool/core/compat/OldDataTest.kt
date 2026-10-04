@@ -83,8 +83,8 @@ class OldDataTest {
     }
 
     @Test
-    fun aWorldFrom1095StillReads() {
-        // 1.0.95: Ai World's record in `<data>/world/<id>/world.json`, a board from a later build among its own, a line of its
+    fun aWorldFrom1097StillReads() {
+        // 1.0.97: Ai World's record in `<data>/world/<id>/world.json`, a board from a later build among its own, a line of its
         // log with a kind this build does not know, and its device-only settings.
         val old = """{"id":"wabc","title":"Openings","scope":"deck:d1","created":1,"updated":2,"open":"sim.js",
             "boards":[{"id":"starter","title":"Opens a starter","kind":"stat","payload":"{\"value\":\"74%\",\"label\":\"x\"}","x":0,"y":0,"note":"seed 1"},
