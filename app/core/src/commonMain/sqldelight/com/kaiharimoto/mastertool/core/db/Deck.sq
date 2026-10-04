@@ -22,6 +22,9 @@ CREATE INDEX deckEntity_updatedAt ON deckEntity(updatedAtEpochMs);
 selectAll:
 SELECT * FROM deckEntity ORDER BY updatedAtEpochMs DESC;
 
+countAll:
+SELECT COUNT(*) FROM deckEntity;
+
 selectById:
 SELECT * FROM deckEntity WHERE id = ?;
 

@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.sync.Cloud
 import com.kaiharimoto.mastertool.core.sync.CloudSignIn
 import com.kaiharimoto.mastertool.core.sync.CloudTokens
 import com.kaiharimoto.mastertool.core.sync.GoogleDriveStore
+import com.kaiharimoto.mastertool.core.sync.ManifestCache
 import com.kaiharimoto.mastertool.core.sync.Sync
 import com.kaiharimoto.mastertool.core.sync.SyncEngine
 import com.kaiharimoto.mastertool.core.sync.SyncException
@@ -17,6 +18,15 @@ import com.kaiharimoto.mastertool.core.sync.SyncPrefs
 import com.kaiharimoto.mastertool.core.sync.SyncReport
 import com.kaiharimoto.mastertool.core.sync.SyncState
 import com.kaiharimoto.mastertool.core.sync.SyncStore
+import com.kaiharimoto.mastertool.core.sync.SyncedPrefs
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.prep.PrepDoc
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import com.kaiharimoto.mastertool.core.sync.WebDavStore
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.ai.SecretStore
@@ -83,6 +93,41 @@ class SyncCenter(private val h: NeueHolders) {
         scope.launch { run(quiet) }
     }
 
+    /**
+     * A little after anything that travels changes — a deck saved, a setting, a web, prep, Ai's notes, a
+     * picture — a quiet sync (1.0.68). The window runs this once everything is read. What is watched is
+     * taken by reference on the main thread, and the settings' synced part and prep's hash worked out
+     * off it (1.0.92): a pinch changes the settings on every event, and none of that travels.
+     */
+    suspend fun followChanges() {
+        snapshotFlow { Watched(h.decksReload, h.neue.prefs, h.layout.preferences.format, h.webs.revision, h.prep.doc, h.ai.bookVersion, h.customArt.version) }
+            .conflate()
+            .map { w -> withContext(Dispatchers.Default) { w.key() } }
+            .distinctUntilChanged()
+            .drop(1)
+            .collectLatest {
+                delay(20_000)
+                if (h.neue.prefs.sync.auto) syncNow(quiet = true)
+            }
+    }
+
+    /** What [followChanges] watches, as read: compared by what [key] makes of it, never by itself. */
+    private class Watched(
+        val decks: Int,
+        val prefs: NeuePreferences,
+        val format: Any?,
+        val webs: Int,
+        val prep: PrepDoc,
+        val book: Int,
+        val art: Int,
+    ) {
+        fun key(): List<Any?> = listOf(decks, SyncedPrefs.extract(prefs).contentHashCode(), format, webs, prep.hashCode(), book, art)
+    }
+
+    /** The other devices' manifests as last read from [manifestsAt], for the app's lifetime: never stored. */
+    private var manifests = ManifestCache()
+    private var manifestsAt: String? = null
+
     private suspend fun run(quiet: Boolean) = lock.withLock {
         running = true
         try {
@@ -90,8 +135,14 @@ class SyncCenter(private val h: NeueHolders) {
             val store = store() ?: return@withLock
             val state = readState()
             val local = NeueSyncLocal(h, seen)
-            val (next, report) = SyncEngine(store, local, state.device, deviceName) { h.deps.now() }.run(state)
-            writeState(next)
+            val where = place(prefs)
+            if (where != manifestsAt) {
+                manifests = ManifestCache()
+                manifestsAt = where
+            }
+            val (next, report) = SyncEngine(store, local, state.device, deviceName, { h.deps.now() }, manifests).run(state)
+            // Written only when what was agreed moved (1.0.92): `lastSync` alone is never read back.
+            if (onDisk?.copy(lastSync = 0) != next.copy(lastSync = 0) || placeFile().readTextOrNull() != where) writeState(next)
             seen.save()
             withContext(Dispatchers.Main) { reload(local.changed) }
             last = report
@@ -252,8 +303,12 @@ class SyncCenter(private val h: NeueHolders) {
 
     // ---- this device's state ---------------------------------------------------------------------
 
+    /** The state as `state.json` holds it, read or written last. */
+    private var onDisk: SyncState? = null
+
     private fun readState(): SyncState {
         val stored = runCatching { Sync.json.decodeFromString(SyncState.serializer(), stateFile.readText()) }.getOrNull()
+        onDisk = stored
         val where = place(prefs)
         // Each place is met afresh: a device moved to another store has agreed nothing with it yet.
         return if (stored != null && stored.device.isNotBlank() && placeFile().readTextOrNull() == where) stored
@@ -263,6 +318,7 @@ class SyncCenter(private val h: NeueHolders) {
     private fun writeState(state: SyncState) {
         dir.mkdirs()
         stateFile.writeText(Sync.json.encodeToString(SyncState.serializer(), state))
+        onDisk = state
         placeFile().writeText(place(prefs))
     }
 

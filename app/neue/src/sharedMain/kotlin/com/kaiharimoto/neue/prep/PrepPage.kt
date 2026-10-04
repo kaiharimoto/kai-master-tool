@@ -240,7 +240,7 @@ private fun methodName(m: String) = when (m) {
 
 @Composable
 private fun PlanTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, mine: StoredDeck?, library: List<StoredDeck>, state: DeckBuilderState) {
-    fun put(e: PrepEvent) = prep.putEvent(e, activate = false)
+    fun put(e: PrepEvent) = prep.putEvent(e, activate = false, typing = true)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 900.dp
         val form: @Composable (Modifier) -> Unit = { m -> EventForm(prep, event, webs, library, ::put, m) }
@@ -694,15 +694,15 @@ private fun DecklistTab(prep: Prep, event: PrepEvent, webs: Webs, mine: StoredDe
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.weight(1f)) {
                 FieldLabel("Your name", hint = "as on your ID")
-                MuInput(profile.name, { prep.profile(profile.copy(name = it)) }, Modifier.fillMaxWidth())
+                MuInput(profile.name, { prep.profile(profile.copy(name = it), typing = true) }, Modifier.fillMaxWidth())
             }
             Column(Modifier.weight(1f)) {
                 FieldLabel("CARD GAME ID")
-                MuInput(profile.cardGameId, { prep.profile(profile.copy(cardGameId = it.filter(Char::isDigit).take(12))) }, Modifier.fillMaxWidth(), mono = true)
+                MuInput(profile.cardGameId, { prep.profile(profile.copy(cardGameId = it.filter(Char::isDigit).take(12)), typing = true) }, Modifier.fillMaxWidth(), mono = true)
             }
             Column(Modifier.weight(0.6f)) {
                 FieldLabel("Country")
-                MuInput(profile.country, { prep.profile(profile.copy(country = it)) }, Modifier.fillMaxWidth())
+                MuInput(profile.country, { prep.profile(profile.copy(country = it), typing = true) }, Modifier.fillMaxWidth())
             }
         }
         if (mine == null) {

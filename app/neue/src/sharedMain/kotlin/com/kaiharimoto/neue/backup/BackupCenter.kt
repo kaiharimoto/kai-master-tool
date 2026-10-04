@@ -26,12 +26,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
@@ -55,17 +56,32 @@ class BackupCenter(private val h: NeueHolders) {
 
     data class Entry(val file: File, val manifest: BackupManifest)
 
-    fun list(): List<Entry> = dir.listFiles { f -> f.isFile && f.extension == Backups.EXTENSION }.orEmpty()
+    fun list(): List<Entry> = files().map(::entry)
+
+    /** The backups in [dir], newest first, unread. */
+    private fun files(): List<File> = dir.listFiles { f -> f.isFile && f.extension == Backups.EXTENSION }.orEmpty()
         .sortedByDescending { it.name }
-        .map { f -> Entry(f, readManifest(f) ?: BackupManifest(at = f.lastModified(), reason = f.nameWithoutExtension.substringAfter(' '))) }
+
+    /** What each backup file said about itself, by name, while its size and time are what they were. */
+    private class Read(val length: Long, val modified: Long, val manifest: BackupManifest?)
+    private val manifests = ConcurrentHashMap<String, Read>()
+
+    private fun entry(f: File): Entry {
+        val length = f.length()
+        val modified = f.lastModified()
+        val known = manifests[f.name]?.takeIf { it.length == length && it.modified == modified }
+        val manifest = known?.manifest ?: readManifest(f).also { manifests[f.name] = Read(length, modified, it) }
+        return Entry(f, manifest ?: BackupManifest(at = modified, reason = f.nameWithoutExtension.substringAfter(' ')))
+    }
 
     /** As the app opens: a backup first, when this is a new version over existing work, or a week has passed. */
     fun onOpen() {
         scope.launch {
             lock.withLock {
                 val last = runCatching { marker.readText().trim() }.getOrNull()?.takeIf { it.isNotBlank() }
-                val hasData = h.deps.deckRepository.all().isNotEmpty() || File(h.ai.files.root, "MEMORY.md").isFile
-                val lastAt = list().firstOrNull()?.manifest?.at
+                val hasData = h.deps.deckRepository.hasAny() || File(h.ai.files.root, "MEMORY.md").isFile
+                // Only the newest is read: the others' manifests are not needed to decide.
+                val lastAt = files().firstOrNull()?.let(::entry)?.manifest?.at
                 val reason = Backups.due(last, Platform.version, lastAt, h.deps.now(), hasData)
                 if (reason != null) runCatching { write(reason) }
                 dir.mkdirs()
@@ -170,50 +186,57 @@ class BackupCenter(private val h: NeueHolders) {
         working = "Backing up"
         try {
             val now = h.deps.now()
-            val out = ByteArrayOutputStream()
+            dir.mkdirs()
+            val target = File(dir, Backups.fileName(STAMP.format(Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault())), reason))
+            val temp = File(dir, ".${target.name}.tmp")
             var decks = 0
             var files = 0
-            ZipOutputStream(out).use { zip ->
-                fun add(name: String, data: ByteArray) {
-                    zip.putNextEntry(ZipEntry(name))
-                    zip.write(data)
-                    zip.closeEntry()
+            // Prep's last typed change, written before the stored document is read.
+            h.prep.settle()
+            // Written straight to the temporary file — the same entries in the same order as when the
+            // whole zip was built in memory first, without holding it (twice) as it was copied out.
+            withContext(Dispatchers.IO) {
+                try {
+                    ZipOutputStream(temp.outputStream().buffered()).use { zip ->
+                        fun add(name: String, data: ByteArray) {
+                            zip.putNextEntry(ZipEntry(name))
+                            zip.write(data)
+                            zip.closeEntry()
+                        }
+                        h.deps.deckRepository.all().forEach { d ->
+                            val e = d.entry
+                            add(
+                                "decks/${e.id}.json",
+                                Backups.json.encodeToString(
+                                    BackupDeck.serializer(),
+                                    BackupDeck(e.id, e.name, e.deck.main.map { it.value }, e.deck.extra.map { it.value }, e.deck.side.map { it.value }, e.notes, d.extended, e.createdAtEpochMs, e.updatedAtEpochMs),
+                                ).encodeToByteArray(),
+                            )
+                            decks++
+                        }
+                        add(NEUE, Backups.json.encodeToString(NeuePreferences.serializer(), h.neue.prefs).encodeToByteArray())
+                        add(LAYOUT, Backups.json.encodeToString(UiPreferences.serializer(), h.layout.preferences).encodeToByteArray())
+                        add(WEBS, Backups.json.encodeToString(WebLibrary.serializer(), h.deps.preferencesRepository.loadWebs()).encodeToByteArray())
+                        add(PREP, PrepCodec.encode(h.deps.preferencesRepository.loadPrep()).encodeToByteArray())
+                        tree(h.ai.files.root).filter { !NeueSyncLocal.privateToDevice(it.first) }.forEach { (rel, f) -> add("ai/$rel", f.readBytes()); files++ }
+                        tree(File(Platform.dataDir, "custom-art")).forEach { (rel, f) -> add("custom-art/$rel", f.readBytes()); files++ }
+                        tree(File(Platform.dataDir, "present")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("present/$rel", f.readBytes()); files++ }
+                        // The duel in play (1.0.74), and later its replays and combos.
+                        tree(File(Platform.dataDir, "duel")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("duel/$rel", f.readBytes()); files++ }
+                        add(
+                            BackupManifest.NAME,
+                            Backups.json.encodeToString(
+                                BackupManifest.serializer(),
+                                BackupManifest(version = Platform.version, at = now, reason = reason, device = SyncPlatform.deviceName, decks = decks, files = files),
+                            ).encodeToByteArray(),
+                        )
+                    }
+                } catch (e: Throwable) {
+                    temp.delete()
+                    throw e
                 }
-                h.deps.deckRepository.all().forEach { d ->
-                    val e = d.entry
-                    add(
-                        "decks/${e.id}.json",
-                        Backups.json.encodeToString(
-                            BackupDeck.serializer(),
-                            BackupDeck(e.id, e.name, e.deck.main.map { it.value }, e.deck.extra.map { it.value }, e.deck.side.map { it.value }, e.notes, d.extended, e.createdAtEpochMs, e.updatedAtEpochMs),
-                        ).encodeToByteArray(),
-                    )
-                    decks++
-                }
-                add(NEUE, Backups.json.encodeToString(NeuePreferences.serializer(), h.neue.prefs).encodeToByteArray())
-                add(LAYOUT, Backups.json.encodeToString(UiPreferences.serializer(), h.layout.preferences).encodeToByteArray())
-                add(WEBS, Backups.json.encodeToString(WebLibrary.serializer(), h.deps.preferencesRepository.loadWebs()).encodeToByteArray())
-                add(PREP, PrepCodec.encode(h.deps.preferencesRepository.loadPrep()).encodeToByteArray())
-                withContext(Dispatchers.IO) {
-                    tree(h.ai.files.root).filter { !NeueSyncLocal.privateToDevice(it.first) }.forEach { (rel, f) -> add("ai/$rel", f.readBytes()); files++ }
-                    tree(File(Platform.dataDir, "custom-art")).forEach { (rel, f) -> add("custom-art/$rel", f.readBytes()); files++ }
-                    tree(File(Platform.dataDir, "present")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("present/$rel", f.readBytes()); files++ }
-                    // The duel in play (1.0.74), and later its replays and combos.
-                    tree(File(Platform.dataDir, "duel")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("duel/$rel", f.readBytes()); files++ }
-                }
-                add(
-                    BackupManifest.NAME,
-                    Backups.json.encodeToString(
-                        BackupManifest.serializer(),
-                        BackupManifest(version = Platform.version, at = now, reason = reason, device = SyncPlatform.deviceName, decks = decks, files = files),
-                    ).encodeToByteArray(),
-                )
             }
             return withContext(Dispatchers.IO) {
-                dir.mkdirs()
-                val target = File(dir, Backups.fileName(STAMP.format(Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault())), reason))
-                val temp = File(dir, ".${target.name}.tmp")
-                temp.writeBytes(out.toByteArray())
                 temp.renameTo(target)
                 Backups.toDelete(dir.listFiles { f -> f.isFile && f.extension == Backups.EXTENSION }.orEmpty().map { it.name }).forEach { File(dir, it).delete() }
                 revision++
@@ -238,7 +261,16 @@ class BackupCenter(private val h: NeueHolders) {
         }
     }
 
+    /**
+     * The manifest is a backup's last entry, so it is found through the zip's central directory —
+     * one seek — rather than by inflating every entry before it; a file whose directory cannot be
+     * read is walked as before.
+     */
     private fun readManifest(f: File): BackupManifest? = runCatching {
+        ZipFile(f).use { zip -> zip.getEntry(BackupManifest.NAME)?.let { e -> zip.getInputStream(e).use { readManifest(it.readBytes()) } } }
+    }.getOrElse { walkManifest(f) }
+
+    private fun walkManifest(f: File): BackupManifest? = runCatching {
         ZipInputStream(f.inputStream()).use { zip ->
             generateSequence { zip.nextEntry }.firstOrNull { it.name == BackupManifest.NAME }?.let { readManifest(zip.readBytes()) }
         }

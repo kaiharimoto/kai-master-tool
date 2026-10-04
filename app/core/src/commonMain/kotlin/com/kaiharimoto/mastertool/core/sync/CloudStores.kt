@@ -99,16 +99,24 @@ abstract class CloudStore(
 class GoogleDriveStore(http: HttpClient, token: suspend () -> String, account: String = "") : CloudStore(http, Cloud.GOOGLE_DRIVE, token, account) {
     private var ids: MutableMap<String, String>? = null
 
+    /** Drive's MD5 of each file's content, by name, as listed: [stamps]. Forgotten for a file this store writes. */
+    private val sums = HashMap<String, String>()
+
     private suspend fun index(): MutableMap<String, String> {
         ids?.let { return it }
         val out = HashMap<String, String>()
         var page: String? = null
         do {
-            val url = "$API?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(id,name)" + (page?.let { "&pageToken=${it.encodeURLParameter()}" } ?: "")
+            val url = "$API?spaces=appDataFolder&pageSize=1000&fields=nextPageToken,files(id,name,md5Checksum)" + (page?.let { "&pageToken=${it.encodeURLParameter()}" } ?: "")
             val r = call(HttpMethod.Get, url)
             check(r, "list its files")
             val o = json(r)
-            o["files"]?.jsonArray?.forEach { f -> out[f.jsonObject["name"]!!.jsonPrimitive.content] = f.jsonObject["id"]!!.jsonPrimitive.content }
+            o["files"]?.jsonArray?.forEach { f ->
+                val name = f.jsonObject["name"]!!.jsonPrimitive.content
+                out[name] = f.jsonObject["id"]!!.jsonPrimitive.content
+                val sum = f.jsonObject["md5Checksum"]?.jsonPrimitive?.content
+                if (sum.isNullOrBlank()) sums.remove(name) else sums[name] = sum
+            }
             page = o["nextPageToken"]?.jsonPrimitive?.content
         } while (page != null)
         ids = out
@@ -116,6 +124,11 @@ class GoogleDriveStore(http: HttpClient, token: suspend () -> String, account: S
     }
 
     override suspend fun list(folder: String): List<String> = index().keys.filter { it.startsWith("$folder/") }.map { it.removePrefix("$folder/") }
+
+    override suspend fun stamps(folder: String): Map<String, String> {
+        index()
+        return sums.filterKeys { it.startsWith("$folder/") }.mapKeys { (k, _) -> k.removePrefix("$folder/") }
+    }
 
     override suspend fun read(name: String): ByteArray? {
         val id = index()[name] ?: return null
@@ -126,6 +139,7 @@ class GoogleDriveStore(http: HttpClient, token: suspend () -> String, account: S
     }
 
     override suspend fun write(name: String, bytes: ByteArray) {
+        sums.remove(name)
         val known = index()[name]
         if (known != null) {
             val r = call(HttpMethod.Patch, "$UPLOAD/$known?uploadType=media") {
@@ -154,6 +168,7 @@ class GoogleDriveStore(http: HttpClient, token: suspend () -> String, account: S
         val r = call(HttpMethod.Delete, "$API/$id")
         if (r.status.value != 404) check(r, "delete a file")
         index().remove(name)
+        sums.remove(name)
     }
 
     companion object {

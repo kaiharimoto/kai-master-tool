@@ -38,6 +38,11 @@ class DeckRepository(
         database.deckQueries.selectAll().executeAsList().map(::toStored)
     }
 
+    /** Whether the library holds any deck, without reading one: what opening asks of someone new. */
+    suspend fun hasAny(): Boolean = withContext(ioDispatcher) {
+        database.deckQueries.countAll().executeAsOne() > 0
+    }
+
     suspend fun byId(id: String): StoredDeck? = withContext(ioDispatcher) {
         database.deckQueries.selectById(id).executeAsOneOrNull()?.let(::toStored)
     }

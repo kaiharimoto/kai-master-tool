@@ -190,12 +190,16 @@ class SeenTimes(private val file: File, private val clock: () -> Long) {
         Sync.json.decodeFromString(MAP, file.readText()).toMutableMap()
     }.getOrDefault(HashMap())
 
+    /** Whether [map] moved since it was last written: an unchanged one is not written again every sync (1.0.92). */
+    private var dirty = false
+
     @Synchronized
     fun at(path: String, hash: String): Long {
         val s = map[path]
         if (s != null && s.hash == hash) return s.at
         val now = clock()
         map[path] = Seen(hash, now)
+        dirty = true
         return now
     }
 
@@ -203,11 +207,12 @@ class SeenTimes(private val file: File, private val clock: () -> Long) {
     @Synchronized
     fun agree(path: String, bytes: ByteArray) {
         map[path] = Seen(Sha256.hex(bytes), clock())
+        dirty = true
     }
 
     @Synchronized
     fun forget(path: String) {
-        map.remove(path)
+        if (map.remove(path) != null) dirty = true
     }
 
     /** A file as an item: its hash read again only when its size or time moved. */
@@ -220,14 +225,17 @@ class SeenTimes(private val file: File, private val clock: () -> Long) {
         val bytes = f.readBytes()
         val hash = Sha256.hex(bytes)
         map[path] = Seen(hash, modified, size, modified)
+        dirty = true
         return LocalItem(hash, modified) { bytes }
     }
 
     @Synchronized
     fun save() {
+        if (!dirty && file.isFile) return
         runCatching {
             file.parentFile?.mkdirs()
             file.writeText(Sync.json.encodeToString(MAP, map))
+            dirty = false
         }
     }
 }

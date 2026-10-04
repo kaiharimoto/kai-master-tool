@@ -215,4 +215,79 @@ class SyncTest {
         // The same settings are always the same bytes: no change to send when nothing changed.
         assertTrue(SyncedPrefs.extract(after).contentEquals(SyncedPrefs.extract(SyncedPrefs.apply(after, SyncedPrefs.extract(after)))))
     }
+
+    /** A store that stamps each file with its content's hash, as Drive's MD5 does, and counts what is asked of it. */
+    private class StampedStore : SyncStore {
+        val inner = MemoryStore()
+        val reads = mutableListOf<String>()
+        val lists = mutableListOf<String>()
+        override val label = "stamped"
+        override suspend fun list(folder: String): List<String> = inner.list(folder).also { lists += folder }
+        override suspend fun stamps(folder: String): Map<String, String> =
+            inner.files.filterKeys { it.startsWith("$folder/") }.entries.associate { (k, v) -> k.removePrefix("$folder/") to Sha256.hex(v) }
+        override suspend fun read(name: String): ByteArray? = inner.read(name).also { reads += name }
+        override suspend fun write(name: String, bytes: ByteArray) = inner.write(name, bytes)
+        override suspend fun delete(name: String) = inner.delete(name)
+    }
+
+    @Test
+    fun anUnchangedManifestIsNotReadAgainAndBlobsAreListedOnlyToSend() = runTest {
+        val store = StampedStore()
+        val cache = ManifestCache()
+        val laptop = MemoryLocal(clock)
+        var laptopState = SyncState("laptop")
+        suspend fun laptopSync(): SyncReport {
+            val (s, r) = SyncEngine(store, laptop, "laptop", "laptop's device", clock, cache).run(laptopState)
+            laptopState = s
+            return r
+        }
+        val phone = Device("phone", store)
+
+        laptop.put("decks/a.json", "{\"name\":\"Labrynth\"}")
+        assertEquals(1, laptopSync().sent)
+        phone.local.put("ai/MEMORY.md", "notes")
+        phone.sync()
+
+        // Nothing new anywhere: both manifests are known by their stamps (the laptop's own read once
+        // more after it rewrote it), and no blob is listed.
+        assertEquals(1, laptopSync().received)
+        laptopSync()
+        store.reads.clear()
+        store.lists.clear()
+        val idle = laptopSync()
+        assertTrue(idle.nothing)
+        assertTrue(store.reads.none { it.startsWith("${Sync.DEVICES}/") }, "read again: ${store.reads}")
+        assertTrue(Sync.BLOBS !in store.lists, "blobs listed with nothing to send")
+
+        // The phone changes something: its manifest's stamp moves, so it is read, and what changed arrives.
+        phone.local.put("ai/MEMORY.md", "notes, more")
+        phone.sync()
+        store.reads.clear()
+        assertEquals(1, laptopSync().received)
+        assertTrue("${Sync.DEVICES}/phone.json" in store.reads)
+        assertEquals("notes, more", laptop.text("ai/MEMORY.md"))
+
+        // Something to send lists the blobs once, and an uncached sync then agrees there is nothing left.
+        laptop.put("decks/b.json", "{\"name\":\"Yubel\"}")
+        store.lists.clear()
+        assertEquals(1, laptopSync().sent)
+        assertEquals(1, store.lists.count { it == Sync.BLOBS })
+        val fresh = SyncEngine(store, laptop, "laptop", "laptop's device", clock).run(laptopState)
+        assertTrue(fresh.second.nothing)
+        assertEquals(laptopState.items, fresh.first.items)
+        phone.sync()
+        assertEquals("{\"name\":\"Yubel\"}", phone.local.text("decks/b.json"))
+    }
+
+    @Test
+    fun aManifestCacheKeepsOnlyWhatHasAStamp() {
+        val cache = ManifestCache()
+        val m = Manifest("d", "Desk", 1)
+        cache.put("d.json", "s1", m)
+        assertEquals(m, cache.get("d.json", "s1"))
+        assertNull(cache.get("d.json", "s2"), "a moved stamp is a new manifest")
+        assertNull(cache.get("d.json", null), "no stamp, no promise")
+        cache.put("d.json", null, m)
+        assertNull(cache.get("d.json", "s1"), "read without a stamp: forgotten")
+    }
 }

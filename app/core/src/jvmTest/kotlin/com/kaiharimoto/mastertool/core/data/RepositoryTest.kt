@@ -302,6 +302,17 @@ class RepositoryTest {
     }
 
     @Test
+    fun hasAnySaysWhetherTheLibraryHoldsADeck() = runTest {
+        val repo = DeckRepository(database(), clock = { 1L })
+        assertEquals(repo.all().isNotEmpty(), repo.hasAny())
+        repo.save("d", "One", Deck.EMPTY)
+        assertTrue(repo.hasAny())
+        assertEquals(repo.all().isNotEmpty(), repo.hasAny())
+        repo.delete("d")
+        assertEquals(false, repo.hasAny())
+    }
+
+    @Test
     fun renameAndDelete() = runTest {
         val repo = DeckRepository(database(), clock = { 1L })
         repo.save("d", "Before", Deck.EMPTY)

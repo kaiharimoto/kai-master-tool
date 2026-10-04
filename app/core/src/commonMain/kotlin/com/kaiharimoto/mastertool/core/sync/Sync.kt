@@ -74,6 +74,14 @@ interface SyncStore {
     val label: String
 
     suspend fun list(folder: String): List<String>
+
+    /**
+     * A stamp for each file directly in [folder] that changes whenever its content does — a hash of the
+     * content the service itself keeps — or null when the store has none it can promise. A file missing
+     * from the map has no stamp. What a sync reads again only when its stamp moved ([ManifestCache]).
+     */
+    suspend fun stamps(folder: String): Map<String, String>? = null
+
     suspend fun read(name: String): ByteArray?
     suspend fun write(name: String, bytes: ByteArray)
     suspend fun delete(name: String)

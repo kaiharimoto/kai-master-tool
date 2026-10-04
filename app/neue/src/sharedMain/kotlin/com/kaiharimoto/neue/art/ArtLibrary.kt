@@ -21,8 +21,12 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.concurrent.ConcurrentHashMap
 
 /** The library the card on screen draws from, when there is one. The studio has none, and draws the small renders. */
@@ -108,6 +112,33 @@ class ArtLibrary(
     private val arrivals = java.util.concurrent.ConcurrentLinkedDeque<Long>()
     @Volatile private var sweepStarted = 0L
 
+    /**
+     * The counts kept as pictures arrive, rather than counted again over the whole pool every
+     * tick (1.0.92): how many times each id stands in the catalogue, and of the catalogue's cards
+     * how many are [present] and how many [missing] — what `catalogue.count { it in present }`
+     * gave, kept current under [tally] by [markPresent] and [markMissing].
+     */
+    private val tally = Any()
+    private var times: Map<Int, Int> = emptyMap()
+    private var haveCount = 0
+    private var missingCount = 0
+
+    /** Woken when there is something for the ticker to tell: a picture, a failure, the sweep starting. */
+    private val tick = Channel<Unit>(Channel.CONFLATED)
+
+    private fun markPresent(id: Int) = synchronized(tally) {
+        if (present.add(id)) haveCount += times[id] ?: 0
+    }
+
+    private fun markMissing(id: Int) = synchronized(tally) {
+        if (missing.add(id)) missingCount += times[id] ?: 0
+    }
+
+    private fun changed() {
+        dirty = true
+        tick.trySend(Unit)
+    }
+
 
     /** The original of [id], if it is on disk. */
     fun fileFor(id: Int): File? = if (id in present) File(dir, "$id.jpg") else null
@@ -123,26 +154,18 @@ class ArtLibrary(
     fun percent(): String = "${count.percent}%"
 
     fun start() {
-        scope.launch {
+        // Off the main thread (1.0.92): the folder's thirteen thousand names, and the ticker after.
+        scope.launch(Dispatchers.Default) {
             withContext(Dispatchers.IO) {
                 dir.mkdirs()
-                var sum = 0L
-                dir.listFiles()?.forEach { file ->
-                    val name = file.name
-                    when {
-                        name.endsWith(".part") -> file.delete()
-                        name.endsWith(".jpg") -> name.removeSuffix(".jpg").toIntOrNull()?.let {
-                            present += it
-                            sum += file.length()
-                        }
-                    }
-                }
-                onDisk.set(sum)
+                onDisk.set(scan())
             }
             scanned = true
             recount()
-            // A few times a second at most, tell the cards what has arrived.
+            // A few times a second at most, tell the cards what has arrived — and with nothing to
+            // tell (nothing arriving, nothing failing, the rate at rest), wait to be told.
             while (isActive) {
+                if (!dirty && arrivals.isEmpty() && perSecond == 0.0 && fault == problem) tick.receive()
                 delay(400)
                 if (dirty) {
                     dirty = false
@@ -154,6 +177,36 @@ class ArtLibrary(
                 if (trouble != problem) problem = trouble
             }
         }
+    }
+
+    /**
+     * The folder read once: half-written files let go, each original marked present, and their
+     * sizes summed — from the directory walk's own attributes, which on Windows come with the
+     * listing rather than as a query a file.
+     */
+    private fun scan(): Long {
+        var sum = 0L
+        Files.walkFileTree(
+            dir.toPath(),
+            emptySet(),
+            1,
+            object : SimpleFileVisitor<Path>() {
+                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    val name = file.fileName.toString()
+                    when {
+                        name.endsWith(".part") -> runCatching { Files.delete(file) }
+                        name.endsWith(".jpg") -> name.removeSuffix(".jpg").toIntOrNull()?.let {
+                            markPresent(it)
+                            sum += if (attrs.isRegularFile) attrs.size() else 0L
+                        }
+                    }
+                    return FileVisitResult.CONTINUE
+                }
+
+                override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult = FileVisitResult.CONTINUE
+            },
+        )
+        return sum
     }
 
     /** Turned on or off in Settings. Off stops the sweep; what is already here is still drawn. */
@@ -170,7 +223,14 @@ class ArtLibrary(
     /** The whole pool, in the order the sweep should take it. Called whenever the pool is (re)loaded. */
     fun catalogue(cards: List<Card>) {
         synchronized(queueLock) {
-            catalogue = cards
+            synchronized(tally) {
+                catalogue = cards
+                val counted = HashMap<Int, Int>(cards.size * 2)
+                cards.forEach { counted[it.id.value] = (counted[it.id.value] ?: 0) + 1 }
+                times = counted
+                haveCount = cards.count { it.id.value in present }
+                missingCount = cards.count { it.id.value in missing }
+            }
             cursor = 0
         }
         recount()
@@ -250,10 +310,11 @@ class ArtLibrary(
     @Volatile private var fault: String? = null
 
     private fun recount() {
-        val cards = synchronized(queueLock) { catalogue }
-        total = cards.size
-        have = if (cards.isEmpty()) 0 else cards.count { it.id.value in present }
-        unavailable = if (cards.isEmpty()) 0 else cards.count { it.id.value in missing }
+        synchronized(tally) {
+            total = catalogue.size
+            have = haveCount
+            unavailable = missingCount
+        }
         bytes = onDisk.get()
         running = enabled && workers.any { it.isActive } && have + unavailable < total
     }
@@ -263,6 +324,7 @@ class ArtLibrary(
         fault = null
         sweepStarted = System.currentTimeMillis()
         arrivals.clear()
+        tick.trySend(Unit)
         workers = List(WORKERS) {
             scope.launch(Dispatchers.IO) {
                 while (!scanned) delay(100)
@@ -276,14 +338,19 @@ class ArtLibrary(
                     wake.trySend(Unit)
                     try {
                         download(next)
-                        fault = null
+                        if (fault != null) {
+                            fault = null
+                            tick.trySend(Unit)
+                        }
                     } catch (e: IOException) {
                         if (e.message.orEmpty().contains("space", ignoreCase = true)) {
                             fault = "The disk is full, so downloading stopped"
+                            tick.trySend(Unit)
                             return@launch
                         }
                         // Offline, or the server said no: try again in a while, not in a tight loop.
                         fault = "Waiting for the network"
+                        tick.trySend(Unit)
                         synchronized(queueLock) { urgent.addLast(next) }
                         delay(30_000)
                     }
@@ -310,7 +377,7 @@ class ArtLibrary(
 
     private suspend fun download(card: Card): File? {
         val id = card.id.value
-        val url = card.imageUrl ?: run { missing += id; inFlight -= id; return null }
+        val url = card.imageUrl ?: run { markMissing(id); inFlight -= id; return null }
         try {
             pace.withLock {
                 val wait = lastStart + MIN_INTERVAL_MS - System.currentTimeMillis()
@@ -321,8 +388,8 @@ class ArtLibrary(
             val status = httpDownload(url, part, mapOf("User-Agent" to "NeueMasterTool/${Platform.version}"), timeoutSeconds = 30)
             if (status == 404) {
                 part.delete()
-                missing += id
-                dirty = true
+                markMissing(id)
+                changed()
                 return null
             }
             if (status !in 200..299) {
@@ -333,16 +400,16 @@ class ArtLibrary(
             val head = part.inputStream().use { input -> ByteArray(2).also { input.read(it) } }
             if (part.length() < 1024 || head[0] != 0xFF.toByte() || head[1] != 0xD8.toByte()) {
                 part.delete()
-                missing += id
-                dirty = true
+                markMissing(id)
+                changed()
                 return null
             }
             val file = File(dir, "$id.jpg")
             Files.move(part.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-            present += id
+            markPresent(id)
             onDisk.addAndGet(file.length())
             arrivals.addLast(System.currentTimeMillis())
-            dirty = true
+            changed()
             return file
         } finally {
             inFlight -= id

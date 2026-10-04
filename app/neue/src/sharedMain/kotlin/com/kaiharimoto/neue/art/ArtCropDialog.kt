@@ -206,13 +206,24 @@ fun ArtCropDialog(
     fun autoAlign() {
         val image = picture ?: return
         val w = window ?: return
-        val pixels = IntArray(image.width * image.height)
-        runCatching { image.readPixels(pixels) }.getOrElse { return }
-        val step = (maxOf(image.width, image.height) / 600).coerceAtLeast(1)
-        val bounds = ContentBounds.of(image.width, image.height, step = step) { x, y -> pixels[y * image.width + x] }
-        box = ArtCrop.auto(
-            image.width.toFloat(), image.height.toFloat(), w.aspect(RENDER_WIDTH, RENDER_HEIGHT), w, RENDER_WIDTH / RENDER_HEIGHT, bounds,
-        )
+        // Off the frame thread, and only the rows [ContentBounds] looks at, each read once (1.0.92): the
+        // same pixels it read from the whole picture's copy, without the copy — 64 MB for a 4096-pixel square.
+        scope.launch {
+            val bounds = withContext(Dispatchers.Default) {
+                val rows = HashMap<Int, IntArray>()
+                val step = (maxOf(image.width, image.height) / 600).coerceAtLeast(1)
+                runCatching {
+                    ContentBounds.of(image.width, image.height, step = step) { x, y ->
+                        rows.getOrPut(y) { IntArray(image.width).also { image.readPixels(it, startX = 0, startY = y, width = image.width, height = 1) } }[x]
+                    }
+                }
+            }.getOrElse { return@launch }
+            // A picture changed while this was working is not this crop's.
+            if (picture !== image) return@launch
+            box = ArtCrop.auto(
+                image.width.toFloat(), image.height.toFloat(), w.aspect(RENDER_WIDTH, RENDER_HEIGHT), w, RENDER_WIDTH / RENDER_HEIGHT, bounds,
+            )
+        }
     }
 
     fun replace() {

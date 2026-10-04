@@ -6,6 +6,8 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -57,7 +59,8 @@ class GitHubReleaseApi(
             error("GitHub returned ${response.status}")
         }
 
-        response.body<ReleaseDto>().toDomain()
+        // Decoded off the caller's thread: an update check starts from the window's scope.
+        withContext(Dispatchers.Default) { response.body<ReleaseDto>().toDomain() }
     }
 
     /**
@@ -78,7 +81,8 @@ class GitHubReleaseApi(
         if (!response.status.isSuccess()) {
             error("GitHub returned ${response.status}")
         }
-        response.body<List<ReleaseDto>>().filterNot { it.draft }.map { it.toDomain() }
+        // Thirty releases with their notes, decoded off the caller's thread.
+        withContext(Dispatchers.Default) { response.body<List<ReleaseDto>>().filterNot { it.draft }.map { it.toDomain() } }
     }
 
     @Serializable

@@ -264,6 +264,7 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
         LaunchedEffect(Unit) {
             MacChrome.handleAppMenu(h) {
                 h.neue.flush()
+                h.prep.flush()
                 h.flushDuel()
                 exit()
             }
@@ -273,6 +274,9 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
     // it while this window shows the notes, the next slide and the clock.
     LaunchedEffect(Unit) {
         while (true) {
+            // Not while the window is down in the taskbar or the dock, unless slides are up on another
+            // screen: nothing else shows the count there, and it is read again the moment the window is back.
+            snapshotFlow { !windowState.isMinimized || h.present.playing != null }.first { it }
             h.present.screens = runCatching { java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.size }.getOrDefault(1)
             delay(5_000)
         }
@@ -316,6 +320,7 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
         Window(
             onCloseRequest = {
                 h.neue.flush()
+                h.prep.flush()
                 h.flushDuel()
                 exit()
             },
@@ -382,7 +387,10 @@ private fun buildDependencies(): AppDependencies {
     val database = DatabaseFactory.create(
         NeueDatabaseDriverFactory(File(Platform.dataDir, DatabaseFactory.DATABASE_NAME).absolutePath),
     )
-    val api = YgoProDeckApi(HttpClientFactory.create())
+    // One client for both: the tablet's update checker below is present and never asked, so it
+    // shares the pool's rather than building one of its own at launch (1.0.92).
+    val http = HttpClientFactory.create()
+    val api = YgoProDeckApi(http)
     return AppDependencies(
         cardRepository = CardRepository(database = database, api = api, clock = System::currentTimeMillis, ioDispatcher = Dispatchers.IO),
         deckRepository = DeckRepository(database = database, clock = System::currentTimeMillis, ioDispatcher = Dispatchers.IO),
@@ -390,7 +398,7 @@ private fun buildDependencies(): AppDependencies {
         fileAccess = NeueFileAccess(),
         // The shared state holders take the tablet's updater types; Neue has its
         // own (`NeueUpdates`), so these are present and never asked.
-        updateChecker = UpdateChecker(GitHubReleaseApi(HttpClientFactory.create()), Platform.version),
+        updateChecker = UpdateChecker(GitHubReleaseApi(http), Platform.version),
         updater = ReleasePageUpdater,
         newDeckId = { UUID.randomUUID().toString() },
         now = System::currentTimeMillis,

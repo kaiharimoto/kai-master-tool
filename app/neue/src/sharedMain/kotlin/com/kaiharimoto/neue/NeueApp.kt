@@ -233,7 +233,7 @@ class NeueHolders(
 
     /** Offers the setup: what is still to do since the version last opened here, or with [again] every step not done yet. */
     suspend fun offerStart(again: Boolean = false) {
-        decksKnown = deps.deckRepository.all().isNotEmpty()
+        decksKnown = deps.deckRepository.hasAny()
         val state = com.kaiharimoto.neue.start.startState(this)
         val android = Platform.os == DesktopOs.ANDROID
         val steps = if (again) {
@@ -499,6 +499,7 @@ fun NeueEffects(h: NeueHolders) {
                 h.art.stop()
                 h.layout.flush()
                 neue.flush()
+                h.prep.flush()
                 h.flushDuel()
             }
         }
@@ -545,15 +546,7 @@ fun NeueEffects(h: NeueHolders) {
         // …and a little after anything that travels changes: a deck saved, a setting, a web, prep, Ai's notes.
         LaunchedEffect(neue.ready) {
             if (!neue.ready) return@LaunchedEffect
-            snapshotFlow {
-                listOf(
-                    h.decksReload, SyncedPrefs.extract(neue.prefs).contentHashCode(),
-                    h.layout.preferences.format, h.webs.revision, h.prep.doc.hashCode(), h.ai.bookVersion, h.customArt.version,
-                )
-            }.drop(1).collectLatest {
-                kotlinx.coroutines.delay(20_000)
-                if (neue.prefs.sync.auto) h.sync.syncNow(quiet = true)
-            }
+            h.sync.followChanges()
         }
         // The ~2 GB library waits for Wi-Fi on a tablet (touch swarm, rec 27); looked at again each half minute.
         LaunchedEffect(neue.prefs.hdArt) {

@@ -14,11 +14,17 @@ class SyncEngine(
     private val device: String,
     private val deviceName: String,
     private val clock: () -> Long,
+    /** The manifests read in earlier syncs with this store, kept by the caller between runs; null reads every one. */
+    private val known: ManifestCache? = null,
 ) {
     suspend fun run(state: SyncState): Pair<SyncState, SyncReport> {
+        // A manifest whose content stamp is the one it had when last read is that same manifest (1.0.92).
+        val stamps = if (known != null) store.stamps(Sync.DEVICES) else null
         val manifests = store.list(Sync.DEVICES).filter { it.endsWith(".json") }.mapNotNull { name ->
-            store.read("${Sync.DEVICES}/$name")?.let { bytes ->
+            val stamp = stamps?.get(name)
+            known?.get(name, stamp) ?: store.read("${Sync.DEVICES}/$name")?.let { bytes ->
                 runCatching { Sync.json.decodeFromString(Manifest.serializer(), bytes.decodeToString()) }.getOrNull()
+                    ?.also { known?.put(name, stamp, it) }
             }
         }
         val names = manifests.associate { it.device to it.name.ifBlank { "another device" } }
@@ -26,7 +32,10 @@ class SyncEngine(
         val snapshot = local.snapshot()
         val steps = SyncPlan.plan(state.items, snapshot.mapValues { (_, v) -> SyncPlan.LocalMeta(v.hash, v.at) }, remote)
 
-        val blobs = store.list(Sync.BLOBS).toHashSet()
+        // The store's blobs, listed only when something is to be sent or merged (1.0.92): a sync with
+        // nothing new here never needs to know them.
+        var listed: HashSet<String>? = null
+        suspend fun blobs(): HashSet<String> = listed ?: store.list(Sync.BLOBS).toHashSet().also { listed = it }
         val agreed = HashMap(state.items)
         var sent = 0
         var received = 0
@@ -36,9 +45,10 @@ class SyncEngine(
 
         suspend fun send(path: String, bytes: ByteArray, at: Long): Version {
             val hash = Sha256.hex(bytes)
-            if (hash !in blobs) {
+            val there = blobs()
+            if (hash !in there) {
                 store.write("${Sync.BLOBS}/$hash", bytes)
-                blobs += hash
+                there += hash
             }
             sent++
             return Version(hash, at, device)
@@ -71,7 +81,7 @@ class SyncEngine(
                     val theirs = fetch(step.remote)
                     when (local.rule(step.path)) {
                         ConflictRule.MERGE -> {
-                            val base = step.base?.takeIf { it.content != null && it.hash in blobs }?.let { runCatching { fetch(it) }.getOrNull() }
+                            val base = step.base?.takeIf { it.content != null && it.hash in blobs() }?.let { runCatching { fetch(it) }.getOrNull() }
                             val result = merge(base, mine, theirs, step.localWins)
                             if (result == null) {
                                 // Not JSON on one side: the newer wins whole.
@@ -115,5 +125,20 @@ class SyncEngine(
         val r = obj(theirs) ?: return null
         val merged = JsonMerge.threeWay(obj(base), l, r, localNewer)
         return Sync.json.encodeToString(JsonObject.serializer(), merged).encodeToByteArray()
+    }
+}
+
+/**
+ * The device manifests read in earlier syncs with one store, by name, each with the content stamp it
+ * was read under ([SyncStore.stamps]). One sync at a time uses it; a manifest with no stamp is never kept.
+ */
+class ManifestCache {
+    private val known = HashMap<String, Pair<String, Manifest>>()
+
+    /** The manifest [name] held when its stamp was [stamp], or null when it is not known so. */
+    fun get(name: String, stamp: String?): Manifest? = stamp?.let { s -> known[name]?.takeIf { it.first == s }?.second }
+
+    fun put(name: String, stamp: String?, manifest: Manifest) {
+        if (stamp == null) known.remove(name) else known[name] = stamp to manifest
     }
 }

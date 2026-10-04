@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,7 +37,11 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.present.SEARCH_DEBOUNCE_MS
 import com.kaiharimoto.neue.theme.Mu
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * An opponent made by hand (1.0.42, kai: "let the user add siding patterns to the current
@@ -57,15 +62,37 @@ internal fun OpponentDialog(start: Matchup?, state: DeckBuilderState, onDismiss:
     var name by remember { mutableStateOf(start?.name ?: typed) }
     var covers by remember { mutableStateOf(start?.covers.orEmpty()) }
     var query by remember { mutableStateOf("") }
-    val results = remember(query, state.index) {
-        if (query.isBlank()) emptyList() else state.index.search(query, limit = 24).cards
+    // Both searches run off the frame thread a moment after the last key, as the pool's does (1.0.92).
+    val index = state.index
+    val results by produceState(emptyList<Card>(), query, index) {
+        if (query.isBlank()) {
+            value = emptyList()
+            return@produceState
+        }
+        delay(SEARCH_DEBOUNCE_MS)
+        value = withContext(Dispatchers.Default) { index.search(query, limit = 24).cards }
     }
     val full = covers.size >= SidingCodec.COVERS
-    val suggested = remember(name.trim(), state.index) {
-        if (name.isBlank()) emptyList() else OpponentGuess.suggest(name.trim(), state.index, limit = 12)
+    val guess = name.trim()
+    // What the suggestions were made for, with them: the label names what is shown.
+    val suggestion by produceState(Suggested("", emptyList()), guess, index) {
+        if (guess.isEmpty()) {
+            value = Suggested("", emptyList())
+            return@produceState
+        }
+        delay(SEARCH_DEBOUNCE_MS)
+        value = Suggested(guess, withContext(Dispatchers.Default) { OpponentGuess.suggest(guess, index, limit = 12) })
     }
-    // Nothing picked on a new opponent: the first suggestions stand for it.
-    val taken = if (covers.isEmpty() && start == null) suggested.take(SidingCodec.COVERS).map { it.id } else covers
+    val suggested = suggestion.cards
+    // Nothing picked on a new opponent: the first suggestions stand for it — for the name as it is
+    // when Add is pressed, even inside the moment before its suggestions are shown.
+    fun taken(now: Boolean): List<CardId> = when {
+        covers.isNotEmpty() || start != null -> covers
+        !now || suggestion.name == guess -> suggested.take(SidingCodec.COVERS).map { it.id }
+        guess.isEmpty() -> emptyList()
+        else -> OpponentGuess.suggest(guess, index, limit = 12).take(SidingCodec.COVERS).map { it.id }
+    }
+    val taken = taken(now = false)
     val width = if (LocalTouchFirst.current) 64.dp else 56.dp
     MuDialog(
         title = if (start == null) "New opponent" else "Edit opponent",
@@ -76,7 +103,7 @@ internal fun OpponentDialog(start: Matchup?, state: DeckBuilderState, onDismiss:
             MuButton("Cancel", onDismiss, variant = BtnVariant.GHOST)
             MuButton(
                 if (start == null) "Add" else "Save",
-                { onSave(name.trim(), taken) },
+                { onSave(name.trim(), taken(now = true)) },
                 variant = BtnVariant.PRIMARY,
                 enabled = name.isNotBlank(),
                 reason = "Name the deck first",
@@ -86,9 +113,9 @@ internal fun OpponentDialog(start: Matchup?, state: DeckBuilderState, onDismiss:
         FieldLabel("Name")
         MuInput(name, { name = it }, Modifier.fillMaxWidth(), placeholder = "Snake-Eye, Yubel, Ryzeal…")
         if (suggested.isNotEmpty()) {
-            FieldLabel("Suggested for “${name.trim()}”", hint = "click to pick")
+            FieldLabel("Suggested for “${suggestion.name}”", hint = "click to pick")
             CardChoices(suggested, covers, full, width) { covers = it }
-        } else if (name.isNotBlank()) {
+        } else if (name.isNotBlank() && suggestion.name == guess) {
             Small("No archetype in that name: search the pool below.", color = c.ink45)
         }
         FieldLabel("Its cards", hint = "${covers.size} of ${SidingCodec.COVERS}")
@@ -146,3 +173,6 @@ private fun CardChoices(cards: List<Card>, covers: List<CardId>, full: Boolean, 
         }
     }
 }
+
+/** An opponent's name and the cards it suggested. */
+private class Suggested(val name: String, val cards: List<Card>)

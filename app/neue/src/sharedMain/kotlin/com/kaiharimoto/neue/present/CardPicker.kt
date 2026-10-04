@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -35,6 +36,9 @@ import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.theme.Mu
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * Cards for a slide (1.0.70): the presentation's deck first, any card by name or by what it
@@ -50,10 +54,18 @@ internal fun CardPicker(h: NeueHolders) {
     val existing = present.slide?.elements?.firstOrNull { it.id in present.selection && (it.type == Element.CARD || it.type == Element.CARDS) }
     var picked by remember(target) { mutableStateOf(if (target == PickTarget.REPLACE) existing?.cards.orEmpty() else emptyList()) }
     var query by remember { mutableStateOf("") }
-    val results: List<Card> = remember(query, index, p.deck) {
-        if (query.trim().length < 2) p.deck?.distinct.orEmpty().mapNotNull { index.byId(CardId(it)) }
-        else index.search(query, limit = 90).cards
+    val deckCards: List<Card> = remember(index, p.deck) { p.deck?.distinct.orEmpty().mapNotNull { index.byId(CardId(it)) } }
+    // The pool searched off the frame thread a moment after the last key, as the pool's own search is
+    // (1.0.92); until the first answer the deck's cards stay.
+    val found: List<Card>? by produceState<List<Card>?>(null, query, index) {
+        if (query.trim().length < 2) {
+            value = null
+            return@produceState
+        }
+        delay(SEARCH_DEBOUNCE_MS)
+        value = withContext(Dispatchers.Default) { index.search(query, limit = 90).cards }
     }
+    val results: List<Card> = if (query.trim().length < 2) deckCards else found ?: deckCards
     val single = target == PickTarget.NEW && picked.size <= 1 || existing?.type == Element.CARD && target == PickTarget.REPLACE
     fun done() {
         val slide = present.slide ?: return
@@ -110,3 +122,6 @@ internal fun CardPicker(h: NeueHolders) {
         }
     }
 }
+
+/** How long after the last key a picker searches the pool: the pool's own wait. */
+internal const val SEARCH_DEBOUNCE_MS = 130L

@@ -124,13 +124,17 @@ class CardRepository(
         val record = record()
         val expected = PoolProgress.expected(record, current.cardCount)
         var received = 0L
-        val fetched = api.fetchAllCards(
-            onBytes = { bytes ->
-                received = bytes
-                onProgress(PoolProgress.Downloading(bytes, expected))
-            },
-            onRead = { onProgress(PoolProgress.Reading) },
-        )
+        // Off the caller's thread: the response is tens of megabytes of JSON, and Ktor decodes
+        // it on whichever thread asks for the body — the main one, from the builder's scope.
+        val fetched = withContext(ioDispatcher) {
+            api.fetchAllCards(
+                onBytes = { bytes ->
+                    received = bytes
+                    onProgress(PoolProgress.Downloading(bytes, expected))
+                },
+                onRead = { onProgress(PoolProgress.Reading) },
+            )
+        }
         val cards = fetched.getOrElse { error ->
             return SyncResult.Failed(
                 error.message ?: "Could not reach the card database.",
