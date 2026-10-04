@@ -132,5 +132,21 @@ class McpServerCore(
         /** Whether [header] (an `Authorization` value) carries [token]. */
         fun authorised(header: String?, token: String): Boolean =
             header != null && header.removePrefix("Bearer ").trim() == token && token.isNotEmpty()
+
+        /**
+         * Whether a request carrying [origin] (its `Origin` header, null when it has none) may reach the server: the
+         * spec's guard against DNS rebinding. The CLIs send no Origin; a web page always does. Allowed: none, or exactly a
+         * loopback origin (`http` or `https`; `127.0.0.1`, `localhost` or `[::1]`; an optional port), parsed whole and
+         * never searched (1.0.99, the red team: `http://127.0.0.1.evil.com` contained "127.0.0.1"). The opaque `null` a
+         * sandboxed page or a file sends is a page's, and refused.
+         */
+        fun originAllowed(origin: String?): Boolean {
+            if (origin == null) return true
+            val match = LOOPBACK_ORIGIN.matchEntire(origin) ?: return false
+            val port = match.groupValues[1]
+            return port.isEmpty() || port.toIntOrNull()?.let { it in 1..65535 } == true
+        }
+
+        private val LOOPBACK_ORIGIN = Regex("""(?i)https?://(?:127\.0\.0\.1|localhost|\[::1])(?::(\d{1,5}))?""")
     }
 }

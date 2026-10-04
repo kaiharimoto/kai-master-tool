@@ -1,7 +1,9 @@
 package com.kaiharimoto.mastertool.core.ai.cli
 
 import com.kaiharimoto.mastertool.core.ai.BackendEvent
+import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
+import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.StopReason
 import com.kaiharimoto.mastertool.core.ai.Usage
 import kotlinx.serialization.json.Json
@@ -55,6 +57,41 @@ data class CliLaunch(
     val stdin: String,
     val env: Map<String, String> = emptyMap(),
 )
+
+/**
+ * A conversation carried into a fresh CLI session (1.0.99). The CLIs moved out of Ai's folder into a working folder
+ * of their own, and Claude Code files its conversations by working folder, so `--resume` there cannot find one begun
+ * in the old folder. Its words then go to a new session with the new message, and the session id that comes back
+ * carries the conversation on from there.
+ */
+object CliCarry {
+    /** At most this many characters of the earlier conversation are carried, the newest kept. */
+    const val CAP = 60_000
+
+    /** Whether [text] (a failed run's message or its error output) is Claude Code's "No conversation found …". */
+    fun lostSession(text: String?): Boolean = text != null && "no conversation found" in text.lowercase()
+
+    /**
+     * [message] with the words of [history] before it: the person's and Ai's text only, no tool traffic or
+     * context, newest kept within [cap]. Only [message] when nothing was said before.
+     */
+    fun message(history: List<ChatTurn>, message: String, cap: Int = CAP): String {
+        val current = history.indexOfLast { it.role == Role.USER && !it.isToolResults }
+        val earlier = (if (current >= 0) history.take(current) else history)
+            .filter { !it.isToolResults && it.text.isNotBlank() }
+            .map { (if (it.role == Role.USER) "Person: " else "Ai: ") + it.text.trim() }
+        val kept = ArrayDeque<String>()
+        var size = 0
+        for (line in earlier.asReversed()) {
+            if (size + line.length > cap) break
+            kept.addFirst(line)
+            size += line.length + 2
+        }
+        if (kept.isEmpty()) return message
+        return "<earlier_conversation>\nWhat was said before this message, carried over from an earlier session:\n\n" +
+            kept.joinToString("\n\n") + "\n</earlier_conversation>\n\n" + message
+    }
+}
 
 object ClaudeCli {
     /**

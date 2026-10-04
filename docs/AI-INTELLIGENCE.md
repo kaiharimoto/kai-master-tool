@@ -97,6 +97,12 @@ The roadmap below builds the rest on that foundation, in order:
 Every confirmed open finding below except the CLI shell's reach and the MCP token's file, with the evidence ledger (Phase 1,
 items 1–3 of the roadmap) and the fact-check held to what it looked up. `NEUE.md` §4k has the details.
 
+### Fixed in 1.0.99
+
+The two security findings below: the CLIs run in an empty folder of their own (`<data>/cli-run/`), the keys moved to
+`<data>/secrets/`, the MCP token is on disk only owner-only for one turn, and the Origin check is exact. `docs/SECURITY.md`
+is the threat model; `NEUE.md` §4k has the details.
+
 ### Confirmed, open: the next fixes (as of 1.0.97)
 
 All confirmed by three verifiers, all judged small, local fixes. They are Phase 1 of the roadmap.

@@ -46,7 +46,8 @@ internal fun AiState.backendFor(connection: AiConnection): ModelBackend {
         Wire.CLAUDE_CLI, Wire.CODEX_CLI -> {
             if (!AiDesk.canRunCli) error("${provider.label} runs on the desktop app only.")
             val program = connection.program ?: error("Set up ${provider.label} again: the app lost where it is installed.")
-            CliBackend(provider.wire, program, files.file("run"), mcpServer() ?: error("The app could not open its tools to ${provider.label}."))
+            // A working folder outside Ai's (1.0.99): nothing of Ai's, and no key, where the CLI is pointed.
+            CliBackend(provider.wire, program, CliRun.folder(Platform.dataDir), files.root, mcpServer() ?: error("The app could not open its tools to ${provider.label}."))
         }
     }
     (backend?.second as? AnthropicBackend)?.close()

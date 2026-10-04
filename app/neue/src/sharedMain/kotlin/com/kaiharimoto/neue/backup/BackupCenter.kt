@@ -221,6 +221,8 @@ class BackupCenter(private val h: NeueHolders) {
                         add(LAYOUT, Backups.json.encodeToString(UiPreferences.serializer(), h.layout.preferences).encodeToByteArray())
                         add(WEBS, Backups.json.encodeToString(WebLibrary.serializer(), h.deps.preferencesRepository.loadWebs()).encodeToByteArray())
                         add(PREP, PrepCodec.encode(h.deps.preferencesRepository.loadPrep()).encodeToByteArray())
+                        // Never the keys or the CLIs' folder: `secrets/` and `cli-run/` (1.0.99) are not walked, and
+                        // their pre-1.0.99 places in Ai's folder are left out here for a device not yet migrated.
                         tree(h.ai.files.root).filter { !NeueSyncLocal.privateToDevice(it.first) }.forEach { (rel, f) -> add("ai/$rel", f.readBytes()); files++ }
                         tree(File(Platform.dataDir, "custom-art")).forEach { (rel, f) -> add("custom-art/$rel", f.readBytes()); files++ }
                         tree(File(Platform.dataDir, "present")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("present/$rel", f.readBytes()); files++ }
