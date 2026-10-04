@@ -129,6 +129,7 @@ fun NeueHolders.deskContext() = DeskContext(
     onPresent = neue.page == Page.PRESENT,
     presenting = present.playing != null,
     onDuel = neue.page == Page.DUEL,
+    onWorld = neue.page == Page.WORLD,
     replaying = neue.page == Page.DUEL && duel.replay != null,
 )
 
@@ -154,6 +155,12 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.GO_PREP -> neue.go(Page.PREP)
         DeskAction.GO_PRESENT -> neue.go(Page.PRESENT)
         DeskAction.GO_DUEL -> neue.go(Page.DUEL)
+        DeskAction.GO_WORLD -> neue.go(Page.WORLD)
+        // Ai World's own (1.0.95): from its keys, the palette and the menus alike.
+        DeskAction.WORLD_RUN, DeskAction.WORLD_STOP, DeskAction.WORLD_FOLLOW, DeskAction.WORLD_NEW,
+        DeskAction.WORLD_PANE_FILES, DeskAction.WORLD_PANE_EDITOR, DeskAction.WORLD_PANE_TERMINAL,
+        DeskAction.WORLD_PANE_BOARDS, DeskAction.WORLD_PANE_THOUGHTS, DeskAction.WORLD_PANE_ACTIVITY,
+        -> com.kaiharimoto.neue.world.runWorld(this, action)
         // From a menu or the palette, where nothing is let go of: a press, and the next one sends (1.0.87).
         DeskAction.DUEL_VOICE -> duelVoice.toggle()
         DeskAction.WEB_PREVIOUS -> stepWeb(-1)
@@ -161,7 +168,8 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.GO_SETTINGS -> neue.go(Page.SETTINGS)
         DeskAction.HELP -> neue.helpOpen = true
         DeskAction.DISMISS -> dismiss()
-        DeskAction.SAVE -> state.save { decksReload++ }
+        // On the World page Ctrl S is the editor's: the person's edit to the file, saved.
+        DeskAction.SAVE -> if (neue.page == Page.WORLD) world.saveEditor() else state.save { decksReload++ }
         DeskAction.UNDO -> when (neue.page) {
             Page.PRESENT -> present.undo()
             Page.DUEL -> duel.undo()

@@ -41,6 +41,7 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
         add(MenuEntry("Advanced search") { run(DeskAction.ADVANCED_SEARCH) })
         add(MenuEntry("Present", hint = "Deck profiles as slides") { neue.go(Page.PRESENT) })
         add(MenuEntry("Duel", hint = "The duel simulator") { neue.go(Page.DUEL) })
+        add(MenuEntry("Ai World", hint = "Ai's own computer, watched") { neue.go(Page.WORLD) })
         if (onBuilder) {
             add(MenuEntry(if (groupsOn(state)) "Hide the groups" else "Groups", hint = "The deck in pieces") { run(DeskAction.TOGGLE_KEYS) })
             add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
@@ -91,6 +92,13 @@ fun NeueHolders.commands(query: String): List<Command> {
         cmd("Go", "Prep", DeskAction.GO_PREP),
         cmd("Go", "Present", DeskAction.GO_PRESENT),
         cmd("Go", "Duel", DeskAction.GO_DUEL),
+        cmd("Go", "Ai World", DeskAction.GO_WORLD),
+        Command("World", "New world") { neue.go(Page.WORLD); com.kaiharimoto.neue.world.newWorld(this) },
+        *(if (neue.page == Page.WORLD) arrayOf(
+            cmd("World", "Run the file in the editor", DeskAction.WORLD_RUN),
+            cmd("World", "Stop the run", DeskAction.WORLD_STOP),
+            cmd("World", if (neue.prefs.world.follow) "Stay put: stop following Ai" else "Follow Ai from pane to pane", DeskAction.WORLD_FOLLOW),
+        ) else emptyArray()),
         Command("Duel", "New duel") { neue.go(Page.DUEL); duel.setupOpen = true },
         Command("Duel", "Test hand: the builder's deck, one player") { neue.go(Page.DUEL); com.kaiharimoto.neue.duel.testHand(this) },
         Command("Duel", "Replays: keep this duel, watch one again") { neue.go(Page.DUEL); duel.libraryOpen = true },

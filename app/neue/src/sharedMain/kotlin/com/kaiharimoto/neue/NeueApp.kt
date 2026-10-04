@@ -389,6 +389,7 @@ class NeueHolders(
         // On the Duel page Esc first lets go of the command line or the chat (1.0.78), so the keys go back to the table.
         if (neue.page == Page.DUEL && textFocus.any) { focus?.clearFocus(); return }
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return
+        if (com.kaiharimoto.neue.world.dismissWorld(this)) return
         BackChain.esc(backFlags())?.let(::unwind)
     }
 
@@ -400,6 +401,7 @@ class NeueHolders(
         wake()
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return true
+        if (com.kaiharimoto.neue.world.dismissWorld(this)) return true
         val step = BackChain.back(backFlags()) ?: return false
         unwind(step)
         return true

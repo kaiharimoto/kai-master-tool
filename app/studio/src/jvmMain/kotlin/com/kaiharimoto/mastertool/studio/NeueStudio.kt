@@ -193,6 +193,7 @@ fun neueMain(args: Array<String>) {
                 "prep" -> Page.PREP
                 "present" -> Page.PRESENT
                 "duel" -> Page.DUEL
+                "world" -> Page.WORLD
                 "settings" -> Page.SETTINGS
                 else -> Page.BUILDER
             }

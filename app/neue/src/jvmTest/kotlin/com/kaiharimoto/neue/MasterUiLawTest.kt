@@ -10,15 +10,17 @@ import kotlin.test.fail
  * Neue and fails on the things §15 forbids. The kit's own linter reads CSS and
  * TSX; this is the same list of laws, spelled the way Compose spells them.
  *
- * Three files may name a colour, and only three, because kai granted exactly
- * three exceptions: the foil on a card's face (content, §17), the markers the user
- * draws on their own deck, and Ai's face (1.0.52), drawn in its character's colours.
+ * Only the files kai granted may name a colour: the foil on a card's face (content,
+ * §17), the markers the user draws on their own deck, Ai's face (1.0.52), drawn in its
+ * character's colours, a slide's own paint (1.0.70), and what Ai pins to a world's
+ * boards (1.0.95, `WorldPaint.kt`: "ink, with colour as content" — a chart's series, a
+ * web's groups, a heatmap's shades). The boards keep every other law: square, flat.
  */
 class MasterUiLawTest {
 
     // Every source set's Kotlin: the shared code and each platform's own (1.0.20).
     private val root = File("src")
-    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt")
+    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt", "WorldPaint.kt")
 
     /**
      * Slides are the creator's content (kai, 1.0.70: "slides are content: full colour"): what
