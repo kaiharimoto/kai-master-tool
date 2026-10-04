@@ -2,6 +2,7 @@ package com.kaiharimoto.neue
 
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.neue.ai.openWizard
+import com.kaiharimoto.neue.ai.startRubricInterview
 import com.kaiharimoto.neue.ai.askTune
 import com.kaiharimoto.neue.ai.openGuide
 import com.kaiharimoto.neue.ai.openBook
@@ -97,6 +98,10 @@ fun NeueHolders.commands(query: String): List<Command> {
         cmd("Go", "Shootout", DeskAction.GO_SHOOTOUT),
         cmd("Shootout", "Begin a session, or carry on", DeskAction.SHOOTOUT_START),
         cmd("Shootout", "The results, or back to the trials", DeskAction.SHOOTOUT_RESULTS),
+        *(if (neue.prefs.ai.enabled) arrayOf(
+            cmd("Shootout", "Trust: how far ${ai.name} is trusted on this matchup", DeskAction.SHOOTOUT_TRUST),
+            Command("Shootout", "Interview: write how you judge this matchup") { neue.go(Page.SHOOTOUT); ai.startRubricInterview() },
+        ) else emptyArray()),
         *(if (neue.page == Page.SHOOTOUT && shootoutStarted && shootout.running) arrayOf(
             cmd("Shootout", "Stop the session, every answer kept", DeskAction.SHOOTOUT_STOP),
         ) else emptyArray()),

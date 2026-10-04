@@ -123,6 +123,7 @@ private fun Head(ai: AiState, phone: Boolean) {
                 ai.writing -> "Reader's guide · " + provider.label
                 ai.session?.mode == AiSession.MODE_DUEL -> "At the duel table · " + provider.label
                 ai.session?.mode == AiSession.MODE_WORLD -> "In Ai World · " + provider.label
+                ai.session?.mode == AiSession.MODE_RUBRIC -> "Shootout interview · " + provider.label
                 ai.tuning -> "Fine Tuning · " + when (ai.session?.mode) {
                     AiSession.MODE_STUDY -> "studying"
                     AiSession.MODE_PRINCIPLES -> "first principles"
@@ -288,6 +289,7 @@ private fun Tools(ai: AiState) {
                     ai.profiling -> "Learning about you"
                     ai.refactoring -> "Refactoring ${ai.h.builder.deckName}'s guide"
                     ai.writing -> "Writing ${ai.h.builder.deckName}'s guide"
+                    ai.session?.mode == AiSession.MODE_RUBRIC -> "Writing the Shootout rubric"
                     else -> "Learning ${ai.h.builder.deckName}"
                 },
                 color = c.ink45,

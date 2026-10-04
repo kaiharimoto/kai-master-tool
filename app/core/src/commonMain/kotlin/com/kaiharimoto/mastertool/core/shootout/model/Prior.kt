@@ -43,10 +43,11 @@ class Prior(spec: ModelSpec) {
         for (s in spec.strata.indices) hold(l.intercept(s), 0.0, p.interceptSd)
         for (j in 0 until spec.judges) {
             if (j > 0) for (k in 0 until 4) hold(l.cut(j, k), 0.0, p.cutSd)
-            hold(l.precision(j), p.precisionLog, p.precisionLogSd)
-            hold(l.comparePrecision(j), p.comparePrecisionLog, p.comparePrecisionLogSd)
-            start[l.precision(j)] = p.precisionLog
-            start[l.comparePrecision(j)] = p.comparePrecisionLog
+            if (j > 0) for (c in 0 until spec.cards) hold(l.judgeCard(j, c), 0.0, p.judgeCardSd)
+            hold(l.precision(j), p.precisionMean(j), p.precisionLogSd)
+            hold(l.comparePrecision(j), p.comparePrecisionMean(j), p.comparePrecisionLogSd)
+            start[l.precision(j)] = p.precisionMean(j)
+            start[l.comparePrecision(j)] = p.comparePrecisionMean(j)
         }
     }
 

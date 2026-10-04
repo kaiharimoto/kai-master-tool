@@ -143,8 +143,10 @@ object Fitter {
     /** The prior middle and spread of the noise parameter at [index]. */
     private fun noisePrior(spec: ModelSpec, index: Int): Pair<Double, Double> {
         val p = spec.priors
-        val isCompare = (0 until spec.judges).any { spec.layout.comparePrecision(it) == index }
-        return if (isCompare) p.comparePrecisionLog to p.comparePrecisionLogSd else p.precisionLog to p.precisionLogSd
+        val compareOf = (0 until spec.judges).firstOrNull { spec.layout.comparePrecision(it) == index }
+        if (compareOf != null) return p.comparePrecisionMean(compareOf) to p.comparePrecisionLogSd
+        val judge = (0 until spec.judges).firstOrNull { spec.layout.precision(it) == index } ?: 0
+        return p.precisionMean(judge) to p.precisionLogSd
     }
 
     /** The maximum of a function that rises then falls on [lo, hi], by golden-section search to a thousandth. */

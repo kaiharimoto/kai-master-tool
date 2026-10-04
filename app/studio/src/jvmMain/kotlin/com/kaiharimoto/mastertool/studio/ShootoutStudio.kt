@@ -18,6 +18,8 @@ import kotlinx.coroutines.runBlocking
  * - `--shootout-target=alone|matchup`: the builder's deck on its own, or in a field of two against a K9 list built from
  *   the lab deck's own legacy siding patterns (which supply the lab's plans, read only), the K9 list siding back.
  * - `--shootout-view=trial|results|setup`; `--shootout-answers=N` (60 by default).
+ * - `--shootout-teach=…` (Phase S stage 3): the teaching screens, with a calibration set, apprentice and supervised
+ *   answers, Ai's solo hands and audits, notes and a rubric made up beside the demo's answers.
  */
 internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, clock: FrameClock) {
     h.webs.load()
@@ -63,6 +65,8 @@ internal suspend fun studioShootout(h: NeueHolders, map: Map<String, String>, cl
         "setup" -> Shootouts.View.SETUP
         else -> Shootouts.View.TRIAL
     }
+    // Teaching Ai (Phase S stage 3): --shootout-teach=supervised|judging|question|calibration|solo|exam|exam-running|trust|rubric|setup.
+    h.shootout.teaching = map["shootout-teach"]
     h.shootout.demo(me, opponent, map["shootout-answers"]?.toIntOrNull() ?: 60, view)
     h.neue.page = Page.SHOOTOUT
     clock.run(160)

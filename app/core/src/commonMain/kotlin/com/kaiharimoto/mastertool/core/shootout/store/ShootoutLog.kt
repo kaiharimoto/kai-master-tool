@@ -57,6 +57,14 @@ data class StoredTrial(
     /** Reason tags (optional, S.md §1): `bricked`, `interrupted`, `out-resourced`, `opponent-bricked`. */
     val tags: List<String> = emptyList(),
     val note: String? = null,
+    /**
+     * The person's trial an answer of Ai's is to (stage 3, S.md §6½): Ai's answers are kept as trials of their own
+     * ([judge] [AI]), each pointing at the person's answer to the same hand, so the pair is how agreement is measured and
+     * a trial once written is never changed. Null for Ai's solo hands and for every answer of the person's.
+     */
+    val of: String? = null,
+    /** How the answer was given (stage 3): one of [TeachModes] — `calibration`, `apprentice`, `supervised`, `solo`, `audit`, `exam`. */
+    val mode: String? = null,
 ) {
     /** Every hand of yours it shows. */
     val hands: List<List<Int>> get() = if (kind == COMPARE) listOf(left, right) else listOf(hand)
@@ -80,7 +88,13 @@ data class StoredTrial(
     }
 }
 
-/** Ai's answer to a trial (S.md §6, §6½): its own judge, stored apart, weighted by its measured agreement later. */
+/**
+ * Ai's answer to a trial (S.md §6, §6½): its own judge, stored apart, weighted by its measured agreement.
+ *
+ * Stage 3 adds what makes its agreement honest to measure ([examples], [rubric], [predicted], [asked]): what Ai was
+ * shown when it answered, so a score is only ever counted on a hand it never learned from ("using only the examples
+ * and rubric it had before"), and [print], the decks it answered on, so a deck change re-earns every kind.
+ */
 @Serializable
 data class AiVerdict(
     val answer: String? = null,
@@ -89,6 +103,45 @@ data class AiVerdict(
     val sure: Double? = null,
     val why: String? = null,
     val model: String? = null,
+    /** The person's judged trials it was shown as examples, by id: the example bank as it stood when it answered. */
+    val examples: List<String> = emptyList(),
+    /** The rubric it was shown, as [com.kaiharimoto.mastertool.core.shootout.teach.Rubric.hash]; null when there was none. */
+    val rubric: String? = null,
+    /** The model's win chance for the hand it was shown, 0 to 1 (stage 1's fit, one input among the others). */
+    val predicted: Double? = null,
+    /** The kind of hand ([com.kaiharimoto.mastertool.core.shootout.teach.HandKind.key]). */
+    val kind: String? = null,
+    /** The decks it answered on ([com.kaiharimoto.mastertool.core.shootout.bench.Bench.print]). */
+    val print: String? = null,
+    /** When it was asked, epoch milliseconds. */
+    val asked: Long? = null,
+    /** One short question it would ask the person, written before it knew their answer (apprentice mode). */
+    val question: String? = null,
+)
+
+/**
+ * The person's note on a trial (S.md §6½): written after the trial (an answer to Ai's question, or their own), so it is
+ * kept beside the trials, never in one. It goes with its trial into the example bank; recurring ones are offered for the
+ * rubric.
+ */
+@Serializable
+data class TrialNote(
+    val trial: String,
+    val text: String,
+    val at: Long = 0,
+    /** Ai's question it answers, when it answers one. */
+    val question: String? = null,
+)
+
+/**
+ * How far the person trusts Ai on this matchup (S.md §6½ "The gate"): Ai runs a kind of hand alone only when the bottom
+ * of its agreement range clears [bar] and it says it is at least [sure] sure. [solo] is whether the person has let it.
+ */
+@Serializable
+data class TrustSettings(
+    val bar: Double = 0.9,
+    val sure: Double = 0.8,
+    val solo: Boolean = false,
 )
 
 /** The two siding plans a sided trial was dealt under, as fingerprints ([PlanPrint]). */
@@ -110,8 +163,18 @@ data class ShootoutLog(
     /** The opponent's name when last seen, so a log reads without its deck. */
     val opponentName: String? = null,
     val trials: List<StoredTrial> = emptyList(),
+    /** The person's notes on trials (stage 3), in the order written. */
+    val notes: List<TrialNote> = emptyList(),
+    /** The gate's settings for this matchup (stage 3); null is the defaults. */
+    val trust: TrustSettings? = null,
 ) {
     fun plus(trial: StoredTrial): ShootoutLog = copy(trials = trials + trial)
+
+    /** The person's notes on [trial], oldest first. */
+    fun notesOn(trial: String): List<TrialNote> = notes.filter { it.trial == trial }
+
+    /** The trust settings, the defaults when none were chosen. */
+    val trusted: TrustSettings get() = trust ?: TrustSettings()
 
     companion object {
         /** The format's version: a newer one is read for what it shares with this one. */
@@ -153,12 +216,28 @@ object ShootoutCodec {
                 null
             }
         }
+        val notes = (root["notes"] as? JsonArray).orEmpty().mapNotNull { n ->
+            try {
+                json.decodeFromJsonElement(TrialNote.serializer(), n)
+            } catch (e: Exception) {
+                null
+            }
+        }
+        val trust = root["trust"]?.let { t ->
+            try {
+                json.decodeFromJsonElement(TrustSettings.serializer(), t)
+            } catch (e: Exception) {
+                null
+            }
+        }
         return ShootoutLog(
             version = (root["version"] as? JsonPrimitive)?.intOrNull ?: ShootoutLog.VERSION,
             deck = deck,
             opponent = (root["opponent"] as? JsonPrimitive)?.takeIf { it.isString }?.content,
             opponentName = (root["opponentName"] as? JsonPrimitive)?.takeIf { it.isString }?.content,
             trials = trials,
+            notes = notes,
+            trust = trust,
         )
     }
 }
@@ -174,6 +253,15 @@ object ShootoutPaths {
     /** The file for the deck alone ([opponentId] null) or against one opponent deck. */
     fun file(deckId: String, opponentId: String?): String =
         "${folder(deckId)}/${if (opponentId == null) ALONE else safe(opponentId) + ".json"}"
+
+    /**
+     * How the person judges this matchup, in words Ai keeps (stage 3, S.md §6½): `<deck>/<matchup>.rubric.md` beside the
+     * trials — `alone.rubric.md` for the deck on its own. Markdown entries, reviewed like the guide.
+     */
+    fun rubric(deckId: String, opponentId: String?): String =
+        "${folder(deckId)}/${if (opponentId == null) "alone" else safe(opponentId)}$RUBRIC"
+
+    const val RUBRIC = ".rubric.md"
 
     /**
      * An id as a file name: letters, digits, `-` and `_` kept, anything else as `~` and its code, so two ids never

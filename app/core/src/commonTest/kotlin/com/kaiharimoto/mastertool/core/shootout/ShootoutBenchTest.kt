@@ -123,12 +123,13 @@ class ShootoutBenchTest {
     }
 
     @Test
-    fun onlyThePersonsBlindAnswersAreFittedForNow() {
+    fun everyAnswerIsFittedAsItsOwnJudge() {
         val bench = Bench.of(BenchInput(mine, lookup))
         val hand = listOf(1001, 1002, 1003, 1004, 1005)
-        assertNotNull(bench.trial(StoredTrial("a", stratum = "ALONE_FIRST", hand = hand, answer = "CLEAR_WIN")))
-        assertNull(bench.trial(StoredTrial("b", stratum = "ALONE_FIRST", hand = hand, answer = "CLEAR_WIN", sawAi = true)))
-        assertNull(bench.trial(StoredTrial("c", stratum = "ALONE_FIRST", hand = hand, answer = "CLEAR_WIN", judge = StoredTrial.AI)))
+        assertEquals(Bench.PERSON, bench.trial(StoredTrial("a", stratum = "ALONE_FIRST", hand = hand, answer = "CLEAR_WIN"))?.judge)
+        // Stage 3: the person after seeing Ai, and Ai, are judges of their own (S.md §6½), never the reference.
+        assertEquals(Bench.SEEN, bench.trial(StoredTrial("b", stratum = "ALONE_FIRST", hand = hand, answer = "CLEAR_WIN", sawAi = true))?.judge)
+        assertEquals(Bench.AI, bench.trial(StoredTrial("c", stratum = "ALONE_FIRST", hand = hand, answer = "CLEAR_WIN", judge = StoredTrial.AI))?.judge)
         assertNull(bench.trial(StoredTrial("d", stratum = "G1_FIRST", hand = hand, answer = "CLEAR_WIN")), "a matchup's trial is not the deck alone's")
         assertNull(bench.trial(StoredTrial("e", stratum = "SOMETHING_NEW", hand = hand, answer = "CLEAR_WIN")))
         assertNull(bench.trial(StoredTrial("f", stratum = "ALONE_FIRST", hand = hand, answer = "MAYBE")))

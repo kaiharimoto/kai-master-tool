@@ -66,6 +66,8 @@ class SyntheticDeck(
             strata: List<Stratum> = listOf(Stratum.G1_FIRST, Stratum.G1_SECOND),
             winRate: Double = 0.55,
             lapse: Double = 0.0,
+            /** How many judges the model fits: 3 for the person blind, Ai and the person after seeing Ai (stage 3). */
+            judges: Int = 1,
         ): SyntheticDeck {
             val spec = ModelSpec(
                 cards = COPIES.size,
@@ -75,6 +77,7 @@ class SyntheticDeck(
                 pairs = PAIRS,
                 priors = priors,
                 lapse = lapse,
+                judges = judges,
             )
             val decks = Decks.matchup(DeckList(COPIES), DeckList(OPPONENT_COPIES))
             val random = Random(seed)

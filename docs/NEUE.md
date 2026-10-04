@@ -4067,11 +4067,38 @@ reloaded after either), and **deleted with the deck** (the library's Delete and 
 in the help dialog; `ShootoutInputTest` holds every mouse action to a finger's form), the palette, the Mac's View menu,
 a phone tab and the ⋯ menu, `navigate`'s `SHOOTOUT`. Master UI throughout: ink only but the card art, square, nothing moves.
 
-**Left** (S.md §7): Ai's parts (§6, §6½ — the stored fields wait for them), fatigue from answer times, the reason tags and
-decisive card on screen, per-plan cards for the sided strata (old-plan trials are pooled today), opening patterns and
-the next copy's worth (§5), the guide link with the evidence ledger, siding plans compared.
+**Teaching Ai** (Phase S stage 3, S.md §6½ and §6¾; `core/shootout/teach`, `neue/shootout/ShootoutTeach`):
+- **What Ai learns, kept**: the **rubric** (`<deck>/<matchup>.rubric.md` beside the trials, markdown entries; written by the
+  interview with `shootout_rubric`, its numbers through the evidence ledger, the whole change reviewed on Finish like Fine
+  Tuning — `AiState.startRubricInterview`, `MODE_RUBRIC`, skill `shootout-interview`; the Rubric dialog lists it, takes an
+  entry out, and offers the notes that keep coming back, `RubricNotes`); the **example bank** (`ExampleBank`, `Similarity`);
+  and the **model's prediction** (`ShootoutRun.predict`). All three, with the cards' text, are `JudgeBrief`.
+- **Ai as a judge**: `judgeHand` (`neue/ai/AiShootout.kt`) is a request of its own — the `shootout-judge` skill and the rules
+  primer, the brief, `shootout_judge` the only tool — so Ai never sees the person's answer to the hand; on an API
+  connection. Its answer is a trial of its own (`judge: ai`, `of`, `mode`, `AiVerdict` with what it was shown).
+- **The four ways to teach**, the setup's **Teach** row (only while Ai is on): **Calibration set** (32 hands taken in turn
+  from every kind, `CalibrationSet`; judged blind, then **the exam** — `View.EXAM`: Ai answers each blind from what came
+  before it and the model as it stood before the set, its agreement per kind); **Apprentice** (Ai predicts each hand as it
+  is shown; after the person answers, where it disagreed or was unsure, its one question — at most one in four trials,
+  `Apprentice` — in a card over the scale whose answer is a note on that trial); **Supervised** (Ai's answer and reason over
+  the scale, **Accept** or `Space` takes it, 1–5 corrects; answered before it lands, the answer stays blind); **Interview**
+  (the Ai panel). Any hand can carry a note ("Note on the last hand").
+- **Ai alone**: with the switch on, a hand of a kind Ai has earned goes to Ai first; sure, it judges it alone (at most 12 in a
+  row), else the hand goes to the person with Ai's answer kept beside it; a share come back as **audits**, shown blind.
+- **The trust panel** (`T`, the header's **Trust**, the palette): the switch, the bar (80–95 %) and how sure counts; per kind
+  its agreement (a press lists the pairs), the range drawn in ink with the bar's tick, OPEN / NOT YET with why / CLOSED; the
+  person's own agreement on repeats (the ceiling); the audits; how much of the data is Ai's, raw and weighted, how Ai and the
+  seen answers lean; Ai's certainty scored; and what Ai's answers moved, each card with and without them, LOOK beside a
+  change past its own range (`ShootoutTrust`, `ShootoutTrustWords`, which `shootout_state` hands Ai too).
+- The trials list marks Ai's answers (alone or beside you), the mode, Ai's certainty and reason, and the notes.
 
-`tools/shoot.sh --page=shootout --shootout=demo --shootout-target=alone|matchup --shootout-view=trial|results|setup`.
+**Left** (S.md §7): Ai's priors from the cards, asking why on an answer the model did not expect, the ablation runner, the
+write-up through the evidence ledger, fatigue from answer times, the reason tags and decisive card on screen, per-plan
+cards for the sided strata (old-plan trials are pooled today), opening patterns and the next copy's worth (§5), the guide
+link with the evidence ledger, siding plans compared.
+
+`tools/shoot.sh --page=shootout --shootout=demo --shootout-target=alone|matchup --shootout-view=trial|results|setup`, and
+`--shootout-teach=supervised|judging|question|calibration|solo|exam|exam-running|trust|rubric|setup` for teaching.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

@@ -38,6 +38,8 @@ import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.model.Estimate
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
+import com.kaiharimoto.mastertool.core.shootout.teach.HandKind
+import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
@@ -248,7 +250,7 @@ private fun Cell(s: Shootouts, row: CardResult, stratum: Stratum, cell: CardCell
 
 /** A number that opens its trials. */
 @Composable
-private fun Number(text: String, caption: String?, textSize: Int = 14, onClick: () -> Unit) {
+internal fun Number(text: String, caption: String?, textSize: Int = 14, onClick: () -> Unit) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
@@ -268,7 +270,7 @@ private fun Number(text: String, caption: String?, textSize: Int = 14, onClick: 
  * the value a square. [scale] is the half-width in points the bar spans.
  */
 @Composable
-private fun RangeBar(e: Estimate, scale: Double) {
+internal fun RangeBar(e: Estimate, scale: Double) {
     val c = Mu.colors
     Box(
         Modifier.fillMaxSize().drawBehind {
@@ -299,6 +301,8 @@ internal fun TrialsDialog(h: NeueHolders, behind: Behind) {
         is Behind.Pair -> "${s.card(behind.a)?.name ?: behind.a} + ${s.card(behind.b)?.name ?: behind.b}"
         is Behind.WinRate -> "Every hand · ${ShootoutWords.stratum(behind.stratum)}"
         Behind.All -> "Every trial"
+        Behind.Ai -> "Every answer of Ai's"
+        is Behind.Kind -> (if (behind.audits) "Audits · " else "Ai beside you · ") + (HandKind.parse(behind.key)?.words?.replaceFirstChar { it.uppercase() } ?: behind.key)
     }
     MuDialog(title, { s.behind = null }, width = 760.dp, description = "${trials.size} trial${if (trials.size == 1) "" else "s"} behind this number, newest first.") {
         trials.take(MAX_LISTED).forEach { t ->
@@ -327,14 +331,21 @@ private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean) {
             }
             Micro(verdict, Modifier.weight(1f), color = c.ink)
             val marks = listOfNotNull(
-                t.reason.takeIf { it == "plain" }?.let { "shuffled" },
+                t.reason.takeIf { it == "plain" && t.judge == StoredTrial.PERSON }?.let { "shuffled" },
                 t.reason.takeIf { it == "repeat" }?.let { "shown again" },
                 "seen Ai first".takeIf { t.sawAi },
-                "Ai".takeIf { t.judge == StoredTrial.AI },
+                (if (t.mode == TeachModes.SOLO) "Ai alone" else "Ai").takeIf { t.judge == StoredTrial.AI },
+                t.mode?.takeIf { it != TeachModes.SOLO }?.let(::modeWords),
                 "older plan".takeIf { s.bench?.underOlderPlan(t) == true },
             )
             if (marks.isNotEmpty()) Mono(marks.joinToString(" · "), color = c.ink45)
         }
+        // Ai's own line (stage 3): how sure it said it was, and why.
+        t.ai?.takeIf { t.judge == StoredTrial.AI }?.let { v ->
+            val sure = v.sure?.let { "${(it * 100).toInt()} % sure" }
+            Small(listOfNotNull(sure, v.why?.let { "“$it”" }).joinToString(" · "), color = c.ink70, maxLines = 2)
+        }
+        s.log?.notesOn(t.id)?.forEach { n -> Small("Note: ${n.text}", color = c.ink70, maxLines = 3) }
         if (t.kind == StoredTrial.COMPARE) {
             Small("First: ${names(t.left)}", maxLines = 2)
             Small("Second: ${names(t.right)}", maxLines = 2)
@@ -343,4 +354,14 @@ private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean) {
         }
         t.opponent?.let { Small("Theirs: ${names(it)}", color = c.ink45, maxLines = 2) }
     }
+}
+
+/** How an answer was given (stage 3), in a word for the trials list. */
+internal fun modeWords(mode: String): String = when (mode) {
+    TeachModes.CALIBRATION -> "calibration set"
+    TeachModes.EXAM -> "exam"
+    TeachModes.APPRENTICE -> "apprentice"
+    TeachModes.SUPERVISED -> "supervised"
+    TeachModes.AUDIT -> "audit"
+    else -> mode
 }

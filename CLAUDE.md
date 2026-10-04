@@ -758,6 +758,19 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   backed up, deleted with the deck. `neue/shootout/Shootouts` (lazy, `h.shootout`) runs every fit off the frame thread and
   writes each answer as it is given. Keys `DeskScope.SHOOTOUT`; mouse and finger `ShootoutMouse`/`ShootoutTouch`.
   `tools/shoot.sh --page=shootout --shootout=demo --shootout-target=matchup --shootout-view=trial|results`.
+  **Stage 3, Ai learns to judge** (`core/shootout/teach`, S.md §6½, `NEUE.md` §4t): what Ai is handed with each hand —
+  the **rubric** (`<deck>/<matchup>.rubric.md`, reviewed like the guide, numbers through `Evidence.judge`), the **example
+  bank** (`Similarity`: cards, roles, turn, the opponent's interaction; only the person's answers given *before* the hand)
+  and the model's `predict` — is `JudgeBrief`; Ai answers through `shootout_judge` in a request of its own (`judgeHand`,
+  API connections, never the person's answer). **Ai's answers are trials of their own** (`judge: ai`, `of`, `mode`, what it
+  was shown on `AiVerdict`) and **each kind of answer is its own judge** in the fit (`Bench.PERSON`/`AI`/`SEEN`: noise, a
+  wide lean and a per-card reading of its own), so a biased judge never moves the ratings. **Trust**: agreement within one
+  step, counted only on held-out pairs (`JudgedPair.heldOut`), per `HandKind`, 80 % Wilson ranges; the gate opens a kind when
+  the range on the hands Ai was sure of clears the person's bar; audits (1 in 3, then 1 in 10) close a kind on two misses
+  beyond its range; a deck change re-earns from a short set (`Trust`). The four ways to teach are `ShootoutTeach` (calibration
+  set and exam, apprentice and its one question, supervised with `Space`) and the interview (`MODE_RUBRIC`, skill
+  `shootout-interview`; judging is `MODE_SHOOTOUT`, `shootout-judge`). `ShootoutTrustSimulationTest` proves it on a simulated
+  judge. `--shootout-teach=supervised|question|calibration|solo|exam|trust|rubric`.
 - **Numbers carry their proof** (1.0.98, the evidence ledger, `core/ai/evidence`): a percentage, odds or probability in a
   guide entry or a book chapter must be one a tool computed in the conversation or the person said (`Numbers`,
   `Evidence.judge`), else it is refused unless marked "(estimate)"; its proof is kept in `ai/evidence/<deck>.json`

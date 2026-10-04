@@ -32,15 +32,37 @@ data class Priors(
     val opponentSd: Double = 0.6,
     /** How far a stratum's starting point may sit from an even game. */
     val interceptSd: Double = 1.5,
-    /** How far a judge other than the reference may sit from the bands they name (a lean toward win or loss). */
-    val cutSd: Double = 0.25,
+    /**
+     * How far a judge other than the reference may sit from the bands they name (a lean toward win or loss). Wide (stage
+     * 3): a judge a whole band optimistic must be measured as leaning, not read as every card being better (the
+     * simulation's biased judge moved the win rate 8 points at 0.25).
+     */
+    val cutSd: Double = 0.8,
+    /**
+     * How far a judge other than the reference may read one card differently from the person, per copy, in log-odds
+     * (stage 3, S.md §6½): a blind spot — Ai rating a brick as a starter — is that judge's own, measured where it overlaps
+     * the person's answers, and never moves the card's rating, which stays the person's.
+     */
+    val judgeCardSd: Double = 0.5,
     /** A judge's precision on the five-point scale (1 / noise), as its log: the middle and the spread. */
     val precisionLog: Double = ln(1.5),
     val precisionLogSd: Double = 0.5,
     /** A judge's precision between two hands, as its log. */
     val comparePrecisionLog: Double = ln(1.2),
     val comparePrecisionLogSd: Double = 0.5,
-)
+    /**
+     * How much less precise a judge other than the reference (Ai, the person after seeing Ai) is taken to be before its
+     * answers are measured, as a log (stage 3, S.md §6½): its answers count for little until where it overlaps the
+     * person's blind answers shows they deserve more — "an Ai answer counts only as much as Ai has shown it can be trusted".
+     */
+    val otherPrecisionDrop: Double = ln(2.0),
+) {
+    /** Judge [judge]'s prior middle for its five-point precision, as a log. */
+    fun precisionMean(judge: Int): Double = if (judge == 0) precisionLog else precisionLog - otherPrecisionDrop
+
+    /** Judge [judge]'s prior middle for its precision between two hands, as a log. */
+    fun comparePrecisionMean(judge: Int): Double = if (judge == 0) comparePrecisionLog else comparePrecisionLog - otherPrecisionDrop
+}
 
 /**
  * What one model instance holds (Phase S §2): the deck's cards and their roles, the opponent's cards (none for
@@ -134,8 +156,14 @@ class Layout(spec: ModelSpec) {
     val judgeBase: Int = interceptBase + s
     private val cutBase: Int = judgeBase + 2 * spec.judges
 
+    /** Each judge but the reference's own reading of each card (stage 3): its blind spots, kept apart. */
+    private val judgeCardBase: Int = cutBase + 4 * (spec.judges - 1)
+
     /** How many parameters the model fits. */
-    val size: Int = cutBase + 4 * (spec.judges - 1)
+    val size: Int = judgeCardBase + k * (spec.judges - 1)
+
+    /** Judge [judge]'s own reading of card [c], beside the shared value; -1 for the reference judge, who has none. */
+    fun judgeCard(judge: Int, c: Int): Int = if (judge == 0) -1 else judgeCardBase + (judge - 1) * k + c
 
     fun role(r: Int): Int = roles + r
     fun card(c: Int): Int = cardBase + c

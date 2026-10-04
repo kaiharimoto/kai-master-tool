@@ -201,6 +201,10 @@ object BuiltInSkills {
         3 to Skill(DeckSkills.DUEL_TABLE_NAME, DeckSkills.DUEL_TABLE_DESCRIPTION, DeckSkills.DUEL_TABLE.trim(), builtIn = true),
         // Ai World (1.0.97): answering by experiment, in code the person watches.
         3 to Skill(DeckSkills.AI_WORLD_NAME, DeckSkills.AI_WORLD_DESCRIPTION, DeckSkills.AI_WORLD.trim(), builtIn = true),
+    ) + listOf(
+        // Shootout (Phase S stage 3): a hand judged as the person would, and the interview that writes the rubric.
+        3 to Skill(ShootoutSkills.JUDGE_NAME, ShootoutSkills.JUDGE_DESCRIPTION, ShootoutSkills.JUDGE.trim(), builtIn = true),
+        3 to Skill(ShootoutSkills.INTERVIEW_NAME, ShootoutSkills.INTERVIEW_DESCRIPTION, ShootoutSkills.INTERVIEW.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */

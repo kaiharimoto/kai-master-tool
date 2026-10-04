@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
+import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Micro
 import androidx.compose.ui.Alignment
@@ -237,6 +238,7 @@ private fun label(ai: AiState, path: String): String = when {
     path.startsWith("decks/") -> deckName(ai, path.removePrefix("decks/").removeSuffix(".md"))
     path.startsWith("guides/") -> deckName(ai, path.removePrefix("guides/").removeSuffix(".md"))
     path.startsWith("skills/") -> path.removePrefix("skills/").substringBefore('/')
+    path.endsWith(ShootoutPaths.RUBRIC) -> "Shootout rubric"
     else -> path
 }
 
