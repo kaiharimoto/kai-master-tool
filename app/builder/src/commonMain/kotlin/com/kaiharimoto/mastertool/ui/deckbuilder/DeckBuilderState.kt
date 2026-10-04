@@ -199,9 +199,40 @@ class DeckBuilderState(
         isolatedKey = if (isolatedKey == keyId) null else keyId
     }
 
-    /** How the main deck is cut up right now, draft included. */
-    fun keying(section: DeckSection = DeckSection.MAIN): LensKeying =
-        DeckLenses.key(lens, deck[section], index::byId, groupsWithDraft, format)
+    /**
+     * How the main deck is cut up right now, draft included. Kept per section until what it
+     * is worked out from changes (1.0.92): the builder asks for it several times a frame.
+     * Every input is still read here, so a caller observing state sees each of them.
+     */
+    fun keying(section: DeckSection = DeckSection.MAIN): LensKeying {
+        val lens = lens
+        val ids = deck[section]
+        val index = index
+        val groups = groups
+        val draft = groupDraft
+        val format = format
+        keyings[section.ordinal]?.let { if (it.matches(lens, ids, index, groups, draft, format)) return it.keying }
+        val keying = DeckLenses.key(lens, ids, index::byId, groupsWithDraft, format)
+        keyings[section.ordinal] = KeyingMemo(lens, ids, index, groups, draft, format, keying)
+        return keying
+    }
+
+    /** The last [keying] of each section and what it was worked out from: immutable, so a reader on any thread sees one whole. */
+    private class KeyingMemo(
+        val lens: Lens,
+        val ids: List<CardId>,
+        val index: CardIndex,
+        val groups: DeckGroups,
+        val draft: GroupDraft?,
+        val format: Format,
+        val keying: LensKeying,
+    ) {
+        fun matches(lens: Lens, ids: List<CardId>, index: CardIndex, groups: DeckGroups, draft: GroupDraft?, format: Format): Boolean =
+            lens == this.lens && format == this.format && index === this.index && groups === this.groups &&
+                draft === this.draft && (ids === this.ids || ids == this.ids)
+    }
+
+    private val keyings = arrayOfNulls<KeyingMemo>(DeckSection.entries.size)
 
     /**
      * The groups plus the one being drawn up, so a selection is a block of the

@@ -20,6 +20,11 @@ import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerInputEventHandler
+import androidx.compose.ui.input.pointer.SuspendingPointerInputModifierNode
+import androidx.compose.ui.node.DelegatingNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.platform.InspectorInfo
 import com.kaiharimoto.mastertool.core.input.DeskTouch
 
 /**
@@ -29,19 +34,62 @@ import com.kaiharimoto.mastertool.core.input.DeskTouch
  * desktop one does: the handler is read fresh on each event (a lambda closing
  * over state must not see the state of the composition that installed it), the
  * events are not consumed, and the detector is keyed on the type and the pass.
+ *
+ * A modifier node (1.0.92), not `composed {}`: equal for the same type, pass and
+ * handler, so what wears it can skip recomposing.
  */
 fun Modifier.onPointer(
     type: PointerEventType,
     pass: PointerEventPass = PointerEventPass.Main,
     onEvent: AwaitPointerEventScope.(event: PointerEvent) -> Unit,
-): Modifier = composed {
-    val handler by rememberUpdatedState(onEvent)
-    pointerInput(type, pass) {
-        awaitPointerEventScope {
-            while (true) {
-                val event = awaitPointerEvent(pass)
-                if (event.type == type) handler(event)
-            }
+): Modifier = this then OnPointerElement(type, pass, onEvent)
+
+private data class OnPointerElement(
+    val type: PointerEventType,
+    val pass: PointerEventPass,
+    val onEvent: AwaitPointerEventScope.(event: PointerEvent) -> Unit,
+) : ModifierNodeElement<OnPointerNode>() {
+    override fun create() = OnPointerNode(type, pass, onEvent)
+
+    override fun update(node: OnPointerNode) = node.update(type, pass, onEvent)
+
+    override fun InspectorInfo.inspectableProperties() {
+        name = "onPointer"
+        properties["type"] = type
+        properties["pass"] = pass
+    }
+}
+
+/** The detector: restarted when the type or the pass changes, the handler swapped in place (read fresh on each event). */
+private class OnPointerNode(
+    private var type: PointerEventType,
+    private var pass: PointerEventPass,
+    private var handler: AwaitPointerEventScope.(event: PointerEvent) -> Unit,
+) : DelegatingNode() {
+    // Nothing here draws, measures or places.
+    override val shouldAutoInvalidate: Boolean get() = false
+
+    private val input = delegate(
+        SuspendingPointerInputModifierNode(
+            PointerInputEventHandler {
+                val wanted = type
+                val at = pass
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(at)
+                        if (event.type == wanted) handler(event)
+                    }
+                }
+            },
+        ),
+    )
+
+    fun update(type: PointerEventType, pass: PointerEventPass, onEvent: AwaitPointerEventScope.(event: PointerEvent) -> Unit) {
+        handler = onEvent
+        if (type != this.type || pass != this.pass) {
+            this.type = type
+            this.pass = pass
+            input.resetPointerInputHandler()
         }
     }
 }

@@ -148,6 +148,9 @@ class NeueDrag(private val state: DeckBuilderState) {
     /** Where the card in the air is drawn, in window pixels: above a finger, centred on a mouse. */
     fun drawn(): CarryOffset.Drawn? = held?.let { drawn(pointer, it) }
 
+    /** Where [held] is drawn with the pointer where it is now: its size is its own, wherever the pointer is. */
+    fun drawnFor(held: Held): CarryOffset.Drawn = drawn(pointer, held)
+
     /** A deck card over the pool, which lets it go: the pool says "Let go to remove" (rec 12). */
     val overPool: Boolean get() = held?.from != null && hover?.let { it.section == null && it.accepted } == true
 

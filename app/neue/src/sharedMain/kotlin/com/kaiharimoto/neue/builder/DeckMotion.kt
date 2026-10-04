@@ -1,5 +1,11 @@
 package com.kaiharimoto.neue.builder
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -9,7 +15,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.input.CarryOffset
+import com.kaiharimoto.mastertool.core.model.Format
+import com.kaiharimoto.neue.cards.NeueCard
+import com.kaiharimoto.neue.kit.Hatch
+import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.mastertool.core.motion.DeskLean
 import com.kaiharimoto.mastertool.core.motion.LeanField
 import com.kaiharimoto.mastertool.core.motion.LeanPose
@@ -166,4 +183,42 @@ fun rememberCarryMotion(drag: NeueDrag): CarryMotion {
     val motion = remember(drag) { CarryMotion(drag) }
     LaunchedEffect(motion) { motion.run() }
     return motion
+}
+
+/**
+ * The card in the air, drawn where the pointer is (1.0.92: its own composable, out of the
+ * shell). Only its place follows the pointer, and that is read as the card is placed, so a
+ * move places one box again and recomposes nothing; its size is [held]'s own, the same
+ * wherever the pointer is. A finger's card rides above the finger (`CarryOffset`).
+ */
+@Composable
+fun CarriedCard(drag: NeueDrag, held: Held, carry: CarryMotion, format: Format, foil: String) {
+    val c = Mu.colors
+    val density = LocalDensity.current
+    // Worked out with the pointer anywhere (here the origin): reading where it is would recompose on every move.
+    val size = remember(held) {
+        CarryOffset.carried(0f, 0f, held.size.width.toFloat(), held.size.height.toFloat(), held.finger, held.density).let { it.width to it.height }
+    }
+    val width = size.first
+    Box(
+        Modifier
+            .offset { drag.drawnFor(held).let { IntOffset(it.left.toInt(), it.top.toInt()) } }
+            .size(with(density) { size.first.toDp() }, with(density) { size.second.toDp() }),
+    ) {
+        NeueCard(
+            held.card,
+            Modifier.fillMaxSize(),
+            format = format,
+            foil = foil,
+            outlined = true,
+            motion = { carry.pose(width) },
+        )
+        // A drop that would be refused says so on the card itself, where the eye is.
+        if (drag.refused) {
+            Hatch(Modifier.matchParentSize(), color = c.ink25)
+            Box(Modifier.align(Alignment.Center).background(c.paper).padding(horizontal = 4.dp)) {
+                Micro("✕", color = c.ink)
+            }
+        }
+    }
 }
