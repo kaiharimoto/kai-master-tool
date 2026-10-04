@@ -687,6 +687,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   Extra Deck only face-up (`CardInst.extraDeck` from the deal, `DuelRules.MAIN_TO_EXTRA`; the drop and verb only for a
   Pendulum); a card facing the other seat wears its plate at its own foot; a set card wears its back at half opacity; a card
   over the Deck shrinks and fades (`overDeck`); one button puts the log and the card away together (`DuelPrefs.logShown`).
+  **The hand held (1.0.94)**: the near hand's card is 1.25× the field's on the window's bottom edge with a fifth below it
+  (`DuelLayouter.HAND_SCALE`/`HAND_CUT`, `DuelLayout.handCard`; the table stands on the bottom edge), overlapping and riffling
+  round the card under the pointer or the keys (`DuelFrames.held`, `riffle`); the life-point pad closes on a press outside.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

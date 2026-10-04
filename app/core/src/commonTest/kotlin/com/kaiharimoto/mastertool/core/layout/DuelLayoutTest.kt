@@ -39,10 +39,26 @@ class DuelLayoutTest {
     @Test
     fun nothingOverlapsAndEverythingIsInsideTheWindow() = every { c, two, bottom, l ->
         val all = l.spots.values + l.score.values + listOfNotNull(l.turn, l.phases, l.inspector, l.log)
+        // The near hand stands a fifth of its card below the window's edge (1.0.94); everything else is inside.
+        val hand = l.pile(bottom, PileKind.HAND)
         all.forEachIndexed { i, a ->
-            assertTrue(a.left >= -0.01f && a.top >= -0.01f && a.right <= c.w + 0.01f && a.bottom <= c.h + 0.5f, "$c two=$two bottom=$bottom: $a outside")
+            val below = if (a == hand) a.height * DuelLayouter.HAND_CUT else 0f
+            assertTrue(a.left >= -0.01f && a.top >= -0.01f && a.right <= c.w + 0.01f && a.bottom <= c.h + below + 0.5f, "$c two=$two bottom=$bottom: $a outside")
             all.drop(i + 1).forEach { b -> assertFalse(overlaps(a, b), "$c two=$two: $a overlaps $b") }
         }
+    }
+
+    @Test
+    fun theNearHandIsBiggerAndCutByTheWindowsEdgeWithoutShrinkingTheField() = every { c, two, bottom, l ->
+        // kai, 1.0.94: "bigger … their bottom cut off by the edge of the screen by 20% … without affecting the field size".
+        val hand = l.pile(bottom, PileKind.HAND)!!
+        assertEquals(l.card * DuelLayouter.HAND_SCALE, l.handCard, 0.01f)
+        assertEquals(l.handCard * DuelLayouter.CARD_RATIO, hand.height, 0.01f)
+        // At most a fifth below the edge, and never over the field.
+        assertTrue(hand.bottom <= c.h + hand.height * DuelLayouter.HAND_CUT + 0.01f, "$c two=$two: ${hand.bottom} vs ${c.h}")
+        assertTrue(hand.top >= l.field.bottom + l.gap - 0.01f, "$c two=$two: the hand over the field")
+        // What shows of it is the band the field was solved round: one field card's height.
+        assertEquals(l.cardHeight, hand.height * (1f - DuelLayouter.HAND_CUT), 0.01f)
     }
 
     @Test

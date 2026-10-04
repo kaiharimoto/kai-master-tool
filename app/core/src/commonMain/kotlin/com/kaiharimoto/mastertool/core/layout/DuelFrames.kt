@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import kotlin.math.abs
 
 /** How a card is drawn: its face, its face dimmed and marked as set (its controller's own set card), or its back. */
 enum class CardLook { FACE, SET, BACK }
@@ -68,6 +69,8 @@ object DuelFrames {
         secret: Long = 0L,
         /** The seat the notation counts from (1.0.87): every other seat's hand drawn in its `oh1…` order ([DuelFocus.Eyes.viewer]). */
         viewer: Int? = null,
+        /** The near hand's card the pointer or the keys are on (1.0.94): it rises whole and the hand riffles round it. */
+        riffle: Int? = null,
     ): List<CardFrame> {
         val out = ArrayList<CardFrame>(s.cards.size)
         fun look(uid: Int): CardLook {
@@ -121,8 +124,14 @@ object DuelFrames {
             if (band != null) {
                 // Another seat's hidden hand in no order of its own, as DuelView sends it (1.0.87, the focus's `oh1…`).
                 val shown = DuelFocus.Eyes(viewers, secret, viewer).hand(s, seat)
-                fan(shown.size, band, if (seat == l.bottom) l.card else band.height / DuelLayouter.CARD_RATIO)
-                    .forEachIndexed { i, slot -> place(shown[i], slot, Z_HAND + i * 0.001f, rotation = r) }
+                if (seat == l.bottom) {
+                    // The near hand (1.0.94): bigger cards, a little over one another, riffling round the one in hand.
+                    val at = riffle?.let { shown.indexOf(it) }?.takeIf { it >= 0 }
+                    held(shown.size, band, l.handCard, at).forEachIndexed { i, (slot, z) -> place(shown[i], slot, z, rotation = r) }
+                } else {
+                    fan(shown.size, band, band.height / DuelLayouter.CARD_RATIO)
+                        .forEachIndexed { i, slot -> place(shown[i], slot, Z_HAND + i * 0.001f, rotation = r) }
+                }
             } else {
                 // A folded hand: its cards wait by the seat's score, out of sight.
                 val at = l.score[seat] ?: l.turn
@@ -234,6 +243,45 @@ object DuelFrames {
         val top = band.top + (band.height - h) / 2f
         return List(n) { i -> Slot(left + i * step, top, w, h) }
     }
+
+    /**
+     * The near hand as it is held (1.0.94, kai: "slightly overlapping each other and have them riffle through them as the
+     * player holds their cursor over the cards or with their keyboard"): [n] cards of width [w] across [band], each over the
+     * one before by [OVERLAP] of a card (more when the band is short of room), in its band's top where the window's edge cuts
+     * a fifth off. The card [at] — under the pointer or the keys — rises by that fifth, whole, in front of the rest; its
+     * neighbours rise a little after it and the hand parts round it, so moving along the hand riffles through it.
+     */
+    fun held(n: Int, band: Slot, w: Float, at: Int? = null): List<Pair<Slot, Float>> {
+        if (n <= 0) return emptyList()
+        val h = w * DuelLayouter.CARD_RATIO
+        val natural = w * (1f - OVERLAP)
+        val step = if (n == 1) 0f else minOf(natural, (band.width - w) / (n - 1)).coerceAtLeast(w * 0.12f)
+        val used = w + step * (n - 1)
+        val left = band.left + (band.width - used) / 2f
+        val cover = (w - step).coerceAtLeast(0f)
+        val rise = h * DuelLayouter.HAND_CUT
+        return List(n) { i ->
+            var x = left + i * step
+            var y = band.top
+            var z = Z_HAND + i * 0.001f
+            if (at != null) {
+                val d = i - at
+                when {
+                    d == 0 -> { y -= rise; z = Z_HAND + 0.5f }
+                    // The neighbours part to frame it and lift a little, as fingers riffling a hand do.
+                    else -> {
+                        x += (if (d < 0) -1f else 1f) * cover * PART / abs(d).coerceAtMost(3)
+                        if (abs(d) == 1) y -= rise * 0.3f
+                    }
+                }
+            }
+            Slot(x, y, w, h) to z
+        }
+    }
+
+    /** How much of a held card the next one covers, and how far the hand parts round the card in hand. */
+    const val OVERLAP = 0.22f
+    const val PART = 0.6f
 
     /** The hand position a card dropped at [x] would take: before the card whose middle is right of it. */
     fun handIndex(frames: List<CardFrame>, hand: List<Int>, x: Float): Int {

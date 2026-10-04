@@ -3655,6 +3655,20 @@ spaces; alone: empty) --duel-spot-state=listening|answer|many --duel-heard=summo
   since 1.0.74 and read by nothing until now), which the layout reads as `wantRails`: put away, the table takes their room
   and both open from the Table menu as drawers.
 
+**1.0.94, the hand held**: "I want the cards in the card hands to be bigger … slightly overlapping each other and have them
+riffle through them as the player holds their cursor over the cards or with their keyboard. The cards can also have their
+bottom cut off by the edge of the screen by 20%":
+- **Bigger, cut by the edge.** The near hand's card is `DuelLayouter.HAND_SCALE` (1.25) times the field's, standing on the
+  window's bottom edge with `HAND_CUT` (a fifth) below it — what shows is one field card's height, the band the height was
+  always solved with, so the field keeps its size (`DuelLayout.handCard`). The table now stands on the bottom edge (a
+  margin at the top only; the room left over goes above the far side, as on a phone), so the hand is one lane from the field.
+- **Overlapping, riffling.** `DuelFrames.held`: each card over the one before by `OVERLAP` (22 %, more when the band is short);
+  the card in hand — under the pointer (`Duels.hovered`), or the keys' `HandCard` when they moved last — rises by the fifth the
+  edge cuts, whole and in front, its neighbours lift a little and the hand parts round it (`PART`), so moving along the hand
+  riffles it. The cards glide there as every table card does; nothing riffles while a card is carried. The table reads the
+  card in hand through one derived value, so only a change of it composes the table again.
+- **The life-point pad closes on a press outside it**, as the open piles do (`lpPadSlot`, shared by the pad and the arbiter).
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

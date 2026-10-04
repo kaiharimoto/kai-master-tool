@@ -121,7 +121,24 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     // Every hand but the bottom seat's in the notation's order (1.0.87, the red team): the third card drawn there is the `oh3`
     // the Spotlight reads, both hands face-up or not.
     val notationSeat = duels.bottom
-    val frames = remember(s, layout, viewers, duels.strip, facing, duels.stripRow, secret, notationSeat) { DuelFrames.of(s, layout, viewers, duels.strip, facing, duels.stripRow, secret, notationSeat) }
+    // The near hand riffles round the card in hand (1.0.94): the one the keys are on when they moved last, else the one
+    // under the pointer; none while a card is carried, so the hand holds still for the drop.
+    // Derived, so only a change of the card in hand composes the table again — never each move of the pointer or the keys.
+    val riffleState = rememberUpdatedState(s)
+    val carriedNow = rememberUpdatedState(carried)
+    val riffle by remember(duels) {
+        derivedStateOf {
+            val st = riffleState.value
+            when {
+                carriedNow.value != null -> null
+                duels.byKeys -> (duels.focus as? DuelFocus.Slot.HandCard)?.takeIf { it.seat == duels.bottom }?.let { DuelFocus.uidAt(st, it, duels.eyes) }
+                else -> duels.hovered?.takeIf { it in st.seats[duels.bottom].hand }
+            }
+        }
+    }
+    val frames = remember(s, layout, viewers, duels.strip, facing, duels.stripRow, secret, notationSeat, riffle) {
+        DuelFrames.of(s, layout, viewers, duels.strip, facing, duels.stripRow, secret, notationSeat, riffle)
+    }
     // Command mode (1.0.87): the focus reads its grid off the table as drawn, and goes with its card when the table changes.
     SideEffect {
         duels.tableLayout = layout
@@ -399,6 +416,12 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 duels.strip?.let { open ->
                     val onItsPile = hit is Hit.Pile && hit.seat == open.first && hit.kind == open.second
                     if (!onItsPile && !stripGround(stateNow, layoutNow, open).contains(x0, y0)) duels.closeStrip()
+                }
+                // So does a press outside the life-point pad (1.0.94), as every other window here closes; a press on its own
+                // score is that score's toggle, which closes it already.
+                duels.lpPad?.let { seat ->
+                    val onScore = layoutNow.score[seat]?.contains(x0, y0) == true
+                    if (!onScore && !lpPadSlot(layoutNow, seat).contains(x0, y0)) duels.lpPad = null
                 }
                 val shift = event.keyboardModifiers.isShiftPressed
                 val alt = event.keyboardModifiers.isAltPressed

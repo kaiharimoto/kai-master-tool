@@ -483,22 +483,34 @@ internal fun VerbStrip(duels: Duels, s: DuelState, l: DuelLayout, frames: List<C
 /** The verb strip's width: the longest verb and its key. */
 private const val VERB_STRIP_W = 168
 
+/**
+ * Where the life-point pad stands: beside the score it changes, level with its top for the far seat, its bottom for the
+ * near. Shared with the table's arbiter, which closes the pad on a press outside it (1.0.94, kai: "it doesn't close when I
+ * click out of it like the other windows").
+ */
+internal fun lpPadSlot(l: DuelLayout, seat: Int): com.kaiharimoto.mastertool.core.layout.Slot {
+    val anchor = l.score[seat] ?: l.turn
+    val top = if (seat != l.bottom) anchor.top else anchor.bottom - LP_PAD_H
+    val left = (anchor.left - 8f - LP_PAD_W).coerceAtLeast(0f)
+    return com.kaiharimoto.mastertool.core.layout.Slot(left, top, LP_PAD_W, LP_PAD_H)
+}
+
+private const val LP_PAD_W = 300f
+private const val LP_PAD_H = 92f
+
 /** The life-point pad: type a change (−1000, +500, =4000, /2) or tap one. */
 @Composable
 internal fun LpPad(duels: Duels, s: DuelState, l: DuelLayout, seat: Int) {
     val c = Mu.colors
-    val anchor = l.score[seat] ?: l.turn
     val focus = remember { FocusRequester() }
     var text by remember(seat) { mutableStateOf("") }
     fun apply(expr: String) {
         val who = if (seat == duels.bottom) "" else "opp "
         if (duels.run("lp $who$expr")) duels.lpPad = null
     }
-    // Beside the score it changes: level with its top for the far seat, its bottom for the near.
-    val top = if (seat != l.bottom) anchor.top else anchor.bottom - 92f
-    val left = (anchor.left - 8f - 300f).coerceAtLeast(0f)
+    val at = lpPadSlot(l, seat)
     Column(
-        Modifier.zIndex(70f).offset(left.dp, top.dp).width(300.dp).height(92.dp)
+        Modifier.zIndex(70f).offset(at.left.dp, at.top.dp).width(at.width.dp).height(at.height.dp)
             .background(c.paper).border(1.dp, c.ink).padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {

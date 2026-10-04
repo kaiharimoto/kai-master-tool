@@ -72,6 +72,12 @@ data class DuelLayout(
     val bottom: Int,
     val twoSided: Boolean,
     val fits: Boolean,
+    /**
+     * The near hand's card (1.0.94, kai: "I want the cards in the card hands to be bigger … The cards can also have their
+     * bottom cut off by the edge of the screen by 20%"): [HAND_SCALE] times [card], standing at the window's bottom edge
+     * with [HAND_CUT] of it below — so what shows of it is the band the hand always had, and the field keeps its size.
+     */
+    val handCard: Float = card,
 ) {
     operator fun get(spot: DuelSpot): Slot? = spots[spot]
 
@@ -150,6 +156,10 @@ object DuelLayouter {
     /** Six phases and End turn (a box and a fifth) at [PHASE_MIN], with the spacing between. */
     const val PHASES_FULL = 7.2f * PHASE_MIN + 6 * PHASE_SPACING
 
+    /** The near hand's card against the field's (1.0.94), and the share of it below the window's edge. */
+    const val HAND_SCALE = 1.25f
+    const val HAND_CUT = 0.2f
+
     /** The far hand's band, as a fraction of a card's height: their cards are held, not laid out. */
     private const val FAR_HAND = 0.62f
 
@@ -180,7 +190,8 @@ object DuelLayouter {
         fun tall(c: Float, scale: Float, farHand: Boolean): Float {
             val g = gapFor(c)
             val ch = c * CARD_RATIO
-            var t = margin * 2 + ch + g + (2 * ch + g)
+            // A margin at the top only (1.0.94): at the bottom the near hand runs off the window's edge.
+            var t = margin + ch + g + (2 * ch + g)
             if (twoSided) {
                 t += g + ch + g + scale * (2 * ch + g)
                 if (farHand) t += g + FAR_HAND * ch * scale
@@ -238,11 +249,12 @@ object DuelLayouter {
         val gridLeft = tableLeft + (tableRoom - blockW) / 2f
         fun col(i: Int) = gridLeft + i * (c + g)
 
-        // Rows, top to bottom; the block is centred in the height.
-        val totalH = tall(c, farScale, farHand) - margin * 2
-        // Centred in the height; on a phone, down by the thumbs, the room left above the far side.
-        val slack = ((height - margin * 2) - totalH).coerceAtLeast(0f)
-        var y = margin + if (form == FormFactor.PHONE) slack else slack / 2f
+        // Rows, top to bottom; the block stands on the window's bottom edge.
+        val totalH = tall(c, farScale, farHand) - margin
+        // Down against the window's bottom edge, where the near hand is cut (1.0.94), the room left above the far side —
+        // as a phone always had it, by the thumbs.
+        val slack = ((height - margin) - totalH).coerceAtLeast(0f)
+        var y = margin + slack
         val spots = LinkedHashMap<DuelSpot, Slot>()
         val score = HashMap<Int, Slot>()
         val near = bottom
@@ -297,8 +309,12 @@ object DuelLayouter {
         spots[DuelSpot.Pile(near, PileKind.DECK)] = slot(6, y)
         y += ch
         val fieldBottom = y
-        y += g
-        spots[DuelSpot.Hand(near)] = Slot(gridLeft, y, gridW, ch)
+        // The near hand: bigger cards at the window's bottom edge, a fifth of each below it (1.0.94). What shows is
+        // (1 - HAND_CUT) × HAND_SCALE = 1 card height, the band the height was solved with, so the field is the size it was.
+        val hc = c * HAND_SCALE
+        val hch = hc * CARD_RATIO
+        val handTop = maxOf(fieldBottom + g, height - hch * (1f - HAND_CUT))
+        spots[DuelSpot.Hand(near)] = Slot(gridLeft, handTop, gridW, hch)
 
         // The score column: their score at the top, the turn, the phases, your score at the bottom.
         val colLeft = gridLeft + gridW + g
@@ -337,6 +353,7 @@ object DuelLayouter {
             bottom = bottom,
             twoSided = twoSided,
             fits = c >= MIN_CARD,
+            handCard = hc,
         )
     }
 
