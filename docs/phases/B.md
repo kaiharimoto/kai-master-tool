@@ -57,25 +57,53 @@ Genesys switch in the builder waits until the format choice can be stored withou
 
 ## 3. Every banlist, by date (`core/cards/Banlists.kt`)
 
-**The source.** Yugipedia keeps each list as a page — "April 2025 Lists (TCG)" — whose `{{Limitation list}}` template
-gives `start_date`, `end_date`, `medium`, `format` and the cards by name under `forbidden`, `limited`, `semi-limited`
-and `unlimited` (the last only for changes), each line optionally `// prev::Status`. The category
-"TCG Advanced Format Forbidden & Limited Lists" (and its OCG twin) lists the pages.
+**The source.** Yugipedia keeps each list as a page — "April 2025 Lists (TCG)", or "April 2005 Lists" before the
+regions shared a month — whose `{{Limitation list}}` template gives `start_date` ("April 7, 2025"), `end_date` (empty
+while it is in force), `medium` (TCG/OCG), `format` (TCG pages only), `prev`, `next`, and the cards by name, one a line,
+under `forbidden`, `limited`, `semi_limited` and `no_longer_on_list` (unlimited now), each line optionally `// prev::Status`
+or another `//` note (`force-smw`, `prev-note:: … <ref …/>`). The category "TCG Advanced Format Forbidden & Limited
+Lists" (82 pages, 2002–) and "OCG Forbidden & Limited Lists" (88 pages, 1999–, beside five subcategories) list them.
+Every page of both, read on 2026-10-04, has the template, a start date and a medium; 2002's have no Forbidden section;
+one OCG name is written `Allure of Darkness|sc`. The API answers 50 pages' wikitext in one request
+(`prop=revisions&rvprop=content`, the text under `revisions[0]["*"]`).
 
-**The model.**
-- `LimitationList(region, start, end, statuses: Map<name, BanStatus>)`; a card not named is unlimited.
-- `BanlistHistory` holds a region's lists sorted by start; `asOf(date)` is the one in force that day.
-- Names are matched to cards against the pool (`TextMatching.normalize`, then the card's former names where the
-  pool knows them); unmatched names are kept and reported, never dropped in silence.
-- Read by a parser tested on captured wikitext; fetched once a week and kept in `<data>/banlists/<region>.json`
-  (synced and backed up, versioned, an `OldDataTest` case). Outside text, so it goes through `Untrusted` where Ai reads it.
+**The model** (`core/cards/Banlists.kt`).
+- `LimitationList(region, title, start, end, statuses: Map<name as written, BanStatus>, prev, next)`; a card not named is
+  unlimited, and a card off the list (`no_longer_on_list`) is named, unlimited, so its history shows the step.
+- `LimitationParser.read(title, wikitext, region)` → the list or the reason, never an exception: dates as a wiki writes
+  them, sections by any spelling, every `//` note, `<ref>`, comment, link and `|annotation` dropped; the region from
+  `medium`, else the title, else the category asked; the start from the title ("April 2005" → the 1st) when the page
+  gives none. Tested on eleven captured answers, 2002 to 2026, both regions (`BanlistFixture`).
+- `BanlistHistory` holds a region's lists sorted by start: `asOf(date)` (the latest that started on or before it),
+  `changes(from, to)`, `statusOf(name or card, date)`, `historyOf(name or card)` — stretches at one status, from the
+  first list that names it.
+- Names are matched to the pool by the pool's own lookup (`TextMatching.normalize`): `LimitationList.match(lookup)`
+  is a `BanlistMatch`, a `BanSource` that finds a card by any printing, then by its name, and keeps the names it could
+  not match (`unmatched`), said in every answer that lists them. The pool keeps no former names, so a card renamed
+  since a list is one of those, never dropped in silence.
+- **A cache, not a document:** `<data>/banlists/<tcg|ocg>.json` (`BanlistDoc`, `version` 1, read with unknown keys
+  ignored, a broken file read as none, written whole through a temporary file; an `OldDataTest` case). It is not
+  synced and not backed up — every device fetches its own — and `banlists` is in `InboundPath.DEVICE_FOLDERS`, so
+  neither a sync nor a restore can plant one.
+- **Fetched** by `neue/banlist/BanlistCenter` (`NeueHolders.banlists`), off the main thread, one fetch at a time, a
+  second between requests, with the app's User-Agent: the category weekly (`BanlistPlan.stale`), then only the pages
+  it lacks — a list never changes once it has ended — the one still in force again weekly, and a page that could not
+  be read again at each refresh (`BanlistPlan.pages`). A failure is worded by `Unreachable`; the lists kept stay in
+  use, and a fetch cut short does not mark the category read, so the next ask carries on.
+- Outside text: Ai reads the names inside `Untrusted`, and every answer cites the list's title and Yugipedia (CC BY-SA).
 
 **"As of".** A date anywhere the banlist matters:
-- the builder's legality (`DeckValidator` takes a `BanSource`: today's from the pool, or a dated list);
-- `hand_odds` with `as_of`: copies over that list's limits are taken out first, and the answer says which;
-- the field, `expected_winrate` and `field_snapshot` with `as_of`: lists illegal under that list are dropped;
-- Ai World's `ygo.banlist(date)` and `ygo.legal(deck, date)`;
-- Ai's `banlist` tool: the list on a date, a card's history of statuses, what changed between two lists.
+- `DeckValidator.validate(…, limits: BanSource?)`: the pool's status by default (`BanSource.current`), or a dated list
+  (`BanlistMatch`), named in the words ("… is limited to 1 on the April 2025 Lists (TCG), deck has 2."); copies by card.
+- Ai's `banlist` tool (`neue/ai/AiBanlist`): `date` (default today), `region` (default the builder's format), `card` (its
+  status that day and its history), `compare_to` (what moved between two days' lists).
+- `validate_deck` with `as_of`: that day's list and the cards released by then (`Legality`).
+- Ai World's `ygo.banlist(date, region)` (the list, its names by status, `l.status(name)`, the unmatched names and the
+  source) and `ygo.legal(deck, date)` (→ `{legal, list, issues}`), through `WorldApi`'s `banlist`/`banStatus`/`legal`
+  and `WorldHost.banlists` — read from what is kept, never fetched on a script's thread (`WorldSnapshot.of` starts a
+  background refresh when one is due). JavaScript only: Python cannot call back into the app.
+- Still to come: the builder's own legality against a dated list (a choice in the UI), `hand_odds` with `as_of`, and
+  the field, `expected_winrate` and `field_snapshot` with `as_of` (the meta's own work, §4).
 
 ## 4. The field, read honestly (`core/ai/meta`, `core/prep/TestStats.kt`)
 

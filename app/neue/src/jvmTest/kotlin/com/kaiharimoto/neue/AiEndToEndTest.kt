@@ -15,7 +15,11 @@ import com.kaiharimoto.mastertool.core.data.DatabaseFactory
 import com.kaiharimoto.mastertool.core.data.DeckRepository
 import com.kaiharimoto.mastertool.core.data.PreferencesRepository
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
+import com.kaiharimoto.mastertool.core.cards.BanlistDoc
+import com.kaiharimoto.mastertool.core.cards.LimitationList
+import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.Presentation
@@ -202,6 +206,51 @@ class AiEndToEndTest {
         assertTrue("Card roles" in guide, guide)
         val read = h.tool("memory_read", "scope" to "guide")
         assertTrue("hand trap" in read.content, read.content)
+    }
+
+    @Test
+    fun theBanlistIsAskedByDateAndADeckCheckedAgainstIt() = runBlocking {
+        val h = holders()
+        // The lists as Yugipedia's pages read; held for this run, so nothing is fetched.
+        h.banlists.use(
+            Format.TCG,
+            BanlistDoc(
+                region = Format.TCG,
+                lists = listOf(
+                    LimitationList(Format.TCG, "January 2025 Lists (TCG)", "2025-01-01", "2025-03-31", mapOf("Pot of Greed" to BanStatus.LIMITED, "Maxx \"C\"" to BanStatus.FORBIDDEN)),
+                    LimitationList(Format.TCG, "April 2025 Lists (TCG)", "2025-04-01", null, mapOf("Pot of Greed" to BanStatus.FORBIDDEN, "Maxx \"C\"" to BanStatus.FORBIDDEN, "Raigeki" to BanStatus.FORBIDDEN, "Not A Card" to BanStatus.LIMITED)),
+                ),
+                checked = System.currentTimeMillis(),
+            ),
+        )
+        val feb = h.tool("banlist", "date" to "2025-02-01", "region" to "tcg")
+        assertFalse(feb.isError, feb.content)
+        assertTrue("January 2025 Lists (TCG) — the TCG Forbidden & Limited list, in force 1 Jan 2025 – 31 Mar 2025" in feb.content, feb.content)
+        assertTrue("<untrusted source=\"Yugipedia: January 2025 Lists (TCG)\">" in feb.content && "Limited (1): Pot of Greed" in feb.content, feb.content)
+        assertTrue("CC BY-SA" in feb.content && "yugipedia.com/wiki/January_2025_Lists_(TCG)" in feb.content, feb.content)
+        // Today's by default, the names the pool lacks said.
+        val now = h.tool("banlist")
+        assertTrue("April 2025 Lists (TCG)" in now.content && "Not matched to a card in the app's pool (1): Not A Card" in now.content, now.content)
+
+        val card = h.tool("banlist", "card" to "pot of greed", "date" to "2025-05-01")
+        assertTrue("Pot of Greed on 1 May 2025: Forbidden on the April 2025 Lists (TCG)" in card.content, card.content)
+        assertTrue("- Limited from 1 Jan 2025 until 1 Apr 2025 (January 2025 Lists (TCG))" in card.content, card.content)
+        val moved = h.tool("banlist", "date" to "2025-05-01", "compare_to" to "2025-02-01")
+        assertTrue("- Raigeki: Unlimited → Forbidden" in moved.content && "- Pot of Greed: Limited → Forbidden" in moved.content, moved.content)
+        assertFalse("Maxx" in moved.content, "unchanged is not a change")
+        assertTrue(h.tool("banlist", "date" to "May 2025").isError)
+        assertTrue(h.tool("banlist", "date" to "2024-01-01").isError, "before the first list kept")
+        assertTrue(h.tool("banlist", "region" to "md").isError, "tcg or ocg")
+
+        // validate_deck as of a day: the list in force then.
+        h.tool("new_deck", "name" to "Old format", "main" to listOf("3 Raigeki", "Ash Blossom & Joyous Spring"))
+        val may = h.tool("validate_deck", "as_of" to "2025-05-01")
+        assertTrue("TCG on 1 May 2025 (the April 2025 Lists (TCG)" in may.content, may.content)
+        assertTrue("Raigeki is Forbidden on the April 2025 Lists (TCG), deck has 3." in may.content, may.content)
+        val feb2 = h.tool("validate_deck", "as_of" to "2025-02-01")
+        assertFalse("Raigeki is" in feb2.content, feb2.content)
+        assertFalse("Raigeki is" in h.tool("validate_deck").content, "today's pool has Raigeki unlimited")
+        assertTrue(h.tool("validate_deck", "as_of" to "1999-01-01").isError)
     }
 
     @Test

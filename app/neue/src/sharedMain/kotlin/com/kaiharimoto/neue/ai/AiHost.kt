@@ -40,6 +40,7 @@ import com.kaiharimoto.mastertool.core.deck.DeckGroup
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.deck.DeckValidator
+import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.deck.RejectionReason
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.library.StartingDeck
@@ -149,6 +150,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         "resolve_cards" -> "Reading the cards off the picture"
         "watch_video" -> "Watching the video with Gemini"
         "context_status" -> "Checking how full its memory is"
+        "banlist" -> "Reading the banlist" + (ToolArgs.string(input, "date")?.let { " of $it" } ?: "")
         "recall" -> "Remembering" + (ToolArgs.string(input, "query")?.let { " “$it”" } ?: "")
         "present_state" -> "Reading the presentation"
         "present_edit" -> "Building the slides"
@@ -167,7 +169,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "app_state" -> appState()
             "list_decks" -> listDecks(ToolArgs.string(i, "query"))
             "get_deck" -> getDeck(ToolArgs.string(i, "deck_id"))
-            "validate_deck" -> validate(ToolArgs.string(i, "deck_id"), ToolArgs.string(i, "format"))
+            "validate_deck" -> validate(ToolArgs.string(i, "deck_id"), ToolArgs.string(i, "format"), ToolArgs.string(i, "as_of"))
             "get_settings" -> ok(AiSettings.describe(neue.prefs, state.format.name, state.searchEffects), "Read the settings")
             "list_webs" -> listWebs()
             "get_web" -> getWeb(ToolArgs.string(i, "web_id")!!)
@@ -210,7 +212,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
             "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
-            else -> (harness.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
+            else -> (harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }
@@ -220,6 +222,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     /** The harness's own: numbers, a plan, the web, the rules, a helper (1.0.47). */
     private val harness = AiHarness(h, ai)
+
+    /** Every banlist by date (1.1.1): the list on a day, a card's history, what moved; `validate_deck`'s `as_of`. */
+    private val banTools = AiBanlist(h)
 
     /** Tournament prep's (1.0.50): the event, the test games, the numbers, the drills. */
     private val prepTools = AiPrep(h)
@@ -378,13 +383,25 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private suspend fun deckOf(id: String?): Pair<String, Deck>? =
         if (id == null || id == state.deckId) state.deckName to state.deck else stored(id)?.let { it.entry.name to it.entry.deck }
 
-    private suspend fun validate(id: String?, format: String?): Answer {
+    private suspend fun validate(id: String?, format: String?, asOf: String?): Answer {
         val (name, deck) = deckOf(id) ?: return fail("No deck $id.")
         val f = format?.let { runCatching { Format.valueOf(it.uppercase()) }.getOrNull() } ?: state.format
-        val v = DeckValidator.validate(deck, index::byId, f)
-        val text = if (v.issues.isEmpty()) "“$name” is legal in ${f.name}: main ${deck.main.size}, extra ${deck.extra.size}, side ${deck.side.size}." else
-            "“$name” in ${f.name}:\n" + v.issues.joinToString("\n") { "- ${it.severity.name.lowercase()}: ${it.message}" }
-        return ok(text, if (v.isLegal) "“$name” is legal in ${f.name}" else "“$name”: ${v.errors.size} problems in ${f.name}")
+        val day = asOf?.trim()?.ifEmpty { null }
+        if (day == null) {
+            val v = DeckValidator.validate(deck, index::byId, f)
+            val text = if (v.issues.isEmpty()) "“$name” is legal in ${f.name}: main ${deck.main.size}, extra ${deck.extra.size}, side ${deck.side.size}." else
+                "“$name” in ${f.name}:\n" + v.issues.joinToString("\n") { "- ${it.severity.name.lowercase()}: ${it.message}" }
+            return ok(text, if (v.isLegal) "“$name” is legal in ${f.name}" else "“$name”: ${v.errors.size} problems in ${f.name}")
+        }
+        // As of a day (1.1.1): that day's Forbidden & Limited list, and the cards released by then.
+        val dated = banTools.listOn(f, day)
+        val list = dated.list ?: return fail(dated.problem ?: "No ${f.name} list for $day.")
+        val v = DeckValidator.validate(deck, index::byId, f, asOf = day, limits = dated.match)
+        val on = "${f.name} on ${Legality.readable(day)} (the ${list.title}, from Yugipedia, CC BY-SA)"
+        val text = (if (v.issues.isEmpty()) "“$name” is legal in $on: main ${deck.main.size}, extra ${deck.extra.size}, side ${deck.side.size}." else
+            "“$name” in $on:\n" + v.issues.joinToString("\n") { "- ${it.severity.name.lowercase()}: ${it.message}" }) +
+            (dated.note?.let { "\n$it" } ?: "")
+        return ok(text, if (v.isLegal) "“$name” is legal on the ${list.title}" else "“$name”: ${v.errors.size} problems on the ${list.title}")
     }
 
     private suspend fun listWebs(): Answer {

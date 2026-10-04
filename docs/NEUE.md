@@ -2038,6 +2038,12 @@ to forget the game rules". What was taken from them, and what was not:
   Only what the question needs is asked, as the site's API page requests: the index, the card,
   and at most eight of its newest Q&As — or, with `with` naming a second card, the Q&As the two
   share (read off the second card's own list). `source` picks one source.
+- **Every banlist by date** (1.1.1, `docs/phases/B.md` §3): `banlist` reads Yugipedia's Forbidden & Limited
+  list pages (`core/cards`: `LimitationParser`, `BanlistHistory`; `neue/banlist/BanlistCenter` keeps them in
+  `<data>/banlists/`, a cache that never syncs) — the list in force on a day, a card's history through the
+  lists, what moved between two days' lists — the names in the envelope, the list and Yugipedia (CC BY-SA)
+  cited. `validate_deck` takes `as_of` (that day's list and releases, `DeckValidator`'s `BanSource`), and a
+  world's scripts have `ygo.banlist(date, region)` and `ygo.legal(deck, date)`.
 - **A helper with a fresh mind**: `delegate` runs a second loop with only the look-only tools
   (`AiTools.readOnly`) and brings back its report alone — twenty decklists read without
   filling the conversation. API connections only; the CLIs have their own.

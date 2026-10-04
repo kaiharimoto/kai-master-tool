@@ -181,6 +181,7 @@ import com.kaiharimoto.neue.theme.MuShell
 import com.kaiharimoto.neue.theme.MuTheme
 import com.kaiharimoto.neue.update.NeueUpdates
 import com.kaiharimoto.neue.web.Webs
+import com.kaiharimoto.neue.banlist.BanlistCenter
 import com.kaiharimoto.neue.world.WorldPage
 import com.kaiharimoto.neue.world.WorldSnapshot
 import com.kaiharimoto.neue.world.Worlds
@@ -244,6 +245,12 @@ class NeueHolders(
     fun flushDuel() {
         if (duelHolder.isInitialized()) duel.flushNow()
     }
+
+    /**
+     * Every Forbidden & Limited list by date (1.1.1): read from Yugipedia into `<data>/banlists/`, a cache this device
+     * keeps for itself — for Ai's `banlist`, `validate_deck`'s `as_of` and a world's `ygo.banlist`.
+     */
+    val banlists: BanlistCenter by lazy { BanlistCenter(java.io.File(Platform.dataDir, "banlists")) }
 
     /** Backups (1.0.69): made when a new version first opens and weekly; exported, restored. */
     val backups: BackupCenter by lazy { BackupCenter(this) }
