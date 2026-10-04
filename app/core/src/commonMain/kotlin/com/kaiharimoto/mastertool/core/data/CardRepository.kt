@@ -88,11 +88,13 @@ class CardRepository(
         val remote = api.checkVersion().getOrElse { return PoolCheck.Unreachable(current.cardCount, clock()) }
         val record = record()
         val local = record?.version
-        return if (!current.isEmpty && PoolFreshness.isCurrent(local, current.lastSyncEpochMs, remote)) {
+        // A pool without release data (stored before 1.1.0) is behind whatever its version says.
+        return if (!current.isEmpty && record?.misc == true && PoolFreshness.isCurrent(local, current.lastSyncEpochMs, remote)) {
             if (local == null) keep((record ?: PoolRecord()).copy(version = remote.database))
             PoolCheck.Current(local ?: remote.database, current.cardCount, clock())
         } else {
-            PoolCheck.Behind(local, remote.database, current.cardCount, clock())
+            // Without release data its version vouches for nothing: "may be available", not "147.20, this is 147.20".
+            PoolCheck.Behind(local?.takeIf { record?.misc == true }, remote.database, current.cardCount, clock())
         }
     }
 
@@ -111,7 +113,8 @@ class CardRepository(
     ): SyncResult {
         val current = status()
 
-        if (!force && !current.isEmpty) {
+        // A pool stored before 1.1.0 has no release data (Phase B): fetched again once, whatever its age.
+        if (!force && !current.isEmpty && record()?.misc == true) {
             val age = current.lastSyncEpochMs?.let { clock() - it }
             if (age != null && age < maxAgeMs) {
                 return SyncResult.UpToDate(current.cardCount)
@@ -148,7 +151,7 @@ class CardRepository(
         }
 
         withContext(ioDispatcher) { replaceAll(cards) { done -> onProgress(PoolProgress.Saving(done, cards.size)) } }
-        keep(PoolRecord(version = version, bytes = if (received > 0) received else record?.bytes ?: 0))
+        keep(PoolRecord(version = version, bytes = if (received > 0) received else record?.bytes ?: 0, misc = true))
         loadFromCache()
         return SyncResult.Updated(cards.size, version)
     }
@@ -178,6 +181,11 @@ class CardRepository(
                     tcgBanStatus = card.tcgBanStatus.name,
                     ocgBanStatus = card.ocgBanStatus.name,
                     alternateIds = CardMapper.joinIds(card.alternateIds),
+                    konamiId = card.konamiId?.toLong(),
+                    tcgDate = card.tcgDate,
+                    ocgDate = card.ocgDate,
+                    formats = CardMapper.joinStrings(card.formats),
+                    genesysPoints = card.genesysPoints?.toLong(),
                 )
             }
             database.cardQueries.upsertSyncState(clock(), cards.size.toLong())

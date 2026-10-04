@@ -38,6 +38,11 @@ internal object CardMapper {
         alternateIds = row.alternateIds.splitList()
             .mapNotNull { it.toIntOrNull() }
             .map(::CardId),
+        konamiId = row.konamiId?.toInt(),
+        tcgDate = row.tcgDate,
+        ocgDate = row.ocgDate,
+        formats = row.formats.splitList(),
+        genesysPoints = row.genesysPoints?.toInt(),
     )
 
     fun joinIds(ids: List<CardId>): String = ids.joinToString(SEPARATOR) { it.value.toString() }

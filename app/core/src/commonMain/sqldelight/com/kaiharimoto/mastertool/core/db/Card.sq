@@ -21,7 +21,13 @@ CREATE TABLE cardEntity (
     imageUrlSmall   TEXT,
     tcgBanStatus    TEXT    NOT NULL DEFAULT 'UNLIMITED',
     ocgBanStatus    TEXT    NOT NULL DEFAULT 'UNLIMITED',
-    alternateIds    TEXT    NOT NULL DEFAULT ''
+    alternateIds    TEXT    NOT NULL DEFAULT '',
+    -- Phase B (1.1.0, migrations/3.sqm): release data. Appended, never reordered: a migrated table has them last.
+    konamiId        INTEGER,
+    tcgDate         TEXT,
+    ocgDate         TEXT,
+    formats         TEXT    NOT NULL DEFAULT '',
+    genesysPoints   INTEGER
 );
 
 CREATE INDEX cardEntity_name ON cardEntity(name);
@@ -44,8 +50,8 @@ insert:
 INSERT OR REPLACE INTO cardEntity(
     id, name, type, frameType, description, race, attribute, atk, def, level,
     linkValue, linkMarkers, pendulumScale, archetype, imageUrl, imageUrlSmall,
-    tcgBanStatus, ocgBanStatus, alternateIds
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    tcgBanStatus, ocgBanStatus, alternateIds, konamiId, tcgDate, ocgDate, formats, genesysPoints
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteAll:
 DELETE FROM cardEntity;

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.ai.Recall
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
@@ -478,10 +479,29 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             val kinds = EffectKinds.of(c)
             if (kinds.isNotEmpty()) append("\nDoes: ").append(kinds.joinToString { it.label })
             if (c.alternateIds.size > 1) append("\nArtworks: ").append(c.alternateIds.size)
+                .append(" (passcodes ").append(c.alternateIds.joinToString { it.value.toString() }).append(": one card, every printing counted against its limit)")
+            releaseLine(c)?.let { append("\n").append(it) }
             append("\n").append(c.description)
         } else if (c.description.isNotBlank()) {
             append(" — ").append(c.description.replace('\n', ' ').take(170)).append(if (c.description.length > 170) "…" else "")
         }
+    }
+
+    /** Where and when it was released, Konami's id and its Genesys points, as the pool has them (Phase B). */
+    private fun releaseLine(c: Card): String? {
+        val parts = buildList {
+            if (c.formats.isNotEmpty()) {
+                fun region(f: Format, date: String?) = when {
+                    Legality.word(f) !in c.formats -> "not released in the ${Legality.word(f)}"
+                    date != null -> "${Legality.word(f)} ${Legality.readable(date)}"
+                    else -> Legality.word(f)
+                }
+                add("Released: " + region(Format.TCG, c.tcgDate) + ", " + region(Format.OCG, c.ocgDate))
+            }
+            c.genesysPoints?.let { add("Genesys $it point${if (it == 1) "" else "s"}") }
+            c.konamiId?.let { add("Konami id $it") }
+        }
+        return parts.takeIf { it.isNotEmpty() }?.joinToString("; ")
     }
 
     private fun searchCards(i: JsonObject): Answer {

@@ -33,7 +33,7 @@ class YgoProDeckApi(
         onBytes: (suspend (Long) -> Unit)? = null,
         onRead: (() -> Unit)? = null,
     ): Result<List<Card>> = runCatching {
-        val response: HttpResponse = client.get("$baseUrl/cardinfo.php") {
+        val response: HttpResponse = client.get("$baseUrl/cardinfo.php?$POOL_QUERY") {
             if (onBytes != null) onDownload { received, _ -> onBytes(received) }
         }
         if (!response.status.isSuccess()) {
@@ -64,6 +64,13 @@ class YgoProDeckApi(
 
     companion object {
         const val DEFAULT_BASE_URL = "https://db.ygoprodeck.com/api/v7"
+
+        /**
+         * The whole pool with its release data (Phase B): `misc=yes` adds each card's formats, TCG and OCG dates and
+         * Konami id; `format=genesys` adds its Genesys points and, checked against the live site, keeps every card
+         * (14,597 either way). About a fifth larger than the bare pool.
+         */
+        const val POOL_QUERY = "misc=yes&format=genesys"
 
         /**
          * JSON configuration the API responses require.

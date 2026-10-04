@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.prep.IsoDate
+import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.input.DeskWords
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.neue.art.ArtCropping
@@ -317,6 +319,13 @@ internal fun CardTags(card: Card, state: DeckBuilderState) {
                 BanStatus.FORBIDDEN -> Badge("✕ Forbidden", inverted = true)
                 BanStatus.LIMITED -> Badge("Limited · 1", inverted = true)
                 BanStatus.SEMI_LIMITED -> Badge("Semi-limited · 2", inverted = true)
+            }
+            // Released here, and by today (Phase B): only said when it is not, so a playable card shows nothing more.
+            val today = IsoDate.of(System.currentTimeMillis().floorDiv(86_400_000L))
+            when (val release = Legality.release(card, state.format, today)) {
+                is Legality.Release.NotReleased -> Badge("Not in the ${Legality.word(state.format)}", inverted = true)
+                is Legality.Release.NotYet -> Badge("Out ${Legality.readable(release.date)}", inverted = true)
+                else -> Unit
             }
         }
     }

@@ -48,7 +48,10 @@ class RepositoryTest {
            "atk":0,"def":1800,"level":3,
            "card_images":[{"id":14558127,"image_url":"a.jpg","image_url_small":"a_s.jpg"},
                           {"id":99999999,"image_url":"b.jpg","image_url_small":"b_s.jpg"}],
-           "banlist_info":{"ban_tcg":"Limited"}},
+           "banlist_info":{"ban_tcg":"Limited"},
+           "misc_info":[{"beta_name":"Ash Blossom","views":25663772,"formats":["Common Charity","TCG","OCG","Master Duel"],
+                         "tcg_date":"2017-05-04","ocg_date":"2017-01-14","konami_id":12950,"has_effect":1,
+                         "md_rarity":"Ultra Rare","genesys_points":20}]},
           {"id":86066372,"name":"Accesscode Talker","type":"Link Monster",
            "frameType":"link","desc":"link","race":"Cyberse","attribute":"DARK",
            "atk":2300,"linkval":4,"linkmarkers":["Left","Right"],
@@ -332,5 +335,55 @@ class RepositoryTest {
         val loaded = assertNotNull(repo.byId("empty"))
         assertTrue(loaded.entry.deck.isEmpty)
         assertEquals(0, loaded.entry.deck.main.size)
+    }
+
+    // ---- Phase B: release data ----------------------------------------------
+
+    @Test
+    fun syncKeepsEachCardsReleaseData() = runTest {
+        val repo = CardRepository(database(), apiReturning(sampleFeed), clock = { 1_000L })
+        repo.sync()
+        val ash = assertNotNull(repo.index.value.byId(CardId(14558127)))
+        assertEquals(12950, ash.konamiId)
+        assertEquals("2017-05-04", ash.tcgDate)
+        assertEquals("2017-01-14", ash.ocgDate)
+        assertEquals(listOf("Common Charity", "TCG", "OCG", "Master Duel"), ash.formats)
+        assertEquals(20, ash.genesysPoints)
+        // A card the feed sent no misc_info for knows nothing, and says so by its empty fields.
+        val talker = assertNotNull(repo.index.value.byId(CardId(86066372)))
+        assertEquals(emptyList(), talker.formats)
+        assertEquals(null, talker.tcgDate)
+    }
+
+    @Test
+    fun thePoolIsAskedForWithItsReleaseData() = runTest {
+        var asked: String? = null
+        val engine = MockEngine { request ->
+            if (request.url.encodedPath.endsWith("cardinfo.php")) asked = request.url.encodedQuery
+            respond(ByteReadChannel(sampleFeed), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }
+        YgoProDeckApi(HttpClientFactory.create(engine)).fetchAllCards()
+        assertEquals("misc=yes&format=genesys", asked)
+    }
+
+    @Test
+    fun aPoolStoredWithoutReleaseDataIsFetchedOnceMoreWhateverItsAge() = runTest {
+        val db = database()
+        var fetches = 0
+        val engine = MockEngine { request ->
+            if (request.url.encodedPath.endsWith("cardinfo.php")) fetches++
+            respond(ByteReadChannel(sampleFeed), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+        }
+        val api = YgoProDeckApi(HttpClientFactory.create(engine))
+        CardRepository(db, api, clock = { 1_000L }).sync(force = true)
+        assertEquals(1, fetches)
+        // As 1.0.99 left it: a fresh pool, but its record written before `misc` existed.
+        db.preferenceQueries.upsert(PoolRecord.KEY, """{"version":"147.20","bytes":10}""")
+        val again = CardRepository(db, api, clock = { 2_000L }).sync()
+        assertIs<SyncResult.Updated>(again)
+        assertEquals(2, fetches)
+        // And once it has the data, a young pool is left alone again.
+        assertIs<SyncResult.UpToDate>(CardRepository(db, api, clock = { 3_000L }).sync())
+        assertEquals(2, fetches)
     }
 }

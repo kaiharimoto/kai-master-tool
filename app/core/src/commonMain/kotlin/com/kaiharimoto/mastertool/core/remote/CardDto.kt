@@ -38,6 +38,8 @@ internal data class CardDto(
     val archetype: String? = null,
     @SerialName("card_images") val images: List<CardImageDto> = emptyList(),
     @SerialName("banlist_info") val banlist: BanlistDto? = null,
+    /** Present when asked for with `misc=yes` (Phase B): where and when it was released, Konami's id, Genesys points. */
+    @SerialName("misc_info") val misc: List<MiscDto> = emptyList(),
 ) {
     fun toDomain(): Card {
         // The first image is the default printing; the rest are alternate arts,
@@ -66,6 +68,11 @@ internal data class CardDto(
             tcgBanStatus = BanStatus.fromApi(banlist?.tcg),
             ocgBanStatus = BanStatus.fromApi(banlist?.ocg),
             alternateIds = alternateIds,
+            konamiId = misc.firstNotNullOfOrNull { it.konamiId },
+            tcgDate = misc.firstNotNullOfOrNull { it.tcgDate?.takeIf(String::isNotBlank) },
+            ocgDate = misc.firstNotNullOfOrNull { it.ocgDate?.takeIf(String::isNotBlank) },
+            formats = misc.flatMap { it.formats }.map(String::trim).filter(String::isNotEmpty).distinct(),
+            genesysPoints = misc.firstNotNullOfOrNull { it.genesysPoints },
         )
     }
 }
@@ -81,4 +88,14 @@ internal data class CardImageDto(
 internal data class BanlistDto(
     @SerialName("ban_tcg") val tcg: String? = null,
     @SerialName("ban_ocg") val ocg: String? = null,
+)
+
+/** `misc_info`'s first (and only) entry, the fields Phase B reads; the rest (views, votes, rarity) are ignored. */
+@Serializable
+internal data class MiscDto(
+    val formats: List<String> = emptyList(),
+    @SerialName("tcg_date") val tcgDate: String? = null,
+    @SerialName("ocg_date") val ocgDate: String? = null,
+    @SerialName("konami_id") val konamiId: Int? = null,
+    @SerialName("genesys_points") val genesysPoints: Int? = null,
 )

@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.ui.deckbuilder
 
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.prep.IsoDate
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -1173,7 +1174,8 @@ class DeckBuilderState(
         if (current.index != index) inspection = current.copy(index = index)
     }
 
-    fun copiesInDeck(id: CardId): Int = deck.copiesOf(id)
+    /** Copies of the card [id] names, by any printing (Phase B: an alternate artwork is the same card). */
+    fun copiesInDeck(id: CardId): Int = CardIdentity.copiesOf(deck, id, index::byId)
 
     fun remaining(card: Card): Int = DeckEditor.remainingCopies(deck, card, format)
 

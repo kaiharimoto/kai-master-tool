@@ -1,0 +1,13 @@
+-- 3 -> 4 (1.1.0, Phase B): each card's release data, from YGOPRODeck's `misc_info`.
+--
+-- Konami's own id, the first TCG and OCG release dates, the formats it is printed for, and its Genesys points.
+-- Added at the end of the table, as `Card.sq` declares them, because `SELECT *` is read by position. A pool
+-- stored before this has nulls and an empty list here, which the app reads as "unknown", never as illegal, and it
+-- fetches the pool again once (`PoolRecord.misc`) so the data arrives. Never renumber or delete this file once a
+-- signed build has shipped it: devices that run it are stamped at user_version 4.
+
+ALTER TABLE cardEntity ADD COLUMN konamiId INTEGER;
+ALTER TABLE cardEntity ADD COLUMN tcgDate TEXT;
+ALTER TABLE cardEntity ADD COLUMN ocgDate TEXT;
+ALTER TABLE cardEntity ADD COLUMN formats TEXT NOT NULL DEFAULT '';
+ALTER TABLE cardEntity ADD COLUMN genesysPoints INTEGER;

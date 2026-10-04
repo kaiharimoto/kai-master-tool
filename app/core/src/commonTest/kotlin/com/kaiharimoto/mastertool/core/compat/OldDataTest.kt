@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.report.book.BookFreshness
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.backup.Backups
+import com.kaiharimoto.mastertool.core.data.PoolRecord
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.present.PresentCodec
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
@@ -46,6 +47,17 @@ class OldDataTest {
         val p = prefs.decodeFromString(NeuePreferences.serializer(), future)
         assertEquals("Kai", p.ai.name)
         assertEquals("/x", p.sync.folder)
+    }
+
+    @Test
+    fun aPoolRecordFrom1099ReadsAsFetchedWithoutReleaseData() {
+        // 1.0.99 wrote the pool's record with no `misc`: read as false, so 1.1.0 fetches the pool once more.
+        val r = prefs.decodeFromString(PoolRecord.serializer(), """{"version":"147.20","bytes":21336136}""")
+        assertEquals("147.20", r.version)
+        assertEquals(false, r.misc)
+        // And 1.1.0's record reads in 1.0.99's shape too, the new key ignored.
+        val back = prefs.decodeFromString(PoolRecord.serializer(), prefs.encodeToString(PoolRecord.serializer(), r.copy(misc = true)))
+        assertTrue(back.misc)
     }
 
     @Test

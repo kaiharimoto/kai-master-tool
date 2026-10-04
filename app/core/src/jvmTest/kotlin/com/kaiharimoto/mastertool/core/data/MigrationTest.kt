@@ -107,7 +107,8 @@ class MigrationTest {
         // file leaves this at 1 and nothing upgrades.
         // 3, not 2: v1.1.0 shipped from a branch whose history stamped devices
         // at user_version 3, so the version can never fall below that again.
-        assertEquals(3L, MasterToolDatabase.Schema.version)
+        // 4 from 1.1.0 (Phase B): each card's release data, `migrations/3.sqm`.
+        assertEquals(4L, MasterToolDatabase.Schema.version)
     }
 
     @Test
@@ -152,5 +153,32 @@ class MigrationTest {
         database.preferenceQueries.upsert("deckbuilder.ui", "{}")
         assertEquals("{}", database.preferenceQueries.selectByKey("deckbuilder.ui").executeAsOne())
         assertTrue(driver.tables().contains("preferenceEntity"))
+    }
+
+    @Test
+    fun aPoolStoredBefore110ReadsWithItsReleaseDataUnknown() {
+        // A version-3 install: the schema as 1.0.99 shipped it, with one card in its pool.
+        val driver = versionOneDatabase()
+        MasterToolDatabase.Schema.migrate(driver, 1L, 3L)
+        driver.execute(
+            null,
+            """
+            INSERT INTO cardEntity(id, name, type, frameType, description, race, attribute, atk, def, level, linkValue,
+                                   linkMarkers, pendulumScale, archetype, imageUrl, imageUrlSmall, tcgBanStatus,
+                                   ocgBanStatus, alternateIds)
+            VALUES (14558127, 'Ash Blossom & Joyous Spring', 'Tuner Monster', 'effect', '', 'Zombie', 'FIRE', 0, 1800,
+                    3, NULL, '', NULL, NULL, NULL, NULL, 'UNLIMITED', 'SEMI_LIMITED', '14558127,14558128')
+            """.trimIndent(),
+            0,
+        )
+
+        MasterToolDatabase.Schema.migrate(driver, 3L, MasterToolDatabase.Schema.version)
+        val row = MasterToolDatabase(driver).cardQueries.selectAll().executeAsList().single()
+        val card = CardMapper.toDomain(row)
+        assertEquals("Ash Blossom & Joyous Spring", card.name)
+        assertEquals(listOf(14558127, 14558128), card.alternateIds.map { it.value })
+        assertEquals(null, card.tcgDate)
+        assertEquals(emptyList(), card.formats)
+        assertEquals(null, card.genesysPoints)
     }
 }

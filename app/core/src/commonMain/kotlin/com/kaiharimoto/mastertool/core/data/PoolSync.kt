@@ -18,6 +18,8 @@ data class PoolVersion(val database: String, val updated: String)
 data class PoolRecord(
     val version: String? = null,
     val bytes: Long = 0,
+    /** Whether the pool was fetched with its release data (Phase B, 1.1.0); a pool from before is fetched again once. */
+    val misc: Boolean = false,
 ) {
     companion object {
         const val KEY = "card.pool"
