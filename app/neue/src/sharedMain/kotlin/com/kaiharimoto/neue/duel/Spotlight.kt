@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -489,8 +490,12 @@ private fun Footer(st: Spotlight.State, view: Spotlight.View, phone: Boolean) {
  * dashed ink outline.
  */
 @Composable
-internal fun SpotlightDim(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>) {
+internal fun SpotlightDim(duels: Duels, s: DuelState, l: DuelLayout, shown: State<List<CardFrame>>) {
     val c = Mu.colors
+    // Open, and not over a replay: read here, so the Spotlight opening, closing and every key typed in it redraws the dim
+    // alone, never the table under it (1.0.92).
+    if (duels.spotlight == null || duels.replay != null) return
+    val frames = shown.value
     val marks = duels.spotlightMarks
     val lit = marks?.touched?.mapNotNull { u -> frames.firstOrNull { it.uid == u && it.shown }?.let(::seenBox) } ?: emptyList()
     val dest = marks?.dest?.mapNotNull { placeBox(l, it) } ?: emptyList()

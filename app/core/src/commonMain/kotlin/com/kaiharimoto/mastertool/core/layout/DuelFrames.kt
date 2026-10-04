@@ -52,6 +52,8 @@ object DuelFrames {
     const val Z_MATERIAL = 1f
     const val Z_FIELD = 2f
     const val Z_PILE = 2f
+    /** Every card of a pile but its top: hidden, never drawn, under the top card. */
+    const val Z_PILE_HIDDEN = Z_PILE - 0.0001f
     const val Z_HAND = 4f
     const val Z_STRIP = 8f
 
@@ -110,7 +112,9 @@ object DuelFrames {
             for (kind in listOf(PileKind.DECK, PileKind.EXTRA, PileKind.GY, PileKind.BANISHED)) {
                 if (strip == seat to kind) continue
                 val slot = l.pile(seat, kind) ?: continue
-                st.pile(kind).forEachIndexed { i, uid -> place(uid, slot, Z_PILE - i * 0.0001f, shown = i == 0, rotation = r) }
+                // The top card shown at [Z_PILE]; the rest are never drawn, so they share one depth under it (1.0.92) —
+                // a depth by their index changed on every draw and shuffle, and every card of the pile drew itself again.
+                st.pile(kind).forEachIndexed { i, uid -> place(uid, slot, if (i == 0) Z_PILE else Z_PILE_HIDDEN, shown = i == 0, rotation = r) }
             }
             // The hand, fanned across its band.
             val band = l.pile(seat, PileKind.HAND)

@@ -44,8 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.data.StoredDeck
-import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
-import com.kaiharimoto.mastertool.core.duel.DuelCatalog
+import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
@@ -53,7 +52,6 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.layout.DuelLayouter
-import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
@@ -79,6 +77,15 @@ import com.kaiharimoto.neue.theme.Mu
 private data class DeckChoice(val id: String?, val name: String, val deck: Deck)
 
 /**
+ * The Spotlight's layer while it is open and no replay is (1.0.92): whether it is open is read here, so opening it and
+ * every key typed in it redraws the Spotlight, never the page round it.
+ */
+@Composable
+private fun SpotlightWhenOpen(h: NeueHolders, game: DuelGame, phone: Boolean, live: Boolean) {
+    if (h.duel.spotlight != null && live) SpotlightLayer(h, game, phone)
+}
+
+/**
  * The Duel page (1.0.74): the duel simulator. A row of what the duel is (one table or two, whose seat
  * you are at, how much the hot-seat shows, undo, the command line), and below it the table between
  * the inspector and the log. Everything about the table's size is [DuelLayouter]'s; this only gives
@@ -91,7 +98,7 @@ internal fun DuelPage(h: NeueHolders) {
     val neue = h.neue
     val prefs = neue.prefs.duel
     val index = h.builder.index
-    duels.catalog = remember(index) { DuelCatalog { code -> index.byId(CardId(code))?.let(DuelCardInfo::of) } }
+    duels.useIndex(index)
     LaunchedEffect(Unit) { duels.load() }
     // The speech model read in before the first command is spoken, when voice is set up (1.0.87).
     LaunchedEffect(Unit) { h.duelVoice.prewarm() }
@@ -132,7 +139,10 @@ internal fun DuelPage(h: NeueHolders) {
                         bottom = duels.bottom,
                     )
                 }
-                val viewers = duels.viewers(prefs)
+                // The same eyes as the last frame are the same set (1.0.92): a new one equal to it each time made every
+                // part of the table that takes it draw itself again.
+                val eyes = duels.viewers(prefs)
+                val viewers = remember(eyes) { eyes }
                 val viewer = if (viewers.size > 1) null else viewers.first()
                 DuelTable(h, duels, game, layout, viewers)
                 layout.inspector?.let { r ->
@@ -173,7 +183,7 @@ internal fun DuelPage(h: NeueHolders) {
                     Box(Modifier.zIndex(96f).then(across)) { ProposalBar(duels, game.state) }
                 }
                 // Command mode's Spotlight (1.0.87): over the table and its rails, in the window's own layer.
-                if (duels.spotlight != null && replay == null) SpotlightLayer(h, game, phone)
+                SpotlightWhenOpen(h, game, phone, replay == null)
             }
         }
     }

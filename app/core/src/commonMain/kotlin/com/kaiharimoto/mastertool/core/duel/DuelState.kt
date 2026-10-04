@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.duel
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * The duel simulator's table: two seats, each with its zones and piles, the Extra Monster Zones they
@@ -68,9 +69,40 @@ data class DuelState(
 
     fun card(uid: Int): CardInst? = cards[uid]
 
+    /**
+     * How many times [placeOf] was asked of this table: the first few walk it, and from then on an index of every card's
+     * place is built once and read (1.0.92). Never part of the table: not in its equality, its copy or its file.
+     */
+    @Transient
+    private var asked: Int = 0
+
+    /** Every card's place, as [scan] finds it — the first place a uid stands, walked in [scan]'s order (1.0.92). */
+    private val places: Map<Int, Place> by lazy {
+        val out = HashMap<Int, Place>(cards.size * 2)
+        emz.forEachIndexed { i, u -> if (u != null) cards[u]?.let { out.getOrPut(u) { Place.Zone(it.controller, ZoneKind.EMZ, i) } } }
+        seats.forEachIndexed { s, seat ->
+            seat.monsters.forEachIndexed { i, u -> if (u != null) out.getOrPut(u) { Place.Zone(s, ZoneKind.MONSTER, i) } }
+            seat.spells.forEachIndexed { i, u -> if (u != null) out.getOrPut(u) { Place.Zone(s, ZoneKind.SPELL, i) } }
+            seat.field?.let { u -> out.getOrPut(u) { Place.Zone(s, ZoneKind.FIELD, 0) } }
+            PileKind.entries.forEach { k -> seat.pile(k).forEachIndexed { i, u -> out.getOrPut(u) { Place.Pile(s, k, i) } } }
+        }
+        cards.values.forEach { host -> host.under.forEachIndexed { i, u -> out.getOrPut(u) { Place.Under(host.uid, i) } } }
+        out
+    }
+
     /** Where the card is now, or null if it has left the duel (a token gone). */
     fun placeOf(uid: Int): Place? {
         val card = cards[uid] ?: return null
+        // A table asked once or twice (most tables a fold makes) is walked; one asked more, the table drawn, is indexed.
+        if (asked < SCANS) {
+            asked++
+            return scan(uid, card)
+        }
+        return places[uid]
+    }
+
+    /** [placeOf] by walking the table: the EMZ, then each seat's zones and piles, then every card's materials. */
+    internal fun scan(uid: Int, card: CardInst): Place? {
         emz.forEachIndexed { i, u -> if (u == uid) return Place.Zone(card.controller, ZoneKind.EMZ, i) }
         seats.forEachIndexed { s, seat ->
             seat.monsters.forEachIndexed { i, u -> if (u == uid) return Place.Zone(s, ZoneKind.MONSTER, i) }
@@ -105,6 +137,8 @@ data class DuelState(
     }
 
     companion object {
+        /** Asks of [placeOf] answered by walking the table before it is indexed. */
+        private const val SCANS = 2
         const val ZONES = 5
         const val START_LP = 8000
         /** Seat 0's cards are 1.., seat 1's are 1001.., tokens from here on. */

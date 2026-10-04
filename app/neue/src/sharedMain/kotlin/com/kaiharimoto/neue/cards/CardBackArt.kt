@@ -2,6 +2,7 @@ package com.kaiharimoto.neue.cards
 
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -23,8 +24,10 @@ import org.jetbrains.compose.resources.imageResource
 @Composable
 fun ClassicCardBack(modifier: Modifier = Modifier) {
     val bitmap = imageResource(Res.drawable.card_back)
+    // One painter for the picture (1.0.92): every face-down card on the duel table drew a new one each time it composed.
+    val painter = remember(bitmap) { BitmapPainter(bitmap, filterQuality = FilterQuality.Medium) }
     Image(
-        painter = BitmapPainter(bitmap, filterQuality = FilterQuality.Medium),
+        painter = painter,
         contentDescription = null,
         modifier = modifier,
         contentScale = ContentScale.FillBounds,

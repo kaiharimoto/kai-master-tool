@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.Opening
+import com.kaiharimoto.mastertool.core.duel.dice.DiceRuns
 import com.kaiharimoto.mastertool.core.duel.dice.DiceSim
 import com.kaiharimoto.mastertool.core.duel.dice.DiceStage
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
@@ -87,7 +88,9 @@ internal fun OpeningDice(duels: Duels, s: DuelState, layout: DuelLayout, playsBo
     val o = s.opening ?: return
     if (o.decided) return
     val stage = remember(layout) { DiceStage(layout) }
-    val runs = remember(o.throws) { o.throws.map { t -> t?.let { DiceSim.run(it) } } }
+    // Each throw played out once (1.0.92): the second seat's throw no longer plays the first seat's out again, and a
+    // throw made here was run ahead off this thread ([DiceRuns.warm]) — the same run, frame for frame.
+    val runs = remember(o.throws) { o.throws.map { t -> t?.let(DiceRuns::of) } }
     // A throw already on the table when it was first drawn (the page opened mid-roll) stands at rest; a new one plays.
     val known = remember { mutableStateMapOf<Int, DiceThrow?>().apply { o.throws.forEachIndexed { i, t -> put(i, t) } } }
     val started = remember { mutableStateMapOf<Int, Long>() }

@@ -10,6 +10,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonDecoder
 import kotlinx.serialization.json.JsonEncoder
 import kotlinx.serialization.json.JsonObject
+import kotlin.concurrent.Volatile
 
 /** How a duel began: the decks in their written order, the seed every shuffle and coin comes from, who went first. */
 @Serializable
@@ -166,7 +167,7 @@ data class DuelGame(
         val group = entries[cursor - 1].group
         var to = cursor - 1
         while (to > floor && entries[to - 1].group == group) to--
-        return copy(cursor = to, state = DuelSetup.fold(header, entries.subList(0, to)).first)
+        return copy(cursor = to, state = DuelCheckpoints.stateAt(header, entries, to))
     }
 
     fun redo(): DuelGame {
@@ -206,7 +207,7 @@ data class DuelGame(
                 }
                 val reordered = entries.subList(0, start) + moved + entries.subList(cursor, entries.size)
                 val to = start + talk.size
-                return copy(entries = reordered, cursor = to, state = DuelSetup.fold(header, reordered.subList(0, to)).first)
+                return copy(entries = reordered, cursor = to, state = DuelCheckpoints.stateAt(header, reordered, to))
             }
             end = start
         }
@@ -233,7 +234,7 @@ data class DuelGame(
     }
 
     /** The table before entry [n] (after the first n entries). */
-    fun stateAt(n: Int): DuelState = DuelSetup.fold(header, entries.subList(0, n.coerceIn(0, entries.size))).first
+    fun stateAt(n: Int): DuelState = DuelCheckpoints.stateAt(header, entries, n)
 
     fun record(name: String = "", parent: String? = null, parentAt: Int? = null, saved: Long = 0L): DuelRecord =
         DuelRecord(header, entries, cursor, name, parent = parent, parentAt = parentAt, saved = saved)
@@ -263,8 +264,85 @@ data class DuelGame(
             val entries = record.entries.mapIndexed { i, e -> e.copy(i = i) }
             val cursor = record.cursor.coerceIn(0, entries.size)
             val floor = entries.indexOfFirst { it.seat != null }.let { if (it < 0) cursor else it }.coerceAtMost(cursor)
-            return DuelGame(record.header, entries, cursor, DuelSetup.fold(record.header, entries.subList(0, cursor)).first, floor)
+            return DuelGame(record.header, entries, cursor, DuelCheckpoints.stateAt(record.header, entries, cursor), floor)
         }
+    }
+}
+
+/**
+ * The tables along the logs folded last, one every [EVERY] entries (1.0.92): undo, an undo that steps over talk, the
+ * table before an entry and a duel read back each folded the whole log from the deal, every time — a cost that grew with
+ * the duel. Now each starts from the nearest table kept behind where it is going, for a log that begins with the same
+ * entries (a pointer check an entry, as data classes compare by identity first), and folds on from there exactly as
+ * [DuelSetup.fold] does, a refused entry skipped. The tables are a cache of the log, never the record: memory only, a few
+ * logs at most, and safe to share — a list replaced whole, never changed in place, so two threads at worst both fold.
+ */
+internal object DuelCheckpoints {
+    const val EVERY = 32
+    /** Logs kept at once: the duel in play, a replay, a what-if, a guest's view. */
+    const val LOGS = 4
+
+    /** [states] the tables after 0, [EVERY], 2 × [EVERY] … entries of [entries], on [header]'s deal. */
+    private class Mark(val header: DuelHeader, val entries: List<DuelEntry>, val states: List<DuelState>)
+
+    @Volatile
+    private var marks: List<Mark> = emptyList()
+
+    /** How many entries were applied to a table here, all told: what the tests count. */
+    internal var applied: Long = 0L
+        private set
+
+    /** The table after the first [n] of [entries] on [header]'s deal: [DuelSetup.fold]'s answer, from the nearest table kept. */
+    fun stateAt(header: DuelHeader, entries: List<DuelEntry>, n: Int): DuelState {
+        val target = n.coerceIn(0, entries.size)
+        if (target < EVERY) return fold(header, entries, 0, target, DuelSetup.initial(header))
+        val now = marks
+        // The kept log that shares the longest start with this one, up to where it is going.
+        var best: Mark? = null
+        var shared = -1
+        for (m in now) {
+            if (m.header != header) continue
+            val c = common(m.entries, entries, target)
+            if (c > shared) { best = m; shared = c }
+        }
+        val usable = if (best == null) 0 else minOf(shared / EVERY, best.states.size - 1)
+        var state = best?.states?.get(usable) ?: DuelSetup.initial(header)
+        var k = usable * EVERY
+        val added = ArrayList<DuelState>()
+        while (k < target) {
+            val stop = minOf(target, (k / EVERY + 1) * EVERY)
+            state = fold(header, entries, k, stop, state)
+            k = stop
+            if (k % EVERY == 0) added += state
+        }
+        // Folded past what was kept: the new tables kept for this log (its start's tables too).
+        if (added.isNotEmpty()) {
+            val start = best?.states?.subList(0, usable + 1) ?: listOf(DuelSetup.initial(header))
+            val mark = Mark(header, entries, start + added)
+            // The log it grew from goes when this one holds every table that one did.
+            val covered = best != null && usable + 1 == best.states.size
+            marks = (listOf(mark) + now.filter { it !== best || !covered }).take(LOGS)
+        }
+        return state
+    }
+
+    /** How many of the first [most] entries the two logs share. */
+    private fun common(a: List<DuelEntry>, b: List<DuelEntry>, most: Int): Int {
+        val m = minOf(a.size, b.size, most)
+        var k = 0
+        while (k < m && a[k] == b[k]) k++
+        return k
+    }
+
+    private fun fold(header: DuelHeader, entries: List<DuelEntry>, from: Int, to: Int, start: DuelState): DuelState {
+        if (from >= to) return start
+        applied += to - from
+        return DuelSetup.fold(header, entries.subList(from, to), start).first
+    }
+
+    /** Forgets every table kept: for the tests. */
+    internal fun clear() {
+        marks = emptyList()
     }
 }
 

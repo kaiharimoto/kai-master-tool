@@ -378,9 +378,7 @@ class Duels(val dir: File) {
         get() {
             if (network.role == NetRole.GUEST) return network.remote
             val r = replayer.replay ?: return game
-            val t = replayer.timelineFor(r.record)
-            val floor = r.record.entries.indexOfFirst { it.seat != null }.let { if (it < 0) r.record.entries.size else it }
-            return DuelGame(r.record.header, r.record.entries, r.at, t.at(r.at).first, minOf(floor, r.at))
+            return replayer.shown(r)
         }
 
     // ---- replays (1.0.75): DuelReplays -------------------------------------------------------------------
@@ -1067,8 +1065,17 @@ class Duels(val dir: File) {
         return act(DuelVerbs.resolve(s, catalog, keep), bottom)
     }
 
+    /** The pool the catalog was made from, and the catalog: one per pool, so asking again changes nothing (1.0.92). */
+    private var indexed: Pair<CardIndex, DuelCatalog>? = null
+
+    /**
+     * The duel reads its cards from [index]: the same catalog for the same pool, each card read off it once
+     * ([DuelCatalog.cached]) — Ai's every tool call asks, and a new catalog each time made the log read itself again.
+     */
     fun useIndex(index: CardIndex) {
-        catalog = DuelCatalog { code -> index.byId(CardId(code))?.let(DuelCardInfo::of) }
+        val made = indexed?.takeIf { it.first === index }
+            ?: (index to DuelCatalog.cached { code -> index.byId(CardId(code))?.let(DuelCardInfo::of) }).also { indexed = it }
+        if (catalog !== made.second) catalog = made.second
     }
 
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */

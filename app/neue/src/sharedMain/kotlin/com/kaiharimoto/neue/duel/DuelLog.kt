@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,17 +78,22 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val talk = ai.session?.takeIf { seated && it.mode == AiSession.MODE_DUEL && it.id == duels.aiSession }
     val folds = remember(game.header, viewer, duels.catalog) { logFolds(game, viewer, duels.catalog) }
     val rolling = duels.diceRolling
-    val table = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest, rolling) {
-        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, folds, duels, refused, rolling)
+    // Which lines are the person's own reads the bottom seat: a seat swapped colours them again (1.0.92; it was stale).
+    val bottom = duels.bottom
+    val table = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest, rolling, bottom) {
+        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, folds, bottom, refused, rolling)
     }
-    // Ai's hidden cards never named to the person in what it says (1.0.81): the original behind Thinking.
+    // Ai's hidden cards never named to the person in what it says (1.0.81): the original behind Thinking. The names are
+    // read once a table, and the patterns made once a list of names, each line redacted once and kept (1.0.92) — the same
+    // words as before, no longer read again on every move.
     val aiSeat = if (game.state.solo) 0 else h.neue.prefs.duel.aiSeat
-    val redact: (String) -> Secrets.Redacted = { text ->
-        Secrets.redact(text, game.state, 1 - aiSeat, aiSeat, duels.catalog)
-    }
-    val said = remember(talk?.turns, thinking, game.cursor, aiSeat) { talk?.let { aiLines(it, thinking, redact) }.orEmpty() }
+    val secret = remember(game.state, aiSeat, duels.catalog) { Secrets.names(game.state, 1 - aiSeat, aiSeat, duels.catalog) }
+    val redactor = remember(secret) { Secrets.Redactor(secret) }
+    val said = remember(talk?.turns, thinking, redactor) { talk?.let { aiLines(it, thinking, redactor::redact) }.orEmpty() }
     // Ai's words among the table's lines, by when each was said.
     val lines = remember(table, said) { if (said.isEmpty()) table else (table + said).sortedBy { it.at } }
+    // Each line its own key, so the list keeps what is on screen as lines come in (1.0.92).
+    val keys = remember(lines) { lineKeys(lines) }
     val live = talk != null && ai.running
     val list = rememberLazyListState()
     LaunchedEffect(lines.size, live, ai.streaming.length / 120) {
@@ -128,10 +134,10 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
         HRule()
         TurnTally(duels, game, viewer)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list) {
-            items(lines) { line -> LogRow(h, duels, line, opened) }
+            itemsIndexed(lines, key = { i, _ -> keys[i] }) { _, line -> LogRow(h, duels, line, opened) }
             if (live && thinking && ai.reasoning.isNotBlank()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) { ReasoningView(ai, ai.reasoning, live = true, opened) } }
             if (live && thinking) items(ai.activity) { Box(Modifier.padding(horizontal = 12.dp)) { ActivityLine(it.summary.ifBlank { it.name }, it.isError) } }
-            if (live && ai.streaming.isNotEmpty()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { ReplyView(ai, redact(ai.streaming).text, live = true) } }
+            if (live && ai.streaming.isNotEmpty()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { ReplyView(ai, redactor.once(ai.streaming).text, live = true) } }
         }
         HRule()
         if (duels.logPick.isNotEmpty() && !guest) PickBar(h, duels, game)
@@ -429,6 +435,29 @@ private fun aiLines(session: AiSession, thinking: Boolean, redact: (String) -> S
     }
 }
 
+/**
+ * A key for each of [lines], never two alike (1.0.92): what kind of line, when, which entry and its words — and, should
+ * two lines still match, how many like it came before.
+ */
+private fun lineKeys(lines: List<LogLine>): List<String> {
+    val seen = HashMap<String, Int>()
+    return lines.map { line ->
+        val text = when (line) {
+            is LogLine.Turn -> line.text
+            is LogLine.Done -> line.text
+            is LogLine.Noted -> line.text
+            is LogLine.Said -> line.text
+            is LogLine.AiSays -> line.text
+            is LogLine.AiThought -> line.text
+            is LogLine.AiDid -> line.text
+        }
+        val base = "${line::class.simpleName}:${line.at}:${(line as? LogLine.Done)?.i ?: -1}:${text.hashCode()}"
+        val n = seen[base] ?: 0
+        seen[base] = n + 1
+        if (n == 0) base else "$base#$n"
+    }
+}
+
 /** The guest's log: the lines the host sent it, a rule at each new turn. */
 private fun remoteLog(lines: List<Line>, me: Int): List<LogLine> {
     val out = ArrayList<LogLine>()
@@ -454,7 +483,7 @@ internal fun logFolds(game: DuelGame, viewer: Int?, catalog: DuelCatalog): DuelF
         LogRead(text, applied)
     }
 
-private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, duels: Duels, refused: Set<Int>, rolling: Set<Int> = emptySet()): List<LogLine> {
+private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, bottom: Int, refused: Set<Int>, rolling: Set<Int> = emptySet()): List<LogLine> {
     // A throw still in the air is a throw, not its numbers: the log never tells what the dice will read (1.0.87).
     val lastRoll = (0..1).associateWith { seat -> game.entries.subList(0, game.cursor).indexOfLast { (it.action as? DuelAction.OpeningRoll)?.seat == seat } }
     val reads = folds.sync(game.entries).results(game.cursor)
@@ -465,7 +494,7 @@ private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, duels: Duels, re
         if (i == game.floor) out += LogLine.Turn("Turn 1", e.at)
         val inAir = (e.action as? DuelAction.OpeningRoll)?.let { it.seat in rolling && lastRoll[it.seat] == i } == true
         if (inAir) {
-            out += LogLine.Done("${DuelWords.seatName(game.state, (e.action as DuelAction.OpeningRoll).seat)} throws the dice…", e.seat == duels.bottom, i = i, at = e.at)
+            out += LogLine.Done("${DuelWords.seatName(game.state, (e.action as DuelAction.OpeningRoll).seat)} throws the dice…", e.seat == bottom, i = i, at = e.at)
             continue
         }
         out += when (e.action) {
@@ -473,7 +502,7 @@ private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, duels: Duels, re
             DuelAction.EndTurn -> LogLine.Turn(r.text, e.at)
             is DuelAction.Note -> LogLine.Noted(r.text, e.at)
             is DuelAction.Thinking, is DuelAction.Ping -> LogLine.Done(r.text, false, at = e.at)
-            else -> LogLine.Done(r.text, e.seat == duels.bottom, struck = !r.applied || e.i in refused, i = i, at = e.at)
+            else -> LogLine.Done(r.text, e.seat == bottom, struck = !r.applied || e.i in refused, i = i, at = e.at)
         }
     }
     if (game.floor >= game.cursor) out += LogLine.Turn("Turn 1")

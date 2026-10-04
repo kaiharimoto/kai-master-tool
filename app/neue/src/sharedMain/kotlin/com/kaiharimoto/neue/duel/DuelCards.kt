@@ -16,7 +16,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -24,8 +27,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.constrain
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -66,13 +72,17 @@ internal fun TableCard(
     val spec = if (carried) snap<Float>() else tween(MuMotion.BASE, easing = MuMotion.ease)
     val x by animateFloatAsState(frame.x, spec, label = "x")
     val y by animateFloatAsState(frame.y, spec, label = "y")
-    val w by animateFloatAsState(frame.w, spec, label = "w")
+    // The width as it glides is read where it is used — the card's size at layout, the plate in its own scope — so a
+    // glide re-lays the card each frame and never composes it again (1.0.92).
+    val width = animateFloatAsState(frame.w, spec, label = "w")
     val rot by animateFloatAsState(frame.rotation, tween(MuMotion.BASE, easing = MuMotion.ease), label = "r")
+    // Whether the plate fits: composed again only when that changes, never on each frame of a glide.
+    val wide by remember { derivedStateOf { width.value >= 40f } }
     Box(
         Modifier
             .zIndex(if (carried) 100f else frame.z)
             .offset { with(density) { IntOffset(x.dp.roundToPx(), y.dp.roundToPx()) } }
-            .size(w.dp, (w / CARD_RATIO).dp)
+            .cardSize { width.value }
             .graphicsLayer { rotationZ = rot }
             .then(if (frame.shown && caption != null) Modifier.cursorPointer(caption = caption, emphasis = true, holdOnPress = true) else Modifier),
     ) {
@@ -94,26 +104,8 @@ internal fun TableCard(
             if (frame.look == CardLook.BACK && selected) Box(Modifier.fillMaxSize().border(2.dp, Mu.colors.paper))
             // What sits on it: counters, materials, its battle numbers.
             val counters = inst.counters.values.sum()
-            val plated = stats != null && w >= 40f
-            if (stats != null && plated) {
-                // Its numbers read upright along the foot of the card as it lies — in Defense, or turned
-                // to face the other seat (1.0.78) — so the plate is counter-turned inside the turned card,
-                // across the bottom of the box the card fills as it lies.
-                val h = w / CARD_RATIO
-                val across = frame.rotation % 180f != 0f
-                val boxW = if (across) h else w
-                // Inside the card's frame on every side, so the border and its foil stay whole round the card
-                // (kai, 1.0.87: the plate across the foot "covers the border foiling … the card is being cut off").
-                val frameInset = w * FRAME_INSET
-                Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = -rot }, contentAlignment = Alignment.Center) {
-                    Box(Modifier.requiredSize(boxW.dp, (if (across) w else h).dp)) {
-                        StatPlate(
-                            stats, boxW - frameInset * 2,
-                            Modifier.align(Alignment.BottomCenter).padding(start = frameInset.dp, end = frameInset.dp, bottom = (frameInset * 1.15f).dp),
-                        )
-                    }
-                }
-            }
+            val plated = stats != null && wide
+            if (stats != null && plated) PlateOn(stats, width, frame.rotation) { rot }
             if (counters > 0) Badge("$counters", Modifier.align(Alignment.TopEnd))
             // The materials' count leaves the foot to the plate: an Xyz Monster is the card with both.
             if (inst.under.isNotEmpty() && frame.shown) Badge("${inst.under.size}", Modifier.align(if (plated) Alignment.TopStart else Alignment.BottomStart), outline = true)
@@ -123,6 +115,44 @@ internal fun TableCard(
 
 /** A card's printed frame, as a share of its width: the plate stays inside it. */
 private const val FRAME_INSET = 0.065f
+
+/**
+ * `size(w.dp, (w / CARD_RATIO).dp)`, with [w] read at layout (1.0.92): the same pixels, the same constraints, and a card
+ * whose width glides is measured again each frame instead of composed again.
+ */
+private fun Modifier.cardSize(w: () -> Float): Modifier = layout { measurable, constraints ->
+    val width = w()
+    val wide = width.dp.roundToPx().coerceAtLeast(0)
+    val tall = (width / CARD_RATIO).dp.roundToPx().coerceAtLeast(0)
+    val placeable = measurable.measure(constraints.constrain(Constraints(wide, wide, tall, tall)))
+    layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
+}
+
+/**
+ * A monster's battle numbers on its card ([width] the card's as it glides, [rotation] how it lies, [rot] how it is turned
+ * now): composed in its own scope, so the glide's every frame recomposes the plate alone (1.0.92).
+ */
+@Composable
+private fun PlateOn(stats: TableStats, width: State<Float>, rotation: Float, rot: () -> Float) {
+    val w = width.value
+    // Its numbers read upright along the foot of the card as it lies — in Defense, or turned
+    // to face the other seat (1.0.78) — so the plate is counter-turned inside the turned card,
+    // across the bottom of the box the card fills as it lies.
+    val h = w / CARD_RATIO
+    val across = rotation % 180f != 0f
+    val boxW = if (across) h else w
+    // Inside the card's frame on every side, so the border and its foil stay whole round the card
+    // (kai, 1.0.87: the plate across the foot "covers the border foiling … the card is being cut off").
+    val frameInset = w * FRAME_INSET
+    Box(Modifier.fillMaxSize().graphicsLayer { rotationZ = -rot() }, contentAlignment = Alignment.Center) {
+        Box(Modifier.requiredSize(boxW.dp, (if (across) w else h).dp)) {
+            StatPlate(
+                stats, boxW - frameInset * 2,
+                Modifier.align(Alignment.BottomCenter).padding(start = frameInset.dp, end = frameInset.dp, bottom = (frameInset * 1.15f).dp),
+            )
+        }
+    }
+}
 
 /** A monster's battle numbers as the table shows them; [defense] says which one battles. */
 internal data class TableStats(val atk: String, val def: String?, val defense: Boolean)

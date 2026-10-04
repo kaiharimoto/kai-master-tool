@@ -44,17 +44,52 @@ object Secrets {
         return secret + short.sortedByDescending { it.length }
     }
 
-    private fun redact(text: String, names: List<String>): Redacted {
-        var out = text
-        val hidden = mutableListOf<String>()
-        names.forEach { name ->
-            val pattern = Regex("(\\[\\[)?(?<![\\p{L}\\p{N}])" + Regex.escape(name) + "(?![\\p{L}\\p{N}])(\\]\\])?", RegexOption.IGNORE_CASE)
-            if (pattern.containsMatchIn(out)) {
-                hidden += name
-                out = pattern.replace(out, "a card")
-            }
+    private fun redact(text: String, names: List<String>): Redacted = Redactor(names).redact(text)
+
+    /** The pattern that finds [name] in Ai's words: a whole name, any case, with the `[[…]]` round it if it has one. */
+    private fun pattern(name: String): Regex =
+        Regex("(\\[\\[)?(?<![\\p{L}\\p{N}])" + Regex.escape(name) + "(?![\\p{L}\\p{N}])(\\]\\])?", RegexOption.IGNORE_CASE)
+
+    /** A [Redactor] for the table as it stands: what [redact] does, with the names read once. */
+    fun redactor(s: DuelState, opponent: Int, aiSeat: Int, catalog: DuelCatalog): Redactor = Redactor(names(s, opponent, aiSeat, catalog))
+
+    /**
+     * [redact] for one list of [names] (1.0.92): each name's pattern compiled once, and each text redacted once and kept,
+     * so the log's every line of Ai's is not read again on every move. The same words out as [redact], name for name.
+     * One thread's (the page's), as the log is.
+     */
+    class Redactor(val names: List<String>) {
+        private val patterns: List<Pair<String, Regex>> by lazy { names.map { it to pattern(it) } }
+        private val kept = HashMap<String, Redacted>()
+
+        /** [text] with the names put as "a card": kept, for text that will be asked after again (a turn of the log). */
+        fun redact(text: String): Redacted {
+            if (names.isEmpty()) return Redacted(text, emptyList())
+            kept[text]?.let { return it }
+            val r = once(text)
+            if (kept.size >= KEEP) kept.clear()
+            kept[text] = r
+            return r
         }
-        return Redacted(out, hidden)
+
+        /** [text] redacted and not kept: text that will never be asked after again (an answer still streaming in). */
+        fun once(text: String): Redacted {
+            if (names.isEmpty()) return Redacted(text, emptyList())
+            var out = text
+            val hidden = mutableListOf<String>()
+            patterns.forEach { (name, pattern) ->
+                if (pattern.containsMatchIn(out)) {
+                    hidden += name
+                    out = pattern.replace(out, "a card")
+                }
+            }
+            return Redacted(out, hidden)
+        }
+
+        private companion object {
+            /** Texts kept at most: a long conversation's turns, never an unbounded store. */
+            const val KEEP = 512
+        }
     }
 
     /**
@@ -99,10 +134,11 @@ object Secrets {
      */
     fun options(options: List<String>, s: DuelState, opponent: Int, aiSeat: Int, catalog: DuelCatalog): Options {
         val names = names(s, opponent, aiSeat, catalog)
+        val redactor = Redactor(names)
         val shown = ArrayList<String>()
         val stoodFor = LinkedHashMap<String, String>()
         options.forEach { o ->
-            val r = if (names.isEmpty()) o else redact(o, names).text
+            val r = if (names.isEmpty()) o else redactor.once(o).text
             var label = r
             var n = 2
             while (label in stoodFor) label = "$r (${n++})"
