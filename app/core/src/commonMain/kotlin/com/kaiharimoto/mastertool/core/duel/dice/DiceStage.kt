@@ -60,6 +60,64 @@ class DiceStage(private val layout: DuelLayout) {
         return base.copy(rest = rest)
     }
 
+    /**
+     * Where [seat]'s own die and coin are kept between throws (1.0.96, kai: "by the left side near the extra deck for both
+     * players"), in table dp: [die] and [coin] their centres, [size] a die's edge. Beside the Extra Deck on its outer side —
+     * your left, their right past the score column — stacked, the coin nearer the middle; where the window leaves no room
+     * there (a phone), beside the Extra Deck on the hand's side, in the band the hand leaves at that end.
+     */
+    data class Home(val seat: Int, val die: Pair<Float, Float>, val coin: Pair<Float, Float>, val size: Float) {
+        /** The coin's radius on the table, dp. */
+        val coinRadius: Float get() = (DiceSim.COIN_R * size).toFloat()
+
+        /** Whether a press at ([x], [y]) is on the die (a little grown to take a finger). */
+        fun onDie(x: Float, y: Float): Boolean = kotlin.math.abs(x - die.first) <= size * 0.75f && kotlin.math.abs(y - die.second) <= size * 0.75f
+
+        fun onCoin(x: Float, y: Float): Boolean {
+            val dx = x - coin.first
+            val dy = y - coin.second
+            val r = coinRadius + size * 0.2f
+            return dx * dx + dy * dy <= r * r
+        }
+    }
+
+    private val homes: Map<Int, Home> = (0..1).mapNotNull { seat -> homeFor(seat)?.let { seat to it } }.toMap()
+
+    fun home(seat: Int): Home? = homes[seat]
+
+    private fun homeFor(seat: Int): Home? {
+        val a = arenas[seat] ?: return null
+        val ed = layout.pile(seat, PileKind.EXTRA) ?: return null
+        val size = a.scale
+        val coinW = (2 * DiceSim.COIN_R).toFloat() * size
+        val pad = layout.gap.coerceAtLeast(6f)
+        val far = a.turned
+        // Up the column, toward the middle of the table: the coin there, the die toward the player.
+        val toward = if (far) 1f else -1f
+        val step = size * 0.95f
+        if (!far) {
+            val bound = layout.inspector?.takeIf { it.right <= ed.left }?.right ?: 0f
+            if (ed.left - bound >= coinW + 2 * pad) {
+                val x = ed.left - pad - coinW / 2f
+                return Home(seat, x to ed.centerY - toward * step, x to ed.centerY + toward * step, size)
+            }
+        } else {
+            val start = maxOf(ed.right, layout.phases.right, layout.score.values.maxOfOrNull { it.right } ?: 0f)
+            val bound = layout.log?.takeIf { it.left >= start }?.left ?: layout.width
+            if (bound - start >= coinW + 2 * pad) {
+                val x = start + pad + coinW / 2f
+                return Home(seat, x to ed.centerY - toward * step, x to ed.centerY + toward * step, size)
+            }
+        }
+        // No room beside it: in the hand's band at the Extra Deck's end, side by side.
+        val y = if (far) (ed.top - pad - coinW / 2f).coerceAtLeast(coinW / 2f) else (ed.bottom + pad + coinW / 2f).coerceAtMost(layout.height - coinW / 2f)
+        val dx = size * 0.95f
+        // Kept inside the window: on a phone the Extra Deck stands against its edge.
+        val margin = coinW / 2f + pad
+        val centre = ed.centerX.coerceIn(dx + margin, (layout.width - dx - margin).coerceAtLeast(dx + margin))
+        return Home(seat, centre + dx * (if (far) -1f else 1f) to y, centre - dx * (if (far) -1f else 1f) to y, size)
+    }
+
     /** A point of [seat]'s arena on the table, in dp (z: its height in dp). */
     fun toTable(seat: Int, p: V3): V3 {
         val a = arenas[seat] ?: return p

@@ -78,10 +78,11 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val talk = ai.session?.takeIf { seated && it.mode == AiSession.MODE_DUEL && it.id == duels.aiSession }
     val folds = remember(game.header, viewer, duels.catalog) { logFolds(game, viewer, duels.catalog) }
     val rolling = duels.diceRolling
+    val inAir = duels.chanceRolling
     // Which lines are the person's own reads the bottom seat: a seat swapped colours them again (1.0.92; it was stale).
     val bottom = duels.bottom
-    val table = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest, rolling, bottom) {
-        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, folds, bottom, refused, rolling)
+    val table = remember(game.header, game.entries, game.cursor, viewer, refused, remote, guest, rolling, inAir, bottom) {
+        if (guest) remoteLog(remote, duels.mySeat) else logLines(game, folds, bottom, refused, rolling, inAir)
     }
     // Ai's hidden cards never named to the person in what it says (1.0.81): the original behind Thinking. The names are
     // read once a table, and the patterns made once a list of names, each line redacted once and kept (1.0.92) — the same
@@ -483,9 +484,21 @@ internal fun logFolds(game: DuelGame, viewer: Int?, catalog: DuelCatalog): DuelF
         LogRead(text, applied)
     }
 
-private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, bottom: Int, refused: Set<Int>, rolling: Set<Int> = emptySet()): List<LogLine> {
+private fun logLines(
+    game: DuelGame,
+    folds: DuelFolds<LogRead>,
+    bottom: Int,
+    refused: Set<Int>,
+    rolling: Set<Int> = emptySet(),
+    inAir: Set<Pair<Int, Boolean>> = emptySet(),
+): List<LogLine> {
     // A throw still in the air is a throw, not its numbers: the log never tells what the dice will read (1.0.87).
     val lastRoll = (0..1).associateWith { seat -> game.entries.subList(0, game.cursor).indexOfLast { (it.action as? DuelAction.OpeningRoll)?.seat == seat } }
+    // The table's die and coin too (1.0.96): the last of each seat's, while it is in the air.
+    val played = game.entries.subList(0, game.cursor)
+    val airborne = inAir.mapNotNull { (seat, coin) ->
+        played.indexOfLast { e -> val a = e.action; if (coin) a is DuelAction.Coin && a.seat == seat else a is DuelAction.Dice && a.seat == seat }.takeIf { it >= 0 }
+    }.toSet()
     val reads = folds.sync(game.entries).results(game.cursor)
     val out = ArrayList<LogLine>(reads.size - game.floor.coerceAtMost(reads.size) + 8)
     for (i in game.floor until reads.size) {
@@ -495,6 +508,12 @@ private fun logLines(game: DuelGame, folds: DuelFolds<LogRead>, bottom: Int, ref
         val inAir = (e.action as? DuelAction.OpeningRoll)?.let { it.seat in rolling && lastRoll[it.seat] == i } == true
         if (inAir) {
             out += LogLine.Done("${DuelWords.seatName(game.state, (e.action as DuelAction.OpeningRoll).seat)} throws the dice…", e.seat == bottom, i = i, at = e.at)
+            continue
+        }
+        if (i in airborne) {
+            val a = e.action
+            val words = if (a is DuelAction.Coin) "${DuelWords.seatName(game.state, a.seat)} tosses a coin…" else "${DuelWords.seatName(game.state, (a as DuelAction.Dice).seat)} rolls a die…"
+            out += LogLine.Done(words, e.seat == bottom, i = i, at = e.at)
             continue
         }
         out += when (e.action) {

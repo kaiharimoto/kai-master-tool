@@ -3708,6 +3708,27 @@ bottom cut off by the edge of the screen by 20%":
   they **roll over the middle row** instead of bouncing off its edge: the arena's far wall is `DiceSim.INNER` (4.5 die edges)
   past the field. The values are still stamped before the throw, so only the picture changed.
 
+**1.0.96, a die and a coin at the table**: "have a 3d dice and coin by the left side near the extra deck for both players
+that the players can use in game for dice rolls and coin flips. clicking on one of them will bring them to the field, just
+dragging them from the corner also works. the coin is thrown by dragging and throwing":
+- **Where they are kept** (`DiceStage.home`): beside each seat's Extra Deck on its outer side — your left, their right past
+  the score column — the coin nearer the middle; on a window with no room there (a phone), in the hand's band at the Extra
+  Deck's end. Never on a zone or a pile (`DuelChanceTest`).
+- **Thrown for real** (`DiceSim.Shape`): the simulator runs one die, or a coin — a disc met at 24 points round each rim,
+  `COIN_R` 0.75 and `COIN_H` 0.06 die edges — with the same fixed step and plain `Double` maths, so host, guest and replay
+  play the same frames. `Toss` is the throw: a hand's drag (`Toss.die`, `Toss.coin`: the coin goes up flipping end over end
+  about the line square to the throw), or one from the Extra Deck's corner (`randomDie`, `randomCoin`) for a click, a typed
+  `dice`/`coin`, or Ai — which glides out of its home over its first moment (`fromCorner`). `TossRuns` keeps the runs.
+- **The log and the table**: `DuelAction.Dice`/`Coin` carry an optional `toss`, stamped after the value (so a roll reads
+  what it always read), and `DuelState.chance` holds each seat's latest die and coin where they landed — through
+  `DuelView` to the guest — until the next move that is not talk or chance puts them back. A roll written before 1.0.96
+  has no throw and lies nowhere (`OldDataTest`). The log says "rolls a die…" until it lands (`Duels.chanceRolling`).
+- **The hand** (`TableChance`, the arbiter's `chanceAt` and `fling`, shared with the opening dice): press and drag to
+  carry it, let go moving to throw it at the hand's speed; a click rolls or flips it from the corner; one lying out is
+  picked up again from where it lies, or a click throws it again there. The coin is paper with an ink rim, **H** on heads
+  and **T** on tails, labelled so the face the physics leaves up reads the stamped side; the die is the opening roll's.
+  `DuelTarget.CHANCE` in the mouse and finger tables. `tools/shoot.sh --page=duel --duel=two --duel-chance=landed|flying|held`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

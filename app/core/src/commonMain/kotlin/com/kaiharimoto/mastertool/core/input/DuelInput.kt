@@ -32,6 +32,8 @@ enum class DuelTarget(val heading: String) {
     MIC("The microphone beside the command line"),
     /** The two dice in front of the field before turn 1 (1.0.87, the opening roll). */
     DICE("Your dice, before turn 1"),
+    /** The die and the coin beside the Extra Deck, or where they landed (1.0.96). */
+    CHANCE("Your die and coin, by your Extra Deck"),
 }
 
 enum class DuelInputAction {
@@ -115,6 +117,8 @@ object DuelMouse {
         DuelBinding(DuelTarget.MIC, HOLD, DuelInputAction.SPEAK, "Speak a command while held; let go to see it, then Enter makes it — as holding M"),
         DuelBinding(DuelTarget.DICE, DRAG, DuelInputAction.THROW, "Pick both up and throw them onto your field: let go while moving and they fly as fast as your hand"),
         DuelBinding(DuelTarget.DICE, CLICK, DuelInputAction.THROW, "Toss them onto the field with a fling of their own"),
+        DuelBinding(DuelTarget.CHANCE, DRAG, DuelInputAction.THROW, "Pick it up and throw it: the die rolls, the coin flips, as fast as your hand let go"),
+        DuelBinding(DuelTarget.CHANCE, CLICK, DuelInputAction.THROW, "Roll the die or flip the coin onto the field; one lying out is thrown again from where it lies"),
     )
 
     fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =
@@ -163,6 +167,8 @@ object DuelTouch {
         DuelBinding(DuelTarget.MIC, HOLD, DuelInputAction.SPEAK, "Speak a command while held; lift to see it, then confirm it"),
         DuelBinding(DuelTarget.DICE, DRAG, DuelInputAction.THROW, "Pick both up and throw them onto your field: lift while moving and they fly as fast as your finger"),
         DuelBinding(DuelTarget.DICE, TAP, DuelInputAction.THROW, "Toss them onto the field with a fling of their own"),
+        DuelBinding(DuelTarget.CHANCE, DRAG, DuelInputAction.THROW, "Pick it up and throw it: the die rolls, the coin flips, as fast as your finger let go"),
+        DuelBinding(DuelTarget.CHANCE, TAP, DuelInputAction.THROW, "Roll the die or flip the coin onto the field; one lying out is thrown again from where it lies"),
     )
 
     fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =

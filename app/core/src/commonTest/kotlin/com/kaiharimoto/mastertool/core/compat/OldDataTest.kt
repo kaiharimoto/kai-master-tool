@@ -150,6 +150,20 @@ class OldDataTest {
     }
 
     @Test
+    fun aDuelFrom1095WithRollsAndFlipsStillReads() {
+        // 1.0.74–1.0.95: a die and a coin written with their values and no throw. 1.0.96 adds `toss`; these lie nowhere.
+        val old = """{"header":{"id":"d5","seed":3,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},
+            {"i":1,"seat":0,"group":1,"action":{"t":"dice","seat":0,"value":4}},
+            {"i":2,"seat":1,"group":2,"action":{"t":"coin","seat":1,"heads":false}}],"cursor":3}"""
+        val r = assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(old))
+        val g = com.kaiharimoto.mastertool.core.duel.DuelGame.of(r)
+        assertEquals(4, (g.entries[1].action as com.kaiharimoto.mastertool.core.duel.DuelAction.Dice).value)
+        assertEquals(false, (g.entries[2].action as com.kaiharimoto.mastertool.core.duel.DuelAction.Coin).heads)
+        assertEquals(emptyList(), g.state.chance)
+    }
+
+    @Test
     fun aDuelFrom1085WithUnstampedTokensAndLocksStillReads() {
         // 1.0.79–1.0.85: a token without its uid and a lock without its id — the fold numbered them — then a
         // move of that token and the lock lifted by its number. 1.0.86 stamps both on commit.

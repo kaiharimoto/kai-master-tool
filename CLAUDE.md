@@ -694,6 +694,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`LocalCardFoil`); a face-up Normal Trap's Default is Set, and the word is **Default**; a card joining the chain lifts and
   shines a holo star (`drawFoilStar`, `TableCard.flash`); the opening dice rest on the S/T row in crop marks (`RestMarks`) and
   roll over the middle row (`DiceSim.INNER`).
+  **1.0.96, a die and a coin at the table**: each seat's beside its Extra Deck (`DiceStage.home`); click to roll or flip from
+  the corner, drag to carry and throw (`TableChance`, `fling`); `DiceSim.Shape.COIN`, `Toss`, `TossRuns`; `Dice`/`Coin` carry
+  an optional `toss` stamped after the value, `DuelState.chance` holds where they landed until the next move (`DuelChanceTest`).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

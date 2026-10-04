@@ -6,7 +6,11 @@ import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.TurnStart
 import com.kaiharimoto.mastertool.core.duel.dice.DiceRuns
+import com.kaiharimoto.mastertool.core.duel.dice.DiceSim
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
+import com.kaiharimoto.mastertool.core.duel.dice.Toss
+import com.kaiharimoto.mastertool.core.duel.dice.TossRuns
+import com.kaiharimoto.neue.duel.dice.ChanceCarry
 import com.kaiharimoto.neue.duel.dice.DiceCarry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -96,6 +100,26 @@ internal class DuelOpening(private val d: Duels) {
         val ok = d.act(listOf(DuelAction.OpeningRoll(seat, toss = toss)), seat)
         // The throw played out now, off the thread that draws (1.0.92): the table finds its run made, the same run.
         if (ok) d.game?.state?.opening?.throws?.getOrNull(seat)?.let { t -> d.scope.launch(Dispatchers.Default) { DiceRuns.warm(t) } }
+        return ok
+    }
+
+    // ---- the table's die and coin (1.0.96) -------------------------------------------------------------
+
+    /** The die or the coin in the person's hand, carried across the table before it is thrown; null when neither is. */
+    var chanceCarry by mutableStateOf<ChanceCarry?>(null)
+    /** The die and coin still in the air, as (seat, coin): the log holds what they read until they land. */
+    var chanceRolling by mutableStateOf<Set<Pair<Int, Boolean>>>(emptySet())
+
+    /**
+     * [seat] rolls its die, or flips its coin ([coin]): [toss] the person's own throw, or null for one from the corner by
+     * the Extra Deck (a click, `roll`, Ai), stamped with the value. The guest's goes to the host, who stamps.
+     */
+    fun throwChance(seat: Int, coin: Boolean, toss: Toss? = null): Boolean {
+        val ok = d.act(listOf(if (coin) DuelAction.Coin(seat, toss = toss) else DuelAction.Dice(seat, toss = toss)), seat)
+        // Played out now, off the thread that draws, as the opening dice are (1.0.92).
+        if (ok) d.game?.state?.chance?.firstOrNull { it.seat == seat && it.coin == coin }?.let { c ->
+            d.scope.launch(Dispatchers.Default) { TossRuns.of(if (c.coin) DiceSim.Shape.COIN else DiceSim.Shape.DIE, c.toss) }
+        }
         return ok
     }
 

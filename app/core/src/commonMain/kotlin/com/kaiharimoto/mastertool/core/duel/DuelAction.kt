@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.duel
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
+import com.kaiharimoto.mastertool.core.duel.dice.Toss
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
@@ -174,11 +175,13 @@ sealed class DuelAction {
 
     // ---- chance --------------------------------------------------------------------------------------
 
+    /** A coin flipped; [toss] the throw the table plays (1.0.96: a hand's, or stamped from the corner; null before then). */
     @Serializable @SerialName("coin")
-    data class Coin(val seat: Int, val heads: Boolean = true) : DuelAction()
+    data class Coin(val seat: Int, val heads: Boolean = true, val toss: Toss? = null) : DuelAction()
 
+    /** A die rolled; [toss] the throw the table plays (1.0.96: a hand's, or stamped from the corner; null before then). */
     @Serializable @SerialName("dice")
-    data class Dice(val seat: Int, val value: Int = 1) : DuelAction()
+    data class Dice(val seat: Int, val value: Int = 1, val toss: Toss? = null) : DuelAction()
 
     /**
      * [n] cards picked at random and moved to the pile [to] (1.0.87, kai: "card effects that banish, discard, or
