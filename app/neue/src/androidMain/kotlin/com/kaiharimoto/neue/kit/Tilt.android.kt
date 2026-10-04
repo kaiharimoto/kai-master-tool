@@ -84,8 +84,12 @@ actual fun rememberDeviceTilt(on: Boolean): State<Tilt?> {
     return state
 }
 
-/** Below this much movement the light is left where it is. */
-private const val STEP = 0.004f
+/**
+ * Below this much movement the light is left where it is. 0.012 of the range is about a quarter of a degree of the
+ * hand's turn (1.0.92; it was 0.004, a tenth of a degree, which a hand's tremor crosses at every reading, so every
+ * card on the screen redrew some fifty times a second while the phone was only held).
+ */
+private const val STEP = 0.012f
 
 private tailrec fun Context.activity(): ComponentActivity? = when (this) {
     is ComponentActivity -> this

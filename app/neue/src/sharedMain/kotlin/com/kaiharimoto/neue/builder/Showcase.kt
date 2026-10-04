@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,7 @@ import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
+import com.kaiharimoto.neue.kit.LocalDeviceTilt
 import com.kaiharimoto.neue.kit.LocalTilt
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Segmented
@@ -69,11 +71,16 @@ private const val TURN_DEGREES = 16f
 @Composable
 fun Showcase(state: DeckBuilderState, neue: NeueState) {
     val card = neue.showcase ?: return
-    val phoneTilt = LocalTilt.current
+    val phoneTilt = LocalDeviceTilt.current
     var pointer by remember { mutableStateOf<Offset?>(null) }
     var artOnly by remember(card) { mutableStateOf(false) }
     val shown = remember(card) { Animatable(0f) }
-    LaunchedEffect(card) { shown.animateTo(1f, tween(MuMotion.BASE, easing = MuMotion.ease)) }
+    LaunchedEffect(card) {
+        neue.showcaseCovers = false
+        shown.animateTo(1f, tween(MuMotion.BASE, easing = MuMotion.ease))
+        neue.showcaseCovers = true
+    }
+    DisposableEffect(Unit) { onDispose { neue.showcaseCovers = false } }
     // The foil the showcase draws with: the chosen one, or the holographic when it is off —
     // a card shown for its foil with none would be a card shown for nothing.
     val foil = if (neue.prefs.foil == Foils.OFF) Foils.HOLO else neue.prefs.foil

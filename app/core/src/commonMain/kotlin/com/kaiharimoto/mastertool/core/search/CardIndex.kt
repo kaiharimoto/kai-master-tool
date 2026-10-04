@@ -89,6 +89,8 @@ class CardIndex private constructor(
         filter: CardFilter = CardFilter.NONE,
         scope: SearchScope = SearchScope.NAMES,
         limit: Int = 120,
+        /** Asked every few hundred cards: true, and a search nobody waits for any more stops (1.0.92), empty. */
+        cancelled: () -> Boolean = { false },
     ): SearchOutcome {
         val parsed = SearchQuery.parse(query)
         val normalizedQuery = parsed.normalized
@@ -111,6 +113,7 @@ class CardIndex private constructor(
         val hits = ArrayList<ScoredCard>(minOf(limit * 4, 512))
         var byText = 0
         for (i in cards.indices) {
+            if (i and 255 == 0 && cancelled()) return SearchOutcome(emptyList(), 0)
             val card = cards[i]
             if (!filter.matches(card)) continue
             val nameScore = if (readNames) {

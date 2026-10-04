@@ -14,6 +14,12 @@ import com.kaiharimoto.mastertool.core.motion.Tilt
  */
 val LocalTilt = staticCompositionLocalOf<State<Tilt?>?> { null }
 
+/**
+ * The phone's tilt itself, for the full-screen card (`Showcase`) alone (1.0.92): [LocalTilt] stands still for the
+ * cards under it while it covers them, since a light nobody can see is fifty redraws a second of every card.
+ */
+val LocalDeviceTilt = staticCompositionLocalOf<State<Tilt?>?> { null }
+
 /** The platform's tilt, listened to only while [on] and while the app is in front. */
 @Composable
 expect fun rememberDeviceTilt(on: Boolean): State<Tilt?>

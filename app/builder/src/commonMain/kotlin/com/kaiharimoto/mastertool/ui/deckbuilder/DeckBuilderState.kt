@@ -49,6 +49,7 @@ import com.kaiharimoto.mastertool.ui.AppDependencies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
@@ -489,7 +490,7 @@ class DeckBuilderState(
             // Scoring 13,000 names with a bounded Levenshtein is far too much
             // work for the frame thread, and `scope` is the composition's.
             val outcome = withContext(deps.computeDispatcher) {
-                index.search(activeQuery, activeFilter, activeScope, limit = RESULT_LIMIT)
+                index.search(activeQuery, activeFilter, activeScope, limit = RESULT_LIMIT, cancelled = { !isActive })
             }
             results = outcome.cards
             matchCount = outcome.matchCount

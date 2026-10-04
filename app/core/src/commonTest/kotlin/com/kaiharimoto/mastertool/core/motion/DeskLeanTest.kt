@@ -52,6 +52,23 @@ class DeskLeanTest {
     }
 
     @Test
+    fun aLeanTooSmallToSeeIsFlat() {
+        // Far out on the bump's side the turn is under a twentieth of a degree: drawn flat, exactly 0 (never -0),
+        // so the card keeps off the perspective path and a still pointer redraws nothing (1.0.92).
+        val far = (0..400).map { DeskLean.toward(0.5f + it * 0.01f, 0.3f) }
+        far.forEach { p ->
+            assertTrue(p.rotationY == 0f || abs(p.rotationY) >= DeskLean.FLAT_DEGREES * 0.5f, "a sliver of a turn: $p")
+            if (p.rotationX == 0f) assertEquals(0f.toBits(), p.rotationX.toBits())
+            if (p.rotationY == 0f) assertEquals(0f.toBits(), p.rotationY.toBits())
+        }
+        // The lift over a card's centre, where the lean itself is nothing, stays.
+        assertEquals(DeskLean.HOVER_LIFT, DeskLean.toward(0f, 0f).lift, 1e-6f)
+        // Where it was visible it is what it was.
+        val near = DeskLean.toward(0.8f, 0.2f)
+        assertTrue(abs(near.rotationY) > 1f)
+    }
+
+    @Test
     fun itIsContinuousAcrossTheCardsEdge() {
         val inside = DeskLean.toward(0.4999f, 0f)
         val outside = DeskLean.toward(0.5001f, 0f)

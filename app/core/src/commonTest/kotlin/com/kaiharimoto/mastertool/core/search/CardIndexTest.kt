@@ -24,6 +24,13 @@ class CardIndexTest {
     }
 
     @Test
+    fun aSearchNobodyWaitsForStops() {
+        // Asked to stop, it gives up at once and empty; never asked, it is the search it always was (1.0.92).
+        assertEquals(SearchOutcome(emptyList(), 0), index.search("ash", cancelled = { true }))
+        assertEquals(index.search("ash"), index.search("ash", cancelled = { false }))
+    }
+
+    @Test
     fun unknownPasscodeReturnsNull() {
         assertNull(index.byId(CardId(1)))
     }

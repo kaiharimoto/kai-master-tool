@@ -339,6 +339,12 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     }
                 }
+                // Deep zen drifts slowly and is only looked at (1.0.92): on a 90 or 120 Hz screen it asks for 60,
+                // half the work for a picture nobody can tell apart; everything else keeps the screen's own rate.
+                val calm = h.neue.immersive && h.neue.zen == com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP && h.neue.showcase == null
+                LaunchedEffect(calm) {
+                    window.attributes = window.attributes.apply { preferredRefreshRate = if (calm) 60f else 0f }
+                }
                 // The bars' icons follow the theme: dark on Paper, light on Ink.
                 val paper = h.neue.prefs.theme == com.kaiharimoto.mastertool.core.prefs.NeueTheme.PAPER
                 LaunchedEffect(paper) {

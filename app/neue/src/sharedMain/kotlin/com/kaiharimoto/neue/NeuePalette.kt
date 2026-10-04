@@ -142,6 +142,7 @@ fun NeueHolders.commands(query: String): List<Command> {
         cmd("App", "Smaller interface", DeskAction.ZOOM_OUT),
         cmd("App", "Keyboard shortcuts", DeskAction.HELP),
         Command("App", "Check for updates") { updates.check(userInitiated = true) },
+        Command("App", if (neue.frameMeter) "Hide frame times" else "Show frame times") { neue.frameMeter = !neue.frameMeter },
         // The phone's and the tablet's screen, the one-tap toggle in words (v1.3.5).
         *(if (neue.touchFirst) arrayOf(Command("App", "Rotate the screen: ${neue.orientation.next().label}") { neue.rotate() }) else emptyArray()),
         // A deck's QR code, off another screen or out of a picture (v1.3.7).

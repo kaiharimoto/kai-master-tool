@@ -77,6 +77,12 @@ object DeskLean {
     /** How far a carried card comes up: more than a hover, because it has left the page. */
     const val CARRY_LIFT = 0.07f
 
+    /** Below this the bump's lean is drawn flat: invisible, and the card stays off the perspective path. */
+    const val FLAT_DEGREES = 0.05f
+
+    /** A lift too small to see (a ten-thousandth of the card, a fiftieth of a pixel on the largest) is no lift. */
+    const val FLAT_LIFT = 1e-4f
+
     /** The most a carried card leans behind the pointer. */
     const val CARRY_DEGREES = 14f
 
@@ -93,16 +99,21 @@ object DeskLean {
         // edge — a pointer in the middle of a card is a finger straight under it.
         // Past the edge it falls away like the side of a bump.
         val shape = if (r <= EDGE) r / EDGE else exp(-((r - EDGE) / REACH).pow(2) * 2f)
-        val degrees = MAX_DEGREES * shape * presence
+        // A lean the bump has all but left is drawn flat (1.0.92): under a twentieth of a degree a card's edge moves less
+        // than a tenth of a pixel, and any turn at all sends the whole card through the perspective path. Its lift stays.
+        val degrees = (MAX_DEGREES * shape * presence).let { if (it < FLAT_DEGREES) 0f else it }
         val ux = if (r > 1e-4f) dx / r else 0f
         val uy = if (r > 1e-4f) dy / r else 0f
         // The edge nearest the pointer comes up: pointer to the right (dx > 0)
         // brings the right edge forward; pointer above (dy < 0) brings the top.
         val over = if (r <= EDGE) 1f else exp(-((r - EDGE) / (REACH * 0.5f)).pow(2) * 2f)
+        val lift = HOVER_LIFT * over * presence
+        if (degrees == 0f && lift < FLAT_LIFT) return LeanPose.REST
         return LeanPose(
-            rotationX = -uy * degrees,
-            rotationY = ux * degrees,
-            lift = HOVER_LIFT * over * presence,
+            // Flat is 0, never -0, so a flat pose equals the last one and nothing redraws for it.
+            rotationX = if (degrees == 0f) 0f else -uy * degrees,
+            rotationY = if (degrees == 0f) 0f else ux * degrees,
+            lift = lift,
         )
     }
 

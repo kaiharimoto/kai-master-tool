@@ -14,7 +14,6 @@ import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.offline.Offline
 import com.kaiharimoto.mastertool.core.start.StartPrefs
 import com.kaiharimoto.mastertool.core.start.StartSteps
-import com.kaiharimoto.mastertool.core.sync.SyncedPrefs
 import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.ai.AiPanel
 import com.kaiharimoto.neue.ai.AiSetupScreen
@@ -48,15 +47,14 @@ import com.kaiharimoto.neue.cards.LocalLimitMarks
 import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
 import com.kaiharimoto.neue.duel.Duels
-import com.kaiharimoto.neue.kit.Hatch
 import com.kaiharimoto.neue.kit.LocalHardwareKeyboard
 import com.kaiharimoto.neue.kit.LocalKeepCase
 import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.LocalReasonNote
 import com.kaiharimoto.neue.kit.LocalTextFocus
+import com.kaiharimoto.neue.kit.LocalDeviceTilt
 import com.kaiharimoto.neue.kit.LocalTilt
 import com.kaiharimoto.neue.kit.LocalTouchFirst
-import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.ProvideTextMenus
 import com.kaiharimoto.neue.kit.TextFocus
 import com.kaiharimoto.neue.pages.FormatPage
@@ -72,6 +70,7 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.animation.Crossfade
 import androidx.compose.runtime.snapshotFlow
+import com.kaiharimoto.mastertool.core.motion.Tilt
 import com.kaiharimoto.mastertool.core.motion.ZenPhase
 import com.kaiharimoto.neue.prep.Prep
 import com.kaiharimoto.neue.prep.PrepPage
@@ -85,8 +84,6 @@ import com.kaiharimoto.neue.web.Webs
 import com.kaiharimoto.neue.zen.LocalZen
 import com.kaiharimoto.neue.zen.ZenReset
 import com.kaiharimoto.neue.zen.ZenLayer
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -126,6 +123,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -153,6 +151,7 @@ import com.kaiharimoto.mastertool.ui.deckbuilder.DeckLayoutState
 import com.kaiharimoto.neue.builder.BuilderPage
 import com.kaiharimoto.neue.builder.CardViewer
 import com.kaiharimoto.neue.builder.CardActions
+import com.kaiharimoto.neue.shell.FrameMeter
 import com.kaiharimoto.neue.shell.PhoneBar
 import com.kaiharimoto.neue.shell.TabBar
 import com.kaiharimoto.neue.builder.NeueDrag
@@ -582,7 +581,12 @@ private fun NeueWindowContent(h: NeueHolders) {
     val tilt = com.kaiharimoto.neue.kit.rememberDeviceTilt(
         on = neue.touchFirst && neue.prefs.foilTilt && neue.prefs.foil != Foils.OFF,
     )
-    CompositionLocalProvider(LocalTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalLimitMarks provides neue.prefs.limitMarks, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, LocalTouchFirst provides neue.touchFirst, LocalPhone provides neue.phone, LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai") else emptySet()), LocalTextFocus provides h.textFocus, LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, LocalArts provides neue.prefs.arts, LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+    // Under the full-screen card the light holds where it was (1.0.92): nobody sees those cards until it closes.
+    val shownTilt = remember(tilt) {
+        var held: Tilt? = null
+        derivedStateOf { if (neue.showcaseCovers) held else tilt.value.also { held = it } }
+    }
+    CompositionLocalProvider(LocalTilt provides shownTilt, LocalDeviceTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalLimitMarks provides neue.prefs.limitMarks, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, LocalTouchFirst provides neue.touchFirst, LocalPhone provides neue.phone, LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai") else emptySet()), LocalTextFocus provides h.textFocus, LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, LocalArts provides neue.prefs.arts, LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
         neue.actingBy(finger = neue.touchFirst) { neue.felt(DeskEvent.ART_STEPPED) }
@@ -958,6 +962,7 @@ private fun Shell(h: NeueHolders) {
         OverlayLayer(h.overlays)
 
         Toasts(h, Modifier.align(Alignment.BottomEnd).imePadding().padding(end = 24.dp, bottom = 24.dp))
+        if (neue.frameMeter) FrameMeter(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp))
 
         // Long jobs the whole window waits on: the cursor ticks and says so.
         val job = when {
