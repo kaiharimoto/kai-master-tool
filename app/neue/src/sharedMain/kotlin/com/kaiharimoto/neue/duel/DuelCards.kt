@@ -41,6 +41,7 @@ import com.kaiharimoto.mastertool.core.layout.CardLook
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.ClassicCardBack
+import com.kaiharimoto.neue.cards.Foils
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Micro
@@ -233,7 +234,8 @@ private fun SetMark(modifier: Modifier) {
     // The card's own back, see-through, over its face (kai, 1.0.93: "instead of white stripes, have it be a transparent
     // version of the card back"): it reads as face-down at a glance, and its controller still reads the card beneath.
     Box(modifier, contentAlignment = Alignment.TopStart) {
-        ClassicCardBack(Modifier.fillMaxSize().graphicsLayer { alpha = SET_BACK_ALPHA })
+        // The see-through back over a set card wears no foil: the card's own face shows through it.
+        ClassicCardBack(Modifier.fillMaxSize().graphicsLayer { alpha = SET_BACK_ALPHA }, foil = Foils.OFF)
         Box(Modifier.background(c.ink).padding(horizontal = 3.dp, vertical = 1.dp)) {
             Micro("Set", color = c.paper, size = 8.sp)
         }

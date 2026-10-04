@@ -39,11 +39,14 @@ class DuelLayoutTest {
     @Test
     fun nothingOverlapsAndEverythingIsInsideTheWindow() = every { c, two, bottom, l ->
         val all = l.spots.values + l.score.values + listOfNotNull(l.turn, l.phases, l.inspector, l.log)
-        // The near hand stands a fifth of its card below the window's edge (1.0.94); everything else is inside.
+        // The near hand stands a fifth of its card below the window's edge (1.0.94), the far hand a fifth above it (1.0.95);
+        // everything else is inside.
         val hand = l.pile(bottom, PileKind.HAND)
+        val farHand = if (two) l.pile(1 - bottom, PileKind.HAND) else null
         all.forEachIndexed { i, a ->
             val below = if (a == hand) a.height * DuelLayouter.HAND_CUT else 0f
-            assertTrue(a.left >= -0.01f && a.top >= -0.01f && a.right <= c.w + 0.01f && a.bottom <= c.h + below + 0.5f, "$c two=$two bottom=$bottom: $a outside")
+            val above = if (a == farHand) a.height * DuelLayouter.HAND_CUT else 0f
+            assertTrue(a.left >= -0.01f && a.top >= -above - 0.01f && a.right <= c.w + 0.01f && a.bottom <= c.h + below + 0.5f, "$c two=$two bottom=$bottom: $a outside")
             all.drop(i + 1).forEach { b -> assertFalse(overlaps(a, b), "$c two=$two: $a overlaps $b") }
         }
     }
@@ -59,6 +62,13 @@ class DuelLayoutTest {
         assertTrue(hand.top >= l.field.bottom + l.gap - 0.01f, "$c two=$two: the hand over the field")
         // What shows of it is the band the field was solved round: one field card's height.
         assertEquals(l.cardHeight, hand.height * (1f - DuelLayouter.HAND_CUT), 0.01f)
+        // Their hand the same, turned round (1.0.95): bigger than their field's cards, a fifth above the top edge.
+        l.pile(1 - bottom, PileKind.HAND)?.takeIf { two }?.let { far ->
+            assertEquals(l.card * l.farScale * DuelLayouter.HAND_SCALE, l.farHandCard, 0.01f)
+            assertEquals(l.farHandCard * DuelLayouter.CARD_RATIO, far.height, 0.01f)
+            assertEquals(-far.height * DuelLayouter.HAND_CUT, far.top, 0.01f)
+            assertTrue(far.bottom <= l.field.top - l.gap + 0.01f, "$c: their hand over the field")
+        }
     }
 
     @Test
@@ -209,8 +219,11 @@ class DuelLayoutTest {
     @Test
     fun theHandsSitRightAgainstTheField() {
         val l = DuelLayouter.solve(1920f, 984f, true)
-        // No seat bars between (1.0.78): one lane from the field to each hand.
-        assertEquals(l.gap, l.pile(l.near, PileKind.HAND)!!.top - l.field.bottom, 0.01f)
-        assertEquals(l.gap, l.field.top - l.pile(l.far, PileKind.HAND)!!.bottom, 0.01f)
+        // No seat bars between (1.0.78): a lane from the field to each hand, and the room left over shared alike either side
+        // of the field, the hands on their edges (1.0.95).
+        val nearGap = l.pile(l.near, PileKind.HAND)!!.top - l.field.bottom
+        val farGap = l.field.top - l.pile(l.far, PileKind.HAND)!!.bottom
+        assertTrue(nearGap >= l.gap - 0.01f && farGap >= l.gap - 0.01f)
+        assertEquals(nearGap, farGap, 0.01f)
     }
 }

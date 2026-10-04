@@ -121,7 +121,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     // Every hand but the bottom seat's in the notation's order (1.0.87, the red team): the third card drawn there is the `oh3`
     // the Spotlight reads, both hands face-up or not.
     val notationSeat = duels.bottom
-    // The near hand riffles round the card in hand (1.0.94): the one the keys are on when they moved last, else the one
+    // A hand riffles round the card in hand (1.0.94; the far hand too, 1.0.95): the one the keys are on when they moved last, else the one
     // under the pointer; none while a card is carried, so the hand holds still for the drop.
     // Derived, so only a change of the card in hand composes the table again — never each move of the pointer or the keys.
     val riffleState = rememberUpdatedState(s)
@@ -131,8 +131,9 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
             val st = riffleState.value
             when {
                 carriedNow.value != null -> null
-                duels.byKeys -> (duels.focus as? DuelFocus.Slot.HandCard)?.takeIf { it.seat == duels.bottom }?.let { DuelFocus.uidAt(st, it, duels.eyes) }
-                else -> duels.hovered?.takeIf { it in st.seats[duels.bottom].hand }
+                // Either hand (1.0.95): theirs riffles as yours does.
+                duels.byKeys -> (duels.focus as? DuelFocus.Slot.HandCard)?.let { DuelFocus.uidAt(st, it, duels.eyes) }
+                else -> duels.hovered?.takeIf { uid -> st.seats.any { uid in it.hand } }
             }
         }
     }

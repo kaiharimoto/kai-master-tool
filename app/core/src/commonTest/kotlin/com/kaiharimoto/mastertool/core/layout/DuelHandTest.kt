@@ -42,7 +42,7 @@ class DuelHandTest {
     }
 
     @Test
-    fun theTableRifflesTheNearHandOnly() {
+    fun theTableRifflesEitherHand() {
         val s = CommandFixtures.battle()
         val l = DuelLayouter.solve(1920f, 1032f, true)
         val mine = s.seats[0].hand
@@ -51,8 +51,11 @@ class DuelHandTest {
         val card = riffled.first { it.uid == mine[1] }
         assertTrue(card.y < still.first { it.uid == mine[1] }.y)
         assertEquals(l.handCard, card.w, 0.01f)
-        // Their hand is as it was, whatever the pointer is over.
-        s.seats[1].hand.forEach { uid -> assertEquals(still.first { it.uid == uid }, DuelFrames.of(s, l, setOf(0, 1), riffle = uid).first { it.uid == uid }) }
+        // Their hand riffles too, turned round (1.0.95): the card in hand drops toward the field, at their hand's size.
+        val theirs = s.seats[1].hand.first()
+        val dropped = DuelFrames.of(s, l, setOf(0, 1), riffle = theirs).first { it.uid == theirs }
+        assertTrue(dropped.y > still.first { it.uid == theirs }.y)
+        assertEquals(l.farHandCard, dropped.w, 0.01f)
         // The hand's band is the layout's.
         assertTrue(l.pile(0, PileKind.HAND)!!.contains(still.first { it.uid == mine[0] }.x + 1f, still.first { it.uid == mine[0] }.y + 1f))
     }
