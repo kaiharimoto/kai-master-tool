@@ -339,5 +339,6 @@ These change what gets built. Each has a default the plan assumes until you say 
 | 0 Foundation (Ai World, instruments, red team) | Shipped 1.0.97 |
 | Evidence ledger, YGOrg rulings, harness fixes | Shipped 1.0.98 |
 | A Trust | Shipped 1.0.99 / v1.3.77 |
-| B Card truth | **1.1.0 / v1.3.78**: card identity, release data, banlists by date, the field read honestly. Left for 1.1.1: the builder's dated legality, the field as of a date, the Genesys switch (`docs/phases/B.md` §5) |
-| S, C to G | Planned |
+| B Card truth | **Done**: 1.1.0 / v1.3.78 (card identity, release data, banlists by date, the field read honestly) and 1.1.1 / v1.3.79 (the builder's dated legality and Genesys, the field as of a date, the Card truth set in Trust) |
+| S Shootout | **Started**: the simulation study, model and picker in core (`docs/phases/S.md`) |
+| C to G | Planned |
