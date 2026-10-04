@@ -3934,6 +3934,14 @@ The card data everything stands on, made correct:
   dated list. Ai's `banlist` (a day's list, a card's history, what moved), `validate_deck` and `hand_odds` with `as_of`
   ("odds as of the March list": the deck cut to that list first, `CardSetOdds.legalised`), and the World's
   `ygo.banlist`/`ygo.legal`.
+- **What the deck is checked against** (1.1.1, `DeckRules`): the Issues drawer opens with **Check against** —
+  Forbidden & Limited on a day (blank is today; the list in force then, named and cited, from `legalityRules`), or
+  **Genesys** under a points cap (no list, TCG cards, no Link or Pendulum, "466 of 100 points"). The ✓ opens the drawer,
+  its tip says what was checked ("Legal in TCG on 1 May 2025 (the April 2025 Lists (TCG))"), the inspector shows the
+  dated list's status or a card's Genesys points, and `validate_deck` on the open deck checks the same. Kept as
+  `NeuePreferences.legalAsOf`/`genesys`/`genesysCap` (synced). A day whose lists cannot be read says so beside the
+  issues. `--genesys=true`, `--legal-as-of=` in the studio. The banlist history fills a page's gap between two equal
+  lists and says it was inferred (Yugipedia's "January 2016 Lists" omits Pot of Greed).
 - **The field read honestly**: illegal lists dropped (`FieldLegality`), one window for every tier (`RecentDecks.window`),
   average-linkage clustering that keeps hybrids apart, the mirror kept in the expected match win, Game 1 played at the
   pre-side rates and games 2–3 at the sided ones (`TestStats`), `hand_odds` exact with overlapping sets and naming what
