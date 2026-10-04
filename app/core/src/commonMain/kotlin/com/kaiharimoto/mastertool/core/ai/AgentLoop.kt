@@ -104,7 +104,8 @@ sealed interface AgentEvent {
      */
     data class Round(val usage: Usage, val measured: Boolean) : AgentEvent
 
-    data class Done(val stop: StopReason, val usage: Usage) : AgentEvent
+    /** The run is over. [outOfSteps]: it was stopped at its cap of rounds, not finished, so its last words are not its answer. */
+    data class Done(val stop: StopReason, val usage: Usage, val outOfSteps: Boolean = false) : AgentEvent
     data class Failed(val message: String, val auth: Boolean) : AgentEvent
 }
 
@@ -227,7 +228,7 @@ class AgentLoop(
             emit(AgentEvent.Appended(answer))
         }
         emit(AgentEvent.Notice("Stopped after $maxSteps rounds of tools. Say “go on” to continue."))
-        emit(AgentEvent.Done(StopReason.MAX_TOKENS, usage))
+        emit(AgentEvent.Done(StopReason.MAX_TOKENS, usage, outOfSteps = true))
     }
 
     companion object {

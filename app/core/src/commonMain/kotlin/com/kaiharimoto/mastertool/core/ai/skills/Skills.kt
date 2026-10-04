@@ -46,6 +46,12 @@ object Skills {
         return Skill(n, description.ifBlank { firstLine(body) }, body.trim(), builtIn)
     }
 
+    /** Where one of Ai's own skills is kept, under its folder. */
+    fun path(name: String): String = "skills/${slug(name)}/SKILL.md"
+
+    /** Whether a path under Ai's folder is one of its own skills ([path]). */
+    fun isPath(path: String): Boolean = path.startsWith("skills/") && path.endsWith("/SKILL.md")
+
     /** A skill's name as a file name: lowercase words joined by dashes. */
     fun slug(name: String): String =
         name.trim().lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-').take(60)

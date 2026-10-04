@@ -49,6 +49,20 @@ class GuideDocTest {
     }
 
     @Test
+    fun aWholeNumberScoreIsTakenAsGivenAndOnlyAFractionIsAShare() {
+        assertEquals(1, SessionReport.score(1.0), "a 1 is a score of 1, not 100")
+        assertEquals(0, SessionReport.score(0.0))
+        assertEquals(62, SessionReport.score(62.0))
+        assertEquals(62, SessionReport.score(0.62))
+        assertEquals(29, SessionReport.score(0.29), "rounded, not cut: 0.29 × 100 is 28.999…")
+        assertEquals(50, SessionReport.score(0.5))
+        assertEquals(100, SessionReport.score(100.0))
+        assertEquals(0, SessionReport.score(-5.0))
+        assertEquals(0, SessionReport.score(null))
+        assertEquals(0, SessionReport.score(Double.NaN))
+    }
+
+    @Test
     fun theQuestionsAskedComeOutOfTheSessionWithTheirAnswers() {
         val q = kotlinx.serialization.json.buildJsonObject { put("question", kotlinx.serialization.json.JsonPrimitive("Which is your starter?")) }
         val turns = listOf(

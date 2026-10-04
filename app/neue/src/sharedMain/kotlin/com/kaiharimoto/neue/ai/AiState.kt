@@ -493,12 +493,12 @@ class AiState(internal val h: NeueHolders) {
             try {
                 // Past most of the model's window, the oldest turns become a summary first (1.0.47).
                 val ready = if (budget > 0) summarizedIfLong(start, model, connection, budget) else start
-                // From first principles (1.0.54) the model is never offered the web or the community's lists.
+                // What the mode closes is never offered (`AiTools.barredIn`): the decks while Ai learns one or the person,
+                // and from first principles (1.0.54) the web and the community's lists too.
                 val offered = when (start.mode) {
-                    AiSession.MODE_PRINCIPLES -> tools.filter { it.name !in AiTools.FIRST_PRINCIPLES_BARRED }
                     // At the table, the table's tools only (1.0.85): the rest cost every round thousands of tokens.
                     AiSession.MODE_DUEL -> tools.filter { it.name in AiTools.DUEL }
-                    else -> tools
+                    else -> AiTools.barredIn(start.mode).let { barred -> tools.filter { it.name !in barred } }
                 }
                 // The pictures' bytes, read from their files just now: they are never kept in the conversation.
                 val request = TurnRequest(ready.system, files.hydrate(ready.sent), offered, connection.model, effort, ready.resume)
