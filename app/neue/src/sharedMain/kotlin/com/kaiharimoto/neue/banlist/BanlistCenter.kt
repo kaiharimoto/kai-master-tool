@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.banlist
 
+import com.kaiharimoto.mastertool.core.cards.RegionNames
+import com.kaiharimoto.mastertool.core.cards.RegionDoc
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.cards.BanlistCodec
 import com.kaiharimoto.mastertool.core.cards.BanlistDoc
@@ -157,6 +159,66 @@ class BanlistCenter(
         val doc = BanlistPlan.merge(before, region, titles.takeIf { problem == null }, read, failed, clock())
         save(region, doc)
         return problem
+    }
+
+    // ---- where cards are printed: Yugipedia's two categories (1.1.1, `RegionNames`) ----------------------------
+
+    private val regionFile get() = File(dir, RegionDoc.FILE)
+    private var regionDoc: RegionDoc? = null
+    private var regionRead = false
+
+    /** The two categories as kept, read from disk the first time; null when none are. */
+    fun storedRegions(): RegionDoc? = synchronized(docs) {
+        if (!regionRead) {
+            regionDoc = runCatching { regionFile.takeIf { it.isFile }?.readText() }.getOrNull()?.let(RegionDoc::decode)
+            regionRead = true
+        }
+        regionDoc
+    }
+
+    /** Holds [doc] as the categories for this run, without writing it (the tests'). */
+    fun useRegions(doc: RegionDoc) = synchronized(docs) {
+        regionDoc = doc
+        regionRead = true
+    }
+
+    /**
+     * Which cards Yugipedia has in the TCG and in the OCG, read again when a week old: about 60 requests a second apart,
+     * so a minute, in the background. What was kept before is answered when a read fails or is cut short.
+     */
+    suspend fun regions(): RegionDoc? = withContext(Dispatchers.IO) {
+        oneAtATime.withLock {
+            val before = storedRegions()
+            if (before != null && !before.stale(clock())) return@withLock before
+            val tcg = category(RegionNames.TCG_CATEGORY) ?: return@withLock before
+            val ocg = category(RegionNames.OCG_CATEGORY) ?: return@withLock before
+            val doc = RegionDoc(checked = clock(), tcg = tcg, ocg = ocg)
+            synchronized(docs) { regionDoc = doc; regionRead = true }
+            runCatching {
+                dir.mkdirs()
+                val temp = File(dir, regionFile.name + ".tmp")
+                temp.writeText(RegionDoc.encode(doc))
+                if (!temp.renameTo(regionFile)) {
+                    regionFile.delete()
+                    temp.renameTo(regionFile)
+                }
+            }
+            doc
+        }
+    }
+
+    /** Every title in [name], or null when a page could not be read or the category never ends. */
+    private suspend fun category(name: String): List<String>? {
+        val titles = mutableListOf<String>()
+        var from: String? = null
+        repeat(RegionDoc.MAX_PAGES) { page ->
+            if (page > 0) delay(pause)
+            val body = get(RegionNames.categoryUrl(name, from)).getOrNull() ?: return null
+            val got = YugipediaLists.members(body) { true } ?: return null
+            titles += got.titles
+            from = got.continueFrom ?: return titles
+        }
+        return null
     }
 
     private suspend fun get(url: String): Result<String> = runCatching {

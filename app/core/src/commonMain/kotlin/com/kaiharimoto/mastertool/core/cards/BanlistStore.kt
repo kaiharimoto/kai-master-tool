@@ -122,8 +122,11 @@ object YugipediaLists {
     /** A category answer: the article titles in it, and where to carry on from (null at the end). */
     data class Members(val titles: List<String>, val continueFrom: String?)
 
-    /** [json] read as a category answer, or null for an error or anything else. */
-    fun members(json: String): Members? {
+    /**
+     * [json] read as a category answer, or null for an error or anything else. [keep] chooses the titles: a banlist
+     * category's list pages by default; every title for the card categories (`RegionNames`).
+     */
+    fun members(json: String, keep: (String) -> Boolean = { it.contains("Lists") }): Members? {
         val root = root(json) ?: return null
         if ("error" in root) return null
         val query = root["query"] as? JsonObject ?: return null
@@ -132,7 +135,7 @@ object YugipediaLists {
             val o = e as? JsonObject ?: return@mapNotNull null
             val ns = (o["ns"] as? JsonPrimitive)?.intOrNull ?: 0
             if (ns != 0) return@mapNotNull null
-            (o["title"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.contains("Lists") }
+            (o["title"] as? JsonPrimitive)?.contentOrNull?.takeIf(keep)
         }
         val next = ((root["continue"] as? JsonObject)?.get("cmcontinue") as? JsonPrimitive)?.contentOrNull
         return Members(titles, next)

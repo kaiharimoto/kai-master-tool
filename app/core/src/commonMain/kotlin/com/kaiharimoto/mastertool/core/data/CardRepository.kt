@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.data
 
+import kotlin.concurrent.Volatile
+import com.kaiharimoto.mastertool.core.cards.RegionNames
 import com.kaiharimoto.mastertool.core.db.MasterToolDatabase
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.remote.YgoProDeckApi
@@ -52,10 +54,32 @@ class CardRepository(
     private val _index = MutableStateFlow(CardIndex.EMPTY)
     val index: StateFlow<CardIndex> = _index.asStateFlow()
 
+    /** The pool as stored, before [regions] is laid over it. */
+    @Volatile private var stored: List<Card> = emptyList()
+
+    /** The second opinion on where cards are printed (1.1.1, [RegionNames]); null until it has been read. */
+    @Volatile private var regions: RegionNames? = null
+
     /** Loads the cached pool into memory. Safe to call on every app start. */
     suspend fun loadFromCache(): CardIndex = withContext(ioDispatcher) {
         val cards = database.cardQueries.selectAll().executeAsList().map(CardMapper::toDomain)
-        CardIndex.build(cards).also { _index.value = it }
+        stored = cards
+        build()
+    }
+
+    /**
+     * Lays [names] over the pool from now on and rebuilds the index with it (1.1.1): a region the pool lacks is added
+     * where Yugipedia has it, and confirmed absent where Yugipedia knows the card but not there. Nothing is stored.
+     */
+    suspend fun useRegions(names: RegionNames): CardIndex = withContext(ioDispatcher) {
+        regions = names
+        build()
+    }
+
+    private fun build(): CardIndex {
+        val r = regions
+        val cards = if (r == null) stored else stored.map(r::confirm)
+        return CardIndex.build(cards).also { _index.value = it }
     }
 
     suspend fun status(): CardPoolStatus = withContext(ioDispatcher) {

@@ -391,7 +391,8 @@ class MetaTest {
         val day = "2025-10-04"
         val ash = TestCards.ashBlossom.copy(formats = listOf("TCG", "OCG"), tcgDate = "2017-01-12")
         val nibiru = TestCards.nibiru.copy(formats = listOf("TCG", "OCG"), tcgDate = "2026-01-15")
-        val japan = TestCards.maxxC.copy(formats = listOf("OCG"), ocgDate = "2015-01-01")
+        // OCG only by both sources (the pool and Yugipedia, `RegionNames`): one alone is unknown, never illegal.
+        val japan = TestCards.maxxC.copy(formats = listOf("OCG"), ocgDate = "2015-01-01", absentFrom = setOf("TCG"))
         val pool = listOf(ash, nibiru, japan).flatMap { c -> c.passcodes.map { it to c } }.toMap()
         // On that day's list Ash is Limited; today's pool says nothing of it.
         val list = object : BanSource {

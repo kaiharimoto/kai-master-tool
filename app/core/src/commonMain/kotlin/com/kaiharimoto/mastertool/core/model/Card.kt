@@ -101,6 +101,11 @@ data class Card(
     val formats: List<String> = emptyList(),
     /** Its cost in Konami's Genesys format (most cards 0); null when the pool does not say. */
     val genesysPoints: Int? = null,
+    /**
+     * Regions a second source confirms it was never printed in (1.1.1, `RegionNames`): set over the pool in memory, never
+     * stored. A region missing from [formats] is "not released" only when it is here too; otherwise it is unknown.
+     */
+    val absentFrom: Set<String> = emptySet(),
 ) {
     /** Every passcode that names this card: its own and each alternate artwork's. */
     val passcodes: Set<CardId>

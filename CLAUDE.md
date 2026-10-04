@@ -752,7 +752,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 - **Card truth** (1.1.0, Phase B, `docs/phases/B.md`, `NEUE.md` §4s): **count copies by card, never by passcode** —
   `CardIdentity` (an alternate artwork is the same card); a new count of copies or "does the deck hold X" goes through it.
   **Legality is region and date too** (`Legality`, from each card's `formats`/`tcgDate`/`ocgDate`, schema 4); missing
-  release data is *unknown*, never illegal. **Banlists by date** are `core/cards` (Yugipedia's lists, a device-only cache in
+  release data is *unknown*, never illegal, and so is a region YGOPRODeck lacks unless Yugipedia agrees (`RegionNames`, 1.1.1). **Banlists by date** are `core/cards` (Yugipedia's lists, a device-only cache in
   `<data>/banlists/`, never synced) behind `BanSource`; a new place that checks copy limits takes a `BanSource`.
   **The builder checks `DeckRules`** (1.1.1): a chosen day's list or Genesys, set from `NeuePreferences.legalAsOf`/
   `genesys`/`genesysCap` by `legalityRules`; read `state.rulesInForce`, never `state.format` alone, for "legal in …".

@@ -3941,7 +3941,9 @@ The card data everything stands on, made correct:
   dated list's status or a card's Genesys points, and `validate_deck` on the open deck checks the same. Kept as
   `NeuePreferences.legalAsOf`/`genesys`/`genesysCap` (synced). A day whose lists cannot be read says so beside the
   issues. `--genesys=true`, `--legal-as-of=` in the studio. The banlist history fills a page's gap between two equal
-  lists and says it was inferred (Yugipedia's "January 2016 Lists" omits Pot of Greed).
+  lists and says it was inferred (Yugipedia's "January 2016 Lists" omits Pot of Greed). **A card is "not released" in a
+  region only when YGOPRODeck and Yugipedia agree** (`RegionNames`, `Card.absentFrom`): the pool alone called Trap Holic
+  OCG-only a year after its TCG print; where they disagree it is unknown, never illegal.
 - **The field read honestly**: illegal lists dropped (`FieldLegality`), one window for every tier (`RecentDecks.window`),
   average-linkage clustering that keeps hybrids apart, the mirror kept in the expected match win, Game 1 played at the
   pre-side rates and games 2–3 at the sided ones (`TestStats`), `hand_odds` exact with overlapping sets and naming what

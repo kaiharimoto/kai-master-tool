@@ -542,6 +542,12 @@ fun NeueEffects(h: NeueHolders) {
         LaunchedEffect(p.legalAsOf, p.genesys, p.genesysCap, state.format, state.index) {
             state.rules = h.legalityRules(p, state.format)
         }
+        // Where cards are printed, a second opinion (1.1.1): the pool alone called Trap Holic OCG-only a year after its
+        // TCG print. Laid over the pool once read; a pool loaded later is built with it already.
+        LaunchedEffect(Unit) {
+            val regions = h.banlists.regions() ?: return@LaunchedEffect
+            state.adoptIndex(h.deps.cardRepository.useRegions(regions.names()))
+        }
     }
 
     run {

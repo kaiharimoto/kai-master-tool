@@ -7,7 +7,7 @@ import com.kaiharimoto.mastertool.core.model.Format
  * Whether a card has been released where, and by when, a deck is played (Phase B, `docs/phases/B.md` §2).
  *
  * Read off the pool's release data (YGOPRODeck's `misc_info`): the regions it is printed in (`formats`) and its
- * first date in each. The list of formats decides **where** — a Speed Duel card carries a TCG date but is no
+ * first date in each — a region missing there counts only when Yugipedia agrees (`Card.absentFrom`, `RegionNames`). The list of formats decides **where** — a Speed Duel card carries a TCG date but is no
  * Advanced card, and 400-odd old and new cards were only ever printed in Japan — and the date decides **when**.
  * A pool without that data (stored by a build before 1.1.0, or a card the site has not dated) is [Release.Unknown],
  * never illegal: a missing fact must not fail a deck.
@@ -37,7 +37,8 @@ object Legality {
      */
     fun release(card: Card, format: Format, asOf: String? = null): Release {
         if (card.formats.isEmpty()) return Release.Unknown
-        if (word(format) !in card.formats) return Release.NotReleased(format)
+        // Not printed here only when a second source agrees (`RegionNames`): the pool alone has been a year behind.
+        if (word(format) !in card.formats) return if (word(format) in card.absentFrom) Release.NotReleased(format) else Release.Unknown
         val date = if (format == Format.TCG) card.tcgDate else card.ocgDate
         if (asOf != null && date != null && isDate(date) && date > asOf) return Release.NotYet(format, date)
         return Release.Legal

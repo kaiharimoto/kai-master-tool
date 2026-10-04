@@ -3,6 +3,8 @@ package com.kaiharimoto.neue
 import com.kaiharimoto.mastertool.core.cards.BanlistCodec
 import com.kaiharimoto.mastertool.core.cards.BanlistPlan
 import com.kaiharimoto.mastertool.core.model.BanStatus
+import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.neue.banlist.BanlistCenter
 import kotlinx.coroutines.async
@@ -126,5 +128,36 @@ class BanlistCenterTest {
         assertTrue(got.all { it.history?.lists?.size == 2 })
         assertEquals(1, asked.count { "list=categorymembers" in it })
         assertNull(center(dir).history(Format.OCG), "nothing kept for the OCG")
+    }
+
+    @Test
+    fun whereCardsArePrintedIsReadPageByPageKeptAndReadAgainWeekly() = runBlocking {
+        val dir = Files.createTempDirectory("regions").toFile()
+        val asked = mutableListOf<String>()
+        fun members(titles: List<String>, next: String?) = buildJsonObject {
+            put("query", buildJsonObject { put("categorymembers", buildJsonArray { titles.forEach { t -> add(buildJsonObject { put("title", t) }) } }) })
+            if (next != null) put("continue", buildJsonObject { put("cmcontinue", next) })
+        }.toString()
+        val c = BanlistCenter(dir, fetch = { url ->
+            asked += url
+            when {
+                "TCG_cards" in url && "cmcontinue" !in url -> members(listOf("Ash Blossom & Joyous Spring"), "page|2")
+                "TCG_cards" in url -> members(listOf("Trap Holic"), null)
+                else -> members(listOf("Trap Holic", "30,000-Year White Turtle", "Ash Blossom & Joyous Spring"), null)
+            }
+        }, clock = { now }, today = { "2025-05-01" }, pause = 0)
+        val doc = assertNotNull(c.regions())
+        assertEquals(listOf("Ash Blossom & Joyous Spring", "Trap Holic"), doc.tcg)
+        assertEquals(3, asked.size)
+        // Kept: the next ask within the week reads nothing, and a new holder reads the file.
+        assertEquals(doc, c.regions())
+        assertEquals(3, asked.size)
+        assertEquals(doc.tcg, BanlistCenter(dir, fetch = { error("no") }, clock = { now }, pause = 0).storedRegions()?.tcg)
+        // What it settles: the turtle is OCG-only by both sources; Trap Holic, on the pool's word alone, is not.
+        val names = doc.names()
+        val turtle = names.confirm(Card(CardId(72929454), "30,000-Year White Turtle", "Normal Monster", "normal", formats = listOf("OCG")))
+        assertEquals(setOf("TCG"), turtle.absentFrom)
+        val holic = names.confirm(Card(CardId(22377092), "Trap Holic", "Trap Card", "trap", formats = listOf("OCG", "Master Duel")))
+        assertEquals(emptySet(), holic.absentFrom)
     }
 }

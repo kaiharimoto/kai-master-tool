@@ -516,7 +516,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val parts = buildList {
             if (c.formats.isNotEmpty()) {
                 fun region(f: Format, date: String?) = when {
-                    Legality.word(f) !in c.formats -> "not released in the ${Legality.word(f)}"
+                    // Not printed there only when Yugipedia agrees with the pool (1.1.1); otherwise said to be unknown.
+                    Legality.release(c, f) is Legality.Release.NotReleased -> "not released in the ${Legality.word(f)}"
+                    Legality.word(f) !in c.formats -> "${Legality.word(f)} unknown (the sources disagree or have not been read)"
                     date != null -> "${Legality.word(f)} ${Legality.readable(date)}"
                     else -> Legality.word(f)
                 }

@@ -395,6 +395,16 @@ class DeckBuilderState(
 
     // ---- lifecycle ---------------------------------------------------------
 
+    /**
+     * Takes the repository's index again after something was laid over the pool (1.1.1, where cards are printed), as a
+     * sync does; an empty one (the pool not read yet) is ignored, since the pool's own load brings the overlay with it.
+     */
+    fun adoptIndex(next: CardIndex) {
+        if (next.size == 0) return
+        index = next
+        runSearch(immediate = true)
+    }
+
     fun start() {
         scope.launch {
             index = deps.cardRepository.loadFromCache()

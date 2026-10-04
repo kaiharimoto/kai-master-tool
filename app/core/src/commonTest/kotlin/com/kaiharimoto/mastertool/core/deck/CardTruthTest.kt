@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.deck
 
 import com.kaiharimoto.mastertool.core.TestCards
+import com.kaiharimoto.mastertool.core.cards.RegionNames
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
@@ -30,11 +31,14 @@ class CardTruthTest {
         genesysPoints = 20,
     )
     private val filler = (1..40).map { TestCards.monster(id = 1000 + it, name = "Filler $it", formats = listOf("TCG", "OCG")) }
-    private val turtle = TestCards.monster(id = 72929454, name = "30,000-Year White Turtle", formats = listOf("OCG GOAT", "OCG"), ocgDate = "1999-10-17")
+    private val regions = RegionNames(tcg = listOf("Adamancipator Conductor", "Trap Holic"), ocg = listOf("30,000-Year White Turtle", "Trap Holic", "Bandit"))
+    private val turtle = regions.confirm(TestCards.monster(id = 72929454, name = "30,000-Year White Turtle", formats = listOf("OCG GOAT", "OCG"), ocgDate = "1999-10-17"))
+    // YGOPRODeck a year behind: OCG and Master Duel only, though printed in the TCG in Duelist's Advance (kai, 1.1.1).
+    private val trapHolic = regions.confirm(TestCards.monster(id = 22377092, name = "Trap Holic", formats = listOf("OCG", "Master Duel"), ocgDate = "2025-04-26"))
     private val upcoming = TestCards.monster(id = 5000001, name = "Adamancipator Conductor", formats = listOf("TCG", "OCG"), tcgDate = "2026-10-08", ocgDate = "2026-04-26")
-    private val speedOnly = TestCards.monster(id = 5000002, name = "Bandit", formats = listOf("Speed Duel"), tcgDate = "2019-08-01")
+    private val speedOnly = regions.confirm(TestCards.monster(id = 5000002, name = "Bandit", formats = listOf("Speed Duel"), tcgDate = "2019-08-01"))
     private val oldPool = TestCards.monster(id = 5000003, name = "From an old pool")
-    private val index = CardIndex.build(listOf(ash, turtle, upcoming, speedOnly, oldPool) + filler)
+    private val index = CardIndex.build(listOf(ash, turtle, upcoming, speedOnly, oldPool, trapHolic) + filler)
 
     private fun deckWith(vararg ids: Int) = Deck(main = ids.map(::CardId) + filler.take(40 - ids.size).map { it.id })
 
@@ -79,6 +83,22 @@ class CardTruthTest {
         assertTrue(tcg.errors.any { it.message == "30,000-Year White Turtle is not released in the TCG (OCG only)." }, tcg.errors.toString())
         val ocg = DeckValidator.validate(deck, index::byId, Format.OCG)
         assertTrue(ocg.isLegal, ocg.errors.toString())
+    }
+
+    @Test
+    fun oneSourceAloneNeverMakesACardIllegal() {
+        // The pool says OCG only, Yugipedia has it in the TCG: the sources disagree, so it is unknown, never illegal.
+        assertEquals(emptySet(), trapHolic.absentFrom)
+        assertEquals(Legality.Release.Unknown, Legality.release(trapHolic, Format.TCG))
+        assertTrue(DeckValidator.validate(deckWith(trapHolic.id.value), index::byId, Format.TCG).isLegal)
+        // The same card before Yugipedia has been read: unknown too.
+        val unread = TestCards.monster(id = 22377092, name = "Trap Holic", formats = listOf("OCG", "Master Duel"))
+        assertEquals(Legality.Release.Unknown, Legality.release(unread, Format.TCG))
+        // A card Yugipedia does not know at all is left alone.
+        val stranger = TestCards.monster(id = 1, name = "Nobody Knows", formats = listOf("OCG"))
+        assertEquals(stranger, regions.confirm(stranger))
+        // Both agree: not released.
+        assertEquals(setOf("TCG"), turtle.absentFrom)
     }
 
     @Test

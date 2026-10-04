@@ -49,6 +49,15 @@ app reads that as *unknown*, never as illegal, and refreshes the pool once (`Poo
 
 `DeckValidator` reports the first two as errors beside the banlist's, with the date in the words.
 
+**Two sources for "not released here"** (1.1.1, kai: "Trap holic exists in the tcg"). YGOPRODeck's `formats` lag:
+Trap Holic was printed in the TCG in Duelist's Advance (DUAD-EN078, 4 July 2025), and a year later the site still lists it
+as OCG and Master Duel only — 47 of the 383 cards it calls OCG-only were in Yugipedia's "TCG cards" category on
+2026-10-04, most of them Duelist's Advance and 2026 sets. So a region missing from the pool is **not released** only when
+Yugipedia agrees (`RegionNames`: it knows the card, in "TCG cards" or "OCG cards", and not in that region's); the agreed
+regions are `Card.absentFrom`, laid over the pool in memory (`CardRepository.useRegions`, nothing stored). Where they
+disagree, or Yugipedia has not been read, it is **unknown**: never illegal, never vouched for. The two categories are a
+device cache beside the lists (`<data>/banlists/regions.json`, about 60 requests a week).
+
 **Genesys** (Konami's points format, from September 2025): no Link or Pendulum monsters, no Forbidden & Limited
 list, and the deck's points — main, extra and side, each copy — at most the event's cap (100 unless the store sets
 another). `GenesysRules.check(deck, cards, cap)` is in core with tests and the points are shown on `card_info`; a
