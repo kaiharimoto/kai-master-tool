@@ -129,6 +129,13 @@ one OCG name is written `Allure of Darkness|sc`. The API answers 50 pages' wikit
   and the field read honestly. Stored-data changes: schema 4 (five columns), `PoolRecord.misc`, a new device-only cache
   `<data>/banlists/`.
 - **1.1.1** — the builder's dated legality, the field and `expected_winrate` as of a date, and the Genesys switch.
-- **1.1.2** — a legality-and-odds regression set in Trust (F1).
+- **1.1.2** — a legality-and-odds regression set in Trust (F1): **Card truth** (`EvalSets.cardTruth`, `card-truth`), 32
+  items, each with its source — 14 banlist-by-date questions in both regions from 2004 to 2023 (cards that moved between
+  lists among them: Raigeki, Monster Reborn, Harpie's Feather Duster TCG against OCG), 8 release questions (OCG-only,
+  a Speed Duel Skill Card, TCG against OCG dates), 5 copy counts by passcode across alternate artworks, and 5 Genesys
+  points graded by a new `Grader.Number`. The facts were read on 2026-10-04: Yugipedia's list pages through the app's own
+  `LimitationParser`/`BanlistHistory`, and YGOPRODeck's pool (`misc=yes`). `banlist` joins `EVAL_TOOLS`; `validate_deck`
+  does not (it checks the person's decks, not a list in the question). Genesys points can change: re-read them when
+  Konami does. Nothing stored changes (graders are not stored; `EvalRun` is as before).
 
 **Needs:** F3's versioned documents (the banlist file), Phase A's runner (the regression set).

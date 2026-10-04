@@ -13,13 +13,16 @@ object EvalSets {
     const val RULINGS = "rulings"
     const val DECKLISTS = "decklists"
     const val PLANTED = "planted-errors"
+    const val CARD_TRUTH = "card-truth"
 
     /** What every question is asked under: answer plainly, end on the line the grader reads. */
     const val INSTRUCTIONS = "You are being tested on a question with a known answer. Use the tools you have if they help " +
-        "(calculate and hand_odds for numbers, rulings and card_info for rules and cards, resolve_cards for card names). " +
-        "Answer briefly, then end with one last line in exactly the form the question asks for, starting with ANSWER:."
+        "(calculate and hand_odds for numbers, rulings and card_info for rules and cards, resolve_cards for card names, " +
+        "banlist for any Forbidden & Limited list by date, card_info by passcode for a card's printings, release dates " +
+        "and Genesys points). Answer briefly, then end with one last line in exactly the form the question asks for, " +
+        "starting with ANSWER:."
 
-    val all: List<EvalSet> by lazy { listOf(handOdds(), rulings(), decklists(), planted()) }
+    val all: List<EvalSet> by lazy { listOf(handOdds(), rulings(), decklists(), planted(), cardTruth()) }
 
     fun byId(id: String): EvalSet? = all.firstOrNull { it.id == id }
 
@@ -206,5 +209,104 @@ object EvalSets {
             plant("plant-24", "In a 40-card deck you hold 5 of its cards going first, a sixth of the deck.", true, "sixth"),
         )
         return EvalSet(PLANTED, "The fact-checker", "${items.size} answers, half with one planted mistake: how many mistakes it catches, and how often it cries wolf.", items, checker = true)
+    }
+
+    // ---- card truth: banlists by date, release, copies by card, Genesys points (1.1.2, Phase B F1) ------------
+
+    /** When the facts below were read from their sources. */
+    const val CARD_TRUTH_READ = "2026-10-04"
+
+    private fun list(title: String) = "Yugipedia, “$title” (read through LimitationParser, $CARD_TRUTH_READ)"
+    private const val POOL = "YGOPRODeck's card pool (cardinfo.php?misc=yes), misc_info"
+
+    private fun ban(id: String, card: String, region: String, status: String, date: String, yes: Boolean, title: String) = yn(
+        id,
+        "Was $card $status on the $region Forbidden & Limited list in force on $date" +
+            (if (region == "TCG") " (Advanced Format)?" else "?"),
+        yes,
+        list(title),
+    )
+
+    private fun copies(id: String, deck: String, rule: String, yes: Boolean, source: String) = yn(
+        id,
+        "A deck holds $deck — cards given by passcode, and no other copies of these cards. $rule",
+        yes,
+        source,
+    )
+
+    private fun points(id: String, card: String, points: Int) = EvalItem(
+        id,
+        "In the Genesys format, how many points does $card cost? Give the whole number, on a last line in the form ANSWER: 12",
+        Grader.Number(points),
+        "$POOL.genesys_points, read $CARD_TRUTH_READ (Konami can change a card's points: read it again when they do)",
+    )
+
+    /**
+     * Card truth (Phase B, `docs/phases/B.md`): questions only the tools answer — a past list by its date and region,
+     * where and when a card was released, copies counted by card whatever their printing, and a card's Genesys points.
+     * Every banlist fact was read from Yugipedia's list pages through the app's own `LimitationParser` and
+     * `BanlistHistory`, the rest from YGOPRODeck's pool, on [CARD_TRUTH_READ]; each item names its source. Dates sit
+     * well inside a list's days, and every list asked about has ended or is the one in force on the day asked.
+     */
+    fun cardTruth(): EvalSet {
+        val unlimited = "On a Forbidden & Limited list where all of them are Unlimited, is that legal?"
+        val items = listOf(
+            // Banlists by date: both regions, every era, cards that moved between lists.
+            ban("ban-01", "Pot of Greed", "TCG", "Forbidden", "2010-03-01", true, "March 2010 Lists (TCG)"),
+            ban("ban-02", "Pot of Greed", "TCG", "Forbidden", "2004-06-01", false, "April 2004 Lists"),
+            ban("ban-03", "Raigeki", "TCG", "Limited", "2016-06-01", true, "April 2016 Lists (TCG)"),
+            ban("ban-04", "Raigeki", "TCG", "Forbidden", "2023-06-01", false, "February 2023 Lists (TCG)"),
+            ban("ban-05", "Monster Reborn", "TCG", "Forbidden", "2009-12-01", true, "September 2009 Lists (TCG)"),
+            ban("ban-06", "Monster Reborn", "TCG", "Forbidden", "2008-06-01", false, "May 2008 Lists"),
+            ban("ban-07", "Maxx \"C\"", "TCG", "Forbidden", "2017-06-01", false, "March 2017 Lists"),
+            ban("ban-08", "Mirror Force", "TCG", "Semi-Limited", "2013-06-01", true, "March 2013 Lists (TCG)"),
+            ban("ban-09", "Harpie's Feather Duster", "TCG", "Forbidden", "2019-06-01", true, "April 2019 Lists (TCG)"),
+            ban("ban-10", "Harpie's Feather Duster", "OCG", "Forbidden", "2019-06-01", false, "April 2019 Lists (OCG)"),
+            ban("ban-11", "Maxx \"C\"", "OCG", "Unlimited (not on the list at all)", "2020-06-01", true, "April 2020 Lists (OCG)"),
+            ban("ban-12", "Change of Heart", "OCG", "Forbidden", "2023-06-01", false, "April 2023 Lists (OCG)"),
+            ban("ban-13", "Ash Blossom & Joyous Spring", "OCG", "Semi-Limited", "2019-06-01", true, "April 2019 Lists (OCG)"),
+            ban("ban-14", "Raigeki", "OCG", "Forbidden", "2010-06-01", true, "March 2010 Lists (OCG)"),
+            // Released where, and when.
+            yn("release-01", "Is Ancient Tree of Enlightenment legal to play in a TCG (Advanced Format) deck on 2026-10-01?", false,
+                "$POOL.formats: OCG, never TCG (OCG 1999-03-06)"),
+            yn("release-02", "Is Archfiend Mirror legal to play in an OCG deck on 2026-10-01?", true,
+                "$POOL.formats and ocg_date: OCG since 1999-02-04, on no OCG list"),
+            yn("release-03", "Is the Skill Card \"Beatdown!\" legal to play in a TCG Advanced Format deck on 2026-10-01?", false,
+                "$POOL.formats: Speed Duel only (a Skill Card, 2019-01-24)"),
+            yn("release-04", "Had Ash Blossom & Joyous Spring been released in the TCG by 2017-03-01?", false,
+                "$POOL.tcg_date 2017-05-04 (OCG 2017-01-14)"),
+            yn("release-05", "Had Ash Blossom & Joyous Spring been released in the OCG by 2017-03-01?", true,
+                "$POOL.ocg_date 2017-01-14"),
+            yn("release-06", "Had Maxx \"C\" been released in the TCG by 2011-06-01?", true,
+                "$POOL.tcg_date 2011-02-08 (OCG 2011-09-17)"),
+            yn("release-07", "Had Accesscode Talker been released in the TCG by 2020-03-01?", false,
+                "$POOL.tcg_date 2020-04-30 (OCG 2020-01-11)"),
+            yn("release-08", "Had Nibiru, the Primal Being been released in the TCG by 2019-09-01?", true,
+                "$POOL.tcg_date 2019-08-29 (OCG 2019-09-14)"),
+            // Copies by card, whatever the printing.
+            copies("copies-01", "2 × 14558127 and 2 × 14558128 in its Main Deck", unlimited, false,
+                "$POOL: 14558127 and 14558128 are both Ash Blossom & Joyous Spring; 4 copies of one card"),
+            copies("copies-02", "2 × 14558127 in its Main Deck and 1 × 14558128 in its Side Deck", unlimited, true,
+                "$POOL: 14558127 and 14558128 are both Ash Blossom & Joyous Spring; 3 copies"),
+            copies("copies-03", "2 × 94145021 in its Main Deck and 2 × 94145022 in its Side Deck", unlimited, false,
+                "$POOL: 94145021 and 94145022 are both Droll & Lock Bird; 4 copies"),
+            copies("copies-04", "1 × 59438930 in its Main Deck and 2 × 59438931 in its Side Deck", unlimited, true,
+                "$POOL: 59438930 and 59438931 are both Ghost Ogre & Snow Rabbit; 3 copies"),
+            copies("copies-05", "1 × 83764719 and 1 × 83764718 in its Main Deck",
+                "Is that legal under the TCG (Advanced Format) Forbidden & Limited list in force on 2026-10-01?", false,
+                "$POOL: both are Monster Reborn, Limited on " + list("September 2026 Lists (TCG)")),
+            // Genesys points.
+            points("genesys-01", "Maxx \"C\"", 50),
+            points("genesys-02", "Triple Tactics Talent", 93),
+            points("genesys-03", "Pot of Prosperity", 40),
+            points("genesys-04", "Ash Blossom & Joyous Spring", 20),
+            points("genesys-05", "Infinite Impermanence", 11),
+        )
+        return EvalSet(
+            CARD_TRUTH, "Card truth",
+            "${items.size} questions only the tools answer: past banlists by date and region, where and when a card was released, " +
+                "copies counted by card, Genesys points.",
+            items,
+        )
     }
 }

@@ -35,6 +35,10 @@ sealed interface Grader {
     @Serializable
     data class YesNo(val expected: Boolean) : Grader
 
+    /** A whole number, exactly: a card's Genesys points (1.1.2, the Card truth set). */
+    @Serializable
+    data class Number(val expected: Int) : Grader
+
     /** A decklist read back: every card by its exact name with its count, nothing more, nothing less. */
     @Serializable
     data class Decklist(val expected: Map<String, Int>) : Grader
@@ -58,6 +62,7 @@ object Grading {
     fun grade(grader: Grader, answer: String): Graded = when (grader) {
         is Grader.Percent -> percent(grader, answer)
         is Grader.YesNo -> yesNo(grader, answer)
+        is Grader.Number -> number(grader, answer)
         is Grader.Decklist -> decklist(grader, answer)
         is Grader.Planted -> Graded(false, "a planted answer is graded on the checker's claims")
     }
@@ -87,6 +92,21 @@ object Grading {
         val line = answerLine(answer).lowercase()
         val word = Regex("""\b(yes|no)\b""").find(line)?.value ?: return Graded(false, "neither yes nor no in “${line.take(60)}”")
         return Graded((word == "yes") == g.expected, "$word (expected ${if (g.expected) "yes" else "no"})")
+    }
+
+    private val aNumber = Regex("""(?<![\d.])-?\d+(?:\.\d+)?""")
+
+    /**
+     * The first number on the ANSWER line ("ANSWER: 50 points of 100" is 50), or the answer's last number when it has
+     * no such line. It must be the expected whole number: "50.0" is 50, "50.5" is not.
+     */
+    private fun number(g: Grader.Number, answer: String): Graded {
+        val hasLine = answer.lines().any { it.trim().uppercase().startsWith("ANSWER") }
+        val line = answerLine(answer)
+        val found = aNumber.findAll(line).toList()
+        val said = (if (hasLine) found.firstOrNull() else found.lastOrNull()) ?: return Graded(false, "no number in “${line.take(60)}”")
+        val ok = said.value.toDoubleOrNull() == g.expected.toDouble()
+        return Graded(ok, "${said.value} (expected ${g.expected})")
     }
 
     private val row = Regex("""^\s*[-•*]?\s*(\d+)\s*[x×]?\s+(.+?)\s*$""", RegexOption.IGNORE_CASE)
