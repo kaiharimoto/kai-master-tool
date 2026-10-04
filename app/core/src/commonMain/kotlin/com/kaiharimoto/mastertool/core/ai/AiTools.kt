@@ -565,9 +565,17 @@ object AiTools {
 
     val rulings = ToolSpec(
         "rulings",
-        "A card's rulings, from Yugipedia's rulings page (Konami's Q&A, translated): how it interacts, what counts as a cost, " +
-            "whether it targets, when it can be used. Check here before stating a ruling you are not sure of.",
-        schema { string("card", "The card's name", required = true) },
+        "A card's rulings: how it interacts, what counts as a cost, whether it targets, when it can be used. Check here " +
+            "before stating a ruling you are not sure of. Two sources: first Konami's official OCG FAQ notes and Q&A, " +
+            "translated by YGOrganization (db.ygoresources.com), the newest few with their dates and translation status; " +
+            "then Yugipedia's rulings page, sectioned TCG and OCG. The official ones are the OCG's: the TCG usually agrees " +
+            "but can differ, and where a TCG ruling disagrees it stands for TCG play. Say which game a ruling is from and " +
+            "name any TCG caveat it carries.",
+        schema {
+            string("card", "The card's name", required = true)
+            string("with", "Another card's name: only the official Q&As about the two together")
+            enum("source", "Which source; default all", listOf("all", "ygorg", "yugipedia"))
+        },
         ToolGroup.CARDS,
         phase = 2,
     )

@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.ai.avatar.Expression
 import com.kaiharimoto.mastertool.core.ai.avatar.MoodTracker
 import com.kaiharimoto.mastertool.core.ai.calc.Calc
 import com.kaiharimoto.mastertool.core.ai.rules.Wikitext
+import com.kaiharimoto.mastertool.core.ai.rules.YgoOrg
 import com.kaiharimoto.mastertool.core.ai.rules.Yugipedia
 import com.kaiharimoto.mastertool.core.ai.web.HtmlText
 import com.kaiharimoto.mastertool.core.ai.web.SearchResults
@@ -39,7 +40,8 @@ import java.io.File
  * similar to Claude Code … as advanced as DeepSeek Harness, built and tailored for this
  * program"): exact numbers (`calculate`, `hand_odds`), a plan the person can watch
  * (`todo_write`), the web (`web_search`, `web_fetch`), the rules (`rulings`,
- * `archetype_guide`, from Yugipedia, whose text is CC BY-SA and says so), and a helper
+ * `archetype_guide`, from Yugipedia, whose text is CC BY-SA and says so — and, for rulings, Konami's
+ * own OCG FAQ and Q&A first, from YGOrganization's database, with its OCG caveat), and a helper
  * with a fresh mind for big reading jobs (`delegate`).
  *
  * Every request to the web goes one at a time, names the app in its User-Agent, and keeps
@@ -58,7 +60,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         "todo_write" -> todo(ToolArgs.strings(i, "items"))
         "web_search" -> search(ToolArgs.string(i, "query")!!)
         "web_fetch" -> fetch(ToolArgs.string(i, "url")!!)
-        "rulings" -> rulings(ToolArgs.string(i, "card")!!)
+        "rulings" -> rulings(ToolArgs.string(i, "card")!!, ToolArgs.string(i, "with"), ToolArgs.string(i, "source"))
         "archetype_guide" -> archetype(ToolArgs.string(i, "archetype")!!, ToolArgs.strings(i, "sections"))
         "delegate" -> delegate(ToolArgs.string(i, "task")!!, ToolArgs.int(i, "steps") ?: 12)
         "express" -> express(ToolArgs.string(i, "face")!!, ToolArgs.int(i, "seconds") ?: 3)
@@ -219,23 +221,108 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
 
     // ---- the rules ------------------------------------------------------------------------
 
-    private suspend fun rulings(card: String): MetaAnswer {
+    /** One source's part of a `rulings` answer: its words, a few for the activity line, and whether it read anything. */
+    private class Read(val text: String, val summary: String, val ok: Boolean)
+
+    /**
+     * A card's rulings from both sources (1.0.98): Konami's OCG FAQ and Q&A from YGOrganization first —
+     * the strongest there is, but the OCG's, so its caveat goes with it — then Yugipedia's page, sectioned
+     * TCG and OCG. Each in its own envelope, cut to its share so neither end is cut off; if one source
+     * fails the other still answers and the failure is said. [source] is "all", "ygorg" or "yugipedia".
+     */
+    private suspend fun rulings(card: String, with: String?, source: String?): MetaAnswer {
         val name = (CardWords.resolve(card, h.builder.index) as? Resolved.Found)?.card?.name ?: card.trim()
+        val which = source?.trim()?.lowercase().orEmpty()
+        val org = which != "yugipedia"
+        val wiki = which != "ygorg"
+        val both = org && wiki
+        val reads = listOfNotNull(
+            if (org) ygoOrgRulings(name, card.trim(), with?.trim()?.ifEmpty { null }, if (both) 7_500 else 13_500) else null,
+            if (wiki) yugipediaRulings(name, if (both) 6_000 else 13_500) else null,
+        )
+        val text = reads.joinToString("\n\n") { it.text }
+        if (reads.none { it.ok }) return fail(text)
+        return MetaAnswer(text, reads.filter { it.ok }.joinToString("; ") { it.summary })
+    }
+
+    /** The parsed name index, kept while its cached body is the same (it is read from the week's cache each time). */
+    @Volatile
+    private var ygoIndex: Pair<String, YgoOrg.Index>? = null
+
+    private suspend fun ygoIndex(): Result<YgoOrg.Index> {
+        val body = get(YgoOrg.INDEX_URL, keep = true).getOrElse { return Result.failure(it) }
+        ygoIndex?.let { (seen, index) -> if (seen == body) return Result.success(index) }
+        return YgoOrg.index(body).onSuccess { ygoIndex = body to it }
+    }
+
+    /**
+     * Konami's OCG documentation for one card, as YGOrganization's database has it: the name index
+     * (kept a week), the card, and at most [YgoOrg.MAX_QAS] of its Q&As, the newest — only those it
+     * shares with [with] when that names a card. Only what the question needs, as the site asks.
+     */
+    private suspend fun ygoOrgRulings(name: String, typed: String, with: String?, budget: Int): Read {
+        val gone = { why: String -> Read("YGOrganization (Konami's OCG rulings): $why", "", ok = false) }
+        val index = ygoIndex().getOrElse { return gone("could not read its card index. ${Unreachable.of(YgoOrg.INDEX_URL, it)}") }
+        val id = index.id(name) ?: index.id(typed) ?: return gone("its database has no card named “$name”.")
+        val url = YgoOrg.cardUrl(id)
+        val card = get(url, keep = true).mapCatching { YgoOrg.card(it).getOrThrow() }
+            .getOrElse { return gone("could not read “$name”. ${Unreachable.of(url, it)}") }
+        val pool = h.builder.index
+        // A card is named as the app names it where it can be (the index also holds old translations).
+        val prefer = { n: String -> pool.byName(n) != null }
+        val named = { ref: Int -> if (ref == card.id && card.name != null) card.name else index.name(ref, prefer) }
+        // Another card named: only the Q&As both cards are in, read off that card's own list.
+        var partner: String? = null
+        var shared: Set<Int>? = null
+        var note = ""
+        if (with != null) {
+            val otherName = (CardWords.resolve(with, pool) as? Resolved.Found)?.card?.name ?: with
+            val other = index.id(otherName) ?: index.id(with)
+            val otherCard = other?.let { o -> get(YgoOrg.cardUrl(o), keep = true).getOrNull()?.let { YgoOrg.card(it).getOrNull() } }
+            if (otherCard != null) {
+                partner = otherCard.name ?: otherName
+                shared = otherCard.qaIds.toSet()
+            } else {
+                note = "(“$with” is not a card YGOrganization's database could find, so the newest Q&As are given instead.)\n"
+            }
+        }
+        val ids = YgoOrg.pick(card.qaIds, shared?.toList())
+        val total = shared?.let { s -> card.qaIds.distinct().count { it in s } } ?: card.qaIds.distinct().size
+        var unread = 0
+        val qas = ids.mapNotNull { q ->
+            get(YgoOrg.qaUrl(q), keep = true).mapCatching { YgoOrg.qa(it).getOrThrow() }.getOrElse {
+                unread++
+                null
+            }
+        }
+        val body = YgoOrg.text(card, qas, total, named, partner) +
+            (if (unread > 0) "\n($unread Q&As could not be read just now.)" else "")
+        // Translations and their notes are written by people outside the app: outside text, in the envelope.
+        val text = "Official rulings (Konami's OCG FAQ and Q&A) for “$name”, from YGOrganization:\n" + note +
+            YgoOrg.CAVEAT + "\n" +
+            Untrusted.wrap("YGOrganization: $name", HtmlText.truncate(body, budget)) + "\n" +
+            YgoOrg.ATTRIBUTION
+        val shown = qas.count { it.status.shown }
+        return Read(text, "Read Konami's OCG notes and $shown Q&As for $name", ok = true)
+    }
+
+    private suspend fun yugipediaRulings(name: String, budget: Int): Read {
+        val gone = { why: String -> Read("Yugipedia: $why", "", ok = false) }
         val url = Yugipedia.rulingsUrl(name)
-        val json = get(url, keep = true).getOrElse { return fail("Could not read Yugipedia's rulings for “$name”. ${Unreachable.of(url, it)}") }
-        val wikitext = Yugipedia.wikitextOf(json) ?: return fail("Yugipedia has no rulings page for “$name”.")
+        val json = get(url, keep = true).getOrElse { return gone("could not read its rulings for “$name”. ${Unreachable.of(url, it)}") }
+        val wikitext = Yugipedia.wikitextOf(json) ?: return gone("it has no rulings page for “$name”.")
         val list = Wikitext.rulings(wikitext)
-        if (list.isEmpty()) return MetaAnswer("No rulings listed for “$name”.\n${Yugipedia.ATTRIBUTION}", "No rulings for $name")
+        if (list.isEmpty()) return Read("Yugipedia lists no rulings for “$name”.\n${Yugipedia.ATTRIBUTION}", "no Yugipedia rulings", ok = true)
         // A wiki anyone can edit: the rulings go in the envelope, cut to size first so its end is never cut off.
         // Each with the headings it stands under (TCG and OCG rulings can differ) and its source.
         val read = buildString {
             list.take(40).forEach { appendLine(it.line()) }
             if (list.size > 40) appendLine("(${list.size - 40} more on the page)")
         }
-        val text = "Rulings for “$name”, each with its section and source:\n" +
-            Untrusted.wrap("Yugipedia rulings: $name", HtmlText.truncate(read.trimEnd(), 13_500)) + "\n" +
+        val text = "Yugipedia's rulings for “$name”, each with its section (TCG or OCG) and source:\n" +
+            Untrusted.wrap("Yugipedia rulings: $name", HtmlText.truncate(read.trimEnd(), budget)) + "\n" +
             Yugipedia.ATTRIBUTION
-        return MetaAnswer(text, "Read ${list.size} rulings for $name")
+        return Read(text, "${list.size} Yugipedia rulings for $name", ok = true)
     }
 
     private suspend fun archetype(name: String, wanted: List<String>): MetaAnswer {
