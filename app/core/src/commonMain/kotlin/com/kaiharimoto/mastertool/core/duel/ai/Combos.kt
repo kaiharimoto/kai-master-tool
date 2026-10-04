@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelEntry
+import com.kaiharimoto.mastertool.core.duel.DuelReach
 import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
@@ -14,6 +15,7 @@ import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
+import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
 import com.kaiharimoto.mastertool.core.duel.text.NameScore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -94,26 +96,69 @@ object ComboRunner {
         }
         return ComboRun(out)
     }
+
+    /**
+     * A planned line held to what a player may do to cards it cannot see ([DuelReach], Phase C): Ai's lines are, as the
+     * network's guest is — its knowledge covers what it reads, never what it does. The first step that would take, turn
+     * up, show or target a card hidden from [seat], with why; null when none would.
+     */
+    fun reach(s: DuelState, seat: Int, run: ComboRun): String? {
+        var state = s
+        run.steps.forEachIndexed { i, (text, actions) ->
+            DuelReach.check(state, seat, actions)?.let { return "Step ${i + 1} (“$text”): $it" }
+            state = DuelRules.applyAll(state, actions, seat).first ?: return null
+        }
+        return null
+    }
 }
 
 /**
  * A span of the log turned back into steps a combo can replay: every move written as the command
  * line would say it, with names for cards, so it plays against any shuffle.
+ *
+ * Recorded for a [seat] (Phase C, the red team's lead: "duel_combo records name hidden cards Ai touched"), a card is
+ * named only when that seat knew it — saw it before or after the move, or it came from its own Deck or Extra Deck,
+ * whose list it knows; any other is written by where it stood ("os2"), and a step with no such place is left out. A
+ * combo is kept with a deck and read back by anyone later, so it holds nothing the seat could not have written.
  */
 object ComboRecorder {
-    fun steps(start: DuelState, entries: List<DuelEntry>, catalog: DuelCatalog): List<String> {
+    fun steps(start: DuelState, entries: List<DuelEntry>, catalog: DuelCatalog, seat: Int? = null, secret: Long = 0L): List<String> {
         var s = start
         val out = mutableListOf<String>()
         entries.forEach { e ->
-            command(s, e.action, catalog)?.let { out += it }
-            s = (DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok)?.state ?: s
+            val after = (DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok)?.state ?: s
+            val before = s
+            val knows: (Int) -> Boolean = if (seat == null) { _ -> true } else { uid -> knew(before, after, uid, seat) }
+            command(before, e.action, catalog, knows) { uid -> seat?.let { DuelNotation.coordOf(before, uid, it, secret) } }?.let { out += it }
+            s = after
         }
         return out
     }
 
-    fun command(s: DuelState, a: DuelAction, catalog: DuelCatalog): String? {
-        fun n(uid: Int) = s.cards[uid]?.let { catalog.nameOf(it) } ?: "#$uid"
-        return when (a) {
+    /** Whether [seat] knew [uid] across a move: seen before or after it, or a card of its own Deck or Extra Deck. */
+    fun knew(before: DuelState, after: DuelState, uid: Int, seat: Int): Boolean {
+        if (DuelSight.sees(before, uid, seat) || DuelSight.sees(after, uid, seat)) return true
+        val own = before.cards[uid]?.owner == seat
+        return own && before.placeOf(uid).let { it is Place.Pile && (it.kind == PileKind.DECK || it.kind == PileKind.EXTRA) }
+    }
+
+    /**
+     * [a] as the command line says it. A card [knows] refuses is written as [coord] gives it, and the step is left out
+     * (null) when it gives none.
+     */
+    fun command(
+        s: DuelState,
+        a: DuelAction,
+        catalog: DuelCatalog,
+        knows: (Int) -> Boolean = { true },
+        coord: (Int) -> String? = { null },
+    ): String? {
+        var unnamed = false
+        fun n(uid: Int): String = when {
+            knows(uid) -> s.cards[uid]?.let { catalog.nameOf(it) } ?: "#$uid"
+            else -> coord(uid) ?: "".also { unnamed = true }
+        }
+        val said = when (a) {
             // A card going to the GY as its chain resolves is the resolve step's own doing.
             is DuelAction.Move -> if (a.how == "resolve" || a.how == "negate") null else {
                 val name = n(a.uid)
@@ -167,6 +212,7 @@ object ComboRecorder {
             is DuelAction.Attack -> "${n(a.attacker)} attacks ${a.target?.let(::n) ?: "directly"}"
             else -> null
         }
+        return said.takeUnless { unnamed }
     }
 
     /** What a recorded line needs in hand: the cards it plays from the hand that were there at the start. */

@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelRandom
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
 import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.DuelTimeline
+import com.kaiharimoto.mastertool.core.duel.replay.Past
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
 import com.kaiharimoto.mastertool.core.duel.replay.Replays
 import kotlinx.coroutines.Dispatchers
@@ -182,24 +183,27 @@ internal class DuelReplays(private val d: Duels) {
         val stamped = actions.mapIndexed { k, a -> DuelRandom.stamp(a, DuelRandom.forEntry(r.record.header.seed, r.at + k + 7919)) }
         val (ok, why) = DuelRules.applyAll(g.state, stamped, seat)
         if (ok == null) { d.problem = why; return false }
-        edit(Replays.insert(r.record, r.at, stamped, seat, Duels.now()), r.at + stamped.size)
+        edit(Replays.insert(r.record, r.at, stamped, seat, Duels.now(), by = d.provenance()), r.at + stamped.size)
         return true
     }
 
     /**
      * [actions] put into the log after entry [at] of the duel in play (1.0.80): a move made in a phase
      * already gone by. Everything after folds on top of it; a later move it makes impossible is struck
-     * through in the log, never refused.
+     * through in the log, never refused. What it leaves to chance comes from that place's own dice, and a move
+     * that would change what was drawn since is refused (Phase C, [Past.stamp], [Past.redeals]): never a way to
+     * fish for a better hand.
      */
     fun insertPast(at: Int, actions: List<DuelAction>, seat: Int?): Boolean {
         if (!d.aiWatch.aiActing && d.aiWatch.waitingOnAi) { d.problem = "Ai is answering your move — Don't wait first."; return false }
         val g = d.game ?: return false
         val k = at.coerceIn(g.floor, g.cursor)
-        val stamped = actions.mapIndexed { n, a -> DuelRandom.stamp(a, DuelRandom.forEntry(g.header.seed, g.cursor + n + 104729)) }
+        val stamped = Past.stamp(g.header, g.played, k, actions)
         val (ok, why) = DuelRules.applyAll(d.folds(g).sync(g.entries).stateAt(k), stamped, seat)
         if (ok == null) { d.problem = why; return false }
+        Past.redeals(g.header, g.played, k, stamped, seat)?.let { d.problem = it; return false }
         val record = g.record().copy(entries = g.played, cursor = g.cursor)
-        val inserted = Replays.insert(record, k, stamped, seat, Duels.now())
+        val inserted = Replays.insert(record, k, stamped, seat, Duels.now(), by = d.provenance())
         d.game = DuelGame.of(inserted)
         d.problem = null
         d.save()

@@ -5,12 +5,14 @@ import com.kaiharimoto.mastertool.core.duel.CardInst
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
+import com.kaiharimoto.mastertool.core.duel.DuelReach
 import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.DuelView
 import com.kaiharimoto.mastertool.core.duel.Outcome
 import com.kaiharimoto.mastertool.core.duel.PileKind
+import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.ResponseWindow
 import com.kaiharimoto.mastertool.core.duel.SeatState
@@ -49,40 +51,19 @@ object DuelHost {
         fun place(p: Place): Place = if (p is Place.Under) p.copy(host = uid(p.host)) else p
         // A host card the guest cannot see stays out of its sight (1.0.85, the red team's second pass): it may go to
         // its owner's own piles or side of the field — destroyed, banished, milled — but never to the guest's side,
-        // into the guest's hand, or face-up by a flip the guest makes.
-        fun hidden(u: Int): Boolean = s.cards[u]?.let { it.owner != seat && it.controller != seat && !DuelSight.sees(s, u, seat) } == true
+        // into the guest's hand, or face-up by a flip the guest makes. One list with Ai's ([DuelReach], Phase C).
         fun refuse(why: String) { if (problem == null) problem = why }
         // The turn player through the batch: two End Turns in one intent must not end the host's turn too.
         var active = s.active
         val out = actions.map { a ->
             when (a) {
-                is DuelAction.Move -> a.copy(uid = uid(a.uid), to = place(a.to)).also { m ->
-                    val to = m.to
-                    if (hidden(m.uid) && when (to) {
-                            is Place.Zone -> to.seat == seat
-                            // A graveyard or banishment is its owner's whoever's pile it was dropped on.
-                            is Place.Pile -> to.seat == seat && to.kind != PileKind.GY && to.kind != PileKind.BANISHED
-                            is Place.Under -> true
-                            Place.Void -> false
-                        }
-                    ) refuse("That card is not yours to take")
-                }
-                is DuelAction.Position -> a.copy(uid = uid(a.uid)).also { p ->
-                    if (hidden(p.uid) && p.pos.faceUp) refuse("Only its controller turns that card face-up")
-                }
+                is DuelAction.Move -> a.copy(uid = uid(a.uid), to = place(a.to)).also { m -> DuelReach.refusal(s, seat, m)?.let(::refuse) }
+                is DuelAction.Position -> a.copy(uid = uid(a.uid)).also { p -> DuelReach.refusal(s, seat, p)?.let(::refuse) }
                 is DuelAction.Counter -> a.copy(uid = uid(a.uid))
-                is DuelAction.ChainAdd -> a.copy(seat = seat, uid = a.uid?.let(::uid), targets = a.targets.map(::uid)).also { c ->
-                    if (c.targets.any { inHandOrDeck(s, it, seat) }) refuse("A card in their hand or Deck cannot be targeted")
-                }
-                is DuelAction.Target -> a.copy(seat = seat, from = a.from?.let(::uid), to = a.to.map(::uid)).also { t ->
-                    if (t.to.any { inHandOrDeck(s, it, seat) }) refuse("A card in their hand or Deck cannot be targeted")
-                }
-                is DuelAction.Reveal -> a.copy(seat = seat, uids = a.uids.map(::uid)).also { r ->
-                    // A guest reveals its own cards only: never the host's deck, hand or set cards (1.0.85).
-                    if (problem == null && r.uids.any { u -> s.cards[u]?.let { it.owner != seat && it.controller != seat } != false }) {
-                        problem = "You can reveal only your own cards"
-                    }
-                }
+                is DuelAction.ChainAdd -> a.copy(seat = seat, uid = a.uid?.let(::uid), targets = a.targets.map(::uid)).also { c -> DuelReach.refusal(s, seat, c)?.let(::refuse) }
+                is DuelAction.Target -> a.copy(seat = seat, from = a.from?.let(::uid), to = a.to.map(::uid)).also { t -> DuelReach.refusal(s, seat, t)?.let(::refuse) }
+                // A guest reveals its own cards only: never the host's deck, hand or set cards (1.0.85).
+                is DuelAction.Reveal -> a.copy(seat = seat, uids = a.uids.map(::uid)).also { r -> DuelReach.refusal(s, seat, r)?.let(::refuse) }
                 is DuelAction.Attack -> a.copy(seat = seat, attacker = uid(a.attacker), target = a.target?.let(::uid))
                 is DuelAction.Keep -> a.copy(uid = uid(a.uid))
                 is DuelAction.Negate -> a.copy(seat = seat)
@@ -121,26 +102,18 @@ object DuelHost {
         return if (problem != null) null to problem else out to null
     }
 
-    /** Whether [uid] is the other seat's, in its hand or Deck: never a guest's target. */
-    private fun inHandOrDeck(s: DuelState, uid: Int, seat: Int): Boolean {
-        val c = s.cards[uid] ?: return false
-        if (c.owner == seat) return false
-        val p = s.placeOf(uid)
-        return p is Place.Pile && (p.kind == PileKind.HAND || p.kind == PileKind.DECK)
-    }
-
     /**
      * An intent from [seat], made on the game if it can be: refused while a response window waits on the
      * other player (unless [force]), and opening one for the other player when their [windows] setting
      * asks for it.
      */
-    fun act(game: DuelGame, seat: Int, actions: List<DuelAction>, windows: Map<Int, String>, force: Boolean = false, at: Long = 0L): DuelGame.Result {
+    fun act(game: DuelGame, seat: Int, actions: List<DuelAction>, windows: Map<Int, String>, force: Boolean = false, at: Long = 0L, by: Provenance? = null): DuelGame.Result {
         val w = game.state.window
         val tableMoves = actions.any { !it.social && it !is DuelAction.Answer }
         if (w != null && w.opener == seat && tableMoves && !force) {
             return DuelGame.Result(game, "Waiting for ${DuelWords.seatName(game.state, w.responder)} to respond or pass")
         }
-        val r = game.act(actions, seat, at)
+        val r = game.act(actions, seat, at, by = by)
         if (!r.ok) return r
         var s = r.game.state
         // The responder acting closes the window as surely as a Pass does.

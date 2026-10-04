@@ -391,7 +391,7 @@ private fun saveSpan(h: NeueHolders, duels: Duels, game: DuelGame, from: Int, to
     val deckId = duels.deckOf(seat) ?: run { h.neue.note = Note("Combos are kept with a library deck: start the duel with a saved deck."); return }
     val start = game.stateAt(from)
     val span = game.entries.subList(from, (to + 1).coerceAtMost(game.cursor)).filter { it.seat == seat || it.seat == null }
-    val steps = ComboRecorder.steps(start, span, duels.catalog)
+    val steps = ComboRecorder.steps(start, span, duels.catalog, seat, game.header.seed)
     if (steps.isEmpty()) { h.neue.note = Note("Nothing in those lines to keep."); return }
     val needs = ComboRecorder.needs(start, seat, span, duels.catalog)
     duels.saveSpan(deckId, "Line from turn ${start.turn}", needs, steps) { n -> h.neue.note = Note("Kept “$n”: ${steps.size} steps, in Combos") }

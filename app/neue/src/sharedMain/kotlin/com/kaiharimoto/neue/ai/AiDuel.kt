@@ -12,8 +12,11 @@ import com.kaiharimoto.mastertool.core.duel.ai.ComboRecorder
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
+import com.kaiharimoto.mastertool.core.duel.ai.AiTable
 import com.kaiharimoto.mastertool.core.duel.ai.Secrets
 import com.kaiharimoto.mastertool.core.duel.nameOf
+import com.kaiharimoto.mastertool.core.duel.record.DuelResult
+import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.replay.Past
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
@@ -38,6 +41,8 @@ internal class AiDuel(private val h: NeueHolders) {
     suspend fun run(name: String, i: JsonObject): MetaAnswer? {
         if (!name.startsWith("duel_")) return null
         duels.useIndex(h.builder.index)
+        // A networked table is two people's: Ai neither reads nor moves either seat there (Phase C, AiTable).
+        AiTable.refusal(name, ToolArgs.string(i, "action"), networked = duels.role != null)?.let { return fail(it) }
         return when (name) {
             "duel_state" -> state(i)
             "duel_act" -> act(i)
@@ -47,6 +52,7 @@ internal class AiDuel(private val h: NeueHolders) {
             "duel_combo" -> combo(i)
             "duel_ruling" -> ruling(i)
             "duel_watch" -> watch(i)
+            "duel_records" -> records(i)
             else -> null
         }
     }
@@ -111,7 +117,7 @@ internal class AiDuel(private val h: NeueHolders) {
         val viewer = DuelBrief.viewer(prefs.aiKnowledge, mine)
         // Ai's own moves: never the person's, never a trigger for itself (1.0.85).
         duels.aiActing = true
-        val report = try { duels.playOut(ops, seat, pace, viewer) } finally { duels.aiActing = false }
+        val report = try { duels.playOut(ops, seat, pace, viewer, guard = true) } finally { duels.aiActing = false }
         val g = duels.game!!
         val after = DuelBrief.describe(g.state, viewer, duels.catalog, g.header.seed, mine, duels.tally(viewer), duels.rulings)
         // Planned as the person's seat, a refusal could name their hidden cards ("Which one: …"): said plainly instead.
@@ -127,6 +133,8 @@ internal class AiDuel(private val h: NeueHolders) {
         val before = g.stateAt(index)
         val plan = ComboRunner.plan(before, seat, ops, duels.catalog)
         if (!plan.ok) return fail("Nothing was put in. ${plan.problem}")
+        // Into the past as at the present: only what a player may do to cards it cannot see (Phase C, DuelReach).
+        ComboRunner.reach(before, seat, plan)?.let { return fail("Nothing was put in. $it: a player does not do that to a card they cannot see.") }
         duels.aiActing = true
         val put = try { duels.insertPast(index, plan.steps.flatMap { it.second }, seat) } finally { duels.aiActing = false }
         if (!put) return fail("Nothing was put in: ${duels.problem ?: "the table refused it"}.")
@@ -156,8 +164,12 @@ internal class AiDuel(private val h: NeueHolders) {
             "my_deck_top" -> "the top $count of its own deck" to names(s.seats[seat].deck.take(count))
             else -> return fail("Look at their_hand, their_set, their_deck_top or my_deck_top.")
         }
-        duels.act(DuelAction.Note("${h.ai.name} looked at $what: $reason", seat), seat)
-        return ok("You see $what: $seen. (Written in the log: “${h.ai.name} looked at $what: $reason”.)", "Peeked at $what")
+        // The reason is read by the person: it never names Ai's own hidden cards (Secrets, as everything Ai writes there).
+        val said = Secrets.redact(reason, s, them, seat, duels.catalog).text
+        // Ai's own entry, marked a peek (Phase C): the records count them.
+        duels.aiActing = true
+        try { duels.act(listOf(DuelAction.Note("${h.ai.name} looked at $what: $said", seat)), seat, peek = true) } finally { duels.aiActing = false }
+        return ok("You see $what: $seen. (Written in the log: “${h.ai.name} looked at $what: $said”.)", "Peeked at $what")
     }
 
     private fun log(i: JsonObject): MetaAnswer {
@@ -240,7 +252,8 @@ internal class AiDuel(private val h: NeueHolders) {
                 val to = (ToolArgs.int(i, "to_entry") ?: g.cursor).coerceIn(from, g.cursor)
                 val start = g.stateAt(from)
                 val span = g.entries.subList(from, to).filter { it.seat == seat || it.seat == null }
-                val steps = ComboRecorder.steps(start, span, duels.catalog)
+                // Named only where the seat knew the card (Phase C): a combo holds nothing its seat could not have written.
+                val steps = ComboRecorder.steps(start, span, duels.catalog, seat, g.header.seed)
                 if (steps.isEmpty()) return fail("Nothing in entries $from–$to to record.")
                 val c = Combo("c${System.currentTimeMillis()}", ToolArgs.string(i, "name") ?: "Recorded line", deckId, ComboRecorder.needs(start, seat, span, duels.catalog), steps, ToolArgs.string(i, "notes").orEmpty(), System.currentTimeMillis())
                 duels.saveCombos(deckId, book.copy(combos = book.combos + c))
@@ -254,7 +267,7 @@ internal class AiDuel(private val h: NeueHolders) {
                 h.neue.go(Page.DUEL)
                 duels.aiActing = true
                 val said = try {
-                    duels.playOut(c.steps, seat, (ToolArgs.int(i, "pace_ms") ?: prefs.aiPace).toLong(), DuelBrief.viewer(prefs.aiKnowledge, aiSeat()))
+                    duels.playOut(c.steps, seat, (ToolArgs.int(i, "pace_ms") ?: prefs.aiPace).toLong(), DuelBrief.viewer(prefs.aiKnowledge, aiSeat()), guard = true)
                 } finally { duels.aiActing = false }
                 ok("${c.name}: ${said.text}", "Ran ${c.name}")
             }
@@ -281,6 +294,44 @@ internal class AiDuel(private val h: NeueHolders) {
             if (duels.forgetRuling(id)) ok("Forgot house ruling $id.", "Forgot a house ruling") else fail("No house ruling $id.")
         }
         else -> fail("action is list, save or delete.")
+    }
+
+    /**
+     * The finished duels as records (Phase C): with no action the summary — "Ai won N of M against kai, with these
+     * settings" — or the newest records one a line. Read-only.
+     */
+    private suspend fun records(i: JsonObject): MetaAnswer {
+        val all = duels.readResults()
+        val person = ToolArgs.string(i, "person")?.trim()?.ifBlank { null }
+        val whatIfs = ToolArgs.bool(i, "what_ifs") == true
+        return when (ToolArgs.string(i, "action") ?: "summary") {
+            "list" -> {
+                val count = (ToolArgs.int(i, "count") ?: 20).coerceIn(1, 200)
+                val rows = all.asSequence()
+                    .filter { whatIfs || !it.whatIf }
+                    .filter { r -> person == null || r.seats.any { it.name.equals(person, ignoreCase = true) } }
+                    .take(count)
+                    .map { r -> recordLine(r) }
+                    .toList()
+                ok(rows.joinToString("\n").ifBlank { "No finished duels kept yet." }, "Read ${rows.size} duel records")
+            }
+            "summary" -> ok(DuelResults.summary(all, person, h.ai.name, whatIfs), "Read the duel records")
+            else -> fail("action is summary or list.")
+        }
+    }
+
+    /** One record in a line: when, who against whom with which decks, who went first and how, who won, how, the setting. */
+    private fun recordLine(r: DuelResult): String {
+        fun seat(k: Int) = r.seats.getOrNull(k)?.let { s ->
+            "${s.name.ifBlank { "Player ${k + 1}" }} (${s.player}${s.deckName.takeIf { it.isNotBlank() }?.let { ", $it" } ?: ""})"
+        } ?: "Player ${k + 1}"
+        val date = java.text.SimpleDateFormat("d MMM yyyy").format(java.util.Date(r.ended))
+        val first = "${r.seats.getOrNull(r.first)?.name ?: "Player ${r.first + 1}"} first" +
+            if (r.firstBy == DuelResult.ROLL) " (the dice: ${r.rolls.joinToString(", ") { it.joinToString("–") }}${r.chosenBy?.let { ", chosen by the $it" } ?: ""})" else ""
+        val won = r.winner?.let { "${r.seats.getOrNull(it)?.name ?: "Player ${it + 1}"} won by ${if (r.how == DuelResult.CONCEDE) "concession" else "life points"}" } ?: "a draw"
+        val ai = r.ai?.let { a -> "; ${h.ai.name} at seat ${a.seat}, knowledge ${a.knows}, ${a.peeks} peeks${if (!a.clean) ", a seat moved by the other side" else ""}" } ?: ""
+        val where = if (r.net) "; networked" else r.eyes?.let { "; the person's eyes: $it" } ?: ""
+        return "${r.id} · $date · ${seat(0)} v ${seat(1)} · $first · $won in turn ${r.turns}$ai$where${if (r.whatIf) " · a what-if" else ""}"
     }
 
     /** Ai's response triggers (1.0.85): watches the table checks each move against, waking Ai only on a match. */

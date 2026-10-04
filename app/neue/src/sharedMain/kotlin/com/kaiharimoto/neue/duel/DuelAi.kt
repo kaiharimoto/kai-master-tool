@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
+import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.TurnStart
 import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.ComboBook
@@ -25,6 +26,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
+import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.neue.NeueHolders
@@ -77,27 +79,45 @@ internal fun logFinishedDuel(h: NeueHolders) {
     val s = g.state
     val d = h.neue.prefs.duel
     if (s.solo || !d.logGames || duels.role != null || duels.replay != null || duels.loggedDuel == g.header.id) return
-    val loser = s.conceded ?: s.seats.indexOfFirst { it.lp <= 0 }.takeIf { it >= 0 } ?: return
+    DuelResults.ending(s) ?: return
     // The person's seat: the one Ai does not play, else the bottom.
     val me = if (h.neue.prefs.ai.enabled && (d.aiPlays || duels.aiSession != null)) 1 - d.aiSeat else duels.bottom
     val mine = g.header.seats.getOrNull(me) ?: return
     val theirs = g.header.seats.getOrNull(1 - me) ?: return
     val deckId = mine.deckId ?: return
-    val foeName = theirs.deckName ?: return
+    val foeName = theirs.deckName
+    // First or second from who really had turn 1 — the dice's winner's choice when the roll decided it (Phase C; before,
+    // seat 0 was always logged as going first).
+    val game = DuelResults.practice(
+        g, me, h.prep.newId("g"), System.currentTimeMillis(),
+        opponent = theirs.deckId ?: foeName, opponentName = foeName, deckId = deckId, note = "From the Duel page, turn ${s.turn}",
+    ) ?: return
     duels.loggedDuel = g.header.id
-    val game = TestGame(
-        id = h.prep.newId("g"),
-        at = System.currentTimeMillis(),
-        deckId = deckId,
-        opponent = theirs.deckId ?: foeName,
-        opponentName = foeName,
-        // Seat 0 takes the first turn.
-        turn = if (me == 0) TestGame.FIRST else TestGame.SECOND,
-        result = if (loser == me) TestGame.LOSS else TestGame.WIN,
-        note = "From the Duel page, turn ${s.turn}",
-    )
     h.prep.log(game)
-    h.neue.note = Note("Logged to Prep: a ${if (loser == me) "loss" else "win"} against $foeName", action = "Undo") { h.prep.removeGame(game.id) }
+    val word = when (game.result) {
+        TestGame.WIN -> "win"
+        TestGame.LOSS -> "loss"
+        else -> "draw"
+    }
+    h.neue.note = Note("Logged to Prep: a $word against $foeName", action = "Undo") { h.prep.removeGame(game.id) }
+}
+
+/**
+ * How the duel table is set now, for every move's provenance (Phase C, `Duels.context`): the seat Ai holds and its
+ * knowledge while Ai sits at a table of this device's (on, playing its seat's turns or in the duel's conversation, or
+ * acting), and the person's eyes at a hot-seat. A networked table has no Ai seat: both seats are people's.
+ */
+internal fun duelContext(h: NeueHolders): Provenance {
+    val d = h.neue.prefs.duel
+    val duels = h.duel
+    val net = duels.role != null
+    val sits = !net && h.neue.prefs.ai.enabled && (d.aiPlays || duels.aiSession != null || duels.aiActing)
+    val solo = duels.game?.state?.solo == true
+    return Provenance(
+        aiSeat = if (sits) (if (solo) 0 else d.aiSeat) else null,
+        aiKnows = if (sits) d.aiKnowledge else null,
+        eyes = if (net) null else d.knowledge,
+    )
 }
 
 /** Whether Ai sits at this table: on, and not a networked table (there the log is the other player's). */
@@ -359,7 +379,7 @@ internal fun DuelAiDialog(h: NeueHolders) {
                         val from = TurnStart.afterOpening(g.entries, turnFrom, g.cursor)
                         val start = g.stateAt(from)
                         val span = g.entries.subList(from, g.cursor).filter { it.seat == seat }
-                        val steps = ComboRecorder.steps(start, span, duels.catalog)
+                        val steps = ComboRecorder.steps(start, span, duels.catalog, seat, g.header.seed)
                         if (steps.isEmpty()) { neue.note = Note("Nothing played this turn to record."); return@MuButton }
                         val combo = Combo("c${System.currentTimeMillis()}", name.ifBlank { "Line ${book.combos.size + 1}" }, deckId, ComboRecorder.needs(start, seat, span, duels.catalog), steps, created = System.currentTimeMillis())
                         scope.launch {

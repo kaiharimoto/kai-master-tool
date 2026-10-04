@@ -149,7 +149,7 @@ All confirmed by three verifiers, all judged small, local fixes. They are Phase 
 
 Read the code before acting on any of these.
 
-**At the duel table**
+**At the duel table** (the first four, and `duel_peek`'s reason, closed in Phase C's first stage: `docs/phases/C.md` §3)
 - Ai's own-seat moves may reveal, flip or take the opponent's hidden cards. The knowledge cap covers reads only.
 - On a networked table, Ai's tools read and move the guest's seat (`aiSeat` defaults to 1).
 - `duel_combo` records name hidden cards Ai touched.
@@ -162,8 +162,9 @@ Read the code before acting on any of these.
 - Ai World's duel tables are seed 1 by default, with no choice of who goes first and no fork of the live position.
 
 **Evaluability**
-- Duel games are logged to Prep with the wrong first/second whenever the opening roll decided it.
+- Duel games are logged to Prep with the wrong first/second whenever the opening roll decided it. (Closed, Phase C §2.)
 - **Duel records carry no provenance** (who moved, Ai's seat, its knowledge), so "Ai beats players" cannot be measured.
+  (Closed, Phase C §1–§2: `Provenance` on every entry, `DuelResult` per finished duel, `duel_records`.)
 - `hand_odds` is wrong when `cards` and `and_cards` overlap, and the fact-checker treats it as ground truth.
   - Ai World's `openings` counts overlap exactly (`HandCounter`): route `hand_odds` through it.
 - Combos are never round-trip verified.

@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelIds
 import com.kaiharimoto.mastertool.core.duel.DuelRecord
 import com.kaiharimoto.mastertool.core.duel.DuelSetup
 import com.kaiharimoto.mastertool.core.duel.DuelTimeline
+import com.kaiharimoto.mastertool.core.duel.Provenance
 
 /** How far one step of a replay goes: one gesture, to the next phase, or to the next turn. */
 enum class ReplayUnit { GROUP, PHASE, TURN }
@@ -106,12 +107,14 @@ object Replays {
      * renumbered so a group never spans an insertion. A token or lock it makes takes a number used nowhere
      * in the log, and the ones after it keep theirs (1.0.86, [DuelIds]).
      */
-    fun insert(r: DuelRecord, at: Int, actions: List<DuelAction>, seat: Int?, time: Long = 0L): DuelRecord {
+    fun insert(r: DuelRecord, at: Int, actions: List<DuelAction>, seat: Int?, time: Long = 0L, by: Provenance? = null): DuelRecord {
         val k = at.coerceIn(0, r.entries.size)
         val settled = DuelIds.settle(r.header, r.entries, k)
         val stamped = DuelIds.stamp(settled.before, actions, DuelIds.next(settled.end, settled.entries))
         val group = (settled.entries.getOrNull(k - 1)?.group ?: -1) + 1
-        val added = stamped.map { DuelEntry(0, time, seat, group, it) }
+        // Who put it in, stamped on the table it was put into (Phase C).
+        val sealed = Provenance.seal(by, settled.before, r.header, settled.entries.take(k))
+        val added = stamped.map { DuelEntry(0, time, seat, group, it, sealed) }
         // Put in the middle of a gesture, the gesture's tail becomes a group of its own (1.0.85): before, it
         // shared the new group's number, and undo took the inserted moves away with half the old gesture.
         val splits = k > 0 && k < settled.entries.size && settled.entries[k - 1].group == settled.entries[k].group
