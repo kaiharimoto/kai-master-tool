@@ -92,7 +92,7 @@ object AiSettings {
     val INTERNAL = setOf(
         "window", "touchIntroSeen", "lensKeys", "extraSideVisible", "inspectorFolded",
         "ai.connections", "ai.introSeen", "sync", "start", "present", "duel",
-        // Ai World (1.0.95): whether Python runs on this computer is the person's decision alone, never Ai's.
+        // Ai World (1.0.97): whether Python runs on this computer is the person's decision alone, never Ai's.
         "world",
     )
 

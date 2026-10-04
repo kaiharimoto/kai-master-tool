@@ -13,7 +13,7 @@ import kotlinx.serialization.json.doubleOrNull
 import kotlin.math.round
 
 /**
- * Ai World's instruments (1.0.95, kai: "we can provide it tools it can operate that we design and engineer
+ * Ai World's instruments (1.0.97, kai: "we can provide it tools it can operate that we design and engineer
  * ourselves to save tokens and start with a strong foundation"): the studies Ai would otherwise write from scratch
  * every time, built once here, tested, and run at the app's own speed rather than the script engine's. Ai runs one
  * in a single step (`world_tool`) or from a script (`ygo.tools.*`); either way it prints what it did to the world's

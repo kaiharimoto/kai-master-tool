@@ -83,6 +83,33 @@ class OldDataTest {
     }
 
     @Test
+    fun aWorldFrom1097StillReads() {
+        // 1.0.97: Ai World's record in `<data>/world/<id>/world.json`, a board from a later build among its own, a line of its
+        // log with a kind this build does not know, and its device-only settings.
+        val old = """{"id":"wabc","title":"Openings","scope":"deck:d1","created":1,"updated":2,"open":"sim.js",
+            "boards":[{"id":"starter","title":"Opens a starter","kind":"stat","payload":"{\"value\":\"74%\",\"label\":\"x\"}","x":0,"y":0,"note":"seed 1"},
+            {"id":"later","kind":"hologram","payload":"?"}],"future":{"a":1}}"""
+        val w = assertNotNull(com.kaiharimoto.mastertool.core.world.WorldCodec.decode(old))
+        assertEquals("Openings", w.title)
+        // A board kind from a newer build is kept as it is, so this build's next save does not lose it.
+        assertEquals(listOf("starter", "later"), w.boards.map { it.id })
+        assertEquals("hologram", w.boards[1].kind)
+        assertEquals(null, w.boards[1].type)
+        assertTrue("\"hologram\"" in com.kaiharimoto.mastertool.core.world.WorldCodec.encode(w))
+        val log = com.kaiharimoto.mastertool.core.world.WorldCodec.events(
+            """{"t":5,"kind":"run","by":"ai","path":"sim.js","text":"Ran sim.js","run":{"lang":"js","ok":true,"out":"hi","boards":["starter"]}}
+{"t":6,"kind":"teleport","text":"?"}""",
+        )
+        // The log is only ever appended to: an event of a kind from a newer build reads as a note, and stays in the file.
+        assertEquals(2, log.size)
+        assertEquals(com.kaiharimoto.mastertool.core.world.WorldEvent.Kind.NOTE, log[1].kind)
+        val p = prefs.decodeFromString(NeuePreferences.serializer(), """{"world":{"python":true,"pythonPath":"/usr/bin/python3","typing":0}}""").world
+        assertTrue(p.python)
+        assertEquals(0, p.typing)
+        assertTrue(p.follow)
+    }
+
+    @Test
     fun aReplayFrom1075StillReads() {
         // 1.0.75: a replay in `<data>/duel/replays/`, a what-if of another, with a note in it.
         val old = """{"header":{"id":"d2","seed":3,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}]},

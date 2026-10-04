@@ -324,7 +324,7 @@ data class NeuePreferences(
     val limitMarks: Boolean = false,
     /** Duel (1.0.74): one table or two, what the hot-seat shows, the decks chosen last. */
     val duel: DuelPrefs = DuelPrefs(),
-    /** Ai World (1.0.95): whether Python may run on this computer, how fast code types in, whether the page follows Ai. */
+    /** Ai World (1.0.97): whether Python may run on this computer, how fast code types in, whether the page follows Ai. */
     val world: WorldPrefs = WorldPrefs(),
 ) {
     /**

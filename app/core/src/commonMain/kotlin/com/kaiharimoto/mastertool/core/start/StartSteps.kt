@@ -30,8 +30,8 @@ enum class StartStep(
     /** Command mode (1.0.87): a duel played by keys and voice; on the desk the speech model it needs. */
     VOICE("voice", "1.0.87", "1.3.64"),
 
-    /** Ai World (1.0.95): on the desk, whether Python may run for Ai — the person's call, asked once. */
-    WORLD("world", "1.0.95", "1.3.73"),
+    /** Ai World (1.0.97): on the desk, whether Python may run for Ai — the person's call, asked once. */
+    WORLD("world", "1.0.97", "1.3.75"),
     ;
 
     companion object {
@@ -52,7 +52,7 @@ data class StartState(
      * recogniser is the system's own (a phone or tablet), or there is no microphone to speak into.
      */
     val voiceReady: Boolean = true,
-    /** Ai World needs nothing more here (1.0.95): Python was decided on, or this is a phone or tablet, which has none. */
+    /** Ai World needs nothing more here (1.0.97): Python was decided on, or this is a phone or tablet, which has none. */
     val worldReady: Boolean = true,
 )
 

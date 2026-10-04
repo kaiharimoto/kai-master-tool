@@ -58,14 +58,14 @@ data class RunOutcome(val record: RunRecord, val boards: List<Board>, val value:
         if (value != null) append("\nValue: ").append(value.take(1_000))
         if (r.err.isNotBlank()) append("\nError: ").append(r.err.take(2_000))
         if (r.cut) append("\n(The output ran past what is kept.)")
-        if (boards.isNotEmpty()) append("\nPinned: ").append(boards.joinToString { "${it.id} (${it.kind.name.lowercase()}: ${it.title})" })
+        if (boards.isNotEmpty()) append("\nPinned: ").append(boards.joinToString { "${it.id} (${it.kind}: ${it.title})" })
     }
 
     private fun cut(s: String, limit: Int) = if (s.length <= limit) s else s.take(limit * 3 / 4) + "\n…\n" + s.takeLast(limit / 4)
 }
 
 /**
- * Ai World for the app's lifetime (1.0.95): the worlds in `<data>/world/<id>/`, the one open, and everything the
+ * Ai World for the app's lifetime (1.0.97): the worlds in `<data>/world/<id>/`, the one open, and everything the
  * person watches — the editor's text as it is typed, the terminal as a run prints, the boards, the activity, and the
  * pane Ai is working in. Ai's tools (`AiWorld`) and the person's clicks change the same state, as the duel's do.
  *
@@ -417,7 +417,7 @@ class Worlds(val dir: File) {
             val id = s.id ?: "b${(w.boards.size + 1)}-" + now().toString(36).takeLast(4)
             val old = w.board(id)
             val (x, y) = old?.let { it.x to it.y } ?: WorldCanvas.free(w.boards)
-            val b = Board(id, s.title, s.kind, s.payload, x, y, old?.w ?: WorldCanvas.WIDTH, old?.h ?: WorldCanvas.HEIGHT, source, now(), s.note)
+            val b = Board(id, s.title, s.kind.id, s.payload, x, y, old?.w ?: WorldCanvas.WIDTH, old?.h ?: WorldCanvas.HEIGHT, source, now(), s.note)
             w = w.put(b).let { if (it.boards.size > World.MAX_BOARDS) it.copy(boards = it.boards.drop(it.boards.size - World.MAX_BOARDS)) else it }
             placed += b
             log(WorldEvent(now(), WorldEvent.Kind.SHOW, by, board = id, text = "Pinned “${b.title}”"))
@@ -517,7 +517,7 @@ class Worlds(val dir: File) {
             appendLine("World ${w.id}: “${w.title}”${w.scope?.let { " ($it)" }.orEmpty()}${if (w.id == open?.id) ", open" else ""}.")
             appendLine("Files: " + (if (w.id == open?.id) files else emptyList()).joinToString().ifEmpty { "none" })
             appendLine("Boards:" + if (w.boards.isEmpty()) " none" else "")
-            w.boards.forEach { b -> appendLine("- ${b.id} | ${b.kind.name.lowercase()} | ${b.title}${if (b.note.isNotBlank()) " — ${b.note}" else ""}") }
+            w.boards.forEach { b -> appendLine("- ${b.id} | ${b.kind} | ${b.title}${if (b.note.isNotBlank()) " — ${b.note}" else ""}") }
             if (runs.isNotEmpty()) {
                 appendLine("Last runs:")
                 runs.forEach { e -> appendLine("- ${e.text}: " + (e.run?.let { r -> if (r.ok) r.out.lines().takeLast(3).joinToString(" / ").take(300) else "error: ${r.err.take(300)}" }.orEmpty())) }

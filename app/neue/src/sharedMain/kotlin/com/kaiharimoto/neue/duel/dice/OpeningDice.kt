@@ -45,6 +45,7 @@ import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.DuelSpot
+import com.kaiharimoto.mastertool.core.layout.Slot
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.kit.BtnSize
@@ -156,10 +157,48 @@ internal fun OpeningDice(duels: Duels, s: DuelState, layout: DuelLayout, playsBo
     for (seat in 0..1) {
         if (carry != null || !o.waitsOn(seat) || !duels.mayRoll(seat, playsBoth)) continue
         val r = restBox(stage, seat) ?: continue
+        RestMarks(r, towardMiddle = if (seat == layout.bottom || !layout.twoSided) Side.ABOVE else Side.BELOW)
         Box(Modifier.zIndex(DICE_Z).offset(r.left.dp, r.top.dp).size(r.width.dp, r.height.dp).cursorPointer(caption = "Throw"))
     }
     OpeningPanel(duels, s, o, layout, playsBoth, settled = (0..1).map { o.thrown(it) && settled(it) })
 }
+
+private enum class Side { ABOVE, BELOW }
+
+/**
+ * The resting dice asking to be thrown (kai, 1.0.95: "have an indicator around them to signal the user to use them"):
+ * crop marks at the four corners of their box, in ink, and a caption on the side toward the middle of the table, where
+ * the hand is not. Still — nothing on the table asks for frames while it waits.
+ */
+@Composable
+private fun RestMarks(r: Slot, towardMiddle: Side) {
+    val c = Mu.colors
+    val pad = MARK_PAD
+    val box = Slot(r.left - pad, r.top - pad, r.width + 2 * pad, r.height + 2 * pad)
+    Canvas(Modifier.zIndex(DICE_Z).offset(box.left.dp, box.top.dp).size(box.width.dp, box.height.dp)) {
+        val arm = MARK_ARM.dp.toPx().coerceAtMost(size.minDimension / 3f)
+        val w = 1.5f.dp.toPx()
+        val h = w / 2f
+        listOf(Offset(h, h) to Offset(1f, 1f), Offset(size.width - h, h) to Offset(-1f, 1f),
+            Offset(h, size.height - h) to Offset(1f, -1f), Offset(size.width - h, size.height - h) to Offset(-1f, -1f),
+        ).forEach { (at, d) ->
+            drawLine(c.ink, at, Offset(at.x + d.x * arm, at.y), strokeWidth = w)
+            drawLine(c.ink, at, Offset(at.x, at.y + d.y * arm), strokeWidth = w)
+        }
+    }
+    val y = if (towardMiddle == Side.ABOVE) box.top - CAPTION_H else box.bottom
+    Box(
+        Modifier.zIndex(DICE_Z).offset((box.centerX - CAPTION_W / 2f).dp, y.dp).size(CAPTION_W.dp, CAPTION_H.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Micro("Drag to throw", Modifier.background(c.paper).padding(horizontal = 4.dp), color = c.ink, size = 10.sp)
+    }
+}
+
+private const val MARK_PAD = 6f
+private const val MARK_ARM = 10f
+private const val CAPTION_W = 120f
+private const val CAPTION_H = 16f
 
 private fun playing(run: DiceSim.Run?, start: Long?, now: Long): Boolean =
     run != null && start != null && (now - start) / 1e9 < run.duration
@@ -168,12 +207,12 @@ private fun playing(run: DiceSim.Run?, start: Long?, now: Long): Boolean =
 internal const val DICE_Z = 55f
 
 /** Where [seat]'s resting dice are drawn, on the table in dp, grown a little to take a press: null when it has none. */
-internal fun restBox(stage: DiceStage, seat: Int): com.kaiharimoto.mastertool.core.layout.Slot? {
+internal fun restBox(stage: DiceStage, seat: Int): Slot? {
     val arena = stage.arena(seat) ?: return null
     val pts = arena.rest.flatMap { p -> listOf(-0.75, 0.75).flatMap { dx -> listOf(-0.75, 0.75).map { dy -> stage.toTable(seat, p + V3(dx, dy, 0.0)) } } }
     val l = pts.minOf { it.x }.toFloat()
     val t = pts.minOf { it.y }.toFloat()
-    return com.kaiharimoto.mastertool.core.layout.Slot(l, t, pts.maxOf { it.x }.toFloat() - l, pts.maxOf { it.y }.toFloat() - t)
+    return Slot(l, t, pts.maxOf { it.x }.toFloat() - l, pts.maxOf { it.y }.toFloat() - t)
 }
 
 private fun faceSeen(stage: DiceStage, seat: Int, p: V3, q: Quat, face: Int): Boolean {

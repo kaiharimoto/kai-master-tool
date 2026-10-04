@@ -36,7 +36,7 @@ object DuelCoverage {
 
     val ROWS: List<Row> = listOf(
         // ---- the verbs: a right-click's menu, the verb strip, a key on the card ----
-        Row("Space / double-click: the obvious thing", "do h1", DuelVerb.DEFAULT),
+        Row("Space / double-click: the default action", "do h1", DuelVerb.DEFAULT),
         Row("A: activate", "a s1", DuelVerb.ACTIVATE),
         Row("S: summon", "s h1 m3", DuelVerb.SUMMON),
         Row("Shift S: Special Summon", "ss gy1 m4", DuelVerb.SPECIAL),

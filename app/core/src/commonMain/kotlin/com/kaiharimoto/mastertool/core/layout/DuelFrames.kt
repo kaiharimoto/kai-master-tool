@@ -124,14 +124,12 @@ object DuelFrames {
             if (band != null) {
                 // Another seat's hidden hand in no order of its own, as DuelView sends it (1.0.87, the focus's `oh1…`).
                 val shown = DuelFocus.Eyes(viewers, secret, viewer).hand(s, seat)
-                if (seat == l.bottom) {
-                    // The near hand (1.0.94): bigger cards, a little over one another, riffling round the one in hand.
-                    val at = riffle?.let { shown.indexOf(it) }?.takeIf { it >= 0 }
-                    held(shown.size, band, l.handCard, at).forEachIndexed { i, (slot, z) -> place(shown[i], slot, z, rotation = r) }
-                } else {
-                    fan(shown.size, band, band.height / DuelLayouter.CARD_RATIO)
-                        .forEachIndexed { i, slot -> place(shown[i], slot, Z_HAND + i * 0.001f, rotation = r) }
-                }
+                // Both hands held (1.0.94; the far one 1.0.95): bigger cards, a little over one another, riffling round the
+                // one in hand — the far hand turned round, its cards dropping toward the field from the window's top edge.
+                val near = seat == l.bottom
+                val at = riffle?.let { shown.indexOf(it) }?.takeIf { it >= 0 }
+                held(shown.size, band, if (near) l.handCard else l.farHandCard, at, fromTop = !near)
+                    .forEachIndexed { i, (slot, z) -> place(shown[i], slot, z, rotation = r) }
             } else {
                 // A folded hand: its cards wait by the seat's score, out of sight.
                 val at = l.score[seat] ?: l.turn
@@ -248,10 +246,11 @@ object DuelFrames {
      * The near hand as it is held (1.0.94, kai: "slightly overlapping each other and have them riffle through them as the
      * player holds their cursor over the cards or with their keyboard"): [n] cards of width [w] across [band], each over the
      * one before by [OVERLAP] of a card (more when the band is short of room), in its band's top where the window's edge cuts
-     * a fifth off. The card [at] — under the pointer or the keys — rises by that fifth, whole, in front of the rest; its
+     * a fifth off ([fromTop]: the far hand, cut at the top and dropping down). The card [at] — under the pointer or the
+     * keys — rises by that fifth, whole, in front of the rest; its
      * neighbours rise a little after it and the hand parts round it, so moving along the hand riffles through it.
      */
-    fun held(n: Int, band: Slot, w: Float, at: Int? = null): List<Pair<Slot, Float>> {
+    fun held(n: Int, band: Slot, w: Float, at: Int? = null, fromTop: Boolean = false): List<Pair<Slot, Float>> {
         if (n <= 0) return emptyList()
         val h = w * DuelLayouter.CARD_RATIO
         val natural = w * (1f - OVERLAP)
@@ -259,7 +258,8 @@ object DuelFrames {
         val used = w + step * (n - 1)
         val left = band.left + (band.width - used) / 2f
         val cover = (w - step).coerceAtLeast(0f)
-        val rise = h * DuelLayouter.HAND_CUT
+        // Toward the field: up from the bottom edge, or down from the top edge for the far hand.
+        val rise = h * DuelLayouter.HAND_CUT * (if (fromTop) -1f else 1f)
         return List(n) { i ->
             var x = left + i * step
             var y = band.top

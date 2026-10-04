@@ -73,7 +73,7 @@ kotlin {
             implementation(libs.ktor.client.mock)
         }
 
-        // Ai World's scripts (1.0.95): the engine is plain Java, so it lives on the JVM side, which the APK shares.
+        // Ai World's scripts (1.0.97): the engine is plain Java, so it lives on the JVM side, which the APK shares.
         jvmMain.dependencies {
             implementation(libs.rhino)
         }
