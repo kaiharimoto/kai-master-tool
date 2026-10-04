@@ -92,6 +92,10 @@ object Yugipedia {
         }
     }
 
+    /** Whether [json] is a `prop=sections` answer at all (its list may be empty): what the cache keeps (1.0.99). */
+    fun hasSections(json: String): Boolean =
+        (root(json)?.takeIf { "error" !in it }?.get("parse") as? JsonObject)?.get("sections") is JsonArray
+
     /**
      * The sections of a `prop=sections` answer whose headings hold any of [wanted]
      * (ignoring case), as their index — the number [parseUrl] takes — and their

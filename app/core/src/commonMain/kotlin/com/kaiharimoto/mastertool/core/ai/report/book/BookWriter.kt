@@ -16,17 +16,30 @@ object BookWriter {
 
     /**
      * [known] gives a card's printed name for a name as written, or null when there is no such card;
-     * [deck] is the open deck's main deck, a name a copy, for the facts.
+     * [deck] is the open deck's main deck, a name a copy, for the facts. [deckPrint] is that deck's fingerprint
+     * (`Ledger.fingerprint`) and [notesHash] Ai's notes' (`ReaderGuide.hashOf`), stamped on what is written (1.0.99):
+     * what the reader checks the book against to say a chapter was written on an older deck ([BookFreshness]).
      */
-    class Context(val known: (String) -> String?, val deck: List<String>?, val now: Long)
+    class Context(
+        val known: (String) -> String?,
+        val deck: List<String>?,
+        val now: Long,
+        val deckPrint: String = "",
+        val notesHash: String = "",
+    )
 
-    fun outline(book: GuideBook): String = buildString {
+    /** The book's plan for Ai; with [ctx], each chapter written on an older deck says so, to be written again. */
+    fun outline(book: GuideBook, ctx: Context? = null): String = buildString {
+        val older = ctx?.let { BookFreshness.of(book, it.deckPrint, it.notesHash).olderDeck.toSet() }.orEmpty()
         appendLine("# ${book.title}" + if (book.subtitle.isNotBlank()) " — ${book.subtitle}" else "")
         if (book.bigIdea.isNotBlank()) appendLine("Big idea: ${book.bigIdea}")
         appendLine("Roles: " + if (book.roles.isEmpty()) "none yet (set_front)" else book.roles.joinToString("; ") { r -> "${r.name} ${r.cards.sumOf { it.copies }}" })
         if (book.chapters.isEmpty()) appendLine("No chapters yet: set_outline first.")
         book.chapters.forEachIndexed { i, c ->
-            appendLine("${i + 1}. [${c.id}] ${c.title} — " + if (c.written) "${c.sections.size} sections, ${c.sections.sumOf { it.blocks.size }} blocks" else "planned")
+            appendLine(
+                "${i + 1}. [${c.id}] ${c.title} — " + (if (c.written) "${c.sections.size} sections, ${c.sections.sumOf { it.blocks.size }} blocks" else "planned") +
+                    if (c.id in older) " — written on an older deck: check it and write it again" else "",
+            )
             c.sections.forEach { s -> appendLine("   - [${s.id}] ${s.title} (${s.blocks.joinToString(", ") { kind(it) }})") }
         }
     }.trim()
@@ -64,6 +77,8 @@ object BookWriter {
             bigIdea = str("big_idea") ?: book.bigIdea,
             roles = roles?.map { r -> r.copy(cards = r.cards.map { c -> c.copy(card = ctx.known(c.card) ?: c.card) }) } ?: book.roles,
             updatedAt = ctx.now,
+            // The roles are what the deck is read through: they were set on this deck.
+            deckPrint = if (roles != null) ctx.deckPrint else book.deckPrint,
         )
         return Result(next, "Front set." + mismatch(next, ctx))
     }
@@ -76,7 +91,8 @@ object BookWriter {
         }
         val problems = check(read, ctx)
         if (problems.isNotEmpty()) return Result(book, "Not kept — fix these and write it again:\n" + problems.joinToString("\n") { "- $it" }, false)
-        val c = canonical(read, ctx)
+        // Written on this deck, from these notes: the app's stamp, whatever the chapter Ai sent says.
+        val c = canonical(read, ctx).copy(deckPrint = ctx.deckPrint, notesHash = ctx.notesHash)
         val at = book.chapters.indexOfFirst { (c.id.isNotBlank() && it.id == c.id) || it.title.equals(c.title, ignoreCase = true) }
         val chapters = if (at >= 0) book.chapters.toMutableList().also { it[at] = c.copy(id = it[at].id) } else book.chapters + c
         val next = book.copy(chapters = chapters, updatedAt = ctx.now).withIds()

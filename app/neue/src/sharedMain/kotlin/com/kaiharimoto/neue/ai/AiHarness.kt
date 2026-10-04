@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.ai.rules.Wikitext
 import com.kaiharimoto.mastertool.core.ai.rules.YgoOrg
 import com.kaiharimoto.mastertool.core.ai.rules.Yugipedia
 import com.kaiharimoto.mastertool.core.ai.web.HtmlText
+import com.kaiharimoto.mastertool.core.ai.web.ReplyCache
 import com.kaiharimoto.mastertool.core.ai.web.SearchResults
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.ai.web.Untrusted
@@ -163,11 +164,20 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
      * other's page), and an API error — a page that does not exist yet, answered 200 — is never kept.
      * [chosen] is an address Ai chose, read only where [UrlGuard] allows, every redirect too; the
      * app's own addresses (the search engine, Yugipedia) are fixed hosts and go straight.
+     * [readable] is how the caller reads the reply (1.0.99): only one it reads is kept, and a kept one it cannot
+     * read is thrown away and asked for again ([ReplyCache]); the reply is returned either way, for the caller to fail on.
      */
-    private suspend fun get(url: String, keep: Boolean = false, chosen: Boolean = false): Result<String> = withContext(Dispatchers.IO) {
+    private suspend fun get(
+        url: String,
+        keep: Boolean = false,
+        chosen: Boolean = false,
+        readable: ((String) -> Boolean)? = null,
+    ): Result<String> = withContext(Dispatchers.IO) {
         val key = File(cache, Sha256.hex(url) + ".txt")
-        if (keep && key.isFile && System.currentTimeMillis() - key.lastModified() < WEEK) {
-            return@withContext Result.success(key.readText())
+        if (keep && key.isFile) {
+            val kept = runCatching { key.readText() }.getOrNull()
+            if (kept != null && ReplyCache.serve(kept, System.currentTimeMillis() - key.lastModified(), readable)) return@withContext Result.success(kept)
+            if (kept == null || !ReplyCache.keep(kept, readable)) runCatching { key.delete() }
         }
         oneAtATime.withLock {
             runCatching {
@@ -179,7 +189,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
                 val body = r.bodyAsText()
                 if (r.status.value !in 200..299) error("${Unreachable.host(url)} answered ${r.status.value} ${r.status.description}")
                 if (body.length > MAX_BODY) body.take(MAX_BODY) else body
-            }.onSuccess { body -> if (keep && !Yugipedia.isError(body)) runCatching { cache.mkdirs(); key.writeText(body) } }
+            }.onSuccess { body -> if (keep && ReplyCache.keep(body, readable)) runCatching { cache.mkdirs(); key.writeText(body) } }
         }
     }
 
@@ -250,9 +260,13 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
     private var ygoIndex: Pair<String, YgoOrg.Index>? = null
 
     private suspend fun ygoIndex(): Result<YgoOrg.Index> {
-        val body = get(YgoOrg.INDEX_URL, keep = true).getOrElse { return Result.failure(it) }
+        // Read once: the cache's check of the reply is the parse the answer uses.
+        var parsed: Pair<String, Result<YgoOrg.Index>>? = null
+        val readable = { b: String -> ygoIndex?.first == b || YgoOrg.index(b).also { parsed = b to it }.isSuccess }
+        val body = get(YgoOrg.INDEX_URL, keep = true, readable = readable).getOrElse { return Result.failure(it) }
         ygoIndex?.let { (seen, index) -> if (seen == body) return Result.success(index) }
-        return YgoOrg.index(body).onSuccess { ygoIndex = body to it }
+        val read = parsed?.takeIf { it.first == body }?.second ?: YgoOrg.index(body)
+        return read.onSuccess { ygoIndex = body to it }
     }
 
     /**
@@ -265,7 +279,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         val index = ygoIndex().getOrElse { return gone("could not read its card index. ${Unreachable.of(YgoOrg.INDEX_URL, it)}") }
         val id = index.id(name) ?: index.id(typed) ?: return gone("its database has no card named “$name”.")
         val url = YgoOrg.cardUrl(id)
-        val card = get(url, keep = true).mapCatching { YgoOrg.card(it).getOrThrow() }
+        val card = get(url, keep = true, readable = CARD_READS).mapCatching { YgoOrg.card(it).getOrThrow() }
             .getOrElse { return gone("could not read “$name”. ${Unreachable.of(url, it)}") }
         val pool = h.builder.index
         // A card is named as the app names it where it can be (the index also holds old translations).
@@ -278,7 +292,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         if (with != null) {
             val otherName = (CardWords.resolve(with, pool) as? Resolved.Found)?.card?.name ?: with
             val other = index.id(otherName) ?: index.id(with)
-            val otherCard = other?.let { o -> get(YgoOrg.cardUrl(o), keep = true).getOrNull()?.let { YgoOrg.card(it).getOrNull() } }
+            val otherCard = other?.let { o -> get(YgoOrg.cardUrl(o), keep = true, readable = CARD_READS).getOrNull()?.let { YgoOrg.card(it).getOrNull() } }
             if (otherCard != null) {
                 partner = otherCard.name ?: otherName
                 shared = otherCard.qaIds.toSet()
@@ -290,7 +304,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
         val total = shared?.let { s -> card.qaIds.distinct().count { it in s } } ?: card.qaIds.distinct().size
         var unread = 0
         val qas = ids.mapNotNull { q ->
-            get(YgoOrg.qaUrl(q), keep = true).mapCatching { YgoOrg.qa(it).getOrThrow() }.getOrElse {
+            get(YgoOrg.qaUrl(q), keep = true, readable = QA_READS).mapCatching { YgoOrg.qa(it).getOrThrow() }.getOrElse {
                 unread++
                 null
             }
@@ -309,7 +323,7 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
     private suspend fun yugipediaRulings(name: String, budget: Int): Read {
         val gone = { why: String -> Read("Yugipedia: $why", "", ok = false) }
         val url = Yugipedia.rulingsUrl(name)
-        val json = get(url, keep = true).getOrElse { return gone("could not read its rulings for “$name”. ${Unreachable.of(url, it)}") }
+        val json = get(url, keep = true, readable = WIKITEXT_READS).getOrElse { return gone("could not read its rulings for “$name”. ${Unreachable.of(url, it)}") }
         val wikitext = Yugipedia.wikitextOf(json) ?: return gone("it has no rulings page for “$name”.")
         val list = Wikitext.rulings(wikitext)
         if (list.isEmpty()) return Read("Yugipedia lists no rulings for “$name”.\n${Yugipedia.ATTRIBUTION}", "no Yugipedia rulings", ok = true)
@@ -328,14 +342,14 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
     private suspend fun archetype(name: String, wanted: List<String>): MetaAnswer {
         val page = name.trim()
         val url = Yugipedia.sectionsUrl(page)
-        val sections = get(url, keep = true).getOrElse { return fail("Could not read Yugipedia's page on “$page”. ${Unreachable.of(url, it)}") }
+        val sections = get(url, keep = true, readable = SECTIONS_READS).getOrElse { return fail("Could not read Yugipedia's page on “$page”. ${Unreachable.of(url, it)}") }
         val want = wanted.ifEmpty { listOf("Playing style", "Combo", "Recommended", "Weakness") }
         val found = Yugipedia.sectionIndex(sections, want)
         if (found.isEmpty()) return fail("Yugipedia has no ${want.joinToString("/")} sections for “$page” (is it the archetype's exact name?).")
         // A wiki anyone can edit: the sections go in the envelope, cut to size first so its end is never cut off.
         val read = buildString {
             found.take(6).forEach { (index, title) ->
-                val body = get(Yugipedia.parseUrl(page, index), keep = true).getOrNull()?.let(Yugipedia::wikitextOf)?.let(Wikitext::plain)
+                val body = get(Yugipedia.parseUrl(page, index), keep = true, readable = WIKITEXT_READS).getOrNull()?.let(Yugipedia::wikitextOf)?.let(Wikitext::plain)
                 if (!body.isNullOrBlank()) {
                     appendLine("## $title")
                     appendLine(HtmlText.truncate(body.trim(), 5_000))
@@ -357,7 +371,11 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
     }
 
     private companion object {
-        const val WEEK = 7L * 24 * 60 * 60 * 1000
+        // How each rulings reply is read: only one that reads is kept for the week (1.0.99, ReplyCache).
+        val CARD_READS: (String) -> Boolean = { YgoOrg.card(it).isSuccess }
+        val QA_READS: (String) -> Boolean = { YgoOrg.qa(it).isSuccess }
+        val WIKITEXT_READS: (String) -> Boolean = { Yugipedia.wikitextOf(it) != null }
+        val SECTIONS_READS: (String) -> Boolean = Yugipedia::hasSections
         const val MAX_BODY = 2_000_000
     }
 }

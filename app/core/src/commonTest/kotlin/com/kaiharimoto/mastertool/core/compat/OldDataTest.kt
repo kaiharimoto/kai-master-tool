@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.compat
 
+import com.kaiharimoto.mastertool.core.ai.report.book.BookFreshness
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
 import com.kaiharimoto.mastertool.core.backup.BackupManifest
 import com.kaiharimoto.mastertool.core.backup.Backups
@@ -61,6 +62,24 @@ class OldDataTest {
             {"id":"lessons/a","title":"A","blocks":[{"type":"text","text":"Words"},{"type":"lesson","maxim":"Open Welcome","card":"Welcome Labrynth","number":"74%"}]}]}]}"""
         val book = assertNotNull(GuideBook.read(old))
         assertEquals(2, book.chapters.single().sections.single().blocks.size)
+    }
+
+    @Test
+    fun aReadersGuideFrom1098WithoutItsDeckReadsDeckUnknown() {
+        // 1.0.98: the book as `reader_guide` stamped it, the notes' hash only; 1.0.99 records the deck per chapter.
+        val old = """{"title":"Labrynth","bigIdea":"Set and pass.","updatedAt":1759000000000,"notesHash":"1x2y3z","chapters":[
+            {"id":"lessons","title":"Lessons","summary":"What decides games","sections":[{"id":"lessons/a","title":"A","blocks":[
+            {"type":"lesson","id":"lessons/a/1","maxim":"Open Welcome","card":"Welcome Labrynth","number":"74%"}]}]},
+            {"id":"lines","title":"Lines"}]}"""
+        val book = assertNotNull(GuideBook.read(old))
+        assertEquals("", book.deckPrint)
+        assertTrue(book.chapters.all { it.deckPrint.isEmpty() && it.notesHash.isEmpty() })
+        val status = BookFreshness.of(book, "abc123", "1x2y3z")
+        assertEquals(BookFreshness.DeckState.UNKNOWN, status.deck)
+        assertEquals(false, status.stale)
+        // The new field round-trips; an older build skips it, as `GuideBook.json` ignores unknown keys.
+        val again = assertNotNull(GuideBook.read(GuideBook.write(book.copy(deckPrint = "abc123"))))
+        assertEquals("abc123", again.deckPrint)
     }
 
     @Test

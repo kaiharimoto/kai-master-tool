@@ -1141,7 +1141,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             ?: GuideBook(aboutName)
         val deck = if (deckId == state.deckId) state.deck else stored(deckId)?.entry?.deck ?: return fail("The deck this guide is about is gone.")
         val main = deck.main.mapNotNull { state.index.byId(it)?.name }
-        val ctx = BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis())
+        // What a write is stamped with (1.0.99): the deck and Ai's notes it was written on, for the reader to check against.
+        val notesHash = ReaderGuide.hashOf(ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty())
+        val ctx = BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis(), Ledger.fingerprint(deck), notesHash)
         val w = BookWriter
         // A chapter's percentages and odds are the deck's facts or a check's (1.0.98, the evidence ledger), like the guide's.
         if (ToolArgs.string(i, "action") == "write_chapter") {
@@ -1156,7 +1158,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
         }
         val result = when (ToolArgs.string(i, "action")) {
-            "outline" -> BookWriter.Result(book, w.outline(book))
+            "outline" -> BookWriter.Result(book, w.outline(book, ctx))
             "set_outline" -> w.setOutline(book, ToolArgs.objects(i, "chapters"))
             "set_front" -> w.setFront(book, i, ctx)
             "write_chapter" -> w.writeChapter(book, ToolArgs.element(i, "chapter"), ctx)
@@ -1168,8 +1170,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         if (!result.ok) return fail(result.message)
         if (result.book != book) {
             // Which version of Ai's notes it was written from, so the app can say when it is out of date.
-            val notes = ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)).orEmpty()
-            ai.files.write(path, GuideBook.write(result.book.copy(notesHash = ReaderGuide.hashOf(notes))))
+            ai.files.write(path, GuideBook.write(result.book.copy(notesHash = notesHash)))
             ai.bookChanged()
         }
         val summary = when (ToolArgs.string(i, "action")) {

@@ -99,8 +99,8 @@ object AiDocs {
         }
     }
 
-    suspend fun deliverBook(h: NeueHolders, deckId: String, book: GuideBook) {
-        val bytes = runCatching { bookBytes(h, book, deckNames(h, deckId)) }.getOrElse {
+    suspend fun deliverBook(h: NeueHolders, deckId: String, book: GuideBook, deck: List<String>? = deckNames(h, deckId)) {
+        val bytes = runCatching { bookBytes(h, book, deck) }.getOrElse {
             h.neue.note = Note("The guide could not be made")
             return
         }
