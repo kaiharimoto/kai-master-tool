@@ -48,6 +48,14 @@ import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuMotion
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawWithContent
+import com.kaiharimoto.neue.cards.HoloCache
+import com.kaiharimoto.neue.cards.drawFoilStar
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  * One card on the duel table, at its frame. Cards may move, and nothing else may: a card that changes
@@ -72,8 +80,28 @@ internal fun TableCard(
      * see the button choice better"): the card draws small and see-through, shrinking toward this point — where it is held.
      */
     overDeck: TransformOrigin? = null,
+    /**
+     * A key that changes each time the card becomes a link of a chain (1.0.95, kai: "I also need a card to lift and shine a
+     * holographic glimmer in the same texture as the foiling in a star + shape when a card is activating/declaring its
+     * effect"): the card rises and settles while a foil star swells over it and goes, the light sweeping across.
+     */
+    flash: Int? = null,
 ) {
     val density = LocalDensity.current
+    val glint = remember { Animatable(0f) }
+    // The key the card was first drawn with: a card already on a chain when the table is drawn (the page opened again, a
+    // duel read back) does not glint; only an activation seen happening does.
+    val seen = remember { arrayOf(flash) }
+    LaunchedEffect(flash) {
+        val fresh = flash != null && flash != seen[0]
+        seen[0] = flash
+        glint.snapTo(0f)
+        if (fresh) {
+            glint.animateTo(1f, tween(GLINT_MS, easing = LinearEasing))
+            glint.snapTo(0f)
+        }
+    }
+    val starCache = remember { HoloCache() }
     val small by animateFloatAsState(if (overDeck != null) 1f else 0f, tween(MuMotion.FAST, easing = MuMotion.ease), label = "deck")
     val pivot = overDeck ?: TransformOrigin.Center
     val spec = if (carried) snap<Float>() else tween(MuMotion.BASE, easing = MuMotion.ease)
@@ -92,6 +120,13 @@ internal fun TableCard(
             .cardSize { width.value }
             .graphicsLayer {
                 rotationZ = rot
+                // The lift as it activates: up and back down, eased by the sine of the glint's progress.
+                val g = glint.value
+                if (g > 0f) {
+                    val up = sin(PI.toFloat() * g)
+                    scaleX = 1f + GLINT_LIFT * up
+                    scaleY = 1f + GLINT_LIFT * up
+                }
                 if (small > 0f) {
                     transformOrigin = pivot
                     val scale = 1f - (1f - OVER_DECK_SCALE) * small
@@ -100,7 +135,16 @@ internal fun TableCard(
                     alpha = 1f - (1f - OVER_DECK_ALPHA) * small
                 }
             }
-            .then(if (frame.shown && caption != null) Modifier.cursorPointer(caption = caption, emphasis = true, holdOnPress = true) else Modifier),
+            .then(if (frame.shown && caption != null) Modifier.cursorPointer(caption = caption, emphasis = true, holdOnPress = true) else Modifier)
+            .drawWithContent {
+                drawContent()
+                val g = glint.value
+                if (g > 0f && g < 1f) {
+                    // The star swells and goes; the light crosses it from one corner to the other.
+                    val radius = size.minDimension * GLINT_SIZE * sin(PI.toFloat() * g)
+                    drawFoilStar(center, radius, Offset(g * 2f - 1f, g * 2f - 1f), starCache)
+                }
+            },
     ) {
         if (frame.shown || carried) {
             when (frame.look) {
@@ -128,6 +172,11 @@ internal fun TableCard(
         }
     }
 }
+
+/** The activation's glint (1.0.95): how long, how far the card lifts, how big the star grows against the card. */
+private const val GLINT_MS = 900
+private const val GLINT_LIFT = 0.08f
+private const val GLINT_SIZE = 0.62f
 
 /** A card carried over a Deck draws at this share of its size and this opacity, so the Deck's choices show (1.0.93). */
 private const val OVER_DECK_SCALE = 0.45f

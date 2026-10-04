@@ -84,7 +84,7 @@ internal fun DuelInspector(h: NeueHolders, duels: Duels, game: DuelGame, viewers
     val body: @Composable (room: Dp?) -> Unit = { room ->
         if (uid == null) {
             Micro("The card", color = c.ink45)
-            Help("Point at a card to read it here. Click it for what it can do; right-click does the obvious thing; drag puts it anywhere.")
+            Help("Point at a card to read it here. Click it for what it can do; right-click does the default action; drag puts it anywhere.")
         } else {
             InspectedCard(h, duels, game, viewers, uid, room)
         }
@@ -222,7 +222,7 @@ internal fun VerbChip(label: String, key: String? = null, strong: Boolean = fals
 
 /** The keys [KeyCheat] shows, as `chord to words`, the arrows first. */
 private fun keyRows(): List<Pair<String, String>> = listOf(
-    DeskAction.DUEL_DEFAULT to "Obvious", DeskAction.DUEL_SUMMON to "Summon", DeskAction.DUEL_SET to "Set",
+    DeskAction.DUEL_DEFAULT to "Default", DeskAction.DUEL_SUMMON to "Summon", DeskAction.DUEL_SET to "Set",
     DeskAction.DUEL_ACTIVATE to "Activate", DeskAction.DUEL_GRAVE to "To GY", DeskAction.DUEL_BANISH to "Banish",
     DeskAction.DUEL_HAND to "To hand", DeskAction.DUEL_DRAW to "Draw", DeskAction.DUEL_NEXT_PHASE to "Next phase",
     DeskAction.DUEL_END_TURN to "End turn", DeskAction.DUEL_COMMAND to "Command", DeskAction.UNDO to "Undo",

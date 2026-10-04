@@ -510,7 +510,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("space", shift = true), DeskAction.DUEL_SELECT, DeskScope.DUEL, "Select the focused card too, or let it go: then one verb moves them all"),
         DeskShortcut(KeyChord("left", alt = true), DeskAction.DUEL_ORDER_EARLIER, DeskScope.DUEL, "Ordering cards onto the Deck: the chosen card one place nearer the top", repeatable = true),
         DeskShortcut(KeyChord("right", alt = true), DeskAction.DUEL_ORDER_LATER, DeskScope.DUEL, "Ordering cards onto the Deck: the chosen card one place further down", repeatable = true),
-        DeskShortcut(KeyChord("space"), DeskAction.DUEL_DEFAULT, DeskScope.DUEL, "The obvious thing for the card under the pointer"),
+        DeskShortcut(KeyChord("space"), DeskAction.DUEL_DEFAULT, DeskScope.DUEL, "The default action for the card under the pointer"),
         DeskShortcut(KeyChord("a"), DeskAction.DUEL_ACTIVATE, DeskScope.DUEL, "Activate it"),
         DeskShortcut(KeyChord("s"), DeskAction.DUEL_SUMMON, DeskScope.DUEL, "Summon it, or Flip Summon it"),
         DeskShortcut(KeyChord("s", shift = true), DeskAction.DUEL_SPECIAL, DeskScope.DUEL, "Special Summon it"),

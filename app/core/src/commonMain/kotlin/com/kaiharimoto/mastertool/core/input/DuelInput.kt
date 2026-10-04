@@ -80,8 +80,8 @@ object DuelMouse {
 
     val all: List<DuelBinding> = listOf(
         DuelBinding(DuelTarget.MY_CARD, CLICK, DuelInputAction.INSPECT, "Select it: what it can do stands beside it, and the inspector reads it"),
-        DuelBinding(DuelTarget.MY_CARD, RIGHT, DuelInputAction.DEFAULT_VERB, "The obvious thing: summon, activate, set, flip summon; in the Battle Phase, attack with it"),
-        DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The obvious thing, as a right-click"),
+        DuelBinding(DuelTarget.MY_CARD, RIGHT, DuelInputAction.DEFAULT_VERB, "The default action: summon, activate, set, flip summon; in the Battle Phase, attack with it"),
+        DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The default action, as a right-click"),
         DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it — in the Battle Phase onto theirs attacks it, onto their hand or life points attacks directly; Alt sets it, Shift puts it under a pile"),
         DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, beside it"),
         DuelBinding(DuelTarget.MY_CARD, CTRL_CLICK, DuelInputAction.ADD_TO_SELECTION, "Put it in the selection, or take it out: each card gets its number, and one key, verb or drag then moves them all, as one undo"),
@@ -131,7 +131,7 @@ object DuelTouch {
 
     val all: List<DuelBinding> = listOf(
         DuelBinding(DuelTarget.MY_CARD, TAP, DuelInputAction.INSPECT, "Select it: what it can do stands beside it, and the inspector reads it"),
-        DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The obvious thing: summon, activate, set, flip summon; in the Battle Phase, attack with it"),
+        DuelBinding(DuelTarget.MY_CARD, DOUBLE, DuelInputAction.DEFAULT_VERB, "The default action: summon, activate, set, flip summon; in the Battle Phase, attack with it"),
         DuelBinding(DuelTarget.MY_CARD, DRAG, DuelInputAction.MOVE, "Put it anywhere; onto a monster attaches it — in the Battle Phase onto theirs attacks it, onto their hand or life points attacks directly"),
         DuelBinding(DuelTarget.MY_CARD, HOLD, DuelInputAction.VERBS, "Every verb for it, beside it, Point among them — and select mode: each tap after it adds a card"),
         DuelBinding(DuelTarget.MY_CARD, SEVERAL, DuelInputAction.ADD_TO_SELECTION, "Put it in the selection, or take it out; the bar over your hand then moves them all"),

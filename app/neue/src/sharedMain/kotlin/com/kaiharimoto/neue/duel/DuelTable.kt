@@ -619,6 +619,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     carried = isCarried,
                     foil = h.neue.prefs.foil,
                     stats = if (base.look == CardLook.BACK) null else words.stats(f.uid),
+                    flash = s.chain.indexOfLast { it.uid == f.uid }.takeIf { it >= 0 }?.plus(1),
                 )
             }
         }
@@ -707,6 +708,8 @@ private fun CarriedCard(
     carried: Boolean,
     foil: String,
     stats: TableStats?,
+    /** Which link of the chain the card is (1.0.95): a new one plays its activation's glint. */
+    flash: Int? = null,
 ) {
     val cr = follow?.value
     val held = cr != null && cr.uid == base.uid
@@ -715,7 +718,7 @@ private fun CarriedCard(
     val overDeck = if (held && !cr.intent.none && (cr.spot as? DropSpot.Pile)?.part != null) {
         TransformOrigin((cr.grabX / layout.card).coerceIn(0f, 1f), (cr.grabY / layout.cardHeight).coerceIn(0f, 1f))
     } else null
-    TableCard(frame = frame, caption = caption, inst = inst, card = card, name = name, selected = selected, carried = carried, foil = foil, stats = stats, overDeck = overDeck)
+    TableCard(frame = frame, caption = caption, inst = inst, card = card, name = name, selected = selected, carried = carried, foil = foil, stats = stats, overDeck = overDeck, flash = flash)
 }
 
 /**
