@@ -232,6 +232,10 @@ Every phase lists:
 - **Goal:** a rating for every card and card pair in a deck, proven by comparing hands. kai: "data proven … smart, reactive,
   and adapting to the user".
 - **Builds:** see `docs/phases/S.md`.
+  - **Two ratings, kept apart** (kai's decision): **the deck on its own**, and **per matchup**, each matchup split into
+    four strata: game one going first, game one going second, sided going first, sided going second. Sided trials use a
+    siding plan for both decks (Siding's plans or the deck's preset patterns now; a two-deck siding tool later). The
+    strata share a card's value through a pooled prior, so few sided trials still borrow from many game-one ones.
   - **Two trial kinds:**
     - matchup trials on a 5-point scale;
     - comparison trials, where two hands differ by one card.
@@ -324,6 +328,7 @@ These change what gets built. Each has a default the plan assumes until you say 
 | Effects as code: Ai writes every card, or you review each card? | Ai writes them, tests verify them, you see coverage; nothing unverified is used by search. |
 | A user-installed open engine (EDOPro) on the desktop as an optional oracle, run in a separate process | No. The app's own engine only, for licence clarity. |
 | Present recording: desktop only, or Android too in the first release? | Desktop first. |
+| Shootout ratings | **Decided:** the deck alone, and per matchup in four strata (G1 first, G1 second, sided first, sided second). |
 
 ---
 
@@ -334,5 +339,5 @@ These change what gets built. Each has a default the plan assumes until you say 
 | 0 Foundation (Ai World, instruments, red team) | Shipped 1.0.97 |
 | Evidence ledger, YGOrg rulings, harness fixes | Shipped 1.0.98 |
 | A Trust | Shipped 1.0.99 / v1.3.77 |
-| **B Card truth** | **Next**, from 1.1.0 (the Neue patch would reach 100) |
+| **B Card truth** | **In progress**, from 1.1.0 (`docs/phases/B.md`) |
 | S, C to G | Planned |

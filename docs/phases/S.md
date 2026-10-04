@@ -29,10 +29,54 @@ Random hands spend most trials on what is already obvious, and the result is a w
 
   They explain a rating; they do not make it.
 
+## 1½. Two ratings, and four ways to start a game (kai's decision)
+
+kai: "Two separate ratings, one for the deck on its own, and matchup dependent ratings differ for each matchup, split
+also into going first, going second, and post side going first, post side going second."
+
+**1. The deck on its own.** How good a hand is with no particular opponent: does it make its play, does it brick.
+- Trials show your hand and the turn, with no opponent's hand.
+- The answer is how strong the hand is (the same five points, read as "how often this hand does what the deck wants").
+- It is the rating to build a deck by: ratios, staples, bricks. It needs no Format web.
+
+**2. Per matchup.** Each opponent in your Format web gets its own ratings, kept apart, because a card's worth changes
+with what it faces (Droll is a different card against a deck that searches).
+
+Each matchup's rating is split four ways, **the strata**:
+
+| Stratum | Your deck | Their deck | Who goes first |
+|---|---|---|---|
+| **G1 · first** | as built | as built | you |
+| **G1 · second** | as built | as built | them |
+| **Sided · first** | after your siding plan | after their siding plan | you |
+| **Sided · second** | after your siding plan | after their siding plan | them |
+
+**What is shared and what is not.**
+- A card is one card across all the strata: a card's ratings in the four are four parameters, but they are **pooled**.
+  Each stratum's value starts from the matchup's average for that card and moves away only as the trials say (a
+  hierarchical prior). So a few sided trials borrow strength from many game-one trials, and a card whose worth really
+  flips between first and second is allowed to.
+- The deck-alone rating is a separate model, never averaged into a matchup's. It can seed a matchup's priors, shown as such.
+- The picker spends trials where the uncertainty that matters is largest, so a stratum the person cares about but has
+  barely tested is the one it fills. The person can also pin a session to one stratum.
+
+**Post-side trials need a siding plan for both decks.**
+- **Yours:** the plan for this matchup and turn from your deck's siding (`SidingCodec`'s plans, Format, 1.0.35). When the
+  deck has none, the legacy `sidingPatterns` it carries are offered, read only.
+- **Theirs:** the opponent's plan for the answering turn (Siding's "how they side against you").
+- **No plan yet:** the session offers to make one. A siding tool for both decks side by side (kai: "not built") is the
+  better door; until it exists, Siding's editor is it, and a stratum without plans is shown as waiting, never filled
+  with game-one hands.
+- **The plan is part of the data.** Every sided trial stores the plans' fingerprints (which cards out, which in). When a
+  plan changes, the trials under the old plan stay, labelled; the model treats each plan as its own deck for the cards
+  that differ and pools the rest. A rating always says which plan it is for.
+- **Siding plans compared** (§5) is then the same model asked a new question: the worth of the hands each plan leaves you
+  with, in the sided strata.
+
 ## 2. The model (`core/shootout/model`)
 
 **One model explains every answer.** A hand's value is the sum of:
-- the turn (first or second);
+- the stratum (game one or sided, first or second; §1½), and for the deck alone just first or second;
 - each card's value, with each copy beyond the first worth a declining fraction (a third copy is not a first);
 - for each pair of cards, any extra value from the two together, positive for a combo and negative for redundancy;
 - minus the opponent's cards' values against it.
@@ -97,10 +141,14 @@ The same simulation tunes the settings: the share of random hands, how tightly p
 - **Pairs:** a grid, in ink, of only the pairs whose range excludes zero, each with how many trials back it.
 - **Counts:** the ratings combined with the real draw odds give the next copy's worth, for example "a third Ash is worth +0.8 points; a second Veiler +0.3".
 - **Opening patterns:** which kinds of hand win the matchup, first and second.
-- **Siding:** plans compared through the same model, on the hands they leave you with.
+- **Two views, never mixed:** the deck alone, and each matchup with its four strata side by side (a card's value as
+  G1 first · G1 second · sided first · sided second, each with its range and its trial count).
+- **Siding:** plans compared through the same model, on the hands they leave you with, in the sided strata.
 - **Every number opens its trials.** Saved into the deck's guide, a number carries its proof (evidence ledger, `Proof(tool = "shootout", …)`).
 - **Storage:**
-  - `<data>/shootout/<deck>/<matchup>.json`: the trials, the append-only log, and the fit read from it. Synced and backed up.
+  - `<data>/shootout/<deck>/alone.json` (the deck on its own) and `<data>/shootout/<deck>/<matchup>.json` (one per
+    opponent, its four strata inside): the trials, the append-only log, and the fit read from it. Synced and backed up.
+  - Every trial stores its stratum and, when sided, both plans' fingerprints.
   - A versioned format with an `OldDataTest` case.
 
 ## 6. Ai's parts (the person stays the judge)
@@ -190,5 +238,5 @@ better" is a number, the same discipline as Trust (Phase A), whose runner it reu
 5. Ai's parts: the calibration set and apprentice mode first (they make the blind data the trust score needs), then the
    interview and notes, then supervised runs, then the gate and audits that let Ai run alone.
 
-**Needs:** Phase B (alternate arts counted as one card, legality); the evidence ledger (1.0.98); F1's runner style for the simulation.
+**Needs:** Phase B (alternate arts counted as one card, legality); the evidence ledger (1.0.98); F1's runner style for the simulation; siding plans for both decks for the sided strata (Siding today, the two-deck siding tool when it is built).
 **Done when:** the simulation's recovery and calibration tests pass; a real session gives ratings with ranges; and every number opens its trials.
