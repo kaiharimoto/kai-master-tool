@@ -60,6 +60,9 @@ enum class Page(val numeral: Int?, val title: String) {
 
     /** Duel (1.0.74): the duel simulator — a table, one seat or two, every card moved by hand. */
     DUEL(7, "Duel"),
+
+    /** Ai World (1.0.95): Ai's own computer — its files, its runs, its reasoning, its boards — watched as it works. */
+    WORLD(8, "World"),
     SETTINGS(null, "Settings"),
 }
 
