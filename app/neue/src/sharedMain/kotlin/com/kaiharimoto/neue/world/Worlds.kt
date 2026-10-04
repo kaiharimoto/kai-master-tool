@@ -279,6 +279,59 @@ class Worlds(val dir: File) {
         scope.launch { write(path, text, WorldEvent.YOU) }
     }
 
+    // ---- The person's own hands (the page's buttons and keys) --------------------------------------------------
+
+    /** Why the person's Run cannot run now, in words, or null when it can. */
+    val runBlocked: String?
+        get() = when {
+            open == null -> "No world is open"
+            running != null -> "Something is running"
+            typing -> "Ai is still typing"
+            editorPath == null -> "Open a file first"
+            WorldPaths.lang(editorPath.orEmpty()) == null -> "Only .js and .py files run"
+            else -> null
+        }
+
+    /** The person's Run: their edit saved first, then the file in the editor run; what stops it is said in the terminal. */
+    fun runEditor() {
+        if (runBlocked != null) return
+        val path = editorPath ?: return
+        val text = editorText
+        val save = edited
+        scope.launch {
+            if (save) write(path, text, WorldEvent.YOU)
+            run(path, null, null, by = WorldEvent.YOU).onFailure { line(TermLine.Kind.ERR, it.message ?: "The run failed.") }
+        }
+    }
+
+    /** The person's New world. */
+    fun make(title: String, scopeOf: String?) {
+        scope.launch { create(title, scopeOf, WorldEvent.YOU) }
+    }
+
+    /** The person's × on a board. */
+    fun takeDown(id: String) {
+        scope.launch { removeBoard(id, WorldEvent.YOU) }
+    }
+
+    /**
+     * A world put on screen at once, for the studio's photographs (`--world=demo`): its files written, the terminal
+     * and activity as given, [editor] open — no typing, no runs.
+     */
+    fun seed(w: World, files: Map<String, String>, lines: List<TermLine>, events: List<WorldEvent>, editor: String?) {
+        val base = filesDir(w)
+        base.mkdirs()
+        files.forEach { (path, text) -> File(base, path).also { it.parentFile?.mkdirs() }.writeText(text) }
+        File(root(w), "world.json").writeText(WorldCodec.encode(w))
+        list = listOf(w) + list.filterNot { it.id == w.id }
+        open = w
+        refreshFiles()
+        terminal.clear()
+        terminal += lines
+        activity = events
+        showFile(editor)
+    }
+
     // ---- Running ----------------------------------------------------------------------------------------------
 
     /**
