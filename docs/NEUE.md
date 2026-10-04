@@ -2575,8 +2575,11 @@ How far to trust a connection, measured — Settings › Assistant › Trust (`T
 - **The sets** (`core/ai/eval/EvalSets`): 40 hand-odds questions whose keys the app's own counter computes (`HandOdds`, so
   a key can never be wrong); 30 rules and rulings with one settled answer each and the source named; 20 decklists as people
   write them (nicknames, typos, counts before and after), read back card by card; and 24 answers for the fact-checker,
-  half with one planted mistake.
-- **Graded by code, never a model** (`Grading`): a percentage at the precision asked, a yes or no, a decklist exactly,
+  half with one planted mistake. **Card truth** (1.1.2, Phase B F1, `EvalSets.cardTruth`): 32 questions only the tools
+  answer — 14 past banlists by date and region (`banlist`, now in `EVAL_TOOLS`), 8 releases by region and date, 5 copy
+  counts by passcode across printings, 5 Genesys points (`Grader.Number`) — each fact read live on 2026-10-04 from Yugipedia's
+  list pages through `LimitationParser`/`BanlistHistory` or YGOPRODeck's `misc_info`, its source named.
+- **Graded by code, never a model** (`Grading`): a percentage at the precision asked, a yes or no, a whole number, a decklist exactly,
   and for the checker its claims — a mistake caught, a clean answer left alone.
 - **The runner** (`AiEval.kt`, `startEval`): each question asked as a person's is — the rules primer in, the look-up
   tools only (`EVAL_TOOLS`) — on API connections (a plan's command-line app runs its own loop and every tool); the

@@ -2,9 +2,16 @@ package com.kaiharimoto.mastertool.core.ai.eval
 
 import com.kaiharimoto.mastertool.core.ai.calc.Calc
 import com.kaiharimoto.mastertool.core.ai.check.FactCheck
+import com.kaiharimoto.mastertool.core.cards.BanlistFixture
+import com.kaiharimoto.mastertool.core.cards.LimitationParser
+import com.kaiharimoto.mastertool.core.model.BanStatus
+import com.kaiharimoto.mastertool.core.model.Format
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /** Phase A (1.0.99): the keys are right, and the graders read answers as a person would. */
@@ -15,9 +22,77 @@ class EvalTest {
         assertEquals(30, EvalSets.rulings().items.size)
         assertEquals(20, EvalSets.decklists().items.size)
         assertEquals(24, EvalSets.planted().items.size)
+        assertEquals(32, EvalSets.cardTruth().items.size)
+        assertEquals(5, EvalSets.all.size)
         assertEquals(12, EvalSets.planted().items.count { (it.grader as Grader.Planted).hasError })
         val ids = EvalSets.all.flatMap { s -> s.items.map { it.id } }
         assertEquals(ids.size, ids.toSet().size, "every item has its own id")
+    }
+
+    @Test
+    fun cardTruthCoversEveryKindWithBothAnswersAndASourceEach() {
+        val set = EvalSets.cardTruth()
+        assertEquals(32, set.items.size)
+        assertEquals(set, EvalSets.byId(EvalSets.CARD_TRUTH), "in the list Trust shows")
+        assertFalse(set.checker)
+        val kinds = set.items.groupBy { it.id.substringBefore('-') }
+        assertEquals(mapOf("ban" to 14, "release" to 8, "copies" to 5, "genesys" to 5), kinds.mapValues { it.value.size })
+        for (kind in listOf("ban", "release", "copies")) {
+            val answers = kinds.getValue(kind).map { (it.grader as Grader.YesNo).expected }.toSet()
+            assertEquals(setOf(true, false), answers, "$kind has both yes and no answers")
+        }
+        kinds.getValue("genesys").forEach { assertTrue(it.grader is Grader.Number, it.id) }
+        set.items.forEach { item ->
+            assertTrue(item.source.isNotBlank(), "${item.id} names its source")
+            assertTrue("ANSWER:" in item.prompt, "${item.id} says the form of its last line")
+        }
+        // A banlist question states its region and its day, and cites the list page it was read from.
+        kinds.getValue("ban").forEach { item ->
+            assertTrue("TCG" in item.prompt || "OCG" in item.prompt, item.id)
+            assertTrue(Regex("""\d{4}-\d{2}-\d{2}""").containsMatchIn(item.prompt), item.id)
+            assertTrue("Yugipedia" in item.source && "Lists" in item.source, item.id)
+        }
+        // Both regions are asked about.
+        assertTrue(kinds.getValue("ban").any { "OCG" in it.prompt } && kinds.getValue("ban").any { "TCG" in it.prompt })
+    }
+
+    @Test
+    fun aCardTruthKeyAgreesWithACapturedList() {
+        // copies-05: 83764719 and 83764718 are Monster Reborn, Limited on the TCG list in force on 2026-10-01.
+        val list = assertNotNull(LimitationParser.parse("September 2026 Lists (TCG)", BanlistFixture.SEPTEMBER_2026_TCG, Format.TCG))
+        assertTrue(list.start <= "2026-10-01" && (list.end == null || "2026-10-01" <= list.end!!), "${list.start}..${list.end}")
+        assertEquals(BanStatus.LIMITED, list.statusOf("Monster Reborn"))
+        val item = EvalSets.cardTruth().items.first { it.id == "copies-05" }
+        assertEquals(Grader.YesNo(false), item.grader, "two copies of a Limited card")
+        assertTrue("September 2026 Lists (TCG)" in item.source)
+    }
+
+    @Test
+    fun aWholeNumberIsGradedExactly() {
+        val g = Grader.Number(50)
+        assertTrue(Grading.grade(g, "Maxx \"C\" costs 50 points.\nANSWER: 50").pass)
+        assertTrue(Grading.grade(g, "ANSWER: 50 points of the 100 allowed").pass, "the first number on the line")
+        assertTrue(Grading.grade(g, "ANSWER: 50.0").pass)
+        assertFalse(Grading.grade(g, "ANSWER: 50.5").pass)
+        assertFalse(Grading.grade(g, "ANSWER: 30").pass)
+        assertFalse(Grading.grade(g, "ANSWER: 500").pass)
+        assertFalse(Grading.grade(g, "ANSWER: fifty").pass, "a number, written as one")
+        assertTrue(Grading.grade(g, "It costs 50").pass, "no ANSWER line: the answer's last number")
+        assertEquals("30 (expected 50)", Grading.grade(g, "ANSWER: 30").read)
+        // A key read off the set is graded the same way.
+        val maxx = EvalSets.cardTruth().items.first { it.id == "genesys-01" }
+        assertTrue(Grading.grade(maxx.grader, "ANSWER: 50").pass)
+        assertTrue(Grading.grade(EvalSets.cardTruth().items.first { it.id == "ban-01" }.grader, "Forbidden since October 2005.\nANSWER: yes").pass)
+        assertFalse(Grading.grade(EvalSets.cardTruth().items.first { it.id == "copies-01" }.grader, "Two and two.\nANSWER: yes").pass)
+    }
+
+    @Test
+    fun aNumberGraderSurvivesTheWire() {
+        // Graders are serialised with their items (a set could be stored or sent); the new kind round-trips beside the old.
+        val json = Json
+        val items = listOf(EvalItem("a", "q", Grader.Number(7), "s"), EvalItem("b", "q", Grader.YesNo(true)))
+        val back = json.decodeFromString(ListSerializer(EvalItem.serializer()), json.encodeToString(ListSerializer(EvalItem.serializer()), items))
+        assertEquals(items, back)
     }
 
     @Test

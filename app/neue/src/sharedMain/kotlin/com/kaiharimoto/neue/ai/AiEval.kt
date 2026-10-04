@@ -25,8 +25,12 @@ import kotlinx.coroutines.launch
 // Trust (1.0.99, Phase A, docs/phases/A.md), on [AiState]: a set of questions with known answers run against a
 // connection, each answer graded by code, every run kept per connection (`ai/evals/<connection>.json`).
 
-/** The tools a question is answered with: the ones that look up, as a person's question is answered. */
-internal val EVAL_TOOLS = setOf("card_info", "search_cards", "rulings", "calculate", "hand_odds", "resolve_cards")
+/**
+ * The tools a question is answered with: the ones that look up, as a person's question is answered. `banlist` (1.1.2,
+ * the Card truth set) reads any past list and only reads; `validate_deck` is left out — it checks the person's own
+ * decks, never a list written in the question.
+ */
+internal val EVAL_TOOLS = setOf("card_info", "search_cards", "rulings", "calculate", "hand_odds", "resolve_cards", "banlist")
 
 /** Roughly what one question costs, in tokens read and written, for the estimate shown before a run. */
 internal const val EVAL_TOKENS_EACH = 6_000
