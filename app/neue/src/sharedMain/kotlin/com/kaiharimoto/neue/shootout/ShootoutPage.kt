@@ -393,18 +393,27 @@ private fun Choice(h: NeueHolders, left: Boolean, ids: List<Int>, cardW: Dp, gap
 
 /** How wide a card can be: [n] across [width] with [gap]s, and no taller than [height]; on a phone, three to a row. */
 private fun cardWidth(width: Dp, height: Dp, n: Int, gap: Dp, phone: Boolean): Dp {
-    val across = if (phone && n > 3) 3 else n.coerceAtLeast(1)
+    val across = phoneAcross(n, phone)
     val rows = (n + across - 1) / across
     val byWidth = (width - gap * (across - 1)) / across
     val byHeight = ((height - gap * (rows - 1)) / rows) * CARD_RATIO
     return min(min(byWidth, byHeight), 260.dp).coerceAtLeast(24.dp)
 }
 
-/** A hand as card art, in rows of three on a phone; [marks] says which cards are draws (1.1.5). */
+/**
+ * Cards to a row on a phone: up to three in one row, else two rows of up to four — a hand of six with its draws stays
+ * two rows, never three of thumbnails (1.1.5).
+ */
+private fun phoneAcross(n: Int, phone: Boolean): Int = when {
+    !phone || n <= 3 -> n.coerceAtLeast(1)
+    else -> minOf(4, (n + 1) / 2)
+}
+
+/** A hand as card art, in rows on a phone ([phoneAcross]); [marks] says which cards are draws (1.1.5). */
 @Composable
 private fun Hand(h: NeueHolders, ids: List<Int>, marks: List<String?>, cardW: Dp, gap: Dp, phone: Boolean) {
     val cards = ids.mapIndexed { i, id -> id to marks.getOrNull(i) }
-    val rows = if (phone && cards.size > 3) cards.chunked(3) else listOf(cards)
+    val rows = if (phone && cards.size > 3) cards.chunked(phoneAcross(cards.size, true)) else listOf(cards)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap), horizontalAlignment = Alignment.CenterHorizontally) {
         rows.forEachIndexed { r, row ->
             key(r) {
@@ -435,8 +444,10 @@ private fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null) {
             )
         }
         if (mark != null) {
-            Box(Modifier.align(Alignment.TopStart).background(c.ink).padding(horizontal = 6.dp, vertical = 2.dp)) {
-                Micro(mark, color = c.paper)
+            // A small card wears a short tag, or the tag outgrows the card: D for the turn's draw.
+            val small = width < 72.dp
+            Box(Modifier.align(Alignment.TopStart).background(c.ink).padding(horizontal = if (small) 3.dp else 6.dp, vertical = if (small) 1.dp else 2.dp)) {
+                Micro(if (small && mark == "Draw") "D" else mark, color = c.paper)
             }
         }
     }
