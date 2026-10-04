@@ -169,7 +169,7 @@ Keep your instruments in the world's `lib/` folder, one per file, and load one w
      * The deck an instrument studies: its cards, and its groups as card names. [notes] are what the reading found
      * worth saying (a group with no Main Deck card, a pool card not in the deck), printed with the study.
      */
-    class DeckRead(val entry: DeckEntry, val cards: Map<CardId, Card>, val groups: Map<String, Set<String>>, private val host: WorldHost) {
+    class DeckRead(val entry: DeckEntry, val cards: Map<CardId, Card>, val groups: Map<String, Set<String>>, internal val host: WorldHost) {
         val main: List<String> = entry.deck.main.map { name(it) }
         val notes = mutableListOf<String>()
         val allNames: Set<String> = (entry.deck.main + entry.deck.extra + entry.deck.side).map { name(it) }.toSet()

@@ -178,7 +178,8 @@ class HandCounter private constructor(val size: Int, private val atoms: List<Pai
                 val t = deck[i]
                 deck[i] = deck[j]
                 deck[j] = t
-                var bits = t
+                // The card drawn is the one now at i (counting the one swapped out was a bias the self-check caught).
+                var bits = deck[i]
                 while (bits != 0L) {
                     val s = bits.countTrailingZeroBits()
                     bits = bits and (bits - 1)
@@ -216,4 +217,103 @@ class HandCounter private constructor(val size: Int, private val atoms: List<Pai
 
         fun binomial(n: Int, k: Int): Double = com.kaiharimoto.mastertool.core.hand.HandOdds.binomial(n, k)
     }
+}
+
+/**
+ * Exact odds over a deck of disjoint roles and the rest (the optimiser's question, 1.0.97): which hands meet a goal
+ * depends only on how many of each role they hold, so the hands that meet it are listed once ([hits]) and every deck
+ * the optimiser tries is a sum over that list — ∏ C(nᵢ, kᵢ) · C(rest, h − Σk) / C(N, h). [words] are the goal's words
+ * as sets of role indices (a role, or `any(…)` of several).
+ */
+class RoleOdds(val roles: Int, private val words: List<Set<Int>>, goal: List<List<Bound>>, val hand: Int) {
+    /** Every count of each role a hand of [hand] can hold that meets the goal. */
+    val hits: List<IntArray>
+
+    init {
+        val out = mutableListOf<IntArray>()
+        val k = IntArray(roles)
+        fun rec(i: Int, left: Int) {
+            if (i == roles) {
+                val counts = IntArray(words.size) { w -> words[w].sumOf { k[it] } }
+                if (HandCounter.meets(counts, goal)) out += k.copyOf()
+                return
+            }
+            for (x in 0..left) {
+                k[i] = x
+                rec(i + 1, left - x)
+            }
+            k[i] = 0
+        }
+        rec(0, hand)
+        hits = out
+    }
+
+    /** P(a hand of [hand] from a deck of [size] holding [counts] of each role meets the goal). */
+    fun probability(counts: IntArray, size: Int): Double {
+        val rest = size - counts.sum()
+        if (rest < 0 || size < hand) return 0.0
+        var p = 0.0
+        for (k in hits) {
+            var w = HandCounter.binomial(rest, hand - k.sum())
+            var i = 0
+            while (w != 0.0 && i < k.size) {
+                w *= HandCounter.binomial(counts[i], k[i])
+                i++
+            }
+            p += w
+        }
+        return (p / HandCounter.binomial(size, hand)).coerceIn(0.0, 1.0)
+    }
+
+    companion object {
+        /** Compositions of at most [hand] into [roles] parts: the size of [hits] at worst. */
+        fun compositions(roles: Int, hand: Int): Long = (1..roles).fold(1L) { a, i -> a * (hand + i) / i }
+    }
+}
+
+/**
+ * Whether a hand holds what a combo needs, each need filled by a different card ([fits], the simulation's check), and
+ * the same question as clauses on counts ([hall]) so it can be counted exactly: by Hall's theorem a hand fills every
+ * need exactly when, for each set of needs, it holds at least as many cards that could fill one of them as there are
+ * needs in the set.
+ */
+object Matching {
+    fun fits(hand: List<String>, needs: List<Set<String>>): Boolean {
+        val order = needs.sortedBy { s -> hand.count { it in s } }
+        val used = BooleanArray(hand.size)
+        fun go(i: Int): Boolean {
+            if (i == order.size) return true
+            for (j in hand.indices) {
+                if (!used[j] && hand[j] in order[i]) {
+                    used[j] = true
+                    if (go(i + 1)) return true
+                    used[j] = false
+                }
+            }
+            return false
+        }
+        return go(0)
+    }
+
+    /**
+     * [needs] (each a set of cards that would do, with how many of it) as at-least clauses on unions of them: one per
+     * need when no two overlap, else one per subset of the distinct needs (Hall's condition), the same union kept once
+     * at its largest count. At most [MAX_OVERLAPPING] distinct needs that overlap, or the clauses outgrow the counter.
+     */
+    fun hall(needs: List<Pair<Set<String>, Int>>): List<Pair<Set<String>, Int>> {
+        val disjoint = needs.indices.all { i -> (i + 1 until needs.size).all { j -> needs[i].first.intersect(needs[j].first).isEmpty() } }
+        if (disjoint) return needs
+        require(needs.size <= MAX_OVERLAPPING) {
+            "a combo with more than $MAX_OVERLAPPING different needs that share cards cannot be counted exactly: name fewer, or name cards rather than groups"
+        }
+        val out = LinkedHashMap<Set<String>, Int>()
+        for (mask in 1 until (1 shl needs.size)) {
+            val union = needs.indices.filter { mask and (1 shl it) != 0 }.flatMap { needs[it].first }.toSet()
+            val n = needs.indices.filter { mask and (1 shl it) != 0 }.sumOf { needs[it].second }
+            out[union] = maxOf(out[union] ?: 0, n)
+        }
+        return out.entries.map { it.key to it.value }
+    }
+
+    const val MAX_OVERLAPPING = 5
 }

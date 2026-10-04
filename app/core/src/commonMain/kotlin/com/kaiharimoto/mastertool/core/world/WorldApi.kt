@@ -6,6 +6,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
+import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.hand.HandConstraint
@@ -76,11 +77,17 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
         "duelBrief" -> JsonPrimitive(duel(args).let { g -> DuelBrief.describe(g.state, args.int("seat") ?: 0, catalog, g.header.seed) })
         "duelState" -> duelState(duel(args))
         "tool" -> tool(args)
+        "guide" -> JsonPrimitive(Instruments.GUIDE)
+        "file" -> {
+            val path = args.str("path")?.let(WorldPaths::safe) ?: throw IllegalArgumentException("use needs a path inside the world, like 'lib/brick_rate.js'")
+            host.file(path)?.let(::JsonPrimitive) ?: throw IllegalArgumentException("there is no $path in this world: world_write it first (world_state lists the files)")
+        }
         "tools" -> JsonArray(Instruments.ALL.map { t ->
             buildJsonObject {
                 put("name", t.name)
                 put("summary", t.summary)
                 put("args", t.args)
+                put("short", t.short)
             }
         })
         else -> throw IllegalArgumentException("ygo has no “$name”")
@@ -331,6 +338,18 @@ interface WorldHost {
 
     /** The practice games logged in Prep, for the matchups instrument. */
     fun games(): List<TestGame> = emptyList()
+
+    /** A deck's saved combos (Duel's Save as combo, Ai's duel_combo), for the combos instrument (1.0.97). */
+    fun combos(deckId: String): List<Combo> = emptyList()
+
+    /**
+     * The field to expect with [deckId]: each opponent's key, as the games log names it, and its share in percent —
+     * the active event's web (Prep), for the matchups instrument (1.0.97). Empty when no event says.
+     */
+    fun field(deckId: String?): Map<String, Int> = emptyMap()
+
+    /** A file of the open world by its path under `files/` (`lib/x.js`), for `ygo.use`; null when there is none (1.0.97). */
+    fun file(path: String): String? = null
 }
 
 internal fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull

@@ -1,4 +1,4 @@
-# Ai World's instruments: the red team (1.0.95 → 1.0.96)
+# Ai World's instruments: the red team (1.0.97)
 
 kai: "run a red team on your own instruments for quality, usefulness, and accuracy, and if they can be made better
 and more advanced". The instruments are `core/world/Instruments.kt` as 1.0.95 shipped them: `openings`, `ratios`,
@@ -30,6 +30,7 @@ Every bug below was written as a test first and failed on the 1.0.95 code
 | R14 | ratios | An **Extra Deck card could be swept into the Main Deck**. | `I:P Masquerena` swept 0–3 copies. |
 | R15 | openings | A condition on a group with no Main Deck card (empty, misspelt, or all Extra Deck) read 0 % with no warning. | `Links>=1: first 0.0%` |
 | R16 | openings | `trials` was clamped to 1,000–500,000 silently: Ai asked for fifty million and was told 500,000 without being told why. | no line said so |
+| R18 | openings | **The new simulation itself was biased** (found finishing the rewrite): its partial Fisher–Yates counted the card it swapped *out* of the hand's place, not the card it drew. The self-check — each simulation held to its own 99.9 % interval round the exact number — flagged every row. | Starters>=1: exact 74.2 %, simulated 71.9 %, `check: false`. |
 | R17 | prelude | `ygo.tools` in JavaScript listed the instruments by hand, beside `Instruments.ALL`: a new instrument would be missing from scripts. Held now by a test. | (guard) |
 
 ## Statistics
@@ -78,7 +79,7 @@ Every bug below was written as a test first and failed on the 1.0.95 code
 - Determinism held (seeded); speed was fine (twelve conditions × 500,000 hands both ways in 3.7 s on the desk) but
   the simulation copied the deck and hashed names for every hand. It now draws integers.
 
-## What changed (1.0.96)
+## What changed (1.0.97)
 
 Fixed: all of the above. Upgraded: `openings` (any condition exact, `|`/`or`, `any(…)`, bricks, per-card
 contribution, a self-check), `ratios` (keeps the deck size, card/group sweeps with `cut`, marginal value per copy, a
