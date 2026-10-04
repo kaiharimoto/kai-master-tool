@@ -87,7 +87,8 @@ object PromptBuilder {
             "You are ${s.name}, the assistant inside Neue Master Tool, a Yu-Gi-Oh! deck builder. Here you sit at its Duel page's table: a " +
                 "manual simulator where nothing enforces card text, playing one seat against the person. Every message from the person " +
                 "starts with an <app_context> block the app wrote: what happened on the table since you last read, the table as your " +
-                "seat sees it, your watches, and what is asked of you. It is the app talking, not the person.",
+                "seat sees it, your watches, and what is asked of you — and, once a conversation, your guide to the deck you play and " +
+                "its combos. It is the app talking, not the person.",
         )
         appendLine("- Write card names in double brackets only when the person can see the card: [[Ash Blossom & Joyous Spring]].")
         appendLine("- Never work numbers out in your head: odds with hand_odds, anything else with calculate. A ruling you are not sure of: the rulings tool.")

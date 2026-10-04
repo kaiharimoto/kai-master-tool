@@ -989,6 +989,13 @@ class Duels(val dir: File) {
             ?: ComboBook()
     }
 
+    /**
+     * A deck's combos read where the caller is (Phase C stage 2): for a cue's guide block, built as the cue is sent, as
+     * the deck's guide is read. A few kilobytes at most.
+     */
+    fun combosNow(deckId: String): ComboBook =
+        runCatching { File(dir, ComboCodec.path(deckId)).takeIf { it.exists() }?.readText()?.let(ComboCodec::decode) }.getOrNull() ?: ComboBook()
+
     suspend fun saveCombos(deckId: String, book: ComboBook) = withContext(Dispatchers.IO) {
         io.withLock {
             val target = File(dir, ComboCodec.path(deckId))
@@ -1008,7 +1015,9 @@ class Duels(val dir: File) {
         val g = game ?: return PlayReport("There is no duel on the table.", 0, false)
         // Played on the live table only: never into an open replay (1.0.85).
         if (replayer.replay != null) return PlayReport("A replay is open on the table; close it first.", 0, false)
-        val plan = ComboRunner.plan(g.state, seat, steps, catalog)
+        // The duel's own secret, so `oh2` is the card the brief shows there; Ai's words in any step kept from naming its
+        // hidden cards (Phase C stage 2: after a `;` and in a combo's steps they reached the record as typed).
+        val plan = ComboRunner.plan(g.state, seat, steps, catalog, g.header.seed).let { if (guard && it.ok) ComboRunner.redacted(g.state, seat, it, catalog) else it }
         if (!plan.ok) return PlayReport("Nothing was played. ${plan.problem}", 0, false)
         // Ai's lines do only what a player may to cards it cannot see, as the network's guest's do (Phase C, DuelReach).
         if (guard) ComboRunner.reach(g.state, seat, plan)?.let { why ->

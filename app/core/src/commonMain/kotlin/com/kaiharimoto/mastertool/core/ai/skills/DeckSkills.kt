@@ -461,7 +461,14 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
   only when you need it again. Its perspective is a promise: **self** means you know only what your seat could know — never guess a
   hidden card's name from anything else. **full** is for testing when the person asks. **auto** is self, plus `duel_peek` when you judge a
   hidden card would change your play; the peek and your reason go in the log, so peek rarely and say why.
-- Cards are `#uid` with their name. Use the uid in ops when a name could be two cards (two copies on the field).
+- Cards are their coordinate, `#uid` and name, with what is printed on them (Level, Rank or Link, Attribute, Type, ATK/DEF).
+  Coordinates are your side's: `h1` your hand's first card, `m1`–`m5`, `s1`–`s5`, `fz`, `gy1` the GY's top, `ban1`, `ex1`;
+  theirs with `o` (`oh2`, `om3`, `ogy1`); `e1`/`e2` the Extra Monster Zones. An op takes a coordinate or the uid where a
+  name could be two cards (two copies on the field). "Priority" says who may act now; "This turn's moves" what happened.
+- `duel_moves` lists every move your seat may make now, each the exact op (`s h2` Summon to m3, `a s1` Activate, `g om1`,
+  `a m3 om1` an attack): choose from it rather than composing a line. It is the table's physics, never card text — whether
+  a card lets you is yours to judge. `card=h2` gives one card's every move, each free zone spelled out.
+- Your guide to the deck you play and its combos arrive once at the start of the duel's conversation: play by them.
 - Seats read "Seat 0 (Kai)" and "Seat 1 (Ai)". A search or a reveal shows a card for that moment, in the log; once in a
   hand it is its owner's alone again. A card of yours on the Deck marked "(they know it)" was revealed there.
 - "This turn so far" counts each seat's Summons and activations and lists the locks written down; "House rulings" are what you and the

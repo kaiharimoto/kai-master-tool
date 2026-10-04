@@ -13,6 +13,7 @@ import com.kaiharimoto.mastertool.core.ai.providers.ConnectKind
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
+import com.kaiharimoto.neue.duel.duelGuide
 import kotlinx.coroutines.launch
 
 // A long conversation (1.0.47, 1.0.56), on [AiState]: the model's window, how full it is, summarising the start to
@@ -112,6 +113,11 @@ private suspend fun AiState.summarise(s: AiSession, model: ModelBackend, connect
  * are summarised away and the conversation's `guideShown`/`scopeShown` say they were already given.
  */
 private fun AiState.standingContext(s: AiSession): String {
+    // At the table the guide is the duel's own block (Phase C stage 2): the deck Ai plays, within its budget.
+    if (s.mode == AiSession.MODE_DUEL) {
+        val guide = duelGuide(h)?.second?.invoke()?.takeIf { it.isNotBlank() } ?: return ""
+        return "\n\n(Still in force after the summary.)\n\n$guide"
+    }
     val deckId = s.deckId?.takeIf { s.mode in AiSession.DECK_MODES } ?: s.guideShown
     val deckName = s.deckName ?: h.builder.deckName.takeIf { deckId == h.builder.deckId } ?: "the deck"
     val guide = deckId?.let { guideForPrompt(it) }?.takeIf { it.isNotBlank() }

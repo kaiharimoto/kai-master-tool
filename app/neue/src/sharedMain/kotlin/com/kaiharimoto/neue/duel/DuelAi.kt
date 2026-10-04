@@ -24,13 +24,15 @@ import com.kaiharimoto.mastertool.core.duel.ai.ComboBook
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRecorder
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
+import com.kaiharimoto.mastertool.core.duel.ai.DuelGuide
 import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
-import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
+import com.kaiharimoto.neue.ai.AiState
+import com.kaiharimoto.neue.ai.guideForPrompt
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.FieldLabel
@@ -120,6 +122,28 @@ internal fun duelContext(h: NeueHolders): Provenance {
     )
 }
 
+/**
+ * Ai's guide at the table (Phase C stage 2): the guide and the combos of the deck its seat plays, within `DuelGuide`'s
+ * budget — and the other seat's deck's, only when Ai reads the table with full knowledge. Its key names the decks, so a
+ * conversation is given it once ([AiState.sendDuel]); the block is made only when it is needed. Null when Ai's seat
+ * plays no saved deck.
+ */
+internal fun duelGuide(h: NeueHolders): Pair<String, () -> String>? {
+    val g = h.duel.game ?: return null
+    if (h.duel.role != null) return null
+    val d = h.neue.prefs.duel
+    val seat = if (g.state.solo) 0 else d.aiSeat
+    val mine = g.header.seats.getOrNull(seat)?.takeIf { it.deckId != null } ?: return null
+    val theirs = g.header.seats.getOrNull(1 - seat)?.takeIf { !g.state.solo && d.aiKnowledge == DuelBrief.FULL && it.deckId != null && it.deckId != mine.deckId }
+    val key = mine.deckId + (theirs?.let { "+full:${it.deckId}" } ?: "")
+    return key to {
+        listOfNotNull(mine, theirs).map { s ->
+            val id = s.deckId!!
+            DuelGuide.block(s.deckName, h.ai.guideForPrompt(id), h.duel.combosNow(id).combos, theirs = s !== mine)
+        }.filter { it.isNotBlank() }.joinToString("\n\n")
+    }
+}
+
 /** Whether Ai sits at this table: on, and not a networked table (there the log is the other player's). */
 internal fun aiAtTable(h: NeueHolders): Boolean = h.neue.prefs.ai.enabled && h.duel.role == null && h.duel.game != null
 
@@ -138,7 +162,7 @@ internal fun cueAi(h: NeueHolders, cue: Cue, words: String = ""): Boolean {
         return false
     }
     val said = words.ifBlank { cue.shown }.ifBlank { "(the table)" }
-    val id = h.ai.sendDuel(said, cueContext(h, cue.ask, said), duels.aiSession, fresh = duels.aiFresh) ?: return false
+    val id = h.ai.sendDuel(said, cueContext(h, cue.ask, said), duels.aiSession, fresh = duels.aiFresh, guide = duelGuide(h)) ?: return false
     duels.aiFresh = false
     duels.aiSession = id
     duels.aiRead = g.cursor
@@ -160,8 +184,9 @@ private fun cueContext(h: NeueHolders, ask: String, said: String): List<String> 
     // Moves taken back since Ai last read leave its mark past the log's end (1.0.85: it was told "nothing new").
     val takenBack = (duels.aiRead ?: 0) > g.cursor
     val from = (duels.aiRead ?: g.floor).coerceIn(0, g.cursor)
-    val lines = DuelHost.lines(g, from, viewer, duels.catalog, duels.folds(g))
-        .filter { it.seat != seat }
+    // Every move but Ai's own, by who made it (Phase C stage 2): a person's move on Ai's cards is logged as Ai's seat, and
+    // filtering by seat dropped it.
+    val lines = DuelBrief.since(g, from, seat, viewer, duels.catalog, duels.folds(g))
         // The cue's own words reach Ai as the message; not twice.
         .filterNot { it.chat && it.text.endsWith(said) }
         .map { "${it.i}. ${it.text}" }
@@ -224,7 +249,7 @@ internal fun cueTriggered(h: NeueHolders) {
         )
     }
     val said = "(trigger) " + hits.joinToString("; ") { it.happening.kind.words }
-    val id = h.ai.sendDuel(said, cueContext(h, ask, said), duels.aiSession, fresh = duels.aiFresh)
+    val id = h.ai.sendDuel(said, cueContext(h, ask, said), duels.aiSession, fresh = duels.aiFresh, guide = duelGuide(h))
     if (id == null) {
         // No connection, or it would not start: the person is never left waiting.
         duels.dontWait()

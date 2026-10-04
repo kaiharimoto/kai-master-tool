@@ -94,18 +94,59 @@ takes, flips or targets the host's hidden ones (`DuelRedTeamTest`, 1.0.85); Ai r
 and a perspective other than its own only with full knowledge (`AiDuel.perspective`, 1.0.85); Ai's words in the log
 never name its hidden cards (`Secrets`, `DuelRedTeamTest`); undo cannot fish (`DuelRandom.forRoll`, 1.0.86).
 
-**Still open, for stage 2:** coordinates in the brief and the parser for the opponent's hand; Ai's text after `;` and in
-combo steps reaching the record unredacted; cues dropping the person's moves on Ai's cards; Ai World's duel tables.
+**Left for stage 2** (closed there, §4): coordinates in the brief and the parser for the opponent's hand; Ai's text after
+`;` and in combo steps reaching the record unredacted; cues dropping the person's moves on Ai's cards. Ai World's duel
+tables are stage 3's (§6).
 
-## 4. The table in full for Ai (stage 2)
+## 4. The table in full for Ai (stage 2, done)
 
-The research's biggest cheap gain (`docs/AI-INTELLIGENCE.md` §2):
-- **The brief in full:** the phase, every public zone with ATK/DEF, Level, Attribute and Type, the Extra Deck, and the
-  history since Ai last read — today the brief gives names only.
-- **A menu of legal moves** from `DuelVerbs` (each card's verbs where it stands, through `DuelReach`), so Ai chooses
-  instead of composing command lines.
-- **Its guide at the table:** the deck's guide (`MemoryKind.GUIDE`) read in the duel's mode, its numbers carrying their
-  proof.
+The research's biggest cheap gain (`docs/AI-INTELLIGENCE.md` §2: an LLM player on an engine lost most to what the
+interface left out — the phase, the full GY, the Extra Deck — never to the rules). Ai at the table sees and does what a
+player would, no less and no more (stage 1's `DuelReach` and its knowledge setting).
+
+- **The brief in full** (`DuelBrief.describe`, read by `duel_state` and every cue): the turn and phase, **who has
+  priority** (`DuelBrief.priority`: a response window's responder, the seat that may chain to the newest link, else the
+  turn player), every card the reader sees with **its printed facts** (`DuelBrief.facts`: Level, Rank or Link rating,
+  Scale, Attribute, Type and kind, ATK and DEF — the table's own number where it holds one, a token's, with the printed
+  one beside it where they differ; a Spell's or Trap's kind), counters and materials; both GYs (top first) and banished
+  piles whole; the Extra Deck (its owner's every card, theirs face-up and counted); hand counts, the chain (negated links
+  marked), LP; and **this turn's moves** (`DuelBrief.turnLines`, from just after the last End Turn, through
+  `DuelHost.lines` as the reader saw them — the words the network's guest is sent). `DuelCardInfo` carries the new facts
+  (`level`, `xyz`, `linkRating`, `attribute`, `race`, `typeLine`, `scale`), read off the card as printed. A hidden card is
+  never named and never given facts (a hidden card's facts would name it): `DuelTableTest` reads the brief through each
+  seat in turn.
+- **One convention for coordinates.** Every card is written with its coordinate from the acting seat's side (`h1`, `m3`,
+  `ogy1`, `oh2`), and the other seat's hand is listed in the order that seat is shown it (`DuelNotation.handOrder`), so
+  each coordinate the brief prints parses back to the card beside it — under full knowledge too. The lead: `ComboRunner.plan`
+  parsed Ai's lines with no secret (0) while the brief and `DuelView` dealt the hand under the duel's seed, so `oh2` was
+  another card than the one shown there; `plan` now takes the duel's secret, from `duel_act`, its `at` and a combo Ai runs.
+- **A menu of legal moves** (`duel_moves`, read-only; `DuelMoves`): for every card the seat may touch — its hand, field,
+  GY, banished cards and Extra Deck, and the other seat's cards on the field and in its piles a player reaches across the
+  table for — the verbs `DuelVerbs.offered` gives where it stands, each written as the exact op `duel_act` takes
+  (`DuelLetters`' letters and `DuelNotation`'s coordinates: `s h2`, `a s1`, `g om1`, `a m3 om1`, `ss ex1`), with the
+  phases ahead, the end, an answer to an ask, the opening roll, the chain (`resolve`, `negate 2`) and each attack. **A
+  move is kept only when it plans** (`ComboRunner.plan`, as `duel_act` checks it) **and `DuelReach` lets the seat make
+  it**; moves that do the same thing are offered once; a hidden card is written by its place, never named; capped at 160
+  with the rest counted; `card=` gives one card's every verb with each free zone and host spelled out. Physics, never
+  card text. Always Ai's own seat's, whatever its knowledge. `AiTools.DUEL` and `AiTable.TABLE_TOOLS` (refused at a
+  networked table) carry it.
+- **Its guide at the table** (`DuelGuide`, `duelGuide` in `neue/duel/DuelAi.kt`): the guide to the deck Ai's seat plays
+  (`guides/<deck>.md` as `guideForPrompt` reads it, each number wearing its proof's mark) and the deck's combos, put in
+  front of the duel conversation once (`AiState.sendDuel(guide = …)`, keyed in `AiSession.guideShown`), within a budget —
+  entries in order, each cut to 600 characters, 4,000 for the guide and 1,500 for the combos, the rest counted — and again
+  after a summary (`standingContext`). The other seat's deck's guide only when Ai reads the table with full knowledge;
+  none at a networked table.
+
+**The leads, closed** (held by `DuelTableTest`, each shown failing as it was first):
+
+| Lead | Status | Held by |
+|---|---|---|
+| Coordinates in the brief and in the parser disagree for the opponent's hand. | **Was open:** the parser's order used secret 0, the brief's the seed. **Fixed** as above; the brief prints every coordinate. | `everyCoordinateTheBriefPrintsParsesBackToItsCard` |
+| Ai's text after `;`, and in combo steps, reaches the record unredacted. | **Was open:** `duel_act` guarded an op only when it began with `say`/`note`/`lock`. **Fixed:** every planned step's words — chat, notes, locks, a chain link's note — go through `Secrets` on the table that step is made on (`ComboRunner.redacted`), for `duel_act`, its `at` and a combo Ai runs; the moves are unchanged. | `aisWordsAfterASemicolonAndInAComboAreKeptFromTheRecord` |
+| Cues drop the person's moves on Ai's cards. | **Was open:** the page acts as a card's controller, so the person destroying Ai's monster was logged as Ai's seat, and the cue kept only the other seat's lines. **Fixed:** the cue keeps every entry but Ai's own, by provenance (`DuelBrief.since`: made by Ai, or the table's draw for Ai's seat; an entry with no provenance by its seat, as before). | `aPersonsMoveOnAisCardsReachesItsNextCue` |
+
+**Stored data:** none new. `AiSession.guideShown` (a string since 1.0.48) holds the duel's guide key, the deck id (and
+`+full:<id>` with full knowledge).
 
 ## 5. Puzzles: an evaluation set (stage 2–3)
 
@@ -123,7 +164,7 @@ stands, through `DuelView` for the seat Ai would hold). Every self-play game is 
 ## 7. Order of work
 
 1. **Stage 1 (this note's §1–§3):** provenance, results and the summary, Prep's first or second, the four leads.
-2. **Stage 2:** the table in full for Ai, the legal-move menu, its guide at the table; the rest of the leads.
+2. **Stage 2 (done, §4):** the table in full for Ai, the legal-move menu, its guide at the table; the rest of the leads.
 3. **Stage 3:** puzzles and their baseline; self-play tables; a red team on the whole phase.
 
 **Stored-data changes in stage 1** (for the release notes): every new duel entry may carry `by` (provenance); a new

@@ -11,6 +11,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRecorder
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
+import com.kaiharimoto.mastertool.core.duel.ai.DuelMoves
 import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
 import com.kaiharimoto.mastertool.core.duel.ai.AiTable
 import com.kaiharimoto.mastertool.core.duel.ai.Secrets
@@ -45,6 +46,7 @@ internal class AiDuel(private val h: NeueHolders) {
         AiTable.refusal(name, ToolArgs.string(i, "action"), networked = duels.role != null)?.let { return fail(it) }
         return when (name) {
             "duel_state" -> state(i)
+            "duel_moves" -> moves(i)
             "duel_act" -> act(i)
             "duel_peek" -> peek(i)
             "duel_log" -> log(i)
@@ -83,9 +85,34 @@ internal class AiDuel(private val h: NeueHolders) {
         val g = duels.game ?: return fail("There is no duel on the table: ask the person to start one (New duel).")
         val seat = readerSeat(i)
         val p = perspective(i)
-        val text = DuelBrief.describe(g.state, DuelBrief.viewer(p, seat), duels.catalog, g.header.seed, seat, duels.tally(DuelBrief.viewer(p, seat)), duels.rulings) +
+        val viewer = DuelBrief.viewer(p, seat)
+        // The table in full (Phase C stage 2): this turn's moves too, in the words that seat saw them.
+        val history = DuelBrief.turnLines(g, viewer, duels.catalog, duels.folds(g))
+        val text = DuelBrief.describe(g.state, viewer, duels.catalog, g.header.seed, seat, duels.tally(viewer), duels.rulings, history) +
             if (p == DuelBrief.AUTO) "\n\nKnowledge: auto — duel_peek if a hidden card would change your play; every peek is logged." else ""
         return ok(text, "Read the duel table")
+    }
+
+    /**
+     * The moves Ai's seat may make now (Phase C stage 2, `DuelMoves`), each the op `duel_act` takes; read-only. Always its
+     * own seat's, whatever its knowledge: a menu of the person's moves would be a list of their cards.
+     */
+    private fun moves(i: JsonObject): MetaAnswer {
+        val g = duels.game ?: return fail("There is no duel on the table: ask the person to start one (New duel).")
+        val seat = aiSeat()
+        val s = g.state
+        val only = ToolArgs.string(i, "card")?.trim()?.takeIf { it.isNotEmpty() }?.let { q ->
+            when (val l = DuelCommand.lookup(q, s, seat, duels.catalog, DuelCommand.Want.TARGET, secret = g.header.seed)) {
+                is DuelCommand.Lookup.One -> l.uid
+                is DuelCommand.Lookup.Many -> return fail("“$q” could be ${l.names.joinToString(" or ")}: give its coordinate.")
+                is DuelCommand.Lookup.None -> return fail(l.why)
+            }
+        }
+        val menu = DuelMoves.menu(s, seat, duels.catalog, g.header.seed, only)
+        if (menu.isEmpty()) return ok(if (only != null) "No move for that card now." else "No moves now.", "Read the moves")
+        val cap = (ToolArgs.int(i, "limit") ?: DuelMoves.CAP).coerceIn(10, 600)
+        val head = "Your moves as ${DuelWords.seatLabel(s, seat)} — each `op` exactly as duel_act takes it; add a zone to put a card elsewhere (s h2 m4):"
+        return ok(head + "\n" + DuelMoves.words(menu, cap), "Read ${menu.sumOf { it.moves.size }} moves")
     }
 
     private suspend fun act(i: JsonObject): MetaAnswer {
@@ -131,7 +158,8 @@ internal class AiDuel(private val h: NeueHolders) {
         val index = Past.indexOf(g.header, g.played, turn, phase)
             ?: return fail("Turn $turn's ${phase.label} Phase is now or still to come: play the moves without 'at'.")
         val before = g.stateAt(index)
-        val plan = ComboRunner.plan(before, seat, ops, duels.catalog)
+        // The duel's secret for `oh2`, and Ai's words kept from naming its hidden cards (Phase C stage 2), as at the present.
+        val plan = ComboRunner.plan(before, seat, ops, duels.catalog, g.header.seed).let { if (it.ok) ComboRunner.redacted(before, seat, it, duels.catalog) else it }
         if (!plan.ok) return fail("Nothing was put in. ${plan.problem}")
         // Into the past as at the present: only what a player may do to cards it cannot see (Phase C, DuelReach).
         ComboRunner.reach(before, seat, plan)?.let { return fail("Nothing was put in. $it: a player does not do that to a card they cannot see.") }
