@@ -1393,8 +1393,8 @@ The long reasons sit under the first table only where they must; the third is to
                     set.items.mapIndexed { i, item ->
                         val pass = (i + 1) % missEvery != 0
                         val miss = when (item.grader) {
-                            is Grader.YesNo -> "yes (expected no)"
-                            is Grader.Planted -> "missed (0 other claims marked wrong)"
+                            is Grader.YesNo -> if ((item.grader as Grader.YesNo).expected) "no (expected yes)" else "yes (expected no)"
+                            is Grader.Planted -> if ((item.grader as Grader.Planted).hasError) "missed (0 other claims marked wrong)" else "false alarm: a true claim marked wrong"
                             else -> "74.5% (expected 74.2%)"
                         }
                         ItemOutcome(item.id, if (pass) tries else 0, tries, pass, if (pass) "right" else miss)
