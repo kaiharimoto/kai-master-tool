@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.mastertool.core.ai.eval.Grader
 import com.kaiharimoto.mastertool.core.ai.eval.EvalLog
 import com.kaiharimoto.mastertool.core.ai.eval.EvalSets
 import com.kaiharimoto.mastertool.core.ai.eval.ItemOutcome
@@ -1391,7 +1392,12 @@ The long reasons sit under the first table only where they must; the third is to
                     set.id, conn, "claude-opus-5-5", at, tries,
                     set.items.mapIndexed { i, item ->
                         val pass = (i + 1) % missEvery != 0
-                        ItemOutcome(item.id, if (pass) tries else 0, tries, pass, if (pass) "right" else "74.5% (expected 74.2%)")
+                        val miss = when (item.grader) {
+                            is Grader.YesNo -> "yes (expected no)"
+                            is Grader.Planted -> "missed (0 other claims marked wrong)"
+                            else -> "74.5% (expected 74.2%)"
+                        }
+                        ItemOutcome(item.id, if (pass) tries else 0, tries, pass, if (pass) "right" else miss)
                     },
                     tokensIn = set.items.size * 5_200L * tries, tokensOut = set.items.size * 420L * tries,
                 )

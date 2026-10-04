@@ -398,6 +398,8 @@ class AiEndToEndTest {
             }
         }
         h.ai.backend = "${conn.id}:${conn.model}:${conn.baseUrl}:${conn.program}" to scripted
+        // The data folder outlives a test run: start from no runs.
+        h.ai.files.delete(EvalLog.path(conn.id))
         val rulings = EvalSets.rulings()
         h.ai.startEval(rulings, conn, tries = 2)
         withTimeout(20_000) { while (h.ai.evalProgress != null || h.ai.evalJob != null) delay(20) }

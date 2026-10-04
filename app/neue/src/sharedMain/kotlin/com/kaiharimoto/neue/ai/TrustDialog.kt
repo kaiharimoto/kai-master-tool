@@ -71,7 +71,7 @@ fun TrustDialog(ai: AiState) {
         } else {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Small("Connection", color = c.ink70)
-                MuSelect(connection, connections, { label(it) }, { chosen = it }, small = true)
+                MuSelect(connection, connections, { label(it) }, { chosen = it }, Modifier.weight(1f), small = true)
                 Small("Tries", color = c.ink70)
                 Segmented(tries, listOf(1, 3), { if (it == 1) "Once" else "3 times" }, { tries = it }, small = true)
             }
