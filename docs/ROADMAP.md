@@ -228,6 +228,30 @@ Every phase lists:
 - **Done when:** a change Ai suggests comes with a simulated gain and a confidence interval, and the suggestions are scored against your results.
 - **Size:** 2 releases.
 
+### Phase S: Shootout, rebuilt on evidence (after B)
+- **Goal:** a rating for every card and card pair in a deck, proven by comparing hands. kai: "data proven … smart, reactive,
+  and adapting to the user".
+- **Builds:** see `docs/phases/S.md`.
+  - **Two trial kinds:**
+    - matchup trials on a 5-point scale;
+    - comparison trials, where two hands differ by one card.
+  - **One model:** per-card values, copies counted with diminishing returns, pair effects, and the person's own noise.
+  - **The hand picker:**
+    - picks what teaches the most, weighted by real draw odds;
+    - mixes in random hands as a check, and corrects results back to real odds;
+    - adapts to fatigue and inconsistency, and stops when the ratings are known.
+  - **Results:** ratings with ranges, a pair grid, the next copy's worth, and opening patterns; every number opens its trials.
+  - **Ai's parts:**
+    - starting guesses from the cards;
+    - a second judge, trusted only as far as its measured agreement;
+    - one question of why on a surprising answer;
+    - the write-up, from the numbers.
+- **Needs:** Phase B (cards counted by card), the evidence ledger, F1.
+- **Done when:** a simulation with known true values shows the picker recovers them in far fewer trials than random hands, and
+  its ranges are calibrated; then a real session gives ratings with ranges.
+- **Size:** 3 to 4 releases. It is also the first source of positions judged by a person, which Phases E–G are checked
+  against.
+
 ---
 
 ## 5. Product tracks beside the phases
@@ -240,7 +264,6 @@ These come in alongside the phases, one at a time, between Ai releases. Each can
 | **Present recording** | Desktop takes with JavaCV/FFmpeg (LGPL, kept dynamic). The take timeline in `core/present/record` already exists. Android next. | Any time; it needs no Ai phase. |
 | **The reader's guide** | Notes and highlights; the interactive book; HTML export from the same drawings. | After Phase A (its numbers are checked first). |
 | **Tablet and phone** | The deck picture, a touch form of tooltips, the data folder. | Any time; small. |
-| **Siding** | Shootout mode (deferred since 1.0.35). | After Phase B (correct legality). |
 | **Mac** | Signing and notarisation. | When the secrets are added. |
 | **Accessibility** | Screen-reader labels for chrome (cards are already named), keyboard reach audited with the help dialog, a contrast check in the law test. | Steadily, a page at a time. |
 | **The 3DS** | Stays on its own track, frozen by its golden vectors; it moves only when `:core`'s play-stage packages do. | No plan to change. |
@@ -250,20 +273,21 @@ These come in alongside the phases, one at a time, between Ai releases. Each can
 ## 6. Order and dependencies
 
 ```
-A Trust ──► B Card truth ──► C Measured duel ──► D Effects as code ──► E Search ──► F Coach
+A Trust ──► B Card truth ──► S Shootout · C Measured duel ──► D Effects as code ──► E Search ──► F Coach
    │              │                 │                    │                 │
    │              └─────────────────┴────────────────────┴────────► G Builder
    └─ F1 evaluation, F4 security (A) · F3 card identity (B) · F2 engine split (C→D) · F5 traces (A→)
-Product tracks: Present recording · reader's guide (after A) · Duel online (after C) · Shootout (after B)
+Product tracks: Present recording · reader's guide (after A) · Duel online (after C)
 ```
 
 **One release at a time, in this order:**
 
 1. **Phase A:** 1.0.99 / v1.3.77.
 2. **Phase B:** from 1.1.0, interleaved with one product track (Present recording).
-3. **Phase C**, then Duel online.
-4. **Phase D** in its four steps. The reader's guide's notes fit between them.
-5. **Phases E, F and G.**
+3. **Phase S:** its simulation study first, then the model, the screens and Ai's parts.
+4. **Phase C**, then Duel online.
+5. **Phase D** in its four steps. The reader's guide's notes fit between them.
+6. **Phases E, F and G.**
 
 ---
 
@@ -302,4 +326,4 @@ These change what gets built. Each has a default the plan assumes until you say 
 | 0 Foundation (Ai World, instruments, red team) | Shipped 1.0.97 |
 | Evidence ledger, YGOrg rulings, harness fixes | Shipped 1.0.98 |
 | **A Trust** | **Next** |
-| B to G | Planned |
+| B, S, C to G | Planned |
