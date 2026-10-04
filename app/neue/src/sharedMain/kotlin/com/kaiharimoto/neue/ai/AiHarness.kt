@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.ai.rules.Wikitext
 import com.kaiharimoto.mastertool.core.ai.rules.Yugipedia
 import com.kaiharimoto.mastertool.core.ai.web.HtmlText
 import com.kaiharimoto.mastertool.core.ai.web.SearchResults
+import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
 import com.kaiharimoto.mastertool.core.hand.HandConstraint
@@ -17,6 +18,7 @@ import com.kaiharimoto.mastertool.core.hand.HandOdds
 import com.kaiharimoto.mastertool.core.hand.HandQuery
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import com.kaiharimoto.mastertool.core.sync.Sha256
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.platform.Platform
 import io.ktor.client.request.get
@@ -144,9 +146,13 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
 
     private val agent = "NeueMasterTool/${Platform.version} (Yu-Gi-Oh! deck builder; https://github.com/kaiharimoto/kai-master-tool)"
 
-    /** A page's body, or why not; kept a week when [keep]. */
+    /**
+     * A page's body, or why not; a Yugipedia answer kept a week when [keep]. The file is named by
+     * the address's SHA-256 (a 32-bit hash let two addresses share a file, and one served the
+     * other's page), and an API error — a page that does not exist yet, answered 200 — is never kept.
+     */
     private suspend fun get(url: String, keep: Boolean = false): Result<String> = withContext(Dispatchers.IO) {
-        val key = File(cache, url.hashCode().toUInt().toString(16) + ".txt")
+        val key = File(cache, Sha256.hex(url) + ".txt")
         if (keep && key.isFile && System.currentTimeMillis() - key.lastModified() < WEEK) {
             return@withContext Result.success(key.readText())
         }
@@ -157,16 +163,16 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
                     header("Accept", "text/html,application/json;q=0.9,*/*;q=0.5")
                 }
                 val body = r.bodyAsText()
-                if (r.status.value !in 200..299) error("${r.status.value} ${r.status.description}")
+                if (r.status.value !in 200..299) error("${Unreachable.host(url)} answered ${r.status.value} ${r.status.description}")
                 if (body.length > MAX_BODY) body.take(MAX_BODY) else body
-            }.onSuccess { body -> if (keep) runCatching { cache.mkdirs(); key.writeText(body) } }
+            }.onSuccess { body -> if (keep && !Yugipedia.isError(body)) runCatching { cache.mkdirs(); key.writeText(body) } }
         }
     }
 
     private suspend fun fetch(url: String): MetaAnswer {
         val u = url.trim()
         if (!u.startsWith("https://")) return fail("Only https pages: “$u”.")
-        val body = get(u).getOrElse { return fail("Could not read $u: ${it.message}") }
+        val body = get(u).getOrElse { return fail("Could not read $u. ${Unreachable.of(u, it)}") }
         val text = if (body.trimStart().startsWith("{") || body.trimStart().startsWith("[")) {
             HtmlText.truncate(body, 12_000)
         } else {
@@ -200,15 +206,15 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
 
     private suspend fun rulings(card: String): MetaAnswer {
         val name = (CardWords.resolve(card, h.builder.index) as? Resolved.Found)?.card?.name ?: card.trim()
-        val json = get(Yugipedia.rulingsUrl(name), keep = true).getOrElse { return fail("Could not reach Yugipedia: ${it.message}") }
+        val url = Yugipedia.rulingsUrl(name)
+        val json = get(url, keep = true).getOrElse { return fail("Could not read Yugipedia's rulings for “$name”. ${Unreachable.of(url, it)}") }
         val wikitext = Yugipedia.wikitextOf(json) ?: return fail("Yugipedia has no rulings page for “$name”.")
         val list = Wikitext.rulings(wikitext)
         if (list.isEmpty()) return MetaAnswer("No rulings listed for “$name”.\n${Yugipedia.ATTRIBUTION}", "No rulings for $name")
         val text = buildString {
-            appendLine("Rulings for “$name”:")
-            list.take(40).forEach { r ->
-                if (r.question != null) appendLine("- Q: ${r.question}\n  A: ${r.answer}") else appendLine("- ${r.answer}")
-            }
+            // Each with the headings it stands under (TCG and OCG rulings can differ) and its source.
+            appendLine("Rulings for “$name”, each with its section and source:")
+            list.take(40).forEach { appendLine(it.line()) }
             if (list.size > 40) appendLine("(${list.size - 40} more on the page)")
             append(Yugipedia.ATTRIBUTION)
         }
@@ -217,7 +223,8 @@ internal class AiHarness(private val h: NeueHolders, private val ai: AiState) {
 
     private suspend fun archetype(name: String, wanted: List<String>): MetaAnswer {
         val page = name.trim()
-        val sections = get(Yugipedia.sectionsUrl(page), keep = true).getOrElse { return fail("Could not reach Yugipedia: ${it.message}") }
+        val url = Yugipedia.sectionsUrl(page)
+        val sections = get(url, keep = true).getOrElse { return fail("Could not read Yugipedia's page on “$page”. ${Unreachable.of(url, it)}") }
         val want = wanted.ifEmpty { listOf("Playing style", "Combo", "Recommended", "Weakness") }
         val found = Yugipedia.sectionIndex(sections, want)
         if (found.isEmpty()) return fail("Yugipedia has no ${want.joinToString("/")} sections for “$page” (is it the archetype's exact name?).")

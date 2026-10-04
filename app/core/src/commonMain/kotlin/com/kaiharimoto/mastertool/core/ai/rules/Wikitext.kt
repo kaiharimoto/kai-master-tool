@@ -18,7 +18,24 @@ import com.kaiharimoto.mastertool.core.ai.web.HtmlText
  * ([Yugipedia.ATTRIBUTION]).
  */
 object Wikitext {
-    data class Ruling(val question: String?, val answer: String, val cite: String?)
+    /**
+     * One ruling: its question when it has one, its answer, where it comes from ([cite]: a
+     * `{{Ruling}}`'s question number in Konami's database, or a bullet's reference in words),
+     * and the headings it stands under ([section], "OCG Rulings › Q&A Rulings") — which is
+     * what says whether a ruling is the TCG's or the OCG's, and they can differ.
+     */
+    data class Ruling(val question: String?, val answer: String, val cite: String?, val section: String? = null) {
+        /** Where it comes from, in words: a bare number is a question in Konami's OCG card database. */
+        val source: String? get() = cite?.let { if (it.all(Char::isDigit)) "Konami OCG Card Database, Q&A #$it" else it }
+
+        /** The ruling as one item of a list, for Ai: `- [OCG Rulings] Q: … A: … (source: …)`. */
+        fun line(): String = buildString {
+            append("- ")
+            section?.let { append('[').append(it).append("] ") }
+            if (question != null) append("Q: ").append(question).append("\n  A: ").append(answer) else append(answer)
+            source?.let { append(" (source: ").append(it).append(')') }
+        }
+    }
 
     data class Section(val level: Int, val title: String, val body: String)
 
@@ -54,13 +71,21 @@ object Wikitext {
         val s = stripComments(wikitext)
         val out = mutableListOf<Ruling>()
         var section = ""
+        // The headings over the line, by level: "OCG Rulings" over "Q&A Rulings".
+        val headings = mutableMapOf<Int, String>()
+        val refs = REF_NAMED.findAll(s).associate { it.groupValues[1].trim() to it.groupValues[2] }
         var lastWasBullet = false
         for (line in logicalLines(s)) {
             val t = line.trim()
             val heading = HEADING.matchEntire(t)
+            val under = headings.entries.sortedBy { it.key }.joinToString(" › ") { it.value }.ifEmpty { null }
             when {
                 heading != null -> {
-                    section = plainInline(heading.groupValues[2]).lowercase()
+                    val level = heading.groupValues[1].length
+                    val title = plainInline(heading.groupValues[2])
+                    headings.keys.retainAll { it < level }
+                    headings[level] = title
+                    section = title.lowercase()
                     lastWasBullet = false
                 }
                 t.startsWith("{{") -> {
@@ -69,10 +94,12 @@ object Wikitext {
                     if (end < 0) continue
                     val template = template(t.substring(2, end - 2))
                     if (template.name != "ruling") continue
-                    val q = template.named("q", "question")?.let { plainInline(it) }?.ifEmpty { null }
-                    val a = template.named("a", "answer")?.let { plainInline(it) }.orEmpty()
-                    val cite = template.named("cite")?.let { plainInline(it) }?.ifEmpty { null }
-                    if (q != null || a.isNotEmpty()) out += Ruling(q, a, cite)
+                    // Named or in order, as the template takes them: Q, A, cite (a `source` in words wins).
+                    val q = (template.named("q", "question") ?: template.positional.getOrNull(0))?.let { plainInline(it) }?.ifEmpty { null }
+                    val a = (template.named("a", "answer") ?: template.positional.getOrNull(1))?.let { plainInline(it) }.orEmpty()
+                    val cite = (template.named("source") ?: template.named("cite") ?: template.positional.getOrNull(2))
+                        ?.let { plainInline(it) }?.ifEmpty { null }
+                    if (q != null || a.isNotEmpty()) out += Ruling(q, a, cite, under)
                 }
                 t.startsWith("*") && section !in NOT_RULINGS -> {
                     val depth = t.takeWhile { it == '*' }.length
@@ -82,7 +109,7 @@ object Wikitext {
                     if (depth > 1 && lastWasBullet && last != null) {
                         out[out.lastIndex] = last.copy(answer = last.answer + "\n- " + text)
                     } else {
-                        out += Ruling(null, text, null)
+                        out += Ruling(null, text, refCite(t, refs), under)
                     }
                     lastWasBullet = true
                 }
@@ -90,6 +117,17 @@ object Wikitext {
             }
         }
         return out
+    }
+
+    /**
+     * A bullet's source: its first reference, in words — written on the line, or only named
+     * there (`<ref name="No.12950"/>`) and written once elsewhere on the page.
+     */
+    private fun refCite(line: String, refs: Map<String, String>): String? {
+        val ref = REF_ANY.find(line) ?: return null
+        val name = REF_NAME.find(ref.groupValues[1])?.groupValues?.get(1)?.trim()
+        val body = ref.groupValues[3].ifBlank { name?.let { refs[it] }.orEmpty() }
+        return plainInline(body).ifEmpty { null }
     }
 
     /**
@@ -127,6 +165,9 @@ object Wikitext {
     private val COMMENT = Regex("<!--[\\s\\S]*?(-->|$)")
     private val REF_SELF = Regex("<ref\\b[^>]*/>", RegexOption.IGNORE_CASE)
     private val REF_PAIR = Regex("<ref\\b[^>]*>[\\s\\S]*?</ref\\s*>", RegexOption.IGNORE_CASE)
+    private val REF_ANY = Regex("<ref\\b([^>]*?)(/>|>([\\s\\S]*?)</ref\\s*>)", RegexOption.IGNORE_CASE)
+    private val REF_NAME = Regex("name\\s*=\\s*\"?([^\"/>]+)\"?", RegexOption.IGNORE_CASE)
+    private val REF_NAMED = Regex("<ref\\s+name\\s*=\\s*\"?([^\"/>]+?)\"?\\s*>([\\s\\S]*?)</ref\\s*>", RegexOption.IGNORE_CASE)
     private val REFERENCES = Regex("<references\\b[^>]*/>|<references\\b[^>]*>[\\s\\S]*?</references\\s*>", RegexOption.IGNORE_CASE)
     private val EXTERNAL_LINK = Regex("\\[((?:https?:)?//[^\\s\\]]+)(?:\\s+([^\\]]*))?]")
     private val BOLD_ITALIC = Regex("'{2,5}")

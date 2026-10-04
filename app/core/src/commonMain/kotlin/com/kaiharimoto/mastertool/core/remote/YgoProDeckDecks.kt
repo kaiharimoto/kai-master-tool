@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.remote
 
+import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import io.ktor.client.HttpClient
@@ -53,7 +54,7 @@ class YgoProDeckDecks(
     private val http: HttpClient,
     private val userAgent: String = "NeueMasterTool",
     private val clock: () -> Long,
-    private val site: String = "https://ygoprodeck.com",
+    private val site: String = SITE,
     private val base: String = "$site/api/decks/getDecks.php",
 ) {
     private val pace = Mutex()
@@ -96,59 +97,91 @@ class YgoProDeckDecks(
     suspend fun players(query: String): Result<List<TournamentPlayer>> = runCatching {
         val (body, final) = fetched("$site/tournaments/player-search/?search=" + query.trim().split(Regex("\\s+")).joinToString("+") { PlayerPages.encodeWord(it) })
         PlayerPages.search(body).ifEmpty {
-            val career = PlayerPages.career(body)?.takeIf { it.results.isNotEmpty() } ?: return@ifEmpty emptyList()
-            val path = final.substringAfter(site, "").takeIf { it.startsWith("/tournaments/by-player/") } ?: PlayerPages.playerPath(career.name)
-            listOf(TournamentPlayer(career.name, career.country, career.results.first().date, path))
+            val career = PlayerPages.career(body)?.takeIf { it.results.isNotEmpty() }
+            when {
+                career != null -> {
+                    val path = final.substringAfter(site, "").takeIf { it.startsWith("/tournaments/by-player/") } ?: PlayerPages.playerPath(career.name)
+                    listOf(TournamentPlayer(career.name, career.country, career.results.first().date, path))
+                }
+                // The site's own "No results." — nobody by that name, which is an answer, not a failure.
+                PlayerPages.noMatches(body) || PlayerPages.notFound(body, final) -> emptyList()
+                else -> throw PlayerPages.LayoutChanged("player search")
+            }
         }
     }
 
     /** A player's results, newest first, from their page ([path] as the search gave it, or made from the name). */
     suspend fun career(nameOrPath: String): Result<PlayerCareer?> = runCatching {
         val path = if (nameOrPath.startsWith("/tournaments/by-player/")) nameOrPath else PlayerPages.playerPath(nameOrPath)
-        PlayerPages.career(fetch(site + path))?.takeIf { it.results.isNotEmpty() }
+        val (body, final) = fetched(site + path)
+        PlayerPages.readCareer(body, final)?.takeIf { it.results.isNotEmpty() }
     }
 
     /** One published list by its number, from the deck's own page: any deck, not only the recent pages'. */
     suspend fun deck(number: Int): Result<TournamentDeck?> = runCatching {
-        PlayerPages.deckPage(fetch("$site/deck/$number"), number)
+        val (body, final) = fetched("$site/deck/$number")
+        PlayerPages.readDeck(body, final, number)
     }
 
     /**
      * Recent results at tier [minTier] and above, back [days] days, in [format]; up to
-     * [maxPages] pages a tier. The decks, and what could not be read, in words.
+     * [maxPages] pages a tier. The decks, what could not be read, in words, and the tiers
+     * whose window held more lists than [maxPages] pages — never cut short in silence.
      */
-    suspend fun recent(minTier: Int, days: Int, format: DeckFormat?, maxPages: Int = 4): Pair<List<TournamentDeck>, List<String>> {
+    suspend fun recent(minTier: Int, days: Int, format: DeckFormat?, maxPages: Int = 4): RecentDecks {
         val out = mutableListOf<TournamentDeck>()
         val problems = mutableListOf<String>()
+        val unread = mutableListOf<Int>()
         for (tier in minTier.coerceIn(1, 4)..4) {
             for (p in 0 until maxPages) {
                 val got = page(tier, p).getOrElse {
-                    problems += "Tier $tier, page ${p + 1}: ${it.message ?: it::class.simpleName}"
+                    problems += "Tier $tier, page ${p + 1}: ${Unreachable.of(base, it)}"
                     break
                 }
                 val fresh = got.filter { it.daysAgo <= days }
                 out += fresh.filter { format == null || it.format == format }
                 // Newest first: a page with nothing recent means there is nothing newer after it.
                 if (got.isEmpty() || fresh.size < got.size) break
+                // A last page still all inside the window: older lists in it were left unread.
+                if (p == maxPages - 1) unread += tier
             }
         }
-        return out.distinctBy { it.number } to problems
+        return RecentDecks(out.distinctBy { it.number }, problems, unread)
     }
 
     companion object {
+        const val SITE = "https://ygoprodeck.com"
         const val PAGE = 20
         const val MIN_INTERVAL_MS = 1000L
         const val CACHE_MS = 60 * 60 * 1000L
     }
 }
 
+/**
+ * What [YgoProDeckDecks.recent] read: the lists, each page that failed in words, and the tiers
+ * whose last page read was still inside the window — older lists there may not have been read,
+ * and an answer built on them must say so.
+ */
+data class RecentDecks(val decks: List<TournamentDeck>, val problems: List<String>, val unread: List<Int> = emptyList())
+
 /** Reading YGOPRODeck's answer, apart from the network, so it is tested on a captured one. */
 object TournamentDecks {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
+    /**
+     * A page of lists. The answer is a JSON list (empty past the last page); anything else — an
+     * object, a page of HTML — is an error, never "no lists": read as none, it ended the search
+     * as if there were nothing older, and the field came back empty.
+     */
     fun parse(body: String, tier: Int): List<TournamentDeck> {
-        val root = json.parseToJsonElement(body) as? JsonArray ?: return emptyList()
+        val root = runCatching { json.parseToJsonElement(body) }.getOrNull() as? JsonArray ?: error(unknownShape(body))
         return root.mapNotNull { (it as? JsonObject)?.let { o -> read(o, tier) } }
+    }
+
+    /** An answer the app cannot read, in words, with the start of it to show what came instead. */
+    fun unknownShape(body: String): String {
+        val start = body.trim().replace(Regex("\\s+"), " ").take(200)
+        return "YGOPRODeck answered in a shape the app doesn't know: ${start.ifEmpty { "(an empty answer)" }}"
     }
 
     private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() && it != "null" }

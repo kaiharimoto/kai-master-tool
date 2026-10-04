@@ -191,7 +191,11 @@ internal class AiPrep(private val h: NeueHolders) {
                 val one = TestStats.expected(rows, mapOf(id to 1))
                 appendLine("- $name: $share% · ${row?.all?.games ?: 0} games · ${(one * 1000).toInt() / 10.0}%")
             }
-            append("Few games are pulled toward 50%: log more against the big shares to firm these up.")
+            appendLine("Few games are pulled toward 50%: log more against the big shares to firm these up.")
+            append(
+                "The rate is only as good as the web's shares: if they were taken from ygopro_field_snapshot they are shares of " +
+                    "top cuts, which over-represent strong decks — say so, or ask the person what the event's field looks like.",
+            )
         }
         return ok(text, "Expected match win ${(total * 100).toInt()}%")
     }

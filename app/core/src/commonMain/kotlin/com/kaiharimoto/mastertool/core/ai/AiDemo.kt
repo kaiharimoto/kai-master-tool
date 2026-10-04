@@ -74,7 +74,7 @@ object AiDemo {
                 "Grouped them into 7 strategies by the cards they play",
             ),
             reply = """
-                Here's the field from 60 lists at regionals and up over the last 30 days (demo numbers here; ask me and I'll read the live ones):
+                Here's what has been topping, from 60 lists at regionals and up over the last 30 days (demo numbers here; ask me and I'll read the live ones). These are shares of top cuts, so strong decks look bigger than they are at the tables:
 
                 ```chart
                 {"type":"hbar","title":"Share of top results","labels":["Snake-Eye","Fiendsmith","Yubel","Tenpai Dragon","Branded","Other"],"series":[{"name":"Share","values":[24,19,14,11,9,23]}],"unit":"%"}
@@ -88,14 +88,14 @@ object AiDemo {
             caption = "The expected field becomes a web on the Format page, your deck starred.",
             person = "Yes. Make a web for my regional on October 18.",
             activity = listOf(
-                "Read the field: 7 strategies, 86% of results",
+                "Read the tops: 7 strategies, 86% of top cuts",
                 "Created web “Regional, Oct 18”",
                 "Imported 6 decks with their shares",
                 "Starred “Snake-Eye 40” as yours",
                 "Wrote the web's notes",
             ),
             reply = """
-                Your web **“Regional, Oct 18”** is on the Format page: six strategies covering 86% of the field, each imported from its most typical list, with your **Snake-Eye 40** starred.
+                Your web **“Regional, Oct 18”** is on the Format page: six strategies covering 86% of the top cuts, each imported from its most typical list, with your **Snake-Eye 40** starred.
 
                 I wrote notes for every deck: its plan, its choke points, and what it fears. The short version:
 

@@ -446,7 +446,7 @@ object AiTools {
             string("event", "Only events whose name has this")
             string("player", "Only lists this player piloted (a part of the name is enough). For a player's whole record, use ygopro_player")
             integer("days", "Only the last this many days (default 60)", min = 1, max = 365)
-            integer("page", "Older results, from 0", min = 0, max = 20)
+            integer("page", "Older results, from 0: page N is each tier's Nth page of twenty lists, of any age unless days is given", min = 0, max = 20)
         },
         ToolGroup.META,
         phase = 2,
@@ -490,8 +490,9 @@ object AiTools {
 
     val fieldSnapshot = ToolSpec(
         "ygopro_field_snapshot",
-        "What the field looks like: recent tournament decks grouped into strategies, each with its share of results " +
+        "What has been topping: recent tournament decks grouped into strategies, each with its share of top cuts " +
             "(weighted by placement and event size), its best finishes and one representative list's deck number. " +
+            "A share of top cuts is not a share of the field — strong decks top more often than they are played. " +
             "The first step in building a web of decks for an event.",
         schema {
             integer("tier", "Lowest event tier (default 2)", min = 1, max = 4)
@@ -658,7 +659,9 @@ object AiTools {
     val expectedWinrate = ToolSpec(
         "expected_winrate",
         "The match win rate to expect at the event: each opponent's best-of-three win rate from the logged games " +
-            "(few games pulled toward even), weighted by its share of the field's web.",
+            "(few games pulled toward even), weighted by its share in the field's web. Only as good as those shares: " +
+            "taken from ygopro_field_snapshot they are shares of top cuts, which over-represent strong decks, so say so " +
+            "when you quote the rate, and ask the person what their event's field really looks like.",
         schema { string("event_id", "Omit for the one being prepared for") },
         ToolGroup.LOOK,
         phase = 3,

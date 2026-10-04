@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.ai
 import com.kaiharimoto.mastertool.core.TestCards
 import com.kaiharimoto.mastertool.core.ai.meta.DeckAnalysis
 import com.kaiharimoto.mastertool.core.ai.meta.FieldBuilder
+import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.Format
@@ -18,6 +19,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MetaTest {
@@ -71,6 +74,51 @@ class MetaTest {
         val (none, why) = down.recent(minTier = 4, days = 30, format = null, maxPages = 1)
         assertTrue(none.isEmpty())
         assertTrue(why.single().contains("503"))
+    }
+
+    @Test
+    fun anAnswerThatIsNotAListIsAnErrorNotNothing() = runTest {
+        // Red team: an object (or a page of HTML) read as "no lists" ended the search as if there
+        // were nothing older, and the field snapshot answered "No TCG results".
+        val shape = """{"error":"Rate limited, please slow down","code":429}"""
+        val thrown = assertFailsWith<IllegalStateException> { TournamentDecks.parse(shape, tier = 2) }
+        assertEquals("YGOPRODeck answered in a shape the app doesn't know: $shape", thrown.message)
+        assertTrue(assertFailsWith<IllegalStateException> { TournamentDecks.parse("<html> <body>Down for maintenance</body></html>", 2) }.message!!.endsWith("<html> <body>Down for maintenance</body></html>"))
+        assertEquals(200 + "YGOPRODeck answered in a shape the app doesn't know: ".length, TournamentDecks.unknownShape("x".repeat(500)).length)
+        assertTrue(TournamentDecks.parse("[]", tier = 2).isEmpty(), "past the last page is an empty list, and that is fine")
+        val odd = YgoProDeckDecks(HttpClientFactory.create(MockEngine { respond(shape, HttpStatusCode.OK) }), clock = { 0L })
+        val (decks, problems) = odd.recent(minTier = 4, days = 30, format = null, maxPages = 3)
+        assertTrue(decks.isEmpty())
+        assertTrue(problems.single().startsWith("Tier 4, page 1: YGOPRODeck answered in a shape the app doesn't know"), problems.toString())
+        assertTrue(odd.page(4, 0).isFailure)
+    }
+
+    @Test
+    fun aWindowLongerThanThePagesReadSaysSo() = runTest {
+        // Every page full of fresh lists: the last page read was still inside the window.
+        val fresh = (1..YgoProDeckDecks.PAGE).joinToString(",", "[", "]") { """{"deck_name":"D$it","main_deck":"[\"1\"]","deckNum":$it,"submit_date":"1 day ago"}""" }
+        val busy = YgoProDeckDecks(HttpClientFactory.create(MockEngine { respond(fresh, HttpStatusCode.OK) }), clock = { 0L })
+        val read = busy.recent(minTier = 3, days = 30, format = null, maxPages = 2)
+        assertEquals(listOf(3, 4), read.unread, "both tiers had more in the window than two pages")
+        assertTrue(read.problems.isEmpty())
+        // A page that reaches past the window, or an empty one, ends the tier with nothing left unread.
+        val old = """[{"deck_name":"Old","main_deck":"[\"1\"]","deckNum":9,"submit_date":"3 months ago"}]"""
+        val quiet = YgoProDeckDecks(HttpClientFactory.create(MockEngine { respond(old, HttpStatusCode.OK) }), clock = { 0L })
+        assertTrue(quiet.recent(minTier = 4, days = 30, format = null, maxPages = 1).unread.isEmpty())
+        val empty = YgoProDeckDecks(HttpClientFactory.create(MockEngine { respond("[]", HttpStatusCode.OK) }), clock = { 0L })
+        assertTrue(empty.recent(minTier = 4, days = 30, format = null, maxPages = 1).unread.isEmpty())
+    }
+
+    @Test
+    fun aShareOfTopCutsIsNeverCalledAShareOfTheField() {
+        // Red team: FieldBuilder weighs top cuts; the skill and expected_winrate called it the field.
+        assertTrue("top cuts" in FieldBuilder.SHARE_CAVEAT && "not of the whole field" in FieldBuilder.SHARE_CAVEAT)
+        assertTrue("share of top cuts" in AiTools.fieldSnapshot.description)
+        assertTrue("top cuts" in AiTools.expectedWinrate.description && "over-represent" in AiTools.expectedWinrate.description)
+        val webs = BuiltInSkills.all.single { it.name == "format-webs" }.body
+        assertTrue("share of top cuts" in webs && "not a share" in webs, "the skill says what the share is")
+        assertTrue("ask the person what their scene plays, or estimate the field separately" in webs.replace(Regex("\\s+"), " "))
+        assertFalse("85% of the field" in webs)
     }
 
     private fun td(number: Int, name: String, main: List<Int>, placement: String = "Top 8", players: Int = 64) = TournamentDeck(

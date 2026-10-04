@@ -21,10 +21,25 @@ object Unreachable {
     /** The host of [url], or the url itself. */
     fun host(url: String): String = url.substringAfter("://").substringBefore('/').substringBefore(':').ifBlank { url }
 
-    /** What went wrong reaching [url], from the error's own [message] (and its class name, where the message is empty). */
-    fun say(url: String, message: String?): String {
+    /**
+     * What went wrong with a request to [url], for a tool's answer: the app's own refusal — an
+     * [IllegalStateException], what `error("…")` throws ("YGOPRODeck answered 503", a page whose
+     * layout changed) — in its own words, anything else as a failure to reach the service ([say]).
+     * Never the bare exception text: `UnknownHostException: ygoprodeck.com` tells a person nothing.
+     */
+    fun of(url: String, failure: Throwable): String = when {
+        failure is IllegalStateException && !failure.message.isNullOrBlank() -> failure.message!!
+        // The JVM's UnknownHostException often says only the host: its class says what happened.
+        else -> say(url, failure.message ?: failure::class.simpleName, failure::class.simpleName)
+    }
+
+    /**
+     * What went wrong reaching [url], from the error's own [message] (and its class name, where the
+     * message is empty); [kind], the error's class name, is read for what happened but never shown.
+     */
+    fun say(url: String, message: String?, kind: String? = null): String {
         val raw = message?.trim().orEmpty()
-        val low = raw.lowercase()
+        val low = raw.lowercase() + " " + kind.orEmpty().lowercase()
         val name = host(url)
         return when {
             lookup.any { it in low } ->

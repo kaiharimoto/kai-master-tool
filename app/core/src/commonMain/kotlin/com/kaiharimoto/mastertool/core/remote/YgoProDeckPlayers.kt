@@ -30,9 +30,46 @@ data class PlayerCareer(val name: String, val country: String?, val tally: List<
  * with each result and the deck it links to, then the deck's own page (`/deck/<number>`), whose
  * list is in the page's script. Pages are HTML, read leniently; here apart from the network, so
  * they are tested on captured ones.
+ *
+ * Leniently, but never by guessing "nobody" (red team): a page that says there is nothing — the
+ * search's "No results.", the site's Not Found page that a missing player or deck redirects to —
+ * is an answer; a real page with none of what the app reads on it is [LayoutChanged], an error,
+ * or a site redesign would read as "no such player" for ever.
  */
 object PlayerPages {
+    /** A YGOPRODeck page the app reached but could no longer read: the site has changed how it is laid out. */
+    class LayoutChanged(page: String) : IllegalStateException(
+        "YGOPRODeck's $page page has changed its layout, so the app could not read what is on it. " +
+            "That is not the same as finding nothing; the app needs an update to read the new page.",
+    )
+
     private val row = Regex("""<a\s+class="tournament_table_row[^"]*"[^>]*?href="([^"]*)"[^>]*>(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
+    private val anyRow = Regex("""class="tournament_table_row""")
+    private val heading = Regex("""<h1[^>]*>(.*?)</h1>""", RegexOption.DOT_MATCHES_ALL)
+
+    /** The player search's own words for no match: "Tournament players matching '…':" and then "No results." */
+    fun noMatches(html: String): Boolean = Regex("""players matching\b.*?</p>\s*No results""", RegexOption.DOT_MATCHES_ALL).containsMatchIn(html)
+
+    /**
+     * The site's page for an address with nothing behind it: a player or deck that does not exist
+     * redirects to `/not-found/`, whose heading is "Not Found". [final] is where the request landed.
+     */
+    fun notFound(html: String, final: String = ""): Boolean =
+        "/not-found" in final || heading.find(html)?.groupValues?.get(1)?.let(::text).equals("Not Found", ignoreCase = true)
+
+    /** [career], told apart from a page the app can no longer read: null only when the site says there is no such player. */
+    fun readCareer(html: String, final: String = ""): PlayerCareer? {
+        if (notFound(html, final)) return null
+        val career = career(html) ?: throw LayoutChanged("player")
+        if (career.results.isEmpty() && (anyRow.containsMatchIn(html) || "tournament_table_header" !in html)) throw LayoutChanged("player")
+        return career
+    }
+
+    /** [deckPage], told apart from a page the app can no longer read: null only when the site has no such deck. */
+    fun readDeck(html: String, final: String, number: Int): TournamentDeck? {
+        if (notFound(html, final)) return null
+        return deckPage(html, number) ?: if ("var maindeckjs" !in html) throw LayoutChanged("deck") else null
+    }
     private val cell = Regex("""<span class="as-tablecell"[^>]*role="gridcell"[^>]*>""")
     private val flag = Regex("""<span class="country-flag[^"]*"\s+title="([^"]*)"""")
     private val badge = Regex("""<span class="badge[^"]*">(?:<img[^>]*>)?([^<]*)</span>""")
@@ -86,10 +123,13 @@ object PlayerPages {
     /** The flag is an emoji before the name; the name is what follows it. */
     private fun dropFlag(s: String): String = s.dropWhile { !it.isLetterOrDigit() }.trim()
 
-    /** A player's page. Null when it is not one (no such player: the site shows an empty table). */
+    /**
+     * A player's page, read leniently. Null when it has no heading at all; a missing player is
+     * the site's Not Found page, which [readCareer] tells apart from a page it can no longer read.
+     */
     fun career(html: String): PlayerCareer? {
-        val heading = Regex("""<h1[^>]*>(.*?)</h1>""", RegexOption.DOT_MATCHES_ALL).find(html)?.groupValues?.get(1)?.let(::text) ?: return null
-        val name = heading.removeSuffix("Tournament Results").trim().removeSuffix("'s").removeSuffix("’s").trim()
+        val title = heading.find(html)?.groupValues?.get(1)?.let(::text) ?: return null
+        val name = title.removeSuffix("Tournament Results").trim().removeSuffix("'s").removeSuffix("’s").trim()
         val country = html.indexOf("Nationality:").takeIf { it >= 0 }?.let { flag.find(html, it) }?.groupValues?.get(1)
             ?.takeUnless { it.contains("unknown", ignoreCase = true) }
         val tally = Regex("""<abbr[^>]*>(.*?)</abbr>\s*events:</b>\s*([^<]*)""", RegexOption.DOT_MATCHES_ALL).findAll(html)

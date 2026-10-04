@@ -29,4 +29,19 @@ class UnreachableTest {
         assertEquals("Could not reach $url: no answer", Unreachable.say(url, null))
         assertEquals("localhost", Unreachable.host("http://localhost:11434/v1"))
     }
+
+    /** As the JVM names it: its message is often only the host, so the class says what happened. */
+    private class UnknownHostException(message: String) : Exception(message)
+
+    @Test
+    fun aToolsFailureIsWordedNotDumped() {
+        // Red team: the meta and Yugipedia tools showed "UnknownHostException: ygoprodeck.com".
+        val site = "https://ygoprodeck.com"
+        assertTrue(Unreachable.of(site, UnknownHostException("ygoprodeck.com")).startsWith("This device could not look up ygoprodeck.com"))
+        assertTrue(Unreachable.of(site, Exception("Connect timeout has expired")).startsWith("Could not connect to ygoprodeck.com"))
+        // The app's own refusals (error("…")) keep their words: they already say what happened.
+        assertEquals("YGOPRODeck answered 503", Unreachable.of(site, IllegalStateException("YGOPRODeck answered 503")))
+        assertEquals("Could not reach $site: Broken pipe", Unreachable.of(site, Exception("Broken pipe")))
+        assertEquals("Could not reach $site: IllegalStateException", Unreachable.of(site, IllegalStateException()), "no words of its own: what it was")
+    }
 }

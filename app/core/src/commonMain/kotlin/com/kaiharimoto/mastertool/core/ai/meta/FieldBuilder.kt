@@ -3,10 +3,13 @@ package com.kaiharimoto.mastertool.core.ai.meta
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.remote.TournamentDeck
 
-/** One strategy in the field: its lists, its share of results, its best finishes, and a list to stand for it. */
+/** One strategy among the results: its lists, its share of top cuts, its best finishes, and a list to stand for it. */
 data class FieldCluster(
     val name: String,
-    /** Its share of the weighted results, in percent. */
+    /**
+     * Its share of the weighted top-cut results, in percent — not of the players at the
+     * tables ([FieldBuilder.SHARE_CAVEAT]).
+     */
     val share: Int,
     val decks: List<TournamentDeck>,
     /** The list most like the others in it — the one to import to stand for the strategy. */
@@ -25,6 +28,10 @@ data class FieldCluster(
  * share is its weight of results: a win counts more than a top 8, a big event more
  * than a small one (`TournamentDeck.weight`).
  *
+ * The lists are **top cuts**, so a share is of the decks that topped, not of the decks
+ * played (red team): a strong deck tops more often than it is played and looks bigger
+ * here than at the tables. Every answer that shows a share says so ([SHARE_CAVEAT]).
+ *
  * Similarity is **weighted by rarity** (an IDF weight per card): a card in nearly every
  * list — a hand trap, a board breaker — says what the format plays, not what a deck
  * is, and counts for little; a card in few lists counts for much. A fixed "staple"
@@ -32,6 +39,13 @@ data class FieldCluster(
  * as staples.
  */
 object FieldBuilder {
+    /** What a strategy's share is, and is not, in words for Ai: shown with every field snapshot. */
+    const val SHARE_CAVEAT =
+        "These shares are of top cuts (results weighted by placement and event size), not of the whole field: " +
+            "a strong deck tops more often than it is played, so it looks bigger here than at the tables, and a deck " +
+            "many people play but few top looks smaller. Where the field's shares matter (a web's shares, the expected " +
+            "win rate, what to practise), ask the person what their event's field looks like, or estimate it separately."
+
     /** A card in at least this share of the lists is a staple: left out of a strategy's core. */
     const val STAPLE_SHARE = 0.6
 
