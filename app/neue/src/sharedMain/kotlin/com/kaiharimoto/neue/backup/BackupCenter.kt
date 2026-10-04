@@ -148,6 +148,7 @@ class BackupCenter(private val h: NeueHolders) {
                     name.startsWith("custom-art/") && safe(name) -> put(File(Platform.dataDir, name), data)
                     name.startsWith("present/") && safe(name) -> put(File(Platform.dataDir, name), data)
                     name.startsWith("duel/") && safe(name) -> put(File(Platform.dataDir, name), data)
+                    name.startsWith("world/") && safe(name) -> put(File(Platform.dataDir, name), data)
                 }
             }
             val neue = entries[NEUE]?.let { runCatching { Backups.json.decodeFromString(NeuePreferences.serializer(), it.decodeToString()) }.getOrNull() }
@@ -168,6 +169,7 @@ class BackupCenter(private val h: NeueHolders) {
                 h.builder.deckId?.let { id -> if (!h.builder.dirty) h.builder.load(id) }
                 h.ai.bookChanged()
                 h.customArt.reload()
+                h.world.reload()
                 h.present.reload()
                 h.duel.reload()
                 h.duel.reloadRulings()
@@ -223,6 +225,8 @@ class BackupCenter(private val h: NeueHolders) {
                         tree(File(Platform.dataDir, "present")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("present/$rel", f.readBytes()); files++ }
                         // The duel in play (1.0.74), and later its replays and combos.
                         tree(File(Platform.dataDir, "duel")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("duel/$rel", f.readBytes()); files++ }
+                        // Ai World's worlds (1.0.95): their files, boards and logs.
+                        tree(File(Platform.dataDir, "world")).filter { NeueSyncLocal.worldSyncs(it.first) }.forEach { (rel, f) -> add("world/$rel", f.readBytes()); files++ }
                         add(
                             BackupManifest.NAME,
                             Backups.json.encodeToString(

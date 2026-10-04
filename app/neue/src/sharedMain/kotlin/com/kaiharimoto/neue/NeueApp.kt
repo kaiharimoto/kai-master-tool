@@ -231,6 +231,9 @@ class NeueHolders(
     }
     val world: Worlds by worldHolder
 
+    /** Whether Ai World has been opened this run: what only touches it when it exists asks this first. */
+    val worldStarted: Boolean get() = worldHolder.isInitialized()
+
     /** Command mode's voice (1.0.87): hold M, or the microphone beside the command line, to speak a move. */
     val duelVoice: DuelVoice by lazy { DuelVoice(this) }
 

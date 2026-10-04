@@ -288,6 +288,14 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         if (neue.page == Page.PRESENT) h.present.open?.let { p ->
             add("Presentation open: “${p.name}” (id ${p.id}), ${p.slides.size} slides, on slide ${h.present.slideIndex + 1}${p.deck?.let { d -> "; profiles the deck “${d.name}”" } ?: ""}; present_state has the outline")
         }
+        if (neue.page == Page.WORLD) {
+            val w = h.world.open
+            add(
+                if (w == null) "On Ai World, with no world open: world_new makes one."
+                else "On Ai World: “${w.title}” (id ${w.id}) is open, ${h.world.files.size} files, ${w.boards.size} boards" +
+                    (h.world.editorPath?.let { "; the editor shows $it" } ?: "") + "; world_state has the rest",
+            )
+        }
     }
 
     // ---- looking ---------------------------------------------------------------
