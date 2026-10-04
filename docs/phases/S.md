@@ -116,7 +116,7 @@ Priors are weak, and they are shown to the person.
    - **Repeats:** a few hands come back unannounced. The answers measure the person's own noise, which is fitted with the rest.
    - **Fatigue:** rising answer times and falling consistency mean tiredness. The trials switch to quicker comparisons, the noise model widens, and stopping is suggested.
    - **Disagreement:** an answer far from the model's prediction is kept, and offered for one question of why (see Ai, below).
-6. **Stop when it is known.** A session shows what it has settled, for example "21 of 24 cards known within ±2 points". It can end at any moment with every answer kept. Ratings carry over between sessions per deck and matchup.
+6. **Stop when it is known.** A session shows what it has settled, for example "21 of 24 cards known within ±5 points" (the 95 % range; ±2 is out of reach for a judge as noisy as the simulation's, see below). It can end at any moment with every answer kept. Ratings carry over between sessions per deck and matchup.
 
 ## 4. Proving the method first (`core/shootout/sim`, commonTest)
 
@@ -131,6 +131,105 @@ It must show:
 - **Pairs:** pair effects are found when they exist and not invented when they do not.
 
 The same simulation tunes the settings: the share of random hands, how tightly pair effects are held at zero, and when to stop. The tests then hold those numbers so a later change cannot quietly make the method worse.
+
+## 4½. Simulation results (stage 1)
+
+Stage 1 is built in `core/shootout` (pure Kotlin, no new library, no screens):
+- `math/`: the matrix and Cholesky solve/inverse with jitter, the logistic curve;
+- `model/`: hands and decks, the trials, the hand's value, the priors as one Gaussian, the likelihoods with exact
+  derivatives, the fit (`Fitter`), and the reported numbers (`Reporter`, `Ratings`);
+- `select/`: the picker, its targets, the real-world check (`RealWorld`) and the stop rule;
+- `sim/`: the synthetic matchup (`SyntheticDeck`), the simulated judge (`SimJudge`) and the study harness (`Study`).
+
+Its tests are `ShootoutMathTest`, `ShootoutModelTest`, `ShootoutPickerTest` and `ShootoutSimulationTest`.
+
+### The set-up
+
+- **The matchup:** 40 cards, 24 different (six three-ofs, four two-ofs, fourteen one-ofs) in four roles, against a
+  40-card deck of 17 different cards; game one first and second (two strata). True values are drawn from the model's
+  own priors around role averages the model is not told. Three of twelve named pairs are real: two combos (+0.9 and
+  +0.7 log-odds, worth 10–16 points) and a redundancy (−0.6).
+- **The judge** is harder than the model assumes:
+  - noise in two parts, misreading the situation and misreading the hand, together a logistic of scale 0.6: a hand
+    that wins 60 % is read, two times in three, as anywhere from 34 % to 82 %;
+  - 3 % of answers are random keys;
+  - fatigue: by trial 300 the noise is 30 % larger and the bands have drifted 0.1 toward calling hands worse.
+- **The baseline** is the same model fed plain shuffled hands, as the legacy shootout dealt them, so the two arms
+  differ only in how hands are chosen.
+
+### What the simulation changed in the design
+
+1. **The person's bands anchor the scale.** With every judge's cut-offs fitted, the scale was not identified, and the
+   priors shrank it: the cut-offs collapsed toward each other and the card values came out a third of the truth. The
+   person's blind answers are now the reference judge: their cut-offs are the bands' edges (20/40/60/80 %), only their
+   noise is fitted, and other judges (Ai, the person after seeing Ai) get cut-offs of their own measured against them.
+2. **The noise is fitted on what the fit does not yet know.** At the joint mode a young session (fewer answers than
+   parameters) explains every answer exactly: the fitted noise fell to a tenth of the truth by trial 80, and the 80 %
+   ranges held the truth half the time. The noise is now fitted, in turn with the values, to the answers' likelihood
+   averaged over each hand's remaining uncertainty (variational EM), and coverage came back to about 80 %.
+3. **No slip term.** A "this answer, or a random key" mixture let the fit call the judge noiseless and every miss a
+   slip (the fitted noise fell to a twentieth). It stays as a seam for a judge with fixed noise, off by default.
+4. **The picker builds hands.** Choosing the best of a few hundred dealt hands gained little (about 1.1×). Improving
+   the best one a card at a time (each card of either hand swapped for any card left in its deck, six rounds) is
+   where the gain comes from: the hand shown is any hand the decks can deal, and the reports average over real odds.
+5. **Comparisons are not chosen on merit, in this judge.** A rating informs about eleven parameters at once (five or
+   six cards, the opponent's six); a one-card comparison informs two. Even with comparisons judged as steadily as
+   ratings, the picker rarely prefers them, and making one trial in five a comparison did worse than one in ten (4.57
+   against 4.35 points after 200 trials). §1's claim that people judge comparisons more consistently is therefore a question for real
+   sessions: one trial in twenty is a comparison, so the person's comparison noise is measured, and the picker uses
+   them as soon as they are worth it.
+
+### The tuned settings
+
+| Setting | Value | Why |
+|---|---|---|
+| Plain shuffled hands | 1 in 6 | The real-world check needs them. 1 in 10–12 made no measurable difference to the card error. |
+| Repeats | 1 in 20, at least 8 trials old | They measure the person's noise. |
+| Comparisons | 1 in 20, beyond that on merit | See 5 above. |
+| Candidates | 240 dealt hands, 40 comparisons, 6 rounds of one-card improvement | 400 dealt hands or 12 rounds were no better. |
+| Pair prior | ±0.5 log-odds | ±0.3 found none of 36 real pair-strata; ±0.5 found 12 with no false one of 108; ±0.8 found 10 with 6 false. |
+| Pairs in the picker's aim | weight 1 (by how often both are drawn) | Weight 0 gave cards 13 % less error after 300 trials but found 4 of 48 real pairs, against 24 of 48. kai's brief is cards *and* pairs. |
+| Stop rule | 21 of 24 cards within ±5 points (95 %) | What a few sessions reach at this noise (below). |
+
+### The numbers
+
+The test (`ShootoutSimulationTest`, four matchups: adaptive 200 trials, plain 300, deterministic) and a wider sweep (eight
+matchups, 300 trials each arm):
+
+- **Recovery** (draw-weighted root-mean-square error of the cards' worth, in points):
+  - trials to reach 5 points: the test's adaptive picker 90 on average, plain 168: **1.86×**. The sweep: 111 against
+    158 (**1.42×**); to 6 points 75 against 94 (1.25×); to 4 points 210 against more than 240 (at least 1.14×).
+  - mean error after 100 trials 5.05 against 5.90; after 200, 4.05 against 4.43; after 300, 3.57 against 3.58.
+  - **The gain is early.** Later the picker spends trials on the pairs (it finds twice as many), so on cards alone
+    plain hands catch up by 300. The test holds 1.4× and 0.92× the error at 200 trials.
+- **Calibration:** the 80 % ranges held the truth 79.2 % of the time and the 95 % ranges 94.8 % (the test's eight runs,
+  384 ratings). The sweep: 75 % for the adaptive picker, 82 % for plain hands. Held at 72–88 % and 88–99 %.
+- **No bias:** the matchup wins 65 % of real hands. The plain average of the answers to the chosen hands reads
+  **4.8 points low** (5.5 in the sweep; every stratum low), because the picker shows close calls. The model's rate,
+  averaged over real hands by their real odds, is off by −0.1 points on average (−0.6 in the sweep), and the plain
+  hands' check (`RealWorld`) by −0.5. Held at ±2, ±2.5, and the naive average at least 2.5 low.
+- **Pairs:** the adaptive picker found 10 of 24 real pair-strata in the test and 24 of 48 in the sweep (plain hands 4
+  and 14), and showed 2 of 72 and 4 of 144 null ones: a false-discovery rate of 12.5 % and 14 %. Held at 25 %, with
+  at least a quarter of real pairs found.
+- **The stop rule keeps its word:** after 200 adaptive trials 6–10 of 24 cards were known within ±7 points, and 77 of
+  those 79 really were (97 %). Held at 90 %.
+- **Runtime:** the whole study test takes about 18 s on the JVM; a fit plus a choice costs about 12 ms per trial at
+  200 trials, so the model is refitted after every answer as §2 planned.
+
+### What it means for the next stages
+
+- **Sessions add up.** At this judge's noise, 21 of 24 cards within ±5 points needs several hundred trials: three to
+  five ten-minute sessions per matchup, both turns. Ratings must carry over (§5's storage), and the session's
+  "settled" line must show progress, not promise an end.
+- **A steadier person needs fewer.** Error falls as the noise does; the person's measured noise (repeats) should be
+  shown, and is the first number to watch on real sessions.
+- **Comparisons** are kept honest by measurement, not assumed better (5 above).
+
+**Left for stage 2:** the trial screens (keyboard, mouse, finger); storage (`<data>/shootout/…`, versioned, with its
+`OldDataTest` case); card identity through `CardIdentity` and roles from the deck's groups; siding-plan fingerprints
+and per-plan cards for the sided strata; the opponent's cards' per-stratum deviations; fatigue detection from answer
+times; the reason tags and decisive card; Ai's parts (§6, §6½), for which `ModelSpec.judges` and the reference judge
+are the seam.
 
 ## 5. Results and how they are shown
 
