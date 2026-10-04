@@ -18,6 +18,22 @@ object Unreachable {
     )
     private val offline = listOf("network is unreachable", "no route to host", "failed to connect", "connection refused", "timed out", "timeout")
 
+    /**
+     * Whether [failure] is the network's — a lookup, a connection, a timeout, a stream cut — and so worth one more try
+     * (1.0.98, the red team). Anything else (a parse error, the app's own bug) fails the same way again, and is said as
+     * what it is, never as "could not reach".
+     */
+    fun isNetwork(failure: Throwable): Boolean = generateSequence(failure) { it.cause }.take(6).any { t ->
+        val kind = t::class.simpleName.orEmpty().lowercase()
+        val low = t.message.orEmpty().lowercase() + " " + kind
+        "ioexception" in kind || "socket" in kind || "timeout" in kind || "connect" in kind || "eof" in kind || "ssl" in kind ||
+            lookup.any { it in low } || offline.any { it in low } || "connection reset" in low || "broken pipe" in low
+    }
+
+    /** What a failure that is not the network's says (1.0.98): the app could not read the answer. */
+    fun unreadable(service: String, failure: Throwable): String =
+        "The app could not read $service's answer: ${failure.message?.takeIf { it.isNotBlank() } ?: failure::class.simpleName}"
+
     /** The host of [url], or the url itself. */
     fun host(url: String): String = url.substringAfter("://").substringBefore('/').substringBefore(':').ifBlank { url }
 

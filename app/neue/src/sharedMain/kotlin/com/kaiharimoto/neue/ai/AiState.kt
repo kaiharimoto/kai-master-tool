@@ -413,9 +413,12 @@ class AiState(internal val h: NeueHolders) {
         val renamed = renamedTo?.let { listOf("The person renamed you: you are $it from now on, whatever the instructions above call you.") }.orEmpty()
         renamedTo = null
         // The open deck's guide (how it plays), once per deck: taught or studied in Fine Tuning (1.0.48).
-        val deckId = h.builder.deckId
+        // A Fine Tuning run reads its own deck's guide, whatever the builder shows (1.0.98).
+        val pinned = current.takeIf { it.mode in AiSession.DECK_MODES && it.deckId != null }
+        val deckId = pinned?.deckId ?: h.builder.deckId
+        val deckName = pinned?.deckName ?: h.builder.deckName
         val guide = if (deckId != null && deckId != current.guideShown) {
-            files.entries(MemoryKind.GUIDE, deckId).takeIf { it.isNotBlank() }?.let { listOf("", "Your guide to how “${h.builder.deckName}” plays (memory scope guide):", it) }.orEmpty()
+            files.entries(MemoryKind.GUIDE, deckId).takeIf { it.isNotBlank() }?.let { listOf("", "Your guide to how “$deckName” plays (memory scope guide):", it) }.orEmpty()
         } else {
             emptyList()
         }
@@ -491,6 +494,12 @@ class AiState(internal val h: NeueHolders) {
             else -> AgentLoop.MAX_STEPS
         }
         val budget = if (model.runsOwnLoop) 0 else budgetFor(connection)
+        // This run's own token and conversation (1.0.98, the red team): a Stop ends it at once, and its coroutine's
+        // late end can then touch neither a newer run nor a newer conversation.
+        val token = ++runToken
+        val runSession = start.id
+        ranResults = emptyMap()
+        runningCall = null
         job = scope.launch {
             try {
                 // Past most of the model's window, the oldest turns become a summary first (1.0.47).
@@ -509,9 +518,15 @@ class AiState(internal val h: NeueHolders) {
                         is AgentEvent.Text -> appendWritten(event.delta)
                         is AgentEvent.Reasoning -> reasoning += event.delta
                         is AgentEvent.Status -> status = event.text
+                        is AgentEvent.Retrying -> reasoning = ""
                         is AgentEvent.Notice -> notice = event.text
                         is AgentEvent.Session -> session?.let { commit(it.copy(resume = event.id)) }
-                        is AgentEvent.ToolRunning -> Unit // the host reports its own line as it runs
+                        // The host reports its own line as it runs; the call and its result are kept for a Stop between calls.
+                        is AgentEvent.ToolRunning -> runningCall = event.call.id
+                        is AgentEvent.ToolDone -> {
+                            ranResults = ranResults + (event.result.id to event.result)
+                            runningCall = null
+                        }
                         is AgentEvent.ToolSeen -> activity = activity + Part.Activity(event.name, event.summary)
                         is AgentEvent.Appended -> {
                             // What it thought, kept in front of what it said, for the chat alone (1.0.47).
@@ -545,25 +560,52 @@ class AiState(internal val h: NeueHolders) {
                     }
                 }
             } finally {
-                finish()
+                finish(token, runSession)
             }
         }
         return true
     }
 
-    /** After an answer, or Stop: what was written is kept, and no tool call is left without its result. */
-    private fun finish() {
-        val s = session
+    /**
+     * Passes that run with no one watching — the reflection after a conversation, the fact-check (1.0.98, the red team):
+     * Forget everything and turning Ai off cancel them, or they write memory back after it was cleared.
+     */
+    internal val backgroundJobs = mutableListOf<Job>()
+
+    internal fun cancelBackground() {
+        backgroundJobs.forEach { it.cancel() }
+        backgroundJobs.clear()
+    }
+
+    /** The run under way's token; 0 when none is (1.0.98). */
+    private var runToken = 0
+    private var finishedToken = 0
+
+    /** What the run's tools answered so far, by call id, and the call running now: kept for a Stop mid-round. */
+    private var ranResults: Map<String, Part.ToolResult> = emptyMap()
+    private var runningCall: String? = null
+
+    /**
+     * After an answer, or Stop: what was written is kept, and no tool call is left without its result — the real one
+     * for a call that ran, "interrupted" for the one running, "not run" for the rest (1.0.98). Once per run, for that
+     * run's own conversation.
+     */
+    private fun finish(token: Int, runSession: String) {
+        if (token <= finishedToken) return
+        finishedToken = token
+        val s = session?.takeIf { it.id == runSession }
         if (s != null) {
             var turns = s.turns
             val partial = streaming.trim()
             if (partial.isNotEmpty()) turns = turns + ChatTurn(Role.ASSISTANT, activity + Part.Text("$partial …"), System.currentTimeMillis())
             val last = turns.lastOrNull()
             if (last != null && last.role == Role.ASSISTANT && last.toolUses.isNotEmpty()) {
-                turns = turns + ChatTurn(Role.USER, last.toolUses.map { Part.ToolResult(it.id, it.name, "Stopped by the person before it ran.", isError = true) })
+                turns = turns + ChatTurn(Role.USER, last.toolUses.map { AgentLoop.unanswered(it, ranResults[it.id], it.id == runningCall, stopping) })
             }
             if (turns != s.turns) commit(s.copy(turns = turns))
         }
+        ranResults = emptyMap()
+        runningCall = null
         clearWritten()
         reasoning = ""
         activity = emptyList()
@@ -572,6 +614,8 @@ class AiState(internal val h: NeueHolders) {
         working = null
         tool = null
         running = false
+        // The run is over before anything below starts another (completeTuning stops, then begins).
+        job = null
         // Finish asked Ai for its report first (1.0.54): now the session ends for real.
         if (wrapping) {
             wrapping = false
@@ -616,9 +660,15 @@ class AiState(internal val h: NeueHolders) {
         }
     }
 
+    /**
+     * Stops the answer under way and ends its run now (1.0.98, the red team): what follows a Stop — a new conversation,
+     * Fine Tuning's first message — finds Ai idle, instead of racing the cancelled run's end.
+     */
     fun stop() {
-        if (job != null) stopping = true
-        job?.cancel()
+        val j = job ?: return
+        stopping = true
+        j.cancel()
+        finish(runToken, session?.id.orEmpty())
     }
 
     /** A new conversation, with the memory as it stands now. */

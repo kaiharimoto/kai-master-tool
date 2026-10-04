@@ -15,9 +15,11 @@ import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
 import com.kaiharimoto.mastertool.core.ai.memory.ProfileCoverage
 import com.kaiharimoto.mastertool.core.ai.report.GuideDoc
+import com.kaiharimoto.mastertool.core.ai.report.ReportLog
 import com.kaiharimoto.mastertool.core.ai.report.SessionQuestions
 import com.kaiharimoto.mastertool.core.ai.report.book.BookReview
 import com.kaiharimoto.mastertool.core.ai.report.book.GuideBook
+import com.kaiharimoto.mastertool.core.ai.skills.Skills
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -36,9 +38,26 @@ private fun AiState.snapshot(): Map<String, String?> {
         files.memoryFiles().forEach { add(it.relativeTo(files.root).invariantSeparatorsPath) }
         addAll(files.skillPaths())
         host.scope()?.path?.let(::add)
+        // Every deck's book, not only the open one's: a review compares the same paths before and after, or Undo
+        // takes a book that was not in the "before" for one that never existed and deletes it (1.0.98, the red team).
+        files.file("guides").listFiles { f -> f.name.endsWith(".book.json") }?.forEach { add("guides/${it.name}") }
         h.builder.deckId?.let { add(GuideBook.path(it)) }
+        session?.deckId?.let { add(GuideBook.path(it)) }
     }
     return paths.associateWith { files.read(it) }
+}
+
+/**
+ * A memory file saved from the brain (1.0.98, the red team): the person's change, [loaded] to [text], made on what is
+ * on disk now, so what Ai wrote meanwhile stays; and, while a Fine Tuning run is under review, made on its "before"
+ * too, so the review lists Ai's changes alone and Undo never takes the person's back.
+ */
+fun AiState.saveByHand(path: String, loaded: String?, text: String) {
+    val isMemory = path.endsWith(".md") && !Skills.isPath(path)
+    val now = files.read(path)
+    files.write(path, if (isMemory) MemoryReview.merge(loaded, now, text) else text)
+    val baseline = tuneBefore ?: return
+    tuneBefore = baseline + (path to if (isMemory) MemoryReview.merge(loaded, baseline[path], text) else text)
 }
 
 /** Opens the Fine Tuning launcher, on [mode] when given. */
@@ -76,7 +95,8 @@ fun AiState.startTuning(mode: String, intensity: TuneIntensity) {
     val deckId = h.builder.deckId
     // The guide's size now: the run may add its intensity's room to it, no more (1.0.66).
     guideStart = if (mode in AiSession.DECK_MODES && deckId != null) Triple(files.memory(MemoryKind.GUIDE, deckId, deck).used, intensity.guideBudget, intensity.label) else null
-    session = begin(connection, mode)
+    // The run is about this deck to its end, whatever the builder shows meanwhile (1.0.98, the red team).
+    session = begin(connection, mode).copy(deckId = deckId, deckName = deck)
     val room = GuideBudget.brief(intensity)
     send(
         when (mode) {
@@ -289,7 +309,6 @@ internal fun AiState.reflect(finished: AiSession) {
     val transcript = finished.turns.drop(finished.reflected).filter { !it.isToolResults }.joinToString("\n") { t ->
         (if (t.role == Role.USER) "Person: " else "$name: ") + t.text.take(1200)
     }.takeLast(16_000)
-    val before = snapshot()
     val allowed = tools.filter { it.name == "memory" || it.name == "memory_read" }
     val request = TurnRequest(
         finished.system,
@@ -306,24 +325,27 @@ internal fun AiState.reflect(finished: AiSession) {
         connection.model,
         "low",
     )
-    scope.launch {
+    backgroundJobs.removeAll { it.isCompleted }
+    backgroundJobs += scope.launch {
         // Only what it was offered answers: a tool it names anyway is refused, not run.
         val names = allowed.map { it.name }.toSet()
+        // Only what its own calls changed is its (1.0.98, the red team): each memory write measured on its own, so a
+        // conversation, a Fine Tuning run, a brain edit or a sync writing meanwhile is never counted as the reflection's.
+        var changes = emptyList<MemoryChange>()
         val run = ToolRunner { call ->
             if (call.name.removePrefix("mcp__neue__") in names) {
-                host.run(call)
+                val pre = snapshot()
+                host.run(call).also { changes = changes + MemoryReview.diff(pre, snapshot()) }
             } else {
                 Part.ToolResult(call.id, call.name, "${call.name} is not used after a conversation: only memory.", isError = true)
             }
         }
         runCatching { AgentLoop(model, run, maxSteps = 6).run(request).collect { } }
-        val changes = MemoryReview.diff(before, snapshot())
         if (changes.isNotEmpty()) {
             val n = MemoryReview.count(changes)
             h.neue.note = com.kaiharimoto.neue.Note("$name remembered $n thing${if (n == 1) "" else "s"} from that conversation", "Undo", lastsMs = 10_000) {
-                reviewBefore = before
-                review = changes
-                undoReview()
+                // Its own entries taken back, one by one: never a whole file put back, never a waiting review touched.
+                changes.forEach { c -> MemoryReview.revert(files.read(c.path), c)?.let { files.write(c.path, it) } ?: files.delete(c.path) }
             }
         }
     }
@@ -348,9 +370,26 @@ fun AiState.foldIntoWeb(deckId: String, deckName: String, webId: String) {
     files.save(MemoryKind.WEB, webId, AiMemory.fold(web, deck, deckName))
 }
 
+/**
+ * A deck copied — duplicated, put in a web, copied out of one (1.0.98, the red team): what Ai learned about it goes
+ * with it, its guide, reader's guide and reports, so the copy does not start knowing nothing. Never over a copy that
+ * has its own already.
+ */
+fun AiState.carryLearning(from: String, to: String) {
+    if (from == to) return
+    fun copy(fromPath: String, toPath: String, change: (String) -> String = { it }) {
+        val text = files.read(fromPath) ?: return
+        if (files.read(toPath) == null) files.write(toPath, change(text))
+    }
+    copy(AiMemory.path(MemoryKind.GUIDE, from), AiMemory.path(MemoryKind.GUIDE, to))
+    copy(GuideBook.path(from), GuideBook.path(to))
+    copy(ReportLog.path(from), ReportLog.path(to)) { text -> ReportLog.write(ReportLog.read(text).map { it.copy(deckId = to) }) }
+}
+
 /** Memory, skills and conversations deleted; the connections stay. */
 fun AiState.forgetEverything() {
     stop()
+    cancelBackground()
     forgetSaves()
     files.forgetEverything()
     session = null

@@ -278,6 +278,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                 (if (v.isLegal) "legal in ${state.format.name}" else "${v.errors.size} rule problems") +
                 (web?.let { "; in the web “${it.name}” (id ${it.id})" } ?: ""),
         )
+        pinned?.takeIf { it.deckId != state.deckId }?.let {
+            add("This Fine Tuning run is about “${it.deckName}” (id ${it.deckId}), not the deck now open: the guide, report and book you write are “${it.deckName}”'s.")
+        }
         neue.selection?.let { add("Selected card: ${it.card.name}") }
         if (neue.page == Page.FORMAT || neue.page == Page.SIDING) webs.selected?.let { add("Web on screen: “${it.name}” (id ${it.id}), ${it.entries.size} decks") }
         if (neue.page == Page.PREP) h.prep.active?.let { e -> add("Event being prepared for: “${e.name}” (id ${e.id}) on ${e.date}, tab ${h.prep.tab.title}; prep_state has the rest") }
@@ -521,17 +524,23 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private suspend fun waitFor(ms: Long = 5000, done: () -> Boolean): Boolean =
         withTimeoutOrNull(ms) { while (!done()) delay(40); true } ?: false
 
-    private suspend fun save(): String = suspendCancellableCoroutine { cont ->
-        state.save(quiet = true) { id ->
-            h.decksReload++
-            if (cont.isActive) cont.resume(id)
+    /** Saves the open deck; a save that never says it is done is a failure said in words, never a tool that hangs (1.0.98). */
+    private suspend fun save(): String = withTimeoutOrNull(20_000) {
+        suspendCancellableCoroutine { cont ->
+            state.save(quiet = true) { id ->
+                h.decksReload++
+                if (cont.isActive) cont.resume(id)
+            }
         }
-    }
+    } ?: error("Saving the deck did not finish: the database did not answer. Nothing may have been saved; try save_deck again.")
 
     private suspend fun openDeck(id: String): Answer {
         val s = stored(id) ?: return fail("No deck $id. list_decks shows the ids.")
         h.openDeck(id)
-        waitFor { state.deckId == id && state.deckName == s.entry.name }
+        // Said as it is (1.0.98, the red team): "Opened" only once it is.
+        if (!waitFor { state.deckId == id && state.deckName == s.entry.name }) {
+            return fail("“${s.entry.name}” did not open in time: the builder still shows “${state.deckName}”. app_state says what is open.")
+        }
         return ok("Opened “${s.entry.name}”.", "Opened “${s.entry.name}”")
     }
 
@@ -783,7 +792,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             else -> return fail("Give deck_id (a library deck) or text (a decklist).")
         }
         val newId = suspendCancellableCoroutine<String> { cont -> webs.add(webId, name, document) { if (cont.isActive) cont.resume(it) } }
-        deckId?.let { from -> ai.foldIntoWeb(from, name, webId) }
+        deckId?.let { from ->
+            ai.foldIntoWeb(from, name, webId)
+            ai.carryLearning(from, newId)
+        }
         ToolArgs.int(i, "share")?.let { webs.share(webId, newId, it) }
         if (ToolArgs.bool(i, "mine") == true) webs.star(webId, newId, true)
         h.decksReload++
@@ -910,11 +922,19 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     // ---- memory and skills ------------------------------------------------------------
 
+    /**
+     * The deck a guide, report or book write is about (1.0.98, the red team): a Fine Tuning run's own deck to its end,
+     * whatever the builder shows meanwhile; else the builder's.
+     */
+    private val pinned: AiSession? get() = ai.session?.takeIf { it.mode in AiSession.DECK_MODES && it.deckId != null }
+    private val aboutId: String? get() = pinned?.deckId ?: state.deckId
+    private val aboutName: String get() = pinned?.deckName ?: state.deckName
+
     private fun memoryTarget(scope: String, id: String? = null): Triple<MemoryKind, String?, String>? = when (scope) {
         "user" -> Triple(MemoryKind.USER, null, ai.name)
         "agent" -> Triple(MemoryKind.AGENT, null, ai.name)
         // How the open deck plays (1.0.48): its own file, in a web or not.
-        "guide" -> (id ?: state.deckId)?.let { Triple(MemoryKind.GUIDE, it, if (it == state.deckId) state.deckName else "this deck") }
+        "guide" -> (id ?: aboutId)?.let { Triple(MemoryKind.GUIDE, it, if (it == aboutId) aboutName else "this deck") }
         "web" -> (id?.let { webs.library.byId(it) } ?: scope()?.takeIf { it.kind == MemoryKind.WEB }?.let { webs.library.byId(it.id) })
             ?.let { Triple(MemoryKind.WEB, it.id, it.name) }
         "deck" -> {
@@ -1066,12 +1086,13 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     }
 
     /** The reader's guide (1.0.67): a book about the open deck, written a chapter at a time and checked as it goes. */
-    private fun readerGuide(i: JsonObject): Answer {
-        val deckId = state.deckId ?: return fail("Save the deck first: the guide belongs to a saved deck.")
+    private suspend fun readerGuide(i: JsonObject): Answer {
+        val deckId = aboutId ?: return fail("Save the deck first: the guide belongs to a saved deck.")
         val path = GuideBook.path(deckId)
         val book = GuideBook.read(ai.files.read(path))
-            ?: GuideBook(state.deckName)
-        val main = state.deck.main.mapNotNull { state.index.byId(it)?.name }
+            ?: GuideBook(aboutName)
+        val deck = if (deckId == state.deckId) state.deck else stored(deckId)?.entry?.deck ?: return fail("The deck this guide is about is gone.")
+        val main = deck.main.mapNotNull { state.index.byId(it)?.name }
         val ctx = BookWriter.Context({ state.index.byName(it)?.name }, main, System.currentTimeMillis())
         val w = BookWriter
         val result = when (ToolArgs.string(i, "action")) {
@@ -1103,12 +1124,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     }
 
     private fun sessionReport(i: JsonObject): Answer {
-        val deckId = state.deckId ?: return fail("There is no saved deck open to report on.")
+        val deckId = aboutId ?: return fail("There is no saved deck open to report on.")
         val s = ai.session ?: return fail("There is no session to report on.")
         fun num(key: String) = (ToolArgs.element(i, key) as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
         val report = SessionReport(
             deckId = deckId,
-            deckName = state.deckName,
+            deckName = aboutName,
             at = System.currentTimeMillis(),
             mode = s.mode.takeIf { it in AiSession.DECK_MODES } ?: AiSession.MODE_TUNE,
             intensity = neue.prefs.ai.tuneIntensity,

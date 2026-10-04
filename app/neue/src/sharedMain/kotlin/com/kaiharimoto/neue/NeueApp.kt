@@ -92,6 +92,7 @@ import com.kaiharimoto.neue.ai.TuneLauncher
 import com.kaiharimoto.neue.ai.VoiceDialog
 import com.kaiharimoto.neue.ai.avatar.AiBadge
 import com.kaiharimoto.neue.ai.avatar.AiFaceClock
+import com.kaiharimoto.neue.ai.carryLearning
 import com.kaiharimoto.neue.ai.foldIntoWeb
 import com.kaiharimoto.neue.ai.forgetEverything
 import com.kaiharimoto.neue.ai.reader.BookReader
@@ -514,6 +515,7 @@ fun NeueEffects(h: NeueHolders) {
             h.art.start()
             // Ai's notes follow a deck into a web, and go with a web that is deleted (1.0.43).
             h.webs.onJoined = { from, name, web -> if (neue.prefs.ai.enabled) h.ai.foldIntoWeb(from, name, web) }
+            h.webs.onCopied = { from, to -> if (neue.prefs.ai.enabled) h.ai.carryLearning(from, to) }
             h.webs.onDeleted = { web -> h.ai.files.delete(AiMemory.path(MemoryKind.WEB, web)) }
             onDispose {
                 h.art.stop()
@@ -751,7 +753,7 @@ private fun Shell(h: NeueHolders) {
                     LaunchedEffect(state.deckId) { if (h.webs.sidingDeckId != null && h.webs.sidingDeckId != state.deckId) h.webs.sidingDeckId = null }
                     Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
                         when (page) {
-                            Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds)
+                            Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds, onDuplicated = { from, to -> if (neue.prefs.ai.enabled) h.ai.carryLearning(from, to) })
                             Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
                             Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
                             Page.FORMAT -> FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)

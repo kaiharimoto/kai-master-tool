@@ -116,6 +116,7 @@ fun AiState.rename(to: String) {
 /** Ai off: every trace gone, nothing running, nothing listening. */
 fun AiState.shutDown() {
     stop()
+    cancelBackground()
     mcp?.stop()
     mcp = null
     (backend?.second as? AnthropicBackend)?.close()

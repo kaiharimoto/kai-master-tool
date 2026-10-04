@@ -72,7 +72,8 @@ class AnthropicBackend(
         .apiKey(apiKey)
         .apply { if (!baseUrl.isNullOrBlank()) baseUrl(baseUrl) }
         .timeout(Duration.ofMinutes(15))
-        .maxRetries(2)
+        // One retry layer, the loop's (1.0.98, the red team): the SDK's two under the loop's two made nine requests a round.
+        .maxRetries(0)
         .build()
 
     /** Only for reading JSON text into a tree; the SDK's own mapper turns trees into its types ([JsonValue.convert]). */
@@ -175,7 +176,10 @@ class AnthropicBackend(
         } catch (e: AnthropicServiceException) {
             emit(BackendEvent.Failed("Anthropic answered ${e.statusCode()}: ${e.message}", retryable = e.statusCode() >= 500))
         } catch (t: Throwable) {
-            emit(BackendEvent.Failed(Unreachable.say("https://api.anthropic.com", t.message ?: t::class.simpleName), retryable = true))
+            emit(
+                if (Unreachable.isNetwork(t)) BackendEvent.Failed(Unreachable.say("https://api.anthropic.com", t.message ?: t::class.simpleName, t::class.simpleName), retryable = true)
+                else BackendEvent.Failed(Unreachable.unreadable("Anthropic", t)),
+            )
         }
     }.flowOn(Dispatchers.IO)
 

@@ -26,7 +26,17 @@ object Compaction {
 
     /** Roughly how many tokens a request is: its instructions, its [tools]' specs (1.0.56) and its turns. */
     fun estimate(system: String, turns: List<ChatTurn>, tools: List<ToolSpec> = emptyList()): Int =
-        (system.length + toolChars(tools) + turns.sumOf { t -> t.parts.sumOf { size(it) } }) / CHARS_PER_TOKEN
+        (system.length + toolChars(tools) + turns.sumOf(::turnSize)) / CHARS_PER_TOKEN
+
+    /**
+     * A turn's characters on the wire. An Anthropic turn keeps its blocks twice — as text and tool uses for the app, and
+     * whole in a [Part.Opaque] that is what is sent — so where there is an opaque copy only it counts (1.0.98, the red team).
+     */
+    internal fun turnSize(t: ChatTurn): Int {
+        val opaque = t.parts.filterIsInstance<Part.Opaque>()
+        if (opaque.isEmpty()) return t.parts.sumOf { size(it) }
+        return opaque.sumOf { it.json.length } + t.parts.filter { it is Part.Context || it is Part.ToolResult || it is Part.Image }.sumOf { size(it) }
+    }
 
     /** The characters tool specs take on the wire: names, descriptions and schemas. */
     fun toolChars(tools: List<ToolSpec>): Int = tools.sumOf { it.name.length + it.description.length + it.schema.toString().length + 24 }
@@ -79,10 +89,40 @@ object Compaction {
     }
 
     /** The turns a summary is written from, as plain lines: who said what, what was done. */
-    fun transcript(turns: List<ChatTurn>, maxChars: Int = 60_000): String {
-        val lines = turns.mapNotNull { t ->
+    fun transcript(turns: List<ChatTurn>, maxChars: Int = TRANSCRIPT_MAX): String = cut(lines(turns).joinToString("\n"), maxChars)
+
+    /**
+     * The turns in pieces whose transcripts each fit [maxChars] (1.0.98, the red team): a long conversation is summarised
+     * a piece at a time, the summary carried from one to the next, instead of its middle silently cut away. A turn
+     * longer than a piece is a piece of its own, cut.
+     */
+    fun chunks(turns: List<ChatTurn>, maxChars: Int = TRANSCRIPT_MAX): List<List<ChatTurn>> {
+        val out = mutableListOf<List<ChatTurn>>()
+        var piece = mutableListOf<ChatTurn>()
+        var size = 0
+        turns.forEach { t ->
+            val n = lines(listOf(t)).sumOf { it.length + 1 }
+            if (piece.isNotEmpty() && size + n > maxChars) {
+                out += piece
+                piece = mutableListOf()
+                size = 0
+            }
+            piece += t
+            size += n
+        }
+        if (piece.isNotEmpty()) out += piece
+        return out
+    }
+
+    const val TRANSCRIPT_MAX = 60_000
+
+    /** A tool's result in a transcript: enough of it to keep its ids and numbers (it was 300 characters before 1.0.98). */
+    const val TRANSCRIPT_RESULT = 1_200
+
+    private fun lines(turns: List<ChatTurn>): List<String> =
+        turns.mapNotNull { t ->
             when {
-                t.isToolResults -> t.toolResults.joinToString("\n") { r -> "  (${r.name}: ${cut(r.summary.ifBlank { r.content }, 300)})" }
+                t.isToolResults -> t.toolResults.joinToString("\n") { r -> "  (${r.name}: ${cut(r.content.ifBlank { r.summary }, TRANSCRIPT_RESULT)})" }
                 t.role == Role.USER -> "Person: " + t.text
                 else -> buildString {
                     append("Assistant: ").append(t.text)
@@ -90,8 +130,6 @@ object Compaction {
                 }
             }.takeIf { it.isNotBlank() }
         }
-        return cut(lines.joinToString("\n"), maxChars)
-    }
 
     /** What the model is asked when the oldest turns are summarised. */
     const val SUMMARY_ASK =

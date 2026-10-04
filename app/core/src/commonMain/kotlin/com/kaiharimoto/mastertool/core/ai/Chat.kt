@@ -212,6 +212,12 @@ data class AiSession(
     val carriedFrom: String? = null,
     /** Answers checked against the card text (1.0.58, the fact-check pass): a field, so older builds read past it. */
     val checks: List<FactCheck.Check> = emptyList(),
+    /**
+     * The deck a Fine Tuning conversation is about (1.0.98, the red team): its guide, report and book are that deck's
+     * whatever the builder shows meanwhile. Null for a conversation about whatever is open.
+     */
+    val deckId: String? = null,
+    val deckName: String? = null,
 ) {
     /**
      * What the model is sent: the summary in front of the turns after it, or every turn; the

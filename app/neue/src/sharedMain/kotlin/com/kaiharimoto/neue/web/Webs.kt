@@ -153,6 +153,9 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
     /** Hears a library deck copied into a web — (from deck, its name, web) — so Ai's notes on it follow (1.0.43). */
     var onJoined: (String, String, String) -> Unit = { _, _, _ -> }
 
+    /** Hears a deck copied — (from, to) — so what Ai learned about it goes with it (1.0.98). */
+    var onCopied: (String, String) -> Unit = { _, _ -> }
+
     /** Hears a web deleted, so Ai's notes on it go too (1.0.43). */
     var onDeleted: (String) -> Unit = {}
 
@@ -160,6 +163,7 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
     fun addFromLibrary(webId: String, stored: StoredDeck, then: (String) -> Unit = {}) =
         add(webId, stored.entry.name, stored.toDocument()) { id ->
             onJoined(stored.entry.id, stored.entry.name, webId)
+            onCopied(stored.entry.id, id)
             then(id)
         }
 
@@ -168,6 +172,7 @@ class Webs(private val deps: AppDependencies, private val scope: CoroutineScope)
         scope.launch {
             val id = deps.newDeckId()
             deps.deckRepository.save(id, stored.entry.name, stored.entry.deck, stored.extended, stored.entry.notes)
+            onCopied(stored.entry.id, id)
             then(id)
         }
     }

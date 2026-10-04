@@ -22,6 +22,35 @@ object MemoryReview {
             MemoryChange(path, now.filter { it !in was }, was.filter { it !in now })
         }.filterNot { it.isEmpty }
 
+    /**
+     * [text] with [change] taken back, entry by entry (1.0.98, the red team): the entries it added removed, the ones it
+     * removed put back — and nothing else touched, so what anyone else wrote meanwhile stays. Null when the file ends up
+     * holding nothing at all. Memory files only; a skill is put back whole.
+     */
+    fun revert(text: String?, change: MemoryChange): String? = apply(text, MemoryChange(change.path, change.removed, change.added))
+
+    /** [text] with [change] made: its removed entries gone, its added ones added after the rest. Null when nothing is left. */
+    fun apply(text: String?, change: MemoryChange): String? {
+        val doc = text?.let { AiMemory.parse(it) } ?: MemoryDoc(emptyList(), emptyList())
+        val kept = doc.entries.filter { it !in change.removed }
+        val added = change.added.filter { it !in kept }
+        val next = doc.copy(entries = kept + added)
+        return if (next.preamble.all { it.isBlank() } && next.entries.isEmpty()) null else next.render()
+    }
+
+    /**
+     * A memory file edited by hand while Ai wrote to it (1.0.98, the red team: the brain editor overwrote Ai's writes):
+     * the person's own change — [mine] against what they opened, [base] — made on what is on disk now, [theirs]. Both
+     * sides' entries stay; the person's preamble wins.
+     */
+    fun merge(base: String?, theirs: String?, mine: String): String {
+        if (theirs == base) return mine
+        val change = diff(mapOf("f" to base), mapOf("f" to mine)).firstOrNull() ?: return theirs ?: mine
+        val merged = apply(theirs, change) ?: return mine
+        val preamble = AiMemory.parse(mine).preamble
+        return AiMemory.parse(merged).copy(preamble = preamble).render()
+    }
+
     /** How many entries changed, in all. */
     fun count(changes: List<MemoryChange>): Int = changes.sumOf { it.added.size + it.removed.size }
 

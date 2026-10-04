@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai.mcp
 
+import com.kaiharimoto.mastertool.core.ai.Compaction
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import kotlinx.serialization.json.Json
@@ -91,7 +92,8 @@ class McpServerCore(
                     putJsonArray("content") {
                         add(buildJsonObject {
                             put("type", "text")
-                            put("text", answer.content)
+                            // Capped as on every other wire (1.0.98, the red team): one result never floods a CLI's context.
+                            put("text", Compaction.cut(answer.content, Compaction.RESULT_CAP))
                         })
                     }
                     put("isError", answer.isError)

@@ -67,11 +67,13 @@ fun MemoryDialog(ai: AiState) {
     val stamp = remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val groups = remember(stamp.intValue) { brainGroups(ai) }
     androidx.compose.runtime.LaunchedEffect(Unit) { ai.deckNames = ai.h.webs.libraryDecks().associate { it.entry.id to it.entry.name } }
-    var text by remember(path, stamp.intValue) { mutableStateOf(ai.files.read(path) ?: if (path == Persona.FILE) ai.files.soul(ai.name) else "") }
+    // What was on disk when the file was opened: a save is the person's change to it, never a copy over what Ai wrote since.
+    val loaded = remember(path, stamp.intValue) { ai.files.read(path) }
+    var text by remember(path, stamp.intValue) { mutableStateOf(loaded ?: if (path == Persona.FILE) ai.files.soul(ai.name) else "") }
     var saved by remember(path, stamp.intValue) { mutableStateOf(true) }
     var editing by remember(path) { mutableStateOf(false) }
     fun save() {
-        ai.files.write(path, text)
+        ai.saveByHand(path, loaded, text)
         saved = true
         stamp.intValue++
     }

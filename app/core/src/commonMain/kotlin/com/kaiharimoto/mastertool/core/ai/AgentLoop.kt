@@ -92,8 +92,17 @@ sealed interface AgentEvent {
     /** A turn is final and belongs in the history (Ai's, or the tool results answering it). */
     data class Appended(val turn: ChatTurn) : AgentEvent
 
+    /** The round is asked again after a stumble (1.0.98): what it thought on the failed try is dropped, not doubled. */
+    data object Retrying : AgentEvent
+
     /** A tool is being run. */
     data class ToolRunning(val call: Part.ToolUse) : AgentEvent
+
+    /**
+     * A tool has run, and this is what it said (1.0.98): told as each lands, so a Stop between two calls of one round
+     * keeps the real results of those that ran — never "not run" for a call whose effects happened.
+     */
+    data class ToolDone(val result: Part.ToolResult) : AgentEvent
 
     /** A tool the CLI ran or called: its line in the chat. */
     data class ToolSeen(val name: String, val summary: String) : AgentEvent
@@ -178,6 +187,7 @@ class AgentLoop(
                 }
                 // A busy or broken moment on the provider's side: try again, but never after words went out.
                 if (f.retryable && !said && attempt < retryDelays.size) {
+                    emit(AgentEvent.Retrying)
                     emit(AgentEvent.Status("The provider stumbled; trying again…"))
                     delay(retryDelays[attempt])
                     attempt++
@@ -205,6 +215,10 @@ class AgentLoop(
             // Paused mid-way through the provider's own tools: sent back as it is, it carries on (1.0.47).
             if (done.stop == StopReason.PAUSED && !backend.runsOwnLoop) continue
             val calls = turn?.toolUses.orEmpty()
+            // Cut off at the model's length limit (1.0.98, the red team): said, so a cut answer never passes for a whole one.
+            if (done.stop == StopReason.MAX_TOKENS && !backend.runsOwnLoop) {
+                emit(AgentEvent.Notice(if (calls.isEmpty()) CUT_ANSWER else CUT_CALLS))
+            }
             if (backend.runsOwnLoop || done.stop != StopReason.TOOL_USE || calls.isEmpty()) {
                 emit(AgentEvent.Done(done.stop, usage))
                 return@flow
@@ -220,7 +234,7 @@ class AgentLoop(
                     throw c
                 } catch (t: Throwable) {
                     Part.ToolResult(call.id, call.name, "The app failed running ${call.name}: ${t.message ?: t::class.simpleName}", isError = true)
-                }
+                }.also { emit(AgentEvent.ToolDone(it)) }
             }
             // Every result in one turn: splitting them teaches a model to stop calling tools together.
             val answer = ChatTurn(Role.USER, results, now())
@@ -233,5 +247,19 @@ class AgentLoop(
 
     companion object {
         const val MAX_STEPS = 24
+        const val CUT_ANSWER = "The answer was cut off at the model's length limit: it is not complete. Say “go on” for the rest."
+        const val CUT_CALLS = "The answer was cut off at the model's length limit while asking for tools: they were not run. Say “go on” to try again."
+
+        /** What a tool call that never got its result is told (1.0.98): why, and whether its effects may have happened. */
+        fun unanswered(call: Part.ToolUse, ran: Part.ToolResult?, running: Boolean, stopped: Boolean): Part.ToolResult = when {
+            ran != null -> ran
+            running -> Part.ToolResult(
+                call.id, call.name,
+                "Interrupted while it ran${if (stopped) ", by the person's Stop" else ""}: some of its effect may have happened. Check the app's state before doing it again.",
+                isError = true,
+            )
+            stopped -> Part.ToolResult(call.id, call.name, "Stopped by the person before it ran.", isError = true)
+            else -> Part.ToolResult(call.id, call.name, "Not run: the answer ended before it ran.", isError = true)
+        }
     }
 }

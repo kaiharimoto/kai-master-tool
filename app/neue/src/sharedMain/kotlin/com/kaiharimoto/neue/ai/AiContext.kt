@@ -8,6 +8,7 @@ import com.kaiharimoto.mastertool.core.ai.ContextBreakdown
 import com.kaiharimoto.mastertool.core.ai.ContextWindows
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.providers.ConnectKind
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
@@ -56,13 +57,17 @@ internal suspend fun AiState.summarizedIfLong(
     force: Boolean = false,
     focus: String? = null,
 ): AiSession {
-    val used = Compaction.estimate(s.system, s.sent, tools)
+    // What the provider measured last round, plus the newest turns since, where there is a measure (1.0.98, the red team):
+    // the estimate alone counted too much and summarised — lossily — far too early.
+    val used = if (s.context > 0) s.context.toInt() + Compaction.estimate("", s.sent.takeLast(2)) else Compaction.estimate(s.system, s.sent, tools)
     if (!force && used <= budget * Compaction.SUMMARIZE_AT) return s
     val keep = if (force) minOf((budget * 0.3).toInt(), used / 4) else (budget * 0.3).toInt()
     val cut = Compaction.cutAt(s.turns, keep, from = s.summarized) ?: return s
     if (cut <= s.summarized) return s
     val summary = summarise(s, model, connection, cut, focus) ?: return s
-    val next = s.copy(summary = summary, summarized = cut, context = 0)
+    // What stood in the summarised turns' context and must not leave with them (1.0.98, the red team): the deck's guide
+    // and the scope's notes, read afresh, so a long run never writes them again from nothing.
+    val next = s.copy(summary = summary + standingContext(s), summarized = cut, context = 0)
     commit(next)
     notice = null
     return next
@@ -71,23 +76,53 @@ internal suspend fun AiState.summarizedIfLong(
 /** The conversation's turns before [cut], with what was summarised before, in the model's own summary. */
 private suspend fun AiState.summarise(s: AiSession, model: ModelBackend, connection: AiConnection, cut: Int, focus: String?): String? {
     status = "Summarising the start of this conversation to fit"
-    val earlier = buildString {
-        if (s.summary.isNotBlank()) appendLine("Summary so far: ${s.summary}\n")
-        append(Compaction.transcript(s.turns.subList(s.summarized.coerceAtMost(cut), cut)))
-    }
     val keep = focus?.trim()?.takeIf { it.isNotEmpty() }?.let { "\n\nThe person asked that the summary keep: $it" }.orEmpty()
-    val ask = ChatTurn.user(Compaction.SUMMARY_ASK + keep + "\n\n" + earlier)
-    var summary = ""
-    runCatching {
-        model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).collect { e ->
-            if (e is BackendEvent.Finished) {
-                summary = e.turn?.text?.ifBlank { null } ?: e.text
-                e.usage?.let { u -> session?.let { commit(it.copy(usage = it.usage + u)) } }
+    // A piece at a time, the summary carried along (1.0.98): never a transcript with its middle cut away.
+    val pieces = Compaction.chunks(s.turns.subList(s.summarized.coerceAtMost(cut), cut))
+    var carried = s.summary.trim()
+    for ((i, piece) in pieces.withIndex()) {
+        if (pieces.size > 1) status = "Summarising the start of this conversation to fit (${i + 1} of ${pieces.size})"
+        val earlier = buildString {
+            if (carried.isNotBlank()) appendLine("Summary so far: $carried\n")
+            append(Compaction.transcript(piece))
+        }
+        val ask = ChatTurn.user(Compaction.SUMMARY_ASK + keep + "\n\n" + earlier)
+        var summary = ""
+        runCatching {
+            model.turn(TurnRequest(s.system, listOf(ask), emptyList(), connection.model, "low")).collect { e ->
+                if (e is BackendEvent.Finished) {
+                    summary = e.turn?.text?.ifBlank { null } ?: e.text
+                    e.usage?.let { u -> session?.let { commit(it.copy(usage = it.usage + u)) } }
+                }
             }
         }
+        // A piece that could not be summarised ends it: no summary rather than one with a hole in it.
+        if (summary.isBlank()) {
+            status = null
+            return null
+        }
+        carried = summary.trim()
     }
     status = null
-    return summary.trim().takeIf { it.isNotEmpty() }
+    return carried.takeIf { it.isNotEmpty() }
+}
+
+/**
+ * The guide and the scope's notes as they stand (1.0.98): put after a summary, because the turns that carried them
+ * are summarised away and the conversation's `guideShown`/`scopeShown` say they were already given.
+ */
+private fun AiState.standingContext(s: AiSession): String {
+    val deckId = s.deckId?.takeIf { s.mode in AiSession.DECK_MODES } ?: s.guideShown
+    val deckName = s.deckName ?: h.builder.deckName.takeIf { deckId == h.builder.deckId } ?: "the deck"
+    val guide = deckId?.let { files.entries(MemoryKind.GUIDE, it) }?.takeIf { it.isNotBlank() }
+    val scope = host.scope()
+    val notes = scope?.let { host.notes(it) }?.takeIf { it.isNotBlank() }
+    if (guide == null && notes == null) return ""
+    return buildString {
+        append("\n\n(Still in force after the summary.)")
+        guide?.let { append("\n\nYour guide to how “$deckName” plays (memory scope guide):\n").append(it) }
+        notes?.let { append("\n\nNotes for ${scope.name}:\n").append(it) }
+    }
 }
 
 /**

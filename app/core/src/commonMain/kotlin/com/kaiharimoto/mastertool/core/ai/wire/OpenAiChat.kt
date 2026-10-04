@@ -342,7 +342,10 @@ class OpenAiChatBackend(
         } catch (c: kotlinx.coroutines.CancellationException) {
             throw c
         } catch (t: Throwable) {
-            emit(BackendEvent.Failed(Unreachable.say(endpoint.baseUrl, t.message ?: t::class.simpleName), retryable = true))
+            emit(
+                if (Unreachable.isNetwork(t)) BackendEvent.Failed(Unreachable.say(endpoint.baseUrl, t.message ?: t::class.simpleName, t::class.simpleName), retryable = true)
+                else BackendEvent.Failed(Unreachable.unreadable(Unreachable.host(endpoint.baseUrl), t)),
+            )
         }
     }
 

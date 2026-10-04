@@ -134,7 +134,7 @@ class AgentLoopTest {
         assertIs<AgentEvent.Done>(events.last())
 
         val spoke = Scripted(listOf(listOf(BackendEvent.TextDelta("Half"), BackendEvent.Failed("dropped", retryable = true))))
-        val out = AgentLoop(spoke, { c -> Part.ToolResult(c.id, c.name, "") }, retryDelays = listOf(1)).run(request).toList()
+        val out = AgentLoop(spoke, { c -> Part.ToolResult(c.id, c.name, "") }, retryDelays = listOf(1L)).run(request).toList()
         assertEquals(1, spoke.sent.size, "words already shown: not said twice")
         assertIs<AgentEvent.Failed>(out.last())
     }
@@ -171,6 +171,46 @@ class AgentLoopTest {
         assertTrue(events.any { it is AgentEvent.Notice })
         assertIs<AgentEvent.Done>(events.last())
     }
+
+    @Test
+    fun eachResultIsToldAsItLandsSoAStopKeepsWhatRan() = runTest {
+        val backend = Scripted(
+            listOf(
+                listOf(BackendEvent.Finished(StopReason.TOOL_USE, ChatTurn(Role.ASSISTANT, listOf(call("a", "save_deck"), call("b", "card_info"))))),
+                listOf(BackendEvent.Finished(StopReason.END, ChatTurn.assistant("Done."))),
+            ),
+        )
+        val events = AgentLoop(backend, { c -> Part.ToolResult(c.id, c.name, "ok ${c.id}") }).run(request).toList()
+        val done = events.filterIsInstance<AgentEvent.ToolDone>().map { it.result.id }
+        assertEquals(listOf("a", "b"), done)
+        // What finish() writes for each call: the real result, the one interrupted, the one never run.
+        val a = call("a", "save_deck")
+        val b = call("b", "card_info")
+        val c = call("c", "add_card")
+        assertEquals("ok a", AgentLoop.unanswered(a, Part.ToolResult("a", "save_deck", "ok a"), running = false, stopped = true).content)
+        assertTrue("Interrupted" in AgentLoop.unanswered(b, null, running = true, stopped = true).content)
+        assertTrue("before it ran" in AgentLoop.unanswered(c, null, running = false, stopped = true).content)
+        assertTrue("ended before it ran" in AgentLoop.unanswered(c, null, running = false, stopped = false).content)
+    }
+
+    @Test
+    fun anAnswerCutAtTheLengthLimitSaysSo() = runTest {
+        val backend = Scripted(listOf(listOf(BackendEvent.Finished(StopReason.MAX_TOKENS, ChatTurn.assistant("The best line is")))))
+        val events = AgentLoop(backend, { c -> Part.ToolResult(c.id, c.name, "ok") }).run(request).toList()
+        assertTrue(events.filterIsInstance<AgentEvent.Notice>().any { it.text == AgentLoop.CUT_ANSWER })
+    }
+
+    @Test
+    fun aRetryClearsWhatTheFailedTryThought() = runTest {
+        val backend = Scripted(
+            listOf(
+                listOf(BackendEvent.ReasoningDelta("thinking…"), BackendEvent.Failed("busy", retryable = true)),
+                listOf(BackendEvent.Finished(StopReason.END, ChatTurn.assistant("Hello."))),
+            ),
+        )
+        val events = AgentLoop(backend, { c -> Part.ToolResult(c.id, c.name, "ok") }, retryDelays = listOf(1L)).run(request).toList()
+        assertTrue(AgentEvent.Retrying in events)
+    }
 }
 
 class CompactionTest {
@@ -195,4 +235,5 @@ class CompactionTest {
         assertEquals(turns[1], pruned[1], "an assistant's own turn is never touched")
         assertTrue(Compaction.overflowed("This model's maximum context length is 128000 tokens"))
     }
+
 }

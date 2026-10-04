@@ -101,7 +101,14 @@ import com.kaiharimoto.neue.theme.MuType
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, reload: Int, hidden: Set<String> = emptySet()) {
+fun DecksPage(
+    deps: AppDependencies,
+    state: DeckBuilderState,
+    neue: NeueState,
+    reload: Int,
+    hidden: Set<String> = emptySet(),
+    onDuplicated: (String, String) -> Unit = { _, _ -> },
+) {
     val c = Mu.colors
     val scope = rememberCoroutineScope()
     var decks by remember { mutableStateOf<List<StoredDeck>?>(null) }
@@ -132,6 +139,7 @@ fun DecksPage(deps: AppDependencies, state: DeckBuilderState, neue: NeueState, r
         scope.launch {
             val id = deps.newDeckId()
             deps.deckRepository.save(id, "${stored.entry.name} copy", stored.entry.deck, stored.extended, stored.entry.notes)
+            onDuplicated(stored.entry.id, id)
             neue.prefs.covers[stored.entry.id]?.let { own -> neue.update { it.copy(covers = it.covers + (id to own)) } }
             neue.note = com.kaiharimoto.neue.Note("Duplicated “${stored.entry.name}”")
             bump++

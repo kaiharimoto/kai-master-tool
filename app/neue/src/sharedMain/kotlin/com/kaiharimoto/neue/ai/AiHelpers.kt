@@ -42,7 +42,8 @@ internal fun AiState.checkLastAnswer() {
     val model = runCatching { backendFor(connection) }.getOrNull() ?: return
     if (model.runsOwnLoop) return
     checking = true
-    scope.launch {
+    backgroundJobs.removeAll { it.isCompleted }
+    backgroundJobs += scope.launch {
         try {
             val index = h.builder.index
             val cards = ChatMarkdown.cards(reply).mapNotNull { name ->
