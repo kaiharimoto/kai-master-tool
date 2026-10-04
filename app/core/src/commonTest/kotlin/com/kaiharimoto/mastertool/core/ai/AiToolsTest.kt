@@ -212,4 +212,13 @@ class AiToolsTest {
         assertTrue(Providers.keyProblem(Providers.anthropic, "sk-proj-abc")!!.contains("sk-ant-"))
         assertNull(Providers.keyProblem(Providers.anthropic, "sk-ant-abc"))
     }
+
+    @Test
+    fun aiNeverLoosensItsOwnSafeguards() {
+        val prefs = NeuePreferences()
+        AiSettings.GUARDS.forEach { key ->
+            assertTrue(key in AiSettings.described, key)
+            assertTrue(AiSettings.set(prefs, key, JsonPrimitive(!key.endsWith("factCheck"))).isFailure, key)
+        }
+    }
 }

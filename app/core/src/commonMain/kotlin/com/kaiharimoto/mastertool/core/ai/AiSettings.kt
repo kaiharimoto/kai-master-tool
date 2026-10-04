@@ -96,6 +96,12 @@ object AiSettings {
         "world",
     )
 
+    /**
+     * Safeguards on Ai itself (1.0.97, the red team): Ai reads them but never sets them, or a page it read could talk
+     * it into deleting without asking, or into no longer being checked. The person sets them in Settings.
+     */
+    val GUARDS = setOf("ai.alwaysAllow", "ai.factCheck")
+
     /** The settings as Ai reads them: each key's value, then what it does. */
     fun describe(prefs: NeuePreferences, format: String, searchEffects: Boolean): JsonObject {
         val flat = flatten(prefs)
@@ -134,6 +140,7 @@ object AiSettings {
         require(key in described && key != FORMAT && key != SEARCH_EFFECTS) {
             if (key in INTERNAL) "$key is not a setting Ai changes." else "There is no setting $key. get_settings lists them."
         }
+        require(key !in GUARDS) { "$key is a safeguard on Ai itself: only the person changes it, in Settings." }
         val root = json.encodeToJsonElement(NeuePreferences.serializer(), prefs).jsonObject.toMutableMap()
         val coerced = coerce(root, key, value)
         if (key.startsWith("ai.")) {

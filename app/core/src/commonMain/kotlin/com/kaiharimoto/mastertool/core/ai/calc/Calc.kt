@@ -88,6 +88,7 @@ object Calc {
     /** n choose k by the multiplicative formula, exact in doubles for deck-sized n. */
     fun choose(n: Double, k: Double): Double {
         if (k < 0 || k > n) return 0.0
+        tooLarge(n)
         val kk = minOf(k, n - k).toInt()
         var r = 1.0
         for (i in 1..kk) r = r * (n - kk + i) / i
@@ -102,6 +103,7 @@ object Calc {
     }
 
     fun atLeast(total: Double, successes: Double, n: Double, k: Double): Double {
+        tooLarge(total); tooLarge(n)
         var p = 0.0
         var i = maxOf(k, 0.0)
         while (i <= minOf(n, successes)) {
@@ -112,6 +114,7 @@ object Calc {
     }
 
     fun atMost(total: Double, successes: Double, n: Double, k: Double): Double {
+        tooLarge(total); tooLarge(n)
         var p = 0.0
         var i = 0.0
         while (i <= minOf(k, n)) {
@@ -124,6 +127,13 @@ object Calc {
     // --- The parser --------------------------------------------------------------
 
     private class CalcError(message: String) : IllegalArgumentException(message)
+
+    /** The loops above count one by one: past [LARGEST] they would run for ever (1.0.97, the red team). */
+    const val LARGEST = 10_000_000.0
+
+    private fun tooLarge(n: Double) {
+        if (!n.isFinite() || n > LARGEST) throw CalcError("${n.toLong()} is too large to count: at most ${LARGEST.toLong()}")
+    }
 
     private class Parser(val src: String) {
         var pos = 0

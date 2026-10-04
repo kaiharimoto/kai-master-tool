@@ -252,4 +252,16 @@ class WireTest {
 
     @Suppress("unused")
     private fun p(s: String) = JsonPrimitive(s)
+
+    @Test
+    fun aTurnThatWasAllThoughtIsNotSentAsNullContent() {
+        val history = listOf(
+            ChatTurn(Role.USER, listOf(Part.Text("Hi"))),
+            ChatTurn(Role.ASSISTANT, listOf(Part.Reasoning("thinking, cut off"))),
+            ChatTurn(Role.USER, listOf(Part.Text("Still there?"))),
+        )
+        val messages = OpenAiWire.messages("", history)
+        assertEquals(2, messages.size, messages.toString())
+        assertTrue("null" !in messages.toString(), messages.toString())
+    }
 }

@@ -624,6 +624,7 @@ class AiState(internal val h: NeueHolders) {
     /** A new conversation, with the memory as it stands now. */
     fun newChat(mode: String = AiSession.MODE_CHAT) {
         stop()
+        settleTuning()
         todos = emptyList()
         session?.let(::reflect)
         problem = null
@@ -727,6 +728,7 @@ class AiState(internal val h: NeueHolders) {
 
     fun open(id: String) {
         if (running) return
+        if (session?.id != id) settleTuning()
         session?.takeIf { it.id != id }?.let(::reflect)
         stored(id)?.let {
             session = it

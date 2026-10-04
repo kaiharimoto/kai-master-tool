@@ -65,10 +65,10 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             }
         })
         "deck" -> host.deck(args.str("id"))?.let(::deckJson) ?: JsonNull
-        "comb" -> num(Calc.choose(args.need("n"), args.need("k")))
-        "hypergeo" -> num(Calc.hypergeo(args.need("N"), args.need("K"), args.need("n"), args.need("k")))
-        "atLeast" -> num(Calc.atLeast(args.need("N"), args.need("K"), args.need("n"), args.need("k")))
-        "atMost" -> num(Calc.atMost(args.need("N"), args.need("K"), args.need("n"), args.need("k")))
+        "comb" -> num(Calc.choose(args.size("n", MAX_COMB), args.size("k", MAX_COMB)))
+        "hypergeo" -> num(Calc.hypergeo(args.size("N"), args.size("K"), args.size("n"), args.size("k")))
+        "atLeast" -> num(Calc.atLeast(args.size("N"), args.size("K"), args.size("n"), args.size("k")))
+        "atMost" -> num(Calc.atMost(args.size("N"), args.size("K"), args.size("n"), args.size("k")))
         "handOdds" -> num(handOdds(args))
         "stats" -> stats(args)
         "show" -> show(args)
@@ -124,14 +124,23 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
 
     private fun handOdds(a: JsonObject): Double {
         val groups = (a["groups"] as? JsonObject ?: throw IllegalArgumentException("handOdds needs groups: {name: copies}"))
-            .mapValues { (k, v) -> (v as? JsonPrimitive)?.doubleOrNull?.toInt() ?: throw IllegalArgumentException("groups.$k is a count") }
+            .mapValues { (k, v) -> (v as? JsonPrimitive)?.doubleOrNull?.takeIf { it in 0.0..MAX_DECK.toDouble() }?.toInt() ?: throw IllegalArgumentException("groups.$k is a count, 0 to $MAX_DECK") }
+        require(groups.size <= MAX_GROUPS) { "handOdds takes at most $MAX_GROUPS groups" }
         val need = (a["need"] as? JsonArray ?: throw IllegalArgumentException("handOdds needs need: [{group, min, max}]")).map { e ->
             val o = e as? JsonObject ?: throw IllegalArgumentException("each need is {group, min, max}")
             val g = o.str("group") ?: throw IllegalArgumentException("each need names a group")
             HandConstraint(g, o.int("min") ?: 0, o.int("max") ?: 60)
         }
-        val deck = a.int("deck") ?: throw IllegalArgumentException("handOdds needs deck: its size")
-        return HandOdds.probability(groups, deck, a.int("hand") ?: 5, HandQuery(need))
+        val deck = a.size("deck", MAX_DECK).toInt()
+        val hand = if (a["hand"] == null) 5 else a.size("hand", MAX_HAND).toInt()
+        // HandOdds walks every count of every constrained group: bound the walk before it starts.
+        val walk = need.groupBy { it.groupKey }.entries.fold(1.0) { acc, (g, cs) ->
+            val low = cs.maxOf { it.min }.coerceAtLeast(0)
+            val high = minOf(cs.minOf { it.max }, groups[g] ?: 0, hand)
+            acc * (high - low + 1).coerceAtLeast(1)
+        }
+        require(walk <= MAX_WALK) { "handOdds would weigh ${walk.toLong()} hands' shapes: ask about fewer groups, or narrower counts" }
+        return HandOdds.probability(groups, deck, hand, HandQuery(need))
     }
 
     private fun stats(a: JsonObject): JsonElement {
@@ -145,17 +154,17 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             "median" -> num(WorldStats.median(xs))
             "quantile" -> num(WorldStats.quantile(xs, a.need("q")))
             "correlation" -> num(WorldStats.correlation(xs, ys))
-            "histogram" -> WorldStats.histogram(xs, a.int("bins") ?: 10).let { (edges, counts) ->
+            "histogram" -> WorldStats.histogram(xs, if (a["bins"] == null) 10 else a.size("bins", MAX_BINS).toInt().coerceAtLeast(1)).let { (edges, counts) ->
                 buildJsonObject {
                     put("edges", JsonArray(edges.map(::num)))
                     put("counts", JsonArray(counts.map { JsonPrimitive(it) }))
                 }
             }
-            "wilson" -> WorldStats.wilson(a.need("k").toInt(), a.need("n").toInt(), a.num("z") ?: 1.96).let { (lo, hi) ->
+            "wilson" -> WorldStats.wilson(a.size("k", MAX_TRIALS).toInt(), a.size("n", MAX_TRIALS).toInt(), a.num("z") ?: 1.96).let { (lo, hi) ->
                 JsonArray(listOf(num(lo), num(hi)))
             }
-            "binomPmf" -> num(WorldStats.binomPmf(a.need("n").toInt(), a.need("k").toInt(), a.need("p")))
-            "binomCdf" -> num(WorldStats.binomCdf(a.need("n").toInt(), a.need("k").toInt(), a.need("p")))
+            "binomPmf" -> num(WorldStats.binomPmf(a.size("n", MAX_BINOM).toInt(), a.size("k", MAX_BINOM).toInt(), a.need("p")))
+            "binomCdf" -> num(WorldStats.binomCdf(a.size("n", MAX_BINOM).toInt(), a.size("k", MAX_BINOM).toInt(), a.need("p")))
             "normalCdf" -> num(WorldStats.normalCdf(a.need("z")))
             "chiSquare" -> WorldStats.chiSquare(xs, ys).let { c ->
                 buildJsonObject {
@@ -199,7 +208,7 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             return SeatSetup(name = d.name, main = d.deck.main.map { it.value }, extra = d.deck.extra.map { it.value }, deckId = d.id, deckName = d.name)
         }
         val seats = listOf(seat(a.str("a"), "seat 0"), if (solo) SeatSetup() else seat(a.str("b"), "seat 1"))
-        val header = DuelHeader(id = "world-${duels.size}", seed = a.num("seed")?.toLong() ?: 1L, seats = seats, solo = solo, handSize = a.int("hand") ?: 5)
+        val header = DuelHeader(id = "world-${duels.size}", seed = a.num("seed")?.toLong() ?: 1L, seats = seats, solo = solo, handSize = if (a["hand"] == null) 5 else a.size("hand", MAX_HAND).toInt())
         duels += DuelGame.start(header)
         return JsonPrimitive(duels.size - 1)
     }
@@ -320,6 +329,16 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
 
     companion object {
         const val MAX_SAMPLE = 1_000_000
+
+        /** A deck's scale, for every count a host loop walks: a deck, its copies, a hand, a draw. */
+        const val MAX_DECK = 10_000
+        const val MAX_COMB = 100_000
+        const val MAX_HAND = 60
+        const val MAX_GROUPS = 16
+        const val MAX_WALK = 2_000_000.0
+        const val MAX_BINS = 1_000
+        const val MAX_BINOM = 1_000_000
+        const val MAX_TRIALS = 1_000_000_000
     }
 }
 
@@ -356,3 +375,13 @@ internal fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive
 internal fun JsonObject.num(key: String): Double? = (this[key] as? JsonPrimitive)?.let { it.doubleOrNull ?: it.contentOrNull?.toDoubleOrNull() }
 internal fun JsonObject.int(key: String): Int? = num(key)?.toInt()
 internal fun JsonObject.need(key: String): Double = num(key) ?: throw IllegalArgumentException("needs $key, a number")
+
+/**
+ * A count a host loop will walk (1.0.97, the red team): a whole number from 0 to [max]. Rhino's budget cannot stop a
+ * loop in Kotlin, so a script's numbers are held to a deck's scale here, at the door, before any loop sees them.
+ */
+internal fun JsonObject.size(key: String, max: Int = WorldApi.MAX_DECK): Double {
+    val v = need(key)
+    if (!v.isFinite() || v < 0 || v > max || v != kotlin.math.floor(v)) throw IllegalArgumentException("$key must be a whole number from 0 to $max (it was $v)")
+    return v
+}

@@ -70,6 +70,7 @@ fun AiState.startTuning(mode: String, intensity: TuneIntensity) {
     wizardOpen = false
     historyOpen = false
     demoOpen = false
+    settleTuning()
     tuneBefore = snapshot()
     lastReport = null
     val deckId = h.builder.deckId
@@ -154,6 +155,7 @@ fun AiState.startProfile(intensity: TuneIntensity) {
     wizardOpen = false
     historyOpen = false
     demoOpen = false
+    settleTuning()
     tuneBefore = snapshot()
     lastReport = null
     session = begin(connection, AiSession.MODE_PROFILE)
@@ -222,6 +224,19 @@ internal fun AiState.completeTuning() {
     offerReview(before)
     val connection = prefs.connection
     session = if (connection != null) begin(connection) else null
+}
+
+/**
+ * A Fine Tuning run left by anything but Finish — a new conversation, Start fresh, another from the history, a switch of
+ * connection, another run begun — still hands what it learned to the review (1.0.97, the red team): nothing is learned
+ * behind the person's back.
+ */
+internal fun AiState.settleTuning() {
+    val before = tuneBefore ?: return
+    wrapping = false
+    guideStart = null
+    tuneBefore = null
+    offerReview(before)
 }
 
 private fun AiState.offerReview(before: Map<String, String?>) {

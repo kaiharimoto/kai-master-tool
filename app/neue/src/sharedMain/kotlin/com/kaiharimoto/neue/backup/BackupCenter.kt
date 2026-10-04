@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.backup
 
+import com.kaiharimoto.mastertool.core.sync.InboundPath
 import com.kaiharimoto.neue.ai.bookChanged
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -283,12 +284,13 @@ class BackupCenter(private val h: NeueHolders) {
     private fun readManifest(bytes: ByteArray): BackupManifest? = runCatching { Backups.json.decodeFromString(BackupManifest.serializer(), bytes.decodeToString()) }.getOrNull()
 
     private suspend fun put(target: File, data: ByteArray) = withContext(Dispatchers.IO) {
+        if (!target.canonicalPath.startsWith(Platform.dataDir.canonicalPath + File.separator)) return@withContext
         target.parentFile?.mkdirs()
         target.writeBytes(data)
     }
 
     /** A name inside its own folder: nothing in a backup may write outside the app's. */
-    private fun safe(name: String) = ".." !in name.split('/') && !name.startsWith("/") && !NeueSyncLocal.privateToDevice(name.substringAfter('/'))
+    private fun safe(name: String) = InboundPath.safe(name) != null
 
     companion object {
         private const val NEUE = "prefs/neue.ui.json"

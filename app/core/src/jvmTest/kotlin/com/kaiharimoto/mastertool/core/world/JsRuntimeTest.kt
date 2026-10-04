@@ -207,4 +207,23 @@ class JsRuntimeTest {
         val (missing, _) = run("ygo.use('lib/none.js');")
         assertFalse(missing.ok)
     }
+
+    @Test
+    fun hostileNumbersAreRefusedAtTheDoorNotLoopedOver() {
+        val calls = listOf(
+            "ygo.comb(1e15, 5e14)",
+            "ygo.atLeast(1e300, 1e300, 1e300, 0)",
+            "ygo.stats.binomCdf(2e9, 1e9, 0.5)",
+            "ygo.handOdds({deck: 1000, hand: 60, groups: {a:60,b:60,c:60,d:60,e:60,f:60,g:60,h:60}, need: [{group:'a'},{group:'b'},{group:'c'},{group:'d'},{group:'e'},{group:'f'},{group:'g'},{group:'h'}]})",
+            "ygo.comb(-1, 2.5)",
+        )
+        calls.forEach { c ->
+            val started = System.currentTimeMillis()
+            val (r, _) = run(c)
+            assertFalse(r.ok, c)
+            assertTrue(System.currentTimeMillis() - started < 2_000, "$c took too long")
+        }
+        val (fine, _) = run("print(ygo.comb(40, 5))")
+        assertTrue(fine.ok && "658008" in fine.out, fine.out + fine.err)
+    }
 }

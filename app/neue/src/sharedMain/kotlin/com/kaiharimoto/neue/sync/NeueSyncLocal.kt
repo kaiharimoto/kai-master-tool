@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue.sync
 
 import com.kaiharimoto.mastertool.core.prep.PrepCodec
+import com.kaiharimoto.mastertool.core.sync.InboundPath
 import com.kaiharimoto.mastertool.core.sync.LocalItem
 import com.kaiharimoto.mastertool.core.sync.Sha256
 import com.kaiharimoto.mastertool.core.sync.Sync
@@ -69,7 +70,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     }
 
     override suspend fun apply(path: String, bytes: ByteArray?) {
-        require(".." !in path.split('/') && !path.startsWith("/")) { "A path that leaves its folder: $path" }
+        requireNotNull(InboundPath.safe(path)) { "A path this device does not take: $path" }
         when {
             path.startsWith(SyncedDeck.FOLDER) -> {
                 val id = SyncedDeck.idOf(path) ?: return
@@ -144,6 +145,8 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
     }
 
     private suspend fun write(target: File, bytes: ByteArray?) = withContext(Dispatchers.IO) {
+        // Belt and braces: whatever the path said, the file stays inside the data folder.
+        require(target.canonicalPath.startsWith(Platform.dataDir.canonicalPath + File.separator)) { "A path that leaves the data folder: $target" }
         if (bytes == null) {
             target.delete()
             return@withContext
@@ -179,8 +182,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
          * What in Ai's folder is this device's alone: its keys (encrypted to this device on Android, and
          * never to leave any device), the command-line apps' working folder, and caches fetched again.
          */
-        fun privateToDevice(rel: String): Boolean =
-            rel.startsWith("credentials.") || rel.startsWith("run/") || rel.startsWith("cache/")
+        fun privateToDevice(rel: String): Boolean = InboundPath.aiPrivate(rel)
 
         /**
          * What of a world travels (1.0.97), [rel] under `world/`: its record, log, files and pictures; never a half-written

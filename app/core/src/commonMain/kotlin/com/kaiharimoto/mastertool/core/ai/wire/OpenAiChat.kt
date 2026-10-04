@@ -125,7 +125,9 @@ object OpenAiWire {
                         words.isNotEmpty() -> add(buildJsonObject { put("role", "user"); put("content", words.joinToString("\n\n")) })
                     }
                 }
-                Role.ASSISTANT -> add(buildJsonObject {
+                // A turn that was all thought (a cut-off <think>, a filtered answer) has nothing to send, and
+                // {content: null} with no tool_calls is refused by every OpenAI-compatible server (1.0.97).
+                Role.ASSISTANT -> if (turn.text.isNotEmpty() || turn.toolUses.isNotEmpty()) add(buildJsonObject {
                     put("role", "assistant")
                     val text = turn.text
                     if (text.isNotEmpty()) put("content", text) else put("content", JsonNull)
