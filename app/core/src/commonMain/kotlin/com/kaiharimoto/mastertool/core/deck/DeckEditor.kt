@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.deck
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format
@@ -89,7 +90,8 @@ object DeckEditor {
         }
 
         val limit = copyLimit(card, format)
-        if (deck.copiesOf(card.id) >= limit) {
+        // By card, not printing: an alternate artwork is the same card (Phase B).
+        if (CardIdentity.copiesOf(deck, card) >= limit) {
             return DeckEdit.Rejected(RejectionReason.COPY_LIMIT, card)
         }
 
@@ -248,7 +250,7 @@ object DeckEditor {
 
         val contents = deck[section]
         val currentHere = contents.count { it == card.id }
-        val elsewhere = deck.copiesOf(card.id) - currentHere
+        val elsewhere = CardIdentity.copiesOf(deck, card) - currentHere
         val roomInSection = section.maxSize - (contents.size - currentHere)
         val allowedByBanlist = copyLimit(card, format) - elsewhere
 
@@ -274,7 +276,7 @@ object DeckEditor {
 
     /** Convenience for showing a "3 / 3" style badge next to a search result. */
     fun remainingCopies(deck: Deck, card: Card, format: Format = Format.TCG): Int =
-        (copyLimit(card, format) - deck.copiesOf(card.id)).coerceAtLeast(0)
+        (copyLimit(card, format) - CardIdentity.copiesOf(deck, card)).coerceAtLeast(0)
 
     /** True when the card is banned outright and should be shown as unusable. */
     fun isForbidden(card: Card, format: Format = Format.TCG): Boolean =

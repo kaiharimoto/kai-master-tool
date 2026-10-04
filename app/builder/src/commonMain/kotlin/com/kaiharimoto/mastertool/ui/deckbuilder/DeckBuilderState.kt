@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.ui.deckbuilder
 
+import com.kaiharimoto.mastertool.core.prep.IsoDate
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -356,7 +357,8 @@ class DeckBuilderState(
      * distinct card scanning all three sections.
      */
     val validation: DeckValidation by derivedStateOf {
-        DeckValidator.validate(deck, index::byId, format)
+        // Released by today, too: an OCG-only card, or one not out yet, is no TCG card (Phase B).
+        DeckValidator.validate(deck, index::byId, format, IsoDate.of(deps.now().floorDiv(86_400_000L)))
     }
 
     val statistics: DeckStatistics by derivedStateOf {

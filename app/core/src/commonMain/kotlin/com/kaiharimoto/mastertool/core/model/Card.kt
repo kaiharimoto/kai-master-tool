@@ -91,7 +91,21 @@ data class Card(
      * Always contains [id].
      */
     val alternateIds: List<CardId> = emptyList(),
+    /** Konami's own database id for the card (YGOPRODeck's `misc_info.konami_id`), or null when the pool has none. */
+    val konamiId: Int? = null,
+    /** First release in the TCG, `yyyy-MM-dd`; null when it has none (OCG-only) or the pool does not say. */
+    val tcgDate: String? = null,
+    /** First release in the OCG, `yyyy-MM-dd`; null when it has none or the pool does not say. */
+    val ocgDate: String? = null,
+    /** Where it can be played, in YGOPRODeck's words ("TCG", "OCG", "Master Duel", …); empty when the pool does not say. */
+    val formats: List<String> = emptyList(),
+    /** Its cost in Konami's Genesys format (most cards 0); null when the pool does not say. */
+    val genesysPoints: Int? = null,
 ) {
+    /** Every passcode that names this card: its own and each alternate artwork's. */
+    val passcodes: Set<CardId>
+        get() = alternateIds.toSet() + id
+
     val category: CardCategory
         get() = when {
             type.contains("Spell", ignoreCase = true) -> CardCategory.SPELL

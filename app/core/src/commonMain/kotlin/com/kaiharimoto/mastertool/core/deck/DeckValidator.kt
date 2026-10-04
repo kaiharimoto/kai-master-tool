@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.deck
 
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.CardIdentity
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format
@@ -36,10 +37,15 @@ data class DeckValidation(val issues: List<DeckIssue>) {
  */
 object DeckValidator {
 
+    /**
+     * [asOf] (`yyyy-MM-dd`) checks each card's release against that day as well as its region (Phase B); without it
+     * only the region is checked, so an OCG-only card is still caught.
+     */
     fun validate(
         deck: Deck,
         cards: (CardId) -> Card?,
         format: Format = Format.TCG,
+        asOf: String? = null,
     ): DeckValidation {
         val issues = mutableListOf<DeckIssue>()
 
@@ -61,11 +67,12 @@ object DeckValidator {
             }
         }
 
-        // Copy limits are counted across the whole deck, so walk distinct ids once.
-        val distinct = (deck.main + deck.extra + deck.side).distinct()
-        distinct.forEach { id ->
+        // Copy limits are counted across the whole deck and by card, not printing: an alternate artwork is the
+        // same card (Phase B). Each card is walked once, from the first printing the deck holds.
+        val all = deck.main + deck.extra + deck.side
+        val seen = HashSet<CardId>()
+        all.distinct().forEach { id ->
             val card = cards(id)
-            val copies = deck.copiesOf(id)
 
             if (card == null) {
                 issues += DeckIssue(
@@ -75,6 +82,8 @@ object DeckValidator {
                 )
                 return@forEach
             }
+            if (!seen.add(card.id)) return@forEach
+            val copies = CardIdentity.copiesOf(deck, card)
 
             val limit = DeckEditor.copyLimit(card, format)
             if (copies > limit) {
@@ -84,6 +93,10 @@ object DeckValidator {
                     "${card.name} $label, deck has $copies.",
                     cardId = id,
                 )
+            }
+
+            if (card.isPlayable) Legality.problem(card, format, asOf)?.let {
+                issues += DeckIssue(IssueSeverity.ERROR, it, cardId = id)
             }
 
             if (!card.isPlayable) {
@@ -96,7 +109,7 @@ object DeckValidator {
 
             // A card sitting in a section it is not allowed to occupy.
             DeckSection.entries.forEach { section ->
-                if (deck[section].contains(id) && !DeckEditor.sectionAccepts(card, section)) {
+                if (deck[section].any { it in card.passcodes } && !DeckEditor.sectionAccepts(card, section)) {
                     issues += DeckIssue(
                         IssueSeverity.ERROR,
                         "${card.name} cannot be in the ${section.displayName} Deck.",
