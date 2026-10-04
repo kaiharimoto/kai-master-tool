@@ -35,6 +35,7 @@ import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.world.World
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
+import com.kaiharimoto.neue.ai.avatar.AiMark
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -49,6 +50,7 @@ import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
+import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuTabs
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Small
@@ -98,11 +100,35 @@ internal fun newWorld(h: NeueHolders) {
     h.world.make(title, deck?.let { World.SCOPE_DECK + it })
 }
 
-/** Hands [question] to Ai, its panel open. */
-private fun askAi(h: NeueHolders, question: String) {
-    // TODO(merge): h.ai.startWorld(question) — on the lead's branch; until then the question waits in the box.
-    h.ai.setOpen(true)
-    h.ai.draft = question
+/**
+ * Hands [question] to Ai as a fresh World conversation (`AiState.startWorld`), about the world open here when one is.
+ * With no connection yet the panel opens on its setup, and the question waits in its box.
+ */
+internal fun askAi(h: NeueHolders, question: String) {
+    val q = question.trim()
+    if (q.isEmpty()) return
+    val w = h.world.open
+    val asked = if (w != null) "In Ai World, in the world “${w.title}”: $q" else "$q (in Ai World)"
+    if (h.ai.prefs.connection == null) h.ai.draft = asked
+    h.ai.startWorld(asked)
+}
+
+/** A line to Ai: Enter sends it, as a fresh World conversation. */
+@Composable
+private fun AskBox(h: NeueHolders, modifier: Modifier = Modifier, dense: Boolean = false) {
+    var text by remember { mutableStateOf("") }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AiMark(16.dp, name = h.ai.name)
+        MuInput(
+            text,
+            { text = it },
+            Modifier.weight(1f),
+            placeholder = if (h.world.open != null) "Ask ${h.ai.name} to try something here" else "Ask ${h.ai.name} a question to answer by experiment",
+            dense = dense,
+            onSubmit = { askAi(h, text); text = "" },
+        )
+        MuButton("Ask", { askAi(h, text); text = "" }, size = BtnSize.SM, variant = BtnVariant.SUBTLE, enabled = text.isNotBlank(), reason = "Type a question first")
+    }
 }
 
 /** What runs here, in words: the person decides about Python on this computer, never Ai. */
@@ -162,6 +188,7 @@ private fun WorldHead(h: NeueHolders, w: World?, phone: Boolean) {
         }
         if (!phone && w != null) Small("${world.files.size} files · ${w.boards.size} boards", color = c.ink45, maxLines = 1)
         Box(Modifier.weight(1f))
+        if (!phone && w != null && neue.prefs.ai.enabled) AskBox(h, Modifier.widthIn(min = 200.dp, max = 380.dp).weight(1f, fill = false), dense = true)
         world.running?.let { r ->
             if (!phone) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -228,6 +255,7 @@ private fun NoWorld(h: NeueHolders) {
                 }
                 if (h.neue.prefs.ai.enabled) {
                     Help("Or ask ${h.ai.name}, and it makes one itself:", color = c.ink45)
+                    AskBox(h, Modifier.widthIn(max = 520.dp))
                     listOf(
                         "Study my deck's openings",
                         "Map how my deck's cards search each other",

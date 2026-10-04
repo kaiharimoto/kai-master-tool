@@ -365,6 +365,9 @@ internal fun TerminalPane(h: NeueHolders) {
 
 // ---- The boards ---------------------------------------------------------------------------------------------------
 
+/** The smallest a board is drawn until the person zooms out themselves: its words still read. */
+private const val READABLE = 0.42f
+
 /** Where the canvas is looked at from: its offset in pixels and its zoom. */
 private class View {
     var pan by mutableStateOf(Offset.Zero)
@@ -388,19 +391,29 @@ internal fun BoardsPane(h: NeueHolders, w: World) {
         Offset((boards.maxOfOrNull { it.x + it.w } ?: 0.0).toFloat(), (boards.maxOfOrNull { it.y + it.h } ?: 0.0).toFloat())
     }
 
-    fun fit() {
+    /**
+     * The view fitted to the boards. On its own it never shrinks them past [READABLE] — with many boards it starts at the
+     * one picked, or the first, and the rest are a pan away; the Fit button ([all]) shows every one, however small.
+     */
+    fun fit(all: Boolean = false) {
         if (viewport.width == 0 || boards.isEmpty()) return
         val minX = boards.minOf { it.x }.toFloat()
         val minY = boards.minOf { it.y }.toFloat()
         val bw = (extent.x - minX) * density
         val bh = (extent.y - minY) * density
         val margin = 24f * density
-        val z = minOf((viewport.width - margin * 2) / bw, (viewport.height - margin * 2) / bh, 1f).coerceAtLeast(0.15f)
+        val whole = minOf((viewport.width - margin * 2) / bw, (viewport.height - margin * 2) / bh, 1f)
+        val z = whole.coerceAtLeast(if (all) 0.15f else READABLE)
         v.zoom = z
-        v.pan = Offset(
-            (viewport.width - bw * z) / 2f - minX * density * z,
-            (viewport.height - bh * z) / 2f - minY * density * z,
-        )
+        val picked = boards.firstOrNull { it.id == world.selectedBoard }
+        v.pan = when {
+            whole >= z -> Offset((viewport.width - bw * z) / 2f - minX * density * z, (viewport.height - bh * z) / 2f - minY * density * z)
+            picked != null -> Offset(
+                viewport.width / 2f - (picked.x + picked.w / 2).toFloat() * density * z,
+                margin - picked.y.toFloat() * density * z,
+            )
+            else -> Offset(margin - minX * density * z, margin - minY * density * z)
+        }
     }
     LaunchedEffect(viewport, boards.size, v.moved) { if (!v.moved) fit() }
     // A board picked (by a click, from Activity, or pinned just now) is brought into view when it is out of it.
@@ -482,7 +495,7 @@ internal fun BoardsPane(h: NeueHolders, w: World) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Mono("${(v.zoom * 100).roundToInt()}%", color = c.ink45)
-            MicroLink("Fit", { v.moved = false; fit() }, color = c.ink)
+            MicroLink("Fit", { v.moved = true; fit(all = true) }, color = c.ink)
         }
     }
 }
@@ -503,7 +516,8 @@ private fun BoardCard(h: NeueHolders, w: World, b: Board) {
             .size(b.w.dp, b.h.dp)
             .background(c.paper)
             .border(if (selected) 2.dp else 1.dp, if (selected) c.ink else c.ink45)
-            .pointerInput(b.id) { detectTapGestures { world.selectedBoard = current.id } },
+            .pointerInput(b.id) { detectTapGestures { world.selectedBoard = current.id } }
+            .cursorPointer(caption = if (selected) null else "Select"),
     ) {
         Row(
             Modifier
@@ -528,7 +542,7 @@ private fun BoardCard(h: NeueHolders, w: World, b: Board) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Mono(b.typed?.name?.lowercase() ?: "new", color = c.ink45, size = 10.sp)
+            Mono(b.type?.id ?: "new", color = c.ink45, size = 10.sp)
             MuText(b.title.ifBlank { b.id }, Modifier.weight(1f), style = MuType.small(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium), color = c.ink, maxLines = 1)
             IconButton(Icons.X, { world.takeDown(b.id) }, size = 24.dp, label = "Take down")
         }

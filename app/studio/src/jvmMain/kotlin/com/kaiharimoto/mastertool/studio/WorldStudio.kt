@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.ai.ChatTurn
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.world.Board
+import com.kaiharimoto.mastertool.core.world.BoardKind
 import com.kaiharimoto.mastertool.core.world.RunRecord
 import com.kaiharimoto.mastertool.core.world.ShowSpec
 import com.kaiharimoto.mastertool.core.world.World
@@ -13,6 +14,10 @@ import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.world.TermLine
 import com.kaiharimoto.neue.world.WorldPane
+import java.awt.Color
+import java.awt.image.BufferedImage
+import java.io.File
+import javax.imageio.ImageIO
 import kotlin.random.Random
 
 /**
@@ -48,44 +53,56 @@ internal fun studioWorld(h: NeueHolders, map: Map<String, String>) {
             }
             """{"columns":["Card","Copies","Opens","Role","Value"],"rows":[$rows]}"""
         }),
+        Triple("chart", "Starters by turn", """{"type":"line","title":"","labels":["T1","T2","T3","T4","T5"],"series":[{"name":"going first","values":[63,71,78,83,87]},{"name":"going second","values":[68,75,81,85,89]}],"unit":"%"}"""),
+        Triple("chart", "What a hand holds", """{"type":"stacked","title":"","labels":["0","1","2","3+"],"series":[{"name":"starters","values":[36,41,17,6]},{"name":"hand traps","values":[22,30,12,4]},{"name":"bricks","values":[12,9,4,1]}]}"""),
         Triple("cards", "The core", "Starters: 3 ${n(0)}, 3 ${n(1)}\nExtenders: 2 ${n(2)}, 1 ${n(3)}\nPayoff: 1 ${n(4)}"),
+        Triple("board", "The end board", "Monsters: ${n(4)}, -, ${n(2)}, -, -\nSpells/Traps: ${n(5)} (set), -, -, -, -\nHand: ${n(1)}\nGY: ${n(0)}, ${n(3)}"),
+        Triple("line", "The main line, step by step", "1. [[${n(0)}]] Normal Summon\n2. [[${n(2)}]] searched by its effect\n3. [[${n(3)}]] Special Summoned\n4. [[${n(4)}]] revived: two interruptions"),
+        Triple("image", "Hands, pictured", "out/hands.png"),
         Triple("markdown", "What I found", "## Openings\n\nThe deck opens a starter in **63 %** of hands, but only **41 %** of those survive one hand trap.\n\n- [[${n(0)}]] is the best single card: it starts every line.\n- Two copies of [[${n(5)}]] would lift the survival rate by about 4 points.\n\n| Change | Opens | Survives |\n| --- | ---: | ---: |\n| As is | 63% | 41% |\n| +1 ${n(5)} | 66% | 45% |"),
     )
     var boards = emptyList<Board>()
     specs.forEachIndexed { i, (kind, title, body) ->
         val (k, payload) = ShowSpec.parse(kind, body).getOrElse { throw IllegalStateException("studio board $title: ${it.message}") }
         val (x, y) = WorldCanvas.slot(i)
-        val note = when (k.name) {
-            "STAT" -> "Seeded so it can be run again and agree."
-            "GRAPH" -> "Arrows are what a card does to reach the next."
+        val note = when (k) {
+            BoardKind.STAT -> "Seeded so it can be run again and agree."
+            BoardKind.GRAPH -> "Arrows are what a card does to reach the next."
             else -> ""
         }
-        boards = boards + Board("b${i + 1}", title, k, payload, x, y, source = "openings.js", updated = now, note = note)
+        boards = boards + Board("b${i + 1}", title, k.id, payload, x, y, source = "openings.js", updated = now, note = note)
+    }
+    // A board from a newer build, and one whose payload no longer reads: both are said in words.
+    run {
+        val (x, y) = WorldCanvas.slot(boards.size)
+        boards = boards + Board("b${boards.size + 1}", "From a newer build", "timeline", "{}", x, y, updated = now)
+        val (x2, y2) = WorldCanvas.slot(boards.size)
+        boards = boards + Board("b${boards.size + 1}", "Half-written chart", BoardKind.CHART.id, "{\"type\":\"bar\"", x2, y2, updated = now)
     }
     val w = World(id = "wstudio", title = "${h.builder.deckName} openings", scope = h.builder.deckId?.let { World.SCOPE_DECK + it }, created = now, updated = now, boards = boards, open = "openings.js")
     val script = """
 // How often does the deck open a starter? 100,000 seeded hands, going first.
-const deck = world.deck();
-const starters = new Set(deck.groups.Starters ?? []);
-const rng = world.random(7);
+var deck = ygo.deck();
+var starters = deck.groups.Starters || [];
+var r = ygo.rng(7);
 
-let opens = 0, two = 0;
-for (let i = 0; i < 100000; i++) {
-  const hand = rng.sample(deck.main, 5);
-  const n = hand.filter(c => starters.has(c.name)).length;
+var opens = 0, two = 0;
+for (var i = 0; i < 100000; i++) {
+  var hand = ygo.hand(deck.main, r, 5);
+  var n = hand.filter(function (c) { return starters.indexOf(c) >= 0; }).length;
   if (n > 0) opens++;
   if (n > 1) two++;
 }
 
-print(`opens: ${'$'}{(opens / 1000).toFixed(1)}%`);
-print(`two or more: ${'$'}{(two / 1000).toFixed(1)}%`);
-show("stat", { value: (opens / 1000).toFixed(1) + "%", label: "Opens a starter" });
+print('opens: ' + (opens / 1000).toFixed(1) + '%');
+print('two or more: ' + (two / 1000).toFixed(1) + '%');
+ygo.show.stat({ value: (opens / 1000).toFixed(1) + '%', label: 'Opens a starter' }, { note: '100,000 hands, seed 7' });
 """.trimStart()
     val files = mapOf(
         "README.md" to "# ${w.title}\n\nHow often the deck opens, and what it opens into.\n",
         "openings.js" to script,
-        "engine.py" to "from world import deck, show\n\nedges = []\nfor card in deck()['main']:\n    pass\n",
-        "lib/hands.js" to "export function sample(rng, list, n) {\n  return rng.sample(list, n);\n}\n",
+        "engine.py" to "import ygo\n\nd = ygo.deck()\nfor name in d['main']:\n    print(name, searches[name])\n",
+        "lib/hands.js" to "// Opening hands for any study: the first n of a fair shuffle.\nfunction hands(cards, seed, n, trials) {\n  var r = ygo.rng(seed);\n  return ygo.simulate(trials, seed, function () { return ygo.hand(cards, r, n); });\n}\n",
         "notes/plan.md" to "1. Count starters\n2. Map the engine\n3. Compare the flex slots\n",
     )
     val lines = listOf(
@@ -95,7 +112,7 @@ show("stat", { value: (opens / 1000).toFixed(1) + "%", label: "Opens a starter" 
         TermLine(TermLine.Kind.NOTE, "— done in 412 ms, 1 board(s)"),
         TermLine(TermLine.Kind.COMMAND, "python engine.py"),
         TermLine(TermLine.Kind.ERR, "NameError: name 'searches' is not defined (line 4)"),
-        TermLine(TermLine.Kind.COMMAND, "instrument engine_map {\"deck\":\"open\"}"),
+        TermLine(TermLine.Kind.COMMAND, "instrument card_web {\"deck\":\"open\"}"),
         TermLine(TermLine.Kind.OUT, "18 cards, 31 edges, hubs: ${n(2)}"),
         TermLine(TermLine.Kind.NOTE, "— done in 96 ms, 2 board(s)"),
     )
@@ -109,9 +126,10 @@ show("stat", { value: (opens / 1000).toFixed(1) + "%", label: "Opens a starter" 
         WorldEvent(t + 24_000, WorldEvent.Kind.RUN, WorldEvent.AI, path = "engine.py", text = "Failed engine.py", run = RunRecord("py", "engine.py", ok = false, err = "NameError")),
         WorldEvent(t + 30_000, WorldEvent.Kind.SHOW, WorldEvent.AI, board = "b5", text = "Pinned “Who finds whom”"),
         WorldEvent(t + 41_000, WorldEvent.Kind.WRITE, WorldEvent.YOU, path = "notes/plan.md", text = "Wrote notes/plan.md (3 lines)"),
-        WorldEvent(t + 50_000, WorldEvent.Kind.SHOW, WorldEvent.AI, board = "b9", text = "Pinned “What I found”"),
+        WorldEvent(t + 50_000, WorldEvent.Kind.SHOW, WorldEvent.AI, board = "b14", text = "Pinned “What I found”"),
     )
     h.world.seed(w, files, lines, events, "openings.js")
+    picture(File(h.world.dir, "${w.id}/files/out/hands.png"))
     h.world.selectedBoard = "b5"
     h.world.aiPane = (map["world-ai"] ?: "editor").let { a -> WorldPane.entries.firstOrNull { it.name.equals(a, ignoreCase = true) } }
     map["world-pane"]?.let { p -> WorldPane.entries.firstOrNull { it.name.equals(p, ignoreCase = true) } }?.let {
@@ -147,4 +165,28 @@ show("stat", { value: (opens / 1000).toFixed(1) + "%", label: "Opens a starter" 
         ),
     )
     println("[neue-studio] world: ${w.boards.size} boards, ${h.world.files.size} files, ${h.world.activity.size} events")
+}
+
+/** The picture a run would have saved for the IMAGE board: a histogram of starters per hand, drawn plainly. */
+private fun picture(file: File) {
+    val img = BufferedImage(640, 400, BufferedImage.TYPE_INT_RGB)
+    val g = img.createGraphics()
+    g.color = Color.WHITE
+    g.fillRect(0, 0, 640, 400)
+    g.color = Color(40, 40, 40)
+    g.drawLine(60, 340, 600, 340)
+    g.drawLine(60, 40, 60, 340)
+    val values = listOf(36, 41, 17, 5, 1)
+    values.forEachIndexed { i, v ->
+        val h = v * 7
+        g.color = Color(70, 110, 180)
+        g.fillRect(90 + i * 100, 340 - h, 60, h)
+        g.color = Color(40, 40, 40)
+        g.drawString("$i", 116 + i * 100, 360)
+        g.drawString("$v%", 108 + i * 100, 334 - h)
+    }
+    g.drawString("starters in the opening hand (matplotlib would draw this)", 60, 30)
+    g.dispose()
+    file.parentFile.mkdirs()
+    ImageIO.write(img, "png", file)
 }

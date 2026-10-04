@@ -533,6 +533,13 @@ fun neueMain(args: Array<String>) {
                 }
                 println("[neue-studio] present: ${p.slides.size} slides, ${p.deck?.groups?.size ?: 0} groups, style ${p.style}")
             }
+            // --world=demo: a world seeded onto Ai World's page (1.0.97), every kind of board on its canvas;
+            // --world-pane=boards|editor|… gives that pane the page, --world-ai=… puts Ai in it (`WorldStudio.kt`).
+            if (map["world"] == "demo") {
+                studioWorld(h, map)
+                h.neue.page = Page.WORLD
+                clock.run(120)
+            }
             // --ydkw=path: a web of decks opened, as Format's Open a .ydkw does (1.0.33);
             // --web-deck=N then puts its N-th deck on the builder, to show the bar's switcher.
             // --start=new|update[:N]: the setup offered on opening (1.0.69), as someone new sees it or someone

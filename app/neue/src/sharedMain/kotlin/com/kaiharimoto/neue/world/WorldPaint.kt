@@ -122,17 +122,11 @@ private fun shade(t: Float, ink: Boolean): Color {
 /** Words that read on [fill]: black on a light one, white on a deep one. */
 private fun inkOn(fill: Color): Color = if (fill.luminance() > 0.42f) Color.Black else Color.White
 
-/**
- * A board's kind as the painters read it: null is a kind this build does not know — a board a newer version made,
- * shown in words rather than drawn. (At the merge with the stored-word model this is `board.type`.)
- */
-internal val Board.typed: BoardKind? get() = kind
-
-/** A board's body, by its kind. */
+/** A board's body, by its kind; a kind this build does not know (`type` null, a newer build's) is said in words. */
 @Composable
 internal fun BoardBody(h: NeueHolders, board: Board, worldId: String, modifier: Modifier = Modifier) {
     Box(modifier) {
-        when (board.typed) {
+        when (board.type) {
             null -> Box(Modifier.fillMaxSize().padding(12.dp)) {
                 Small("Made by a newer version of the app: update to see this board.", color = Mu.colors.ink70)
             }
