@@ -42,12 +42,12 @@ object Foils {
     fun label(id: String): String = all.firstOrNull { it.id == id }?.label ?: id
 }
 
-fun DrawScope.drawFoil(style: String, feel: Offset?, frame: ArtFrame? = null) {
+fun DrawScope.drawFoil(style: String, feel: Offset?, frame: ArtFrame? = null, cache: HoloCache? = null) {
     when (style) {
         Foils.OFF -> Unit
         // Where there is no runtime shader, the classic band stands in (DESIGN.md §6:
         // every shader keeps a drawing that works without one).
-        Foils.HOLO -> with(Holo) { if (!drawHolo(feel ?: Offset.Zero, frame)) drawClassic(feel) }
+        Foils.HOLO -> with(Holo) { if (!drawHolo(feel ?: Offset.Zero, frame, cache)) drawClassic(feel) }
         else -> drawClassic(feel)
     }
 }
@@ -66,7 +66,7 @@ private fun DrawScope.drawClassic(feel: Offset?) = drawPrismaticInset(
  * grown by a hair, in ink underneath first. Only with the holographic foil,
  * which is the one that has a stamp to draw.
  */
-fun DrawScope.drawFoilName(mask: NameMask, light: Offset, outlined: Boolean) {
+fun DrawScope.drawFoilName(mask: NameMask, light: Offset, outlined: Boolean, cache: HoloCache? = null) {
     if (!Holo.available) return
     val bar = Rect(
         NameInk.LEFT * size.width,
@@ -81,7 +81,7 @@ fun DrawScope.drawFoilName(mask: NameMask, light: Offset, outlined: Boolean) {
     }
     drawIntoCanvas { canvas ->
         canvas.saveLayer(bar, Paint())
-        with(Holo) { drawHoloSheet(bar, light) }
+        with(Holo) { drawHoloSheet(bar, light, cache) }
         drawImage(mask.letters, dstOffset = at, dstSize = span, blendMode = BlendMode.DstIn, filterQuality = FilterQuality.High)
         canvas.restore()
     }

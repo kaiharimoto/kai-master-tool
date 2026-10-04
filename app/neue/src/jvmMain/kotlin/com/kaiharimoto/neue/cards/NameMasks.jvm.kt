@@ -1,7 +1,7 @@
 package com.kaiharimoto.neue.cards
 
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.graphics.asComposeImageBitmap
 import coil3.BitmapImage
 import coil3.toBitmap
 import org.jetbrains.skia.Bitmap
@@ -24,16 +24,16 @@ private fun Bitmap.argb(x: Int, y: Int, w: Int, h: Int): IntArray? {
     }
 }
 
+// Alpha alone, a byte a pixel (1.0.92): a mask is only ever drawn through its alpha, and an
+// alpha-only image drawn with Compose's paint is that alpha in black, which DstIn and a SrcIn
+// tint read exactly as they read the white this was before (`CardDrawingCacheTest`).
 internal actual fun alphaBitmap(mask: FloatArray, w: Int, h: Int): ImageBitmap {
-    val bytes = ByteArray(w * h * 4)
-    mask.forEachIndexed { i, a ->
-        val v = (a * 255f).roundToInt().coerceIn(0, 255).toByte()
-        bytes[i * 4] = v
-        bytes[i * 4 + 1] = v
-        bytes[i * 4 + 2] = v
-        bytes[i * 4 + 3] = v
-    }
-    return Image.makeRaster(ImageInfo(w, h, ColorType.RGBA_8888, ColorAlphaType.PREMUL), bytes, w * 4).toComposeImageBitmap()
+    val bytes = ByteArray(w * h) { i -> (mask[i] * 255f).roundToInt().coerceIn(0, 255).toByte() }
+    // Installed straight into a bitmap: an image handed to Compose is converted to 32-bit colour on the way.
+    val bitmap = Bitmap()
+    check(bitmap.installPixels(ImageInfo(w, h, ColorType.ALPHA_8, ColorAlphaType.PREMUL), bytes, w)) { "the mask did not install" }
+    bitmap.setImmutable()
+    return bitmap.asComposeImageBitmap()
 }
 
 /** The masks of a Skia image the screenshot has decoded itself. */

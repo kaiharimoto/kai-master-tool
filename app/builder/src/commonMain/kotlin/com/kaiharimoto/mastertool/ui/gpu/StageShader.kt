@@ -54,6 +54,154 @@ expect fun compileStageShader(sksl: String): StageShader?
 expect fun StageShader.brush(uniforms: ShaderUniforms.() -> Unit): Brush
 
 /**
+ * [brush], remembering in [memo] what the brush was made from (1.0.92): a draw that
+ * sets exactly the uniforms the last one through [memo] set gets the same brush back
+ * where making one costs — the desktop mints a native shader, a dozen calls across
+ * JNI, per brush, and a card's foil is drawn again with the same light far more
+ * often than with a new one. The same uniforms are the same shader, so the same
+ * pixels. Where a brush is only floats written into one shared shader (Android) it
+ * is made every time, since another surface may have written its own since.
+ *
+ * One [memo] per surface that is drawn, used from the thread that draws it.
+ */
+expect fun StageShader.brush(memo: BrushMemo, uniforms: ShaderUniforms.() -> Unit): Brush
+
+/** What one surface's brush was last made from, and the brush: see [brush]. */
+class BrushMemo {
+    private var last = UniformRecord()
+    private var next = UniformRecord()
+    private var made: Brush? = null
+
+    /**
+     * Records [uniforms]; the brush made from the same ones last time, or null
+     * when they differ (or hold an image, whose pixels a record cannot vouch for)
+     * — then [made] must be called with the new brush, made from [replay].
+     */
+    fun reuse(uniforms: ShaderUniforms.() -> Unit): Brush? {
+        val record = next
+        record.clear()
+        record.uniforms()
+        val brush = made
+        if (brush != null && !record.hasImages && record.sameAs(last)) return brush
+        next = last
+        last = record
+        made = null
+        return null
+    }
+
+    /** Sets the uniforms [reuse] last recorded on [target], in the order they were set. */
+    fun replay(target: ShaderUniforms) = last.replay(target)
+
+    /** The brush made from the uniforms [reuse] last recorded. */
+    fun made(brush: Brush) {
+        made = brush
+    }
+}
+
+/** The uniforms one draw set, in order: names, how many floats each took, the floats, and any images. */
+private class UniformRecord : ShaderUniforms {
+    private val names = ArrayList<String>(16)
+    private val kinds = ArrayList<Int>(16)
+    private var values = FloatArray(32)
+    private var used = 0
+    private val images = ArrayList<Pair<ImageBitmap, Boolean>>(0)
+
+    val hasImages: Boolean get() = images.isNotEmpty()
+
+    fun clear() {
+        names.clear()
+        kinds.clear()
+        used = 0
+        images.clear()
+    }
+
+    private fun room(n: Int) {
+        if (used + n > values.size) values = values.copyOf(maxOf(values.size * 2, used + n))
+    }
+
+    private fun put(name: String, kind: Int) {
+        names.add(name)
+        kinds.add(kind)
+    }
+
+    override fun float(name: String, value: Float) {
+        room(1); values[used++] = value; put(name, FLOAT)
+    }
+
+    override fun float2(name: String, x: Float, y: Float) {
+        room(2); values[used++] = x; values[used++] = y; put(name, FLOAT2)
+    }
+
+    override fun float3(name: String, x: Float, y: Float, z: Float) {
+        room(3); values[used++] = x; values[used++] = y; values[used++] = z; put(name, FLOAT3)
+    }
+
+    override fun float4(name: String, x: Float, y: Float, z: Float, w: Float) {
+        room(4); values[used++] = x; values[used++] = y; values[used++] = z; values[used++] = w; put(name, FLOAT4)
+    }
+
+    override fun colour(name: String, red: Float, green: Float, blue: Float, alpha: Float) {
+        room(4); values[used++] = red; values[used++] = green; values[used++] = blue; values[used++] = alpha; put(name, COLOUR)
+    }
+
+    override fun matrix3(name: String, columnMajor: FloatArray) {
+        room(columnMajor.size)
+        columnMajor.copyInto(values, used)
+        used += columnMajor.size
+        put(name, MATRIX3)
+    }
+
+    override fun image(name: String, bitmap: ImageBitmap, repeat: Boolean) {
+        images.add(bitmap to repeat)
+        put(name, IMAGE)
+    }
+
+    /** The same uniforms in the same order, the floats bit for bit. */
+    fun sameAs(other: UniformRecord): Boolean {
+        if (used != other.used || names.size != other.names.size) return false
+        for (i in names.indices) if (kinds[i] != other.kinds[i] || names[i] != other.names[i]) return false
+        for (i in 0 until used) if (values[i].toRawBits() != other.values[i].toRawBits()) return false
+        return true
+    }
+
+    fun replay(target: ShaderUniforms) {
+        var at = 0
+        var image = 0
+        for (i in names.indices) {
+            val name = names[i]
+            val v = values
+            when (kinds[i]) {
+                FLOAT -> target.float(name, v[at])
+                FLOAT2 -> target.float2(name, v[at], v[at + 1])
+                FLOAT3 -> target.float3(name, v[at], v[at + 1], v[at + 2])
+                FLOAT4 -> target.float4(name, v[at], v[at + 1], v[at + 2], v[at + 3])
+                COLOUR -> target.colour(name, v[at], v[at + 1], v[at + 2], v[at + 3])
+                MATRIX3 -> target.matrix3(name, v.copyOfRange(at, at + 9))
+                IMAGE -> images[image++].let { (bitmap, repeat) -> target.image(name, bitmap, repeat) }
+            }
+            at += when (kinds[i]) {
+                FLOAT -> 1
+                FLOAT2 -> 2
+                FLOAT3 -> 3
+                FLOAT4, COLOUR -> 4
+                MATRIX3 -> 9
+                else -> 0
+            }
+        }
+    }
+
+    private companion object {
+        const val FLOAT = 1
+        const val FLOAT2 = 2
+        const val FLOAT3 = 3
+        const val FLOAT4 = 4
+        const val COLOUR = 5
+        const val MATRIX3 = 6
+        const val IMAGE = 7
+    }
+}
+
+/**
  * A shader that can read what is already drawn underneath it.
  *
  * ## Why this is a second seam and not a flag on the first

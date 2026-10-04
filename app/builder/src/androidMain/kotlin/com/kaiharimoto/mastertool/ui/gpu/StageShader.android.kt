@@ -43,6 +43,11 @@ actual fun StageShader.brush(uniforms: ShaderUniforms.() -> Unit): Brush {
     return ShaderBrush(shader)
 }
 
+// Every time: the one RuntimeShader is shared by every surface that draws with it, so a
+// brush kept from an earlier draw would carry whatever uniforms another surface wrote since.
+// Writing the floats is all a brush costs here.
+actual fun StageShader.brush(memo: BrushMemo, uniforms: ShaderUniforms.() -> Unit): Brush = brush(uniforms)
+
 actual val runtimeShadersAvailable: Boolean
     get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
 
