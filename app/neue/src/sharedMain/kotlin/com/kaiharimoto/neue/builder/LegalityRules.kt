@@ -35,7 +35,7 @@ import com.kaiharimoto.neue.theme.Mu
  * [DeckRules] with the list in force that day from the banlist history. A day whose lists cannot be read is checked
  * on its release dates with the pool's list, and says so — never silently today's.
  */
-internal suspend fun NeueHolders.legalityRules(p: NeuePreferences, format: Format): DeckRules {
+suspend fun NeueHolders.legalityRules(p: NeuePreferences, format: Format): DeckRules {
     val day = p.legalAsOf.takeIf { Legality.isDate(it) }
     if (p.genesys) return DeckRules(format, day, genesysCap = p.genesysCap)
     if (day == null) return DeckRules(format)
