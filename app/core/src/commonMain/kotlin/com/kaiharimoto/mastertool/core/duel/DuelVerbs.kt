@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.duel
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.model.Card
+import kotlin.concurrent.Volatile
 
 /** What the table needs to know about a card to choose a zone for it — never what its text does. */
 enum class CardKind { MONSTER, EXTRA_MONSTER, SPELL, FIELD_SPELL, TRAP, TOKEN }
@@ -69,6 +70,36 @@ fun interface DuelCatalog {
 
     companion object {
         val NONE = DuelCatalog { null }
+
+        /**
+         * [source] asked once a passcode and remembered, a miss too (1.0.92): the table asks after the same few dozen
+         * cards on every frame, every caption and every line of the log, and reading a card's kind and its hand cost
+         * off its text each time was the duel's hottest path. One per pool: a new pool is a new catalog.
+         */
+        fun cached(source: (Int) -> DuelCardInfo?): DuelCatalog = CachedCatalog(source)
+    }
+}
+
+/**
+ * [DuelCatalog.cached]: a map replaced whole on every miss, never changed in place, so a reader on another thread (Ai's
+ * tools, the network) only ever sees a whole map — at worst two threads both ask [source] once, with the same answer.
+ * A duel names a hundred or so passcodes, so copying on a miss costs nothing that shows.
+ */
+internal class CachedCatalog(private val source: (Int) -> DuelCardInfo?) : DuelCatalog {
+    @Volatile
+    private var known: Map<Int, DuelCardInfo?> = emptyMap()
+
+    /** How many times [source] was asked: what the tests count. */
+    internal var asked: Int = 0
+        private set
+
+    override fun info(code: Int): DuelCardInfo? {
+        val now = known
+        if (code in now) return now[code]
+        val info = source(code)
+        asked++
+        known = HashMap<Int, DuelCardInfo?>(now.size * 2 + 4).apply { putAll(known); put(code, info) }
+        return info
     }
 }
 

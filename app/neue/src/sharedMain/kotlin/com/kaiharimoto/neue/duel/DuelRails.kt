@@ -220,21 +220,27 @@ internal fun VerbChip(label: String, key: String? = null, strong: Boolean = fals
     }
 }
 
+/** The keys [KeyCheat] shows, as `chord to words`, the arrows first. */
+private fun keyRows(): List<Pair<String, String>> = listOf(
+    DeskAction.DUEL_DEFAULT to "Obvious", DeskAction.DUEL_SUMMON to "Summon", DeskAction.DUEL_SET to "Set",
+    DeskAction.DUEL_ACTIVATE to "Activate", DeskAction.DUEL_GRAVE to "To GY", DeskAction.DUEL_BANISH to "Banish",
+    DeskAction.DUEL_HAND to "To hand", DeskAction.DUEL_DRAW to "Draw", DeskAction.DUEL_NEXT_PHASE to "Next phase",
+    DeskAction.DUEL_END_TURN to "End turn", DeskAction.DUEL_COMMAND to "Command", DeskAction.UNDO to "Undo",
+    // Command mode (1.0.87): the whole table without a mouse.
+    DeskAction.DUEL_FOCUS_ACT to "Act on the focus", DeskAction.DUEL_PICK to "Pick up", DeskAction.DUEL_COORDINATES to "Coordinates",
+).mapNotNull { (a, words) ->
+    DeskShortcuts.all.firstOrNull { it.action == a && (it.scope == DeskScope.DUEL || a == DeskAction.UNDO) }?.chord?.let { DeskShortcuts.kbd(it) to words }
+}.let { listOf(ARROWS to "Walk the table") + it }
+
 /** The keys that matter most, pinned at the inspector's foot, two to a row; a click folds them away. */
 @Composable
 private fun KeyCheat(h: NeueHolders) {
     val c = Mu.colors
     val shown = h.neue.prefs.duel.keysShown
-    val rows = listOf(
-        DeskAction.DUEL_DEFAULT to "Obvious", DeskAction.DUEL_SUMMON to "Summon", DeskAction.DUEL_SET to "Set",
-        DeskAction.DUEL_ACTIVATE to "Activate", DeskAction.DUEL_GRAVE to "To GY", DeskAction.DUEL_BANISH to "Banish",
-        DeskAction.DUEL_HAND to "To hand", DeskAction.DUEL_DRAW to "Draw", DeskAction.DUEL_NEXT_PHASE to "Next phase",
-        DeskAction.DUEL_END_TURN to "End turn", DeskAction.DUEL_COMMAND to "Command", DeskAction.UNDO to "Undo",
-        // Command mode (1.0.87): the whole table without a mouse.
-        DeskAction.DUEL_FOCUS_ACT to "Act on the focus", DeskAction.DUEL_PICK to "Pick up", DeskAction.DUEL_COORDINATES to "Coordinates",
-    ).mapNotNull { (a, words) ->
-        DeskShortcuts.all.firstOrNull { it.action == a && (it.scope == DeskScope.DUEL || a == DeskAction.UNDO) }?.chord?.let { DeskShortcuts.kbd(it) to words }
-    }.let { listOf(ARROWS to "Walk the table") + it }
+    // The keys' words are the tables', which do not change while the app runs: read once (1.0.92).
+    val rows = remember(DeskShortcuts.all) {
+        keyRows()
+    }
     Column(Modifier.fillMaxWidth()) {
         HRule()
         Row(

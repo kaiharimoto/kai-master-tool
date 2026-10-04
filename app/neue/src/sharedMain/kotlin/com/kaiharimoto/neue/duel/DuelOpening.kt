@@ -5,8 +5,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.TurnStart
+import com.kaiharimoto.mastertool.core.duel.dice.DiceRuns
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import com.kaiharimoto.neue.duel.dice.DiceCarry
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * How a turn opens, a part of [Duels]: the turns that start themselves (1.0.86) and the opening roll's dice (1.0.87).
@@ -89,8 +92,12 @@ internal class DuelOpening(private val d: Duels) {
      * [seat] throws its two dice: [toss] the person's own throw, or null for a fling with no hand behind it (a key,
      * `roll`, Ai), made from the same stamped randomness as the values. The guest's throw goes to the host, who stamps.
      */
-    fun throwDice(seat: Int, toss: DiceThrow? = null): Boolean =
-        d.act(listOf(DuelAction.OpeningRoll(seat, toss = toss)), seat)
+    fun throwDice(seat: Int, toss: DiceThrow? = null): Boolean {
+        val ok = d.act(listOf(DuelAction.OpeningRoll(seat, toss = toss)), seat)
+        // The throw played out now, off the thread that draws (1.0.92): the table finds its run made, the same run.
+        if (ok) d.game?.state?.opening?.throws?.getOrNull(seat)?.let { t -> d.scope.launch(Dispatchers.Default) { DiceRuns.warm(t) } }
+        return ok
+    }
 
     /** The roll's winner goes first, or second. */
     fun goFirst(seat: Int, first: Boolean): Boolean = d.act(listOf(DuelAction.GoFirst(seat, first)), seat)

@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -36,9 +38,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.duel.CardInst
 import com.kaiharimoto.mastertool.core.duel.DeckPart
 import com.kaiharimoto.mastertool.core.duel.DropSpot
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelDrop
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelSeats
@@ -62,7 +66,9 @@ import com.kaiharimoto.mastertool.core.layout.DuelFrames
 import com.kaiharimoto.mastertool.core.layout.DuelLayout
 import com.kaiharimoto.mastertool.core.layout.DuelSpot
 import com.kaiharimoto.mastertool.core.layout.Slot
+import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.duel.dice.DiceCarry
 import com.kaiharimoto.neue.duel.dice.OpeningDice
@@ -99,8 +105,13 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     val c = Mu.colors
     val s = game.state
     val density = LocalDensity.current
-    var carry by remember { mutableStateOf<Carry?>(null) }
-    var box by remember { mutableStateOf<Slot?>(null) }
+    // The card carried and where it is now: written on every move of the pointer, so only what draws the carried card,
+    // its hint and what lies over it read it (1.0.92) — the table as a whole reads [carried], which changes as a carry
+    // begins and ends. Both are written together.
+    val carry = remember { mutableStateOf<Carry?>(null) }
+    var carried by remember { mutableStateOf<Int?>(null) }
+    // The box dragged over the table to pick cards: read by the box alone, not the table, as it grows (1.0.92).
+    val box = remember { mutableStateOf<Slot?>(null) }
     // A card carried out of an open pile: the pile steps aside, so the zones under it take the drop (1.0.78).
     var stripLeft by remember { mutableStateOf(false) }
     val facing = h.neue.prefs.duel.facing
@@ -116,18 +127,17 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         duels.eyes = DuelFocus.Eyes(viewers, secret, notationSeat)
     }
     LaunchedEffect(s, viewers, duels.strip, duels.bottom, layout) { duels.refocus() }
-    val shownFrames = carry?.let { cr ->
-        frames.map { f ->
-            when {
-                f.uid == cr.uid -> f.copy(x = cr.x - cr.grabX, y = cr.y - cr.grabY, rotation = 0f, z = 100f, shown = true, w = layout.card, h = layout.cardHeight)
-                stripLeft && f.inStrip -> f.copy(shown = false)
-                else -> f
-            }
-        }
-    } ?: frames
     val framesNow by rememberUpdatedState(frames)
     val stateNow by rememberUpdatedState(s)
     val layoutNow by rememberUpdatedState(layout)
+    // The frames as drawn: the carried card where the pointer holds it, an open pile's cards gone while one carried out
+    // of it looks for a place. Read by what draws over the cards, each in its own scope.
+    val shownFrames = remember {
+        derivedStateOf {
+            val fs = framesNow
+            carry.value?.let { cr -> fs.map { f -> carriedFrame(f, cr, stripLeft, layoutNow) } } ?: fs
+        }
+    }
     val index = h.builder.index
     // Another seat's open pile answers with its verbs only to someone who plays both seats (1.0.86).
     val playsBoth = playsBoth(h)
@@ -466,8 +476,9 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                             val update = {
                                 if (fromStrip && open != null && !stripLeft && !stripGround(stateNow, layoutNow, open).contains(p.x, p.y)) stripLeft = true
                                 val spot = dropAt(uid, p.x, p.y)
-                                carry = Carry(uid, gx, gy, p.x, p.y, spot, DuelDrop.intent(stateNow, uid, spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed, duels.dragActor()))
+                                carry.value = Carry(uid, gx, gy, p.x, p.y, spot, DuelDrop.intent(stateNow, uid, spot, duels.catalog, mods.isAltPressed, mods.isShiftPressed, duels.dragActor()))
                             }
+                            carried = uid
                             update()
                             try {
                                 while (true) {
@@ -481,14 +492,16 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                                 }
                             } catch (gone: kotlinx.coroutines.CancellationException) {
                                 // The gesture was cut off: nothing is carried any more (1.0.85; the flag stayed set).
-                                carry = null
+                                carry.value = null
+                                carried = null
                                 duels.carrying = false
                                 throw gone
                             }
                             update()
-                            val done = carry
+                            val done = carry.value
                             val left = stripLeft
-                            carry = null
+                            carry.value = null
+                            carried = null
                             stripLeft = false
                             duels.carrying = false
                             if (done != null && !done.intent.none) {
@@ -509,15 +522,15 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                             // A box: every card it touches is selected.
                             var p = moved!!
                             while (true) {
-                                box = Slot(minOf(x0, p.x), minOf(y0, p.y), kotlin.math.abs(p.x - x0), kotlin.math.abs(p.y - y0))
+                                box.value = Slot(minOf(x0, p.x), minOf(y0, p.y), kotlin.math.abs(p.x - x0), kotlin.math.abs(p.y - y0))
                                 val e = awaitPointerEvent()
                                 val ch = e.changes.firstOrNull { it.id == down.id } ?: break
                                 ch.consume()
                                 p = ch.position / d
                                 if (!ch.pressed) break
                             }
-                            val b = box
-                            box = null
+                            val b = box.value
+                            box.value = null
                             if (b != null) {
                                 val boxed = framesNow.filter { f ->
                                     f.shown && (f.inStrip || stateNow.placeOf(f.uid).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) }) &&
@@ -559,39 +572,28 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         }
 
         // Every card: hidden pile cards are placed too, so a card leaving its pile glides out of it.
-        shownFrames.filter { it.uid in s.cards }.forEach { f ->
+        val attacker = duels.attacking
+        val words = remember(s, attacker, duels.bottom, playsBoth, duels.catalog, index) { CardWords(s, attacker, duels.bottom, playsBoth, duels.catalog, index) }
+        val leaving = carried != null && stripLeft
+        frames.filter { it.uid in s.cards }.forEach { f ->
             key(f.uid) {
                 val inst = s.cards.getValue(f.uid)
-                val card = if (inst.token && inst.code == 0) null else index.byId(CardId(inst.code))
-                val inMonsterZone = s.placeOf(f.uid).let { it is Place.Zone && (it.kind == ZoneKind.MONSTER || it.kind == ZoneKind.EMZ) }
-                val stats = when {
-                    f.look == CardLook.BACK || !inst.faceUp || !inMonsterZone -> null
-                    // A token's own numbers, when its maker gave them (1.0.79).
-                    inst.token && (inst.atk != null || inst.def != null) -> TableStats("${inst.atk ?: "?"}", "${inst.def ?: "?"}", inst.defense)
-                    card != null && card.atk != null -> TableStats("${card.atk}", card.def?.toString(), inst.defense)
-                    else -> null
-                }
-                val attacker = duels.attacking
-                val caption = when {
-                    !f.shown -> null
-                    // What a click does while an attack waits: "Attack Arias", "Attack directly" (1.0.86).
-                    attacker != null && attacker != f.uid && !f.inStrip -> attackCaption(s, attacker, f.uid, duels)
-                    f.inStrip || s.placeOf(f.uid).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } ->
-                        if (!(if (f.inStrip) DuelSeats.stripPlays(s, duels.seatFor(f.uid), duels.bottom, playsBoth) else s.solo || duels.seatFor(f.uid) == duels.bottom)) DuelVerb.TARGET.label
-                        else DuelVerbs.default(s, duels.seatFor(f.uid), f.uid, duels.catalog).label
-                    s.placeOf(f.uid).let { it is Place.Pile && it.kind == PileKind.DECK } -> "Draw"
-                    else -> "Open"
-                }
-                TableCard(
-                    frame = f,
-                    caption = caption,
+                val isCarried = f.uid == carried
+                // An open pile's cards step aside while one carried out of it looks for a place.
+                val base = if (!isCarried && leaving && f.inStrip) f.copy(shown = false) else f
+                CarriedCard(
+                    base = base,
+                    // Only the carried card follows the pointer, and only it reads where the pointer is.
+                    follow = if (isCarried) carry else null,
+                    layout = layout,
+                    caption = words.caption(base, shown = isCarried || base.shown),
                     inst = inst,
-                    card = card,
-                    name = duels.catalog.nameOf(inst),
+                    card = words.card(f.uid),
+                    name = words.name(f.uid),
                     selected = f.uid in duels.selection || f.uid == duels.attaching || f.uid == attacker || f.uid == duels.picked || f.uid == duels.linkTarget,
-                    carried = carry?.uid == f.uid,
+                    carried = isCarried,
                     foil = h.neue.prefs.foil,
-                    stats = stats,
+                    stats = if (base.look == CardLook.BACK) null else words.stats(f.uid),
                 )
             }
         }
@@ -599,37 +601,38 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         // The open pile's own ground, over the table — gone while a card carried out of it looks for a place.
         if (!stripLeft) duels.strip?.let { (seat, kind) -> StripGround(duels, s, layout, seat, kind) }
         ShuffleOffer(duels, s, layout)
-        if (carry == null && duels.verbStrip && duels.selection.size < 2) VerbStrip(duels, s, layout, shownFrames, playsBoth)
+        // With nothing carried the frames as drawn are the frames.
+        if (carried == null && duels.verbStrip && duels.selection.size < 2) VerbStrip(duels, s, layout, frames, playsBoth)
         // Several cards, one move (1.0.90): their order on each, what they can all do, and the order onto a Deck.
-        if (carry == null) SelectionBadges(duels, s, shownFrames)
-        if (carry == null) SelectionBar(h, duels, s, layout, viewers, shownFrames)
-        if (carry == null) OrderingStrip(h, duels, s, layout, viewers)
+        if (carried == null) SelectionBadges(duels, s, frames)
+        if (carried == null) SelectionBar(h, duels, s, layout, viewers, frames)
+        if (carried == null) OrderingStrip(h, duels, s, layout, viewers)
         // Command mode (1.0.87): the coordinates at every place's corner, and the ring the arrows walk.
         if (h.neue.prefs.duel.coordinates) Coordinates(duels, s, layout, shownFrames)
-        if (carry == null && duels.byKeys) FocusRing(duels, s, layout, shownFrames, viewers)
+        // The ring reads the keys and the focus itself, so walking the table redraws the ring alone (1.0.92).
+        if (carried == null) FocusRing(duels, s, layout, frames, viewers)
 
         // The chain, the arrows, the pings — over the cards.
         ChainWell(s, layout, duels, viewers)
         ChainMenu(duels, s, layout, viewers)
         duels.linkTarget?.let { from -> if (from in s.cards) LinkTargetBand(duels, s, layout, from) }
         // Under an open pile, which covers the cards they point at.
-        Canvas(Modifier.fillMaxSize().zIndex(if (duels.strip != null) DuelFrames.Z_STRIP - 1f else 50f)) { arrows(s, layout, shownFrames, c.ink, c.paper) }
+        Canvas(Modifier.fillMaxSize().zIndex(if (duels.strip != null) DuelFrames.Z_STRIP - 1f else 50f)) { arrows(s, layout, shownFrames.value, c.ink, c.paper) }
         Pings(game, layout, shownFrames)
         // The opening roll (1.0.87): the dice in front of each field, in the hand, or tumbling across it; the result.
         if (duels.replay == null) OpeningDice(duels, s, layout, playsBoth)
 
         // What letting go will do, where it will happen.
-        carry?.let { cr -> DropHint(cr, layout, shownFrames, s) }
-        box?.let { b ->
-            Box(Modifier.zIndex(60f).offset(b.left.dp, b.top.dp).size(b.width.dp, b.height.dp).border(1.dp, c.ink).background(c.ink06))
-        }
+        DropHint(carry, layout)
+        PickBox(box)
         ScoreColumn(h, duels, s, layout)
         PhaseStrip(h, duels, s, layout)
         duels.attacking?.let { a -> if (a in s.cards) AttackBand(duels, s, layout, a) }
-        if (duels.replay == null && carry == null) BattleChip(h, duels, game, layout)
+        if (duels.replay == null && carried == null) BattleChip(h, duels, game, layout)
         duels.lpPad?.let { seat -> LpPad(duels, s, layout, seat) }
-        // Command mode's Spotlight (1.0.87): the table dims but for what the line touches and where it goes.
-        if (duels.spotlight != null && duels.replay == null) SpotlightDim(duels, s, layout, shownFrames)
+        // Command mode's Spotlight (1.0.87): the table dims but for what the line touches and where it goes. The dim reads
+        // whether the Spotlight is open itself, so a key typed in it never redraws the table (1.0.92).
+        SpotlightDim(duels, s, layout, shownFrames)
     }
 }
 
@@ -644,14 +647,113 @@ internal fun playsBoth(h: NeueHolders): Boolean {
 }
 
 /** A click on [uid] while [attacker] waits to attack: its words when the click would declare it, else null. */
-private fun attackCaption(s: DuelState, attacker: Int, uid: Int, duels: Duels): String? {
+private fun attackCaption(s: DuelState, attacker: Int, uid: Int, catalog: DuelCatalog): String? {
     val spot = when (val p = s.placeOf(uid)) {
         is Place.Zone -> DropSpot.Zone(p)
         is Place.Pile -> if (p.kind == PileKind.HAND) DropSpot.Hand(p.seat, 0) else null
         else -> null
     }
-    val intent = DuelDrop.intent(s, attacker, spot, duels.catalog)
+    val intent = DuelDrop.intent(s, attacker, spot, catalog)
     return intent.label.takeIf { intent.actions.singleOrNull() is DuelAction.Attack }
+}
+
+/** [f] as drawn while [cr] is carried: the carried card where the pointer holds it, an open pile's cards gone once one left it. */
+private fun carriedFrame(f: CardFrame, cr: Carry, stripLeft: Boolean, l: DuelLayout): CardFrame = when {
+    f.uid == cr.uid -> f.copy(x = cr.x - cr.grabX, y = cr.y - cr.grabY, rotation = 0f, z = 100f, shown = true, w = l.card, h = l.cardHeight)
+    stripLeft && f.inStrip -> f.copy(shown = false)
+    else -> f
+}
+
+/**
+ * One card of the table at [base], or — the card carried — where the pointer holds it (1.0.92): the pointer's every move
+ * is read here, by the carried card alone, never by the table round it. Every card goes through this, carried or not, so
+ * a card picked up or let go keeps its glide.
+ */
+@Composable
+private fun CarriedCard(
+    base: CardFrame,
+    follow: State<Carry?>?,
+    layout: DuelLayout,
+    caption: String?,
+    inst: CardInst,
+    card: Card?,
+    name: String,
+    selected: Boolean,
+    carried: Boolean,
+    foil: String,
+    stats: TableStats?,
+) {
+    val cr = follow?.value
+    val frame = if (cr != null && cr.uid == base.uid) carriedFrame(base, cr, stripLeft = false, layout) else base
+    TableCard(frame = frame, caption = caption, inst = inst, card = card, name = name, selected = selected, carried = carried, foil = foil, stats = stats)
+}
+
+/**
+ * What each card on the table says — the family cursor's caption, its name, its picture, its battle numbers — read once
+ * for a table and kept (1.0.92), never again on every frame of a drag: a caption asks the card's default verb, an
+ * attack's intent and where the card is. Made again when the table, the attack waiting, the bottom seat, who plays both
+ * seats, the catalog or the pool changes. One thread's (composition's).
+ */
+private class CardWords(
+    private val s: DuelState,
+    private val attacker: Int?,
+    private val bottom: Int,
+    private val playsBoth: Boolean,
+    private val catalog: DuelCatalog,
+    private val index: CardIndex,
+) {
+    private val captions = HashMap<Long, String?>()
+    private val cards = HashMap<Int, Card?>()
+    private val names = HashMap<Int, String>()
+    private val numbers = HashMap<Int, TableStats?>()
+
+    /** [Duels.seatFor] on this table: the controller of a card on the field, else its owner. */
+    private fun seatFor(uid: Int): Int {
+        val card = s.cards[uid] ?: return bottom
+        return if (s.placeOf(uid) is Place.Zone) card.controller else card.owner
+    }
+
+    /** What a right-click does to [f]'s card, for the cursor's caption; null when it is not [shown]. */
+    fun caption(f: CardFrame, shown: Boolean): String? {
+        if (!shown) return null
+        val key = (f.uid.toLong() shl 1) or (if (f.inStrip) 1L else 0L)
+        if (key in captions) return captions[key]
+        return captionOf(f.uid, f.inStrip).also { captions[key] = it }
+    }
+
+    private fun captionOf(uid: Int, inStrip: Boolean): String? = when {
+        // What a click does while an attack waits: "Attack Arias", "Attack directly" (1.0.86).
+        attacker != null && attacker != uid && !inStrip -> attackCaption(s, attacker, uid, catalog)
+        inStrip || s.placeOf(uid).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } ->
+            if (!(if (inStrip) DuelSeats.stripPlays(s, seatFor(uid), bottom, playsBoth) else s.solo || seatFor(uid) == bottom)) DuelVerb.TARGET.label
+            else DuelVerbs.default(s, seatFor(uid), uid, catalog).label
+        s.placeOf(uid).let { it is Place.Pile && it.kind == PileKind.DECK } -> "Draw"
+        else -> "Open"
+    }
+
+    fun card(uid: Int): Card? = cards.getOrPut(uid) {
+        val inst = s.cards.getValue(uid)
+        if (inst.token && inst.code == 0) null else index.byId(CardId(inst.code))
+    }
+
+    fun name(uid: Int): String = names.getOrPut(uid) { catalog.nameOf(s.cards.getValue(uid)) }
+
+    /** The card's ATK/DEF on a face-up monster in a Monster Zone; a card drawn as its back shows none (the caller's). */
+    fun stats(uid: Int): TableStats? {
+        if (uid in numbers) return numbers[uid]
+        val inst = s.cards.getValue(uid)
+        val card = card(uid)
+        val inMonsterZone = s.placeOf(uid).let { it is Place.Zone && (it.kind == ZoneKind.MONSTER || it.kind == ZoneKind.EMZ) }
+        val out = when {
+            !inst.faceUp || !inMonsterZone -> null
+            // A token's own numbers, when its maker gave them (1.0.79).
+            inst.token && (inst.atk != null || inst.def != null) -> TableStats("${inst.atk ?: "?"}", "${inst.def ?: "?"}", inst.defense)
+            card != null && card.atk != null -> TableStats("${card.atk}", card.def?.toString(), inst.defense)
+            else -> null
+        }
+        numbers[uid] = out
+        return out
+    }
 }
 
 private fun DrawScope.frame(slot: Slot, color: androidx.compose.ui.graphics.Color) {
@@ -701,8 +803,9 @@ private fun ZoneNumbers(s: DuelState, l: DuelLayout, placed: Placed) {
 
 /** The highlight under a carried card: the spot it will land in, framed, and what it will do there in words. */
 @Composable
-private fun DropHint(cr: Carry, l: DuelLayout, frames: List<CardFrame>, s: DuelState) {
+private fun DropHint(carry: State<Carry?>, l: DuelLayout) {
     val c = Mu.colors
+    val cr = carry.value ?: return
     if (cr.intent.none) return
     val slot: Slot? = when (val spot = cr.spot) {
         is DropSpot.Zone -> l.zone(spot.zone)
@@ -736,6 +839,14 @@ private fun DropHint(cr: Carry, l: DuelLayout, frames: List<CardFrame>, s: DuelS
     Box(Modifier.zIndex(91f).offset(slot.left.dp, (slot.top - 22).dp).background(c.ink).padding(horizontal = 6.dp, vertical = 3.dp)) {
         Micro(cr.intent.label, color = c.paper)
     }
+}
+
+/** The box dragged over the table to pick the cards it touches. */
+@Composable
+private fun PickBox(box: State<Slot?>) {
+    val c = Mu.colors
+    val b = box.value ?: return
+    Box(Modifier.zIndex(60f).offset(b.left.dp, b.top.dp).size(b.width.dp, b.height.dp).border(1.dp, c.ink).background(c.ink06))
 }
 
 /** Target arrows: from the card (or the seat's score) to each target, ink over a paper edge so they read on any art. */
@@ -781,12 +892,14 @@ private fun DrawScope.arrows(s: DuelState, l: DuelLayout, frames: List<CardFrame
 
 /** A ping, for three seconds: a frame round what was pointed at and the word, in ink. */
 @Composable
-private fun Pings(game: DuelGame, l: DuelLayout, frames: List<CardFrame>) {
+private fun Pings(game: DuelGame, l: DuelLayout, shown: State<List<CardFrame>>) {
     val c = Mu.colors
     var tick by remember { mutableStateOf(0) }
     val now = remember(tick, game.cursor) { Duels.now() }
     val recent = game.played.takeLast(12).filter { it.action is DuelAction.Ping && now - it.at < PING_MS }
     LaunchedEffect(game.cursor, tick) { if (recent.isNotEmpty()) { delay(PING_MS); tick++ } }
+    // The frames as drawn read only with a ping to place: a carried card's every move is not the pings' business otherwise.
+    val frames = if (recent.isEmpty()) emptyList() else shown.value
     recent.mapNotNull { e ->
         val p = e.action as DuelAction.Ping
         val slot = p.uid?.let { uid -> frames.firstOrNull { it.uid == uid && it.shown }?.let { Slot(it.x, it.y, it.w, it.h) } }
@@ -840,6 +953,7 @@ private fun boxOf(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFr
 @Composable
 private fun FocusRing(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>, viewers: Set<Int>) {
     val c = Mu.colors
+    if (!duels.byKeys) return
     val focus = duels.focus ?: return
     val box = boxOf(duels, s, l, frames, focus) ?: return
     val uid = DuelFocus.uidAt(s, focus, duels.eyes)
@@ -885,8 +999,9 @@ private fun FocusRing(duels: Duels, s: DuelState, l: DuelLayout, frames: List<Ca
  * leave the art alone.
  */
 @Composable
-private fun Coordinates(duels: Duels, s: DuelState, l: DuelLayout, frames: List<CardFrame>) {
+private fun Coordinates(duels: Duels, s: DuelState, l: DuelLayout, shown: State<List<CardFrame>>) {
     val c = Mu.colors
+    val frames = shown.value
     val viewer = duels.bottom
     val cells = DuelFocus.cells(s, viewer, duels.focusShape()).map { it.slot }.filter { it !is DuelFocus.Slot.Link } +
         (duels.strip?.let { (seat, kind) -> s.seats[seat].pile(kind).indices.map { DuelFocus.Slot.PileCard(seat, kind, it) } } ?: emptyList())

@@ -43,6 +43,22 @@ internal class DuelReplays(private val d: Duels) {
         return set
     }
 
+    /** The open replay's table where it stands, with the record and the place it was made for (1.0.92). */
+    private var shownAt: Triple<DuelRecord, Int, DuelGame>? = null
+
+    /**
+     * [r]'s table at [Replay.at], made once a place (1.0.92): the table asks after it dozens of times a frame (whose seat a
+     * card is, what it shows), and each of those folded the timeline again and made a new game of it.
+     */
+    fun shown(r: Replay): DuelGame {
+        shownAt?.let { (rec, at, g) -> if (rec === r.record && at == r.at) return g }
+        val t = timelineFor(r.record)
+        val floor = r.record.entries.indexOfFirst { it.seat != null }.let { if (it < 0) r.record.entries.size else it }
+        val g = DuelGame(r.record.header, r.record.entries, r.at, t.at(r.at).first, minOf(floor, r.at))
+        shownAt = Triple(r.record, r.at, g)
+        return g
+    }
+
     fun timelineFor(r: DuelRecord): DuelTimeline {
         if (timelineOf !== r) {
             timeline = Replays.timeline(r)
@@ -113,6 +129,7 @@ internal class DuelReplays(private val d: Duels) {
         replay = null
         timeline = null
         timelineOf = null
+        shownAt = null
     }
 
     /** The replay moved to [at], within its log. */
