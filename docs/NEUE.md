@@ -2578,7 +2578,11 @@ How far to trust a connection, measured — Settings › Assistant › Trust (`T
   half with one planted mistake. **Card truth** (1.1.2, Phase B F1, `EvalSets.cardTruth`): 32 questions only the tools
   answer — 14 past banlists by date and region (`banlist`, now in `EVAL_TOOLS`), 8 releases by region and date, 5 copy
   counts by passcode across printings, 5 Genesys points (`Grader.Number`) — each fact read live on 2026-10-04 from Yugipedia's
-  list pages through `LimitationParser`/`BanlistHistory` or YGOPRODeck's `misc_info`, its source named.
+  list pages through `LimitationParser`/`BanlistHistory` or YGOPRODeck's `misc_info`, its source named. **Duel puzzles**
+  (Phase C stage 3, `EvalSets.PUZZLES`, `Puzzles`, `docs/phases/C.md` §5): 17 positions with a known goal, each played on a
+  table of its own (`PuzzleTable`) with `duel_state`, `duel_moves` and `duel_act` only, under a referee that admits a turn's
+  legal moves and works out battle itself (`PuzzleReferee`), and graded on the table (`Grader.Puzzle`); Trust shows the
+  set's bounds under it — doing nothing 0, a battle-only greedy player 2, the recorded solutions 17 (`PuzzleBaselines`).
 - **Graded by code, never a model** (`Grading`): a percentage at the precision asked, a yes or no, a whole number, a decklist exactly,
   and for the checker its claims — a mistake caught, a clean answer left alone.
 - **The runner** (`AiEval.kt`, `startEval`): each question asked as a person's is — the rules primer in, the look-up
@@ -3831,6 +3835,21 @@ only with full knowledge). The leads closed: one coordinate convention (`ComboRu
 `oh2` is the card the brief shows there), every word in Ai's lines through `Secrets` (`ComboRunner.redacted`), and a cue
 keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held by `DuelTableTest`.
 
+**Puzzles, self-play and the red team, stage 3** (Phase C, `docs/phases/C.md` §5–§7; Phase C done):
+- **Duel puzzles in Trust** (`EvalSets.PUZZLES`): 17 one-turn positions of Normal Monsters and a few Normal Spells, played
+  by Ai on tables of their own through `duel_state`/`duel_moves`/`duel_act` (`PuzzleTable`, `AiEval.playPuzzle`) under a
+  referee (`PuzzleReferee`: one Normal Summon with its Tributes, a position change once, attacks once and directly only at
+  an empty field, battle worked out by `DuelBattle`, the puzzle's Spells resolved as written; `lp` and moves by hand
+  refused), graded on the table. Baselines: nothing 0, battle-only greedy 2, the solutions 17 of 17.
+- **Self-play** (`ygo.duel.start({seed, first})`, `ygo.duel.fork()` in Ai World, §4r): both seats Ai's, a finished table a
+  `DuelResult` with `kind: "self-play"` (and its `seed`, `forkOf`), kept with the records by `Duels.keepResult` and counted
+  apart: "Ai against itself: … won N of M against …" (`DuelResults.againstItself`, `selfWords`) in `duel_records` and
+  Replays.
+- **The red team:** the brief on a very full table was 12,501 characters a cue; a card's facts are now at its first mention
+  only (8,934, `DuelScaleTest` bounds it at 10,000). `duel_moves` there: 424 moves in about 0.6 s on the desktop. The menu,
+  `card=` and a card asked for by name name no hidden card (`PhaseCRedTeamTest`). A number key after a placement no longer
+  re-makes Ai's last move as the person's (`Duels.replace`, `DuelNumberKeyTest`).
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five
@@ -3911,6 +3930,13 @@ unsaved edits and all, every library deck, groups — `WorldSnapshot`, plain val
 Fisher–Yates, a tenth of a full shuffle — `deal`, `simulate`, `rate` with Wilson's interval); `stats` (`WorldStats`:
 summaries, histogram, Wilson, binomial, normal, chi-square with its p-value); a duel table of the script's own on the real
 rules (`duel.start`, `do`, `brief`, `state` — physics only, as the Duel page); and `show.*`, which pins boards.
+**Self-play tables** (Phase C stage 3, `docs/phases/C.md` §6): `duel.start({a, b, seed, first})` takes a seed (a fresh one
+when none is given, `t.seed` — every table was seed 1 before) and who has turn 1; `duel.fork()` copies the duel in play as
+the seat Ai would hold sees it (`DuelFork`: that seat's `DuelView` and its own decklist, the rest unknown cards, both Decks
+shuffled by the fork's seed; never a networked duel); `t.do(line, seat)` moves either seat through `ComboRunner.plan`, each
+move Ai's (`Provenance` ai, that seat); `t.moves(seat)` is the `DuelMoves` menu; `t.result()`. A table that ends is a
+`DuelResult` of kind `self-play` (`WorldApi.finished`), kept with the duel records by the run (`Worlds.keepDuel`) and counted
+apart from games against kai.
 
 **Boards** (`WorldShow.kt`, painted by `neue/world/WorldPaint.kt`, the World's one file allowed colour — charts and webs
 read better in it, kai's call): markdown (the chat's renderer), chart (the chat's bar, hbar, line and stacked, plus

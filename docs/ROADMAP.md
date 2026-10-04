@@ -341,5 +341,5 @@ These change what gets built. Each has a default the plan assumes until you say 
 | A Trust | Shipped 1.0.99 / v1.3.77 |
 | B Card truth | **Done**: 1.1.0 / v1.3.78 (card identity, release data, banlists by date, the field read honestly) and 1.1.1 / v1.3.79 (the builder's dated legality and Genesys, the field as of a date, the Card truth set in Trust) |
 | S Shootout | **Started**: the simulation study, model and picker in core (`docs/phases/S.md`) |
-| C The measured duel | **Started**: stage 1 — provenance on every move, results and "Ai won N of M" (`duel_records`), Prep's first or second, the four duel leads (`docs/phases/C.md`) |
+| C The measured duel | **Done** (`docs/phases/C.md`): stage 1 — provenance on every move, results and "Ai won N of M" (`duel_records`), Prep's first or second, the four duel leads; stage 2 — the table in full for Ai, `duel_moves`, its guide at the table; stage 3 — the duel puzzle set in Trust with its baseline (nothing 0, battle-only greedy 2, solutions 17 of 17), self-play tables in Ai World (a seed, who goes first, a fork; "Ai against itself" counted apart), the red team on the phase |
 | D to G | Planned |

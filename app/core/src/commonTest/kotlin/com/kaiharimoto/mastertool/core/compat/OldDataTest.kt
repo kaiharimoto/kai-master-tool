@@ -389,4 +389,26 @@ class OldDataTest {
         assertEquals(null, DuelResultCodec.decode("""{"ended":1}"""))
         assertEquals(null, DuelResultCodec.decode("{"))
     }
+
+    @Test
+    fun aDuelRecordWithoutAKindIsATableDuelAndASelfPlayRecordIsNeverAGameAgainstAPerson() {
+        // Up to 1.1.2 a record has no `kind`: a duel at the table, counted as it was.
+        val table = assertNotNull(DuelResultCodec.decode("""{"id":"d9","duel":"d9","ended":1,"seats":[{"name":"Kai","player":"person"},
+            {"name":"Ai","player":"ai"}],"winner":0,"turns":5,"ai":{"seat":1,"knows":"self","moves":9}}"""))
+        assertEquals(null, table.kind)
+        assertEquals(1, DuelResults.aiAgainst(listOf(table)).single().lost)
+        // Phase C stage 3: a self-play record of Ai World's carries its kind, seed and fork, and is counted apart.
+        val selfPlay = """{"id":"world-1-0-s7","duel":"world-1-0","ended":2,"seats":[{"name":"Branded","deckName":"Branded","player":"ai",
+            "moves":{"ai":30}},{"name":"Snake-Eye","deckName":"Snake-Eye","player":"ai","moves":{"ai":28}}],"winner":0,"turns":7,
+            "kind":"self-play","seed":7,"forkOf":"d9"}"""
+        val r = assertNotNull(DuelResultCodec.decode(selfPlay))
+        assertEquals(DuelResult.SELF_PLAY, r.kind)
+        assertEquals(7L, r.seed)
+        assertEquals("d9", r.forkOf)
+        assertTrue(DuelResults.aiAgainst(listOf(r)).isEmpty())
+        assertEquals("Ai against itself: Branded won 1 of 1 against Snake-Eye; going first won 1.", DuelResults.summary(listOf(r)))
+        // An older build skips the keys it does not know: both seats Ai's, it is still no game against a person.
+        val older = assertNotNull(DuelResultCodec.decode(selfPlay.replace("\"kind\":\"self-play\",", "")))
+        assertTrue(DuelResults.aiAgainst(listOf(older)).isEmpty())
+    }
 }

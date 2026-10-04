@@ -359,7 +359,8 @@ internal class AiDuel(private val h: NeueHolders) {
         val won = r.winner?.let { "${r.seats.getOrNull(it)?.name ?: "Player ${it + 1}"} won by ${if (r.how == DuelResult.CONCEDE) "concession" else "life points"}" } ?: "a draw"
         val ai = r.ai?.let { a -> "; ${h.ai.name} at seat ${a.seat}, knowledge ${a.knows}, ${a.peeks} peeks${if (!a.clean) ", a seat moved by the other side" else ""}" } ?: ""
         val where = if (r.net) "; networked" else r.eyes?.let { "; the person's eyes: $it" } ?: ""
-        return "${r.id} · $date · ${seat(0)} v ${seat(1)} · $first · $won in turn ${r.turns}$ai$where${if (r.whatIf) " · a what-if" else ""}"
+        val self = if (r.kind == DuelResult.SELF_PLAY) " · self-play in Ai World, seed ${r.seed}${r.forkOf?.let { ", forked from $it" } ?: ""}" else ""
+        return "${r.id} · $date · ${seat(0)} v ${seat(1)} · $first · $won in turn ${r.turns}$ai$where${if (r.whatIf) " · a what-if" else ""}$self"
     }
 
     /** Ai's response triggers (1.0.85): watches the table checks each move against, waking Ai only on a match. */

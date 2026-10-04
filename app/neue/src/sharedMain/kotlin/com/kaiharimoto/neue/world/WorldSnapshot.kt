@@ -3,6 +3,9 @@ package com.kaiharimoto.neue.world
 import com.kaiharimoto.mastertool.core.cards.BanlistHistory
 import com.kaiharimoto.mastertool.core.deck.DeckGroups
 import com.kaiharimoto.mastertool.core.deck.DeckGroupsCodec
+import com.kaiharimoto.mastertool.core.duel.DuelCodec
+import com.kaiharimoto.mastertool.core.duel.DuelFork
+import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.ai.Combo
 import com.kaiharimoto.mastertool.core.duel.ai.ComboCodec
 import com.kaiharimoto.mastertool.core.model.Card
@@ -16,6 +19,7 @@ import com.kaiharimoto.mastertool.core.search.SearchScope
 import com.kaiharimoto.mastertool.core.world.WorldHost
 import com.kaiharimoto.mastertool.core.world.WorldPaths
 import com.kaiharimoto.neue.NeueHolders
+import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.platform.Platform
 import java.io.File
 import java.time.LocalDate
@@ -39,7 +43,11 @@ class WorldSnapshot private constructor(
     private val bans: (Format) -> BanlistHistory? = { null },
     private val region: Format = Format.TCG,
     private val day: String? = null,
+    /** The duel in play as Ai's seat reads it (Phase C stage 3, `ygo.duel.fork`): a view, never the live table. */
+    private val fork: Lazy<DuelFork.Source?> = lazyOf(null),
 ) : WorldHost {
+    override fun now(): Long = System.currentTimeMillis()
+    override fun liveDuel(): DuelFork.Source? = fork.value
     override fun cardById(id: Int): Card? = index.byId(CardId(id))
     override fun cardNamed(name: String): Card? = index.byName(name)
     override fun search(query: String, limit: Int): List<Card> = index.search(query, scope = SearchScope.NAMES, limit = limit).cards
@@ -62,7 +70,7 @@ class WorldSnapshot private constructor(
     }
 
     /** This snapshot reading a world's own files, for `ygo.use`. */
-    fun reading(files: File): WorldSnapshot = WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files, bans, region, day)
+    fun reading(files: File): WorldSnapshot = WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files, bans, region, day, fork)
 
     companion object {
         /** Read on the main thread, where the builder's state lives; the library from its repository. */
@@ -83,8 +91,27 @@ class WorldSnapshot private constructor(
             banlists.warm(b.format)
             return WorldSnapshot(
                 b.index, open, stored.map { it.entry }, groups, games, shares, File(Platform.dataDir, "duel"),
-                bans = banlists::history, region = b.format, day = LocalDate.now().toString(),
+                bans = banlists::history, region = b.format, day = LocalDate.now().toString(), fork = fork(h),
             )
+        }
+
+        /**
+         * The duel in play, as the seat Ai would hold reads it with its knowledge setting (Phase C stage 3): the page's when
+         * the Duel page has been opened, else the one left in `<data>/duel/current.json`. Never a networked table's (its
+         * seats are two people's: `AiTable`), and never the table itself — a [DuelFork.Source] holds that seat's view.
+         */
+        private fun fork(h: NeueHolders): Lazy<DuelFork.Source?> {
+            val d = h.neue.prefs.duel
+            fun of(game: DuelGame?): DuelFork.Source? {
+                game ?: return null
+                // A host's networked duel is the two players' (its entries say so, on disk too).
+                if (game.played.any { it.by?.net == true }) return null
+                return DuelFork.source(game, if (game.state.solo) 0 else d.aiSeat, d.aiKnowledge)
+            }
+            // The page's duel, read now on the main thread; else the one on disk, read only if a script forks it.
+            if (h.duelStarted) return lazyOf(if (h.duel.role != null) null else of(h.duel.game))
+            val file = File(File(Platform.dataDir, "duel"), Duels.CURRENT)
+            return lazy { of(runCatching { file.takeIf { it.isFile }?.readText()?.let(DuelCodec::decode)?.let(DuelGame::of) }.getOrNull()) }
         }
     }
 }

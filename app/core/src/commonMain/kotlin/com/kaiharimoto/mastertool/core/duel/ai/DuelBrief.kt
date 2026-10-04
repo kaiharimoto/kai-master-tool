@@ -70,6 +70,7 @@ object DuelBrief {
         fun uidOf(c: ViewCard, among: List<Int>): Int? =
             if (c.ref > 0) c.ref else among.firstOrNull { DuelView.veil(secret, it, s.epoch[it] ?: 0) == c.ref }
         fun coord(c: ViewCard, among: List<Int>): String? = uidOf(c, among)?.let { DuelNotation.coordOf(s, it, side, secret) }
+        val told = HashSet<Pair<Int?, String>>()
         fun name(c: ViewCard, at: String? = null): String {
             val head = at?.let { "$it " }.orEmpty()
             if (c.code == null) return "${head}a face-down card [?${-c.ref}]"
@@ -85,7 +86,9 @@ object DuelBrief {
                 CardPosition.FACE_DOWN_ATK -> ", set"
             }
             val extra = buildList {
-                facts(c, catalog)?.let(::add)
+                // A card's facts at its first mention only (Phase C stage 3, the red team: a long game's GYs repeated the
+                // same Level, Attribute and ATK for every copy — a quarter of the brief on a full table).
+                facts(c, catalog)?.let { f -> if (told.add(c.code to f)) add(f) }
                 if (c.counters.isNotEmpty()) add(c.counters.entries.joinToString { (k, n) -> "$n ${k.ifBlank { "counter" }}" })
                 if (c.under.isNotEmpty()) add("materials: " + c.under.joinToString { name(it) })
             }.joinToString("; ")
@@ -129,7 +132,7 @@ object DuelBrief {
             appendLine("Extra Monster Zones (\"emz left\" / \"emz right\" are your own left and right): ${emz.joinToString(" · ")}")
             appendLine(
                 "Coordinates are ${DuelWords.possessive(DuelWords.seatName(s, side))} (h1 the hand's first card, m1–m5, s1–s5, fz, gy1 the GY's top, " +
-                    "ban1, ex1; theirs with o: oh2, om3, ogy1; e1/e2 the Extra Monster Zones): any op takes one in place of a name.",
+                    "ban1, ex1; theirs with o: oh2, om3, ogy1; e1/e2 the Extra Monster Zones): any op takes one in place of a name. A card's printed facts are at its first mention.",
             )
             appendLine()
             val seats = if (s.solo) listOf(0) else listOf(0, 1)

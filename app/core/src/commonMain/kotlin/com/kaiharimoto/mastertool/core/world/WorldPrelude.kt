@@ -150,17 +150,26 @@ object WorldPrelude {
     })(),
     // One of your own instruments (a file under lib/, say): run in the global scope, its functions yours to call; its last value returned.
     use: function (path) { return (0, eval)(call('file', { path: String(path) })); },
-    duel: {
-      start: function (o) {
-        var h = call('duelNew', o || {});
+    duel: (function () {
+      // A table of the script's own (self-play, Phase C): a seed (a fresh one when none is given; t.seed says which), first
+      // (the seat that has turn 1), or fork: true for the duel in play as Ai's seat sees it. Both seats are Ai's; a table that
+      // ends is kept as a self-play result.
+      function table(t) {
+        var h = t.h;
         return {
-          h: h,
+          h: h, seed: t.seed, first: t.first, forkOf: t.forkOf,
           do: function (line, seat) { return call('duelDo', { h: h, line: String(line), seat: seat || 0 }); },
           brief: function (seat) { return call('duelBrief', { h: h, seat: seat || 0 }); },
-          state: function () { return call('duelState', { h: h }); }
+          state: function () { return call('duelState', { h: h }); },
+          moves: function (seat) { return call('duelMoves', { h: h, seat: seat || 0 }); },
+          result: function () { return call('duelResult', { h: h }); }
         };
       }
-    }
+      return {
+        start: function (o) { return table(call('duelNew', o || {})); },
+        fork: function (o) { var x = o || {}; x.fork = true; return table(call('duelNew', x)); }
+      };
+    })()
   };
   g.ygo = ygo;
 })(this);

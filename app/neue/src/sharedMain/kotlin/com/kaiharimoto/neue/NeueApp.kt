@@ -229,10 +229,15 @@ class NeueHolders(
     private val duelHolder = lazy { Duels(java.io.File(Platform.dataDir, "duel")).also { d -> d.context = { duelContext(this) } } }
     val duel: Duels by duelHolder
 
+    /** Whether the duel holder exists this run (Phase C stage 3: a World's fork reads the page's duel, else the one on disk). */
+    val duelStarted: Boolean get() = duelHolder.isInitialized()
+
     /** Ai World (1.0.97): Ai's own computer — its files, runs and boards — in `<data>/world/`. */
     private val worldHolder = lazy {
         Worlds(java.io.File(Platform.dataDir, "world")).also { w ->
             w.host = { WorldSnapshot.of(this) }
+            // A self-play table that ends is a duel record of its own kind (Phase C stage 3).
+            w.keepDuel = { r -> duel.keepResult(r) }
             w.prefs = { neue.prefs.world }
             w.comeForward = { if (neue.page != Page.WORLD) neue.go(Page.WORLD) }
             w.load()

@@ -83,6 +83,7 @@ import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.eval.EvalLog
 import com.kaiharimoto.mastertool.core.ai.eval.EvalSets
 import com.kaiharimoto.mastertool.core.ai.eval.Grader
+import com.kaiharimoto.mastertool.core.ai.eval.Puzzles
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.neue.ai.evalRuns
 import com.kaiharimoto.neue.ai.startEval
@@ -599,6 +600,41 @@ class AiEndToEndTest {
         withTimeout(20_000) { while (h.ai.evalJob != null) delay(20) }
         val checked = EvalLog.latest(h.ai.evalRuns(conn.id))[EvalSets.PLANTED]!!
         assertEquals(12, checked.items.count { it.firstPass }, "12 clean answers left alone, 12 mistakes missed")
+    }
+
+    @Test
+    fun puzzlesArePlayedOnTablesOfTheirOwnAndGradedOnTheTable() = runBlocking {
+        val h = holders()
+        val conn = AiConnection("c-puzzle", "anthropic", model = "scripted")
+        h.neue.update { it.copy(ai = it.ai.copy(connections = listOf(conn), active = conn.id)) }
+        // A scripted model: on p01 it plays the recorded line through duel_act; on every other puzzle it cheats by typing
+        // the damage; then it says DONE. Only the tools it was given are offered.
+        val offered = mutableSetOf<String>()
+        val scripted = object : ModelBackend {
+            override val runsOwnLoop = false
+            override fun turn(request: TurnRequest) = flow {
+                offered += request.tools.map { it.name }
+                val asked = request.history.first().text
+                val acted = request.history.any { t -> t.parts.any { it is Part.ToolResult } }
+                if (acted) {
+                    emit(BackendEvent.Finished(StopReason.END, ChatTurn.assistant("DONE"), usage = Usage(input = 100, output = 5)))
+                } else {
+                    val ops = if ("p01" in asked) Puzzles.byId("p01")!!.solution else listOf("lp opp =0")
+                    val call = Part.ToolUse("a1", "duel_act", buildJsonObject { putJsonArray("ops") { ops.forEach { add(JsonPrimitive(it)) } } })
+                    emit(BackendEvent.Finished(StopReason.TOOL_USE, ChatTurn(Role.ASSISTANT, listOf(call)), usage = Usage(input = 100, output = 10)))
+                }
+            }
+        }
+        h.ai.backend = "${conn.id}:${conn.model}:${conn.baseUrl}:${conn.program}" to scripted
+        h.ai.files.delete(EvalLog.path(conn.id))
+        val before = h.duel.game
+        h.ai.startEval(Puzzles.set(), conn)
+        withTimeout(30_000) { while (h.ai.evalJob != null) delay(20) }
+        val run = EvalLog.latest(h.ai.evalRuns(conn.id))[EvalSets.PUZZLES]!!
+        assertEquals(listOf("p01"), run.items.filter { it.firstPass }.map { it.id }, "the line played wins; typed damage is refused")
+        assertTrue("met" in run.items.first { it.id == "p01" }.read, run.items.first().read)
+        assertEquals(setOf("duel_state", "duel_moves", "duel_act"), offered)
+        assertEquals(before, h.duel.game, "the duel in play is never touched")
     }
 
     @Test

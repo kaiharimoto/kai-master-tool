@@ -190,6 +190,24 @@ class JsRuntimeTest {
     }
 
     @Test
+    fun aScriptPlaysAiAgainstItselfToTheEnd() {
+        val (r, api) = run(
+            """
+            var t = ygo.duel.start({a: 'd1', b: 'd1', seed: 21, first: 1});
+            print(t.seed, t.first, t.state().active);
+            print(t.moves(1).length > 0, t.do('draw', 1).ok, t.result());
+            var end = t.do('concede', 0);
+            print(end.ended.winner, end.ended.kind, t.result().winner, t.do('draw', 1).ok);
+            var u = ygo.duel.start({a: 'd1', b: 'd1'});
+            print(u.seed !== 1 && u.seed > 0);
+            """.trimIndent(),
+        )
+        assertTrue(r.ok, r.err)
+        assertEquals("21 1 1\ntrue true null\n1 self-play 1 false\ntrue\n", r.out)
+        assertEquals(1, api.finished.size)
+    }
+
+    @Test
     fun theStatisticsAreReachable() {
         val (r, _) = run("var w = ygo.stats.wilson(81, 263); [w[0].toFixed(3), ygo.stats.median([3,1,2])].join(' ')")
         assertTrue(r.ok, r.err)

@@ -390,6 +390,8 @@ class Duels(val dir: File) {
     /** Every result, once read from disk (Ai's `duel_records`). */
     suspend fun readResults(): List<DuelResult> = records.read()
     fun reloadResults() = records.reload()
+    /** A self-play table's result from Ai World (Phase C stage 3), kept with the rest. */
+    fun keepResult(r: DuelResult) = records.keep(r)
     /** The duel in play looked at again: its result written when it has ended, taken away when the end was undone. */
     fun noteResult() = records.note(game)
 
@@ -721,6 +723,9 @@ class Duels(val dir: File) {
         val g = game ?: return false
         val last = g.entries.getOrNull(g.cursor - 1) ?: return false
         val group = g.entries.filter { it.group == last.group }.map { it.action }
+        // Only the placement itself (Phase C stage 3, the red team): with Ai's move logged since, the number key undid Ai's
+        // group and wrote it again under its provenance — the person's key recorded as Ai's move.
+        if (last.by?.byAi == true || group.none { it is DuelAction.Move && it.uid == p.uid && it.to is Place.Zone }) return false
         val zone = Place.Zone(p.seat, kind, index)
         val moved = group.map { a -> if (a is DuelAction.Move && a.uid == p.uid && a.to is Place.Zone) a.copy(to = zone) else a }
         val undone = g.undo()

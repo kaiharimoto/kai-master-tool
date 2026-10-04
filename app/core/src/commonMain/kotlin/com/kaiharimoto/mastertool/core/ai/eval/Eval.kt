@@ -49,6 +49,10 @@ sealed interface Grader {
      */
     @Serializable
     data class Planted(val hasError: Boolean, val about: List<String> = emptyList()) : Grader
+
+    /** A duel puzzle ([Puzzles], Phase C stage 3), graded by playing it: the goal checked on its table, never on words. */
+    @Serializable
+    data class Puzzle(val id: String) : Grader
 }
 
 /** One graded answer: whether it passed, and the words the grade read. */
@@ -65,6 +69,7 @@ object Grading {
         is Grader.Number -> number(grader, answer)
         is Grader.Decklist -> decklist(grader, answer)
         is Grader.Planted -> Graded(false, "a planted answer is graded on the checker's claims")
+        is Grader.Puzzle -> Graded(false, "a puzzle is graded on its table, by playing it")
     }
 
     /** The checker's claims on a planted answer, graded: a mistake caught, or a clean answer left alone. */

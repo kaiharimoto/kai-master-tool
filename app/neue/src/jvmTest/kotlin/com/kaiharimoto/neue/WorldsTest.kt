@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
@@ -58,6 +59,27 @@ class WorldsTest {
 
     /** The terminal fills on the main thread: wait for it to settle. */
     private suspend fun settle() = withContext(Dispatchers.Main) { delay(150) }
+
+    @Test
+    fun aSelfPlayTableThatEndsIsKeptWithTheDuelRecords() = runBlocking {
+        val w = worlds()
+        val kept = mutableListOf<DuelResult>()
+        w.keepDuel = { kept += it }
+        withContext(Dispatchers.Main) { w.create("Self-play", null) }
+        val code = """
+            var t = ygo.duel.start({a: 'd1', b: 'd1', seed: 4});
+            t.do('draw', 0); t.do('end', 0); t.do('draw', 1);
+            t.do('concede', 1).ended.winner
+        """.trimIndent()
+        val run = withContext(Dispatchers.Main) { w.run(null, code, "js") }.getOrThrow()
+        settle()
+        assertTrue(run.record.ok, run.record.err)
+        assertEquals("0", run.value)
+        val r = kept.single()
+        assertEquals(DuelResult.SELF_PLAY, r.kind)
+        assertEquals(4L, r.seed)
+        assertTrue(w.terminal.any { "1 self-play duel kept" in it.text }, w.terminal.toString())
+    }
 
     @Test
     fun aScriptIsWrittenRunAndPinned() = runBlocking {

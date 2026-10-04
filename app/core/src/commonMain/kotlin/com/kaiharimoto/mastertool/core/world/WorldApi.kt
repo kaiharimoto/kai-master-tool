@@ -10,12 +10,18 @@ import com.kaiharimoto.mastertool.core.deck.DeckValidator
 import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
+import com.kaiharimoto.mastertool.core.duel.DuelFork
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
+import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.ai.Combo
+import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
-import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
+import com.kaiharimoto.mastertool.core.duel.ai.DuelMoves
+import com.kaiharimoto.mastertool.core.duel.record.DuelResult
+import com.kaiharimoto.mastertool.core.duel.record.DuelResults
+import kotlin.random.Random
 import com.kaiharimoto.mastertool.core.hand.HandConstraint
 import com.kaiharimoto.mastertool.core.hand.HandOdds
 import com.kaiharimoto.mastertool.core.hand.HandQuery
@@ -54,7 +60,19 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
     /** Where an instrument's terminal lines go: the running engine's own output, so they stream with the script's. */
     var print: (String) -> Unit = {}
     private val duels = mutableListOf<DuelGame>()
-    private val catalog = DuelCatalog.cached { code -> host.cardById(code)?.let(DuelCardInfo::of) }
+    /** The tables forked from the duel in play: the table's handle → that duel's id. */
+    private val forkOf = HashMap<Int, String>()
+    /** The tables whose end is already kept in [finished]. */
+    private val ended = HashSet<Int>()
+
+    /**
+     * Each self-play table that finished in this run, as a result of its own kind (Phase C stage 3): the world keeps them
+     * with the duel records, apart from games against people.
+     */
+    val finished = mutableListOf<DuelResult>()
+
+    // A fork's cards its seat never saw are unknown cards (DuelFork): they read as such, never as a passcode.
+    private val catalog = DuelCatalog.cached { code -> if (code == DuelFork.UNKNOWN) DuelFork.UNKNOWN_INFO else host.cardById(code)?.let(DuelCardInfo::of) }
 
     /** The answer to [name] with [args], or an [IllegalArgumentException] whose message is the script's error. */
     fun call(name: String, args: JsonObject): JsonElement = when (name) {
@@ -88,6 +106,8 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
         "duelDo" -> duelDo(args)
         "duelBrief" -> JsonPrimitive(duel(args).let { g -> DuelBrief.describe(g.state, args.int("seat") ?: 0, catalog, g.header.seed) })
         "duelState" -> duelState(duel(args))
+        "duelMoves" -> duelMoves(args)
+        "duelResult" -> duelResult(args)
         "tool" -> tool(args)
         "guide" -> JsonPrimitive(Instruments.GUIDE)
         "file" -> {
@@ -285,51 +305,117 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             .ifEmpty { k.name.lowercase().replaceFirstChar { it.uppercase() } }
 
     // ---- A duel table of the script's own: the real rules, headless, both seats the script's. -------------------
+    //
+    // Self-play (Phase C stage 3, `docs/phases/C.md` §6): a table takes a seed (a fresh one when none is given, always
+    // returned — the tables were all seed 1 before, every game the same deal), who goes first, or a fork of the duel in
+    // play as the seat Ai would hold sees it (DuelFork). Moves go through the line Ai plays kai with (ComboRunner.plan),
+    // each Ai's own (provenance `ai` on both seats), and a table that ends becomes a self-play result ([finished]).
 
     private fun duelNew(a: JsonObject): JsonElement {
         require(duels.size < limits.duels) { "a run may open at most ${limits.duels} duel tables" }
-        val solo = a["solo"]?.let { (it as? JsonPrimitive)?.contentOrNull == "true" } ?: (a.str("b") == null)
-        fun seat(id: String?, label: String): SeatSetup {
-            val d = (if (id == null || id == "open") host.deck(null) else host.deck(id))
-                ?: throw IllegalArgumentException("no deck “${id ?: "open"}” for $label")
-            return SeatSetup(name = d.name, main = d.deck.main.map { it.value }, extra = d.deck.extra.map { it.value }, deckId = d.id, deckName = d.name)
+        val seed = a.num("seed")?.toLong() ?: Random.nextInt(1, Int.MAX_VALUE).toLong()
+        val id = "world-${host.now()}-${duels.size}"
+        val fork = (a["fork"] as? JsonPrimitive)?.contentOrNull == "true"
+        val game = if (fork) {
+            val src = host.liveDuel() ?: throw IllegalArgumentException(
+                "there is no duel in play to fork: one is started on the Duel page (a networked table is the two players', never forked)",
+            )
+            forkOf[duels.size] = src.header.id
+            DuelFork.table(src, seed, id)
+        } else {
+            val solo = a["solo"]?.let { (it as? JsonPrimitive)?.contentOrNull == "true" } ?: (a.str("b") == null)
+            val first = a.int("first") ?: 0
+            require(first == 0 || first == 1) { "first is the seat that has turn 1: 0 or 1" }
+            require(!solo || first == 0) { "a one-player table is seat 0's" }
+            fun seat(id: String?, label: String): SeatSetup {
+                val d = (if (id == null || id == "open") host.deck(null) else host.deck(id))
+                    ?: throw IllegalArgumentException("no deck “${id ?: "open"}” for $label")
+                return SeatSetup(name = d.name, main = d.deck.main.map { it.value }, extra = d.deck.extra.map { it.value }, deckId = d.id, deckName = d.name)
+            }
+            val seats = listOf(seat(a.str("a"), "seat 0"), if (solo) SeatSetup() else seat(a.str("b"), "seat 1"))
+            val header = DuelHeader(id = id, seed = seed, seats = seats, first = first, solo = solo, handSize = if (a["hand"] == null) 5 else a.size("hand", MAX_HAND).toInt(), created = host.now())
+            DuelGame.start(header)
         }
-        val seats = listOf(seat(a.str("a"), "seat 0"), if (solo) SeatSetup() else seat(a.str("b"), "seat 1"))
-        val header = DuelHeader(id = "world-${duels.size}", seed = a.num("seed")?.toLong() ?: 1L, seats = seats, solo = solo, handSize = if (a["hand"] == null) 5 else a.size("hand", MAX_HAND).toInt())
-        duels += DuelGame.start(header)
-        return JsonPrimitive(duels.size - 1)
+        duels += game
+        return buildJsonObject {
+            put("h", duels.size - 1)
+            put("seed", seed)
+            put("first", game.header.first)
+            put("active", game.state.active)
+            forkOf[duels.size - 1]?.let { put("forkOf", it) }
+        }
     }
 
     private fun duel(a: JsonObject): DuelGame =
         duels.getOrNull(a.int("h") ?: -1) ?: throw IllegalArgumentException("no duel table ${a["h"]} — open one with ygo.duel.start")
 
+    private fun seatOf(a: JsonObject): Int = (a.int("seat") ?: 0).also { require(it == 0 || it == 1) { "seat is 0 or 1" } }
+
     private fun duelDo(a: JsonObject): JsonElement {
         val h = a.int("h") ?: -1
         val game = duel(a)
-        val seat = a.int("seat") ?: 0
+        val seat = seatOf(a)
         val line = a.str("line") ?: throw IllegalArgumentException("duel.do needs a line, like “draw” or “summon ash to m3”")
-        return when (val p = DuelCommand.parse(line, game.state, seat, catalog, game.header.seed, anyCopy = true)) {
-            is DuelCommand.Parsed.Actions -> {
-                val r = game.act(p.actions, seat)
-                if (r.problem != null) refused(r.problem) else {
-                    duels[h] = r.game
-                    done(p.said)
-                }
-            }
-            is DuelCommand.Parsed.Many -> {
-                var g = game
-                for (part in p.parts) {
-                    val r = g.act(part.actions, seat)
-                    if (r.problem != null) return refused(r.problem)
-                    g = r.game
-                }
-                duels[h] = g
-                done(p.parts.joinToString("; ") { it.said })
-            }
-            is DuelCommand.Parsed.Problem -> refused(p.text + if (p.choices.isEmpty()) "" else " (did you mean ${p.choices.joinToString(", ")}?)")
-            is DuelCommand.Parsed.Ruling -> refused("a ruling is not a move")
-            else -> refused("“$line” asks the table something; ygo.duel takes moves — read the table with brief() or state()")
+        if (DuelResults.ending(game.state) != null) return refused("the duel is over: duel.result() says how it ended")
+        // The line Ai plays kai with: planned whole on the table first, then each step made as Ai's own move for that seat.
+        val plan = ComboRunner.plan(game.state, seat, listOf(line), catalog, game.header.seed)
+        if (!plan.ok) {
+            val why = plan.problem.orEmpty().substringAfter("): ", plan.problem.orEmpty())
+            return refused(if ("a question or the table's chrome" in why) "“$line” asks the table something; ygo.duel takes moves — read the table with brief() or state()" else why)
         }
+        val by = Provenance(Provenance.AI, aiSeat = seat, aiKnows = DuelBrief.FULL)
+        var g = game
+        for ((_, actions) in plan.steps) {
+            val r = g.act(actions, seat, at = host.now(), by = by)
+            if (r.problem != null) return refused(r.problem)
+            g = r.game
+        }
+        duels[h] = g
+        val result = noteEnd(h, g)
+        return buildJsonObject {
+            put("ok", true)
+            put("said", plan.steps.joinToString("; ") { it.first })
+            result?.let { put("ended", resultJson(it)) }
+        }
+    }
+
+    /** A table that has just ended, kept once as a self-play result. */
+    private fun noteEnd(h: Int, g: DuelGame): DuelResult? {
+        if (h in ended || g.state.solo) return null
+        val r = DuelResults.selfPlay(g, host.now(), "${g.header.id}-s${g.header.seed}", forkOf[h]) ?: return null
+        ended += h
+        finished += r
+        return r
+    }
+
+    private fun duelResult(a: JsonObject): JsonElement {
+        val h = a.int("h") ?: -1
+        duel(a)
+        return finished.firstOrNull { it.duel == duels[h].header.id }?.let(::resultJson) ?: JsonNull
+    }
+
+    private fun resultJson(r: DuelResult): JsonElement = buildJsonObject {
+        put("winner", r.winner?.let(::JsonPrimitive) ?: JsonNull)
+        put("how", r.how)
+        put("turns", r.turns)
+        put("first", r.first)
+        put("kind", r.kind)
+        put("seed", r.seed)
+    }
+
+    /** The moves [seat] may make now (`DuelMoves`, the menu Ai reads at kai's table): each line exactly as `do` takes it. */
+    private fun duelMoves(a: JsonObject): JsonElement {
+        val g = duel(a)
+        val seat = seatOf(a)
+        return JsonArray(DuelMoves.menu(g.state, seat, catalog, g.header.seed).flatMap { group ->
+            group.moves.map { m ->
+                buildJsonObject {
+                    put("line", m.line)
+                    put("what", m.what)
+                    put("group", group.title)
+                }
+            }
+        })
     }
 
     private fun done(said: String) = buildJsonObject {
@@ -465,6 +551,15 @@ interface WorldHost {
 
     /** Today, `yyyy-MM-dd`, for a script that names no day; null reads the newest list kept (1.1.1). */
     fun today(): String? = null
+
+    /** The time now, in ms: when a self-play table began and ended (Phase C stage 3). */
+    fun now(): Long = 0L
+
+    /**
+     * The duel in play as the seat Ai would hold reads it, for `ygo.duel.fork` (Phase C stage 3): that seat's view and
+     * its own decklist, never the live table itself; null when no duel is in play, or it is a networked table.
+     */
+    fun liveDuel(): DuelFork.Source? = null
 }
 
 internal fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull

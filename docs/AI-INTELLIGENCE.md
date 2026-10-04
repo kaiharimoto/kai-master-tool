@@ -162,6 +162,8 @@ the person's moves on Ai's cards in its cues, the guide at the table, the brief 
 - **Ai has no access to its guide at the table.**
 - The brief gives names only: no ATK/DEF, Level, Attribute or Type.
 - Ai World's duel tables are seed 1 by default, with no choice of who goes first and no fork of the live position.
+  (Closed, Phase C stage 3, `docs/phases/C.md` §6: a fresh seed returned, `first`, `ygo.duel.fork()`; self-play results
+  counted apart.)
 
 **Evaluability**
 - Duel games are logged to Prep with the wrong first/second whenever the opening roll decided it. (Closed, Phase C §2.)

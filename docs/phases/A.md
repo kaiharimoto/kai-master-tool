@@ -44,3 +44,9 @@ of Ai's mistakes the fact-checker catches, so a change to the harness, a skill o
 - running sets on every push against a live model (cost);
 - pictures for the decklist set;
 - puzzles (Phase C).
+
+**Added since:**
+- **Card truth** (1.1.2, Phase B, `docs/phases/B.md`): 32 questions only the tools answer.
+- **Duel puzzles** (Phase C stage 3, `docs/phases/C.md` §5): 17 positions played on tables of their own with the duel tools,
+  under a referee, graded on the table (`Grader.Puzzle`, `PuzzleTable`); Trust shows the set's bounds — doing nothing 0, a
+  battle-only greedy player 2, the recorded solutions 17.

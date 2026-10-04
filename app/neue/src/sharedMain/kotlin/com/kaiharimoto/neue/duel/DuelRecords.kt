@@ -82,6 +82,21 @@ internal class DuelRecords(private val d: Duels) {
         }
         // The same end looked at again (a page opened, a chat line): nothing to write.
         if (kept != null && kept.copy(ended = r.ended) == r) return
+        write(r)
+    }
+
+    /** A result made elsewhere — a self-play table of Ai World's (Phase C stage 3) — kept as the table's are. */
+    fun keep(r: DuelResult) {
+        if (r.id.isBlank()) return
+        load()
+        d.scope.launch {
+            reading?.join()
+            write(r)
+        }
+    }
+
+    private fun write(r: DuelResult) {
+        val id = r.id
         results = (listOf(r) + results.filterNot { it.id == id })
         d.scope.launch {
             withContext(Dispatchers.IO) {

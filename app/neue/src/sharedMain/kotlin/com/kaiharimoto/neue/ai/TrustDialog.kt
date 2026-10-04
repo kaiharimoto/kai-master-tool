@@ -127,6 +127,8 @@ private fun SetRow(
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink))
         Small(set.about, color = c.ink70)
+        // The puzzles' bounds (Phase C stage 3), worked out by the app: what a score is to be read against.
+        if (set.id == EvalSets.PUZZLES) Mono(PUZZLE_BOUNDS, color = c.ink45)
         if (last != null) Mono(details(set, last), color = c.ink45)
         when {
             running != null -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -135,7 +137,7 @@ private fun SetRow(
             }
             confirming -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val n = set.items.size * tries
-                Small("$n question${if (n == 1) "" else "s"}, about ${tokens(n.toLong() * EVAL_TOKENS_EACH)} tokens on this connection.", color = c.ink)
+                Small("$n question${if (n == 1) "" else "s"}, about ${tokens(n.toLong() * tokensEach(set))} tokens on this connection.", color = c.ink)
                 MuButton("Run now", onConfirm, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
                 MuButton("Cancel", onCancel, variant = BtnVariant.GHOST, size = BtnSize.SM)
             }

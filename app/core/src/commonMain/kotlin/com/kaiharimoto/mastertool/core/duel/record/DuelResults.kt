@@ -55,6 +55,15 @@ data class DuelResult(
     /** Played on from a replay ("what if"): not a game of its own, left out of the summary unless asked. */
     val whatIf: Boolean = false,
     val version: Int = VERSION,
+    /**
+     * What kind of game (Phase C stage 3): null for a duel at the table, [SELF_PLAY] for Ai against itself on a table of
+     * Ai World's — counted apart, never as a game against a person. Absent on every record written before.
+     */
+    val kind: String? = null,
+    /** A self-play table's seed: the same seed and moves play the same game again. */
+    val seed: Long? = null,
+    /** A self-play table forked from the duel in play: that duel's id. */
+    val forkOf: String? = null,
 ) {
     /** The seats played by people (this device's person or the network's guest), and Ai's. */
     fun player(seat: Int): String = seats.getOrNull(seat)?.player ?: UNKNOWN
@@ -67,6 +76,8 @@ data class DuelResult(
         const val LP = "lp"
         const val DRAW = "draw"
         const val UNKNOWN = "unknown"
+        /** Ai against itself, on a table of Ai World's ([kind]). */
+        const val SELF_PLAY = "self-play"
     }
 }
 
@@ -185,6 +196,45 @@ object DuelResults {
         )
     }
 
+    /**
+     * A self-play table's game as a result (Phase C stage 3, Ai World): both seats Ai's, its own [DuelResult.kind] so it is
+     * never counted as a game against a person; its [DuelResult.seed] and, when it was forked from the duel in play, that
+     * duel's id. Null while it goes on.
+     */
+    fun selfPlay(game: DuelGame, ended: Long, id: String, forkOf: String? = null): DuelResult? =
+        of(game, ended, id)?.copy(kind = DuelResult.SELF_PLAY, ai = null, seed = game.header.seed, forkOf = forkOf)
+
+    /** Ai against itself, by the decks that met: [first] the deck first in name order, its wins, the other's, draws. */
+    data class SelfScore(val first: String, val second: String, val firstWon: Int, val secondWon: Int, val drawn: Int, val goingFirstWon: Int) {
+        val played: Int get() = firstWon + secondWon + drawn
+    }
+
+    /** Every self-play result, grouped by the two decks that met (in name order, so the seats do not split a pairing). */
+    fun againstItself(results: List<DuelResult>): List<SelfScore> =
+        results.filter { it.kind == DuelResult.SELF_PLAY && it.seats.size == 2 }.groupBy { r ->
+            r.seats.map { deckOf(it) }.sorted().let { it[0] to it[1] }
+        }.map { (pair, rs) ->
+            fun deckWon(r: DuelResult) = r.winner?.let { deckOf(r.seats[it]) }
+            val mirror = pair.first == pair.second
+            SelfScore(
+                pair.first, pair.second,
+                firstWon = if (mirror) rs.count { it.winner != null } else rs.count { deckWon(it) == pair.first },
+                secondWon = if (mirror) 0 else rs.count { deckWon(it) == pair.second },
+                drawn = rs.count { it.winner == null },
+                goingFirstWon = rs.count { it.winner != null && it.winner == it.first },
+            )
+        }.sortedByDescending { it.played }
+
+    /** "Ai against itself: Branded won 3 of 5 against Snake-Eye (1 drawn); going first won 4." */
+    fun selfWords(score: SelfScore, aiName: String = "Ai"): String {
+        val drawn = if (score.drawn > 0) " (${score.drawn} drawn)" else ""
+        val head = if (score.first == score.second) "$aiName against itself, ${score.first} in the mirror: ${score.played} played$drawn"
+        else "$aiName against itself: ${score.first} won ${score.firstWon} of ${score.played} against ${score.second}$drawn"
+        return "$head; going first won ${score.goingFirstWon}."
+    }
+
+    private fun deckOf(s: ResultSeat): String = s.deckName.ifBlank { s.name }.ifBlank { "a deck" }
+
     /** The opening roll's rounds as both seats' sums: a seat's second throw in a round (after a tie) starts the next. */
     fun rounds(played: List<DuelEntry>): List<List<Int>> {
         val out = mutableListOf<MutableList<Int?>>()
@@ -259,6 +309,7 @@ object DuelResults {
     fun aiAgainst(results: List<DuelResult>, person: String? = null, whatIfs: Boolean = false): List<Score> {
         val games = results.mapNotNull { r ->
             if (r.whatIf && !whatIfs) return@mapNotNull null
+            if (r.kind == DuelResult.SELF_PLAY) return@mapNotNull null
             val ai = r.ai ?: return@mapNotNull null
             val other = 1 - ai.seat
             val p = r.player(other)
@@ -305,8 +356,10 @@ object DuelResults {
     /** Every person and setting in words, one line each; [none] when there is nothing to count. */
     fun summary(results: List<DuelResult>, person: String? = null, aiName: String = "Ai", whatIfs: Boolean = false): String {
         val scores = aiAgainst(results, person, whatIfs)
-        if (scores.isEmpty()) return if (person != null) "No finished duels between $aiName and $person yet." else "No finished duels against $aiName yet."
-        return scores.joinToString("\n") { words(it, aiName) }
+        // Ai against itself (Phase C stage 3), counted apart: after the games against people, never among them.
+        val self = if (person == null) againstItself(results).map { selfWords(it, aiName) } else emptyList()
+        if (scores.isEmpty() && self.isEmpty()) return if (person != null) "No finished duels between $aiName and $person yet." else "No finished duels against $aiName yet."
+        return (scores.map { words(it, aiName) } + self).joinToString("\n")
     }
 
     private fun knowsWords(k: String) = when (k) {
