@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.studio
 
+import com.kaiharimoto.neue.builder.legalityRules
 import com.kaiharimoto.mastertool.core.ai.eval.Grader
 import com.kaiharimoto.mastertool.core.ai.eval.EvalLog
 import com.kaiharimoto.mastertool.core.ai.eval.EvalSets
@@ -826,6 +827,10 @@ fun neueMain(args: Array<String>) {
             // --genesys=true / --legal-as-of=2025-05-01: what the builder checks against (1.1.1).
             if (map["genesys"] == "true") h.neue.update { it.copy(genesys = true) }
             map["legal-as-of"]?.let { day -> h.neue.update { it.copy(legalAsOf = day) } }
+            // The studio draws without the app's effects, so the rules the effect would set are set here.
+            if (map["genesys"] != null || map["legal-as-of"] != null) {
+                h.builder.rules = kotlinx.coroutines.runBlocking { h.legalityRules(h.neue.prefs, h.builder.format) }
+            }
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())
             map["zen"]?.let { phase ->

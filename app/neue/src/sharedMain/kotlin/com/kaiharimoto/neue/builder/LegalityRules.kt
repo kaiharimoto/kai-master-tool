@@ -63,14 +63,12 @@ internal fun RulesPicker(state: DeckBuilderState, neue: NeueState) {
         }, small = true)
         if (p.genesys) {
             var cap by remember { mutableStateOf(p.genesysCap.toString()) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FieldLabel("Points cap", hint = "100 unless the event sets another")
-                MuInput(cap, { v ->
-                    cap = v.filter(Char::isDigit).take(4)
-                    cap.toIntOrNull()?.takeIf { it in NeuePreferences.MIN_GENESYS_CAP..NeuePreferences.MAX_GENESYS_CAP }
-                        ?.let { n -> neue.update(debounce = true) { it.copy(genesysCap = n) } }
-                }, Modifier.width(88.dp), placeholder = "100", mono = true)
-            }
+            FieldLabel("Points cap", hint = "100 unless the event sets another")
+            MuInput(cap, { v ->
+                cap = v.filter(Char::isDigit).take(4)
+                cap.toIntOrNull()?.takeIf { it in NeuePreferences.MIN_GENESYS_CAP..NeuePreferences.MAX_GENESYS_CAP }
+                    ?.let { n -> neue.update(debounce = true) { it.copy(genesysCap = n) } }
+            }, Modifier.width(120.dp), placeholder = "100", mono = true)
             state.rulesInForce.points(state.deck, state.index::byId)?.let { r ->
                 Small(
                     "${r.points} of ${r.cap} points" + if (r.unknown.isNotEmpty()) " · ${r.unknown.size} card${if (r.unknown.size == 1) "" else "s"} with no points known, counted as 0" else "",
@@ -79,12 +77,12 @@ internal fun RulesPicker(state: DeckBuilderState, neue: NeueState) {
             }
         }
         var day by remember { mutableStateOf(p.legalAsOf) }
+        FieldLabel("On", hint = if (day.isBlank()) "today" else if (Legality.isDate(day)) Legality.readable(day) else "yyyy-mm-dd")
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FieldLabel("On", hint = if (day.isBlank()) "today" else if (Legality.isDate(day)) Legality.readable(day) else "yyyy-mm-dd")
             MuInput(day, { v ->
                 day = v.trim().take(10)
                 if (day.isEmpty() || Legality.isDate(day)) neue.update(debounce = true) { it.copy(legalAsOf = day) }
-            }, Modifier.width(132.dp), placeholder = "today", mono = true)
+            }, Modifier.width(160.dp), placeholder = "today", mono = true)
             if (day.isNotEmpty()) {
                 MuButton("Today", {
                     day = ""
