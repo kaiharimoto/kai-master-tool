@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.shootout
 
+import com.kaiharimoto.mastertool.core.shootout.model.Contrast
 import com.kaiharimoto.mastertool.core.shootout.model.Fitter
 import com.kaiharimoto.mastertool.core.shootout.model.Rated
 import com.kaiharimoto.mastertool.core.shootout.model.Reporter
@@ -109,8 +110,8 @@ class ShootoutTrustSimulationTest {
             val base = read(person)
             val ds = read(withAi)
             val nv = read(naive)
-            fun win(c: List<com.kaiharimoto.mastertool.core.shootout.model.Contrast>) = c.filter { it.target is Target.WinRate }.map { it.value }.average()
-            fun card(c: List<com.kaiharimoto.mastertool.core.shootout.model.Contrast>) = c.filter { (it.target as? Target.Card)?.card == 9 }.map { it.value }.average()
+            fun win(c: List<Contrast>) = c.filter { it.target is Target.WinRate }.map { it.value }.average()
+            fun card(c: List<Contrast>) = c.filter { (it.target as? Target.Card)?.card == 9 }.map { it.value }.average()
             dsWin += abs(win(ds) - win(base)) / runs
             naiveWin += abs(win(nv) - win(base)) / runs
             dsCard += abs(card(ds) - card(base)) / runs

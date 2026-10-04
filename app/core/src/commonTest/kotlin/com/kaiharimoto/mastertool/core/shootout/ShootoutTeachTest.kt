@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.shootout
 
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryWrite
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
@@ -33,6 +34,7 @@ import com.kaiharimoto.mastertool.core.shootout.teach.RubricNotes
 import com.kaiharimoto.mastertool.core.shootout.teach.Similarity
 import com.kaiharimoto.mastertool.core.shootout.teach.Situation
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
+import com.kaiharimoto.mastertool.core.sync.InboundPath
 import com.kaiharimoto.mastertool.core.shootout.teach.Trust
 import kotlin.random.Random
 import kotlin.test.Test
@@ -140,7 +142,7 @@ class ShootoutTeachTest {
     fun theRubricIsEntriesWithAStableName() {
         val doc = Rubric.read(null, "Lab", "Yubel")
         assertEquals("# Rubric: Lab against Yubel", doc.preamble.first())
-        val written = (Rubric.add(doc, "A starter and a hand trap beats their turn one unless it is Ash-only.") as com.kaiharimoto.mastertool.core.ai.memory.MemoryWrite.Done).doc.render()
+        val written = (Rubric.add(doc, "A starter and a hand trap beats their turn one unless it is Ash-only.") as MemoryWrite.Done).doc.render()
         val h = assertNotNull(Rubric.hash(written))
         assertEquals(h, Rubric.hash(written), "the same rubric, the same name")
         assertNull(Rubric.hash(doc.render()), "no entries, no rubric")
@@ -149,6 +151,9 @@ class ShootoutTeachTest {
         assertEquals("shootout/d1/o~2e2.rubric.md", ShootoutPaths.rubric("d1", "o.2"))
         assertEquals("shootout/d1/alone.rubric.md", ShootoutPaths.rubric("d1", null))
         assertEquals("shootout/d1/~alone.rubric.md", ShootoutPaths.rubric("d1", "alone"))
+        // Beside the trials, so it travels with them: synced and backed up, a path any device may write.
+        assertNotNull(InboundPath.safe(ShootoutPaths.rubric("deck-1", "o.2")))
+        assertTrue(ShootoutPaths.rubric("d", "o").startsWith(ShootoutPaths.folder("d") + "/"), "deleted with the deck's folder")
     }
 
     @Test

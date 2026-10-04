@@ -56,7 +56,7 @@ object ShootoutTrustWords {
         appendLine(share(r))
         appendLine("Ai leans: ${lean(r.aiLean)}.")
         r.seenLean?.let { appendLine("The person after seeing Ai's answer: ${lean(it)}; one such answer counts ${dec(r.seenWeight ?: 0.0)} of a blind one.") }
-        r.state.seen.drift?.let { appendLine("Seeing Ai's answer first makes the person give exactly it ${dec(it)} points more often than blind.") }
+        r.state.seen.drift?.let { appendLine("Seeing Ai's answer first makes the person give that very answer ${dec(it)} points more often than blind.") }
         val flagged = r.flagged
         if (flagged.isNotEmpty()) {
             appendLine("Cards Ai's answers moved most (worth with them, without them, in points):")

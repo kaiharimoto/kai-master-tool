@@ -429,10 +429,18 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     private fun writeRubric(t: RubricTarget, text: String) {
         rubricText = text
         scope.launch {
-            withContext(Dispatchers.IO) {
-                val f = File(dataDir, ShootoutPaths.rubric(t.deck, t.opponent))
-                f.parentFile?.mkdirs()
-                f.writeText(text)
+            writing.withLock {
+                withContext(Dispatchers.IO) {
+                    // Written whole, then put in place, as the trials are: sync never reads half a rubric.
+                    val f = File(dataDir, ShootoutPaths.rubric(t.deck, t.opponent))
+                    f.parentFile?.mkdirs()
+                    val temp = File(f.parentFile, ".${f.name}.tmp")
+                    temp.writeText(text)
+                    if (!temp.renameTo(f)) {
+                        f.delete()
+                        temp.renameTo(f)
+                    }
+                }
             }
         }
     }
@@ -603,7 +611,7 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
             val mine = Answer.entries.first { it.name == t.answer }
             val shift = when (random.nextInt(10)) { 0 -> -2; 1, 2 -> 1; 3 -> -1; else -> 0 }
             val said = if (t.sawAi) mine else Answer.entries[(mine.ordinal + shift).coerceIn(0, 4)]
-            val sure = (0.62 + 0.36 * random.nextDouble()).let { if (shift == -2) it - 0.2 else it }
+            val sure = if (shift == 0 || shift == 1) 0.8 + 0.18 * random.nextDouble() else 0.55 + 0.3 * random.nextDouble()
             val verdict = AiVerdict(
                 answer = said.name, sure = sure, why = "Reads as the examples nearest it.", model = "demo",
                 kind = b.kindOf(p).key, print = b.print, asked = t.at - 1_000,

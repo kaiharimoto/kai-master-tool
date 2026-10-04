@@ -1,12 +1,15 @@
 package com.kaiharimoto.neue.shootout
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -52,6 +55,7 @@ import com.kaiharimoto.neue.theme.Mu
 private fun key(action: DeskAction, fallback: String) = DeskShortcuts.chordFor(action)?.let(DeskShortcuts::kbd) ?: fallback
 
 /** How the next session teaches Ai, and how far it is trusted: on the setup, under the hands to deal. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun TeachSetup(h: NeueHolders) {
     val s = h.shootout
@@ -63,13 +67,18 @@ internal fun TeachSetup(h: NeueHolders) {
             Micro("Teach", color = c.ink45)
             AiName(h.ai.name, c.ink)
         }
-        Segmented(t.mode, ShootoutTeach.Mode.entries, { it.label }, { t.mode = it }, small = true)
+        // Four words across a phone do not fit: there the ways are a menu.
+        if (LocalPhone.current) {
+            MuSelect(t.mode, ShootoutTeach.Mode.entries, { it.label }, { t.mode = it }, Modifier.width(220.dp), small = true)
+        } else {
+            Segmented(t.mode, ShootoutTeach.Mode.entries, { it.label }, { t.mode = it }, small = true)
+        }
         Body(t.mode.help, color = c.ink70)
         t.problem?.takeIf { t.mode != ShootoutTeach.Mode.JUDGE }?.let { Small(it, color = c.ink) }
         if (t.mode == ShootoutTeach.Mode.CALIBRATION) {
             Help("${CalibrationSet.SIZE} hands, taken in turn from every kind of hand the matchup deals. After a deck changes, a short set of a few per kind earns the kinds back.")
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MuButton("Interview", { h.ai.startRubricInterview() }, size = BtnSize.SM, reason = "Ai asks how you judge this matchup and writes it down; you review it on Finish")
             MuButton("Rubric", { t.rubricOpen = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
             MuButton("Trust", t::openTrust, size = BtnSize.SM, variant = BtnVariant.GHOST)
@@ -83,8 +92,8 @@ internal fun TeachSetup(h: NeueHolders) {
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Small("Your bar")
-            MuSelect(settings.bar, Trust.BARS, { ShootoutTrustWords.pct(it) }, { t.setSettings(settings.copy(bar = it)) }, small = true)
-            Help("A kind opens when nine times in ten ${h.ai.name} agrees with you at least this often.")
+            MuSelect(settings.bar, Trust.BARS, { ShootoutTrustWords.pct(it) }, { t.setSettings(settings.copy(bar = it)) }, Modifier.width(110.dp), small = true)
+            Help("A kind opens when nine times in ten ${h.ai.name} agrees with you at least this often.", Modifier.weight(1f, fill = false))
         }
     }
 }

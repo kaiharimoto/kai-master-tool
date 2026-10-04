@@ -70,10 +70,10 @@ internal fun TrustDialog(h: NeueHolders) {
             MuSwitch(settings.solo, { t.setSettings(settings.copy(solo = it)) })
             Small("$name judges the open kinds alone", Modifier.weight(1f, fill = false))
             Small("Bar")
-            MuSelect(settings.bar, Trust.BARS, { ShootoutTrustWords.pct(it) }, { t.setSettings(settings.copy(bar = it)) }, small = true)
+            MuSelect(settings.bar, Trust.BARS, { ShootoutTrustWords.pct(it) }, { t.setSettings(settings.copy(bar = it)) }, Modifier.width(110.dp), small = true)
             if (!phone) {
                 Small("Sure from")
-                MuSelect(settings.sure, SURE, { ShootoutTrustWords.pct(it) }, { t.setSettings(settings.copy(sure = it)) }, small = true)
+                MuSelect(settings.sure, SURE, { ShootoutTrustWords.pct(it) }, { t.setSettings(settings.copy(sure = it)) }, Modifier.width(110.dp), small = true)
             }
         }
         if (r == null) {
@@ -111,7 +111,7 @@ private fun TrustBody(h: NeueHolders, r: TrustReport, bar: Double, phone: Boolea
         Small(ShootoutTrustWords.share(r), color = c.ink)
         Small("$name: ${ShootoutTrustWords.lean(r.aiLean)}.", color = c.ink70)
         r.seenLean?.let { Small("You after seeing $name's answer: ${ShootoutTrustWords.lean(it)}; one such answer counts ${"%.1f".format(r.seenWeight ?: 0.0)} of a blind one.", color = c.ink70) }
-        r.state.seen.drift?.let { Small("Seeing its answer first, you give exactly it ${"%.0f".format(it)} points more often than blind.", color = c.ink70) }
+        r.state.seen.drift?.let { Small("Seeing its answer first, you give that very answer ${"%.0f".format(it)} points more often than blind.", color = c.ink70) }
         val cal = r.state.calibration
         if (cal.n > 0) {
             Spacer16()
@@ -135,7 +135,7 @@ private fun KindRow(h: NeueHolders, k: KindTrust, bar: Double, phone: Boolean) {
     val c = Mu.colors
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Small(k.kind.words.replaceFirstChar { it.uppercase() }, Modifier.weight(1f), color = c.ink, maxLines = 1)
+            Small(k.kind.words.replaceFirstChar { it.uppercase() }, Modifier.weight(1f), color = c.ink, maxLines = if (phone) 2 else 1)
             val share = k.share
             if (share != null) {
                 Number("${ShootoutTrustWords.pct(share)} of ${k.pairs.toInt()}", "The hands behind it") { s.behind = Behind.Kind(k.kind.key) }
@@ -146,7 +146,7 @@ private fun KindRow(h: NeueHolders, k: KindTrust, bar: Double, phone: Boolean) {
             Mono(if (k.open) "OPEN" else if (k.closedAt != null) "CLOSED" else "NOT YET", color = if (k.open) c.ink else c.ink45)
         }
         if (!k.open && k.why != null && share(k)) Small(k.why!!.replaceFirstChar { it.uppercase() } + ".", color = c.ink45, maxLines = 2)
-        if (k.audits > 0) MicroLink("${k.audits} audits · ${k.misses} missed", { s.behind = Behind.Kind(k.kind.key, audits = true) })
+        if (k.audits > 0) MicroLink("${k.audits} audit${if (k.audits == 1) "" else "s"} · ${k.misses} missed", { s.behind = Behind.Kind(k.kind.key, audits = true) })
     }
     HRule()
 }

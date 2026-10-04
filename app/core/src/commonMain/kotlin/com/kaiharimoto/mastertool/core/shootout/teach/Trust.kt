@@ -189,7 +189,7 @@ object Trust {
         val stale = since.any { print != null && it.verdict.print != null && it.verdict.print != print }
         val currentSure = since.filter { (print == null || it.verdict.print == print) && (it.sure ?: 0.0) >= settings.sure }
         val why = when {
-            surePairs < MIN_SURE -> "${fmt(surePairs)} hands it was sure of; it needs $MIN_SURE"
+            surePairs < MIN_SURE -> "${fmt(surePairs)} hand${if (surePairs == 1.0) "" else "s"} it was sure of; it needs $MIN_SURE"
             sureRange.lower < settings.bar -> "the bottom of its range, ${pct(sureRange.lower)}, is under your bar of ${pct(settings.bar)}"
             stale && currentSure.size < RECHECK -> "the decks changed: ${currentSure.size} of $RECHECK hands on today's decks"
             stale && currentSure.count { it.agrees } < currentSure.size * settings.bar -> "on today's decks it agreed ${currentSure.count { it.agrees }} of ${currentSure.size}"
