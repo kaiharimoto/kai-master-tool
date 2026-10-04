@@ -105,14 +105,35 @@ one OCG name is written `Allure of Darkness|sc`. The API answers 50 pages' wikit
 - `hand_odds` with `as_of` (and `format`): the deck cut to that day's list first (`CardSetOdds.legalised`: a card's
   allowance counted across the deck by card, the Extra and Side Decks' copies first, the Main Deck's last copies taken
   out), the answer naming the list and what was taken out — "odds as of the March list".
-- Still to come (1.1.1): the builder's own legality against a dated list (a choice in the UI), and the field,
-  `expected_winrate` and `field_snapshot` with `as_of` (`FieldLegality.check`'s `limitOf` is where the list plugs in).
+- **The field as of a date** (1.1.1): `ygopro_field_snapshot` and `ygopro_tournament_decks` take `as_of` (a day; the
+  region is the lists' `format`, default the builder's), so a past format is read as it was:
+  - **The window ends on that day**: lists whose event fell in [as_of − days, as_of]. A list's age is its **event's
+    day**, read from the description YGOPRODeck sends with it ("Tournament: … – September 27th 2026",
+    `TournamentDecks.eventDate`/`eventDay`, `TournamentDeck.day`), else the site's own "2 months ago" (a month wide).
+    The pages are newest first, so `YgoProDeckDecks.recent(…, asOf)` **searches** for the page where the window ends —
+    a gallop from a guess made from page 0's span, then halving, at most `MAX_PROBES` (32) requests a tier and never
+    past `MAX_PAGE` (2,500), each paced a second apart — and reads `maxPages` from there (from the page before, which
+    the search already read). A year back is some twenty requests a tier, not three hundred pages in turn. One old
+    event posted late neither starts nor ends the reading (a page counts by its majority, or its last list by its event
+    and its posting both).
+  - **The honest window holds**: a tier stopped at the page cap still inside the window cuts every tier to the same
+    date (`RecentDecks.window`, now counted from `end`, the days before today the window ends), said as "the 5 days to
+    4 Oct 2025, not the 30 days to 4 Oct 2025 asked for", with the `as_of` that reads the rest (`earlier`); a tier whose
+    lists on YGOPRODeck end before the window is said (`endsWords`).
+  - **Legal on that day** (`FieldLegality.asOf`): a list holding a card not out in the region by then, or never
+    released there (`Legality.release`: `NotYet`/`NotReleased`), is set aside first and said on its own ("2 lists held
+    cards not out in the TCG on 4 Oct 2025 and were left out: …", `unreleasedWords`); the rest are held to the list in
+    force that day (`AiBanlist.listOn`, `min(3, statusOf(card).maxCopies)`), dropped and said as before. The answer names
+    the list, cites Yugipedia (CC BY-SA), and counts the list's names the pool could not match. `ygopro_tournament_decks`
+    checks legality only with `as_of`; without it, it is unchanged. Genesys has no list: its window alone.
+  - `expected_winrate` takes no `as_of`: it reads the games logged, not the field.
+- Still to come: the builder's own legality against a dated list (a choice in the UI).
 
 ## 4. The field, read honestly (`core/ai/meta`, `core/prep/TestStats.kt`)
 
 | Lead | Fix |
 |---|---|
-| Lists illegal under the current list are counted. | Dropped, and the count dropped said with the cards that dropped them (`FieldLegality.check`/`words`: copies by card across Main, Extra and Side over `limitOf`, today's `DeckEditor.copyLimit` by default — the `as_of` list plugs in there; a card the pool does not know drops nothing; Genesys lists are not checked, having no list). |
+| Lists illegal under the current list are counted. | Dropped, and the count dropped said with the cards that dropped them (`FieldLegality.check`/`words`: copies by card across Main, Extra and Side over `limitOf`, today's `DeckEditor.copyLimit` by default — the `as_of` list plugs in there, `FieldLegality.asOf`, §3; a card the pool does not know drops nothing; Genesys lists are not checked, having no list). |
 | Each tier is cut at a page cap, so one tier's window is days and another's weeks. | One window for all tiers (`YgoProDeckDecks.recent`, `RecentDecks.window`): where any tier's reading stopped short, every tier is cut to the same date — the day before the newest of the capped tiers' oldest dates, since that day itself may be part-read — and the answer says the window it really covers (`windowWords`, `cutWords`: "the last 11 days, not the last 45 asked for"). |
 | Clustering chains hybrids into one strategy (a list joins if it is like **any** member). | Average linkage (`FieldBuilder.build`): a list joins a strategy only if it is like the strategy **as a whole**; two strategies merge only on their average (a merge pass on summed similarities kept up to date). |
 | Copies counted by passcode. | By card (§1): `FieldBuilder` takes the pool's lookup (`AS_PRINTED` by default, for callers with none) for similarity, weights, staples and cores; `DeckSearch` names a card once; the builder's copy badge and the inspector's opening odds count every printing. |
@@ -128,7 +149,9 @@ one OCG name is written `Allure of Darkness|sc`. The API answers 50 pages' wikit
   fetched once more), every banlist by date with `banlist`, `validate_deck`/`hand_odds` `as_of` and `ygo.banlist`/`legal`,
   and the field read honestly. Stored-data changes: schema 4 (five columns), `PoolRecord.misc`, a new device-only cache
   `<data>/banlists/`.
-- **1.1.1** — the builder's dated legality, the field and `expected_winrate` as of a date, and the Genesys switch.
+- **1.1.1** — the builder's dated legality, the field as of a date (**done**: `ygopro_field_snapshot` and
+  `ygopro_tournament_decks` `as_of`, §3; `expected_winrate` needs none, reading logged games), and the Genesys switch.
+  No stored-data change from the field as of a date.
 - **1.1.2** — a legality-and-odds regression set in Trust (F1).
 
 **Needs:** F3's versioned documents (the banlist file), Phase A's runner (the regression set).

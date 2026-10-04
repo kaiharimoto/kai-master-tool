@@ -1,8 +1,10 @@
 package com.kaiharimoto.mastertool.core.remote
 
 import com.kaiharimoto.mastertool.core.ai.wire.Unreachable
+import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.prep.IsoDate
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -37,8 +39,10 @@ data class TournamentDeck(
     val tier: Int,
     val deck: Deck,
     val url: String,
-    /** The event's date as YGOPRODeck writes it, when read off the deck's own page. */
+    /** The event's date as YGOPRODeck writes it ("September 27th 2026"), from the list's description or its own page. */
     val date: String? = null,
+    /** The event's day, `yyyy-MM-dd`, read from [date] (1.1.1); null when it could not be read. */
+    val day: String? = null,
 ) {
     /** How much a result says: a win at a big event more than a top 8 at a small one. */
     val weight: Double get() = TournamentDecks.placementWeight(placement) * TournamentDecks.sizeWeight(players)
@@ -124,41 +128,133 @@ class YgoProDeckDecks(
     }
 
     /**
-     * Recent results at tier [minTier] and above, back [days] days, in [format]; up to
-     * [maxPages] pages a tier. The decks, what could not be read, in words, and the tiers
-     * whose window held more lists than [maxPages] pages — never cut short in silence.
+     * Results at tier [minTier] and above in [format] over [days] days: the last [days], or with [asOf] (`yyyy-MM-dd`)
+     * the [days] up to and including that day (1.1.1: a past format read as it was). Up to [maxPages] pages a tier
+     * inside the window. The decks, what could not be read, in words, and the tiers whose window held more lists than
+     * [maxPages] pages — never cut short in silence.
+     *
+     * A list's age is its **event's** day when its description gives one ([TournamentDeck.day]) — the site's own "2
+     * months ago" is a month wide, and is the fallback ([TournamentDeck.daysAgo]).
      *
      * **One window for all tiers** (Phase B §4): a busy tier fills its pages in days while a quiet
      * one reaches back the whole window, and read as they came, "the last 45 days" was a week or
      * two of regionals beside 45 days of YCS. So when a tier's reading stops at the page cap still
      * inside the window, every tier is cut to the same date ([RecentDecks.window]): the days before
      * the newest of the capped tiers' oldest dates, since lists of that day itself may be left unread.
+     *
+     * **Reading back** ([asOf]): the pages are newest first, so the page where the window ends is found by a search —
+     * a gallop from a guess made from the first page's span, then halving — at most [MAX_PROBES] requests a tier and
+     * never past page [MAX_PAGE], each paced like any other ([MIN_INTERVAL_MS]). A year back is some twenty requests a
+     * tier, not three hundred pages read in turn. Lists newer than the window are skipped; [maxPages] counts from there.
      */
-    suspend fun recent(minTier: Int, days: Int, format: DeckFormat?, maxPages: Int = 4): RecentDecks {
+    suspend fun recent(minTier: Int, days: Int, format: DeckFormat?, maxPages: Int = 4, asOf: String? = null): RecentDecks {
+        val todayDay = floorDiv(clock(), DAY_MS)
+        val end = asOf?.let { IsoDate.epochDay(it) }?.let { (todayDay - it).toInt().coerceAtLeast(0) } ?: 0
+        val start = end + days
+        fun age(d: TournamentDeck): Int = RecentDecks.ageOf(d, todayDay)
         val out = mutableListOf<TournamentDeck>()
         val problems = mutableListOf<String>()
         val unread = mutableListOf<Int>()
         val reached = LinkedHashMap<Int, Int>()
+        val ends = LinkedHashMap<Int, Int>()
         for (tier in minTier.coerceIn(1, 4)..4) {
-            for (p in 0 until maxPages) {
+            val first = if (end == 0) 0 else when (val s = startPage(tier, end, ::age)) {
+                is Start.At -> s.page
+                is Start.Ends -> { s.oldest?.let { ends[tier] = it }; continue }
+                is Start.Failed -> { problems += s.why; continue }
+            }
+            // From the page before the one found, which may end with the window's first lists (the search read it, and
+            // pages are kept an hour, so it costs no request).
+            val from = (first - 1).coerceAtLeast(0)
+            for (p in from until first + maxPages) {
                 val got = page(tier, p).getOrElse {
                     problems += "Tier $tier, page ${p + 1}: ${Unreachable.of(base, it)}"
                     break
                 }
-                val fresh = got.filter { it.daysAgo <= days }
-                out += fresh.filter { format == null || it.format == format }
-                // Newest first: a page with nothing recent means there is nothing newer after it.
-                if (got.isEmpty() || fresh.size < got.size) break
-                // A last page still all inside the window: older lists in it were left unread.
-                if (p == maxPages - 1) {
+                val inside = got.filter { age(it) in end..start }
+                out += inside.filter { format == null || it.format == format }
+                // Newest first: a page reaching past the window's start means nothing after it is inside. Past it is
+                // the page's last list, by its event and by its posting both, or most of the page — one old event
+                // posted late does not end the reading.
+                val past = got.count { age(it) > start }
+                val last = got.lastOrNull()
+                if (last == null || past * 2 > got.size || (age(last) > start && last.daysAgo > start)) break
+                // A last page still inside the window: older lists in it were left unread.
+                if (p == first + maxPages - 1 && age(last) <= start && inside.isNotEmpty()) {
                     unread += tier
-                    reached[tier] = got.maxOf { it.daysAgo }
+                    reached[tier] = inside.maxOf(::age)
                 }
             }
         }
-        val window = reached.values.minOrNull()?.let { (it - 1).coerceAtLeast(0) }
-        val kept = out.distinctBy { it.number }.filter { window == null || it.daysAgo <= window }
-        return RecentDecks(kept, problems, unread, window, reached)
+        val window = reached.values.minOrNull()?.let { (it - 1).coerceAtLeast(end) }
+        val kept = out.distinctBy { it.number }.filter { window == null || age(it) <= window }
+        return RecentDecks(
+            kept, problems, unread, window, reached,
+            end = end, asOf = asOf?.takeIf { end > 0 }, today = IsoDate.of(todayDay), ends = ends,
+        )
+    }
+
+    /** Where a tier's reading begins: the page, or — when the tier's lists end before the window does — how old its oldest is. */
+    private sealed interface Start {
+        data class At(val page: Int) : Start
+        data class Ends(val oldest: Int?) : Start
+        data class Failed(val why: String) : Start
+    }
+
+    /**
+     * The first page of [tier] holding a list [end] days old or older ([age]); every page before it holds only newer
+     * ones. A gallop from a guess (how many days page 0 spans), then halving. A page past the last is empty.
+     */
+    private suspend fun startPage(tier: Int, end: Int, age: (TournamentDeck) -> Int): Start {
+        var probes = 0
+        val seen = HashMap<Int, List<TournamentDeck>>()
+        var failure: Throwable? = null
+        suspend fun at(p: Int): List<TournamentDeck>? {
+            seen[p]?.let { return it }
+            if (probes >= MAX_PROBES) return null
+            probes++
+            return page(tier, p).onFailure { failure = it }.getOrNull()?.also { seen[p] = it }
+        }
+        fun failed(p: Int) = Start.Failed(
+            "Tier $tier: could not find where $end days ago begins in YGOPRODeck's lists " +
+                (failure?.let { "(page ${p + 1}: ${Unreachable.of(base, it)})" } ?: "(still searching after $MAX_PROBES requests)"),
+        )
+        // Reached as the reading's end is: most of the page that old, or its last list by its event and its posting both
+        // — an old event posted late, on a page of newer ones, must not start the reading weeks too soon.
+        fun reaches(got: List<TournamentDeck>): Boolean {
+            val last = got.lastOrNull() ?: return true
+            return got.count { age(it) >= end } * 2 > got.size || (age(last) >= end && last.daysAgo >= end)
+        }
+        val zero = at(0) ?: return failed(0)
+        if (zero.isEmpty()) return Start.Ends(null)
+        if (reaches(zero)) return Start.At(0)
+        var lo = 0
+        var loAge = zero.maxOf(age)
+        val span = (loAge - zero.minOf(age)).coerceAtLeast(1)
+        var step = ((end - loAge) / span).coerceIn(1, MAX_PAGE)
+        var hi: Int
+        while (true) {
+            val p = (lo + step).coerceAtMost(MAX_PAGE)
+            val got = at(p) ?: return failed(p)
+            if (reaches(got)) {
+                hi = p
+                break
+            }
+            lo = p
+            loAge = got.maxOf(age)
+            if (p == MAX_PAGE) return Start.Ends(loAge)
+            step *= 2
+        }
+        while (hi - lo > 1) {
+            val mid = (lo + hi) / 2
+            val got = at(mid) ?: return failed(mid)
+            if (reaches(got)) hi = mid else {
+                lo = mid
+                loAge = got.maxOf(age)
+            }
+        }
+        // The first page to reach the window's end is past the last page: the tier's lists end before the window does.
+        return if (seen[hi].isNullOrEmpty()) Start.Ends(loAge) else Start.At(hi)
     }
 
     companion object {
@@ -166,6 +262,15 @@ class YgoProDeckDecks(
         const val PAGE = 20
         const val MIN_INTERVAL_MS = 1000L
         const val CACHE_MS = 60 * 60 * 1000L
+        const val DAY_MS = 24 * 60 * 60 * 1000L
+
+        /** Requests a tier may spend finding where a past window ends. */
+        const val MAX_PROBES = 32
+
+        /** The furthest page searched: fifty thousand lists back. */
+        const val MAX_PAGE = 2500
+
+        private fun floorDiv(a: Long, b: Long): Long = a / b - (if (a % b != 0L && (a xor b) < 0) 1 else 0)
     }
 }
 
@@ -183,14 +288,33 @@ data class RecentDecks(
      * window asked for was read.
      */
     val window: Int? = null,
-    /** How far back, in days, each tier in [unread] was read. */
+    /** How far back, in days before today, each tier in [unread] was read. */
     val reached: Map<Int, Int> = emptyMap(),
+    /** How many days before today the window ends: 0 for the last days, more when read as of a past day (1.1.1). */
+    val end: Int = 0,
+    /** The day the window ends on, `yyyy-MM-dd`, when it is a past one; null for the last days. */
+    val asOf: String? = null,
+    /** The day the ages are counted from, `yyyy-MM-dd`. */
+    val today: String? = null,
+    /** Tiers whose lists on YGOPRODeck all came after the window, with how old the oldest is, in days. */
+    val ends: Map<Int, Int> = emptyMap(),
 ) {
     /** The days the lists really cover: the window asked for, or the one every tier was cut to. */
-    fun covers(asked: Int): Int = window ?: asked
+    fun covers(asked: Int): Int = window?.let { it - end } ?: asked
 
-    /** "last 12 days" — the window as an answer says it. */
-    fun windowWords(asked: Int): String = covers(asked).let { if (it == 0) "today" else if (it == 1) "last 1 day" else "last $it days" }
+    /** "last 12 days", or "45 days to 12 Mar 2025" — the window as an answer says it. */
+    fun windowWords(asked: Int): String = covers(asked).let {
+        if (asOf != null) {
+            val to = Legality.readable(asOf)
+            if (it == 0) "day of $to" else if (it == 1) "1 day to $to" else "$it days to $to"
+        } else if (it == 0) "today" else if (it == 1) "last 1 day" else "last $it days"
+    }
+
+    /** The day [age] days before [today], `yyyy-MM-dd`; null when there is no today. */
+    fun dayAt(age: Int): String? = IsoDate.epochDay(today)?.let { IsoDate.of(it - age) }
+
+    /** The as-of day that reads the part of a window that was cut: the day before the part read begins; null when none was cut. */
+    fun earlier(): String? = window?.let { dayAt(it + 1) }
 
     /**
      * Why the window is shorter than [asked], in words, then [next] (what reads further); empty when the whole window
@@ -198,10 +322,26 @@ data class RecentDecks(
      */
     fun cutWords(asked: Int, next: String): String {
         if (unread.isEmpty()) return ""
-        val tiers = reached.entries.joinToString(", ") { (t, d) -> "tier $t reached back only ${if (d == 0) "to today" else "$d days"}" }
-            .ifEmpty { unread.joinToString(", ") { "tier $it" } }
+        val tiers = reached.entries.joinToString(", ") { (t, d) ->
+            if (asOf != null) "tier $t reached back only to ${dayAt(d)?.let(Legality::readable) ?: "$d days ago"}"
+            else "tier $t reached back only ${if (d == 0) "to today" else "$d days"}"
+        }.ifEmpty { unread.joinToString(", ") { "tier $it" } }
+        val wanted = if (asOf != null) "the $asked days to ${Legality.readable(asOf)}" else "the last $asked"
         return " Not every list in the window was read ($tiers before the pages ran out), so every tier is cut to the same " +
-            "window — the ${windowWords(asked)}, not the last $asked asked for — to compare like with like; $next."
+            "window — the ${windowWords(asked)}, not $wanted asked for — to compare like with like; $next."
+    }
+
+    /** The tiers whose lists on YGOPRODeck do not reach back to the window, in words; empty when every tier does. */
+    fun endsWords(): String {
+        if (ends.isEmpty()) return ""
+        val tiers = ends.entries.joinToString(", ") { (t, d) -> "tier $t's to ${dayAt(d)?.let(Legality::readable) ?: "$d days ago"}" }
+        return " YGOPRODeck's lists go back only so far ($tiers), so ${if (ends.size == 1) "that tier has" else "those tiers have"} nothing in the window."
+    }
+
+    companion object {
+        /** How many days before [todayDay] (days since 1970) [deck]'s event was: its day when read, else the site's age. */
+        fun ageOf(deck: TournamentDeck, todayDay: Long): Int =
+            deck.day?.let { IsoDate.epochDay(it) }?.let { (todayDay - it).toInt().coerceAtLeast(0) } ?: deck.daysAgo
     }
 }
 
@@ -245,6 +385,7 @@ object TournamentDecks {
                 else -> DeckFormat.TCG
             }
         }
+        val date = eventDate(o.str("deck_description"))
         return TournamentDeck(
             number = number,
             name = o.str("deck_name")?.trim() ?: "Deck $number",
@@ -257,8 +398,38 @@ object TournamentDecks {
             tier = tier,
             deck = Deck(main, ids(o.str("extra_deck")), ids(o.str("side_deck"))),
             url = "https://ygoprodeck.com/deck/" + (o.str("pretty_url") ?: number.toString()),
+            date = date,
+            day = eventDay(date),
         )
     }
+
+    /**
+     * The event's date as the list's description writes it — `<p>Tournament: Mexico City WCQ Regional &ndash; September
+     * 27th 2026</p>` gives "September 27th 2026" — or null when the description has none.
+     */
+    fun eventDate(description: String?): String? {
+        val line = description?.let { TOURNAMENT.find(it)?.groupValues?.get(1) }?.let(PlayerPages::text) ?: return null
+        return line.substringAfterLast(" – ", "").trim().takeIf { it.isNotBlank() && eventDay(it) != null }
+    }
+
+    /** "September 27th 2026", "Sept. 27, 2026" or "27 September 2026" as `2026-09-27`; null for anything else. */
+    fun eventDay(text: String?): String? {
+        if (text.isNullOrBlank()) return null
+        val (month, day, year) = MONTH_FIRST.find(text)?.destructured?.let { (m, d, y) -> Triple(m, d, y) }
+            ?: DAY_FIRST.find(text)?.destructured?.let { (d, m, y) -> Triple(m, d, y) } ?: return null
+        val m = MONTHS.indexOfFirst { month.lowercase().startsWith(it) } + 1
+        val d = day.toInt()
+        if (m == 0 || d !in 1..31) return null
+        val iso = "$year-${m.toString().padStart(2, '0')}-${d.toString().padStart(2, '0')}"
+        // A day that does not exist (31 February) is not a day.
+        return iso.takeIf { IsoDate.epochDay(it)?.let(IsoDate::of) == it }
+    }
+
+    private val TOURNAMENT = Regex("""<p>\s*Tournament:\s*(.*?)</p>""", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+    private const val MONTH = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?"
+    private val MONTH_FIRST = Regex("""\b$MONTH\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b""", RegexOption.IGNORE_CASE)
+    private val DAY_FIRST = Regex("""\b(\d{1,2})(?:st|nd|rd|th)?\s+$MONTH,?\s+(\d{4})\b""", RegexOption.IGNORE_CASE)
+    private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 
     /** "3 days ago", "1 week ago", "8 hours ago", "2 months ago" as whole days; unknown is old. */
     fun daysAgo(text: String?): Int {

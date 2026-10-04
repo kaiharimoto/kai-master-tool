@@ -37,6 +37,7 @@ import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.mastertool.core.present.ai.PresentBrief
 import com.kaiharimoto.mastertool.core.present.ai.RestyleBrief
 import com.kaiharimoto.mastertool.core.remote.HttpClientFactory
+import com.kaiharimoto.mastertool.core.remote.YgoProDeckDecks
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.platform.PickedFile
 import com.kaiharimoto.neue.platform.Platform
@@ -202,6 +203,9 @@ class AiState(internal val h: NeueHolders) {
     internal var job: Job? = null
     internal var backend: Pair<String, ModelBackend>? = null
     internal var mcp: McpHandle? = null
+
+    /** Where the meta tools read tournament lists: null is YGOPRODeck itself; a test sets a fake one here. */
+    internal var tournaments: YgoProDeckDecks? = null
 
     // ---- the face (1.0.52) ------------------------------------------------------
 

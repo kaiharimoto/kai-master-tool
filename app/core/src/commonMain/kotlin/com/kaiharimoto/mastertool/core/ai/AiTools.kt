@@ -445,14 +445,16 @@ object AiTools {
         "ygopro_tournament_decks",
         "Recent tournament decklists from YGOPRODeck's meta decks: event, placement, player count, format (TCG, OCG, Genesys) " +
             "and date. Tier 1 is locals, 2 regionals and WCQs, 3 national and YCS, 4 Worlds. Filter by archetype, format or " +
-            "event words; pages back in time with page.",
+            "event words; pages back in time with page. With as_of, a past format: the lists of the days up to that day, " +
+            "by each event's own date, and only those legal then (that day's banlist, from Yugipedia, and cards released by then).",
         schema {
             integer("tier", "Lowest event tier (default 2)", min = 1, max = 4)
-            string("format", "TCG, OCG or Genesys (default: the app's format)")
+            string("format", "TCG, OCG or Genesys (default: the app's format); also the region whose banlist as_of uses")
             string("archetype", "Only decks whose name has this")
             string("event", "Only events whose name has this")
             string("player", "Only lists this player piloted (a part of the name is enough). For a player's whole record, use ygopro_player")
-            integer("days", "Only the last this many days (default 60)", min = 1, max = 365)
+            integer("days", "Only the last this many days, or with as_of the days up to it (default 60)", min = 1, max = 365)
+            string("as_of", "A day, yyyy-MM-dd: read the format as it was then (the window ends that day); omit for the latest")
             integer("page", "Older results, from 0: page N is each tier's Nth page of twenty lists, of any age unless days is given", min = 0, max = 20)
         },
         ToolGroup.META,
@@ -501,11 +503,14 @@ object AiTools {
             "(weighted by placement and event size), its best finishes and one representative list's deck number. " +
             "A share of top cuts is not a share of the field — strong decks top more often than they are played. " +
             "Lists illegal under today's banlist are left out, and every tier is read over the same window (said when shorter than asked). " +
+            "With as_of, the field as it stood on a past day: the window ends that day, lists are dated by their event, and " +
+            "lists illegal on that day's banlist (Yugipedia) or holding cards not yet released then are left out and said. " +
             "The first step in building a web of decks for an event.",
         schema {
             integer("tier", "Lowest event tier (default 2)", min = 1, max = 4)
-            string("format", "TCG, OCG or Genesys (default: the app's format)")
-            integer("days", "How many days back (default 45)", min = 7, max = 365)
+            string("format", "TCG, OCG or Genesys (default: the app's format); also the region whose banlist as_of uses")
+            integer("days", "How many days back (default 45), from as_of when given", min = 7, max = 365)
+            string("as_of", "A day, yyyy-MM-dd: the field as of then — a past format; omit for the latest")
             integer("top", "How many strategies to return (default 12)", min = 3, max = 30)
         },
         ToolGroup.META,

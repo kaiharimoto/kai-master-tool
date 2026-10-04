@@ -178,6 +178,7 @@ object PlayerPages {
             deck = Deck(main, ids(js("extradeckjs")), ids(js("sidedeckjs"))),
             url = url,
             date = date,
+            day = TournamentDecks.eventDay(date),
         )
     }
 

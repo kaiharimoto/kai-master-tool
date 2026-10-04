@@ -99,7 +99,8 @@ object BuiltInSkills {
             - `ygopro_tournament_decks` lists recent tournament decklists from YGOPRODeck's curated meta decks: deck name,
               event, placement, player count, format and date, newest first. `tier`: 1 locals, 2 regionals and WCQs,
               3 nationals and YCS, 4 Worlds. Default tier 2 and up. Filter with `archetype`, `event`, `format`, `days`;
-              `page` goes back further.
+              `page` goes back further. **A past format**: as_of (a day, yyyy-MM-dd) reads the lists of the days up to
+              that day instead, dated by each event, and keeps only those legal then; say the day and the banlist used.
             - `ygopro_deck` shows one list in full with card names; `import_ygopro_deck` copies it into the library or a web.
               Both take any deck number, including the one at the end of a ygoprodeck.com/deck/… address.
             - **By player**: YGOPRODeck's deck lists cannot be filtered by player, so `ygopro_player` reads the site's
@@ -131,7 +132,10 @@ object BuiltInSkills {
             2. **Read what is topping**: `ygopro_field_snapshot` for the format and a window of recent results (30–60 days;
               shorter right after a banlist). It groups decks into strategies with a **share of top cuts** — not a share
               of the field. Strong decks top more often than they are played, so they look bigger there than they are at
-              the tables, and a popular deck that rarely tops looks smaller.
+              the tables, and a popular deck that rarely tops looks smaller. For a past event, or to compare formats, give
+              as_of (the event's day): the window then ends that day, and lists illegal on that day's banlist or holding
+              cards not yet out are left out. Say the window and the list the answer names; if it says the window is
+              shorter than asked, say that too.
             3. **Choose the decks**: the strategies that together cover about 85% of the top cuts, usually 5–9. Fold a
                strategy under 3% into "other" unless the person asks for it. Adjust for what you know of the event
                (a local skews to what its players own; the person may know their scene — ask).
