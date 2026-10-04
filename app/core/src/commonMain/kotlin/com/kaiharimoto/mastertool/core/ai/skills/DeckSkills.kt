@@ -522,6 +522,41 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
 - When a line works, `save` it (needs and steps, names not uids) or `record` it from the log, with notes on what stops it.
 """
 
+    const val AI_WORLD_NAME = "ai-world"
+    const val AI_WORLD_DESCRIPTION =
+        "Working in Ai World: answering a question by writing and running code — odds, simulations, card webs, data — and pinning what it shows, while the person watches."
+
+    const val AI_WORLD: String = """# Working in Ai World
+
+Ai World is your own small computer. The person watches every file you write, every run and its output, your reasoning and every board you pin. Use it to find things out, not to look busy: a question that has a number for an answer, a web of cards, a comparison, a simulation.
+
+## The loop
+1. **Say the question** in one line, and what would answer it ("How often does this deck open a starter and a hand trap, going first?").
+2. **world_new** with a title that is the question, scoped to the deck (`open` for the builder's) — or keep working in the open world.
+3. **world_write** a small script. Start small: print the deck's size and a few names before simulating anything.
+4. **world_run** it. Read the output. When it fails, read the error's line and fix it — never guess past an error.
+5. **Check** before you believe: compare a simulation with the exact odds where both exist (`ygo.atLeast`, `ygo.handOdds`); run twice with different seeds; look at a few dealt hands by eye.
+6. **Show** what answers the question: `ygo.show.*` in the script (or `world_show`), one board per finding, each with a note saying what it shows and how it was made.
+7. **Tell** the person the answer in words, citing the boards, with the number of trials, the seed and the interval (`ygo.rate` gives a Wilson interval).
+
+## JavaScript (everywhere)
+- Data: `ygo.deck()` (the open deck: main/extra/side as names, groups, cards with text), `ygo.deck(id)`, `ygo.decks()`, `ygo.card(name)`, `ygo.search(q)`.
+- Exact maths: `ygo.comb`, `ygo.hypergeo(N,K,n,k)`, `ygo.atLeast`, `ygo.atMost`, `ygo.handOdds({groups:{starters:12,traps:9}, deck:40, hand:5, need:[{group:'starters',min:1},{group:'traps',min:1}]})`.
+- Chance, always seeded: `var r = ygo.rng(1)`; `ygo.hand(cards, r, 5)` is the fast opening hand; `ygo.deal(cards, seed, 5)` gives hand and the shuffled library; `ygo.simulate(n, seed, function (r, i) { … })`; `ygo.rate(booleans)` → {p, low, high}.
+- Statistics: `ygo.stats.mean/sd/median/quantile/histogram/correlation/wilson/binomPmf/binomCdf/normalCdf/chiSquare`.
+- A duel table of your own on the real rules (physics only, no card text): `var t = ygo.duel.start({seed: 1})`, `t.do('draw')`, `t.do('s h2 m3')`, `t.state()`, `t.brief(0)`.
+- Boards: `ygo.show.stat({value:'63%', label:'Opens a starter', detail:'100,000 hands, seed 1'})`, `ygo.show.chart({type:'bar', labels:[…], series:[{name:'…', values:[…]}]})` (also hbar, line, stacked, scatter {points:[[x,y]]}, heatmap {rows, cols, values}, histogram {values, bins}), `ygo.show.graph({edges:[['Card A','Card B','searches']]})` for a web of cards, `ygo.show.flow(…)` for a line as a flowchart, `ygo.show.table({columns, rows})`, `ygo.show.cards('3 Ash Blossom & Joyous Spring\n2 Droll & Lock Bird')`, `ygo.show.markdown(text)`. The second argument is `{title, id, note}`; an id replaces the board that has it.
+- Limits: about 30 seconds a run, no files, no network. A million trials is too many in one run; 20,000 to 100,000 is plenty for two decimal places.
+
+## Python (the desk, when the person allowed it)
+`import ygo` gives the same names in snake case (`ygo.deck()`, `ygo.hand_odds(...)`, `ygo.at_least`, `ygo.rate`, `ygo.show(kind, body, title=…, note=…)`). numpy and matplotlib only if the person has them; a picture saved to `out/x.png` can be shown with `ygo.show('image', 'out/x.png')`.
+
+## Honesty
+- The duel table and the simulations know only what the cards physically do, not what their text allows. Say so when a result depends on a card's effect, and model the effect yourself in code, plainly, where it matters.
+- Never present a number you did not compute in a run. Say how it was made.
+- Keep the world tidy: one file per experiment, a short README.md saying what each file answers.
+"""
+
     const val RESTYLE_NAME = "restyle"
     const val RESTYLE_DESCRIPTION =
         "Changes how a presentation looks from the person's words or a picture: the theme, its colors and faces, backgrounds and fills, never the content."

@@ -290,6 +290,22 @@ enum class DeskAction {
     REPLAY_DELETE,
     /** "What if": play on from here as a duel of its own. */
     REPLAY_BRANCH,
+
+    // Ai World (1.0.95): Ai's own computer, watched.
+    GO_WORLD,
+    /** Runs the file open in the editor. */
+    WORLD_RUN,
+    /** Stops the run in progress, Ai's or the person's. */
+    WORLD_STOP,
+    /** The page follows Ai to the pane it is working in, or stays where the person put it. */
+    WORLD_FOLLOW,
+    WORLD_NEW,
+    WORLD_PANE_FILES,
+    WORLD_PANE_EDITOR,
+    WORLD_PANE_TERMINAL,
+    WORLD_PANE_BOARDS,
+    WORLD_PANE_THOUGHTS,
+    WORLD_PANE_ACTIVITY,
     ;
 
     companion object {
@@ -336,6 +352,9 @@ enum class DeskScope(val heading: String) {
 
     /** A replay open on the Duel page (1.0.75). */
     REPLAY("Watching a replay"),
+
+    /** On Ai World, with nothing covering it (1.0.95). */
+    WORLD("In Ai World"),
 }
 
 /** What is on screen, which decides which desk shortcuts are live. */
@@ -358,6 +377,8 @@ data class DeskContext(
     val onDuel: Boolean = false,
     /** A replay is open on it (1.0.75): its keys stand in for the duel's. */
     val replaying: Boolean = false,
+    /** Ai World is the page on screen (1.0.95). */
+    val onWorld: Boolean = false,
 )
 
 data class DeskShortcut(
@@ -391,6 +412,7 @@ object DeskShortcuts {
         DeskShortcut(ctrl("5"), DeskAction.GO_PREP, DeskScope.APP, "Prep: an event and its practice", allowedInTextInput = true),
         DeskShortcut(ctrl("6"), DeskAction.GO_PRESENT, DeskScope.APP, "Present: deck profiles as slides", allowedInTextInput = true),
         DeskShortcut(ctrl("7"), DeskAction.GO_DUEL, DeskScope.APP, "Duel: the duel simulator", allowedInTextInput = true),
+        DeskShortcut(ctrl("8"), DeskAction.GO_WORLD, DeskScope.APP, "Ai World: Ai's own computer, watched", allowedInTextInput = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),
@@ -576,6 +598,17 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("down"), DeskAction.POOL_NEXT, DeskScope.POOL, "Next result, or the card below the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter"), DeskAction.POOL_ADD, DeskScope.POOL, "Add the result to the deck", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter", shift = true), DeskAction.POOL_ADD_TO_SIDE, DeskScope.POOL, "Add the result to the side deck", allowedInTextInput = true, repeatable = true),
+        // Ai World (1.0.95).
+        DeskShortcut(ctrl("enter"), DeskAction.WORLD_RUN, DeskScope.WORLD, "Run the file in the editor", allowedInTextInput = true),
+        DeskShortcut(ctrl("period"), DeskAction.WORLD_STOP, DeskScope.WORLD, "Stop the run", allowedInTextInput = true),
+        DeskShortcut(KeyChord("f"), DeskAction.WORLD_FOLLOW, DeskScope.WORLD, "Follow Ai from pane to pane, or stay put"),
+        DeskShortcut(KeyChord("n", alt = true), DeskAction.WORLD_NEW, DeskScope.WORLD, "A new world"),
+        DeskShortcut(KeyChord("1", alt = true), DeskAction.WORLD_PANE_FILES, DeskScope.WORLD, "Files", allowedInTextInput = true),
+        DeskShortcut(KeyChord("2", alt = true), DeskAction.WORLD_PANE_EDITOR, DeskScope.WORLD, "Editor", allowedInTextInput = true),
+        DeskShortcut(KeyChord("3", alt = true), DeskAction.WORLD_PANE_TERMINAL, DeskScope.WORLD, "Terminal", allowedInTextInput = true),
+        DeskShortcut(KeyChord("4", alt = true), DeskAction.WORLD_PANE_BOARDS, DeskScope.WORLD, "Boards", allowedInTextInput = true),
+        DeskShortcut(KeyChord("5", alt = true), DeskAction.WORLD_PANE_THOUGHTS, DeskScope.WORLD, "Thoughts", allowedInTextInput = true),
+        DeskShortcut(KeyChord("6", alt = true), DeskAction.WORLD_PANE_ACTIVITY, DeskScope.WORLD, "Activity", allowedInTextInput = true),
     )
 
     fun resolve(chord: KeyChord, context: DeskContext): DeskAction? = resolveShortcut(chord, context)?.action
@@ -604,6 +637,7 @@ object DeskShortcuts {
         DeskScope.PRESENTING -> !context.overlayOpen && context.presenting
         DeskScope.DUEL -> !context.overlayOpen && context.onDuel && !context.onBuilder && !context.replaying
         DeskScope.REPLAY -> !context.overlayOpen && context.onDuel && !context.onBuilder && context.replaying
+        DeskScope.WORLD -> !context.overlayOpen && context.onWorld && !context.onBuilder
     }
 
     /**

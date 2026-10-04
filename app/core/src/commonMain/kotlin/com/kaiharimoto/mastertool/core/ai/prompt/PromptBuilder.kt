@@ -260,6 +260,16 @@ object PromptBuilder {
                     "speaker notes. Run present_view on every slide you change and fix what it lists.",
             )
         }
+        if (s.mode == "world") {
+            appendLine()
+            appendLine("## This conversation works in Ai World, your own computer, while the person watches")
+            appendLine(
+                "Read the skill ai-world with skill_view first and follow it. Answer by experiment: world_new (or the open world), then " +
+                    "world_write a script, world_run it, read what it printed, fix it, and pin what you found with ygo.show or world_show. " +
+                    "Every number you tell the person comes from a run, with how many trials and the seed. Say in a line what each step is for " +
+                    "before you take it: they are watching. Do not change their decks in this conversation.",
+            )
+        }
         if (s.mode == "profile") {
             appendLine()
             appendLine("## This conversation is Learn About You: you interview the person")

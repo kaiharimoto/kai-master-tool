@@ -57,7 +57,7 @@ object SyncedPrefs {
         "scale", "poolVisible", "inspectorVisible", "poolWidth", "inspectorWidth", "poolColumns", "filtersOpen",
         "sound", "railPinned", "hdArt", "lensKeys", "groupsPanel", "inspectorFolded", "window", "extraSideVisible",
         "extraVisible", "sideVisible", "deckZoom", "groupGap", "touchIntroSeen", "poolList", "textScale",
-        "orientation", "phoneDockStop", "foilTilt", "sync", "start",
+        "orientation", "phoneDockStop", "foilTilt", "sync", "start", "world",
     )
 
     /** Ai's settings that travel; its connections are this device's (their keys never leave it). */

@@ -124,6 +124,9 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
 
         /** Pages a tier that the field snapshot reads. */
         const val FIELD_PAGES = 6
+
+        /** Where the lists come from, for the envelope round what people typed into the site. */
+        const val SOURCE = "YGOPRODeck"
     }
 
     private fun counted(ids: List<CardId>): String =
@@ -242,10 +245,5 @@ internal class AiMeta(private val h: NeueHolders, private val ai: AiState) {
             append(cutShort(unread, "a shorter days window reads all of it"))
         }
         return MetaAnswer(text, "Read what topped in ${format.name}: ${clusters.take(3).joinToString { "${it.name} ${it.share}%" }} of top cuts")
-    }
-
-    private companion object {
-        /** Where the lists come from, for the envelope round what people typed into the site. */
-        const val SOURCE = "YGOPRODeck"
     }
 }

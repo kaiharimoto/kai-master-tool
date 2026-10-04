@@ -92,6 +92,8 @@ object AiSettings {
     val INTERNAL = setOf(
         "window", "touchIntroSeen", "lensKeys", "extraSideVisible", "inspectorFolded",
         "ai.connections", "ai.introSeen", "sync", "start", "present", "duel",
+        // Ai World (1.0.95): whether Python runs on this computer is the person's decision alone, never Ai's.
+        "world",
     )
 
     /** The settings as Ai reads them: each key's value, then what it does. */

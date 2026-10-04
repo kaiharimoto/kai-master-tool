@@ -107,6 +107,7 @@ class JsRuntime(private val limits: Limits = Limits()) {
         var ok = false
         val started = System.currentTimeMillis()
         val budget = Budget(limits) { stop() || given.get() }
+        api.print = { text -> text.lines().forEach(::print) }
         val worker = Thread(null, {
             val cx = Factory.enterContext()
             try {

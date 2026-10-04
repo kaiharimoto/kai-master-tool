@@ -14,6 +14,7 @@ import com.kaiharimoto.mastertool.core.hand.HandQuery
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.DeckEntry
+import com.kaiharimoto.mastertool.core.prep.TestGame
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -39,6 +40,9 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
     data class Shown(val id: String?, val title: String, val kind: BoardKind, val payload: String, val note: String)
 
     val shown = mutableListOf<Shown>()
+
+    /** Where an instrument's terminal lines go: the running engine's own output, so they stream with the script's. */
+    var print: (String) -> Unit = {}
     private val duels = mutableListOf<DuelGame>()
     private val catalog = DuelCatalog.cached { code -> host.cardById(code)?.let(DuelCardInfo::of) }
 
@@ -71,6 +75,14 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
         "duelDo" -> duelDo(args)
         "duelBrief" -> JsonPrimitive(duel(args).let { g -> DuelBrief.describe(g.state, args.int("seat") ?: 0, catalog, g.header.seed) })
         "duelState" -> duelState(duel(args))
+        "tool" -> tool(args)
+        "tools" -> JsonArray(Instruments.ALL.map { t ->
+            buildJsonObject {
+                put("name", t.name)
+                put("summary", t.summary)
+                put("args", t.args)
+            }
+        })
         else -> throw IllegalArgumentException("ygo has no “$name”")
     }
 
@@ -86,6 +98,19 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             put("decks_list", call("decks", JsonObject(emptyMap())))
             put("decks", buildJsonObject { all.forEach { put(it.id, deckJson(it)) } })
         }.toString()
+    }
+
+    /** An instrument ([Instruments]) run by name: its lines printed, its boards pinned, its answer returned. */
+    fun tool(args: JsonObject): JsonElement {
+        val name = args.str("name") ?: throw IllegalArgumentException("tool needs a name: ${Instruments.ALL.joinToString { it.name }}")
+        val given = args["args"] as? JsonObject ?: JsonObject(emptyMap())
+        val r = Instruments.run(name, given, host)
+        r.lines.forEach(print)
+        r.boards.forEach { b ->
+            require(shown.size < limits.shows) { "a run may show at most ${limits.shows} boards" }
+            shown += b
+        }
+        return r.answer
     }
 
     private fun find(q: String): Card? = q.trim().toIntOrNull()?.let(host::cardById) ?: host.cardNamed(q)
@@ -302,6 +327,9 @@ interface WorldHost {
 
     /** A deck's groups: each group's name and the passcodes in it. */
     fun groups(deckId: String): Map<String, List<Int>> = emptyMap()
+
+    /** The practice games logged in Prep, for the matchups instrument. */
+    fun games(): List<TestGame> = emptyList()
 }
 
 internal fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull

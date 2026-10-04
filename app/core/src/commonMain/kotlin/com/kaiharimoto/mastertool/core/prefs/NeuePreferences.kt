@@ -6,6 +6,7 @@ import com.kaiharimoto.mastertool.core.layout.GroupArrangement
 import com.kaiharimoto.mastertool.core.present.PresentPrefs
 import com.kaiharimoto.mastertool.core.start.StartPrefs
 import com.kaiharimoto.mastertool.core.sync.SyncPrefs
+import com.kaiharimoto.mastertool.core.world.WorldPrefs
 import kotlinx.serialization.Serializable
 
 /**
@@ -323,6 +324,8 @@ data class NeuePreferences(
     val limitMarks: Boolean = false,
     /** Duel (1.0.74): one table or two, what the hot-seat shows, the decks chosen last. */
     val duel: DuelPrefs = DuelPrefs(),
+    /** Ai World (1.0.95): whether Python may run on this computer, how fast code types in, whether the page follows Ai. */
+    val world: WorldPrefs = WorldPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

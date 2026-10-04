@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.present.ai.PresentWriter
 import com.kaiharimoto.mastertool.core.search.EffectKind
+import com.kaiharimoto.mastertool.core.world.Instruments
 
 /**
  * Everything Ai can do in the app, as data: the prompt lists it, every backend
@@ -16,7 +17,7 @@ import com.kaiharimoto.mastertool.core.search.EffectKind
  * a passcode, or with a count in front, `"3 Ash Blossom"` / `"3x Ash Blossom"`.
  */
 object AiTools {
-    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "PRESENT", "DUEL", "SETTINGS")
+    val PAGES = listOf("DECKS", "BUILDER", "SIDING", "FORMAT", "PREP", "PRESENT", "DUEL", "WORLD", "SETTINGS")
     val SECTIONS = listOf("main", "extra", "side")
     val EXPORTS = listOf("ydk", "ydkx", "ydke", "text", "qr")
 
@@ -325,7 +326,7 @@ object AiTools {
 
     val navigate = ToolSpec(
         "navigate",
-        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), PRESENT (deck profiles as slides), DUEL (the duel simulator), SETTINGS.",
+        "Goes to a page: DECKS (the library), BUILDER, SIDING, FORMAT (webs of decks), PREP (tournament prep), PRESENT (deck profiles as slides), DUEL (the duel simulator), WORLD (Ai World, your own computer the person watches), SETTINGS.",
         schema { enum("page", "The page", PAGES, required = true) },
         ToolGroup.APP,
     )
@@ -1075,6 +1076,107 @@ object AiTools {
         phase = 3,
     )
 
+    // ---- Ai World (1.0.95): a computer of Ai's own that the person watches --------------------------------------
+
+    val worldState = ToolSpec(
+        "world_state",
+        "Ai World (08), your own small computer, which the person watches live: with no id, every world; with one (or the open " +
+            "one), its files, its boards (id, kind, title, note) and its last runs with their output. Read it before you work in a world.",
+        schema { string("world_id", "One world; omit for the open one, or the list when none is open") },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val worldNew = ToolSpec(
+        "world_new",
+        "Ai World (08): a new world to work in, opened, for one question — 'Opening odds of Snake-Eye', 'Who beats whom in the " +
+            "field'. scope ties it to a deck or a web (deck:<id>, web:<id>, or 'open' for the builder's deck). Or open {world_id} " +
+            "to go back to one.",
+        schema {
+            string("title", "What the world is for, in a few words")
+            string("scope", "deck:<id>, web:<id>, or open")
+            string("world_id", "Open this existing world instead of making one")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val worldWrite = ToolSpec(
+        "world_write",
+        "Ai World (08): writes a file in the open world's files, typed out live for the person. text replaces the file (creating " +
+            "it); edits [{find, replace}] change it in place, each find exact and once; delete removes it. Code is .js (runs " +
+            "everywhere) or .py (the desk, when the person allowed Python); notes are .md, data .json or .csv. Paths are relative, " +
+            "like sim/openings.js.",
+        schema {
+            string("path", "The file, relative to the world, e.g. sim/openings.js", required = true)
+            string("text", "The whole file")
+            objects("edits", "Changes in place, in order") {
+                string("find", "Exact text that appears once", required = true)
+                string("replace", "What it becomes", required = true)
+            }
+            boolean("delete", "Remove the file")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val worldRead = ToolSpec(
+        "world_read",
+        "Ai World (08): reads a file of the open world, with line numbers.",
+        schema { string("path", "The file, relative to the world", required = true) },
+        ToolGroup.LOOK,
+        phase = 3,
+    )
+
+    val worldRun = ToolSpec(
+        "world_run",
+        "Ai World (08): runs a file (path) or a snippet (code, with lang js or py) in the open world, its output streaming into the " +
+            "world's terminal as the person watches. JavaScript has ygo.*: card, search, deck, decks, comb, hypergeo, atLeast, " +
+            "atMost, handOdds, rng(seed), hand(cards, rng, n), deal, simulate(n, seed, fn), rate, stats.*, show.{chart, graph, flow, " +
+            "table, stat, markdown, cards, board, line} and duel.start (a headless table on the real rules). Python imports ygo with " +
+            "the same names. Seed every simulation. Returns the output, an error with its line, and the boards the run pinned.",
+        schema {
+            string("path", "A file to run")
+            string("code", "Or a snippet to run without saving it")
+            enum("lang", "The snippet's language; a file's comes from its name", listOf("js", "py"))
+            integer("seconds", "Time limit, at most 120; default 30", min = 1, max = 120)
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val worldTool = ToolSpec(
+        "world_tool",
+        "Ai World (08): runs one of the app's instruments in the open world — studies engineered and tested in the app, faster and " +
+            "surer than code written on the spot, and cheaper: one step, no script. Its lines stream to the world's terminal and its " +
+            "boards are pinned. Reach for one before writing your own; write your own (world_write) for what none of them does, " +
+            "to the same standard. ygo.tools.list() or world_tool list gives each one's arguments. The instruments: " + Instruments.brief() + ".",
+        schema {
+            enum("name", "The instrument, or list for every instrument's arguments", Instruments.ALL.map { it.name } + "list", required = true)
+            any("args", "Its arguments, as an object")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val worldShow = ToolSpec(
+        "world_show",
+        "Ai World (08): pins a board to the open world's canvas without running code, or takes one down. put {id, kind, title, body, " +
+            "note}: kind is markdown, chart (bar, hbar, line, stacked, scatter, heatmap, histogram — JSON as the chat's chart), graph " +
+            "or flow ({nodes, edges: [[from, to, label]]}), table ({columns, rows}), stat ({value, label, detail}), cards, board or " +
+            "line (the chat's fences' text) or image (a path under out/). A board with an id that exists is replaced. remove {id}.",
+        schema {
+            enum("action", "What to do", listOf("put", "remove"), required = true)
+            string("id", "The board's id: put replaces the board with it; remove takes it down")
+            string("kind", "put: what the board draws")
+            string("title", "put: its title")
+            any("body", "put: the board's JSON, or text for markdown, cards, board and line")
+            string("note", "put: one line on what it shows and why")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
     /**
      * What a duel conversation is offered (1.0.85): the table's tools and the few a player reaches for at it.
      * Sending all of them cost every round about twelve thousand tokens the table never used.
@@ -1092,6 +1194,7 @@ object AiTools {
         "prep_state", "matchup_matrix", "expected_winrate", "resolve_cards", "context_status", "recall", "watch_video",
         "present_state", "present_view",
         "duel_state", "duel_log",
+        "world_state", "world_read",
     )
 
     /** Every tool, in the order they are offered. */
@@ -1109,6 +1212,7 @@ object AiTools {
         express, sessionReport, resolveCards, watchVideo, contextStatus, compact, recall, readerGuide,
         presentState, presentEdit, presentView,
         duelState, duelAct, duelPeek, duelLog, duelSetup, duelCombo, duelRuling, duelWatch,
+        worldState, worldNew, worldWrite, worldRead, worldRun, worldTool, worldShow,
     )
 
     /** The tools a build that has shipped up to [phase] offers. */

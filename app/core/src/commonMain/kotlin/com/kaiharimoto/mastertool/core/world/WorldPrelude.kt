@@ -129,6 +129,14 @@ object WorldPrelude {
       chart: show('chart'), graph: show('graph'), flow: show('flow'), table: show('table'), stat: show('stat'),
       markdown: show('markdown'), cards: show('cards'), board: show('board'), line: show('line'), image: show('image')
     },
+    tools: (function () {
+      // The app's instruments (Instruments.kt): engineered, tested, run at the app's speed. ygo.tools.list() names them.
+      var t = { list: function () { return call('tools'); } };
+      ['openings', 'ratios', 'card_web', 'composition', 'matchups'].forEach(function (n) {
+        t[n] = function (args) { return call('tool', { name: n, args: args || {} }); };
+      });
+      return t;
+    })(),
     duel: {
       start: function (o) {
         var h = call('duelNew', o || {});
