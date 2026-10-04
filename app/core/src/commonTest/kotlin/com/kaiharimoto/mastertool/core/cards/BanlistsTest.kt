@@ -318,4 +318,22 @@ class BanlistsTest {
         assertTrue(body.startsWith("Forbidden (109): Abyss Dweller, "), body.take(80))
         assertTrue("Unlimited now (came off the list) (5): Cyber Jar" in body)
     }
+
+    @Test
+    fun aPagesGapBetweenTwoEqualListsIsFilledAndSaidToBeInferred() {
+        // Yugipedia's "January 2016 Lists" (OCG) leaves out Pot of Greed, Forbidden on the lists either side.
+        val before = LimitationList(Format.OCG, "October 2015 Lists", "2015-10-01", statuses = mapOf("Pot of Greed" to BanStatus.FORBIDDEN, "Raigeki" to BanStatus.LIMITED))
+        val gap = LimitationList(Format.OCG, "January 2016 Lists", "2016-01-01", statuses = mapOf("Raigeki" to BanStatus.UNLIMITED))
+        val after = LimitationList(Format.OCG, "April 2016 Lists (OCG)", "2016-04-01", statuses = mapOf("Pot of Greed" to BanStatus.FORBIDDEN))
+        val h = BanlistHistory(Format.OCG, listOf(after, gap, before))
+        assertEquals(BanStatus.FORBIDDEN, h.statusOf("Pot of Greed", "2016-02-01"))
+        assertEquals(setOf("Pot of Greed"), h.asOf("2016-02-01")!!.inferred)
+        // A card the page names is never overridden: Raigeki came off, said so, and stays off.
+        assertEquals(BanStatus.UNLIMITED, h.statusOf("Raigeki", "2016-02-01"))
+        assertTrue("(inferred): Pot of Greed" in BanlistWords.body(h.asOf("2016-02-01")!!))
+        // The newest list has nothing after it, and a gap with a different status after is a real change.
+        assertEquals(emptySet(), h.latest!!.inferred)
+        val moved = BanlistHistory(Format.OCG, listOf(before, gap, after.copy(statuses = mapOf("Pot of Greed" to BanStatus.LIMITED))))
+        assertEquals(BanStatus.UNLIMITED, moved.statusOf("Pot of Greed", "2016-02-01"))
+    }
 }

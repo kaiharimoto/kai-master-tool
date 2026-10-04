@@ -33,6 +33,12 @@ data class LimitationList(
     /** The pages of the lists before and after it, as the page names them. */
     val prev: String? = null,
     val next: String? = null,
+    /**
+     * Names the page leaves out but the lists either side restrict alike, carried over by [BanlistHistory] and said to
+     * be inferred, never read. Yugipedia's "January 2016 Lists" (OCG) omits Pot of Greed, Forbidden before and after;
+     * three such gaps in 169 lists, read on 2026-10-04.
+     */
+    val inferred: Set<String> = emptySet(),
 ) {
     private val byName: Map<String, BanStatus> by lazy {
         val out = HashMap<String, BanStatus>(statuses.size * 2)
@@ -97,15 +103,32 @@ data class BanSpell(val status: BanStatus, val from: String, val until: String?,
  * Pages read twice (a list renamed) are kept once, the later read winning.
  */
 class BanlistHistory(val region: Format, lists: List<LimitationList>) {
-    val lists: List<LimitationList> = lists
-        .filter { it.region == region }
-        .associateBy { it.title }.values
-        .sortedWith(compareBy<LimitationList> { it.start }.thenBy { it.title })
+    val lists: List<LimitationList> = repaired(
+        lists
+            .filter { it.region == region }
+            .associateBy { it.title }.values
+            .sortedWith(compareBy<LimitationList> { it.start }.thenBy { it.title }),
+    )
 
     val isEmpty: Boolean get() = lists.isEmpty()
 
     /** The list in force on [date] (`yyyy-MM-dd`), or null before the first. */
     fun asOf(date: String): LimitationList? = lists.lastOrNull { it.start <= date }
+
+    /**
+     * Each list with the gaps in its page filled (1.1.1): a card Forbidden, Limited or Semi-Limited alike on the lists
+     * before and after, and not named on this one at all, kept at that status here and marked [LimitationList.inferred].
+     * A list moves a card only by naming it (`no_longer_on_list` when it comes off), so a silent gap between two equal
+     * statuses is the page's omission, not a change. The newest list has no list after it and is never filled.
+     */
+    private fun repaired(sorted: List<LimitationList>): List<LimitationList> = sorted.mapIndexed { i, list ->
+        val before = sorted.getOrNull(i - 1) ?: return@mapIndexed list
+        val after = sorted.getOrNull(i + 1) ?: return@mapIndexed list
+        val gaps = before.statuses.filter { (name, s) ->
+            s != BanStatus.UNLIMITED && !list.names(name) && after.names(name) && after.statusOf(name) == s
+        }
+        if (gaps.isEmpty()) list else list.copy(statuses = list.statuses + gaps, inferred = list.inferred + gaps.keys)
+    }
 
     /** The newest list there is. */
     val latest: LimitationList? get() = lists.lastOrNull()

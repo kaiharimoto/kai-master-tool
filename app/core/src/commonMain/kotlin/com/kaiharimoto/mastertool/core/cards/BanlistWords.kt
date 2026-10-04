@@ -33,6 +33,10 @@ object BanlistWords {
         }
         val off = list.at(BanStatus.UNLIMITED)
         if (off.isNotEmpty()) append("Unlimited now (came off the list) (").append(off.size).append("): ").append(off.joinToString(", ")).append('\n')
+        if (list.inferred.isNotEmpty()) {
+            append("Not on Yugipedia's page, but restricted alike on the lists before and after, so read as such (inferred): ")
+                .append(list.inferred.sorted().joinToString(", ")).append('\n')
+        }
         if (unmatched.isNotEmpty()) {
             append("Not matched to a card in the app's pool (${unmatched.size}): ").append(unmatched.take(30).joinToString(", "))
             if (unmatched.size > 30) append(", and ${unmatched.size - 30} more")
