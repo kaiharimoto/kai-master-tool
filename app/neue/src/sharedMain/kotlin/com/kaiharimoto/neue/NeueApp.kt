@@ -114,6 +114,7 @@ import com.kaiharimoto.neue.cards.Foils
 import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.cards.LocalArtStep
 import com.kaiharimoto.neue.cards.LocalArts
+import com.kaiharimoto.neue.cards.LocalCardFoil
 import com.kaiharimoto.neue.cards.LocalLimitMarks
 import com.kaiharimoto.neue.cards.LocalNameStyle
 import com.kaiharimoto.neue.cards.NeueCard
@@ -220,7 +221,7 @@ class NeueHolders(
     private val duelHolder = lazy { Duels(java.io.File(Platform.dataDir, "duel")) }
     val duel: Duels by duelHolder
 
-    /** Ai World (1.0.95): Ai's own computer — its files, runs and boards — in `<data>/world/`. */
+    /** Ai World (1.0.97): Ai's own computer — its files, runs and boards — in `<data>/world/`. */
     private val worldHolder = lazy {
         Worlds(java.io.File(Platform.dataDir, "world")).also { w ->
             w.host = { WorldSnapshot.of(this) }
@@ -230,6 +231,9 @@ class NeueHolders(
         }
     }
     val world: Worlds by worldHolder
+
+    /** Whether Ai World has been opened this run: what only touches it when it exists asks this first. */
+    val worldStarted: Boolean get() = worldHolder.isInitialized()
 
     /** Command mode's voice (1.0.87): hold M, or the microphone beside the command line, to speak a move. */
     val duelVoice: DuelVoice by lazy { DuelVoice(this) }
@@ -602,7 +606,7 @@ private fun NeueWindowContent(h: NeueHolders) {
         var held: Tilt? = null
         derivedStateOf { if (neue.showcaseCovers) held else tilt.value.also { held = it } }
     }
-    CompositionLocalProvider(LocalTilt provides shownTilt, LocalDeviceTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalLimitMarks provides neue.prefs.limitMarks, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, LocalTouchFirst provides neue.touchFirst, LocalPhone provides neue.phone, LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai") else emptySet()), LocalTextFocus provides h.textFocus, LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, LocalArts provides neue.prefs.arts, LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
+    CompositionLocalProvider(LocalTilt provides shownTilt, LocalCardFoil provides neue.prefs.foil, LocalDeviceTilt provides tilt, LocalDensity provides Density(base.density * neue.prefs.scale, base.fontScale * neue.prefs.textScaleOn(neue.touchFirst, neue.phone)), LocalArt provides h.art, LocalNameStyle provides neue.prefs.foilNames, LocalLimitMarks provides neue.prefs.limitMarks, LocalZen provides h.zen, LocalCursor provides h.cursor, LocalOverlays provides h.overlays, LocalTouchFirst provides neue.touchFirst, LocalPhone provides neue.phone, LocalKeepCase provides (if (neue.prefs.ai.enabled) setOf(neue.prefs.ai.name.ifBlank { "Ai" }, "Ai") else emptySet()), LocalTextFocus provides h.textFocus, LocalHardwareKeyboard provides (!neue.touchFirst || neue.hardwareKeyboard), LocalReasonNote provides { reason: String -> neue.note = Note(reason) }, LocalArts provides neue.prefs.arts, LocalArtStep provides { card: com.kaiharimoto.mastertool.core.model.Card, by: Int ->
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
         neue.actingBy(finger = neue.touchFirst) { neue.felt(DeskEvent.ART_STEPPED) }

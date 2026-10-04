@@ -156,7 +156,7 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.GO_PRESENT -> neue.go(Page.PRESENT)
         DeskAction.GO_DUEL -> neue.go(Page.DUEL)
         DeskAction.GO_WORLD -> neue.go(Page.WORLD)
-        // Ai World's own (1.0.95): from its keys, the palette and the menus alike.
+        // Ai World's own (1.0.97): from its keys, the palette and the menus alike.
         DeskAction.WORLD_RUN, DeskAction.WORLD_STOP, DeskAction.WORLD_FOLLOW, DeskAction.WORLD_NEW,
         DeskAction.WORLD_PANE_FILES, DeskAction.WORLD_PANE_EDITOR, DeskAction.WORLD_PANE_TERMINAL,
         DeskAction.WORLD_PANE_BOARDS, DeskAction.WORLD_PANE_THOUGHTS, DeskAction.WORLD_PANE_ACTIVITY,

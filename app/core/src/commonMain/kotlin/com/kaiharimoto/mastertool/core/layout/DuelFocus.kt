@@ -119,7 +119,7 @@ object DuelFocus {
         val two = shape.twoSided && !s.solo
         val raw = mutableListOf<List<Pair<Slot, Float>>>()
         if (two) {
-            if (shape.farHand) raw += hand(s, far, FAR_HAND * shape.farScale, shape.farScale)
+            if (shape.farHand) raw += hand(s, far, DuelLayouter.HAND_SCALE * shape.farScale, shape.farScale)
             raw += listOf(Slot.Pile(far, PileKind.DECK) to 0f) +
                 (0 until DuelState.ZONES).map { i -> zone(far, ZoneKind.SPELL, i) to (5 - i).toFloat() } +
                 listOf(Slot.Pile(far, PileKind.EXTRA) to 6f)
@@ -144,7 +144,7 @@ object DuelFocus {
         raw += listOf(Slot.Pile(near, PileKind.EXTRA) to 0f) +
             (0 until DuelState.ZONES).map { i -> zone(near, ZoneKind.SPELL, i) to (1 + i).toFloat() } +
             listOf(Slot.Pile(near, PileKind.DECK) to 6f)
-        raw += hand(s, near, 1f, 1f)
+        raw += hand(s, near, DuelLayouter.HAND_SCALE, 1f)
         return raw.filter { it.isNotEmpty() }.mapIndexed { r, row -> row.sortedBy { it.second }.map { (slot, col) -> Cell(slot, r, col) } }
     }
 
@@ -152,17 +152,16 @@ object DuelFocus {
     fun cells(s: DuelState, viewer: Int, shape: Shape): List<Cell> = rows(s, viewer, shape).flatten()
 
     /**
-     * A hand's cards at their columns, as [DuelFrames.fan] lays them: side by side when they fit, else
-     * overlapping evenly, centred on the middle column. [width] is a card's width in columns' pitch, and
-     * [span] the band's width as a share of the grid's.
+     * A hand's cards at their columns, as [DuelFrames.held] lays them (1.0.94): each over the one before by
+     * [DuelFrames.OVERLAP], more when the band is short, centred on the middle column. [width] is a card's width in
+     * columns' pitch, and [span] the band's width as a share of the grid's.
      */
     private fun hand(s: DuelState, seat: Int, width: Float, span: Float): List<Pair<Slot, Float>> {
         val n = s.seats[seat].hand.size
         if (n == 0) return emptyList()
         val w = CARD_IN_PITCH * width
         val band = GRID_IN_PITCH * span
-        val natural = n * w + (n - 1) * w * 0.06f
-        val step = if (n == 1 || natural <= band) w * 1.06f else (band - w) / (n - 1)
+        val step = if (n == 1) 0f else minOf(w * (1f - DuelFrames.OVERLAP), (band - w) / (n - 1)).coerceAtLeast(w * 0.12f)
         return List(n) { i -> Slot.HandCard(seat, i) to 3f + (i - (n - 1) / 2f) * step }
     }
 
@@ -327,6 +326,4 @@ object DuelFocus {
     private const val CARD_IN_PITCH = 1f / 1.1f
     /** The grid's width (seven cards, six lanes) in the zones' pitch. */
     private const val GRID_IN_PITCH = 7.6f / 1.1f
-    /** The far hand's cards, as a share of a near card (`DuelLayouter`'s far hand band). */
-    private const val FAR_HAND = 0.62f
 }

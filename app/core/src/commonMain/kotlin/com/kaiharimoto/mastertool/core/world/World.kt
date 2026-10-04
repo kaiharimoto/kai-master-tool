@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Ai World (1.0.95, kai: "a free environment to build using coding tools … that the user can see and watch live"):
+ * Ai World (1.0.97, kai: "a free environment to build using coding tools … that the user can see and watch live"):
  * a small computer of Ai's own. It writes files, runs them — JavaScript everywhere, Python on the desk — and pins
  * what it found to the world's boards, and the person watches every keystroke, run and board as it happens.
  *
@@ -40,7 +40,10 @@ data class World(
     }
 }
 
-/** What a board draws. Its [Board.payload] is the kind's own text: JSON for the drawn kinds, the chat's fences' text for cards. */
+/**
+ * What a board draws. Its [Board.payload] is the kind's own text: JSON for the drawn kinds, the chat's fences' text for
+ * cards. Kept in the file by [id], as a word: a kind a newer build adds survives an older build's save untouched.
+ */
 @Serializable
 enum class BoardKind {
     /** The chat's markdown, its tables and fenced blocks too. */
@@ -72,13 +75,22 @@ enum class BoardKind {
 
     /** A picture a run saved; the payload is its path under the world's folder. */
     @SerialName("image") IMAGE,
+    ;
+
+    /** The word in the file. */
+    val id: String get() = name.lowercase()
+
+    companion object {
+        fun of(id: String): BoardKind? = entries.firstOrNull { it.id == id.lowercase() }
+    }
 }
 
 @Serializable
 data class Board(
     val id: String,
     val title: String = "",
-    val kind: BoardKind = BoardKind.MARKDOWN,
+    /** A [BoardKind.id]; one this build does not know is kept as it is and drawn as "made by a newer version". */
+    val kind: String = "markdown",
     val payload: String = "",
     /** Where it stands on the canvas, in the canvas's own units; [WorldCanvas] places a new one. */
     val x: Double = 0.0,
@@ -90,7 +102,10 @@ data class Board(
     val updated: Long = 0L,
     /** Ai's one line on what it shows and why. */
     val note: String = "",
-)
+) {
+    /** What it draws, or null for a kind from a newer build. */
+    val type: BoardKind? get() = BoardKind.of(kind)
+}
 
 /** One thing that happened in a world, as `log.jsonl` keeps it: the Activity pane, and Ai's own memory of the world. */
 @Serializable

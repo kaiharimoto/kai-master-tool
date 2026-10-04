@@ -154,6 +154,9 @@ object DuelVerbs {
                 // The Battle Phase's obvious thing for the turn player's attacker is to attack (1.0.86).
                 (s.solo || s.active == seat) && canAttack(s, seat, uid) -> DuelVerb.ATTACK
                 !card.faceUp && (p.kind == ZoneKind.MONSTER || p.kind == ZoneKind.EMZ) -> DuelVerb.SUMMON
+                // A Normal Trap face-up in its zone and on no chain has done its work: set it again (kai, 1.0.95).
+                card.faceUp && p.kind == ZoneKind.SPELL && kind == CardKind.TRAP &&
+                    catalog.info(card.code)?.sub.equals("Normal", ignoreCase = true) && s.chain.none { it.uid == uid } -> DuelVerb.SET
                 else -> DuelVerb.ACTIVATE
             }
             is Place.Pile -> when (p.kind) {

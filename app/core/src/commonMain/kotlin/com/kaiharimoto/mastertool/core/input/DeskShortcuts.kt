@@ -291,7 +291,7 @@ enum class DeskAction {
     /** "What if": play on from here as a duel of its own. */
     REPLAY_BRANCH,
 
-    // Ai World (1.0.95): Ai's own computer, watched.
+    // Ai World (1.0.97): Ai's own computer, watched.
     GO_WORLD,
     /** Runs the file open in the editor. */
     WORLD_RUN,
@@ -353,7 +353,7 @@ enum class DeskScope(val heading: String) {
     /** A replay open on the Duel page (1.0.75). */
     REPLAY("Watching a replay"),
 
-    /** On Ai World, with nothing covering it (1.0.95). */
+    /** On Ai World, with nothing covering it (1.0.97). */
     WORLD("In Ai World"),
 }
 
@@ -377,7 +377,7 @@ data class DeskContext(
     val onDuel: Boolean = false,
     /** A replay is open on it (1.0.75): its keys stand in for the duel's. */
     val replaying: Boolean = false,
-    /** Ai World is the page on screen (1.0.95). */
+    /** Ai World is the page on screen (1.0.97). */
     val onWorld: Boolean = false,
 )
 
@@ -532,7 +532,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("space", shift = true), DeskAction.DUEL_SELECT, DeskScope.DUEL, "Select the focused card too, or let it go: then one verb moves them all"),
         DeskShortcut(KeyChord("left", alt = true), DeskAction.DUEL_ORDER_EARLIER, DeskScope.DUEL, "Ordering cards onto the Deck: the chosen card one place nearer the top", repeatable = true),
         DeskShortcut(KeyChord("right", alt = true), DeskAction.DUEL_ORDER_LATER, DeskScope.DUEL, "Ordering cards onto the Deck: the chosen card one place further down", repeatable = true),
-        DeskShortcut(KeyChord("space"), DeskAction.DUEL_DEFAULT, DeskScope.DUEL, "The obvious thing for the card under the pointer"),
+        DeskShortcut(KeyChord("space"), DeskAction.DUEL_DEFAULT, DeskScope.DUEL, "The default action for the card under the pointer"),
         DeskShortcut(KeyChord("a"), DeskAction.DUEL_ACTIVATE, DeskScope.DUEL, "Activate it"),
         DeskShortcut(KeyChord("s"), DeskAction.DUEL_SUMMON, DeskScope.DUEL, "Summon it, or Flip Summon it"),
         DeskShortcut(KeyChord("s", shift = true), DeskAction.DUEL_SPECIAL, DeskScope.DUEL, "Special Summon it"),
@@ -598,7 +598,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("down"), DeskAction.POOL_NEXT, DeskScope.POOL, "Next result, or the card below the selected one", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter"), DeskAction.POOL_ADD, DeskScope.POOL, "Add the result to the deck", allowedInTextInput = true, repeatable = true),
         DeskShortcut(KeyChord("enter", shift = true), DeskAction.POOL_ADD_TO_SIDE, DeskScope.POOL, "Add the result to the side deck", allowedInTextInput = true, repeatable = true),
-        // Ai World (1.0.95).
+        // Ai World (1.0.97).
         DeskShortcut(ctrl("enter"), DeskAction.WORLD_RUN, DeskScope.WORLD, "Run the file in the editor", allowedInTextInput = true),
         DeskShortcut(ctrl("period"), DeskAction.WORLD_STOP, DeskScope.WORLD, "Stop the run", allowedInTextInput = true),
         DeskShortcut(KeyChord("f"), DeskAction.WORLD_FOLLOW, DeskScope.WORLD, "Follow Ai from pane to pane, or stay put"),

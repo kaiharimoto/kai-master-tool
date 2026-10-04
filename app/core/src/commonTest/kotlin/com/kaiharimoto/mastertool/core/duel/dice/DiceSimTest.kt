@@ -64,7 +64,8 @@ class DiceSimTest {
                         val at = d.p + d.q.rotate(c)
                         assertTrue(at.z >= -tol, "Throw $i: a corner at z ${at.z} at ${f.t}s")
                         assertTrue(at.x >= -tol && at.x <= DiceSim.ARENA_W + tol, "Throw $i: a corner at x ${at.x}")
-                        assertTrue(at.y >= -tol && at.y <= DiceSim.ARENA_D + tol, "Throw $i: a corner at y ${at.y}")
+                        // Over the middle row as far as [DiceSim.INNER] (1.0.95: the dice roll over it, not off it).
+                        assertTrue(at.y >= -DiceSim.INNER - tol && at.y <= DiceSim.ARENA_D + tol, "Throw $i: a corner at y ${at.y}")
                     }
                 }
             }

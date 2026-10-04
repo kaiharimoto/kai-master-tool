@@ -13,7 +13,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 /**
- * Ai's hands in Ai World (1.0.95): every tool goes through [com.kaiharimoto.neue.world.Worlds], the same holder the
+ * Ai's hands in Ai World (1.0.97): every tool goes through [com.kaiharimoto.neue.world.Worlds], the same holder the
  * person's clicks change, so what Ai writes is typed into the editor they watch, what it runs prints into their
  * terminal, and what it shows is pinned to their canvas.
  */

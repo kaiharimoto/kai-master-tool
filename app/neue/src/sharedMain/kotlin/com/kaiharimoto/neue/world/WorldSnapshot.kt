@@ -12,7 +12,7 @@ import com.kaiharimoto.mastertool.core.world.WorldHost
 import com.kaiharimoto.neue.NeueHolders
 
 /**
- * The app as a world's scripts read it (1.0.95), taken once as a run starts: the pool's index (never changed in
+ * The app as a world's scripts read it (1.0.97), taken once as a run starts: the pool's index (never changed in
  * place), the library, the builder's open deck as it stands, unsaved edits and all, every deck's groups, and the
  * practice games. Plain values, so a script's thread reads them while the app goes on changing its own.
  */

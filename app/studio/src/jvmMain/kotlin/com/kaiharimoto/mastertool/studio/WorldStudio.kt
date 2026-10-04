@@ -16,7 +16,7 @@ import com.kaiharimoto.neue.world.WorldPane
 import kotlin.random.Random
 
 /**
- * `--world=demo` (1.0.95): a world seeded straight onto Ai World's page — files, a run's lines, the activity, a short
+ * `--world=demo` (1.0.97): a world seeded straight onto Ai World's page — files, a run's lines, the activity, a short
  * conversation in Thoughts and one board of every kind — so the page can be photographed without a model.
  * `--world-pane=boards|editor|…` gives that pane the page; `--world-ai=editor|…` puts Ai in that pane (editor by default).
  */

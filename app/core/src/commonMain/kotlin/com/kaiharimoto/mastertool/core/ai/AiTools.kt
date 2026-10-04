@@ -1076,7 +1076,7 @@ object AiTools {
         phase = 3,
     )
 
-    // ---- Ai World (1.0.95): a computer of Ai's own that the person watches --------------------------------------
+    // ---- Ai World (1.0.97): a computer of Ai's own that the person watches --------------------------------------
 
     val worldState = ToolSpec(
         "world_state",

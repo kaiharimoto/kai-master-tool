@@ -3,7 +3,7 @@ package com.kaiharimoto.mastertool.core.world
 import kotlinx.serialization.Serializable
 
 /**
- * Ai World's settings (1.0.95), this device's alone: whether Python may run here is a decision about this computer,
+ * Ai World's settings (1.0.97), this device's alone: whether Python may run here is a decision about this computer,
  * made by the person in setup or Settings and never by Ai (`AiSettings.INTERNAL`).
  */
 @Serializable

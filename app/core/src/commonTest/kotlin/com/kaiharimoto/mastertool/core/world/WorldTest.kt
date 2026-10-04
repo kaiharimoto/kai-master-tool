@@ -167,7 +167,7 @@ class EngineLayoutHubsTest {
 class WorldCodecTest {
     @Test
     fun aWorldRoundTripsAndABadBoardIsDroppedAlone() {
-        val w = World("w1", "Odds", "deck:abc", boards = listOf(Board("b1", "Hands", BoardKind.STAT, """{"value":"63%","label":"x"}""")))
+        val w = World("w1", "Odds", "deck:abc", boards = listOf(Board("b1", "Hands", BoardKind.STAT.id, """{"value":"63%","label":"x"}""")))
         assertEquals(w, WorldCodec.decode(WorldCodec.encode(w)))
         val broken = """{"id":"w2","title":"T","boards":[{"id":"ok","kind":"chart"},{"id":7,"kind":{"no":1}}],"future":true}"""
         val read = assertNotNull(WorldCodec.decode(broken))

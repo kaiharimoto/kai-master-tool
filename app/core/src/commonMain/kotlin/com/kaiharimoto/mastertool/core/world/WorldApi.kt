@@ -177,7 +177,8 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
     }
 
     private fun titleOf(k: BoardKind, payload: String): String =
-        (runCatching { (ShowSpec.obj(payload)["title"] as? JsonPrimitive)?.contentOrNull }.getOrNull()).orEmpty()
+        // A chart's own title, else a stat's label: what the board shows, never only its kind.
+        runCatching { ShowSpec.obj(payload).let { o -> ShowSpec.str(o, "title").ifEmpty { ShowSpec.str(o, "label") } } }.getOrNull().orEmpty()
             .ifEmpty { k.name.lowercase().replaceFirstChar { it.uppercase() } }
 
     // ---- A duel table of the script's own: the real rules, headless, both seats the script's. -------------------

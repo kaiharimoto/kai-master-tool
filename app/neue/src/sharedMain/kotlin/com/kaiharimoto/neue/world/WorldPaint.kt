@@ -90,7 +90,7 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 
 /*
- * What Ai pins to a world's boards, drawn (1.0.95). This file is allowed colour, on kai's word — "ink, with colour as
+ * What Ai pins to a world's boards, drawn (1.0.97). This file is allowed colour, on kai's word — "ink, with colour as
  * content": a chart's series, a web's groups and a heatmap's shades read far better in colour, and they are what Ai
  * wants to show, not chrome. Everything else here keeps the family's laws — square, flat, no shadows — and the frame
  * round a board, its title and its note are the page's ink (`WorldPanes.kt`).

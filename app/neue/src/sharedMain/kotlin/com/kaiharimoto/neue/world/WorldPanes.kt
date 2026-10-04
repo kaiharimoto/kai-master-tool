@@ -104,7 +104,7 @@ import java.util.Date
 import kotlin.math.roundToInt
 
 /*
- * Ai World's panes (1.0.95, kai: "I want to see everything the Ai is doing"): its files, the editor it types into,
+ * Ai World's panes (1.0.97, kai: "I want to see everything the Ai is doing"): its files, the editor it types into,
  * the terminal its runs print to, the boards it pins, its thoughts as they stream, and everything it did. Each pane is
  * a square ink frame with a micro-caps title; the one Ai is working in says so with its still mark — nothing glides
  * after it, since only cards move.

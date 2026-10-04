@@ -62,7 +62,7 @@ import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 
 /**
- * Ai World's page (1.0.95, `08`; kai: "I want to see everything the Ai is doing. The Ai is operating in a mini virtual
+ * Ai World's page (1.0.97, `08`; kai: "I want to see everything the Ai is doing. The Ai is operating in a mini virtual
  * computer"): a head with the world, its picker, New, Run or Stop, Follow and what runs here; under it the six panes —
  * Files over Activity, the Editor over the Terminal, the Boards over Thoughts — drawn in `WorldPanes.kt`, their boards
  * in `WorldPaint.kt`. A phone shows one pane at a time under a strip of tabs.

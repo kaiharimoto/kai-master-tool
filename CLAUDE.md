@@ -690,6 +690,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **The hand held (1.0.94)**: the near hand's card is 1.25× the field's on the window's bottom edge with a fifth below it
   (`DuelLayouter.HAND_SCALE`/`HAND_CUT`, `DuelLayout.handCard`; the table stands on the bottom edge), overlapping and riffling
   round the card under the pointer or the keys (`DuelFrames.held`, `riffle`); the life-point pad closes on a press outside.
+  **1.0.95**: their hand is held the same at the top edge (`farHandCard`, `held(fromTop)`); the card back wears the foil
+  (`LocalCardFoil`); a face-up Normal Trap's Default is Set, and the word is **Default**; a card joining the chain lifts and
+  shines a holo star (`drawFoilStar`, `TableCard.flash`); the opening dice rest on the S/T row in crop marks (`RestMarks`) and
+  roll over the middle row (`DiceSim.INNER`).
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow
   presentation creator that's animated and interactive … record in app using a webcam"): `core/present` is

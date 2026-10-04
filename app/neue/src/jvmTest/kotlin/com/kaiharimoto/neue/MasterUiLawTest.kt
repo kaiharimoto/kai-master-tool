@@ -13,7 +13,7 @@ import kotlin.test.fail
  * Only the files kai granted may name a colour: the foil on a card's face (content,
  * §17), the markers the user draws on their own deck, Ai's face (1.0.52), drawn in its
  * character's colours, a slide's own paint (1.0.70), and what Ai pins to a world's
- * boards (1.0.95, `WorldPaint.kt`: "ink, with colour as content" — a chart's series, a
+ * boards (1.0.97, `WorldPaint.kt`: "ink, with colour as content" — a chart's series, a
  * web's groups, a heatmap's shades). The boards keep every other law: square, flat.
  */
 class MasterUiLawTest {

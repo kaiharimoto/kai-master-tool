@@ -1,5 +1,28 @@
 package com.kaiharimoto.neue.pages
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.data.PoolCheck
@@ -8,70 +31,51 @@ import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.mastertool.core.layout.ScreenOrientation
+import com.kaiharimoto.mastertool.core.offline.ArtCount
+import com.kaiharimoto.mastertool.core.offline.Offline
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.update.DesktopOs
+import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
+import com.kaiharimoto.neue.NeueState
 import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.ai.avatar.AiName
-import com.kaiharimoto.neue.ai.rename
-import com.kaiharimoto.neue.ai.openWizard
-import com.kaiharimoto.neue.ai.use
 import com.kaiharimoto.neue.ai.forget
-import androidx.compose.foundation.background
+import com.kaiharimoto.neue.ai.openWizard
+import com.kaiharimoto.neue.ai.rename
+import com.kaiharimoto.neue.ai.use
+import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.backup.BackupCenter
+import com.kaiharimoto.neue.cards.Foils
+import com.kaiharimoto.neue.cards.NameStyles
+import com.kaiharimoto.neue.cursor.cursorPointer
+import com.kaiharimoto.neue.kit.Breathe
+import com.kaiharimoto.neue.kit.BtnSize
+import com.kaiharimoto.neue.kit.BtnVariant
+import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.LocalTouchFirst
+import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuSelect
-import com.kaiharimoto.neue.kit.muClickable
-import com.kaiharimoto.neue.cursor.cursorPointer
-import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.unit.dp
-import com.kaiharimoto.mastertool.core.offline.ArtCount
-import com.kaiharimoto.mastertool.core.offline.Offline
-import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
-import com.kaiharimoto.mastertool.core.prefs.NeueTheme
-import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
-import com.kaiharimoto.neue.NeueState
-import com.kaiharimoto.neue.art.ArtLibrary
-import com.kaiharimoto.neue.cards.Foils
-import com.kaiharimoto.neue.cards.NameStyles
-import com.kaiharimoto.neue.kit.BtnSize
-import com.kaiharimoto.neue.kit.BtnVariant
-import com.kaiharimoto.neue.kit.Breathe
-import com.kaiharimoto.neue.kit.Help
-import com.kaiharimoto.neue.kit.Icons
-import com.kaiharimoto.neue.kit.Mono
-import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuSwitch
 import com.kaiharimoto.neue.kit.Progress
 import com.kaiharimoto.neue.kit.RowText
 import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.SectionTitle
 import com.kaiharimoto.neue.kit.Segmented
+import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.sync.SyncCenter
 import com.kaiharimoto.neue.sync.SyncSection
 import com.kaiharimoto.neue.theme.Inverted
 import com.kaiharimoto.neue.theme.Mu
+import com.kaiharimoto.neue.world.WorldPython
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** What Settings needs from outside the deck: the updater, the folders, the way to write back. */
 class SettingsHost(
@@ -382,6 +386,50 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
                 MuButton("Open folder", { ai.files.root.mkdirs(); Platform.open(ai.files.root) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
             }
             MuButton("Forget everything", { ai.forgetAsked = true }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+        }
+    }
+    WorldSettings(neue)
+}
+
+/**
+ * Ai World's settings (1.0.97): whether the page follows Ai, how fast its code types in, and — on the desk only —
+ * whether Python may run, which is the person's decision and never Ai's (`AiSettings.INTERNAL`).
+ */
+@Composable
+private fun WorldSettings(neue: NeueState) {
+    val w = neue.prefs.world
+    val name = neue.prefs.ai.name
+    SettingRow("Ai World follows", "When $name starts working in Ai World (${chord(com.kaiharimoto.mastertool.core.input.DeskAction.GO_WORLD).ifEmpty { "page 08" }}), the page comes forward so nothing it does is out of sight.", onToggle = { neue.update { it.copy(world = it.world.copy(follow = !it.world.follow)) } }) {
+        MuSwitch(w.follow, { on -> neue.update { it.copy(world = it.world.copy(follow = on)) } })
+    }
+    SettingRow("Typing", "How fast $name's code types into the World's editor as you watch.") {
+        Segmented(
+            w.typing,
+            listOf(0, 1_500, 600, 200),
+            { when (it) { 0 -> "Instant"; 1_500 -> "Fast"; 600 -> "Steady"; else -> "Slow" } },
+            { v -> neue.update { it.copy(world = it.world.copy(typing = v)) } },
+            small = true,
+        )
+    }
+    if (!WorldPython.possible) return
+    var found by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    LaunchedEffect(w.pythonPath, w.python) {
+        found = withContext(Dispatchers.IO) {
+            WorldPython.find(w.pythonPath)?.version ?: "No Python 3 found"
+        }
+    }
+    SettingRow(
+        "Python in Ai World",
+        "JavaScript always runs there, shut away from your files and the network. Python runs as you, with your permissions: " +
+            "allow it only if you are happy for $name's code to run on this computer. ${found.orEmpty()}",
+        onToggle = { neue.update { it.copy(world = it.world.copy(python = !it.world.python)) } },
+    ) {
+        MuSwitch(w.python, { on -> neue.update { it.copy(world = it.world.copy(python = on)) } })
+    }
+    if (w.python) {
+        var path by androidx.compose.runtime.remember(w.pythonPath) { androidx.compose.runtime.mutableStateOf(w.pythonPath) }
+        SettingRow("Python to run", "Blank finds one on the PATH (python3, python, py -3); or the full path to a Python 3.") {
+            MuInput(path, { path = it.take(400) }, Modifier.width(280.dp), placeholder = "On the PATH", onSubmit = { neue.update { it.copy(world = it.world.copy(pythonPath = path.trim())) } })
         }
     }
 }

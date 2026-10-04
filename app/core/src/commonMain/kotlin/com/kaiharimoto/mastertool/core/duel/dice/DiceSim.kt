@@ -25,6 +25,12 @@ object DiceSim {
     /** The seat's field, in die edges: x across it, y from its far edge toward the player. */
     const val ARENA_W = 20.0
     const val ARENA_D = 8.0
+    /**
+     * How far past the field's far edge the table runs before a wall (1.0.95, kai: "don't have it bounce off of the center
+     * box, have it roll over it instead"): about the middle row's depth, so a die thrown hard rolls over the Extra Monster
+     * Zones and the chain well, never off an edge there. A constant, not the window's: every screen plays the same throw.
+     */
+    const val INNER = 4.5
 
     const val DT = 1.0 / 480.0
     /** One frame kept every this many steps: sixty a second. */
@@ -189,7 +195,7 @@ object DiceSim {
             }
             if (at.x < AHEAD) out += contact(b, null, r, V3.ZERO, V3(1.0, 0.0, 0.0), -at.x, WALL_BOUNCE, WALL_FRICTION)
             if (at.x > ARENA_W - AHEAD) out += contact(b, null, r, V3.ZERO, V3(-1.0, 0.0, 0.0), at.x - ARENA_W, WALL_BOUNCE, WALL_FRICTION)
-            if (at.y < AHEAD) out += contact(b, null, r, V3.ZERO, V3(0.0, 1.0, 0.0), -at.y, WALL_BOUNCE, WALL_FRICTION)
+            if (at.y < -INNER + AHEAD) out += contact(b, null, r, V3.ZERO, V3(0.0, 1.0, 0.0), -INNER - at.y, WALL_BOUNCE, WALL_FRICTION)
             if (at.y > ARENA_D - AHEAD) out += contact(b, null, r, V3.ZERO, V3(0.0, -1.0, 0.0), at.y - ARENA_D, WALL_BOUNCE, WALL_FRICTION)
         }
     }
@@ -339,6 +345,6 @@ object DiceSim {
         val (_, u, v) = footprint(pose)
         val hx = abs(u.x) + abs(v.x)
         val hy = abs(u.y) + abs(v.y)
-        return pose.copy(p = V3(pose.p.x.coerceIn(hx, ARENA_W - hx), pose.p.y.coerceIn(hy, ARENA_D - hy), 0.5))
+        return pose.copy(p = V3(pose.p.x.coerceIn(hx, ARENA_W - hx), pose.p.y.coerceIn(-INNER + hy, ARENA_D - hy), 0.5))
     }
 }
