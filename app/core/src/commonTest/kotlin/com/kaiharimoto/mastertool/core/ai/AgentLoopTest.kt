@@ -108,7 +108,17 @@ class AgentLoopTest {
         val backend = Scripted(List(3) { round })
         val events = AgentLoop(backend, { Part.ToolResult(it.id, it.name, "x") }, maxSteps = 3).run(request).toList()
         assertEquals(3, backend.sent.size)
-        assertIs<AgentEvent.Done>(events.last())
+        val done = events.last()
+        assertIs<AgentEvent.Done>(done)
+        assertTrue(done.outOfSteps, "the cap says so, for a helper's report to say it was cut short")
+    }
+
+    @Test
+    fun aRunThatFinishesIsNotOutOfSteps() = runTest {
+        val backend = Scripted(listOf(listOf(BackendEvent.Finished(StopReason.MAX_TOKENS, ChatTurn.assistant("Long answer…")))))
+        val done = AgentLoop(backend, { error("never") }, maxSteps = 3).run(request).toList().last()
+        assertIs<AgentEvent.Done>(done)
+        assertTrue(!done.outOfSteps, "the model's own length limit is not the step cap")
     }
 
     @Test

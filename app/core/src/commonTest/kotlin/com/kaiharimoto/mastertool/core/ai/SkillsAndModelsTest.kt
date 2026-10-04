@@ -59,6 +59,28 @@ class MemoryReviewTest {
         assertEquals(3, com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.count(changes))
         assertTrue(com.kaiharimoto.mastertool.core.ai.memory.MemoryReview.diff(before, before).isEmpty())
     }
+
+    @Test
+    fun aSkillAiWroteIsReviewedLineByLine() {
+        val path = Skills.path("Side Against Snake-Eye")
+        assertEquals("skills/side-against-snake-eye/SKILL.md", path)
+        assertTrue(Skills.isPath(path))
+        assertFalse(Skills.isPath("USER.md") || Skills.isPath("guides/d1.md"))
+        val v1 = com.kaiharimoto.mastertool.core.ai.skills.Skill("side-against-snake-eye", "Siding against Snake-Eye.", "1. Read the web.\n2. Bring Droll.").render()
+        val v2 = v1.replace("Bring Droll.", "Bring Ash.")
+        val review = com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
+        // Written in the session: every line of it is new, so the review shows it and Undo deletes it.
+        val written = review.diff(mapOf(path to null), mapOf(path to v1)).single()
+        assertEquals(path, written.path)
+        assertEquals(listOf("When to use it: Siding against Snake-Eye.", "1. Read the web.", "2. Bring Droll."), written.added)
+        assertTrue(written.removed.isEmpty())
+        // Patched: the line gone and the line come.
+        val patched = review.diff(mapOf(path to v1), mapOf(path to v2)).single()
+        assertEquals(listOf("2. Bring Ash."), patched.added)
+        assertEquals(listOf("2. Bring Droll."), patched.removed)
+        // Deleted: missing from the after's map altogether, as a folder gone is.
+        assertEquals(3, review.diff(mapOf(path to v1), emptyMap()).single().removed.size)
+    }
 }
 
 class LearningTest {
@@ -85,6 +107,22 @@ class LearningTest {
         assertTrue("## This conversation is Fine Tuning" in tune)
         assertTrue(tune.startsWith(chat.trimEnd()), "tuning appends; the rest of the prompt is the same bytes")
         assertEquals(tune, com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.system(base.copy(mode = AiSession.MODE_TUNE)))
+    }
+
+    @Test
+    fun aHelperHasALeanPromptOfItsOwn() {
+        val helper = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.helper("Ai", "I am the soul.")
+        assertTrue(helper.startsWith("I am the soul."))
+        assertTrue("## Your job" in helper && "your final message is your report" in helper)
+        assertTrue("## The rules of the game" in helper, "the rules, always")
+        val base = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.Setup("Ai", "I am the soul.", "Plays Branded.", "", "- fine-tuning: …", "desktop", mode = AiSession.MODE_TUNE)
+        val tune = com.kaiharimoto.mastertool.core.ai.prompt.PromptBuilder.system(base)
+        // None of the conversation's own: its mode, its blocks, its memory, its skills.
+        listOf("## This conversation", "```chart", "## Skills", "Plays Branded.").forEach {
+            assertTrue(it in tune, "the conversation's prompt has $it")
+            assertFalse(it in helper, "a helper's prompt has $it")
+        }
+        assertTrue(helper.length < tune.length, "the rules are most of it; the rest is the conversation's alone")
     }
 }
 

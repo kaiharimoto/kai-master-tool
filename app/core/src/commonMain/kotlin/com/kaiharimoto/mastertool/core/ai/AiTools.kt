@@ -699,7 +699,7 @@ object AiTools {
     val sessionReport = ToolSpec(
         "session_report",
         "Files this Fine Tuning session's report, as its last act; the person gets it as a PDF and the deck's guide shows the scores. " +
-            "Your honest confidence, 0-100: understanding (what the deck is for and how its cards fit), playing (how well you could " +
+            "Your honest confidence, each a whole number from 0 to 100 (62, never 0.62): understanding (what the deck is for and how its cards fit), playing (how well you could " +
             "pilot it yourself, turn by turn) and mirror (the share of best-of-three matches you expect to win against a competent " +
             "player piloting the same deck; 50 is even). Undersell rather than oversell, and say why.",
         schema {
@@ -707,9 +707,9 @@ object AiTools {
             strings("learned", "What you learned, one line each")
             strings("insights", "Deckbuilding insights, as suggestions")
             strings("open_questions", "What is still open")
-            integer("understanding", "0-100", required = true, min = 0, max = 100)
-            integer("playing", "0-100", required = true, min = 0, max = 100)
-            integer("mirror", "0-100: expected best-of-three win rate in the mirror", required = true, min = 0, max = 100)
+            integer("understanding", "A whole number, 0-100", required = true, min = 0, max = 100)
+            integer("playing", "A whole number, 0-100", required = true, min = 0, max = 100)
+            integer("mirror", "A whole number, 0-100: expected best-of-three win rate in the mirror", required = true, min = 0, max = 100)
             string("why", "What the scores rest on, and what would raise them", required = true)
         },
         ToolGroup.MEMORY,
@@ -821,6 +821,45 @@ object AiTools {
         "ygopro_tournament_decks", "ygopro_deck", "import_ygopro_deck", "ygopro_field_snapshot", "ygopro_player",
         "watch_video",
     )
+
+    /**
+     * Every tool that changes the person's decks: edits, groups, names, saves, new and deleted
+     * decks, the builder's undo — and run_action, which reaches the same through the app's own
+     * actions (Remove selected, Undo, New deck…).
+     */
+    val DECK_CHANGING: Set<String> = setOf(
+        "edit_deck", "set_groups", "rename_deck", "save_deck", "delete_deck", "import_deck", "new_deck", "undo", "run_action",
+    )
+
+    /**
+     * Opening another deck mid-way through Fine Tuning, Refactor guide or the reader's guide: the
+     * guide, the book and the session report all follow the builder's deck, so the rest of the run
+     * would write to a deck the person never chose (and the review's budget would be the wrong
+     * one's). Learn About You is about the person, not a deck, and may open one.
+     */
+    private val SWITCHING_DECKS: Set<String> = setOf("open_deck")
+
+    /**
+     * The tools closed in a conversation of [mode], whatever the model tries (offered and answered
+     * alike): the decks are never changed while Ai learns a deck, rewrites its guide, writes its
+     * book or interviews the person — "do not change their decks" was the prompt's word alone —
+     * and from first principles the web is closed too ([FIRST_PRINCIPLES_BARRED]).
+     */
+    fun barredIn(mode: String): Set<String> = when (mode) {
+        AiSession.MODE_PRINCIPLES -> FIRST_PRINCIPLES_BARRED + DECK_CHANGING + SWITCHING_DECKS
+        AiSession.MODE_TUNE, AiSession.MODE_STUDY, AiSession.MODE_REFACTOR, AiSession.MODE_WRITE -> DECK_CHANGING + SWITCHING_DECKS
+        AiSession.MODE_PROFILE -> DECK_CHANGING
+        else -> emptySet()
+    }
+
+    /** Why [tool] is closed in [mode], for the model; null when it is open. */
+    fun barredWhy(mode: String, tool: String): String? = when {
+        tool !in barredIn(mode) -> null
+        mode == AiSession.MODE_PRINCIPLES && tool in FIRST_PRINCIPLES_BARRED ->
+            "$tool is closed in this session: the deck is learned from its card text and the rules alone. Reason it out."
+        tool in SWITCHING_DECKS -> "$tool is closed in this session: it is about the deck open now, and its guide is written to that deck. Stay on it."
+        else -> "$tool is closed in this session: the person's decks are not changed here. Suggest the change in words instead."
+    }
 
     /** The tools a delegated helper may use: every one that only looks. */
     val presentState = ToolSpec(

@@ -6,6 +6,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlin.math.roundToInt
 
 /**
  * What one Fine Tuning session came to (1.0.54, kai: "at the end of teaching sessions, it should
@@ -59,8 +60,16 @@ data class SessionReport(
             else -> "Fine Tuning"
         }
 
-        /** A score from what a model sent: a number, or text holding one; clamped to 0–100. */
-        fun score(raw: Double?): Int = (raw ?: 0.0).let { if (it > 0 && it <= 1.0) it * 100 else it }.toInt().coerceIn(0, 100)
+        /**
+         * A score from what a model sent: a number, or text holding one; clamped to 0–100. Only a
+         * fraction strictly between 0 and 1 reads as a share (0.62 is 62); a whole number is taken
+         * as given, so a 1 sent as the score it means is 1, never 100.
+         */
+        fun score(raw: Double?): Int {
+            val value = raw?.takeUnless { it.isNaN() } ?: 0.0
+            val percent = if (value > 0 && value < 1) value * 100 else value
+            return percent.coerceIn(0.0, 100.0).roundToInt()
+        }
     }
 }
 

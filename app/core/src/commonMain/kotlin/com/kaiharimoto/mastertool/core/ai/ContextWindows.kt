@@ -125,13 +125,28 @@ object Recall {
                 }
                 texts.mapNotNull { text ->
                     val lower = text.lowercase()
-                    val found = words.count { it in lower }
+                    // Whole words, as the query was split: "it" is not found in "with", nor "ash" in "flash".
+                    val at = words.map { wordAt(lower, it) }
+                    val found = at.count { it >= 0 }
                     if (found == 0 || found < (words.size + 1) / 2) return@mapNotNull null
-                    val at = words.map { lower.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: 0
-                    val excerpt = text.substring((at - 100).coerceAtLeast(0), (at + 260).coerceAtMost(text.length)).replace('\n', ' ').trim()
+                    val first = at.filter { it >= 0 }.minOrNull() ?: 0
+                    val excerpt = text.substring((first - 100).coerceAtLeast(0), (first + 260).coerceAtMost(text.length)).replace('\n', ' ').trim()
                     Hit(s.id, s.title, t.at, if (t.isToolResults) Role.ASSISTANT else t.role, excerpt, found)
                 }
             }
         }.sortedWith(compareByDescending<Hit> { it.score }.thenByDescending { it.at }).take(limit)
+    }
+
+    /** Where [word] first stands in [lower] as a word of its own (no letter or digit either side); -1 when it does not. */
+    fun wordAt(lower: String, word: String): Int {
+        var from = 0
+        while (true) {
+            val at = lower.indexOf(word, from)
+            if (at < 0) return -1
+            val end = at + word.length
+            val alone = (at == 0 || !lower[at - 1].isLetterOrDigit()) && (end == lower.length || !lower[end].isLetterOrDigit())
+            if (alone) return at
+            from = at + 1
+        }
     }
 }

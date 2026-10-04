@@ -3,7 +3,9 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.AgentLoop
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
+import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.TuneIntensity
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
@@ -22,12 +24,17 @@ import java.io.File
 // What Ai learns (phase 3), on [AiState]: Fine Tuning and Learn About You, the review of what they changed in memory,
 // the reflection after a conversation, the guide and the reader's guide, and memory's folding and forgetting.
 
-/** The memory files as they stand, by path: what a review compares against. */
+/**
+ * The memory files as they stand, by path: what a review compares against. The skills Ai wrote are
+ * in it too, so a skill written or patched in a session is shown at its end and Undo puts it back —
+ * or deletes it, when it was not there before.
+ */
 private fun AiState.snapshot(): Map<String, String?> {
     val paths = buildSet {
         add(MemoryKind.USER.file)
         add(MemoryKind.AGENT.file)
         files.memoryFiles().forEach { add(it.relativeTo(files.root).invariantSeparatorsPath) }
+        addAll(files.skillPaths())
         host.scope()?.path?.let(::add)
         h.builder.deckId?.let { add(GuideBook.path(it)) }
     }
@@ -250,10 +257,12 @@ fun AiState.undoReview() {
 
 /**
  * After a conversation, a short pass to keep what will matter (Hermes's nudge): the
- * model reads the conversation back and writes durable facts to memory — and a
- * skill, when it worked out a procedure. Quiet: a note says how many things were
- * remembered, with Undo. Only for conversations long enough to teach something, and
- * only on an API connection (a CLI would run a whole session for it).
+ * model reads the conversation back and writes durable facts to memory. Quiet: a note
+ * says how many things were remembered, with Undo. No skills: the pass runs with no
+ * one watching, and a skill changes how Ai does a whole kind of task, so skills are
+ * written in a conversation, where the person sees it (and is asked over one of the
+ * app's). Only for conversations long enough to teach something, and only on an API
+ * connection (a CLI would run a whole session for it).
  */
 internal fun AiState.reflect(finished: AiSession) {
     if (AiState.PHASE < 3 || finished.mode != AiSession.MODE_CHAT) return
@@ -266,7 +275,7 @@ internal fun AiState.reflect(finished: AiSession) {
         (if (t.role == Role.USER) "Person: " else "$name: ") + t.text.take(1200)
     }.takeLast(16_000)
     val before = snapshot()
-    val allowed = tools.filter { it.name == "memory" || it.name == "skill_manage" || it.name == "memory_read" }
+    val allowed = tools.filter { it.name == "memory" || it.name == "memory_read" }
     val request = TurnRequest(
         finished.system,
         listOf(
@@ -274,7 +283,8 @@ internal fun AiState.reflect(finished: AiSession) {
                 "Our conversation just ended. Here it is:\n\n$transcript\n\n" +
                     "Save to memory what will still matter next week about the person or about doing this job for them " +
                     "(memory tool; replace what changed rather than adding duplicates). If you worked out a repeatable " +
-                    "procedure, write it as a skill (skill_manage). If nothing is worth keeping, do nothing. Then answer in one word: done.",
+                    "procedure, note it in your own notes (memory scope agent) in a line or two; skills are not written here. " +
+                    "If nothing is worth keeping, do nothing. Then answer in one word: done.",
             ),
         ),
         allowed,
@@ -282,7 +292,16 @@ internal fun AiState.reflect(finished: AiSession) {
         "low",
     )
     scope.launch {
-        runCatching { AgentLoop(model, { call -> host.run(call) }, maxSteps = 6).run(request).collect { } }
+        // Only what it was offered answers: a tool it names anyway is refused, not run.
+        val names = allowed.map { it.name }.toSet()
+        val run = ToolRunner { call ->
+            if (call.name.removePrefix("mcp__neue__") in names) {
+                host.run(call)
+            } else {
+                Part.ToolResult(call.id, call.name, "${call.name} is not used after a conversation: only memory.", isError = true)
+            }
+        }
+        runCatching { AgentLoop(model, run, maxSteps = 6).run(request).collect { } }
         val changes = MemoryReview.diff(before, snapshot())
         if (changes.isNotEmpty()) {
             val n = MemoryReview.count(changes)
