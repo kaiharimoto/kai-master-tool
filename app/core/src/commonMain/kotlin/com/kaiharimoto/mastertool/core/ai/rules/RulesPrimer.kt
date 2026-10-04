@@ -74,6 +74,6 @@ object RulesPrimer {
 - A card leaving the field goes to its owner's hand, Deck or GY, whoever controlled it.
 - Public: LP, card counts, GYs, face-up cards. Private: hands, face-down cards, Deck order.
 
-Rulings for specific cards: check them with the `rulings` tool, never from memory. The official rulebook: ${OFFICIAL}
+Rulings for specific cards: check them with the `rulings` tool, never from memory. Konami's official Q&A there is the OCG's; the TCG can differ, and a TCG ruling stands for TCG play. Say which game a ruling is from. The official rulebook: ${OFFICIAL}
 """
 }

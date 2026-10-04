@@ -2023,6 +2023,21 @@ to forget the game rules". What was taken from them, and what was not:
   page (Konami's Q&A, translated; CC BY-SA, attributed in every answer), read with a
   User-Agent, one request at a time and kept a week in `<data>/ai/cache`, as its API asks.
   `archetype_guide` reads an archetype page's playing style, combos and weaknesses.
+- **Official rulings first** (1.0.98, `YgoOrg` in `core/ai/rules`): `rulings` reads Konami's own
+  OCG FAQ notes and Q&A from YGOrganization's database (db.ygoresources.com) before Yugipedia,
+  each source in its own envelope with its own share of the 16k (so neither end is cut), and one
+  source failing leaves the other answering. kai's caveat goes with every answer
+  (`YgoOrg.CAVEAT`): these are the OCG's, translated; the TCG usually agrees, a TCG ruling stands
+  for TCG play where they differ, and Ai says which game a ruling is from. Each Q&A carries
+  Konami's date (the pre-Master Rule 4 and 2022-12-30 placeholder dates said for what they are)
+  and the site's translation status — up to date, unconfirmable, outdated (Konami's Japanese
+  given instead), untranslated; retracted ones and FAQ notes Konami no longer has are left out,
+  as the site leaves them; its "might not apply to the TCG" notes are quoted as **TCG caveat**.
+  Konami ids are not passcodes: the English name index (`/data/idx/card/name/en`, kept a week)
+  maps the name, and `<<id>>` references are named from it, preferring the name the pool knows.
+  Only what the question needs is asked, as the site's API page requests: the index, the card,
+  and at most eight of its newest Q&As — or, with `with` naming a second card, the Q&As the two
+  share (read off the second card's own list). `source` picks one source.
 - **A helper with a fresh mind**: `delegate` runs a second loop with only the look-only tools
   (`AiTools.readOnly`) and brings back its report alone — twenty decklists read without
   filling the conversation. API connections only; the CLIs have their own.

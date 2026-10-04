@@ -302,6 +302,11 @@ said so, and so does this list.
   - It is keyed by Konami ID, which YGOPRODeck's `misc_info.konami_id` maps from passcodes.
   - It is cached by revision; never crawl it.
   - Keep Yugipedia (CC BY-SA, attributed) for the TCG view.
+  - **Shipped in 1.0.98**: `rulings` reads it first (`YgoOrg`): the card's FAQ notes and its newest Q&As (or those
+    shared with a second card), each with Konami's date and its translation status, the site's TCG warnings quoted,
+    and the OCG caveat on every answer; Yugipedia follows. The name goes to an id through the site's own English
+    name index, kept a week, so no passcode map is needed. Using `X-Cache-Revision` and `/manifest/<rev>` instead
+    of the week is a later refinement.
 - **Banlists by date:** Yugipedia's `{{Limitation list}}` template carries start and end dates
   ([API](https://yugipedia.com/api.php)). That allows a past format to be replayed in Ai World.
 - **Never Konami's Neuron.** Its terms forbid building a database by downloading

@@ -20,6 +20,8 @@ For questions on timing, battle, materials or tournament procedure. The primer i
 
 **Never invent a ruling.** When the answer depends on one card's text or an official ruling, call `rulings` for that card and say what it returned. If it returns nothing clear, say plainly "I'm not sure; this is how the general rule reads" and name the rule. A confident wrong ruling costs the person a game at the table.
 
+**Which game a ruling is from.** `rulings` gives Konami's official OCG FAQ and Q&A first (translated by YGOrganization), then Yugipedia's TCG and OCG sections. Cite each as OCG or TCG. They usually agree; where a TCG ruling differs, it stands for TCG play, and any entry marked with a TCG caveat must be said as such. With two cards in the question, pass the second as "with" to read the Q&As about both.
+
 ## The Damage Step, step by step
 The Damage Step begins after an attack is not stopped in the Battle Step. Its five parts:
 1. **Start of the Damage Step.** Effects that say "at the start of the Damage Step" (for example, banishing the monster it battles) and Spells, Traps and Quick Effects that directly change ATK or DEF.
