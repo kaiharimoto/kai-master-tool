@@ -601,9 +601,10 @@ private fun AppCard(h: NeueHolders, n: UiNode.Card, s: Sender) {
     } else {
         Row(pick, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ChatCard(h.ai, name, 34.dp)
+            // The card's own name first, whole where it can be: the label says what it is to the app, under it.
             Column {
-                Body(n.label.ifBlank { name }, color = c.ink, maxLines = 2)
-                if (n.label.isNotBlank() && n.label != name) Small(name, color = c.ink70, maxLines = 1)
+                Body(name, color = c.ink, maxLines = 2)
+                if (n.label.isNotBlank() && n.label != name) Small(n.label, color = c.ink70, maxLines = 2)
             }
         }
     }
