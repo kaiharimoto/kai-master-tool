@@ -225,11 +225,9 @@ private fun Widget(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean) {
             n.children.forEachIndexed { i, k -> key(i) { Node(h, k, s) } }
         }
         is UiNode.Row -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(space(n.gap)), verticalAlignment = Alignment.Top) {
-            // Weighted children share the room; with none weighted, every child shares it equally.
-            val weighted = n.children.any { it.weight != null }
+            // Every child shares the row by its weight, 1 when it names none (§8.4).
             n.children.forEachIndexed { i, k ->
-                val w = k.weight ?: if (weighted) null else 1
-                key(i) { Box(if (w != null) Modifier.weight(w.toFloat()) else Modifier) { Node(h, k, s, inRow = true) } }
+                key(i) { Box(Modifier.weight((k.weight ?: 1).toFloat())) { Node(h, k, s, inRow = true) } }
             }
         }
         is UiNode.Grid -> Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(space(n.gap))) {

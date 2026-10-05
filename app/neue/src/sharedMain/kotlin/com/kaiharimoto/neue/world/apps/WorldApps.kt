@@ -344,10 +344,11 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
                 }
                 h.state = r.value
                 h.failure = null
-                h.answered++
                 if (r.shown.isNotEmpty()) world.pinFromApp(h.slug, r.shown.take(AppLimits.SHOWS), by)
                 saveSoon(h)
                 render(h)
+                // Answered once its screen is drawn: what waits on it reads the new screen.
+                h.answered++
             }
             is AppCall.Failed -> threw(h, r)
         }

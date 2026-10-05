@@ -25,13 +25,12 @@ import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.theme.Mu
 import kotlinx.coroutines.launch
 
 /*
- * What an Ai app's window adds to the desktop's frame (`docs/world/DESKTOP.md` §2.3, §8.5, §8.6): `by Ai`, the breathing
+ * What an Ai app's window adds to the desktop's frame (`docs/world/DESKTOP.md` §2.3, §8.5, §8.6): the breathing
  * square while an event runs past 150 ms, and its ⋯ — Show code, Back to an earlier version, Start fresh, Delete. The
  * desktop's `DeskApps` puts it in the title bar; nothing an app returns can change the frame (§8.6 point 4).
  */
@@ -45,8 +44,8 @@ fun WorldAppTools(h: NeueHolders, app: AppRef, color: Color = Mu.colors.ink) {
     val scope = rememberCoroutineScope()
     var at by remember { mutableStateOf(Offset.Zero) }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // `by Ai` is the frame's own, after the name; this is the breathing square and the menu.
         if (host?.busy == true) Breathe(color = color)
-        Micro("by Ai", color = color)
         Box(Modifier.onGloballyPositioned { at = it.boundsInWindow().bottomLeft + Offset(0f, 4f) }) {
             Tip("The app's code, its versions, a fresh start") {
                 IconButton(Icons.More, {

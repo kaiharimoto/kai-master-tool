@@ -154,11 +154,8 @@ private fun TabCell(h: NeueHolders, t: Tab, selected: Boolean, width: androidx.c
         Small(title, Modifier.weight(1f), color = if (selected) c.ink else c.ink45, maxLines = 1)
         // Ai changed it while it was not selected: a 6 dp ink square, until it is.
         if (t.mark) Box(Modifier.size(6.dp).background(c.ink))
-        if (hot || selected || LocalPhone.current) {
-            IconButton(Icons.X, { browser.close(t.id) }, size = 24.dp, label = "Close tab")
-        } else {
-            Spacer(Modifier.width(24.dp))
-        }
+        // ✕ on the tab in view and the one under the pointer (always, to a finger); the others give its room to the title.
+        if (hot || selected || LocalPhone.current) IconButton(Icons.X, { browser.close(t.id) }, size = 24.dp, label = "Close tab")
     }
 }
 
