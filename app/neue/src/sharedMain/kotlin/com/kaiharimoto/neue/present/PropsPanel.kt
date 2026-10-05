@@ -844,7 +844,7 @@ private fun ThemeProps(h: NeueHolders, p: Presentation, ctx: SlideContext) {
         MuSlider(z.borderWidth, { put(z.copy(borderWidth = it)) }, Modifier.fillMaxWidth(), 0f..24f, name = "Border width")
         FieldLabel("Before the camera is live", hint = "in the editor and for your own recorder")
         Segmented(z.fill, listOf(WebcamZone.FILL_THEME, WebcamZone.FILL_CHROMA, WebcamZone.FILL_NONE), { when (it) { WebcamZone.FILL_CHROMA -> "Green screen"; WebcamZone.FILL_NONE -> "Clear"; else -> "Panel" } }, { put(z.copy(fill = it)) }, small = true)
-        Help("Green screen fills the zone with keying green, so a recorder of your own (OBS) can put your camera there. Clear leaves the slide showing through.")
+        Help("Green screen fills the zone with keying green, so a recorder of your own (OBS) can put your camera there. Panel and Clear are for the editor only: while presenting and in exports the zone stays empty until the camera is live.")
     }
     // Written onto the title and end slides where the old name stood (B4); words written by hand stay.
     FieldLabel("Your name", hint = "on the title slide")

@@ -1159,6 +1159,9 @@ private fun CameraFrame(ctx: SlideContext, z: WebcamZone, modifier: Modifier, s:
     val density = LocalDensity.current
     Box(
         modifier.drawWithContent {
+            // Until the camera is live, the audience sees no empty panel or frame where it will stand (the audit's
+            // I4): the panel and its border are the editor's; only Green screen is drawn for a recorder to key.
+            if (!editing && camera == null && z.fill != WebcamZone.FILL_CHROMA) return@drawWithContent
             val path = zonePath(z.shape, size.width, size.height, s, ctx.theme.flat)
             when {
                 camera != null -> clipPath(path) { this@drawWithContent.drawContent() }
