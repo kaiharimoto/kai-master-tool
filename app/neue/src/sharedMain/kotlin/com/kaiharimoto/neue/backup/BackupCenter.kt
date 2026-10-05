@@ -18,6 +18,7 @@ import com.kaiharimoto.mastertool.core.web.WebLibrary
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.mastertool.core.present.record.TakePaths
 import com.kaiharimoto.neue.platform.deliverFile
 import com.kaiharimoto.neue.sync.NeueSyncLocal
 import com.kaiharimoto.neue.sync.SyncPlatform
@@ -149,7 +150,7 @@ class BackupCenter(private val h: NeueHolders) {
                     }
                     name.startsWith("ai/") && safe(name) -> put(File(h.ai.files.root, name.removePrefix("ai/")), data)
                     name.startsWith("custom-art/") && safe(name) -> put(File(Platform.dataDir, name), data)
-                    name.startsWith("present/") && safe(name) -> put(File(Platform.dataDir, name), data)
+                    name.startsWith("present/") && safe(name) && TakePaths.syncs(name.removePrefix("present/")) -> put(File(Platform.dataDir, name), data)
                     name.startsWith("duel/") && safe(name) -> put(File(Platform.dataDir, name), data)
                     name.startsWith("world/") && safe(name) -> put(File(Platform.dataDir, name), data)
                     name.startsWith("${ShootoutPaths.FOLDER}/") && safe(name) -> put(File(Platform.dataDir, name), data)
@@ -230,7 +231,8 @@ class BackupCenter(private val h: NeueHolders) {
                         // their pre-1.0.99 places in Ai's folder are left out here for a device not yet migrated.
                         tree(h.ai.files.root).filter { !NeueSyncLocal.privateToDevice(it.first) }.forEach { (rel, f) -> add("ai/$rel", f.readBytes()); files++ }
                         tree(File(Platform.dataDir, "custom-art")).forEach { (rel, f) -> add("custom-art/$rel", f.readBytes()); files++ }
-                        tree(File(Platform.dataDir, "present")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("present/$rel", f.readBytes()); files++ }
+                        // Takes (1.1.13) never: minutes of camera each, and this device's own (`TakePaths.syncs`).
+                        tree(File(Platform.dataDir, "present")).filter { !it.first.endsWith(".tmp") && TakePaths.syncs(it.first) }.forEach { (rel, f) -> add("present/$rel", f.readBytes()); files++ }
                         // The duel in play (1.0.74), and later its replays and combos.
                         tree(File(Platform.dataDir, "duel")).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("duel/$rel", f.readBytes()); files++ }
                         // Ai World's worlds (1.0.97): their files, boards and logs.

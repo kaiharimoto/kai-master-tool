@@ -563,7 +563,7 @@ internal fun SlideCanvas(h: NeueHolders, p: Presentation, slide: Slide, ctx: Sli
                                             PresentAction.MOVE, PresentAction.DUPLICATE_MOVE, PresentAction.MENU, PresentAction.MARQUEE,
                                             PresentAction.ZOOM, PresentAction.PAN, PresentAction.RESIZE, PresentAction.RESIZE_KEEP_SHAPE,
                                             PresentAction.ROTATE, PresentAction.OPEN_SLIDE, PresentAction.REORDER, PresentAction.NEXT,
-                                            PresentAction.PREVIOUS, PresentAction.LASER,
+                                            PresentAction.PREVIOUS, PresentAction.LASER, PresentAction.RECORD, PresentAction.STOP_RECORDING, PresentAction.MARK,
                                             -> Unit
                                         }
                                     }

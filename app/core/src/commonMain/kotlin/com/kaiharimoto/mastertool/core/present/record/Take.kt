@@ -57,13 +57,26 @@ data class Take(
     /** How far the camera's first frame is behind the take's clock, in ms. */
     val cameraOffsetMs: Long = 0L,
     val fps: Int = 30,
-    /** The video rendered from it last, if any. */
+    /** The video rendered from it last, if any: a file name in the take's folder. */
     val rendered: String? = null,
     val version: Int = 1,
+    /**
+     * Whether recording ended as it should (1.1.13): false while it records, and for ever after when the app
+     * closed or crashed mid-take — the camera's file may then be cut short, and the take says so.
+     */
+    val finished: Boolean = true,
+    /** The encoder the last render used ([EncoderPick]), for its line in the list. */
+    val renderedCodec: String? = null,
+    /** When it was last rendered, epoch ms. */
+    val renderedAt: Long = 0L,
+    /** The camera's picture mirrored when it is drawn, as the presentation said when recording began. */
+    val mirror: Boolean = true,
 ) {
     companion object {
         const val FILE = "take.json"
         const val PRESENTATION = "presentation.json"
+        const val CAMERA = "camera.mkv"
+        const val AUDIO = "audio.wav"
     }
 }
 

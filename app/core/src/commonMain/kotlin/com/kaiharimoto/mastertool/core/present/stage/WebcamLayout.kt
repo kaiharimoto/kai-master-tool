@@ -76,7 +76,10 @@ data class WebcamZone(
     val mirror: Boolean = true,
     /** What stands in the zone before the camera is live: [FILL_NONE], [FILL_THEME], [FILL_CHROMA]. */
     val fill: String = FILL_THEME,
-    /** Which camera, by its name, when there are several (phase 3). */
+    /**
+     * Which camera, by its name — read by nothing (1.1.13): a presentation travels between computers, which name their
+     * cameras differently, so the camera is chosen per computer (`NeuePreferences.record`, `RecordPrefs.camera`).
+     */
     val device: String? = null,
 ) {
     companion object {

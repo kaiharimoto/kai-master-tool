@@ -337,6 +337,11 @@ data class NeuePreferences(
     val genesys: Boolean = false,
     /** The Genesys points cap: 100 unless an event sets another. */
     val genesysCap: Int = GenesysRules.CAP,
+    /**
+     * Recording a take on Present (1.1.13): the camera and microphone by name, the count-in, the camera live while
+     * presenting. This device's own (machines name their cameras differently), never set by Ai.
+     */
+    val record: com.kaiharimoto.mastertool.core.present.record.RecordPrefs = com.kaiharimoto.mastertool.core.present.record.RecordPrefs(),
 ) {
     /**
      * The text size in force: the chosen one, else a size up on a tablet held at arm's

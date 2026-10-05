@@ -47,7 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.ai.text.MicroCaps
 import com.kaiharimoto.mastertool.core.input.DeskAction
+import com.kaiharimoto.mastertool.core.input.DeskScope
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.neue.present.record.keyFor
+import com.kaiharimoto.neue.present.record.record
 import com.kaiharimoto.mastertool.core.input.PresentAction
 import com.kaiharimoto.mastertool.core.input.PresentGestures
 import com.kaiharimoto.mastertool.core.input.PresentPress
@@ -340,12 +343,33 @@ private fun PresentButton(h: NeueHolders, below: Float, kbd: (DeskAction) -> Str
                                 enabled = present.screens > 1,
                                 reason = "Connect a second screen",
                             ) { present.audience = !present.audience },
-                        ) + presentOutputEntries(h),
+                        ) + presentOutputEntries(h) + recordEntries(h),
                     )
                 }, size = 32.dp, variant = BtnVariant.SECONDARY, label = "Ways to present")
             }
         }
     }
+}
+
+/**
+ * Present ▾'s recording (1.1.13): record a take from this slide, the takes made, and the camera and microphone. On a
+ * phone or tablet the takes are there to say why not ([com.kaiharimoto.neue.platform.Capture.whyNot]).
+ */
+private fun recordEntries(h: NeueHolders): List<MenuEntry> {
+    val present = h.present
+    val takes = present.takes
+    val can = com.kaiharimoto.neue.platform.Capture.canRecord
+    return listOf(
+        MenuEntry(
+            "Record a take",
+            hint = keyFor(DeskAction.PRESENT_RECORD, DeskScope.PRESENT_EDIT) ?: "your camera and voice",
+            separatorBefore = true,
+            enabled = can,
+            reason = com.kaiharimoto.neue.platform.Capture.whyNot,
+        ) { takes.record(h) },
+        MenuEntry("Takes…", hint = keyFor(DeskAction.PRESENT_TAKES, DeskScope.PRESENT_EDIT) ?: "render, play, chapters") { present.open?.let { takes.show(it) } },
+        MenuEntry("Camera and microphone…", enabled = can, reason = com.kaiharimoto.neue.platform.Capture.whyNot) { takes.settingUp = true },
+    )
 }
 
 /** Style ▾: the looks, Master UI first (kai, 1.0.72), then Restyle with Ai and its undo — one door to the look. */

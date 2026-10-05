@@ -13,6 +13,12 @@ enum class PresentTarget(val heading: String) {
     SORTER("A slide in the list"),
     STAGE_CARD("A card in a deck slide's panel"),
     PRESENTING("The slide while presenting"),
+
+    /** The recording light on the presenter's bar (1.1.13): never in the video, which is drawn afterwards. */
+    RECORD_LIGHT("The recording light"),
+
+    /** Stop on the presenter's recording bar. */
+    RECORD_STOP("Stop on the recording bar"),
 }
 
 enum class PresentAction {
@@ -34,6 +40,15 @@ enum class PresentAction {
     NEXT,
     PREVIOUS,
     LASER,
+
+    /** Record, pause, or carry on recording (1.1.13). */
+    RECORD,
+
+    /** Stop recording and keep the take. */
+    STOP_RECORDING,
+
+    /** A chapter marked here. */
+    MARK,
 }
 
 data class PresentBinding(
@@ -66,6 +81,9 @@ object PresentMouse {
         PresentBinding(PresentTarget.PRESENTING, "Click", PresentAction.NEXT, "Next"),
         PresentBinding(PresentTarget.PRESENTING, "Right-click", PresentAction.PREVIOUS, "Back"),
         PresentBinding(PresentTarget.PRESENTING, "Move with the laser on", PresentAction.LASER, "Point"),
+        PresentBinding(PresentTarget.RECORD_LIGHT, "Click", PresentAction.RECORD, "Record; while recording, pause or carry on"),
+        PresentBinding(PresentTarget.RECORD_LIGHT, "Right-click", PresentAction.MARK, "Mark a chapter here"),
+        PresentBinding(PresentTarget.RECORD_STOP, "Click", PresentAction.STOP_RECORDING, "Stop and keep the take"),
     )
 
     fun resolve(target: PresentTarget, gesture: String): PresentAction? =
@@ -94,6 +112,9 @@ object PresentTouch {
         PresentBinding(PresentTarget.PRESENTING, "Tap the right half", PresentAction.NEXT, "Next"),
         PresentBinding(PresentTarget.PRESENTING, "Tap the left half", PresentAction.PREVIOUS, "Back"),
         PresentBinding(PresentTarget.PRESENTING, "Press and hold", PresentAction.LASER, "Point while held"),
+        PresentBinding(PresentTarget.RECORD_LIGHT, "Tap", PresentAction.RECORD, "Record; while recording, pause or carry on"),
+        PresentBinding(PresentTarget.RECORD_LIGHT, "Press and hold", PresentAction.MARK, "Mark a chapter here"),
+        PresentBinding(PresentTarget.RECORD_STOP, "Tap", PresentAction.STOP_RECORDING, "Stop and keep the take"),
     )
 }
 
@@ -178,5 +199,11 @@ object PresentGestures {
             p.secondary || p.finger && p.leftHalf -> PresentAction.PREVIOUS
             else -> PresentAction.NEXT
         }
+        PresentTarget.RECORD_LIGHT -> when {
+            p.moved -> null
+            p.secondary || p.finger && p.held -> PresentAction.MARK
+            else -> PresentAction.RECORD
+        }
+        PresentTarget.RECORD_STOP -> if (!p.moved && !p.secondary) PresentAction.STOP_RECORDING else null
     }
 }

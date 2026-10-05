@@ -103,7 +103,7 @@ fun PresentPage(h: NeueHolders) {
         MuDialog(
             "Delete ${p.name}?",
             { present.confirmDelete = null },
-            description = "Its slides and notes go. Its pictures stay until no presentation uses them.",
+            description = "Its slides, notes and takes go. Its pictures stay until no presentation uses them.",
             footer = {
                 MuButton("Keep it", { present.confirmDelete = null }, variant = BtnVariant.GHOST)
                 MuButton("Delete", { present.delete(p); present.confirmDelete = null }, variant = BtnVariant.PRIMARY, icon = Icons.Trash)

@@ -97,6 +97,8 @@ object AiSettings {
         "ai.connections", "ai.introSeen", "sync", "start", "present", "duel",
         // Ai World (1.0.97): whether Python runs on this computer is the person's decision alone, never Ai's.
         "world",
+        // Recording (1.1.13): which camera and microphone open is the person's choice alone.
+        "record",
     )
 
     /**

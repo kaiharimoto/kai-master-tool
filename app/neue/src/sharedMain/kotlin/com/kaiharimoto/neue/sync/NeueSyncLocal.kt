@@ -13,6 +13,7 @@ import com.kaiharimoto.mastertool.core.web.DeckWeb
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.duel.Duels
 import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.mastertool.core.present.record.TakePaths
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.serializer
@@ -67,7 +68,8 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
         withContext(Dispatchers.IO) {
             files(ai, "ai/") { rel -> !privateToDevice(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(art, "art/") { true }.forEach { (path, f) -> out[path] = seen.file(path, f) }
-            files(present, "present/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
+            // Takes (1.1.13) are this device's own: minutes of camera, never synced (`TakePaths.syncs`).
+            files(present, "present/") { rel -> !rel.endsWith(".tmp") && TakePaths.syncs(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(duel, "duel/") { rel -> !rel.endsWith(".tmp") && rel.substringAfterLast('/') != Duels.CURRENT }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(world, "world/") { rel -> worldSyncs(rel) }.forEach { (path, f) -> out[path] = seen.file(path, f) }
             files(shootout, "${ShootoutPaths.FOLDER}/") { rel -> !rel.endsWith(".tmp") }.forEach { (path, f) -> out[path] = seen.file(path, f) }
@@ -123,7 +125,7 @@ class NeueSyncLocal(private val h: NeueHolders, private val seen: SeenTimes) : S
                 seen.forget(path)
                 changed += "art"
             }
-            path.startsWith("present/") -> {
+            path.startsWith("present/") && TakePaths.syncs(path.removePrefix("present/")) -> {
                 write(File(present, path.removePrefix("present/")), bytes)
                 seen.forget(path)
                 changed += "present"

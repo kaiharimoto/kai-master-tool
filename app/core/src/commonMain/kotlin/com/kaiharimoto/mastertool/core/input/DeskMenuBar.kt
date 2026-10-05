@@ -67,6 +67,8 @@ object DeskMenuBar {
                 item(DeskAction.REMOVE_SELECTED, "Remove the selected card", ruleAfter = true),
                 item(DeskAction.PRESENT_START, "Present from the start"),
                 item(DeskAction.PRESENT_FROM_HERE, "Present from this slide"),
+                item(DeskAction.PRESENT_RECORD, "Record a take"),
+                item(DeskAction.PRESENT_TAKES, "Takes"),
             ),
         ),
         DeskMenu(
