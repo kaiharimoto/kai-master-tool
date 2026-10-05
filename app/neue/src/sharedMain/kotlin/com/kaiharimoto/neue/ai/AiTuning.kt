@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.ai.TuneIntensity
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.GuideBudget
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryBudget
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryChange
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
@@ -83,9 +84,28 @@ fun AiState.saveByHand(path: String, loaded: String?, text: String) {
  * checked, stale since the deck changed, contradicted, or an estimate — so Ai knows which of its own numbers to trust.
  * Numbers computed on another deck than the builder's are marked stale here, and checked again in the background.
  */
-fun AiState.guideForPrompt(deckId: String): String {
+fun AiState.guideForPrompt(deckId: String): String = guideEntries(deckId).joinToString("\n") { "- $it" }
+
+/**
+ * The guide as a conversation is given it (1.1.9): within its room on the connection in use ([memoryRoom]) — the
+ * entries most relevant to [query] and the deck, and the index line for the rest — each wearing its proof's mark. Null
+ * when the guide is empty.
+ */
+fun AiState.guideShown(deckId: String, deckName: String, query: String = ""): MemoryBudget.Shown? {
+    val entries = guideEntries(deckId).takeIf { it.isNotEmpty() } ?: return null
+    return MemoryBudget.pick(entries, memoryRoom(MemoryKind.GUIDE), MemoryBudget.Focus(query, listOf(deckName)), MemoryKind.GUIDE, "guide")
+}
+
+/** [guideShown] as the block in front of a message: its heading, the entries marked as memory, the index line. */
+fun AiState.guideBlock(deckId: String, deckName: String, query: String = ""): String? {
+    val shown = guideShown(deckId, deckName, query) ?: return null
+    return "Your guide to how “$deckName” plays (memory scope guide; a mark in brackets says whether its number still holds):\n" +
+        MemoryBudget.tagged(AiMemory.path(MemoryKind.GUIDE, deckId), shown.lines())
+}
+
+private fun AiState.guideEntries(deckId: String): List<String> {
     val entries = files.read(AiMemory.path(MemoryKind.GUIDE, deckId))?.let { AiMemory.parse(it).entries }.orEmpty()
-    if (entries.isEmpty()) return ""
+    if (entries.isEmpty()) return emptyList()
     var ledger = Ledger.read(files.read(Ledger.path(deckId)))
     if (deckId == h.builder.deckId && ledger.isNotEmpty()) {
         val marked = Ledger.staleAgainst(ledger, Ledger.fingerprint(h.builder.deck))
@@ -95,7 +115,7 @@ fun AiState.guideForPrompt(deckId: String): String {
         }
         if (ledger.any { it.status == Proven.Status.STALE }) recheckGuide(deckId)
     }
-    return Ledger.annotate(entries, ledger).joinToString("\n") { "- $it" }
+    return Ledger.annotate(entries, ledger)
 }
 
 /**
@@ -184,8 +204,12 @@ fun AiState.startTuning(mode: String, intensity: TuneIntensity) {
     // The guide's size now: the run may add its intensity's room to it, no more (1.0.66).
     guideStart = if (mode in AiSession.DECK_MODES && deckId != null) Triple(files.memory(MemoryKind.GUIDE, deckId, deck).used, intensity.guideBudget, intensity.label) else null
     // The run is about this deck to its end, whatever the builder shows meanwhile (1.0.98, the red team).
+    guideFilled = null
     session = begin(connection, mode).copy(deckId = deckId, deckName = deck)
-    val room = GuideBudget.brief(intensity)
+    // A run that filled its room left what it had left for this one (1.1.9): it begins there.
+    val carried = deckId?.takeIf { mode == AiSession.MODE_TUNE || mode == AiSession.MODE_STUDY || mode == AiSession.MODE_PRINCIPLES }
+        ?.let { GuideBudget.carryOver(files.reports(it).lastOrNull()) }
+    val room = GuideBudget.brief(intensity) + (carried?.let { " $it" } ?: "")
     send(
         when (mode) {
             AiSession.MODE_STUDY -> "Study “$deck” yourself, and think out loud so I can learn with you. Intensity: ${intensity.label} — ${intensity.studies} $room"
@@ -325,6 +349,7 @@ internal fun AiState.completeTuning() {
     guideStart = null
     val ended = session
     stop()
+    sayFilled()
     endReport = lastReport?.takeIf { r -> ended != null && ended.mode in AiSession.DECK_MODES && r.at >= ended.createdAt }
     lastReport = null
     val before = tuneBefore ?: snapshot()
@@ -344,7 +369,15 @@ internal fun AiState.settleTuning() {
     wrapping = false
     guideStart = null
     tuneBefore = null
+    sayFilled()
     offerReview(before)
+}
+
+/** A run that used all of its room in the guide says so when it ends (1.1.9): the run was full, never the guide. */
+private fun AiState.sayFilled() {
+    val words = guideFilled ?: return
+    guideFilled = null
+    notice = words
 }
 
 private fun AiState.offerReview(before: Map<String, String?>) {

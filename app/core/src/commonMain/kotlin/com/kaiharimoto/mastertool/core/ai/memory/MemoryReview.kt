@@ -19,7 +19,10 @@ object MemoryReview {
         (before.keys + after.keys).distinct().sorted().map { path ->
             val was = lines(path, before[path])
             val now = lines(path, after[path])
-            MemoryChange(path, now.filter { it !in was }, was.filter { it !in now })
+            // Sets, so a guide of thousands of entries is compared in one pass, never entries × entries (1.1.9).
+            val wasSet = was.toHashSet()
+            val nowSet = now.toHashSet()
+            MemoryChange(path, now.filter { it !in wasSet }, was.filter { it !in nowSet })
         }.filterNot { it.isEmpty }
 
     /**
@@ -32,8 +35,10 @@ object MemoryReview {
     /** [text] with [change] made: its removed entries gone, its added ones added after the rest. Null when nothing is left. */
     fun apply(text: String?, change: MemoryChange): String? {
         val doc = text?.let { AiMemory.parse(it) } ?: MemoryDoc(emptyList(), emptyList())
-        val kept = doc.entries.filter { it !in change.removed }
-        val added = change.added.filter { it !in kept }
+        val removed = change.removed.toHashSet()
+        val kept = doc.entries.filter { it !in removed }
+        val keptSet = kept.toHashSet()
+        val added = change.added.filter { keptSet.add(it) }
         val next = doc.copy(entries = kept + added)
         return if (next.preamble.all { it.isBlank() } && next.entries.isEmpty()) null else next.render()
     }

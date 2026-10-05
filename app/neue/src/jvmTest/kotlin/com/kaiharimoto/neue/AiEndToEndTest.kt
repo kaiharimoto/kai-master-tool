@@ -45,6 +45,13 @@ import com.kaiharimoto.mastertool.ui.update.AppUpdater
 import com.kaiharimoto.mastertool.ui.update.InstallOutcome
 import com.kaiharimoto.neue.ai.AiDesk
 import com.kaiharimoto.neue.ai.guideForPrompt
+import com.kaiharimoto.neue.ai.guideBlock
+import com.kaiharimoto.neue.ai.memoryRoom
+import com.kaiharimoto.neue.ai.standingContext
+import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryBudget
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryDoc
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.neue.ai.AnthropicBackend
 import com.kaiharimoto.neue.art.ArtLibrary
 import com.kaiharimoto.neue.builder.NeueDrag
@@ -567,6 +574,50 @@ class AiEndToEndTest {
         }
         assertTrue("contradicted" in h.ai.guideForPrompt(deckId))
         assertTrue("estimate" in h.ai.guideForPrompt(deckId))
+    }
+
+    @Test
+    fun whatAiKnowsHasNoCapAndIsReadWithinItsRoom() = runBlocking {
+        // kai (1.1.9): "I don't want there to be a cap to the knowledge".
+        val h = holders()
+        h.tool("new_deck", "name" to "Big guide", "main" to listOf("3 Ash Blossom & Joyous Spring", "3 Infinite Impermanence", "3 Raigeki"))
+        withTimeout(5_000) { while (h.builder.deckId == null) delay(20) }
+        val deckId = h.builder.deckId!!
+        val lines = (1..600).map { "Lines: line ${"abcdefghij"[it % 10]} — " + "a step of the combo, ".repeat(12) + "#$it" }
+        h.ai.files.write(AiMemory.path(MemoryKind.GUIDE, deckId), MemoryDoc(listOf("# How Big guide plays"), lines).render())
+        // Past every old cap, through the tool Ai writes with: never refused for size.
+        val guide = h.tool("memory", "action" to "add", "scope" to "guide", "text" to "Weak points: [[Nibiru, the Primal Being]] ends the line at five summons.")
+        assertFalse(guide.isError, guide.content)
+        repeat(30) { n ->
+            val agent = h.tool("memory", "action" to "add", "scope" to "agent", "text" to "Lesson ${"x".repeat(n + 1)}: " + "check the banlist before quoting limits, ".repeat(6))
+            assertFalse(agent.isError, agent.content)
+            val deck = h.tool("memory", "action" to "add", "scope" to "deck", "text" to "Note ${"y".repeat(n + 1)}: " + "this list sides into the mirror, ".repeat(6))
+            assertFalse(deck.isError, deck.content)
+        }
+        assertTrue(h.ai.files.read(AiMemory.path(MemoryKind.AGENT))!!.length > 6_000)
+        assertTrue(h.ai.files.read(AiMemory.path(MemoryKind.DECK, deckId))!!.length > 6_000)
+
+        // The prompt reads the guide within its room: what was asked, and the line for the rest.
+        val block = h.ai.guideBlock(deckId, "Big guide", "What about Nibiru?")!!
+        assertTrue("Nibiru" in block && MemoryBudget.INDEX_MARK in block && "memory_read scope guide" in block, block.takeLast(400))
+        assertTrue(block.length <= h.ai.memoryRoom(MemoryKind.GUIDE) + 400, "${block.length}")
+        // A summary puts it back, index line and all.
+        val s = AiSession("s-big", turns = listOf(ChatTurn.user("What about Nibiru?")), guideShown = deckId)
+        assertTrue(MemoryBudget.INDEX_MARK in h.ai.standingContext(s))
+
+        // The rest is a tool call away: by query, by label, by range, and in recall.
+        val found = h.tool("memory_read", "scope" to "guide", "query" to "Nibiru")
+        assertTrue("[601] Weak points" in found.content, found.content.take(400))
+        val labelled = h.tool("memory_read", "scope" to "guide", "label" to "Lines", "from" to 590)
+        assertTrue("[590] Lines" in labelled.content && "[589]" !in labelled.content, labelled.content.take(400))
+        val range = h.tool("memory_read", "scope" to "guide", "from" to 100, "count" to 2)
+        assertTrue("[100] " in range.content && "[101] " in range.content && "read on from 102" in range.content, range.content)
+        val recalled = h.tool("recall", "query" to "Nibiru summons", "scope" to "memory")
+        assertTrue("guides/" in recalled.content && "[601]" in recalled.content, recalled.content)
+        // context_status says what is in reach.
+        h.ai.session = AiSession("s-ctx", turns = listOf(ChatTurn.user("hi")))
+        val status = h.tool("context_status")
+        assertTrue("Memory in reach" in status.content && "The guide to" in status.content, status.content)
     }
 
     @Test

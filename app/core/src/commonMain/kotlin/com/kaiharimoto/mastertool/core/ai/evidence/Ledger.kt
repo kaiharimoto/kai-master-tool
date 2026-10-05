@@ -80,7 +80,10 @@ object Ledger {
         list.filter { it.entry != proven.entry && it.entry != replaced } + proven
 
     /** [list] kept to the entries the guide still holds. */
-    fun prune(list: List<Proven>, entries: List<String>): List<Proven> = list.filter { it.entry in entries }
+    fun prune(list: List<Proven>, entries: List<String>): List<Proven> {
+        val held = entries.toHashSet()
+        return list.filter { it.entry in held }
+    }
 
     /** [list] with every entry computed on another deck than [now] marked stale (estimates stay what they are). */
     fun staleAgainst(list: List<Proven>, now: String): List<Proven> = list.map { p ->

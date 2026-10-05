@@ -8,7 +8,8 @@ import com.kaiharimoto.mastertool.core.ai.ContextBreakdown
 import com.kaiharimoto.mastertool.core.ai.ContextWindows
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
-import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.Role
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryBudget
 import com.kaiharimoto.mastertool.core.ai.providers.ConnectKind
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
@@ -112,7 +113,7 @@ private suspend fun AiState.summarise(s: AiSession, model: ModelBackend, connect
  * The guide and the scope's notes as they stand (1.0.98): put after a summary, because the turns that carried them
  * are summarised away and the conversation's `guideShown`/`scopeShown` say they were already given.
  */
-private fun AiState.standingContext(s: AiSession): String {
+internal fun AiState.standingContext(s: AiSession): String {
     // At the table the guide is the duel's own block (Phase C stage 2): the deck Ai plays, within its budget.
     if (s.mode == AiSession.MODE_DUEL) {
         val guide = duelGuide(h)?.second?.invoke()?.takeIf { it.isNotBlank() } ?: return ""
@@ -120,14 +121,17 @@ private fun AiState.standingContext(s: AiSession): String {
     }
     val deckId = s.deckId?.takeIf { s.mode in AiSession.DECK_MODES } ?: s.guideShown
     val deckName = s.deckName ?: h.builder.deckName.takeIf { deckId == h.builder.deckId } ?: "the deck"
-    val guide = deckId?.let { guideForPrompt(it) }?.takeIf { it.isNotBlank() }
+    // Within their rooms, as they were given (1.1.9): the most relevant entries to what the person asked last, and the
+    // index line for the rest — a summary never loses the line that says the rest is there.
+    val last = s.turns.lastOrNull { it.role == Role.USER && !it.isToolResults }?.text.orEmpty()
+    val guide = deckId?.let { guideBlock(it, deckName, last) }
     val scope = host.scope()
-    val notes = scope?.let { host.notes(it) }?.takeIf { it.isNotBlank() }
+    val notes = scope?.let { host.notes(it, last) }?.takeIf { it.isNotBlank() }
     if (guide == null && notes == null) return ""
     return buildString {
         append("\n\n(Still in force after the summary.)")
-        guide?.let { append("\n\nYour guide to how “$deckName” plays (memory scope guide):\n").append(it) }
-        notes?.let { append("\n\nNotes for ${scope.name}:\n").append(it) }
+        guide?.let { append("\n\n").append(it) }
+        notes?.let { append("\n\nNotes for ${scope.name}:\n").append(MemoryBudget.tagged(scope.path, it)) }
     }
 }
 
@@ -218,6 +222,11 @@ fun AiState.contextReport(): String {
                 if (contextMeasured) ", as the provider counted last round." else ", estimated.",
         )
         ContextBreakdown.of(s, tools, s.context).forEach { appendLine("- ${it.label}: ${words(it.tokens)}") }
+        // What memory is in reach (1.1.9): the files have no cap, so say how much of each is in front of Ai.
+        memoryReport().takeIf { it.isNotEmpty() }?.let { lines ->
+            appendLine("Memory in reach:")
+            lines.forEach(::appendLine)
+        }
         if (s.summarized > 0) appendLine("The first ${s.summarized} messages are summarised (${s.summary.length} characters); recall finds their words.")
         if (s.carriedFrom != null) appendLine("This conversation carries on from an earlier one, whose summary it holds.")
         if (s.clearedBefore > 0) appendLine("Tool results before message ${s.clearedBefore} are sent cut short.")

@@ -20,7 +20,7 @@ The person knows this deck better than any list online. Your job is to draw that
 
 ## Before the first question
 1. Read the open deck: `get_deck`, then `analyze_deck` for its shape (starters, hand traps, bricks, archetypes).
-2. Read what you already know: `memory_read` with scope "guide". Skip anything it already answers; ask only to confirm or deepen it.
+2. Read what you already know: `memory_read` with scope "guide" (a long guide a page at a time, or by `label` and `query` for the part you are on). Skip anything it already answers; ask only to confirm or deepen it.
 3. Plan with `todo_write`: the questions you mean to ask, in order, sized to the intensity in the conversation's context. **Quick** is about 6 questions, **Standard** about 12, **Deep** about 20. Stay inside the budget; if time runs out, the rest goes to "Open questions".
 
 ## How to ask
@@ -276,7 +276,7 @@ Say it in their terms, briefly (the game-rules skill has the detail):
 The guide has grown entry by entry over many sessions. Your job is to rewrite it as one document that helps someone play this deck: everything useful kept and made sharper, everything else gone. **Never change the deck in this conversation.**
 
 ## Read first
-1. `memory_read` with scope "guide": the whole guide.
+1. `memory_read` with scope "guide": the whole guide, a page at a time — each answer says where to read on; read until nothing is left.
 2. `get_deck`: the list as it stands now. Cards that left the deck take their entries with them, unless the entry says why they left.
 3. `card_info` on any card whose entry makes a claim you are not sure the text supports. Card text comes from the tools, never from memory.
 
@@ -300,7 +300,7 @@ Keep the person's own teaching over anything inferred, unless the cards prove it
 
 ## Write it
 1. Before writing, tell the person in a few lines what you will drop, merge and fix, with a count of each.
-2. Write the whole guide at once with `memory`, action rewrite, scope "guide": the new guide as its text, one "- " entry per line, nothing else. It replaces every entry; the title stays.
+2. Write the whole guide at once with `memory`, action rewrite, scope "guide": the new guide as its text, one "- " entry per line, nothing else. It replaces every entry; the title stays. A guide too long to write out in one answer is refactored with replace and remove instead, a section at a time (`memory_read` with its `label`).
 3. Read it back with `memory_read` and fix what came out wrong with replace or remove.
 4. Finish with a short account: entries and characters before and after, the biggest changes, and anything you were unsure of. The person reviews every change when the session ends and can keep or undo it.
 """

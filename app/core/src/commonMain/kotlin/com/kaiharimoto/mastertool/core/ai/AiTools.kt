@@ -357,8 +357,8 @@ object AiTools {
         "Your own long-term memory, kept as short markdown entries. user: what you learn about the person (their events, " +
             "format, decks, habits, what they want from you). agent: what you learned about doing this job well. " +
             "deck / web: notes about the deck or web in scope (the open deck, or the web it belongs to). " +
-            "add a new entry; replace an entry (old_text is a unique part of it); remove one. Keep entries short and durable: " +
-            "facts that will still matter next week, never a transcript. rewrite (scope guide, in Refactor guide only): text is the whole " +
+            "add a new entry; replace an entry (old_text is a unique part of it); remove one. Keep entries durable: " +
+            "facts that will still matter next week, never a transcript. Only user is capped; agent, deck, web and guide keep everything. rewrite (scope guide, in Refactor guide only): text is the whole " +
             "new guide, one \"- \" entry per line, replacing every entry. A guide entry's percentages, odds and probabilities " +
             "must be numbers a tool computed in this conversation (hand_odds, calculate, world_tool) or the person said: " +
             "anything else is refused, unless the entry says it is your estimate with “(estimate)”. Entries read back marked " +
@@ -374,10 +374,18 @@ object AiTools {
 
     val memoryRead = ToolSpec(
         "memory_read",
-        "Reads a memory file in full: user, agent, or the notes of a deck or web by id.",
+        "Reads a memory file: user, agent, the guide, or the notes of a deck or web by id. Files have no cap, so a large one " +
+            "is read a page at a time, every entry numbered by its place: with no query, label or from, the file from its first " +
+            "entry; query: the entries holding those words, best first; label: the entries under a label (Lines, Card roles, " +
+            "Weak points…); from and count: a range. Each answer says where to read on. Use it whenever the prompt's " +
+            "\"Memory index\" line says entries were left out and you need them.",
         schema {
             enum("scope", "Which memory", listOf("user", "agent", "deck", "web", "guide"), required = true)
-            string("id", "For deck or web: its id (default: the one in scope)")
+            string("id", "For deck, web or guide: its id (default: the one in scope)")
+            string("query", "Words to find: the entries holding them, best first")
+            string("label", "Only the entries under this label, e.g. Lines or Weak points")
+            integer("from", "The first entry to read, by its number (default 1)", min = 1)
+            integer("count", "How many entries at most (default: a page)", min = 1, max = 2000)
         },
         ToolGroup.MEMORY,
     )
@@ -842,11 +850,13 @@ object AiTools {
 
     val recall = ToolSpec(
         "recall",
-        "Finds words in this conversation's saved history — including the part summarised away — or in every past " +
-            "conversation (scope all). Use it when the summary lost a detail you need: a list, a number, what the person said.",
+        "Finds words in this conversation's saved history — including the part summarised away — in every past " +
+            "conversation (scope all), or in everything you remember (scope memory: your notes, the profile, every deck's " +
+            "guide and notes, every web's). Use it when the summary lost a detail you need — a list, a number, what the person " +
+            "said — or for a memory entry the prompt left out.",
         schema {
             string("query", "Words to find", required = true)
-            enum("scope", "this (default) or all conversations", listOf("this", "all"))
+            enum("scope", "this (default), all conversations, or memory", listOf("this", "all", "memory"))
             integer("limit", "How many matches (default 8)", min = 1, max = 30)
         },
         ToolGroup.MEMORY,

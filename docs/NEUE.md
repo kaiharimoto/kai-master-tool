@@ -1856,9 +1856,10 @@ off ask in the chat first (`Confirm`), unless Settings says never ask.
 
 **Memory** (Hermes's shape), markdown in `<data>/ai` the person can read and edit
 (Settings → Assistant → What it knows): `SOUL.md` the voice (`Persona`), `USER.md` what
-it knows about the person, `MEMORY.md` its own notes — bounded (`AiMemory`: entries,
-limits, a full memory refuses and lists what to drop) and in the prompt as a snapshot
-taken when a conversation begins. **Scoped notes** (kai: "each deck, if it's not in a
+it knows about the person, `MEMORY.md` its own notes — entries (`AiMemory`), in the prompt
+as a snapshot taken when a conversation begins. Since 1.1.9 only `USER.md` is bounded (5,000
+characters; a full one refuses and lists what to drop): what Ai knows of the game has no cap,
+and the prompt reads it within a budget (below, *No cap on what Ai knows*). **Scoped notes** (kai: "each deck, if it's not in a
 web, and web has its own markdown"): `webs/<id>.md` for a web and every deck in it,
 `decks/<id>.md` for a deck in none. `MemoryScope` picks the one file for where the
 person is; it goes into the context only when the scope changes. A library deck copied
@@ -2421,8 +2422,8 @@ outputs and how the user gets them").
   asks about what it saw ("You've built three Labrynth lists this month and Las Vegas is on the 12th
   — which one are you taking?"), and lets every answer choose the next question.
 - **A deck's guide has no cap** (kai: "remove the 10k cap for guides"): `MemoryKind.GUIDE` is
-  `UNBOUNDED`, one entry still at most 5,000 characters; the brain shows its size, not a share.
-  The other memories stay bounded — they are in every prompt.
+  `UNBOUNDED`, one entry still at most 5,000 characters (8,000 from 1.1.9); the brain shows its size,
+  not a share. From 1.1.9 Ai's notes, a deck's and a web's notes have no cap either; only the profile is bounded.
 
 **1.0.66, the guide kept worth reading.**
 - **A run's room, by its intensity** (kai: "if the study run is deep let it add up to 20k"): the guide
@@ -2641,6 +2642,50 @@ new one, so its words are carried into a new session (`CliCarry`). **The MCP tok
 on disk only in that per-turn file, never on a command line; and **the Origin check is exact**
 (`McpServerCore.originAllowed`: none, or a loopback origin parsed whole). Sync and backups never walk `secrets/` or
 `cli-run/`, the old places stay excluded, and `InboundPath` refuses all four.
+
+#### No cap on what Ai knows (1.1.9)
+
+kai: "when it comes to knowledge of the deck or anything yugioh related the persistent memory can take up a lot as I
+don't want there to be a cap to the knowledge". **Unbounded storage, budgeted reading.**
+
+- **The files keep everything.** `MemoryKind.AGENT` (`MEMORY.md`, 2,000 characters before), `DECK` (4,000), `WEB`
+  (6,000) and `GUIDE` (already uncapped) are `UNBOUNDED`; a write is never refused for the file's size. One entry is
+  held to `ENTRY_CEILING`, 8,000 characters (it was 1,000 / 2,000 / 3,000 / 5,000), room for a whole line written out
+  step by step. `USER.md` keeps its 5,000: it is the person, not the game, and goes into every prompt whole. Every
+  session report is kept (`ReportLog` kept the newest 60). The reader's guide (`GuideBook`) and the evidence ledger
+  had no cap; the World's `Worlds.MAX_FILE` is a script's size, not Ai's memory, and is unchanged.
+- **The prompt reads a budget** (`MemoryBudget`, core): each kind's room is a share of the model's window
+  (`ContextWindows`, or the connection's own) — Ai's notes 2.5 %, a deck's 3 %, a web's 4 %, the guide 10 % — never
+  below the old caps (so a file that fitted before still goes in whole on any model) and never above a ceiling
+  (40k / 60k / 80k / 200k characters). At 200k tokens that is 20,000 / 24,000 / 32,000 / 80,000 characters. A file
+  within its room goes in whole, as before. A larger one gives the most relevant entries — the person's latest words
+  (rarer words count more), the deck or web in scope (a web's `[Deck]` entries), the guide's labels (Goals and Game plan,
+  then Lines, then Card roles and Weak points …, Sources last; `GuideDoc`'s sections) and recency to break ties — in the
+  file's own order, then **the index line**: "(Memory index: 312 more of 352 entries in the deck's guide are not shown
+  here, 96,120 characters; by label: Lines 120, … Read them with memory_read scope guide — a query, a label, or from and
+  count — or recall scope memory.)". Ai's notes are chosen by the conversation's first message (the system prompt is
+  frozen); the guide and the scope's notes by the message they arrive with.
+- **The rest is a tool call away.** `memory_read` takes `query` (best first), `label` (an alias reads as its section)
+  and `from`/`count`, answers a page at a time under a tool result's cap (`MemoryQuery.PAGE`, 12,000), numbers every
+  entry by its place and says where to read on. `recall` has `scope: memory`: every memory file, entry by entry
+  (`MemoryQuery.search`). The prompt's Memory section tells Ai to read before it says it does not know.
+- **Context is counted.** The memory in front of a message is marked `<memory file="…">` (`MemoryBudget.tagged`), and
+  `ContextBreakdown` counts it as Memory, not the page; `context_status` lists each file in reach, its size and its room
+  (`memoryReport`); the Context panel shows "N of M tokens". Compaction puts the guide and the scope's notes back after a
+  summary within their rooms, the index line with them (`standingContext`).
+- **A Fine Tuning run's room stays** (`guideBudget`: 5,000 / 10,000 / 20,000) — cost control, not a cap on knowledge.
+  A run that fills it is told to stop, say so, and put what it had left in `session_report`'s open questions as
+  "Next run: …"; the person is told when the run ends (`GuideBudget.filled`), and the next learning run on the deck
+  begins with them (`GuideBudget.carryOver`).
+- **The person sees everything.** The brain reads a file off the frame thread and draws every entry as a row of a lazy
+  list; past 60,000 characters it edits 200 entries a page (each save merged entry by entry, `MemoryReview.merge`). The
+  living guide and profile are lazy lists too, each entry's proof found in one lookup.
+- **Large files stay fast.** `SyncMerges.entries`, `MemoryReview.diff`/`apply`, `AiMemory.fold`, `Ledger.prune` and
+  the guide's proof check work with sets, never entries × entries; `UncappedMemoryTest` holds a 1 MB guide's budget,
+  merge, review, read and search to a time.
+- **Stored data**: the files keep their format, so every build reads them. An older build refuses an *add* to a file
+  already past its old cap ("Memory is full") until Ai replaces or removes an entry, and puts the whole file into its
+  prompt — it never deletes anything. Backups and sync carry the files as they are.
 
 #### Going further — the roadmap
 
