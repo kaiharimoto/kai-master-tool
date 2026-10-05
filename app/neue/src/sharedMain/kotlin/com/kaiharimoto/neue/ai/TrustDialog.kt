@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -30,11 +31,13 @@ import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.ai.eval.EvalRun
 import com.kaiharimoto.mastertool.core.ai.eval.EvalSet
 import com.kaiharimoto.mastertool.core.ai.eval.EvalSets
-import com.kaiharimoto.mastertool.core.ai.eval.Grader
 import com.kaiharimoto.mastertool.core.ai.eval.TrustWords
+import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.providers.Prices
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import com.kaiharimoto.neue.Viewing
+import com.kaiharimoto.neue.kit.Badge
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -59,11 +62,14 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * Trust (1.0.99, Phase A): how far to trust each connection, measured. It opens on a table — a row per set of questions
- * with known answers, the connection's last score, when, and Run — and a row opens out to what the score means, what it
- * cost, and the items it missed, each led by its question (the design review, findings 7, 12–15). For the fact-checker,
- * how many planted mistakes it caught and how often it cried wolf; for the puzzles, a scale from doing nothing to solved.
- * A run is started here and asks first what it will spend. Ink only, as every other score in the app.
+ * Test scores (1.0.99, Phase A, named Trust until kai's pick in the design review, finding 8 — the code keeps that name;
+ * Shootout's Trust is another thing): how each connection scores on questions with known answers. It opens on a table — a
+ * row per set, the connection's last score with its verdict against fixed bars (`TrustWords.verdict`: Rely on it, Check
+ * it, Do it yourself; finding 7), when, and Run — and a row opens out to what the score means, the bars, what it cost in
+ * tokens and at list prices (`Prices`), and the items it missed, each led by its question (findings 7, 12–15). For the
+ * fact-checker, how many planted mistakes it caught and how often it cried wolf; for the puzzles, a scale from doing
+ * nothing to solved. A run is started here and asks first what it will spend, in tokens and in money (finding 4). Ink
+ * only, as every other score in the app.
  */
 @Composable
 fun TrustDialog(ai: AiState) {
@@ -72,22 +78,22 @@ fun TrustDialog(ai: AiState) {
     val connections = ai.prefs.connections
     var chosen by remember { mutableStateOf(ai.prefs.connection ?: connections.firstOrNull()) }
     var tries by remember { mutableStateOf(1) }
-    var asking by remember { mutableStateOf<EvalSet?>(null) }
     val running = ai.evalProgress
     MuDialog(
-        title = "How far to trust ${ai.name}",
-        onDismiss = { ai.trustOpen = false },
+        title = "How ${ai.name} scores on questions with known answers",
+        onDismiss = { ai.trustOpen = false; ai.trustAsking = null },
         width = 760.dp,
-        description = "Questions with known answers, graded by the app, never by a model. A score is a connection's: " +
-            "the same questions, asked of another model, give another score.",
+        // The title says what is asked; the description, how it is graded and whose score it is.
+        description = "Graded by the app, never by a model. A score is a connection's: the same questions, asked of " +
+            "another model, give another score.",
         footer = {
-            MuButton("Close", { ai.trustOpen = false }, variant = BtnVariant.SECONDARY)
+            MuButton("Close", { ai.trustOpen = false; ai.trustAsking = null }, variant = BtnVariant.SECONDARY)
         },
     ) {
         val c = Mu.colors
         val connection = chosen
         if (connections.isEmpty() || connection == null) {
-            Help("Set up a connection first: Trust measures one.")
+            Help("Set up a connection first: test scores measure one.")
         } else {
             Help(
                 "Right first time: the share it got right on its first try. A score is one connection's; each run is a fresh " +
@@ -127,21 +133,22 @@ fun TrustDialog(ai: AiState) {
                 EvalSets.all.forEachIndexed { n, set ->
                     SetRow(
                         ai,
+                        connection,
                         n + 1,
                         set,
                         latest[set.id],
                         running = running?.takeIf { it.first == set.id }?.let { it.second to it.third },
                         busy = running != null,
-                        confirming = asking == set,
+                        confirming = ai.trustAsking == set.id,
                         tries = tries,
                         open = set.id in ai.trustExpanded,
                         onOpen = { ai.trustExpanded = if (set.id in ai.trustExpanded) ai.trustExpanded - set.id else ai.trustExpanded + set.id },
-                        onRun = { asking = set },
+                        onRun = { ai.trustAsking = set.id },
                         onConfirm = {
-                            asking = null
+                            ai.trustAsking = null
                             ai.startEval(set, connection, tries)
                         },
-                        onCancel = { asking = null },
+                        onCancel = { ai.trustAsking = null },
                         onStop = { ai.stopEval() },
                     )
                     HRule()
@@ -158,6 +165,7 @@ private fun label(c: AiConnection?): String =
 @Composable
 private fun SetRow(
     ai: AiState,
+    connection: AiConnection,
     n: Int,
     set: EvalSet,
     last: EvalRun?,
@@ -175,7 +183,12 @@ private fun SetRow(
     val c = Mu.colors
     val f = LocalMuFonts.current
     val phone = LocalPhone.current
+    // The connection's model at its provider's list prices; null when the table does not hold it (`Prices`).
+    val price = Prices.of(connection.provider, connection.model)
     val missed = last?.items?.count { !it.firstPass } ?: 0
+    val verdict = last?.let { TrustWords.verdict(set, it, greedy = if (set.id == EvalSets.PUZZLES) PUZZLE_BOUNDS.second else null) }
+    // The verdict in micro caps beside the score; "Do it yourself", the one that changes what the person does, inverted.
+    val word: @Composable () -> Unit = { verdict?.let { Badge(it.words, inverted = it == TrustWords.Verdict.YOURSELF) } }
     val run: @Composable () -> Unit = {
         if (running == null && !confirming) {
             MuButton(
@@ -190,12 +203,23 @@ private fun SetRow(
             MuText(set.title, Modifier.weight(1f), style = MuType.h2(f), color = c.ink, maxLines = 2)
             if (last == null) Small("Not run", color = c.ink45)
             else MuText(headline(set, last), style = MuType.mono(f, 20.sp), color = c.ink, maxLines = 1)
-            if (!phone) run()
+            if (!phone) {
+                word()
+                run()
+            }
         }
         // The fact-checker is the one set whose name says nothing to a newcomer: said under its title.
         if (set.checker) Help("The pass that checks ${ai.name}'s answers after it replies (Settings › Ai › Fact-check).", Modifier.padding(start = 30.dp))
+        // On a phone when and on which model is a line of its own, whole, and the verdict leads the line under it with
+        // the details and Run — so the title and the model keep their room at 360 dp.
+        if (phone && last != null) MuText(ranWhen(last), Modifier.padding(start = 30.dp), style = MuType.mono(f), color = c.ink45)
         Row(Modifier.padding(start = 30.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            MuText(last?.let { ranWhen(it) }.orEmpty(), Modifier.weight(1f), style = MuType.mono(f), color = c.ink45)
+            if (phone) {
+                word()
+                Spacer(Modifier.weight(1f))
+            } else {
+                MuText(last?.let { ranWhen(it) }.orEmpty(), Modifier.weight(1f), style = MuType.mono(f), color = c.ink45)
+            }
             MicroLink(
                 when {
                     open -> "Less ▴"
@@ -213,20 +237,40 @@ private fun SetRow(
                 Small("Asking ${running.first} of ${running.second}…", Modifier.weight(1f), color = c.ink)
                 MuButton("Stop", onStop, variant = BtnVariant.GHOST, size = BtnSize.SM)
             }
-            confirming -> Row(Modifier.padding(start = 30.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            confirming -> {
+                // What it will spend, in tokens and at list prices — or where to look when the model has none (finding 4).
                 val q = set.items.size * tries
-                Mono("$q question${if (q == 1) "" else "s"} · ≈ ${tokens(q.toLong() * tokensEach(set))} tokens on this connection", Modifier.weight(1f), color = c.ink)
-                MuButton("Run now", onConfirm, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
-                MuButton("Cancel", onCancel, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                val spend = q.toLong() * tokensEach(set)
+                val words: @Composable (Modifier) -> Unit = { m ->
+                    Column(m) {
+                        MuText("$q question${if (q == 1) "" else "s"} · ≈ ${tokens(spend)} tokens on this connection", style = MuType.mono(f), color = c.ink)
+                        MuText(Prices.words(price?.let { Prices.estimate(it, spend) }), style = MuType.mono(f), color = c.ink70)
+                    }
+                }
+                val buttons: @Composable () -> Unit = {
+                    MuButton("Run now", onConfirm, variant = BtnVariant.PRIMARY, size = BtnSize.SM)
+                    MuButton("Cancel", onCancel, variant = BtnVariant.GHOST, size = BtnSize.SM)
+                }
+                if (phone) {
+                    Column(Modifier.padding(start = 30.dp, top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        words(Modifier.fillMaxWidth())
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { buttons() }
+                    }
+                } else {
+                    Row(Modifier.padding(start = 30.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        words(Modifier.weight(1f))
+                        buttons()
+                    }
+                }
             }
         }
-        if (open) Details(ai, set, last)
+        if (open) Details(ai, set, last, connection.provider)
     }
 }
 
 /** A set opened out: what it asks, what the score means, the puzzles' scale, what it cost, and what it missed. */
 @Composable
-private fun Details(ai: AiState, set: EvalSet, last: EvalRun?) {
+private fun Details(ai: AiState, set: EvalSet, last: EvalRun?, provider: String) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     Column(Modifier.padding(start = 30.dp, top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -234,7 +278,7 @@ private fun Details(ai: AiState, set: EvalSet, last: EvalRun?) {
         if (last != null) {
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (set.checker) {
-                    val (_, _, alarms, clean) = checker(set, last)
+                    val (_, _, alarms, clean) = TrustWords.checker(set, last)
                     MuText("$alarms", style = MuType.mono(f, 20.sp), color = c.ink)
                     Small("false alarm${if (alarms == 1) "" else "s"} in $clean clean answers: how often it cries wolf", Modifier.padding(bottom = 3.dp), color = c.ink70)
                 } else {
@@ -247,7 +291,9 @@ private fun Details(ai: AiState, set: EvalSet, last: EvalRun?) {
             }
         }
         if (set.id == EvalSets.PUZZLES) PuzzleScale(last?.items?.count { it.firstPass })
-        if (last != null) MuText(costWords(set, last), style = MuType.mono(f), color = c.ink45)
+        // What the score means for you: the set's bars in words, under its own figure.
+        Help(TrustWords.barsWords(set))
+        if (last != null) MuText(costWords(set, last, provider), style = MuType.mono(f), color = c.ink45)
         if (last != null) Misses(ai, set, last)
     }
 }
@@ -293,20 +339,10 @@ private fun PuzzleScale(score: Int?) {
 /** The score that matters most, large and in mono: right first time of all, or for the checker, mistakes caught. */
 private fun headline(set: EvalSet, run: EvalRun): String {
     if (set.checker) {
-        val (caught, planted) = checker(set, run)
+        val (caught, planted) = TrustWords.checker(set, run)
         return "caught $caught of $planted"
     }
     return "${run.items.count { it.firstPass }} of ${run.items.size}"
-}
-
-/** For the checker: mistakes caught of those planted, and false alarms of the clean answers. */
-private fun checker(set: EvalSet, run: EvalRun): List<Int> {
-    val planted = set.items.filter { (it.grader as? Grader.Planted)?.hasError == true }.map { it.id }.toSet()
-    val byId = run.items.associateBy { it.id }
-    val caught = planted.count { byId[it]?.firstPass == true }
-    val clean = run.items.filter { it.id !in planted }
-    val alarms = clean.count { !it.firstPass }
-    return listOf(caught, planted.count { it in byId }, alarms, clean.size)
 }
 
 /** When it last ran, and on which model: "3 Oct · claude-opus-5-5". */
@@ -315,9 +351,13 @@ private fun ranWhen(run: EvalRun): String = listOfNotNull(
     run.model.takeIf { it.isNotBlank() },
 ).joinToString(" · ")
 
-/** What the run cost and when, whole: never cut (finding 14). */
-private fun costWords(set: EvalSet, run: EvalRun): String = buildList {
+/**
+ * What the run cost and when, whole: never cut (finding 14) — tokens, then at list prices when the run's model has one
+ * (every token read priced as new, since a run keeps reads and cached reads together: "≈").
+ */
+private fun costWords(set: EvalSet, run: EvalRun, provider: String): String = buildList {
     add("${tokens(run.tokensIn)} in, ${tokens(run.tokensOut)} out")
+    Prices.of(provider, run.model)?.let { p -> add(Prices.words(Prices.cost(p, Usage(input = run.tokensIn, output = run.tokensOut)))) }
     add(DateTimeFormatter.ofPattern("d MMM, HH:mm").format(Instant.ofEpochMilli(run.at).atZone(ZoneId.systemDefault())))
     if (run.model.isNotBlank()) add(run.model)
     if (run.stoppedEarly) add("stopped after ${run.items.size} of ${set.items.size}")

@@ -25,7 +25,7 @@ import com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 import kotlinx.coroutines.launch
 
-// Trust (1.0.99, Phase A, docs/phases/A.md), on [AiState]: a set of questions with known answers run against a
+// Test scores (1.0.99, Phase A, docs/phases/A.md; named Trust until the design review), on [AiState]: a set of questions with known answers run against a
 // connection, each answer graded by code, every run kept per connection (`ai/evals/<connection>.json`).
 
 /**
@@ -66,7 +66,7 @@ fun AiState.startEval(set: EvalSet, connection: AiConnection, tries: Int = 1) {
         return
     }
     if (model.runsOwnLoop) {
-        evalNote = "Trust runs on API connections: a plan's command-line app runs its own loop and every tool, so its answers cannot be held to the look-up tools."
+        evalNote = "Test scores run on API connections: a plan's command-line app runs its own loop and every tool, so its answers cannot be held to the look-up tools."
         return
     }
     evalNote = null

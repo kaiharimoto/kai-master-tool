@@ -128,7 +128,7 @@ Every phase lists:
     - 40 rulings questions with known answers, from YGOrg Q&A and house rulings;
     - 20 decklist pictures;
     - planted errors for the fact-checker.
-  - **A Trust page in Settings:** each connection's scores, cost per question, and when it was last tested.
+  - **A Trust page in Settings** (now **Test scores**): each connection's scores, cost per question, and when it was last tested.
   - **F4's three fixes:** an empty working folder for the CLIs, keys moved out, and the MCP token in memory.
   - The reader's guide marks itself stale when the deck changes. The rulings cache keeps only replies it could read.
 - **Needs:** nothing; it starts the foundation.

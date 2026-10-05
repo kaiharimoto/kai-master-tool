@@ -10,7 +10,7 @@ import kotlin.math.abs
 import kotlin.math.pow
 
 /**
- * How much to trust a connection (1.0.99, Phase A, `docs/phases/A.md`): questions with known answers, graded by code
+ * Test scores (1.0.99, Phase A, `docs/phases/A.md`; once called Trust): questions with known answers, graded by code
  * and never by a model, run against a connection and kept per connection. A score is a number, so a change to the
  * harness, a skill or a prompt can be shown to help — or not.
  */

@@ -176,6 +176,10 @@ class AiVsAiTest {
             assertEquals(d.matches.ended, (g.played.last().action as? DuelAction.Note)?.text)
             // What was spent is the bar's counter, against the match's budget (finding 9).
             assertEquals(rules.tokenCap, d.matches.budget)
+            // And in money (finding 4): the seat on a listed model is priced, gpt-x is not, so no sum stands for the whole.
+            assertEquals(listOf(true, false), d.matches.prices.map { it != null })
+            assertEquals(null, d.matches.dollars)
+            assertEquals(2, d.matches.usage.size)
             // The match is a replay too; the person's own duel (none here) was never touched.
             assertTrue(File(dir, "replays").listFiles().orEmpty().isNotEmpty())
             assertEquals(null, d.game)

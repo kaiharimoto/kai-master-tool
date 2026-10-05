@@ -588,10 +588,12 @@ class AiState(internal val h: NeueHolders) {
      */
     internal val backgroundJobs = mutableListOf<Job>()
 
-    /** Trust (1.0.99): its dialog, the run under way (set, done, of), a word when a run could not start, and a count of runs kept. */
+    /** Test scores (1.0.99; Trust in the code): its dialog, the run under way (set, done, of), a word when a run could not start, and a count of runs kept. */
     var trustOpen by mutableStateOf(false)
-    /** The sets opened out to their details and misses in Trust's table (the design review, finding 12); none at first. */
+    /** The sets opened out to their details and misses in the Test scores table (the design review, finding 12); none at first. */
     var trustExpanded by mutableStateOf<Set<String>>(emptySet())
+    /** The set whose Run is asking first what it will spend, in tokens and money (finding 4); null when none is. */
+    var trustAsking by mutableStateOf<String?>(null)
     var evalProgress by mutableStateOf<Triple<String, Int, Int>?>(null)
     var evalNote by mutableStateOf<String?>(null)
     var evalVersion by mutableStateOf(0)

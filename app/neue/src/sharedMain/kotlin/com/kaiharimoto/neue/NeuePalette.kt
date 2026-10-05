@@ -39,6 +39,7 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
         add(MenuEntry("Search cards and commands", hint = "Search") { neue.paletteOpen = true })
         if (neue.prefs.ai.enabled) add(MenuEntry(ai.name, hint = "Your assistant") { ai.setOpen(true) })
         if (neue.prefs.ai.enabled) add(MenuEntry("Look into ${ai.name}", hint = "What it knows") { ai.memoryOpen = "USER.md" })
+        if (neue.prefs.ai.enabled) add(MenuEntry("${ai.name}'s test scores", hint = "Known answers") { ai.trustOpen = true })
         add(MenuEntry("Advanced search") { run(DeskAction.ADVANCED_SEARCH) })
         add(MenuEntry("Present", hint = "Deck profiles as slides") { neue.go(Page.PRESENT) })
         add(MenuEntry("Duel", hint = "The duel simulator") { neue.go(Page.DUEL) })
@@ -202,6 +203,8 @@ fun NeueHolders.commands(query: String): List<Command> {
             Command(ai.name, "${ai.name}: set up a connection") { ai.openWizard() },
             Command(ai.name, "${ai.name}'s brain: read and edit what it knows") { ai.memoryOpen = "USER.md" },
             Command(ai.name, "${ai.name}'s context: how full it is, and make room") { ai.contextOpen = true },
+            // Settings' Test scores (named Trust until the design review): its old name and its kind still find it.
+            Command(ai.name, "${ai.name}'s test scores: questions with known answers", words = listOf("trust", "accuracy", "benchmark", "eval")) { ai.trustOpen = true },
             Command(ai.name, "${ai.name}: settings — model, effort and the rest") { ai.quickOpen = true },
             Command(ai.name, "${ai.name}: Fine Tuning, teach it this deck") { ai.setOpen(true); ai.askTune() },
             Command(ai.name, "${ai.name}: learn this deck from first principles") { ai.setOpen(true); ai.askTune(AiSession.MODE_PRINCIPLES) },

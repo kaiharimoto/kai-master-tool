@@ -5,6 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.ModelBackend
+import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.providers.ModelNames
+import com.kaiharimoto.mastertool.core.ai.providers.Prices
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.ai.providers.Wire
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
@@ -75,6 +78,17 @@ class DuelMatches internal constructor(private val d: Duels) {
         private set
     var budget by mutableStateOf(0L)
         private set
+    /** Each seat's tokens so far by kind, and its model's list prices (null: not in the table), for the counter's "≈ $". */
+    var usage by mutableStateOf<List<Usage>>(emptyList())
+        private set
+    var prices by mutableStateOf<List<Prices.Price?>>(emptyList())
+        private set
+    /** Each seat's model, said short, for the counter's tip. */
+    var models by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    /** What the match has spent so far in dollars at list prices; null when a seat's model has no price. */
+    val dollars: Double? get() = AiMatch.dollars(usage, prices)
     /** Each seat's conversation, by id: kept with Ai's, to be read afterwards. */
     var sessions by mutableStateOf<List<String>>(emptyList())
         private set
@@ -115,6 +129,9 @@ class DuelMatches internal constructor(private val d: Duels) {
         decks = choice.seats.map { it.deckName }
         spent = 0L
         budget = choice.rules.tokenCap
+        usage = List(choice.seats.size) { Usage() }
+        prices = choice.connections.map { Prices.of(it.provider, it.model) }
+        models = choice.seats.map { ModelNames.short(it.model).ifBlank { it.name } }
         sessions = sessionIds
         d.closeReplay()
         d.strip = null
@@ -123,6 +140,7 @@ class DuelMatches internal constructor(private val d: Duels) {
             table, players, engineList, Duels::now,
             status = { words -> d.scope.launch { status = words } },
             spent = { tokens -> d.scope.launch { spent = tokens } },
+            used = { u -> d.scope.launch { usage = u } },
         )
         job = d.scope.launch {
             var end: MatchEnd? = null

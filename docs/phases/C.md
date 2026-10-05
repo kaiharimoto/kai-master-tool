@@ -150,7 +150,7 @@ player would, no less and no more (stage 1's `DuelReach` and its knowledge setti
 
 ## 5. Puzzles: an evaluation set (stage 3, done)
 
-**Duel puzzles** (`EvalSets.PUZZLES`, the sixth set in Trust; `core/ai/eval/Puzzles.kt`, `PuzzleTable.kt`): 17 positions
+**Duel puzzles** (`EvalSets.PUZZLES`, the sixth set in Test scores, named Trust then; `core/ai/eval/Puzzles.kt`, `PuzzleTable.kt`): 17 positions
 with a known goal, played by Ai on a table of their own and **graded on the table** — never on what Ai says.
 
 - **A puzzle** (`Puzzle`): a position (`PuzzleSetup`: both seats' life points, your hand, each side's monsters by zone and
@@ -203,10 +203,10 @@ The puzzles (17; each proved solvable by its line and not by its wrong one in `P
 | p16 | Their LP 0 (4400) | Which two to Tribute: keep the 1400 for 4400 exactly. |
 | p17 | Their LP 0 (3800) | Raigeki, not Dark Hole, keeps your attackers. |
 
-**The baseline score** (`PuzzleBaselines`, held by `PuzzleTest.theBaselineBoundsTheSet`, shown in Trust under the set):
+**The baseline score** (`PuzzleBaselines`, held by `PuzzleTest.theBaselineBoundsTheSet`, shown in Test scores under the set):
 doing nothing **0 of 17**; a battle-only greedy player (into the Battle Phase, each monster strongest first attacks the
 weakest monster it destroys without loss, else directly at an empty field) **2 of 17** (p01, p02); the recorded solutions
-**17 of 17**. A model's score is read between those bounds. Trust estimates 30,000 tokens a puzzle.
+**17 of 17**. A model's score is read between those bounds. Test scores estimates 30,000 tokens a puzzle.
 
 ## 6. Ai vs Ai: two sessions, one a seat (stage 3, reworked)
 
@@ -313,7 +313,7 @@ vs Ai: claude-opus-5-5 beat gpt-x 3 of 5"); every duel lead is closed and held b
 **What Phase C leaves for later:**
 - Puzzles with effect monsters, the Extra Deck, the opponent's responses and more than one turn: they need effects as code
   (Phase D). A puzzle is still a turn by the numbers.
-- A model's score on the puzzle set: run in Trust per connection (cost); no live model runs on push.
+- A model's score on the puzzle set: run in Test scores per connection (cost); no live model runs on push.
 - A cheaper legality check for `duel_moves` than a whole plan per move, if a phone shows the half second.
 - An Elo per Ai version from Ai vs Ai matches and puzzles (Phase E); Ai vs Ai for a plan's command-line app (it would need
   an MCP server answering one seat of a match's table); a cheaper cue (the brief as a diff) for long matches.
@@ -328,6 +328,6 @@ duel at the table, as before, and an older build reading an Ai vs Ai record skip
 a person (both seats are Ai's). A record of kind `"self-play"` (with `forkOf`), written only by the unreleased first cut of
 this stage, is still read — and counted nowhere. A new conversation mode, `ai-vs-ai`, in `<data>/ai/sessions/`. A finished
 or stopped match is a replay in `<data>/duel/replays/`. `OldDataTest` holds the shapes. No preference, no schema change;
-Trust's runs of the puzzle set are ordinary `ai/evals/<connection>.json` runs.
+Test scores' runs of the puzzle set are ordinary `ai/evals/<connection>.json` runs.
 
 **Needs:** F1 (the puzzle set), F4 (Ai's permissions at the table), Phase B (correct cards).

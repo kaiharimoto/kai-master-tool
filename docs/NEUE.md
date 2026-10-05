@@ -2569,9 +2569,13 @@ only for judgment, outcomes over time, the person last. This release builds its 
   week only when the parser the caller uses reads them, and throws away a kept one it cannot read (an older build's)
   instead of serving it; a caller without a reader keeps what it kept before.
 
-#### Trust (1.0.99, Phase A, `docs/phases/A.md`)
+#### Test scores (1.0.99, Phase A, `docs/phases/A.md`; named Trust until 1.1.8)
 
-How far to trust a connection, measured — Settings › Assistant › Trust (`TrustDialog`):
+How each connection scores on questions with known answers — Settings › Assistant › **Test scores**, the dialog "How Ai
+scores on questions with known answers" (`TrustDialog`), also in the palette ("Ai's test scores", found by "trust" too)
+and the phone's ⋯ menu. **The name** is kai's pick in the design review (finding 8): Shootout's **Trust** grants or
+withholds trust in Ai as a judge; this page measures, so it is Test scores. Code identifiers, stored keys and file names
+keep the first name (`TrustDialog`, `trustOpen`, `TrustWords`, `ai/evals/`).
 - **The sets** (`core/ai/eval/EvalSets`): 40 hand-odds questions whose keys the app's own counter computes (`HandOdds`, so
   a key can never be wrong); 30 rules and rulings with one settled answer each and the source named; 20 decklists as people
   write them (nicknames, typos, counts before and after), read back card by card; and 24 answers for the fact-checker,
@@ -2581,7 +2585,7 @@ How far to trust a connection, measured — Settings › Assistant › Trust (`T
   list pages through `LimitationParser`/`BanlistHistory` or YGOPRODeck's `misc_info`, its source named. **Duel puzzles**
   (Phase C stage 3, `EvalSets.PUZZLES`, `Puzzles`, `docs/phases/C.md` §5): 17 positions with a known goal, each played on a
   table of its own (`PuzzleTable`) with `duel_state`, `duel_moves` and `duel_act` only, under a referee that admits a turn's
-  legal moves and works out battle itself (`PuzzleReferee`), and graded on the table (`Grader.Puzzle`); Trust shows the
+  legal moves and works out battle itself (`PuzzleReferee`), and graded on the table (`Grader.Puzzle`); Test scores shows the
   set's bounds under it — doing nothing 0, a battle-only greedy player 2, the recorded solutions 17 (`PuzzleBaselines`).
 - **Graded by code, never a model** (`Grading`): a percentage at the precision asked, a yes or no, a whole number, a decklist exactly,
   and for the checker its claims — a mistake caught, a clean answer left alone.
@@ -2593,7 +2597,7 @@ How far to trust a connection, measured — Settings › Assistant › Trust (`T
 - **Ai vs Ai runs headless too** (Phase C, `docs/phases/C.md` §6): each seat of a match is an `AgentPlayer` — the same
   `AgentLoop`, its own backend from `AiState.newBackend` (never the panel's cached one), its own history and `AiSession`
   (mode `ai-vs-ai`, `MODE_MATCH`, kept and read-only) — answered by its seat's `MatchTable` tools, never `AiHost`; API
-  connections only, for the same reason as Trust.
+  connections only, for the same reason as Test scores.
 - **The dialog** opens on a table (the design review of Ai vs Ai and Trust, findings 7, 12–15): a row per set — its
   `01` numeral, title at h2, the score in 20px mono ("34 of 40", for the checker "caught 10 of 12"), when and on which
   model, and Run at the right — each opening out (`AiState.trustExpanded`, "3 missed ▸") to what the score means ("85%
@@ -2603,9 +2607,26 @@ How far to trust a connection, measured — Settings › Assistant › Trust (`T
   link. The fact-checker says under its title what it is; the puzzles draw their bounds as a scale — a 1px track from 0
   to 17, ticks where doing nothing, only attacking and the solutions land, the score a 6px square. A help line at the head
   says what "right first time" is and that a few points either way is noise; Connection and Tries are field labels, the
-  connection a row of its own on a phone. The word pass@1 is gone from the screen (the verdict per set — a word against
-  fixed bars — and Trust's name are kai's choice, left as they are).
-- `tools/shoot.sh --ai=trust` photographs it with sample runs; `--ai-step=open` opens out the odds, the checker and the puzzles.
+  connection a row of its own on a phone. The word pass@1 is gone from the screen.
+- **A verdict per set** (1.1.8, kai's choice (b) of finding 7; `TrustWords.verdict`, core, `TrustVerdictTest`): a word
+  against fixed bars, beside the score as a micro-caps badge (on a phone it leads the second line) — **Rely on it**,
+  **Check it**, **Do it yourself**, the last inverted, as the one that changes what the person does. The bars, said in
+  the set's details (`barsWords`): the answer sets (odds, rulings, decklists, card truth) at 95 % and 80 % right first
+  time — with several tries, the lower of that and right every time; the fact-checker at 90 % and 70 % of planted
+  mistakes caught, held to Check it by more than one false alarm in ten clean answers and to Do it yourself by more than
+  one in four; the puzzles at 90 % and 60 % solved, and never above Do it yourself at or under the only-attacks
+  baseline. A run stopped early gets none. Ai does not read the scores, so no verdict line is handed to it.
+- **What a run costs, in money** (1.1.8, kai's choice (b) of finding 4; `Prices`, core, `PricesTest`): the Run
+  confirmation says the questions, ≈ tokens, and "≈ $1.10 at list prices, Oct 2026" — or "see your provider's pricing"
+  when the connection's model is not in the table — and a finished run's cost line adds its figure. The estimate assumes
+  nine tenths of the tokens read (uncached) and one tenth written (`Prices.ESTIMATE_READ_SHARE`), so it is an upper
+  "≈". **The table** (`core/ai/providers/Prices.kt`) holds list prices per million tokens — input, output, cache read,
+  cache write — for the provider's own API only (Anthropic, OpenAI, Gemini; never OpenRouter, a cloud or a local
+  model), matched by exact id after a routing prefix and `[1m]` are dropped (Anthropic's dated snapshots read as their
+  alias; OpenAI's never, since it prices some apart), each source named in its KDoc with the day it was read. Change a
+  row and `Prices.AS_OF` together.
+- `tools/shoot.sh --ai=trust` photographs it with sample runs; `--ai-step=open` opens out the odds, the checker and the
+  puzzles; `--ai-step=confirm` shows the hand-odds Run confirmation with its price.
 
 #### The keys, the CLIs' folder and the MCP token (1.0.99)
 
@@ -3849,7 +3870,7 @@ only with full knowledge). The leads closed: one coordinate convention (`ComboRu
 keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held by `DuelTableTest`.
 
 **Puzzles, Ai vs Ai and the red team, stage 3** (Phase C, `docs/phases/C.md` §5–§7; Phase C done):
-- **Duel puzzles in Trust** (`EvalSets.PUZZLES`): 17 one-turn positions of Normal Monsters and a few Normal Spells, played
+- **Duel puzzles in Test scores** (named Trust then; `EvalSets.PUZZLES`): 17 one-turn positions of Normal Monsters and a few Normal Spells, played
   by Ai on tables of their own through `duel_state`/`duel_moves`/`duel_act` (`PuzzleTable`, `AiEval.playPuzzle`) under a
   referee (`PuzzleReferee`: one Normal Summon with its Tributes, a position change once, attacks once and directly only at
   an empty field, battle worked out by `DuelBattle`, the puzzle's Spells resolved as written; `lp` and moves by hand
@@ -3874,8 +3895,10 @@ keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held 
   - **The bar**: while a match is on the table the window's bar holds it where the command line stood (`MatchStatus`; on a
     phone `PhoneMatchBar`, two lines that wrap) — a breathing square, WATCHING · AI VS AI, "↓ Opus 5.5 with lab · ↑ GPT-5
     with K9 Vanquish Soul · turn 3 · GPT-5 is playing its turn", the spend so far against the budget ("≈ 210k of 1M
-    tokens", `DuelMatches.spent`/`budget`, from `AiMatch`'s `spent`), and Stop, whose tip says the replay is kept and no
-    result counted. Over: the result first, "Read Opus 5.5's game" for each seat, Back to your duel. Nothing covers the far
+    tokens · ≈ $0.80", `DuelMatches.spent`/`budget`, from `AiMatch`'s `spent`; the money from each seat's tokens by kind,
+    `AiMatch.usage`/`used` → `DuelMatches.usage`, at that seat's list prices, `DuelMatches.dollars`, its tip each seat's
+    share with the table's date), and Stop, whose tip says the replay is kept and no result counted. On a phone the money
+    is a line of its own under who sits where. Over: the result first, "Read Opus 5.5's game" for each seat, Back to your duel. Nothing covers the far
     hand any more; the old `MatchBar` over the table is gone.
   - **Nothing of a player's is offered**: no command line or microphone, the Spotlight never opens, the log has no box,
     no Combos and no cues, the phases, life points, die and coin are inert (drawn at ink-45, no pointer; `mayRoll` is false),
@@ -3890,7 +3913,12 @@ keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held 
     options; one column on a phone with full-width segmented controls (`Segmented(fill = true)`). The budget follows the
     turn cap — the smallest that covers the estimate (`AiMatch.budgetFor`: 12 turns 1M, so the first match can finish) —
     until the person sets it; where it still bites, "— 500k stops it at about turn 7, as a draw" (`AiMatch.stopsAt`). The
-    spend is in the footer beside Start, in mono: "≈ 900k tokens at most · stops at 1M" (cost in money is kai's choice).
+    spend is in the footer beside Start, in mono: "≈ 900k tokens at most · stops at 1M", and under it in money (1.1.8,
+    kai's choice (b) of finding 4): "≈ $3.20 at list prices, Oct 2026" — the tokens it can spend shared evenly between the
+    seats, each split nine tenths read (uncached) and one tenth written, at its own model's list prices
+    (`AiMatch.dollars`, `Prices`, core, `PricesTest`). A seat whose model the table lacks (a host other than the
+    provider's own API, a local model, an id not listed) makes it "see your provider's pricing": never a sum that leaves a
+    seat out. §4k's Test scores has the table and its sources.
   - **The result is the log's last line**, written by the table as the match ends (`AiMatch.end`) and drawn in ink at
     weight 500 once it is over.
   - **The records in Replays** are a table (the kit's §12): AGAINST · RESULT · AI SAW · THEY SAW · FIRST
