@@ -75,7 +75,7 @@ class ShootoutTeachTest {
         assertEquals(HandKind(first = true, starter = true, interaction = true), k)
         assertEquals("first·starter·interaction", k.key)
         assertEquals(k, HandKind.parse(k.key))
-        assertEquals("going second without a starter, into none", HandKind(false, false, false).words)
+        assertEquals("going second without a starter, no interaction from them", HandKind(false, false, false).words)
         assertNull(HandKind.parse("sideways·starter"))
         assertEquals(8, HandKind.all(alone = false).size)
         assertEquals(4, HandKind.all(alone = true).size)

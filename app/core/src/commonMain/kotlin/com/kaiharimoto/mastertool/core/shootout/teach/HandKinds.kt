@@ -21,14 +21,14 @@ data class HandKind(val first: Boolean, val starter: Boolean, val interaction: B
             interaction?.let { if (it) "interaction" else "clear" },
         ).joinToString("·")
 
-    /** How a person reads it: "going first with a starter, into interaction". */
+    /** How a person reads it: "going first with a starter, interaction from them" (design review, 1.1.6: never "into none"). */
     val words: String
         get() = buildString {
             append(if (first) "going first" else "going second")
             append(if (starter) " with a starter" else " without a starter")
             when (interaction) {
-                true -> append(", into interaction")
-                false -> append(", into none")
+                true -> append(", interaction from them")
+                false -> append(", no interaction from them")
                 null -> Unit
             }
         }

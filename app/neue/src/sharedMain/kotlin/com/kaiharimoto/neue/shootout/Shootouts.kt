@@ -147,8 +147,14 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     private var shownId = ""
     private var given = 0
 
-    /** Whether a session is under way. */
-    val running: Boolean get() = run != null && view == View.TRIAL
+    /** The hands the person has judged for the deck and target chosen: what the page counts, never Ai's answers. */
+    val handsJudged: Int get() = log?.trials?.count { it.judge == StoredTrial.PERSON } ?: 0
+
+    /**
+     * Whether a session is under way. The view (state) is read first, so whoever asks — the window's bar too — hears a
+     * session begin and end; `run` is not state, and read first it hid the view from the bar's first look.
+     */
+    val running: Boolean get() = view == View.TRIAL && run != null
 
     /** The card behind a passcode, from the pool. */
     fun card(id: Int): Card? = h.builder.index.byId(CardId(id))
@@ -244,6 +250,8 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     /** A session begun on the deck and target chosen, or the one under way carried on. */
     fun start() {
         if (view == View.TRIAL && run != null) return
+        // Nothing begins while Ai sits its exam (design review, 1.1.6).
+        if (teach.examRunning) return
         val b = bench ?: return
         val l = log ?: return
         if (thinking) return

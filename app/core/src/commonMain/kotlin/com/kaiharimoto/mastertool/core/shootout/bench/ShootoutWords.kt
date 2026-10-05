@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.shootout.bench
 
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
+import com.kaiharimoto.mastertool.core.shootout.select.StopRule
 import kotlin.math.abs
 import kotlin.math.round
 
@@ -39,33 +40,100 @@ object ShootoutWords {
         }
     }
 
-    /** The band of win chance an answer names (S.md §4½: the person's answers are the scale's anchor). */
+    /**
+     * The band an answer names, as a count in ten (S.md §4½: the person's answers are the scale's anchor): games won in a
+     * matchup, hands that do what the deck wants alone. "In 10" keeps "%" for the model's own numbers (design review, 1.1.6).
+     */
     fun band(answer: Answer): String = when (answer) {
-        Answer.CLEAR_WIN -> "80–100 %"
-        Answer.LEAN_WIN -> "60–80 %"
-        Answer.COIN_FLIP -> "40–60 %"
-        Answer.LEAN_LOSS -> "20–40 %"
-        Answer.CLEAR_LOSS -> "0–20 %"
+        Answer.CLEAR_WIN -> "8+ in 10"
+        Answer.LEAN_WIN -> "6–8 in 10"
+        Answer.COIN_FLIP -> "4–6 in 10"
+        Answer.LEAN_LOSS -> "2–4 in 10"
+        Answer.CLEAR_LOSS -> "0–2 in 10"
     }
 
-    /** A stratum's name as a column head: `G1 · first`, `Sided · second`, `Going first`. */
+    /** The one question a rating asks, over its five answers. */
+    fun question(alone: Boolean): String =
+        if (alone) "How often does a hand like this do what the deck wants?" else "How does this game go for you?"
+
+    /**
+     * A stratum's short name, a column head: `G1 first`, `Sided second`, `Going first`. The same words as [situation],
+     * shortened, so one situation has one name everywhere (design review, 1.1.6).
+     */
     fun stratum(s: Stratum): String = when (s) {
         Stratum.ALONE_FIRST -> "Going first"
         Stratum.ALONE_SECOND -> "Going second"
-        Stratum.G1_FIRST -> "G1 · first"
-        Stratum.G1_SECOND -> "G1 · second"
-        Stratum.SIDED_FIRST -> "Sided · first"
-        Stratum.SIDED_SECOND -> "Sided · second"
+        Stratum.G1_FIRST -> "G1 first"
+        Stratum.G1_SECOND -> "G1 second"
+        Stratum.SIDED_FIRST -> "Sided first"
+        Stratum.SIDED_SECOND -> "Sided second"
     }
 
-    /** A stratum as a sentence over a trial: who goes first, and which game. */
+    /** A stratum in full, over a trial: which game, and who goes first. [opponent] is kept for callers; the words are yours. */
+    @Suppress("UNUSED_PARAMETER")
     fun situation(s: Stratum, opponent: String?): String = when (s) {
-        Stratum.ALONE_FIRST -> "You go first · five cards"
-        Stratum.ALONE_SECOND -> "You go second · six cards"
-        Stratum.G1_FIRST -> "Game one · you go first"
-        Stratum.G1_SECOND -> "Game one · ${opponent ?: "they"} go${if (opponent == null) "" else "es"} first"
-        Stratum.SIDED_FIRST -> "After siding · you go first"
-        Stratum.SIDED_SECOND -> "After siding · ${opponent ?: "they"} go${if (opponent == null) "" else "es"} first"
+        Stratum.ALONE_FIRST -> "Going first"
+        Stratum.ALONE_SECOND -> "Going second"
+        Stratum.G1_FIRST -> "Game 1 · going first"
+        Stratum.G1_SECOND -> "Game 1 · going second"
+        Stratum.SIDED_FIRST -> "Sided · going first"
+        Stratum.SIDED_SECOND -> "Sided · going second"
+    }
+
+    /** "1 hand", "60 hands": what a person reads is hands, never trials (the code keeps "trial"). */
+    fun hands(n: Int): String = "$n hand" + if (n == 1) "" else "s"
+
+    /** How sure Ai said it was, in words, so "%" stays the win chance's: sure, fairly sure, unsure. */
+    fun certainty(sure: Double): String = when {
+        sure >= 0.8 -> "sure"
+        sure >= 0.6 -> "fairly sure"
+        else -> "unsure"
+    }
+
+    /** A share in tens, rounded: 0.68 → "7 in 10". */
+    fun inTen(x: Double): String = "${round(x.coerceIn(0.0, 1.0) * 10).toInt()} in 10"
+
+    /** The person's steadiness ([ShootoutResults.steadiness]) as a sentence. */
+    fun steadiness(same: Double): String = "You answer the same hand the same way about ${inTen(same)} times"
+
+    /** A stratum inside a sentence: "going first", "in game 1, going second", "after siding, going first". */
+    fun where(s: Stratum): String = when (s) {
+        Stratum.ALONE_FIRST -> "going first"
+        Stratum.ALONE_SECOND -> "going second"
+        Stratum.G1_FIRST -> "in game 1, going first"
+        Stratum.G1_SECOND -> "in game 1, going second"
+        Stratum.SIDED_FIRST -> "after siding, going first"
+        Stratum.SIDED_SECOND -> "after siding, going second"
+    }
+
+    /**
+     * One line of the results' "So far" (S.md §5: a verdict only where the range supports one): [name]'s worth where its
+     * 80 % range excludes zero; [best] marks the largest gain called.
+     */
+    fun call(name: String, call: Call, best: Boolean): String {
+        // Whole points: "about" with a tenth reads as more certain than the range allows.
+        val about = abs(round(call.estimate.value)).toInt()
+        return if (call.gains) {
+            "$name: worth about +$about points ${where(call.stratum)}" + if (best) ", the best card called so far" else ""
+        } else {
+            "$name: about −$about points ${where(call.stratum)}; its range is below zero, so a copy could go"
+        }
+    }
+
+    /** The results' "So far" when nothing is called: how much is known, and about how many more hands. */
+    fun tooEarly(settled: StopRule.Settled, more: Int?): String =
+        "Too early to call: ${settled.known} of ${settled.of} cards known within ±${settled.halfWidth.toInt()} points." +
+            when {
+                more == null -> ""
+                more <= 0 -> ""
+                else -> " About ${roundHands(more)} more hands."
+            }
+
+    /** A count said as "about": to the nearest 10 past 20, the nearest 50 past 200. */
+    fun roundHands(n: Int): Int = when {
+        n <= 20 -> n
+        n <= 200 -> ((n + 5) / 10) * 10
+        else -> ((n + 25) / 50) * 50
     }
 
     /** Points of win chance, signed and to a tenth: `+4.2`, `−1.0`, `0.0`. */
@@ -79,8 +147,8 @@ object ShootoutWords {
         }
     }
 
-    /** A share as whole percent: `62 %`. */
-    fun percent(x: Double): String = "${round(x * 100).toInt()} %"
+    /** A share as whole percent, the way the app writes one: `62%`. */
+    fun percent(x: Double): String = "${round(x * 100).toInt()}%"
 
     /**
      * A phone's swipe on a rating (S.md §1: "a swipe on a phone"), from how far the finger travelled as fractions of

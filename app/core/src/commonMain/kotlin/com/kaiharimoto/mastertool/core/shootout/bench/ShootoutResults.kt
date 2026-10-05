@@ -2,11 +2,14 @@ package com.kaiharimoto.mastertool.core.shootout.bench
 
 import com.kaiharimoto.mastertool.core.shootout.model.Estimate
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
+import com.kaiharimoto.mastertool.core.shootout.select.Proposal
 import com.kaiharimoto.mastertool.core.shootout.select.RealWorld
 import com.kaiharimoto.mastertool.core.shootout.select.StopRule
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
 import com.kaiharimoto.mastertool.core.shootout.teach.JudgedPair
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
+import kotlin.math.abs
+import kotlin.math.ceil
 
 /** One card's number in one stratum: its worth per copy with its ranges, how often it is drawn, and the trials behind it. */
 class CardCell(val estimate: Estimate, val drawShare: Double, val trials: Int)
@@ -23,6 +26,11 @@ class CardResult(
 
 /** A pair whose 95 % range excludes zero: the extra win chance from holding both, beyond the two cards' own. */
 class PairResult(val a: Int, val b: Int, val stratum: Stratum, val estimate: Estimate, val trials: Int)
+
+/** A card the hands have called (S.md §5: "a verdict only where the range supports one"): its 80 % range excludes zero. */
+class Call(val card: Int, val stratum: Stratum, val estimate: Estimate) {
+    val gains: Boolean get() = estimate.value > 0
+}
 
 /** Which trials a number stands on: every number opens its trials (S.md §5). */
 sealed interface Behind {
@@ -84,7 +92,37 @@ class ShootoutResults(
     val settled: StopRule.Settled,
     /** The person's noise on the five-point scale, in log-odds. */
     val noise: Double,
+    /**
+     * How often the person would give one of their hands the same answer twice, as the fit reads their noise: the chance
+     * of two equal answers, averaged over the hands they judged (design review, 1.1.6: "noise 0.24" in words). Null
+     * before there are enough hands to say.
+     */
+    val steadiness: Double? = null,
 ) {
+    /**
+     * What the hands have called so far, the clearest first: every card and stratum whose 80 % range lies wholly on one
+     * side of zero ("Arias: worth about +20 points going first"). Empty is "too early to call".
+     */
+    fun calls(): List<Call> = cards.flatMap { row ->
+        row.cells.filter { (_, c) -> c.estimate.range80.let { it.start > 0 || it.endInclusive < 0 } }
+            .map { (s, c) -> Call(row.card, s, c.estimate) }
+    }.sortedByDescending { abs(it.estimate.value) }
+
+    /**
+     * About how many more of the person's hands until the stop rule is met, read from the ranges as they stand: a range
+     * narrows as one over the square root of the hands, so the card at the rule's share needs its width over the rule's
+     * squared, times the hands so far. A rough reading, said as "about"; 0 once it is met, null with nothing to read.
+     */
+    fun handsToSettle(): Int? {
+        if (settled.enough) return 0
+        if (fitted == 0 || cards.isEmpty()) return null
+        val widths = cards.map { row -> row.cells.values.maxOf { it.estimate.halfWidth95 } }.sorted()
+        val at = widths[(ceil(ShootoutRun.STOP.share * widths.size).toInt() - 1).coerceIn(0, widths.lastIndex)]
+        if (at <= settled.halfWidth) return 0
+        val ratio = at / settled.halfWidth
+        return ceil(fitted * (ratio * ratio - 1)).toInt()
+    }
+
     companion object {
         fun read(run: ShootoutRun): ShootoutResults {
             val bench = run.bench
@@ -124,7 +162,20 @@ class ShootoutResults(
                 olderPlans = trials.count(bench::underOlderPlan),
                 settled = ShootoutRun.STOP.read(ratings, bench.strata),
                 noise = run.noise,
+                steadiness = steadiness(run),
             )
+        }
+
+        /** The person's newest hands read for [steadiness]: enough to say, cheap to read. */
+        private const val STEADY_HANDS = 400
+
+        /** The chance of the same answer twice, by the fit, averaged over the person's blind ratings; null under ten. */
+        private fun steadiness(run: ShootoutRun): Double? {
+            val rated = run.log.trials.filter { it.blind && it.kind == StoredTrial.RATE }.takeLast(STEADY_HANDS)
+            val same = rated.mapNotNull { t ->
+                (run.bench.proposal(t) as? Proposal.Rate)?.let { p -> run.predict(p).chances.sumOf { it * it } }
+            }
+            return if (same.size < 10) null else same.average()
         }
 
         /**
