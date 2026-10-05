@@ -46,7 +46,7 @@ class WorldSnapshot private constructor(
     /** The duel in play as Ai's seat reads it (Phase C stage 3, `ygo.duel.fork`): a view, never the live table. */
     private val fork: Lazy<DuelFork.Source?> = lazyOf(null),
     /** The app's folders every world sees (Phase D step 2, `lib/effects/`): a prefix and its folder, for `ygo.use`. */
-    private val mounts: List<Pair<String, File>> = emptyList(),
+    private val mounts: List<WorldMount> = emptyList(),
 ) : WorldHost {
     override fun now(): Long = System.currentTimeMillis()
     override fun liveDuel(): DuelFork.Source? = fork.value
@@ -68,16 +68,16 @@ class WorldSnapshot private constructor(
     override fun today(): String? = day
     override fun file(path: String): String? {
         val safe = WorldPaths.safe(path) ?: return null
-        mounts.firstOrNull { safe.startsWith(it.first) }?.let { (prefix, dir) ->
-            val rel = safe.removePrefix(prefix)
-            if (rel.isEmpty() || '/' in rel) return null
-            return runCatching { File(dir, rel).takeIf { f -> f.isFile }?.readText() }.getOrNull()
+        mounts.firstOrNull { safe.startsWith(it.prefix) }?.let { m ->
+            val rel = safe.removePrefix(m.prefix)
+            if (rel.isEmpty() || !m.readable(rel)) return null
+            return runCatching { File(m.dir, rel).takeIf { f -> f.isFile }?.readText() }.getOrNull()
         }
         return filesDir?.let { runCatching { File(it, safe).takeIf { f -> f.isFile }?.readText() }.getOrNull() }
     }
 
     /** This snapshot reading a world's own files and the app's folders mounted in it, for `ygo.use`. */
-    fun reading(files: File, mounted: List<Pair<String, File>> = mounts): WorldSnapshot =
+    fun reading(files: File, mounted: List<WorldMount> = mounts): WorldSnapshot =
         WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files, bans, region, day, fork, mounted)
 
     companion object {

@@ -4536,6 +4536,24 @@ link with the evidence ledger, siding plans compared.
 (`early`: a calibration set of 12 not yet examined); Setup before teaching is offered is `--shootout-view=setup
 --shootout-answers=0` (or any number under 30).
 
+### 4u. Effects as code: the library (Phase D step 2; `docs/phases/D.md` §3, §6)
+
+A card's effect is `lib/effects/<passcode>.js` in any world, written with `ygo.fx` (alias `fx`, `core/world/FxPrelude.kt`),
+which builds plain data; **`FxCompile`** runs it once in Rhino (5 s, shut in) and keeps only the data (`JsData`: a function in
+it is refused). Every write is checked (`FxCheck` and the text's `FxLints`) and read back in words (`FxWords`).
+- **One library, by card**: `<data>/effects/` (`<passcode>.js`, the compiled `<passcode>.json` with `vocab` and its source's
+  hash, the person's `<passcode>.review.json`, helpers `_name.js`), mounted at `lib/effects/` in every world through
+  `WorldMount` (`Worlds.mounts`; `WorldSnapshot.file` for `ygo.use`). A world writes only sources and helpers. Every printing
+  reads its card's script (`CardIdentity`). At most 2,000 scripts.
+- **The holder** is `Effects` (`neue/effects`, lazy `h.effects`): it compiles what changed (never over a newer build's script),
+  checks everything on each load, and keeps `entries`, `book` (what the engine and the table read; broken scripts never) and
+  `revision`. A write through a world is compiled at once and the writer told how it went.
+- **Sync and backups** carry `effects/` (newer wins; `FxPaths.syncs`); `<data>/fxcache/` is a device folder
+  (`InboundPath.DEVICE_FOLDERS`): verdicts never travel, and a script synced in is checked again here.
+- **Ai**: `fx_state` and `fx_check` (`AiEffects`). Only the person accepts a warning (`FxReviews.accept` refuses Ai).
+- Left for the rest of step 2: the Effects pane, Write its effect, asking (`FxAsks`, `fx_request`, `Effects.gate`), the cost
+  and the table's Shortcut surfaces (D.md §10, step 2, "As landed").
+
 ## 5. Releases, updates and feedback — the permanent numbers
 
 `release-neue.yml`, dispatched with a version, builds a `.msi` (Windows), two

@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxCheck
 import com.kaiharimoto.mastertool.core.duel.effects.FxCodec
 import com.kaiharimoto.mastertool.core.duel.effects.FxCompile
 import com.kaiharimoto.mastertool.core.duel.effects.FxEntry
+import com.kaiharimoto.mastertool.core.duel.effects.FxFacts
 import com.kaiharimoto.mastertool.core.duel.effects.FxHost
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.duel.effects.FxRead
@@ -202,6 +203,21 @@ class Effects(val dir: File, val cacheDir: File) {
     }
 
     // ---- What the page and Ai read --------------------------------------------------------------------------------------
+
+    /**
+     * The pool's facts for the engine (`FxFacts.over`), any printing resolved: with [book], what the table's
+     * `Shortcuts.of(game, h.effects.book, h.effects.facts(), …)` needs (agent (e)'s seam; rebuild when [revision] moves).
+     */
+    fun facts(): FxFacts {
+        val index = pool()
+        return FxFacts.over { index.byId(it) }
+    }
+
+    /** The pool's cards by exact name, any case, as passcodes: `Shortcuts.names`, for a typed `declare=`. */
+    fun names(): (String) -> List<Int> {
+        val index = pool()
+        return { name -> listOfNotNull(index.byName(name)?.id?.value) }
+    }
 
     /** [code]'s entry, by any printing; null when the library has nothing for it. */
     fun entry(code: Int): FxEntry? = entries[canonical(pool())(code)]

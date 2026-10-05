@@ -460,7 +460,7 @@ class Worlds(val dir: File) {
     }
 
     /** The app as [w]'s code reads it, its own files included (`ygo.use`). */
-    private suspend fun hostIn(w: World): WorldHost = host().let { (it as? WorldSnapshot)?.reading(filesDir(w), mounts.map { m -> m.prefix to m.dir }) ?: it }
+    private suspend fun hostIn(w: World): WorldHost = host().let { (it as? WorldSnapshot)?.reading(filesDir(w), mounts.toList()) ?: it }
 
     /** Runs an instrument in the open world: its lines in the terminal, its boards pinned. */
     suspend fun tool(name: String, args: JsonObject, by: String = WorldEvent.AI): Result<RunOutcome> = runCatching {
