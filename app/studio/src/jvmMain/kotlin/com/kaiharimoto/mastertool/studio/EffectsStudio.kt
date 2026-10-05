@@ -50,6 +50,8 @@ internal suspend fun studioEffects(h: NeueHolders, mode: String, map: Map<String
     val warned = monsters.getOrNull(1)
     val broken = monsters.getOrNull(2)
     val dir = File(Platform.dataDir, FxPaths.FOLDER).apply { mkdirs() }
+    // Each picture starts from the same asked list: the studio's data folder outlives a run.
+    File(dir, FxPaths.ASKED).delete()
     // Our own scripts, written for the picture: a search, the same with its once-per-turn left out, and one whose ref nothing binds.
     clean?.let { c ->
         File(dir, FxPaths.js(c.id.value)).writeText(
@@ -109,7 +111,7 @@ internal suspend fun studioEffects(h: NeueHolders, mode: String, map: Map<String
                         ChatTurn.user("Can you write the effects for my engine so the table can play them?"),
                         ChatTurn(Role.ASSISTANT, listOf(Part.Text("Here is what that would take."), Part.ToolUse("r1", "fx_request", input))),
                         ChatTurn(Role.USER, listOf(Part.ToolResult("r1", "fx_request", content, summary = "Offered ${offer.toWrite.size} cards to write"))),
-                        ChatTurn.assistant("Two of them are already written and reused at no cost; one needs a repair. Press **Write** when you are ready, and I'll write them one at a time in Ai World."),
+                        ChatTurn.assistant("Five are new and two already written need a repair. Press **Write** when you are ready, and I'll write them one at a time in Ai World."),
                     ),
                     createdAt = now,
                     updatedAt = now,

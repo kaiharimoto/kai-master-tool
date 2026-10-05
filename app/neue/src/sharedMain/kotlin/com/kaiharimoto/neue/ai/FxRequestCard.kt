@@ -51,7 +51,7 @@ internal fun FxRequestCard(ai: AiState, offer: FxOffer) {
     Column(Modifier.fillMaxWidth().border(1.dp, if (written || declined) c.ink25 else c.ink).padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Micro("Effects to write", color = c.ink45)
         MuText(
-            offer.what.ifBlank { "Cards to write" }.replaceFirstChar { it.uppercase() },
+            offer.what.ifBlank { "Cards to write" }.let { w -> if (w.startsWith("the ") || w.startsWith("what ")) w.replaceFirstChar { it.uppercase() } else w },
             style = MuType.row(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium),
             color = c.ink,
         )

@@ -133,9 +133,12 @@ class Effects(val dir: File, val cacheDir: File) {
                 withContext(Dispatchers.Main) { working = null }
             }
         }
-        // The asked list travels with the library (a sync or a restore may bring a newer one).
-        val list = withContext(Dispatchers.IO) { FxAsks.decode(file(FxPaths.ASKED).takeIf { it.isFile }?.let { f -> runCatching { f.readText() }.getOrNull() }) }
-        withContext(Dispatchers.Main) { asked = list }
+        // The asked list travels with the library (a sync or a restore may bring a newer one). Read under the work's lock, so
+        // never half-written, and taken only when no edit made here is still on its way to the disk — or a reload that
+        // raced a go would put back the list from before it.
+        val edits = withContext(Dispatchers.Main) { askedEdits }
+        val list = work.withLock { withContext(Dispatchers.IO) { FxAsks.decode(file(FxPaths.ASKED).takeIf { it.isFile }?.let { f -> runCatching { f.readText() }.getOrNull() }) } }
+        withContext(Dispatchers.Main) { if (askedEdits == edits && askedSaved >= askedEdits) asked = list }
         publish(read.first, read.second, index)
     }
 
@@ -426,9 +429,27 @@ class Effects(val dir: File, val cacheDir: File) {
     fun suggest(main: List<Int>, extra: List<Int>, combos: List<Collection<Int>>, engine: Collection<Int>, limit: Int = 12): List<FxSuggest.Pick> =
         FxSuggest.of(main, extra, combos, engine, ::status, canonical(pool()), limit)
 
+    /** Edits to [asked] made here (on the main thread), and how many of them have reached the disk. */
+    private var askedEdits = 0
+
+    @Volatile
+    private var askedSaved = 0
+
+    /** The newest list to write, with its edit's number: each save writes the newest, so saves landing out of order never go back. */
+    @Volatile
+    private var askedPending: Pair<String, Int>? = null
+
     private fun saveAsked() {
-        val text = FxAsks.encode(asked)
-        scope.launch(Dispatchers.IO) { work.withLock { write(file(FxPaths.ASKED), text) } }
+        askedPending = FxAsks.encode(asked) to ++askedEdits
+        scope.launch(Dispatchers.IO) {
+            work.withLock {
+                val (text, n) = askedPending ?: return@withLock
+                if (n > askedSaved) {
+                    write(file(FxPaths.ASKED), text)
+                    askedSaved = n
+                }
+            }
+        }
     }
 
     // ---- The mount ------------------------------------------------------------------------------------------------------
