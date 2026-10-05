@@ -17,7 +17,7 @@ object SyncMerges {
         val b = base?.decodeToString()?.let(AiMemory::parse)?.entries.orEmpty().toHashSet()
         val m = AiMemory.parse(mine.decodeToString())
         val t = AiMemory.parse(theirs.decodeToString())
-        // Sets throughout (1.1.9): a memory file has no cap now, and a guide of a megabyte merges in one pass, never
+        // Sets throughout (1.1.11): a memory file has no cap now, and a guide of a megabyte merges in one pass, never
         // entries × entries.
         val mineSet = m.entries.toHashSet()
         val removedThere = if (base == null) emptySet() else b - t.entries.toHashSet()

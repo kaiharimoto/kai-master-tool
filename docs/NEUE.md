@@ -1857,7 +1857,7 @@ off ask in the chat first (`Confirm`), unless Settings says never ask.
 **Memory** (Hermes's shape), markdown in `<data>/ai` the person can read and edit
 (Settings → Assistant → What it knows): `SOUL.md` the voice (`Persona`), `USER.md` what
 it knows about the person, `MEMORY.md` its own notes — entries (`AiMemory`), in the prompt
-as a snapshot taken when a conversation begins. Since 1.1.9 only `USER.md` is bounded (5,000
+as a snapshot taken when a conversation begins. Since 1.1.11 only `USER.md` is bounded (5,000
 characters; a full one refuses and lists what to drop): what Ai knows of the game has no cap,
 and the prompt reads it within a budget (below, *No cap on what Ai knows*). **Scoped notes** (kai: "each deck, if it's not in a
 web, and web has its own markdown"): `webs/<id>.md` for a web and every deck in it,
@@ -2422,8 +2422,8 @@ outputs and how the user gets them").
   asks about what it saw ("You've built three Labrynth lists this month and Las Vegas is on the 12th
   — which one are you taking?"), and lets every answer choose the next question.
 - **A deck's guide has no cap** (kai: "remove the 10k cap for guides"): `MemoryKind.GUIDE` is
-  `UNBOUNDED`, one entry still at most 5,000 characters (8,000 from 1.1.9); the brain shows its size,
-  not a share. From 1.1.9 Ai's notes, a deck's and a web's notes have no cap either; only the profile is bounded.
+  `UNBOUNDED`, one entry still at most 5,000 characters (8,000 from 1.1.11); the brain shows its size,
+  not a share. From 1.1.11 Ai's notes, a deck's and a web's notes have no cap either; only the profile is bounded.
 
 **1.0.66, the guide kept worth reading.**
 - **A run's room, by its intensity** (kai: "if the study run is deep let it add up to 20k"): the guide
@@ -2643,7 +2643,7 @@ on disk only in that per-turn file, never on a command line; and **the Origin ch
 (`McpServerCore.originAllowed`: none, or a loopback origin parsed whole). Sync and backups never walk `secrets/` or
 `cli-run/`, the old places stay excluded, and `InboundPath` refuses all four.
 
-#### No cap on what Ai knows (1.1.9)
+#### No cap on what Ai knows (1.1.11)
 
 kai: "when it comes to knowledge of the deck or anything yugioh related the persistent memory can take up a lot as I
 don't want there to be a cap to the knowledge". **Unbounded storage, budgeted reading.**

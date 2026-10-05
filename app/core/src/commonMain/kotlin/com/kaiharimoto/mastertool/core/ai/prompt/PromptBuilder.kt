@@ -307,7 +307,7 @@ object PromptBuilder {
             val what = if (scope.kind == MemoryKind.WEB) "web" else "deck"
             appendLine()
             appendLine("Your notes on the $what “${scope.name}” (memory scope $what):")
-            // Marked as memory (1.1.9), so the context gauge counts it as memory and not the page.
+            // Marked as memory (1.1.11), so the context gauge counts it as memory and not the page.
             appendLine(notes?.trim()?.takeIf { it.isNotEmpty() }?.let { MemoryBudget.tagged(scope.path, it) } ?: "(none yet)")
         }
     }.trim()

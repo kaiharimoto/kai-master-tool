@@ -5,7 +5,7 @@ import com.kaiharimoto.mastertool.core.ai.report.GuideDoc
 import kotlin.math.ln
 
 /**
- * What of a memory file goes in front of the model (1.1.9, kai: "I don't want there to be a cap to the knowledge"):
+ * What of a memory file goes in front of the model (1.1.11, kai: "I don't want there to be a cap to the knowledge"):
  * the files keep everything; the prompt gets a budget of them. A file within its budget goes in whole, as it always
  * did. A larger one gives the entries most relevant to the moment — the person's latest message, the deck or web in
  * scope, the guide's labels, how recent an entry is — up to the budget, in the file's own order, and then one line

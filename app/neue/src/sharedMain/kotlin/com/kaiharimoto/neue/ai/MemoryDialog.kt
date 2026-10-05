@@ -75,7 +75,7 @@ fun MemoryDialog(ai: AiState) {
     val stamp = remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val groups = remember(stamp.intValue) { brainGroups(ai) }
     androidx.compose.runtime.LaunchedEffect(Unit) { ai.deckNames = ai.h.webs.libraryDecks().associate { it.entry.id to it.entry.name } }
-    // Read off the frame thread (1.1.9: a file has no cap, and a guide may be a megabyte): what was on disk when the file
+    // Read off the frame thread (1.1.11: a file has no cap, and a guide may be a megabyte): what was on disk when the file
     // was opened — a save is the person's change to it, never a copy over what Ai wrote since — parsed for reading.
     val file by androidx.compose.runtime.produceState<BrainFile?>(null, path, stamp.intValue) {
         value = withContext(Dispatchers.IO) { BrainFile.read(ai, path) }
@@ -200,7 +200,7 @@ fun MemoryDialog(ai: AiState) {
 }
 
 /**
- * A brain file as the dialog shows it (1.1.9), read and parsed off the frame thread: its text, its entries, and its
+ * A brain file as the dialog shows it (1.1.11), read and parsed off the frame thread: its text, its entries, and its
  * blocks one entry each, for a lazy list. Past [WHOLE] characters a memory file is edited a page of entries at a time.
  */
 private class BrainFile(
@@ -281,7 +281,7 @@ private fun brainGroups(ai: AiState): List<Pair<String, List<String>>> {
     ).filter { it.second.isNotEmpty() }
 }
 
-/** How full a memory file is: the profile against its cap; the files with none (1.1.9) by their entries and size. */
+/** How full a memory file is: the profile against its cap; the files with none (1.1.11) by their entries and size. */
 private fun fullness(path: String, file: BrainFile): String? {
     val kind = MemoryKind.entries.firstOrNull { k ->
         if (k.file.contains("%s")) path.startsWith(k.file.substringBefore("%s")) else path == k.file

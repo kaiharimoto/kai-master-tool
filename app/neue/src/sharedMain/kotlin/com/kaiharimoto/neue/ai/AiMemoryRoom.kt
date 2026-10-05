@@ -6,7 +6,7 @@ import com.kaiharimoto.mastertool.core.ai.memory.MemoryBudget
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.prefs.AiConnection
 
-// Memory with no cap, read within a budget (1.1.9, kai: "I don't want there to be a cap to the knowledge"), on
+// Memory with no cap, read within a budget (1.1.11, kai: "I don't want there to be a cap to the knowledge"), on
 // [AiState]: each kind's room on the model in use, the part of a file that goes in front of the model, and what of it
 // is in reach, for context_status.
 
@@ -43,7 +43,7 @@ private fun AiState.reach(label: String, kind: MemoryKind, id: String?, scope: S
     }
 }
 
-/** What memory is in reach (1.1.9), for context_status: each file in scope, its size, and how much of it is shown. */
+/** What memory is in reach (1.1.11), for context_status: each file in scope, its size, and how much of it is shown. */
 fun AiState.memoryReport(): List<String> = buildList {
     reach("Your profile (user)", MemoryKind.USER, null, "user")?.let(::add)
     reach("Your notes (agent)", MemoryKind.AGENT, null, "agent")?.let(::add)

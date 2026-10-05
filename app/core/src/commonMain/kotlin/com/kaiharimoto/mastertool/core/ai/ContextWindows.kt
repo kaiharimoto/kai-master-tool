@@ -68,7 +68,7 @@ object ContextBreakdown {
         var results = 0
         var pictures = 0
         var context = 0
-        // The memory put in front of messages (1.1.9: the deck's guide, the scope's notes, within their budgets) is
+        // The memory put in front of messages (1.1.11: the deck's guide, the scope's notes, within their budgets) is
         // marked as such in the app's blocks, and counted with the memory in the instructions, not as the page.
         var shown = 0
         session.sent.forEach { t ->

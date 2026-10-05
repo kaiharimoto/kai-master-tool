@@ -422,7 +422,7 @@ class AiState(internal val h: NeueHolders) {
         val pinned = current.takeIf { it.mode in AiSession.DECK_MODES && it.deckId != null }
         val deckId = pinned?.deckId ?: h.builder.deckId
         val deckName = pinned?.deckName ?: h.builder.deckName
-        // Within its room on this model (1.1.9): the entries most relevant to these words, and a line for the rest.
+        // Within its room on this model (1.1.11): the entries most relevant to these words, and a line for the rest.
         val guide = if (deckId != null && deckId != current.guideShown) {
             guideBlock(deckId, deckName, words)?.let { listOf("", it) }.orEmpty()
         } else {
@@ -779,7 +779,7 @@ class AiState(internal val h: NeueHolders) {
     /** The guide's size at the start of a Fine Tuning run, the run's room and its intensity's name; null outside one. */
     internal var guideStart: Triple<Int, Int, String>? = null
 
-    /** What the person is told when this run ends, once it used all of its room in the guide (1.1.9); null while it has room. */
+    /** What the person is told when this run ends, once it used all of its room in the guide (1.1.11); null while it has room. */
     internal var guideFilled: String? = null
 
     /** Learn About You's launcher is open. */
@@ -852,7 +852,7 @@ class AiState(internal val h: NeueHolders) {
                 name = name,
                 soul = files.soul(name),
                 userMemory = files.entries(MemoryKind.USER),
-                // Ai's own notes have no cap (1.1.9): the prompt holds what fits their room on this connection's model.
+                // Ai's own notes have no cap (1.1.11): the prompt holds what fits their room on this connection's model.
                 agentMemory = promptMemory(MemoryKind.AGENT, null, "agent", query, on = connection),
                 skillsIndex = Skills.index(skills()),
                 device = when {

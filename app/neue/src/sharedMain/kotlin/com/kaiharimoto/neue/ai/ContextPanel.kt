@@ -167,7 +167,7 @@ fun ContextPanel(ai: AiState) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Micro("What it remembers, read every time", color = c.ink70)
                 val deckId = ai.h.builder.deckId
-                // Kept whole, read within a budget (1.1.9): each file's size, and how much of it goes in front of the model.
+                // Kept whole, read within a budget (1.1.11): each file's size, and how much of it goes in front of the model.
                 // Measured off the frame thread: a guide may be a megabyte.
                 val memory by androidx.compose.runtime.produceState(emptyList<Triple<String, String, Pair<Int, Int>>>(), deckId, s.id) {
                     val files = listOf(

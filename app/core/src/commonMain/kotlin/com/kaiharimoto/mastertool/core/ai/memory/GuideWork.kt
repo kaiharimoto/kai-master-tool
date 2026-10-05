@@ -7,7 +7,7 @@ import com.kaiharimoto.mastertool.core.ai.report.SessionReport
  * What one Fine Tuning run may add to a deck's guide (1.0.66, kai: "if the study run is deep let it
  * add up to 20k"). The guide itself has no cap ([UNBOUNDED]); a run does, by its intensity, so a
  * Quick pass stays a quick pass and a Deep one has the room to write everything it found. It is
- * cost control, never a cap on what Ai knows (1.1.9): a run that fills its room says so, leaves what
+ * cost control, never a cap on what Ai knows (1.1.11): a run that fills its room says so, leaves what
  * it had left in its report as "Next run:" questions, and the next run on the deck begins with them.
  */
 object GuideBudget {

@@ -450,7 +450,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `run_action`, and a new `NeuePreferences` field must be described in `AiSettings` or
   listed as internal — or the test fails. Memory is markdown in `<data>/ai` (`SOUL.md`,
   `USER.md`, `MEMORY.md`, `webs/<id>.md`, `decks/<id>.md`, `guides/<id>.md`), scoped
-  to the one deck or web in view (`MemoryScope`). **No cap on what Ai knows** (1.1.9, kai: "I don't want there to be a
+  to the one deck or web in view (`MemoryScope`). **No cap on what Ai knows** (1.1.11, kai: "I don't want there to be a
   cap to the knowledge"): only `USER.md` is bounded (5,000); `MEMORY.md`, deck, web and guide files keep everything, one
   entry at most `ENTRY_CEILING` (8,000). **The prompt reads a budget, not the file** (`MemoryBudget`): a share of the
   model's window per kind, never below the old caps — the most relevant entries (latest words, scope, the guide's labels,

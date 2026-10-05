@@ -4,7 +4,7 @@ import com.kaiharimoto.mastertool.core.ai.Recall
 import com.kaiharimoto.mastertool.core.ai.report.GuideDoc
 
 /**
- * Reading a memory file a part at a time (1.1.9): once a file is larger than its room in the prompt ([MemoryBudget]),
+ * Reading a memory file a part at a time (1.1.11): once a file is larger than its room in the prompt ([MemoryBudget]),
  * this is how Ai reaches the rest — `memory_read` with a query, a label or a range, and `recall` with scope memory
  * across every file. Each answer fits one tool result ([PAGE] characters, under `Compaction.RESULT_CAP`), numbers
  * every entry by its place in the file, and says where to read on, so nothing is ever cut out of the middle unseen.

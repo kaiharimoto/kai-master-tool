@@ -281,7 +281,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private fun presentDeck() = if (neue.page == Page.PRESENT) h.present.open?.deck?.takeIf { it.deckId != null } else null
 
     /**
-     * The scope's notes as the prompt holds them (1.1.9): the whole file when it fits its room on the model in use, else
+     * The scope's notes as the prompt holds them (1.1.11): the whole file when it fits its room on the model in use, else
      * the entries most relevant to [query] and the scope, with the index line for the rest.
      */
     fun notes(scope: MemoryScope, query: String = ""): String =
@@ -1037,7 +1037,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val carried = before.joinToString("\n")
         val sources = Evidence.sources(ai.session?.turns.orEmpty()) + Evidence.Source(CARRIED, "", carried)
         var next = Ledger.prune(was, after)
-        // A set: a guide of thousands of entries is compared in one pass (1.1.9).
+        // A set: a guide of thousands of entries is compared in one pass (1.1.11).
         val held = before.toHashSet()
         after.filter { it !in held }.forEach { entry ->
             when (val v = Evidence.judge(entry, sources, deck, now)) {
@@ -1109,7 +1109,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     }
 
     /**
-     * A memory file read a page at a time (1.1.9): the files have no cap, so this is how Ai reaches what its prompt left
+     * A memory file read a page at a time (1.1.11): the files have no cap, so this is how Ai reaches what its prompt left
      * out — by [query], [label] or range ([from], [count]), each entry numbered by its place in the file.
      */
     private suspend fun memoryRead(scope: String, id: String?, query: String?, label: String?, from: Int?, count: Int?): Answer {
@@ -1190,7 +1190,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     /** Words found in this conversation's saved history, the summarised part too, or in every conversation (1.0.56). */
     private suspend fun recall(query: String, scope: String, limit: Int): Answer {
         if (query.isBlank()) return fail("Say what to find.")
-        // Everything Ai remembers (1.1.9): every memory file, entry by entry — what a prompt's budget left out.
+        // Everything Ai remembers (1.1.11): every memory file, entry by entry — what a prompt's budget left out.
         if (scope == "memory") {
             val hits = withContext(Dispatchers.IO) {
                 val files = ai.files.memoryFiles().filter { it.name != Persona.FILE }

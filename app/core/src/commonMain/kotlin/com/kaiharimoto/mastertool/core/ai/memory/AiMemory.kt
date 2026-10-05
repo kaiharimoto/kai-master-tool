@@ -14,7 +14,7 @@ package com.kaiharimoto.mastertool.core.ai.memory
  * Anything that is not an entry — the title, a note the person wrote at the top — is kept as it
  * is. The person may edit the file by hand; this reads it back.
  *
- * **What it knows of the game is never refused for size** (1.1.9, kai: "when it comes to knowledge
+ * **What it knows of the game is never refused for size** (1.1.11, kai: "when it comes to knowledge
  * of the deck or anything yugioh related the persistent memory can take up a lot as I don't want
  * there to be a cap to the knowledge"): its own notes, a deck's notes, a web's and a deck's guide
  * keep everything written to them. What goes in front of the model is a budget instead
@@ -32,14 +32,14 @@ enum class MemoryKind(val file: String, val limit: Int, val title: String, val e
 
     /**
      * What Ai learns about doing the job, and the game's lessons it keeps for itself. In the prompt
-     * within its budget; no cap on the file (1.1.9; 2,000 characters before).
+     * within its budget; no cap on the file (1.1.11; 2,000 characters before).
      */
     AGENT("MEMORY.md", UNBOUNDED, "%s's notes to self", entryLimit = ENTRY_CEILING),
 
-    /** Notes on one deck that is in no web: in the prompt, within its budget, while it is open (4,000 characters before 1.1.9). */
+    /** Notes on one deck that is in no web: in the prompt, within its budget, while it is open (4,000 characters before 1.1.11). */
     DECK("decks/%s.md", UNBOUNDED, "Notes on %s", entryLimit = ENTRY_CEILING),
 
-    /** Notes on one web — the field for an event, every deck in it: in the prompt, within its budget, while it is in scope (6,000 before 1.1.9). */
+    /** Notes on one web — the field for an event, every deck in it: in the prompt, within its budget, while it is in scope (6,000 before 1.1.11). */
     WEB("webs/%s.md", UNBOUNDED, "Notes on %s", entryLimit = ENTRY_CEILING),
 
     /**
@@ -50,7 +50,7 @@ enum class MemoryKind(val file: String, val limit: Int, val title: String, val e
     GUIDE("guides/%s.md", UNBOUNDED, "How %s plays", entryLimit = ENTRY_CEILING),
     ;
 
-    /** Whether the file has a cap on its length: the profile alone (1.1.9). */
+    /** Whether the file has a cap on its length: the profile alone (1.1.11). */
     val bounded: Boolean get() = limit != UNBOUNDED
 }
 
@@ -62,7 +62,7 @@ enum class MemoryKind(val file: String, val limit: Int, val title: String, val e
 const val UNBOUNDED = Int.MAX_VALUE
 
 /**
- * One entry's ceiling in a file with no cap (1.1.9): room for a whole line of play written out step by
+ * One entry's ceiling in a file with no cap (1.1.11): room for a whole line of play written out step by
  * step, or a matchup's plan, and still a note rather than a document (5,000 for the guide before; 1,000
  * for Ai's notes, 2,000 for a deck's, 3,000 for a web's).
  */
@@ -180,10 +180,10 @@ object AiMemory {
     /**
      * A deck joining a web: its notes become the web's, each entry marked with the
      * deck's name, so nothing learned about it is lost and the web's file is the one
-     * that is read from now on. A web's file has no cap (1.1.9), so every entry is kept.
+     * that is read from now on. A web's file has no cap (1.1.11), so every entry is kept.
      */
     fun fold(web: MemoryDoc, deck: MemoryDoc, deckName: String): MemoryDoc {
-        // A set, so folding a long deck file into a long web file is never entries × entries (1.1.9).
+        // A set, so folding a long deck file into a long web file is never entries × entries (1.1.11).
         val held = web.entries.mapTo(HashSet()) { it.lowercase() }
         val marked = deck.entries.map { "[$deckName] $it" }.filter { held.add(it.lowercase()) }
         return web.copy(entries = web.entries + marked)

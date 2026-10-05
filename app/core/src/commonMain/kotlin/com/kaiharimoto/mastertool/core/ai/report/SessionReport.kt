@@ -87,7 +87,7 @@ object ReportLog {
     fun write(reports: List<SessionReport>): String = json.encodeToString(serializer, reports.sortedBy { it.at })
 
     /**
-     * [log] with [report] added. Every report is kept (1.1.9, kai: no cap to what Ai knows of a deck — a report's
+     * [log] with [report] added. Every report is kept (1.1.11, kai: no cap to what Ai knows of a deck — a report's
      * lessons and questions are part of it; the newest 60 before): [keep] is for a caller that wants fewer.
      */
     fun add(log: List<SessionReport>, report: SessionReport, keep: Int = Int.MAX_VALUE): List<SessionReport> =

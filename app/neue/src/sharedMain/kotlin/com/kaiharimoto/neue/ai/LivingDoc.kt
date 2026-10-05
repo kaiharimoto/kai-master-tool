@@ -78,7 +78,7 @@ fun LivingDocDialog(ai: AiState) {
     val stamp = remember(open) { mutableIntStateOf(0) }
     when (open) {
         is LivingDoc.Guide -> {
-            // Read and sorted off the frame thread (1.1.9): the guide has no cap, and may be thousands of entries.
+            // Read and sorted off the frame thread (1.1.11): the guide has no cap, and may be thousands of entries.
             val read by androidx.compose.runtime.produceState<GuideRead?>(null, open, stamp.intValue) {
                 val print = h.builder.deck.takeIf { h.builder.deckId == open.deckId }?.let(Ledger::fingerprint)
                 value = withContext(Dispatchers.IO) { GuideRead.of(ai, open.deckId, print) }
@@ -123,7 +123,7 @@ fun LivingDocDialog(ai: AiState) {
                     }, variant = BtnVariant.PRIMARY, icon = Icons.Export, enabled = !making, reason = "The PDF is being made")
                 },
             ) {
-                // Every entry its own row of a lazy list (1.1.9): the whole guide, never cut, and light to scroll.
+                // Every entry its own row of a lazy list (1.1.11): the whole guide, never cut, and light to scroll.
                 val r = read
                 LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (r == null) item { Help("Reading the guide…") }

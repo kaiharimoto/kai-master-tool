@@ -87,7 +87,7 @@ fun AiState.saveByHand(path: String, loaded: String?, text: String) {
 fun AiState.guideForPrompt(deckId: String): String = guideEntries(deckId).joinToString("\n") { "- $it" }
 
 /**
- * The guide as a conversation is given it (1.1.9): within its room on the connection in use ([memoryRoom]) — the
+ * The guide as a conversation is given it (1.1.11): within its room on the connection in use ([memoryRoom]) — the
  * entries most relevant to [query] and the deck, and the index line for the rest — each wearing its proof's mark. Null
  * when the guide is empty.
  */
@@ -206,7 +206,7 @@ fun AiState.startTuning(mode: String, intensity: TuneIntensity) {
     // The run is about this deck to its end, whatever the builder shows meanwhile (1.0.98, the red team).
     guideFilled = null
     session = begin(connection, mode).copy(deckId = deckId, deckName = deck)
-    // A run that filled its room left what it had left for this one (1.1.9): it begins there.
+    // A run that filled its room left what it had left for this one (1.1.11): it begins there.
     val carried = deckId?.takeIf { mode == AiSession.MODE_TUNE || mode == AiSession.MODE_STUDY || mode == AiSession.MODE_PRINCIPLES }
         ?.let { GuideBudget.carryOver(files.reports(it).lastOrNull()) }
     val room = GuideBudget.brief(intensity) + (carried?.let { " $it" } ?: "")
@@ -373,7 +373,7 @@ internal fun AiState.settleTuning() {
     offerReview(before)
 }
 
-/** A run that used all of its room in the guide says so when it ends (1.1.9): the run was full, never the guide. */
+/** A run that used all of its room in the guide says so when it ends (1.1.11): the run was full, never the guide. */
 private fun AiState.sayFilled() {
     val words = guideFilled ?: return
     guideFilled = null

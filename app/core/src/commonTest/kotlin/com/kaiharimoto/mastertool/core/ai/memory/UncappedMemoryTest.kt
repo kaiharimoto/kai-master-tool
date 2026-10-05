@@ -17,12 +17,12 @@ import kotlin.test.assertTrue
 import kotlin.time.TimeSource
 
 /**
- * No cap on what Ai knows of the game (1.1.9, kai: "I don't want there to be a cap to the knowledge"): its notes, a deck's
+ * No cap on what Ai knows of the game (1.1.11, kai: "I don't want there to be a cap to the knowledge"): its notes, a deck's
  * and a web's notes and a deck's guide keep everything; the prompt reads them within a budget, and the memory tool and
  * recall reach the rest.
  */
 class UncappedMemoryTest {
-    /** The caps each kind had before 1.1.9. */
+    /** The caps each kind had before 1.1.11. */
     private val oldCaps = mapOf(MemoryKind.AGENT to 2_000, MemoryKind.DECK to 4_000, MemoryKind.WEB to 6_000, MemoryKind.GUIDE to 10_000)
 
     private fun line(n: Int, label: String = "Lines") =

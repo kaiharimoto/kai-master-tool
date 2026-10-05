@@ -578,7 +578,7 @@ class AiEndToEndTest {
 
     @Test
     fun whatAiKnowsHasNoCapAndIsReadWithinItsRoom() = runBlocking {
-        // kai (1.1.9): "I don't want there to be a cap to the knowledge".
+        // kai (1.1.11): "I don't want there to be a cap to the knowledge".
         val h = holders()
         h.tool("new_deck", "name" to "Big guide", "main" to listOf("3 Ash Blossom & Joyous Spring", "3 Infinite Impermanence", "3 Raigeki"))
         withTimeout(5_000) { while (h.builder.deckId == null) delay(20) }

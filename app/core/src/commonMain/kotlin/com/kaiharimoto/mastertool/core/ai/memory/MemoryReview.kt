@@ -19,7 +19,7 @@ object MemoryReview {
         (before.keys + after.keys).distinct().sorted().map { path ->
             val was = lines(path, before[path])
             val now = lines(path, after[path])
-            // Sets, so a guide of thousands of entries is compared in one pass, never entries × entries (1.1.9).
+            // Sets, so a guide of thousands of entries is compared in one pass, never entries × entries (1.1.11).
             val wasSet = was.toHashSet()
             val nowSet = now.toHashSet()
             MemoryChange(path, now.filter { it !in wasSet }, was.filter { it !in nowSet })
