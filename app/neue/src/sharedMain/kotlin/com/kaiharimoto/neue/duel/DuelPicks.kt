@@ -281,18 +281,28 @@ internal val ORDER_HINT: String get() = "← → choose · ${keyOf(DeskAction.DU
 /** What Enter offers on a link in the chain well. */
 internal enum class LinkItem(val label: String) {
     RESOLVE("Resolve"),
+    /** The newest link made by a Shortcut, resolved through the engine (Phase D §5½ 3); Resolve, by hand, stays first. */
+    RESOLVE_WRITTEN("Resolve as written"),
     RESOLVE_ALL("Resolve the whole chain"),
     NEGATE("Negate"),
     TARGET("Target with it"),
     READ("Read it"),
 }
 
-/** The items for link [i] (0-based): only the newest link resolves; a negated link is not negated twice. */
-internal fun linkItems(s: DuelState, i: Int): List<LinkItem> {
+/** The items for link [i] of the table shown, a written link's Resolve as written among them (Phase D §5½ 3). */
+internal fun Duels.linkItemsFor(s: DuelState, i: Int): List<LinkItem> =
+    linkItems(s, i, written = i == s.chain.size - 1 && shortcuts()?.written(s, i + 1) == true)
+
+/**
+ * The items for link [i] (0-based): only the newest link resolves — and, [written] by a Shortcut, resolves as written too;
+ * a negated link is not negated twice.
+ */
+internal fun linkItems(s: DuelState, i: Int, written: Boolean = false): List<LinkItem> {
     val link = s.chain.getOrNull(i) ?: return emptyList()
     return buildList {
         if (i == s.chain.size - 1) {
             add(LinkItem.RESOLVE)
+            if (written) add(LinkItem.RESOLVE_WRITTEN)
             if (s.chain.size > 1) add(LinkItem.RESOLVE_ALL)
         }
         if (!link.negated) add(LinkItem.NEGATE)
@@ -315,6 +325,7 @@ internal fun runLinkItem(duels: Duels, s: DuelState, i: Int, item: LinkItem) {
     duels.chainMenu = null
     when (item) {
         LinkItem.RESOLVE -> duels.resolveChain()
+        LinkItem.RESOLVE_WRITTEN -> duels.resolveByShortcut(all = false)
         LinkItem.RESOLVE_ALL -> duels.resolveAll()
         LinkItem.NEGATE -> duels.negate(i + 1)
         LinkItem.TARGET -> {
@@ -330,7 +341,7 @@ internal fun runLinkItem(duels: Duels, s: DuelState, i: Int, item: LinkItem) {
 internal fun ChainMenu(duels: Duels, s: DuelState, l: DuelLayout, viewers: Set<Int>) {
     val c = Mu.colors
     val i = duels.chainMenu ?: return
-    val items = linkItems(s, i)
+    val items = duels.linkItemsFor(s, i)
     val well = l[DuelSpot.Chain] ?: return
     if (items.isEmpty()) return
     val cursor = duels.chainCursor.coerceIn(0, items.size - 1)

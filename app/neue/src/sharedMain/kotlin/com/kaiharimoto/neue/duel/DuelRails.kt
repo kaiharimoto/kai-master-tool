@@ -151,6 +151,18 @@ private fun InspectedWords(duels: Duels, game: DuelGame, uid: Int, sees: Boolean
         H2(if (sees) duels.catalog.nameOf(inst) else "A face-down card", maxLines = 2)
         if (sees && inst.token && (inst.atk != null || inst.def != null)) Mono("ATK ${inst.atk ?: "?"} / DEF ${inst.def ?: "?"}", color = c.ink)
         if (card != null) Body(card.description, color = c.ink)
+        // Its Shortcuts (Phase D §5½): each written effect by its short name, what it needs, and whether the engine allows it
+        // now — greyed with its rule where not; unverified until the tests of step 3 say otherwise.
+        val shortcuts = if (sees) duels.shortcutPart.options(uid) else emptyList()
+        if (shortcuts.isNotEmpty()) {
+            val key = DeskShortcuts.chordFor(DeskAction.DUEL_SHORTCUT)?.let(DeskShortcuts::kbd)
+            Micro("Shortcut · ${shortcuts.size}", color = c.ink70)
+            shortcuts.forEachIndexed { i, o ->
+                if (o.legal) VerbChip(o.label + if (o.verified) "" else " · unverified", if (i == 0) key else null, modifier = Modifier.fillMaxWidth()) { duels.useShortcut(uid, o.effect) }
+                else Small("${o.label}: ${o.why ?: "not now"} · by hand: Activate", color = c.ink45, maxLines = 2)
+                if (o.needs.isNotBlank()) Mono(o.needs, color = c.ink45, size = 10.sp)
+            }
+        }
         // What the two players agreed about this card (1.0.79).
         if (sees && inst.code != 0) duels.rulings.forCode(inst.code).forEach { r ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -86,7 +86,7 @@ object FxSummons {
         }
         val zones = (0 until 5).map { Place.Zone(seat, ZoneKind.MONSTER, it) }.filter { z -> s.at(z).let { it == null || it in tributes } }
         val pos = if (move.set) CardPosition.FACE_DOWN_DEF else CardPosition.FACE_UP_ATK
-        val zone = pickZone(zones, chooser, uid, listOf(pos), FxSource(uid, FxTag.RULE, if (move.set) "Set" else "Normal Summon"))
+        val zone = pickZone(zones, chooser, uid, listOf(pos), FxSource(uid, FxTag.RULE, if (move.set) "Set" else "Normal Summon"), FxRules.closedZones(t, seat, zones))
             ?: return if (zones.isEmpty()) FxPlay.Refused("No Monster Zone is free.") else FxPlay.Cancelled
         val actions = tributes.map { m -> FxSteps.graveFor(t, m, t.inst(m)?.owner ?: seat).let { (to, p) -> DuelAction.Move(m, to, p, HOW_TRIBUTE) } } +
             DuelAction.Move(uid, zone, pos, if (move.set) HOW_SET else HOW_NORMAL)
@@ -169,7 +169,7 @@ object FxSummons {
         // Its zone and its position are the player's, each asked when there is more than one (kai: "all matters").
         val allowed = FxSteps.positions(wanted, link = option.kind == ProcKind.LINK)
         val source = FxSource(uid, FxTag.PROC, "${FxRules.procWord(option.kind)} Summon")
-        val zone = pickZone(zones, chooser, uid, allowed, source) ?: return if (zones.isEmpty()) FxPlay.Refused("No zone is free for it.") else FxPlay.Cancelled
+        val zone = pickZone(zones, chooser, uid, allowed, source, FxRules.closedZones(now, seat, zones)) ?: return if (zones.isEmpty()) FxPlay.Refused("No zone is free for it.") else FxPlay.Cancelled
         val position = run {
             val answer = ask(chooser, Decision.Position(uid, allowed, source)) ?: return FxPlay.Cancelled
             allowed[answer.single()]
@@ -207,8 +207,8 @@ object FxSummons {
     }
 
     /** One zone of [zones] for [card] (in one of [positions]): the only one, or the chooser's; null when there is none or it cancelled. */
-    private fun pickZone(zones: List<Place.Zone>, chooser: Chooser, card: Int, positions: List<CardPosition>, source: FxSource): Place.Zone? =
-        if (zones.isEmpty()) null else ask(chooser, Decision.Zone(zones, card, positions, source))?.single()?.let(zones::get)
+    private fun pickZone(zones: List<Place.Zone>, chooser: Chooser, card: Int, positions: List<CardPosition>, source: FxSource, closed: Map<Place.Zone, String> = emptyMap()): Place.Zone? =
+        if (zones.isEmpty()) null else ask(chooser, Decision.Zone(zones, card, positions, source, closed))?.single()?.let(zones::get)
 
     /**
      * The chooser's answer to [d], or null when it is no legal answer (a cancel). A decision with one legal answer is not

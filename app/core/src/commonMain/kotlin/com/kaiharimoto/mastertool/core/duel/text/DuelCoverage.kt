@@ -63,6 +63,16 @@ object DuelCoverage {
         Row("Drag from zone to zone", "move m1 to m5", DuelVerb.MOVE),
         Row("Shift A, then a click on their monster: attack", "a m1 om1", DuelVerb.ATTACK),
         Row("U: Shortcut, the written effect does its moves", "u h1", DuelVerb.SHORTCUT),
+        // ---- the Shortcut window (Phase D §5¾.10): each of its gestures, typed as the line gives the same answers ----
+        Row("Shortcut window: a row of Which Shortcut, a click or its digit", "u h1 e2"),
+        Row("Shortcut window: a lit card clicked, or its digit, or Space on it", "u h1 pick=gy1"),
+        Row("Shortcut window: a target clicked on the field, in a GY or banished", "u h1 target=om1,ogy1"),
+        Row("Shortcut window: a lit zone clicked, or its number key", "u h1 zone=m3"),
+        Row("Shortcut window: a position chip, or A, D or E", "u h1 zone=m3 pos=def"),
+        Row("Shortcut window: Yes or No, or Y or N", "u h1 option=yes"),
+        Row("Shortcut window: an option's row, or its digit", "u h1 option=2"),
+        Row("Shortcut window: the waiting triggers' order, dragged or by Alt ↑↓", "u h1 order=2,1"),
+        Row("Shortcut window: a name declared, from the search", "u h1 declare=Gatekeeper Vell"),
         // ---- drops: where a carried card is let go ----
         Row("Drop on an empty Monster Zone", "h1 to m3", intent = "zone.place"),
         Row("Alt-drop on an empty zone: set", "e h1 m3", intent = "zone.set"),

@@ -256,7 +256,7 @@ object FxChain {
                 is Place.Pile -> if (p.kind == PileKind.HAND) {
                     val zones = FxRules.spellZones(sc.t, seat, uid)
                     if (zones.isEmpty()) throw FxStop.refuse(FxRules.NO_SPELL_ZONE)
-                    val z = zones[sc.ask(Decision.Zone(zones, uid, listOf(CardPosition.FACE_UP_ATK), FxSource(uid, effect, e.label))).single()]
+                    val z = zones[sc.ask(Decision.Zone(zones, uid, listOf(CardPosition.FACE_UP_ATK), FxSource(uid, effect, e.label), FxRules.closedZones(sc.t, seat, zones))).single()]
                     // A new Field Spell replaces the old.
                     if (z.kind == ZoneKind.FIELD) sc.t.state.at(z)?.let { old ->
                         sc.emit(DuelAction.Move(old, Place.Pile(sc.t.inst(old)?.owner ?: seat, PileKind.GY), how = "send"), tag(FxTag.ACTIVATE))

@@ -12,6 +12,12 @@ import com.kaiharimoto.mastertool.core.duel.Place
  */
 enum class Purpose { TARGET, COST, SUMMON, ADD, SEND, BANISH, DESTROY, RETURN, ATTACH, MATERIAL, TRIBUTE, DISCARD, REVEAL, OTHER }
 
+/**
+ * Which part of an effect a card choice belongs to ([Decision.Cards.stepKind]), so the Shortcut window names its crumbs
+ * (D.md §5¾.2, §5¾.12): what is paid, what is targeted, or what the effect does as it resolves.
+ */
+enum class StepKind { COST, TARGET, DOES }
+
 /** The effect a decision is for: its card, the effect's id, and its short name ("Revive"), or "" for a rule's own choice. */
 data class FxSource(val uid: Int, val effect: String, val label: String = "")
 
@@ -57,6 +63,13 @@ sealed interface Decision {
         val looked: List<Spot> = emptyList(),
         /** The seat that chooses, when it is not the one using the effect ("your opponent chooses"); null: the user. */
         val by: Int? = null,
+        /**
+         * Cards in the places looked in ([looked]) that are not offered, and why, in the engine's words (D.md §5¾.12): what a
+         * window says when a dimmed card is pointed at. Only cards the choosing seat may see; empty when not worked out.
+         */
+        val refused: Map<Int, String> = emptyMap(),
+        /** Which part of the effect this choice is: its cost, its targets, or what it does (D.md §5¾.12). Null: not known. */
+        val stepKind: StepKind? = null,
     ) : Decision
 
     /** Which of [among] (only the legal, free zones) [card] goes to, and the [positions] it may take there. */
@@ -65,6 +78,11 @@ sealed interface Decision {
         val card: Int? = null,
         val positions: List<CardPosition> = emptyList(),
         val effect: FxSource? = null,
+        /**
+         * The zones of the same kind that are not offered, and why ("Taken by Example Pawn", "You already use an Extra
+         * Monster Zone"), so a window says why a zone is closed (D.md §5¾.12). Empty when not worked out.
+         */
+        val closed: Map<Place.Zone, String> = emptyMap(),
     ) : Decision
 
     /** Which of [among] [card] is summoned in: face-up Attack or Defense, or face-down Defense where it is Set. */
@@ -233,4 +251,17 @@ object FxEngine {
 
     /** Who moves next: the seat with priority while a chain stands, the turn player otherwise. */
     fun next(t: FxTable): Int = FxChain.next(t.current())
+
+    /**
+     * The candidates of [d] (indexes into [Decision.Cards.among]) that may still be picked once [picked] (indexes) are: a
+     * pure reading of the decision, so a window greys a card as the set changes (D.md §5¾.12). Every pick is one card of its
+     * own, so a card picked is not offered again, and nothing more is once [Decision.Cards.max] is met. The script's own
+     * rules over a set ("different names", a Level total) have no word in this vocabulary yet; a set the engine refuses is
+     * refused on Enter, in words.
+     */
+    fun stillLegal(d: Decision.Cards, picked: List<Int>): List<Int> {
+        val chosen = picked.filter { it in d.among.indices }.toSet()
+        if (chosen.size >= d.max) return emptyList()
+        return d.among.indices.filter { it !in chosen }
+    }
 }

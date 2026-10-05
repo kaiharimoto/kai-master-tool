@@ -412,7 +412,8 @@ internal fun verbMenu(duels: Duels, s: DuelState, uid: Int, playsBoth: Boolean):
     val inStrip = duels.strip?.let { (seat, kind) -> s.placeOf(uid).let { it is Place.Pile && it.seat == seat && it.kind == kind } } == true
     // Another seat's open pile is for pointing at, unless the person plays both seats (1.0.86).
     val mine = s.solo || actor == duels.bottom || (inStrip && DuelSeats.stripPlays(s, actor, duels.bottom, playsBoth))
-    val offered = DuelVerbs.offered(s, actor, uid, duels.catalog)
+    // Shortcut (Phase D §5½) is offered on a card with a written effect, after its default, from the one list.
+    val offered = DuelVerbs.offered(s, actor, uid, duels.catalog, duels.shortcuts())
     val verbs = if (mine) offered else listOf(DuelVerb.TARGET) + offered.filter { it != DuelVerb.TARGET }
     return if (verbs.isEmpty()) null else VerbMenu(uid, verbs, mine)
 }

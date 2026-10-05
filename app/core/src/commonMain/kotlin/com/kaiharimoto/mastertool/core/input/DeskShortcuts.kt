@@ -261,6 +261,50 @@ enum class DeskAction {
      * in the duel before (which opened Command mode, as every free letter still does).
      */
     DUEL_SHORTCUT,
+
+    // ---- the Shortcut window (Phase D §5¾.10): live while a Shortcut asks, in [DeskScope.SHORTCUT_WINDOW] ----
+    /** Enter: confirm the answer — the picks once the count is met, the zone focused, the row chosen, Yes. */
+    SHORTCUT_CONFIRM,
+    /** Space: pick or let go the focused card; cycle the position; Use or Skip a waiting trigger. */
+    SHORTCUT_TOGGLE,
+    /** ← and →: walk the strip and the lit cards on the table, or the lit zones. */
+    SHORTCUT_LEFT,
+    SHORTCUT_RIGHT,
+    /** ↑ and ↓: walk the rows of a list. */
+    SHORTCUT_UP,
+    SHORTCUT_DOWN,
+    /** Tab: the next place in the picking strip. */
+    SHORTCUT_NEXT_PLACE,
+    /** Alt ↑ and Alt ↓: move the chosen trigger earlier or later on the chain. */
+    SHORTCUT_EARLIER,
+    SHORTCUT_LATER,
+    /** The digits: the nth card or row, or the zone of that number (1–5 Monster Zones, 6 and 7 the Extra Monster Zones). */
+    SHORTCUT_1,
+    SHORTCUT_2,
+    SHORTCUT_3,
+    SHORTCUT_4,
+    SHORTCUT_5,
+    SHORTCUT_6,
+    SHORTCUT_7,
+    SHORTCUT_8,
+    SHORTCUT_9,
+    /** 0: the Field Zone, or the tenth Level. */
+    SHORTCUT_0,
+    /** Shift and a digit: that Spell & Trap Zone. */
+    SHORTCUT_S1,
+    SHORTCUT_S2,
+    SHORTCUT_S3,
+    SHORTCUT_S4,
+    SHORTCUT_S5,
+    /** A, D, E: the position, Attack, Defense or Set. */
+    SHORTCUT_ATTACK,
+    SHORTCUT_DEFENSE,
+    SHORTCUT_SET,
+    /** Y and N: yes or no. */
+    SHORTCUT_YES,
+    SHORTCUT_NO,
+    /** /: type an answer — a coordinate (`gy1`, `om1`), a label, a name. Any other letter types too. */
+    SHORTCUT_TYPE,
     /**
      * Command mode's voice (1.0.87, kai: "hold a key to talk"): held, the microphone listens; let go, what was
      * said is written out and shown as a move to confirm. A [HELD] action: pressed and let go by a hand only.
@@ -432,6 +476,12 @@ enum class DeskScope(val heading: String) {
     /** A replay open on the Duel page (1.0.75). */
     REPLAY("Watching a replay"),
 
+    /**
+     * The Shortcut window open on the Duel page (Phase D §5¾.10): its keys stand in for the duel's while a Shortcut asks,
+     * as a replay's do, so a duel key never acts under an open choice.
+     */
+    SHORTCUT_WINDOW("Choosing for a Shortcut"),
+
     /** On Ai World, with nothing covering it (1.0.97). */
     WORLD("In Ai World"),
 
@@ -459,6 +509,8 @@ data class DeskContext(
     val onDuel: Boolean = false,
     /** A replay is open on it (1.0.75): its keys stand in for the duel's. */
     val replaying: Boolean = false,
+    /** The Shortcut window is open on it (Phase D §5¾.10): its keys stand in for the duel's. */
+    val choosing: Boolean = false,
     /** Ai World is the page on screen (1.0.97). */
     val onWorld: Boolean = false,
     /** Shootout is the page on screen (1.1.2). */
@@ -675,6 +727,39 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("r", shift = true), DeskAction.DUEL_ROLL, DeskScope.DUEL, "Before turn 1: throw your dice for who goes first"),
         DeskShortcut(KeyChord("r", alt = true), DeskAction.DUEL_STOW, DeskScope.DUEL, "Put your die and coin back beside your Extra Deck"),
 
+        // The Shortcut window (Phase D §5¾.10): while a Shortcut asks, its keys stand in for the duel's.
+        DeskShortcut(KeyChord("enter"), DeskAction.SHORTCUT_CONFIRM, DeskScope.SHORTCUT_WINDOW, "Confirm: the cards picked, the zone focused, the row chosen, or Yes"),
+        DeskShortcut(KeyChord("space"), DeskAction.SHORTCUT_TOGGLE, DeskScope.SHORTCUT_WINDOW, "Pick the focused card or let it go; turn the position; Use or Skip a trigger"),
+        DeskShortcut(KeyChord("left"), DeskAction.SHORTCUT_LEFT, DeskScope.SHORTCUT_WINDOW, "The card or zone before, among the lit ones", repeatable = true),
+        DeskShortcut(KeyChord("right"), DeskAction.SHORTCUT_RIGHT, DeskScope.SHORTCUT_WINDOW, "The card or zone after, among the lit ones", repeatable = true),
+        DeskShortcut(KeyChord("up"), DeskAction.SHORTCUT_UP, DeskScope.SHORTCUT_WINDOW, "The row above", repeatable = true),
+        DeskShortcut(KeyChord("down"), DeskAction.SHORTCUT_DOWN, DeskScope.SHORTCUT_WINDOW, "The row below", repeatable = true),
+        DeskShortcut(KeyChord("tab"), DeskAction.SHORTCUT_NEXT_PLACE, DeskScope.SHORTCUT_WINDOW, "The next place in the picking strip"),
+        DeskShortcut(KeyChord("up", alt = true), DeskAction.SHORTCUT_EARLIER, DeskScope.SHORTCUT_WINDOW, "Move the chosen trigger earlier on the chain", repeatable = true),
+        DeskShortcut(KeyChord("down", alt = true), DeskAction.SHORTCUT_LATER, DeskScope.SHORTCUT_WINDOW, "Move the chosen trigger later on the chain", repeatable = true),
+        DeskShortcut(KeyChord("1"), DeskAction.SHORTCUT_1, DeskScope.SHORTCUT_WINDOW, "The first card or row, or Monster Zone 1"),
+        DeskShortcut(KeyChord("2"), DeskAction.SHORTCUT_2, DeskScope.SHORTCUT_WINDOW, "The second, or Monster Zone 2"),
+        DeskShortcut(KeyChord("3"), DeskAction.SHORTCUT_3, DeskScope.SHORTCUT_WINDOW, "The third, or Monster Zone 3"),
+        DeskShortcut(KeyChord("4"), DeskAction.SHORTCUT_4, DeskScope.SHORTCUT_WINDOW, "The fourth, or Monster Zone 4"),
+        DeskShortcut(KeyChord("5"), DeskAction.SHORTCUT_5, DeskScope.SHORTCUT_WINDOW, "The fifth, or Monster Zone 5"),
+        DeskShortcut(KeyChord("6"), DeskAction.SHORTCUT_6, DeskScope.SHORTCUT_WINDOW, "The sixth, or the left Extra Monster Zone"),
+        DeskShortcut(KeyChord("7"), DeskAction.SHORTCUT_7, DeskScope.SHORTCUT_WINDOW, "The seventh, or the right Extra Monster Zone"),
+        DeskShortcut(KeyChord("8"), DeskAction.SHORTCUT_8, DeskScope.SHORTCUT_WINDOW, "The eighth card or row"),
+        DeskShortcut(KeyChord("9"), DeskAction.SHORTCUT_9, DeskScope.SHORTCUT_WINDOW, "The ninth card or row"),
+        DeskShortcut(KeyChord("0"), DeskAction.SHORTCUT_0, DeskScope.SHORTCUT_WINDOW, "The Field Zone, or Level 10"),
+        DeskShortcut(KeyChord("1", shift = true), DeskAction.SHORTCUT_S1, DeskScope.SHORTCUT_WINDOW, "Spell & Trap Zone 1"),
+        DeskShortcut(KeyChord("2", shift = true), DeskAction.SHORTCUT_S2, DeskScope.SHORTCUT_WINDOW, "Spell & Trap Zone 2"),
+        DeskShortcut(KeyChord("3", shift = true), DeskAction.SHORTCUT_S3, DeskScope.SHORTCUT_WINDOW, "Spell & Trap Zone 3"),
+        DeskShortcut(KeyChord("4", shift = true), DeskAction.SHORTCUT_S4, DeskScope.SHORTCUT_WINDOW, "Spell & Trap Zone 4"),
+        DeskShortcut(KeyChord("5", shift = true), DeskAction.SHORTCUT_S5, DeskScope.SHORTCUT_WINDOW, "Spell & Trap Zone 5"),
+        DeskShortcut(KeyChord("a"), DeskAction.SHORTCUT_ATTACK, DeskScope.SHORTCUT_WINDOW, "Attack Position; while picking, types an a"),
+        DeskShortcut(KeyChord("d"), DeskAction.SHORTCUT_DEFENSE, DeskScope.SHORTCUT_WINDOW, "Defense Position; while picking, types a d"),
+        DeskShortcut(KeyChord("e"), DeskAction.SHORTCUT_SET, DeskScope.SHORTCUT_WINDOW, "Set, face-down; while picking, types an e"),
+        DeskShortcut(KeyChord("y"), DeskAction.SHORTCUT_YES, DeskScope.SHORTCUT_WINDOW, "Yes, or Use"),
+        DeskShortcut(KeyChord("n"), DeskAction.SHORTCUT_NO, DeskScope.SHORTCUT_WINDOW, "No, or Skip"),
+        DeskShortcut(KeyChord("slash"), DeskAction.SHORTCUT_TYPE, DeskScope.SHORTCUT_WINDOW, "Type the answer: a coordinate, a label or a name (any other letter types too)"),
+        DeskShortcut(ctrl("z"), DeskAction.UNDO, DeskScope.SHORTCUT_WINDOW, "Back one choice, as Esc", repeatable = true),
+
         DeskShortcut(KeyChord("left"), DeskAction.REPLAY_BACK, DeskScope.REPLAY, "A step back", repeatable = true),
         DeskShortcut(KeyChord("right"), DeskAction.REPLAY_FORWARD, DeskScope.REPLAY, "A step on", repeatable = true),
         DeskShortcut(KeyChord("left", shift = true), DeskAction.REPLAY_BACK_PHASE, DeskScope.REPLAY, "A phase back", repeatable = true),
@@ -763,8 +848,9 @@ object DeskShortcuts {
             (context.searchFocused || !context.textInputFocused)
         DeskScope.PRESENT_EDIT -> !context.overlayOpen && context.onPresent && !context.presenting && !context.onBuilder
         DeskScope.PRESENTING -> !context.overlayOpen && context.presenting
-        DeskScope.DUEL -> !context.overlayOpen && context.onDuel && !context.onBuilder && !context.replaying
+        DeskScope.DUEL -> !context.overlayOpen && context.onDuel && !context.onBuilder && !context.replaying && !context.choosing
         DeskScope.REPLAY -> !context.overlayOpen && context.onDuel && !context.onBuilder && context.replaying
+        DeskScope.SHORTCUT_WINDOW -> !context.overlayOpen && context.onDuel && !context.onBuilder && !context.replaying && context.choosing
         DeskScope.WORLD -> !context.overlayOpen && context.onWorld && !context.onBuilder
         DeskScope.SHOOTOUT -> !context.overlayOpen && context.onShootout && !context.onBuilder
     }
