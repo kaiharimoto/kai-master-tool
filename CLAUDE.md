@@ -788,7 +788,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (kai's waiver; `MasterUiLawTest.movementIsNamed` refuses animated offsets and translation anywhere else in
   `neue/world/`): its pose a plain array read in `offset {}`/`graphicsLayer {}`, its loop only while unsettled, asleep the
   still `AiMark`. The desktop's arrows and Enter are `worldDeskKey`, never `DeskShortcuts`. `--world-desk=…`,
-  `--world-avatar=…` photograph it.
+  `--world-avatar=…` photograph it. **It shows what it is doing, on itself** (`DESKTOP.md` §5.7): a plate of a sign and
+  a few words travels beside it, its face is the work's, and a square ink ring breathes while the person is wanted — all
+  decided by core's `AvatarStatus` (fed by `AvatarTarget.doing`, `WorldDeskState.ran` and `AiNow`), drawn in
+  `DeskAvatar.kt`; `--world-status=…` photographs it.
 - **Shootout** (1.1.2, `09`, `Ctrl 9`, Phase S stage 2, `NEUE.md` §4t, `docs/phases/S.md`): hands judged one at a time, every card
   rated with its range. `core/shootout/bench`: `Bench` (canonical cards, roles from the groups, sided strata only with **both**
   plans — else *waiting*, never game-one hands), `ShootoutRun` (a session; the picker at its tuned settings, `STOP` ±5),

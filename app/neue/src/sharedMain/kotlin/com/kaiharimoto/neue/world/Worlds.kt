@@ -26,8 +26,10 @@ import com.kaiharimoto.neue.world.browser.WorldBrowser
 import com.kaiharimoto.neue.world.library.WorldLibrary
 import com.kaiharimoto.mastertool.core.world.desk.AiDoes
 import com.kaiharimoto.mastertool.core.world.desk.AppRef
+import com.kaiharimoto.mastertool.core.world.desk.AvatarStatus
 import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
 import com.kaiharimoto.neue.world.desk.WorldDeskState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -539,8 +541,12 @@ class Worlds(val dir: File) {
             line(if (record.ok) TermLine.Kind.NOTE else TermLine.Kind.ERR, if (record.ok) "— done in ${record.ms} ms" + (if (boards.isNotEmpty()) ", ${boards.size} board(s)" else "") else record.err)
             logged?.let { line(TermLine.Kind.NOTE, RunLog.pointer(at)) }
             log(WorldEvent(at, WorldEvent.Kind.RUN, by, path = safe, text = (if (record.ok) "Ran " else "Failed ") + label, run = record.copy(out = record.out.take(4_000))))
-            desk.ran(label, record.ok, record.err, record.ms, boards.size, at)
+            desk.ran(label, record.ok, record.err, record.ms, boards.size, at, by)
             RunOutcome(record, boards, outcome.second)
+        } catch (e: Exception) {
+            // A run that never started (Python off here, none found): the avatar says so where it stands (§5.7).
+            if (by == WorldEvent.AI && e !is CancellationException) desk.aiRunFailed(label, e.message.orEmpty())
+            throw e
         } finally {
             running = null
         }
@@ -632,7 +638,7 @@ class Worlds(val dir: File) {
     suspend fun tool(name: String, args: JsonObject, by: String = WorldEvent.AI): Result<RunOutcome> = runCatching {
         val w = open ?: error("No world is open: world_new makes one.")
         check(running == null) { "Something is running already: wait for it, or stop it." }
-        if (by == WorldEvent.AI) desk.arrive(BuiltInApp.TERMINAL.ref, AiDoes.Tool(name))
+        if (by == WorldEvent.AI) desk.arrive(BuiltInApp.TERMINAL.ref, AiDoes.Tool(name, AvatarStatus.instrument(name, args)))
         running = "instrument $name"
         stopAsked = false
         line(TermLine.Kind.COMMAND, "instrument $name ${args.toString().take(200)}")
@@ -646,10 +652,11 @@ class Worlds(val dir: File) {
             line(TermLine.Kind.NOTE, "— done in ${record.ms} ms, ${boards.size} board(s)")
             val at = now()
             log(WorldEvent(at, WorldEvent.Kind.RUN, by, text = "Instrument $name", run = record))
-            desk.ran(name, ok = true, error = "", ms = record.ms, pages = boards.size, at = at)
+            desk.ran(name, ok = true, error = "", ms = record.ms, pages = boards.size, at = at, by = by)
             RunOutcome(record, boards, result.answer.toString().take(4_000))
         } catch (e: IllegalArgumentException) {
             line(TermLine.Kind.ERR, e.message.orEmpty())
+            if (by == WorldEvent.AI) desk.aiRunFailed(name, e.message.orEmpty())
             throw e
         } finally {
             running = null

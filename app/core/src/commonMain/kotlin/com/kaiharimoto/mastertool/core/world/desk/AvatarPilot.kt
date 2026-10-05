@@ -10,11 +10,11 @@ sealed interface AiDoes {
     /** `world_run`: [label] is the file or `snippet.js`. */
     data class Run(val label: String) : AiDoes
 
-    /** `world_tool`: an instrument. */
-    data class Tool(val name: String) : AiDoes
+    /** `world_tool`: an instrument; [detail] its few words for the avatar's caption ("50,000 hands", [AvatarStatus.instrument]). */
+    data class Tool(val name: String, val detail: String? = null) : AiDoes
 
-    /** `world_show`: the page opened in [tab]. */
-    data class Show(val tab: String) : AiDoes
+    /** `world_show`: the page opened in [tab]; [title] the page's, for the avatar's caption. */
+    data class Show(val tab: String, val title: String? = null) : AiDoes
 
     /** `world_app make` (its code already typed as a [Write]): the new icon, a press, its window. */
     data class MakeApp(val slug: String, val name: String) : AiDoes
@@ -51,6 +51,10 @@ class AvatarPilot {
 
     /** The taskbar's line (§2.2). */
     var status: String = ASLEEP
+        private set
+
+    /** What it went to do at [current], in words, a face and a sign (§5.7, [AvatarStatus]); null on the walk home. */
+    var doing: AvatarStatus? = null
         private set
 
     /** Asleep at home: drawn as the still `AiMark`, no frame loop (§5.4). */
@@ -119,6 +123,7 @@ class AvatarPilot {
         current = n
         arrivedAt = null
         if (n.status.isNotEmpty()) status = n.status
+        doing = n.doing
         asleep = false
     }
 
@@ -159,7 +164,9 @@ class AvatarPilot {
             val editor = BuiltInApp.EDITOR.ref
             val terminal = BuiltInApp.TERMINAL.ref
             val browser = BuiltInApp.BROWSER.ref
-            return when (does) {
+            // Every place on the way carries what it went to do (§5.7); home says nothing.
+            val doing = AvatarStatus.of(does)
+            val route = when (does) {
                 AiDoes.TurnStart -> listOf(AvatarTarget(Anchor.HOME, status = WAKING, dwell = PASS_MS))
                 is AiDoes.Write -> into(editor, "Writing ${name(does.path)}", listOf(AvatarTarget(Anchor.CARET, editor.key, follow = true)))
                 is AiDoes.Run -> into(terminal, "Running ${name(does.label)}", listOf(AvatarTarget(Anchor.LINE, terminal.key, follow = true)))
@@ -190,6 +197,7 @@ class AvatarPilot {
                     AvatarTarget(Anchor.HOME, status = "Going home"),
                 )
             }
+            return route.map { if (it.anchor == Anchor.HOME) it else it.copy(doing = doing) }
         }
     }
 }

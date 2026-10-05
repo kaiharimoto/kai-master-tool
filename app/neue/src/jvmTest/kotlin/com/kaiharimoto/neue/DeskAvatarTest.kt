@@ -1,7 +1,9 @@
 package com.kaiharimoto.neue
 
 import com.kaiharimoto.mastertool.core.world.desk.AiDoes
+import com.kaiharimoto.mastertool.core.world.desk.AiNow
 import com.kaiharimoto.mastertool.core.world.desk.Anchor
+import com.kaiharimoto.mastertool.core.world.desk.AvatarStatus
 import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
 import com.kaiharimoto.mastertool.core.world.desk.Desk
 import com.kaiharimoto.mastertool.core.world.desk.DeskArea
@@ -10,6 +12,7 @@ import com.kaiharimoto.mastertool.core.world.desk.DeskRect
 import com.kaiharimoto.neue.world.desk.DeskAvatarState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -59,6 +62,35 @@ class DeskAvatarTest {
         assertEquals("Writing a.js", a.status)
         // Settled at the caret: the loop says it has nothing more and asks for no frames.
         assertTrue(a.frame(now + 2_000L) < 0 || a.frame(now + 4_000L) < 0, a.describe())
+    }
+
+    @Test
+    fun itSaysWhatItWentToDoHowTheRunWentAndNothingAtHome() {
+        val a = DeskAvatarState()
+        a.report(null, Anchor.HOME, DeskRect(1200.0, 640.0, 28.0, 28.0))
+        a.report(BuiltInApp.TERMINAL.id, Anchor.CELL, DeskRect(100.0, 640.0, 44.0, 44.0))
+        val desk = Desk().reduce(DeskOp.TurnStart(0L), area)
+        a.on(AiDoes.TurnStart, desk)
+        assertTrue(a.home, "waking at home: the taskbar's line speaks")
+        a.on(AiDoes.Run("hands.js"), desk)
+        var now = run(a, 0L, 3_000L).first
+        assertEquals("Running hands.js", a.doing?.text, a.describe())
+        assertFalse(a.home)
+        val ai = AiNow(running = true, tool = "world_run")
+        assertEquals(AvatarStatus.Kind.RUNNING, AvatarStatus.resolve(a.doing, a.doingSince, a.outcome, a.outcomeAt, ai, a.doingSince + 1)?.kind)
+        // The run fails: worried, where it stands, until it goes to do something new.
+        a.ran("hands.js", ok = false, error = "ReferenceError: x", at = a.doingSince + 5)
+        val failed = AvatarStatus.resolve(a.doing, a.doingSince, a.outcome, a.outcomeAt, AiNow(running = true), a.outcomeAt + 10)
+        assertEquals(AvatarStatus.Kind.FAILED, failed?.kind)
+        assertEquals(com.kaiharimoto.mastertool.core.ai.avatar.Expression.OOPS, failed?.expression)
+        // The turn ends: Done never hides the failure; then home, where it says nothing.
+        a.on(AiDoes.TurnEnd, desk)
+        now = run(a, now, now + 10_000L).first
+        assertTrue(a.asleep && a.home, a.describe())
+        assertEquals(
+            AvatarStatus.Plate.NONE,
+            AvatarStatus.plate(AvatarStatus.resolve(a.doing, a.doingSince, a.outcome, a.outcomeAt, AiNow(), now), avatarOn = true, asleep = a.asleep, atHome = a.home, recede = true, personTookOver = false),
+        )
     }
 
     @Test

@@ -342,6 +342,54 @@ The `PhoneBar`'s live face is home. Working in the app on screen, the avatar hop
 on the desk. Working in another app, it sits on the dock's **Switch** cell, which reads `Ai · Terminal`; a tap goes
 there.
 
+### 5.7 What it is doing, on itself (`core/world/desk/AvatarStatus.kt`, tested)
+
+kai: "Did we ever come to design the Ai pop out avatar in World? Where it jumps around and interacts with the world so
+the user can track its status visually better?" Where the avatar is says *where* Ai works; this says *what*, beside it.
+
+- **A plate that travels with it**: paper, a 1 dp ink rule, square; a 16 dp ink **sign** and **a few words** in the
+  label tier (READABILITY.md §1), a file's name as itself in mono. It stands on the avatar's right, its middle on the
+  avatar's, 6 dp off; near the page's right edge it goes to the left, and it is held 4 dp inside the page either way
+  (`AvatarStatus.place`). It is placed in layout from the loop's pose — it moves with the avatar and never recomposes
+  for it.
+- **The words** are at most 34 characters on the desk and 26 on a phone, shortened by words (`TabTitles.short`) or by a
+  file's parts (`matchup-labrynth-…-v2.js`, the extension kept) — never under the 12-character floor, never a stub.
+  The verb is never cut.
+- **One status per activity** (`AvatarStatus.Kind`), each an existing face (§4k′ — no new geometry) and a sign drawn on
+  the icon grid (`WorldIcons.sign`):
+
+| Activity | Words | Face | Sign |
+|---|---|---|---|
+| Writing a file (`world_write`) | *Writing* `deck-odds.js` | Working (focused) | pen |
+| Making / opening an app | *Making Hand odds*, *Opening Hand odds* | Working | the launcher's squares |
+| A run, an instrument | *Running* `hands.js`, *Running 50,000 hands* | Listening (watching) | play |
+| Pressing its app's widget | *Trying Hand odds* | Listening | pointer |
+| Reading a file, the Library, cards, rulings | *Reading Labrynth guide*, *Reading cards* | Reading | open book |
+| The Browser, the web | *Browsing*, *Searching the web* | Reading | globe |
+| A page shown | *Showing Opening hands* | Found it (pleased) | a page |
+| Between tools | *Thinking* | Thinking | three squares |
+| Its reply streaming | *Answering* | Speaking | Thoughts' bubble |
+| A run finished | *Ran* `hands.js` (2.5 s) | Done (pleased) | ✓ |
+| A run failed | *Failed* `hands.js` (8 s, or until its next errand) | Oops (worried) | ✕ |
+| A question or a confirmation | *Waiting on you* | Waiting | a squared `?` |
+| Python off here | *Needs Python allowed* | Waiting | a squared `?` |
+| The turn ended | *Done* | Done | ✓ |
+
+- **What it says, in order** (`AvatarStatus.resolve`): a question or confirmation waiting; a run's end for its while —
+  until the avatar goes to do something new, though the turn's *Done* never hides a failure; another tool than the
+  World's, in its words; a reply streaming; between tools, *Thinking*; else the errand of the place it stands at
+  (`AvatarTarget.doing`, carried by every target of a route, so the words change when the avatar arrives, not before).
+- **When it needs the person** it goes to where the answer is given (Thoughts' composer for a question or a
+  confirmation; the Terminal's line for Python off) and holds the waiting pose: a square ink ring round it breathes —
+  8 to 20 dp past the head, 2.4 s a breath, a cosine in and out (`AvatarStatus.breath`) — stepped 20 times a second by
+  its own loop, which runs only while it waits; reduced motion keeps the ring still.
+- **When it says nothing**: *Show Ai on the desktop* off (`WorldPrefs.avatar`) — nothing travels, and the taskbar's
+  line says it in the same words, the face at home wearing the work's face; at home or on the way there (the taskbar's
+  line speaks); off the page (a phone's home is the face in Neue's bar: `AvatarStatus.onPage`); asleep; or idle (the walk home), when the plate fades out over 180 ms. With recede on
+  (`WorldPrefs.recede`), the person's hands on the page during a turn fold it to its sign — the moment the windows stop
+  receding (§6.2) — unless it is waiting on them or telling them how a run went; with recede off nothing steps back.
+- **A hand's moment** (petting, a poke, `AvatarPlay`) still answers in its own face.
+
 ## 6. Focus and hierarchy
 
 ### 6.1 Never steal focus (`core/world/desk/FocusPolicy.kt`, tested)
@@ -729,6 +777,7 @@ skill says so in one line: "the World's limits are on code; write what you learn
 | `DeskTidyTest` | the answer stays; untouched windows of Ai's close; nothing of the person's is touched; kept tabs survive |
 | `AvatarPathTest` | durations in bounds; eased progress monotonic; a re-plan keeps position and direction (random sweeps, largest step bounded); skip finishes in 120 ms; at most one hop behind; settled → no frames wanted |
 | `AvatarPilotTest` | the targets for each tool in order (§5.2), the 700 ms wait only with Follow and the avatar on |
+| `AvatarStatusTest` | each activity's words, face and sign (§5.7); what it says in order; the plate's rules (avatar off, home, recede); words shortened never to a stub; the plate flips at an edge and stays on the page; the breath is slow and smooth |
 | `WorldAddressTest` | parse and format round trip, unsafe paths refused, unknown addresses |
 | `BrowserTabsTest` | back and forward, re-pin in place, 20 tabs, kept tabs |
 | `WorldNoticesTest` | each notice's rule, coalescing, one toast a 2 s |
@@ -758,6 +807,7 @@ a world run while an app answers an event), `NonLocalReturnTest` as ever.
 
 `tools/shoot.sh --page=world --world=demo` plus `--world-desk=fresh|working|browser|app|library|launcher|switcher|notices`,
 `--world-avatar=icon|travel|caret|terminal|home` (the hop frozen at a fraction with `--world-avatar-t=0.5`),
+`--world-status=writing|running|instrument|reading|thinking|pleased|worried|waiting` (§5.7, with `--world-desk=working`),
 `--world-app=hand-odds|combo-lines|matchups`, with `--form=phone --width=1080 --height=2400 --density=2.625` and
 `--theme=ink`. The studio advances the frame clock by hand, so a hop is photographed mid-air.
 
