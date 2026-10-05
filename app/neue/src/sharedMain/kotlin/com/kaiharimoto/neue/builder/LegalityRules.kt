@@ -123,7 +123,8 @@ private fun GenesysPoints(state: DeckBuilderState, neue: NeueState) {
             dearest.forEach { cost ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     RowText(cost.name, Modifier.weight(1f), color = c.ink)
-                    Mono("×${cost.copies} · ${cost.total}", color = c.ink70)
+                    // "3 × 20 = 60": what each copy costs and what they cost together, never one number for both.
+                    Mono(if (cost.copies > 1) "${cost.copies} × ${cost.each} = ${cost.total}" else "${cost.total}", color = c.ink70)
                     MuButton("Show", { showInDeck(state, neue, cost.id) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
                 }
             }
