@@ -20,6 +20,9 @@ import kotlinx.serialization.json.contentOrNull
 internal class AiWorld(private val h: NeueHolders) {
     private val world get() = h.world
 
+    /** The apps, `world_open` and `world_read`'s pages: what runs inside the desktop's windows (agent C). */
+    private val inside = AiWorldApps(h)
+
     private fun ok(content: String, summary: String) = MetaAnswer(content, summary)
     private fun fail(message: String) = MetaAnswer(message, message, isError = true)
 
@@ -27,7 +30,9 @@ internal class AiWorld(private val h: NeueHolders) {
         "world_state" -> state(ToolArgs.string(i, "world_id"))
         "world_new" -> new(ToolArgs.string(i, "title"), ToolArgs.string(i, "scope"), ToolArgs.string(i, "world_id"))
         "world_write" -> write(i)
-        "world_read" -> read(ToolArgs.string(i, "path").orEmpty())
+        "world_read" -> inside.read(ToolArgs.string(i, "path").orEmpty(), (ToolArgs.int(i, "from") ?: 0).coerceAtLeast(0))
+        "world_app" -> inside.app(i)
+        "world_open" -> inside.open(ToolArgs.string(i, "address").orEmpty())
         "world_run" -> runIt(ToolArgs.string(i, "path"), ToolArgs.string(i, "code"), ToolArgs.string(i, "lang"), ToolArgs.int(i, "seconds") ?: 30)
         "world_tool" -> tool(ToolArgs.string(i, "name").orEmpty(), i["args"])
         "world_show" -> show(i)
@@ -76,14 +81,6 @@ internal class AiWorld(private val h: NeueHolders) {
         return world.write(path, text).fold({ ok(it, it) }, { fail(it.message.orEmpty()) })
     }
 
-    private fun read(path: String): MetaAnswer {
-        val text = world.read(path) ?: return fail("There is no $path. world_state lists the files.")
-        val numbered = text.lines().mapIndexed { n, l -> "${(n + 1).toString().padStart(4)}  $l" }.joinToString("\n")
-        world.showFile(path)
-        world.arrive(WorldPane.EDITOR)
-        return ok(if (numbered.length > 16_000) numbered.take(16_000) + "\n…" else numbered, "Read $path")
-    }
-
     private suspend fun runIt(path: String?, code: String?, lang: String?, seconds: Int): MetaAnswer =
         world.run(path, code, lang, seconds).fold(
             { o -> MetaAnswer(o.words(), (if (o.record.ok) "Ran " else "Failed ") + (path ?: "a snippet"), isError = !o.record.ok) },
@@ -117,8 +114,12 @@ internal class AiWorld(private val h: NeueHolders) {
                 is JsonPrimitive -> b.contentOrNull.orEmpty()
                 else -> b.toString()
             }
-            world.putBoard(ToolArgs.string(i, "id"), kind, ToolArgs.string(i, "title"), body, ToolArgs.string(i, "note")).fold(
-                { b -> ok("Pinned ${b.id}: “${b.title}”.", "Pinned “${b.title}”") },
+            val tab = ToolArgs.bool(i, "open") != false
+            world.putBoard(ToolArgs.string(i, "id"), kind, ToolArgs.string(i, "title"), body, ToolArgs.string(i, "note"), tab = tab).fold(
+                { b ->
+                    val at = com.kaiharimoto.mastertool.core.world.desk.WorldAddress.Board(b.id).format()
+                    ok("Pinned ${b.id}: “${b.title}” at $at" + (if (tab) ", open in a Browser tab." else "; not opened (world_open shows it)."), "Pinned “${b.title}”")
+                },
                 { fail(it.message.orEmpty()) },
             )
         }

@@ -62,6 +62,10 @@ import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
+import com.kaiharimoto.neue.world.apps.SoloApp
+import com.kaiharimoto.neue.world.apps.ThoughtsApp
+import com.kaiharimoto.neue.world.browser.BrowserApp
+import com.kaiharimoto.neue.world.browser.key
 
 /**
  * Ai World's page (1.0.97, `08`; kai: "I want to see everything the Ai is doing. The Ai is operating in a mini virtual
@@ -80,6 +84,11 @@ fun WorldPage(h: NeueHolders) {
         if (neue.prefs.world.open != id) neue.update { it.copy(world = it.world.copy(open = id)) }
     }
     val w = world.open
+    // An app with no pane takes the page until the desktop gives it a window (`world.apps.solo`).
+    world.apps.solo?.let { app ->
+        SoloApp(h, app, Modifier.fillMaxSize().padding(if (phone) 0.dp else 16.dp), onClose = { world.apps.solo = null })
+        return
+    }
     Column(Modifier.fillMaxSize()) {
         WorldHead(h, w, phone)
         when {
@@ -344,8 +353,8 @@ private fun PaneFor(h: NeueHolders, w: World, pane: WorldPane, modifier: Modifie
             WorldPane.FILES -> FilesPane(h)
             WorldPane.EDITOR -> EditorPane(h)
             WorldPane.TERMINAL -> TerminalPane(h)
-            WorldPane.BOARDS -> BoardsPane(h, w)
-            WorldPane.THOUGHTS -> ThoughtsPane(h)
+            WorldPane.BOARDS -> BrowserApp(h)
+            WorldPane.THOUGHTS -> ThoughtsApp(h)
             WorldPane.ACTIVITY -> ActivityPane(h)
         }
     }
@@ -380,6 +389,9 @@ internal fun runWorld(h: NeueHolders, action: DeskAction) {
         DeskAction.WORLD_APP_TERMINAL -> bring(WorldPane.TERMINAL)
         DeskAction.WORLD_APP_BROWSER -> bring(WorldPane.BOARDS)
         DeskAction.WORLD_APP_THOUGHTS -> bring(WorldPane.THOUGHTS)
-        else -> Unit
+        DeskAction.WORLD_APP_INSTRUMENTS -> world.apps.windows.open(com.kaiharimoto.mastertool.core.world.desk.BuiltInApp.INSTRUMENTS.ref, com.kaiharimoto.mastertool.core.world.WorldEvent.YOU)
+        DeskAction.WORLD_APP_LIBRARY -> world.apps.windows.open(com.kaiharimoto.mastertool.core.world.desk.BuiltInApp.LIBRARY.ref, com.kaiharimoto.mastertool.core.world.WorldEvent.YOU)
+        // The Browser's keys, while it is the pane in front.
+        else -> if (world.focus == WorldPane.BOARDS) world.browser.key(action)
     }
 }

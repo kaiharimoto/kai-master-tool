@@ -16,7 +16,7 @@ enum class Offered {
 
 /**
  * An app's waiting events (§8.5): one call at a time per app, up to [AppLimits.QUEUE] waiting; a `change` of a widget
- * that already has one waiting replaces it (only the last value matters); more are dropped and counted. Each event is
+ * whose change is the last thing waiting replaces it (only the last value matters; behind a press it keeps its place); more are dropped and counted. Each event is
  * stamped with the app's next `seq` as it is offered — `Math.random` is seeded from it, so a run of events replays exactly.
  * Not thread-safe: the host owns it on one thread.
  */
@@ -34,7 +34,9 @@ class AppEvents(private var seq: Long = 0L) {
 
     fun offer(id: String, type: String, value: JsonElement): Offered {
         if (type == UiEvent.CHANGE) {
-            val i = waiting.indexOfFirst { it.type == UiEvent.CHANGE && it.id == id }
+            // Only a change still last in the queue is replaced: one with a press after it must reach the app before that
+            // press (pick, then Log), or the press would read the newer value.
+            val i = waiting.indexOfLast { it.type == UiEvent.CHANGE && it.id == id }.takeIf { it == waiting.lastIndex } ?: -1
             if (i >= 0) {
                 waiting[i] = UiEvent(id, type, value, waiting[i].seq)
                 return Offered.REPLACED

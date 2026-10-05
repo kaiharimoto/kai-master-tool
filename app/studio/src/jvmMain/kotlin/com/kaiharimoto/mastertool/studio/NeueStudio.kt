@@ -576,6 +576,8 @@ fun neueMain(args: Array<String>) {
                 studioWorld(h, map)
                 h.neue.page = Page.WORLD
                 clock.run(120)
+                // --world-app=…: one app of the desktop drawn full-size alone (agent C, `WorldAppsStudio.kt`).
+                studioWorldApps(h, map, clock)
             }
             // --shootout=demo: Shootout's page with answers given (1.1.2, `ShootoutStudio.kt`): --shootout-target=alone|matchup,
             // --shootout-view=trial|results|setup, --shootout-answers=N.

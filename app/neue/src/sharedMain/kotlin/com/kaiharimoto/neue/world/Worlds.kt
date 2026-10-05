@@ -19,6 +19,11 @@ import com.kaiharimoto.mastertool.core.world.WorldLimits
 import com.kaiharimoto.mastertool.core.world.WorldPaths
 import com.kaiharimoto.mastertool.core.world.WorldPrefs
 import com.kaiharimoto.mastertool.core.world.WorldPrelude
+import com.kaiharimoto.mastertool.core.world.RunLog
+import com.kaiharimoto.neue.world.apps.WorldApps
+import com.kaiharimoto.neue.world.apps.describeDesk
+import com.kaiharimoto.neue.world.browser.WorldBrowser
+import com.kaiharimoto.neue.world.library.WorldLibrary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -130,6 +135,17 @@ class Worlds(val dir: File) {
     /** The person pressed Skip on Ai's typing. */
     var skipTyping by mutableStateOf(false)
 
+    // ---- What runs inside the desktop's windows (1.1.x, `docs/world/DESKTOP.md` §13, agent C): owned parts ------------
+
+    /** The Browser: every board a page, one per tab (§4). */
+    val browser = WorldBrowser(this)
+
+    /** Ai's apps: the registry the windows read, each app's live screen, every change through `AppStore` (§8). */
+    val apps = WorldApps(this)
+
+    /** Everything Ai knows, read where it lives under the data folder (§10). */
+    val library = WorldLibrary(dir.absoluteFile.parentFile ?: dir)
+
     @Volatile
     private var stopAsked = false
 
@@ -150,8 +166,14 @@ class Worlds(val dir: File) {
         }
     }
 
-    /** Reloads from disk after a sync or a restore brought other worlds in. */
-    fun reload() = load()
+    /** Reloads from disk after a sync or a restore brought other worlds in, and the open world's apps and tabs with it. */
+    fun reload() {
+        load()
+        open?.let { w ->
+            browser.load(root(w))
+            apps.reload()
+        }
+    }
 
     suspend fun create(title: String, scopeOf: String?, by: String = WorldEvent.AI): World {
         val now = System.currentTimeMillis()
@@ -179,6 +201,8 @@ class Worlds(val dir: File) {
         terminal.clear()
         selectedBoard = null
         activity = WorldCodec.events(File(root(w), "log.jsonl").takeIf { it.isFile }?.readText()).takeLast(MAX_ACTIVITY)
+        browser.load(root(w))
+        apps.load(root(w))
         val first = w.open ?: files.firstOrNull { WorldPaths.lang(it) != null } ?: files.firstOrNull()
         showFile(first)
     }
@@ -200,6 +224,8 @@ class Worlds(val dir: File) {
     fun read(path: String): String? {
         val w = open ?: return null
         val safe = WorldPaths.safe(path) ?: return null
+        // An app's code is under the world's apps/, beside files/ (§8.2): the Editor and world_read read it there.
+        WorldApps.slugOfCode(safe)?.let { slug -> return apps.code(slug) }
         return File(filesDir(w), safe).takeIf { it.isFile }?.let { if (it.length() > MAX_FILE) it.readText().take(MAX_FILE) else it.readText() }
     }
 
@@ -210,6 +236,15 @@ class Worlds(val dir: File) {
         val w = open ?: error("No world is open: world_new makes one.")
         val safe = WorldPaths.safe(path) ?: error("“$path” is not a path inside the world: relative, plain letters, no ..")
         require(text.length <= MAX_FILE) { "a file holds at most ${MAX_FILE / 1000}k characters" }
+        // An app's code saved from the Editor is a new version of the app (§8.2): the store keeps the old one for Back to.
+        WorldApps.slugOfCode(safe)?.let { slug ->
+            require(by == WorldEvent.YOU) { "an app's code changes through world_app change, not world_write" }
+            val m = apps.change(slug, text, by = by).getOrThrow()
+            editorPath = safe
+            editorText = text
+            edited = false
+            return@runCatching "Saved ${m.title} as v${m.version}."
+        }
         if (by == WorldEvent.AI) {
             arrive(WorldPane.EDITOR)
             typeOut(safe, text)
@@ -236,7 +271,7 @@ class Worlds(val dir: File) {
     }
 
     /** Ai's text, typed in at the person's chosen pace, never longer than a few seconds whatever its length. */
-    private suspend fun typeOut(path: String, text: String) {
+    internal suspend fun typeOut(path: String, text: String) {
         val cps = prefs().typing
         editorPath = path
         if (cps <= 0 || text.isEmpty()) {
@@ -330,6 +365,8 @@ class Worlds(val dir: File) {
         terminal.clear()
         terminal += lines
         activity = events
+        browser.load(root(w))
+        apps.load(root(w))
         showFile(editor)
     }
 
@@ -356,13 +393,18 @@ class Worlds(val dir: File) {
         stopAsked = false
         line(TermLine.Kind.COMMAND, "${if (language == WorldPaths.LANG_PY) "python" else "js"} $label")
         val started = now()
+        // Every line, past what is kept too: the whole output goes to files/out/<run>.log when it is longer (§11).
+        val whole = RunLog.Collector()
         try {
             val api = WorldApi(hostIn(w))
-            val outcome = if (language == WorldPaths.LANG_PY) runPython(w, safe, source, limit, api) else runJs(label, source, limit, api)
+            val outcome = if (language == WorldPaths.LANG_PY) runPython(w, safe, source, limit, api, whole) else runJs(label, source, limit, api, whole)
             val boards = pin(api.shown, safe, by)
-            val record = outcome.first.copy(path = safe, boards = boards.map { it.id }, ms = now() - started)
+            val at = now()
+            val logged = keepWholeOutput(w, whole, at)
+            val record = outcome.first.copy(path = safe, boards = boards.map { it.id }, ms = at - started, out = outcome.first.out + logged?.let { "\n" + RunLog.pointer(at) }.orEmpty())
             line(if (record.ok) TermLine.Kind.NOTE else TermLine.Kind.ERR, if (record.ok) "— done in ${record.ms} ms" + (if (boards.isNotEmpty()) ", ${boards.size} board(s)" else "") else record.err)
-            log(WorldEvent(now(), WorldEvent.Kind.RUN, by, path = safe, text = (if (record.ok) "Ran " else "Failed ") + label, run = record.copy(out = record.out.take(4_000))))
+            logged?.let { line(TermLine.Kind.NOTE, RunLog.pointer(at)) }
+            log(WorldEvent(at, WorldEvent.Kind.RUN, by, path = safe, text = (if (record.ok) "Ran " else "Failed ") + label, run = record.copy(out = record.out.take(4_000))))
             if (boards.isNotEmpty() && by == WorldEvent.AI) arrive(WorldPane.BOARDS)
             RunOutcome(record, boards, outcome.second)
         } finally {
@@ -370,15 +412,15 @@ class Worlds(val dir: File) {
         }
     }
 
-    private suspend fun runJs(label: String, source: String, seconds: Int, api: WorldApi): Pair<RunRecord, String?> {
+    private suspend fun runJs(label: String, source: String, seconds: Int, api: WorldApi, whole: RunLog.Collector): Pair<RunRecord, String?> {
         val r = withContext(Dispatchers.IO) {
-            JsRuntime(JsRuntime.Limits(millis = seconds * 1000L)).run(source, label, api, onLine = { l -> line(TermLine.Kind.OUT, l) }, stop = { stopAsked })
+            JsRuntime(JsRuntime.Limits(millis = seconds * 1000L)).run(source, label, api, onLine = { l -> line(TermLine.Kind.OUT, l) }, stop = { stopAsked }, everyLine = whole::line)
         }
         r.value?.let { line(TermLine.Kind.OUT, "→ $it") }
         return RunRecord(WorldPaths.LANG_JS, ok = r.ok, out = r.out, err = r.err, cut = r.cut) to r.value
     }
 
-    private suspend fun runPython(w: World, path: String?, source: String, seconds: Int, api: WorldApi): Pair<RunRecord, String?> {
+    private suspend fun runPython(w: World, path: String?, source: String, seconds: Int, api: WorldApi, whole: RunLog.Collector): Pair<RunRecord, String?> {
         val p = prefs()
         check(WorldPython.possible) { "Python does not run on this device; write JavaScript (.js)." }
         check(p.python) { "Python is off on this computer: the person allows it in Settings › Ai World. Write JavaScript (.js) meanwhile." }
@@ -402,6 +444,7 @@ class Worlds(val dir: File) {
                 if (!isErr && l.startsWith(WorldPrelude.SHOW_MARK)) {
                     show(api, l.removePrefix(WorldPrelude.SHOW_MARK))
                 } else {
+                    if (!isErr) synchronized(whole) { whole.line(l) }
                     val sink = if (isErr) err else out
                     synchronized(sink) {
                         if (sink.length + l.length > MAX_OUTPUT) cut = true else sink.append(l).append('\n')
@@ -428,6 +471,25 @@ class Worlds(val dir: File) {
             api.call("show", JsonObject(mapOf("kind" to JsonPrimitive(kind), "body" to JsonPrimitive(body)) + o.filterKeys { it in setOf("title", "id", "note") }))
         }.onFailure { line(TermLine.Kind.ERR, "show: ${it.message}") }
     }
+
+    /**
+     * A run's whole output, written to `files/out/<run>.log` when it went past what is kept (§11, [RunLog]): the path, or
+     * null when the output fit.
+     */
+    private suspend fun keepWholeOutput(w: World, whole: RunLog.Collector, at: Long): String? {
+        if (!whole.needed) return null
+        val path = RunLog.path(at)
+        withContext(Dispatchers.IO) {
+            val f = File(filesDir(w), path)
+            f.parentFile?.mkdirs()
+            f.writeText(whole.text())
+        }
+        refreshFiles()
+        return path
+    }
+
+    /** The app as the open world's apps read it (`ygo.*` in an app's calls), its own files included. */
+    internal suspend fun hostForApps(): WorldHost = open?.let { hostIn(it) } ?: host()
 
     /** The app as [w]'s code reads it, its own files included (`ygo.use`). */
     private suspend fun hostIn(w: World): WorldHost = host().let { (it as? WorldSnapshot)?.reading(filesDir(w)) ?: it }
@@ -467,7 +529,7 @@ class Worlds(val dir: File) {
     // ---- Boards -----------------------------------------------------------------------------------------------
 
     /** Pins what a run asked to show: an id that exists replaces its board in place, a new one takes a free slot. */
-    private suspend fun pin(shown: List<WorldApi.Shown>, source: String?, by: String): List<Board> {
+    internal suspend fun pin(shown: List<WorldApi.Shown>, source: String?, by: String, tab: Boolean = true): List<Board> {
         var w = open ?: return emptyList()
         val placed = mutableListOf<Board>()
         shown.forEach { s ->
@@ -482,16 +544,19 @@ class Worlds(val dir: File) {
         if (placed.isNotEmpty()) {
             touch(w)
             selectedBoard = placed.last().id
+            // Every board is a page: each opens in a tab, or updates the tab already on it in place (§4). The last is
+            // selected for the person's own run, and for Ai's when the page follows it.
+            if (tab) placed.forEachIndexed { i, b -> browser.shown(b.id, raise = i == placed.lastIndex && (by == WorldEvent.YOU || prefs().follow), by = by) }
         }
         return placed
     }
 
     /** A board put straight up by Ai or taken down (`world_show`). */
-    suspend fun putBoard(id: String?, kind: String, title: String?, body: String, note: String?, by: String = WorldEvent.AI): Result<Board> = runCatching {
+    suspend fun putBoard(id: String?, kind: String, title: String?, body: String, note: String?, by: String = WorldEvent.AI, tab: Boolean = true): Result<Board> = runCatching {
         open ?: error("No world is open: world_new makes one.")
         val (k, payload) = ShowSpec.parse(kind, body).getOrElse { throw IllegalArgumentException(it.message) }
         if (by == WorldEvent.AI) arrive(WorldPane.BOARDS)
-        pin(listOf(WorldApi.Shown(id?.filter { it.isLetterOrDigit() || it in "-_" }?.take(40)?.ifEmpty { null }, title.orEmpty().ifEmpty { k.name.lowercase() }, k, payload, note.orEmpty())), null, by).single()
+        pin(listOf(WorldApi.Shown(id?.filter { it.isLetterOrDigit() || it in "-_" }?.take(40)?.ifEmpty { null }, title.orEmpty().ifEmpty { k.name.lowercase() }, k, payload, note.orEmpty())), null, by, tab).single()
     }
 
     suspend fun removeBoard(id: String, by: String = WorldEvent.AI): Result<String> = runCatching {
@@ -500,13 +565,6 @@ class Worlds(val dir: File) {
         touch(w.drop(id))
         log(WorldEvent(now(), WorldEvent.Kind.UNSHOW, by, board = id, text = "Took down $id"))
         "Took down $id."
-    }
-
-    /** The person moved a board on the canvas. */
-    fun moveBoard(id: String, x: Double, y: Double) {
-        val w = open ?: return
-        val b = w.board(id) ?: return
-        scope.launch { touch(w.put(b.copy(x = x, y = y))) }
     }
 
     // ---- Keeping it --------------------------------------------------------------------------------------------
@@ -553,7 +611,7 @@ class Worlds(val dir: File) {
         }
     }
 
-    private fun log(e: WorldEvent) {
+    internal fun log(e: WorldEvent) {
         val w = open ?: return
         activity = (activity + e).takeLast(MAX_ACTIVITY)
         scope.launch {
@@ -579,6 +637,7 @@ class Worlds(val dir: File) {
                 appendLine("Last runs:")
                 runs.forEach { e -> appendLine("- ${e.text}: " + (e.run?.let { r -> if (r.ok) r.out.lines().takeLast(3).joinToString(" / ").take(300) else "error: ${r.err.take(300)}" }.orEmpty())) }
             }
+            if (w.id == open?.id) append(describeDesk())
             append("Python: " + when {
                 !WorldPython.possible -> "not on this device"
                 !prefs().python -> "off (the person allows it in Settings)"

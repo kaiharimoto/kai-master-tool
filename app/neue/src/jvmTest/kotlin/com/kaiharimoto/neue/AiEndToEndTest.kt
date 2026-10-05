@@ -99,6 +99,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -689,6 +690,80 @@ class AiEndToEndTest {
         assertTrue("met" in run.items.first { it.id == "p01" }.read, run.items.first().read)
         assertEquals(setOf("duel_state", "duel_moves", "duel_act"), offered)
         assertEquals(before, h.duel.game, "the duel in play is never touched")
+    }
+
+    /**
+     * Ai World's apps end to end through `AiHost` (`docs/world/DESKTOP.md` §8.7): an app made — typed into the Editor,
+     * checked, opened — pressed, its state read back enveloped, changed by edits, its code read a page at a time, opened by
+     * address, a page shown without a tab, and deleted only with the person's yes.
+     */
+    @Test
+    fun aiMakesPressesAndChangesAnAppInItsWorld() = runBlocking<Unit> {
+        val h = holders()
+        h.neue.update { it.copy(world = it.world.copy(typing = 0, follow = false)) }
+        val made = h.tool("world_new", "title" to "Apps test ${UUID.randomUUID()}")
+        assertFalse(made.isError, made.content)
+        val world = h.world.open!!
+        try {
+            val code = """
+                function init() { return { n: 0 }; }
+                function view(s) { return ui.col([ui.stat({ value: String(s.n), label: 'Pressed' }), ui.button({ id: 'add', label: 'Add one', kind: 'primary' })]); }
+                function on(s, e) { if (e.id === 'add') s.n += 1; return s; }
+            """.trimIndent()
+            // An app that will not run is refused with its line, and nothing opens.
+            val broken = h.tool("world_app", "action" to "make", "slug" to "broken", "code" to "function init() { return {}; }\nfunction view(s) { return oops(); }\nfunction on(s, e) { return s; }")
+            assertTrue(broken.isError && "line 2" in broken.content, broken.content)
+            assertNull(h.world.apps.manifest("broken"))
+
+            val app = h.tool("world_app", "action" to "make", "slug" to "presses", "name" to "Presses", "kind" to "tracker", "glyph" to "tally", "code" to code)
+            assertFalse(app.isError, app.content)
+            assertTrue("stat: 0" in app.content && "[add]" in app.content, app.content)
+            assertEquals(code, h.world.editorText, "typed into the Editor")
+            assertEquals("apps/presses/main.js", h.world.editorPath)
+            assertEquals("tally", h.world.apps.manifest("presses")!!.glyph)
+
+            val pressed = h.tool("world_app", "action" to "press", "slug" to "presses", "id" to "add")
+            assertTrue("stat: 1" in pressed.content, pressed.content)
+            val state = h.tool("world_app", "action" to "state", "slug" to "presses")
+            assertTrue(state.content.startsWith("<untrusted") && "\"n\"" in state.content, state.content)
+
+            val edits = listOf(JsonObject(mapOf("find" to JsonPrimitive("label: 'Pressed'"), "replace" to JsonPrimitive("label: 'Times pressed'"))))
+            val changed = h.tool("world_app", "action" to "change", "slug" to "presses", "edits" to edits)
+            assertFalse(changed.isError, changed.content)
+            assertTrue("v2" in changed.content && "Times pressed" in changed.content && "stat: 1" in changed.content, changed.content)
+
+            // world_read reads an app's code, a page at a time, numbered from where the page starts.
+            val read = h.tool("world_read", "path" to "apps/presses/main.js")
+            assertTrue("    1  function init()" in read.content, read.content)
+            val later = h.tool("world_read", "path" to "apps/presses/main.js", "from" to 40)
+            assertTrue(later.content.trimStart().startsWith("2") || later.content.trimStart().startsWith("1"), later.content)
+
+            assertFalse(h.tool("world_open", "address" to "world://apps/presses").isError)
+            assertTrue(h.tool("world_open", "address" to "world://nowhere/at-all").isError)
+            assertFalse(h.tool("world_open", "address" to "library").isError)
+
+            // A page shown without a tab; then one with.
+            val quiet = h.tool("world_show", "action" to "put", "id" to "quiet", "kind" to "stat", "body" to "{\"value\":\"1\",\"label\":\"x\"}", "open" to false)
+            assertFalse(quiet.isError, quiet.content)
+            assertNull(h.world.browser.tabs.showing("world://boards/quiet"))
+            h.tool("world_show", "action" to "put", "id" to "loud", "kind" to "stat", "body" to "{\"value\":\"2\",\"label\":\"y\"}")
+            assertNotNull(h.world.browser.tabs.showing("world://boards/loud"))
+
+            val state2 = h.tool("world_state")
+            assertTrue("presses | Presses | tracker | v2" in state2.content && "world://boards/loud" in state2.content, state2.content)
+
+            // Deleting asks the person.
+            val no = launch { while (h.ai.confirm == null) delay(10); h.ai.confirm!!.reply(false) }
+            assertTrue(h.tool("world_app", "action" to "delete", "slug" to "presses").isError)
+            no.join()
+            assertNotNull(h.world.apps.manifest("presses"))
+            val yes = launch { while (h.ai.confirm == null) delay(10); h.ai.confirm!!.reply(true) }
+            assertFalse(h.tool("world_app", "action" to "delete", "slug" to "presses").isError)
+            yes.join()
+            assertNull(h.world.apps.manifest("presses"))
+        } finally {
+            java.io.File(h.world.dir, world.id).deleteRecursively()
+        }
     }
 
     @Test

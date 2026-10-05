@@ -201,6 +201,8 @@ object BuiltInSkills {
         3 to Skill(DeckSkills.DUEL_TABLE_NAME, DeckSkills.DUEL_TABLE_DESCRIPTION, DeckSkills.DUEL_TABLE.trim(), builtIn = true),
         // Ai World (1.0.97): answering by experiment, in code the person watches.
         3 to Skill(DeckSkills.AI_WORLD_NAME, DeckSkills.AI_WORLD_DESCRIPTION, DeckSkills.AI_WORLD.trim(), builtIn = true),
+        // Ai World as a desktop (1.1.x): an app of Ai's own, when the person will use it again.
+        3 to Skill(DeckSkills.WORLD_APP_NAME, DeckSkills.WORLD_APP_DESCRIPTION, DeckSkills.WORLD_APP.trim(), builtIn = true),
     ) + listOf(
         // Shootout (Phase S stage 3): a hand judged as the person would, and the interview that writes the rubric.
         3 to Skill(ShootoutSkills.JUDGE_NAME, ShootoutSkills.JUDGE_DESCRIPTION, ShootoutSkills.JUDGE.trim(), builtIn = true),
