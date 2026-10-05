@@ -3998,8 +3998,8 @@ The card data everything stands on, made correct:
 - **Released where, and by when** (`Legality`): the pool is fetched with `misc=yes&format=genesys` and keeps each card's
   Konami id, TCG and OCG dates, formats and Genesys points (schema 4, `migrations/3.sqm`; a pool from before is fetched
   once more, `PoolRecord.misc`). The `formats` list decides where — a Speed Duel card has a TCG date and is no Advanced
-  card — and the date when. The builder checks as of today, Prep as of the event's day; the inspector badges "Not in the
-  TCG" or "Out 8 Oct 2026". A pool without the data is *unknown*, never illegal. `GenesysRules` (points, no Link or
+  card — and the date when. The builder checks as of today, Prep as of the event's day; the inspector says "Not in the
+  TCG" or "Not in the TCG until 8 Oct 2026". A pool without the data is *unknown*, never illegal. `GenesysRules` (points, no Link or
   Pendulum) is in core; the builder's Genesys switch waits for a format choice older builds can read.
 - **Every banlist, by date** (`core/cards`, `neue/banlist/BanlistCenter`): Yugipedia's `{{Limitation list}}` pages, 82
   TCG and 88 OCG, parsed and kept as a device-only cache in `<data>/banlists/`; `BanSource` lets the validator check a
@@ -4012,7 +4012,29 @@ The card data everything stands on, made correct:
   its tip says what was checked ("Legal in TCG on 1 May 2025 (the April 2025 Lists (TCG))"), the inspector shows the
   dated list's status or a card's Genesys points, and `validate_deck` on the open deck checks the same. Kept as
   `NeuePreferences.legalAsOf`/`genesys`/`genesysCap` (synced). A day whose lists cannot be read says so beside the
-  issues. `--genesys=true`, `--legal-as-of=` in the studio. The banlist history fills a page's gap between two equal
+  issues. `--genesys=true`, `--legal-as-of=` in the studio.
+- **The chosen rules govern every copy limit** (1.1.2's design review of the builder): `DeckRules.banSource` — none in
+  Genesys (three of anything), the dated list's status, else the pool's — is handed to `DeckEditor` (`copyLimit`, `add`,
+  `addAt`, `setCount`, `remainingCopies`, each with a trailing `limits: BanSource?`, so a caller handed nothing behaves as
+  before; `ChosenRulesLimitTest`). `DeckBuilderState.limits` holds it, so adding, dropping, the remaining copies, the
+  steppers, the refusal's toast, the inspector's Copies, the corner mark on every builder card (`NeueCard(limits =)`),
+  the screenshot's marks, Ai's `edit_deck`/`new_deck` and Prep's "Ready to register" (as of the event's day, through
+  `legalityRules`) all read the same rules: a Genesys deck takes three Maxx "C". **What was chosen shows**: the bare ✓ is
+  only the default's; a day or Genesys says so after it in mono (`DeckRules.tag`: `✓ 1 May 2025`, `✓ Genesys 92/100`,
+  `✕ 2 · Genesys 466/100`), the name field hugs the name so the mark stands beside it, and the tip names `I`. The phone's
+  line is the short form (`DeckRules.short`: `Legal · TCG · 1 May 2025`); the long form reads "TCG on 1 May 2025, by the
+  April 2025 Lists (TCG)". **The drawer is Legality** ("What the deck is checked against, and what fails it"): kit §6's
+  empty state (`Legal.`), the strips at the rows' 24 inset, Genesys points as the kit's bar (`466 / 100 · 366 over`) with
+  the five costliest cards (`GenesysRules.Result.costs`) each with Show, a barred card named "a Link monster" with Show,
+  and **Lists and cards as of** Today | A day | Event · 17 Oct 2026 (Prep's active or next event; a day typed with or
+  without dashes, `Dates.parseDay`, read back under the field). **The inspector's standing is one line under the type**
+  (`DeckRules.standing`: "Not in the TCG until 8 Oct 2026", "Forbidden · April 2005 list", "Genesys · 50 points"),
+  never "Unlimited" for a card not out yet. **The palette**: Go in the pages' order, a page's own commands after Go only
+  on that page (elsewhere after App, "on Shootout" for a key), the group column as wide as its longest group, and
+  `Command.words` (Legality answers to banlist, F&L, forbidden, format, issues). **One formatter each** (`core/text`):
+  `Words.percent` (`58%`, the kit's `percent`), `Dates.day`/`Dates.short`/`Dates.parseDay`, `Words.isProse` (the kit's
+  `Hint`: a `FieldLabel` or menu hint in the sans unless it is a key or a number) and `Words.named` (the help dialog calls
+  Ai by its name). Unselected segments are ink-45 in both themes, so the chosen one reads by fill in ink too. The banlist history fills a page's gap between two equal
   lists and says it was inferred (Yugipedia's "January 2016 Lists" omits Pot of Greed). **A card is "not released" in a
   region only when YGOPRODeck and Yugipedia agree** (`RegionNames`, `Card.absentFrom`): the pool alone called Trap Holic
   OCG-only a year after its TCG print; where they disagree it is unknown, never illegal.

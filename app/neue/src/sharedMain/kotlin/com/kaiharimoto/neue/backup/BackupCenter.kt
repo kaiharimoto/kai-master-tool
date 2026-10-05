@@ -29,6 +29,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.kaiharimoto.mastertool.core.text.Dates
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -306,8 +307,9 @@ class BackupCenter(private val h: NeueHolders) {
         private const val WEBS = "prefs/neue.webs.json"
         private const val PREP = "prefs/neue.prep.json"
         private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HHmm")
-        private val DAY = DateTimeFormatter.ofPattern("d MMMM yyyy, HH:mm", java.util.Locale.ENGLISH)
 
-        fun date(at: Long): String = DAY.format(Instant.ofEpochMilli(at).atZone(ZoneId.systemDefault()))
+        /** When a backup was made, as the family writes a moment (`Dates.short`): "3 Oct, 23:46", the year only when not this one. */
+        fun date(at: Long): String =
+            Dates.short(at, ZoneId.systemDefault().rules.getOffset(Instant.ofEpochMilli(at)).totalSeconds / 60, System.currentTimeMillis())
     }
 }

@@ -58,6 +58,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
@@ -434,7 +435,7 @@ internal fun Standing(state: DeckBuilderState, neue: NeueState, compact: Boolean
 
 /** The bar's standing: its glyph in micro caps and, when the rules are not the default, what they are in mono. */
 @Composable
-private fun Mark(glyph: String, tag: String?, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+private fun Mark(glyph: String, tag: String?, color: Color, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
     val shown = animatedColor(if (hovered) Mu.colors.ink else color)
