@@ -65,6 +65,12 @@ data class FxState(
      * ([FxMemo.batch]); one made by hand is a batch of its own. What "last" and missing the timing are judged by.
      */
     val batch: Int = 0,
+    /**
+     * The batch at the chain's last boundary (a link added or resolved): when a link resolves, whatever happened before
+     * its resolution began is no longer last — the last thing to happen is that link's resolution, whatever it did (TCG
+     * Rulebook v10: "the last thing to happen is the resolution of the effect at Chain Link 1").
+     */
+    val since: Int = 0,
     /** While a chain stands and is not resolving: the seat that may respond now (the other seat after each link). */
     val priority: Int? = null,
     /** Passes in a row since the newest link or the last resolution: two, and the newest link resolves. */
@@ -240,16 +246,42 @@ data class FxTable(
 
     /** [uid]'s Level now: its printed one with every change still in effect on this instance applied, in order. */
     fun level(uid: Int): Int? {
-        var level = card(uid)?.level ?: return null
+        var level = (card(uid)?.level ?: return null).toLong()
         val life = fx.life(uid)
         fx.levels.forEach { ch ->
             if (ch.uid != uid || ch.life != life) return@forEach
-            ch.to?.let { level = it }
+            ch.to?.let { level = it.toLong() }
             ch.by?.let { level += it }
         }
-        return level.coerceAtLeast(1)
+        // In Long and clamped, so a change past any Level never wraps round.
+        return level.coerceIn(1L, MOST_LEVEL.toLong()).toInt()
     }
 
     /** The same table with [fx] for the table's turn: what every rule reads. */
     fun current(): FxTable = if (fx.turn == state.turn) this else copy(fx = fx.forTurn(state.turn))
+
+    companion object {
+        /** The highest Level a change can make (a card's own Level never passes 13). */
+        const val MOST_LEVEL = 99
+    }
+
+    // ---- worked out once a table (the red team's profile, D.md §5.7) ---------------------------------------------------
+    // A table never changes: a move makes a new one (`copy`, which starts these afresh). They are not part of equality.
+
+    /** The restrictions binding now ([FxRules.inForce]): read by every activation, summon and Special Summon checked. */
+    internal val inForce: List<InForce> by lazy(LazyThreadSafetyMode.PUBLICATION) { FxRules.inForceNow(this) }
+
+    /** Why each (seat, card, effect) may not be activated on this table, as `FxChain.refusal` worked it out: null, it may. */
+    @kotlin.concurrent.Volatile
+    private var refusals: Map<Triple<Int, Int, String>, String?> = emptyMap()
+
+    /** [seat]'s refusal for [uid]'s [effect] on this table: worked out once by [work], a map replaced whole on a miss. */
+    internal fun refusal(seat: Int, uid: Int, effect: String, work: () -> String?): String? {
+        val key = Triple(seat, uid, effect)
+        val now = refusals
+        if (key in now) return now[key]
+        val why = work()
+        refusals = HashMap<Triple<Int, Int, String>, String?>(now.size * 2 + 4).apply { putAll(now); put(key, why) }
+        return why
+    }
 }

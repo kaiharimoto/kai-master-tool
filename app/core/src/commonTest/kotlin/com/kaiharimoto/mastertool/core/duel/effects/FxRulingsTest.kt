@@ -236,6 +236,27 @@ class FxRulingsTest {
         assertTrue("Example Echo's Draw: missed the timing." in p.notes())
     }
 
+    /**
+     * Rule (Problem-Solving Card Text, Part 7, quoted by Yugipedia's "If... You Can VS When... You Can", fetched): "When a
+     * chain resolves, the last thing to happen is the resolution of the effect at Chain Link 1." A card sent to the GY at
+     * Chain Link 2 misses the timing of its optional "when" trigger even when Chain Link 1 then does nothing a card can
+     * see (here a Rally, which only grants a Normal Summon); the engine counted only moves, life points and the like.
+     */
+    @Test
+    fun a14b_chainLinkOnesResolutionIsLastWhateverItDid() {
+        val p = FxPlays(FxRef.game(Side(hand = listOf(FxRef.RALLY), field = listOf(Slot(FxRef.ECHO, 0), set(FxRef.FLASH, 0)), deck = listOf(FxRef.PAWN))))
+        val echo = p.uid(FxRef.ECHO)
+        p.activate(0, p.uid(FxRef.RALLY))
+        p.pass(1)
+        p.activate(0, p.uid(FxRef.FLASH)) { d -> if (d is Decision.Cards) listOf(d.among.indexOf(echo)) else null }
+        p.passBoth(1)
+        assertEquals(PileKind.GY, (p.t.state.placeOf(echo) as Place.Pile).kind)
+        assertTrue(p.t.fx.pending.single().last, "last, while Chain Link 1 waits")
+        p.resolve()
+        assertTrue(p.t.state.chain.isEmpty())
+        assertTrue("Example Echo's Draw: missed the timing." in p.notes(), p.notes().toString())
+    }
+
     /** Rule: a cost is not an effect: "sent by a card effect" is not set off by paying a cost. */
     @Test
     fun a15_aCostIsNotAnEffect() {

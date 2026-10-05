@@ -64,7 +64,7 @@ object FxProcs {
         val p = t.state.placeOf(uid)
         val procs = script.summon?.procs.orEmpty()
         return procs.mapIndexedNotNull { i, proc ->
-            if (FxWalk.unread(proc)) return@mapIndexedNotNull null
+            if (t.book.unreadProc(script.card, i)) return@mapIndexedNotNull null
             val inExtra = p is Place.Pile && p.kind == PileKind.EXTRA && p.seat == seat
             when (proc) {
                 is Proc.Link -> if (inExtra && c.link != null) build(t, seat, uid, i, proc, ProcKind.LINK, linkSets(t, seat, uid, proc)) else null
@@ -188,17 +188,20 @@ object FxProcs {
 
     /**
      * Fusion material sets for [fusion] by [proc] from [from] (the step executor's pick of places): each [Mat] its own
-     * cards, none used twice. Each set in [from]'s order.
+     * cards, none used twice. Each set in [from]'s order. With [stop], the search ends at the first set it holds, which
+     * alone is returned: the same answer to "is there one [stop] holds" as the whole list filtered, found sooner.
      */
-    fun fusionSets(t: FxTable, seat: Int, fusion: Int, proc: Proc.Fusion, from: List<Int>): List<List<Int>> {
+    fun fusionSets(t: FxTable, seat: Int, fusion: Int, proc: Proc.Fusion, from: List<Int>, stop: ((List<Int>) -> Boolean)? = null): List<List<Int>> {
         val scope = FxScope(t, seat, fusion)
         val pool = from.filter { it != fusion && t.card(it)?.monster == true }
         val out = LinkedHashSet<List<Int>>()
         val budget = Budget()
+        var found: List<Int>? = null
         fun assign(i: Int, used: List<Int>) {
-            if (out.size >= MOST || budget.left <= 0) return
+            if (found != null || out.size >= MOST || budget.left <= 0) return
             if (i == proc.materials.size) {
-                out += pool.filter { it in used }
+                val set = pool.filter { it in used }
+                if (out.add(set) && stop != null && stop(set)) found = set
                 return
             }
             val m = proc.materials[i]
@@ -206,14 +209,14 @@ object FxProcs {
             subsets(fit, m.least..minOf(m.most, fit.size), budget).forEach { pick -> if (pick.isNotEmpty() || m.least == 0) assign(i + 1, used + pick) }
         }
         assign(0, emptyList())
-        return out.toList()
+        return found?.let(::listOf) ?: out.toList()
     }
 
     /**
      * Ritual Tribute sets for [ritual] from [from]: monsters with a Level whose Levels equal its own, or reach it with none
-     * to spare ([LevelRule.AT_LEAST]: no Tribute could be left out and still reach it).
+     * to spare ([LevelRule.AT_LEAST]: no Tribute could be left out and still reach it). [stop] as for [fusionSets].
      */
-    fun ritualSets(t: FxTable, seat: Int, ritual: Int, from: List<Int>, rule: LevelRule): List<List<Int>> {
+    fun ritualSets(t: FxTable, seat: Int, ritual: Int, from: List<Int>, rule: LevelRule, stop: ((List<Int>) -> Boolean)? = null): List<List<Int>> {
         val level = t.card(ritual)?.level ?: return emptyList()
         val pool = from.filter { it != ritual && t.card(it)?.monster == true && t.level(it) != null }
         val out = ArrayList<List<Int>>()
@@ -224,7 +227,10 @@ object FxProcs {
                 LevelRule.EQUAL -> sum == level
                 LevelRule.AT_LEAST -> sum >= level && levels.all { sum - it < level }
             }
-            if (ok) out += set
+            if (ok) {
+                out += set
+                if (stop != null && stop(set)) return listOf(set)
+            }
             if (out.size >= MOST) break
         }
         return out

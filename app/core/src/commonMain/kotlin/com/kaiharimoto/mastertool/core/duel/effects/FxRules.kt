@@ -163,7 +163,7 @@ object FxRules {
     fun spellZones(t: FxTable, seat: Int, uid: Int): List<Place.Zone> {
         val c = t.card(uid) ?: return emptyList()
         return if (c.type == CardType.SPELL && c.isSpellSub("Field")) {
-            listOf(Place.Zone(seat, ZoneKind.FIELD, 0)) // a new Field Spell replaces the old (the old goes to the GY by hand)
+            listOf(Place.Zone(seat, ZoneKind.FIELD, 0)) // a new Field Spell replaces your old one, which goes to the GY by the game's own rule (Yugipedia, "Field Spell Card")
         } else t.state.freeZones(seat, ZoneKind.SPELL)
     }
 
@@ -239,14 +239,17 @@ object FxRules {
      * The restrictions binding [seat] now: those left by effects ([FxState.restrictions]) and those a face-up card's
      * [Kind.CONTINUOUS] effects apply while their condition holds.
      */
-    fun inForce(t: FxTable): List<InForce> = t.fx.restrictions + continuous(t)
+    fun inForce(t: FxTable): List<InForce> = t.inForce
+
+    /** What [inForce] reads, worked out once a table ([FxTable.inForce]). */
+    internal fun inForceNow(t: FxTable): List<InForce> = t.fx.restrictions + continuous(t)
 
     private fun continuous(t: FxTable): List<InForce> = t.state.onField().flatMap { uid ->
         val inst = t.inst(uid)
         if (inst == null || !inst.faceUp) return@flatMap emptyList()
         val script = t.script(uid) ?: return@flatMap emptyList()
         val owner = FxFilters.controller(uid, t.state) ?: return@flatMap emptyList()
-        script.effects.filter { it.kind == Kind.CONTINUOUS && !FxWalk.unread(it) }
+        script.effects.filter { it.kind == Kind.CONTINUOUS && !t.book.unread(script.card, it.id) }
             .filter { e -> e.condition == null || FxConds.holds(e.condition, FxScope(t, owner, uid)) }
             .flatMap { e -> e.leaves.flatMap { r -> seatsOf(r.seat, owner).map { InForce(r, it, uid, t.state.turn) } } }
     }

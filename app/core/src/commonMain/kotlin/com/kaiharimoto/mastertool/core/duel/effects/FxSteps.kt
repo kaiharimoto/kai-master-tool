@@ -186,8 +186,8 @@ object FxSteps {
             is Op.Shuffle -> true
             is Op.SpecialSummon -> enough(op.pick) { summonable(t, seat, it) } &&
                 FxFilters.candidates(op.pick, scope).any { summonable(t, seat, it) && FxRules.summonZones(t, seat, it).isNotEmpty() }
-            is Op.FusionSummon -> fusions(t, act, op).isNotEmpty()
-            is Op.RitualSummon -> rituals(t, act, op).isNotEmpty()
+            is Op.FusionSummon -> fusions(t, act, op, any = true).isNotEmpty()
+            is Op.RitualSummon -> rituals(t, act, op, any = true).isNotEmpty()
             is Op.SynchroSummon -> procedures(t, act, op.f, ProcKind.SYNCHRO).isNotEmpty()
             is Op.XyzSummon -> procedures(t, act, op.f, ProcKind.XYZ).isNotEmpty()
             is Op.LinkSummon -> procedures(t, act, op.f, ProcKind.LINK).isNotEmpty()
@@ -265,7 +265,7 @@ object FxSteps {
     }
 
     /** The Fusion Monsters [op] could summon now for [act], with their material sets. */
-    internal fun fusions(t: FxTable, act: FxAct, op: Op.FusionSummon): List<Pair<Int, List<List<Int>>>> {
+    internal fun fusions(t: FxTable, act: FxAct, op: Op.FusionSummon, any: Boolean = false): List<Pair<Int, List<List<Int>>>> {
         val seat = act.seat
         val scope = act.scope(t)
         val pool = FxFilters.cards(op.materialsFrom, scope)
@@ -274,13 +274,15 @@ object FxSteps {
             if (CardFrame.FUSION !in c.frames || !FxFilters.matches(op.fusion, u, scope)) return@mapNotNull null
             if (FxRules.specialRefusal(t, seat, u, ProcKind.FUSION) != null) return@mapNotNull null
             val proc = t.script(u)?.summon?.procs?.filterIsInstance<Proc.Fusion>()?.firstOrNull() ?: return@mapNotNull null
-            val sets = FxProcs.fusionSets(t, seat, u, proc, pool).filter { FxRules.summonZones(t, seat, u, it.toSet()).isNotEmpty() }
+            val zoned = { set: List<Int> -> FxRules.summonZones(t, seat, u, set.toSet()).isNotEmpty() }
+            // [any]: whether there is one at all — the search stops at the first, the same answer sooner.
+            val sets = FxProcs.fusionSets(t, seat, u, proc, pool, if (any) zoned else null).filter(zoned)
             if (sets.isEmpty()) null else u to sets
         }
     }
 
     /** The Ritual Monsters [op] could summon now for [act], with their Tribute sets. */
-    internal fun rituals(t: FxTable, act: FxAct, op: Op.RitualSummon): List<Pair<Int, List<List<Int>>>> {
+    internal fun rituals(t: FxTable, act: FxAct, op: Op.RitualSummon, any: Boolean = false): List<Pair<Int, List<List<Int>>>> {
         val seat = act.seat
         val scope = act.scope(t)
         val pool = FxFilters.cards(op.tributesFrom, scope)
@@ -288,7 +290,8 @@ object FxSteps {
             val c = t.card(u) ?: return@mapNotNull null
             if (!c.monster || CardFrame.RITUAL !in c.frames || !FxFilters.matches(op.ritual, u, scope)) return@mapNotNull null
             if (FxRules.specialRefusal(t, seat, u, ProcKind.RITUAL) != null) return@mapNotNull null
-            val sets = FxProcs.ritualSets(t, seat, u, pool, op.levels).filter { FxRules.summonZones(t, seat, u, it.toSet()).isNotEmpty() }
+            val zoned = { set: List<Int> -> FxRules.summonZones(t, seat, u, set.toSet()).isNotEmpty() }
+            val sets = FxProcs.ritualSets(t, seat, u, pool, op.levels, if (any) zoned else null).filter(zoned)
             if (sets.isEmpty()) null else u to sets
         }
     }

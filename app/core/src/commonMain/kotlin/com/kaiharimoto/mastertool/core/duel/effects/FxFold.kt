@@ -94,6 +94,11 @@ object FxFold {
         if (!setup && happening(a, tag) && fx.pending.any { it.last && it.event.batch < batch }) {
             fx = fx.copy(pending = fx.pending.map { if (it.last && it.event.batch < batch) it.copy(last = false) else it })
         }
+        // A link resolved, whatever it did: what happened before its resolution began is no longer last.
+        if (!setup && a == DuelAction.ChainResolve && fx.pending.any { it.last && it.event.batch <= fx.since }) {
+            fx = fx.copy(pending = fx.pending.map { if (it.last && it.event.batch <= fx.since) it.copy(last = false) else it })
+        }
+        if (a is DuelAction.ChainAdd || a == DuelAction.ChainResolve) fx = fx.copy(since = fx.batch)
         val events = r.events
         if (events.isNotEmpty()) fx = FxChain.gather(FxTable(after, fx.forTurn(after.turn), book, facts), events)
         return Read(fx.forTurn(after.turn), events)
@@ -382,7 +387,7 @@ object FxFold {
             val p = after.placeOf(uid)
             val seat = FxFilters.controller(uid, after) ?: return ""
             val fits = script.effects.filter { e ->
-                e.kind != Kind.CONTINUOUS && e.kind != Kind.TRIGGER && !FxWalk.unread(e) &&
+                e.kind != Kind.CONTINUOUS && e.kind != Kind.TRIGGER && !t.book.unread(script.card, e.id) &&
                     (e.from.any { FxProcs.at(p, it, seat) } || (e.kind == Kind.ACTIVATION && Where.HAND in e.from && p is Place.Zone))
             }
             return fits.singleOrNull()?.id ?: ""

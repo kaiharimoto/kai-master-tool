@@ -107,7 +107,7 @@ object FxChain {
         val inst = t.inst(uid) ?: return "No such card."
         val script = t.script(uid) ?: return "The engine has no written effect for this card: use it by hand."
         val e = script.effect(effect) ?: return "It has no effect $effect."
-        if (FxWalk.unread(e)) return if (FxWalk.tooDeep(e)) "This effect nests deeper than the engine reads." else "This effect is written in a newer build's words."
+        if (t.book.unread(inst.code, effect)) return if (FxWalk.tooDeep(e)) "This effect nests deeper than the engine reads." else "This effect is written in a newer build's words."
         if (e.kind == Kind.CONTINUOUS) return "A continuous effect is never activated: it applies while the card is face-up."
         val place = s.placeOf(uid) ?: return "That card has left the duel."
         if (FxFilters.controller(uid, s) != seat) return "Only its controller uses it."
@@ -285,7 +285,7 @@ object FxChain {
             ?: throw FxStop.refuse("The engine did not see Chain Link $n activated: resolve it by hand.")
         if (fl.effect.isEmpty()) throw FxStop.refuse("The engine cannot tell which effect Chain Link $n is: resolve it by hand.")
         val e = t.book.effect(fl.card, fl.effect) ?: throw FxStop.refuse("Chain Link $n has no written effect: resolve it by hand.")
-        if (FxWalk.unread(e)) throw FxStop.refuse("Chain Link $n's effect is written in a newer build's words.")
+        if (t.book.unread(fl.card, fl.effect)) throw FxStop.refuse("Chain Link $n's effect is written in a newer build's words.")
         val act = FxAct(fl.seat, fl.uid, fl.card, fl.effect, FxTag.RESOLVE, n, fl.bound, fl.script, fl.verified, fl.declared)
         if (!cl.negated && !fl.effectNegated) {
             val bound = recheck(sc, act, fl, e)
@@ -342,7 +342,7 @@ object FxChain {
                 val place = s.placeOf(uid) ?: continue
                 val seat = FxFilters.controller(uid, s) ?: continue
                 for (e in script.effects) {
-                    if (e.kind != Kind.TRIGGER || FxWalk.unread(e)) continue
+                    if (e.kind != Kind.TRIGGER || t.book.unread(script.card, e.id)) continue
                     val tr = e.trigger ?: continue
                     if (!fits(tr.on, ev)) continue
                     if (ev.uid != 0) {

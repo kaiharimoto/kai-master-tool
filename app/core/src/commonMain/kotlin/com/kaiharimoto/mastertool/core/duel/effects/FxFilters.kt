@@ -251,7 +251,7 @@ object FxFilters {
     /** How many cards [pick] takes at least and at most from [n] candidates: all of them for [Pick.all]. */
     fun bounds(pick: Pick, n: Int): IntRange = when {
         pick.all || pick.top -> n..n
-        pick.upTo -> 0..minOf(pick.n, n)
+        pick.upTo -> minOf(1, n)..minOf(pick.n, n) // "up to n" is 1 to n (a house ruling, D.md §2.3½)
         else -> pick.n.coerceAtMost(Pick.MOST)..pick.n.coerceAtMost(Pick.MOST)
     }
 }

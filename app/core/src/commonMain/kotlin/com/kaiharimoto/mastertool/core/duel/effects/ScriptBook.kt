@@ -36,6 +36,24 @@ class ScriptBook private constructor(
     /** Every card the book holds a script for, as canonical passcodes. */
     val cards: Set<Int> get() = scripts.keys
 
+    /**
+     * Each card's effects (by id) and procedures (by index) that hold a word this build cannot read or nest too deep
+     * ([FxWalk.unread]), worked out once a book: a script never changes, and walking every effect again on every move was
+     * a tenth of the engine's time (the red team's profile).
+     */
+    private val unreadEffects: Map<Int, Set<String>> by lazy {
+        scripts.mapValues { (_, s) -> s.effects.filter(FxWalk::unread).map { it.id }.toSet() }.filterValues { it.isNotEmpty() }
+    }
+    private val unreadProcs: Map<Int, Set<Int>> by lazy {
+        scripts.mapValues { (_, s) -> s.summon?.procs.orEmpty().withIndex().filter { FxWalk.unread(it.value) }.map { it.index }.toSet() }.filterValues { it.isNotEmpty() }
+    }
+
+    /** Whether [code]'s effect [id] cannot be read by this build ([FxWalk.unread]): never offered, never used. */
+    fun unread(code: Int, id: String): Boolean = unreadEffects[canon(code)]?.contains(id) == true
+
+    /** Whether [code]'s summoning procedure [index] cannot be read by this build. */
+    fun unreadProc(code: Int, index: Int): Boolean = unreadProcs[canon(code)]?.contains(index) == true
+
     /** The cards whose scripts hold a trigger effect, as canonical passcodes: the only ones an event can set off. */
     val triggers: Set<Int> by lazy {
         scripts.filterValues { s -> s.effects.any { it.kind == Kind.TRIGGER } }.keys

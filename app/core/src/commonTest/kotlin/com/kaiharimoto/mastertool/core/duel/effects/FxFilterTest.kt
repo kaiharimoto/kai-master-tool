@@ -164,7 +164,8 @@ class FxFilterTest {
         val all = Pick(all = true, from = listOf(Spot(Rel.THEM, Area.MONSTERS)))
         assertEquals(4, FxFilters.candidates(all, s).size)
         assertEquals(4..4, FxFilters.bounds(all, 4))
-        assertEquals(0..2, FxFilters.bounds(Pick(n = 2, upTo = true), 5))
+        assertEquals(1..2, FxFilters.bounds(Pick(n = 2, upTo = true), 5), "\"up to 2\" is 1 or 2, as the step executor reads it")
+        assertEquals(0..0, FxFilters.bounds(Pick(n = 2, upTo = true), 0))
         assertEquals(1..1, FxFilters.bounds(Pick(), 5))
         assertEquals(setOf(FxRef.SCOUT, FxRef.LAMP, FxRef.PAWN, FxRef.BRIDGE), FxFilters.cards(listOf(Spot(Rel.THEM, Area.FIELD)), s).map { table.inst(it)!!.code }.toSet())
     }
