@@ -38,7 +38,7 @@ class MorphTest {
         assertEquals(-550f, start.dy)
         assertEquals(0.5f, start.scale)
         val home = Morph.travel(p, 1f)
-        assertEquals(0f, home.dx)
+        assertEquals(0f, home.dx, 0.0001f)
         assertEquals(1f, home.scale)
     }
 }

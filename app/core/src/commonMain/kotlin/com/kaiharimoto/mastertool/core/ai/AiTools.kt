@@ -979,7 +979,7 @@ object AiTools {
         "Looks at one slide of the open presentation as the audience will see it, and says what is wrong: anything on the webcam or off the slide, " +
             "words too many, too small or too faint to read, boxes too small for their words, empty card or picture slots, a deck slide talking about " +
             "nothing, too many clicks, no speaker notes — and for a deck slide which cards are lit. When you can see pictures, the slide itself comes " +
-            "with the words, drawn as the audience sees it: judge colour, balance and crowding from it too. Run it on every slide you make and fix what it says.",
+            "with the words, drawn as the audience sees it: judge color, balance and crowding from it too. Run it on every slide you make and fix what it says.",
         schema { any("slide", "The slide: its id or number", required = true) },
         ToolGroup.LOOK,
         phase = 3,

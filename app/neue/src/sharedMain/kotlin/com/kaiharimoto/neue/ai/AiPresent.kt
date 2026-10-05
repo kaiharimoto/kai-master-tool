@@ -305,7 +305,7 @@ internal class AiPresent(private val h: NeueHolders) {
         // are judged from pixels, not words. Drawn as the audience's finished picture, once its art is in.
         val picture = slidePicture(p, i)
         val text = buildString {
-            if (picture != null) appendLine("The slide as the audience sees it, every build done, is attached as a picture (960 × 540). Judge colour, balance and crowding from it.")
+            if (picture != null) appendLine("The slide as the audience sees it, every build done, is attached as a picture (960 × 540). Judge color, balance and crowding from it.")
             val s = p.slides[i]
             appendLine("Slide ${i + 1} of ${p.slides.size}: ${s.title.ifBlank { "(untitled)" }}")
             PresentReport.deckWords(p, i, ::cardName)?.let { appendLine("Deck: $it") }
