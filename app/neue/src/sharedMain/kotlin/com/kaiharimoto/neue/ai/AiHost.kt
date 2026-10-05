@@ -354,8 +354,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         put("name", name)
         if (open) put("open", true)
         if (open && state.dirty) put("unsaved_changes", true)
-        val v = DeckValidator.validate(deck, index::byId, state.format)
+        // Checked as the builder checks: the day and list chosen, or Genesys (the 1.1.2 design review, finding 1).
+        val rules = state.rulesInForce
+        val v = if (open) state.validation else rules.validate(deck, index::byId, state.today)
         put("legal_${state.format.name}", v.isLegal)
+        if (!rules.isDefault) put("checked_against", rules.words())
         if (v.issues.isNotEmpty()) put("issues", buildJsonArray { v.issues.forEach { add(JsonPrimitive(it.message)) } })
         put("main", counted(deck.main))
         put("extra", counted(deck.extra))
@@ -606,7 +609,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     private fun why(reason: RejectionReason, card: Card): String = when (reason) {
         RejectionReason.SECTION_FULL -> "that section is full"
-        RejectionReason.COPY_LIMIT -> "${card.name} is at its limit (${DeckEditor.copyLimit(card, state.format)} in ${state.format.name})"
+        RejectionReason.COPY_LIMIT -> "${card.name} is at its limit (${DeckEditor.copyLimit(card, state.format, state.limits)} in ${state.rulesInForce.short()})"
         RejectionReason.WRONG_SECTION -> if (card.isExtraDeck) "${card.name} belongs in the extra deck" else "${card.name} cannot go in the extra deck"
         RejectionReason.NOT_PLAYABLE -> "${card.name} cannot be put in a deck"
         RejectionReason.NOT_PRESENT -> "${card.name} is not there"
@@ -621,7 +624,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                     if (r.guessed) notes += "Read “${CardWords.split(w).text}” as ${r.card.name}."
                     val target = if (section == DeckSection.SIDE) DeckSection.SIDE else r.card.requiredSection()
                     repeat(r.count.coerceIn(1, 3)) {
-                        when (val e = DeckEditor.add(d, r.card, target, state.format)) {
+                        when (val e = DeckEditor.add(d, r.card, target, state.format, state.limits)) {
                             is DeckEdit.Applied -> d = e.deck
                             is DeckEdit.Rejected -> {
                                 notes += "Left out a copy of ${r.card.name}: ${why(e.reason, r.card)}."
@@ -647,9 +650,9 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         state.adoptDeck(deck, name)
         neue.go(Page.BUILDER)
         val id = save()
-        val v = DeckValidator.validate(deck, index::byId, state.format)
+        val v = state.rulesInForce.validate(deck, index::byId, state.today)
         val text = "Made “$name” (id $id): main ${deck.main.size}, extra ${deck.extra.size}, side ${deck.side.size}; " +
-            (if (v.isLegal) "legal in ${state.format.name}." else "not legal yet: ${v.errors.joinToString("; ") { it.message }}.") +
+            (if (v.isLegal) "legal in ${state.rulesInForce.words()}." else "not legal yet: ${v.errors.joinToString("; ") { it.message }}.") +
             (if (notes.isNotEmpty()) "\n" + notes.joinToString("\n") else "")
         return ok(text, "Built “$name” — ${deck.main.size}/${deck.extra.size}/${deck.side.size}")
     }
@@ -679,7 +682,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                 "add" -> {
                     var added = 0
                     repeat((count ?: 1).coerceIn(1, 3)) {
-                        when (val e = DeckEditor.add(deck, card, section, state.format)) {
+                        when (val e = DeckEditor.add(deck, card, section, state.format, state.limits)) {
                             is DeckEdit.Applied -> { deck = e.deck; added++ }
                             is DeckEdit.Rejected -> { problems += "Could not add ${card.name}: ${why(e.reason, card)}."; return@repeat }
                         }
@@ -693,7 +696,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
                     repeat(n) { (DeckEditor.remove(deck, card.id, section) as? DeckEdit.Applied)?.let { deck = it.deck } }
                     if (n > 0) done += "−$n ${card.name}"
                 }
-                "set" -> when (val e = DeckEditor.setCount(deck, card, section, (count ?: 1).coerceIn(0, 3), state.format)) {
+                "set" -> when (val e = DeckEditor.setCount(deck, card, section, (count ?: 1).coerceIn(0, 3), state.format, state.limits)) {
                     is DeckEdit.Applied -> { deck = e.deck; done += "${card.name} ×${deck[section].count { it == card.id }}" }
                     is DeckEdit.Rejected -> problems += "Could not set ${card.name}: ${why(e.reason, card)}."
                 }

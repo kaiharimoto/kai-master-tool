@@ -484,7 +484,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("right"), DeskAction.SELECT_RIGHT, DeskScope.BUILDER, "Select the card to the right", repeatable = true),
         DeskShortcut(KeyChord("a"), DeskAction.NEXT_ART, DeskScope.BUILDER, "Next artwork of the card being read"),
         DeskShortcut(KeyChord("a", shift = true), DeskAction.PREVIOUS_ART, DeskScope.BUILDER, "Previous artwork"),
-        DeskShortcut(KeyChord("i"), DeskAction.ISSUES, DeskScope.BUILDER, "Issues"),
+        DeskShortcut(KeyChord("i"), DeskAction.ISSUES, DeskScope.BUILDER, "Legality: what the deck is checked against"),
         DeskShortcut(KeyChord("left", alt = true), DeskAction.WEB_PREVIOUS, DeskScope.BUILDER, "Previous deck in the web"),
         DeskShortcut(KeyChord("right", alt = true), DeskAction.WEB_NEXT, DeskScope.BUILDER, "Next deck in the web"),
 

@@ -277,7 +277,7 @@ internal object ShotDesigns {
                 block.stacks.forEach { (card, st) ->
                     b.items += PArt(x, y, row, row, card)
                     b.text(x + row + 12f, y, 44f, row, "${st.count}", Face.MONO, 26f, b.c.ink)
-                    val ban = card?.banStatus(model.format)
+                    val ban = card?.let { model.limits?.statusOf(it) ?: it.banStatus(model.format) }
                     val banned = ban != null && ban != BanStatus.UNLIMITED
                     b.text(x + row + 56f, y, colW - row - 56f - (if (banned) 40f else 0f), row, card?.name ?: "Unknown card", Face.ROW, 22f, b.c.ink)
                     if (banned) {

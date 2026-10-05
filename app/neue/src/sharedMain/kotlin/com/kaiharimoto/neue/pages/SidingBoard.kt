@@ -229,7 +229,7 @@ private fun Copy(
             .muClickable(interactionSource = source) { if (marked) onBack(id) else onTake(id) },
     ) {
         if (card != null) {
-            NeueCard(card, Modifier.fillMaxSize().padding(if (marked && strong) 2.dp else 0.dp), format = state.format, foil = "off", dimmed = marked && !strong)
+            NeueCard(card, Modifier.fillMaxSize().padding(if (marked && strong) 2.dp else 0.dp), format = state.format, limits = state.limits, foil = "off", dimmed = marked && !strong)
         } else {
             Box(Modifier.fillMaxSize().border(1.dp, c.ink25))
         }

@@ -1,9 +1,6 @@
 package com.kaiharimoto.neue.builder
 
-import com.kaiharimoto.mastertool.core.model.Format
-import com.kaiharimoto.mastertool.core.deck.GenesysRules
-import com.kaiharimoto.mastertool.core.prep.IsoDate
-import com.kaiharimoto.mastertool.core.deck.Legality
+import com.kaiharimoto.mastertool.core.deck.DeckRules
 import com.kaiharimoto.mastertool.core.input.DeskWords
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
 import com.kaiharimoto.neue.art.ArtCropping
@@ -46,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.deck.DeckEditor
-import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.CardCategory
 import com.kaiharimoto.mastertool.core.model.DeckSection
@@ -58,7 +54,6 @@ import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.zen.zenDeep
 import com.kaiharimoto.neue.zen.zenQuiet
-import com.kaiharimoto.neue.kit.Badge
 import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.mastertool.core.model.CardArt
@@ -177,7 +172,7 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
                 style = MuType.body(LocalMuFonts.current),
                 artGap = 20.dp,
                 headGap = 16.dp,
-                head = { Box(Modifier.zenQuiet()) { CardHeading(card) } },
+                head = { Box(Modifier.zenQuiet()) { CardHeading(card, standing = state.standingOf(card)) } },
                 art = {
                     NeueCard(
                         card = card,
@@ -185,6 +180,7 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
                             if (custom == null) base else base.dragAndDropTarget(shouldStartDragAndDrop = { com.kaiharimoto.neue.platform.mayBePicture(it) }, target = drop)
                         },
                         format = state.format,
+                        limits = state.limits,
                         foil = neue.prefs.foil,
                     )
                 },
@@ -274,9 +270,13 @@ private fun Fold(title: String, key: String, neue: NeueState, modifier: Modifier
     }
 }
 
-/** The card's name, what it is, and its numbers. */
+/**
+ * The card's name, what it is, where it stands, and its numbers. [standing] is one line under the type (the 1.1.2
+ * design review, finding 7) — "Not in the TCG until 8 Oct 2026", "Forbidden · April 2005 list", "Genesys · 50 points"
+ * — so it is read before the card is added, never below the fold; ✕ and full ink when it keeps the card out.
+ */
 @Composable
-internal fun CardHeading(card: Card, large: Boolean = false) {
+internal fun CardHeading(card: Card, large: Boolean = false, standing: DeckRules.Standing? = null) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (large) {
@@ -285,6 +285,7 @@ internal fun CardHeading(card: Card, large: Boolean = false) {
             H2(card.name, maxLines = 3)
         }
         Micro(card.type, color = c.ink70, maxLines = 2)
+        if (standing != null) Micro((if (standing.blocked) "✕ " else "") + standing.words, color = if (standing.blocked) c.ink else c.ink45, maxLines = 2)
         if (card.category == CardCategory.MONSTER) {
             Row(horizontalArrangement = Arrangement.spacedBy(if (large) 40.dp else 28.dp), modifier = Modifier.padding(top = 4.dp)) {
                 card.level?.let { Stat(if (card.frameType.contains("xyz")) "Rank" else "Level", it.toString()) }
@@ -297,11 +298,13 @@ internal fun CardHeading(card: Card, large: Boolean = false) {
     }
 }
 
-/** What the card is filed under — each a question, click it to search the pool by it — and its standing on the list. */
+/** Where [card] stands under the rules the builder checks against, for [CardHeading]. */
+internal fun DeckBuilderState.standingOf(card: Card): DeckRules.Standing = rulesInForce.standing(card, today)
+
+/** What the card is filed under, each a question: click it to search the pool by it. Its standing is in the heading. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun CardTags(card: Card, state: DeckBuilderState) {
-    val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             card.race?.let { race -> Tag(race, false, { state.onFilterChange(CardFilter(races = setOf(race), format = state.format)) }, caption = "Search") }
@@ -313,33 +316,6 @@ internal fun CardTags(card: Card, state: DeckBuilderState) {
             }
             card.archetype?.let { archetype -> Tag(archetype, false, { state.onFilterChange(CardFilter(archetypes = setOf(archetype), format = state.format)) }, caption = "Search") }
         }
-        val rules = state.rulesInForce
-        // The status on the list checked against: a dated one when chosen (1.1.1), else the pool's.
-        val ban = rules.limits?.statusOf(card) ?: card.banStatus(state.format)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (rules.genesys) {
-                // Genesys (1.1.1): no list, a card's points instead, and Link and Pendulum monsters barred.
-                Badge("Genesys")
-                Mono(card.genesysPoints?.let { "$it point${if (it == 1) "" else "s"}" } ?: "points unknown", color = c.ink70)
-                if (GenesysRules.isBarred(card)) Badge("✕ Not in Genesys", inverted = true)
-            } else {
-                Badge(state.format.name)
-                when (ban) {
-                    BanStatus.UNLIMITED -> Mono("Unlimited", color = c.ink70)
-                    BanStatus.FORBIDDEN -> Badge("✕ Forbidden", inverted = true)
-                    BanStatus.LIMITED -> Badge("Limited · 1", inverted = true)
-                    BanStatus.SEMI_LIMITED -> Badge("Semi-limited · 2", inverted = true)
-                }
-            }
-            // Released here, and by the day checked (Phase B): only said when it is not, so a playable card shows nothing more.
-            val region = if (rules.genesys) Format.TCG else state.format
-            val day = rules.asOf ?: IsoDate.of(System.currentTimeMillis().floorDiv(86_400_000L))
-            when (val release = Legality.release(card, region, day)) {
-                is Legality.Release.NotReleased -> Badge("Not in the ${Legality.word(region)}", inverted = true)
-                is Legality.Release.NotYet -> Badge("Out ${Legality.readable(release.date)}", inverted = true)
-                else -> Unit
-            }
-        }
     }
 }
 
@@ -348,7 +324,8 @@ internal fun CardTags(card: Card, state: DeckBuilderState) {
 internal fun Copies(card: Card, state: DeckBuilderState) {
     val c = Mu.colors
     val home = card.requiredSection()
-    val limit = DeckEditor.copyLimit(card, state.format)
+    // In the rules chosen (finding 1): three of anything in Genesys, the day's status on a dated list.
+    val limit = DeckEditor.copyLimit(card, state.format, state.limits)
     val total = state.copiesInDeck(card.id)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -463,7 +463,9 @@ fun <T> Segmented(
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Micro(label(option), color = if (selected) c.paper else c.ink, size = if (tall) 11.sp else 10.sp)
+                // The others at ink-45, as inactive tabs (kit §2): in ink, light words on dark bloom and outweighed the
+                // chosen block, so either theme read the other option as chosen (the 1.1.2 design review, finding 13).
+                Micro(label(option), color = if (selected) c.paper else if (hovered) c.ink else c.ink45, size = if (tall) 11.sp else 10.sp)
             }
         }
     }
@@ -669,7 +671,7 @@ fun MenuRow(
                 color = inner.ink,
                 maxLines = 1,
             )
-            if (hint != null) Mono(hint, color = inner.ink45)
+            if (hint != null) Hint(hint, color = inner.ink45)
         }
     }
 }
@@ -690,7 +692,7 @@ fun RequestFocusOnce(requester: FocusRequester, key: Any? = Unit) {
 fun FieldLabel(text: String, modifier: Modifier = Modifier, hint: String? = null) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Micro(text, Modifier.weight(1f))
-        if (hint != null) Mono(hint)
+        if (hint != null) Hint(hint)
     }
 }
 

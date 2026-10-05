@@ -89,7 +89,7 @@ object DeckValidator {
             if (!seen.add(card.id)) return@forEach
             val copies = CardIdentity.copiesOf(deck, card)
 
-            val limit = if (limits == null) DeckEditor.copyLimit(card, format) else minOf(Deck.MAX_COPIES, limits.statusOf(card).maxCopies)
+            val limit = DeckEditor.copyLimit(card, format, limits)
             if (copies > limit) {
                 val label = if (limit == 0) "is Forbidden" else "is limited to $limit"
                 val on = limits?.label?.let { " on the $it" }.orEmpty()

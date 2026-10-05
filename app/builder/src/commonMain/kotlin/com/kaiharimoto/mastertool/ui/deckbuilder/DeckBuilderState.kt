@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.ui.deckbuilder
 
+import com.kaiharimoto.mastertool.core.deck.BanSource
 import com.kaiharimoto.mastertool.core.deck.DeckRules
 import com.kaiharimoto.mastertool.core.prep.IsoDate
 import androidx.compose.runtime.derivedStateOf
@@ -361,8 +362,11 @@ class DeckBuilderState(
     val validation: DeckValidation by derivedStateOf {
         // Released by the day, too: an OCG-only card, or one not out yet, is no TCG card (Phase B); and the list of
         // that day, or Genesys, when the person chose one (1.1.1).
-        rulesInForce.validate(deck, index::byId, IsoDate.of(deps.now().floorDiv(86_400_000L)))
+        rulesInForce.validate(deck, index::byId, today)
     }
+
+    /** Today, `yyyy-MM-dd`, by the app's clock: the day a check with no day chosen is made on. */
+    val today: String get() = IsoDate.of(deps.now().floorDiv(86_400_000L))
 
     /**
      * What the deck is checked against beyond its format (1.1.1): a day and its list, or Genesys. Set by the app from
@@ -372,6 +376,13 @@ class DeckBuilderState(
 
     /** [rules] in the builder's format: what [validation] checks, and the words for it ("TCG on 1 May 2025 …"). */
     val rulesInForce: DeckRules get() = rules.copy(format = format)
+
+    /**
+     * Where every copy limit comes from (the 1.1.2 design review, finding 1): the chosen rules', so Genesys takes three
+     * of anything and a dated list limits by that day — adding, dropping, the remaining copies, the steppers, the
+     * toast and the card marks alike. One instance while the rules stand, so a card handed it does not redraw.
+     */
+    val limits: BanSource by derivedStateOf { rulesInForce.banSource }
 
     val statistics: DeckStatistics by derivedStateOf {
         DeckStatistics.of(deck, index::byId, statsSection)
@@ -526,7 +537,7 @@ class DeckBuilderState(
 
     /** Whether the copy went in: what a finger's haptic and ring wait on (touch swarm, rec 13). */
     fun addCard(card: Card, section: DeckSection = card.requiredSection()): Boolean =
-        applyEdit(DeckEditor.add(deck, card, section, format), card)
+        applyEdit(DeckEditor.add(deck, card, section, format, limits), card)
 
     fun removeOne(card: Card, section: DeckSection) {
         when (val result = DeckEditor.remove(deck, card.id, section)) {
@@ -544,7 +555,7 @@ class DeckBuilderState(
     }
 
     fun setCount(card: Card, section: DeckSection, count: Int) {
-        applyEdit(DeckEditor.setCount(deck, card, section, count, format), card)
+        applyEdit(DeckEditor.setCount(deck, card, section, count, format, limits), card)
     }
 
     // ---- drops -------------------------------------------------------------
@@ -553,7 +564,7 @@ class DeckBuilderState(
     // drop is undoable and a rejected drop explains itself in the same words.
 
     fun addCardAt(card: Card, section: DeckSection, index: Int): Boolean =
-        applyEdit(DeckEditor.addAt(deck, card, section, index, format), card)
+        applyEdit(DeckEditor.addAt(deck, card, section, index, format, limits), card)
 
     fun moveCardTo(
         card: Card,
@@ -603,7 +614,7 @@ class DeckBuilderState(
         if (!DeckEditor.sectionAccepts(card, to)) return false
         // A move does not change how many copies the deck holds, so only a card
         // arriving from the pool can be stopped by the banlist.
-        if (from == null && DeckEditor.remainingCopies(deck, card, format) <= 0) return false
+        if (from == null && DeckEditor.remainingCopies(deck, card, format, limits) <= 0) return false
         // Reordering within a section needs no room; arriving in a new one does.
         if (from != to && deck[to].size >= to.maxSize) return false
         return true
@@ -665,11 +676,13 @@ class DeckBuilderState(
     private fun explain(reason: RejectionReason, card: Card): String = when (reason) {
         RejectionReason.SECTION_FULL -> "That section is full."
         RejectionReason.COPY_LIMIT -> {
-            val limit = DeckEditor.copyLimit(card, format)
+            // In the rules chosen, not today's list: a dated list's status, or Genesys's three of anything (finding 1).
+            val limit = DeckEditor.copyLimit(card, format, limits)
+            val where = rulesInForce.let { if (it.genesys) "Genesys" else it.short() }
             if (limit == 0) {
-                "${card.name} is Forbidden in ${format.name}."
+                "${card.name} is Forbidden in $where."
             } else {
-                "${card.name} is limited to $limit ${if (limit == 1) "copy" else "copies"}."
+                "${card.name} is limited to $limit ${if (limit == 1) "copy" else "copies"} in $where."
             }
         }
         RejectionReason.WRONG_SECTION ->
@@ -1198,7 +1211,7 @@ class DeckBuilderState(
     /** Copies of the card [id] names, by any printing (Phase B: an alternate artwork is the same card). */
     fun copiesInDeck(id: CardId): Int = CardIdentity.copiesOf(deck, id, index::byId)
 
-    fun remaining(card: Card): Int = DeckEditor.remainingCopies(deck, card, format)
+    fun remaining(card: Card): Int = DeckEditor.remainingCopies(deck, card, format, limits)
 
     /** Asks the owning pane to scroll [id] into view and flash it. */
     /** Asks the deck to ring the card at [position] in [section] (touch swarm, rec 15: an add a finger made, where it landed). */

@@ -61,6 +61,7 @@ import com.kaiharimoto.neue.art.LocalArt
 import com.kaiharimoto.neue.art.LocalCustomArt
 import coil3.compose.AsyncImagePainter
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
+import com.kaiharimoto.mastertool.core.deck.BanSource
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.Format
@@ -131,6 +132,11 @@ fun NeueCard(
      * the one before.
      */
     artChip: Boolean = false,
+    /**
+     * Where the corner's limit mark comes from: the rules the builder checks against (`DeckBuilderState.limits`, the
+     * 1.1.2 design review, finding 1) — none in Genesys, a dated list's status — else the pool's list in [format].
+     */
+    limits: BanSource? = null,
 ) {
     // The artwork chosen for this card (1.0.14): the same card with another picture,
     // under that picture's passcode, so the originals and the name masks keep apart.
@@ -149,7 +155,7 @@ fun NeueCard(
     } else {
         null
     }
-    NeueCardFace(drawn, modifier, format, copies, selected, dimmed, foil, marker, outlined, motion, chip)
+    NeueCardFace(drawn, modifier, format, copies, selected, dimmed, foil, marker, outlined, motion, chip, limits?.statusOf(card))
 }
 
 /** Steps a card's artwork: provided by the window, which owns the choice (`NeueState.stepArt`). */
@@ -175,6 +181,8 @@ private fun NeueCardFace(
     outlined: Boolean,
     motion: (() -> LeanPose)?,
     artChip: ArtChip? = null,
+    /** The status under the chosen rules, when the caller has them; else the pool's in [format]. */
+    ruled: BanStatus? = null,
 ) {
     val c = Mu.colors
     var art by remember(card.id) { mutableStateOf(ArtState.LOADING) }
@@ -401,7 +409,7 @@ private fun NeueCardFace(
             }
         }
 
-        val ban = card.banStatus(format)
+        val ban = ruled ?: card.banStatus(format)
         // Forbidden always shows; Limited and Semi-Limited only when asked for (kai, 1.0.73).
         if (ban != BanStatus.UNLIMITED && (ban.maxCopies == 0 || LocalLimitMarks.current)) {
             Inverted {

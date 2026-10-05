@@ -664,7 +664,7 @@ private fun PlanArt(
                                 .muClickable { onTakeBack(id) },
                         ) {
                             if (card != null) {
-                                NeueCard(card, Modifier.fillMaxSize().padding(if (strong) 2.dp else 1.dp), format = state.format, foil = "off", dimmed = gone || !strong)
+                                NeueCard(card, Modifier.fillMaxSize().padding(if (strong) 2.dp else 1.dp), format = state.format, limits = state.limits, foil = "off", dimmed = gone || !strong)
                             } else {
                                 Mono("#${id.value}", Modifier.align(Alignment.Center), color = c.ink45, size = 9.sp)
                             }

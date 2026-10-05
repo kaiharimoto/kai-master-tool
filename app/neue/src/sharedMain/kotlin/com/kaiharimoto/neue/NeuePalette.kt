@@ -54,7 +54,7 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
             })
             // Always there (1.1.1): what the deck is checked against is chosen in the drawer.
             val count = state.validation.errors.size + state.validation.warnings.size
-            add(MenuEntry(if (count > 0) "Issues" else "Legality", hint = if (count > 0) "$count" else state.rulesInForce.words()) { neue.drawer = Drawer.ISSUES })
+            add(MenuEntry("Legality", hint = if (count > 0) "✕ $count" else state.rulesInForce.short()) { neue.drawer = Drawer.ISSUES })
         }
         add(MenuEntry(if (state.dirty) "Save" else "Saved", separatorBefore = true, enabled = state.dirty || !neue.prefs.autoSave) { run(DeskAction.SAVE) })
         add(MenuEntry("Auto save: ${if (neue.prefs.autoSave) "on" else "off"}", hint = "Turn ${if (neue.prefs.autoSave) "off" else "on"}") {
@@ -82,50 +82,69 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
     }
 }
 
+/**
+ * The palette's rows (the 1.1.2 design review, finding 11): Go in the pages' own order, then this page's own commands,
+ * then the rest and App, and only then the other pages' own — their keys work on their page alone, so there they say
+ * which page instead of a key. [Command.words] are what else a row answers to ("banlist" finds Legality).
+ */
 fun NeueHolders.commands(query: String): List<Command> {
     val q = query.trim().lowercase()
     fun kbd(a: DeskAction) = DeskShortcuts.chordFor(a)?.let(DeskShortcuts::kbd)
-    fun cmd(group: String, label: String, action: DeskAction) = Command(group, label, kbd(action)) { run(action) }
-    val fixed = listOf(
-        cmd("Go", "Decks", DeskAction.GO_DECKS),
-        cmd("Go", "Builder", DeskAction.GO_BUILDER),
-        cmd("Go", "Siding", DeskAction.GO_SIDING),
-        cmd("Go", "Format", DeskAction.GO_FORMAT),
-        cmd("Go", "Prep", DeskAction.GO_PREP),
-        cmd("Go", "Present", DeskAction.GO_PRESENT),
-        cmd("Go", "Duel", DeskAction.GO_DUEL),
-        cmd("Go", "Ai World", DeskAction.GO_WORLD),
-        cmd("Go", "Shootout", DeskAction.GO_SHOOTOUT),
-        cmd("Shootout", "Begin a session, or carry on", DeskAction.SHOOTOUT_START),
-        cmd("Shootout", "The results, or back to the trials", DeskAction.SHOOTOUT_RESULTS),
-        *(if (neue.prefs.ai.enabled) arrayOf(
-            cmd("Shootout", "Trust: how far ${ai.name} is trusted on this matchup", DeskAction.SHOOTOUT_TRUST),
-            Command("Shootout", "Interview: write how you judge this matchup") { neue.go(Page.SHOOTOUT); ai.startRubricInterview() },
-        ) else emptyArray()),
-        *(if (neue.page == Page.SHOOTOUT && shootoutStarted && shootout.running) arrayOf(
-            cmd("Shootout", "Stop the session, every answer kept", DeskAction.SHOOTOUT_STOP),
-        ) else emptyArray()),
-        Command("World", "New world") { neue.go(Page.WORLD); com.kaiharimoto.neue.world.newWorld(this) },
-        *(if (neue.page == Page.WORLD) arrayOf(
-            cmd("World", "Run the file in the editor", DeskAction.WORLD_RUN),
-            cmd("World", "Stop the run", DeskAction.WORLD_STOP),
-            cmd("World", if (neue.prefs.world.follow) "Stay put: stop following Ai" else "Follow Ai from pane to pane", DeskAction.WORLD_FOLLOW),
-        ) else emptyArray()),
-        Command("Duel", "New duel") { neue.go(Page.DUEL); duel.setupOpen = true },
-        Command("Duel", "Test hand: the builder's deck, one player") { neue.go(Page.DUEL); com.kaiharimoto.neue.duel.testHand(this) },
-        Command("Duel", "Replays: keep this duel, watch one again") { neue.go(Page.DUEL); duel.libraryOpen = true },
-        Command("Present", "New deck profile") { neue.go(Page.PRESENT); present.creating = true },
-        *(if (present.open != null) arrayOf(
-            cmd("Present", "Present from the start", DeskAction.PRESENT_START),
-            cmd("Present", "Present from this slide", DeskAction.PRESENT_FROM_HERE),
-            Command("Present", "Rehearse timings") { present.present(0, rehearse = true) },
-            cmd("Present", "New slide", DeskAction.SLIDE_NEW),
-        ) else emptyArray()),
-        *(if (present.open != null && neue.prefs.ai.enabled) arrayOf(
-            Command("Present", "Build these slides with ${ai.name}") { neue.go(Page.PRESENT); present.briefing = true },
-            Command("Present", "Restyle these slides with ${ai.name}") { neue.go(Page.PRESENT); present.restyling = true },
-        ) else emptyArray()),
-        cmd("Go", "Settings", DeskAction.GO_SETTINGS),
+    fun cmd(group: String, label: String, action: DeskAction, words: List<String> = emptyList()) = Command(group, label, kbd(action), words = words) { run(action) }
+    val go = listOf(
+        Page.BUILDER to DeskAction.GO_BUILDER,
+        Page.DECKS to DeskAction.GO_DECKS,
+        Page.SIDING to DeskAction.GO_SIDING,
+        Page.FORMAT to DeskAction.GO_FORMAT,
+        Page.PREP to DeskAction.GO_PREP,
+        Page.PRESENT to DeskAction.GO_PRESENT,
+        Page.DUEL to DeskAction.GO_DUEL,
+        Page.WORLD to DeskAction.GO_WORLD,
+        Page.SHOOTOUT to DeskAction.GO_SHOOTOUT,
+    ).sortedBy { it.first.numeral ?: Int.MAX_VALUE }.map { (page, action) ->
+        cmd("Go", if (page == Page.WORLD) "Ai World" else page.title, action)
+    } + cmd("Go", "Settings", DeskAction.GO_SETTINGS)
+    // Each page's own commands, kept apart so they stand after Go on their page and after App elsewhere.
+    val pages: Map<Page, List<Command>> = mapOf(
+        Page.SHOOTOUT to listOfNotNull(
+            cmd("Shootout", "Begin a session, or carry on", DeskAction.SHOOTOUT_START),
+            cmd("Shootout", "The results, or back to the trials", DeskAction.SHOOTOUT_RESULTS),
+            if (neue.prefs.ai.enabled) cmd("Shootout", "Trust: how far ${ai.name} is trusted on this matchup", DeskAction.SHOOTOUT_TRUST) else null,
+            if (neue.prefs.ai.enabled) Command("Shootout", "Interview: write how you judge this matchup") { neue.go(Page.SHOOTOUT); ai.startRubricInterview() } else null,
+            if (neue.page == Page.SHOOTOUT && shootoutStarted && shootout.running) cmd("Shootout", "Stop the session, every answer kept", DeskAction.SHOOTOUT_STOP) else null,
+        ),
+        Page.WORLD to listOf(Command("World", "New world") { neue.go(Page.WORLD); com.kaiharimoto.neue.world.newWorld(this) }) + (
+            if (neue.page == Page.WORLD) listOf(
+                cmd("World", "Run the file in the editor", DeskAction.WORLD_RUN),
+                cmd("World", "Stop the run", DeskAction.WORLD_STOP),
+                cmd("World", if (neue.prefs.world.follow) "Stay put: stop following Ai" else "Follow Ai from pane to pane", DeskAction.WORLD_FOLLOW),
+            ) else emptyList()
+        ),
+        Page.DUEL to listOf(
+            Command("Duel", "New duel") { neue.go(Page.DUEL); duel.setupOpen = true },
+            Command("Duel", "Test hand: the builder's deck, one player") { neue.go(Page.DUEL); com.kaiharimoto.neue.duel.testHand(this) },
+            Command("Duel", "Replays: keep this duel, watch one again") { neue.go(Page.DUEL); duel.libraryOpen = true },
+        ),
+        Page.PRESENT to listOf(Command("Present", "New deck profile") { neue.go(Page.PRESENT); present.creating = true }) + (
+            if (present.open != null) listOf(
+                cmd("Present", "Present from the start", DeskAction.PRESENT_START),
+                cmd("Present", "Present from this slide", DeskAction.PRESENT_FROM_HERE),
+                Command("Present", "Rehearse timings") { present.present(0, rehearse = true) },
+                cmd("Present", "New slide", DeskAction.SLIDE_NEW),
+            ) else emptyList()
+        ) + (
+            if (present.open != null && neue.prefs.ai.enabled) listOf(
+                Command("Present", "Build these slides with ${ai.name}") { neue.go(Page.PRESENT); present.briefing = true },
+                Command("Present", "Restyle these slides with ${ai.name}") { neue.go(Page.PRESENT); present.restyling = true },
+            ) else emptyList()
+        ),
+    )
+    val here = pages[neue.page].orEmpty()
+    // Elsewhere a page's keys do something else or nothing: the row names its page instead.
+    val elsewhere = pages.filterKeys { it != neue.page }.entries.sortedBy { it.key.numeral ?: Int.MAX_VALUE }.flatMap { (page, rows) ->
+        rows.map { if (it.hint != null) it.copy(hint = "on ${if (page == Page.WORLD) "Ai World" else page.title}") else it }
+    }
+    val rest = listOf(
         cmd("Deck", "Save", DeskAction.SAVE),
         cmd("Deck", "New deck", DeskAction.NEW_DECK),
         cmd("Deck", "Import a .ydk or .ydkx", DeskAction.IMPORT),
@@ -140,7 +159,8 @@ fun NeueHolders.commands(query: String): List<Command> {
         Command("Deck", if (neue.prefs.foil == Foils.OFF) "Foil on" else "Foil off") { toggleFoil() },
         cmd("Deck", "Undo", DeskAction.UNDO),
         cmd("Deck", "Redo", DeskAction.REDO),
-        cmd("Deck", "Issues", DeskAction.ISSUES),
+        // One row for the drawer (finding 4), found by what people call it.
+        cmd("Deck", "Legality", DeskAction.ISSUES, words = LEGALITY_WORDS),
         cmd("Deck", "Groups", DeskAction.GROUPS),
         cmd("App", "Zen, now", DeskAction.ZEN),
         Command("App", if (neue.prefs.autoZen) "Zen by itself: off" else "Zen by itself: on") { neue.update { it.copy(autoZen = !it.autoZen) } },
@@ -150,11 +170,14 @@ fun NeueHolders.commands(query: String): List<Command> {
         cmd("Cards", if (neue.prefs.poolList != null) "Show every card in the pool" else "Show the list in the pool", DeskAction.SHOW_LIST),
         Command("Cards", "New list of cards") { neue.showList(neue.newList()) },
         cmd("Deck", "New group", DeskAction.NEW_GROUP),
-        Command("Deck", if (neue.prefs.genesys) "Check against the Forbidden & Limited list" else "Check against Genesys") {
+        Command(
+            "Deck",
+            if (neue.prefs.genesys) "Check against the Forbidden & Limited list" else "Check against Genesys",
+            words = if (neue.prefs.genesys) LEGALITY_WORDS else GENESYS_WORDS,
+        ) {
             neue.update { it.copy(genesys = !it.genesys) }
         },
-        Command("Deck", "Legality: what the deck is checked against…") { neue.drawer = Drawer.ISSUES },
-        Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}") {
+        Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}", words = listOf("region", "TCG", "OCG")) {
             setFormat(if (builder.format == Format.TCG) Format.OCG else Format.TCG)
         },
         cmd("App", if (neue.prefs.theme == NeueTheme.PAPER) "Switch to ink (dark)" else "Switch to paper (light)", DeskAction.TOGGLE_THEME),
@@ -173,7 +196,9 @@ fun NeueHolders.commands(query: String): List<Command> {
         *(if (QrSource.CAMERA in Platform.scanSources) arrayOf(Command("Deck", "Scan a deck's QR code") { CardActions.scan(QrSource.CAMERA, builder, neue) }) else emptyArray()),
         *(if (QrSource.PICTURE in Platform.scanSources) arrayOf(Command("Deck", "Import a picture of a QR code") { CardActions.scan(QrSource.PICTURE, builder, neue) }) else emptyArray()),
         Command("App", "Refresh the card pool") { builder.refreshCardPool(force = true) },
-        // The assistant's own, while it is on (1.0.43).
+    )
+    // The assistant's own, while it is on (1.0.43).
+    val assistant = listOf<Command>(
         *(if (neue.prefs.ai.enabled) arrayOf(
             cmd(ai.name, "${ai.name}: open or close", DeskAction.AI_PANEL),
             cmd(ai.name, "${ai.name}: speak to it", DeskAction.AI_VOICE),
@@ -193,8 +218,9 @@ fun NeueHolders.commands(query: String): List<Command> {
             Command(ai.name, "${ai.name}: your profile") { ai.openProfile() },
             Command(ai.name, "${ai.name}: what can you do?") { ai.setOpen(true); ai.demoOpen = true },
         ) else emptyArray()),
-        Command("App", "Report an issue →") { Platform.reportIssue() },
-    ).filter { q.isEmpty() || it.label.lowercase().contains(q) || it.group.lowercase().startsWith(q) }
+    )
+    val fixed = (go + here + rest + assistant + elsewhere + Command("App", "Report an issue →") { Platform.reportIssue() })
+        .filter { c -> q.isEmpty() || c.label.lowercase().contains(q) || c.group.lowercase().startsWith(q) || c.words.any { it.lowercase().contains(q) } }
 
     if (q.length < 2 || builder.index.size == 0) return fixed
     val cards = builder.index.search(query, limit = 12).cards.map { card ->
@@ -211,3 +237,9 @@ fun NeueHolders.commands(query: String): List<Command> {
     }
     return fixed + cards
 }
+
+/** What the Legality row answers to besides its name: what people call the list and the drawer. */
+private val LEGALITY_WORDS = listOf("issues", "banlist", "ban list", "F&L", "forbidden", "limited", "format", "legal", "check against")
+
+/** What the Genesys row answers to. */
+private val GENESYS_WORDS = listOf("genesys", "points", "format", "legal")

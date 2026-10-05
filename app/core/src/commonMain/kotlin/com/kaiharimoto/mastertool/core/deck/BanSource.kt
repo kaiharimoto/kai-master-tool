@@ -18,5 +18,8 @@ fun interface BanSource {
     companion object {
         /** The pool's status in [format]: the list in force when the pool was last fetched. */
         fun current(format: Format): BanSource = BanSource { it.banStatus(format) }
+
+        /** No list at all: three of anything (Genesys, 1.1.1). */
+        val NONE: BanSource = BanSource { BanStatus.UNLIMITED }
     }
 }

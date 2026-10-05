@@ -101,13 +101,13 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                         artMax = artWidth / CARD_RATIO,
                         head = {
                             Row(verticalAlignment = Alignment.Top) {
-                                Box(Modifier.weight(1f).padding(end = 12.dp)) { CardHeading(card) }
+                                Box(Modifier.weight(1f).padding(end = 12.dp)) { CardHeading(card, standing = state.standingOf(card)) }
                                 // Full screen, turning with the phone (v1.3.6).
                                 IconButton(Icons.Maximize, { neue.showcase = card }, size = 40.dp, label = "Full screen")
                                 IconButton(Icons.X, close, size = 40.dp, label = "Close")
                             }
                         },
-                        art = { NeueCard(card = card, modifier = Modifier.fillMaxSize(), format = state.format, foil = neue.prefs.foil) },
+                        art = { NeueCard(card = card, modifier = Modifier.fillMaxSize(), format = state.format, foil = neue.prefs.foil, limits = state.limits) },
                         body = { style -> SelectionContainer { MuText(text, style = style, color = c.ink) } },
                     )
                     HRule(color = c.ink)
@@ -140,13 +140,14 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                 card = card,
                 modifier = Modifier.size(artWidth, artHeight),
                 format = state.format,
+                limits = state.limits,
                 foil = neue.prefs.foil,
             )
             Box(Modifier.width(details).height(artHeight)) {
                 val scroll = rememberScrollState()
                 Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                     Row(verticalAlignment = Alignment.Top) {
-                        Box(Modifier.weight(1f).padding(end = 16.dp)) { CardHeading(card, large = true) }
+                        Box(Modifier.weight(1f).padding(end = 16.dp)) { CardHeading(card, large = true, standing = state.standingOf(card)) }
                         Tip("Full screen: the card as large as it goes, turning with the pointer or the tablet") {
                             IconButton(Icons.Maximize, { neue.showcase = card }, size = 32.dp, label = "Full screen")
                         }

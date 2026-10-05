@@ -120,6 +120,7 @@ actual class DeckShots actual constructor(
         return ShotModel(
             name = state.deckName,
             format = state.format,
+            limits = state.limits,
             date = LocalDate.now().toString(),
             latestSet = null,
             sections = DeckSection.entries.map { section ->

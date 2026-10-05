@@ -265,6 +265,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                                         card = card,
                                         modifier = Modifier.fillMaxSize(),
                                         format = state.format,
+                                        limits = state.limits,
                                         copies = state.copiesInDeck(card.id),
                                         selected = card == picked,
                                         dimmed = list == null && state.remaining(card) <= 0,
@@ -331,9 +332,9 @@ private fun Reading(card: Card, state: DeckBuilderState, neue: NeueState, listId
     val scroll = rememberScrollState()
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            NeueCard(card, Modifier.fillMaxWidth().aspectRatio(CARD_RATIO), format = state.format, foil = neue.prefs.foil)
+            NeueCard(card, Modifier.fillMaxWidth().aspectRatio(CARD_RATIO), format = state.format, foil = neue.prefs.foil, limits = state.limits)
             ArtSwitch(card, neue)
-            CardHeading(card)
+            CardHeading(card, standing = state.standingOf(card))
             SelectionContainer { Body(card.description.ifBlank { "No card text." }, color = c.ink) }
             // The actions, the add first — or the list's, when the pop-out is adding to one.
             val home = card.requiredSection()
