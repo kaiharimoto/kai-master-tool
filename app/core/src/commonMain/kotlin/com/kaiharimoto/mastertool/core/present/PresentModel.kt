@@ -248,10 +248,26 @@ data class Element(
     val edited: Boolean = false,
     /** A link: another slide's id to jump to when clicked while presenting. */
     val link: String? = null,
+    /**
+     * A guide for the creator, not content (1.1.x, I2): the end card's "Next video" and "Subscribe"
+     * boxes mark where YouTube's end screen goes. Shown in the editor and while presenting, left out of
+     * every export. See [isGuide], which also knows the boxes made before this field.
+     */
+    val guide: Boolean = false,
 ) {
     val plainText: String get() = paras.joinToString("\n") { p -> p.runs.joinToString("") { it.text } }
 
+    /**
+     * Whether this is a guide ([guide]), or one of the end card's dashed boxes as 1.0.70–1.1.x made them,
+     * before the field: a dashed shape reading "Next video" or "Subscribe".
+     */
+    val isGuide: Boolean
+        get() = guide || (type == SHAPE && stroke?.dash == Stroke.DASH_DASHED && plainText.trim() in OLD_GUIDES)
+
     companion object {
+        /** The end card's guide boxes' words, as the layout wrote them. */
+        private val OLD_GUIDES = setOf("Next video", "Subscribe")
+
         const val TEXT = "TEXT"
         const val SHAPE = "SHAPE"
         const val IMAGE = "IMAGE"
@@ -442,6 +458,11 @@ data class Chart(
     val max: Float? = null,
     /** Values are percentages. */
     val percent: Boolean = false,
+    /**
+     * Each label's deck group, as its colour index in the deck's palette (1.1.x, B8): a slice or bar
+     * about a group wears the group's own marker colour. Null or short: the chart's own inks.
+     */
+    val groups: List<Int>? = null,
 ) {
     companion object {
         const val BAR = "BAR"

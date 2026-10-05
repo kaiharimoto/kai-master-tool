@@ -137,6 +137,7 @@ import com.kaiharimoto.neue.shot.ShotStyle
 import com.kaiharimoto.neue.start.StudioStart
 import com.kaiharimoto.neue.update.NeueUpdates
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.swing.Swing
 import org.jetbrains.skia.EncodedImageFormat
@@ -548,12 +549,61 @@ fun neueMain(args: Array<String>) {
                 when (map["present-mode"]) {
                     "library" -> { h.present.close(); clock.run(60) }
                     "restyle" -> { h.present.restyling = true; clock.run(40) }
+                    // A module's dialog open (1.1.x): --present-add=COMBO|PERFORMERS|ODDS|….
+                    "add" -> { h.present.addingModule = map["present-add"]?.uppercase() ?: Modules.COMBO; clock.run(90) }
                     "style" -> { h.present.restyleBefore = h.present.open; clock.run(20) }
                     "play", "overview", "notes" -> {
                         h.present.present(h.present.slideIndex)
                         clock.run(90)
                         if (map["present-mode"] == "overview") { h.present.toggleOverview(); clock.run(90) }
                         if (map["present-mode"] == "notes") { h.present.toggleNotes(); clock.run(30) }
+                    }
+                    // The presenter's console in this window, the slides in a window of their own (1.1.x): the
+                    // studio draws this window only. --present-console-next=true takes one click first.
+                    "console" -> {
+                        h.present.output.slidesWindow = true
+                        h.present.present(h.present.slideIndex)
+                        clock.run(60)
+                        if (map["present-console-next"] == "true") { h.present.next(); clock.run(60) }
+                        if (map["present-console-pen"] == "true") {
+                            h.present.togglePen()
+                            h.present.playing?.ink = listOf(listOf(300f to 300f, 600f to 420f, 900f to 330f))
+                            clock.run(20)
+                        }
+                    }
+                }
+                // --present-export=pdf|png|thumb: a real export through the export overlay (1.1.x), the file
+                // written to the out folder beside the shot.
+                map["present-export"]?.let { kind ->
+                    val shown = h.present.open?.slides?.indices?.filter { h.present.open?.slides?.get(it)?.hidden == false }.orEmpty()
+                    val job = when (kind) {
+                        "png" -> com.kaiharimoto.neue.present.ExportJob(com.kaiharimoto.neue.present.ExportJob.PNG, shown) { file, _, bytes -> File(out, "$name-$file").writeBytes(bytes); "Saved $file" }
+                        "thumb" -> com.kaiharimoto.neue.present.ExportJob(com.kaiharimoto.neue.present.ExportJob.THUMBNAIL, listOf(h.present.slideIndex)) { file, _, bytes -> File(out, "$name-$file").writeBytes(bytes); "Saved $file" }
+                        else -> com.kaiharimoto.neue.present.ExportJob(com.kaiharimoto.neue.present.ExportJob.PDF, shown) { file, _, bytes -> File(out, "$name-$file").writeBytes(bytes); "Saved $file" }
+                    }
+                    h.present.exporting = job
+                    // Each slide waits for its art by the frame clock: turn it until the job is done.
+                    var frames = 0
+                    while (h.present.exporting != null && frames < 60 * 60 * 4) { clock.run(30); frames += 30 }
+                    println("[neue-studio] present export $kind: ${if (h.present.exporting == null) "written" else "timed out"} after $frames frames")
+                }
+                // --present-view=N: slide N drawn as the picture Ai's present_view sends a model that sees (1.1.x).
+                map["present-view"]?.toIntOrNull()?.let { n ->
+                    val p = h.present.open
+                    if (p != null) {
+                        var image: androidx.compose.ui.graphics.ImageBitmap? = null
+                        var answered = false
+                        // Unconfined: the request is made at once, and the answer lands as the window draws it.
+                        val asked = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined).launch {
+                            image = h.present.output.picture(p, n)
+                            answered = true
+                        }
+                        var frames = 0
+                        while (!answered && frames < 60 * 40) { clock.run(30); frames += 30 }
+                        asked.cancel()
+                        val bytes = image?.let { com.kaiharimoto.neue.platform.encodePng(it) }
+                        if (bytes != null) File(out, "$name-view.png").writeBytes(bytes)
+                        println("[neue-studio] present view of slide $n: ${if (bytes != null) "${image?.width}×${image?.height}" else "none"} after $frames frames")
                     }
                 }
                 map["present-frames"]?.let { spec ->

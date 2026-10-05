@@ -159,10 +159,19 @@ internal class AiPresent(private val h: NeueHolders) {
                         failed = true
                         break
                     }
-                    val fresh = ModuleData.refresh(h, start, s) ?: s
-                    p = PresentEdits.updateSlide(start, s.id) { fresh }
-                    touched = s.id
-                    lines += "${lines.size + 1}. Refreshed slide ${start.indexOf(s.id) + 1} from its data; what was changed by hand stayed"
+                    // A siding slide follows its own matchup (the audit's B2); one whose matchup is gone is left, and said.
+                    when (val r = ModuleData.refreshed(h, start, s)) {
+                        is Modules.Refreshed.Made -> {
+                            p = PresentEdits.updateSlide(start, s.id) { r.slide }
+                            touched = s.id
+                            lines += "${lines.size + 1}. Refreshed slide ${start.indexOf(s.id) + 1} from its data; what was changed by hand stayed"
+                        }
+                        is Modules.Refreshed.Gone -> {
+                            lines += "${lines.size + 1}. refresh_module: slide ${start.indexOf(s.id) + 1} was left as it was. ${r.why}"
+                            failed = true
+                            break
+                        }
+                    }
                 }
                 null -> { lines += "${lines.size + 1}. An op has no action."; failed = true }
                 else -> {
@@ -271,6 +280,8 @@ internal class AiPresent(private val h: NeueHolders) {
         val gathered = ModuleData.gather(h, p, type, input)
         if (type == Modules.SIDING && gathered.matchups.isEmpty()) throw ModuleProblem("add_module siding: the deck has no siding plans (or none by those names). Make them with set_siding_plan first.")
         if (type == Modules.MATCHUPS && gathered.rows.isEmpty()) throw ModuleProblem("add_module matchups: no practice games are logged for this deck. Log them with log_game first.")
+        // Opening odds and Ratios with no groups, as the dialog refuses them (the audit's I3).
+        Modules.missing(type, gathered)?.let { throw ModuleProblem("add_module ${type.lowercase()}: $it") }
         val slides = Modules.generate(type, gathered, System.currentTimeMillis())
         var after = ToolArgs.string(op, "after")?.let { r -> p.slide(r)?.let { p.indexOf(it.id) } ?: r.toIntOrNull()?.minus(1) }
             ?: (p.slides.lastIndex - if (p.slides.lastOrNull()?.layout == SlideLayouts.END_CARD) 1 else 0)
@@ -283,14 +294,18 @@ internal class AiPresent(private val h: NeueHolders) {
     /** Something the app could not do for an op, said so Ai can fix it. */
     private class ModuleProblem(message: String) : Exception(message)
 
-    private fun view(ref: kotlinx.serialization.json.JsonElement?): MetaAnswer {
+    private suspend fun view(ref: kotlinx.serialization.json.JsonElement?): MetaAnswer {
         val p = present.open ?: return fail("There is no presentation open.")
         val r = (ref as? JsonPrimitive)?.contentOrNull ?: return fail("Give slide: its id or number.")
         val i = p.slide(r)?.let { p.indexOf(it.id) } ?: r.toIntOrNull()?.minus(1)?.takeIf { it in p.slides.indices }
             ?: return fail("No slide $r; there are ${p.slides.size}.")
         present.slideId = p.slides[i].id
         val problems = PresentReport.check(p, i, ::cardName)
+        // A model that sees is shown the slide itself too (1.1.x, the audit's M9): colour, balance and crowding
+        // are judged from pixels, not words. Drawn as the audience's finished picture, once its art is in.
+        val picture = slidePicture(p, i)
         val text = buildString {
+            if (picture != null) appendLine("The slide as the audience sees it, every build done, is attached as a picture (960 × 540). Judge color, balance and crowding from it.")
             val s = p.slides[i]
             appendLine("Slide ${i + 1} of ${p.slides.size}: ${s.title.ifBlank { "(untitled)" }}")
             PresentReport.deckWords(p, i, ::cardName)?.let { appendLine("Deck: $it") }
@@ -300,6 +315,27 @@ internal class AiPresent(private val h: NeueHolders) {
                 problems.forEach { appendLine("- $it") }
             }
         }
-        return ok(text.trim(), if (problems.isEmpty()) "Looked at slide ${i + 1}: reads well" else "Looked at slide ${i + 1}: ${problems.size} to fix")
+        return MetaAnswer(
+            text.trim(),
+            if (problems.isEmpty()) "Looked at slide ${i + 1}: reads well" else "Looked at slide ${i + 1}: ${problems.size} to fix",
+            pictures = listOfNotNull(picture),
+        )
+    }
+
+    /**
+     * Slide [i] of [p] as a PNG for the conversation, when the model sees (`Vision` says so for sure: a model
+     * that cannot would refuse every later turn with the picture in it) and talks to the app over an API (a
+     * CLI's tools answer in words alone); null otherwise, or if the window could not draw it in time.
+     */
+    private suspend fun slidePicture(p: Presentation, i: Int): com.kaiharimoto.mastertool.core.ai.Part.Image? {
+        val ai = h.ai
+        if (ai.sight != com.kaiharimoto.mastertool.core.ai.vision.Vision.Sight.YES) return null
+        val wire = com.kaiharimoto.mastertool.core.ai.providers.Providers.byId(ai.prefs.connection?.provider)?.wire ?: return null
+        if (wire == com.kaiharimoto.mastertool.core.ai.providers.Wire.CLAUDE_CLI || wire == com.kaiharimoto.mastertool.core.ai.providers.Wire.CODEX_CLI) return null
+        val session = ai.session?.id ?: return null
+        val image = present.output.picture(p, i) ?: return null
+        val bytes = com.kaiharimoto.neue.platform.encodePng(image) ?: return null
+        val part = ai.files.putImage(session, bytes, "image/png", image.width, image.height)
+        return part.copy(data = java.util.Base64.getEncoder().encodeToString(bytes))
     }
 }

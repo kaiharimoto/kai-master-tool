@@ -2929,9 +2929,12 @@ kai: "There's a lot of content creators on YouTube who do deck profiles explaini
 deck by using a webcam and a screen recording of their deck list on duelingbook … Present mode should work
 like a slideshow presentation creator that's animated and interactive, as well as the ability to record in
 app using a webcam. If a webcam option is on, the presentation will allocate a zone for the webcam and build
-around it." Google Slides is the benchmark. Built in four phases, one release each: **1.0.70** the editor,
-the three ways of telling a deck and presenting; **1.0.71** modules and Ai building it; **1.0.72** the
-desktop recording (JavaCV/FFmpeg, LGPL); **1.0.73** recording on Android, captions, chapters, thumbnails.
+around it." Google Slides is the benchmark. Built so far: **1.0.70** the editor, the three ways of telling a
+deck and presenting; **1.0.71** modules and Ai building it; **1.0.72** Master UI by default and Restyle;
+**1.0.73** sane geometry; **1.1.x** the audit's fixes (`docs/present/AUDIT.md`). **Recording is not built yet**:
+no camera is opened and no take is made. The version numbers once planned for it (1.0.72–1.0.75) went to other
+work; the plan is the audit's track A (JavaCV/FFmpeg LGPL on the desk, CameraX and `MediaCodec` on Android).
+Until then a creator records with OBS: Green screen in the camera zone, and **Slides in a window** (below).
 
 **`06 Present`** (`Page.PRESENT`, `Ctrl 6`, `present/PresentPage.kt`): the library of presentations
 (a picture of each first slide, Open, Present, Duplicate, Delete), **New deck profile** (a saved deck, how
@@ -3001,9 +3004,29 @@ moves; transitions (fade, push, cover, zoom, morph; between deck slides the deck
 after the slide is in; **D** the whole deck over anything, a card clicked there goes to the step that talks
 about it; **B**/**W** a black or white screen; **L** the laser (a held finger too); **E** the pen; **S** the
 speaker notes over the slide; Home/End; clickers' Page Up/Page Down; click or the right of the screen next,
-right-click or the left back; Esc ends. **Rehearse timings** keeps each slide's time on it. **The presenter
-view** (desktop, two screens, Present ▾): the slides in a borderless window over the other screen, and this
-window the presenter's — the slide, the next one, the notes at any size, the clocks and the controls.
+right-click or the left back (a finger: the left half); Esc ends. **Rehearse timings** keeps each slide's time
+on it. **The presenter view** (desktop, two screens, Present ▾): the slides in a borderless window over the other
+screen, and this window the presenter's console (`PresenterConsole`).
+
+**Presenting, fixed in 1.1.x** (the audit's B9, B10, I1, M7, R3, R4, R6):
+- **The console**: the slide as it stands, and **what the next click shows** — the next slide as it arrives, or
+  this slide with its next build done (it was a blank box on every build); the speaker notes at any size and the
+  next slide's first line; the clocks; Back, Next, Whole deck, Black and **White** screen, Laser, **Pen** (drawn on
+  the presenter's copy, seen on the audience's) and Clear the pen; and **Go to** any slide. The audience's slides
+  never draw the speaker notes (`PresentStage(audience = true)`): S used to put them on the other screen too.
+- **Slides in a window** (desktop, Present ▾, `PresentOutput.slidesWindow`): the audience's slides in an ordinary,
+  resizable window on the same screen, and this window the console. OBS records that window (Window Capture) and
+  never the notes. The main window stays out of full screen, which would cover it. Works with one screen.
+- **S on one screen** still draws the notes over the slide, and now says so — a screen recording carries them —
+  with where the cure is. Their clock ticks each second on a clock of its own (the frame clock sleeps once a slide
+  settles, and the clock stood still).
+- **The pointer hides** after two seconds without moving, unless the laser or pen is on: the family cursor is
+  given no place, and a second window's system pointer is blank.
+- **Morph is a morph** (`core/present/play/Morph`, tested): an element with a partner on the slide leaving — the
+  same `morphKey`, the same id, the same words, or a title for a title — travels from it, growing or shrinking into
+  place, as an `ElementState` read in its layer; the rest fade. It played as Fade before.
+- **The originals first**: a show and an export ask the art library for every card the presentation draws.
+- **Android keeps the screen on** while a presentation plays (`MainActivity`'s `keepOn`).
 
 **Stored**: one file per presentation, `<data>/present/<id>.json` (`PresentCodec`: unknown keys skipped, a
 broken slide or element dropped alone, never the file), pictures content-addressed in
@@ -3079,12 +3102,49 @@ whatever was changed by hand (`Element.edited`). kai's five and six more:
 - **Tech choices**, **Combo** (the cards of a line in order), **Get the deck** (the deck's ydke code as a QR),
   **Decklist** (every card).
 `present/ModuleData` gathers what each reads from the rest of the app, for the dialog, Refresh and Ai alike.
+
+**Modules, fixed in 1.1.x** (the audit's B2, B7, I3, R10):
+- **Refresh follows the slide's own link, never its title**: a siding slide keeps its matchup in its
+  `ModuleRef.params["matchup"]` (`Modules.PARAM_MATCHUP`), and `Modules.refreshed` finds it in the module made
+  again. A slide made before the link finds its matchup from its untouched title element or the title it was made
+  with (`Modules.matchupOf`; `OldDataTest` holds the shape). A matchup renamed or deleted on 03 Siding is **said**
+  ("… has no siding plan any more: it was renamed or deleted"), and the slide left as it was — it used to take the
+  first matchup's cards. Ai's `refresh_module` says the same.
+- **A clicked turn builds whole**: the going-second label, tags, cards, arrow, why and "No change" all come in on
+  its click (the why stood alone under an empty band). A combo's arrow comes in with the card it points at.
+- **Titles**: Siding draws the dialog's Title before each matchup ("Regionals · vs Yubel"); Decklist draws its title.
+- **No data, no slide**: Matchups, Opening odds and Ratios with nothing to show are refused by the dialog and by
+  Ai's `add_module` alike, with what to make first (`Modules.missing`).
+- **The dialog**: the card picker names its cards; a combo's steps reorder (↑ ↓) and any pick comes off (✕);
+  Refresh's help says what it reads (Decklist and Get the deck read the presentation's copy of the deck).
+- **Opening odds' tiles** fit on two lines (the count with the name).
+
+**Charts tell their series apart** (1.1.x, the audit's B8; `core/present/ChartInks`, tested in every theme): in
+Master UI `accent` and `accent3` are both the ink, so two series drew the same black. A chart takes its own inks
+— Master UI's three ramp steps then the same **hatched** (diagonal rules in an outline, a dashed line, open
+points); every other theme its accents that can be told apart, the ramp filling in — and a chart about the deck's
+groups (Ratios, `Chart.groups`) wears the groups' own marker colours, any two that match falling back to an ink. A
+bar chart with several named series has a legend.
 Every module element is stage-anchored, so a module slide makes room for the camera like any layout.
 
 **Export** (1.0.71, the bar's export menu; `present/SlideExport`): a PDF of every slide shown (one 16:9 page a
 slide, through `core/pdf`), this slide or every slide as 1920 × 1080 pictures (a zip), and a **YouTube
-thumbnail** of a slide at 1280 × 720. Each slide is drawn by the same painter with every build done, and
-caught once its art has arrived.
+thumbnail** of a slide at 1280 × 720. Each slide is drawn by the same painter with every build done.
+
+**A slide as a finished picture** (1.1.x, the audit's I2 and M9): `present/paint/SlideRender` is the one way a slide
+becomes pixels for anything but the screen — export, Ai's `present_view`, and the recorder's frames when there is
+one. `SlideRender` draws a moment of a show at an exact pixel size into a `SlideShot`'s graphics layer, never on
+screen; `SlideShot.capture` waits for what the slide shows — every card's art (`cards/ArtWaits`: a card drawn under
+`LocalArtWaits` holds a place until its original, or its small render when the library has none, has decoded) and
+every picture — then for the frame to hold still, and catches it. It counts frames, never the wall clock (the
+studio turns its clock by hand), and gives up after ten seconds rather than wait on a download. It used to wait a
+fixed 1.5 s and 0.7 s and caught blank cards on a slow download.
+- **Finished means no placeholders**: `SlideView(final = true)` leaves out the camera zone and camera elements
+  unless a real picture fills them (the empty panel and its border were in every PDF page, picture and thumbnail),
+  and every guide — `Element.guide`, which the end card's "Next video" and "Subscribe" boxes are; `Element.isGuide`
+  also knows the dashed boxes 1.0.70–1.1.x made before the field.
+- The export's window shows a preview fitted to it (`SlidePreview`), not the 1920 × 1080 slide overflowing it.
+- Not yet: a thumbnail layout of its own (big face, big title), and PDF pages of real text rather than pictures.
 
 **Ai builds it** (1.0.71, §4k; kai: "Ai will be a big part of this … well taught on how to use the
 tools to operate this feature autonomously"). Three tools, all phase 3:
@@ -3101,7 +3161,11 @@ tools to operate this feature autonomously"). Three tools, all phase 3:
   app is `neue/ai/AiPresent`: **create** (a deck profile of a saved deck or the builder's, opened on
   Present), **add_module** (through `ModuleData`; a module with no data says what to make first — siding plans,
   logged games, an event — rather than inventing it) and **refresh_module**.
-- **`present_view`** (looks): one slide as the audience sees it, in words (`PresentReport.check`), because a
+- **`present_view`** (looks): one slide as the audience sees it — **and, for a model that sees (`Vision` sure of it)
+  over an API, the slide itself as a 960 × 540 picture** (1.1.x, the audit's M9), drawn by `SlideRender` through
+  `PresentOutput.picture` and the window's `SlideRenderHost`, kept under `ai/images/<session>/`. A tool result
+  carries it as `Part.ToolResult.pictures` (`@Transient`: never stored on the result), and `AgentLoop` puts it after
+  every result in the same turn, where every wire may send a picture. In words too (`PresentReport.check`), because a
   tool's answer is text and not every model sees: anything on the webcam or off the slide, words under 26
   units, boxes too small for their words, contrast under 3 : 1, empty card or picture slots, over 45 words, a
   deck slide about nothing, cards drawn under the camera, more than six clicks, no notes; and which cards a
@@ -3118,9 +3182,12 @@ tools to operate this feature autonomously"). Three tools, all phase 3:
 - On Present, Ai's memory is the profiled deck's (`AiHost.scope`) and its situation names the presentation
   and the slide on screen.
 
-**Pictures**: `tools/shoot.sh --page=present --present=demo --present-slide=N --present-mode=library|edit|play|overview|notes
+**Pictures**: `tools/shoot.sh --page=present --present=demo --present-slide=N --present-mode=library|edit|play|overview|notes|console|add
 --present-style=spotlight|slides|buildup --present-theme=arena|neon|… --present-webcam=tr|tl|br|bl|left|right|off
---present-frames=N,K`.
+--present-frames=N,K`. Since 1.1.x: `--present-mode=console` (the console, the slides in a window) with
+`--present-console-next=true` and `--present-console-pen=true`; `--present-mode=add --present-add=COMBO|…` (a module's
+dialog); `--present-export=pdf|png|thumb` (a real export, written beside the shot); `--present-view=N` (Ai's picture
+of slide N).
 
 ### 4p. Duel: the duel simulator (1.0.74–)
 

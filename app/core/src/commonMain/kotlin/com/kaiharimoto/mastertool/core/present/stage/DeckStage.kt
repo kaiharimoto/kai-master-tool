@@ -358,7 +358,8 @@ object DeckStage {
         rows(extra)
         rows(side)
         if (!hasOthers && pieces == null) return StageFrame.EMPTY
-        return StageFrame(cards = cards, labels = labels)
+        // Each group's own colour for its outline (the audit's R10: the whole deck drew every group in the first one's).
+        return StageFrame(cards = cards, labels = labels, colors = deck.groups.associate { it.id to it.color })
     }
 
     private fun mainPieces(

@@ -135,12 +135,15 @@ private fun SlideProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Slide
             MuButton("Refresh", {
                 scope.launch {
                     val o = h.present.open ?: return@launch
-                    val fresh = ModuleData.refresh(h, o, slide) ?: return@launch
-                    h.present.commit(PresentEdits.updateSlide(o, slide.id) { fresh }, "Refresh ${com.kaiharimoto.mastertool.core.present.modules.Modules.name(ref.type).lowercase()}")
+                    when (val r = ModuleData.refreshed(h, o, slide)) {
+                        is com.kaiharimoto.mastertool.core.present.modules.Modules.Refreshed.Made ->
+                            h.present.commit(PresentEdits.updateSlide(o, slide.id) { r.slide }, "Refresh ${com.kaiharimoto.mastertool.core.present.modules.Modules.name(ref.type).lowercase()}")
+                        is com.kaiharimoto.mastertool.core.present.modules.Modules.Refreshed.Gone -> h.neue.note = com.kaiharimoto.neue.Note(r.why)
+                    }
                 }
             }, size = BtnSize.SM, icon = Icons.Refresh)
         }
-        Help("Refresh makes it again from the newest data; what you changed by hand stays.")
+        Help(ModuleData.refreshHelp(ref.type))
     }
     FieldLabel("Title", hint = "for the list and the notes")
     MuInput(slide.title, { t -> commitSlide(h, slide, "Title", "title-${slide.id}") { it.copy(title = t) } }, Modifier.fillMaxWidth(), dense = true, placeholder = "Untitled")

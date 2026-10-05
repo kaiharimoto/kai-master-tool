@@ -281,7 +281,22 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
             delay(5_000)
         }
     }
-    if (h.present.playing != null && h.present.audience && h.present.screens > 1) {
+    // The slides in a window of their own (1.1.x, the audit's I1): an ordinary window on this screen that a
+    // recorder (OBS's Window Capture) records, while this window is the presenter's console — notes and all,
+    // never in the recording.
+    if (h.present.playing != null && h.present.output.slidesWindow) {
+        val slidesState = remember { WindowState(placement = WindowPlacement.Floating, size = DpSize(1280.dp, 720.dp)) }
+        Window(
+            onCloseRequest = { h.present.output.slidesWindow = false },
+            title = "Neue Master Tool · Slides",
+            icon = painterResource("icons/neue.png"),
+            state = slidesState,
+            onPreviewKeyEvent = h::onKey,
+        ) {
+            val pl = h.present.playing
+            if (pl != null) PresentAudience(h, com.kaiharimoto.neue.present.rememberSlideContext(h, pl.show.presentation))
+        }
+    } else if (h.present.playing != null && h.present.audience && h.present.screens > 1) {
         val other = remember(host) {
             val devices = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices
             val mine = host?.graphicsConfiguration?.device

@@ -80,6 +80,7 @@ import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.platform.decodePicture
 import com.kaiharimoto.neue.present.paint.SlideContext
 import com.kaiharimoto.neue.present.paint.SlideView
+import com.kaiharimoto.neue.present.play.presentOutputEntries
 import com.kaiharimoto.neue.theme.Mu
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -244,7 +245,7 @@ private fun EditorBar(h: NeueHolders, p: Presentation, ctx: SlideContext) {
                             enabled = present.screens > 1,
                             reason = "Connect a second screen",
                         ) { present.audience = !present.audience },
-                    ),
+                    ) + presentOutputEntries(h),
                 )
             }, size = BtnSize.SM, variant = BtnVariant.PRIMARY, arrow = true)
         }

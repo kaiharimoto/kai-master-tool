@@ -49,6 +49,11 @@ sealed interface Part {
         val isError: Boolean = false,
         /** What the chat shows for it, in words ("Added 3 Ash Blossom"); the model reads [content]. */
         val summary: String = "",
+        /**
+         * Pictures the answer brings (1.1.x, `present_view`'s slide for a model that sees): never stored on the
+         * result — [AgentLoop] puts them in the same turn, after every result, as [Image] parts of their own.
+         */
+        @Transient val pictures: List<Image> = emptyList(),
     ) : Part
 
     /**

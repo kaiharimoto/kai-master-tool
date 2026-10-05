@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,7 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.present.Ease
@@ -42,11 +45,16 @@ import com.kaiharimoto.mastertool.core.present.Transition
 import com.kaiharimoto.mastertool.core.present.edit.Transform
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.play.ElementState
+import com.kaiharimoto.mastertool.core.present.play.Morph
 import com.kaiharimoto.mastertool.core.present.play.StageTween
 import com.kaiharimoto.mastertool.core.present.stage.DeckStage
 import com.kaiharimoto.mastertool.core.present.stage.StageFrame
 import com.kaiharimoto.mastertool.core.present.stage.WebcamLayout
+import com.kaiharimoto.neue.cursor.FamilyCursor
+import com.kaiharimoto.neue.cursor.LocalCursor
 import com.kaiharimoto.neue.cursor.cursor
+import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
@@ -63,6 +71,7 @@ import com.kaiharimoto.neue.present.paint.drawThemeBackground
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlin.math.min
@@ -75,10 +84,30 @@ private const val OVERVIEW_MS = 650
  * builds and transitions running on one frame clock that sleeps when nothing moves, the deck
  * gliding between deck slides, the whole deck on demand (D), the laser, the pen, a blank
  * screen and the speaker notes. Clicks and keys move it on; Esc ends it.
+ *
+ * [audience] is the slides shown for the audience elsewhere (another screen, a window for a recorder): the
+ * speaker notes are never drawn there, since the presenter's console has them. The pointer hides itself
+ * after [IDLE_MS] without moving (1.1.x, the audit's R4), so a screen recording does not carry it.
  */
 @Composable
-fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier = Modifier, camera: (@Composable () -> Unit)? = null) {
+fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier = Modifier, camera: (@Composable () -> Unit)? = null, audience: Boolean = false) {
     val pl = present.playing ?: return
+    val familyCursor = LocalCursor.current
+    // When the pointer last moved, in nanoseconds: a plain value, so a move never recomposes the stage.
+    val lastMove = remember(pl) { longArrayOf(System.nanoTime()) }
+    var idle by remember(pl) { mutableStateOf(false) }
+    LaunchedEffect(pl) {
+        while (true) {
+            delay(250)
+            val still = System.nanoTime() - lastMove[0] > IDLE_MS * 1_000_000L
+            val hide = still && !pl.laser && !pl.pen
+            if (hide != idle) {
+                idle = hide
+                // The family cursor draws nothing without a place: it comes back with the next move.
+                if (hide) familyCursor?.moved(null, false)
+            }
+        }
+    }
     val show = pl.show
     val p = show.presentation
     val allKeys = remember(p.deck) { p.deck?.let { d -> DeckStage.copies(d).map { it.key } }.orEmpty() }
@@ -101,6 +130,8 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
     BoxWithConstraints(
         modifier.fillMaxSize().background(Color.Black)
             .cursor(if (pl.laser || pl.pen) CursorMode.NATIVE else CursorMode.DEFAULT)
+            // Where the window's own pointer is the system's (a second window), hidden as the family cursor is.
+            .pointerHoverIcon(if (idle) FamilyCursor.BLANK else PointerIcon.Default)
             .pointerInput(pl) {
                 // Clicks and taps move on; a held finger points; the pen draws.
                 awaitPointerEventScope {
@@ -118,6 +149,10 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                         val oy = (h - Presentation.HEIGHT * s) / 2f
                         val cx = (change.position.x - ox) / s
                         val cy = (change.position.y - oy) / s
+                        if (event.type == PointerEventType.Move || event.type == PointerEventType.Press) {
+                            lastMove[0] = System.nanoTime()
+                            if (idle) idle = false
+                        }
                         when (event.type) {
                             PointerEventType.Move -> {
                                 if (pl.laser) laserAt = Offset(cx, cy)
@@ -161,7 +196,8 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                                         // A linked element jumps to its slide.
                                         linkAt(show, pl.cursor.slide, cx, cy)?.let { to -> show.presentation.indexOf(to).takeIf { it >= 0 } } != null ->
                                             present.goToSlide(show.presentation.indexOf(linkAt(show, pl.cursor.slide, cx, cy)))
-                                        change.type == androidx.compose.ui.input.pointer.PointerType.Touch && change.position.x < w / 3f -> present.previous()
+                                        // A finger on the left half goes back, as the help's table says (the audit's R6).
+                                        change.type == androidx.compose.ui.input.pointer.PointerType.Touch && change.position.x < w / 2f -> present.previous()
                                         else -> present.next()
                                     }
                                 } else if (pl.laser && change.type == androidx.compose.ui.input.pointer.PointerType.Touch) {
@@ -205,13 +241,21 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
             show.state(cursor, e, if (pl.backward) Long.MAX_VALUE / 4 else (pl.ms - transitionLead(pl)).coerceAtLeast(0))
         }
 
+        // Morph (1.1.x, the audit's M7): elements with a partner on the slide leaving travel from it; the rest fade.
+        val morph = transition.kind == Transition.MORPH && fromSlide != null && from != null
+        val partners = remember(fromSlide, slide, morph) {
+            if (morph && fromSlide != null && from != null) Morph.pairs(fromSlide, show.stage(from.slide), slide, show.stage(cursor.slide)) else emptyList()
+        }
+        val travelling = remember(partners) { partners.associateBy { it.to } }
+        val left = remember(partners) { partners.map { it.from }.toSet() }
+
         Box(Modifier.fillMaxSize()) {
             // The slide leaving, under the one arriving.
             if (fromSlide != null) {
                 SlideView(
                     ctx, fromSlide, show.zone(from.slide), show.stage(from.slide),
                     Modifier.fillMaxSize().graphicsLayer { applyLeaving(this, transition, arrived(), size.width, size.height) },
-                    state = { ElementState.SHOWN },
+                    state = if (!morph) ({ ElementState.SHOWN }) else ({ e -> if (e.id in left) ElementState.HIDDEN else ElementState(alpha = 1f - arrived()) }),
                     fade = { if (arrived() >= 1f) 0f else 1f },
                     camera = camera,
                 )
@@ -221,8 +265,18 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                 Modifier.fillMaxSize().graphicsLayer { applyArriving(this, transition, arrived(), size.width, size.height, bothDeck) },
                 deck = if (slide.deck != null || fromSlide?.deck != null) deckFrame else null,
                 deckKeys = allKeys,
-                state = state,
+                state = if (!morph) state else ({ e ->
+                    val built = state(e)
+                    val p = travelling[e.id]
+                    if (p == null) {
+                        built.copy(alpha = built.alpha * arrived())
+                    } else {
+                        val t = Morph.travel(p, arrived())
+                        built.copy(dx = built.dx + t.dx, dy = built.dy + t.dy, scale = built.scale * t.scale)
+                    }
+                }),
                 fade = { if (bothDeck || transition.kind == Transition.FADE || transition.kind == Transition.MORPH) arrived() else 1f },
+                elementFade = { if (morph) 1f else if (bothDeck || transition.kind == Transition.FADE) arrived() else 1f },
                 camera = camera,
             )
             // The whole deck, on demand.
@@ -243,7 +297,7 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                 }
             }
             pl.blank?.let { b -> Box(Modifier.fillMaxSize().background(if (b == "W") Color.White else Color.Black)) }
-            if (pl.notes) NotesPanel(pl, Modifier.align(Alignment.BottomCenter))
+            if (pl.notes && !audience) NotesPanel(pl, Modifier.align(Alignment.BottomCenter))
         }
     }
 }
@@ -336,13 +390,24 @@ private fun OverviewLayer(
     }
 }
 
-/** The speaker notes over the bottom of the slide (S): this slide's, what comes next, and the time. */
+/**
+ * The speaker notes over the bottom of the slide (S): this slide's, what comes next, and the time — which
+ * ticks each second on a clock of its own (the audit's B10: the frame clock sleeps once a slide settles).
+ * Drawn on the slide, a screen recording would carry them: the panel says so, and where the cure is.
+ */
 @Composable
 private fun NotesPanel(pl: Playing, modifier: Modifier) {
     val c = Mu.colors
     val slide = pl.show.slides.getOrNull(pl.cursor.slide) ?: return
     val next = pl.show.next(pl.cursor)?.let { if (it.slide != pl.cursor.slide) pl.show.slides.getOrNull(it.slide) else null }
-    val elapsed = (System.nanoTime() - pl.startedAt) / 1_000_000_000
+    var now by remember { mutableLongStateOf(System.nanoTime()) }
+    LaunchedEffect(pl) {
+        while (true) {
+            delay(1000 - (System.nanoTime() - pl.startedAt) / 1_000_000 % 1000)
+            now = System.nanoTime()
+        }
+    }
+    val elapsed = (now.coerceAtLeast(pl.startedAt) - pl.startedAt) / 1_000_000_000
     Column(
         modifier.fillMaxWidth(0.9f).padding(bottom = 24.dp).background(c.paper.copy(alpha = 0.96f)).border(1.dp, c.ink).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -360,5 +425,13 @@ private fun NotesPanel(pl: Playing, modifier: Modifier) {
             )
         }
         if (next != null) Small("Next: ${next.title.ifBlank { "slide ${pl.show.slides.indexOf(next) + 1}" }}", color = c.ink45)
+        Small(
+            if (Platform.os != DesktopOs.ANDROID) "On the slide, so a screen recording shows these. Recording with OBS? Present ▾ › Slides in a window keeps notes out of it."
+            else "On the slide, so a screen recording shows these.",
+            color = c.ink45,
+        )
     }
 }
+
+/** How long the pointer may rest before a show hides it. */
+private const val IDLE_MS = 2_000L

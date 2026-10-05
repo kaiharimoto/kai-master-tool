@@ -110,11 +110,11 @@ object SlideLayouts {
             END_CARD -> listOf(
                 el(Element.TEXT, 0.05f, 0.06f, 0.9f, 0.2f, text(Element.ROLE_TITLE, "Thanks for watching", Para.ALIGN_CENTER, Element.V_MIDDLE)).big(104f),
                 el(Element.SHAPE, 0.06f, 0.34f, 0.4f, 0.5f) {
-                    copy(shape = Element.SHAPE_ROUNDED, corner = 24f, fill = Fill.solid("@surface"), stroke = Stroke("@line", 3f, Stroke.DASH_DASHED),
+                    copy(shape = Element.SHAPE_ROUNDED, corner = 24f, fill = Fill.solid("@surface"), stroke = Stroke("@line", 3f, Stroke.DASH_DASHED), guide = true,
                         paras = listOf(Para.of("Next video", align = Para.ALIGN_CENTER)), vAlign = Element.V_MIDDLE, role = Element.ROLE_CAPTION)
                 },
                 el(Element.SHAPE, 0.54f, 0.34f, 0.4f, 0.5f) {
-                    copy(shape = Element.SHAPE_ROUNDED, corner = 24f, fill = Fill.solid("@surface"), stroke = Stroke("@line", 3f, Stroke.DASH_DASHED),
+                    copy(shape = Element.SHAPE_ROUNDED, corner = 24f, fill = Fill.solid("@surface"), stroke = Stroke("@line", 3f, Stroke.DASH_DASHED), guide = true,
                         paras = listOf(Para.of("Subscribe", align = Para.ALIGN_CENTER)), vAlign = Element.V_MIDDLE, role = Element.ROLE_CAPTION)
                 },
             )

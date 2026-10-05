@@ -446,7 +446,7 @@ TITLE for the open, SECTION between parts, TITLE_BODY for a point, TWO_COLUMN fo
 - One heading font and one body font. Bold for a card name or a number, not for a whole sentence.
 
 ## Checking
-`present_view` lists what a viewer would trip over. A slide is done when it lists nothing but, at most, missing speaker notes you are about to write.
+`present_view` lists what a viewer would trip over. When you can see pictures it also shows you the slide as the audience will (every build done, no camera panel): look at it for what words cannot say — colors that fight, a crowded corner, a lopsided slide. A slide is done when it lists nothing but, at most, missing speaker notes you are about to write, and looks right.
 """
 
     const val DUEL_TABLE_NAME = "duel-table"

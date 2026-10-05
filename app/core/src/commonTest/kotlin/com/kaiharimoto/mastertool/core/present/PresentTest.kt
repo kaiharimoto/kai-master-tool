@@ -39,6 +39,13 @@ class PresentTest {
 
     private val stage = WebcamLayout.safe
 
+    @Test
+    fun theWholeDeckOutlinesEachGroupInItsOwnColour() {
+        // R10: a Decklist slide drew every group's outline in the first group's colour.
+        val f = DeckStage.whole(deck, stage)
+        assertEquals(mapOf("g1" to 0, "g2" to 1, "g3" to 2), f.colors)
+    }
+
     private fun steps() = listOf(
         DeckFocus(all = true),
         DeckFocus(groups = listOf("g1"), note = "Open these"),

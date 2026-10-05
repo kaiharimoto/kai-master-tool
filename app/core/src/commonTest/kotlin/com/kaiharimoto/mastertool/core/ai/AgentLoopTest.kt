@@ -56,6 +56,25 @@ class AgentLoopTest {
     }
 
     @Test
+    fun picturesAResultBringsFollowEveryResultInTheSameTurn() = runTest {
+        // present_view's slide for a model that sees (1.1.x): an Image part after the results, never stored on one.
+        val backend = Scripted(
+            listOf(
+                listOf(BackendEvent.Finished(StopReason.TOOL_USE, ChatTurn(Role.ASSISTANT, listOf(call("a", "present_view"), call("b", "present_state"))))),
+                listOf(BackendEvent.Finished(StopReason.END, ChatTurn.assistant("Looks clean."))),
+            ),
+        )
+        val slide = Part.Image("images/s/abc.png", "image/png", 960, 540, data = "iVBOR")
+        AgentLoop(backend, { c -> Part.ToolResult(c.id, c.name, "ok", pictures = if (c.name == "present_view") listOf(slide) else emptyList()) }).run(request).toList()
+        val answer = backend.sent[1].history.last()
+        assertEquals(listOf("a", "b"), answer.toolResults.map { it.id })
+        assertEquals(listOf(slide), answer.images, "sent with its bytes this round")
+        assertTrue(answer.parts.indexOfFirst { it is Part.Image } > answer.parts.indexOfLast { it is Part.ToolResult }, "after every result")
+        val stored = kotlinx.serialization.json.Json { encodeDefaults = true }.encodeToString(ChatTurn.serializer(), answer)
+        assertTrue("pictures" !in stored && "iVBOR" !in stored, "the bytes and the field are never stored")
+    }
+
+    @Test
     fun aToolThatThrowsIsAnErrorResultNotACrash() = runTest {
         val backend = Scripted(
             listOf(

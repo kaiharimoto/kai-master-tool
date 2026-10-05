@@ -45,6 +45,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.rememberUpdatedState
@@ -231,6 +232,16 @@ private fun NeueCardFace(
     }
     val hd by remember(card.id, library) {
         derivedStateOf { library?.let { it.version; it.fileFor(card.id.value) } }
+    }
+    // A finished picture (an export, Ai's look at a slide) waits on this card's art (1.1.x, ArtWaits): its
+    // original when the library has one, else its small render. Nothing is counted where none is provided.
+    val waits = LocalArtWaits.current
+    if (waits != null) {
+        val shown = if (hd == null) art != ArtState.LOADING else original == ArtState.READY || (original == ArtState.FAILED && art != ArtState.LOADING)
+        DisposableEffect(waits, shown) {
+            if (!shown) waits.hold()
+            onDispose { if (!shown) waits.release() }
+        }
     }
     // Where the pointer is over the card, -1..1 on each axis; null when it is not.
     val feelState = remember { mutableStateOf<Offset?>(null) }
