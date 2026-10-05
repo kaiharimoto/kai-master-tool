@@ -1550,6 +1550,32 @@ All are additive fields with defaults, so a decision built by hand still reads.
 - Studio pictures: `--duel-shortcut=which|pick|pick2|place|extra|target|order|declare`, each with `--theme=ink` and
   `--form=phone`.
 
+### 5¾.14 What landed (step 2, agent (e))
+
+- **Core.** `duel/ShortcutAsking.kt` (`ShortcutAsking`, `ReplayChooser`, `Given`, `ShortcutStep`): asking by replay, the
+  line's own answers used first. `duel/text/ShortcutWindow.kt`: the sentence for every `Purpose` × `Dest`, the count,
+  Enter's and Esc's words, the crumbs, the groups by place (a place looked in with nothing named), the position chips, the
+  keys, `needs`, and `place` (never over a lit card on the ten table sizes; a sheet on a phone) and `beside` (Which).
+  `duel/text/PositionGlyphs.kt`: the grid of §5¾.9, and `pixels` — each glyph as rectangles on whole pixels, which is what
+  "lands on whole pixels at 16, 20 and 24" needs (the grid's own edges do not, at 16 and 20).
+- **§5¾.12, landed:** `Cards.refused` (cards the choosing seat sees in a place looked in, "Not one this effect can choose"),
+  `Cards.stepKind`, `Zone.closed` (`FxRules.closedZones`: taken, an EMZ already used, no Link pointing), `ShortcutOption.needs`,
+  `FxEngine.stillLegal` (a pick per card and the count; a script's set rules have no word yet). `Cards.looked` was there.
+  Not landed: `Decision.Triggers` (the window asks Use / Skip one row at a time, then the order, as §5¾.7 allows). A target
+  was already read off `purpose == TARGET` (`AnswerChooser`); there is no `why.startsWith("target")` left.
+- **A written link** is one whose card has a written effect the book holds (`Shortcuts.written`): every `ChainAdd` folds to
+  an `FxLink`, so "the engine has a link" was true of every link; `Shift Q` asked By hand or By Shortcut on any chain.
+- **Neue.** `DuelShortcuts` (a part of `Duels`: `writtenEffects`, the window's state, its keys), `ShortcutWindow.kt` (the marks
+  and the window), `PositionGlyph.kt`; Shortcut in `verbMenu`, the inspector, `ChainMenu` (Resolve as written), `Shift Q`'s
+  strip, the line, `NeueKeys` (any free letter types into the window). `DeskScope.SHORTCUT_WINDOW` and its `SHORTCUT_*`
+  actions; `DuelCoverage` rows for each window gesture.
+- **Fixtures.** `effects/FxSamples.kt` (commonMain, 900000500–900000510): the mockups' Gatekeeper cards and a table of them,
+  for the studio and the tests until the library holds real scripts.
+- **Tests.** `ShortcutReplayTest`, `ShortcutWindowTest`, `PositionGlyphsTest` (core); `DuelEffectTableTest` (neue).
+- **Left for later.** Dragging a card from the strip onto a lit zone, and dragging a trigger's row (its ↑ ↓ and Alt ↑↓ do
+  it); the zone's dashed card on hover (the focused zone is framed and shows its glyph); the "POINTS HERE" line from a
+  pointing Link; voice. The `Effects` holder plugs in at `Duels.writtenEffects`.
+
 ---
 
 ## 6. Stored data

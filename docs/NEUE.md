@@ -4172,6 +4172,29 @@ keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held 
   `card=` and a card asked for by name name no hidden card (`PhaseCRedTeamTest`). A number key after a placement no longer
   re-makes Ai's last move as the person's (`Duels.replace`, `DuelNumberKeyTest`).
 
+**Phase D step 2, Shortcut at the table** (`docs/phases/D.md` §5½, §5¾; kai: "the default key staying. Shortcut should be a
+dedicated choice when interacting with a card if it has one set"):
+- **The verb** is offered from `DuelVerbs.offered` on every surface once the table is handed written effects
+  (`Duels.writtenEffects`, set by the `Effects` holder; the studio and the tests hand in `FxSamples`): the verb strip after
+  the default, Enter's menu, a finger's held menu, the inspector (each Shortcut by its short name, what it needs, greyed with
+  its rule), `U`, the line (`u m1 call pick=gy1` opens the window for what the answers leave out) and Ai. Default,
+  right-click, Space and `Shift Q` with no written link are what they were. Refused at a networked table, in words.
+- **The window is the table's `Chooser`, asking by replay** (`core/duel/ShortcutAsking`: the use runs with the answers given;
+  the first question they do not reach is shown; Esc takes the last answer back; nothing is committed until the use is done,
+  then one group, one undo, every entry tagged). Its words, groups, chips, keys and where it stands are core
+  `duel/text/ShortcutWindow` (never over a lit card, tested on the ten table sizes; a sheet on a phone); `neue/duel/ShortcutWindow.kt`
+  draws the frame (card, who · which · Shortcut, UNVERIFIED, the sentence, step crumbs, the count, Esc's and Enter's words,
+  the keys) and seven bodies: Which, an option, yes/no (Use/Skip for a trigger), the picking strip (option B, grouped by place in
+  the effect's order, hidden copies ×2), the place step (the queue, the position chips; the zones lit on the table with their
+  keys and glyphs, placed cards dashed), a position alone, the waiting triggers' order, and a declaration (any card's name
+  from the pool). The table dims round what is lit; a click picks, a lit zone places, a GY or banished pile opens as a row.
+- **Keys**: `DeskScope.SHORTCUT_WINDOW` stands in for the duel's while it asks (Enter, Space, the arrows, Tab, Alt ↑↓, 1–9,
+  Shift 1–5, 0, A D E, Y N, /; any other letter types an answer); Ctrl Z and Esc are one choice back. The position glyphs are
+  `core/duel/text/PositionGlyphs` (whole pixels) drawn by `PositionGlyph`.
+- **Resolve by Shortcut**: Resolve as written in the chain well's menu for a link whose card has a written effect, and
+  `Shift Q`'s strip (By hand · Enter, By Shortcut · U). The log reads "Gatekeeper Herald · Call (Shortcut, unverified)".
+- `tools/shoot.sh --page=duel --duel=two --duel-shortcut=which|pick|pick2|place|extra|target|order|declare`.
+
 ### 4q. Performance: fast without a pixel lost (1.0.92)
 
 kai asked for a red team on performance, "how we can have it run the best while maintaining the graphics quality". Five

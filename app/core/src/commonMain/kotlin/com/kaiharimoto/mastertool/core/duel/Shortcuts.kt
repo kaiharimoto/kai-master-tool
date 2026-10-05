@@ -14,6 +14,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.duel.effects.Kind
 import com.kaiharimoto.mastertool.core.duel.effects.ScriptBook
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
+import com.kaiharimoto.mastertool.core.duel.text.ShortcutWindow
 
 /**
  * The engine's two doors as the table reaches them (Phase D §5½): [FX] is the engine itself; a test hands in its own, so
@@ -43,6 +44,8 @@ data class ShortcutOption(
     val legal: Boolean,
     val why: String? = null,
     val verified: Boolean = false,
+    /** What it needs before it resolves, from its script (D.md §5¾.12): "no target", "1 target · they control · cost: banish this card". */
+    val needs: String = "",
 ) {
     /** "Search", "Search (unverified)", "Revive: once per turn: used". */
     val words: String
@@ -119,6 +122,16 @@ class Shortcuts(
     /** The same, with the engine's state [next] — after a step of a plan. */
     fun withFx(next: FxState?): Shortcuts = Shortcuts(book, facts, next, engine, networked, resolveAtOnce, verified, names)
 
+    /**
+     * The same scripts at the duel in play [game]: the engine's state folded from its log, at a networked table or not
+     * (D.md §5½: refused there in words), resolving at once or not.
+     */
+    fun at(game: DuelGame, networked: Boolean = this.networked, resolveAtOnce: Boolean? = this.resolveAtOnce): Shortcuts =
+        Shortcuts(book, facts, FxFold.fold(game.header, game.played, book, facts, game.state), engine, networked, resolveAtOnce, verified, names)
+
+    /** Whether [code]'s effect [effect] is verified (§4.4), as the log's tag will say. */
+    fun isVerified(code: Int, effect: String): Boolean = verified(book.canonical(code), effect)
+
     /** The engine's view of [s]. */
     fun table(s: DuelState): FxTable = FxTable(s, fx ?: FxState.at(s), book, facts).current()
 
@@ -159,7 +172,7 @@ class Shortcuts(
                     else -> NOT_NOW
                 }
             }
-            ShortcutOption(uid, e.id, label(e, i), ok, why, verified(book.canonical(card.code), e.id))
+            ShortcutOption(uid, e.id, label(e, i), ok, why, verified(book.canonical(card.code), e.id), ShortcutWindow.needs(e))
         }
     }
 
@@ -211,8 +224,15 @@ class Shortcuts(
         }
     }
 
-    /** Whether Chain Link [link] (1-based) of [s] is the engine's own — made by a Shortcut — so it can resolve as written. */
-    fun written(s: DuelState, link: Int): Boolean = table(s).fx.links.any { it.link == link }
+    /**
+     * Whether Chain Link [link] (1-based) of [s] holds a written effect — made by a Shortcut, or a hand-made activation of a
+     * card that has one (§5½ 3: "when the newest link's card has a written effect") — so it can resolve as written.
+     */
+    fun written(s: DuelState, link: Int): Boolean = writtenIn(table(s), link)
+
+    /** Whether link [n] of [t] holds a card's written effect the engine knows: a link of a card with none is resolved by hand. */
+    private fun writtenIn(t: FxTable, n: Int): Boolean =
+        t.fx.links.any { it.link == n && it.effect.isNotEmpty() && book.effect(it.card, it.effect) != null }
 
     /**
      * **Resolve by Shortcut** (§5½ 3): the newest link resolved as written, through the engine — or with [all] the whole
@@ -225,7 +245,9 @@ class Shortcuts(
         var t = table(s)
         if (!all) {
             val n = s.chain.size
-            if (t.fx.links.none { it.link == n }) return ShortcutResult.no("Chain Link $n was not made by a Shortcut: resolve it by hand")
+            if (!writtenIn(t, n)) return ShortcutResult.no(
+                if (t.fx.links.none { it.link == n }) "Chain Link $n was not made by a Shortcut: resolve it by hand" else "Chain Link $n has no written effect: resolve it by hand",
+            )
             return when (val p = engine.play(t, seat, FxMove.Resolve, chooser)) {
                 is FxPlay.Done -> ShortcutResult(p.actions, steps(p), said = "Resolve Chain Link $n by Shortcut", state = p.state, fx = p.fx)
                 FxPlay.Cancelled -> ShortcutResult.CANCELLED
@@ -238,7 +260,7 @@ class Shortcuts(
         var guard = 0
         while (t.state.chain.isNotEmpty() && guard++ < MAX_LINKS) {
             val n = t.state.chain.size
-            if (t.fx.links.any { it.link == n }) {
+            if (writtenIn(t, n)) {
                 when (val p = engine.play(t, seat, FxMove.Resolve, chooser)) {
                     is FxPlay.Done -> {
                         actions += p.actions
@@ -298,7 +320,19 @@ class Shortcuts(
             networked: Boolean = false,
             resolveAtOnce: Boolean? = null,
             names: ((String) -> List<Int>)? = null,
-        ): Shortcuts = Shortcuts(book, facts, FxFold.fold(game.header, game.played, book, facts, game.state), engine, networked, resolveAtOnce, names = names)
+            verified: (code: Int, effect: String) -> Boolean = { _, _ -> false },
+        ): Shortcuts = Shortcuts(book, facts, FxFold.fold(game.header, game.played, book, facts, game.state), engine, networked, resolveAtOnce, verified, names)
+
+        /**
+         * The written effects a table is handed (D.md §5½): the library's scripts and the pool's facts, before any duel's
+         * log is folded — what the `Effects` holder gives the Duel page, and [at] makes each table's.
+         */
+        fun written(
+            book: ScriptBook,
+            facts: FxFacts,
+            verified: (code: Int, effect: String) -> Boolean = { _, _ -> false },
+            names: ((String) -> List<Int>)? = null,
+        ): Shortcuts = Shortcuts(book, facts, verified = verified, names = names)
 
         /** An effect's short name: its own label, else "Effect 2" by its id (or its place in the script). */
         fun label(e: Effect, index: Int): String =

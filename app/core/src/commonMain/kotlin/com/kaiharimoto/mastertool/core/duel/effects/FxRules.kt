@@ -233,6 +233,35 @@ object FxRules {
         }
     }
 
+    /**
+     * The zones of the kinds in [open] that are not among them, each with why, as the Shortcut window says it (D.md
+     * §5¾.12): taken by a card, an Extra Monster Zone when the seat already uses one, a Main Monster Zone no Link points to.
+     * A set card is named only as a set card.
+     */
+    fun closedZones(t: FxTable, seat: Int, open: List<Place.Zone>): Map<Place.Zone, String> {
+        if (open.isEmpty()) return emptyMap()
+        val s = t.state
+        val kinds = open.map { it.kind }.toSet()
+        val all = buildList {
+            if (ZoneKind.MONSTER in kinds || ZoneKind.EMZ in kinds) {
+                (0 until DuelState.ZONES).forEach { add(Place.Zone(seat, ZoneKind.MONSTER, it)) }
+                s.emz.indices.forEach { add(Place.Zone(seat, ZoneKind.EMZ, it)) }
+            }
+            if (ZoneKind.SPELL in kinds) (0 until DuelState.ZONES).forEach { add(Place.Zone(seat, ZoneKind.SPELL, it)) }
+        }
+        val holdsEmz = s.emz.any { u -> u != null && s.cards[u]?.controller == seat }
+        return all.filter { it !in open }.associateWith { z ->
+            val there = s.at(z)
+            when {
+                there != null -> if (s.cards[there]?.faceUp == true) "Taken by ${t.card(there)?.name ?: "a card"}" else "Taken by a set card"
+                z.kind == ZoneKind.EMZ && holdsEmz -> "You already use an Extra Monster Zone"
+                z.kind == ZoneKind.EMZ -> "Not a zone this summon can use"
+                ZoneKind.EMZ in kinds -> "No Link Monster points here"
+                else -> "Not a zone this can use"
+            }
+        }
+    }
+
     // ---- restrictions -------------------------------------------------------------------------------------------------
 
     /**

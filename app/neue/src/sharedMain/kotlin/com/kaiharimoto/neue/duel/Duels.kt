@@ -38,6 +38,8 @@ import com.kaiharimoto.mastertool.core.duel.ai.DuelTriggers
 import com.kaiharimoto.mastertool.core.duel.ai.Trigger
 import com.kaiharimoto.mastertool.core.duel.ai.Watch
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
+import com.kaiharimoto.mastertool.core.duel.effects.catalog
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
@@ -94,6 +96,8 @@ class Duels(val dir: File) {
     internal val picking = DuelPicking(this)
     internal val records = DuelRecords(this)
     val matches = DuelMatches(this)
+    /** Shortcut at the table (Phase D §5½, §5¾): public, as [matches] is, so the studio and the tests drive the window. */
+    val shortcutPart = DuelShortcuts(this)
 
     var game by mutableStateOf<DuelGame?>(null)
     /** The seat drawn at the bottom of the table: the one acting, in a hot-seat. */
@@ -266,6 +270,19 @@ class Duels(val dir: File) {
     var logPick by mutableStateOf<List<Int>>(emptyList())
     /** The next move goes into the log after this entry, not at its end: acting in a phase gone by. */
     var insertAfter by mutableStateOf<Int?>(null)
+
+    // ---- Shortcut at the table (Phase D §5½, §5¾): DuelShortcuts --------------------------------------------
+
+    /** The written effects the table is handed: the `Effects` holder's library (null: none written, nothing offered). */
+    var writtenEffects by shortcutPart::written
+    /** The table's Shortcuts now, folded from the duel's log; null where none are written. */
+    fun shortcuts(): Shortcuts? = shortcutPart.now()
+    /** The Shortcut window is open: its keys stand in for the duel's. */
+    val choosing: Boolean get() = shortcutPart.open
+    /** [uid]'s written effect used ([effect] by id or name; null asks which). */
+    fun useShortcut(uid: Int, effect: String? = null): Boolean = shortcutPart.use(uid, effect)
+    /** The chain resolved as written: its newest link, or the whole chain. */
+    fun resolveByShortcut(all: Boolean): Boolean = shortcutPart.resolve(all)
 
     // ---- Ai's response triggers (1.0.85): DuelAiWatch -------------------------------------------------
 
@@ -501,6 +518,8 @@ class Duels(val dir: File) {
         // A finished Ai vs Ai match being read is put away for the new duel (a running one stays on the table).
         matches.close()
         game = DuelGame.start(header, now())
+        shortcutPart.close()
+        shortcutPart.resolveStrip = false
         replayer.origin = null
         spot.closeSpotlight()
         replayer.closeReplay()
@@ -547,9 +566,20 @@ class Duels(val dir: File) {
      * Commits [actions] as one group by [seat]. False, and the reason said, when the table refuses. Who made it is
      * written with it ([provenance]); [peek] marks one of Ai's peeks.
      */
-    fun act(actions: List<DuelAction>, seat: Int? = bottom, peek: Boolean = false): Boolean {
+    fun act(actions: List<DuelAction>, seat: Int? = bottom, peek: Boolean = false, fx: List<FxTag?> = emptyList()): Boolean {
         // An Ai vs Ai match on the table is watched, never played into (`docs/phases/C.md` §6).
         if (matches.live != null) { problem = DuelMatches.ON_THE_TABLE; return false }
+        // A Shortcut's moves (Phase D §5½) are made on the live table on this device only, tagged: never into a replay or the
+        // past, never over the network (refused there in words).
+        if (fx.any { it != null }) {
+            val why = when {
+                replayer.replay != null -> "A replay is open: close it to use a Shortcut"
+                insertAfter != null -> "Insert here takes moves made by hand"
+                network.role != null -> DuelHost.NO_SHORTCUTS
+                else -> null
+            }
+            if (why != null) { problem = why; return false }
+        }
         if (replayer.replay != null) return replayer.insert(actions, seat)
         // Insert here takes the person's next move only — never a step of Ai's or a combo's play-out (1.0.85).
         insertAfter?.let { at -> if (network.role == null && !playing && !aiWatch.releasing && actions.any { !it.social }) { insertAfter = null; return replayer.insertPast(at, actions, seat) } }
@@ -595,6 +625,7 @@ class Duels(val dir: File) {
             actions, seat, now(),
             join = opener.autoActing && opener.autoGroup != null && g.entries.getOrNull(g.cursor - 1)?.group == opener.autoGroup,
             by = provenance(peek),
+            fx = fx,
         )
         if (!r.ok) {
             problem = r.problem
@@ -637,6 +668,8 @@ class Duels(val dir: File) {
         // Any verb puts a waiting attack away (1.0.86); an attack verb arms it again below.
         attacking = null
         val actor = seat ?: seatFor(uid)
+        // Shortcut (Phase D §5½): the card's written effect, its choices asked in the Shortcut window — never a manual verb.
+        if (verb == DuelVerb.SHORTCUT) return shortcutPart.use(uid)
         // Several at once (1.0.90, DuelSelection): one group, one undo; onto a Deck, in an order the person chooses first.
         if (uid in selection && selection.size > 1 && verb != DuelVerb.ATTACK) return picking.verbAll(verb, host)
         val r = DuelVerbs.actions(g.state, actor, uid, verb, catalog, zone, host, direct)
@@ -694,7 +727,23 @@ class Duels(val dir: File) {
         val s = shown?.state ?: return false
         if (s.chain.isEmpty()) { problem = "There is no chain to resolve"; return false }
         chainMenu = null
+        // A written link stands (Phase D §5½ 3): By hand (Enter) or By Shortcut (U), on a strip of two.
+        if (writtenLink(s)) { shortcutPart.resolveStrip = true; return false }
+        return byHandAll()
+    }
+
+    /** Shift Q by hand, as it was before Shortcut: the whole chain, newest link first, as one group. */
+    fun byHandAll(): Boolean {
+        val s = shown?.state ?: return false
+        shortcutPart.resolveStrip = false
+        if (s.chain.isEmpty()) return false
         return act(DuelVerbs.resolveAll(s, catalog), bottom)
+    }
+
+    /** Whether some link of the chain was made by a Shortcut, so it may resolve as written. */
+    fun writtenLink(s: DuelState): Boolean {
+        val sc = shortcuts() ?: return false
+        return (1..s.chain.size).any { sc.written(s, it) }
     }
 
     /** Chain Link [link] (1-based) negated: it stays and resolves doing nothing; an activated Spell or Trap goes to the GY. */
@@ -774,8 +823,8 @@ class Duels(val dir: File) {
             is DuelCommand.Parsed.Actions -> if (act(p.actions, bottom)) Ran.Moved else refused()
             // Moves joined with ";" (1.0.87): each its own step, in order, stopping at the first the table refuses.
             is DuelCommand.Parsed.Many -> many(p, quiet, ::refused)
-            // Shortcut (Phase D §5½): the table has no written effects until the library comes (step 2), so the line says so.
-            is DuelCommand.Parsed.Shortcut -> { if (!quiet) problem = Shortcuts.NONE_AT_TABLE; Ran.Refused(Shortcuts.NONE_AT_TABLE) }
+            // Shortcut (Phase D §5½): the window asks what the line's own answers leave out; with nothing written, the line says so.
+            is DuelCommand.Parsed.Shortcut -> if (shortcutPart.line(p.ask) || shortcutPart.open) Ran.Moved else refused()
             is DuelCommand.Parsed.Ruling -> {
                 val r = houseRulings.keepRuling(p.code, p.card, p.text)
                 act(DuelAction.Note("House ruling: ${r.card?.let { "$it — " } ?: ""}${r.text}", bottom), bottom)
@@ -857,6 +906,8 @@ class Duels(val dir: File) {
     }
 
     fun undo() {
+        // The Shortcut window open (§5¾.10): Ctrl Z is Esc there, one choice back; nothing was committed to undo.
+        if (shortcutPart.open) { shortcutPart.back(); return }
         if (matches.live != null) { problem = DuelMatches.ON_THE_TABLE; return }
         if (replayer.replay != null) { replayer.step(ReplayUnit.GROUP, -1); return }
         if (network.role != null) { network.askTakeBack(); return }
@@ -1149,16 +1200,21 @@ class Duels(val dir: File) {
     }
 
     /** The pool the catalog was made from, and the catalog: one per pool, so asking again changes nothing (1.0.92). */
-    private var indexed: Pair<CardIndex, DuelCatalog>? = null
+    private var indexed: Triple<CardIndex, Any?, DuelCatalog>? = null
 
     /**
      * The duel reads its cards from [index]: the same catalog for the same pool, each card read off it once
      * ([DuelCatalog.cached]) — Ai's every tool call asks, and a new catalog each time made the log read itself again.
+     * A card the pool does not hold is read off the written effects' facts (Phase D: the reserved range's samples), so a
+     * new set of written effects is a new catalog too: a miss kept from before them would hide their names.
      */
     fun useIndex(index: CardIndex) {
-        val made = indexed?.takeIf { it.first === index }
-            ?: (index to DuelCatalog.cached { code -> index.byId(CardId(code))?.let(DuelCardInfo::of) }).also { indexed = it }
-        if (catalog !== made.second) catalog = made.second
+        val base = shortcutPart.written()
+        val made = indexed?.takeIf { it.first === index && it.second === base }
+            ?: Triple(index, base as Any?, DuelCatalog.cached { code ->
+                index.byId(CardId(code))?.let(DuelCardInfo::of) ?: base?.facts?.catalog()?.info(code)
+            }).also { indexed = it }
+        if (catalog !== made.third) catalog = made.third
     }
 
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */

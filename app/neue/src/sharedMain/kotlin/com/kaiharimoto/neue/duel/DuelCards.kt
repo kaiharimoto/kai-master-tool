@@ -153,7 +153,7 @@ internal fun TableCard(
                     if (card != null) {
                         NeueCard(card, Modifier.fillMaxSize(), selected = selected, foil = if (frame.look == CardLook.SET) "off" else foil)
                     } else {
-                        TokenFace(name, Modifier.fillMaxSize())
+                        TokenFace(name, Modifier.fillMaxSize(), token = inst.token)
                     }
                     if (frame.look == CardLook.SET) SetMark(Modifier.fillMaxSize())
                 }
@@ -293,10 +293,10 @@ private fun SetMark(modifier: Modifier) {
 
 /** A token with no picture: its name in a paper box. */
 @Composable
-internal fun TokenFace(name: String, modifier: Modifier) {
+internal fun TokenFace(name: String, modifier: Modifier, token: Boolean = true) {
     val c = Mu.colors
     Column(modifier.background(c.paper).border(1.dp, c.ink).padding(4.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Micro("Token", color = c.ink45, size = 8.sp)
+        if (token) Micro("Token", color = c.ink45, size = 8.sp)
         Micro(name, color = c.ink, size = 9.sp, maxLines = 3)
     }
 }

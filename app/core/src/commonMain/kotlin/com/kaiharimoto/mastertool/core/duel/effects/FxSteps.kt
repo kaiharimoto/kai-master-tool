@@ -90,6 +90,10 @@ object FxSteps {
      */
     const val MOST_DEPTH = 16
 
+    /** Why a card in a place an effect looked in is not offered ([Decision.Cards.refused]). */
+    const val NOT_OFFERED = "Not one this effect can choose"
+    const val THIS_CARD = "The card using the effect"
+
     /** Runs [steps] for [act] on [t]. */
     fun run(t: FxTable, act: FxAct, steps: List<Step>, chooser: Chooser): FxRun {
         if (steps.isEmpty()) return FxRun.Done(emptyList(), emptyList(), t.state, t.fx, bound = act.bound, declared = act.declared)
@@ -399,11 +403,29 @@ object FxSteps {
         /** [min]–[max] of [among], chosen for [purpose] (a cost's own pick is a [Purpose.COST]): the uids. */
         fun cards(verb: String, among: List<Int>, min: Int, max: Int, purpose: Purpose, to: Landing? = null, who: Rel = Rel.YOU, looked: List<Spot> = emptyList()): List<Int> {
             val why = if (act.part == FxTag.COST && purpose != Purpose.TARGET) Purpose.COST else purpose
+            val chooser = if (who == Rel.THEM) 1 - seat else seat
+            val kind = when {
+                purpose == Purpose.TARGET -> StepKind.TARGET
+                act.part == FxTag.COST -> StepKind.COST
+                else -> StepKind.DOES
+            }
             val d = Decision.Cards(
                 why(verb, who), among, min, max, why, to, among.map { s.placeOf(it) }, source, stepWords(), hidden(among),
                 looked = looked, by = if (who == Rel.THEM) 1 - seat else null,
+                refused = refusedIn(looked, among, chooser), stepKind = kind,
             )
             return sc.ask(d).map { among[it] }
+        }
+
+        /**
+         * The cards in [looked] that [among] leaves out, each with why (D.md §5¾.12): only cards [viewer] sees, so a dimmed
+         * card in an open pile says why it is not offered and nothing hidden is named.
+         */
+        private fun refusedIn(looked: List<Spot>, among: List<Int>, viewer: Int): Map<Int, String> {
+            if (looked.isEmpty()) return emptyMap()
+            val offered = among.toSet()
+            return FxFilters.cards(looked, scope()).filter { it !in offered && DuelSight.sees(s, it, viewer) }
+                .take(Pick.MOST).associateWith { if (it == act.uid) THIS_CARD else NOT_OFFERED }
         }
 
         fun landing(dest: Dest, positions: List<CardPosition> = emptyList()) = Landing(dest, seat, positions)
@@ -700,7 +722,7 @@ object FxSteps {
 
         /** Which of [zones] (the legal, free ones) [card] goes to, in one of [positions]: asked when there is more than one. */
         fun zone(card: Int, zones: List<Place.Zone>, positions: List<CardPosition>): Place.Zone? =
-            if (zones.isEmpty()) null else zones[sc.ask(Decision.Zone(zones, card, positions, source)).single()]
+            if (zones.isEmpty()) null else zones[sc.ask(Decision.Zone(zones, card, positions, source, FxRules.closedZones(t, seat, zones))).single()]
 
         private fun special(op: Op.SpecialSummon): Boolean {
             val (chosen, whole) = choose(op.pick, "Special Summon", Purpose.SUMMON, landing(Dest.MONSTER_ZONE, positions(op.pos))) { summonable(t, seat, it) }

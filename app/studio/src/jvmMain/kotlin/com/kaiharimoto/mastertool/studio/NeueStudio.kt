@@ -440,6 +440,9 @@ fun neueMain(args: Array<String>) {
                     }
                     println("[neue-studio] spotlight: ${d.spotlight}")
                 }
+                // --duel-shortcut=which|pick|pick2|place|extra|target|order|declare: the Shortcut window (Phase D §5¾) on the
+                // reserved-range samples' table (`FxSamples`), stood at that question.
+                map["duel-shortcut"]?.let { shot -> studioShortcut(h, shot) }
                 // --duel-replay=N: the duel as a replay, stood at entry N (or halfway), with a note there.
                 map["duel-replay"]?.let { spec ->
                     val g = h.duel.game!!
@@ -1995,4 +1998,82 @@ private suspend fun studioChance(h: NeueHolders, how: String, clock: FrameClock)
 
 /** `--duel-dice-frames=N`: how many frames into the near seat's throw a flying shot is taken. */
 private var diceFrames: Int? = null
+
+/**
+ * The Shortcut window (Phase D §5¾) for `--duel-shortcut=which|pick|pick2|place|extra|target|order|declare`: the reserved
+ * range's sample cards (`FxSamples`, the window's mockups' "Gatekeeper"), on a two-seat table — or a one-player table where
+ * the use resolves at once (extra, order, declare) — the Shortcut started and answered up to the question to photograph.
+ * Their facts stand over the pool's, so a name declared may be any card that exists.
+ */
+private fun studioShortcut(h: com.kaiharimoto.neue.NeueHolders, shot: String) {
+    val d = h.duel
+    val index = h.builder.index
+    val samples = com.kaiharimoto.mastertool.core.duel.effects.FxSamples
+    val U = com.kaiharimoto.mastertool.core.duel.effects.FxSamples.U
+    val facts = com.kaiharimoto.mastertool.core.duel.effects.FxFacts(
+        { code -> samples.facts[code] ?: index.byId(CardId(code))?.let { com.kaiharimoto.mastertool.core.duel.effects.FxFacts.of(it) } },
+    )
+    val names: (String) -> List<Int> = { w -> listOfNotNull(index.byName(w)?.id?.value) + samples.cards.filter { it.name.equals(w.trim(), ignoreCase = true) }.map { it.id.value } }
+    val written = samples.written(names, facts)
+    d.writtenEffects = { written }
+    val solo = shot in setOf("extra", "order", "declare")
+    h.neue.update { it.copy(duel = it.duel.copy(twoSided = !solo)) }
+    d.game = samples.game(solo = solo)
+    d.bottom = 0
+    // The duel's catalog reads a card the pool does not hold off the written effects' facts.
+    d.useIndex(index)
+    val part = d.shortcutPart
+    fun pick(vararg uids: Int) {
+        val q = part.question?.decision as? com.kaiharimoto.mastertool.core.duel.effects.Decision.Cards ?: return
+        uids.forEach { u -> q.among.indexOf(u).takeIf { it >= 0 }?.let(part::togglePick) }
+    }
+
+    when (shot) {
+        "which" -> d.useShortcut(U.HERALD)
+        // A two-seat table: the activation is a link the other seat may answer, and the summon is asked as it resolves.
+        "pick" -> {
+            d.useShortcut(U.HERALD, "call")
+            d.resolveByShortcut(all = false)
+            pick(U.VELL_GY)
+        }
+        "pick2" -> {
+            d.useShortcut(U.HERALD, "rally")
+            d.resolveByShortcut(all = false)
+            pick(U.VELL_HAND, U.VELL_GY)
+        }
+        "place" -> {
+            d.useShortcut(U.HERALD, "rally")
+            d.resolveByShortcut(all = false)
+            pick(U.VELL_HAND, U.VELL_GY)
+            part.confirm()
+            part.choosePosition(com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_DEF)
+            part.key(com.kaiharimoto.mastertool.core.input.DeskAction.SHORTCUT_3)
+            part.choosePosition(com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_ATK)
+            part.cursor = 2
+        }
+        "extra" -> {
+            d.useShortcut(U.GATE)
+            part.key(com.kaiharimoto.mastertool.core.input.DeskAction.SHORTCUT_S3)
+        }
+        "target" -> {
+            d.useShortcut(U.HERALD, "sweep")
+            pick(U.SENTRY)
+            d.openPile(1, PileKind.GY)
+        }
+        "order" -> {
+            d.useShortcut(U.TOLL)
+            part.key(com.kaiharimoto.mastertool.core.input.DeskAction.SHORTCUT_S3)
+            pick(U.ECHO_DECK_1, U.ECHO_DECK_2)
+            part.confirm()
+            part.key(com.kaiharimoto.mastertool.core.input.DeskAction.SHORTCUT_YES)
+            part.key(com.kaiharimoto.mastertool.core.input.DeskAction.SHORTCUT_YES)
+        }
+        "declare" -> {
+            d.useShortcut(U.OATH)
+            part.key(com.kaiharimoto.mastertool.core.input.DeskAction.SHORTCUT_S3)
+            part.typed = "Gate"
+        }
+    }
+    println("[neue-studio] shortcut $shot: ${part.question?.decision} · problem ${d.problem}")
+}
 

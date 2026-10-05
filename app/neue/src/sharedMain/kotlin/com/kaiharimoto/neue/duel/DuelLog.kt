@@ -25,6 +25,7 @@ import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.effects.ScriptBook
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelFolds
 import com.kaiharimoto.mastertool.core.duel.DuelGame
@@ -83,7 +84,9 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val seated = aiAtTable(h) && !watching
     val thinking = h.neue.prefs.duel.aiThinking
     val talk = ai.session?.takeIf { seated && it.mode == AiSession.MODE_DUEL && it.id == duels.aiSession }
-    val folds = remember(game.header, viewer, duels.catalog) { logFolds(game, viewer, duels.catalog) }
+    // A Shortcut's line names its effect by its short name (Phase D §5½): the written effects' book, when the table has one.
+    val book = duels.shortcuts()?.book ?: ScriptBook.EMPTY
+    val folds = remember(game.header, viewer, duels.catalog, book) { logFolds(game, viewer, duels.catalog, book) }
     val rolling = duels.diceRolling
     val inAir = duels.chanceRolling
     // Which lines are the person's own reads the bottom seat: a seat swapped colours them again (1.0.92; it was stale).
@@ -489,10 +492,13 @@ internal class LogRead(val text: String, val applied: Boolean)
  * The log's words, read once an entry and kept (1.0.86): a move reads one entry, an undo, a redo or a
  * replay's tick reads none. Before, every change of the cursor folded and worded the whole duel again.
  */
-internal fun logFolds(game: DuelGame, viewer: Int?, catalog: DuelCatalog): DuelFolds<LogRead> =
+internal fun logFolds(
+    game: DuelGame, viewer: Int?, catalog: DuelCatalog,
+    book: ScriptBook = ScriptBook.EMPTY,
+): DuelFolds<LogRead> =
     DuelFolds(game.header) { e, before, after, applied ->
         val text = if (e.action == DuelAction.EndTurn) "Turn ${after.turn} · ${DuelWords.seatName(after, after.active)}"
-        else DuelWords.say(before, after, e, viewer, catalog)
+        else DuelWords.say(before, after, e, viewer, catalog, book)
         LogRead(text, applied)
     }
 

@@ -117,7 +117,7 @@ internal class FxScribe(start: FxTable, private val chooser: Chooser, val by: In
  * The duel's catalog as the engine's facts tell it: what `DuelVerbs.resolve` and `DuelVerbs.negate` read (a card's
  * kind, its Spell or Trap kind), so the chain's own Spells and Traps go to the GY by the one list.
  */
-internal fun FxFacts.catalog(): DuelCatalog = DuelCatalog { code ->
+fun FxFacts.catalog(): DuelCatalog = DuelCatalog { code ->
     get(code)?.let { c ->
         val kind = when {
             c.type == CardType.SPELL && c.isSpellSub("Field") -> CardKind.FIELD_SPELL

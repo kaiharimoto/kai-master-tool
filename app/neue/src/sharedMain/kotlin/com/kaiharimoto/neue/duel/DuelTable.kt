@@ -267,6 +267,19 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     /** Whether the person plays [f]'s card, or only points at it: an open pile of theirs is target-only (1.0.86). */
     fun plays(f: CardFrame) = if (f.inStrip) DuelSeats.stripPlays(stateNow, duels.seatFor(f.uid), duels.bottom, playsBothNow) else mine(f.uid)
 
+    /**
+     * A press on the table while the Shortcut window asks (Phase D §5¾.10): a lit card is picked or let go, a lit zone takes
+     * the card being placed, a pile holding candidates opens as a row; a right-click reads the card. Nothing else moves.
+     */
+    fun shortcutPress(hit: Hit, x: Float, y: Float, secondary: Boolean) {
+        val part = duels.shortcutPart
+        when (hit) {
+            is Hit.Card -> if (secondary) duels.inspected = hit.frame.uid else part.tableCard(hit.frame.uid)
+            is Hit.Pile -> if (!part.tablePile(hit.seat, hit.kind)) duels.inspected = null
+            else -> (layoutNow.spotAt(x, y) as? DuelSpot.Zone)?.let { part.tableZone(it.zone) }
+        }
+    }
+
     fun rightClick(hit: Hit, x: Float) {
         // A right-click puts a waiting attack away, and does nothing else (1.0.86).
         if (duels.attacking != null) { duels.attacking = null; return }
@@ -368,6 +381,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     if (event.type == PointerEventType.Move && p != lastPointer) duels.lastInput = Duels.Input.POINTER
                     lastPointer = p
                     duels.hovered = DuelFrames.hit(framesNow, p.x / d, p.y / d)?.uid
+                    // The Shortcut window's place step: the zone under the pointer is the one Enter takes (§5¾.5).
+                    if (duels.choosing) duels.shortcutPart.hoverZone((layoutNow.spotAt(p.x / d, p.y / d) as? DuelSpot.Zone)?.zone)
                     continue
                 }
                 if (event.type == PointerEventType.Exit) { duels.hovered = null; continue }
@@ -490,6 +505,16 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                 duels.lpPad?.let { seat ->
                     val onScore = layoutNow.score[seat]?.contains(x0, y0) == true
                     if (!onScore && !lpPadSlot(layoutNow, seat).contains(x0, y0)) duels.lpPad = null
+                }
+                // The Shortcut window asks (Phase D §5¾): the table answers it and does nothing else — no drag, no verb. A press on
+                // the window itself is its chips'.
+                if (duels.choosing) {
+                    val inWindow = duels.shortcutPart.windowAt?.contains(x0, y0) == true
+                    val secondary = event.buttons.isSecondaryPressed
+                    if (!inWindow) down.consume()
+                    do { event = awaitPointerEvent() } while (event.changes.any { it.pressed })
+                    if (!inWindow) shortcutPress(hit, x0, y0, secondary)
+                    continue
                 }
                 val shift = event.keyboardModifiers.isShiftPressed
                 val alt = event.keyboardModifiers.isAltPressed
@@ -695,7 +720,11 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         if (!stripLeft) duels.strip?.let { (seat, kind) -> StripGround(duels, s, layout, seat, kind) }
         ShuffleOffer(duels, s, layout)
         // With nothing carried the frames as drawn are the frames.
-        if (carried == null && duels.verbStrip && duels.selection.size < 2) VerbStrip(duels, s, layout, frames, playsBoth)
+        val choosing = duels.choosing
+        if (carried == null && duels.verbStrip && duels.selection.size < 2 && !choosing) VerbStrip(duels, s, layout, frames, playsBoth)
+        // Shortcut (Phase D §5¾): the window, and what it lights on the table, while a Shortcut asks; Shift Q's two ways.
+        if (choosing) ShortcutLayer(h, duels, s, layout, frames, viewers)
+        ResolveStrip(duels, s, layout)
         // Several cards, one move (1.0.90): their order on each, what they can all do, and the order onto a Deck.
         if (carried == null) SelectionBadges(duels, s, frames)
         if (carried == null) SelectionBar(h, duels, s, layout, viewers, frames)

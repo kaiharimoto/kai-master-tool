@@ -109,6 +109,8 @@ private fun NeueHolders.spotlightOn(chord: KeyChord, context: DeskContext): Bool
     if (neue.page != Page.DUEL || context.textInputFocused || context.overlayOpen || neue.hasTop) return false
     if (chord.ctrl || chord.alt || chord.key.length != 1 || chord.key[0] !in 'a'..'z') return false
     if (duel.shown == null || duel.replay != null) return false
+    // The Shortcut window open (Phase D §5¾.10): a letter types its answer, a coordinate or a label, never a command.
+    if (duel.choosing) return duel.shortcutPart.type(chord.key)
     duel.openSpotlight(chord.key)
     return true
 }
@@ -156,6 +158,7 @@ fun NeueHolders.deskContext() = DeskContext(
         world.desk.desk.front == com.kaiharimoto.mastertool.core.world.desk.BuiltInApp.BROWSER.id,
     onShootout = neue.page == Page.SHOOTOUT,
     replaying = neue.page == Page.DUEL && duel.replay != null,
+    choosing = neue.page == Page.DUEL && duel.choosing,
 )
 
 /**

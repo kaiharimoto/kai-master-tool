@@ -65,6 +65,16 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
     }
     val game = duels.shown ?: return
     val s = game.state
+    // The Shortcut window (Phase D §5¾.10) has its own keys while it asks.
+    if (action in DuelShortcuts.ACTIONS) { duels.shortcutPart.key(action); return }
+    // Shift Q's strip (§5½ 3): Enter resolves by hand, U by Shortcut.
+    if (duels.shortcutPart.resolveStrip) {
+        when (action) {
+            DeskAction.DUEL_FOCUS_ACT, DeskAction.DUEL_RESOLVE_ALL -> { duels.byHandAll(); return }
+            DeskAction.DUEL_SHORTCUT -> { duels.resolveByShortcut(all = true); return }
+            else -> duels.shortcutPart.resolveStrip = false
+        }
+    }
     // The ordering strip (1.0.90) has the keys while it is open: its own arrows, Enter, and K / Shift K / Alt K / R.
     if (duels.ordering != null && runOrdering(duels, action)) return
     if (runFocus(h, action)) return
@@ -168,6 +178,9 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
     when {
         // The Spotlight first (1.0.87): it stands over everything on the table.
         d.spotlight != null -> d.closeSpotlight()
+        // The Shortcut window (Phase D §5¾.10): its field, then an open pile, then one choice back, then the whole use let go.
+        d.choosing -> d.shortcutPart.back()
+        d.shortcutPart.resolveStrip -> d.shortcutPart.resolveStrip = false
         // What is open on the table closes first (1.0.86, the red team: Esc stopped Ai's turn and closed nothing).
         d.combosOpen -> d.combosOpen = false
         d.setupOpen -> d.setupOpen = false
@@ -218,7 +231,7 @@ private fun runFocus(h: NeueHolders, action: DeskAction): Boolean {
     val menuOpen = d.verbStrip && d.verbCursor != null
     val s0 = d.shown?.state
     // Enter's menu on a link in the chain well (1.0.90): ↑↓ choose in it.
-    val chainOpen = d.chainMenu?.let { i -> s0?.let { linkItems(it, i) } }?.takeIf { it.isNotEmpty() }
+    val chainOpen = d.chainMenu?.let { i -> s0?.let { d.linkItemsFor(it, i) } }?.takeIf { it.isNotEmpty() }
     if (chainOpen != null && (action == DeskAction.DUEL_FOCUS_UP || action == DeskAction.DUEL_FOCUS_DOWN)) {
         d.chainCursor = (d.chainCursor + if (action == DeskAction.DUEL_FOCUS_UP) -1 else 1).coerceIn(0, chainOpen.size - 1)
         return true
@@ -271,7 +284,7 @@ private fun enterOnFocus(h: NeueHolders) {
     val focus = d.focus
     // The chain well's menu (1.0.90): Enter does the item chosen.
     d.chainMenu?.let { i ->
-        val item = linkItems(s, i).getOrNull(d.chainCursor)
+        val item = d.linkItemsFor(s, i).getOrNull(d.chainCursor)
         if (item != null) runLinkItem(d, s, i, item) else d.chainMenu = null
         return
     }
