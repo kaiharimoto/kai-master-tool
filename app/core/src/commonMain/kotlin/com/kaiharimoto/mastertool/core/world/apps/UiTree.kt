@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.world.apps
 import com.kaiharimoto.mastertool.core.world.BoardKind
 import com.kaiharimoto.mastertool.core.world.ShowSpec
 import com.kaiharimoto.mastertool.core.world.WorldCodec
+import com.kaiharimoto.mastertool.core.world.WorldTable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -127,6 +128,12 @@ data class UiTree(val root: UiNode, val nodes: Int = 0, val problems: List<Strin
                     "deckPicker" -> UiNode.DeckPicker(id(o, kind), o.t("label"), o.s("value"), w)
                     "table" -> table(o, w)
                     "cards" -> UiNode.Cards(o.s("id"), (o["cards"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.let(::str) }.take(AppLimits.OPTIONS), o.b("pickable") ?: false, w)
+                    "card" -> {
+                        val card = (o["card"] as? JsonPrimitive)?.contentOrNull?.let(::str)?.trim().orEmpty()
+                            .ifEmpty { (o["name"] as? JsonPrimitive)?.contentOrNull?.let(::str)?.trim().orEmpty() }
+                        require(card.isNotEmpty()) { "ui.card needs a card: its name or its passcode" }
+                        UiNode.Card(card, o.s("size") == "large" || o.b("large") == true, o.t("label"), o.s("id")?.take(64), o.b("pickable") ?: false, w)
+                    }
                     "board" -> board(o, w)
                     "progress" -> UiNode.Progress((o.d("value") ?: 0.0).let { if (it.isFinite()) it.coerceIn(0.0, 1.0) else 0.0 }, o.t("label"), w)
                     "empty" -> UiNode.Empty(o.t("text").ifEmpty { "Nothing here yet." }, w)
@@ -160,7 +167,8 @@ data class UiTree(val root: UiNode, val nodes: Int = 0, val problems: List<Strin
                 }
             }
             val opens = raw.take(AppLimits.ROWS).map { r -> ((r as? JsonObject)?.get("open") as? JsonPrimitive)?.contentOrNull?.takeIf { AppLinks.allowed(it) } }
-            return UiNode.Table(o.s("id"), columns, rows, (raw.size - AppLimits.ROWS).coerceAtLeast(0), o.b("pickable") ?: false, if (opens.any { it != null }) opens else emptyList(), w)
+            val cards = WorldTable.cardColumns(o["cards"] ?: o["cardColumns"], columns)
+            return UiNode.Table(o.s("id"), columns, rows, (raw.size - AppLimits.ROWS).coerceAtLeast(0), o.b("pickable") ?: false, if (opens.any { it != null }) opens else emptyList(), w, cards)
         }
 
         private fun cell(e: JsonElement): String = when (e) {

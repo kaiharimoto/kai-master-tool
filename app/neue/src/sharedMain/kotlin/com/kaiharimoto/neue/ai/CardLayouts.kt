@@ -33,6 +33,7 @@ import com.kaiharimoto.mastertool.core.ai.text.Block
 import com.kaiharimoto.mastertool.core.ai.text.CardGroup
 import com.kaiharimoto.mastertool.core.ai.text.ChatBoard
 import com.kaiharimoto.mastertool.core.model.Card
+import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.Viewing
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
@@ -55,9 +56,10 @@ import com.kaiharimoto.neue.theme.MuType
  * Parsed in core (`ChatMarkdown`: ```deck, ```compare, ```line, ```board, labelled ```cards).
  */
 
-/** A card named in a reply, found in the pool by its exact name or the nearest one. */
+/** A card named in a reply, found in the pool by its passcode, its exact name or the nearest one. */
 internal fun cardNamed(ai: AiState, name: String): Card? {
     val index = ai.h.builder.index
+    name.trim().toIntOrNull()?.let { code -> index.byId(CardId(code))?.let { return it } }
     return index.byName(name) ?: (CardWords.resolve(name, index) as? Resolved.Found)?.card
 }
 

@@ -13,6 +13,7 @@ import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.prefs.NeuePreferences
 import com.kaiharimoto.mastertool.core.prefs.UiPreferences
 import com.kaiharimoto.mastertool.core.prep.PrepCodec
+import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
 import com.kaiharimoto.mastertool.core.web.WebLibrary
 import com.kaiharimoto.neue.NeueHolders
@@ -154,6 +155,7 @@ class BackupCenter(private val h: NeueHolders) {
                     name.startsWith("duel/") && safe(name) -> put(File(Platform.dataDir, name), data)
                     name.startsWith("world/") && safe(name) -> put(File(Platform.dataDir, name), data)
                     name.startsWith("${ShootoutPaths.FOLDER}/") && safe(name) -> put(File(Platform.dataDir, name), data)
+                    name.startsWith("${FxPaths.FOLDER}/") && safe(name) && FxPaths.syncs(name.removePrefix("${FxPaths.FOLDER}/")) -> put(File(Platform.dataDir, name), data)
                 }
             }
             val neue = entries[NEUE]?.let { runCatching { Backups.json.decodeFromString(NeuePreferences.serializer(), it.decodeToString()) }.getOrNull() }
@@ -176,6 +178,7 @@ class BackupCenter(private val h: NeueHolders) {
                 h.customArt.reload()
                 h.world.reload()
                 if (h.shootoutStarted) h.shootout.reload()
+                if (h.effectsStarted) h.effects.reload()
                 h.present.reload()
                 h.duel.reload()
                 h.duel.reloadRulings()
@@ -239,6 +242,8 @@ class BackupCenter(private val h: NeueHolders) {
                         tree(File(Platform.dataDir, "world")).filter { NeueSyncLocal.worldSyncs(it.first) }.forEach { (rel, f) -> add("world/$rel", f.readBytes()); files++ }
                         // Shootout's trials (1.1.2): every deck's, alone and per matchup.
                         tree(File(Platform.dataDir, ShootoutPaths.FOLDER)).filter { !it.first.endsWith(".tmp") }.forEach { (rel, f) -> add("${ShootoutPaths.FOLDER}/$rel", f.readBytes()); files++ }
+                        // The effects library (Phase D step 2); never `fxcache/`, which each device recomputes.
+                        tree(File(Platform.dataDir, FxPaths.FOLDER)).filter { FxPaths.syncs(it.first) }.forEach { (rel, f) -> add("${FxPaths.FOLDER}/$rel", f.readBytes()); files++ }
                         add(
                             BackupManifest.NAME,
                             Backups.json.encodeToString(

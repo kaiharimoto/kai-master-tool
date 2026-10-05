@@ -45,6 +45,8 @@ fun MuText(
     style: TextStyle = LocalMuText.current,
     color: Color = Color.Unspecified,
     maxLines: Int = Int.MAX_VALUE,
+    /** Pictures set in the line (a card's art before its name, in Ai World). */
+    inlineContent: Map<String, androidx.compose.foundation.text.InlineTextContent> = emptyMap(),
 ) {
     val resolved = if (color != Color.Unspecified) color else style.color.takeIf { it != Color.Unspecified } ?: Mu.colors.ink
     BasicText(
@@ -53,6 +55,7 @@ fun MuText(
         style = style.copy(color = resolved),
         maxLines = maxLines,
         overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
+        inlineContent = inlineContent,
     )
 }
 

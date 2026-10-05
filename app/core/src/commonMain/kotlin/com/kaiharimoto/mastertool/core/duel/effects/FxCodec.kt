@@ -130,6 +130,28 @@ object FxCodec {
     /** The script, or null when it is newer or unreadable. */
     fun decode(text: String): CardScript? = (read(text) as? FxRead.Script)?.script
 
-    /** The first 12 hex digits of the SHA-256 of the script as written: what a tag and a verdict name it by. */
-    fun hash(s: CardScript): String = Sha256.hex(encode(s)).take(12)
+    /**
+     * The first 12 hex digits of the SHA-256 of the script as written: what a tag and a verdict name it by. The source's
+     * hash ([CardScript.source]) is left out: the data is what is verified, not the JavaScript that built it.
+     */
+    fun hash(s: CardScript): String = Sha256.hex(encode(if (s.source.isEmpty()) s else s.copy(source = ""))).take(12)
+
+    /** 12 hex of the SHA-256 of [text] as written: a source's ([CardScript.source]) or a card's printed text ([CardScript.text]). */
+    fun short(text: String): String = Sha256.hex(text).take(12)
+
+    /** A card's printed text's hash ([CardScript.text]): line endings and the ends' spaces aside, so only a real change shows. */
+    fun textOf(printed: String): String = short(printed.replace("\r\n", "\n").trim())
+
+    /**
+     * The compiled file as the library writes it (`<data>/effects/<passcode>.json`): the script, with its vocabulary written
+     * out even when it is this build's (D.md §6: "the compiled CardScript: vocab, its source's hash, the text's hash").
+     */
+    fun file(s: CardScript): String {
+        val o = json.encodeToJsonElement(CardScript.serializer(), s) as JsonObject
+        val head = LinkedHashMap<String, JsonElement>()
+        o["card"]?.let { head["card"] = it }
+        head["vocab"] = JsonPrimitive(s.vocab)
+        o.forEach { (k, v) -> if (k != "card" && k != "vocab") head[k] = v }
+        return JsonObject(head).toString()
+    }
 }

@@ -24,6 +24,28 @@ object Goals {
 
     const val EXAMPLE = "Starters>=1 & Hand traps>=1 | Extenders>=2"
 
+    private val COMPARE = Regex("""\s*(>=|<=|==|=|>|<)\s*(\d+)""")
+    private val SPACES = Regex("""\s+""")
+
+    /**
+     * A condition as a page's words, for a title, a chart's label or a table's cell: `"Starters">=1` reads
+     * "Starters ≥ 1" — the quotes that hold a name together dropped, the comparisons spaced and set as signs. What the
+     * person typed stays as typed where it can be typed again (the Terminal's lines).
+     */
+    fun words(text: String): String {
+        val plain = text.replace("\"", "").replace("“", "").replace("”", "")
+        val signed = COMPARE.replace(plain) { m ->
+            val op = when (m.groupValues[1]) {
+                ">=" -> "≥"
+                "<=" -> "≤"
+                "==", "=" -> "="
+                else -> m.groupValues[1]
+            }
+            " $op ${m.groupValues[2]}"
+        }
+        return signed.replace(SPACES, " ").trim().ifEmpty { text.trim() }
+    }
+
     /**
      * "Starters>=1 & Hand traps>=1", "Starters>=1 | Extenders>=2" (and binds tighter than or), "any(Ash, Imperm)>=1",
      * "Ash Blossom & Joyous Spring>=1" (an `&` or an `and` inside a name is part of it: a clause only ends at its number),

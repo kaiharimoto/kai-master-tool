@@ -13,7 +13,6 @@ import com.kaiharimoto.mastertool.core.world.WorldCanvas
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.world.TermLine
-import com.kaiharimoto.neue.world.WorldPane
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.File
@@ -23,9 +22,19 @@ import kotlin.random.Random
 /**
  * `--world=demo` (1.0.97): a world seeded straight onto Ai World's page — files, a run's lines, the activity, a short
  * conversation in Thoughts and one board of every kind — so the page can be photographed without a model.
- * `--world-pane=boards|editor|…` gives that pane the page; `--world-ai=editor|…` puts Ai in that pane (editor by default).
+ * `--world=fresh` seeds a world with nothing in it yet, for the fresh desktop. The desktop's own scenes are
+ * `--world-desk=…` (`DeskStudio.kt`).
  */
 internal fun studioWorld(h: NeueHolders, map: Map<String, String>) {
+    if (map["world"] == "fresh") {
+        val now = System.currentTimeMillis()
+        val w = World(id = "wfresh", title = "lab openings", scope = h.builder.deckId?.let { World.SCOPE_DECK + it }, created = now, updated = now)
+        // A desk left by an earlier run is not this picture's.
+        File(h.world.dir, "${w.id}/desk.json").delete()
+        h.world.seed(w, mapOf("README.md" to "# lab openings\n"), emptyList(), emptyList(), null)
+        println("[neue-studio] world: fresh")
+        return
+    }
     val now = System.currentTimeMillis()
     val index = h.builder.index
     // The builder's cards, by name, so the boards that draw art draw real cards.
@@ -37,7 +46,7 @@ internal fun studioWorld(h: NeueHolders, map: Map<String, String>) {
 
     val specs = listOf(
         Triple("stat", "Opens a starter", """{"value":"63.4%","label":"Opens a starter","detail":"Of 100,000 seeded five-card hands, going first. 1 in 8 opens two."}"""),
-        Triple("chart", "Starters seen", """{"type":"hbar","title":"","labels":["${q(n(0))}","${q(n(1))}","${q(n(2))}","${q(n(3))}","${q(n(4))}"],"series":[{"name":"in hand","values":[38.1,33.2,29.8,21.4,12.9]},{"name":"live","values":[31.0,30.1,22.6,18.9,10.2]}],"unit":"%"}"""),
+        Triple("chart", "Starters seen", """{"type":"hbar","cards":true,"title":"","labels":["${q(n(0))}","${q(n(1))}","${q(n(2))}","${q(n(3))}","${q(n(4))}"],"series":[{"name":"in hand","values":[38.1,33.2,29.8,21.4,12.9]},{"name":"live","values":[31.0,30.1,22.6,18.9,10.2]}],"unit":"%"}"""),
         Triple("chart", "Hand strength", run {
             val r = Random(11)
             val a = (0 until 70).joinToString(",") { val x = r.nextDouble() * 10; "[${"%.2f".format(x)},${"%.2f".format(x * 0.7 + r.nextDouble() * 3)}]" }
@@ -51,7 +60,7 @@ internal fun studioWorld(h: NeueHolders, map: Map<String, String>) {
             val rows = (0 until 14).joinToString(",") { i ->
                 """["${q(n(i))}",${3 - i % 3},"${"%.1f".format(40.0 - i * 2.3)}%","${listOf("Starter", "Extender", "Hand trap", "Brick")[i % 4]}","${"%.2f".format(1.0 - i * 0.05)}"]"""
             }
-            """{"columns":["Card","Copies","Opens","Role","Value"],"rows":[$rows]}"""
+            """{"columns":["Card","Copies","Opens","Role","Value"],"rows":[$rows],"cards":["Card"]}"""
         }),
         Triple("chart", "Starters by turn", """{"type":"line","title":"","labels":["T1","T2","T3","T4","T5"],"series":[{"name":"going first","values":[63,71,78,83,87]},{"name":"going second","values":[68,75,81,85,89]}],"unit":"%"}"""),
         Triple("chart", "What a hand holds", """{"type":"stacked","title":"","labels":["0","1","2","3+"],"series":[{"name":"starters","values":[36,41,17,6]},{"name":"hand traps","values":[22,30,12,4]},{"name":"bricks","values":[12,9,4,1]}]}"""),
@@ -128,14 +137,10 @@ ygo.show.stat({ value: (opens / 1000).toFixed(1) + '%', label: 'Opens a starter'
         WorldEvent(t + 41_000, WorldEvent.Kind.WRITE, WorldEvent.YOU, path = "notes/plan.md", text = "Wrote notes/plan.md (3 lines)"),
         WorldEvent(t + 50_000, WorldEvent.Kind.SHOW, WorldEvent.AI, board = "b14", text = "Pinned “What I found”"),
     )
+    File(h.world.dir, "${w.id}/desk.json").delete()
     h.world.seed(w, files, lines, events, "openings.js")
     picture(File(h.world.dir, "${w.id}/files/out/hands.png"))
-    h.world.selectedBoard = "b5"
-    h.world.aiPane = (map["world-ai"] ?: "editor").let { a -> WorldPane.entries.firstOrNull { it.name.equals(a, ignoreCase = true) } }
-    map["world-pane"]?.let { p -> WorldPane.entries.firstOrNull { it.name.equals(p, ignoreCase = true) } }?.let {
-        h.world.maximized = it
-        h.world.focus = it
-    }
+    h.world.selectedBoard = "b1"
     fun result(name: String, summary: String) = Part.ToolResult("t-$name", name, "{}", summary = summary)
     h.ai.preview(
         AiSession(

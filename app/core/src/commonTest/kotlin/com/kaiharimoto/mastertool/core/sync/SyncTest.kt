@@ -195,6 +195,17 @@ class SyncTest {
     }
 
     @Test
+    fun theEffectsLibraryTravelsAndItsVerdictsNever() {
+        // Phase D step 2: `effects/` is synced, newer wins; `fxcache/` (verdicts, test runs) is recomputed on each device, so
+        // a planted "verified" can never arrive by sync or in a backup.
+        assertEquals("effects/900000001.js", InboundPath.safe("effects/900000001.js"))
+        assertEquals("effects/900000001.json", InboundPath.safe("effects/900000001.json"))
+        listOf("fxcache/verdicts.json", "fxcache/900000001.json", "fxcache/runs/d1.json").forEach { assertNull(InboundPath.safe(it), it) }
+        assertTrue(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs("900000001.review.json"))
+        assertTrue(!com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs("900000001.verdict.json"))
+    }
+
+    @Test
     fun everySettingIsSortedIntoTravelsOrStays() {
         val loose = SyncedPrefs.fields.filter { it !in SyncedPrefs.SYNCED && it !in SyncedPrefs.DEVICE }
         assertTrue(loose.isEmpty(), "Settings neither synced nor kept on the device: $loose. Add each to SyncedPrefs.SYNCED or DEVICE.")

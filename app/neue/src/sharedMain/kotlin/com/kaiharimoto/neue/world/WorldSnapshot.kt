@@ -17,6 +17,7 @@ import com.kaiharimoto.mastertool.core.prep.TestStats
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import com.kaiharimoto.mastertool.core.search.SearchScope
 import com.kaiharimoto.mastertool.core.world.WorldHost
+import com.kaiharimoto.mastertool.core.world.WorldKnowledge
 import com.kaiharimoto.mastertool.core.world.WorldPaths
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.duel.Duels
@@ -45,6 +46,10 @@ class WorldSnapshot private constructor(
     private val day: String? = null,
     /** The duel in play as Ai's seat reads it (Phase C stage 3, `ygo.duel.fork`): a view, never the live table. */
     private val fork: Lazy<DuelFork.Source?> = lazyOf(null),
+    /** What Ai knows, read-only (`ygo.knowledge`, `docs/world/DESKTOP.md` §10.4): the Library's catalogue and files. */
+    private val known: WorldKnowledge? = null,
+    /** The app's folders every world sees (Phase D step 2, `lib/effects/`): a prefix and its folder, for `ygo.use`. */
+    private val mounts: List<WorldMount> = emptyList(),
 ) : WorldHost {
     override fun now(): Long = System.currentTimeMillis()
     override fun liveDuel(): DuelFork.Source? = fork.value
@@ -64,13 +69,20 @@ class WorldSnapshot private constructor(
     override fun banlists(region: Format): BanlistHistory? = bans(region)
     override fun format(): Format = region
     override fun today(): String? = day
+    override fun knowledge(): WorldKnowledge? = known
     override fun file(path: String): String? {
         val safe = WorldPaths.safe(path) ?: return null
+        mounts.firstOrNull { safe.startsWith(it.prefix) }?.let { m ->
+            val rel = safe.removePrefix(m.prefix)
+            if (rel.isEmpty() || !m.readable(rel)) return null
+            return runCatching { File(m.dir, rel).takeIf { f -> f.isFile }?.readText() }.getOrNull()
+        }
         return filesDir?.let { runCatching { File(it, safe).takeIf { f -> f.isFile }?.readText() }.getOrNull() }
     }
 
-    /** This snapshot reading a world's own files, for `ygo.use`. */
-    fun reading(files: File): WorldSnapshot = WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files, bans, region, day, fork)
+    /** This snapshot reading a world's own files and the app's folders mounted in it, for `ygo.use`. */
+    fun reading(files: File, mounted: List<WorldMount> = mounts): WorldSnapshot =
+        WorldSnapshot(index, open, library, groupsOf, logged, shares, comboDir, files, bans, region, day, fork, known, mounted)
 
     companion object {
         /** Read on the main thread, where the builder's state lives; the library from its repository. */
@@ -92,6 +104,7 @@ class WorldSnapshot private constructor(
             return WorldSnapshot(
                 b.index, open, stored.map { it.entry }, groups, games, shares, File(Platform.dataDir, "duel"),
                 bans = banlists::history, region = b.format, day = LocalDate.now().toString(), fork = fork(h),
+                known = h.world.library.knowledge,
             )
         }
 

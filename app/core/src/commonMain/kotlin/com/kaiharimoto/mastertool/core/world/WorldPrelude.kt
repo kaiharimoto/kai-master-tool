@@ -78,6 +78,8 @@ object WorldPrelude {
     return r;
   }
 
+  // ygo.show.*(body, {title, id, note}). Cards are drawn as their art where the body says so: a chart's labels with
+  // cards: true, a table's columns with cards: ['Card'] (or [0]), a web's nodes with card: true, [[Card]] in words.
   function show(kind) {
     return function (body, o) {
       o = o || {};
@@ -182,6 +184,7 @@ object WorldPrelude {
       };
     })()
   };
+${FxPrelude.JS}
   g.ygo = ygo;
 })(this);
 """

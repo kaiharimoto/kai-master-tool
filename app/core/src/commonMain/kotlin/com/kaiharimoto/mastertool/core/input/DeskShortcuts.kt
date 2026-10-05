@@ -401,6 +401,16 @@ enum class DeskAction {
     WORLD_TAB_PREVIOUS,
     WORLD_TAB_BACK,
     WORLD_TAB_FORWARD,
+    /** In the Browser: the first eight tabs by number, and the last (`Ctrl 1`–`Ctrl 9`, as browsers have them). */
+    WORLD_TAB_1,
+    WORLD_TAB_2,
+    WORLD_TAB_3,
+    WORLD_TAB_4,
+    WORLD_TAB_5,
+    WORLD_TAB_6,
+    WORLD_TAB_7,
+    WORLD_TAB_8,
+    WORLD_TAB_9,
     /** Skip ahead: Ai's typing finishes, its waiting targets dropped, the hop under way ends in 120 ms. */
     WORLD_SKIP,
 
@@ -485,6 +495,9 @@ enum class DeskScope(val heading: String) {
     /** On Ai World, with nothing covering it (1.0.97). */
     WORLD("In Ai World"),
 
+    /** On Ai World with its Browser in front: the tabs by number (1.1.x). */
+    WORLD_BROWSER("In Ai World's Browser"),
+
     /** On Shootout, with nothing covering it (1.1.2). */
     SHOOTOUT("In a Shootout"),
 }
@@ -515,6 +528,11 @@ data class DeskContext(
     val onWorld: Boolean = false,
     /** Shootout is the page on screen (1.1.2). */
     val onShootout: Boolean = false,
+    /**
+     * On Ai World, the Browser is the window in front: `Ctrl 1`–`Ctrl 9` are its tabs, as in any browser, and the pages'
+     * own `Ctrl 1`–`Ctrl 9` give way until another window or the desktop is in front ([DeskShortcut.yieldsToTabs]).
+     */
+    val browserInFront: Boolean = false,
 )
 
 data class DeskShortcut(
@@ -531,6 +549,8 @@ data class DeskShortcut(
      * key's own repeats while held are nothing. Only [DeskAction.HELD] actions, never [repeatable].
      */
     val hold: Boolean = false,
+    /** A page's `Ctrl` digit: dead while the World's Browser is in front, whose tabs the same keys number. */
+    val yieldsToTabs: Boolean = false,
 )
 
 object DeskShortcuts {
@@ -541,15 +561,15 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("escape"), DeskAction.DISMISS, DeskScope.ANYWHERE, "Close whatever is on top", allowedInTextInput = true),
         DeskShortcut(ctrl("k"), DeskAction.PALETTE, DeskScope.ANYWHERE, "Command palette", allowedInTextInput = true),
 
-        DeskShortcut(ctrl("1"), DeskAction.GO_BUILDER, DeskScope.APP, "Builder", allowedInTextInput = true),
-        DeskShortcut(ctrl("2"), DeskAction.GO_DECKS, DeskScope.APP, "Decks", allowedInTextInput = true),
-        DeskShortcut(ctrl("3"), DeskAction.GO_SIDING, DeskScope.APP, "Siding", allowedInTextInput = true),
-        DeskShortcut(ctrl("4"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true),
-        DeskShortcut(ctrl("5"), DeskAction.GO_PREP, DeskScope.APP, "Prep: an event and its practice", allowedInTextInput = true),
-        DeskShortcut(ctrl("6"), DeskAction.GO_PRESENT, DeskScope.APP, "Present: deck profiles as slides", allowedInTextInput = true),
-        DeskShortcut(ctrl("7"), DeskAction.GO_DUEL, DeskScope.APP, "Duel: the duel simulator", allowedInTextInput = true),
-        DeskShortcut(ctrl("8"), DeskAction.GO_WORLD, DeskScope.APP, "Ai World: Ai's own computer, watched", allowedInTextInput = true),
-        DeskShortcut(ctrl("9"), DeskAction.GO_SHOOTOUT, DeskScope.APP, "Shootout: hands judged, cards rated", allowedInTextInput = true),
+        DeskShortcut(ctrl("1"), DeskAction.GO_BUILDER, DeskScope.APP, "Builder", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("2"), DeskAction.GO_DECKS, DeskScope.APP, "Decks", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("3"), DeskAction.GO_SIDING, DeskScope.APP, "Siding", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("4"), DeskAction.GO_FORMAT, DeskScope.APP, "Format: webs of decks", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("5"), DeskAction.GO_PREP, DeskScope.APP, "Prep: an event and its practice", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("6"), DeskAction.GO_PRESENT, DeskScope.APP, "Present: deck profiles as slides", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("7"), DeskAction.GO_DUEL, DeskScope.APP, "Duel: the duel simulator", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("8"), DeskAction.GO_WORLD, DeskScope.APP, "Ai World: Ai's own computer, watched", allowedInTextInput = true, yieldsToTabs = true),
+        DeskShortcut(ctrl("9"), DeskAction.GO_SHOOTOUT, DeskScope.APP, "Shootout: hands judged, cards rated", allowedInTextInput = true, yieldsToTabs = true),
         DeskShortcut(ctrl("comma"), DeskAction.GO_SETTINGS, DeskScope.APP, "Settings", allowedInTextInput = true),
         DeskShortcut(KeyChord("f1"), DeskAction.HELP, DeskScope.APP, "Keyboard shortcuts", allowedInTextInput = true),
         DeskShortcut(ctrl("s"), DeskAction.SAVE, DeskScope.APP, "Save the deck", allowedInTextInput = true),
@@ -807,6 +827,15 @@ object DeskShortcuts {
         DeskShortcut(ctrl("tab", shift = true), DeskAction.WORLD_TAB_PREVIOUS, DeskScope.WORLD, "The previous tab", allowedInTextInput = true),
         DeskShortcut(KeyChord("left", alt = true), DeskAction.WORLD_TAB_BACK, DeskScope.WORLD, "Back, in the Browser"),
         DeskShortcut(KeyChord("right", alt = true), DeskAction.WORLD_TAB_FORWARD, DeskScope.WORLD, "Forward, in the Browser"),
+        DeskShortcut(ctrl("1"), DeskAction.WORLD_TAB_1, DeskScope.WORLD_BROWSER, "The Browser's first tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("2"), DeskAction.WORLD_TAB_2, DeskScope.WORLD_BROWSER, "Its second tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("3"), DeskAction.WORLD_TAB_3, DeskScope.WORLD_BROWSER, "Its third tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("4"), DeskAction.WORLD_TAB_4, DeskScope.WORLD_BROWSER, "Its fourth tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("5"), DeskAction.WORLD_TAB_5, DeskScope.WORLD_BROWSER, "Its fifth tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("6"), DeskAction.WORLD_TAB_6, DeskScope.WORLD_BROWSER, "Its sixth tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("7"), DeskAction.WORLD_TAB_7, DeskScope.WORLD_BROWSER, "Its seventh tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("8"), DeskAction.WORLD_TAB_8, DeskScope.WORLD_BROWSER, "Its eighth tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("9"), DeskAction.WORLD_TAB_9, DeskScope.WORLD_BROWSER, "Its last tab", allowedInTextInput = true),
         // Shootout (1.1.2): one key per answer, so a trial is a glance and a press.
         DeskShortcut(KeyChord("1"), DeskAction.SHOOTOUT_ANSWER_1, DeskScope.SHOOTOUT, "Clear win, or the hand plays through"),
         DeskShortcut(KeyChord("2"), DeskAction.SHOOTOUT_ANSWER_2, DeskScope.SHOOTOUT, "Lean win"),
@@ -833,6 +862,7 @@ object DeskShortcuts {
     fun live(context: DeskContext): List<DeskShortcut> =
         all.filter {
             (!context.textInputFocused || it.allowedInTextInput) && it.isActive(context) &&
+                !(it.yieldsToTabs && context.onWorld && context.browserInFront && !context.overlayOpen && !context.onBuilder) &&
                 (context.ai || it.action !in DeskAction.AI) && !(context.ai && it.action in DeskAction.WITHOUT_AI)
         }
 
@@ -852,6 +882,7 @@ object DeskShortcuts {
         DeskScope.REPLAY -> !context.overlayOpen && context.onDuel && !context.onBuilder && context.replaying
         DeskScope.SHORTCUT_WINDOW -> !context.overlayOpen && context.onDuel && !context.onBuilder && !context.replaying && context.choosing
         DeskScope.WORLD -> !context.overlayOpen && context.onWorld && !context.onBuilder
+        DeskScope.WORLD_BROWSER -> !context.overlayOpen && context.onWorld && !context.onBuilder && context.browserInFront
         DeskScope.SHOOTOUT -> !context.overlayOpen && context.onShootout && !context.onBuilder
     }
 

@@ -186,6 +186,7 @@ sealed interface WorldChart {
                 put("type", c.chart.type.name.lowercase())
                 put("title", c.chart.title)
                 put("unit", c.chart.unit)
+                if (c.chart.cards) put("cards", true)
                 put("labels", buildJsonArray { c.chart.labels.forEach { add(JsonPrimitive(it)) } })
                 put("series", buildJsonArray {
                     c.chart.series.forEach { s ->
@@ -309,7 +310,11 @@ data class WorldGraph(val title: String, val nodes: List<Node>, val edges: List<
     }
 }
 
-data class WorldTable(val title: String, val columns: List<String>, val rows: List<List<String>>) {
+/**
+ * A table: [columns] over [rows] of text. [cards] are the columns whose cells are cards' names (`"cards": [0]` by index, or
+ * by the columns' names) — said outright, never guessed from the words — drawn with each card's art beside its name.
+ */
+data class WorldTable(val title: String, val columns: List<String>, val rows: List<List<String>>, val cards: List<Int> = emptyList()) {
     companion object {
         const val MAX_ROWS = 300
         const val MAX_COLUMNS = 20
@@ -336,17 +341,39 @@ data class WorldTable(val title: String, val columns: List<String>, val rows: Li
             require(rows.size <= MAX_ROWS) { "at most $MAX_ROWS rows" }
             val width = maxOf(columns.size, rows.maxOfOrNull { it.size } ?: 0)
             require(width <= MAX_COLUMNS) { "at most $MAX_COLUMNS columns" }
+            val named = columns + List(width - columns.size) { "" }
             WorldTable(
                 ShowSpec.str(o, "title"),
-                columns + List(width - columns.size) { "" },
+                named,
                 rows.map { it + List(width - it.size) { "" } },
+                cardColumns(o["cards"] ?: o["cardColumns"], named),
             )
+        }
+
+        /**
+         * The columns [spec] marks as cards: indexes (`[0, 2]`), the columns' names (`["Card"]`), one of either, or
+         * `true` for the first column. Anything else marks none: a cell is a card only when it is said to be.
+         */
+        fun cardColumns(spec: JsonElement?, columns: List<String>): List<Int> {
+            fun one(e: JsonElement): Int? {
+                val p = e as? JsonPrimitive ?: return null
+                if (!p.isString) return p.contentOrNull?.toDoubleOrNull()?.toInt()?.takeIf { it in columns.indices }
+                val name = p.contentOrNull.orEmpty()
+                return columns.indexOfFirst { it.equals(name, ignoreCase = true) }.takeIf { it >= 0 }
+            }
+            return when (spec) {
+                null, is JsonNull -> emptyList()
+                is JsonArray -> spec.mapNotNull(::one).distinct().sorted()
+                is JsonPrimitive -> if (!spec.isString && spec.contentOrNull == "true") listOf(0).filter { it in columns.indices } else listOfNotNull(one(spec))
+                else -> emptyList()
+            }
         }
 
         fun encode(t: WorldTable): String = buildJsonObject {
             put("title", t.title)
             put("columns", buildJsonArray { t.columns.forEach { add(JsonPrimitive(it)) } })
             put("rows", buildJsonArray { t.rows.forEach { r -> add(buildJsonArray { r.forEach { add(JsonPrimitive(it)) } }) } })
+            if (t.cards.isNotEmpty()) put("cards", buildJsonArray { t.cards.forEach { add(JsonPrimitive(it)) } })
         }.toString()
     }
 }

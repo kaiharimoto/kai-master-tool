@@ -65,4 +65,24 @@ class WorldInputTest {
         assertEquals(null, DeskShortcuts.resolve(KeyChord("w", ctrl = true), builder))
         assertEquals(DeskAction.SLIDE_NEW, DeskShortcuts.resolve(KeyChord("m", ctrl = true), DeskContext(onBuilder = false, onPresent = true)))
     }
+
+    @Test
+    fun ctrlDigitsAreTheBrowsersTabsWhileItIsInFront() {
+        val browser = DeskContext(onBuilder = false, onWorld = true, browserInFront = true)
+        val typingAnAddress = browser.copy(textInputFocused = true)
+        for (n in 1..9) {
+            val chord = KeyChord("$n", ctrl = true)
+            assertEquals(DeskAction.valueOf("WORLD_TAB_$n"), DeskShortcuts.resolve(chord, browser), "Ctrl $n in the Browser")
+            assertEquals(DeskAction.valueOf("WORLD_TAB_$n"), DeskShortcuts.resolve(chord, typingAnAddress))
+        }
+        // Any other window in front, or the desktop: the pages keep their keys.
+        assertEquals(DeskAction.GO_BUILDER, DeskShortcuts.resolve(KeyChord("1", ctrl = true), world))
+        assertEquals(DeskAction.GO_SHOOTOUT, DeskShortcuts.resolve(KeyChord("9", ctrl = true), world))
+        // Never two meanings at once.
+        for (context in listOf(browser, typingAnAddress, world, typingInWorld)) {
+            DeskShortcuts.live(context).groupBy { it.chord }.forEach { (chord, rows) ->
+                if (rows.map { it.action }.toSet().size > 1) fail("${DeskShortcuts.kbd(chord)} means ${rows.map { it.action }} in $context")
+            }
+        }
+    }
 }

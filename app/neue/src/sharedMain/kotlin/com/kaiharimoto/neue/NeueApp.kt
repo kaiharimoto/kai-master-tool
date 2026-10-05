@@ -187,9 +187,12 @@ import com.kaiharimoto.neue.theme.MuTheme
 import com.kaiharimoto.neue.update.NeueUpdates
 import com.kaiharimoto.neue.web.Webs
 import com.kaiharimoto.neue.banlist.BanlistCenter
+import com.kaiharimoto.neue.world.WorldBarItems
 import com.kaiharimoto.neue.world.WorldPage
+import com.kaiharimoto.neue.world.desk.WorldPhoneTitle
 import com.kaiharimoto.neue.shootout.ShootoutPage
 import com.kaiharimoto.neue.shootout.Shootouts
+import com.kaiharimoto.neue.effects.Effects
 import com.kaiharimoto.neue.shootout.dismissShootout
 import com.kaiharimoto.neue.world.WorldSnapshot
 import com.kaiharimoto.neue.world.Worlds
@@ -247,6 +250,16 @@ class NeueHolders(
             w.host = { WorldSnapshot.of(this) }
             w.prefs = { neue.prefs.world }
             w.comeForward = { if (neue.page != Page.WORLD) neue.go(Page.WORLD) }
+            // What the person is doing as Ai arrives (DESKTOP.md §6.1): typing, or a menu, a dialog or the palette open.
+            w.desk.person = {
+                com.kaiharimoto.mastertool.core.world.desk.PersonState(
+                    typing = textFocus.any,
+                    overlay = neue.hasTop || overlays.isOpen || w.desk.launcherOpen || w.desk.dialog != null,
+                    now = System.currentTimeMillis(),
+                )
+            }
+            // The effects library, at lib/effects/ in every world (Phase D step 2).
+            w.mounts += effects.mount
             w.load()
         }
     }
@@ -261,6 +274,22 @@ class NeueHolders(
 
     /** Whether Shootout has been opened this run. */
     val shootoutStarted: Boolean get() = shootoutHolder.isInitialized()
+
+    /**
+     * Effects as code (Phase D step 2): the library of written effects in `<data>/effects/`, compiled, checked, and the
+     * book the engine and the table read; mounted in every world at `lib/effects/`. `<data>/fxcache/` is this device's alone.
+     */
+    private val effectsHolder = lazy {
+        Effects.under(Platform.dataDir).also { e ->
+            e.pool = { builder.index }
+            e.onChange = { if (worldStarted) world.refreshListing() }
+            e.load()
+        }
+    }
+    val effects: Effects by effectsHolder
+
+    /** Whether the effects library has been read this run: a sync or a restore reloads it only then. */
+    val effectsStarted: Boolean get() = effectsHolder.isInitialized()
 
     /** Command mode's voice (1.0.87): hold M, or the microphone beside the command line, to speak a move. */
     val duelVoice: DuelVoice by lazy { DuelVoice(this) }
@@ -725,8 +754,14 @@ private fun Shell(h: NeueHolders) {
                 onUpdate = { h.updates.dialogOpen = true },
                 menu = { h.phoneMenu(it) },
                 working = work != null,
-                ai = if (neue.prefs.ai.enabled) {
+                // On the World page the bar's face is the avatar's home, gone while it works in the app on screen (§5.6).
+                ai = if (neue.prefs.ai.enabled && (neue.page != Page.WORLD || com.kaiharimoto.neue.world.desk.worldFaceHome(h))) {
                     { _ -> AiBadge(h, height = 40.dp) }
+                } else {
+                    null
+                },
+                title = if (neue.page == Page.WORLD) {
+                    { WorldPhoneTitle(h) }
                 } else {
                     null
                 },
@@ -741,7 +776,8 @@ private fun Shell(h: NeueHolders) {
             // On the Duel page the bar is the duel's (1.0.78): full screen is in its row, Ai in the log.
             switches = neue.page != Page.DUEL,
             trailing = {
-                if (neue.prefs.ai.enabled && neue.page != Page.DUEL) {
+                // On the World page the taskbar's Ai cell is Ai's place: one face on screen (DESKTOP.md §2.2).
+                if (neue.prefs.ai.enabled && neue.page != Page.DUEL && neue.page != Page.WORLD) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         // Ai's face and name in a box on every platform (1.0.63, kai: "on desktop the app is not
                         // the marquee"); its brain is in its panel now, not beside it in the bar.
@@ -754,6 +790,8 @@ private fun Shell(h: NeueHolders) {
                 BuilderBar(state, neue, h.play, h::setPlay, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow, webs = h.webs, onStepWeb = h::stepWeb, onOpenDeck = h::openDeck)
             } else if (neue.page == Page.DUEL) {
                 DuelBarItems(h, narrow)
+            } else if (neue.page == Page.WORLD) {
+                WorldBarItems(h, narrow)
             } else if (neue.page == Page.SHOOTOUT && h.shootout.running) {
                 // A Shootout session's header folds into the bar (design review, 1.1.6), as Duel's does. The page makes the
                 // holder anyway; reading it here (never "started?") lets the bar hear the session begin.

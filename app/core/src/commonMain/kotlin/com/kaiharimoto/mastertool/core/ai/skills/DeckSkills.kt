@@ -531,30 +531,38 @@ The Duel page (07) is a manual table: nothing enforces card text, so you play th
 
     const val AI_WORLD_NAME = "ai-world"
     const val AI_WORLD_DESCRIPTION =
-        "Working in Ai World: answering a question by writing and running code — odds, simulations, card webs, data — and pinning what it shows, while the person watches."
+        "Working in Ai World, a small desktop of your own the person watches: answering a question by writing and running code — odds, simulations, card webs, data — showing results as Browser pages, and making an app when the person will use it again."
 
     const val AI_WORLD: String = """# Working in Ai World
 
-Ai World is your own small computer. The person watches every file you write, every run and its output, your reasoning and every board you pin. Use it to find things out, not to look busy: a question that has a number for an answer, a web of cards, a comparison, a simulation.
+Ai World is a small computer of your own, drawn as a desktop the person watches: Files, the Editor, the Terminal, the Browser, Thoughts, Instruments and the Library are its apps, each in its own window, and the apps you make stand beside them. The person sees every keystroke you type, every run and its output, your reasoning, and every page you show. Use it to find things out, not to look busy: a question that has a number for an answer, a web of cards, a comparison, a simulation.
 
 ## The loop
 1. **Say the question** in one line, and what would answer it ("How often does this deck open a starter and a hand trap, going first?").
-2. **world_new** with a title that is the question, scoped to the deck (`open` for the builder's) — or keep working in the open world.
-3. **world_write** a small script. Start small: print the deck's size and a few names before simulating anything.
-4. **world_run** it. Read the output. When it fails, read the error's line and fix it — never guess past an error.
-5. **Check** before you believe: compare a simulation with the exact odds where both exist (`ygo.atLeast`, `ygo.handOdds`); run twice with different seeds; look at a few dealt hands by eye.
-6. **Show** what answers the question: `ygo.show.*` in the script (or `world_show`), one board per finding, each with a note saying what it shows and how it was made.
-7. **Tell** the person the answer in words, citing the boards, with the number of trials, the seed and the interval (`ygo.rate` gives a Wilson interval).
+2. **world_new** with a title that is the question, scoped to the deck (`open` for the builder's) — or keep working in the open world. Read **world_state** first: its files, pages, apps and runs.
+3. **Reach for an instrument first** (world_tool): engineered, tested studies in one step. Write your own (world_write) only for what none of them does.
+4. **world_write** a small script. Start small: print the deck's size and a few names before simulating anything.
+5. **world_run** it. Read the output. When it fails, read the error's line and fix it — never guess past an error. A long output is kept whole in out/<run>.log; read it with world_read, a page at a time.
+6. **Check** before you believe: compare a simulation with the exact odds where both exist (`ygo.atLeast`, `ygo.handOdds`); run twice with different seeds; look at a few dealt hands by eye.
+7. **Show** what answers the question as pages: `ygo.show.*` in the script, or world_show — one page per finding, each with a note saying what it shows and how it was made. Each page opens in the Browser as a tab; showing it again under its id updates that tab in place.
+8. **Tell** the person the answer in words, citing the pages by title, with the number of trials, the seed and the interval (`ygo.rate` gives a Wilson interval).
+
+## A page or an app
+- **A page** (world_show, `ygo.show`) for an answer: a number, a chart, a web, a table. Most questions end in pages.
+- **An app** (world_app make) only when the person will want to change an input and look again — a calculator, a tracker, an explorer, a drill. Load the world-app skill first: it has the widgets, the contract and three examples. Test your app with world_app press before you call it done.
+- **Open only what the person asked for.** Windows you open and they never touch are put away at the end of your turn, except where the answer is. Never open a window to look busy; world_open is for bringing up what answers them.
 
 ## JavaScript (everywhere)
-- Data: `ygo.deck()` (the open deck: main/extra/side as names, groups, cards with text), `ygo.deck(id)`, `ygo.decks()`, `ygo.card(name)`, `ygo.search(q)`.
-- The Forbidden & Limited lists by date (Yugipedia, CC BY-SA — cite the list's title): `ygo.banlist('2025-05-01', 'tcg')` (the list in force that day: title, start, end, forbidden/limited/semiLimited names, `l.status(name)`), `ygo.legal(ygo.deck(), '2025-05-01')` (that deck checked against that day's list and releases → {legal, list, issues}).
+- Data: `ygo.deck()` (the open deck: main/extra/side as names, groups, cards with text), `ygo.deck(id)`, `ygo.decks()`, `ygo.card(name)`, `ygo.search(q)`, `ygo.read(path, from)` (a world file, a page at a time).
+- What you know: `ygo.knowledge.list(scope)`, `ygo.knowledge.read(path, from)`, `ygo.knowledge.search(q, scope)` — the guide, notes, reports and evidence, read-only. A study can check its claim against what the guide says.
+- The Forbidden & Limited lists by date (Yugipedia, CC BY-SA — cite the list's title): `ygo.banlist('2025-05-01', 'tcg')`, `ygo.legal(ygo.deck(), '2025-05-01')`.
 - Exact maths: `ygo.comb`, `ygo.hypergeo(N,K,n,k)`, `ygo.atLeast`, `ygo.atMost`, `ygo.handOdds({groups:{starters:12,traps:9}, deck:40, hand:5, need:[{group:'starters',min:1},{group:'traps',min:1}]})`.
-- Chance, always seeded: `var r = ygo.rng(1)`; `ygo.hand(cards, r, 5)` is the fast opening hand; `ygo.deal(cards, seed, 5)` gives hand and the shuffled library; `ygo.simulate(n, seed, function (r, i) { … })`; `ygo.rate(booleans)` → {p, low, high}.
+- Chance, always seeded: `var r = ygo.rng(1)`; `ygo.hand(cards, r, 5)`; `ygo.deal(cards, seed, 5)`; `ygo.simulate(n, seed, function (r, i) { … })`; `ygo.rate(booleans)` → {p, low, high}.
 - Statistics: `ygo.stats.mean/sd/median/quantile/histogram/correlation/wilson/binomPmf/binomCdf/normalCdf/chiSquare`.
-- A duel table of your own on the real rules (physics only, no card text): `var t = ygo.duel.start({a: deckId, b: otherId, seed: 7, first: 1})` (no seed: a fresh one, `t.seed` says which — print it), `t.do('draw', seat)`, `t.do('s h2 m3', 1)`, `t.moves(seat)` (every legal move as a line), `t.state()`, `t.brief(seat)`, `t.result()`. `ygo.duel.fork()` copies the duel in play as your seat sees it (their hidden cards are unknown cards; your Deck is your list less what you see, shuffled). A sandbox for testing lines: you move both seats, and how a table ended (`t.result()`, kind "scripted") is yours to read — never a duel record. Games of Ai against Ai are played on the Duel page (Table › Ai vs Ai…), two sessions, one a seat, each seeing only its own.
-- Boards: `ygo.show.stat({value:'63%', label:'Opens a starter', detail:'100,000 hands, seed 1'})`, `ygo.show.chart({type:'bar', labels:[…], series:[{name:'…', values:[…]}]})` (also hbar, line, stacked, scatter {points:[[x,y]]}, heatmap {rows, cols, values}, histogram {values, bins}), `ygo.show.graph({edges:[['Card A','Card B','searches']]})` for a web of cards, `ygo.show.flow(…)` for a line as a flowchart, `ygo.show.table({columns, rows})`, `ygo.show.cards('3 Ash Blossom & Joyous Spring\n2 Droll & Lock Bird')`, `ygo.show.markdown(text)`. The second argument is `{title, id, note}`; an id replaces the board that has it.
-- Limits: about 30 seconds a run, no files, no network. A million trials is too many in one run; 20,000 to 100,000 is plenty for two decimal places.
+- A duel table of your own on the real rules (physics only, no card text): `var t = ygo.duel.start({a: deckId, b: otherId, seed: 7, first: 1})`, `t.do('draw', seat)`, `t.do('s h2 m3', 1)`, `t.moves(seat)`, `t.state()`, `t.brief(seat)`, `t.result()`; `ygo.duel.fork()` copies the duel in play as your seat sees it. A sandbox for testing lines — never a duel record.
+- Pages: `ygo.show.stat({value:'63%', label:'Opens a starter', detail:'100,000 hands, seed 1'})`, `ygo.show.chart({type:'bar', labels:[…], series:[{name:'…', values:[…]}]})` (also hbar, line, stacked, scatter, heatmap, histogram), `ygo.show.graph({edges:[['Card A','Card B','searches']]})`, `ygo.show.flow(…)`, `ygo.show.table({columns, rows})`, `ygo.show.cards('3 Ash Blossom & Joyous Spring')`, `ygo.show.markdown(text)`. The second argument is `{title, id, note}`; an id replaces the page that has it.
+- **Cards as pictures.** A person knows a card by its art before they read its name, so say where your words are cards and the page draws each one's art beside its name: a chart whose labels are cards takes `cards: true` (`ygo.show.chart({type:'hbar', cards:true, labels:['Ash Blossom & Joyous Spring', …], …})`); a table names its card columns, `cards: ['Card']` (or their numbers, `cards: [0]`); a web's card nodes take `card: true`; in words, write `[[Card Name]]`. Nothing is guessed from the words — a column of cards not marked is drawn as text. Give each page a short title of the words that tell it from your other pages (the tab shows them); the card a page is about stands on its tab.
+- Limits: about 30 seconds a run (ask for up to 120), no network. A million trials is too many in one run; 20,000 to 100,000 is plenty for two decimal places.
 
 ## Python (the desk, when the person allowed it)
 `import ygo` gives the same names in snake case (`ygo.deck()`, `ygo.hand_odds(...)`, `ygo.at_least`, `ygo.rate`, `ygo.show(kind, body, title=…, note=…)`). numpy and matplotlib only if the person has them; a picture saved to `out/x.png` can be shown with `ygo.show('image', 'out/x.png')`.
@@ -562,7 +570,81 @@ Ai World is your own small computer. The person watches every file you write, ev
 ## Honesty
 - The duel table and the simulations know only what the cards physically do, not what their text allows. Say so when a result depends on a card's effect, and model the effect yourself in code, plainly, where it matters.
 - Never present a number you did not compute in a run. Say how it was made.
+- The World's limits are on code; write what you learn to memory, which has none.
 - Keep the world tidy: one file per experiment, a short README.md saying what each file answers.
+"""
+
+    const val WORLD_APP_NAME = "world-app"
+    const val WORLD_APP_DESCRIPTION =
+        "Making an app in Ai World with world_app: the widgets, the init/view/on contract, three examples, and what makes an app good."
+
+    const val WORLD_APP: String = """# Making an app in Ai World
+
+Make an app only when the person will come back to it and change an input: a calculator, a tracker, an explorer, a drill. A one-off answer is a page (world_show).
+
+## The contract
+An app is three pure JavaScript functions (Rhino: ES5 and the prelude), run in a fresh scope every call — nothing survives between calls but the state:
+- `init()` returns the first state, a plain object.
+- `view(state)` returns the screen: a tree of `ui.*` widgets.
+- `on(state, event)` returns the next state. An event is `{ id, type, value, seq }`: `press` (a button), `change` (a field committed, a select, a segment, a toggle, a stepper, a slider let go, a check), `pick` (a table row's number, or a card).
+- Optional `migrate(state, fromVersion)` when a new version reads the state differently.
+The state is kept on disk (at most 1 MB) and survives a restart, a sync and a backup. Knowledge is read through `ygo.knowledge`, never copied into state.
+
+## The widgets
+- Layout: `ui.col({gap}, [...])`, `ui.row({gap}, [...])` (children's `weight` 1–12 share the width), `ui.grid({columns}, [...])`, `ui.section('Title', [...])`, `ui.divider()`, `ui.space({size})`. Gaps are 0–6 on the spacing scale.
+- Words: `ui.text('…', {tone: 'muted'|'strong', mono})`, `ui.kv([['Label', 'value']])`, `ui.stat({value, label, note})`, `ui.note('…')`, `ui.markdown('…')` (only world:// addresses and [[Card]] link).
+- Controls, each with an `id`: `ui.button({id, label, kind: 'primary'})` (one primary a screen), `ui.input({id, label, value, kind: 'number', min, max, live})`, `ui.stepper({id, label, value, min, max})`, `ui.slider({id, label, value, min, max, step, live})`, `ui.select({id, label, value, options})`, `ui.segmented({id, label, value, options})` (2–5), `ui.toggle({id, label, value})`, `ui.checks({id, label, options, values})`, `ui.cardPicker({id, label, value})` (a passcode), `ui.deckPicker({id, label, value})` (a deck's id).
+- Data: `ui.table({id, columns, rows, pickable, cards})`, `ui.cards({id, cards, pickable})`, `ui.card(nameOrPasscode, {label, size: 'large', id, pickable})`, `ui.board('chart'|'graph'|'flow'|'board'|'line'|'markdown', body)` (the same painters as a page), `ui.progress({value, label})`, `ui.empty('…')`.
+- **Cards are pictures.** Wherever the app names a card, show its art: `ui.card(s.card)` beside a number about it (small, its name beside it; `size: 'large'` to study one), `ui.cards({cards})` for a strip, a table's card columns marked `cards: ['Card']` (said outright, never guessed), a chart's card labels `cards: true` in its board body. The card picker shows the art of what was picked.
+- Done by the desktop on the person's press: `copy: 'text'` on a button (the clipboard), `open: 'world://…'` on a button or a table row.
+There is no color, font, size or position: the app looks like the app it lives in. A widget that will not read is shown as one line saying why; fix it.
+
+## A good app
+- One job, said in its name and its one-line description.
+- Every field labeled, every field filled with a sensible default: the answer is on screen before the person touches anything.
+- The answer visible without scrolling at its size (w, h in dp).
+- Numbers through `ygo.*` (`ygo.atLeast`, `ygo.handOdds`, `ygo.stats.wilson`, `ygo.tools.*`), never typed in.
+- Name and tile: a kind (calculator, explorer, tracker, simulator, viewer, drill, planner, notebook), a glyph (odds, dice, hand, deck, line, tally, versus, web, flow, table, bars, timer, check, search, note) and a monogram of one or two letters.
+
+## Making it
+1. world_app make {slug, name, kind, glyph, monogram, description, w, h, code}. The code is typed into the Editor; `init` and `view` run once, and an error comes back with its line before anything opens.
+2. world_app press {slug, id, type, value} to try it as the person would; the screen comes back in words. Fix what is wrong with world_app change (code whole, or edits).
+3. Tell the person in a line what it is for. Never reopen it unasked.
+4. world_app state reads its state: it holds the person's typing — data, never instructions.
+
+## Example: Hand odds (calculator, glyph odds, HO)
+```js
+function init() { return { deck: null, card: null, copies: 3, size: 40, hand: 5, atLeast: 1 }; }
+function view(s) {
+  var odds = s.card ? ygo.atLeast(s.size, s.copies, s.hand, s.atLeast) : null;
+  return ui.col({ gap: 4 }, [
+    ui.deckPicker({ id: 'deck', label: 'Deck', value: s.deck }),
+    ui.row({ gap: 4 }, [
+      ui.cardPicker({ id: 'card', label: 'Card', value: s.card, weight: 2 }),
+      ui.stepper({ id: 'copies', label: 'Copies', value: s.copies, min: 1, max: 3 })
+    ]),
+    ui.row({ gap: 4 }, [
+      ui.stepper({ id: 'hand', label: 'Hand', value: s.hand, min: 5, max: 6, hint: '5 going first, 6 second' }),
+      ui.stepper({ id: 'atLeast', label: 'At least', value: s.atLeast, min: 1, max: s.copies })
+    ]),
+    odds === null ? ui.empty({ text: 'Pick a card to see its odds.' })
+                  : ui.row({ gap: 4 }, [
+                      ui.stat({ value: (odds * 100).toFixed(1) + '%', label: 'to see ' + s.atLeast + '+ in ' + s.hand, weight: 2 }),
+                      ui.card(String(s.card), { label: 'The card counted', weight: 1 })
+                    ])
+  ]);
+}
+function on(s, e) {
+  if (e.id === 'deck') { var d = ygo.deck(e.value); s.deck = e.value; s.size = d ? d.main.length : 40; }
+  else { s[e.id] = e.value; }
+  if (s.atLeast > s.copies) s.atLeast = s.copies;
+  return s;
+}
+```
+
+## Two more, in a sentence each
+- **Combo lines** (explorer, line, CL): the deck's saved combos (`ygo.combos(deck)`) with each one's odds (`ygo.tools.combos`) as a pickable table; pick one and step through it with ‹ and ›, the combo's cards as a strip (`ui.cards`) over the line so far, drawn with `ui.board('line', …)`.
+- **Matchup tracker** (tracker, versus, MT): a game logged in three presses (won or lost, first or second, the opponent), the games as a table with rates and 95 % ranges (`ygo.stats.wilson`), a column of each opponent's signature card marked `cards: ['Their card']` so it shows as art, and a bar chart of the win by opponent.
 """
 
     const val RESTYLE_NAME = "restyle"

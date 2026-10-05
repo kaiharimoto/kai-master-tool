@@ -71,11 +71,18 @@ import com.kaiharimoto.neue.ai.ChatCard
 import com.kaiharimoto.neue.ai.MarkdownBlock
 import com.kaiharimoto.neue.ai.cardNamed
 import com.kaiharimoto.neue.cards.CARD_RATIO
-import com.kaiharimoto.neue.kit.Help
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Help
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuText
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
+import com.kaiharimoto.neue.world.type.Body
+import com.kaiharimoto.neue.world.type.WorldType
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.kit.LocalKeepCase
+import com.kaiharimoto.mastertool.core.ai.text.MicroCaps
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import com.kaiharimoto.neue.platform.decodePicture
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
@@ -133,7 +140,7 @@ internal fun BoardBody(h: NeueHolders, board: Board, worldId: String, modifier: 
             BoardKind.CHART -> WorldChart.parse(board.payload).fold(
                 { chart ->
                     when (chart) {
-                        is WorldChart.Bars -> BarsPaint(chart.chart)
+                        is WorldChart.Bars -> BarsPaint(h, chart.chart)
                         is WorldChart.Scatter -> ScatterPaint(chart)
                         is WorldChart.Heatmap -> HeatmapPaint(chart)
                     }
@@ -142,7 +149,7 @@ internal fun BoardBody(h: NeueHolders, board: Board, worldId: String, modifier: 
             )
             BoardKind.GRAPH -> WorldGraph.parse(board.payload).fold({ GraphPaint(h, it) }, { Unreadable(it) })
             BoardKind.FLOW -> WorldGraph.parse(board.payload).fold({ FlowPaint(h, it) }, { Unreadable(it) })
-            BoardKind.TABLE -> WorldTable.parse(board.payload).fold({ TablePaint(it) }, { Unreadable(it) })
+            BoardKind.TABLE -> WorldTable.parse(board.payload).fold({ TablePaint(h, it) }, { Unreadable(it) })
             BoardKind.STAT -> WorldStat.parse(board.payload).fold({ StatPaint(it) }, { Unreadable(it) })
             BoardKind.MARKDOWN -> MarkdownPaint(h, board.payload)
             BoardKind.CARDS -> MarkdownPaint(h, "```cards\n${board.payload}\n```")
@@ -210,57 +217,81 @@ private fun StatPaint(stat: WorldStat) {
 
 // ---- Bars, lines and stacks -------------------------------------------------------------------------------------
 
+/**
+ * A bar, line or stacked chart. The key to its colours stands over it, read before the bars are (READABILITY.md §6);
+ * the numbers a chart writes share their places (`ChatChart.labels`); and a chart whose labels are cards (`cards: true`)
+ * shows each card's art beside its name, so a card is known by its picture before its words are read.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BarsPaint(chart: ChatChart.Chart) {
+private fun BarsPaint(h: NeueHolders, chart: ChatChart.Chart) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     val measurer = rememberTextMeasurer()
-    val label = MuType.mono(f, 10.sp).copy(color = c.ink70)
-    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Canvas(Modifier.fillMaxWidth().weight(1f)) {
-            if (chart.labels.isEmpty() || chart.series.isEmpty()) return@Canvas
-            when (chart.type) {
-                ChatChart.Type.HBAR -> horizontalBars(chart, c.ink12, label, measurer)
-                else -> verticalBars(chart, c.ink12, c.paper, label, measurer)
+    val label = WorldType.data(f).copy(color = c.ink70)
+    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (chart.series.size > 1 || chart.series.firstOrNull()?.name?.isNotBlank() == true) Legend(chart.series.map { it.name })
+        when {
+            chart.labels.isEmpty() || chart.series.isEmpty() -> Unit
+            chart.type == ChatChart.Type.HBAR -> HorizontalBars(h, chart, label, measurer, Modifier.fillMaxWidth().weight(1f))
+            else -> Column(Modifier.fillMaxWidth().weight(1f)) {
+                val density = LocalDensity.current
+                val axisWidth = with(density) { verticalAxisWidth(chart, label, measurer).toDp() }
+                Canvas(Modifier.fillMaxWidth().weight(1f)) { verticalBars(chart, c.ink12, c.paper, label, measurer) }
+                // A card's art over its name under each slot, where the labels are cards.
+                if (chart.cards) {
+                    Row(Modifier.fillMaxWidth().padding(start = axisWidth, top = 4.dp)) {
+                        chart.labels.forEach { name ->
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.TopCenter) { CardChip(h, name, CHIP) }
+                        }
+                    }
+                }
             }
         }
-        if (chart.series.size > 1 || chart.series.firstOrNull()?.name?.isNotBlank() == true) Legend(chart.series.map { it.name })
     }
 }
 
+/** The legend: a square of each series' colour and its name, in the body tier. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Legend(names: List<String>) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         names.forEachIndexed { i, name ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(10.dp).background(series(i)))
-                Small(name.ifBlank { "Series ${i + 1}" }, color = Mu.colors.ink70, maxLines = 1)
+                Body(name.ifBlank { "Series ${i + 1}" }, color = Mu.colors.ink, maxLines = 1)
             }
         }
     }
 }
+
+/** How wide the value axis's numbers stand, in px. */
+private fun verticalAxisWidth(chart: ChatChart.Chart, label: TextStyle, measurer: TextMeasurer): Int =
+    ChatChart.ticks(chart.max).maxOf { measurer.measure(ChatChart.label(it, chart.unit), label).size.width } + 12
+
+/** A small card's width in a chart's label column or under its slot: the art reads, the name stays the floor's. */
+private val CHIP = 22.dp
 
 private fun DrawScope.verticalBars(chart: ChatChart.Chart, grid: Color, paper: Color, label: TextStyle, measurer: TextMeasurer) {
     val ticks = ChatChart.ticks(chart.max)
     val top = ticks.last().takeIf { it > 0 } ?: 1.0
-    val axisWidth = ticks.maxOf { measurer.measure(ChatChart.label(it, chart.unit), label).size.width } + 6.dp.toPx()
-    val bottomRoom = 16.dp.toPx()
-    val headRoom = 14.dp.toPx()
-    val plotH = (size.height - bottomRoom - headRoom).coerceAtLeast(1f)
+    val axisWidth = verticalAxisWidth(chart, label, measurer).toFloat()
+    val n = chart.labels.size
     val plotW = size.width - axisWidth
+    val slot = plotW / n
+    val names = chart.labels.map { measurer.measure(it, label, maxLines = 2, overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = (slot - 4.dp.toPx()).toInt().coerceAtLeast(1))) }
+    val bottomRoom = (names.maxOfOrNull { it.size.height } ?: 0) + 6.dp.toPx()
+    val headRoom = 16.dp.toPx()
+    val plotH = (size.height - bottomRoom - headRoom).coerceAtLeast(1f)
     fun y(v: Double) = headRoom + (plotH * (1 - v / top)).toFloat()
-    ticks.forEach { t ->
+    val tickWords = ChatChart.labels(ticks, chart.unit)
+    ticks.forEachIndexed { k, t ->
         val yy = y(t)
         drawLine(grid, Offset(axisWidth, yy), Offset(size.width, yy), 1.dp.toPx())
-        val tl = measurer.measure(ChatChart.label(t, chart.unit), label)
+        val tl = measurer.measure(tickWords[k], label)
         drawText(tl, topLeft = Offset(axisWidth - tl.size.width - 6.dp.toPx(), yy - tl.size.height / 2f))
     }
-    val n = chart.labels.size
-    val slot = plotW / n
-    chart.labels.forEachIndexed { i, name ->
-        val tl = measurer.measure(name, label, maxLines = 1, constraints = Constraints(maxWidth = slot.toInt().coerceAtLeast(1)))
+    names.forEachIndexed { i, tl ->
         drawText(tl, topLeft = Offset(axisWidth + slot * i + (slot - tl.size.width) / 2f, size.height - tl.size.height))
     }
     when (chart.type) {
@@ -292,13 +323,14 @@ private fun DrawScope.verticalBars(chart: ChatChart.Chart, grid: Color, paper: C
             val groupW = slot * 0.72f
             val w = groupW / chart.series.size
             chart.series.forEachIndexed { s, line ->
+                val words = ChatChart.labels(line.values, chart.unit)
                 line.values.forEachIndexed { i, v ->
                     val x = axisWidth + slot * i + (slot - groupW) / 2f + w * s
                     val y0 = y(maxOf(v, 0.0))
                     val y1 = y(minOf(v, 0.0).coerceAtLeast(0.0))
                     if (y1 - y0 > 0f) drawRect(series(s), Offset(x + 1f, y0), Size((w - 2f).coerceAtLeast(1f), y1 - y0))
                     if (chart.series.size == 1 && n <= 16) {
-                        val tl = measurer.measure(ChatChart.label(v, chart.unit), label)
+                        val tl = measurer.measure(words[i], label)
                         drawText(tl, topLeft = Offset(x + (w - tl.size.width) / 2f, y0 - tl.size.height - 2.dp.toPx()))
                     }
                 }
@@ -307,28 +339,67 @@ private fun DrawScope.verticalBars(chart: ChatChart.Chart, grid: Color, paper: C
     }
 }
 
-private fun DrawScope.horizontalBars(chart: ChatChart.Chart, grid: Color, label: TextStyle, measurer: TextMeasurer) {
-    val top = chart.max.takeIf { it > 0 } ?: 1.0
-    val labelW = (chart.labels.maxOf { measurer.measure(it, label, maxLines = 1).size.width } + 8.dp.toPx()).coerceAtMost(size.width * 0.4f)
-    val valueRoom = 44.dp.toPx()
-    val plotW = size.width - labelW - valueRoom
-    val rowH = size.height / chart.labels.size
-    chart.labels.forEachIndexed { i, name ->
-        val y = rowH * i
-        val tl = measurer.measure(name, label, maxLines = 1, constraints = Constraints(maxWidth = (labelW - 8.dp.toPx()).toInt().coerceAtLeast(1)))
-        drawText(tl, topLeft = Offset(0f, y + (rowH - tl.size.height) / 2f))
-        val barH = ((rowH - 6.dp.toPx()) / chart.series.size).coerceAtMost(28.dp.toPx())
-        val block = barH * chart.series.size
-        chart.series.forEachIndexed { s, line ->
-            val v = line.values.getOrElse(i) { 0.0 }
-            val w = (plotW * (v.coerceAtLeast(0.0) / top)).toFloat()
-            val by = y + (rowH - block) / 2f + barH * s
-            drawRect(series(s), Offset(labelW, by), Size(w, (barH - 1f).coerceAtLeast(1f)))
-            val vl = measurer.measure(ChatChart.label(v, chart.unit), label)
-            drawText(vl, topLeft = Offset(labelW + w + 4.dp.toPx(), by + (barH - vl.size.height) / 2f))
+/**
+ * Horizontal bars: each row's name (with its card's art when the labels are cards) in a column of its own, at most
+ * two lines and never cut below the readable floor, the bars and their values beside it.
+ */
+@Composable
+private fun HorizontalBars(h: NeueHolders, chart: ChatChart.Chart, label: TextStyle, measurer: TextMeasurer, modifier: Modifier) {
+    val c = Mu.colors
+    val f = LocalMuFonts.current
+    val name = WorldType.body(f, LocalPhone.current)
+    val words = remember(chart) { chart.series.map { ChatChart.labels(it.values, chart.unit) } }
+    BoxWithConstraints(modifier) {
+        val density = LocalDensity.current
+        val longest = remember(chart, name) { chart.labels.maxOf { measurer.measure(it, name, maxLines = 1).size.width } }
+        val art = if (chart.cards) CHIP + 8.dp else 0.dp
+        val labelW = (with(density) { longest.toDp() } + art + 12.dp).coerceAtMost(maxWidth * 0.4f).coerceAtLeast(minOf(maxWidth * 0.4f, 120.dp))
+        Row(Modifier.fillMaxSize()) {
+            Column(Modifier.width(labelW).fillMaxHeight()) {
+                chart.labels.forEach { n ->
+                    Row(Modifier.weight(1f).fillMaxWidth().padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (chart.cards) {
+                            CardChip(h, n, CHIP)
+                            Box(Modifier.width(8.dp))
+                        }
+                        MuText(n, style = name, color = c.ink, maxLines = 2)
+                    }
+                }
+            }
+            Canvas(Modifier.weight(1f).fillMaxHeight()) {
+                val top = chart.max.takeIf { it > 0 } ?: 1.0
+                val valueRoom = (words.flatten().maxOfOrNull { measurer.measure(it, label).size.width } ?: 0) + 10.dp.toPx()
+                val plotW = (size.width - valueRoom).coerceAtLeast(1f)
+                val rowH = size.height / chart.labels.size
+                chart.labels.indices.forEach { i ->
+                    val y = rowH * i
+                    val barH = ((rowH - 10.dp.toPx()) / chart.series.size).coerceIn(1f, 24.dp.toPx())
+                    val block = barH * chart.series.size
+                    chart.series.forEachIndexed { s, line ->
+                        val v = line.values.getOrElse(i) { 0.0 }
+                        val w = (plotW * (v.coerceAtLeast(0.0) / top)).toFloat()
+                        val by = y + (rowH - block) / 2f + barH * s
+                        drawRect(series(s), Offset(0f, by), Size(w, (barH - 1f).coerceAtLeast(1f)))
+                        val vl = measurer.measure(words[s][i], label)
+                        drawText(vl, topLeft = Offset(w + 4.dp.toPx(), by + (barH - vl.size.height) / 2f))
+                    }
+                }
+                drawLine(c.ink12, Offset(0f, 0f), Offset(0f, size.height), 1.dp.toPx())
+            }
         }
     }
-    drawLine(grid, Offset(labelW, 0f), Offset(labelW, size.height), 1.dp.toPx())
+}
+
+/**
+ * A card's art, small, for a name in a chart's or table's row: the pool's card by its name or passcode, drawn by the
+ * app's own `NeueCard` through `ChatCard` (the person's chosen artwork applies, the small render decoded at the size
+ * drawn), the inspector reading it on hover and a click opening it large. A name the pool does not know draws nothing,
+ * and the name beside it carries the row.
+ */
+@Composable
+internal fun CardChip(h: NeueHolders, name: String, width: Dp) {
+    val known = remember(name, h.builder.index.size) { cardNamed(h.ai, name) != null }
+    if (known) ChatCard(h.ai, name, width) else Box(Modifier.width(width))
 }
 
 // ---- Points -----------------------------------------------------------------------------------------------------
@@ -351,7 +422,7 @@ private fun ScatterPaint(chart: WorldChart.Scatter) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     val measurer = rememberTextMeasurer()
-    val label = MuType.mono(f, 10.sp).copy(color = c.ink70)
+    val label = WorldType.data(f).copy(color = c.ink70)
     val xs = remember(chart) { chart.series.flatMap { s -> s.points.map { it.x } } }
     val ys = remember(chart) { chart.series.flatMap { s -> s.points.map { it.y } } }
     val xTicks = remember(chart) { axis(xs.min(), xs.max()) }
@@ -413,7 +484,7 @@ private fun HeatmapPaint(map: WorldChart.Heatmap) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     val measurer = rememberTextMeasurer()
-    val label = MuType.mono(f, 10.sp).copy(color = c.ink70)
+    val label = WorldType.data(f).copy(color = c.ink70)
     val lo = map.min
     val hi = map.max
     val ink = c.isInk
@@ -427,7 +498,8 @@ private fun HeatmapPaint(map: WorldChart.Heatmap) {
                 val tl = measurer.measure(name, label, maxLines = 1, constraints = Constraints(maxWidth = (cellW - 2.dp.toPx()).toInt().coerceAtLeast(1)))
                 drawText(tl, topLeft = Offset(rowW + cellW * j + (cellW - tl.size.width) / 2f, headH - tl.size.height - 2.dp.toPx()))
             }
-            val valueStyle = label.copy(fontSize = if (cellH < 18.dp.toPx() || cellW < 34.dp.toPx()) 8.sp else 10.sp)
+            // A value too big for its cell is left to its shade (and the scale under the map), never set below the floor.
+            val valueStyle = label
             map.rows.forEachIndexed { i, name ->
                 val y = headH + cellH * i
                 val tl = measurer.measure(name, label, maxLines = 1, constraints = Constraints(maxWidth = (rowW - 8.dp.toPx()).toInt().coerceAtLeast(1)))
@@ -497,7 +569,7 @@ private fun Web(h: NeueHolders, graph: WorldGraph, colours: Map<String, Color>, 
     val c = Mu.colors
     val f = LocalMuFonts.current
     val measurer = rememberTextMeasurer()
-    val verb = MuType.mono(f, 9.sp).copy(color = c.ink70)
+    val verb = WorldType.data(f).copy(color = c.ink70)
     val index = h.builder.index
     val cards = remember(graph, index.size) { graph.nodes.associate { n -> n.id to (if (n.card) cardNamed(h.ai, n.label) else null) } }
     val tileH = tile / CARD_RATIO
@@ -559,7 +631,7 @@ private fun NodeLabel(text: String, colour: Color?, hub: Boolean, widest: Dp) {
         MuText(
             text,
             Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-            style = MuType.help(LocalMuFonts.current).copy(fontWeight = if (hub) FontWeight.Bold else FontWeight.Medium),
+            style = WorldType.label(LocalMuFonts.current, LocalPhone.current).copy(fontWeight = if (hub) FontWeight.Bold else FontWeight.Medium),
             color = c.ink,
             maxLines = 2,
         )
@@ -628,29 +700,35 @@ private fun FlowPaint(h: NeueHolders, graph: WorldGraph) {
 
 private val NUMERIC = Regex("^[−+-]?[\\d.,]+\\s*%?$")
 
+/**
+ * A table: its heads in micro caps, its cells in the body tier (numbers in mono, set right), the rows lazy. A column the
+ * table marks as cards (`cards: [0]`, never guessed) draws each card's art beside its name.
+ */
 @Composable
-private fun TablePaint(table: WorldTable) {
+private fun TablePaint(h: NeueHolders, table: WorldTable) {
     val c = Mu.colors
     val f = LocalMuFonts.current
-    val head = MuType.mono(f, 10.sp).copy(fontWeight = FontWeight.Medium)
-    val body = MuType.small(f)
-    val mono = MuType.mono(f, 11.sp)
+    val phone = LocalPhone.current
+    val head = WorldType.micro(f)
+    val body = WorldType.body(f, phone)
+    val mono = WorldType.mono(f, phone)
     val n = table.columns.size
-    val numeric = remember(table) { (0 until n).map { col -> table.rows.isNotEmpty() && table.rows.all { r -> r[col].isBlank() || NUMERIC.matches(r[col].trim()) } } }
-    // Each column as wide as its longest cell in characters, inside sensible bounds.
+    val cards = table.cards.toSet()
+    val numeric = remember(table) { (0 until n).map { col -> col !in cards && table.rows.isNotEmpty() && table.rows.all { r -> r[col].isBlank() || NUMERIC.matches(r[col].trim()) } } }
+    // Each column as wide as its longest cell in characters, inside sensible bounds; a card's column a chip wider.
     val chars = remember(table) {
-        (0 until n).map { col -> (listOf(table.columns[col]) + table.rows.map { it[col] }).maxOf { it.length }.coerceIn(3, 36) }
+        (0 until n).map { col -> (listOf(table.columns[col]) + table.rows.map { it[col] }).maxOf { it.length }.coerceIn(4, 36) }
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val natural = chars.map { (it * 7.4f + 16f).dp }
+        val natural = chars.mapIndexed { col, it -> (it * 7.6f + 16f).dp + if (col in cards) CHIP + 8.dp else 0.dp }
         val total = natural.fold(0.dp) { a, b -> a + b }
         val widths = if (total < maxWidth) natural.map { it * (maxWidth / total) } else natural
         val scroll = rememberScrollState()
         Column(Modifier.fillMaxSize().horizontalScroll(scroll)) {
-            Row(Modifier.background(c.ink06).padding(vertical = 6.dp)) {
+            Row(Modifier.background(c.ink06).padding(vertical = 7.dp)) {
                 table.columns.forEachIndexed { col, name ->
                     MuText(
-                        name.uppercase(),
+                        MicroCaps.of(name, LocalKeepCase.current),
                         Modifier.width(widths[col]).padding(horizontal = 8.dp),
                         style = head.copy(textAlign = if (numeric[col]) TextAlign.End else TextAlign.Start),
                         color = c.ink70,
@@ -659,20 +737,29 @@ private fun TablePaint(table: WorldTable) {
                 }
             }
             LazyColumn(Modifier.width(widths.fold(0.dp) { a, b -> a + b })) {
-                itemsIndexed(table.rows) { r, row ->
+                itemsIndexed(table.rows) { _, row ->
                     Row(
                         Modifier
                             .drawBehind { drawLine(c.ink12, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
-                            .padding(vertical = 5.dp),
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         row.forEachIndexed { col, cell ->
-                            MuText(
-                                cell,
-                                Modifier.width(widths[col]).padding(horizontal = 8.dp),
-                                style = (if (numeric[col]) mono else body).copy(textAlign = if (numeric[col]) TextAlign.End else TextAlign.Start),
-                                color = if (col == 0) c.ink else c.ink70,
-                                maxLines = 2,
-                            )
+                            if (col in cards && cell.isNotBlank()) {
+                                Row(Modifier.width(widths[col]).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    CardChip(h, cell, CHIP)
+                                    Box(Modifier.width(8.dp))
+                                    MuText(cell, style = body, color = c.ink, maxLines = 2)
+                                }
+                            } else {
+                                MuText(
+                                    cell,
+                                    Modifier.width(widths[col]).padding(horizontal = 8.dp),
+                                    style = (if (numeric[col]) mono else body).copy(textAlign = if (numeric[col]) TextAlign.End else TextAlign.Start),
+                                    color = if (col == 0) c.ink else c.ink70,
+                                    maxLines = 2,
+                                )
+                            }
                         }
                     }
                 }

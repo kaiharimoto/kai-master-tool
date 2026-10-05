@@ -30,6 +30,11 @@ import com.kaiharimoto.neue.shootout.runShootout
 fun NeueHolders.onKey(event: KeyEvent): Boolean {
     if (event.type == KeyEventType.KeyUp) {
         held.remove(event.key)
+        // Ctrl let go while the World's strip of windows is out: the one chosen comes forward (DESKTOP.md §9.1).
+        if (worldStarted && world.desk.switching != null && event.key in WINDOW_KEY_HOLD) {
+            world.desk.commitSwitch()
+            return true
+        }
         // A held row's key coming up ends what its going down started (1.0.87: M let go sends what was said).
         holding.remove(event.key)?.let { action ->
             hold(action, down = false)
@@ -78,7 +83,14 @@ fun NeueHolders.onKey(event: KeyEvent): Boolean {
             return true
         }
     }
+    // The World's desktop in focus: the arrows walk its icons and Enter opens one (never a table row, §9.1).
+    if (!context.overlayOpen && !neue.hasTop && com.kaiharimoto.neue.world.worldDeskKey(this, chord, context.textInputFocused)) return true
     val shortcut = DeskShortcuts.resolveShortcut(chord, context) ?: return spotlightOn(chord, context)
+    // Ctrl ` walks the windows while Ctrl is held, and its letting go chooses.
+    if (shortcut.action == DeskAction.WORLD_NEXT_WINDOW || shortcut.action == DeskAction.WORLD_PREVIOUS_WINDOW) {
+        com.kaiharimoto.neue.world.runWorld(this, shortcut.action, ctrlHeld = true)
+        return true
+    }
     if (repeat && !shortcut.repeatable) return true
     if (shortcut.hold) {
         holding[event.key] = shortcut.action
@@ -102,6 +114,14 @@ private fun NeueHolders.spotlightOn(chord: KeyChord, context: DeskContext): Bool
     duel.openSpotlight(chord.key)
     return true
 }
+
+/** The keys whose letting go ends the World's walk through its windows: Ctrl, and the Mac's Command. */
+private val WINDOW_KEY_HOLD = setOf(
+    androidx.compose.ui.input.key.Key.CtrlLeft,
+    androidx.compose.ui.input.key.Key.CtrlRight,
+    androidx.compose.ui.input.key.Key.MetaLeft,
+    androidx.compose.ui.input.key.Key.MetaRight,
+)
 
 /** A held row's action: [down] starts it, the key coming up ends it. */
 private fun NeueHolders.hold(action: DeskAction, down: Boolean) {
@@ -134,6 +154,8 @@ fun NeueHolders.deskContext() = DeskContext(
     presenting = present.playing != null,
     onDuel = neue.page == Page.DUEL,
     onWorld = neue.page == Page.WORLD,
+    browserInFront = neue.page == Page.WORLD && worldStarted && !neue.phone &&
+        world.desk.desk.front == com.kaiharimoto.mastertool.core.world.desk.BuiltInApp.BROWSER.id,
     onShootout = neue.page == Page.SHOOTOUT,
     replaying = neue.page == Page.DUEL && duel.replay != null,
     choosing = neue.page == Page.DUEL && duel.choosing,
@@ -176,6 +198,8 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.WORLD_SNAP_UP, DeskAction.WORLD_SNAP_LEFT, DeskAction.WORLD_SNAP_RIGHT, DeskAction.WORLD_SNAP_DOWN,
         DeskAction.WORLD_TAB_NEW, DeskAction.WORLD_TAB_ADDRESS, DeskAction.WORLD_TAB_NEXT, DeskAction.WORLD_TAB_PREVIOUS,
         DeskAction.WORLD_TAB_BACK, DeskAction.WORLD_TAB_FORWARD, DeskAction.WORLD_SKIP,
+        DeskAction.WORLD_TAB_1, DeskAction.WORLD_TAB_2, DeskAction.WORLD_TAB_3, DeskAction.WORLD_TAB_4, DeskAction.WORLD_TAB_5,
+        DeskAction.WORLD_TAB_6, DeskAction.WORLD_TAB_7, DeskAction.WORLD_TAB_8, DeskAction.WORLD_TAB_9,
         -> com.kaiharimoto.neue.world.runWorld(this, action)
         // From a menu or the palette, where nothing is let go of: a press, and the next one sends (1.0.87).
         DeskAction.DUEL_VOICE -> duelVoice.toggle()

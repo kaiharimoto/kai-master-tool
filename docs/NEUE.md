@@ -4306,16 +4306,148 @@ own in the same shape when none fits.
 say the question, start small, run, read, check against an independent method, pin one board per finding with a note,
 and never tell a number no run computed.
 
-**Watching it** (`neue/world/`): Files, Editor (Ai's code typed in at `WorldPrefs.typing`, at most a few seconds a file,
-with Skip), Terminal (each run's command and its output streaming), Boards, Thoughts (Ai's reasoning and words) and
-Activity; the pane Ai works in wears "Ai is here" with the still `AiMark` — focus jumps, nothing glides. Follow
-(`WorldPrefs.follow`, `F`) brings the page forward when Ai starts work. Keys: `DeskScope.WORLD` — `Ctrl Enter` run,
-`Ctrl .` stop, `Alt 1`–`6` the panes, `Alt N` a new world. On a phone the panes are tabs.
+**Watching it: a desktop** (1.1.x, `docs/world/DESKTOP.md`, kai: "I didn't know where to look … how about a simulation
+of a computer desktop"). 1.0.97's six panes and the boards canvas are gone; the page is a small computer
+(`neue/world/desk/`):
+- **The desktop** (`WorldDeskPage`): paper below Neue's bar, the seven built-in apps' icons in a column (88 × 80 tiles),
+  Ai's apps in a column of their own under *Made by Ai* (a framed tile and a monogram; `NEW` until opened), and with no
+  window open the **plate** — a fresh world's "A computer for Ai's experiments." with the ask line and three suggestions,
+  or a world's name, its `16 pages · 6 files · 1 app` and two links. Right-click: Show desktop, Put windows away, Tidy
+  icons, New world, World settings. Neue's bar carries the world's name as a picker (`WorldBarItems`) and does not show
+  `AiBadge` here: one face on screen.
+- **Windows** (`WindowFrame`), one per app, all moved by core's reducer (`Desk.step` over `DeskOp`, kept in
+  `<world>/desk.json` through `DeskCodec` a moment after each change): the window in front has an ink title bar with paper
+  words, an ink edge and a 3 dp paper **keep-out** round it — no shadow; behind, paper bars and ink-45 words. Drag the
+  title bar to move (no easing), let go at an edge or corner to snap (a dashed outline shows where), a 6 dp band and 12 dp
+  corners resize (not to a finger), `□` or a double-click maximises. While Ai works in the front window with Follow on,
+  the others **recede** to 45 % (`WorldPrefs.recede`); any press or key of the person's ends it.
+- **The taskbar** (`Taskbar`): the launcher, the pinned apps (`WorldPrefs.pinned`) and every open one (in front inverted,
+  open underlined, minimised in ink-45; middle-click closes, right-click Pin/Close/Close Ai's windows), the run with its
+  seconds and Stop, the notices' tray, the clock (`07:48 · 0:42` while Ai works), and **Ai's cell**: the avatar's home,
+  its line (*Asleep*, *Writing openings.js*, *Waiting on you*, *Done*), Follow and Skip while it works.
+- **The launcher** (`⊞`, `Alt 0`; `Launcher.kt`): search over apps, worlds, pages and files (Enter opens the first), the
+  open windows, the apps, *Made by Ai*, the five newest worlds, Ask Ai, World settings. **The switcher**: `` Ctrl ` ``
+  walks the open windows while Ctrl is held, a strip showing after 200 ms, letting go choosing. **Notices**
+  (`WorldNotices`): one toast at a time over the tray's corner, held under the pointer, the tray keeping the last 50.
+- **Ai's avatar** (`DeskAvatar.kt`, kai's waiver for this one thing, held by `MasterUiLawTest.movementIsNamed`): Ai's
+  own face, never a new character, going to what it is about to use — `AvatarPilot` turns each tool call into targets,
+  `AvatarPath` hops (a quadratic arc, Master UI's one easing, 280–680 ms) and follows the caret or the printing line;
+  the page reports where each target is from layout (`AvatarTargets`). Its position is a plain array read in
+  `offset {}`, its lean and landing squash in `graphicsLayer {}`; the loop runs only while a hop or follow is unsettled.
+  Asleep it is the still `AiMark` in the taskbar and asks for no frames. `F` follows, `Shift F` skips ahead; a click opens
+  Thoughts, a drag picks it up. With Follow on, a window Ai opens waits for the avatar to reach its icon (≤ 700 ms).
+- **The avatar shows what it is doing, on itself** (kai: "so the user can track its status visually better";
+  `DESKTOP.md` §5.7): a paper plate with an ink rule travels beside it — a small ink **sign** for the kind of work (pen,
+  play, open book, globe, page, pointer, three squares, a squared `?`, ✓, ✕; `WorldIcons.sign`, on the icon grid) and
+  **a few words** in the label tier, a file's name as itself in mono (*Writing* `deck-odds.js`, *Running 50,000 hands*,
+  *Reading Labrynth guide*, *Thinking*, *Ran* `hands.js`, *Waiting on you*), shortened by words and a file's parts,
+  never to a stub. It stands on the avatar's right, its left near the page's edge, placed in layout from the loop's
+  pose. **Its face is the work's**: focused writing, watching a run, reading, thinking, pleased at a run or a page,
+  worried at a failure, waiting — Ai's own twenty faces, no new geometry (a hand's petting still answers in its own).
+  **When the person is wanted** (a question, a confirmation, Python off here) it stands where it is answered and a
+  square ink ring breathes round it, stepped 20 times a second and only while it waits. All of it is core's
+  `AvatarStatus` (`resolve`, `plate`, `place`, `breath`, `words`; `AvatarStatusTest`), fed by the pilot's errand
+  (`AvatarTarget.doing`), a run's end (`WorldDeskState.ran`, `aiRunFailed`) and `AiState` (`AiNow`: the tool, a
+  question or confirmation, a reply streaming). Off with *Show Ai on the desktop*; at home, asleep or idle it fades and
+  the taskbar's line — the same words — speaks; with recede on, the person's hands on the page fold it to its sign.
+- **Never stealing focus** (`FocusPolicy`, in `WorldDeskState.arrive`): Raise, or — while the person types, pressed in
+  the last 4 s, or has a menu open — Behind with a notice, or Mark with Follow off. When Ai's turn ends, `DeskTidy` puts
+  away what it opened and nobody touched, keeping the answer in front.
+- **The shell's own apps** (`neue/world/system/`): **Files** (`files/` and `apps/` as two roots; double-click opens code
+  in the Editor, markdown, pictures, CSV and JSON as pages; Open as page, Run, Rename, Delete), the **Editor** (Run, the
+  language, the file as a menu, Ai typing with Skip and **Take over** — a write by Ai to a file the person changed since
+  it last read it is refused in words it can act on; over a megabyte, read-only and drawn lazily) and the **Terminal**
+  (each run streaming, and a command line of its own, `TerminalCommand`: `run`, `js`, `py`, `tool`, `open`, `ls`,
+  `cat`, `clear`, `help`, `↑` recalls, Tab completes). What runs in the other windows — the Browser, Thoughts,
+  Instruments, Library and Ai's apps — is the app host's, plugged in at one seam (`DeskApps`).
+- **On a phone** (`WorldPhone`): no windows — one app fills the page; a 48 dp dock (Apps, Switch with its count, the
+  run or the notices) above Neue's tabs, a swipe up for the launcher, sideways for the next app; the switcher lists the
+  open apps in words; `PhoneBar` carries the app's icon and name and its ⋯ the world picker, Follow, Skip, Close; its face
+  is the avatar's home.
+- **Keys** (`DeskScope.WORLD`, `runWorld`): `Alt 1`–`7` the apps (open, bring forward, or minimise the one in front),
+  `Alt 0` the launcher, `` Ctrl ` `` the windows, `Ctrl W` the tab or the window, `Ctrl M`, `Alt Shift` and an arrow to
+  snap, the Browser's `Ctrl T`/`L`/`Tab`, `Alt ←`/`→`, `F`, `Shift F`, `Ctrl Enter`, `Ctrl .`, `Alt N`; with nothing in
+  front the arrows walk the icons and Enter opens one (`worldDeskKey`, never in `DeskShortcuts`). Esc closes the
+  launcher, the strip, the tray, a toast — never a window. Mouse and finger: `WorldMouse`, `WorldTouch`.
 
-**Kept like the rest**: synced and backed up (`NeueSyncLocal.worldSyncs`: never `.tmp` or the Python helper's folder),
+**What runs inside the windows** (1.1.x, `DESKTOP.md` §3–§4, §8, §10; `neue/world/browser/`, `apps/`, `library/`,
+owned parts of `Worlds`: `world.browser`, `world.apps`, `world.library`):
+- **The Browser** (`BrowserApp`, `WorldBrowser`): tabs as Chrome has them (96–220 dp, the kind's glyph, `✕` under the
+  pointer, a 6 dp mark on a tab Ai changed, a middle-click closes), `←` `→` `↻`, the address (`world://…`, `Ctrl L`),
+  Keep, and ⋯ (copy the address, the source file, the run, a new tab, take the page down). The tabs are the desk's
+  (`DeskOp.Tabs` in `desk.json`); a page pinned by a run, an instrument, an app or `world_show` opens through
+  `desk.showed`, updating the tab already on it. **Every board is a page** (`BrowserPages.kt`): the kind in micro caps,
+  the title, Ai's note, `from openings.js · ran 07:48 · 412 ms` with links, and `BoardBody` — the boards' own painters,
+  unchanged — at the page's width under a 1,120 dp column. `world://home` lists every page grouped by the run that made
+  it (`WorldHome`), then files and apps, with a filter; `world://files/…` draws markdown, pictures, CSV as a table, JSON
+  indented and code read-only, lazily; `world://runs/<t>` a run's output, error and pages; `world://instruments/<name>`
+  what it answers; anything else says there is no such page and offers the nearest titles. On a phone the tabs fold into
+  a count beside the address. The boards canvas is gone (its `x/y/w/h` stay in `world.json`, unread).
+- **Ai's apps** (`WorldApps`, `AppHost`, `AppWindow`): an app's screen is its `view`'s tree (`UiTree`) drawn with the
+  kit's own components — rows by weight, steppers, sliders (live ones eight a second, the last always sent), selects,
+  segments, switches, checks, the pool's card search, the library's decks, tables a page of 50 at a time, card strips,
+  `ui.board` through `BoardBody`. Events go through `AppEvents` (a change never jumps a press) to `JsApp` on the apps'
+  own two threads, one call at a time per app, apart from the world's runs; the state is written 500 ms after the last
+  event. A throw is one ink line over the app — the call, the error, **its line**, *Show code* — the state kept; a `view`
+  that throws dims the last good screen; a `Broken` or `Unknown` widget says why in its place. A new version keeps the
+  state (`migrate` first; *Start fresh* offered if the view then throws); the window's ⋯ has Show code, *Back to vN*,
+  Start fresh, Delete. Its code is `apps/<slug>/main.js` in the Editor; the person's save is a new version. An app's
+  `ygo.show` opens its pages as tabs; `ygo.knowledge` reads the Library (`WorldSnapshot.knowledge`).
+- **Thoughts** (`ThoughtsApp`): the World conversation as one stream — the asks, the reasoning (folded once filed), the
+  words, and each tool call as a compact row (`✎ Wrote openings.js`, `▶ Ran …`, `◧ Pinned …`, `⊞ Made …`) that opens what
+  it made; All · Words · Actions; the panel's `Composer` at its foot, or, before a World conversation, an ask line that
+  starts one here without docking the panel (`askInWorld`).
+- **Instruments** (`InstrumentsApp`): the list (name and question) and a form from `InstrumentForm` — decks a select,
+  conditions and cards in lines, choices as segments, a switch, numbers — Run, the lines in the Terminal, the pages in
+  the Browser, the last runs under the form with *Open pages*.
+- **The Library** (`LibraryApp`, `WorldLibrary`): shelves (This deck with its picker, Webs, Ai, Everything, each
+  counted) from `LibraryCatalog` — a listing, never a copy; a document read off the frame thread into
+  `LibrarySections` and drawn as a lazy column of ≤ 4 KB blocks at a 68-character measure, its contents beside it; the
+  book's chapters with *Open the reader*, reports with their scores and why, the evidence as a table with *stale*.
+  Search walks the files (`LibrarySearch`), 150 ms after the last key, cancelled by the next, the shelf in view first,
+  hits streaming in by document with the match inverted, 500 then *More*. Read-only: *Edit* opens Ai's brain.
+- **Ai's side** (`AiWorldApps`): `world_app` make (typed into the Editor, `init` and `view` checked in the cage before
+  anything is written — an error comes back with its line), change (whole or edits), back, open, close, press (the screen
+  back in words, `UiWords`), state (in the `Untrusted` envelope), delete (asks); `world_open` a page, an app, a file or a
+  built-in through `world.arrive`; `world_show` opens its page in a tab (`open: false` pins only); `world_read` a page of
+  16,000 characters with `from`; `world_state` adds the apps, tabs, windows and any app that threw. A run's whole output
+  past 64 KB is written to `files/out/<run>.log` (`RunLog`). Skills: `ai-world` (a page for an answer, an app only when
+  the person will use it again, open only what was asked) and `world-app` (the widgets, the contract, the examples).
+
+**Kept like the rest**: synced and backed up (`NeueSyncLocal.worldSyncs`: never `.tmp` or the Python helper's folder —
+so `desk.json` and every app's `apps/<slug>/` travel, `WorldAppsTest`),
 reloaded after a sync or a restore; `OldDataTest.aWorldFrom1097StillReads`; `WorldsTest` runs a world end to end
 (typed, run, streamed, pinned, an instrument, Python allowed or not and its odds agreeing with the app's).
-`tools/shoot.sh --page=world --world=demo` photographs it.
+`tools/shoot.sh --page=world --world=demo` photographs it; `--world=fresh` an empty world; `--world-desk=fresh|several|
+working|launcher|notices|switcher` the desktop's scenes, `--world-avatar=icon|travel|caret|terminal|home` with
+`--world-avatar-t=0.5` the avatar frozen mid-hop, `--world-status=writing|running|instrument|reading|thinking|pleased|
+worried|waiting` its status where that work is (`DeskStudio.kt`); `--world-app=browser|thoughts|instruments|library|
+hand-odds|combo-lines|matchups` one app's window, maximised (`--world-app-window=normal` at its comfort size,
+`--world-page=b5` the Browser's page, `--world-library=search:words`; `WorldAppsStudio.kt`); with `--form=phone` and
+`--theme=ink` as ever. `--world-tabs=peek|overview` shows a tab's picture under the strip, or every tab as pictures.
+
+**Reading at a glance** (1.1.x, `docs/world/READABILITY.md`; kai: "I'm having readability issues with the World
+interfaces … set visual guidelines and rules on text sizes and layouts"; "integrate card images where possible/needed
+for maximum visual pickup"). **One type scale** (`neue/world/type/WorldType.kt`: title 20, heading 15/16, body 13/14,
+label 12/13, micro 11, mono 12/13, chart data 11 — desk/phone), the World's own `Body`, `Small`, `Help`, `Mono`,
+`Micro`, `MicroLink`, `MonoLink`; **a measure** of 72 characters (`readingMeasure()`: Thoughts and the Library set one
+reading column, centred in a wide window); **titles never cut to a stub** (`TabTitles`: the distinctive words, never
+under 12 characters, the whole title in a tip, a preview and the overview; `Goals.words`: "Starters ≥ 1", not
+`"Starters">=1`); **ink-45 never for words of a reading tier, ink-25 and ink-12 never for words**. Held by
+`WorldReadabilityTest` (no raw `.sp`, no kit text below the scale, no faint words, the floors) and core's
+`TabTitlesTest`, `TabStripTest`, `GoalWordsTest`. **Tabs anyone can tell apart**: a number (`Ctrl 1`–`Ctrl 9` while the
+Browser is in front — the pages' `Ctrl` digits give way, `DeskShortcut.yieldsToTabs`), the kind's glyph, the art of the
+card the page is about (`PageLead`), a short title, Ai's mark as a square on the glyph's corner (only on Ai's tabs:
+`BrowserTabs.open`), a run's pages together (`Tab.group`, a darker rule between groups); tabs 176–220 dp
+(`TabStrip.fit`), whole tabs and a count past the room; a pointer resting on a tab shows the page small (`TabPeek`,
+`PagePreview`: the page's own painters through one layer, `LocalPagePreview` keeps it from the avatar); the count opens
+every tab as pictures (`TabOverview`: searched, closed, dragged to reorder). **Cards are pictures**: a chart's
+`cards: true` labels and a table's `cards: ['Card']` columns draw each card's art (`CardChip` over `ChatCard`/`NeueCard`,
+the person's artworks applied); `ui.card` in apps, the card picker's art, the example apps; `[[Card]]` in Thoughts, the
+Library and pages draws a small card in the line (`LocalCardChips`, `InlineWords`). Held by `CardFieldsTest`,
+`PageLeadTest`, `ExampleAppsTest`. Also: the work area is measured from the apps there are now (`DeskGrid`: a window
+opened on a just-made app no longer lands on its icon column), a window come to the front reads the notices it answers
+(`WorldNotices.looked`: no "6 new pages" over the Browser), and the toast stands over the tray it goes into.
 
 ### 4s. Card truth (1.1.0, Phase B; `docs/phases/B.md`)
 
@@ -4558,6 +4690,24 @@ link with the evidence ledger, siding plans compared.
 `--shootout-teach=supervised|judging|question|calibration|solo|exam|exam-running|trust|rubric|setup|early` for teaching
 (`early`: a calibration set of 12 not yet examined); Setup before teaching is offered is `--shootout-view=setup
 --shootout-answers=0` (or any number under 30).
+
+### 4u. Effects as code: the library (Phase D step 2; `docs/phases/D.md` §3, §6)
+
+A card's effect is `lib/effects/<passcode>.js` in any world, written with `ygo.fx` (alias `fx`, `core/world/FxPrelude.kt`),
+which builds plain data; **`FxCompile`** runs it once in Rhino (5 s, shut in) and keeps only the data (`JsData`: a function in
+it is refused). Every write is checked (`FxCheck` and the text's `FxLints`) and read back in words (`FxWords`).
+- **One library, by card**: `<data>/effects/` (`<passcode>.js`, the compiled `<passcode>.json` with `vocab` and its source's
+  hash, the person's `<passcode>.review.json`, helpers `_name.js`), mounted at `lib/effects/` in every world through
+  `WorldMount` (`Worlds.mounts`; `WorldSnapshot.file` for `ygo.use`). A world writes only sources and helpers. Every printing
+  reads its card's script (`CardIdentity`). At most 2,000 scripts.
+- **The holder** is `Effects` (`neue/effects`, lazy `h.effects`): it compiles what changed (never over a newer build's script),
+  checks everything on each load, and keeps `entries`, `book` (what the engine and the table read; broken scripts never) and
+  `revision`. A write through a world is compiled at once and the writer told how it went.
+- **Sync and backups** carry `effects/` (newer wins; `FxPaths.syncs`); `<data>/fxcache/` is a device folder
+  (`InboundPath.DEVICE_FOLDERS`): verdicts never travel, and a script synced in is checked again here.
+- **Ai**: `fx_state` and `fx_check` (`AiEffects`). Only the person accepts a warning (`FxReviews.accept` refuses Ai).
+- Left for the rest of step 2: the Effects pane, Write its effect, asking (`FxAsks`, `fx_request`, `Effects.gate`), the cost
+  and the table's Shortcut surfaces (D.md §10, step 2, "As landed").
 
 ## 5. Releases, updates and feedback — the permanent numbers
 
