@@ -209,10 +209,15 @@ private fun NewPresentationDialog(h: NeueHolders) {
     val neue = h.neue
     val prefs = neue.prefs.present
     val scope = rememberCoroutineScope()
-    var decks by remember { mutableStateOf<List<StoredDeck>>(emptyList()) }
-    LaunchedEffect(Unit) { decks = h.deps.deckRepository.all().sortedBy { it.entry.name.lowercase() } }
-    var deck by remember { mutableStateOf<StoredDeck?>(null) }
-    LaunchedEffect(decks) { if (deck == null) deck = decks.firstOrNull { it.entry.id == h.builder.deckId } ?: decks.firstOrNull() }
+    var stored by remember { mutableStateOf<List<StoredDeck>>(emptyList()) }
+    LaunchedEffect(Unit) { stored = h.deps.deckRepository.all().sortedBy { it.entry.name.lowercase() } }
+    // The builder's open deck too, saved or not (R8): Ai's create could use it, the dialog could not.
+    val builder = h.builder
+    val unsaved = (builder.deck.main.isNotEmpty() || builder.deck.extra.isNotEmpty()) && (builder.deckId == null || builder.dirty)
+    val openDeck = if (unsaved) DeckChoice("${builder.deckName.ifBlank { "Untitled deck" }} · open in the builder, unsaved") else null
+    val decks = listOfNotNull(openDeck) + stored.map { DeckChoice(it.entry.name, it) }
+    var deck by remember { mutableStateOf<DeckChoice?>(null) }
+    LaunchedEffect(decks.size) { if (deck == null) deck = decks.firstOrNull { it.stored == null } ?: decks.firstOrNull { it.stored?.entry?.id == builder.deckId } ?: decks.firstOrNull() }
     var style by remember { mutableStateOf(prefs.style) }
     // Master UI unless the person has picked another theme themselves (kai, 1.0.72).
     val appDark = neue.prefs.theme == NeueTheme.INK
@@ -228,17 +233,20 @@ private fun NewPresentationDialog(h: NeueHolders) {
         val chosen = deck
         val now = System.currentTimeMillis()
         val snapshot = if (blank || chosen == null) null else {
-            val groups = DeckGroupsCodec.read(chosen.extended).groups
-            val ids = (chosen.entry.deck.main + chosen.entry.deck.extra + chosen.entry.deck.side).map { it.value }.toSet()
+            val from = chosen.stored
+            val d = from?.entry?.deck ?: builder.deck
+            val groups = if (from != null) DeckGroupsCodec.read(from.extended).groups else builder.groups
+            val ids = (d.main + d.extra + d.side).map { it.value }.toSet()
             PresentEdits.snapshot(
-                chosen.entry.deck, groups, chosen.entry.name, chosen.entry.id,
+                d, groups, from?.entry?.name ?: builder.deckName.ifBlank { "Untitled deck" }, from?.entry?.id ?: builder.deckId,
                 neue.prefs.groupArrangement,
                 neue.prefs.arts.filterKeys { it in ids },
                 GroupMarkers.palettes.indexOfFirst { it.id == neue.prefs.groupPalette }.coerceAtLeast(0),
                 now,
             )
         }
-        val webcam = WebcamZone(enabled = camera, preset = preset)
+        // Until the camera is live, the zone shows the slide through it rather than a blank panel (I4).
+        val webcam = WebcamZone(enabled = camera, preset = preset, fill = WebcamZone.FILL_NONE)
         val title = name.ifBlank { snapshot?.name?.let { "$it deck profile" } ?: "Untitled presentation" }
         val p = if (snapshot == null) {
             Presentation(present.newId(), title, now, now, style, null, theme, webcam = webcam, creator = creator, slides = listOf(SlideLayouts.slide(SlideLayouts.TITLE)))
@@ -258,16 +266,16 @@ private fun NewPresentationDialog(h: NeueHolders) {
         description = "Pick the deck and how to tell it. Every slide it makes is yours to change.",
         footer = {
             MuButton("Blank presentation", { create(blank = true) }, variant = BtnVariant.GHOST)
-            if (neue.prefs.ai.enabled) MuButton("Build with ${h.ai.name}", { create(blank = false, withAi = true) }, enabled = deck != null, reason = "Save a deck first")
-            MuButton("Make it", { create(blank = false) }, variant = BtnVariant.PRIMARY, enabled = deck != null, reason = "Save a deck first")
+            if (neue.prefs.ai.enabled) MuButton("Build with ${h.ai.name}", { create(blank = false, withAi = true) }, enabled = deck != null, reason = "Build a deck first")
+            MuButton("Make it", { create(blank = false) }, variant = BtnVariant.PRIMARY, enabled = deck != null, reason = "Build a deck first")
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            FieldLabel("Deck")
-            if (decks.isEmpty()) Help("No saved decks yet: save one on the builder, or start a blank presentation.")
-            else MuSelect(deck, decks, { it?.entry?.name ?: "None" }, { deck = it }, Modifier.fillMaxWidth())
+            FieldLabel("Deck", hint = "kept inside the profile as it is now")
+            if (decks.isEmpty()) Help("No decks yet: build one on the builder, or start a blank presentation.")
+            else MuSelect(deck, decks, { it?.name ?: "None" }, { deck = it }, Modifier.fillMaxWidth())
             FieldLabel("Name", hint = "optional")
-            MuInput(name, { name = it }, Modifier.fillMaxWidth(), placeholder = deck?.entry?.name?.let { "$it deck profile" } ?: "Deck profile")
+            MuInput(name, { name = it }, Modifier.fillMaxWidth(), placeholder = deck?.let { "${it.stored?.entry?.name ?: builder.deckName.ifBlank { "Untitled deck" }} deck profile" } ?: "Deck profile")
             FieldLabel("How the deck is told")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Presentation.STYLES.forEach { st ->
@@ -295,10 +303,18 @@ private fun NewPresentationDialog(h: NeueHolders) {
                 if (camera) MuSelect(preset, WebcamZone.PRESETS.filter { it != WebcamZone.CUSTOM }, WebcamZone::presetName, { preset = it }, Modifier.width(200.dp), small = true)
                 else Small("Off", color = c.ink45)
             }
-            FieldLabel("Your name", hint = "for the title slide")
+            if (camera) Help("The slides make room for your camera. $CAMERA_NOTE")
+            FieldLabel("Your name", hint = "for the title slide; the Theme tab changes it later")
             MuInput(creator, { creator = it }, Modifier.fillMaxWidth(), placeholder = "Channel or handle")
         }
     }
+}
+
+/** A deck the New dialog can profile: a saved one, or ([stored] null) the builder's open deck as it stands. */
+private class DeckChoice(val name: String, val stored: StoredDeck? = null) {
+    override fun equals(other: Any?): Boolean = other is DeckChoice && other.name == name && other.stored?.entry?.id == stored?.entry?.id
+
+    override fun hashCode(): Int = name.hashCode() * 31 + (stored?.entry?.id?.hashCode() ?: 0)
 }
 
 /** One of the three styles, drawn as a tiny diagram of what it does. */

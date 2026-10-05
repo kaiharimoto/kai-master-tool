@@ -11,6 +11,10 @@ import com.kaiharimoto.mastertool.core.present.PresentIds
 import com.kaiharimoto.mastertool.core.present.Presentation
 import com.kaiharimoto.mastertool.core.present.Slide
 import com.kaiharimoto.mastertool.core.present.edit.EditHistory
+import com.kaiharimoto.mastertool.core.present.edit.EditorEdits
+import com.kaiharimoto.mastertool.core.present.edit.SlidePicks
+import com.kaiharimoto.mastertool.core.present.edit.SlideZoom
+import com.kaiharimoto.mastertool.core.present.stage.SlideCamera
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.play.Cursor
 import com.kaiharimoto.neue.platform.decodePicture
@@ -115,8 +119,15 @@ class Presentations(val dir: File) {
     var revision by mutableStateOf(0)
         private set
 
-    /** The slide in view, by id. */
-    var slideId by mutableStateOf<String?>(null)
+    private var slideIdState by mutableStateOf<String?>(null)
+
+    /** The slide in view, by id. Another slide lets go of the camera picked on this one. */
+    var slideId: String?
+        get() = slideIdState
+        set(value) {
+            if (value != slideIdState) cameraPicked = false
+            slideIdState = value
+        }
 
     /** The elements selected on it. */
     var selection by mutableStateOf<Set<String>>(emptySet())
@@ -174,15 +185,63 @@ class Presentations(val dir: File) {
         seal()
     }
 
-    /** The presentation put back as it was before the restyle, as one step of Undo. */
+    /**
+     * The look put back as it was before the restyle, as one step of Undo — only the look
+     * ([EditorEdits.restoreLook]): slides added, words typed and notes written since all stay. Before
+     * this it put back the whole slide list, and the work done after a restyle went with it.
+     */
     fun undoRestyle() {
         val before = restyleBefore ?: return
         val o = open
         restyleBefore = null
         if (o == null || o.id != before.id) return
-        commit(o.copy(theme = before.theme, themeOverride = before.themeOverride, slides = before.slides), "Undo restyle")
+        commit(EditorEdits.restoreLook(o, before), "Undo restyle")
         seal()
     }
+
+    // ---- the editor's view and modes (the editor's audit, track B) ---------------------
+
+    /** How large the slide being made is drawn, and where (Ctrl wheel, a pinch, Ctrl Alt = and -). */
+    var zoom by mutableStateOf(SlideZoom.FIT)
+
+    /** The canvas's size in pixels, as it last laid out: the keys zoom round its middle. */
+    var viewWidth = 0f
+    var viewHeight = 0f
+
+    /** Zoomed by [factor] round the middle of the canvas (the keys), or fitted again with [factor] null. */
+    fun zoomBy(factor: Float?) {
+        zoom = if (factor == null || viewWidth <= 0f) SlideZoom.FIT else zoom.zoomAround(factor, viewWidth / 2f, viewHeight / 2f, viewWidth, viewHeight)
+    }
+
+    /** The camera on the slide in view is selected: dragged, sized, or hidden with Delete. */
+    var cameraPicked by mutableStateOf(false)
+
+    /** The sorter was the last thing pressed: Delete takes slides then, never otherwise. */
+    var sorterFocused by mutableStateOf(false)
+
+    /** A finger's switches over the canvas: a tap adds to the selection; a corner keeps the shape. */
+    var selectSeveral by mutableStateOf(false)
+    var keepShape by mutableStateOf(false)
+
+    /** The selection was just duplicated from a menu: the next drag carries the copy (a finger's Alt drag). */
+    var justDuplicated by mutableStateOf(false)
+
+    /** The slide whose section heading is being named in the sorter. */
+    var namingSection by mutableStateOf<String?>(null)
+
+    /** The bar's ⋯ menu asked open from outside it (the studio's `--present-more`). */
+    var moreTools by mutableStateOf(false)
+
+    /** "Slides from groups" waiting on its confirmation: it replaces every deck slide. */
+    var confirmFromGroups by mutableStateOf(false)
+
+    /** The slides picked in the sorter, the one in view included, in the show's order. */
+    val pickedSlides: List<String>
+        get() {
+            val p = open ?: return emptyList()
+            val current = slide?.id ?: return emptyList()
+            return SlidePicks(current, slidesPicked).all(p.slides.map { it.id })
+        }
 
     /** The New dialog, open. */
     var creating by mutableStateOf(false)
@@ -247,14 +306,19 @@ class Presentations(val dir: File) {
         selection = emptySet()
         slidesPicked = emptySet()
         editingText = null
+        cameraPicked = false
+        sorterFocused = false
+        namingSection = null
+        zoom = SlideZoom.FIT
         revision++
     }
 
     fun close() {
-        flush()
+        flushNow()
         open = null
         selection = emptySet()
         editingText = null
+        cameraPicked = false
     }
 
     /**
@@ -272,7 +336,8 @@ class Presentations(val dir: File) {
     fun seal() = history.seal()
 
     private fun put(next: Presentation) {
-        val stamped = next.copy(updatedAt = System.currentTimeMillis())
+        // A Camera element (an older build's paste, Ai's add_element) becomes the slide's own camera.
+        val stamped = SlideCamera.fold(next).copy(updatedAt = System.currentTimeMillis())
         open = stamped
         library = listOf(stamped) + library.filterNot { it.id == stamped.id }
         if (slideId != null && stamped.slide(slideId) == null) slideId = stamped.slides.firstOrNull()?.id
@@ -298,36 +363,69 @@ class Presentations(val dir: File) {
 
     private var saveJob: Job? = null
     private var pending: Presentation? = null
+    private var pendingSeq = 0L
+
+    /** Each save's turn: a write never puts back an older one than the file already holds. */
+    private var seq = 0L
+    private val written = HashMap<String, Long>()
 
     /** Written a moment after the last edit, a drag's hundred moves one write. */
     private fun save(p: Presentation, now: Boolean = false) {
+        val n = ++seq
+        // Another presentation's write still waiting (a duplicate made from the library) goes now, not never.
+        pending?.takeIf { it.id != p.id }?.let { other -> val m = pendingSeq; scope.launch { write(other, m) } }
         pending = p
+        pendingSeq = n
         saveJob?.cancel()
         saveJob = scope.launch {
             if (!now) delay(400)
-            write(p)
+            write(p, n)
         }
     }
 
-    /** The last edit written now: the page left, the window closing. */
+    /** The last edit written soon: the show starting. */
     fun flush() {
         val p = pending ?: return
+        val n = pendingSeq
         saveJob?.cancel()
-        scope.launch { write(p) }
+        scope.launch { write(p, n) }
     }
 
-    private suspend fun write(p: Presentation) = io.withLock {
-        withContext(Dispatchers.IO) {
-            dir.mkdirs()
-            val target = File(dir, "${p.id}.json")
-            val temp = File(dir, "${p.id}.json.tmp")
-            temp.writeText(PresentCodec.encode(p))
-            if (!temp.renameTo(target)) {
-                target.delete()
-                temp.renameTo(target)
+    /**
+     * The last edit written now, on this thread, before this returns: the window closing, Ctrl Q, the
+     * tablet put away (the editor's audit, B12). [flush] only launched a write the closing scope might
+     * never run, and a note typed half a second before quitting was lost. A few kilobytes of JSON; the
+     * write in flight, if any, finishes first under the same lock.
+     */
+    fun flushNow() {
+        val p = pending ?: return
+        saveJob?.cancel()
+        runCatching { writeFile(p, pendingSeq) }
+        if (pending === p) pending = null
+    }
+
+    private suspend fun write(p: Presentation, n: Long) = io.withLock {
+        withContext(Dispatchers.IO) { writeFile(p, n) }
+        if (pending === p) pending = null
+    }
+
+    private val fileLock = Any()
+
+    /** [p] to its file through a temporary one, so a write cut short never leaves half a presentation. */
+    private fun writeFile(p: Presentation, n: Long) {
+        synchronized(fileLock) {
+            if ((written[p.id] ?: -1L) <= n) {
+                written[p.id] = n
+                dir.mkdirs()
+                val target = File(dir, "${p.id}.json")
+                val temp = File(dir, "${p.id}.json.tmp")
+                temp.writeText(PresentCodec.encode(p))
+                if (!temp.renameTo(target)) {
+                    target.delete()
+                    temp.renameTo(target)
+                }
             }
         }
-        if (pending === p) pending = null
     }
 
     fun delete(p: Presentation) {

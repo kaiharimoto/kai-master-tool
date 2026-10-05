@@ -54,7 +54,8 @@ object PresentMouse {
         PresentBinding(PresentTarget.ELEMENT, "Right-click", PresentAction.MENU, "Cut, copy, order, group, delete"),
         PresentBinding(PresentTarget.CANVAS, "Drag", PresentAction.MARQUEE, "Select everything the box touches"),
         PresentBinding(PresentTarget.CANVAS, "Right-click", PresentAction.MENU, "Paste, new slide, background"),
-        PresentBinding(PresentTarget.CANVAS, "Ctrl wheel", PresentAction.ZOOM, "Zoom the slide"),
+        PresentBinding(PresentTarget.CANVAS, "Ctrl wheel", PresentAction.ZOOM, "Zoom the slide round the pointer"),
+        PresentBinding(PresentTarget.CANVAS, "Wheel", PresentAction.PAN, "Move round a zoomed slide; Shift moves across"),
         PresentBinding(PresentTarget.HANDLE, "Drag", PresentAction.RESIZE, "Size it; Alt sizes from the middle"),
         PresentBinding(PresentTarget.HANDLE, "Shift drag", PresentAction.RESIZE_KEEP_SHAPE, "Size it, keeping its shape"),
         PresentBinding(PresentTarget.HANDLE, "Drag the round handle", PresentAction.ROTATE, "Turn it; Shift snaps to 15°"),
@@ -86,12 +87,96 @@ object PresentTouch {
         PresentBinding(PresentTarget.HANDLE, "Drag", PresentAction.RESIZE, "Size it"),
         PresentBinding(PresentTarget.HANDLE, "Drag a corner with Keep shape on", PresentAction.RESIZE_KEEP_SHAPE, "Size it, keeping its shape"),
         PresentBinding(PresentTarget.HANDLE, "Drag the round handle", PresentAction.ROTATE, "Turn it"),
-        PresentBinding(PresentTarget.SORTER, "Tap", PresentAction.OPEN_SLIDE, "Edit the slide"),
-        PresentBinding(PresentTarget.SORTER, "Drag", PresentAction.REORDER, "Move it in the show"),
+        PresentBinding(PresentTarget.SORTER, "Tap", PresentAction.OPEN_SLIDE, "Edit the slide; with Select several on, pick several"),
+        PresentBinding(PresentTarget.SORTER, "Drag by its number", PresentAction.REORDER, "Move it in the show; a drag elsewhere scrolls the list"),
         PresentBinding(PresentTarget.SORTER, "Press and hold", PresentAction.MENU, "Duplicate, hide, delete, a new slide after"),
         PresentBinding(PresentTarget.STAGE_CARD, "Tap", PresentAction.FOCUS_CARD, "Talk about it on this slide, or not"),
         PresentBinding(PresentTarget.PRESENTING, "Tap the right half", PresentAction.NEXT, "Next"),
         PresentBinding(PresentTarget.PRESENTING, "Tap the left half", PresentAction.PREVIOUS, "Back"),
         PresentBinding(PresentTarget.PRESENTING, "Press and hold", PresentAction.LASER, "Point while held"),
     )
+}
+
+/**
+ * One press on Present, as facts: where it landed, what pressed it, and what it turned into — the
+ * input [PresentGestures.classify] reads. The editor's canvas and its sorter describe every press this
+ * way and act on what comes back, so the tables above are what the code does, not only what the help
+ * dialog prints (the editor's audit, M2–M4; `PresentInputTest` holds every row to it).
+ */
+data class PresentPress(
+    val target: PresentTarget,
+    /** A finger or a pen, not a mouse. */
+    val finger: Boolean = false,
+    /** The right button. */
+    val secondary: Boolean = false,
+    val shift: Boolean = false,
+    /** Ctrl, or ⌘ on the Mac. */
+    val ctrl: Boolean = false,
+    val alt: Boolean = false,
+    /** Clicks or taps in a row: two is a double-click. */
+    val taps: Int = 1,
+    /** Held still past the system's hold before moving or letting go. */
+    val held: Boolean = false,
+    /** Moved past the slop: a drag. */
+    val moved: Boolean = false,
+    /** Fingers down together. */
+    val fingers: Int = 1,
+    /** Two fingers that moved apart or together: a pinch. */
+    val spread: Boolean = false,
+    /** A wheel turned, not a press. */
+    val wheel: Boolean = false,
+    /** On a handle: the round one that turns. */
+    val roundHandle: Boolean = false,
+    /** On a handle: a corner, not an edge. */
+    val corner: Boolean = false,
+    /** A finger's Select several switch, on. */
+    val selectSeveral: Boolean = false,
+    /** A finger's Keep shape switch, on. */
+    val keepShape: Boolean = false,
+    /** The selection was just duplicated (Duplicate from a held finger's menu): a drag carries the copy. */
+    val afterDuplicate: Boolean = false,
+    /** In the sorter: pressed on the slide's number, its grip. */
+    val onGrip: Boolean = false,
+    /** Presenting: the laser is on. */
+    val laser: Boolean = false,
+    /** Presenting: on the left half of the screen. */
+    val leftHalf: Boolean = false,
+)
+
+object PresentGestures {
+    /** What [p] does, or null when it does nothing of the tables' (a finger dragging the sorter scrolls it). */
+    fun classify(p: PresentPress): PresentAction? = when (p.target) {
+        PresentTarget.ELEMENT -> when {
+            p.secondary || p.finger && p.held && !p.moved -> PresentAction.MENU
+            p.moved && (p.alt || p.afterDuplicate) -> PresentAction.DUPLICATE_MOVE
+            p.moved -> PresentAction.MOVE
+            p.taps >= 2 -> PresentAction.EDIT_TEXT
+            p.shift || p.ctrl || p.finger && p.selectSeveral -> PresentAction.ADD_TO_SELECTION
+            else -> PresentAction.SELECT
+        }
+        PresentTarget.CANVAS -> when {
+            p.wheel -> if (p.ctrl) PresentAction.ZOOM else PresentAction.PAN
+            p.fingers >= 2 -> if (p.spread) PresentAction.ZOOM else PresentAction.PAN
+            p.secondary || p.finger && p.held && !p.moved -> PresentAction.MENU
+            p.moved -> PresentAction.MARQUEE
+            else -> null
+        }
+        PresentTarget.HANDLE -> when {
+            !p.moved -> null
+            p.roundHandle -> PresentAction.ROTATE
+            p.shift || p.finger && p.keepShape && p.corner -> PresentAction.RESIZE_KEEP_SHAPE
+            else -> PresentAction.RESIZE
+        }
+        PresentTarget.SORTER -> when {
+            p.secondary || p.finger && p.held && !p.moved -> PresentAction.MENU
+            p.moved -> if (!p.finger || p.onGrip) PresentAction.REORDER else null
+            else -> PresentAction.OPEN_SLIDE
+        }
+        PresentTarget.STAGE_CARD -> if (!p.moved && !p.secondary) PresentAction.FOCUS_CARD else null
+        PresentTarget.PRESENTING -> when {
+            p.laser && p.moved || p.finger && p.held -> PresentAction.LASER
+            p.secondary || p.finger && p.leftHalf -> PresentAction.PREVIOUS
+            else -> PresentAction.NEXT
+        }
+    }
 }

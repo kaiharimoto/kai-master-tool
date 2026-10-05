@@ -266,6 +266,7 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
                 h.neue.flush()
                 h.prep.flush()
                 h.flushDuel()
+                h.flushPresent()
                 exit()
             }
         }
@@ -322,6 +323,7 @@ private fun MainWindow(deps: AppDependencies, exit: () -> Unit) {
                 h.neue.flush()
                 h.prep.flush()
                 h.flushDuel()
+                h.flushPresent()
                 exit()
             },
             title = "Neue Master Tool",

@@ -312,7 +312,10 @@ class NeueState(
      * to read a card by, so the rail stays out and the inspector follows the
      * selection. A mouse plugged into the tablet still works as a mouse.
      */
-    val touchFirst: Boolean get() = Platform.os == DesktopOs.ANDROID
+    val touchFirst: Boolean get() = touchOverride ?: (Platform.os == DesktopOs.ANDROID)
+
+    /** The studio's way to draw a tablet's touch idioms on the desk (`--touch=true`); null reads the platform. */
+    var touchOverride by mutableStateOf<Boolean?>(null)
 
     /**
      * What the app is running on (the phone, v1.3.5): read off the window in physical dp

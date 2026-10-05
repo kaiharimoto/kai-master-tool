@@ -2916,12 +2916,15 @@ arts and the palette, kept inside the presentation, so a deck edited later never
 rounded, circle, pill), a border in a theme colour. `stage(zone, aspect)` is the room left for content —
 of the four bands round the zone, the one where content of that shape is drawn largest — and every deck
 frame and every stage-anchored element (`Element.anchor = STAGE`, which every layout's placeholders are)
-re-flows round it. A slide may move the camera or hide it (`Slide.camera`). Before the camera is live the
-zone is a panel, clear, or **green screen** (`#00B140`) so a creator's own recorder can key a camera in.
+re-flows round it. A slide may move the camera, hide it, or stand it in a box of its own (`Slide.camera`,
+`Slide.cameraBox`; see *The editor, finished* below). Before the camera is live the zone is a panel, clear
+(a new presentation's default since the editor's fixes), or **green screen** (`#00B140`) so a creator's own
+recorder can key a camera in.
 
 **The editor** (`PresentEditor`): one 48 px bar (back, the name, Undo/Redo, Slide ▾ by layout, Text, Shape ▾,
-Picture, Card, More ▾ — cards in a row, the deck, camera, big number, table, chart, the deck's ydke as a QR —
-and Present ▾); the slides down the left (drag to reorder; right-click: new after, duplicate, skip when
+Picture, Card, Insert ▾ — cards in a row, the deck, the camera, big number, table, chart, the deck's ydke as a
+QR —, Module ▾, Style ▾, Export and Present as a split button; it folds into ⋯ as the window narrows); the
+slides down the left (drag to reorder; right-click: new after, duplicate, skip when
 presenting, a section, present from here, delete; rehearsed times on each); the slide in the middle with its
 speaker notes under it; the panel on the right — **Slide** (title, background: theme, colour, gradient,
 radial, picture with a scrim; transition, its length and direction, on every slide; the camera on this
@@ -2952,7 +2955,8 @@ Marker — Apache 2.0; `docs/fonts/`).
 
 **Presenting** (`PresentStage`, over the window, immersive for its length; Android lies down whatever the
 Screen setting, `ScreenOrientation.resolve(…, forceLandscape)`): one frame clock that sleeps when nothing
-moves; transitions (fade, push, cover, zoom, morph; between deck slides the deck itself glides); builds run
+moves; transitions (cut, fade, push, cover, zoom — a stored Morph plays as the fade it always was; between
+deck slides the deck itself glides); builds run
 after the slide is in; **D** the whole deck over anything, a card clicked there goes to the step that talks
 about it; **B**/**W** a black or white screen; **L** the laser (a held finger too); **E** the pen; **S** the
 speaker notes over the slide; Home/End; clickers' Page Up/Page Down; click or the right of the screen next,
@@ -3015,7 +3019,8 @@ font only) and give the user options for styles if they desire it"):
 - **With it on,** every stage-anchored element (all layout placeholders and module slots) and every deck frame
   re-flow into the band beside the camera where they draw largest. `WebcamLayout.stage` tries the four bands;
   `CompiledShow.deckFrame` tries each for the deck and the note lane.
-- **Per slide,** a slide can hide or move the camera (`Slide.camera`), and CAMERA_BIG gives the face the room.
+- **Per slide,** a slide can hide or move the camera (`Slide.camera`, or its own `cameraBox`), and the Big camera
+  layout moves the camera itself to `SlideCamera.BIG` to give the face the room.
 - **The exception:** only elements placed by hand in canvas units stay where they were put.
 
 **Modules** (1.0.71, Module ▾ in the bar; `core/present/modules/Modules`, tested): generators that make
@@ -3073,9 +3078,61 @@ tools to operate this feature autonomously"). Three tools, all phase 3:
 - On Present, Ai's memory is the profiled deck's (`AiHost.scope`) and its situation names the presentation
   and the slide on screen.
 
-**Pictures**: `tools/shoot.sh --page=present --present=demo --present-slide=N --present-mode=library|edit|play|overview|notes
+**The editor, finished** (the editor's fixes, `docs/present/AUDIT.md` track B; kai: "incompletely built and not
+fully functional"):
+- **Nothing typed is lost.** A number typed into X, Y, W or H is read once, on Enter or as the field is let go
+  (`EditorEdits.number`), so "500" is 500 and one step of Undo — read per key it was clamped to 12 at its first digit
+  and became 1200. A press on the slide lets go of the field (`releasesTyping`). **Undo restyle** puts back the look
+  only (`EditorEdits.restoreLook`: theme, backgrounds, fills, borders, faces, colours, matched by id); slides, words
+  and notes made since stay. **Quitting writes the presentation now** (`Presentations.flushNow`, on the calling
+  thread, from every window close, the Mac's Quit and Android's `onStop`; `NeueHolders.flushPresent`), and a save
+  never writes back an older version than the file holds.
+- **The bar folds at every width** (`core/layout/ToolFold`, tested): each tool has a rank, the least used go into ⋯
+  first, and Back, the name, Export and **Present** never fold. Present is a split button — its face presents from
+  this slide, its arrow opens From the start, Rehearse and the presenter view. Restyle with Ai lives in Style ▾. The
+  panel's tabs scroll sideways; the Builds tab's buttons wrap.
+- **One camera, moved by the slide** (`core/present/stage/SlideCamera`). The Big camera layout and Insert ▾ → Camera
+  move the real zone: `Slide.camera = CUSTOM` with `Slide.cameraBox`, so the stage and every stage-anchored element
+  re-flow round it. A click on the camera picks it — dragged, sized by its handles, nudged by the arrows, numbers in
+  the Item tab, hidden with Delete; the Slide tab offers "A box of its own". The Camera *element* (which only drew a
+  second frame, even with the webcam off) is folded into the slide's own box wherever one appears: a file opened
+  (`PresentCodec.decode`), every edit (`Presentations.put`, so Ai's `add_element` and an old paste too).
+  `OldDataTest` holds the 1.0.70 shape. **Inserted things land on the stage**, beside the camera, never under it
+  (`EditorEdits.placeIn`).
+- **The gestures the help prints are what the canvas does.** Every press is described as a `PresentPress` and acted
+  on by `PresentGestures.classify` (core); `PresentInputTest` reads every row of `PresentMouse` and `PresentTouch` into
+  a press and checks it does what the row says. So: **zoom** (`SlideZoom`: Ctrl wheel round the pointer, a pinch,
+  Ctrl Alt = / - / 0 — `PRESENT_ZOOM_IN/OUT/FIT` — and the − / % / + / Fit over the slide; the wheel and two fingers
+  move a zoomed slide); **slides picked in the sorter** (`SlidePicks`: Shift a run, Ctrl one more, a finger with
+  Select several; copy, duplicate, delete, hide and a drag act on all of them); **a held finger opens the menus** on
+  the slide and in the sorter; **Select several** and **Keep shape** switches over the slide on a touch screen;
+  **Duplicate, then drag** carries the copy; a finger drags a slide **by its number** so the list still scrolls, and
+  the list scrolls under a carried row at its edges; **a picture dropped on the slide** is added; **sections are
+  named** in place in the sorter and on the Slide tab.
+- **Delete takes slides only from the sorter.** With nothing selected on the slide, Delete deletes the slides
+  picked in the list when the list was pressed last; otherwise it says what it would need.
+- **Morph is named what it did**: it drew a fade, so the Slide tab offers Cut, Fade, Push, Cover and Zoom; a stored
+  `MORPH` reads and plays as Fade (`Transition.OFFERED`). Elements travelling between slides is not built.
+- **Your name is on the slides**: `EditorEdits.setCreator` rewrites "Deck profile · name" and the old name as a word
+  on the title and end slides as it is typed.
+- **Words for someone new**: a line over the slide says what a click does here; "On the slide" (the deck tab's note,
+  everyone sees it) and "Speaker notes · only you see them"; "Notes on N of M · Rehearsed" over the notes jumps to
+  what it names; a deck slide's cards toggle focus on a click whenever nothing is selected, whichever tab is open; the
+  Item tab lists what is on the slide when nothing is selected; the Theme tab's faces are labelled Headings and
+  Words; the camera says plainly that recording is coming and that Green screen and OBS record today; Big number,
+  Table and Chart arrive as visible blanks (`Placeholders`), flagged until filled in; "Slides from groups" asks
+  before replacing deck slides that hold work, and switching style moves the whole-deck step
+  (`EditorEdits.retell`); the New dialog can profile the builder's open deck unsaved.
+- **Android keeps the screen awake while presenting** (`MainActivity`, `keepOn`), and again after the app returns.
+- Not done here: the phone held upright still has no canvas (Present lies the phone down), and elements do not
+  morph between slides.
+
+**Pictures**: `tools/shoot.sh --page=present --present=demo --present-slide=N --present-mode=library|edit|play|overview|notes|new
 --present-style=spotlight|slides|buildup --present-theme=arena|neon|… --present-webcam=tr|tl|br|bl|left|right|off
---present-frames=N,K`.
+--present-frames=N,K`; the editor's states (`studio/PresentStudio.kt`): `--present-tab=SLIDE|ELEMENT|ANIMATE|DECK|THEME`,
+`--present-select=N`, `--present-camera=big|custom`, `--present-insert=row|chart|table|number`, `--present-zoom=2`,
+`--present-picks=1,2,3`, `--present-section=N`, `--present-confirm=groups`, `--present-more=true`; and `--touch=true`
+draws a touch screen's idioms on the desk.
 
 ### 4p. Duel: the duel simulator (1.0.74–)
 

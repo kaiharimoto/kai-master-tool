@@ -3,7 +3,11 @@ package com.kaiharimoto.neue.present
 import com.kaiharimoto.mastertool.core.present.Element
 import com.kaiharimoto.mastertool.core.present.Geometry
 import com.kaiharimoto.mastertool.core.present.RunStyle
+import com.kaiharimoto.mastertool.core.present.Slide
+import com.kaiharimoto.mastertool.core.present.edit.EditorEdits
 import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
+import com.kaiharimoto.mastertool.core.present.stage.Box as CanvasBox
+import com.kaiharimoto.mastertool.core.present.stage.SlideCamera
 import com.kaiharimoto.mastertool.core.present.edit.RichText
 import com.kaiharimoto.mastertool.core.present.edit.SlideClip
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
@@ -30,11 +34,14 @@ internal fun copy(h: NeueHolders) {
         Platform.copy(SlideClip.elements(els))
         h.neue.note = Note(if (els.size == 1) "Copied" else "Copied ${els.size}")
     } else {
-        val s = present.slide ?: return
-        present.clipboardSlides = listOf(s)
+        val p = present.open ?: return
+        // The slides picked in the sorter, or the one in view.
+        val slides = present.pickedSlides.mapNotNull { p.slide(it) }.ifEmpty { listOfNotNull(present.slide) }
+        if (slides.isEmpty()) return
+        present.clipboardSlides = slides
         present.clipboard = emptyList()
-        Platform.copy(SlideClip.slides(listOf(s)))
-        h.neue.note = Note("Copied the slide")
+        Platform.copy(SlideClip.slides(slides))
+        h.neue.note = Note(if (slides.size == 1) "Copied the slide" else "Copied ${slides.size} slides")
     }
 }
 
@@ -77,26 +84,66 @@ internal fun duplicate(h: NeueHolders) {
         val (next, ids) = PresentEdits.duplicateElements(p, slide.id, present.selection)
         present.commit(next, "Duplicate")
         present.selection = ids.toSet()
+        // A finger's Alt drag: the copy is selected, and the next drag carries it.
+        present.justDuplicated = true
     } else {
-        val next = PresentEdits.duplicateSlides(p, setOf(slide.id))
-        present.commit(next, "Duplicate slide")
+        val picked = present.pickedSlides.toSet().ifEmpty { setOf(slide.id) }
+        val next = PresentEdits.duplicateSlides(p, picked)
+        present.commit(next, if (picked.size == 1) "Duplicate slide" else "Duplicate ${picked.size} slides")
         present.slideId = next.slides.getOrNull(next.indexOf(slide.id) + 1)?.id
+        present.slidesPicked = emptySet()
     }
 }
 
+/**
+ * Delete: the selection on the slide; the camera picked (it is hidden on this slide); or, only when the
+ * sorter was pressed last, the slides picked there (the editor's audit, R1: one Backspace after a click
+ * on the canvas used to take the whole slide).
+ */
 internal fun deleteSelection(h: NeueHolders) {
     val present = h.present
     val p = present.open ?: return
     val slide = present.slide ?: return
-    if (present.selection.isNotEmpty()) {
-        present.commit(PresentEdits.removeElements(p, slide.id, present.selection), "Delete")
-        present.selection = emptySet()
-    } else if (p.slides.size > 1) {
-        val at = present.slideIndex
-        val next = PresentEdits.removeSlides(p, setOf(slide.id))
-        present.commit(next, "Delete slide")
-        present.slideId = next.slides.getOrNull(at.coerceAtMost(next.slides.lastIndex))?.id
+    when {
+        present.selection.isNotEmpty() -> {
+            present.commit(PresentEdits.removeElements(p, slide.id, present.selection), "Delete")
+            present.selection = emptySet()
+        }
+        present.cameraPicked -> {
+            present.commit(PresentEdits.updateSlide(p, slide.id) { it.copy(camera = Slide.CAMERA_HIDDEN, cameraBox = null) }, "Hide the camera here")
+            present.cameraPicked = false
+            h.neue.note = Note("The camera is hidden on this slide: the Slide tab brings it back")
+        }
+        present.sorterFocused -> deleteSlides(h)
+        else -> h.neue.note = Note("Select something to delete, or a slide in the list")
     }
+}
+
+/** The slides picked in the sorter, or the one in view; a presentation keeps one slide. */
+internal fun deleteSlides(h: NeueHolders) {
+    val present = h.present
+    val p = present.open ?: return
+    val ids = present.pickedSlides.toSet().ifEmpty { setOfNotNull(present.slide?.id) }
+    if (ids.isEmpty()) return
+    if (ids.size >= p.slides.size) {
+        h.neue.note = Note("A presentation keeps one slide")
+        return
+    }
+    val at = present.slideIndex
+    val next = PresentEdits.removeSlides(p, ids)
+    present.commit(next, if (ids.size == 1) "Delete slide" else "Delete ${ids.size} slides")
+    present.slideId = next.slides.getOrNull(at.coerceAtMost(next.slides.lastIndex))?.id
+    present.slidesPicked = emptySet()
+}
+
+/**
+ * Where something [w] × [h] (canvas units) is put on the slide in view: on its stage, the room the
+ * camera leaves, centred and shrunk to fit (the editor's audit, I5) — never under the camera.
+ */
+internal fun insertBox(h: NeueHolders, w: Float, hh: Float): CanvasBox {
+    val present = h.present
+    val p = present.open ?: return CanvasBox(0f, 0f, w, hh)
+    return EditorEdits.placeIn(CompiledShow(p).stage(present.slideIndex), w, hh)
 }
 
 internal fun selectAll(h: NeueHolders) {
@@ -131,6 +178,11 @@ internal fun nudge(h: NeueHolders, dx: Float, dy: Float) {
     val present = h.present
     val p = present.open ?: return
     val slide = present.slide ?: return
+    if (present.selection.isEmpty() && present.cameraPicked) {
+        val zone = SlideCamera.zone(p, slide) ?: return
+        present.commit(PresentEdits.updateSlide(p, slide.id) { SlideCamera.moved(it, zone.copy(x = zone.x + dx, y = zone.y + dy)) }, "Move the camera", coalesce = "nudge")
+        return
+    }
     if (present.selection.isEmpty()) {
         val step = if (dx + dy > 0) 1 else -1
         p.slides.getOrNull(present.slideIndex + step)?.let { present.slideId = it.id }

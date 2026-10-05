@@ -79,11 +79,12 @@ internal fun CardPicker(h: NeueHolders) {
             }
             else -> if (picked.isNotEmpty()) {
                 val e = if (picked.size == 1 && target == PickTarget.NEW) {
-                    Element(newElementId(), Element.CARD, 760f, 180f, 400f, 720f, cards = picked)
+                    Element(newElementId(), Element.CARD, 0f, 0f, 400f, 720f, cards = picked)
                 } else {
-                    Element(newElementId(), Element.CARDS, 160f, 260f, 1600f, 620f, cards = picked, cardLabels = true)
+                    Element(newElementId(), Element.CARDS, 0f, 0f, 1600f, 620f, cards = picked, cardLabels = true)
                 }
-                insertElement(h, e)
+                // On the stage, beside the camera (I5: the fourth card's name used to land under it).
+                insertSized(h, e)
             }
         }
         present.pickingCards = null

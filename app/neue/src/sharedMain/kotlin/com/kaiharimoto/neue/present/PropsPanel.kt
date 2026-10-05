@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,8 +49,11 @@ import com.kaiharimoto.mastertool.core.present.Theme
 import com.kaiharimoto.mastertool.core.present.ThemeOverride
 import com.kaiharimoto.mastertool.core.present.Themes
 import com.kaiharimoto.mastertool.core.present.Transition
+import com.kaiharimoto.mastertool.core.present.Placeholders
 import com.kaiharimoto.mastertool.core.present.edit.Align
+import com.kaiharimoto.mastertool.core.present.edit.EditorEdits
 import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
+import com.kaiharimoto.mastertool.core.present.stage.SlideCamera
 import com.kaiharimoto.mastertool.core.present.play.CompiledShow
 import com.kaiharimoto.mastertool.core.present.stage.WebcamLayout
 import com.kaiharimoto.mastertool.core.present.stage.WebcamZone
@@ -61,6 +66,7 @@ import com.kaiharimoto.neue.kit.FieldLabel
 import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.IconButton
+import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
@@ -96,7 +102,8 @@ internal fun PropsPanel(h: NeueHolders, p: Presentation, slide: Slide, ctx: Slid
     val scroll = rememberScrollState()
     val tabs = PropsTab.entries
     Column(modifier) {
-        Box(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+        // The tabs scroll sideways where the panel is narrow (B11: on a phone Theme was off its edge).
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp)) {
             MuTabs(present.tab, tabs, { it.title }, { present.tab = it })
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -183,7 +190,12 @@ private fun SlideProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Slide
         MuSlider(bg.scrim, { v -> commitSlide(h, slide, "Background", "scrim") { it.copy(background = bg.copy(scrim = v)) } }, Modifier.fillMaxWidth(), 0f..0.9f, name = "Darken")
     }
     FieldLabel("Transition", hint = "how this slide arrives")
-    MuSelect(slide.transition.kind, Transition.KINDS, Transition::kindName, { k -> commitSlide(h, slide, "Transition") { it.copy(transition = it.transition.copy(kind = k)) } }, Modifier.fillMaxWidth(), small = true)
+    // Morph drew a fade, so it is offered as what it is (M7); a slide that has it shows Fade.
+    val arrives = slide.transition.kind.let { if (it in Transition.OFFERED) it else Transition.FADE }
+    MuSelect(arrives, Transition.OFFERED, Transition::kindName, { k -> commitSlide(h, slide, "Transition") { it.copy(transition = it.transition.copy(kind = k)) } }, Modifier.fillMaxWidth(), small = true)
+    if (p.slides.getOrNull(p.indexOf(slide.id) - 1)?.deck != null && slide.deck != null) {
+        Help("Between two deck slides the deck itself glides, whatever the transition.")
+    }
     if (slide.transition.kind == Transition.PUSH || slide.transition.kind == Transition.COVER) {
         Segmented(slide.transition.direction, listOf(Transition.LEFT, Transition.RIGHT, Transition.UP, Transition.DOWN), { it.lowercase().replaceFirstChar(Char::uppercase) }, { d ->
             commitSlide(h, slide, "Transition") { it.copy(transition = it.transition.copy(direction = d)) }
@@ -192,10 +204,18 @@ private fun SlideProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Slide
     Small("${slide.transition.durationMs} ms")
     MuSlider(slide.transition.durationMs.toFloat(), { v -> commitSlide(h, slide, "Transition", "dur") { it.copy(transition = it.transition.copy(durationMs = v.roundToInt())) } }, Modifier.fillMaxWidth(), 150f..1500f, name = "Length")
     MuButton("Use on every slide", { val p2 = h.present.open ?: return@MuButton; h.present.commit(p2.copy(slides = p2.slides.map { it.copy(transition = slide.transition) }), "Transition everywhere") }, size = BtnSize.SM, variant = BtnVariant.GHOST)
-    if (p.webcam.enabled) {
-        FieldLabel("Camera on this slide")
-        val options = listOf(Slide.CAMERA_DEFAULT, Slide.CAMERA_HIDDEN) + WebcamZone.PRESETS.filter { it != WebcamZone.CUSTOM }
-        MuSelect(slide.camera, options, { when (it) { Slide.CAMERA_DEFAULT -> "Where it always is"; Slide.CAMERA_HIDDEN -> "Hidden"; else -> WebcamZone.presetName(it) } }, { v -> commitSlide(h, slide, "Camera") { it.copy(camera = v) } }, Modifier.fillMaxWidth(), small = true)
+    SlideCameraField(h, p, slide)
+    FieldLabel("Section", hint = "a heading in the list")
+    if (slide.section == null) {
+        MuButton("Start a section here", {
+            commitSlide(h, slide, "Section") { it.copy(section = "New section") }
+            h.present.namingSection = slide.id
+        }, size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.Plus)
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            MuInput(slide.section.orEmpty(), { v -> commitSlide(h, slide, "Name the section", "section-${slide.id}") { it.copy(section = v) } }, Modifier.weight(1f), dense = true, placeholder = "Section name")
+            IconButton(Icons.X, { commitSlide(h, slide, "Section") { it.copy(section = null) } }, label = "End the section")
+        }
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         MuSwitch(slide.hidden, { v -> commitSlide(h, slide, "Hide slide") { it.copy(hidden = v) } })
@@ -209,6 +229,60 @@ private fun SlideProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Slide
     }
 }
 
+/** The camera's promise, said plainly until it can be kept (the audit's newcomer item 1). */
+internal const val CAMERA_NOTE = "Your camera goes here when you record. Recording is coming; for now choose Green screen in the Theme tab and record with OBS."
+
+/** Where the camera stands on this slide: the presentation's place, hidden, a corner, or a box of its own (B6). */
+@Composable
+private fun SlideCameraField(h: NeueHolders, p: Presentation, slide: Slide) {
+    FieldLabel("Camera on this slide")
+    if (!p.webcam.enabled) {
+        Help("The webcam is off for this presentation.")
+        MuButton("Turn the webcam on", { pickCamera(h) }, size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.Camera)
+        return
+    }
+    val options = listOf(Slide.CAMERA_DEFAULT, Slide.CAMERA_HIDDEN) + WebcamZone.PRESETS.filter { it != WebcamZone.CUSTOM } + Slide.CAMERA_CUSTOM
+    MuSelect(slide.camera, options, ::cameraName, { v ->
+        if (v == Slide.CAMERA_CUSTOM) {
+            // Its own box starts where the camera stands now, to be dragged from there.
+            val now = SlideCamera.zone(p, slide) ?: SlideCamera.BIG
+            commitSlide(h, slide, "Camera") { SlideCamera.moved(it, now) }
+            h.present.cameraPicked = true
+        } else {
+            commitSlide(h, slide, "Camera") { it.copy(camera = v, cameraBox = null) }
+        }
+    }, Modifier.fillMaxWidth(), small = true)
+    Help("Click the camera on the slide to drag it where it should stand here; the rest of the slide makes room. $CAMERA_NOTE")
+}
+
+private fun cameraName(v: String): String = when (v) {
+    Slide.CAMERA_DEFAULT -> "Where it always is"
+    Slide.CAMERA_HIDDEN -> "Hidden"
+    Slide.CAMERA_CUSTOM -> "A box of its own"
+    else -> WebcamZone.presetName(v)
+}
+
+/** The camera picked on the slide: where it stands here, by numbers too. */
+@Composable
+private fun CameraProps(h: NeueHolders, p: Presentation, slide: Slide) {
+    Micro("Camera", color = Mu.colors.ink70)
+    val zone = SlideCamera.zone(p, slide)
+    if (zone != null) key(slide.id) {
+        FieldLabel("Where it stands here", hint = "canvas 1920 × 1080; Enter sets it")
+        fun put(b: com.kaiharimoto.mastertool.core.present.stage.Box) = commitSlide(h, slide, "Move the camera") { SlideCamera.moved(it, b) }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            NumberField("X", zone.x, Modifier.weight(1f)) { put(zone.copy(x = it)) }
+            NumberField("Y", zone.y, Modifier.weight(1f)) { put(zone.copy(y = it)) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            NumberField("W", zone.w, Modifier.weight(1f), min = SlideCamera.MIN) { put(zone.copy(w = it)) }
+            NumberField("H", zone.h, Modifier.weight(1f), min = SlideCamera.MIN) { put(zone.copy(h = it)) }
+        }
+    }
+    SlideCameraField(h, p, slide)
+    Help("Moving it here moves it on this slide only; the Theme tab sets where it stands on every slide, its shape and its border.")
+}
+
 // ---- the element -------------------------------------------------------------------------
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -216,27 +290,48 @@ private fun SlideProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Slide
 private fun ElementProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: SlideContext) {
     val present = h.present
     val c = Mu.colors
+    val show = remember(p) { CompiledShow(p) }
     val sel = slide.elements.filter { it.id in present.selection }
+    if (present.cameraPicked && sel.isEmpty()) {
+        CameraProps(h, p, slide)
+        return
+    }
     if (sel.isEmpty()) {
-        Help("Select something on the slide to change it: click it, Shift-click for more, or drag a box round several.")
+        // Nothing selected (the audit's newcomer item 7): what is on the slide, each a tap away.
+        Help("Select something to change it: ${if (LocalTouchFirst.current) "tap it, or turn on Select several for more" else "click it, Shift-click for more, or drag a box round several"}. Or pick it here.")
+        slide.elements.asReversed().forEach { el ->
+            Row(
+                Modifier.fillMaxWidth().border(1.dp, c.ink12).cursorPointer(label = "Select it").muClickable { present.selection = present.groupOf(el.id); present.cameraPicked = false }.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Micro(Element.typeName(el.type), Modifier.width(64.dp), color = c.ink70)
+                Small(el.plainText.ifBlank { el.stat?.value ?: el.cards.mapNotNull { ctx.cards(it)?.name }.firstOrNull() ?: "" }.take(40), Modifier.weight(1f), maxLines = 1)
+                if (Placeholders.untouched(el)) Micro("Fill in", color = c.ink)
+            }
+        }
+        if (p.webcam.enabled && show.zone(present.slideIndex) != null) {
+            MuButton("The camera", { pickCamera(h) }, Modifier.fillMaxWidth(), size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.Camera)
+        }
+        if (slide.elements.isEmpty()) Small("This slide has nothing on it yet: Text, Shape, Picture, Card and Insert in the bar add something.", color = c.ink45)
         return
     }
     val ids = sel.map { it.id }.toSet()
     val e = sel.first()
-    val show = remember(p) { CompiledShow(p) }
     val stage = show.stage(present.slideIndex)
     val box = Geometry.box(e, stage)
     Micro(if (sel.size == 1) Element.typeName(e.type) else "${sel.size} selected", color = c.ink70)
+    if (sel.any(Placeholders::untouched)) Help("This still shows a placeholder: fill it in before the slide goes out.")
 
-    if (sel.size == 1) {
-        FieldLabel("Position and size", hint = "canvas 1920 × 1080")
+    if (sel.size == 1) key(e.id) {
+        FieldLabel("Position and size", hint = "canvas 1920 × 1080; Enter sets it")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             NumberField("X", box.x, Modifier.weight(1f)) { v -> commitElements(h, slide, ids, "Move") { Geometry.place(it, box.copy(x = v), stage) } }
             NumberField("Y", box.y, Modifier.weight(1f)) { v -> commitElements(h, slide, ids, "Move") { Geometry.place(it, box.copy(y = v), stage) } }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            NumberField("W", box.w, Modifier.weight(1f)) { v -> commitElements(h, slide, ids, "Resize") { Geometry.place(it, box.copy(w = v.coerceAtLeast(12f)), stage) } }
-            NumberField("H", box.h, Modifier.weight(1f)) { v -> commitElements(h, slide, ids, "Resize") { Geometry.place(it, box.copy(h = v.coerceAtLeast(12f)), stage) } }
+            NumberField("W", box.w, Modifier.weight(1f), min = 12f) { v -> commitElements(h, slide, ids, "Resize") { Geometry.place(it, box.copy(w = v), stage) } }
+            NumberField("H", box.h, Modifier.weight(1f), min = 12f) { v -> commitElements(h, slide, ids, "Resize") { Geometry.place(it, box.copy(h = v), stage) } }
             NumberField("°", e.rotation, Modifier.weight(1f)) { v -> commitElements(h, slide, ids, "Turn") { it.copy(rotation = ((v % 360f) + 360f) % 360f) } }
         }
     }
@@ -288,7 +383,7 @@ private fun ElementProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Sli
             FieldLabel("Shape")
             MuSelect(e.shape, listOf(Element.SHAPE_RECT, Element.SHAPE_ROUNDED, Element.SHAPE_ELLIPSE, Element.SHAPE_DIAMOND, Element.SHAPE_STAR), Element::shapeName, { v -> commitElements(h, slide, ids, "Mask") { it.copy(shape = v, corner = if (v == Element.SHAPE_ROUNDED) 32f else it.corner) } }, Modifier.fillMaxWidth(), small = true)
             BorderAndShadow(h, slide, ids, e, ctx)
-            Help("A picture can be pasted (Ctrl V) or dropped on the slide too.")
+            Help("A picture can be pasted (Ctrl V) or dropped on the slide too: it comes in as a new picture.")
         }
         Element.CARD, Element.CARDS -> {
             FieldLabel(if (e.type == Element.CARD) "Card" else "Cards")
@@ -349,7 +444,6 @@ private fun ElementProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Sli
                 commitElements(h, slide, ids, "Deck") { it.copy(focus = f.copy(all = true, sections = if (v == "ALL") emptyList() else listOf(v))) }
             }, small = true)
         }
-        Element.CAMERA -> Help("Where the webcam stands on this slide. Its shape and border are the theme's camera settings.")
     }
     if (sel.size == 1) {
         FieldLabel("When clicked while presenting")
@@ -365,12 +459,35 @@ private fun distribute(h: NeueHolders, slide: Slide, sel: List<Element>, stage: 
     commitElements(h, slide, byId.keys, "Distribute") { el -> byId[el.id]?.let { Geometry.place(el, it, stage) } ?: el }
 }
 
+/**
+ * A number typed (the editor's audit, B1): the words are the field's own while it has focus, and the
+ * number is read once — on Enter, or as the field is let go — held within [min]..[max], one step of
+ * Undo. Read on every key, typing 500 into W gave 1200: "5" was clamped to 12 at once, and the field
+ * was rewritten under the typing.
+ */
 @Composable
-private fun NumberField(label: String, value: Float, modifier: Modifier, onChange: (Float) -> Unit) {
-    var text by remember(value) { mutableStateOf(value.roundToInt().toString()) }
+internal fun NumberField(label: String, value: Float, modifier: Modifier, min: Float = -Float.MAX_VALUE, max: Float = Float.MAX_VALUE, onChange: (Float) -> Unit) {
+    val shown = value.roundToInt().toString()
+    var text by remember { mutableStateOf(shown) }
+    var focused by remember { mutableStateOf(false) }
+    // While it is not being typed in, it shows the value as it stands (a drag on the slide, an Undo).
+    if (!focused && text != shown) text = shown
+    fun commit() {
+        val v = EditorEdits.number(text, min, max)
+        if (v != null && v.roundToInt() != value.roundToInt()) onChange(v)
+        text = (v ?: value).roundToInt().toString()
+    }
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Mono(label, color = Mu.colors.ink45)
-        MuInput(text, { v -> text = v; v.toFloatOrNull()?.let(onChange) }, Modifier.weight(1f), dense = true, mono = true)
+        MuInput(
+            text, { v -> text = v }, Modifier.weight(1f), dense = true, mono = true,
+            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            onFocusChange = { f ->
+                if (focused && !f) commit()
+                focused = f
+            },
+            onSubmit = ::commit,
+        )
     }
 }
 
@@ -484,6 +601,7 @@ private fun TextProps(h: NeueHolders, slide: Slide, ids: Set<String>, e: Element
 
 // ---- builds ------------------------------------------------------------------------------
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AnimateProps(h: NeueHolders, p: Presentation, slide: Slide) {
     val present = h.present
@@ -492,7 +610,8 @@ private fun AnimateProps(h: NeueHolders, p: Presentation, slide: Slide) {
     val all = slide.elements.flatMap { e -> e.animations.map { e to it } }.sortedWith(compareBy({ it.second.order }, { it.second.id }))
     FieldLabel("Add to the selection")
     if (sel.isEmpty()) Help("Select something on the slide to make it come in, draw the eye, or go.")
-    else Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Wrapped, so Go is never cut off by the panel's edge (B13).
+    else FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         listOf(Anim.ENTRANCE to "Come in", Anim.EMPHASIS to "Draw the eye", Anim.EXIT to "Go").forEach { (kind, word) ->
             MuButton(word, {
                 var order = (all.maxOfOrNull { it.second.order } ?: -1) + 1
@@ -565,7 +684,8 @@ private fun DeckProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: SlideC
             Row(
                 Modifier.fillMaxWidth().border(if (st == p.style) 2.dp else 1.dp, if (st == p.style) c.ink else c.ink12)
                     .cursorPointer(label = Presentation.styleName(st))
-                    .muClickable { present.commit(p.copy(style = st), "Style") }
+                    // The whole-deck step moves with the style: Build-up ends on it, the others open with it (I9).
+                    .muClickable { present.commit(EditorEdits.retell(p, st), "Style") }
                     .padding(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -583,7 +703,11 @@ private fun DeckProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: SlideC
         return
     }
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        MuButton("Slides from groups", { present.commit(PresentEdits.stepsFromGroups(p), "Deck slides from groups") }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+        // It replaces every deck slide: asked first when they hold work of the person's (I9).
+        MuButton("Slides from groups", {
+            if (EditorEdits.deckSlidesHoldWork(p)) present.confirmFromGroups = true
+            else present.commit(PresentEdits.stepsFromGroups(p), "Deck slides from groups")
+        }, size = BtnSize.SM, variant = BtnVariant.GHOST)
         MuButton("Deck slide", { addSlide(h, SlideLayouts.DECK) }, size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.Plus)
     }
     val focus = slide.deck
@@ -593,8 +717,9 @@ private fun DeckProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: SlideC
     }
     FieldLabel("This step")
     MuInput(focus.title, { t -> commitSlide(h, slide, "Step", "step-${slide.id}") { it.copy(title = t, deck = focus.copy(title = t)) } }, Modifier.fillMaxWidth(), dense = true, placeholder = "What this step is about")
-    FieldLabel("The note", hint = "beside the deck")
-    NotesField(focus.note, { t -> commitSlide(h, slide, "Note", "note-${slide.id}") { it.copy(deck = focus.copy(note = t)) } }, "Why these cards, in a sentence or two.")
+    // Two kinds of note (the audit's newcomer item 5): this one is drawn on the slide; speaker notes are private.
+    FieldLabel("On the slide", hint = "a note beside the deck, everyone sees it")
+    NotesField(focus.note, { t -> commitSlide(h, slide, "Note", "note-${slide.id}") { it.copy(deck = focus.copy(note = t)) } }, "Why these cards, in a sentence or two. What only you should see goes in the speaker notes under the slide.")
     Segmented(focus.notePlace, listOf(DeckFocus.NOTE_AUTO, DeckFocus.NOTE_SIDE, DeckFocus.NOTE_BOTTOM, DeckFocus.NOTE_NONE), { when (it) { DeckFocus.NOTE_SIDE -> "Side"; DeckFocus.NOTE_BOTTOM -> "Under"; DeckFocus.NOTE_NONE -> "None"; else -> "Auto" } }, { v ->
         commitSlide(h, slide, "Note place") { it.copy(deck = focus.copy(notePlace = v)) }
     }, small = true)
@@ -612,7 +737,7 @@ private fun DeckProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: SlideC
             }
         }
     }
-    Help("Or click cards on the slide (with this tab open), or below.")
+    Help(if (LocalTouchFirst.current) "Or tap cards on the slide with nothing selected, or below." else "Or click cards on the slide with nothing selected, or below.")
     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         deck.distinct.forEach { id ->
             val card = ctx.cards(id) ?: return@forEach
@@ -673,9 +798,16 @@ private fun ThemeProps(h: NeueHolders, p: Presentation, ctx: SlideContext) {
             }, Modifier.weight(1f))
         }
     }
+    // Each face named for what it sets (I7).
     FieldLabel("Faces")
-    MuSelect(ctx.theme.headingFont, SlideFonts.all, SlideFonts::name, { v -> present.commit(p.copy(themeOverride = o.copy(headingFont = v)), "Heading face") }, Modifier.fillMaxWidth(), small = true)
-    MuSelect(ctx.theme.bodyFont, SlideFonts.all, SlideFonts::name, { v -> present.commit(p.copy(themeOverride = o.copy(bodyFont = v)), "Body face") }, Modifier.fillMaxWidth(), small = true)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Small("Headings", Modifier.width(72.dp))
+        MuSelect(ctx.theme.headingFont, SlideFonts.all, SlideFonts::name, { v -> present.commit(p.copy(themeOverride = o.copy(headingFont = v)), "Heading face") }, Modifier.weight(1f), small = true)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Small("Words", Modifier.width(72.dp))
+        MuSelect(ctx.theme.bodyFont, SlideFonts.all, SlideFonts::name, { v -> present.commit(p.copy(themeOverride = o.copy(bodyFont = v)), "Body face") }, Modifier.weight(1f), small = true)
+    }
     Small("Cards not talked about: ${(ctx.theme.dim * 100).roundToInt()}% bright")
     MuSlider(ctx.theme.dim, { v -> present.commit(p.copy(themeOverride = o.copy(dim = v)), "Dimming", "dim") }, Modifier.fillMaxWidth(), 0.05f..0.8f, name = "Dimming")
 
@@ -686,6 +818,7 @@ private fun ThemeProps(h: NeueHolders, p: Presentation, ctx: SlideContext) {
         MuSwitch(z.enabled, { put(z.copy(enabled = it)) })
         Small(if (z.enabled) "On" else "Off")
     }
+    if (z.enabled) Help("$CAMERA_NOTE A slide can move or hide it: its Slide tab, or drag it on the slide.")
     if (z.enabled) {
         MuSelect(z.preset, WebcamZone.PRESETS, WebcamZone::presetName, { v ->
             put(z.copy(preset = v, box = if (v == WebcamZone.CUSTOM) (WebcamLayout.zone(z) ?: z.box) else z.box))
@@ -699,8 +832,8 @@ private fun ThemeProps(h: NeueHolders, p: Presentation, ctx: SlideContext) {
                 NumberField("Y", b.y, Modifier.weight(1f)) { put(z.copy(box = b.copy(y = it))) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                NumberField("W", b.w, Modifier.weight(1f)) { put(z.copy(box = b.copy(w = it))) }
-                NumberField("H", b.h, Modifier.weight(1f)) { put(z.copy(box = b.copy(h = it))) }
+                NumberField("W", b.w, Modifier.weight(1f), min = SlideCamera.MIN) { put(z.copy(box = b.copy(w = it))) }
+                NumberField("H", b.h, Modifier.weight(1f), min = SlideCamera.MIN) { put(z.copy(box = b.copy(h = it))) }
             }
         }
         FieldLabel("Border")
@@ -708,8 +841,10 @@ private fun ThemeProps(h: NeueHolders, p: Presentation, ctx: SlideContext) {
         MuSlider(z.borderWidth, { put(z.copy(borderWidth = it)) }, Modifier.fillMaxWidth(), 0f..24f, name = "Border width")
         FieldLabel("Before the camera is live", hint = "in the editor and for your own recorder")
         Segmented(z.fill, listOf(WebcamZone.FILL_THEME, WebcamZone.FILL_CHROMA, WebcamZone.FILL_NONE), { when (it) { WebcamZone.FILL_CHROMA -> "Green screen"; WebcamZone.FILL_NONE -> "Clear"; else -> "Panel" } }, { put(z.copy(fill = it)) }, small = true)
-        Help("Green screen fills the zone with keying green, so a recorder of your own (OBS) can put your camera there.")
+        Help("Green screen fills the zone with keying green, so a recorder of your own (OBS) can put your camera there. Clear leaves the slide showing through.")
     }
-    FieldLabel("Your name", hint = "title and end slides")
-    MuInput(p.creator, { v -> present.commit(p.copy(creator = v), "Name", "creator") }, Modifier.fillMaxWidth(), dense = true)
+    // Written onto the title and end slides where the old name stood (B4); words written by hand stay.
+    FieldLabel("Your name", hint = "on the title slide")
+    MuInput(p.creator, { v -> present.commit(EditorEdits.setCreator(p, v), "Name", "creator") }, Modifier.fillMaxWidth(), dense = true, placeholder = "Channel or handle")
+    Help("Changing it rewrites \"Deck profile · ${p.creator.ifBlank { "your name" }}\" on the title slide, and your old name wherever it stands on the title and end slides.")
 }

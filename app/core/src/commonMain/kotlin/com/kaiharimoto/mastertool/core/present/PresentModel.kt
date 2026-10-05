@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.present
 
+import com.kaiharimoto.mastertool.core.present.stage.Box
 import com.kaiharimoto.mastertool.core.present.stage.WebcamZone
 import kotlinx.serialization.Serializable
 
@@ -159,13 +160,21 @@ data class Slide(
     val notes: String = "",
     /** Rehearsed or set time on this slide, ms. */
     val durationMs: Long? = null,
-    /** The webcam on this slide: [CAMERA_DEFAULT], [CAMERA_HIDDEN], or a preset that moves it here. */
+    /**
+     * The webcam on this slide: [CAMERA_DEFAULT], [CAMERA_HIDDEN], a preset that moves it here, or
+     * [CAMERA_CUSTOM] — the box in [cameraBox], dragged on the slide or set by the Big camera layout.
+     */
     val camera: String = CAMERA_DEFAULT,
     val hidden: Boolean = false,
     /** A module this slide was made by (phase 2), kept so it can be refreshed. */
     val module: ModuleRef? = null,
     /** The section heading in the sorter this slide begins, if any. */
     val section: String? = null,
+    /**
+     * Where the webcam stands on this slide when [camera] is [CAMERA_CUSTOM], in canvas units. Before
+     * it, a Camera element drew a second frame and never moved the zone (`SlideCamera.fold` reads one).
+     */
+    val cameraBox: Box? = null,
 ) {
     fun element(id: String?): Element? = id?.let { wanted -> elements.firstOrNull { it.id == wanted } }
 
@@ -174,6 +183,9 @@ data class Slide(
     companion object {
         const val CAMERA_DEFAULT = "DEFAULT"
         const val CAMERA_HIDDEN = "HIDDEN"
+
+        /** The camera in a box of this slide's own ([cameraBox]). */
+        const val CAMERA_CUSTOM = "CUSTOM"
     }
 }
 
@@ -540,8 +552,15 @@ data class Transition(
         const val PUSH = "PUSH"
         const val COVER = "COVER"
         const val ZOOM = "ZOOM"
+        /**
+         * Written by 1.0.70–1.1.x and still read, but no longer offered: it drew exactly a fade (between
+         * two deck slides the deck glides whatever the transition), so it is called what it does.
+         */
         const val MORPH = "MORPH"
         val KINDS = listOf(NONE, FADE, PUSH, COVER, ZOOM, MORPH)
+
+        /** What the Slide tab offers: every kind that looks different from the others. */
+        val OFFERED = listOf(NONE, FADE, PUSH, COVER, ZOOM)
 
         const val LEFT = "LEFT"
         const val RIGHT = "RIGHT"
@@ -553,7 +572,6 @@ data class Transition(
             PUSH -> "Push"
             COVER -> "Cover"
             ZOOM -> "Zoom"
-            MORPH -> "Morph"
             else -> "Fade"
         }
     }

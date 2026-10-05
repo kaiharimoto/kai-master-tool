@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.present
 
 import com.kaiharimoto.mastertool.core.present.stage.Box
+import com.kaiharimoto.mastertool.core.present.stage.SlideCamera
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -35,7 +36,7 @@ object PresentCodec {
             json.decodeFromString(Presentation.serializer(), text)
         } catch (e: Exception) {
             salvage(text)
-        }?.let(Geometry::sane)
+        }?.let(Geometry::sane)?.let(SlideCamera::fold)
     }
 
     /** Slide by slide and element by element, keeping whatever reads. */

@@ -195,6 +195,8 @@ fun neueMain(args: Array<String>) {
                 h.neue.formOverride = FormFactor.PHONE
                 h.neue.form = FormFactor.PHONE
             }
+            // --touch=true: a tablet's touch idioms on the desk (a finger's switches, hints that say tap).
+            map["touch"]?.let { h.neue.touchOverride = it == "true" }
             // --lens=roles etc. is below; --dock=PEEK|HALF|FULL sets the phone's pool dock.
             map["dock"]?.let { d -> h.neue.update { it.copy(phoneDockStop = d.uppercase()) } }
             h.neue.page = when (map["page"]) {
@@ -540,13 +542,24 @@ fun neueMain(args: Array<String>) {
                     made.forEach { sl -> p = PresentEdits.addSlide(p, sl, after); after++ }
                     moduleFirst = made.firstOrNull()?.id
                 }
+                // --present-camera=big: a Big camera slide after the title, in view; =custom: the slide in view's
+                // camera in a box of its own, picked (the editor's audit, B5/B6).
+                var cameraFirst: String? = null
+                if (map["present-camera"] == "big") {
+                    val big = com.kaiharimoto.mastertool.core.present.SlideLayouts.slide(com.kaiharimoto.mastertool.core.present.SlideLayouts.CAMERA_BIG, kotlin.random.Random(5))
+                    p = PresentEdits.addSlide(p, big, 0)
+                    cameraFirst = big.id
+                }
                 h.present.create(p)
                 moduleFirst?.let { h.present.slideId = it }
+                cameraFirst?.let { h.present.slideId = it }
                 map["present-slide"]?.toIntOrNull()?.let { n -> p.slides.getOrNull(n)?.let { h.present.slideId = it.id } }
                 h.neue.page = Page.PRESENT
                 clock.run(80)
+                studioEditor(h, map, clock)
                 when (map["present-mode"]) {
                     "library" -> { h.present.close(); clock.run(60) }
+                    "new" -> { h.present.creating = true; clock.run(60) }
                     "restyle" -> { h.present.restyling = true; clock.run(40) }
                     "style" -> { h.present.restyleBefore = h.present.open; clock.run(20) }
                     "play", "overview", "notes" -> {

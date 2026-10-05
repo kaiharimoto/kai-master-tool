@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.present
 
+import com.kaiharimoto.mastertool.core.present.stage.SlideCamera
 import kotlin.random.Random
 
 /** Fresh ids for presentations, slides, elements and builds: short, random, stable once given. */
@@ -81,7 +82,7 @@ object SlideLayouts {
                 el(Element.TEXT, 0.04f, 0.57f, 0.9f, 0.1f, text(Element.ROLE_SUBTITLE, "What comes next")),
             )
             BIG_NUMBER -> listOf(
-                el(Element.STAT, 0.1f, 0.18f, 0.8f, 0.5f) { copy(stat = Stat("87%", "to open a starter", "going first")) },
+                el(Element.STAT, 0.1f, 0.18f, 0.8f, 0.5f) { copy(stat = Placeholders.stat) },
                 el(Element.TEXT, 0.1f, 0.74f, 0.8f, 0.12f, text(Element.ROLE_CAPTION, "Why it matters", Para.ALIGN_CENTER)),
             )
             CARD_FOCUS -> listOf(
@@ -102,8 +103,8 @@ object SlideLayouts {
                 el(Element.TEXT, 0.08f, 0.2f, 0.84f, 0.46f, text(Element.ROLE_TITLE, "“A line worth remembering.”", Para.ALIGN_CENTER, Element.V_MIDDLE)),
                 el(Element.TEXT, 0.2f, 0.7f, 0.6f, 0.1f, text(Element.ROLE_CAPTION, "— Who said it", Para.ALIGN_CENTER)),
             )
+            // The camera itself moves to the big box (the slide's camera, below), never a second frame.
             CAMERA_BIG -> listOf(
-                Element(PresentIds.next("e", random), Element.CAMERA, 96f, 140f, 1100f, 800f),
                 Element(PresentIds.next("e", random), Element.TEXT, 1260f, 200f, 560f, 200f, paras = listOf(Para.of("Hi, I'm…")), role = Element.ROLE_TITLE),
                 Element(PresentIds.next("e", random), Element.TEXT, 1260f, 430f, 560f, 400f, paras = listOf(Para.of("Today's deck")), role = Element.ROLE_BODY),
             )
@@ -126,6 +127,8 @@ object SlideLayouts {
             elements = elements,
             deck = if (layout == DECK) DeckFocus(all = true, title = "The deck") else null,
             title = if (layout == DECK) "The deck" else "",
+            camera = if (layout == CAMERA_BIG) Slide.CAMERA_CUSTOM else Slide.CAMERA_DEFAULT,
+            cameraBox = if (layout == CAMERA_BIG) SlideCamera.BIG else null,
         )
     }
 }
