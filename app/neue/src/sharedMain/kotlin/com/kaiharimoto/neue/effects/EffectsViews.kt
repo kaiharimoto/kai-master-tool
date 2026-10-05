@@ -59,13 +59,7 @@ fun CardEffects(h: NeueHolders, card: Card, from: String, modifier: Modifier = M
         }
         words.forEach { line -> Small("${line.head} — ${line.text}", color = c.ink) }
         if (status.usable && words.isNotEmpty()) Help("Written as code, in our own words above; unverified until it has been tested against your duels.")
-        ask?.let { a ->
-            val spent = FxCost.spentWords(a)
-            Help(
-                "Asked from ${FxFrom.words(a.from)} · ${FxAsks.stateWords(a.state)}" + (spent?.let { " · $it" } ?: ""),
-                color = c.ink45,
-            )
-        }
+        ask?.let { a -> Help(FxCost.askedWords(a), color = c.ink45) }
         val writing = fx.authoring?.request?.cards?.contains(code) == true && h.ai.running
         when {
             status == FxStatus.NONE -> Unit

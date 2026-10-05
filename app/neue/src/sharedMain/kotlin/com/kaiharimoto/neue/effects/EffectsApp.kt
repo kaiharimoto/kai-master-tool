@@ -248,7 +248,7 @@ private fun LibraryRow(h: NeueHolders, e: FxEntry) {
                 RowText(card?.name ?: e.card.toString(), color = c.ink)
                 Mono(e.status.words.replaceFirstChar { it.uppercase() }, color = if (order(e.status) < 3) c.ink else c.ink45)
                 ask?.let { a ->
-                    Help("Asked from ${FxFrom.words(a.from)} · ${FxAsks.stateWords(a.state)}" + (FxCost.spentWords(a)?.let { " · $it" } ?: ""), color = c.ink45)
+                    Help(FxCost.askedWords(a), color = c.ink45)
                 }
             }
         }

@@ -66,6 +66,9 @@ class FxCostTest {
         // 19,000 in at $2 and 4,000 out at $10 a million.
         assertEquals(0.078, assertNotNull(a.usd), 1e-9)
         assertEquals("written for 23,000 tokens, ≈ \$0.08", FxCost.spentWords(a))
+        // The row says what it cost once there is a cost, else where the card stands.
+        assertEquals("Asked from the card viewer · asked", FxCost.askedWords(FxAsk(card = 9, from = FxFrom.VIEWER)))
+        assertEquals("Asked from a combo · written for 23,000 tokens, ≈ \$0.08", FxCost.askedWords(a.copy(from = FxFrom.COMBO)))
         assertEquals(FxAsks.WRITTEN, a.state)
         // A CLI says its own figure; nothing else does with no price, and the row says so.
         assertEquals(0.5, FxCost.actual(Usage(input = 10, costUsd = 0.5), null))

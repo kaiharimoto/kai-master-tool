@@ -236,6 +236,12 @@ object FxCost {
         return "written for ${tokens(ask.tokens)} tokens, $money"
     }
 
+    /**
+     * A card's asked row in words: "Asked from the card viewer · written for 31,000 tokens, ≈ $0.24", or its state while
+     * nothing is spent yet ("Asked from the Effects app · asked, not started").
+     */
+    fun askedWords(ask: FxAsk): String = "Asked from ${FxFrom.words(ask.from)} · " + (spentWords(ask) ?: FxAsks.stateWords(ask.state))
+
     /** "31,000". */
     fun tokens(n: Long): String = n.toString().reversed().chunked(3).joinToString(",").reversed()
 }
