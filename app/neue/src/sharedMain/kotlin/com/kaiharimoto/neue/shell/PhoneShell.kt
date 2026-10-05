@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -72,6 +73,8 @@ fun PhoneBar(
     working: Boolean = false,
     /** Ai's marquee while it is on (1.0.52), told whether the Update chip is taking room from it. */
     ai: (@Composable (narrow: Boolean) -> Unit)? = null,
+    /** The page's own title in place of its numeral and name (Ai World's app, 1.1.x). */
+    title: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val c = Mu.colors
     var moreAt by remember { mutableStateOf(Offset.Zero) }
@@ -94,8 +97,12 @@ fun PhoneBar(
             IconButton(Icons.Redo, state::redo, enabled = state.canRedo, size = 40.dp, label = "Redo", reason = "Nothing to redo")
         } else {
             Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                neue.page.numeral?.let { Mono(it.toString().padStart(2, '0'), color = c.ink45) }
-                MuText(neue.page.title, style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 1)
+                if (title != null) {
+                    title()
+                } else {
+                    neue.page.numeral?.let { Mono(it.toString().padStart(2, '0'), color = c.ink45) }
+                    MuText(neue.page.title, style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 1)
+                }
             }
         }
         if (working) Breathe(running = true)
