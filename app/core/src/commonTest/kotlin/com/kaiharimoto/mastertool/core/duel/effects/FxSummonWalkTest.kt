@@ -32,6 +32,7 @@ class FxSummonWalkTest {
         when (d) {
             is Decision.Cards -> d.among.indices.shuffled(r).take(r.nextInt(d.min, d.max.coerceAtMost(d.among.size) + 1))
             is Decision.Zone -> listOf(r.nextInt(d.among.size))
+            is Decision.Position -> listOf(r.nextInt(d.among.size))
             is Decision.Order -> d.triggers.indices.shuffled(r)
             is Decision.YesNo -> listOf(r.nextInt(2))
             is Decision.Option -> listOf(r.nextInt(d.among.size))

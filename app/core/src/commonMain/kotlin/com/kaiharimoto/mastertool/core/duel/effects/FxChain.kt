@@ -248,7 +248,7 @@ object FxChain {
                 is Place.Pile -> if (p.kind == PileKind.HAND) {
                     val zones = FxRules.spellZones(sc.t, seat, uid)
                     if (zones.isEmpty()) throw FxStop.refuse(FxRules.NO_SPELL_ZONE)
-                    val z = zones[sc.ask(Decision.Zone(zones)).single()]
+                    val z = zones[sc.ask(Decision.Zone(zones, uid, listOf(CardPosition.FACE_UP_ATK), FxSource(uid, effect, e.label))).single()]
                     // A new Field Spell replaces the old.
                     if (z.kind == ZoneKind.FIELD) sc.t.state.at(z)?.let { old ->
                         sc.emit(DuelAction.Move(old, Place.Pile(sc.t.inst(old)?.owner ?: seat, PileKind.GY), how = "send"), tag(FxTag.ACTIVATE))
@@ -397,11 +397,12 @@ object FxChain {
                 why == null
             }
             if (!mandatory) group = group.filter { p ->
-                val yes = sc.ask(Decision.YesNo("${whose(sc, seat)}use ${label(sc.t, p)}?")).single() == 1
+                val e = sc.t.book.effect(p.card, p.effect)
+                val yes = sc.ask(Decision.YesNo("${whose(sc, seat)}use ${label(sc.t, p)}?", FxSource(p.uid, p.effect, e?.label.orEmpty()))).single() == 1
                 if (!yes) skip(sc, p, "not used")
                 yes
             }
-            val ordered = if (group.size > 1) sc.ask(Decision.Order(group)).map { group[it] } else group
+            val ordered = if (group.size > 1) sc.ask(Decision.Order(group, group.map { label(sc.t, it) })).map { group[it] } else group
             ordered.forEach { p ->
                 val why = usable(sc.t, p)
                 if (why != null) skip(sc, p, why) else activate(sc, p.seat, p.uid, p.effect)

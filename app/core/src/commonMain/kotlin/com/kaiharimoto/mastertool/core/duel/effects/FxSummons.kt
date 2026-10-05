@@ -77,13 +77,17 @@ object FxSummons {
         val tributes = if (need == 0) emptyList() else {
             val among = FxFilters.area(Area.MONSTERS, seat, s)
             if (among.size < need) return FxPlay.Refused(FxRules.tributeRefusal(c.level ?: 0, t.script(uid)?.summon, among.size) ?: "Not enough Tributes.")
-            val d = Decision.Cards("Tribute for ${c.name}", among, need, need)
+            val d = Decision.Cards(
+                "Tribute for ${c.name}", among, need, need, Purpose.TRIBUTE, Landing(Dest.GY, seat), among.map { s.placeOf(it) },
+                FxSource(uid, FxTag.RULE, if (move.set) "Set" else "Tribute Summon"),
+            )
             val answer = ask(chooser, d) ?: return FxPlay.Cancelled
             answer.map { among[it] }
         }
         val zones = (0 until 5).map { Place.Zone(seat, ZoneKind.MONSTER, it) }.filter { z -> s.at(z).let { it == null || it in tributes } }
-        val zone = pickZone(zones, chooser) ?: return if (zones.isEmpty()) FxPlay.Refused("No Monster Zone is free.") else FxPlay.Cancelled
         val pos = if (move.set) CardPosition.FACE_DOWN_DEF else CardPosition.FACE_UP_ATK
+        val zone = pickZone(zones, chooser, uid, listOf(pos), FxSource(uid, FxTag.RULE, if (move.set) "Set" else "Normal Summon"))
+            ?: return if (zones.isEmpty()) FxPlay.Refused("No Monster Zone is free.") else FxPlay.Cancelled
         val actions = tributes.map { DuelAction.Move(it, Place.Pile(t.inst(it)?.owner ?: seat, PileKind.GY), how = HOW_TRIBUTE) } +
             DuelAction.Move(uid, zone, pos, if (move.set) HOW_SET else HOW_NORMAL)
         val events = buildList {
@@ -122,7 +126,11 @@ object FxSummons {
         // The materials: one set of the legal ones.
         val k = if (option.sets.size == 1) 0 else {
             val among = option.sets.flatten().distinct().let { all -> FxFilters.area(Area.MONSTERS, seat, s).filter { it in all } }
-            val d = Decision.Cards("Materials for ${c.name}", among, option.sets.minOf { it.size }, option.sets.maxOf { it.size })
+            val d = Decision.Cards(
+                "Materials for ${c.name}", among, option.sets.minOf { it.size }, option.sets.maxOf { it.size }, Purpose.MATERIAL,
+                if (option.kind == ProcKind.XYZ) null else Landing(Dest.GY, seat), among.map { s.placeOf(it) },
+                FxSource(uid, FxTag.PROC, "${FxRules.procWord(option.kind)} Summon"),
+            )
             val answer = ask(chooser, d) ?: return FxPlay.Cancelled
             val chosen = answer.map { among[it] }.toSet()
             option.sets.indexOfFirst { it.toSet() == chosen }.takeIf { it >= 0 }
@@ -153,17 +161,20 @@ object FxSummons {
             }
         }
         val zones = if (proc is Proc.Inherent) FxRules.summonZones(now, seat, uid) else option.zones[k]
-        val zone = pickZone(zones, chooser) ?: return if (zones.isEmpty()) FxPlay.Refused("No zone is free for it.") else FxPlay.Cancelled
         val wanted = when {
             option.kind == ProcKind.LINK -> Pos.ATTACK
             proc is Proc.Inherent -> proc.pos
             else -> Pos.EITHER
         }
-        val defense = if (wanted == Pos.EITHER) {
-            val answer = ask(chooser, Decision.Option(listOf(ATTACK_POSITION, DEFENSE_POSITION))) ?: return FxPlay.Cancelled
-            answer.single() == 1
-        } else false
-        val actions = FxProcs.actions(now, option.kind, uid, materials, zone, FxProcs.position(wanted, defense))
+        // Its zone and its position are the player's, each asked when there is more than one (kai: "all matters").
+        val allowed = FxSteps.positions(wanted, link = option.kind == ProcKind.LINK)
+        val source = FxSource(uid, FxTag.PROC, "${FxRules.procWord(option.kind)} Summon")
+        val zone = pickZone(zones, chooser, uid, allowed, source) ?: return if (zones.isEmpty()) FxPlay.Refused("No zone is free for it.") else FxPlay.Cancelled
+        val position = if (allowed.size == 1) allowed.single() else {
+            val answer = ask(chooser, Decision.Position(uid, allowed, source)) ?: return FxPlay.Cancelled
+            allowed[answer.single()]
+        }
+        val actions = FxProcs.actions(now, option.kind, uid, materials, zone, position)
         val events = FxProcs.events(now, seat, option.kind, uid, materials, zone)
         fx = fx.copy(
             summoned = fx.summoned + (uid to option.kind),
@@ -195,11 +206,11 @@ object FxSummons {
         return "No legal materials, or no zone left for it."
     }
 
-    /** One zone of [zones]: the only one, or the chooser's; null when there is none or it cancelled. */
-    private fun pickZone(zones: List<Place.Zone>, chooser: Chooser): Place.Zone? = when (zones.size) {
+    /** One zone of [zones] for [card] (in one of [positions]): the only one, or the chooser's; null when there is none or it cancelled. */
+    private fun pickZone(zones: List<Place.Zone>, chooser: Chooser, card: Int, positions: List<CardPosition>, source: FxSource): Place.Zone? = when (zones.size) {
         0 -> null
         1 -> zones.single()
-        else -> ask(chooser, Decision.Zone(zones))?.single()?.let(zones::get)
+        else -> ask(chooser, Decision.Zone(zones, card, positions, source))?.single()?.let(zones::get)
     }
 
     /** The chooser's answer to [d], or null when it is no legal answer (a cancel). */
@@ -215,6 +226,4 @@ object FxSummons {
     const val HOW_NORMAL = "normal"
     const val HOW_SET = "set"
     const val HOW_TRIBUTE = "tribute"
-    const val ATTACK_POSITION = "Attack Position"
-    const val DEFENSE_POSITION = "Defense Position"
 }

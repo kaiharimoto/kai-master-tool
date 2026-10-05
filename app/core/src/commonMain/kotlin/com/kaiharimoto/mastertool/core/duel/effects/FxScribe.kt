@@ -74,6 +74,7 @@ internal class FxScribe(start: FxTable, private val chooser: Chooser, private va
             else -> null
         }
         is Decision.Zone -> if (d.among.size == 1) listOf(0) else null
+        is Decision.Position -> if (d.among.size == 1) listOf(0) else null
         is Decision.Order -> if (d.triggers.size <= 1) d.triggers.indices.toList() else null
         is Decision.YesNo -> null
         is Decision.Option -> if (d.among.size == 1) listOf(0) else null

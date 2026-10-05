@@ -17,6 +17,7 @@ import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.effects.Chooser
 import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.duel.nameOf
+import com.kaiharimoto.mastertool.core.duel.text.AnswerChooser
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
 import com.kaiharimoto.mastertool.core.duel.text.NameScore
@@ -247,6 +248,7 @@ object ComboRecorder {
         val picks = mutableListOf<String>()
         val targets = mutableListOf<String>()
         val zones = mutableListOf<String>()
+        val positions = mutableListOf<String>()
         var s = start
         group.forEach { e ->
             val before = s
@@ -261,14 +263,22 @@ object ComboRecorder {
                 is DuelAction.Target -> if (a.on) a.to.forEach { t -> n(t)?.let { targets += it } }
                 is DuelAction.Move -> {
                     if (a.uid != tag.uid) n(a.uid)?.let { if (it !in picks) picks += it }
-                    (a.to as? Place.Zone)?.let { z -> DuelNotation.slotCoord(z, e.seat ?: seat ?: 0)?.let { zones += it } }
+                    (a.to as? Place.Zone)?.let { z ->
+                        DuelNotation.slotCoord(z, e.seat ?: seat ?: 0)?.let { zones += it }
+                        // A monster summoned: its position goes with its zone (kai: "what zone they summon to, what position, all matters").
+                        if ((z.kind == ZoneKind.MONSTER || z.kind == ZoneKind.EMZ) && before.placeOf(a.uid) !is Place.Zone) a.pos?.let { positions += AnswerChooser.positionWord(it) }
+                    }
+                }
+                is DuelAction.Token -> {
+                    DuelNotation.slotCoord(a.to, e.seat ?: seat ?: 0)?.let { zones += it }
+                    positions += AnswerChooser.positionWord(a.pos)
                 }
                 else -> Unit
             }
             s = after
         }
         val card = name ?: return null
-        return "u $card ${tag.effect}" + ShortcutAnswers(pick = picks, target = targets.distinct(), zone = zones).words()
+        return "u $card ${tag.effect}" + ShortcutAnswers(pick = picks, target = targets.distinct(), zone = zones, pos = positions).words()
     }
 
     /** Whether [seat] knew [uid] across a move: seen before or after it, or a card of its own Deck or Extra Deck. */

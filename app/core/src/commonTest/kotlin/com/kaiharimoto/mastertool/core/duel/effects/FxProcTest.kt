@@ -43,8 +43,8 @@ class FxProcTest {
     /** Answers a cards decision with [uids], by their places in its list. */
     private fun cards(vararg uids: Int): (Decision) -> List<Int> = { d -> (d as Decision.Cards).among.let { a -> uids.map { a.indexOf(it) } } }
     private fun zone(z: Place.Zone): (Decision) -> List<Int> = { d -> listOf((d as Decision.Zone).among.indexOf(z)) }
-    private val attack: (Decision) -> List<Int> = { d -> assertIs<Decision.Option>(d); listOf(0) }
-    private val defense: (Decision) -> List<Int> = { d -> assertIs<Decision.Option>(d); listOf(1) }
+    private val attack: (Decision) -> List<Int> = { d -> listOf(assertIs<Decision.Position>(d).among.indexOf(CardPosition.FACE_UP_ATK)) }
+    private val defense: (Decision) -> List<Int> = { d -> listOf(assertIs<Decision.Position>(d).among.indexOf(CardPosition.FACE_UP_DEF)) }
     private fun emz(i: Int) = Place.Zone(0, ZoneKind.EMZ, i)
     private fun m(seat: Int, i: Int) = Place.Zone(seat, ZoneKind.MONSTER, i)
 

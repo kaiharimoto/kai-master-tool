@@ -289,8 +289,15 @@ object FxSteps {
         "Winged Beast", "Wyrm", "Zombie",
     )
 
-    const val ATTACK = "Attack Position"
-    const val DEFENSE = "Defense Position"
+    /**
+     * The positions a monster may be summoned in by [pos]: face-up Attack or Defense when the effect leaves it open, the one
+     * it fixes otherwise, face-down Defense only where it Sets; a Link Monster ([link]) always in Attack Position.
+     */
+    fun positions(pos: Pos, link: Boolean = false): List<CardPosition> = when {
+        link -> listOf(CardPosition.FACE_UP_ATK)
+        pos == Pos.EITHER -> listOf(CardPosition.FACE_UP_ATK, CardPosition.FACE_UP_DEF)
+        else -> listOf(FxProcs.position(pos))
+    }
 
     /** One run of steps: the act, its bindings as they grow, and the batch it is in. */
     private class Ctx(val sc: FxScribe, val act: FxAct) {
@@ -305,6 +312,39 @@ object FxSteps {
 
         val t: FxTable get() = sc.t
         val s: DuelState get() = sc.t.state
+
+        /** The effect asking, for every decision: its card, id and short name. */
+        val source: FxSource = FxSource(act.uid, act.effect, sc.t.book.effect(act.card, act.effect)?.label.orEmpty())
+
+        /** Where this run's steps stand among the effect's own (costs, targets, what it does), for "2 of 3". */
+        private val effect = sc.t.book.effect(act.card, act.effect)
+        private val offset = effect?.let { e ->
+            when (act.part) {
+                FxTag.ACTIVATE -> e.cost.size
+                FxTag.RESOLVE -> e.cost.size + e.targets.size
+                else -> 0
+            }
+        } ?: 0
+        private val total = effect?.let { it.cost.size + it.targets.size + it.does.size } ?: 0
+        private var at = 0
+        private var depth = 0
+
+        fun stepWords(): String? = if (effect == null || total == 0) null else "${(offset + at + 1).coerceAtMost(total)} of $total"
+
+        /** Whether some of [among] lie where only their owner may look: a Deck, or face-down in an Extra Deck. */
+        fun hidden(among: List<Int>): Boolean = among.any { u ->
+            val p = s.placeOf(u)
+            p is Place.Pile && (p.kind == PileKind.DECK || (p.kind == PileKind.EXTRA && t.inst(u)?.faceUp != true))
+        }
+
+        /** [min]–[max] of [among], chosen for [purpose] (a cost's own pick is a [Purpose.COST]): the uids. */
+        fun cards(verb: String, among: List<Int>, min: Int, max: Int, purpose: Purpose, to: Landing? = null, who: Rel = Rel.YOU): List<Int> {
+            val why = if (act.part == FxTag.COST && purpose != Purpose.TARGET) Purpose.COST else purpose
+            val d = Decision.Cards(why(verb, who), among, min, max, why, to, among.map { s.placeOf(it) }, source, stepWords(), hidden(among))
+            return sc.ask(d).map { among[it] }
+        }
+
+        fun landing(dest: Dest, positions: List<CardPosition> = emptyList()) = Landing(dest, seat, positions)
 
         fun scope(): FxScope = FxScope(sc.t, seat, act.uid, bound, declared)
 
@@ -324,13 +364,16 @@ object FxSteps {
         fun steps(list: List<Step>): Boolean {
             var prev = true
             var all = true
+            depth++
             list.forEachIndexed { i, step ->
+                if (depth == 1) at = i
                 if (i > 0 && (step.link == Join.THEN || step.link == Join.ALSO)) batch++
                 val needs = step.link == Join.AND_IF_YOU_DO || step.link == Join.THEN
                 val ok = if (needs && !prev) false else op(step.op)
                 prev = ok
                 all = all && ok
             }
+            depth--
             return all
         }
 
@@ -342,7 +385,8 @@ object FxSteps {
                 if (c.size < need) throw FxStop.refuse("No legal target for ${name(act.uid)}.")
                 val max = if (p.all) c.size else minOf(p.n.coerceIn(1, Pick.MOST), c.size)
                 val min = if (p.all) c.size else need
-                val chosen = sc.ask(Decision.Cards(why("Target", p.who), c, min, max)).map { c[it] }
+                at = i
+                val chosen = cards("Target", c, min, max, Purpose.TARGET, who = p.who)
                 bound[targetKey(i)] = chosen
                 p.bind?.let { bound[it] = chosen }
                 all += chosen
@@ -353,7 +397,7 @@ object FxSteps {
         // ---- picks ------------------------------------------------------------------------------------------------
 
         /** The cards [pick] takes, chosen when there is a choice; [keep] narrows its candidates for the op. */
-        fun choose(pick: Pick, verb: String, keep: (Int) -> Boolean = { true }): Pair<List<Int>, Boolean> {
+        fun choose(pick: Pick, verb: String, purpose: Purpose, to: Landing? = null, keep: (Int) -> Boolean = { true }): Pair<List<Int>, Boolean> {
             val c = FxFilters.candidates(pick, scope()).filter(keep)
             val chosen: List<Int>
             val whole: Boolean
@@ -378,7 +422,7 @@ object FxSteps {
                     val need = pick.n.coerceIn(1, Pick.MOST)
                     val max = minOf(need, c.size)
                     val min = if (pick.upTo) 1 else max
-                    chosen = sc.ask(Decision.Cards(why(verb, pick.who), c, min, max)).map { c[it] }
+                    chosen = cards(verb, c, min, max, purpose, to, pick.who)
                     whole = chosen.size >= (if (pick.upTo) 1 else need)
                 }
             }
@@ -391,13 +435,13 @@ object FxSteps {
         fun op(op: Op): Boolean = when (op) {
             is Op.Move -> move(op)
             is Op.Add -> add(op.pick)
-            is Op.Send -> pile(op.pick, "Send to the GY", PileKind.GY, null, "send") { !inPile(s, it, PileKind.GY) }
-            is Op.Discard -> pile(handPick(op.pick), "Discard", PileKind.GY, null, FxFold.HOW_DISCARD) { inPile(s, it, PileKind.HAND) }
+            is Op.Send -> pile(op.pick, "Send to the GY", Purpose.SEND, PileKind.GY, null, "send") { !inPile(s, it, PileKind.GY) }
+            is Op.Discard -> pile(handPick(op.pick), "Discard", Purpose.DISCARD, PileKind.GY, null, FxFold.HOW_DISCARD) { inPile(s, it, PileKind.HAND) }
             is Op.Destroy -> destroy(op.pick)
-            is Op.Banish -> pile(op.pick, "Banish", PileKind.BANISHED, if (op.faceDown) CardPosition.FACE_DOWN_DEF else CardPosition.FACE_UP_ATK, "banish") {
+            is Op.Banish -> pile(op.pick, "Banish", Purpose.BANISH, PileKind.BANISHED, if (op.faceDown) CardPosition.FACE_DOWN_DEF else CardPosition.FACE_UP_ATK, "banish") {
                 !inPile(s, it, PileKind.BANISHED)
             }
-            is Op.Tribute -> pile(tributePick(op.pick), "Tribute", PileKind.GY, null, FxSummons.HOW_TRIBUTE)
+            is Op.Tribute -> pile(tributePick(op.pick), "Tribute", Purpose.TRIBUTE, PileKind.GY, null, FxSummons.HOW_TRIBUTE)
             is Op.Return -> back(op.pick, op.to)
             is Op.Draw -> draw(op)
             is Op.Shuffle -> shuffle(op)
@@ -444,7 +488,7 @@ object FxSteps {
 
         private fun move(op: Op.Move): Boolean = when (op.to) {
             Dest.MONSTER_ZONE, Dest.SPELL_ZONE, Dest.FIELD_ZONE -> {
-                val (chosen, whole) = choose(op.pick, "Move")
+                val (chosen, whole) = choose(op.pick, "Move", Purpose.OTHER, landing(op.to))
                 var moved = 0
                 chosen.forEach { u ->
                     val zones = when (op.to) {
@@ -453,25 +497,33 @@ object FxSteps {
                         else -> s.freeZones(seat, ZoneKind.FIELD)
                     }
                     if (zones.isEmpty()) return@forEach
-                    val z = zones[sc.ask(Decision.Zone(zones)).single()]
                     val pos = when {
                         !op.faceDown -> CardPosition.FACE_UP_ATK
                         op.to == Dest.MONSTER_ZONE -> CardPosition.FACE_DOWN_DEF
                         else -> CardPosition.FACE_DOWN_ATK
                     }
+                    val z = zone(u, zones, listOf(pos)) ?: return@forEach
                     emit(DuelAction.Move(u, z, pos, "place"))
                     moved++
                 }
                 whole && moved == chosen.size
             }
-            Dest.GY -> pile(op.pick, "Send to the GY", PileKind.GY, null, "send") { !inPile(s, it, PileKind.GY) }
-            Dest.BANISHED -> pile(op.pick, "Banish", PileKind.BANISHED, if (op.faceDown) CardPosition.FACE_DOWN_DEF else CardPosition.FACE_UP_ATK, "banish")
+            Dest.GY -> pile(op.pick, "Send to the GY", Purpose.SEND, PileKind.GY, null, "send") { !inPile(s, it, PileKind.GY) }
+            Dest.BANISHED -> pile(op.pick, "Banish", Purpose.BANISH, PileKind.BANISHED, if (op.faceDown) CardPosition.FACE_DOWN_DEF else CardPosition.FACE_UP_ATK, "banish")
             else -> back(op.pick, op.to)
         }
 
         /** Each card [pick] takes to its owner's [kind] pile ([at] in it), `how` [how]. */
-        fun pile(pick: Pick, verb: String, kind: PileKind, pos: CardPosition?, how: String, at: Int? = null, keep: (Int) -> Boolean = { true }): Boolean {
-            val (chosen, whole) = choose(pick, verb, keep)
+        fun pile(pick: Pick, verb: String, purpose: Purpose, kind: PileKind, pos: CardPosition?, how: String, at: Int? = null, keep: (Int) -> Boolean = { true }): Boolean {
+            val dest = when {
+                kind == PileKind.HAND -> Dest.HAND
+                kind == PileKind.GY -> Dest.GY
+                kind == PileKind.BANISHED -> Dest.BANISHED
+                kind == PileKind.EXTRA -> Dest.EXTRA
+                at == Place.BOTTOM -> Dest.DECK_BOTTOM
+                else -> Dest.DECK_TOP
+            }
+            val (chosen, whole) = choose(pick, verb, purpose, landing(dest), keep)
             if (chosen.isEmpty()) return false
             chosen.forEach { u -> emit(DuelAction.Move(u, redirect(u, Place.Pile(owner(u), kind, at)), pos(u, kind, pos), how)) }
             return whole
@@ -492,7 +544,7 @@ object FxSteps {
         }
 
         private fun add(pick: Pick): Boolean {
-            val (chosen, whole) = choose(pick, "Add to your hand") { !inPile(s, it, PileKind.HAND) }
+            val (chosen, whole) = choose(pick, "Add to your hand", Purpose.ADD, landing(Dest.HAND)) { !inPile(s, it, PileKind.HAND) }
             if (chosen.isEmpty()) return false
             val searched = chosen.filter { inPile(s, it, PileKind.DECK) }
             chosen.forEach { u ->
@@ -510,7 +562,7 @@ object FxSteps {
 
         private fun destroy(pick: Pick): Boolean {
             // Only a card on the field, or in a hand, is destroyed.
-            val (chosen, whole) = choose(pick, "Destroy") { u -> s.placeOf(u).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } }
+            val (chosen, whole) = choose(pick, "Destroy", Purpose.DESTROY, landing(Dest.GY)) { u -> s.placeOf(u).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } }
             if (chosen.isEmpty()) return false
             chosen.forEach { u ->
                 val c = t.card(u)
@@ -524,20 +576,20 @@ object FxSteps {
         }
 
         private fun back(pick: Pick, to: Dest): Boolean = when (to) {
-            Dest.HAND -> pile(pick, "Return to the hand", PileKind.HAND, null, "return") { !inPile(s, it, PileKind.HAND) }
-            Dest.DECK_TOP -> pile(pick, "Return to the Deck", PileKind.DECK, null, "return", Place.TOP)
-            Dest.DECK_BOTTOM -> pile(pick, "Return to the Deck", PileKind.DECK, null, "return", Place.BOTTOM)
+            Dest.HAND -> pile(pick, "Return to the hand", Purpose.RETURN, PileKind.HAND, null, "return") { !inPile(s, it, PileKind.HAND) }
+            Dest.DECK_TOP -> pile(pick, "Return to the Deck", Purpose.RETURN, PileKind.DECK, null, "return", Place.TOP)
+            Dest.DECK_BOTTOM -> pile(pick, "Return to the Deck", Purpose.RETURN, PileKind.DECK, null, "return", Place.BOTTOM)
             Dest.DECK_SHUFFLED -> {
-                val (chosen, whole) = choose(pick, "Shuffle into the Deck")
+                val (chosen, whole) = choose(pick, "Shuffle into the Deck", Purpose.RETURN, landing(Dest.DECK_SHUFFLED))
                 if (chosen.isEmpty()) false else {
                     chosen.forEach { u -> emit(DuelAction.Move(u, redirect(u, Place.Pile(owner(u), PileKind.DECK, Place.TOP)), null, "shuffle")) }
                     chosen.filter { inPile(s, it, PileKind.DECK) }.map(::owner).distinct().forEach { emit(DuelAction.Shuffle(it, PileKind.DECK)) }
                     whole
                 }
             }
-            Dest.EXTRA -> pile(pick, "Return to the Extra Deck", PileKind.EXTRA, null, "return") { t.card(it)?.let { c -> c.extraDeck || c.pendulum } == true }
-            Dest.GY -> pile(pick, "Send to the GY", PileKind.GY, null, "send")
-            Dest.BANISHED -> pile(pick, "Banish", PileKind.BANISHED, CardPosition.FACE_UP_ATK, "banish")
+            Dest.EXTRA -> pile(pick, "Return to the Extra Deck", Purpose.RETURN, PileKind.EXTRA, null, "return") { t.card(it)?.let { c -> c.extraDeck || c.pendulum } == true }
+            Dest.GY -> pile(pick, "Send to the GY", Purpose.SEND, PileKind.GY, null, "send")
+            Dest.BANISHED -> pile(pick, "Banish", Purpose.BANISH, PileKind.BANISHED, CardPosition.FACE_UP_ATK, "banish")
             Dest.MONSTER_ZONE, Dest.SPELL_ZONE, Dest.FIELD_ZONE -> move(Op.Move(pick, to))
         }
 
@@ -563,30 +615,31 @@ object FxSteps {
         }
 
         private fun reveal(pick: Pick): Boolean {
-            val (chosen, whole) = choose(pick, "Reveal")
+            val (chosen, whole) = choose(pick, "Reveal", Purpose.REVEAL)
             if (chosen.isEmpty()) return false
             emit(DuelAction.Reveal(seat, chosen, 1 - seat))
             return whole
         }
 
-        /** A position for a monster summoned in [pos]: the controller's choice when either. */
-        fun position(pos: Pos, attackOnly: Boolean = false): CardPosition = when {
-            attackOnly -> CardPosition.FACE_UP_ATK
-            pos == Pos.EITHER -> if (sc.ask(Decision.Option(listOf(ATTACK, DEFENSE))).single() == 1) CardPosition.FACE_UP_DEF else CardPosition.FACE_UP_ATK
-            else -> FxProcs.position(pos)
-        }
+        /** The position [card] takes, among [allowed]: asked when there is more than one ([Decision.Position]). */
+        fun position(card: Int, allowed: List<CardPosition>): CardPosition =
+            allowed[sc.ask(Decision.Position(card, allowed, source)).single()]
 
-        fun zone(zones: List<Place.Zone>): Place.Zone? = if (zones.isEmpty()) null else zones[sc.ask(Decision.Zone(zones)).single()]
+        /** Which of [zones] (the legal, free ones) [card] goes to, in one of [positions]: asked when there is more than one. */
+        fun zone(card: Int, zones: List<Place.Zone>, positions: List<CardPosition>): Place.Zone? =
+            if (zones.isEmpty()) null else zones[sc.ask(Decision.Zone(zones, card, positions, source)).single()]
 
         private fun special(op: Op.SpecialSummon): Boolean {
-            val (chosen, whole) = choose(op.pick, "Special Summon") { summonable(t, seat, it) }
+            val (chosen, whole) = choose(op.pick, "Special Summon", Purpose.SUMMON, landing(Dest.MONSTER_ZONE, positions(op.pos))) { summonable(t, seat, it) }
             if (chosen.isEmpty()) return false
             var done = 0
+            // One card at a time, each its own zone and position.
             chosen.forEach { u ->
                 // Again for each: a second copy of a once-a-turn monster, or a zone the first one took.
                 if (!summonable(t, seat, u)) return@forEach
-                val z = zone(FxRules.summonZones(t, seat, u)) ?: return@forEach
-                emit(DuelAction.Move(u, z, position(op.pos), FxProcs.HOW_SUMMON))
+                val allowed = positions(op.pos, link = t.card(u)?.link != null)
+                val z = zone(u, FxRules.summonZones(t, seat, u), allowed) ?: return@forEach
+                emit(DuelAction.Move(u, z, position(u, allowed), FxProcs.HOW_SUMMON))
                 done++
             }
             return whole && done == chosen.size
@@ -596,30 +649,31 @@ object FxSteps {
         private fun materials(uid: Int, sets: List<List<Int>>, verb: String): List<Int> {
             if (sets.size == 1) return sets.single()
             val among = sets.flatten().distinct()
-            val answer = sc.ask(Decision.Cards("$verb for ${name(uid)}", among, sets.minOf { it.size }, sets.maxOf { it.size }))
-            val chosen = answer.map { among[it] }.toSet()
+            val purpose = if (verb == "Ritual Summon") Purpose.TRIBUTE else Purpose.MATERIAL
+            val to = if (verb == "Xyz Summon") null else landing(Dest.GY)
+            val chosen = cards("$verb for ${name(uid)}", among, sets.minOf { it.size }, sets.maxOf { it.size }, purpose, to).toSet()
             return sets.firstOrNull { it.toSet() == chosen } ?: throw FxStop.refuse("Those materials do not make a $verb of ${name(uid)}.")
         }
 
         private fun fusion(op: Op.FusionSummon): Boolean {
             val options = fusions(t, act, op)
             if (options.isEmpty()) return false
-            val uid = options[sc.ask(Decision.Cards(why("Fusion Summon"), options.map { it.first }, 1, 1)).single()].first
+            val uid = cards("Fusion Summon", options.map { it.first }, 1, 1, Purpose.SUMMON, landing(Dest.MONSTER_ZONE, positions(Pos.EITHER))).single()
             val set = materials(uid, options.first { it.first == uid }.second, "Fusion Summon")
             set.forEach { m -> emit(DuelAction.Move(m, Place.Pile(owner(m), PileKind.GY), how = FxProcs.HOW_MATERIAL), FxMemo(summon = ProcKind.FUSION)) }
-            val z = zone(FxRules.summonZones(t, seat, uid)) ?: throw FxStop.refuse("No zone is free for ${name(uid)}.")
-            emit(DuelAction.Move(uid, z, position(Pos.EITHER), "fusion"))
+            val z = zone(uid, FxRules.summonZones(t, seat, uid), positions(Pos.EITHER)) ?: throw FxStop.refuse("No zone is free for ${name(uid)}.")
+            emit(DuelAction.Move(uid, z, position(uid, positions(Pos.EITHER)), "fusion"))
             return true
         }
 
         private fun ritual(op: Op.RitualSummon): Boolean {
             val options = rituals(t, act, op)
             if (options.isEmpty()) return false
-            val uid = options[sc.ask(Decision.Cards(why("Ritual Summon"), options.map { it.first }, 1, 1)).single()].first
+            val uid = cards("Ritual Summon", options.map { it.first }, 1, 1, Purpose.SUMMON, landing(Dest.MONSTER_ZONE, positions(Pos.EITHER))).single()
             val set = materials(uid, options.first { it.first == uid }.second, "Ritual Summon")
             set.forEach { m -> emit(DuelAction.Move(m, Place.Pile(owner(m), PileKind.GY), how = FxSummons.HOW_TRIBUTE), FxMemo(summon = ProcKind.RITUAL)) }
-            val z = zone(FxRules.summonZones(t, seat, uid)) ?: throw FxStop.refuse("No zone is free for ${name(uid)}.")
-            emit(DuelAction.Move(uid, z, position(Pos.EITHER), "ritual"))
+            val z = zone(uid, FxRules.summonZones(t, seat, uid), positions(Pos.EITHER)) ?: throw FxStop.refuse("No zone is free for ${name(uid)}.")
+            emit(DuelAction.Move(uid, z, position(uid, positions(Pos.EITHER)), "ritual"))
             return true
         }
 
@@ -627,14 +681,15 @@ object FxSteps {
             val options = procedures(t, act, f, kind)
             if (options.isEmpty()) return false
             val uids = options.map { it.uid }.distinct()
-            val uid = uids[sc.ask(Decision.Cards(why("${FxRules.procWord(kind)} Summon"), uids, 1, 1)).single()]
+            val allowed = positions(Pos.EITHER, link = kind == ProcKind.LINK)
+            val uid = cards("${FxRules.procWord(kind)} Summon", uids, 1, 1, Purpose.SUMMON, landing(Dest.MONSTER_ZONE, allowed)).single()
             val mine = options.filter { it.uid == uid }
             val sets = mine.flatMap { it.sets }
             val set = materials(uid, sets, "${FxRules.procWord(kind)} Summon")
             val option = mine.first { set in it.sets }
-            val z = zone(option.zones[option.sets.indexOf(set)]) ?: return false
+            val z = zone(uid, option.zones[option.sets.indexOf(set)], allowed) ?: return false
             val word = kind.name.lowercase()
-            val pos = position(Pos.EITHER, attackOnly = kind == ProcKind.LINK)
+            val pos = position(uid, allowed)
             FxProcs.actions(t, kind, uid, set, z, pos).forEach { a ->
                 if (a is DuelAction.Move && a.uid == uid) emit(a.copy(how = word))
                 else emit(a, FxMemo(summon = kind))
@@ -644,7 +699,7 @@ object FxSteps {
 
         private fun attach(op: Op.Attach): Boolean {
             val h = host(t, scope(), op.to) ?: return false
-            val (chosen, whole) = choose(op.pick, "Attach") { it != h && it !in t.inst(h)?.under.orEmpty() }
+            val (chosen, whole) = choose(op.pick, "Attach", Purpose.ATTACH) { it != h && it !in t.inst(h)?.under.orEmpty() }
             if (chosen.isEmpty()) return false
             chosen.forEach { emit(DuelAction.Move(it, Place.Under(h), how = "attach")) }
             return whole
@@ -655,7 +710,7 @@ object FxSteps {
             val under = t.inst(h)?.under.orEmpty()
             val n = op.n.coerceAtLeast(1)
             if (under.size < n) return false
-            val chosen = sc.ask(Decision.Cards(why("Detach"), under, n, n)).map { under[it] }
+            val chosen = cards("Detach", under, n, n, Purpose.SEND, landing(Dest.GY))
             chosen.forEach { m -> emit(DuelAction.Move(m, Place.Pile(owner(m), PileKind.GY), how = FxFold.HOW_DETACH)) }
             return true
         }
@@ -665,10 +720,13 @@ object FxSteps {
             val to = scope().seats(op.rel).first()
             val n = op.n.coerceIn(1, 5)
             var made = 0
+            val allowed = positions(op.pos)
             repeat(n) {
-                val z = zone(s.freeZones(to, ZoneKind.MONSTER)) ?: return@repeat
+                // A token is no card yet: its zone and position name the table's next uid, the one it will take.
+                val next = s.nextUid
+                val z = zone(next, s.freeZones(to, ZoneKind.MONSTER), allowed) ?: return@repeat
                 emit(
-                    DuelAction.Token(seat, z, position(op.pos), 0, op.name, op.atk, op.def),
+                    DuelAction.Token(seat, z, position(next, allowed), 0, op.name, op.atk, op.def),
                     FxMemo(token = FxToken(op.level, op.attribute, op.race)),
                 )
                 made++
@@ -689,7 +747,7 @@ object FxSteps {
         }
 
         private fun level(op: Op.ChangeLevel): Boolean {
-            val (chosen, whole) = choose(op.pick, "Change the Level") { t.level(it) != null }
+            val (chosen, whole) = choose(op.pick, "Change the Level", Purpose.OTHER) { t.level(it) != null }
             if (chosen.isEmpty()) return false
             val to = op.to?.let { FxConds.value(it, scope()) }
             val by = op.by?.let { FxConds.value(it, scope()) }
@@ -706,7 +764,7 @@ object FxSteps {
         }
 
         private fun counter(op: Op.Counter): Boolean {
-            val (chosen, whole) = choose(op.pick, "Counters") { s.placeOf(it) is Place.Zone }
+            val (chosen, whole) = choose(op.pick, "Counters", Purpose.OTHER) { s.placeOf(it) is Place.Zone }
             if (chosen.isEmpty()) return false
             var ok = whole
             chosen.forEach { u ->
@@ -720,7 +778,7 @@ object FxSteps {
             val open = op.options.indices.filter { i -> op.options[i].isEmpty() || able(t, act.copy(bound = bound, declared = declared), op.options[i].first().op) }
             if (open.isEmpty()) return false
             val labels = open.map { i -> op.labels.getOrNull(i)?.takeIf { it.isNotBlank() } ?: "Option ${i + 1}" }
-            val pick = open[sc.ask(Decision.Option(labels)).single()]
+            val pick = open[sc.ask(Decision.Option(labels, source)).single()]
             return steps(op.options[pick])
         }
 
@@ -733,7 +791,7 @@ object FxSteps {
         private fun declare(op: Op.Declare): Boolean {
             val among = declarable(t, act, op)
             if (among.isEmpty()) return false
-            val d = among[sc.ask(Decision.Declare(op.kind, among.map { it.word })).single()]
+            val d = among[sc.ask(Decision.Declare(op.kind, among.map { it.word }, source)).single()]
             declared[op.bind] = d
             emit(DuelAction.Note("${name(act.uid)}: declared ${d.word}.", seat), FxMemo(declared = mapOf(op.bind to d)))
             return true

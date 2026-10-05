@@ -1,33 +1,82 @@
 package com.kaiharimoto.mastertool.core.duel.effects
 
+import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.Place
 
 /**
- * A choice the engine puts to a [Chooser] (D.md §2.5): **the engine never guesses.** Every answer is a list of indexes
- * into the decision's own list — [Cards.among], [Zone.among], [Order.triggers], [Option.among], [Declare.among]; [YesNo] is `[1]` for yes
- * and `[0]` for no. An answer outside the decision's bounds, or [Chooser.CANCEL], cancels the whole use: nothing is
- * committed ([FxPlay.Cancelled]).
+ * What a card choice is for ([Decision.Cards.purpose]): what a window says and how it draws the picked cards' way —
+ * worked out by the engine from the step, never written by a script.
+ */
+enum class Purpose { TARGET, COST, SUMMON, ADD, SEND, BANISH, DESTROY, RETURN, ATTACH, MATERIAL, TRIBUTE, DISCARD, REVEAL, OTHER }
+
+/** The effect a decision is for: its card, the effect's id, and its short name ("Revive"), or "" for a rule's own choice. */
+data class FxSource(val uid: Int, val effect: String, val label: String = "")
+
+/**
+ * Where a step takes the cards it picks ([Decision.Cards.to]): [dest] on [seat]'s side, and the positions the step allows
+ * when it puts them on the field (empty elsewhere; one position when the step fixes it).
+ */
+data class Landing(val dest: Dest, val seat: Int, val positions: List<CardPosition> = emptyList())
+
+/**
+ * A choice the engine puts to a [Chooser] (D.md §2.5, §5½): **the engine never guesses.** Every answer is a list of indexes
+ * into the decision's own list — [Cards.among], [Zone.among], [Position.among], [Order.triggers], [Option.among],
+ * [Declare.among]; [YesNo] is `[1]` for yes and `[0]` for no. An answer outside the decision's bounds, or [Chooser.CANCEL],
+ * cancels the whole use: nothing is committed ([FxPlay.Cancelled]). A decision with one legal answer is never put.
+ *
+ * Each carries what a generic window needs to draw it — what it is for, where its cards are and go, which effect asks,
+ * which step of the Shortcut it is — so every picker is derived from the engine alone, and a script never says how it is
+ * shown (kai: "so the Ai doesn't need to worry about that"). Every such field has a default, so a decision built by hand
+ * (a test, the table's "which Shortcut") reads as it did.
  */
 sealed interface Decision {
-    /** [min]–[max] of [among] (uids), for [why]: "Tribute", "Materials for X", "Target", "Add to your hand". */
-    data class Cards(val why: String, val among: List<Int>, val min: Int, val max: Int) : Decision
+    /**
+     * [min]–[max] of [among] (uids), for [why]: "Tribute", "Materials for X", "Target", "Add to your hand".
+     *
+     * [purpose]: what the cards are for. [to]: where the step takes them, and in which positions, when it moves them.
+     * [from]: each candidate's place, in step with [among] (a seat and a zone, a pile, or beneath a card), so a window
+     * groups them by place. [effect]: the effect that asks. [step]: "2 of 3" within the effect's steps (its costs, targets
+     * and what it does), when known. [hidden]: some candidates lie in a pile the chooser may look through but the other
+     * player does not see — its own Deck or Extra Deck, as a search shows them — as against public places.
+     */
+    data class Cards(
+        val why: String,
+        val among: List<Int>,
+        val min: Int,
+        val max: Int,
+        val purpose: Purpose = Purpose.OTHER,
+        val to: Landing? = null,
+        val from: List<Place?> = emptyList(),
+        val effect: FxSource? = null,
+        val step: String? = null,
+        val hidden: Boolean = false,
+    ) : Decision
 
-    data class Zone(val among: List<Place.Zone>) : Decision
+    /** Which of [among] (only the legal, free zones) [card] goes to, and the [positions] it may take there. */
+    data class Zone(
+        val among: List<Place.Zone>,
+        val card: Int? = null,
+        val positions: List<CardPosition> = emptyList(),
+        val effect: FxSource? = null,
+    ) : Decision
 
-    /** The order a player puts their own simultaneous triggers on the chain: the answer is a permutation. */
-    data class Order(val triggers: List<Pending>) : Decision
+    /** Which of [among] [card] is summoned in: face-up Attack or Defense, or face-down Defense where it is Set. */
+    data class Position(val card: Int, val among: List<CardPosition>, val effect: FxSource? = null) : Decision
+
+    /** The order a player puts their own simultaneous triggers on the chain: the answer is a permutation. [labels]: each one's card and effect. */
+    data class Order(val triggers: List<Pending>, val labels: List<String> = emptyList()) : Decision
 
     /** An optional trigger, a "you can …", chaining more. */
-    data class YesNo(val why: String) : Decision
+    data class YesNo(val why: String, val effect: FxSource? = null) : Decision
 
-    /** One of [among]: a [Op.Choose]'s options, a monster's position, and which of a card's Shortcuts to run. */
-    data class Option(val among: List<String>) : Decision
+    /** One of [among]: a [Op.Choose]'s options, and which of a card's Shortcuts to run. */
+    data class Option(val among: List<String>, val effect: FxSource? = null) : Decision
 
     /** A declaration ([Op.Declare]): one of [among] — card names (searchable), Types, Attributes or Levels. */
-    data class Declare(val kind: DeclareKind, val among: List<String>) : Decision
+    data class Declare(val kind: DeclareKind, val among: List<String>, val effect: FxSource? = null) : Decision
 }
 
 /**
@@ -42,11 +91,12 @@ fun interface Chooser {
         /** The answer that cancels the whole use. */
         val CANCEL: List<Int> = listOf(-1)
 
-        /** Answers every decision with its first legal answer: the first [Decision.Cards.min] cards, yes, the first option. */
+        /** Answers every decision with its first legal answer: the first [Decision.Cards.min] cards, yes, the first zone, position or option. */
         val FIRST = Chooser { d ->
             when (d) {
                 is Decision.Cards -> (0 until d.min.coerceAtMost(d.among.size)).toList()
                 is Decision.Zone -> if (d.among.isEmpty()) CANCEL else listOf(0)
+                is Decision.Position -> if (d.among.isEmpty()) CANCEL else listOf(0)
                 is Decision.Order -> d.triggers.indices.toList()
                 is Decision.YesNo -> listOf(1)
                 is Decision.Option -> if (d.among.isEmpty()) CANCEL else listOf(0)
@@ -60,6 +110,7 @@ fun interface Chooser {
             return when (d) {
                 is Decision.Cards -> answer.size in d.min..d.max && answer.all { it < d.among.size }
                 is Decision.Zone -> answer.size == 1 && answer[0] < d.among.size
+                is Decision.Position -> answer.size == 1 && answer[0] < d.among.size
                 is Decision.Order -> answer.sorted() == d.triggers.indices.toList()
                 is Decision.YesNo -> answer.size == 1 && answer[0] in 0..1
                 is Decision.Option -> answer.size == 1 && answer[0] < d.among.size
