@@ -252,7 +252,7 @@ private fun SlideCameraField(h: NeueHolders, p: Presentation, slide: Slide) {
             commitSlide(h, slide, "Camera") { it.copy(camera = v, cameraBox = null) }
         }
     }, Modifier.fillMaxWidth(), small = true)
-    Help("Click the camera on the slide to drag it where it should stand here; the rest of the slide makes room. $CAMERA_NOTE")
+    Help("${if (LocalTouchFirst.current) "Tap" else "Click"} the camera on the slide to drag it where it should stand here; the rest of the slide makes room. $CAMERA_NOTE")
 }
 
 private fun cameraName(v: String): String = when (v) {
@@ -268,7 +268,7 @@ private fun CameraProps(h: NeueHolders, p: Presentation, slide: Slide) {
     Micro("Camera", color = Mu.colors.ink70)
     val zone = SlideCamera.zone(p, slide)
     if (zone != null) key(slide.id) {
-        FieldLabel("Where it stands here", hint = "canvas 1920 × 1080; Enter sets it")
+        FieldLabel("Where it stands", hint = "Enter sets it")
         fun put(b: com.kaiharimoto.mastertool.core.present.stage.Box) = commitSlide(h, slide, "Move the camera") { SlideCamera.moved(it, b) }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             NumberField("X", zone.x, Modifier.weight(1f)) { put(zone.copy(x = it)) }
@@ -324,7 +324,7 @@ private fun ElementProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Sli
     if (sel.any(Placeholders::untouched)) Help("This still shows a placeholder: fill it in before the slide goes out.")
 
     if (sel.size == 1) key(e.id) {
-        FieldLabel("Position and size", hint = "canvas 1920 × 1080; Enter sets it")
+        FieldLabel("Position and size", hint = "of 1920 × 1080; Enter sets it")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             NumberField("X", box.x, Modifier.weight(1f)) { v -> commitElements(h, slide, ids, "Move") { Geometry.place(it, box.copy(x = v), stage) } }
             NumberField("Y", box.y, Modifier.weight(1f)) { v -> commitElements(h, slide, ids, "Move") { Geometry.place(it, box.copy(y = v), stage) } }

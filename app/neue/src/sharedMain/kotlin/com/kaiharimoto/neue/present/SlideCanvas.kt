@@ -648,7 +648,7 @@ private fun CanvasHeader(h: NeueHolders, slide: Slide, zone: CanvasBox?) {
         present.editingText != null -> "Typing on the slide. Esc when done."
         slide.deck != null && present.selection.isEmpty() -> "$click a card to talk about it on this slide, or not. Drag across the slide to select."
         present.selection.isNotEmpty() -> if (touch) "Drag to move it; double-tap words to edit them; hold for the menu." else "Drag to move it; double-click words to edit them; right-click for the menu."
-        zone != null -> "$click something to change it. The camera stands in its frame: $click it to move it on this slide."
+        zone != null -> "$click something to change it. The camera stands in its frame: ${click.lowercase()} it to move it on this slide."
         else -> "$click something to change it, or drag a box round several."
     }
     Row(

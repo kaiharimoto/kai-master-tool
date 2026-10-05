@@ -693,6 +693,8 @@ private fun SectionHeading(h: NeueHolders, p: Presentation, s: Slide) {
     val name = s.section ?: return
     if (present.namingSection == s.id) {
         val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+        // Let go only after it had the focus: the field reports "not focused" once as it first appears.
+        var had by remember { mutableStateOf(false) }
         androidx.compose.runtime.LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
         MuInput(
             name,
@@ -701,7 +703,10 @@ private fun SectionHeading(h: NeueHolders, p: Presentation, s: Slide) {
             dense = true,
             placeholder = "Section name",
             focusRequester = focus,
-            onFocusChange = { focused -> if (!focused && present.namingSection == s.id) present.namingSection = null },
+            onFocusChange = { focused ->
+                if (focused) had = true
+                else if (had && present.namingSection == s.id) present.namingSection = null
+            },
             onSubmit = { present.namingSection = null; present.seal() },
         )
     } else {
@@ -768,7 +773,7 @@ private fun NotesPane(h: NeueHolders, p: Presentation, slide: Slide, modifier: M
     val c = Mu.colors
     Column(modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Micro("Speaker notes · only you see them", Modifier.weight(1f), color = c.ink45)
+            Micro(if (LocalPhone.current) "Speaker notes" else "Speaker notes · only you see them", Modifier.weight(1f), color = c.ink45)
             ReadyLine(h, p)
         }
         NotesField(slide.notes, { text ->
