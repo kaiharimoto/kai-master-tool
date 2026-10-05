@@ -25,6 +25,19 @@ import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.sync.Manifest
 import com.kaiharimoto.mastertool.core.sync.Sync
 import com.kaiharimoto.mastertool.core.sync.SyncPrefs
+import com.kaiharimoto.mastertool.core.world.WorldCodec
+import com.kaiharimoto.mastertool.core.world.WorldEvent
+import com.kaiharimoto.mastertool.core.world.apps.AppCodec
+import com.kaiharimoto.mastertool.core.world.apps.AppKind
+import com.kaiharimoto.mastertool.core.world.apps.StateRead
+import com.kaiharimoto.mastertool.core.world.apps.UiNode
+import com.kaiharimoto.mastertool.core.world.apps.UiTree
+import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
+import com.kaiharimoto.mastertool.core.world.desk.DeskCodec
+import com.kaiharimoto.mastertool.core.world.desk.IconCell
+import com.kaiharimoto.mastertool.core.world.desk.Snap
+import com.kaiharimoto.mastertool.core.world.desk.WindowMode
+import com.kaiharimoto.mastertool.core.world.desk.WorldHome
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -225,6 +238,86 @@ class OldDataTest {
         assertTrue(p.python)
         assertEquals(0, p.typing)
         assertTrue(p.follow)
+    }
+
+    @Test
+    fun aWorldFrom1097OpensOnADesktop() {
+        // 1.1.x (`docs/world/DESKTOP.md` §12.1): a 1.0.97 world has no `desk.json` and no `apps/`. It opens on an empty
+        // desktop, its boards are pages at world://home, and their canvas places are written back as they were.
+        val old = """{"id":"wabc","title":"Openings","created":1,"updated":2,"open":"sim.js",
+            "boards":[{"id":"starter","title":"Opens a starter","kind":"stat","payload":"{\"value\":\"74%\",\"label\":\"x\"}","x":552.0,"y":412.0,"w":600.0,"h":300.0,"updated":5,"source":"sim.js"},
+            {"id":"web","title":"Card web","kind":"graph","payload":"{}","x":0,"y":0,"updated":6}]}"""
+        val w = assertNotNull(WorldCodec.decode(old))
+        val desk = DeskCodec.decode(null)
+        assertTrue(desk.windows.isEmpty())
+        assertEquals(null, desk.front)
+        assertTrue(desk.tabs.tabs.isEmpty())
+        val log = WorldCodec.events("""{"t":4,"kind":"run","by":"ai","path":"sim.js","text":"Ran sim.js","run":{"lang":"js","ok":true,"boards":["starter"]}}""")
+        val pages = WorldHome.groups(w, log)
+        assertEquals(setOf("starter", "web"), pages.flatMap { it.boards }.map { it.id }.toSet())
+        // Written back: every place as it was, though nothing draws the canvas now.
+        val again = assertNotNull(WorldCodec.decode(WorldCodec.encode(w)))
+        assertEquals(w.boards.map { listOf(it.x, it.y, it.w, it.h) }, again.boards.map { listOf(it.x, it.y, it.w, it.h) })
+        assertEquals(listOf(552.0, 412.0, 600.0, 300.0), again.board("starter")!!.let { listOf(it.x, it.y, it.w, it.h) })
+        // Its device settings from 1.0.97 read with the desktop's defaults: the five pins, the avatar on, recede on.
+        val p = prefs.decodeFromString(NeuePreferences.serializer(), """{"world":{"python":false,"typing":600,"follow":false,"open":"wabc"}}""").world
+        assertEquals(BuiltInApp.PINNED, p.pinned)
+        assertEquals(listOf("files", "editor", "terminal", "browser", "thoughts"), p.pinned)
+        assertTrue(p.avatar)
+        assertTrue(p.recede)
+        assertEquals(false, p.follow)
+        // And a 1.1.x log line of an app reads in 1.0.97's shape too: kind and slug a newer build adds, kept.
+        val appLine = WorldCodec.events("""{"t":9,"kind":"app","by":"ai","path":"apps/hand-odds/main.js","text":"Made","app":"hand-odds"}""").single()
+        assertEquals(WorldEvent.Kind.APP, appLine.kind)
+        assertEquals("hand-odds", appLine.app)
+    }
+
+    @Test
+    fun aDeskFromANewerBuildReads() {
+        // A desk.json a later build wrote: keys it added, a window mode it added, a window of an app kind this build
+        // does not know, a tab with fields of its own. What this build can draw reads; nothing fails.
+        val newer = """{"version":3,"windows":[
+              {"app":"editor","mode":"maximised","frame":{"x":0.1,"y":0.1,"w":0.5,"h":0.6,"z":3},"by":"ai","turn":4,"used":9,"glass":true},
+              {"app":"terminal","mode":"tiled","frame":{"x":0.2,"y":0.2,"w":0.4,"h":0.3}},
+              {"app":"spreadsheet","frame":{"x":0.0,"y":0.0,"w":0.3,"h":0.3}},
+              {"app":"app:hand-odds","snap":"left","mode":"snapped","kept":true}],
+            "front":"editor","tabs":{"tabs":[{"id":"t4","address":"world://boards/b1","pinnedAt":1,"by":"ai","turn":4,"kept":true}],"selected":"t4","next":5,"groups":[]},
+            "icons":[{"app":"files","col":0,"row":0,"label":"x"}],"turn":4,"cascade":3,"wallpaper":"dots"}"""
+        val d = DeskCodec.decode(newer)
+        assertEquals(listOf("editor", "terminal", "app:hand-odds"), d.windows.map { it.app })
+        assertEquals(WindowMode.MAXIMISED, d.window("editor")!!.mode)
+        assertEquals(WindowMode.NORMAL, d.window("terminal")!!.mode, "a mode from a newer build reads as normal")
+        assertEquals(Snap.LEFT, d.window("app:hand-odds")!!.snap)
+        assertEquals("editor", d.front)
+        assertEquals("world://boards/b1", d.tabs.current!!.address)
+        assertTrue(d.tabs.current!!.kept)
+        assertEquals(listOf(IconCell("files", 0, 0)), d.icons)
+        assertEquals(4, d.turn)
+    }
+
+    @Test
+    fun anAppFromANewerBuildReads() {
+        // An app a later build made: a kind, a glyph and keys this build does not know, and a screen with a widget it
+        // cannot draw. The app reads, its kind is kept as written and drawn as a viewer, and the widget says so in its place.
+        val m = assertNotNull(
+            AppCodec.decode(
+                """{"slug":"other-name","name":"Season log","kind":"spreadsheet","glyph":"hologram","monogram":"SL","api":2,"version":7,
+                    "size":{"w":800,"h":600},"permissions":["camera"],"by":"ai","created":1,"updated":2}""",
+                "season-log",
+            ),
+        )
+        assertEquals("season-log", m.slug, "the folder names the app")
+        assertEquals("spreadsheet", m.kind)
+        assertEquals(AppKind.VIEWER, m.appKind)
+        assertEquals(2, m.api)
+        assertEquals(7, m.version)
+        assertEquals("SL", m.tile.monogram)
+        assertTrue("\"spreadsheet\"" in AppCodec.encode(m), "kept for the build that wrote it")
+        val tree = UiTree.parse("""{"ui":"col","children":[{"ui":"text","text":"Games"},{"ui":"spreadsheet","id":"s","cells":[[1]]},{"ui":"stat","value":"12","label":"games","sparkline":[1,2]}]}""")
+        val kids = (tree.root as UiNode.Col).children
+        assertEquals(UiNode.Unknown("spreadsheet"), kids[1])
+        assertEquals("12", (kids[2] as UiNode.Stat).value)
+        assertEquals(StateRead.Ok("""{"games":[],"v":2}"""), AppCodec.readState("""{"games":[],"v":2}"""))
     }
 
     @Test

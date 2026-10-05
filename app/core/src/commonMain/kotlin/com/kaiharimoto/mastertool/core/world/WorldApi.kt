@@ -107,6 +107,17 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             host.file(path)?.let(::JsonPrimitive) ?: throw IllegalArgumentException("there is no $path in this world: world_write it first (world_state lists the files)")
         }
         "read" -> read(args)
+        "combos" -> {
+            val d = host.deck(args.str("id")) ?: throw IllegalArgumentException("no deck “${args.str("id") ?: "open"}”: ygo.decks() lists them")
+            JsonArray(host.combos(d.id).map { c ->
+                buildJsonObject {
+                    put("name", c.name)
+                    put("needs", JsonArray(c.needs.map(::JsonPrimitive)))
+                    put("steps", JsonArray(c.steps.map(::JsonPrimitive)))
+                    put("notes", c.notes)
+                }
+            })
+        }
         "knowledgeList" -> knowledge().list(args.str("scope")).let { docs -> JsonArray(docs.take(MAX_LISTED).map(::docJson)) }
         "knowledgeRead" -> {
             val path = args.str("path") ?: throw IllegalArgumentException("knowledge.read needs a path from knowledge.list()")

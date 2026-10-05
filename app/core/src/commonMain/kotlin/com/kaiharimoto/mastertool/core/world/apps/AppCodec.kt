@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.world.apps
 
+import com.kaiharimoto.mastertool.core.ai.web.Untrusted
 import com.kaiharimoto.mastertool.core.world.WorldCodec
 import com.kaiharimoto.mastertool.core.world.desk.AppRef
 import com.kaiharimoto.mastertool.core.world.desk.DeskSize
@@ -115,6 +116,12 @@ object AppCodec {
             StateRead.Broken("the state is not JSON: ${e.message?.lineSequence()?.firstOrNull().orEmpty().take(120)}")
         }
     }
+
+    /**
+     * An app's state as Ai reads it back (`world_app state`, §8.6 point 7): in the envelope outside text gets — it holds
+     * the person's typing, card text and whatever another device wrote, so it is data, never instructions.
+     */
+    fun forAi(m: AppManifest, state: String): String = Untrusted.wrap("app ${m.slug} v${m.version} state.json", state)
 
     /** Why a state the app returned cannot be kept, or null when it can. */
     fun stateProblem(json: String): String? =

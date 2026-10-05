@@ -82,12 +82,16 @@ object LibrarySearch {
         var carryAt = 0L
         var at = 0L
         val overlap = q.longest * 2 + 16
+        var lines = 0
         fun test(text: CharSequence, from: Int, to: Int, offset: Long, reportBefore: Int): Boolean {
+            // Asked every few thousand lines and after every hit too, not only between windows: a window of short lines
+            // that all hit would otherwise run on past the keystroke that cancelled it.
+            if ((++lines and 0xFFF) == 0 && cancelled()) return false
             val ranges = matchLine(text, from, to, q) ?: return true
             if (ranges.first().first - from >= reportBefore) return true
             onHit(hit(doc, offset, text.subSequence(from, to).toString(), ranges.map { (it.first - from)..(it.last - from) }))
             hits++
-            return hits < limit
+            return hits < limit && !cancelled()
         }
         while (true) {
             if (cancelled()) return hits

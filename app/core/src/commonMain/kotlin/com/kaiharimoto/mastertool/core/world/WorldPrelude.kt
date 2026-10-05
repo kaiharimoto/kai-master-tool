@@ -150,6 +150,8 @@ object WorldPrelude {
     })(),
     // One of your own instruments (a file under lib/, say): run in the global scope, its functions yours to call; its last value returned.
     use: function (path) { return (0, eval)(call('file', { path: String(path) })); },
+    // A deck's saved combos (Duel's Save as combo): [{name, needs, steps, notes}], each step a line duel.do takes.
+    combos: function (deck) { var id = deck !== null && typeof deck === 'object' ? deck.id : deck; return call('combos', id === undefined || id === null ? {} : { id: String(id) }); },
     // A file of this world read a page at a time: {text, from, next, total}; next is null at the end.
     read: function (path, from) { return call('read', { path: String(path), from: from || 0 }); },
     // What Ai knows (guides, books, notes, reports, evidence, rubrics), read-only: list(scope), read(path, from), search(q, scope).
