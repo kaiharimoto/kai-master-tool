@@ -276,7 +276,8 @@ object FxRef {
             val fieldExtra = s.field.filter { ed(it.code) }.map { it.code }
             SeatSetup(main = s.hand + fieldMain + s.gy + s.banished + s.deck, extra = fieldExtra + s.extra)
         }
-        val header = DuelHeader(seats = setups, handSize = 0)
+        // Whoever went first, seat [active] has turn [turn].
+        val header = DuelHeader(seats = setups, handSize = 0, first = (active + turn - 1) % 2)
         var state = DuelSetup.initial(header)
         val lay = ArrayList<DuelAction>()
         repeat(turn - 1) { lay += DuelAction.EndTurn }
@@ -291,7 +292,6 @@ object FxRef {
             var e = base + setups[seat].main.size
             s.field.filter { ed(it.code) }.forEach { slot -> lay += DuelAction.Move(e++, Place.Zone(seat, slot.kind, slot.index), slot.pos, "place") }
         }
-        if (active != (turn - 1) % 2) error("seat $active does not have turn $turn")
         lay += DuelAction.Phase(phase)
         val (next, problem) = DuelRules.applyAll(state, lay)
         state = next ?: error("the test table does not lay out: $problem")

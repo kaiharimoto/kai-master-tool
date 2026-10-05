@@ -8,6 +8,11 @@ import com.kaiharimoto.mastertool.core.data.PoolRecord
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
+import com.kaiharimoto.mastertool.core.duel.effects.FxCodec
+import com.kaiharimoto.mastertool.core.duel.effects.FxRead
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
+import com.kaiharimoto.mastertool.core.duel.effects.FxVocab
+import com.kaiharimoto.mastertool.core.duel.effects.Opt
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.record.DuelResultCodec
 import com.kaiharimoto.mastertool.core.duel.record.DuelResults
@@ -438,6 +443,38 @@ class OldDataTest {
         // Not a record at all: none, never a crash.
         assertEquals(null, DuelResultCodec.decode("""{"ended":1}"""))
         assertEquals(null, DuelResultCodec.decode("{"))
+    }
+
+    @Test
+    fun aDuelWithoutEffectTagsStillReadsAnd120sTagsReadBack() {
+        // Up to 1.1.x no entry carries `fx`: every entry reads with none, and is written back without the key.
+        val old = """{"header":{"id":"d10","seed":3,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Ai","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},
+            {"i":1,"seat":0,"group":1,"action":{"t":"move","uid":1,"to":{"t":"zone","seat":0,"kind":"MONSTER","index":0},"pos":"FACE_UP_ATK","how":"normal"},"by":{"by":"person"}}],"cursor":2}"""
+        val g = DuelGame.of(assertNotNull(DuelCodec.decode(old)))
+        assertTrue(g.entries.all { it.fx == null })
+        assertTrue("\"fx\"" !in DuelCodec.encode(g.record()))
+        // 1.2.0 (Phase D): an entry the engine made carries its tag; an older build skips the key, and a later key in it is skipped here.
+        val now = old.replace("\"by\":{\"by\":\"person\"}}", "\"by\":{\"by\":\"person\"},\"fx\":{\"uid\":1,\"effect\":\"rule\",\"part\":\"rule\",\"script\":\"0123456789ab\",\"verified\":true,\"later\":7}}")
+        val n = DuelGame.of(assertNotNull(DuelCodec.decode(now)))
+        val tag = assertNotNull(n.entries[1].fx)
+        assertEquals(FxTag(1, FxTag.RULE, FxTag.RULE, script = "0123456789ab", verified = true), tag)
+        assertEquals(null, n.entries[0].fx)
+        assertEquals(n.state, g.state, "the tag changes nothing on the table")
+    }
+
+    @Test
+    fun aVocabularyOneScriptReadsAndANewerOneIsKeptUnread() {
+        // 1.2.0 (Phase D): a compiled script as the first vocabulary writes it.
+        val v1 = """{"card":900000001,"name":"Example Scout","text":"0123456789ab","effects":[{"id":"e1","label":"Search","kind":"TRIGGER",
+            "from":["MONSTER_ZONE"],"trigger":{"on":{"event":"SUMMONED","summon":["NORMAL","SPECIAL"]}},"opt":{"t":"name"},
+            "does":[{"op":{"t":"add","pick":{"from":[{"area":"DECK"}],"where":{"t":"all","all":[{"t":"name-has","word":"Example"},{"t":"kind","type":"MONSTER"},{"t":"level","span":{"min":1,"max":4}}]}}}}]}]}"""
+        val s = assertNotNull(FxCodec.decode(v1))
+        assertEquals(Opt.ByName(), s.effects.single().opt)
+        assertEquals(FxCodec.json.parseToJsonElement(v1), FxCodec.json.parseToJsonElement(FxCodec.encode(s)), "written back the same")
+        // A later vocabulary's script is never decoded, so never rewritten.
+        val later = FxCodec.read(v1.replace("\"card\":900000001,", "\"card\":900000001,\"vocab\":${FxVocab.VERSION + 1},"))
+        assertTrue(later is FxRead.Newer)
     }
 
     @Test
