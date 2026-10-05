@@ -61,7 +61,7 @@ private fun SessionActions(h: NeueHolders, keys: Boolean, short: Boolean) {
         MuButton("Results", s::toggleResults, size = BtnSize.SM, variant = BtnVariant.SUBTLE)
         if (keys) KeyCap(keyOf(DeskAction.SHOOTOUT_RESULTS, "R"))
     }
-    if (h.ai.enabled) {
+    if (h.ai.enabled && s.teachShown) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             MuButton("Trust", s.teach::openTrust, size = BtnSize.SM, variant = BtnVariant.GHOST)
             if (keys) KeyCap(keyOf(DeskAction.SHOOTOUT_TRUST, "T"))

@@ -48,6 +48,7 @@ import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
+import com.kaiharimoto.mastertool.core.shootout.teach.TeachGate
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.cards.CARD_RATIO
@@ -165,7 +166,8 @@ private fun HeaderActions(h: NeueHolders, phone: Boolean) {
         )
         if (!phone) KeyCap(keyOf(DeskAction.SHOOTOUT_RESULTS, "R"))
     }
-    if (h.ai.enabled) {
+    // Trust is a teaching control: offered with the steps, not before (kai's choice, 1.1.8); the key still opens it.
+    if (h.ai.enabled && s.teachShown) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             MuButton("Trust", s.teach::openTrust, size = BtnSize.SM, variant = BtnVariant.GHOST, enabled = s.bench != null, reason = s.problem)
             if (!phone) KeyCap(keyOf(DeskAction.SHOOTOUT_TRUST, "T"))
@@ -235,18 +237,16 @@ private fun SetupView(h: NeueHolders) {
                 if (deck != null) MicroLink("Write the plans on Siding", { h.webs.side(deck, s.opponentId) })
             }
         }
-        // Teaching Ai (Phase S stage 3): how the session teaches, the interview, the rubric.
-        TeachSetup(h)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            val exam = s.teach.examRunning
-            MuButton(
-                if (s.teach.mode == ShootoutTeach.Mode.CALIBRATION && h.ai.enabled) "Begin the calibration set" else "Begin a session",
-                s::start, variant = BtnVariant.PRIMARY, arrow = true, enabled = !s.thinking && !exam,
-                reason = if (exam) "${h.ai.name} is sitting its exam" else null,
-            )
-            KeyCap(keyOf(DeskAction.SHOOTOUT_START, "Enter"))
+        // Teaching Ai (Phase S stage 3) as numbered steps, offered once the person has judged a session's hands for the deck
+        // or has taught Ai before (kai's choice, 1.1.8); a first visit is only for rating hands.
+        val teaching = h.ai.enabled && s.teachShown
+        LaunchedEffect(teaching, s.log?.trials?.size, s.log?.notes?.size, s.log?.trust, bench, h.ai.name) {
+            if (teaching) s.teach.readProgress()
         }
+        if (teaching) TeachSetup(h)
+        SetupActions(h, teaching)
         Help("About ten minutes is a session. Stop whenever you like: every answer is kept, and the ratings carry over to the next one. The cards are rated per copy, against the card the deck would have dealt instead.")
+        if (h.ai.enabled && !teaching) Small(TeachGate.line(s.deckTally, h.ai.name), color = c.ink70)
     }
 }
 
@@ -578,7 +578,7 @@ private fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp, 
  * corner read as one more draw tag.
  */
 @Composable
-private fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null) {
+internal fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null) {
     val s = h.shootout
     val c = Mu.colors
     val card = s.card(id)
@@ -735,9 +735,10 @@ internal fun runShootout(h: NeueHolders, action: DeskAction) {
         -> if (s.running) ShootoutWords.byKey(action.ordinal - DeskAction.SHOOTOUT_ANSWER_1.ordinal + 1)?.let(s::answer)
         DeskAction.SHOOTOUT_LEFT -> if (s.running) s.prefer(true)
         DeskAction.SHOOTOUT_RIGHT -> if (s.running) s.prefer(false)
+        // Enter is always a session of the person's own (kai's choice, 1.1.8): a key never starts spending Ai's requests.
         DeskAction.SHOOTOUT_START -> {
             h.neue.go(Page.SHOOTOUT)
-            s.start()
+            if (!s.running) s.teach.begin(ShootoutTeach.Mode.JUDGE)
         }
         DeskAction.SHOOTOUT_STOP -> s.stop()
         DeskAction.SHOOTOUT_RESULTS -> {

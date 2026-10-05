@@ -4132,10 +4132,16 @@ reloaded after either), and **deleted with the deck** (the library's Delete and 
   of two equal answers by the fit, averaged over their hands). Status words are sentence case in micro caps, prose is
   never mono.
 - **The header** (Setup, Results, the exam): the deck and opponent, **Results** (`R`; disabled with no hands judged, "Judge
-  a few hands first") and **Trust** (`T`) — each action once; **Begin** is the body's alone, disabled while Ai sits its
+  a few hands first") and **Trust** (`T`; shown with the teaching steps, 1.1.8) — each action once; **Begin** is the body's alone, disabled while Ai sits its
   exam (`ShootoutTeach.examRunning`, which `start` refuses too).
 - **Setup**: the target's words, which hands ("Mixed (recommended)" or one situation, `pinned`; a menu on a phone, where the
-  sided ones fell off the edge), the waiting situations, the Teach row, Begin (`Enter`).
+  sided ones fell off the edge), the waiting situations, the teaching steps once offered, Begin (`Enter`). **A first visit
+  is for rating hands** (1.1.8, kai's choice): until the person has judged `TeachGate.HANDS` (30, about a session) hands
+  **for the deck** — counted over all its matchups' files, since knowing the page and its scale carries from the deck
+  alone to every opponent, and a calibration set is the best way into a new matchup — Setup shows no teaching and no
+  Trust button, only one line under it: "After your first session you can teach Ai to judge with you." ("12 hands more
+  and you can…" once some are judged, `TeachGate.line`). Someone who has taught Ai on any of the deck's matchups (an
+  answer of Ai's, a hand in a teaching mode, the gate's settings, a rubric; `TeachGate.taught`) always sees it.
 - **A trial**: while a session runs **the page header folds away** and its deck, Results, Trust and Stop (`Esc`) stand in
   the window's bar (`ShootoutBarItems`, as Duel's), or a slim row under a phone's bar (`PhoneSessionRow`); the deck and
   opponent are locked for the session. The situation, the progress line ("6 of 24 cards known within ±5 points · 14 hands
@@ -4178,12 +4184,26 @@ a phone tab and the ⋯ menu, `navigate`'s `SHOOTOUT`. Master UI throughout: ink
 - **Ai as a judge**: `judgeHand` (`neue/ai/AiShootout.kt`) is a request of its own — the `shootout-judge` skill and the rules
   primer, the brief, `shootout_judge` the only tool — so Ai never sees the person's answer to the hand; on an API
   connection. Its answer is a trial of its own (`judge: ai`, `of`, `mode`, `AiVerdict` with what it was shown).
-- **The four ways to teach**, the setup's **Teach** row (only while Ai is on; **Just me** is the default — "Judge" read as
+- **Teaching is four numbered steps** (1.1.8, kai's choice; `TeachSteps`, core, tested): `01` **Calibration set** → `02`
+  **Apprentice** → `03` **Supervised** → `04` **Ai judges alone**, each row its numeral, name, state in a word and the
+  counts behind it, read from the matchup's trials and `Trust` alone. Calibration is in progress from its first hand until
+  Ai has sat the exam on the set whole ("32 hands judged · Ai has not sat its exam", its action the exam), done with "Ai
+  agreed 30 of 32 in its exam", and in progress again when the decks changed since (a short set); Apprentice is done at
+  `APPRENTICE_HANDS` (40) blind hands, with the questions asked; Supervised at `SUPERVISED_HANDS` (20), with how often the
+  person took Ai's answer; Alone is **On**, **Off** (kinds earned, the switch off: its action is the trust panel),
+  **Allowed** or **Not yet** (none earned: more apprentice hands earn them). The first step not done is marked **Next** and
+  its action is **the page's one primary button**, with **Begin a session** (you judge, Ai not asked) beside it as
+  secondary; every other step keeps a small button of its own (Begin, Again, New set, Exam; step 4's is Trust), so a step
+  can be run again or out of order. With no step left, Begin a session is the primary again. **`Enter` is always Begin a
+  session**, so a key never starts spending Ai's requests (`ShootoutTeach.begin`, `act`).
+- **The four ways to teach** (only while Ai is on; **Just me** is a session without one — "Judge" read as
   "Ai judges"): **Calibration set** (32 hands taken in turn
   from every kind, `CalibrationSet`; judged blind, then **the exam** — `View.EXAM`: Ai answers each blind from what came
   before it and the model as it stood before the set, its agreement per kind); **Apprentice** (Ai predicts each hand as it
   is shown; after the person answers, where it disagreed or was unsure, its one question — at most one in four trials,
-  `Apprentice` — in a card over the scale whose answer is a note on that trial); **Supervised** (Ai's answer and reason over
+  `Apprentice` — in a card over the scale whose answer is a note on that trial, **carrying the hand it asks about** as small
+card art, their hand beside yours and the situation over them, since the next hand is on screen by then — 1.1.8, kai's
+choice; a note of the person's own carries it too); **Supervised** (Ai's answer and reason over
   the scale in a strip of one height whether waiting or answered, so the hands never move, its box on the scale marked with
   a 2 px border and its name, **Accept** or `Space` takes it, 1–5 corrects; answered before it lands, the answer stays blind);
   **Interview** (the Ai panel; a link, "Tell Ai how you judge (interview)"). Any hand can carry a note ("Note on the last
@@ -4209,7 +4229,9 @@ cards for the sided strata (old-plan trials are pooled today), opening patterns 
 link with the evidence ledger, siding plans compared.
 
 `tools/shoot.sh --page=shootout --shootout=demo --shootout-target=alone|matchup --shootout-view=trial|results|setup`, and
-`--shootout-teach=supervised|judging|question|calibration|solo|exam|exam-running|trust|rubric|setup` for teaching.
+`--shootout-teach=supervised|judging|question|calibration|solo|exam|exam-running|trust|rubric|setup|early` for teaching
+(`early`: a calibration set of 12 not yet examined); Setup before teaching is offered is `--shootout-view=setup
+--shootout-answers=0` (or any number under 30).
 
 ## 5. Releases, updates and feedback — the permanent numbers
 
