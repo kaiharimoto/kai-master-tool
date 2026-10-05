@@ -58,6 +58,12 @@ data class CardScript(
     /** What the vocabulary cannot say, in Ai's words. */
     val unsupported: List<String> = emptyList(),
     val notes: String = "",
+    /**
+     * 12 hex of the SHA-256 of the `lib/effects/<passcode>.js` it was compiled from (Phase D step 2, `FxCompile`): what tells
+     * the library a source changed and must be compiled again. Never part of the script's own hash ([FxCodec.hash]):
+     * verification follows the compiled data, so a comment written into the source re-verifies nothing.
+     */
+    val source: String = "",
 ) {
     fun effect(id: String): Effect? = effects.firstOrNull { it.id == id }
 }

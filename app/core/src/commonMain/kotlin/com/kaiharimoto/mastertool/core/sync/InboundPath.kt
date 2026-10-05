@@ -14,9 +14,10 @@ package com.kaiharimoto.mastertool.core.sync
 object InboundPath {
     /**
      * Folders of the data folder that are this device's alone (1.0.99): its keys, and the command-line apps' working
-     * folder — and (1.1.1) the banlists read from Yugipedia, a cache each device fetches for itself.
+     * folder — and (1.1.1) the banlists read from Yugipedia, a cache each device fetches for itself — and (Phase D step 2)
+     * `fxcache/`, the effects' verdicts and test runs, which each device recomputes: a planted "verified" never arrives.
      */
-    val DEVICE_FOLDERS = setOf("secrets", "cli-run", "banlists")
+    val DEVICE_FOLDERS = setOf("secrets", "cli-run", "banlists", "fxcache")
 
     /** Under Ai's folder (`ai/`), what never travels: [rel] is the path inside it. */
     fun aiPrivate(rel: String): Boolean =

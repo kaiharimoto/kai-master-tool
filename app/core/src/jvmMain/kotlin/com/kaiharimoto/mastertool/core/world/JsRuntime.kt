@@ -42,6 +42,8 @@ class JsRuntime(private val limits: Limits = Limits()) {
         val cut: Boolean,
         /** The last expression's value, when it had one. */
         val value: String?,
+        /** With `data = true`: the last expression's value as data ([JsData]), null when it was refused (see [err]). */
+        val data: kotlinx.serialization.json.JsonElement? = null,
     )
 
     /** Why a run was stopped: thrown inside the interpreter, past any `catch` a script writes. */
@@ -113,6 +115,8 @@ class JsRuntime(private val limits: Limits = Limits()) {
         onLine: (String) -> Unit = {},
         stop: () -> Boolean = { false },
         everyLine: (String) -> Unit = {},
+        /** Read the last value as data ([JsData]): what `FxCompile` keeps (Phase D step 2). A function in it fails the run. */
+        data: Boolean = false,
     ): Result {
         val out = StringBuilder()
         var cut = false
@@ -133,6 +137,7 @@ class JsRuntime(private val limits: Limits = Limits()) {
         }
         var err = ""
         var value: String? = null
+        var kept: kotlinx.serialization.json.JsonElement? = null
         var ok = false
         val started = System.currentTimeMillis()
         val budget = Budget(limits) { stop() || given.get() }
@@ -146,10 +151,13 @@ class JsRuntime(private val limits: Limits = Limits()) {
                 ScriptableObject.putProperty(scope, "__print", Printer { text -> text.lines().forEach(::print) })
                 cx.evaluateString(scope, WorldPrelude.JS, "ygo", 1, null)
                 val result = cx.evaluateString(scope, code, name, 1, null)
-                if (result != null && result !is Undefined && result !is org.mozilla.javascript.Function) {
+                if (data) kept = JsData.json(result)
+                else if (result != null && result !is Undefined && result !is org.mozilla.javascript.Function) {
                     value = Context.toString(result).take(2_000)
                 }
                 ok = true
+            } catch (e: JsData.Refused) {
+                err = e.message.orEmpty()
             } catch (e: Stop) {
                 err = e.message.orEmpty()
             } catch (e: RhinoException) {
@@ -172,7 +180,7 @@ class JsRuntime(private val limits: Limits = Limits()) {
             worker.interrupt()
             return Result(false, synchronized(lock) { out.toString() }, "Stopped: past ${limits.millis / 1000} seconds inside one call (a regular expression, most likely); it is left to finish on its own.", System.currentTimeMillis() - started, cut, null)
         }
-        return Result(ok, synchronized(lock) { out.toString() }, err, System.currentTimeMillis() - started, cut, value)
+        return Result(ok, synchronized(lock) { out.toString() }, err, System.currentTimeMillis() - started, cut, value, kept)
     }
 
     /** The one door: `__ygo(name, json)` → JSON text, or a JavaScript `Error` a script can catch. */
@@ -208,14 +216,22 @@ class JsRuntime(private val limits: Limits = Limits()) {
         internal const val STACK = 16L * MB
         internal const val GRACE = 2_000L
 
-        /** A Rhino error in words, with where: "TypeError: x is undefined (sim.js, line 12)". */
+        /**
+         * A Rhino error in words, with where: "TypeError: x is undefined (sim.js, line 12)". Thrown inside the prelude (a
+         * builder's argument check, `ygo.fx`), where is the script's own line that called it (Phase D step 2), not the
+         * prelude's: a mistake fails at the line that made it.
+         */
         fun describe(e: RhinoException): String {
             val what = e.details().ifBlank { e.message.orEmpty() }
+            val inPrelude = e.sourceName() == "ygo"
+            val caller = if (inPrelude) runCatching { e.scriptStack.firstOrNull { it.fileName != null && it.fileName != "ygo" } }.getOrNull() else null
             val where = buildString {
-                e.sourceName()?.takeIf { it.isNotBlank() && it != "ygo" }?.let { append(it) }
-                if (e.lineNumber() > 0) append(if (isEmpty()) "line ${e.lineNumber()}" else ", line ${e.lineNumber()}")
+                val file = caller?.fileName ?: e.sourceName()?.takeIf { it.isNotBlank() && it != "ygo" }
+                val line = caller?.lineNumber ?: if (inPrelude) -1 else e.lineNumber()
+                file?.let { append(it) }
+                if (line > 0) append(if (isEmpty()) "line $line" else ", line $line")
             }
-            val code = e.lineSource()?.trim()?.takeIf { it.isNotEmpty() }?.let { "\n  $it" }.orEmpty()
+            val code = if (inPrelude) "" else e.lineSource()?.trim()?.takeIf { it.isNotEmpty() }?.let { "\n  $it" }.orEmpty()
             return what + (if (where.isNotEmpty()) " ($where)" else "") + code
         }
     }

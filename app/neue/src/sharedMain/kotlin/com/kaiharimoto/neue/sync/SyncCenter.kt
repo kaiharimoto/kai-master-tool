@@ -180,6 +180,8 @@ class SyncCenter(private val h: NeueHolders) {
         if ("replays" in changed) { h.duel.loadReplays(); h.duel.reloadRulings(); h.duel.reloadResults() }
         if ("world" in changed) h.world.reload()
         if ("shootout" in changed && h.shootoutStarted) h.shootout.reload()
+        // A script synced in is compiled and checked again here; its verdict never came with it (Phase D step 2).
+        if ("effects" in changed && h.effectsStarted) h.effects.reload()
     }
 
     /** The store [prefs] names, or null when there is none to sync with. */

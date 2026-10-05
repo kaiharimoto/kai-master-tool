@@ -190,6 +190,7 @@ import com.kaiharimoto.neue.banlist.BanlistCenter
 import com.kaiharimoto.neue.world.WorldPage
 import com.kaiharimoto.neue.shootout.ShootoutPage
 import com.kaiharimoto.neue.shootout.Shootouts
+import com.kaiharimoto.neue.effects.Effects
 import com.kaiharimoto.neue.shootout.dismissShootout
 import com.kaiharimoto.neue.world.WorldSnapshot
 import com.kaiharimoto.neue.world.Worlds
@@ -247,6 +248,8 @@ class NeueHolders(
             w.host = { WorldSnapshot.of(this) }
             w.prefs = { neue.prefs.world }
             w.comeForward = { if (neue.page != Page.WORLD) neue.go(Page.WORLD) }
+            // The effects library, at lib/effects/ in every world (Phase D step 2).
+            w.mounts += effects.mount
             w.load()
         }
     }
@@ -261,6 +264,22 @@ class NeueHolders(
 
     /** Whether Shootout has been opened this run. */
     val shootoutStarted: Boolean get() = shootoutHolder.isInitialized()
+
+    /**
+     * Effects as code (Phase D step 2): the library of written effects in `<data>/effects/`, compiled, checked, and the
+     * book the engine and the table read; mounted in every world at `lib/effects/`. `<data>/fxcache/` is this device's alone.
+     */
+    private val effectsHolder = lazy {
+        Effects.under(Platform.dataDir).also { e ->
+            e.pool = { builder.index }
+            e.onChange = { if (worldStarted) world.refreshListing() }
+            e.load()
+        }
+    }
+    val effects: Effects by effectsHolder
+
+    /** Whether the effects library has been read this run: a sync or a restore reloads it only then. */
+    val effectsStarted: Boolean get() = effectsHolder.isInitialized()
 
     /** Command mode's voice (1.0.87): hold M, or the microphone beside the command line, to speak a move. */
     val duelVoice: DuelVoice by lazy { DuelVoice(this) }
