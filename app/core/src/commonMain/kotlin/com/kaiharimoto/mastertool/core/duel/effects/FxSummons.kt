@@ -57,7 +57,7 @@ object FxSummons {
     }
 
     private fun tag(t: FxTable, uid: Int, effect: String, part: String): FxTag =
-        FxTag(uid, effect, part, script = t.script(uid)?.let(FxCodec::hash) ?: "", verified = t.book.verifiedOnly)
+        FxTag(uid, effect, part, script = t.inst(uid)?.let { t.book.hash(it.code) } ?: "", verified = t.book.verifiedOnly)
 
     private fun phase(t: FxTable, seat: Int, move: FxMove.Phase): FxPlay {
         if (t.state.active != seat && !t.state.solo) return FxPlay.Refused(FxRules.NOT_TURN)
@@ -140,7 +140,7 @@ object FxSummons {
             now = t.copy(fx = fx)
             if (proc.cost.isNotEmpty()) {
                 val act = FxAct(seat, uid, t.code(uid) ?: 0, FxTag.PROC, FxTag.COST, bound = mapOf(Pick.SELF to listOf(uid)),
-                    script = t.script(uid)?.let(FxCodec::hash) ?: "", verified = t.book.verifiedOnly)
+                    script = t.inst(uid)?.let { t.book.hash(it.code) } ?: "", verified = t.book.verifiedOnly)
                 when (val r = FxSteps.run(now, act, proc.cost, chooser)) {
                     is FxRun.Refused -> return FxPlay.Refused(r.why)
                     FxRun.Cancelled -> return FxPlay.Cancelled

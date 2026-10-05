@@ -36,6 +36,27 @@ class ScriptBook private constructor(
     /** Every card the book holds a script for, as canonical passcodes. */
     val cards: Set<Int> get() = scripts.keys
 
+    /** The cards whose scripts hold a trigger effect, as canonical passcodes: the only ones an event can set off. */
+    val triggers: Set<Int> by lazy {
+        scripts.filterValues { s -> s.effects.any { it.kind == Kind.TRIGGER } }.keys
+    }
+
+    /**
+     * [code]'s script's hash ([FxCodec.hash]), worked out once a card: every tag carries it, and hashing a script is a
+     * SHA-256 of its JSON. A map replaced whole on a miss, so the goldfish's workers share it safely. Empty without one.
+     */
+    fun hash(code: Int): String {
+        val card = canon(code)
+        val now = hashes
+        now[card]?.let { return it }
+        val h = scripts[card]?.let(FxCodec::hash) ?: ""
+        hashes = HashMap<Int, String>(now.size * 2 + 4).apply { putAll(now); put(card, h) }
+        return h
+    }
+
+    @kotlin.concurrent.Volatile
+    private var hashes: Map<Int, String> = emptyMap()
+
     val size: Int get() = scripts.size
 
     companion object {

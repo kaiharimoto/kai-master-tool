@@ -671,7 +671,7 @@ data class FxTag(
     val uid: Int,
     /** "e1"…, [PROC], or [RULE] (a Normal Summon or Set, the phase, the chain's own Spells to the GY). */
     val effect: String,
-    /** [COST], [ACTIVATE], [RESOLVE], [PROC], [RULE]. */
+    /** [COST], [ACTIVATE], [RESOLVE], [PROC], [RULE], [SKIP]. */
     val part: String,
     /** Its chain link, 1-based. */
     val link: Int? = null,
@@ -679,6 +679,11 @@ data class FxTag(
     val script: String = "",
     /** The effect was VERIFIED when it was used (§4.4); the table offers unverified ones too. */
     val verified: Boolean = false,
+    /**
+     * What the engine knew that the action itself does not say ([FxMemo]): its batch, a link's bindings, a restriction, a
+     * Level change. With it a tagged log folds to exactly the engine's own `FxState` (`FxFold`, `FxFoldTest`).
+     */
+    val memo: FxMemo? = null,
 ) {
     companion object {
         const val PROC = "proc"
@@ -686,5 +691,7 @@ data class FxTag(
         const val COST = "cost"
         const val ACTIVATE = "activate"
         const val RESOLVE = "resolve"
+        /** A waiting trigger let go (not used, missed the timing, or not usable now), said in the log as a note. */
+        const val SKIP = "skip"
     }
 }

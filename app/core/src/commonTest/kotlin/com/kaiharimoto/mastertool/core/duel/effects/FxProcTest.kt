@@ -68,7 +68,9 @@ class FxProcTest {
             ),
             d.actions,
         )
-        assertTrue(d.tags.all { it == FxTag(bridge, FxTag.PROC, FxTag.PROC, script = FxCodec.hash(FxRef.book.script(FxRef.BRIDGE)!!)) })
+        // One batch, carried in each tag's memo (agent (c)'s fold reads it); otherwise the procedure's tag.
+        assertTrue(d.tags.all { it.copy(memo = null) == FxTag(bridge, FxTag.PROC, FxTag.PROC, script = FxCodec.hash(FxRef.book.script(FxRef.BRIDGE)!!)) })
+        assertEquals(1, d.tags.map { it.memo?.batch }.toSet().size)
         val n = after(t, p)
         assertEquals(ProcKind.LINK, n.fx.summoned[bridge])
         assertTrue(bridge in n.fx.proper && n.fx.sent == setOf(scout, tinker))

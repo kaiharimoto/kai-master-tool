@@ -129,16 +129,32 @@ object FxEngine {
         return FxSummons.moves(now, seat) + FxChain.moves(now, seat)
     }
 
-    /** [move] made: the tagged actions to commit and the table after, or refused with the rule that forbids it. */
+    /**
+     * [move] made: the tagged actions to commit and the table after, or refused with the rule that forbids it.
+     *
+     * Summons, procedures and phases are `FxSummons`'; they start no chain, so the triggers they set off gather afterwards
+     * and form a chain in the same move (`FxChain.after`, SEGOC). Activations, passes and resolutions are `FxChain`'s.
+     * Either way the state returned is the fold of the tagged actions ([FxFold]), so committing them and folding the log
+     * gives it back. A shuffle is stamped with the duel's dice ([FxTable.seed], [FxState.rolls]) as `DuelGame.act` will
+     * stamp it, so the table returned is the one the commit makes.
+     */
     fun play(t: FxTable, seat: Int, move: FxMove, chooser: Chooser): FxPlay {
         val now = t.current()
-        val played = when (move) {
-            is FxMove.NormalSummon, is FxMove.Procedure, is FxMove.Phase -> FxSummons.play(now, seat, move, chooser)
-            is FxMove.Activate, FxMove.Pass, FxMove.Resolve -> return FxChain.play(now, seat, move, chooser)
+        return when (move) {
+            is FxMove.NormalSummon, is FxMove.Procedure, is FxMove.Phase -> when (val p = FxSummons.play(now, seat, move, chooser)) {
+                is FxPlay.Done -> FxChain.after(now, seat, p, chooser)
+                else -> p
+            }
+            is FxMove.Activate, FxMove.Pass, FxMove.Resolve -> FxChain.play(now, seat, move, chooser)
         }
-        // A summon starts no chain: its triggers gather afterwards (§2.3), the chain's to collect.
-        if (played !is FxPlay.Done || played.events.isEmpty()) return played
-        val after = now.copy(state = played.state, fx = played.fx)
-        return played.copy(fx = FxChain.gather(after, played.events))
     }
+
+    /**
+     * Why [seat] may not activate [uid]'s [effect] now, in words, or null when it may: what a Shortcut shows greyed with its
+     * rule ("Once per turn: used.").
+     */
+    fun refusal(t: FxTable, seat: Int, uid: Int, effect: String): String? = FxChain.refusal(t, seat, uid, effect)
+
+    /** Who moves next: the seat with priority while a chain stands, the turn player otherwise. */
+    fun next(t: FxTable): Int = FxChain.next(t.current())
 }

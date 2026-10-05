@@ -5,6 +5,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.Lock
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
+import kotlinx.serialization.Serializable
 
 /**
  * What the table does not hold and the engine folds beside it (D.md §2.1): a fold over the same log entries (`FxFold`,
@@ -48,6 +49,23 @@ data class FxState(
     val tokens: Map<Int, FxCard> = emptyMap(),
     /** Folded from a log made by hand: inferred, so a rule's doubt is said rather than refused silently (§5½). */
     val inferred: Boolean = false,
+    /**
+     * How many things the log has left to chance so far (shuffles, coins, dice, random picks): the engine stamps a shuffle
+     * it makes with the duel's dice for that roll ([FxTable.seed], `DuelRandom.forRoll`), so committing it through
+     * `DuelGame.act` stamps the same salt and the table the engine played on is the one the log folds to.
+     */
+    val rolls: Int = 0,
+    /**
+     * The newest batch of things that happened at the same time (D.md §2.3): an engine entry carries its batch
+     * ([FxMemo.batch]); one made by hand is a batch of its own. What "last" and missing the timing are judged by.
+     */
+    val batch: Int = 0,
+    /** While a chain stands and is not resolving: the seat that may respond now (the other seat after each link). */
+    val priority: Int? = null,
+    /** Passes in a row since the newest link or the last resolution: two, and the newest link resolves. */
+    val passes: Int = 0,
+    /** The chain has begun to resolve: no link is added until it is over. */
+    val resolving: Boolean = false,
 ) {
     fun life(uid: Int): Int = lives[uid] ?: 0
 
@@ -71,6 +89,9 @@ data class FxState(
         links = emptyList(),
         pending = emptyList(),
         levels = levels.filter { it.until == Lock.UNTIL_DUEL },
+        priority = null,
+        passes = 0,
+        resolving = false,
     )
 
     /**
@@ -92,6 +113,7 @@ data class FxState(
  * A declaration's answer ([Op.Declare]): [kind], and [value] — a name's canonical passcode, a Level — or [word] — a Type,
  * an Attribute — as the chooser picked it from [Decision.Declare.among].
  */
+@Serializable
 data class Declared(val kind: DeclareKind, val value: Int = 0, val word: String = "")
 
 /** A once-per-turn use: counted under [key] (`FxRules.optKey`), by [seat], of [card] (canonical) [effect] on [uid]. */
@@ -115,6 +137,7 @@ data class NormalGrant(val seat: Int, val source: Int, val filter: Filter = Filt
 data class InForce(val restriction: Restriction, val seat: Int, val source: Int, val turn: Int)
 
 /** A Level changed by an effect: set [to], or moved [by], while [uid] stays the instance [life], until [until]. */
+@Serializable
 data class LevelChange(val uid: Int, val life: Int, val to: Int? = null, val by: Int? = null, val until: String = Lock.UNTIL_TURN)
 
 /**
@@ -142,6 +165,11 @@ data class Pending(
     val seat: Int,
     val mandatory: Boolean,
     val event: FxEvent,
+    /**
+     * Nothing has happened since its event (D.md §2.3): an optional `WHEN` trigger whose event is no longer last when its
+     * chain is built misses the timing. `IF` triggers and mandatory ones never do.
+     */
+    val last: Boolean = true,
 )
 
 /**
@@ -160,13 +188,24 @@ data class FxLink(
     val effectNegated: Boolean = false,
     val script: String = "",
     val verified: Boolean = false,
+    /** Each bound card's instance as it was bound ([FxState.life]): a target that moved since is gone at resolution. */
+    val lives: Map<Int, Int> = emptyMap(),
+    /** What was declared as it was activated ([Op.Declare] among its costs). */
+    val declared: Map<String, Declared> = emptyMap(),
 )
 
 /**
  * The engine's view of a duel at one moment (D.md §2.5): the table, what the engine folds beside it, the scripts it plays
  * by and the pool's facts. Pure: the same table, scripts and answers always give the same actions.
  */
-data class FxTable(val state: DuelState, val fx: FxState, val book: ScriptBook, val facts: FxFacts) {
+data class FxTable(
+    val state: DuelState,
+    val fx: FxState,
+    val book: ScriptBook,
+    val facts: FxFacts,
+    /** The duel's seed (`DuelHeader.seed`): a shuffle the engine makes is stamped as the log will stamp it ([FxState.rolls]). */
+    val seed: Long = 0L,
+) {
     fun inst(uid: Int): CardInst? = state.cards[uid]
 
     /** A card's printed facts — a token's from what made it — before any Level change. */
