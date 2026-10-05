@@ -10,7 +10,10 @@ import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.Shortcuts
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
+import com.kaiharimoto.mastertool.core.duel.effects.ScriptBook
 import com.kaiharimoto.mastertool.core.duel.nameOf
 
 /**
@@ -21,8 +24,37 @@ import com.kaiharimoto.mastertool.core.duel.nameOf
  */
 object DuelWords {
 
-    /** [before] and [after] are the table either side of [e]; [viewer] null knows everything. */
-    fun say(before: DuelState, after: DuelState, e: DuelEntry, viewer: Int?, catalog: DuelCatalog): String {
+    /**
+     * [before] and [after] are the table either side of [e]; [viewer] null knows everything. An entry a Shortcut made
+     * (`DuelEntry.fx`, Phase D §5½) says so after its words: "— Example Scout · Search (Shortcut)", with "unverified" where
+     * the effect was; [book] gives the effect's short name. A card the viewer cannot see is not named, nor its effect.
+     */
+    fun say(before: DuelState, after: DuelState, e: DuelEntry, viewer: Int?, catalog: DuelCatalog, book: ScriptBook = ScriptBook.EMPTY): String {
+        val line = plain(before, after, e, viewer, catalog)
+        val tag = e.fx ?: return line
+        val c = before.cards[tag.uid] ?: after.cards[tag.uid]
+        val seen = c != null && (DuelSight.sees(before, tag.uid, viewer) || (tag.uid in after.cards && DuelSight.sees(after, tag.uid, viewer)))
+        val name = if (seen && tag.effect != FxTag.RULE) catalog.nameOf(c) else null
+        val label = when {
+            name == null || c == null -> null
+            tag.effect == FxTag.PROC -> "its summoning procedure"
+            else -> book.script(c.code)?.let { sc -> sc.effects.indexOfFirst { it.id == tag.effect }.takeIf { it >= 0 }?.let { Shortcuts.label(sc.effects[it], it) } }
+                ?: "Effect ${tag.effect.removePrefix("e")}"
+        }
+        return "$line — ${shortcutTag(name, label, tag.verified)}"
+    }
+
+    /** A Shortcut's mark in the log: "Example Scout · Search (Shortcut)", "(Shortcut, unverified)" where it was. */
+    fun shortcutTag(card: String?, label: String?, verified: Boolean): String = buildString {
+        if (card != null) {
+            append(card)
+            if (label != null) append(" · ").append(label)
+            append(' ')
+        }
+        append(if (verified) "(Shortcut)" else "(Shortcut, unverified)")
+    }
+
+    private fun plain(before: DuelState, after: DuelState, e: DuelEntry, viewer: Int?, catalog: DuelCatalog): String {
         val who = e.seat?.let { seatName(before, it) }
         fun card(uid: Int): String {
             val c = before.cards[uid] ?: after.cards[uid] ?: return "a card"

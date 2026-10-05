@@ -42,6 +42,8 @@ object DuelLetters {
         Letter("r", DuelVerb.REVEAL, DeskAction.DUEL_REVEAL, "Reveal"),
         Letter("c", DuelVerb.COUNTER_UP, DeskAction.DUEL_COUNTER_UP, "A counter"),
         Letter("t", DuelVerb.TARGET, DeskAction.DUEL_TARGET, "Target"),
+        // Shortcut (Phase D §5½): `u h2`, `u h2 e2`, `u h2 search`; the word is `shortcut`, never `use`, which stays Activate.
+        Letter("u", DuelVerb.SHORTCUT, DeskAction.DUEL_SHORTCUT, "Shortcut"),
         Letter("m", DuelVerb.MOVE, null),
         Letter("bd", DuelVerb.BANISH_DOWN, DeskAction.DUEL_BANISH_DOWN),
         Letter("kb", DuelVerb.DECK_BOTTOM, DeskAction.DUEL_DECK_BOTTOM),

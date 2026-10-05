@@ -66,6 +66,8 @@ object DuelSpeech {
         "mill", "flip", "pos", "move", "place", "attach", "detach", "reveal", "counter", "token", "lp", "resolve", "bp", "m1", "m2",
         "ep", "end", "next", "ss", "special", "read", "open", "look", "discard", "return", "bounce", "spin", "excavate", "shuffle",
         "coin", "dice", "concede", "swap", "redo", "random", "roll", "throw", "first", "second", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play",
+        // Phase D §5½: "shortcut h2 search" said aloud is the line's own.
+        "shortcut",
     )
 
     /** For tests. */

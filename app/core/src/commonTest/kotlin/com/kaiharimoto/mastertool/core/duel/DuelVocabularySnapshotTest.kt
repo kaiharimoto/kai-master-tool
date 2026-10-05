@@ -46,14 +46,16 @@ class DuelVocabularySnapshotTest {
         "counter" to DuelVerb.COUNTER_UP, "uncounter" to DuelVerb.COUNTER_DOWN,
         "place" to DuelVerb.PLACE, "put" to DuelVerb.PLACE, "move" to DuelVerb.MOVE,
         "do" to DuelVerb.DEFAULT,
+        // Phase D §5½: Shortcut's word and letter, added beside the rest; `use` above stays Activate.
+        "shortcut" to DuelVerb.SHORTCUT,
         "a" to DuelVerb.ACTIVATE, "s" to DuelVerb.SUMMON, "e" to DuelVerb.SET, "p" to DuelVerb.POSITION, "f" to DuelVerb.FLIP,
         "g" to DuelVerb.GRAVE, "b" to DuelVerb.BANISH, "h" to DuelVerb.HAND, "k" to DuelVerb.DECK_TOP, "x" to DuelVerb.EXTRA,
-        "o" to DuelVerb.ATTACH, "r" to DuelVerb.REVEAL, "c" to DuelVerb.COUNTER_UP, "t" to DuelVerb.TARGET, "m" to DuelVerb.MOVE,
+        "o" to DuelVerb.ATTACH, "r" to DuelVerb.REVEAL, "c" to DuelVerb.COUNTER_UP, "t" to DuelVerb.TARGET, "u" to DuelVerb.SHORTCUT, "m" to DuelVerb.MOVE,
         "bd" to DuelVerb.BANISH_DOWN, "kb" to DuelVerb.DECK_BOTTOM, "ks" to DuelVerb.DECK_SHUFFLE, "cd" to DuelVerb.COUNTER_DOWN,
     )
 
     /** `DuelCommand.letters`. */
-    private val letters = setOf("a", "s", "e", "p", "f", "g", "b", "h", "k", "x", "o", "r", "c", "t", "m", "bd", "kb", "ks", "cd")
+    private val letters = setOf("a", "s", "e", "p", "f", "g", "b", "h", "k", "x", "o", "r", "c", "t", "u", "m", "bd", "kb", "ks", "cd")
 
     /** The two-letter verbs, as `DuelComplete.suggest` and `CommandHelp.letters` each spelled them out. */
     private val twoLetters = setOf("bd", "kb", "ks", "cd")
@@ -62,14 +64,14 @@ class DuelVocabularySnapshotTest {
     private val completionLetters = listOf(
         "s" to "Summon", "e" to "Set", "a" to "Activate", "g" to "Send to the GY", "b" to "Banish", "h" to "To the hand",
         "t" to "Target", "o" to "Attach", "p" to "Position", "f" to "Flip", "r" to "Reveal", "k" to "To the top of the Deck",
-        "x" to "To the Extra Deck", "c" to "A counter",
+        "x" to "To the Extra Deck", "c" to "A counter", "u" to "Shortcut",
     )
 
     /** `CommandHelp.letters`, as the help shows it. */
     private val helpLetters = listOf(
         "a" to "Activate", "b" to "Banish", "c" to "Add a counter", "e" to "Set", "f" to "Flip", "g" to "Send to GY",
         "h" to "To hand", "k" to "To top of Deck", "m" to "Move", "o" to "Attach as material", "p" to "Change position",
-        "r" to "Reveal", "s" to "Summon", "t" to "Target", "x" to "To Extra Deck",
+        "r" to "Reveal", "s" to "Summon", "t" to "Target", "u" to "Shortcut", "x" to "To Extra Deck",
         "bd" to "Banish face-down", "cd" to "Remove a counter", "kb" to "To bottom of Deck", "ks" to "Shuffle into Deck",
     )
 
@@ -231,6 +233,8 @@ class DuelVocabularySnapshotTest {
         "mill", "flip", "pos", "move", "place", "attach", "detach", "reveal", "counter", "token", "lp", "resolve", "bp", "m1", "m2",
         "ep", "end", "next", "ss", "special", "read", "open", "look", "discard", "return", "bounce", "spin", "excavate", "shuffle",
         "coin", "dice", "concede", "swap", "redo", "random", "roll", "throw", "first", "second", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play",
+        // Phase D §5½.
+        "shortcut",
     )
 
     @Test

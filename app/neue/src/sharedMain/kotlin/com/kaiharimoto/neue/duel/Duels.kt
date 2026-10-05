@@ -26,6 +26,7 @@ import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
+import com.kaiharimoto.mastertool.core.duel.Shortcuts
 import com.kaiharimoto.mastertool.core.duel.Tally
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.ai.AiCue
@@ -772,6 +773,8 @@ class Duels(val dir: File) {
             is DuelCommand.Parsed.Actions -> if (act(p.actions, bottom)) Ran.Moved else refused()
             // Moves joined with ";" (1.0.87): each its own step, in order, stopping at the first the table refuses.
             is DuelCommand.Parsed.Many -> many(p, quiet, ::refused)
+            // Shortcut (Phase D §5½): the table has no written effects until the library comes (step 2), so the line says so.
+            is DuelCommand.Parsed.Shortcut -> { if (!quiet) problem = Shortcuts.NONE_AT_TABLE; Ran.Refused(Shortcuts.NONE_AT_TABLE) }
             is DuelCommand.Parsed.Ruling -> {
                 val r = houseRulings.keepRuling(p.code, p.card, p.text)
                 act(DuelAction.Note("House ruling: ${r.card?.let { "$it — " } ?: ""}${r.text}", bottom), bottom)

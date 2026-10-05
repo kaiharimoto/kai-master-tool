@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.DuelVerb
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.Shortcuts
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.duel.text.DuelLetters
@@ -53,8 +54,10 @@ object DuelMoves {
     /**
      * Every move [seat] may make on [s], grouped. [only] is one card (a uid): every verb it takes where it stands, with each
      * free zone and host spelled out. [secret] is the duel's (its seed): the other seat's hand in the order the seat is shown it.
+     * [shortcuts]: the table's written effects (Phase D §5½) — each of the seat's own cards then lists its Shortcuts legal
+     * now (`u h2 e1`), and the chain its resolution as written; without them nothing of the kind is listed.
      */
-    fun menu(s: DuelState, seat: Int, catalog: DuelCatalog, secret: Long, only: Int? = null): List<Group> {
+    fun menu(s: DuelState, seat: Int, catalog: DuelCatalog, secret: Long, only: Int? = null, shortcuts: Shortcuts? = null): List<Group> {
         val seen = HashSet<List<DuelAction>>()
         fun plan(line: String): List<DuelAction>? {
             val run = ComboRunner.plan(s, seat, listOf(line), catalog, secret)
@@ -80,6 +83,13 @@ object DuelMoves {
                 offer(out, "resolve", "Resolve Chain Link ${s.chain.size}")
                 if (s.chain.size > 1) offer(out, "resolve all", "Resolve the whole chain")
                 s.chain.forEachIndexed { i, l -> if (!l.negated) offer(out, "negate ${i + 1}", "Negate Chain Link ${i + 1}") }
+                // As written (Phase D §5½): offered when the newest link, or any, was made by a Shortcut. The engine makes it
+                // with the choices it asks for, so it is listed, not planned.
+                if (shortcuts != null && !shortcuts.networked) {
+                    val links = (1..s.chain.size).filter { shortcuts.written(s, it) }
+                    if (s.chain.size in links) out += Move("resolve by shortcut", "Resolve Chain Link ${s.chain.size} as written")
+                    if (links.isNotEmpty() && s.chain.size > 1) out += Move("resolve all by shortcut", "Resolve the whole chain, the written links as written")
+                }
                 if (out.isNotEmpty()) groups += Group("The chain", out)
             }
             attacks(s, seat, catalog, secret).let { lines ->
@@ -115,13 +125,18 @@ object DuelMoves {
             val card = s.cards[uid] ?: continue
             val at = DuelNotation.coordOf(s, uid, seat, secret) ?: continue
             val sees = DuelSight.sees(s, uid, seat)
-            val offered = DuelVerbs.offered(s, seat, uid, catalog).filter { it != DuelVerb.DEFAULT && it != DuelVerb.ATTACK }
+            val offered = DuelVerbs.offered(s, seat, uid, catalog).filter { it != DuelVerb.DEFAULT && it != DuelVerb.ATTACK && it != DuelVerb.SHORTCUT }
             val chosen = when {
                 only != null -> (if (theirs) verbs else offered) + (if (theirs) emptyList() else verbs.filter { it !in offered })
                 theirs -> verbs
                 else -> verbs.filter { it in offered }
             }
             val out = mutableListOf<Move>()
+            // The card's Shortcuts legal now (Phase D §5½), by effect id: the engine makes each with the choices given in the
+            // op (`pick=`, `target=`, `zone=`, `declare=`), or asks them back.
+            if (!theirs && shortcuts != null) shortcuts.options(s, seat, uid).filter { it.legal }.forEach { o ->
+                out += Move("${word(DuelVerb.SHORTCUT)} $at ${o.effect}", "Shortcut: ${o.label}${if (o.verified) "" else " (unverified)"}")
+            }
             for (verb in chosen) {
                 val word = word(verb) ?: continue
                 offer(out, "$word $at", verb.label)

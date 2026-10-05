@@ -73,6 +73,13 @@ object CommandHelp {
         "k gy1 gy3" to "On top of the Deck, top first: gy1 the new top card, gy3 under it",
         "kb gy1 gy3" to "On the bottom, top first: gy3 the bottom card, gy1 just above it",
         "t om1 om2" to "An arrow to each of their cards",
+        // Shortcut (Phase D §5½): the written effect does the moves; `use` is still Activate.
+        "u h2" to "Shortcut: the card's written effect does its moves, asking each choice (U)",
+        "u h2 e2" to "Its second effect, by id; or by its short name, “u h2 search”",
+        "u h2 search" to "The effect called Search",
+        "u gy1 e2 target=om1" to "With the choice given: target their M1 (also pick=, zone=, option=, declare=)",
+        "resolve by shortcut" to "The newest chain link resolves as written",
+        "resolve all by shortcut" to "The whole chain: the written links as written, the rest by hand",
     )
 
     /** One row of the help: what to type or press on the left, what it means on the right. */
