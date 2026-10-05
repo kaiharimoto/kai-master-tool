@@ -776,7 +776,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   time, off the main thread; Ai's code typed into the editor), `AiWorld` Ai's tools (`world_state/new/write/read/run/tool/show`),
   `MODE_WORLD` and the `ai-world` skill; `WorldPaint.kt` is the World's one file allowed colour. `<data>/world/` is
   synced and backed up; the `WORLD` start step asks about Python on the desk. `tools/shoot.sh --page=world --world=demo`.
-  **Since 1.1.x it is a desktop** (`docs/world/DESKTOP.md`, kai: "a simulation of a computer desktop"; 1.0.97's panes and
+  **Since 1.1.14 it is a desktop** (`docs/world/DESKTOP.md`, kai: "a simulation of a computer desktop"; 1.0.97's panes and
   the boards canvas are gone): `core/world/desk` is the model (`Desk` + `DeskOp` through one reducer, `desk.json` by
   `DeskCodec`, `FocusPolicy`, `DeskTidy`, `AvatarPilot`/`AvatarPath`, `WorldIcons`, `WorldNotices`), `neue/world/desk/`
   the shell — `WorldDeskState` (the owned part of `Worlds`: every window change goes through `apply(DeskOp)`; Ai through

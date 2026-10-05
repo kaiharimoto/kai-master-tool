@@ -1,4 +1,4 @@
-# Ai World as a desktop (1.1.x)
+# Ai World as a desktop (1.1.14)
 
 **Goal:** Ai World stops being six panes of equal weight and becomes a small computer kai can sit at: a desktop with
 icons, a taskbar, windows that open one at a time, a browser with tabs for everything Ai found, apps Ai builds that
