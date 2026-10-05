@@ -47,11 +47,10 @@ internal fun tokensEach(set: EvalSet): Int = if (set.id == EvalSets.PUZZLES) PUZ
  * The puzzle set's bounds, worked out by playing it (Phase C stage 3): doing nothing, a battle-only greedy player and the
  * recorded solutions, each through the same table and referee a model plays.
  */
-internal val PUZZLE_BOUNDS: String by lazy {
-    val (nothing, greedy, solved) = PuzzleBaselines.bounds()
-    val n = Puzzles.all.size
-    "Baselines: doing nothing $nothing of $n · a battle-only greedy player $greedy of $n · the recorded solutions $solved of $n"
-}
+internal val PUZZLE_BOUNDS: Triple<Int, Int, Int> by lazy { PuzzleBaselines.bounds() }
+
+/** How many puzzles the set holds: the scale's far end. */
+internal val PUZZLE_COUNT: Int get() = Puzzles.all.size
 
 /** A connection's runs, oldest first. */
 fun AiState.evalRuns(connection: String): List<EvalRun> = EvalLog.read(files.read(EvalLog.path(connection)))

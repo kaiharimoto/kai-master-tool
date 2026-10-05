@@ -56,7 +56,8 @@ internal class DuelSpotlightState(private val d: Duels) {
         /** The character the opening keystroke may still type into the field (the letter, or `/`). */
         swallow: Char?,
     ) {
-        if (d.shown == null || d.replayer.replay != null) return
+        // Nor over Ai vs Ai being watched: nothing typed there could be played (the design review, finding 1).
+        if (d.shown == null || d.replayer.replay != null || d.spectating) return
         val was = spotlight
         spotlight = if (was != null && text.isEmpty()) was.copy(mode = mode, answer = null, problem = null)
         else com.kaiharimoto.mastertool.core.duel.text.Spotlight.State(text).copy(mode = mode)

@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.Part
@@ -51,10 +52,13 @@ import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
+import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.muClickable
+import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
+import com.kaiharimoto.neue.theme.MuType
 
 /**
  * The duel's log and its chat — and, from 1.0.80, Ai's (kai: "it feels redundant to have basically two
@@ -73,7 +77,10 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
     val refused = duels.refused()
     val remote = duels.remoteLines
     val guest = duels.role == Duels.NetRole.GUEST
-    val seated = aiAtTable(h)
+    // Watching Ai vs Ai (the design review, finding 1): no box to type in, no cues for Ai at the person's table — the
+    // log is read, not written.
+    val watching = duels.spectating
+    val seated = aiAtTable(h) && !watching
     val thinking = h.neue.prefs.duel.aiThinking
     val talk = ai.session?.takeIf { seated && it.mode == AiSession.MODE_DUEL && it.id == duels.aiSession }
     val folds = remember(game.header, viewer, duels.catalog) { logFolds(game, viewer, duels.catalog) }
@@ -135,15 +142,17 @@ internal fun DuelLogRail(h: NeueHolders, duels: Duels, game: DuelGame, viewer: I
         HRule()
         TurnTally(duels, game, viewer)
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = list) {
-            itemsIndexed(lines, key = { i, _ -> keys[i] }) { _, line -> LogRow(h, duels, line, opened) }
+            // A match over: its result is the log's last line, in ink at weight 500, kept after the bar is closed.
+            val result = if (watching && !duels.matches.running) lines.lastIndex else -1
+            itemsIndexed(lines, key = { i, _ -> keys[i] }) { i, line -> LogRow(h, duels, line, opened, strong = i == result) }
             if (live && thinking && ai.reasoning.isNotBlank()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) { ReasoningView(ai, ai.reasoning, live = true, opened) } }
             if (live && thinking) items(ai.activity) { Box(Modifier.padding(horizontal = 12.dp)) { ActivityLine(it.summary.ifBlank { it.name }, it.isError) } }
             if (live && ai.streaming.isNotEmpty()) item { Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { ReplyView(ai, redactor.once(ai.streaming).text, live = true) } }
         }
         HRule()
-        if (duels.logPick.isNotEmpty() && !guest) PickBar(h, duels, game)
+        if (duels.logPick.isNotEmpty() && !guest && !watching) PickBar(h, duels, game)
         if (seated && !guest && duels.replay == null) AiCues(h, duels, game, talk != null)
-        MuInput(
+        if (!watching) MuInput(
             duels.chat,
             { duels.chat = it },
             Modifier.fillMaxWidth().padding(8.dp),
@@ -179,7 +188,7 @@ private fun submit(h: NeueHolders, duels: Duels, text: String, seated: Boolean) 
 }
 
 @Composable
-private fun LogRow(h: NeueHolders, duels: Duels, line: LogLine, opened: MutableMap<String, Boolean>) {
+private fun LogRow(h: NeueHolders, duels: Duels, line: LogLine, opened: MutableMap<String, Boolean>, strong: Boolean = false) {
     val c = Mu.colors
     when (line) {
         is LogLine.Turn -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -198,7 +207,10 @@ private fun LogRow(h: NeueHolders, duels: Duels, line: LogLine, opened: MutableM
             else Small(line.text, m, color = if (line.mine) c.ink else c.ink70)
         }
         is LogLine.Noted -> Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-            Box(Modifier.border(1.dp, c.ink).padding(horizontal = 6.dp, vertical = 3.dp)) { Small(line.text, color = c.ink) }
+            Box(Modifier.border(1.dp, c.ink).padding(horizontal = 6.dp, vertical = 3.dp)) {
+                if (strong) MuText(line.text, style = MuType.small(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium), color = c.ink)
+                else Small(line.text, color = c.ink)
+            }
         }
         is LogLine.AiSays -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) { ReplyView(h.ai, line.text) }
         is LogLine.AiThought -> Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) { ReasoningView(h.ai, line.text, live = false, opened) }

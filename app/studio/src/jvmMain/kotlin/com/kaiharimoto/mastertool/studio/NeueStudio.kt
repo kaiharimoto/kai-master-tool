@@ -450,6 +450,9 @@ fun neueMain(args: Array<String>) {
             // --duel-match=dialog|live|over: Ai vs Ai (`docs/phases/C.md` §6) — the start dialog, a match being watched (the second
             // seat mid-turn), or one played to its end; scripted players through the real referee, no model called.
             map["duel-match"]?.let { studioMatch(h, it, clock) }
+            // --duel-records=demo: Replays opened on a tally of finished duels — against people at several settings, and Ai vs Ai
+            // by models and decks (the design review, finding 11).
+            map["duel-records"]?.let { studioRecords(h, clock) }
             // --present=demo: a deck profile of the builder's deck (1.0.70), opened in the editor;
             // --present-style=spotlight|slides|buildup, --present-theme=arena|neon|…, --present-webcam=tr|tl|br|bl|left|right|off,
             // --present-slide=N the slide in view, --present-mode=library|edit|play|overview|notes, and
@@ -1410,6 +1413,7 @@ The long reasons sit under the first table only where they must; the third is to
                         val miss = when (item.grader) {
                             is Grader.YesNo -> if ((item.grader as Grader.YesNo).expected) "no (expected yes)" else "yes (expected no)"
                             is Grader.Planted -> if ((item.grader as Grader.Planted).hasError) "missed (0 other claims marked wrong)" else "false alarm: a true claim marked wrong"
+                            is Grader.Puzzle -> "not solved: their LP 1200, the goal 0"
                             else -> "74.5% (expected 74.2%)"
                         }
                         ItemOutcome(item.id, if (pass) tries else 0, tries, pass, if (pass) "right" else miss)
@@ -1421,9 +1425,13 @@ The long reasons sit under the first table only where they must; the third is to
                 sample(EvalSets.handOdds(), 6, 3, now - 86_400_000),
                 sample(EvalSets.rulings(), 10, 1, now - 3_600_000),
                 sample(EvalSets.planted(), 5, 1, now - 600_000),
+                // The puzzles too, so the scale has a score on it.
+                sample(EvalSets.byId(EvalSets.PUZZLES)!!, 3, 1, now - 300_000),
             )
             ai.files.write(EvalLog.path(conn), EvalLog.write(runs))
             ai.evalVersion++
+            // --ai-step=open: the odds, the checker and the puzzles opened out to their details and misses.
+            if (step == "open") ai.trustExpanded = setOf(EvalSets.HAND_ODDS, EvalSets.PLANTED, EvalSets.PUZZLES)
             ai.trustOpen = true
         }
         // 1.0.67: the reader's guide, the sample book open in the reader; --ai=reader-lines lands on the first line,

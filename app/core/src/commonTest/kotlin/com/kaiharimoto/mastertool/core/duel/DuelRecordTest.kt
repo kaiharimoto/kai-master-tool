@@ -190,13 +190,12 @@ class DuelRecordTest {
         assertEquals(1, plain.drawn)
         assertEquals(4, plain.played)
         assertEquals(
-            "Ai won 2 of 4 against kai (1 drawn), with these settings: Ai's knowledge its own seat's eyes; kai seeing only their own hand; " +
-                "the dice deciding who went first (Ai first in 4).",
+            "Ai won 2 of 4 against kai, 1 drawn. Ai saw only its own hand; kai saw only theirs; the dice chose who went first (Ai first in 4).",
             DuelResults.words(plain),
         )
         val auto = kai.first { it.settings.knows == DuelBrief.AUTO }
-        assertTrue(DuelResults.words(auto, "Mika").contains("2 peeks, each in the log"))
-        assertTrue(DuelResults.words(kai.first { it.settings.eyes == DuelPrefs.KNOW_ALL }).contains("kai seeing both hands"))
+        assertTrue(DuelResults.words(auto, "Mika").contains("Mika saw its own hand and peeked 2 times, each peek in the log"))
+        assertTrue(DuelResults.words(kai.first { it.settings.eyes == DuelPrefs.KNOW_ALL }).contains("kai saw both hands"))
         // What-ifs only when asked for.
         assertEquals(5, DuelResults.aiAgainst(results, "kai", whatIfs = true).first { it.settings.knows == DuelBrief.SELF && it.settings.eyes == DuelPrefs.KNOW_SEAT }.played)
         // Everyone, and no one.

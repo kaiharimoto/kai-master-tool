@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.duel.record
 
+import com.kaiharimoto.mastertool.core.ai.providers.ModelNames
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelEntry
 import com.kaiharimoto.mastertool.core.duel.DuelGame
@@ -232,40 +233,61 @@ object DuelResults {
         }
 
     /**
-     * Ai vs Ai by the two engines that met, in name order (so the seats do not split a pairing): [a]'s wins, [b]'s,
-     * draws, and how often going first won.
+     * Ai vs Ai by the two players that met — each an engine with the deck it sat down with — in name order (so the seats
+     * do not split a pairing): [a]'s wins, [b]'s, draws, and how often going first won. [aDeck]/[bDeck] are the decks'
+     * names (blank when the record has none); the deck usually matters more than the model, so a pairing is both.
      */
-    data class MatchScore(val a: String, val b: String, val aWon: Int, val bWon: Int, val drawn: Int, val goingFirstWon: Int) {
+    data class MatchScore(
+        val a: String,
+        val b: String,
+        val aWon: Int,
+        val bWon: Int,
+        val drawn: Int,
+        val goingFirstWon: Int,
+        val aDeck: String = "",
+        val bDeck: String = "",
+    ) {
         val played: Int get() = aWon + bWon + drawn
     }
 
-    /** Every Ai vs Ai result, grouped by the engines that met; a result of any other kind is never among them. */
+    /** A seat of an Ai vs Ai match as the summary pairs it: its engine and its deck. */
+    private fun side(seat: ResultSeat): Pair<String, String> = seat.engine to seat.deckName
+
+    /** Every Ai vs Ai result, grouped by the engines and decks that met; a result of any other kind is never among them. */
     fun aiVsAi(results: List<DuelResult>): List<MatchScore> =
         results.filter { it.kind == DuelResult.AI_VS_AI && it.seats.size == 2 && !it.whatIf }.groupBy { r ->
-            r.seats.map { it.engine }.sorted().let { it[0] to it[1] }
+            r.seats.map(::side).sortedWith(compareBy({ it.first }, { it.second })).let { it[0] to it[1] }
         }.map { (pair, rs) ->
             val mirror = pair.first == pair.second
-            fun won(r: DuelResult) = r.winner?.let { r.seats[it].engine }
+            fun won(r: DuelResult) = r.winner?.let { side(r.seats[it]) }
             MatchScore(
-                pair.first, pair.second,
+                pair.first.first, pair.second.first,
                 aWon = if (mirror) rs.count { it.winner != null } else rs.count { won(it) == pair.first },
                 bWon = if (mirror) 0 else rs.count { won(it) == pair.second },
                 drawn = rs.count { it.winner == null },
                 goingFirstWon = rs.count { it.winner != null && it.winner == it.first },
+                aDeck = pair.first.second,
+                bDeck = pair.second.second,
             )
         }.sortedByDescending { it.played }
 
-    /** "Ai vs Ai: claude-opus-5-5 beat gpt-x 3 of 5 (1 drawn; going first won 4)." */
+    /** An engine as a person says it — a model id shortened ("Opus 5.5"), a connection's label as it is — with its deck. */
+    fun player(engine: String, deck: String): String {
+        val name = ModelNames.short(engine).ifBlank { engine }
+        return if (deck.isBlank()) name else "$name ($deck)"
+    }
+
+    /** "Opus 5.5 (lab) beat GPT-5 (K9 Vanquish Soul) 3 of 5, 1 drawn; going first won 4." */
     fun matchWords(score: MatchScore): String {
-        val tail = listOfNotNull(
-            if (score.drawn > 0) "${score.drawn} drawn" else null,
-            "going first won ${score.goingFirstWon}",
-        ).joinToString("; ")
+        val a = player(score.a, score.aDeck)
+        val b = player(score.b, score.bDeck)
+        val drawn = if (score.drawn > 0) ", ${score.drawn} drawn" else ""
+        val first = "going first won ${score.goingFirstWon}"
         return when {
-            score.a == score.b -> "Ai vs Ai: ${score.a} against itself, two sessions, ${score.played} played ($tail)."
-            score.aWon == score.bWon -> "Ai vs Ai: ${score.a} and ${score.b} won ${score.aWon} each of ${score.played} ($tail)."
-            score.aWon > score.bWon -> "Ai vs Ai: ${score.a} beat ${score.b} ${score.aWon} of ${score.played} ($tail)."
-            else -> "Ai vs Ai: ${score.b} beat ${score.a} ${score.bWon} of ${score.played} ($tail)."
+            score.a == score.b && score.aDeck == score.bDeck -> "$a against itself, two sessions: ${score.played} played$drawn; $first."
+            score.aWon == score.bWon -> "$a and $b won ${score.aWon} each of ${score.played}$drawn; $first."
+            score.aWon > score.bWon -> "$a beat $b ${score.aWon} of ${score.played}$drawn; $first."
+            else -> "$b beat $a ${score.bWon} of ${score.played}$drawn; $first."
         }
     }
 
@@ -367,41 +389,76 @@ object DuelResults {
         }.sortedWith(compareBy<Score> { it.person.lowercase() }.thenByDescending { it.played })
     }
 
-    /** "Ai won 3 of 5 against kai (1 drawn), with these settings: …" — [aiName] is what the person calls Ai. */
+    /**
+     * One line of the tally (Replays, in the kit's §12 table shape): who Ai played, how it went, what Ai saw, what they
+     * saw, and who went first — each a few words, so the columns read down.
+     */
+    data class Cells(val against: String, val result: String, val aiSaw: String, val theySaw: String, val first: String, val note: String? = null)
+
+    fun cells(score: Score, aiName: String = "Ai"): Cells {
+        val s = score.settings
+        val peeks = "${score.peeks} peek${if (score.peeks == 1) "" else "s"}"
+        val aiSaw = s.knows.split('+').joinToString(", then ") { k ->
+            when (k) {
+                DuelBrief.SELF -> "its own hand"
+                DuelBrief.AUTO -> "its own hand, $peeks"
+                DuelBrief.FULL -> "every card"
+                DuelBrief.OPPONENT -> "the other hand"
+                else -> k
+            }
+        }.replaceFirstChar { it.uppercase() }
+        return Cells(
+            against = score.person,
+            result = "Won ${score.won} of ${score.played}" + if (score.drawn > 0) ", ${score.drawn} drawn" else "",
+            aiSaw = aiSaw,
+            theySaw = when {
+                s.net -> "Their own hand, online"
+                s.eyes == DuelPrefs.KNOW_ALL -> "Both hands"
+                s.eyes == DuelPrefs.KNOW_SEAT -> "Their own hand"
+                else -> "—"
+            },
+            first = "$aiName in ${score.wentFirst} of ${score.played}" + if (s.rolled) ", by the dice" else "",
+            note = if (!s.clean) "A seat was moved by the other side at times." else null,
+        )
+    }
+
+    /**
+     * "Ai won 3 of 5 against kai, 1 drawn. Ai saw only its own hand; kai saw only theirs; the dice chose who went first
+     * (Ai first in 2)." — a sentence for the result, one for how the table was set. [aiName] is what the person calls Ai.
+     */
     fun words(score: Score, aiName: String = "Ai"): String {
         val s = score.settings
         val head = "$aiName won ${score.won} of ${score.played} against ${score.person}" +
-            (if (score.drawn > 0) " (${score.drawn} drawn)" else "")
-        val knows = s.knows.split('+').joinToString(" then ") { knowsWords(it) }
+            (if (score.drawn > 0) ", ${score.drawn} drawn" else "") + "."
+        val saw = s.knows.split('+').joinToString(", then ") { k ->
+            when (k) {
+                DuelBrief.SELF -> "only its own hand"
+                DuelBrief.AUTO -> "its own hand and peeked ${score.peeks} time${if (score.peeks == 1) "" else "s"}, each peek in the log"
+                DuelBrief.FULL -> "every card"
+                DuelBrief.OPPONENT -> "only the other seat's hand"
+                else -> k
+            }
+        }
         val parts = listOfNotNull(
-            "$aiName's knowledge $knows",
-            if (s.knows.split('+').contains(DuelBrief.AUTO)) "${score.peeks} peek${if (score.peeks == 1) "" else "s"}, each in the log" else null,
+            "$aiName saw $saw",
             when {
-                s.net -> "over the network, each seeing only their own hand"
-                s.eyes == DuelPrefs.KNOW_ALL -> "${score.person} seeing both hands"
-                s.eyes == DuelPrefs.KNOW_SEAT -> "${score.person} seeing only their own hand"
+                s.net -> "over the network, ${score.person} saw only theirs"
+                s.eyes == DuelPrefs.KNOW_ALL -> "${score.person} saw both hands"
+                s.eyes == DuelPrefs.KNOW_SEAT -> "${score.person} saw only theirs"
                 else -> null
             },
-            if (s.rolled) "the dice deciding who went first ($aiName first in ${score.wentFirst})" else "$aiName first in ${score.wentFirst}",
-            if (!s.clean) "a seat moved by the other side at times" else null,
+            if (s.rolled) "the dice chose who went first ($aiName first in ${score.wentFirst})" else "$aiName went first in ${score.wentFirst}",
+            if (!s.clean) "a seat was moved by the other side at times" else null,
         )
-        return "$head, with these settings: ${parts.joinToString("; ")}."
+        return "$head ${parts.joinToString("; ")}."
     }
 
     /** Every person and setting in words, one line each; [none] when there is nothing to count. */
     fun summary(results: List<DuelResult>, person: String? = null, aiName: String = "Ai", whatIfs: Boolean = false): String {
         val scores = aiAgainst(results, person, whatIfs)
         // Ai vs Ai (two sessions, one a seat), counted apart: after the games against people, never among them.
-        val self = if (person == null) aiVsAi(results).map(::matchWords) else emptyList()
+        val self = if (person == null) aiVsAi(results).map { "Ai vs Ai: " + matchWords(it) } else emptyList()
         if (scores.isEmpty() && self.isEmpty()) return if (person != null) "No finished duels between $aiName and $person yet." else "No finished duels against $aiName yet."
         return (scores.map { words(it, aiName) } + self).joinToString("\n")
-    }
-
-    private fun knowsWords(k: String) = when (k) {
-        DuelBrief.SELF -> "its own seat's eyes"
-        DuelBrief.AUTO -> "auto (its own eyes, and peeks it logs)"
-        DuelBrief.FULL -> "full (every card)"
-        DuelBrief.OPPONENT -> "the other seat's eyes"
-        else -> k
     }
 }

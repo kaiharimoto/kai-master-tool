@@ -232,15 +232,27 @@ private fun keyRows(): List<Pair<String, String>> = listOf(
     DeskShortcuts.all.firstOrNull { it.action == a && (it.scope == DeskScope.DUEL || a == DeskAction.UNDO) }?.chord?.let { DeskShortcuts.kbd(it) to words }
 }.let { listOf(ARROWS to "Walk the table") + it }
 
+/**
+ * The keys a watcher has while Ai vs Ai is on the table (the design review, finding 1): Esc stops the match, or once it is
+ * over takes the person back to their duel; the arrows walk the table to read its cards; the coordinates. A player's keys
+ * would only be refused.
+ */
+private fun watcherRows(running: Boolean): List<Pair<String, String>> = listOfNotNull(
+    DeskShortcuts.chordFor(DeskAction.DISMISS)?.let { DeskShortcuts.kbd(it) to if (running) "Stop the match" else "Back to your duel" },
+    ARROWS to "Walk the table",
+    DeskShortcuts.all.firstOrNull { it.action == DeskAction.DUEL_COORDINATES && it.scope == DeskScope.DUEL }?.chord?.let { DeskShortcuts.kbd(it) to "Coordinates" },
+)
+
 /** The keys that matter most, pinned at the inspector's foot, two to a row; a click folds them away. */
 @Composable
 private fun KeyCheat(h: NeueHolders) {
     val c = Mu.colors
     val shown = h.neue.prefs.duel.keysShown
     // The keys' words are the tables', which do not change while the app runs: read once (1.0.92).
-    val rows = remember(DeskShortcuts.all) {
+    val all = remember(DeskShortcuts.all) {
         keyRows()
     }
+    val rows = if (h.duel.spectating) watcherRows(h.duel.matches.running) else all
     Column(Modifier.fillMaxWidth()) {
         HRule()
         Row(

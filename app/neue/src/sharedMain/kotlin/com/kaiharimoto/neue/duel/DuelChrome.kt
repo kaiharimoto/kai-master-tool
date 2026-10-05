@@ -60,6 +60,7 @@ import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Micro
+import androidx.compose.ui.text.style.TextAlign
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
@@ -83,6 +84,8 @@ private val PHASE_SHORT = mapOf(
 @Composable
 internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
+    // Watching Ai vs Ai the life points are read, never changed (the design review, finding 1): no pad, no pointer.
+    val watching = duels.spectating
     l.score.forEach { (seat, slot) ->
         val st = s.seats[seat]
         val turn = s.active == seat
@@ -91,17 +94,21 @@ internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayo
         Column(
             Modifier.zIndex(30f).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp)
                 .background(if (turn) c.ink else c.paper).border(1.dp, if (turn) c.ink else c.ink25)
-                .cursorPointer(caption = if (aimed(duels, s, seat)) "Attack directly" else "Change LP")
-                .muClickable {
-                    // An attack waiting (1.0.86): their life points take it directly.
-                    if (aimed(duels, s, seat)) duels.attack(null)
-                    else { duels.attacking = null; duels.lpPad = if (duels.lpPad == seat) null else seat }
-                }
+                .then(
+                    if (watching) Modifier
+                    else Modifier.cursorPointer(caption = if (aimed(duels, s, seat)) "Attack directly" else "Change LP")
+                        .muClickable {
+                            // An attack waiting (1.0.86): their life points take it directly.
+                            if (aimed(duels, s, seat)) duels.attack(null)
+                            else { duels.attacking = null; duels.lpPad = if (duels.lpPad == seat) null else seat }
+                        },
+                )
                 .padding(horizontal = 4.dp, vertical = 3.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp, if (top) Alignment.Top else Alignment.Bottom),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            val name: @Composable () -> Unit = { Micro(DuelWords.seatName(s, seat), color = ink, size = 9.sp, maxLines = 1) }
+            // Two lines when it must (the design review, finding 2): "Opus 5.5" is never cut to "OPUS…".
+            val name: @Composable () -> Unit = { Micro(DuelWords.seatName(s, seat), color = ink, size = 9.sp, maxLines = 2, align = TextAlign.Center) }
             val marks: @Composable () -> Unit = {
                 when {
                     s.conceded == seat -> Micro("Conceded", color = ink, size = 8.sp, maxLines = 1)
@@ -137,6 +144,10 @@ internal fun ScoreColumn(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayo
 @Composable
 internal fun PhaseStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayout) {
     val c = Mu.colors
+    // Watching Ai vs Ai the phases are the players' (the design review, finding 1): drawn at ink-45, no pointer, no press.
+    val watching = duels.spectating
+    val ink = if (watching) c.ink45 else c.ink
+    fun Modifier.acts(caption: String, onClick: () -> Unit): Modifier = if (watching) this else cursorPointer(caption = caption).muClickable(onClick = onClick)
     var menuAt by remember { mutableStateOf(Offset.Zero) }
     l.phaseBoxes().forEach { b ->
         val slot = b.slot
@@ -146,20 +157,18 @@ internal fun PhaseStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayou
                 val p = b.phase ?: DuelPhase.DRAW
                 val on = s.phase == p
                 Box(
-                    place.background(if (on) c.ink else c.paper)
-                        .border(1.dp, if (on) c.ink else c.ink25)
-                        .cursorPointer(caption = p.label)
-                        .muClickable { if (!on) duels.goPhase(p) },
+                    place.background(if (on) ink else c.paper)
+                        .border(1.dp, if (on) ink else c.ink25)
+                        .acts(p.label) { if (!on) duels.goPhase(p) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Mono(PHASE_SHORT.getValue(p), color = if (on) c.paper else c.ink, size = 11.sp)
+                    Mono(PHASE_SHORT.getValue(p), color = if (on) c.paper else ink, size = 11.sp)
                 }
             }
             PhaseBox.Kind.NOW -> Column(
-                place.background(c.ink).border(1.dp, c.ink)
+                place.background(ink).border(1.dp, ink)
                     .onGloballyPositioned { menuAt = it.boundsInWindow().topLeft }
-                    .cursorPointer(caption = "${s.phase.label} Phase · every phase")
-                    .muClickable { h.neue.menu = MenuSpec(menuAt, phaseMenu(duels, s)) },
+                    .acts("${s.phase.label} Phase · every phase") { h.neue.menu = MenuSpec(menuAt, phaseMenu(duels, s)) },
                 verticalArrangement = Arrangement.Center,
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -171,23 +180,21 @@ internal fun PhaseStrip(h: NeueHolders, duels: Duels, s: DuelState, l: DuelLayou
                 val ends = s.phase == DuelPhase.END
                 val next = s.phase.next()
                 Column(
-                    place.background(c.paper).border(1.dp, c.ink)
-                        .cursorPointer(caption = if (ends) "End turn" else "Next phase: ${next.label}")
-                        .muClickable { if (ends) duels.goPhase(null, end = true) else duels.goPhase(next) },
+                    place.background(c.paper).border(1.dp, if (watching) c.ink25 else c.ink)
+                        .acts(if (ends) "End turn" else "Next phase: ${next.label}") { if (ends) duels.goPhase(null, end = true) else duels.goPhase(next) },
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Micro(if (ends) "End" else "Next", color = c.ink, size = 9.sp, maxLines = 1)
-                    Mono(if (ends) "turn" else PHASE_SHORT.getValue(next), color = c.ink, size = 15.sp)
+                    Micro(if (ends) "End" else "Next", color = ink, size = 9.sp, maxLines = 1)
+                    Mono(if (ends) "turn" else PHASE_SHORT.getValue(next), color = ink, size = 15.sp)
                 }
             }
             PhaseBox.Kind.END -> Box(
-                place.border(1.dp, c.ink)
-                    .cursorPointer(caption = "End turn")
-                    .muClickable { duels.goPhase(null, end = true) },
+                place.border(1.dp, if (watching) c.ink25 else c.ink)
+                    .acts("End turn") { duels.goPhase(null, end = true) },
                 contentAlignment = Alignment.Center,
             ) {
-                Micro(if (s.solo) "Next" else "End", color = c.ink, size = 9.sp)
+                Micro(if (s.solo) "Next" else "End", color = ink, size = 9.sp)
             }
         }
     }

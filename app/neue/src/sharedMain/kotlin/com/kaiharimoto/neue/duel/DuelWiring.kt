@@ -185,6 +185,9 @@ internal fun dismissDuel(h: NeueHolders): Boolean {
         d.picked != null -> d.picked = null
         d.verbStrip -> d.verbStrip = false
         d.verbsOpen -> d.verbsOpen = false
+        // Ai vs Ai being watched (the design review, finding 9): Esc is Stop while it runs, then Back to your duel.
+        d.matches.running -> d.matches.stop()
+        d.spectating -> d.matches.close()
         // Then Ai thinking at the table stops, and the moves it was playing out with it.
         aiAtTable(h) && h.ai.running && h.ai.session?.mode == AiSession.MODE_DUEL -> {
             h.ai.stop()

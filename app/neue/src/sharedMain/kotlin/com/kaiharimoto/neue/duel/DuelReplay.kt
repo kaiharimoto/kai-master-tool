@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.kit.HRule
 import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuButton
@@ -146,6 +148,65 @@ private fun Timeline(duels: Duels, replay: Replay, modifier: Modifier) {
     }
 }
 
+/** The tally's columns: who Ai played, how it went, what Ai saw, what they saw, who went first. */
+private val TALLY_WEIGHTS = listOf(0.9f, 1.1f, 1.1f, 1.1f, 1.2f)
+
+/** A micro-caps header strip over a ruled table (the kit's §12): [cells] side by side, or one [label] across. */
+@Composable
+private fun TallyHead(cells: List<String>) {
+    val c = Mu.colors
+    Row(
+        Modifier.fillMaxWidth().drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (cells.size == 1) Micro(cells.single(), Modifier.weight(1f), color = c.ink70)
+        else cells.forEachIndexed { i, t -> Micro(t, Modifier.weight(TALLY_WEIGHTS[i]), color = c.ink70) }
+    }
+}
+
+/**
+ * Ai's games against people, counted (Phase C; the design review, finding 11): a row per person and setting, read down by
+ * column — on a phone, where five columns do not fit, a sentence a row.
+ */
+@Composable
+private fun ResultsTable(scores: List<DuelResults.Score>, aiName: String) {
+    val c = Mu.colors
+    val phone = LocalPhone.current
+    Column {
+        TallyHead(if (phone) listOf("Against people") else listOf("Against", "Result", "$aiName saw", "They saw", "First"))
+        scores.forEach { s ->
+            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (phone) {
+                    Small(DuelResults.words(s, aiName), color = c.ink70)
+                } else {
+                    val cells = DuelResults.cells(s, aiName)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(cells.against, cells.result, cells.aiSaw, cells.theySaw, cells.first).forEachIndexed { i, t ->
+                            Small(t, Modifier.weight(TALLY_WEIGHTS[i]), color = if (i == 0) c.ink else c.ink70)
+                        }
+                    }
+                    cells.note?.let { Help(it) }
+                }
+            }
+            HRule()
+        }
+    }
+}
+
+/** Ai vs Ai, counted apart by the models and the decks that met: its own strip, a sentence a pairing, at ink-70 like the rest. */
+@Composable
+private fun MatchesTable(matches: List<DuelResults.MatchScore>) {
+    val c = Mu.colors
+    Column {
+        TallyHead(listOf("Ai vs Ai"))
+        matches.forEach { m ->
+            Small(DuelResults.matchWords(m), Modifier.fillMaxWidth().padding(vertical = 6.dp), color = c.ink70)
+            HRule()
+        }
+    }
+}
+
 /** The library of replays: save the duel in play as one, open one, or let one go. */
 @Composable
 internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
@@ -168,10 +229,10 @@ internal fun ReplayLibrary(duels: Duels, aiName: String = "Ai") {
             HRule()
         }
         if (scores.isNotEmpty() || matches.isNotEmpty()) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 AiName(aiName, c.ink)
-                scores.forEach { Small(DuelResults.words(it, aiName), color = c.ink70) }
-                matches.forEach { Small(DuelResults.matchWords(it), color = c.ink45) }
+                if (scores.isNotEmpty()) ResultsTable(scores, aiName)
+                if (matches.isNotEmpty()) MatchesTable(matches)
             }
             HRule()
         }

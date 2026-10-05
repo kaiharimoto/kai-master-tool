@@ -432,8 +432,7 @@ class OldDataTest {
         assertEquals(1, res.ai?.seat)
         assertEquals(listOf(listOf(7, 7), listOf(5, 9)), res.rolls)
         assertEquals(
-            "Ai won 1 of 1 against Kai, with these settings: Ai's knowledge its own seat's eyes; Kai seeing only their own hand; " +
-                "the dice deciding who went first (Ai first in 1).",
+            "Ai won 1 of 1 against Kai. Ai saw only its own hand; Kai saw only theirs; the dice chose who went first (Ai first in 1).",
             DuelResults.summary(listOf(res)),
         )
         // Not a record at all: none, never a crash.
@@ -473,7 +472,7 @@ class OldDataTest {
         assertEquals(listOf("claude-opus-5-5", "gpt-x"), m.seats.map { it.engine })
         assertEquals("Anthropic", m.seats[0].connection)
         assertTrue(DuelResults.aiAgainst(listOf(m)).isEmpty())
-        assertEquals("Ai vs Ai: claude-opus-5-5 beat gpt-x 1 of 1 (going first won 0).", DuelResults.summary(listOf(m)))
+        assertEquals("Ai vs Ai: Opus 5.5 (Branded) beat GPT-x (Snake-Eye) 1 of 1; going first won 0.", DuelResults.summary(listOf(m)))
         val limit = assertNotNull(DuelResultCodec.decode(match.replace("\"winner\":0,\"how\":\"lp\"", "\"how\":\"limit\",\"said\":\"A draw by limit: turn 13 reached.\"")))
         assertEquals(null, limit.winner)
         assertEquals(DuelResult.LIMIT, limit.how)

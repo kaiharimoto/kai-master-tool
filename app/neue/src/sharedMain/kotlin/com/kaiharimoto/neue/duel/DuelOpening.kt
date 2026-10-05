@@ -87,6 +87,8 @@ internal class DuelOpening(private val d: Duels) {
      */
     fun mayRoll(seat: Int, playsBoth: Boolean): Boolean = when {
         d.replayer.replay != null -> false
+        // Ai vs Ai being watched: its die and coin are the players', never the watcher's (the design review, finding 1).
+        d.matches.live != null -> false
         d.network.role != null -> seat == d.network.mySeat
         seat == aiOpeningSeat -> false
         else -> seat == d.bottom || playsBoth

@@ -2594,9 +2594,18 @@ How far to trust a connection, measured — Settings › Assistant › Trust (`T
   `AgentLoop`, its own backend from `AiState.newBackend` (never the panel's cached one), its own history and `AiSession`
   (mode `ai-vs-ai`, `MODE_MATCH`, kept and read-only) — answered by its seat's `MatchTable` tools, never `AiHost`; API
   connections only, for the same reason as Trust.
-- **The dialog**: per set, the last score large, its details (pass@1, every-try, tokens, when, the model), and the first
-  items missed with what the grader read; for the checker, mistakes caught of those planted and false alarms of the clean.
-- `tools/shoot.sh --ai=trust` photographs it with sample runs.
+- **The dialog** opens on a table (the design review of Ai vs Ai and Trust, findings 7, 12–15): a row per set — its
+  `01` numeral, title at h2, the score in 20px mono ("34 of 40", for the checker "caught 10 of 12"), when and on which
+  model, and Run at the right — each opening out (`AiState.trustExpanded`, "3 missed ▸") to what the score means ("85%
+  right first time", with three tries "right all 3 times 80%"; the checker's false alarms of the clean answers), what it
+  cost, whole, and the first items missed: the question first, cut at a word, then "answered 74.5%, right is 74.2% (to
+  0.1%)", the id last in mono (`TrustWords`, core, tested), a `[[Card]]` drawn as the card's name through the chat's own
+  link. The fact-checker says under its title what it is; the puzzles draw their bounds as a scale — a 1px track from 0
+  to 17, ticks where doing nothing, only attacking and the solutions land, the score a 6px square. A help line at the head
+  says what "right first time" is and that a few points either way is noise; Connection and Tries are field labels, the
+  connection a row of its own on a phone. The word pass@1 is gone from the screen (the verdict per set — a word against
+  fixed bars — and Trust's name are kai's choice, left as they are).
+- `tools/shoot.sh --ai=trust` photographs it with sample runs; `--ai-step=open` opens out the odds, the checker and the puzzles.
 
 #### The keys, the CLIs' folder and the MCP token (1.0.99)
 
@@ -3818,8 +3827,8 @@ the table sees and does only what a player would"):
   replays carry none and read as before (`OldDataTest`).
 - **Results** (`DuelResult`, `DuelResults`, `DuelRecords`): a duel that ends — a concession, life points at 0, both at 0
   a draw — is kept as `<data>/duel/records/<id>.json` (synced and backed up as replays are; a what-if under its own id),
-  and taken away when Undo takes the end back. `DuelResults.aiAgainst`/`summary` count "Ai won N of M against kai, with
-  these settings", grouped by Ai's knowledge, the person's eyes, networked or not, peeks, clean seats and the dice; Ai
+  and taken away when Undo takes the end back. `DuelResults.aiAgainst`/`summary` count "Ai won N of M against kai. Ai saw
+  only its own hand; …", grouped by Ai's knowledge, the person's eyes, networked or not, peeks, clean seats and the dice; Ai
   reads it with `duel_records`, the person in **Replays** above the list. Prep's practice game takes going first or second
   from who had turn 1 (`DuelResults.practice`), not from seat 0.
 - **The leads closed**: Ai is held to the guest's rules for hidden cards (`DuelReach`, shared with `DuelHost.resolve`;
@@ -3856,11 +3865,39 @@ keeps the person's moves on Ai's cards (`DuelBrief.since`, by provenance). Held 
   or a draw by limit (turn cap, token budget). Started from the Table menu's **Ai vs Ai…** or New duel (`AiVsAiDialog`: decks,
   a connection per seat, seed, turn cap, windows, budget, the spend said first; API connections only, never at a networked
   table, never with Ai off), run off the main thread on a table of its own (`DuelMatches`, a part of `Duels`) and watched
-  live as a spectator — both hands face-up, the person's moves refused (`Duels.spectating`), `MatchBar` with Stop, each
-  seat's conversation, Back to your duel. A finished match is a `DuelResult` of kind `ai-vs-ai` with each seat's connection
-  and model, counted apart ("Ai vs Ai: claude-opus-5-5 beat gpt-x 3 of 5 (1 drawn; going first won 4)." —
-  `DuelResults.aiVsAi`, `matchWords`, in `duel_records` and Replays), and a replay. `tools/shoot.sh --page=duel
-  --duel-match=dialog|live|over`.
+  live as a spectator — both hands face-up, the person's moves refused (`Duels.spectating`), each seat's conversation, Back
+  to your duel. A finished match is a `DuelResult` of kind `ai-vs-ai` with each seat's connection and model, counted apart
+  by the models **and decks** that met ("Ai vs Ai: Opus 5.5 (lab) beat GPT-5 (K9 Vanquish Soul) 3 of 5, 1 drawn; going
+  first won 4." — `DuelResults.aiVsAi`, `matchWords`, in `duel_records` and Replays), and a replay. `tools/shoot.sh
+  --page=duel --duel-match=dialog|live|over`.
+- **Watching is not playing** (the design review of Ai vs Ai, duel records and Trust, findings 1–6, 9–11 and 15):
+  - **The bar**: while a match is on the table the window's bar holds it where the command line stood (`MatchStatus`; on a
+    phone `PhoneMatchBar`, two lines that wrap) — a breathing square, WATCHING · AI VS AI, "↓ Opus 5.5 with lab · ↑ GPT-5
+    with K9 Vanquish Soul · turn 3 · GPT-5 is playing its turn", the spend so far against the budget ("≈ 210k of 1M
+    tokens", `DuelMatches.spent`/`budget`, from `AiMatch`'s `spent`), and Stop, whose tip says the replay is kept and no
+    result counted. Over: the result first, "Read Opus 5.5's game" for each seat, Back to your duel. Nothing covers the far
+    hand any more; the old `MatchBar` over the table is gone.
+  - **Nothing of a player's is offered**: no command line or microphone, the Spotlight never opens, the log has no box,
+    no Combos and no cues, the phases, life points, die and coin are inert (drawn at ink-45, no pointer; `mayRoll` is false),
+    and the KEYS panel lists a watcher's keys — Esc stops the match, then is Back to your duel (`dismissDuel`), the arrows
+    walk the table, I the coordinates. A refusal names a real button: "Stop it, or press Back to your duel."
+  - **Who is who**: a player is its model said short (`ModelNames.short`, core, tested: `claude-opus-5-5` "Opus 5.5",
+    `gpt-5` "GPT-5"; a connection with no model by its label; two alike "Opus 5.5 A"/"B"), the table's seat name, so the
+    log, the score column — whose name may take two lines, never cut — and the records read it. Display only. The dialog's
+    seats are **Bottom seat** and **Top seat**, as the table shows them, the top seat another connection when there is one.
+  - **The dialog** says what a newcomer needs: two Ai players, each seeing only its own hand, deck guide and combos; seats
+    then bounds a 24 gap apart, fields 16; each hint under its control in Help; Seed and Response windows under More
+    options; one column on a phone with full-width segmented controls (`Segmented(fill = true)`). The budget follows the
+    turn cap — the smallest that covers the estimate (`AiMatch.budgetFor`: 12 turns 1M, so the first match can finish) —
+    until the person sets it; where it still bites, "— 500k stops it at about turn 7, as a draw" (`AiMatch.stopsAt`). The
+    spend is in the footer beside Start, in mono: "≈ 900k tokens at most · stops at 1M" (cost in money is kai's choice).
+  - **The result is the log's last line**, written by the table as the match ends (`AiMatch.end`) and drawn in ink at
+    weight 500 once it is over.
+  - **The records in Replays** are a table (the kit's §12): AGAINST · RESULT · AI SAW · THEY SAW · FIRST
+    (`DuelResults.cells`), a sentence a row on a phone, and Ai vs Ai under a strip of its own. `DuelResults.words` reads in
+    sentences: "Ai won 3 of 5 against kai, 1 drawn. Ai saw only its own hand; kai saw only theirs; the dice chose who went
+    first (Ai first in 2)." `tools/shoot.sh --page=duel --duel-records=demo` photographs it.
+  - New duel offers it as a link above the footer, "Or watch Ai play Ai →"; the Table menu's hint is "Watch two Ai players duel".
 - **The red team:** the brief on a very full table was 12,501 characters a cue; a card's facts are now at its first mention
   only (8,934, `DuelScaleTest` bounds it at 10,000). `duel_moves` there: 424 moves in about 0.6 s on the desktop. The menu,
   `card=` and a card asked for by name name no hidden card (`PhaseCRedTeamTest`). A number key after a placement no longer

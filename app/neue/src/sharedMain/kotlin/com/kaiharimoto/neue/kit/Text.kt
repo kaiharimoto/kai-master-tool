@@ -66,8 +66,9 @@ fun Micro(
     color: Color = Mu.colors.ink70,
     size: TextUnit = 11.sp,
     maxLines: Int = 1,
+    align: TextAlign? = null,
 ) {
-    MuText(MicroCaps.of(text, LocalKeepCase.current), modifier, MuType.micro(LocalMuFonts.current, size), color, maxLines)
+    MuText(MicroCaps.of(text, LocalKeepCase.current), modifier, MuType.micro(LocalMuFonts.current, size), color, maxLines, align)
 }
 
 /**

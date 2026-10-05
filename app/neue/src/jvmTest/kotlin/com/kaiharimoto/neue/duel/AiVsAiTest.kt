@@ -172,6 +172,10 @@ class AiVsAiTest {
             assertTrue(DuelResults.summary(d.results).startsWith("Ai vs Ai: "), DuelResults.summary(d.results))
             assertTrue(File(dir, "records/${r.id}.json").exists())
             assertTrue(d.matches.ended.orEmpty().contains("won on life points"), d.matches.ended)
+            // The result is the log's last line, so it is read there after the bar is closed (the design review, finding 5).
+            assertEquals(d.matches.ended, (g.played.last().action as? DuelAction.Note)?.text)
+            // What was spent is the bar's counter, against the match's budget (finding 9).
+            assertEquals(rules.tokenCap, d.matches.budget)
             // The match is a replay too; the person's own duel (none here) was never touched.
             assertTrue(File(dir, "replays").listFiles().orEmpty().isNotEmpty())
             assertEquals(null, d.game)
@@ -235,5 +239,19 @@ class AiVsAiTest {
             assertTrue(kept.isNotEmpty() && kept.all { s -> s.turns.isNotEmpty() })
             assertTrue(File(dir, "replays").listFiles().orEmpty().any { "stopped" in it.readText() })
         }
+    }
+
+    @Test
+    fun aSeatIsNamedByItsModelSaidShortAndTheRefusalNamesARealButton() {
+        // The design review, finding 2: never a raw id the score column cuts to "CLAUD…".
+        assertEquals("Opus 5.5", playerName(AiConnection("c0", "anthropic", "Anthropic", "claude-opus-5-5")))
+        assertEquals("GPT-5", playerName(AiConnection("c1", "openai", "OpenAI", "gpt-5")))
+        // No model: the connection's own label.
+        assertEquals("My server", playerName(AiConnection("c2", "openai-compatible", "My server", "")))
+        assertEquals("Ai", playerName(null))
+        // Finding 1: "close it" named no button; Back to your duel is the button's own label.
+        assertTrue("Back to your duel" in DuelMatches.ON_THE_TABLE)
+        assertEquals("900k", tokens(900_000))
+        assertEquals("1M", tokens(1_000_000))
     }
 }

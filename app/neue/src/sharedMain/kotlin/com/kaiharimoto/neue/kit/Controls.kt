@@ -440,6 +440,8 @@ fun <T> Segmented(
     small: Boolean = false,
     /** Stays small on a tablet too: it is spent from the deck's own budget (the lens row, the bar). */
     compact: Boolean = false,
+    /** Equal cells across the width it is given ([modifier] sets that width): a phone's full-width row. */
+    fill: Boolean = false,
 ) {
     val c = Mu.colors
     // Outside the deck a finger gets 36dp and 11sp, where ≥ and ≤ looked alike (touch swarm, rec 18).
@@ -452,6 +454,7 @@ fun <T> Segmented(
             val hovered by source.collectIsHotAsState()
             Box(
                 Modifier
+                    .then(if (fill) Modifier.weight(1f) else Modifier)
                     .fillMaxHeight()
                     .background(animatedColor(if (selected) c.ink else if (hovered) c.ink06 else Color.Transparent))
                     .hoverable(source)

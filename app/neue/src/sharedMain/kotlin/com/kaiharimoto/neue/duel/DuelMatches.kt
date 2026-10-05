@@ -64,8 +64,16 @@ class DuelMatches internal constructor(private val d: Duels) {
     /** How the match ended, in words; null while it runs. */
     var ended by mutableStateOf<String?>(null)
         private set
-    /** Each seat's player for the bar: the connection and model. */
+    /** Each seat's player for the bar, as the table names it: the model said short ("Opus 5.5"), else the connection. */
     var engines by mutableStateOf<List<String>>(emptyList())
+        private set
+    /** Each seat's deck, by name. */
+    var decks by mutableStateOf<List<String>>(emptyList())
+        private set
+    /** Tokens spent so far, both seats, and the budget they are spent against: the bar's counter while it runs. */
+    var spent by mutableStateOf(0L)
+        private set
+    var budget by mutableStateOf(0L)
         private set
     /** Each seat's conversation, by id: kept with Ai's, to be read afterwards. */
     var sessions by mutableStateOf<List<String>>(emptyList())
@@ -103,12 +111,19 @@ class DuelMatches internal constructor(private val d: Duels) {
         running = true
         ended = null
         status = "Dealing"
-        engines = choice.seats.map { it.model.ifBlank { it.connection } }
+        engines = choice.seats.map { it.name }
+        decks = choice.seats.map { it.deckName }
+        spent = 0L
+        budget = choice.rules.tokenCap
         sessions = sessionIds
         d.closeReplay()
         d.strip = null
         d.clearSelection()
-        val match = AiMatch(table, players, engineList, Duels::now) { words -> d.scope.launch { status = words } }
+        val match = AiMatch(
+            table, players, engineList, Duels::now,
+            status = { words -> d.scope.launch { status = words } },
+            spent = { tokens -> d.scope.launch { spent = tokens } },
+        )
         job = d.scope.launch {
             var end: MatchEnd? = null
             try {
@@ -128,7 +143,7 @@ class DuelMatches internal constructor(private val d: Duels) {
                     status = null
                     ended = over.words
                     over.result?.let { d.records.keep(it) }
-                    val names = choice.seats.joinToString(" v ") { it.model.ifBlank { it.connection }.ifBlank { it.name } }
+                    val names = choice.seats.joinToString(" v ") { it.name }
                     d.replayer.keepReplay("Ai vs Ai: $names${if (over.stopped) " (stopped)" else ""}", table.game)
                     backends.forEach { runCatching { closeBackend(it) } }
                     job = null
@@ -149,6 +164,7 @@ class DuelMatches internal constructor(private val d: Duels) {
         live = null
         ended = null
         engines = emptyList()
+        decks = emptyList()
     }
 
     /** Waits for a running match to finish (tests). */
@@ -158,7 +174,7 @@ class DuelMatches internal constructor(private val d: Duels) {
 
     companion object {
         /** What the person is told when they reach for a table Ai vs Ai is playing. */
-        const val ON_THE_TABLE = "Ai vs Ai is on the table: stop it, or close it, to take your duel back."
+        const val ON_THE_TABLE = "Ai vs Ai is on the table. Stop it, or press Back to your duel."
 
         /**
          * Why [connection] cannot play a seat, or null when it can: an API connection the app can talk to itself. A plan's
@@ -180,7 +196,7 @@ internal fun matchProblems(h: NeueHolders, choice: MatchChoice): List<String> = 
     if (h.duel.role != null) add("This is a networked table: Ai vs Ai is never played on one.")
     if (choice.connections.size != 2) add("Choose a connection for each seat.")
     choice.connections.distinctBy { it.id }.forEach { c -> DuelMatches.unusable(c)?.let(::add) }
-    choice.seats.forEachIndexed { i, s -> if (s.main.isEmpty()) add("Seat $i's deck has no Main Deck to draw from.") }
+    choice.seats.forEach { s -> if (s.main.isEmpty()) add("${s.deckName.ifBlank { "A seat's deck" }} has no Main Deck to draw from.") }
 }
 
 /**
@@ -210,7 +226,7 @@ internal fun startAiVsAi(h: NeueHolders, choice: MatchChoice): String? {
         val effort = h.ai.prefs.effort.ifBlank { if (provider?.efforts?.contains("low") == true) "low" else provider?.defaultEffort.orEmpty() }
         val session = AiSession(
             id = UUID.randomUUID().toString(),
-            title = "Ai vs Ai · Seat $seat (${s.model.ifBlank { s.connection }}) · ${s.deckName}",
+            title = "Ai vs Ai · ${s.name} · ${s.deckName}",
             createdAt = now,
             updatedAt = now,
             connection = c.id,

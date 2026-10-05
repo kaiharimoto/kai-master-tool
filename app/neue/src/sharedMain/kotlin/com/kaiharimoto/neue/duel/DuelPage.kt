@@ -39,6 +39,7 @@ import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.Small
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -184,8 +185,6 @@ internal fun DuelPage(h: NeueHolders) {
                 // Over the table's own width, between the rails, never over their heads.
                 val across = Modifier.offset(layout.field.left.dp, 4.dp).width((layout.phases.right - layout.field.left).dp)
                 if (duels.role != null && !phone) Box(Modifier.zIndex(95f).then(across)) { NetBar(h, duels, overlay = true) }
-                // Ai vs Ai being watched (`docs/phases/C.md` §6): who plays whom, who is moving, Stop.
-                if (duels.spectating) Box(Modifier.zIndex(97f).then(across)) { MatchBar(h) }
                 // The other seat's ask to move on, for the turn player to answer (1.0.79).
                 if (game.state.proposal != null && replay == null && !duels.spectating) {
                     Box(Modifier.zIndex(96f).then(across)) { ProposalBar(duels, game.state) }
@@ -306,6 +305,10 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
             if (phone) {
                 Box(Modifier.weight(1f))
                 IconButton(Icons.More, { duels.drawer = if (duels.drawer == "log") null else "log" }, label = "Log")
+            } else if (duels.spectating) {
+                // Watching Ai vs Ai, the command line's place is the match's (the design review, findings 1 and 5): nothing
+                // to type into a table no one of yours plays, and the bar no longer covers the far hand.
+                MatchStatus(h)
             } else {
                 SpotlightOpener(duels, Modifier.weight(1f), short = narrow)
                 // Hold to speak a command (1.0.87): the M key for a hand on the mouse.
@@ -339,7 +342,8 @@ internal fun RowScope.DuelBarItems(h: NeueHolders, narrow: Boolean, phone: Boole
 @Composable
 private fun LogHead(h: NeueHolders) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        MuButton("Combos", { h.duel.combosOpen = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
+        // Combos are played at the person's own table, never into a match being watched.
+        if (!h.duel.spectating) MuButton("Combos", { h.duel.combosOpen = true }, size = BtnSize.SM, variant = BtnVariant.GHOST)
         if (h.neue.prefs.ai.enabled) AiBadge(h, height = 28.dp)
     }
 }
@@ -419,7 +423,7 @@ private fun tableMenu(h: NeueHolders): List<MenuEntry> {
         add(MenuEntry("Log and chat") { duels.drawer = "log" })
         add(MenuEntry(if (neue.prefs.ai.enabled) "${h.ai.name} and combos…" else "Combos…") { duels.combosOpen = true })
         // Two Ai sessions, one a seat (`docs/phases/C.md` §6): never on a networked table, never with Ai off.
-        if (!online && neue.prefs.ai.enabled && !duels.matches.running) add(MenuEntry("Ai vs Ai…", hint = "Two sessions, one a seat") { duels.matches.dialogOpen = true })
+        if (!online && neue.prefs.ai.enabled && !duels.matches.running) add(MenuEntry("Ai vs Ai…", hint = "Watch two Ai players duel") { duels.matches.dialogOpen = true })
         if (online) add(MenuEntry("Leave the table", separatorBefore = true, danger = true) { duels.leave() })
     }
 }
@@ -433,7 +437,10 @@ private fun PhoneDuelBar(h: NeueHolders, duels: Duels) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) { DuelBarItems(h, narrow = true, phone = true) }
-        if (duels.shown != null && duels.replay == null) {
+        if (duels.spectating) {
+            // Watching Ai vs Ai: the match's two lines where the command line stands (the design review, finding 5).
+            PhoneMatchBar(h)
+        } else if (duels.shown != null && duels.replay == null) {
             Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SpotlightOpener(duels, Modifier.weight(1f), short = true)
                 // A phone has no M key: the microphone is held instead (1.0.87).
@@ -505,10 +512,6 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
                 MuButton("Close", { duels.setupOpen = false }, variant = BtnVariant.GHOST)
             } else {
             MuButton("Cancel", { duels.setupOpen = false }, variant = BtnVariant.GHOST)
-            // A quiet way to a match of two Ai sessions instead (`docs/phases/C.md` §6).
-            if (neue.prefs.ai.enabled && !duels.matches.running) {
-                MuButton("Ai vs Ai…", { duels.setupOpen = false; duels.matches.dialogOpen = true }, variant = BtnVariant.GHOST)
-            }
             MuButton("Shuffle and draw", {
                 if (mine.deck.main.isEmpty()) { neue.note = Note("That deck has no Main Deck to draw from."); return@MuButton }
                 neue.update { it.copy(duel = it.duel.copy(deckId = mine.id, opponentDeckId = if (solo) "-" else theirs.id, names = listOf(me, them))) }
@@ -556,6 +559,11 @@ private fun SetupDialog(h: NeueHolders, duels: Duels) {
                 }
             }
             Help("Two seats on one screen is a hot-seat: Tab sits you at the other.")
+            // A quiet way to a match of two Ai players instead (`docs/phases/C.md` §6): a link above the footer, never a
+            // third footer button that reads as the dialog's action (the design review, finding 15).
+            if (neue.prefs.ai.enabled && !duels.matches.running) {
+                MicroLink("Or watch Ai play Ai →", { duels.setupOpen = false; duels.matches.dialogOpen = true }, Modifier.padding(top = 12.dp))
+            }
         } else {
             OnlineSetup(h, duels, hosting = where == "host", mine = seat)
         }

@@ -590,6 +590,8 @@ class AiState(internal val h: NeueHolders) {
 
     /** Trust (1.0.99): its dialog, the run under way (set, done, of), a word when a run could not start, and a count of runs kept. */
     var trustOpen by mutableStateOf(false)
+    /** The sets opened out to their details and misses in Trust's table (the design review, finding 12); none at first. */
+    var trustExpanded by mutableStateOf<Set<String>>(emptySet())
     var evalProgress by mutableStateOf<Triple<String, Int, Int>?>(null)
     var evalNote by mutableStateOf<String?>(null)
     var evalVersion by mutableStateOf(0)

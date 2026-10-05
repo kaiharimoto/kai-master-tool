@@ -122,6 +122,8 @@ class AiMatch(
     private val now: () -> Long = { 0L },
     /** Who is moving now, in words, for the person watching. */
     private val status: (String) -> Unit = {},
+    /** The tokens spent so far, both seats, after each cue: the watcher's counter against the budget. */
+    private val spent: (Long) -> Unit = {},
 ) {
     var memo = MatchMemo()
         private set
@@ -154,7 +156,7 @@ class AiMatch(
                     val from = g.cursor
                     val text = MatchPrompt.cue(table, seat, n.kind, memo.cues + 1, memo.read[seat], nudge[seat])
                     nudge = nudge.mapIndexed { i, x -> if (i == seat) null else x }
-                    status("${DuelWords.seatName(g.state, seat)} · ${words(n.kind)}")
+                    status("${DuelWords.seatName(g.state, seat)} is ${words(n.kind)}")
                     table.beginCue(seat)
                     val r = try {
                         withTimeoutOrNull(rules.cueMillis) { players[seat].cue(text, table.runner(seat)) }
@@ -169,6 +171,7 @@ class AiMatch(
                     if (r.failed != null) table.say("${DuelWords.seatName(table.state, seat)}'s session failed this cue: ${r.failed.take(160)}")
                     val after = MatchReferee.after(g, table.game, MatchReferee.Cued(seat, n.kind, table.movesSince(from, seat), r.failed, r.tokens), memo, rules)
                     memo = after.memo
+                    spent(memo.tokens)
                     for (t in after.table) {
                         if (t.note == MatchReferee.RESOLVE_FOR) resolved(seat, "${DuelWords.seatName(table.state, seat)} did not resolve its link: the table resolves it.")
                         else table.table(t.seat, t.actions, t.note)
@@ -195,10 +198,15 @@ class AiMatch(
         val said = limit?.let { "A draw by limit: $it." } ?: forfeit
         val r = DuelResults.aiVsAi(g, now(), g.header.id, engines, end = ending, said = said)
         status("Over")
-        return MatchEnd(r, r?.let { words(it, g) } ?: "The match ended.")
+        val words = r?.let { words(it, g) } ?: "The match ended."
+        // The result is the log's last line, so it is read there after the bar is closed (a limit has said its own).
+        if (limit == null) table.say(words)
+        return MatchEnd(r, words)
     }
 
     private fun words(r: DuelResult, g: DuelGame): String {
+        // A limit says why once: "A draw by limit in turn 7: the token budget … is spent."
+        if (r.how == DuelResult.LIMIT) return r.said?.removePrefix("A draw by limit: ")?.let { "A draw by limit in turn ${r.turns}: $it" } ?: "A draw by limit in turn ${r.turns}."
         val who = r.winner?.let { "${DuelWords.seatName(g.state, it)} won" } ?: "A draw"
         val how = when (r.how) {
             DuelResult.CONCEDE -> "by concession"
@@ -241,5 +249,20 @@ class AiMatch(
             val estimate = cues * TOKENS_PER_CUE
             return Cost(cues, estimate, minOf(estimate, rules.tokenCap))
         }
+
+        /** The token budgets the start dialog offers, both seats. */
+        val BUDGETS: List<Long> = listOf(250_000L, 500_000L, 1_000_000L, 2_000_000L)
+
+        /**
+         * The budget a match of [turnCap] turns starts with: the smallest offered that covers the estimate, so the first
+         * match someone starts with the defaults can finish (12 turns: 1M) — the largest when none does.
+         */
+        fun budgetFor(turnCap: Int): Long {
+            val estimate = cost(MatchRules(turnCap = turnCap, tokenCap = Long.MAX_VALUE)).estimate
+            return BUDGETS.firstOrNull { it >= estimate } ?: BUDGETS.last()
+        }
+
+        /** About the turn in which a budget of [tokenCap] stops a match, at the estimate's pace. */
+        fun stopsAt(tokenCap: Long): Int = ((tokenCap / TOKENS_PER_CUE - 2) / CUES_PER_TURN + 1).toInt().coerceAtLeast(1)
     }
 }

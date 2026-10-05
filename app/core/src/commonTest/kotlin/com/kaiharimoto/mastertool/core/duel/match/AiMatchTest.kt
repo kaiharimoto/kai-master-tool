@@ -132,7 +132,7 @@ class AiMatchTest {
         assertTrue(chooser.cues.first().endsWith("· choose]"), chooser.cues.toString())
         // Counted apart: never against a person; read as Ai vs Ai.
         assertTrue(DuelResults.aiAgainst(listOf(r)).isEmpty())
-        assertEquals("Ai vs Ai: claude-opus-5-5 and gpt-x won 0 each of 1 (1 drawn; going first won 0).", DuelResults.summary(listOf(r)))
+        assertEquals("Ai vs Ai: Opus 5.5 (Alpha) and GPT-x (Beta) won 0 each of 1, 1 drawn; going first won 0.", DuelResults.summary(listOf(r)))
     }
 
     @Test
@@ -210,10 +210,11 @@ class AiMatchTest {
             ),
             winner = winner, first = first, kind = DuelResult.AI_VS_AI, how = if (winner == null) DuelResult.LIMIT else DuelResult.LP,
         )
-        // kai's words: "claude-opus-5-5 beat gpt-x 3 of 5 (going first won 4)", whichever seat each sat at.
+        // kai's words: "claude-opus-5-5 beat gpt-x 3 of 5 (going first won 4)", whichever seat each sat at — a model said
+        // as a person says it (the design review, finding 11).
         val five = listOf(r(0, 0), r(0, 0), r(1, 1, a = "gpt-x", b = "claude-opus-5-5"), r(1, 1), r(null, 0))
-        assertEquals("Ai vs Ai: claude-opus-5-5 beat gpt-x 3 of 5 (1 drawn; going first won 4).", DuelResults.summary(five).lines().single())
-        assertEquals("Ai vs Ai: claude-opus-5-5 against itself, two sessions, 1 played (going first won 1).", DuelResults.matchWords(DuelResults.aiVsAi(listOf(r(0, 0, b = "claude-opus-5-5"))).single()))
+        assertEquals("Ai vs Ai: Opus 5.5 beat GPT-x 3 of 5, 1 drawn; going first won 4.", DuelResults.summary(five).lines().single())
+        assertEquals("Opus 5.5 against itself, two sessions: 1 played; going first won 1.", DuelResults.matchWords(DuelResults.aiVsAi(listOf(r(0, 0, b = "claude-opus-5-5"))).single()))
         // Said before it starts: cues to the cap at a cue's cost, never past the budget.
         val c = AiMatch.cost(MatchRules(turnCap = 12, tokenCap = 500_000))
         assertEquals(50, c.cues)
