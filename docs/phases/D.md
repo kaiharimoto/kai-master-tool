@@ -1118,6 +1118,336 @@ later switch is one new `DuelPrefs` field, described in `AiSettings` and sorted 
 
 ---
 
+## 5¾. The Shortcut window (the table's `Chooser`)
+
+kai: "When doing shortcuts sometimes there are multiple shortcuts to do, and sometimes you'll need to designate a target(s)
+or declare an effect before resolving the effect, so a choice window or targeting system will be needed. Targeting should be
+able to include card(s) in the GY, banishment and field." · "Sometimes a card effect summons monsters to the field from
+various locations like hand deck graveyard banished and extra deck. We need to design a visually intuitive picker. We need to
+consider the UI for Shortcuts in general so the Ai doesn't need to worry about that." · "What zone they summon to, what
+position, all matters." · "For card positions in the UI we should integrate small visual graphics."
+
+The mockups are `docs/phases/shortcut-window.html` (paper and ink, desk and 360 dp). This section is the contract they draw.
+
+### 5¾.1 One window, drawn from the `Decision` alone
+
+- **Every choice a Shortcut asks is answered in one place, the Shortcut window** (`neue/duel/ShortcutWindow.kt`, its
+  arithmetic in core `duel/text/ShortcutWindow.kt`: words, grouping, keys, placement, all tested).
+- **The window is generic.** Everything it draws comes from:
+  - the `Decision` (D.md §2.5, as landed at 6f0bd334);
+  - the table (`DuelState`, `DuelLayout`, `DuelFrames`);
+  - the card facts (`FxFacts`).
+  
+  A script never says how it is shown. Ai writes the effect and never the interface.
+- **The window is the table's `Chooser`, asking by replay.** `Chooser.choose` is synchronous, so the window never blocks
+  the engine:
+  1. The table runs the use (`Shortcuts.use`) with a `ShortcutChooser` that holds the answers given so far.
+  2. The first `Decision` it cannot answer stops the run (`question`), and the window shows that `Decision`.
+  3. The person's answer is added to the list and the use runs again from the start.
+  
+  The engine is deterministic, so every run reaches the same next question. Nothing is committed until the run ends
+  with `FxPlay.Done`. Esc drops the last answer and runs again, which lands on the question before it. With no answers
+  left, Esc cancels the whole use and nothing is committed (§5½).
+- **The typed line and Ai use the same chooser.** Answers given in the op (`pick=`, `target=`, `zone=`, `pos=`,
+  `option=`, `declare=`, `order=`) are used first. The window opens only for what they leave out. For Ai, that becomes
+  a question listing the options.
+- **A decision with one legal answer is never put** (the engine's rule). The window does not open for it. The log's line
+  names what was decided for the person ("to M3, the only zone").
+
+### 5¾.2 The frame every choice shares
+
+| Part | From | Drawn |
+|---|---|---|
+| **The card** | `effect.uid` (`FxSource`) | A thumbnail, 26–34 dp. The inspector reads that card until the pointer reads another. |
+| **Who and which** | the card's name · `effect.label` · "Shortcut" | Micro caps. A dashed **UNVERIFIED** tag where `DuelEntry.fx.verified` will be false. It is the line the log will write. |
+| **What, in words** | `purpose` + `why` + `min`/`max` + `from` + `to` (§5¾.4) | One sentence at 15 sp: "Special Summon 1 "Gatekeeper" monster from your hand, Deck, GY, banishment or Extra Deck". |
+| **Step** | `step` ("2 of 3": the effect's costs, targets and steps) | "STEP 2 OF 3", micro caps, the number in mono. The crumbs under it name the parts of this step: Pick → Place for a summon, Which → Cost → Target for an activation. Done parts are ticked, the current part is inverted, later parts are outlined. |
+| **Count** | answers so far against `min`/`max` | Mono: "0 / 1", "2 / up to 2", "1 of 2" (targets), "2 of 2" (placing). |
+| **Body** | the `Decision`'s type (§5¾.3) | One of six shapes. |
+| **Enter** | the answer, said exactly | Inverted chip: "Summon Gatekeeper Vell", "Confirm 2 targets", "Place Oru in M3 · Attack". It is disabled until the count is met, and its cursor `reason` says why ("Pick 1 more"). |
+| **Esc** | the answers so far | "Back: take Vell out of M4" while there is a step to go back to; "Cancel" on the first. |
+| **Keys** | this body's keys | Mono, at the foot's right, as the ordering strip writes them. |
+
+**It is Master UI:**
+- paper and ink;
+- a 2 dp ink border;
+- zero radius, no shadow;
+- Inter, with JetBrains Mono for every number and coordinate;
+- emphasis by inversion.
+
+There is no colour. Card art is content, so it keeps its colour inside the card.
+
+The ink theme is `MuColors.of(ink = true)`, the exact inversion, and nothing else changes. The dim is ink at 82 %, the
+lit zones are paper dashes on ink, and the glyphs keep their line weight. Every part is drawn from `Mu.colors`, and
+`MasterUiLawTest` holds it.
+
+**Where it stands** (`ShortcutWindow.place`, core, tested on the ten `DuelLayout` sizes):
+1. It never covers a lit card, a lit zone, or the activating card. It takes the half of the table that has none of them.
+   - Your own piles and the Extra Deck are lit: it lies over the far half.
+   - Your zones are lit: a band over the far hand.
+   - Their side is lit: a band over the near hand.
+2. When the table itself is the answer (a zone, a position, targets), the body moves onto the table. The window shrinks
+   to a band holding the head, the count and the foot.
+3. **Which Shortcut** stands beside the card, where `VerbStrip` stands, and opens from it.
+4. An open pile's row (`DuelFrames.stripGrid`) lies in the band with no lit card. If every band holds one, it lies over
+   the window's half, and the window shrinks to its band.
+5. The rails, the log and the score column stay readable. The dim is the Spotlight's (`SpotlightDim`, paper at 82 %),
+   holed for what is lit.
+6. Its layer is above the verb strip (`VERB_Z` 85) and below a carried card (100).
+
+### 5¾.3 Each `Decision`, mapped to the window
+
+| `Decision` | Body | The table | Answered by |
+|---|---|---|---|
+| `Option` from **which Shortcut** | Rows: the number, the label, what the effect needs ("Revive · 1 target in your GY", "no target"), and its line of text. Greyed rows wear their rule ("Once per turn: used") and the manual way out ("By hand: Activate A"). | The card is ringed. | 1–9, ↑↓ Enter, a click or tap, `u m2 e2`. |
+| `Option` from `Op.Choose` | The same rows, the options' labels. | — | 1–9, the label's first letter. |
+| `YesNo` | Two chips, **Yes** inverted and **No**, with `why` as the sentence. | The card is ringed. | Y / N, Enter is Yes, `option=yes|no`. |
+| `Cards` | **The picking strip** (§5¾.4): candidates grouped by place. | Source piles are lit with their counts; candidates on the field are lit and the rest dimmed; picks are numbered. | 1–9 or Space, arrows, typing a coordinate (`gy1`, `ob2`, `om1`, `dk`), a click, a tap, `pick=`/`target=`. |
+| `Zone` (and the `Position` after it) | **The place step** (§5¾.5): the queue of cards to place, and the position chips. | Only `among` is lit, each zone with its number key and the glyph of the chosen position. Hovering a zone draws the card standing there, dashed. | 1–5, Shift 1–5, 6/7 (EMZ), 0 (Field); A, D, E for the position; a click or tap; `zone=`, `pos=`. |
+| `Position` asked alone | The three position chips, large. | The card is ringed in its zone. | A, D, E; a tap; `pos=`. |
+| `Order` (with the `YesNo`s before it) | **Waiting Shortcuts** (§5¾.7): one list, grouped Must, then You can, each row with Use and Skip. | Each card wears its link number, L1…, and a skipped card loses it. | ↑↓, Alt ↑↓ to move, Space for Use/Skip, a drag on the grip; `order=`, `option=`. |
+| `Declare` | **The declaration** (§5¾.8): a search box and results for NAME, short lists for TYPE, ATTRIBUTE and LEVEL. | The card is ringed. | Typing, ↑↓, 1–9; `declare=`. |
+
+### 5¾.4 `Cards`: the picking strip (the summon picker, option B)
+
+kai's focus, chosen among three (`shortcut-window.html` §01):
+- **A.** A strip with a tab for each place.
+- **B.** One row, grouped by place. **kai's choice.**
+- **C.** The piles lit on the table, each opening in place.
+
+**Decided: B, with two things taken from C** (kai: "I agree with B with C"). The source piles are lit on the table while the strip is open, and
+a card can be dragged from the strip straight onto a lit zone.
+
+**What it is:**
+- Every candidate in `among`, grouped by its `from`. The groups follow the order the effect names its places (the
+  script's `Pick.from`), and each group is headed with its place and coordinate: "GY · gy · 2".
+- Each card wears its coordinate under its name (`DuelNotation`: `gy1`, `ban1`, `dk`, `ex`, `om1`, `oh2`).
+- Identical copies in a hidden pile are one card marked ×2. A search takes any copy (`CardIdentity`, `anyCopy`).
+- The same card in two places stands in each group, so the person chooses which copy, e.g. the GY's Vell rather than
+  the Deck's.
+- **Places with nothing legal are named**, with the engine's reason: "Hand · none: Gatekeeper Colossus is Special
+  Summoned only by its own procedure". This needs `looked` and `refused` (§5¾.12). Until the engine gives them, those
+  places are not shown.
+- **Picks** wear their order, "1", "2", as the ordering strip numbers its cards. A pick that makes another candidate
+  illegal greys that card with the words ("Same name as 1"). That needs the set rule (§5¾.12).
+- **On the table** each source pile is lit and ringed, and carries a count chip ("3 IN DECK"). Pointing at a card in the
+  strip rings its pile. A candidate already on the field is lit where it lies, and clicking it there picks it too.
+- **`hidden`**: a candidate in your own Deck or face-down Extra Deck is shown only to the seat choosing (`DuelSight`).
+  - The other seat, and a networked or Ai opponent, see the band say "Kai is searching their Deck" and the count, never
+    the cards.
+  - A hot-seat with both hands face-up shows it, as the Deck's open pile does today.
+- A big search wraps to a second row, then scrolls inside the strip. The page never scrolls.
+
+**Purpose → words, Enter, and how the table draws the picks.** `to: Landing` says where they go.
+
+| `purpose` | The sentence | Enter | On the table |
+|---|---|---|---|
+| `SUMMON` | "Special Summon 1 X from your hand, Deck or GY" | "Summon <name>" / "Place them" | Then the place step (§5¾.5). |
+| `TARGET` | "Target up to 2 cards they control, or in either GY or banishment" | "Confirm 2 targets" | Numbered badges, plus a target arrow (`DuelAction.Target`) from the activating card to each pick. |
+| `COST` | "Cost: " + the step's verb ("discard 1 card", "banish this card") | "Pay: discard <name>" | Ringed, dashed toward `to.dest`. |
+| `ADD` | "Add 1 X from your Deck to your hand" | "Add <name>" | The destination (the hand) is outlined. |
+| `SEND` / `DESTROY` / `BANISH` / `DISCARD` | The verb, from where, to `to.dest` | "Send <name>", … | The GY or banished pile is outlined, dashed. |
+| `RETURN` | "Return 1 … to the hand / the top of the Deck / the Extra Deck" (`to.dest`) | "Return <name>" | The `to.dest` pile is outlined; for the Deck, its third (`DeckPart`). |
+| `ATTACH` / `MATERIAL` / `TRIBUTE` | "Materials for <host>" (`why`) | "Use these 2" | Picks are numbered; the host is ringed. |
+| `REVEAL` | "Reveal 1 …" | "Reveal <name>" | The picks are lifted. |
+| `OTHER` | `why` as the engine wrote it | "Confirm" | Picks are numbered. |
+
+### 5¾.5 Zone and position: every summon, one card at a time
+
+The engine asks `Zone` then `Position`, a card at a time, each only when it has more than one answer (FxSteps
+`special`, FxSummons). The window shows both on one screen:
+- **Zones.** Only `Zone.among` is lit, each with a 2 dp dashed outline and its number key (`1`–`5`, `Shift 1`–`5`, `6`/`7`
+  for the EMZ, `0` for the Field Zone). Every other zone is dotted.
+- **The zone shows the glyph of the chosen position.** Hovering or focusing a lit zone draws the card standing there in
+  that position, dashed. So the person sees how it will stand before confirming.
+- **Extra Monster Zones and linked zones.** For a monster from the Extra Deck, the lit set is the EMZs that are open plus
+  the zones a Link points to. Each pointing Link wears a short dashed line to its zone, "POINTS HERE". This is drawn
+  from the table (`Card.linkMarkers`, `FxRules.summonZones`), not the decision.
+- **Positions** (`Zone.positions`, then `Decision.Position.among`):
+  - three chips, each a glyph with its word: **Attack · A**, **Defense · D**, **Set · E**;
+  - the one chosen is inverted;
+  - one the rules forbid is dashed, with its reason under the word ("A Link is never in Defense", "This effect summons
+    face-up"), worked out from the card's facts and the `Landing`;
+  - Attack is the first answer, as `Chooser.FIRST` gives it.
+  
+  When the `Position` decision follows, the window answers it from the chip and does not open again.
+- **Several monsters** (`max` > 1) are placed in the order they were picked. **The queue** is the picked row, carried
+  into the place step:
+  - each card wears a word: ✓ PLACED with its zone and glyph, PLACING NOW inverted, or NEXT;
+  - the head says "Place Gatekeeper Oru · from your Deck", with the count "2 of 2".
+  
+  A placed card stands in its zone on the table with a dashed outline, because nothing is committed until the last one
+  is placed. Esc takes the last placed card back out ("Back: take Vell out of M4").
+- **Forced.** When only one zone and one position are legal, nothing is asked. The card glides there, and the log names
+  the zone.
+
+### 5¾.6 Targeting: the field, both GYs, both banished piles
+
+- The legal targets, `Cards.among` where `purpose == TARGET`, are lit where they lie: both seats' Monster, Spell & Trap,
+  Field and Extra Monster Zones, Xyz materials, and the hand where the effect names it. Everything else is dimmed.
+- A GY or banished pile holding a target is lit, with its count chip. A click, Enter on its focus, or typing its
+  coordinate opens it as a row over the band that holds no lit card. Its legal cards are lit, the others dimmed, and
+  pointing at a dimmed card says why.
+- Each chosen target wears its number ("1", "2") and the target arrow from the activating card. The window's band lists
+  them as chips ("1 · Thornveil Sentry om1 ×"), and × lets one go. The count reads "1 of 2".
+- A face-down card that can be targeted is lit and named by place only ("the set card in os2", `DuelSelection.label`).
+- At resolution a target that left or stopped matching is dropped, and the log says so (§5½). The arrows stay while the
+  link stands.
+
+### 5¾.7 Several Shortcuts waiting (simultaneous triggers)
+
+- The engine works through the four groups in order: the turn player's mandatory, the turn player's optional, the
+  other player's mandatory, the other player's optional. For each optional trigger it asks a `YesNo`, then an `Order`
+  of the ones used.
+- **The window shows each seat's waiting triggers as one list**, and answers the `YesNo`s and the `Order` from it:
+  - **Must** comes first: its rows are numbered L1…, mandatory, no Skip;
+  - **You can** follows, in the order chosen, each row with Use / Skip.
+- Each row shows:
+  - its link-to-be;
+  - the card;
+  - "name · label" (`Order.labels`);
+  - what it will need (the same words as Which Shortcut).
+- On the table each card wears its link number. A skipped card loses it.
+- **Enter** puts them on the chain. **Esc** skips every optional one.
+- The other seat's triggers are said in a line ("Rival's triggers (1) go on the chain after yours, and they order them").
+- This needs the whole group before the first `YesNo` is put (§5¾.12). Until then, the window asks Use / Skip one row
+  at a time, then the order.
+
+### 5¾.8 Declarations
+
+- **NAME**: a search box in mono at 20 sp. Results are a thumbnail, the name with the match underlined, and a short
+  kind ("Monster · Level 4"), one row per card, never per artwork. The chosen card's text is read beside the results.
+  Matching is the pool's (`EffectMatching`, names first).
+  - The engine offers what `declarable` gives: names the seat has seen.
+  - The window says the count ("8 of 74 you can name").
+  - For the real game's "any card name", see §5¾.12.
+- **TYPE**: the 25 Types as chips; typing narrows them.
+- **ATTRIBUTE**: seven chips, each picked by its first letter (L D E W F I V).
+- **LEVEL**: 01–12 as mono chips. A digit picks; 1 then 0–2 gives 10–12.
+- The answer is public: the log line "X: declared Y." (`DuelAction.Note`) is the engine's.
+
+### 5¾.9 The position glyphs (kai: "small visual graphics")
+
+Three line drawings on a 24-unit grid, stroked 1.5 units: 1 px at 16 dp, 2 px at 32 dp. Square caps, mitre joins, no
+radius, no colour.
+
+| Glyph | `CardPosition` | Drawing (24 grid) |
+|---|---|---|
+| **Attack** | `FACE_UP_ATK` | An upright card `rect(6.75, 2.75, 10.5, 18.5)`, its art window hollow `rect(9, 5, 6, 6)`, and a rule `line(9, 15.5 → 15, 15.5)`. |
+| **Defense** | `FACE_UP_DEF` | The same card turned a quarter left: `rect(2.75, 6.75, 18.5, 10.5)`, window `rect(5, 9, 6, 6)`, rule `line(15.5, 9 → 15.5, 15)`. |
+| **Set** | `FACE_DOWN_DEF` | Sideways, `rect(2.75, 6.75, 18.5, 10.5)`, the back filled solid: `fillRect(5, 9, 14, 6)`. |
+| (rare) | `FACE_DOWN_ATK` | Upright, back filled solid: `fillRect(9, 5, 6, 13)`. |
+
+- **The hollow window is face-up; the solid fill is the back.** That is the one difference to learn.
+- **A glyph never stands alone**: its word is beside it ("Attack", "Defense", "Set"), or under it on a 44 dp chip.
+- **Selected** inverts the chip: an ink fill with the glyph and word in paper.
+- **Not allowed** is dashed in ink-45, with its reason under the word.
+- Sizes: 16 in the log and the inspector, 20 on the desk's chips, 24 on the phone's chips, 30 in a lit zone (20 on the
+  phone).
+
+**In Compose:** `neue/duel/PositionGlyph.kt`, one `Canvas` of `Path`s, no image assets. The geometry is a core table
+(`core/duel/text/PositionGlyphs.kt`: rects in 24-grid units, tested so the strokes land on whole pixels at 16, 20 and
+24).
+
+```kotlin
+@Composable
+fun PositionGlyph(pos: CardPosition, size: Dp = 20.dp, color: Color = Mu.colors.ink, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(size)) {
+        val u = this.size.minDimension / 24f
+        val stroke = Stroke(width = 1.5f * u, cap = StrokeCap.Square, join = StrokeJoin.Miter)
+        PositionGlyphs.of(pos).forEach { part ->
+            val tl = Offset(part.x * u, part.y * u); val sz = Size(part.w * u, part.h * u)
+            when (part.kind) {
+                Part.OUTLINE -> drawRect(color, tl, sz, style = stroke)
+                Part.FILL -> drawRect(color, tl, sz)
+                Part.RULE -> drawLine(color, tl, Offset(tl.x + sz.width, tl.y + sz.height), 1.5f * u, StrokeCap.Square)
+            }
+        }
+    }
+}
+```
+
+**Where else it is used:**
+- **The log.** A summon or a change of position carries its glyph before the line: "[Defense glyph] Kai Special Summons Gatekeeper
+  Vell to M4 in Defense".
+- **The inspector.** Beside the place line of a card on the field.
+- **The verb strip.** On Position (`P`) and Set (`E`).
+- **The Spotlight's preview.** "s h2 m3 def → [Defense] Normal Summon? No: Set it in M3".
+- **The zone numbers.** `ZoneNumbers` shows the glyph the default would summon in.
+- **The selection's bar.** For a card on the field.
+
+### 5¾.10 Input idioms (each complete without the others)
+
+| Input | Pick cards | Zone and position | Option / which / yes-no | Order | Declare |
+|---|---|---|---|---|---|
+| **Enter** | Confirm once the count is met | Place in the focused zone | Use the chosen row; Yes | Put them on the chain | Declare the chosen row |
+| **Esc** | Back one decision, then cancel; an open pile row closes first | ← | ← | Skip all optional | ← |
+| **Digits** | 1–9 pick or let go the nth | The table's zone keys (1–5, Shift 1–5, 6/7, 0) | 1–9; Y / N | 1–9 focus a row | 1–9; Levels by digit |
+| **Arrows** | ←→ walk the strip and the lit table cards; Tab the next place | Walk the lit zones only | ↑↓ | ↑↓; Alt ↑↓ move | ↑↓ |
+| **Space** | Pick or let go the focus | Cycle the position | — | Use / Skip | — |
+| **Letters** | Type a coordinate (`gy1`, `ob2`, `om1`, `dk`) | A Attack · D Defense · E Set | First letter of a label | — | Any letter types |
+| **Mouse** | A click picks; a right-click reads the card; dragging to a lit zone picks and places | A click on a lit zone; hovering draws the card there | A click | Drag a row | A click |
+| **Finger** | A tap picks or lets go; holding opens the card large (`viewSoon`) and never picks | Tap a chip, tap a zone (44 dp chips) | Tap | Drag the grip; tap Use/Skip | Type, tap |
+| **Typed line** | `u s3 pick=gy1` · `target=om1,ogy2` | `zone=m4,m3 pos=def,atk` (pos= in step with each monster zone) | `option=2`, `option=yes` | `order=2,1` | `declare=Gatekeeper Vell` |
+| **Ai** | The same words in `duel_act`, held to `DuelReach` and its knowledge; anything left out is asked back with the options listed (`ShortcutChooser.ask`) | ← | ← | ← | ← |
+| **Voice** (hold M) | "pick graveyard one" → `gy1`, shown and confirmed (`DuelSpeech`, `voiceConfirm`) | "zone three defense" | "yes" / "two" | — | "declare Gatekeeper Vell" |
+
+**The keys:**
+- They live in a new `DeskScope.SHORTCUT_WINDOW`, live while the window is open. It sits above `DeskScope.DUEL`, as
+  `REPLAY` replaces the duel's keys.
+- Its rows are in `DeskShortcuts`. `DuelCoverage` gets a typed form for each gesture, and `DuelInput` holds the mouse to
+  the finger. The help (F1) renders them.
+- A new clickable declares its cursor caption: "Pick · gy1", "Place · M3 · Attack", "Target 2 · ogy1". A disabled one
+  gives a `reason`.
+
+### 5¾.11 The phone (360 dp, a finger)
+
+- The window is a **sheet on the bottom edge**: a 2 dp ink top rule, the full width, the tab bar hidden while it is open.
+  - It is never taller than the band below the near Spell & Trap row while the table is the answer (zones, positions,
+    targets).
+  - It may cover the near hand: the hand is never the answer then, and when it is, the sheet stands above it.
+- **The picking strip** scrolls sideways under its group headers. The empty places are written above the buttons.
+- **Piles are 38 dp wide**, so a pile's count chip is the tap target, and an open pile lies over the far half.
+- **Buttons are 44 dp.** Cancel or Back is on the left, the inverted Enter fills the rest.
+- **Position chips** fill the row, each a glyph and its word, 24 dp glyphs.
+- **The queue** of cards to place sits in the sheet's head.
+- **A declaration** takes the full height above the soft keyboard (`imePadding`), the results just above the keys.
+- **Back** is Esc (`BackChain`).
+- **Haptics** only on a commit (`DeskFeel`).
+- Studio: `--form=phone --width=1080 --height=2400 --density=2.625`.
+
+### 5¾.12 What the window needs that the engine does not give yet
+
+All are additive fields with defaults, so a decision built by hand still reads.
+
+| Need | Field (proposed) | Without it |
+|---|---|---|
+| Name the places that held nothing ("Hand · none") | `Cards.looked: List<Spot>` | Empty places are not shown. |
+| Say why a card in a searched place is not offered | `Cards.refused: Map<Int, String>` (uid → the engine's words) | Dimmed cards in an open pile say nothing. |
+| Grey a card as the set changes ("same name as 1", a Level total) | `Cards.together: Filter?`, or a pure `FxEngine.stillLegal(d, picked): List<Int>` | An illegal set is refused on Enter, in words. |
+| Say why a zone is closed ("E2: you already use E1") | `Zone.closed: Map<Place.Zone, String>` | Closed zones are dotted, with no reason. |
+| Name any card, as the game allows | `Declare.open: Boolean` (the window searches the pool; the answer is a passcode) | Only the names the seat has seen. |
+| What each Shortcut needs, on the Which list | `ShortcutOption.needs: String` (from the script's `cost` and `targets`) | Rows show the label and the rule only. |
+| The whole trigger group before the first `YesNo` | `Decision.Triggers(pending, mandatory: List<Boolean>)` answered as the order of the used ones; or ask the group ahead | Use / Skip one row at a time, then the order. |
+| Step names, not only "2 of 3" | `Cards.stepKind` (COST / TARGET / DOES), or read from the script by `FxSource` | Only the step number is shown. |
+| Tell a target from a pick | Already there: `purpose == TARGET`. **`ShortcutChooser` should read it instead of `why.startsWith("target")`.** | — |
+
+### 5¾.13 Tests
+
+- `ShortcutWindowTest` (core):
+  - words for every `Purpose` × `Dest`;
+  - grouping by `from` in the effect's order;
+  - the count and Enter's words;
+  - placement on the ten layouts, never over a lit card;
+  - the keys (`DuelCoverage`).
+- `ShortcutReplayTest` (core): asking by replay reaches the same `Decision` after each answer; Esc lands on the decision
+  before; a cancel commits nothing.
+- `PositionGlyphsTest` (core): the geometry lands on whole pixels at 16, 20 and 24.
+- Studio pictures: `--duel-shortcut=which|pick|pick2|place|extra|target|order|declare`, each with `--theme=ink` and
+  `--form=phone`.
+
+---
+
 ## 6. Stored data
 
 | Where | What | Sync | Backup | Held by |

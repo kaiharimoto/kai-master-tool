@@ -1,0 +1,1172 @@
+<title>Shortcut Window</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: one reading column of mockups, Master UI throughout; each mockup is a real-size stage (dp) scaled into its frame. */
+:root {
+  --bg: #ffffff; --fg: #000000;
+  --f70: rgba(0,0,0,.80); --f45: rgba(0,0,0,.66); --f25: rgba(0,0,0,.45); --f12: rgba(0,0,0,.16); --f06: rgba(0,0,0,.07);
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #000000; --fg: #ffffff;
+    --f70: rgba(255,255,255,.80); --f45: rgba(255,255,255,.62); --f25: rgba(255,255,255,.45); --f12: rgba(255,255,255,.16); --f06: rgba(255,255,255,.07);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #000000; --fg: #ffffff;
+  --f70: rgba(255,255,255,.80); --f45: rgba(255,255,255,.62); --f25: rgba(255,255,255,.45); --f12: rgba(255,255,255,.16); --f06: rgba(255,255,255,.07);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.55 var(--sans); margin: 0; }
+.page { max-width: 1240px; margin: 0 auto; padding-inline: 24px; padding-block: 40px 96px; }
+@media (max-width: 600px) { .page { padding-inline: 16px; } }
+h1 { font-size: 56px; line-height: 1.02; font-weight: 500; letter-spacing: -.02em; margin: 0; text-wrap: balance; }
+h2 { font-size: 32px; line-height: 1.1; font-weight: 500; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+h3 { font-size: 20px; line-height: 1.2; font-weight: 500; margin: 0; text-wrap: balance; }
+@media (max-width: 600px) { h1 { font-size: 40px; } h2 { font-size: 26px; } }
+p { margin: 0; max-width: 68ch; }
+.micro { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--f70); }
+.faint { color: var(--f45); }
+code { font-family: var(--mono); font-size: .92em; }
+kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--f25); padding: 0 5px; white-space: nowrap; }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+header.top { display: flex; flex-direction: column; gap: 18px; padding-bottom: 28px; border-bottom: 2px solid var(--fg); }
+.eyebrow { display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+.lede { font-size: 17px; line-height: 1.5; color: var(--f70); max-width: 72ch; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--fg); }
+.seg button { font: 500 11px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; background: var(--bg); color: var(--fg); border: 0; padding: 9px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--fg); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+nav.toc a { text-decoration: none; font-size: 13px; }
+nav.toc a span { font-family: var(--mono); color: var(--f45); margin-right: 6px; }
+
+section { padding-block: 56px 8px; display: flex; flex-direction: column; gap: 22px; }
+section + section { border-top: 1px solid var(--f12); }
+.sh { display: grid; grid-template-columns: 56px 1fr; gap: 4px 16px; align-items: baseline; }
+.sh .no { font-family: var(--mono); font-size: 20px; color: var(--f45); }
+.sh p { grid-column: 2; color: var(--f70); }
+@media (max-width: 600px) { .sh { grid-template-columns: 1fr; } .sh p { grid-column: 1; } }
+
+.opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 980px) { .opts { grid-template-columns: 1fr; } }
+.opt { border: 1px solid var(--fg); display: flex; flex-direction: column; min-width: 0; }
+.opt.rec { border-width: 3px; }
+.opt-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; padding: 12px 14px; border-bottom: 1px solid var(--fg); }
+.opt.rec .opt-h { background: var(--fg); color: var(--bg); }
+.opt-h .l { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+.opt-b { padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.pl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.pl li { display: grid; grid-template-columns: 16px 1fr; gap: 6px; }
+.pl li::before { font-family: var(--mono); font-weight: 700; }
+.pl li.p::before { content: "+"; }
+.pl li.m::before { content: "−"; }
+.verdict { border: 2px solid var(--fg); padding: 16px 18px; display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; }
+.verdict .tag { background: var(--fg); color: var(--bg); padding: 4px 8px; align-self: start; }
+@media (max-width: 600px) { .verdict { grid-template-columns: 1fr; } }
+
+.figs { display: grid; gap: 20px; }
+.figs.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.figs.phones { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+@media (max-width: 800px) { .figs.two { grid-template-columns: 1fr; } }
+figure { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+figcaption { font-size: 13px; color: var(--f70); }
+figcaption b { font-weight: 500; color: var(--fg); }
+.frame { position: relative; overflow: hidden; width: 100%; border: 1px solid var(--f25); }
+.stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 28px; }
+.note h4 { margin: 0 0 4px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; }
+.note p { font-size: 13px; color: var(--f70); }
+
+.tablewrap { overflow-x: auto; border-top: 1px solid var(--fg); }
+table.keys { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 640px; }
+table.keys th, table.keys td { text-align: left; padding: 8px 10px 8px 0; border-bottom: 1px solid var(--f12); vertical-align: top; }
+table.keys th { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; color: var(--f70); }
+
+.legend { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 10px 28px; font-size: 13px; }
+.legend li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; }
+.legend li b { font-family: var(--mono); background: var(--fg); color: var(--bg); text-align: center; height: 22px; line-height: 22px; font-weight: 500; }
+
+/* Glyph sheet (outside the mock frames: drawn in the page's own theme too, then forced paper and ink) */
+.glyphs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border: 1px solid var(--fg); }
+@media (max-width: 800px) { .glyphs { grid-template-columns: 1fr; } }
+.gpanel { padding: 18px; display: flex; flex-direction: column; gap: 16px; background: var(--p); color: var(--i); }
+.gpanel .row { display: flex; flex-wrap: wrap; gap: 18px 26px; align-items: flex-end; }
+.gcell { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.gcell .cap2 { font-family: var(--mono); font-size: 10px; color: var(--i45); }
+.gbig { display: flex; gap: 18px; flex-wrap: wrap; }
+.gbig figure { align-items: center; }
+.gbig figcaption { color: var(--i70); font-size: 11px; }
+
+/* ---------- Mock theme: paper and ink, exactly MuColors.of(ink) ---------- */
+.mock, .gpanel { --p: #ffffff; --i: #000000; --i70: rgba(0,0,0,.80); --i45: rgba(0,0,0,.66); --i25: rgba(0,0,0,.45); --i12: rgba(0,0,0,.16); --i06: rgba(0,0,0,.07); }
+.mock.ink, .gpanel.ink, body[data-mocks="ink"] .mock, body[data-mocks="ink"] .gpanel { --p: #000000; --i: #ffffff; --i70: rgba(255,255,255,.80); --i45: rgba(255,255,255,.62); --i25: rgba(255,255,255,.45); --i12: rgba(255,255,255,.16); --i06: rgba(255,255,255,.07); }
+body[data-mocks="paper"] .mock.ink, body[data-mocks="paper"] .gpanel.ink { --p: #ffffff; --i: #000000; --i70: rgba(0,0,0,.80); --i45: rgba(0,0,0,.66); --i25: rgba(0,0,0,.45); --i12: rgba(0,0,0,.16); --i06: rgba(0,0,0,.07); }
+.mock { background: var(--p); color: var(--i); font: 12px/1.35 var(--sans); }
+.mock svg text { font-family: var(--sans); }
+.mock .cf { fill: var(--p); stroke: var(--i); stroke-width: 1; }
+.mock .nb { fill: none; stroke: var(--i25); stroke-width: .75; }
+.mock .tn { fill: var(--i); font-weight: 500; letter-spacing: .02em; }
+.mock .tk { fill: var(--i70); font-weight: 500; letter-spacing: .08em; }
+.mock .art { fill: var(--i12); }
+.mock .mot { fill: none; stroke: var(--i45); stroke-width: 1.2; }
+.mock .ln { fill: var(--i25); }
+.mock .bk { fill: var(--i12); stroke: var(--i25); stroke-width: .75; }
+.mock .bko { fill: var(--i); }
+.mock .pl8 { fill: var(--i); }
+.mock .plt { fill: var(--p); font-family: var(--mono); font-weight: 500; }
+.mock .zo { fill: none; stroke: var(--i25); stroke-width: 1; }
+.mock .zt { fill: var(--i70); font-size: 9px; letter-spacing: .08em; font-weight: 500; }
+.mock .cnt { fill: var(--p); stroke: var(--i); stroke-width: 1; }
+.mock .cntt { fill: var(--i); font-family: var(--mono); font-size: 10px; }
+.mock .dim { fill: var(--p); opacity: .82; }
+.mock .r1 { fill: none; stroke: var(--p); stroke-width: 2; }
+.mock .r2 { fill: none; stroke: var(--i); stroke-width: 2; }
+.mock .rc { fill: none; stroke: var(--i); stroke-width: 1; }
+.mock .zl { fill: var(--p); stroke: var(--i); stroke-width: 2; stroke-dasharray: 6 4; }
+.mock .zx { fill: none; stroke: var(--i25); stroke-width: 1; stroke-dasharray: 2 3; }
+.mock .gh { fill: var(--i06); stroke: var(--i); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.mock .ink { fill: var(--i); }
+.mock .pap { fill: var(--p); }
+.mock .pst { fill: var(--p); stroke: var(--i); stroke-width: 1; }
+.mock .tx { fill: var(--i); }
+.mock .tx7 { fill: var(--i70); }
+.mock .tx4 { fill: var(--i45); }
+.mock .txp { fill: var(--p); }
+.mock .mono { font-family: var(--mono) !important; }
+.mock .arw { stroke: var(--i); stroke-width: 2; fill: none; }
+.mock .arw2 { stroke: var(--i); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; }
+.mock .hair { stroke: var(--i12); stroke-width: 1; }
+.mock .hairk { stroke: var(--i); stroke-width: 1; }
+.mock .gz, .mock .g { fill: none; stroke: var(--i); stroke-width: 1.5; stroke-linejoin: miter; stroke-linecap: square; }
+.g { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: miter; stroke-linecap: square; }
+.g .gf, .gz .gf { fill: currentColor; stroke: none; }
+.mock .gz .gf { fill: var(--i); }
+.mock .gz.inv { stroke: var(--p); } .mock .gz.inv .gf { fill: var(--p); }
+
+/* Window parts (HTML over the table) */
+.mock .w { position: absolute; background: var(--p); color: var(--i); border: 2px solid var(--i); padding: 10px 12px; display: flex; flex-direction: column; gap: 9px; z-index: 4; }
+.mock .w.sheet { border-width: 2px 0 0 0; padding: 10px 12px 12px; }
+.mock .mc { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; }
+.mock .m9 { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; }
+.mock .mo { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.mock .c70 { color: var(--i70); } .mock .c45 { color: var(--i45); }
+.mock .wh { display: flex; gap: 10px; align-items: flex-start; }
+.mock .wh svg { flex: none; }
+.mock .whm { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.mock .who { color: var(--i70); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.mock .what { font-size: 15px; font-weight: 500; line-height: 1.25; }
+.mock .sub { font-size: 11px; color: var(--i70); }
+.mock .side { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; flex: none; }
+.mock .crumbs { display: flex; gap: 4px; }
+.mock .cr { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; border: 1px solid var(--i25); color: var(--i45); padding: 2px 6px; white-space: nowrap; }
+.mock .cr.now { background: var(--i); color: var(--p); border-color: var(--i); }
+.mock .cr.done { color: var(--i70); border-color: var(--i70); }
+.mock .count { font-family: var(--mono); font-size: 18px; line-height: 1; font-variant-numeric: tabular-nums; }
+.mock .count small { font-size: 11px; color: var(--i70); }
+.mock .tagu { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; border: 1px dashed var(--i); padding: 0 4px; }
+.mock .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--i25); background: var(--p); padding: 5px 8px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; white-space: nowrap; }
+.mock .chip .k { font-family: var(--mono); color: var(--i45); letter-spacing: 0; text-transform: none; font-weight: 400; }
+.mock .chip.on { background: var(--i); color: var(--p); border-color: var(--i); }
+.mock .chip.on .k { color: var(--p); opacity: .8; }
+.mock .chip.dis { color: var(--i45); border-style: dashed; }
+.mock .chip.big { height: 44px; padding: 0 14px; font-size: 11px; justify-content: center; }
+.mock .foot { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.mock .hint { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--i45); }
+.mock .tabs { display: flex; border-bottom: 1px solid var(--i); }
+.mock .tab { padding: 6px 10px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; display: flex; gap: 6px; align-items: center; border: 1px solid transparent; border-bottom: 0; white-space: nowrap; }
+.mock .tab .mo { letter-spacing: 0; }
+.mock .tab.on { background: var(--i); color: var(--p); }
+.mock .tab.none { color: var(--i45); }
+.mock .row { display: flex; gap: 8px; align-items: flex-start; }
+.mock .groups { display: flex; gap: 0; align-items: stretch; }
+.mock .grp { display: flex; flex-direction: column; gap: 5px; padding: 0 10px; }
+.mock .grp:first-child { padding-left: 0; }
+.mock .grp + .grp { border-left: 1px solid var(--i12); }
+.mock .gh2 { display: flex; gap: 6px; align-items: baseline; border-bottom: 1px solid var(--i); padding-bottom: 3px; white-space: nowrap; }
+.mock .gh2 .mo { font-size: 10px; color: var(--i45); }
+.mock .grp.none .gh2 { border-bottom-style: dashed; border-color: var(--i25); color: var(--i45); }
+.mock .cards { display: flex; gap: 6px; }
+.mock .cd { display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative; flex: none; }
+.mock .cd svg { display: block; }
+.mock .cd .nm { font-size: 8.5px; letter-spacing: .06em; text-transform: uppercase; font-weight: 500; text-align: center; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mock .cd .co { font-family: var(--mono); font-size: 9.5px; color: var(--i45); }
+.mock .cd .why { font-size: 9px; color: var(--i70); text-align: center; line-height: 1.2; }
+.mock .cd.pk > svg { outline: 2px solid var(--i); outline-offset: 2px; background: var(--p); }
+.mock .cd.off > svg { opacity: .3; }
+.mock .cd.off .nm { color: var(--i45); }
+.mock .bd { position: absolute; top: -3px; left: -3px; z-index: 2; background: var(--i); color: var(--p); border: 1px solid var(--p); font-family: var(--mono); font-size: 11px; line-height: 15px; padding: 0 4px; }
+.mock .pcs { display: flex; gap: 6px; flex-wrap: wrap; }
+.mock .pc { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--i25); padding: 4px 9px 4px 6px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; white-space: nowrap; }
+.mock .pc .k { font-family: var(--mono); color: var(--i45); letter-spacing: 0; text-transform: none; font-weight: 400; }
+.mock .pc.on { background: var(--i); color: var(--p); border-color: var(--i); }
+.mock .pc.on .k { color: var(--p); opacity: .8; }
+.mock .pc.off { border-style: dashed; color: var(--i45); }
+.mock .pc .pr { display: block; font-size: 9px; letter-spacing: 0; text-transform: none; font-weight: 400; color: var(--i70); }
+.mock .pcs.big .pc { height: 44px; padding: 0 12px 0 8px; flex: 1; justify-content: center; }
+.mock .pcs.stack { flex-direction: column; }
+.mock .lbl { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; color: var(--i70); }
+.mock .olist { display: flex; flex-direction: column; border-top: 1px solid var(--i12); }
+.mock .oi { display: grid; grid-template-columns: 22px 1fr auto; gap: 2px 10px; padding: 8px 6px; border-bottom: 1px solid var(--i12); align-items: start; }
+.mock .oi .n { font-family: var(--mono); border: 1px solid var(--i); text-align: center; line-height: 18px; height: 20px; }
+.mock .oi .t { font-size: 13px; font-weight: 500; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mock .oi .d { grid-column: 2 / 4; font-size: 11px; color: var(--i70); }
+.mock .oi .need { font-family: var(--mono); font-size: 10px; color: var(--i70); white-space: nowrap; }
+.mock .oi.on { background: var(--i); color: var(--p); }
+.mock .oi.on .n { border-color: var(--p); }
+.mock .oi.on .d, .mock .oi.on .need { color: var(--p); opacity: .85; }
+.mock .oi.off { color: var(--i45); }
+.mock .oi.off .n { border-color: var(--i25); border-style: dashed; }
+.mock .oi .rule { font-family: var(--mono); font-size: 10px; border: 1px dashed var(--i25); padding: 0 4px; color: var(--i70); }
+.mock .tr { display: grid; grid-template-columns: 34px 30px 1fr auto; gap: 10px; align-items: center; padding: 7px 6px; border-bottom: 1px solid var(--i12); }
+.mock .tr .ln2 { font-family: var(--mono); font-size: 11px; text-align: center; border: 1px solid var(--i); line-height: 18px; }
+.mock .tr.cur { outline: 2px solid var(--i); outline-offset: -2px; }
+.mock .tr.skip { color: var(--i45); }
+.mock .tr.skip svg { opacity: .35; }
+.mock .tr.skip .ln2 { border-style: dashed; border-color: var(--i25); }
+.mock .tr .t { font-size: 12px; font-weight: 500; }
+.mock .tr .d { font-size: 10.5px; color: var(--i70); }
+.mock .seg2 { display: inline-flex; border: 1px solid var(--i); }
+.mock .seg2 span { font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; padding: 4px 8px; }
+.mock .seg2 span + span { border-left: 1px solid var(--i); }
+.mock .seg2 span.on { background: var(--i); color: var(--p); }
+.mock .seg2.dis { border-color: var(--i25); color: var(--i45); }
+.mock .input { display: flex; align-items: center; gap: 8px; border-bottom: 2px solid var(--i); padding: 4px 0 6px; font-family: var(--mono); font-size: 20px; }
+.mock .caret { display: inline-block; width: 2px; height: 22px; background: var(--i); }
+.mock .res { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 4px 6px; border-bottom: 1px solid var(--i12); font-size: 12px; }
+.mock .res.on { background: var(--i); color: var(--p); }
+.mock .res .mo { font-size: 10px; color: var(--i45); }
+.mock .res.on .mo { color: var(--p); opacity: .8; }
+.mock .res mark { background: none; color: inherit; text-decoration: underline; text-underline-offset: 2px; font-weight: 700; }
+.mock .grid-ch { display: flex; flex-wrap: wrap; gap: 4px; }
+.mock .grid-ch span { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; font-weight: 500; border: 1px solid var(--i25); padding: 4px 7px; }
+.mock .grid-ch span.on { background: var(--i); color: var(--p); border-color: var(--i); }
+.mock .grid-ch.lv span { font-family: var(--mono); min-width: 28px; text-align: center; letter-spacing: 0; }
+.mock .qi { display: flex; gap: 8px; align-items: center; padding: 4px 8px 4px 4px; border: 1px solid var(--i25); }
+.mock .qi.now { border: 2px solid var(--i); }
+.mock .qi .qs { display: flex; flex-direction: column; gap: 1px; }
+.mock .qi .qn { font-size: 11px; font-weight: 500; }
+.mock .qi .qw { font-size: 9px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; }
+.mock .qi .qw.inv { background: var(--i); color: var(--p); padding: 1px 5px; align-self: flex-start; }
+.mock .qi.done { color: var(--i70); }
+.mock .qarrow { font-family: var(--mono); color: var(--i45); }
+.mock .panel { position: absolute; background: var(--p); border: 1px solid var(--i); padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 5px; z-index: 3; }
+.mock .callout { position: absolute; z-index: 9; background: var(--i); color: var(--p); font-family: var(--mono); font-size: 12px; line-height: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--p); }
+.mock .kbd { position: absolute; z-index: 6; left: 0; right: 0; background: var(--i12); display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; padding: 8px 5px; }
+.mock .kbd span { background: var(--p); height: 38px; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.mock .lp { position: absolute; z-index: 3; }
+
+/* The family cursor: crop marks in difference mode, the caption in ink */
+.mock .crop { position: absolute; inset: -6px; pointer-events: none; mix-blend-mode: difference; z-index: 7; }
+.mock .crop i { position: absolute; width: 8px; height: 8px; border: 2px solid #fff; }
+.mock .crop i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+.mock .crop i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; }
+.mock .crop i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; }
+.mock .crop i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+.mock .cap { position: absolute; left: -6px; top: calc(100% + 12px); z-index: 8; background: var(--i); color: var(--p); outline: 1px solid var(--p); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; height: 20px; line-height: 20px; padding: 0 7px; white-space: nowrap; }
+.mock .cap .mo { letter-spacing: 0; text-transform: none; }
+.mock .hot { position: absolute; z-index: 7; }
+@media (prefers-reduced-motion: no-preference) { .seg button { transition: background .12s; } }
+</style>
+
+<div class="page">
+<header class="top">
+  <div class="eyebrow"><span class="micro">Neue Master Tool · 07 Duel · Phase D §5½</span><span class="micro faint">Design exploration for kai · October 2026</span></div>
+  <h1>The Shortcut window</h1>
+  <p class="lede">One window answers every choice a written effect asks: which Shortcut, which cards, which zone and position, what order, what name. It is drawn from the engine's <code>Decision</code> alone, so Ai writes the effect and never the interface. Card art is stood in for by drawn cards; the names are invented.</p>
+  <div class="toolbar">
+    <span class="micro">Mockups drawn</span>
+    <div class="seg" role="group" aria-label="Theme of the mockups">
+      <button type="button" id="m-drawn" aria-pressed="true" data-m="drawn">As marked</button>
+      <button type="button" id="m-paper" aria-pressed="false" data-m="paper">All paper</button>
+      <button type="button" id="m-ink" aria-pressed="false" data-m="ink">All ink</button>
+    </div>
+    <span class="faint" style="font-size:13px">The page follows your theme; each mockup is paper or ink as marked.</span>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#summon"><span>01</span>The summon picker: A, B, C</a>
+    <a href="#optA"><span>02</span>A in full</a>
+    <a href="#optB"><span>03</span>B in full</a>
+    <a href="#optC"><span>04</span>C in full</a>
+    <a href="#glyphs"><span>05</span>Position glyphs</a>
+    <a href="#which"><span>06</span>Which Shortcut</a>
+    <a href="#target"><span>07</span>Targeting</a>
+    <a href="#waiting"><span>08</span>Several waiting</a>
+    <a href="#declare"><span>09</span>Declaration</a>
+    <a href="#frame"><span>10</span>The frame</a>
+    <a href="#engine"><span>11</span>Against the engine</a>
+  </nav>
+</header>
+
+<section id="summon">
+  <div class="sh"><span class="no">01</span><h2>The summon picker, three ways</h2>
+    <p>The effect: <i>Five Gates Open</i>, “Special Summon 1 “Gatekeeper” monster from your hand, Deck, GY, banishment or Extra Deck.” Seven cards are legal across four places; the hand holds none. Each option shows the pick, then the zone and position, which kai asked to be chosen every time unless only one is legal.</p></div>
+  <div class="opts">
+    <article class="opt">
+      <div class="opt-h"><span class="l">A</span><span class="micro">Tabs by place</span></div>
+      <div class="opt-b">
+        <div data-scene="aPick" data-crop="300,40,640,520"></div>
+        <div data-scene="aPlace" data-crop="300,40,640,520"></div>
+        <p style="font-size:13px">A strip over the far half with a tab per place, each counting its legal cards. One place shows at a time. The place step keeps the strip's shape: position chips where the tabs were, zones lit on the field.</p>
+        <ul class="pl">
+          <li class="p">Compact: a 20-card Deck search still fits one row.</li>
+          <li class="p">Tabs show counts, so an empty place reads 0 before you visit it.</li>
+          <li class="m">Comparing the GY's Vell with the Deck's Vell means switching tabs. That is the commonest choice: summon the GY copy and keep the Deck one.</li>
+          <li class="m">The first tab shown is arbitrary, and every pick costs a Tab or a tap.</li>
+        </ul>
+        <a href="#optA" style="font-size:13px">A at full size, and on a phone ↓</a>
+      </div>
+    </article>
+    <article class="opt rec">
+      <div class="opt-h"><span class="l">B</span><span class="micro">Recommended · One row, grouped by place</span></div>
+      <div class="opt-b">
+        <div data-scene="bPick" data-crop="300,40,640,520"></div>
+        <div data-scene="bPlace" data-crop="300,40,640,520"></div>
+        <p style="font-size:13px">Every legal card in one row under its place header, each with its coordinate (<code>dk</code>, <code>gy1</code>, <code>ban1</code>). Places with nothing legal are named, with the reason. Once picked, the row becomes the queue of cards to place.</p>
+        <ul class="pl">
+          <li class="p">Everything at once: “which Vell” takes one glance.</li>
+          <li class="p">Answers “why not that one”: <i>Hand · none, Gatekeeper Colossus only by its own procedure</i>.</li>
+          <li class="p">One list for arrows, digits and typing. The same strip serves every pick of cards: summon, add, send, banish, materials, discard.</li>
+          <li class="p">For several monsters, the picked row is the placing queue, so what is left to place is always on screen.</li>
+          <li class="m">A big Deck search wraps to a second row, then scrolls, and the strip covers the far half while it is open.</li>
+        </ul>
+        <a href="#optB" style="font-size:13px">B at full size, the “up to 2” walk, and on a phone ↓</a>
+      </div>
+    </article>
+    <article class="opt">
+      <div class="opt-h"><span class="l">C</span><span class="micro">The table is the picker</span></div>
+      <div class="opt-b">
+        <div data-scene="cPick" data-crop="300,40,640,520"></div>
+        <div data-scene="cPlace" data-crop="300,40,640,520"></div>
+        <p style="font-size:13px">No strip. The table dims, the piles with legal cards light with their counts, and a pile opens in place as a row. The picked card lifts out and is carried to a lit zone, with its position chips beside it.</p>
+        <ul class="pl">
+          <li class="p">The most spatial: you choose where the card is, and the zones are right there.</li>
+          <li class="p">Drag from the pile to the zone: pick and place in one gesture.</li>
+          <li class="m">The Deck and Extra Deck are hidden, so they open as a row anyway.</li>
+          <li class="m">Two steps per pile, and comparing across piles means opening each. On a phone a pile is 38 dp wide.</li>
+          <li class="m">An open pile covers the zones you are about to choose.</li>
+        </ul>
+        <a href="#optC" style="font-size:13px">C at full size, and on a phone ↓</a>
+      </div>
+    </article>
+  </div>
+  <div class="verdict">
+    <span class="micro tag">My pick: B</span>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <p><b style="font-weight:500">B, with two things taken from C.</b> The table lights each source pile while the strip is open, and pointing at a card in the strip rings its pile. A card can also be dragged from the strip straight onto a lit zone, which picks and places it in one gesture.</p>
+      <p class="muted">B is the only option whose layout comes straight from the <code>Decision</code>: group <code>among</code> by <code>from</code>, in the order of the effect's places. So the same strip serves a summon, a search, a cost, materials and a discard without any per-effect design. It names the empty places, which answers the most common doubt. At 360 dp it becomes stacked groups that scroll sideways. It is also the ordering strip kai already uses, with headers added.</p>
+    </div>
+  </div>
+</section>
+
+<section id="optA">
+  <div class="sh"><span class="no">02</span><h2>A · Tabs by place</h2>
+    <p>The strip lies over the far half, which holds no lit card. The table lights every place a tab names, and the active tab's pile is ringed.</p></div>
+  <div class="figs two">
+    <div data-scene="aPick" data-crop="220,0,820,800" data-cap="<b>Pick.</b> GY is the open tab. Its two legal cards are offered, and the two it cannot summon are counted in words. Tab moves to the next place; an empty place stays in the row, marked 0."></div>
+    <div data-scene="aPlace" data-crop="220,0,820,800" data-cap="<b>Place.</b> The tabs become position chips; Set is dashed with its reason. The four free Monster Zones are lit, numbered, and show the Attack glyph. Pointing at M3 draws the card standing there."></div>
+  </div>
+  <div class="figs phones">
+    <div data-scene="paPick" data-crop="0,0,360,800" data-cap="<b>Phone, pick.</b> A sheet from the bottom edge with the tabs scrolling sideways. 44 dp buttons; the tab bar is away while choosing."></div>
+    <div data-scene="pPlace" data-crop="0,0,360,800" data-cap="<b>Phone, place</b> (shared by A, B and C). Big position chips with glyph and word. Tap a lit zone."></div>
+  </div>
+</section>
+
+<section id="optB">
+  <div class="sh"><span class="no">03</span><h2>B · One row, grouped by place</h2>
+    <p>The recommendation. Groups follow the effect's own order of places. A card that can come from two places appears under each, so you choose which copy. Identical Deck copies are one card marked ×2, because a search takes any copy (<code>CardIdentity</code>).</p></div>
+  <div class="figs two">
+    <div data-scene="bPick" data-crop="220,0,820,800" data-cap="<b>Summon 1.</b> Seven legal cards under four headers, then <i>Hand · none</i> with its reason. Pointing at the GY's Vell rings the GY on the table. Digits 1–7 pick, the arrows walk, and typing <code>gy1</code> picks too."></div>
+    <div data-scene="bPick2" data-crop="220,0,820,800" data-cap="<b>Up to 2, different names.</b> Picked cards wear 1 and 2. The Deck's Vell is now off, “same name as 1”. Places the effect does not search (banishment, Extra Deck, hand) are not shown. The count reads 2 / up to 2."></div>
+    <div data-scene="bPlace" data-crop="220,0,820,800" data-cap="<b>Placing 2 of 2.</b> The queue is the picked row. Vell is done (M4, Defense, its glyph beside it) and stands sideways on the table with a dashed outline, because nothing is committed until the last card is placed. Oru is NOW. Esc takes Vell back out of M4."></div>
+    <div data-scene="bExtra" data-crop="220,0,820,800" data-cap="<b>From the Extra Deck.</b> A Link monster: only the Extra Monster Zones and the zones a Link points to are lit. Here the Warden in E1 points to M3, so the choice is M3 or nothing. The Attack glyph is fixed, because a Link is never in Defense. When only one zone and one position are legal, the window places the card and says so in the log; this frame shows the near-forced case."></div>
+  </div>
+  <div class="figs phones">
+    <div data-scene="pbPick" data-crop="0,0,360,800" data-cap="<b>Phone, pick.</b> Groups scroll sideways in one row under their headers. The empty places are written above the buttons."></div>
+    <div data-scene="pbPick2" data-crop="0,0,360,800" data-cap="<b>Phone, up to 2.</b> A tap picks or lets go. Holding a card opens it large and never picks it."></div>
+    <div data-scene="pPlace" data-crop="0,0,360,800" data-cap="<b>Phone, placing 2 of 2.</b> The queue is in the sheet's head, with the current card inverted."></div>
+    <div data-scene="pPlaceInk" data-crop="0,0,360,800" data-cap="<b>The same, in ink.</b> An exact inversion: the lit zones are paper-on-ink dashes, and the glyphs keep their line weight."></div>
+  </div>
+  <div class="figs two">
+    <div data-scene="bPlaceInk" data-crop="220,0,820,800" data-cap="<b>Placing, in ink.</b> The dim is ink at 82 % over the table, so the lit zones and the cards in the queue are the only things at full strength."></div>
+    <div data-scene="bPickInk" data-crop="220,0,820,800" data-cap="<b>Picking, in ink.</b> Inverted selection; the hovered card's crop marks read in both themes because they are drawn in difference."></div>
+  </div>
+</section>
+
+<section id="optC">
+  <div class="sh"><span class="no">04</span><h2>C · The table is the picker</h2>
+    <p>Only a head band stands over the far hand. Everything else happens on the table: lit piles with their counts, a pile opening in place, and the card carried to its zone.</p></div>
+  <div class="figs two">
+    <div data-scene="cPick" data-crop="220,0,820,800" data-cap="<b>Pick.</b> The GY is open in place, as a row over the near monster row. The two cards it can summon are lit; the other two are dimmed, and pointing at them says why. The Deck, the banished pile and the Extra Deck carry their counts."></div>
+    <div data-scene="cPlace" data-crop="220,0,820,800" data-cap="<b>Place.</b> Vell is lifted and carried. Its position chips stand beside it like the verb strip. Dropping it on a lit zone places it, and the zone already shows the glyph of the chosen position."></div>
+  </div>
+  <div class="figs phones">
+    <div data-scene="pcPick" data-crop="0,0,360,800" data-cap="<b>Phone, pick.</b> Piles are 38 dp wide, so each count chip is the tap target. A pile opens over the far half."></div>
+  </div>
+</section>
+
+<section id="glyphs">
+  <div class="sh"><span class="no">05</span><h2>Position glyphs</h2>
+    <p>kai: “For card positions in the UI we should integrate small visual graphics.” Three line drawings on a 24 grid with a 1.5 stroke, which is 1 px at 16. Square corners and no colour. The card's art window tells face-up from face-down: hollow means face showing, solid means back showing. A glyph never stands alone; its word is beside or under it.</p></div>
+  <div class="glyphs">
+    <div class="gpanel" id="gp-paper"></div>
+    <div class="gpanel ink" id="gp-ink"></div>
+  </div>
+  <div class="notes">
+    <div class="note"><h4>Attack</h4><p>Upright card, art window hollow, one rule for the text box. Face-up Attack Position.</p></div>
+    <div class="note"><h4>Defense</h4><p>The same card turned a quarter to the left: art window on the left, the rule standing upright. Face-up Defense Position.</p></div>
+    <div class="note"><h4>Set</h4><p>Sideways, with the art window filled solid as the back. Face-down Defense Position. The word is “Set”, which is what the table's verb says.</p></div>
+    <div class="note"><h4>Selected</h4><p>The chip inverts, glyph and word together. An unavailable position is dashed and keeps its reason under the word. It is never hidden, so the rule is visible.</p></div>
+  </div>
+</section>
+
+<section id="which">
+  <div class="sh"><span class="no">06</span><h2>Which Shortcut</h2>
+    <p>Opened by <kbd>U</kbd> or the verb strip's Shortcut on a card with several written effects. It stands where the verb strip stood, beside the card. Each row lists what the effect will need before you commit.</p></div>
+  <div class="figs two">
+    <div data-scene="which" data-crop="300,300,740,420" data-cap="<b>Desk.</b> Search is used for the turn: greyed with its rule and the manual way out. Exchange is unverified and says so. 1–3 choose, Enter uses. The engine's <code>Decision.Option</code> lists only the legal labels; the greyed row and its rule come from <code>Shortcuts.options</code>, and “needs” from the script's targets."></div>
+    <div class="figs phones" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div data-scene="pWhich" data-crop="0,0,360,800" data-cap="<b>Phone, paper.</b> The same rows at 52 dp."></div>
+      <div data-scene="pWhichInk" data-crop="0,0,360,800" data-cap="<b>Phone, ink.</b>"></div>
+    </div>
+  </div>
+</section>
+
+<section id="target">
+  <div class="sh"><span class="no">07</span><h2>Targeting across the field, the GYs and banishment</h2>
+    <p><i>Ruinbell Toll</i>: “Target up to 2 cards your opponent controls, or in either GY or banishment; shuffle them into the Deck.” Legal cards stay lit while the rest of the table dims. Each chosen target wears its number, the target arrow is drawn from the activating card, and the window counts “1 of 2”.</p></div>
+  <div class="figs two">
+    <div data-scene="target" data-crop="220,0,820,800" data-cap="<b>1 of 2.</b> Thornveil Sentry is target 1, with its arrow. Their GY is open as a row over the near half, which holds no lit card, and its five cards are all legal. The band at the top lists the chosen targets; × lets one go."></div>
+    <div data-scene="targetInk" data-crop="220,0,820,800" data-cap="<b>2 of 2, in ink.</b> Both arrows stand. The set card in their Spell &amp; Trap Zone is still lit, because a face-down card can be targeted. Enter confirms; the links' arrows stay while the chain stands."></div>
+  </div>
+  <div class="figs phones">
+    <div data-scene="pTarget" data-crop="0,0,360,800" data-cap="<b>Phone, paper.</b> The sheet stays below the near Spell &amp; Trap row, and the far side is clear."></div>
+    <div data-scene="pTargetInk" data-crop="0,0,360,800" data-cap="<b>Phone, ink.</b> Their GY opened by tapping its count chip: a row over the far hand's empty band."></div>
+  </div>
+</section>
+
+<section id="waiting">
+  <div class="sh"><span class="no">08</span><h2>Several Shortcuts waiting</h2>
+    <p>Triggers that went off together (§2.3). Your own are ordered in two groups as the rules require: what must go first, then what you may use. Within each group you choose the order, and each optional one can be Used or Skipped. The table shows the link each card will become.</p></div>
+  <div class="figs two">
+    <div data-scene="waiting" data-crop="220,0,820,800" data-cap="<b>Desk.</b> Oru's draw is mandatory, so it is Link 1 and cannot be skipped. Vell and the Archivist can be reordered with Alt ↑↓ or a drag. The Archivist is skipped and its link number on the table goes."></div>
+    <div class="figs phones" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div data-scene="pWaiting" data-crop="0,0,360,800" data-cap="<b>Phone.</b> Drag the grip to reorder; Use and Skip are a 44 dp switch."></div>
+      <div data-scene="pWaitingInk" data-crop="0,0,360,800" data-cap="<b>Phone, ink.</b>"></div>
+    </div>
+  </div>
+</section>
+
+<section id="declare">
+  <div class="sh"><span class="no">09</span><h2>A declaration</h2>
+    <p><i>Silence Edict</i>: “Declare 1 card name.” A searchable list of the names the engine offers (<code>Decision.Declare.among</code>): today every card you own and every face-up card on the field, in a GY or banished, one row per card, never per artwork. Matched as the pool's search matches. Type, Attribute and Level use short lists instead of the search box.</p></div>
+  <div class="figs two">
+    <div data-scene="declare" data-crop="220,0,820,800" data-cap="<b>A card name.</b> “gate” matches eight of the 74 names offered. The first row is chosen, and its text shows on the right. The declared name is public, so the log says it."></div>
+    <div data-scene="declareSmall" data-crop="220,0,820,800" data-cap="<b>Type, Attribute, Level.</b> One short list each. A Level is a digit key, an Attribute its first letter."></div>
+  </div>
+  <div class="figs phones">
+    <div data-scene="pDeclare" data-crop="0,0,360,800" data-cap="<b>Phone.</b> The sheet goes full height while the soft keyboard is up; the results sit just above it."></div>
+    <div data-scene="pDeclareInk" data-crop="0,0,360,800" data-cap="<b>Phone, ink.</b>"></div>
+  </div>
+</section>
+
+<section id="frame">
+  <div class="sh"><span class="no">10</span><h2>The frame every choice shares</h2>
+    <p>The window is the same object at every step. Its head names the card, the effect and where the use stands. Its body is whatever the <code>Decision</code> asks. Its foot holds Enter, Esc and the keys.</p></div>
+  <div data-scene="anatomy" data-crop="0,0,1280,800" data-cap="<b>Anatomy</b>, desk, 1280 × 800 dp with both rails."></div>
+  <ul class="legend">
+    <li><b>01</b><span><b style="font-weight:500">The card.</b> A thumbnail of the source card, which is the card the inspector reads until you point at something else.</span></li>
+    <li><b>02</b><span><b style="font-weight:500">Who and which.</b> The card's name · the effect's label · SHORTCUT, plus a dashed UNVERIFIED tag when it applies. This is the line the log will write.</span></li>
+    <li><b>03</b><span><b style="font-weight:500">What, in words.</b> The purpose as a sentence: “Special Summon 1 “Gatekeeper” monster from your hand, Deck, GY, banishment or Extra Deck”. Built from <code>purpose</code>, <code>n</code>, the filter's words and <code>from</code>.</span></li>
+    <li><b>04</b><span><b style="font-weight:500">The steps.</b> Cost · Target · Pick · Place, each as done ✓, NOW, or to come. Comes from <code>step</code> and the plan of the use.</span></li>
+    <li><b>05</b><span><b style="font-weight:500">The count.</b> “0 / 1”, “1 of 2”, “2 / up to 2”, in mono. It turns to Enter's word once the minimum is met.</span></li>
+    <li><b>06</b><span><b style="font-weight:500">The body.</b> Places and cards, positions, options, an order, a search: one of six shapes, chosen by the type of the <code>Decision</code>.</span></li>
+    <li><b>07</b><span><b style="font-weight:500">Enter.</b> Inverted, says exactly what it does: “Summon Gatekeeper Vell”, “Confirm 2 targets”. Disabled, with its reason, until the count is met.</span></li>
+    <li><b>08</b><span><b style="font-weight:500">Esc.</b> “Back” goes one step back. On the first step it reads “Cancel” and nothing is committed.</span></li>
+    <li><b>09</b><span><b style="font-weight:500">The keys</b> for this body, in mono, as on the ordering strip.</span></li>
+    <li><b>10</b><span><b style="font-weight:500">The table answers too.</b> Lit sources, rings, numbers and lit zones. Every choice can be made on the table as well as in the window.</span></li>
+  </ul>
+  <h3>Where it stands</h3>
+  <div class="notes">
+    <div class="note"><h4>Rule</h4><p>The window never covers a lit card or a lit zone. It takes the half of the table with no lit card (the far half for your own summons and searches, the near half or the near hand for targets on their side), and stands beside the card for Which Shortcut, as the verb strip does.</p></div>
+    <div class="note"><h4>Compact while the table is the answer</h4><p>For a zone, a position or targets, the body moves onto the table and the window shrinks to a band: head, count and foot, at the edge farthest from the lit things.</p></div>
+    <div class="note"><h4>Open piles</h4><p>An open pile's row lies in the band with no lit card too. If every band holds one, it lies over the window's half and the window shrinks to its band.</p></div>
+    <div class="note"><h4>Never modal to the eye</h4><p>The rails, the log and the score column stay readable. The dim is paper (or ink) at 82 %, the Spotlight's dim, so the table is still there behind it.</p></div>
+  </div>
+  <div data-scene="placement" data-crop="0,0,1280,330" data-cap="<b>Three placements.</b> A strip over the far half for your own piles; a band over the far hand for zones, with your side lit; a band over the near hand for their side, with the open pile over your side."></div>
+  <h3>Keys, pointer, finger, typing and Ai</h3>
+  <div class="tablewrap">
+    <table class="keys">
+      <thead><tr><th>Input</th><th>Cards (pick)</th><th>Zone and position</th><th>Option, which, yes/no</th><th>Order</th><th>Declare</th></tr></thead>
+      <tbody>
+        <tr><td><kbd>Enter</kbd></td><td>Confirm once the count is met</td><td>Place in the focused zone</td><td>Use the chosen row; Yes</td><td>Put them on the chain</td><td>Declare the chosen row</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td colspan="5">Back one step, unpicking what that step chose. On the first step: cancel the whole Shortcut, with nothing committed. With a pile row open, Esc closes the row first.</td></tr>
+        <tr><td>Digits</td><td><kbd>1</kbd>–<kbd>9</kbd> pick or let go the nth card</td><td><kbd>1</kbd>–<kbd>5</kbd>, <kbd>Shift 1</kbd>–<kbd>5</kbd>, <kbd>6</kbd>/<kbd>7</kbd> EMZ, <kbd>0</kbd> Field: the table's zone keys</td><td><kbd>1</kbd>–<kbd>9</kbd> the nth row; <kbd>Y</kbd>/<kbd>N</kbd></td><td><kbd>1</kbd>–<kbd>9</kbd> focus a row</td><td><kbd>1</kbd>–<kbd>9</kbd> the nth result; Levels by digit</td></tr>
+        <tr><td>Arrows</td><td><kbd>←</kbd><kbd>→</kbd> walk the strip (and lit table cards); <kbd>Tab</kbd> next place</td><td>Walk the lit zones only</td><td><kbd>↑</kbd><kbd>↓</kbd></td><td><kbd>↑</kbd><kbd>↓</kbd>; <kbd>Alt ↑</kbd><kbd>Alt ↓</kbd> move</td><td><kbd>↑</kbd><kbd>↓</kbd></td></tr>
+        <tr><td><kbd>Space</kbd></td><td>Pick or let go the focus</td><td>Cycle position</td><td>—</td><td>Use / Skip</td><td>—</td></tr>
+        <tr><td>Letters</td><td>Type a coordinate: <code>gy1</code>, <code>ob2</code>, <code>om1</code>, <code>dk</code></td><td><kbd>A</kbd> Attack · <kbd>D</kbd> Defense · <kbd>E</kbd> Set (the table's Set key)</td><td>The label's first letter</td><td>—</td><td>Any letter types into the box</td></tr>
+        <tr><td>Mouse</td><td>Click picks; right-click reads it in the inspector; drag to a lit zone picks and places</td><td>Click a lit zone; hover draws the card standing there</td><td>Click a row</td><td>Drag a row</td><td>Click a row</td></tr>
+        <tr><td>Finger</td><td>Tap picks or lets go; hold opens the card large and never picks</td><td>Tap a chip, tap a zone (44 dp chips)</td><td>Tap a row</td><td>Drag the grip; tap Use/Skip</td><td>Type; tap a row</td></tr>
+        <tr><td>Typed line</td><td colspan="5"><code>u s3 pick=gy1</code> · <code>u h2 e2 target=om1,ogy2</code> · <code>u s3 pick=gy1,dk:Oru zone=m4,m3 pos=def,atk</code> · <code>u m2 e2</code> · <code>declare "Gatekeeper Vell"</code>. A choice the line leaves out is asked in the window.</td></tr>
+        <tr><td>Ai</td><td colspan="5">Answers in the op with the same words (<code>pick=</code>, <code>target=</code>, <code>zone=</code>, <code>pos=</code>, <code>order=</code>, <code>option=yes|no</code> for a trigger used or skipped, <code>declare=</code>), held to <code>DuelReach</code> and its knowledge. Anything left out is asked back with the options listed, in the window's words.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="figs two">
+    <div data-scene="anatomyInk" data-crop="220,0,820,800" data-cap="<b>The frame in ink.</b> Exact inversion; nothing else changes. Micro caps, mono numbers, one 2 dp ink border, no radius, no shadow."></div>
+    <div class="figs phones" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+      <div data-scene="pbPick" data-crop="0,0,360,800" data-cap="<b>360 dp, paper.</b> The window is a sheet on the bottom edge, held below the near Spell &amp; Trap row whenever the table is the answer."></div>
+      <div data-scene="pbPickInk" data-crop="0,0,360,800" data-cap="<b>360 dp, ink.</b>"></div>
+    </div>
+  </div>
+</section>
+
+<section id="engine">
+  <div class="sh"><span class="no">11</span><h2>Against the engine as it landed</h2>
+    <p>Designed against <code>Decision</code> at 6f0bd334. Most of what the window draws is already there. The mapping is in <code>shortcut-window-spec.md</code> (written as D.md §5¾); what it still lacks is below.</p></div>
+  <div class="notes">
+    <div class="note"><h4>Already there</h4><p><code>Cards</code> carries <code>purpose</code>, <code>to: Landing</code>, <code>from</code> per candidate, <code>effect</code>, <code>step</code> and <code>hidden</code>. <code>Zone</code> names its card and positions, and <code>Position</code> follows it, a card at a time. <code>Order</code> has labels. Each asks only when it has more than one answer.</p></div>
+    <div class="note"><h4>Zone, then position</h4><p>The engine asks <code>Zone</code> and then <code>Position</code>. The window shows both at once (position chips beside the lit zones, the zone showing the chosen glyph), then answers <code>Position</code> from the chip. One screen, two answers.</p></div>
+    <div class="note"><h4>Places with nothing</h4><p>Missing: the places a pick looked in. <code>from</code> covers only the candidates, so “Hand · none” and its reason need <code>looked: List&lt;Spot&gt;</code> and <code>refused: Map&lt;uid, String&gt;</code>.</p></div>
+    <div class="note"><h4>A rule over the set</h4><p>Missing: a check on the set so far (“different names”, a Level total), so the window can grey a card as you pick. Either <code>together: Filter</code> or a pure <code>FxEngine.stillLegal(d, picked)</code>.</p></div>
+    <div class="note"><h4>Zones not offered</h4><p><code>Zone.among</code> lists only the legal zones. For “E2 closed: you already use E1” the window needs <code>closed: Map&lt;Place.Zone, String&gt;</code>. Without it, the window draws them dotted and says nothing.</p></div>
+    <div class="note"><h4>Names to declare</h4><p><code>declarable</code> offers names the seat has seen, not the whole pool. The real game lets you name any card, so the window wants <code>Declare.open = true</code> and searches the pool itself.</p></div>
+    <div class="note"><h4>Which Shortcut</h4><p><code>Option</code> lists only legal labels. The window reads <code>Shortcuts.options</code> for the greyed rows and needs <code>ShortcutOption.needs</code> (“1 target in your GY”), worked out from the script's cost and targets.</p></div>
+    <div class="note"><h4>Several triggers</h4><p>The engine asks a <code>YesNo</code> for each optional trigger, then an <code>Order</code> for the ones used. The window shows one list with Use and Skip and answers both. It needs the whole group up front, as <code>Decision.Triggers(pending, mandatory)</code> or by asking ahead.</p></div>
+    <div class="note"><h4>Asking by replay</h4><p><code>Chooser</code> is synchronous, so the table asks by replay. It runs the use with the answers so far, stops at the first unanswered decision (the <code>ShortcutChooser</code> <code>question</code> path), and shows it. Esc drops the last answer. The engine is deterministic, so it reaches the same question.</p></div>
+  </div>
+</section>
+</div>
+
+<script>
+/* ------------------------------------------------------------------ geometry (dp) */
+const DESK = { kind: 'desk', W: 1280, H: 800, cw: 74, ch: 108, lane: 8, x0: 316,
+  rows: { oh: -14, ost: 102, om: 218, sh: 334, m: 450, s: 566, h: 682 }, hs: 1.25, score: { x: 894, w: 70 },
+  dim: { x: 250, y: 44, w: 780, h: 756 } };
+const PHONE = { kind: 'phone', W: 360, H: 800, cw: 38, ch: 55, lane: 3.6, x0: 8,
+  rows: { oh: 196, ost: 297, om: 356, sh: 415, m: 474, s: 533, h: 690 }, hs: 1.25, score: { x: 300, w: 52 },
+  dim: { x: 0, y: 136, w: 360, h: 664 } };
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const fieldW = G => 7 * G.cw + 6 * G.lane;
+const bx = (G, col, y) => ({ x: G.x0 + col * (G.cw + G.lane), y, w: G.cw, h: G.ch });
+
+function slot(G, at) {
+  const r = G.rows; let m;
+  if ((m = at.match(/^m([1-5])$/))) return bx(G, +m[1], r.m);
+  if ((m = at.match(/^s([1-5])$/))) return bx(G, +m[1], r.s);
+  if ((m = at.match(/^om([1-5])$/))) return bx(G, 6 - m[1], r.om);
+  if ((m = at.match(/^os([1-5])$/))) return bx(G, 6 - m[1], r.ost);
+  const fixed = { fz: [0, 'm'], gy: [6, 'm'], ex: [0, 's'], dk: [6, 's'], e1: [2, 'sh'], e2: [4, 'sh'], chain: [3, 'sh'], ban: [6, 'sh'], oban: [0, 'sh'], ofz: [6, 'om'], ogy: [0, 'om'], oex: [6, 'ost'], odk: [0, 'ost'] };
+  if (fixed[at]) return bx(G, fixed[at][0], r[fixed[at][1]]);
+  if ((m = at.match(/^h(\d+)\/(\d+)$/))) {
+    const i = +m[1], n = +m[2], w = G.cw * G.hs, h = G.ch * G.hs, step = w * 0.8;
+    const left = G.x0 + fieldW(G) / 2 - (w + step * (n - 1)) / 2;
+    return { x: left + (i - 1) * step, y: r.h, w, h };
+  }
+  if ((m = at.match(/^oh(\d+)\/(\d+)$/))) {
+    const i = +m[1], n = +m[2], w = G.cw, h = G.ch, step = w * 0.72;
+    const left = G.x0 + fieldW(G) / 2 - (w + step * (n - 1)) / 2;
+    return { x: left + (i - 1) * step, y: r.oh, w, h };
+  }
+  if ((m = at.match(/^xy:(-?[\d.]+),(-?[\d.]+)$/))) return { x: +m[1], y: +m[2], w: G.cw, h: G.ch };
+  throw new Error('slot ' + at);
+}
+const turned = c => c.pos === 'def' || c.pos === 'set';
+function vbox(G, c) { const b = slot(G, c.at); if (!turned(c)) return b; const cx = b.x + b.w / 2, cy = b.y + b.h / 2; return { x: cx - b.h / 2, y: cy - b.w / 2, w: b.h, h: b.w }; }
+
+/* ------------------------------------------------------------------ drawn cards */
+function motif(i, x, y, w, h) {
+  const cx = x + w / 2, cy = y + h / 2, r = Math.min(w, h) * 0.3;
+  switch (i % 6) {
+    case 0: return `<circle class="mot" cx="${cx}" cy="${cy}" r="${r}"/>`;
+    case 1: return `<path class="mot" d="M${cx} ${cy - r}L${cx + r} ${cy + r * 0.8}L${cx - r} ${cy + r * 0.8}Z"/>`;
+    case 2: return `<path class="mot" d="M${cx} ${cy - r}L${cx + r} ${cy}L${cx} ${cy + r}L${cx - r} ${cy}Z"/>`;
+    case 3: return `<rect class="mot" x="${cx - r}" y="${cy - r}" width="${r * 1.2}" height="${r * 1.2}"/><rect class="mot" x="${cx - r * 0.2}" y="${cy - r * 0.2}" width="${r * 1.2}" height="${r * 1.2}"/>`;
+    case 4: return `<path class="mot" d="M${cx - r} ${cy}H${cx + r}M${cx} ${cy - r}V${cy + r}M${cx - r * 0.7} ${cy - r * 0.7}L${cx + r * 0.7} ${cy + r * 0.7}"/>`;
+    default: return `<circle class="mot" cx="${cx}" cy="${cy + r * 0.3}" r="${r * 0.6}"/><path class="mot" d="M${cx - r} ${cy - r * 0.6}H${cx + r}"/>`;
+  }
+}
+function back(w, h) {
+  return `<rect class="cf" x=".5" y=".5" width="${w - 1}" height="${h - 1}"/><rect class="bk" x="${w * 0.07}" y="${w * 0.07}" width="${w * 0.86}" height="${h - w * 0.14}"/><ellipse class="bko" cx="${w / 2}" cy="${h / 2}" rx="${w * 0.17}" ry="${h * 0.24}"/>`;
+}
+function face(w, h, c) {
+  if (c.back) return back(w, h);
+  const fs = Math.max(3.6, Math.min(9, w * 0.085)), nb = Math.max(5, h * 0.095);
+  const ax = w * 0.12, ay = 3 + nb + h * 0.03, aw = w * 0.76, ah = aw * 0.9;
+  const max = Math.max(3, Math.floor((w - 9) / (fs * 0.58)));
+  const nm = c.n.length > max ? c.n.slice(0, max - 1) + '…' : c.n;
+  let s = `<rect class="cf" x=".5" y=".5" width="${w - 1}" height="${h - 1}"/>`;
+  s += `<rect class="nb" x="2.5" y="2.5" width="${w - 5}" height="${nb}"/>`;
+  s += `<text class="tn" x="${4 + w * 0.02}" y="${2.5 + nb * 0.74}" font-size="${fs}">${esc(nm)}</text>`;
+  s += `<rect class="art" x="${ax}" y="${ay}" width="${aw}" height="${ah}"/>` + motif(c.mo || 0, ax, ay, aw, ah);
+  const ty = ay + ah + h * 0.035;
+  const kind = c.k === 's' ? 'SPELL' : c.k === 't' ? 'TRAP' : c.k === 'l' ? (c.tag || 'LINK') : (c.tag || '');
+  if (kind) s += `<text class="tk" x="${w / 2}" y="${ty + fs * 0.8}" font-size="${fs * 0.78}" text-anchor="middle">${kind}</text>`;
+  for (let i = 0; i < 3; i++) s += `<rect class="ln" x="${ax}" y="${ty + fs * (kind ? 1.5 : 0.6) + i * fs * 0.85}" width="${aw * (i === 2 ? 0.6 : 1)}" height="${Math.max(0.6, h * 0.008)}"/>`;
+  if (c.plate && c.atk != null) {
+    const ph = Math.max(9, h * 0.13);
+    s += `<rect class="pl8" x="2" y="${h - ph - 2}" width="${w - 4}" height="${ph}"/><text class="plt" x="${w / 2}" y="${h - 2 - ph * 0.28}" font-size="${ph * 0.62}" text-anchor="middle">${c.atk} / ${c.def}</text>`;
+  }
+  return s;
+}
+function thumb(c, w) { const h = Math.round(w / 0.686); return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${face(w, h, c)}</svg>`; }
+
+/* ------------------------------------------------------------------ glyphs */
+const GLYPH = {
+  atk: '<rect x="6.75" y="2.75" width="10.5" height="18.5"/><rect x="9" y="5" width="6" height="6"/><path d="M9 15.5h6"/>',
+  def: '<rect x="2.75" y="6.75" width="18.5" height="10.5"/><rect x="5" y="9" width="6" height="6"/><path d="M15.5 9v6"/>',
+  set: '<rect x="2.75" y="6.75" width="18.5" height="10.5"/><rect class="gf" x="5" y="9" width="14" height="6"/>',
+};
+const glyph = (t, s = 20, cls = 'g') => `<svg class="${cls}" width="${s}" height="${s}" viewBox="0 0 24 24" aria-hidden="true">${GLYPH[t]}</svg>`;
+const POS = { atk: ['Attack', 'A'], def: ['Defense', 'D'], set: ['Set', 'E'] };
+
+/* ------------------------------------------------------------------ table drawing */
+function card(G, c) {
+  const b = slot(G, c.at);
+  const op = c.ghosted ? ' opacity=".55"' : '';
+  const inner = face(b.w, b.h, c);
+  let s;
+  if (turned(c)) { const cx = b.x + b.w / 2, cy = b.y + b.h / 2; s = `<g transform="translate(${cx} ${cy}) rotate(-90) translate(${-b.w / 2} ${-b.h / 2})"${op}>${inner}</g>`; }
+  else s = `<g transform="translate(${b.x} ${b.y})"${op}>${inner}</g>`;
+  if (c.pile != null) { const cw = 8 + String(c.pile).length * 6.5; s += `<rect class="cnt" x="${b.x + b.w - cw - 3}" y="${b.y + b.h - 16}" width="${cw}" height="13"/><text class="cntt" x="${b.x + b.w - 3 - cw / 2}" y="${b.y + b.h - 6}" text-anchor="middle" font-size="${G.kind === 'phone' ? 8 : 10}">${c.pile}</text>`; }
+  return s;
+}
+function ring(r, kind) {
+  if (kind === 'cand') return `<rect class="rc" x="${r.x - 3}" y="${r.y - 3}" width="${r.w + 6}" height="${r.h + 6}"/>`;
+  if (kind === 'dash') return `<rect class="arw2" x="${r.x - 3}" y="${r.y - 3}" width="${r.w + 6}" height="${r.h + 6}"/>`;
+  return `<rect class="r1" x="${r.x - 1}" y="${r.y - 1}" width="${r.w + 2}" height="${r.h + 2}"/><rect class="r2" x="${r.x - 3}" y="${r.y - 3}" width="${r.w + 6}" height="${r.h + 6}"/>`;
+}
+function badge(x, y, t, size = 11) {
+  const w = 8 + String(t).length * size * 0.62, h = size + 5;
+  return `<rect class="ink" x="${x}" y="${y}" width="${w}" height="${h}" style="stroke:var(--p);stroke-width:1"/><text class="txp mono" x="${x + w / 2}" y="${y + h - 4}" text-anchor="middle" font-size="${size}">${esc(t)}</text>`;
+}
+function chipAbove(r, t, G) {
+  const fs = G.kind === 'phone' ? 8 : 9.5, w = 10 + t.length * fs * 0.68, h = fs + 9;
+  const x = r.x + r.w / 2 - w / 2, y = r.y - h - 4;
+  return `<rect class="ink" x="${x}" y="${y}" width="${w}" height="${h}"/><text class="txp" x="${x + w / 2}" y="${y + h - 5}" text-anchor="middle" font-size="${fs}" font-weight="500" letter-spacing=".06em">${esc(t)}</text>`;
+}
+function zoneLit(G, z) {
+  const b = slot(G, z.at), cx = b.x + b.w / 2, cy = b.y + b.h / 2, ph = G.kind === 'phone';
+  let s = `<rect class="zl" x="${b.x + 1}" y="${b.y + 1}" width="${b.w - 2}" height="${b.h - 2}"/>`;
+  if (z.ghost) {
+    const gw = turned({ pos: z.g }) ? b.h - 6 : b.w - 6, gh = turned({ pos: z.g }) ? b.w - 6 : b.h - 6;
+    s += `<rect class="gh" x="${cx - gw / 2}" y="${cy - gh / 2}" width="${gw}" height="${gh}"/>`;
+  }
+  const kw = ph ? 16 : 22, kh = ph ? 13 : 17;
+  s += `<rect class="ink" x="${cx - kw / 2}" y="${b.y + (ph ? 4 : 8)}" width="${kw}" height="${kh}"/><text class="txp mono" x="${cx}" y="${b.y + (ph ? 14 : 21)}" text-anchor="middle" font-size="${ph ? 9 : 12}">${z.key}</text>`;
+  const gs = ph ? 20 : 30;
+  if (z.g) s += `<svg class="gz" x="${cx - gs / 2}" y="${cy - gs / 2 + (ph ? 5 : 6)}" width="${gs}" height="${gs}" viewBox="0 0 24 24">${GLYPH[z.g]}</svg>`;
+  if (z.word && !ph) s += `<text class="tx" x="${cx}" y="${b.y + b.h - 10}" text-anchor="middle" font-size="8.5" font-weight="500" letter-spacing=".08em">${z.word}</text>`;
+  return s;
+}
+function arrow(G, a, b, cls = 'arw') {
+  const ax = a.x + a.w / 2, ay = a.y + a.h / 2, bx2 = b.x + b.w / 2, by = b.y + b.h / 2;
+  const dx = bx2 - ax, dy = by - ay, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L, ex = bx2 - ux * 10, ey = by - uy * 10;
+  const hx = ex - ux * 10, hy = ey - uy * 10, px = -uy * 5, py = ux * 5;
+  return `<path class="${cls}" d="M${ax} ${ay}L${hx} ${hy}"/><path class="ink" d="M${ex} ${ey}L${hx + px} ${hy + py}L${hx - px} ${hy - py}Z"/>`;
+}
+const ALLZONES = ['om1', 'om2', 'om3', 'om4', 'om5', 'os1', 'os2', 'os3', 'os4', 'os5', 'ofz', 'ogy', 'oex', 'odk', 'oban', 'e1', 'e2', 'chain', 'ban', 'm1', 'm2', 'm3', 'm4', 'm5', 's1', 's2', 's3', 's4', 's5', 'fz', 'gy', 'ex', 'dk'];
+
+function deskChrome(o) {
+  let s = `<rect class="pap" x="0" y="0" width="1280" height="44"/><path class="hairk" d="M0 44.5H1280"/>`;
+  s += `<rect class="ink" x="16" y="14" width="16" height="16"/><text class="tx" x="40" y="27" font-size="12" font-weight="700" letter-spacing=".02em">NEUE MASTER TOOL</text><text class="tx7" x="168" y="27" font-size="11" letter-spacing=".08em">/  07  DUEL  /</text>`;
+  [['+ NEW DUEL', 262, 104], ['REPLAYS', 374, 72], ['TABLE ▾', 454, 66], ['SEAT: KAI', 528, 76]].forEach(([t, x, w]) => { s += `<rect class="zo" x="${x}" y="9" width="${w}" height="26"/><text class="tx" x="${x + w / 2}" y="26" text-anchor="middle" font-size="9.5" font-weight="500" letter-spacing=".08em">${t}</text>`; });
+  s += `<text class="tx4 mono" x="640" y="27" font-size="11">Type a command · s h2 m3 · a m3 om1</text><path class="hair" d="M640 36H1200"/>`;
+  s += `<path class="hair" d="M250 44V800M1030 44V800"/>`;
+  s += `<text class="tx" x="20" y="72" font-size="10" font-weight="500" letter-spacing=".08em">THE CARD</text>`;
+  if (o.inspect) {
+    const c = o.inspect; s += `<g transform="translate(20 86)">${face(210, 306, c)}</g><text class="tx" x="20" y="418" font-size="16" font-weight="500">${esc(c.n)}</text>`;
+    (o.inspectText || []).forEach((t, i) => { s += `<text class="tx7" x="20" y="${442 + i * 18}" font-size="12">${esc(t)}</text>`; });
+  } else s += `<text class="tx4" x="20" y="92" font-size="11">Point at a card to read it here.</text>`;
+  s += `<text class="tx" x="1046" y="72" font-size="10" font-weight="500" letter-spacing=".08em">LOG <tspan class="mono tx4">24</tspan></text>`;
+  (o.log || ['Turn 1 · Main 1', 'Kai Normal Summons Mirrorwake Archivist to M2', 'Kai activates Five Gates Open (Shortcut)', 'Chain Link 1: Five Gates Open']).forEach((t, i, a) => { s += `<text class="${i === a.length - 1 ? 'tx' : 'tx7'}" x="1046" y="${98 + i * 20}" font-size="11.5">${esc(t)}</text>`; });
+  return s;
+}
+function phoneChrome(o) {
+  let s = `<rect class="pap" x="0" y="0" width="360" height="136"/><text class="tx4 mono" x="12" y="30" font-size="12">07</text><text class="tx" x="34" y="32" font-size="19" font-weight="500">Duel</text><text class="tx" x="330" y="30" font-size="16" font-weight="700">···</text><path class="hairk" d="M0 47.5H360"/>`;
+  [['+ NEW', 12, 74], ['REPLAYS', 94, 78], ['TABLE ▾', 180, 72], ['SEAT: KAI', 260, 84]].forEach(([t, x, w]) => { s += `<rect class="zo" x="${x}" y="56" width="${w}" height="32"/><text class="tx" x="${x + w / 2}" y="76" text-anchor="middle" font-size="9.5" font-weight="500" letter-spacing=".08em">${t}</text>`; });
+  s += `<text class="tx4 mono" x="12" y="122" font-size="11">Type a command</text><path class="hair" d="M12 132H300"/><rect class="zo" x="312" y="102" width="34" height="30"/>`;
+  if (!o.noTabs) { s += `<path class="hairk" d="M0 744.5H360"/>`; ['01 BUILDER', '02 DECKS', '03 SIDING', '04 FORMAT', '05 PREP', '07 DUEL', '⚙'].forEach((t, i) => { s += `<text class="${t.startsWith('07') ? 'tx' : 'tx4'}" x="${26 + i * 51}" y="776" text-anchor="middle" font-size="7.5" font-weight="500" letter-spacing=".06em">${t}</text>`; }); }
+  return s;
+}
+function score(G, o) {
+  const { x, w } = G.score, ph = G.kind === 'phone';
+  let s = '';
+  if (ph) {
+    s += `<rect class="pst" x="${x}" y="297" width="${w}" height="55"/><text class="tx" x="${x + w / 2}" y="312" text-anchor="middle" font-size="8" font-weight="500" letter-spacing=".08em">RIVAL</text><text class="tx mono" x="${x + w / 2}" y="330" text-anchor="middle" font-size="12">8000</text>`;
+    s += `<rect class="ink" x="${x}" y="356" width="${w}" height="31"/><text class="txp" x="${x + w / 2}" y="368" text-anchor="middle" font-size="7" font-weight="500" letter-spacing=".08em">TURN 1</text><text class="txp mono" x="${x + w / 2}" y="381" text-anchor="middle" font-size="10">M1 ▾</text>`;
+    s += `<rect class="pst" x="${x}" y="391" width="${w}" height="102"/><text class="tx" x="${x + w / 2}" y="436" text-anchor="middle" font-size="8" font-weight="500" letter-spacing=".08em">NEXT</text><text class="tx mono" x="${x + w / 2}" y="452" text-anchor="middle" font-size="12">BP</text>`;
+    s += `<rect class="pst" x="${x}" y="498" width="${w}" height="31"/><text class="tx" x="${x + w / 2}" y="517" text-anchor="middle" font-size="8" font-weight="500" letter-spacing=".08em">END</text>`;
+    s += `<rect class="ink" x="${x}" y="533" width="${w}" height="55"/><text class="txp mono" x="${x + w / 2}" y="560" text-anchor="middle" font-size="12">8000</text><text class="txp" x="${x + w / 2}" y="576" text-anchor="middle" font-size="8" font-weight="500" letter-spacing=".08em">KAI</text>`;
+    return s;
+  }
+  s += `<rect class="pst" x="${x}" y="102" width="${w}" height="62"/><text class="tx" x="${x + w / 2}" y="120" text-anchor="middle" font-size="9" font-weight="500" letter-spacing=".08em">RIVAL</text><text class="tx mono" x="${x + w / 2}" y="140" text-anchor="middle" font-size="15">8000</text>`;
+  s += `<text class="tx7" x="${x + w / 2}" y="184" text-anchor="middle" font-size="8.5" font-weight="500" letter-spacing=".08em">TURN 1</text>`;
+  ['DP', 'SP', 'M1', 'BP', 'M2', 'EP', 'END'].forEach((p, i) => { const y = 194 + i * 58, on = p === (o.phase || 'M1'); s += `<rect class="${on ? 'ink' : 'pst'}" x="${x}" y="${y}" width="${w}" height="52"/><text class="${on ? 'txp' : 'tx'} mono" x="${x + w / 2}" y="${y + 30}" text-anchor="middle" font-size="11">${p}</text>`; });
+  s += `<rect class="ink" x="${x}" y="606" width="${w}" height="68"/><text class="txp mono" x="${x + w / 2}" y="636" text-anchor="middle" font-size="15">8000</text><text class="txp" x="${x + w / 2}" y="656" text-anchor="middle" font-size="9" font-weight="500" letter-spacing=".08em">KAI</text>`;
+  return s;
+}
+function chainWell(G, lines) {
+  if (!lines) return '';
+  const b = slot(G, 'chain'), ph = G.kind === 'phone';
+  let s = `<text class="tx" x="${b.x + 4}" y="${b.y + (ph ? 10 : 14)}" font-size="${ph ? 6.5 : 9}" font-weight="500" letter-spacing=".08em">CHAIN</text>`;
+  lines.forEach((t, i) => { const y = b.y + (ph ? 14 : 20) + i * (ph ? 10 : 15); s += `<rect class="ink" x="${b.x + 4}" y="${y}" width="${ph ? 8 : 11}" height="${ph ? 8 : 11}"/><text class="txp mono" x="${b.x + (ph ? 8 : 9.5)}" y="${y + (ph ? 6.5 : 9)}" text-anchor="middle" font-size="${ph ? 6.5 : 9}">${i + 1}</text><text class="tx mono" x="${b.x + (ph ? 15 : 19)}" y="${y + (ph ? 6.5 : 9)}" font-size="${ph ? 6 : 8.5}">${esc(ph ? t.slice(0, 4) + '…' : t.slice(0, 9) + (t.length > 9 ? '…' : ''))}</text>`; });
+  return s;
+}
+/** The whole table as one SVG: chrome, zones, cards, the dim, then what is lit, then rings, numbers, arrows. */
+function table(G, o) {
+  const cards = o.cards || [];
+  const occupied = new Set(cards.map(c => c.at));
+  let s = `<svg width="${G.W}" height="${G.H}" viewBox="0 0 ${G.W} ${G.H}" style="position:absolute;left:0;top:0" aria-hidden="true"><rect class="pap" x="0" y="0" width="${G.W}" height="${G.H}"/>`;
+  s += G.kind === 'desk' ? deskChrome(o) : phoneChrome(o);
+  ALLZONES.forEach(z => { const b = slot(G, z); if (z === 'chain') return; s += `<rect class="zo" x="${b.x + 0.5}" y="${b.y + 0.5}" width="${b.w - 1}" height="${b.h - 1}"/>`; });
+  ['ban', 'oban'].forEach(z => { if (!occupied.has(z)) { const b = slot(G, z); s += `<text class="zt" x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + 3}" text-anchor="middle" ${G.kind === 'phone' ? 'font-size="6"' : ''}>BANISHED</text>`; } });
+  s += chainWell(G, o.chain);
+  s += score(G, o);
+  cards.filter(c => !c.lit).forEach(c => { s += card(G, c); });
+  if (o.dim) { const d = G.dim; s += `<rect class="dim" x="${d.x}" y="${d.y}" width="${d.w}" height="${d.h}"/>`; }
+  (o.zonesOff || []).forEach(z => { const b = slot(G, z); s += `<rect class="zx" x="${b.x + 3}" y="${b.y + 3}" width="${b.w - 6}" height="${b.h - 6}"/>`; });
+  (o.zones || []).forEach(z => { s += zoneLit(G, z); });
+  cards.filter(c => c.lit).forEach(c => { s += card(G, c); });
+  cards.forEach(c => { if (c.ring) s += ring(vbox(G, c), c.ring); });
+  (o.arrows || []).forEach(([a, b]) => { s += arrow(G, typeof a === 'string' ? slot(G, a) : a, typeof b === 'string' ? vbox(G, cards.find(c => c.at === b) || { at: b }) : b); });
+  cards.forEach(c => { const r = vbox(G, c); if (c.chip) s += chipAbove(r, c.chip, G); if (c.badge) s += badge(r.x - 2, r.y - 2, c.badge, G.kind === 'phone' ? 9 : 11); });
+  s += o.top || '';
+  return s + '</svg>';
+}
+
+/* ------------------------------------------------------------------ the boards */
+const C = {
+  archivist: { n: 'Mirrorwake Archivist', k: 'm', mo: 3, atk: 1600, def: 1800 },
+  gates: { n: 'Five Gates Open', k: 's', mo: 4 },
+  muster: { n: "Gatekeeper's Muster", k: 's', mo: 1 },
+  toll: { n: 'Ruinbell Toll', k: 't', mo: 5 },
+  edict: { n: 'Silence Edict', k: 't', mo: 2 },
+  vell: { n: 'Gatekeeper Vell', k: 'm', mo: 7, atk: 1800, def: 1200 },
+  oru: { n: 'Gatekeeper Oru', k: 'm', mo: 13, tag: 'TUNER', atk: 1000, def: 1500 },
+  ilse: { n: 'Gatekeeper Ilse', k: 'm', mo: 14 },
+  mourn: { n: 'Gatekeeper Mourn', k: 'm', mo: 15 },
+  dusk: { n: 'Gatekeeper of Dusk', k: 'm', mo: 8 },
+  arch: { n: 'Gatekeeper Arch-Sentinel', k: 'l', tag: 'LINK-2', mo: 16, atk: 2000, def: '—' },
+  warden: { n: 'Gatekeeper Warden', k: 'l', tag: 'LINK-1', mo: 9, atk: 800, def: '—' },
+  colossus: { n: 'Gatekeeper Colossus', k: 'm', mo: 11 },
+  pot: { n: 'Pot of Cinders', k: 's', mo: 12 },
+  lantern: { n: 'Glass Lantern', k: 'm', mo: 10 },
+  ember: { n: 'Ember Ward', k: 't', mo: 9 },
+  shard: { n: 'Lantern Shard', k: 's', mo: 6 },
+  thorn: { n: 'Thornveil Sentry', k: 'm', mo: 1, atk: 1900, def: 1000 },
+  harrier: { n: 'Ashen Harrier', k: 'm', mo: 2, atk: 2100, def: 600 },
+  ferry: { n: 'Quiet Ferryman', k: 'm', mo: 5 },
+  crane: { n: 'Hollow Crane', k: 'm', mo: 0 },
+  wisp: { n: 'Pale Wisp', k: 'm', mo: 3 }, rite: { n: 'Rite of Ash', k: 's', mo: 4 }, gale: { n: 'Gale Cutter', k: 't', mo: 2 },
+};
+const at = (c, where, extra) => Object.assign({}, c, { at: where }, extra || {});
+function board(G, o = {}) {
+  const ph = G.kind === 'phone';
+  const far = [
+    { at: 'odk', back: 1, pile: 33 }, { at: 'oex', back: 1, pile: 14 },
+    at(C.thorn, 'om1', { plate: !ph }), at(C.harrier, 'om3', { plate: !ph }), { at: 'om4', back: 1, pos: 'set' }, { at: 'os2', back: 1 },
+    at(C.ferry, 'ogy', { pile: 5 }), at(C.crane, 'oban', { pile: 1 }),
+  ];
+  for (let i = 1; i <= 5; i++) far.push({ at: `oh${i}/5`, back: 1 });
+  const near = [
+    at(C.archivist, 'm2', { plate: !ph }), at(o.src || C.gates, o.srcAt || 's3'),
+    at(C.vell, 'gy', { pile: 4 }), at(C.dusk, 'ban', { pile: 1 }), { at: 'ex', back: 1, pile: 15 }, { at: 'dk', back: 1, pile: 31 },
+    at(C.ember, 'h1/4'), at(C.lantern, 'h2/4'), at(C.colossus, 'h3/4'), at(C.pot, 'h4/4'),
+  ];
+  return far.concat(near);
+}
+function mod(cards, where, patch) { return cards.map(c => c.at === where ? Object.assign({}, c, patch) : c); }
+function lightPiles(cards, G, counts, active) {
+  let out = cards;
+  Object.entries(counts).forEach(([w, n]) => { out = mod(out, w, { lit: 1, ring: w === active ? 'pick' : 'cand', chip: G.kind === 'phone' ? String(n) : `${n} ${{ dk: 'IN DECK', gy: 'IN GY', ban: 'BANISHED', ex: 'IN EXTRA' }[w]}` }); });
+  return out;
+}
+
+/* ------------------------------------------------------------------ window parts (HTML) */
+const win = (x, y, w, inner, cls = '', extra = '') => `<div class="w ${cls}" style="left:${x}px;top:${y}px;width:${w}px;${extra}">${inner}</div>`;
+const crumbs = list => `<div class="crumbs">${list.map(([t, s]) => `<span class="cr ${s || ''}">${s === 'done' ? '✓ ' : ''}${t}</span>`).join('')}</div>`;
+const crop = cap => `<span class="crop"><i></i><i></i><i></i><i></i></span>${cap ? `<span class="cap">${cap}</span>` : ''}`;
+function head(o) {
+  return `<div class="wh">${o.card ? thumb(o.card, o.tw || 34) : ''}<div class="whm"><div class="mc who">${o.who}${o.unv ? ' <span class="tagu">Unverified</span>' : ''}</div><div class="what" ${o.whatSize ? `style="font-size:${o.whatSize}px"` : ''}>${o.what}</div>${o.sub ? `<div class="sub">${o.sub}</div>` : ''}</div><div class="side">${o.step ? `<span class="m9 c70">Step <span class="mo">${o.step}</span></span>` : ''}${o.crumbs ? crumbs(o.crumbs) : ''}${o.count ? `<div class="count">${o.count}</div>` : ''}</div></div>`;
+}
+const chip = (label, key, cls = '') => `<span class="chip ${cls}">${label}${key ? `<span class="k">${key}</span>` : ''}</span>`;
+function cand(c, o = {}) {
+  const w = o.w || 60;
+  return `<div class="cd${o.pick ? ' pk' : ''}${o.off ? ' off' : ''}" style="width:${w + (o.wide || 0)}px">${o.pick ? `<span class="bd">${o.pick}</span>` : ''}${thumb(c, w)}<span class="nm">${esc(c.n)}</span><span class="co">${o.coord || ''}${o.copies ? ` ×${o.copies}` : ''}</span>${o.why ? `<span class="why">${o.why}</span>` : ''}${o.hov ? crop(o.cap) : ''}</div>`;
+}
+function grp(title, coord, n, inner, cls = '') { return `<div class="grp ${cls}"><div class="gh2"><span class="m9">${title}</span><span class="mo">${coord}${n != null ? ' · ' + n : ''}</span></div>${inner}</div>`; }
+function pos(sel, allow, o = {}) {
+  return `<div class="pcs${o.big ? ' big' : ''}${o.stack ? ' stack' : ''}">` + ['atk', 'def', 'set'].filter(p => allow[p] !== undefined).map(p => {
+    const a = allow[p], off = a !== true;
+    return `<span class="pc${p === sel ? ' on' : ''}${off ? ' off' : ''}">${glyph(p, o.big ? 24 : 20)}<span>${POS[p][0]}${off && a && o.reasons !== false ? `<span class="pr">${a}</span>` : ''}</span>${o.keys === false ? '' : `<span class="k">${POS[p][1]}</span>`}</span>`;
+  }).join('') + '</div>';
+}
+const hot = (r, cap) => `<div class="hot" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">${crop(cap)}</div>`;
+const callout = (x, y, n) => `<span class="callout" style="left:${x}px;top:${y}px">${n}</span>`;
+
+/* ------------------------------------------------------------------ scenes */
+const S = {};
+const SUMMON_WHAT = 'Special Summon 1 “Gatekeeper” monster from your hand, Deck, GY, banishment or Extra Deck';
+const COUNTS = { dk: 3, gy: 2, ban: 1, ex: 1 };
+
+function bPickBody(o = {}) {
+  const w = o.w || 60;
+  return `<div class="groups">
+    ${grp('Deck', 'dk', 3, `<div class="cards">${cand(C.oru, { w, coord: 'dk' })}${cand(C.vell, { w, coord: 'dk', copies: 2 })}${cand(C.ilse, { w, coord: 'dk' })}</div>`)}
+    ${grp('GY', 'gy', 2, `<div class="cards">${cand(C.vell, { w, coord: 'gy1', hov: o.hov !== false, cap: 'Pick · <span class="mo">gy1</span>' })}${cand(C.mourn, { w, coord: 'gy3' })}</div>`)}
+    ${grp('Banished', 'ban', 1, `<div class="cards">${cand(C.dusk, { w, coord: 'ban1' })}</div>`)}
+    ${grp('Extra', 'ex', 1, `<div class="cards">${cand(C.arch, { w, coord: 'ex' })}</div>`)}
+    ${grp('Hand', 'h', null, `<div class="sub" style="max-width:118px">None. Gatekeeper Colossus is Special Summoned only by its own procedure.</div>`, 'none')}
+  </div>`;
+}
+S.bPick = (G = DESK) => ({
+  svg: table(G, { cards: mod(lightPiles(board(G), G, COUNTS, 'gy'), 's3', { lit: 1, ring: 'pick' }), dim: true, chain: ['Five Gates Open'], inspect: C.vell, inspectText: ['Level 4 · EARTH · Warrior', 'If this card is Special Summoned:', 'you can add 1 “Gatekeeper” Spell', 'from your Deck to your hand.'] }),
+  html: win(230, 52, 740, head({ card: C.gates, who: 'Five Gates Open · Open the Gates · Shortcut', what: SUMMON_WHAT, step: '1 of 1', crumbs: [['Pick', 'now'], ['Place']], count: '0 / 1' }) + bPickBody() +
+    `<div class="foot">${chip('Summon Gatekeeper Vell', 'Enter', 'on')}${chip('Cancel', 'Esc')}<span class="hint">1–7 pick · ←→ walk · Tab next place · type gy1</span></div>`),
+});
+S.bPickInk = () => Object.assign(S.bPick(), { theme: 'ink' });
+S.bPick2 = (G = DESK) => {
+  const w = 60;
+  const body = `<div class="groups">
+    ${grp('Deck', 'dk', 3, `<div class="cards">${cand(C.oru, { w, coord: 'dk', pick: 2 })}${cand(C.vell, { w, coord: 'dk', copies: 2, off: 1, why: 'Same name as 1' })}${cand(C.ilse, { w, coord: 'dk', hov: 1, cap: 'Pick · <span class="mo">dk</span>' })}</div>`)}
+    ${grp('GY', 'gy', 2, `<div class="cards">${cand(C.vell, { w, coord: 'gy1', pick: 1 })}${cand(C.mourn, { w, coord: 'gy3' })}</div>`)}
+  </div>`;
+  let cards = lightPiles(board(G, { src: C.muster }), G, { dk: 3, gy: 2 }, null);
+  cards = mod(cards, 's3', { lit: 1, ring: 'pick' }); cards = mod(cards, 'gy', { badge: '1' }); cards = mod(cards, 'dk', { badge: '2' });
+  return {
+    svg: table(G, { cards, dim: true, chain: ["Gatekeeper's Muster"] }),
+    html: win(230, 52, 740, head({ card: C.muster, who: "Gatekeeper's Muster · Muster · Shortcut", what: 'Special Summon up to 2 “Gatekeeper” monsters with different names from your Deck or GY', step: '1 of 1', crumbs: [['Pick', 'now'], ['Place']], count: '2 <small>/ up to 2</small>' }) + body +
+      `<div class="foot">${chip('Place them', 'Enter', 'on')}${chip('Cancel', 'Esc')}<span class="hint">1–5 or Space pick, let go · ←→ walk · Tab next place</span></div>`),
+  };
+};
+function queue(items) {
+  return `<div class="row" style="align-items:center;gap:6px">${items.map((q, i) => `${i ? '<span class="qarrow">→</span>' : ''}<div class="qi ${q.s}">${thumb(q.c, 26)}<div class="qs"><span class="qw ${q.s === 'now' ? 'inv' : ''}">${q.s === 'now' ? 'Placing now' : q.s === 'done' ? '✓ Placed' : 'Next'}</span><span class="qn">${q.c.n}</span>${q.where ? `<span class="row" style="gap:4px;align-items:center">${glyph(q.g, 16)}<span class="mo" style="font-size:10px">${q.where}</span></span>` : ''}</div></div>`).join('')}</div>`;
+}
+S.bPlace = (G = DESK) => {
+  let cards = board(G, { src: C.muster });
+  cards = mod(cards, 's3', { lit: 1 });
+  cards = cards.concat([at(C.vell, 'm4', { pos: 'def', lit: 1, ring: 'dash', badge: '1' })]);
+  const r3 = slot(G, 'm3');
+  return {
+    svg: table(G, { cards, dim: true, chain: ["Gatekeeper's Muster"], zones: [{ at: 'm1', key: '1', g: 'atk' }, { at: 'm3', key: '3', g: 'atk', ghost: 1, word: 'ATTACK' }, { at: 'm5', key: '5', g: 'atk' }], zonesOff: ['e1', 'e2'] }),
+    html: win(230, 52, 740, head({ card: C.oru, who: "Gatekeeper's Muster · Muster · Shortcut", what: 'Place Gatekeeper Oru <span class="c70" style="font-weight:400">from your Deck</span>', step: '1 of 1', crumbs: [['Pick', 'done'], ['Place', 'now']], count: '2 <small>of 2</small>' }) +
+      `<div class="row" style="justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">${queue([{ c: C.vell, s: 'done', g: 'def', where: 'M4 · Defense' }, { c: C.oru, s: 'now' }])}<div style="display:flex;flex-direction:column;gap:4px"><span class="lbl">Position</span>${pos('atk', { atk: true, def: true, set: 'Summoned face-up' })}</div></div>` +
+      `<div class="foot">${chip('Place Oru in M3 · Attack', 'Enter', 'on')}${chip('Back: take Vell out of M4', 'Esc')}<span class="hint">1 3 5 zone · A D position · ←→ zones</span></div>`) +
+      hot(r3, 'Place Oru · <span class="mo">M3</span> · Attack'),
+  };
+};
+S.bPlaceInk = () => Object.assign(S.bPlace(), { theme: 'ink' });
+S.bExtra = (G = DESK) => {
+  let cards = board(G); cards = mod(cards, 's3', { lit: 1 });
+  cards = cards.concat([at(C.warden, 'e1', { lit: 1, ring: 'cand' })]);
+  const arrowsSvg = (() => { const e = slot(G, 'e1'), m = slot(G, 'm3'); return `<path class="arw2" d="M${e.x + e.w} ${e.y + e.h}L${m.x + 8} ${m.y + 4}"/><text class="tx" x="${e.x + e.w + 4}" y="${e.y + e.h + 14}" font-size="9" font-weight="500" letter-spacing=".06em">POINTS HERE</text>`; })();
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Five Gates Open'], zones: [{ at: 'm3', key: '3', g: 'atk', ghost: 1, word: 'ATTACK' }], zonesOff: ['m1', 'm4', 'm5', 'e2'], top: arrowsSvg }),
+    html: win(230, 52, 740, head({ card: C.arch, who: 'Five Gates Open · Open the Gates · Shortcut', what: 'Place Gatekeeper Arch-Sentinel <span class="c70" style="font-weight:400">from your Extra Deck</span>', step: '1 of 1', crumbs: [['Pick', 'done'], ['Place', 'now']], count: '1 <small>of 1</small>' }) +
+      `<div class="row" style="justify-content:space-between;gap:16px;flex-wrap:wrap"><div class="sub" style="max-width:380px;font-size:12px">An Extra Deck monster goes to an Extra Monster Zone or a zone a Link points to. You already use E1, so E2 is closed. Warden points to M3. M1, M4 and M5 are not pointed to.</div><div style="display:flex;flex-direction:column;gap:4px"><span class="lbl">Position</span>${pos('atk', { atk: true, def: 'A Link is never in Defense', set: 'A Link is never Set' })}</div></div>` +
+      `<div class="foot">${chip('Place in M3 · Attack', 'Enter', 'on')}${chip('Back to the pick', 'Esc')}<span class="hint">3 zone</span></div>`) + hot(slot(G, 'm3'), 'Place · <span class="mo">M3</span>'),
+  };
+};
+
+S.aPick = (G = DESK) => {
+  const tabs = `<div class="tabs"><span class="tab none">Hand <span class="mo">0</span></span><span class="tab">Deck <span class="mo">3</span></span><span class="tab on">GY <span class="mo">2</span></span><span class="tab">Banished <span class="mo">1</span></span><span class="tab">Extra <span class="mo">1</span></span><span class="hint" style="align-self:center">Tab · Shift Tab</span></div>`;
+  const body = `<div class="row" style="gap:18px;align-items:flex-end"><div class="cards">${cand(C.vell, { w: 64, coord: 'gy1', hov: 1, cap: 'Pick · <span class="mo">gy1</span>' })}${cand(C.mourn, { w: 64, coord: 'gy3' })}</div><div class="sub" style="max-width:260px;padding-bottom:22px">2 more in your GY cannot be summoned by this: Pot of Cinders is a Spell; Lantern Shard is a Spell.</div></div>`;
+  return {
+    svg: table(G, { cards: mod(lightPiles(board(G), G, COUNTS, 'gy'), 's3', { lit: 1, ring: 'pick' }), dim: true, chain: ['Five Gates Open'] }),
+    html: win(230, 52, 740, head({ card: C.gates, who: 'Five Gates Open · Open the Gates · Shortcut', what: SUMMON_WHAT, step: '1 of 1', crumbs: [['Pick', 'now'], ['Place']], count: '0 / 1' }) + tabs + body +
+      `<div class="foot">${chip('Summon Gatekeeper Vell', 'Enter', 'on')}${chip('Cancel', 'Esc')}<span class="hint">1–2 pick · ←→ walk</span></div>`),
+  };
+};
+S.aPlace = (G = DESK) => {
+  let cards = board(G); cards = mod(cards, 's3', { lit: 1 }); cards = mod(cards, 'gy', { lit: 1, ring: 'pick' });
+  const zones = [{ at: 'm1', key: '1', g: 'def' }, { at: 'm3', key: '3', g: 'def', ghost: 1, word: 'DEFENSE' }, { at: 'm4', key: '4', g: 'def' }, { at: 'm5', key: '5', g: 'def' }];
+  const tabs = `<div class="tabs"><span class="tab">✓ Gatekeeper Vell <span class="mo">gy1</span></span><span class="tab on">Position and zone</span></div>`;
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Five Gates Open'], zones, zonesOff: ['e1', 'e2'] }),
+    html: win(230, 52, 740, head({ card: C.vell, who: 'Five Gates Open · Open the Gates · Shortcut', what: 'Place Gatekeeper Vell <span class="c70" style="font-weight:400">from your GY</span>', step: '1 of 1', crumbs: [['Pick', 'done'], ['Place', 'now']], count: '1 <small>of 1</small>' }) + tabs +
+      `<div class="row" style="gap:24px;align-items:flex-start;flex-wrap:wrap"><div style="display:flex;flex-direction:column;gap:4px"><span class="lbl">Position</span>${pos('def', { atk: true, def: true, set: 'This effect summons face-up' })}</div><div style="display:flex;flex-direction:column;gap:4px"><span class="lbl">Zone</span><span class="sub" style="font-size:12px">M1, M3, M4, M5 are free · M2 holds Mirrorwake Archivist</span></div></div>` +
+      `<div class="foot">${chip('Place in M3 · Defense', 'Enter', 'on')}${chip('Back to the pick', 'Esc')}<span class="hint">1 3 4 5 zone · A D position</span></div>`) + hot(slot(G, 'm3'), 'Place · <span class="mo">M3</span> · Defense'),
+  };
+};
+
+S.cPick = (G = DESK) => {
+  let cards = lightPiles(board(G), G, COUNTS, 'gy'); cards = mod(cards, 's3', { lit: 1, ring: 'pick' });
+  const g = slot(G, 'gy'), pw = 4 * 64 + 3 * 8 + 16, px = g.x + g.w - pw, py = 404;
+  const pile = `<div class="panel" style="left:${px}px;top:${py}px;width:${pw}px"><div class="row" style="justify-content:space-between"><span class="m9">Your GY · <span class="mo">4</span></span><span class="m9 c70">2 can be summoned</span></div><div class="cards" style="gap:8px">${cand(C.vell, { w: 64, coord: 'gy1', hov: 1, cap: 'Pick · <span class="mo">gy1</span>' })}${cand(C.pot, { w: 64, coord: 'gy2', off: 1 })}${cand(C.mourn, { w: 64, coord: 'gy3' })}${cand(C.shard, { w: 64, coord: 'gy4', off: 1 })}</div></div>`;
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Five Gates Open'], top: (() => { const h = slot(G, 'h2/4'); return `<rect class="pst" x="${h.x + 30}" y="${h.y - 24}" width="150" height="18" style="stroke-dasharray:3 2"/><text class="tx7" x="${h.x + 105}" y="${h.y - 11}" text-anchor="middle" font-size="9" font-weight="500" letter-spacing=".08em">HAND · NONE CAN BE</text>`; })() }),
+    html: win(230, 52, 740, `<div class="row" style="align-items:center;gap:12px">${thumb(C.gates, 26)}<div class="whm"><div class="mc who">Five Gates Open · Open the Gates · Shortcut</div><div class="what" style="font-size:14px">${SUMMON_WHAT}</div></div><div class="side">${crumbs([['Pick', 'now'], ['Place']])}<div class="count">0 / 1</div></div></div><div class="foot">${chip('Open a lit pile', 'click · Enter')}${chip('Cancel', 'Esc')}<span class="hint">←→ walk the lit piles · type gy1</span></div>`) + pile,
+  };
+};
+S.cPlace = (G = DESK) => {
+  let cards = board(G); cards = mod(cards, 's3', { lit: 1 }); cards = mod(cards, 'gy', { lit: 1, ring: 'dash' });
+  const carried = { x: 772, y: 330, w: 74 * 1.08, h: 108 * 1.08 };
+  const zones = [{ at: 'm1', key: '1', g: 'atk' }, { at: 'm3', key: '3', g: 'atk', ghost: 1, word: 'ATTACK' }, { at: 'm4', key: '4', g: 'atk' }, { at: 'm5', key: '5', g: 'atk' }];
+  const m3 = slot(G, 'm3');
+  const topSvg = `<path class="arw2" d="M${carried.x + 10} ${carried.y + carried.h}Q${m3.x + 100} ${m3.y - 30} ${m3.x + m3.w / 2 + 6} ${m3.y + 6}"/><g transform="translate(${carried.x} ${carried.y}) rotate(-4)">${face(carried.w, carried.h, C.vell)}</g>`;
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Five Gates Open'], zones, zonesOff: ['e1', 'e2'], top: topSvg }),
+    html: win(230, 52, 740, `<div class="row" style="align-items:center;gap:12px">${thumb(C.vell, 26)}<div class="whm"><div class="mc who">Five Gates Open · Open the Gates · Shortcut</div><div class="what" style="font-size:14px">Place Gatekeeper Vell: drag it to a lit zone, or press its number</div></div><div class="side">${crumbs([['Pick', 'done'], ['Place', 'now']])}<div class="count">1 <small>of 1</small></div></div></div><div class="foot">${chip('Back to the GY', 'Esc')}<span class="hint">1 3 4 5 zone · A D position</span></div>`) +
+      `<div class="w" style="left:${carried.x + carried.w + 10}px;top:${carried.y - 4}px;width:150px;padding:6px;gap:5px;border-width:1px"><span class="lbl">Position</span>${pos('atk', { atk: true, def: true, set: 'Summoned face-up' }, { stack: 1 })}</div>` +
+      hot(m3, 'Drop · <span class="mo">M3</span> · Attack'),
+  };
+};
+
+S.which = (G = DESK) => {
+  let cards = board(G); cards = mod(cards, 'm2', { ring: 'pick' });
+  cards = mod(cards, 's3', { n: 'Ember Ward', k: 't', mo: 9, back: 1 });
+  const m2 = slot(G, 'm2');
+  const rows = `<div class="olist">
+    <div class="oi off"><span class="n">1</span><span class="t">Search <span class="rule">Once per turn: used</span></span><span class="need">no target</span><span class="d">Add 1 “Mirrorwake” card from your Deck to your hand. By hand: Activate <span class="mo">A</span></span></div>
+    <div class="oi on"><span class="n">2</span><span class="t">Revive</span><span class="need">1 target in your GY</span><span class="d">Cost: discard 1 card. Special Summon the target in Defense Position.</span></div>
+    <div class="oi"><span class="n">3</span><span class="t">Exchange <span class="tagu">Unverified</span></span><span class="need">no target</span><span class="d">Send this card to the GY; Special Summon 1 Level 4 “Mirrorwake” monster from your Extra Deck.</span></div></div>`;
+  return {
+    svg: table(G, { cards, chain: null, inspect: C.archivist }),
+    html: win(m2.x + m2.w + 10, m2.y - 70, 352, `<div class="wh">${thumb(C.archivist, 28)}<div class="whm"><div class="mc who">Mirrorwake Archivist · Shortcut</div><div class="what" style="font-size:14px">Which effect?</div></div><div class="side">${crumbs([['Which', 'now'], ['Cost'], ['Target'], ['Place']])}</div></div>` + rows +
+      `<div class="foot">${chip('Use Revive', 'Enter', 'on')}${chip('Cancel', 'Esc')}<span class="hint">1–3 · ↑↓</span></div>`),
+  };
+};
+
+S.target = (G = DESK, second = false) => {
+  let cards = board(G, { src: C.toll, srcAt: 's4' });
+  cards = mod(cards, 's4', { lit: 1, ring: 'pick' });
+  ['om1', 'om3', 'om4', 'os2', 'oban', 'gy', 'ban'].forEach(w => { cards = mod(cards, w, { lit: 1, ring: 'cand' }); });
+  cards = mod(cards, 'om1', { ring: 'pick', badge: '1' });
+  cards = mod(cards, 'ogy', { lit: 1, ring: second ? 'cand' : 'pick', badge: second ? '2' : null });
+  const arrows = [['s4', 'om1']];
+  if (second) arrows.push(['s4', 'ogy']);
+  const panelY = 556, pw = 5 * 64 + 4 * 8 + 16;
+  const pile = second ? '' : `<div class="panel" style="left:${316 + (566 - pw) / 2}px;top:${panelY}px;width:${pw}px"><div class="row" style="justify-content:space-between"><span class="m9">Rival's GY · <span class="mo">5</span></span><span class="m9 c70">All 5 can be targeted</span></div><div class="cards" style="gap:8px">${cand(C.ferry, { w: 64, coord: 'ogy1', hov: 1, cap: 'Target 2 · <span class="mo">ogy1</span>' })}${cand(C.wisp, { w: 64, coord: 'ogy2' })}${cand(C.rite, { w: 64, coord: 'ogy3' })}${cand(C.gale, { w: 64, coord: 'ogy4' })}${cand(C.crane, { w: 64, coord: 'ogy5' })}</div></div>`;
+  const chosen = `<span class="chip">1 · Thornveil Sentry <span class="k">om1 ×</span></span>` + (second ? `<span class="chip">2 · Quiet Ferryman <span class="k">ogy1 ×</span></span>` : `<span class="chip dis">2 · —</span>`);
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Ruinbell Toll'], arrows }),
+    html: win(230, 46, 740, `<div class="row" style="align-items:center;gap:12px">${thumb(C.toll, 26)}<div class="whm"><div class="mc who">Ruinbell Toll · Recall · Shortcut</div><div class="what" style="font-size:14px">Target up to 2 cards they control, or in either GY or banishment</div></div><div class="side">${crumbs([['Target', 'now'], ['Resolve']])}<div class="count">${second ? 2 : 1} <small>of 2</small></div></div></div>` +
+      `<div class="foot">${chosen}<span style="flex:1"></span>${chip(second ? 'Confirm 2 targets' : 'Confirm 1 target', 'Enter', 'on')}${chip('Cancel', 'Esc')}</div>`, '', 'padding:8px 12px;gap:6px') + pile,
+  };
+};
+S.targetInk = () => Object.assign(S.target(DESK, true), { theme: 'ink' });
+
+S.waiting = (G = DESK) => {
+  let cards = board(G);
+  cards = mod(cards, 's3', { back: 1 });
+  cards = mod(cards, 'm2', { lit: 1, ring: 'cand' });
+  cards = cards.concat([at(C.oru, 'm1', { lit: 1, ring: 'pick', badge: 'L1', plate: 1 }), at(C.vell, 'm4', { lit: 1, ring: 'pick', badge: 'L2', pos: 'def' })]);
+  const tr = (ln, c, t, d, kind, cls = '', grip = true) => `<div class="tr ${cls}"><span class="ln2">${ln}</span>${thumb(c, 30)}<div><div class="t">${c.n} · ${t}</div><div class="d">${d}</div></div>${kind}</div>`;
+  const useSkip = on => `<span class="seg2"><span class="${on ? 'on' : ''}">Use</span><span class="${on ? '' : 'on'}">Skip</span></span>`;
+  const body = `<div class="lbl">Must · goes first</div>${tr('L1', C.oru, 'Draw', 'Mandatory, when sent from the field or Summoned · no target', '<span class="seg2 dis"><span class="on">Must</span></span>')}
+    <div class="lbl" style="margin-top:6px">You can · in this order</div>${tr('L2', C.vell, 'Search', 'If Special Summoned · no target', useSkip(true), 'cur')}${tr('—', C.archivist, 'Revive', 'When a “Gatekeeper” is Special Summoned · 1 target in your GY', useSkip(false), 'skip')}
+    <div class="sub">Rival's triggers (1) go on the chain after yours, and they order them.</div>`;
+  return {
+    svg: table(G, { cards, dim: true, log: ['Kai Special Summons Gatekeeper Vell to M4', 'Kai Special Summons Gatekeeper Oru to M1', '3 Shortcuts went off together'] }),
+    html: win(230, 52, 740, head({ card: null, who: '3 Shortcuts went off together', what: 'Put yours on the chain: Link 1 resolves last', crumbs: [['Order', 'now']], count: '2 <small>of 3 used</small>' }) + `<div style="display:flex;flex-direction:column">${body}</div>` +
+      `<div class="foot">${chip('Put them on the chain', 'Enter', 'on')}${chip('Skip all I can', 'Esc')}<span class="hint">↑↓ choose · Alt ↑↓ move · Space use/skip</span></div>`),
+  };
+};
+
+function declareBody(o = {}) {
+  const res = [
+    [C.vell, 'Gatekeeper Vell', 'Monster · Level 4'], [C.oru, 'Gatekeeper Oru', 'Monster · Level 3 · Tuner'], [C.ilse, 'Gatekeeper Ilse', 'Monster · Level 2'], [C.mourn, 'Gatekeeper Mourn', 'Monster · Level 4'],
+    [C.dusk, 'Gatekeeper of Dusk', 'Monster · Level 4'], [C.colossus, 'Gatekeeper Colossus', 'Monster · Level 8'], [C.arch, 'Gatekeeper Arch-Sentinel', 'Link-2'], [C.gates, 'Five Gates Open', 'Spell'],
+  ].slice(0, o.n || 8);
+  return `<div class="input">${o.q || 'gate'}<span class="caret"></span><span style="flex:1"></span><span class="mo c45" style="font-size:11px">8 of 74 you can name</span></div>
+    <div>${res.map(([c, n, k], i) => `<div class="res ${i === 0 ? 'on' : ''}">${thumb(c, 22)}<span>${n.replace(/gate/i, m => `<mark>${m}</mark>`)}</span><span class="mo">${k}</span></div>`).join('')}</div>`;
+}
+S.declare = (G = DESK) => {
+  let cards = board(G, { src: C.edict, srcAt: 's2' }); cards = mod(cards, 's2', { lit: 1, ring: 'pick' });
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Silence Edict'] }),
+    html: win(250, 70, 700, head({ card: C.edict, who: 'Silence Edict · Hush · Shortcut', what: 'Declare 1 card name', step: '1 of 2', crumbs: [['Declare', 'now'], ['Resolve']] }) +
+      `<div class="row" style="gap:16px;align-items:stretch"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">${declareBody()}</div><div style="width:200px;display:flex;flex-direction:column;gap:6px;border-left:1px solid var(--i12);padding-left:14px">${thumb(C.vell, 120)}<div style="font-size:13px;font-weight:500">Gatekeeper Vell</div><div class="sub">Level 4 · EARTH · Warrior. If this card is Special Summoned: you can add 1 “Gatekeeper” Spell from your Deck to your hand.</div></div></div>` +
+      `<div class="foot">${chip('Declare Gatekeeper Vell', 'Enter', 'on')}${chip('Cancel', 'Esc')}<span class="hint">type · ↑↓ · 1–8</span></div>`),
+  };
+};
+S.declareSmall = (G = DESK) => {
+  let cards = board(G, { src: C.edict, srcAt: 's2' }); cards = mod(cards, 's2', { lit: 1, ring: 'pick' });
+  const types = ['Aqua', 'Beast', 'Beast-Warrior', 'Cyberse', 'Dinosaur', 'Divine-Beast', 'Dragon', 'Fairy', 'Fiend', 'Fish', 'Illusion', 'Insect', 'Machine', 'Plant', 'Psychic', 'Pyro', 'Reptile', 'Rock', 'Sea Serpent', 'Spellcaster', 'Thunder', 'Warrior', 'Winged Beast', 'Wyrm', 'Zombie'];
+  const attrs = ['LIGHT', 'DARK', 'EARTH', 'WATER', 'FIRE', 'WIND', 'DIVINE'];
+  const box = (y, who, what, inner, foot) => win(250, y, 700, head({ card: C.edict, tw: 24, who, what, whatSize: 13 }) + inner + `<div class="foot">${foot}</div>`, '', 'gap:7px;padding:8px 12px');
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Silence Edict'] }),
+    html: box(56, 'Silence Edict · Hush · Shortcut', 'Declare 1 Type', `<div class="grid-ch">${types.map(t => `<span class="${t === 'Warrior' ? 'on' : ''}">${t}</span>`).join('')}</div>`, `${chip('Declare Warrior', 'Enter', 'on')}${chip('Cancel', 'Esc')}<span class="hint">←→↑↓ · type to narrow</span>`) +
+      box(290, 'Another effect · Shortcut', 'Declare 1 Attribute', `<div class="grid-ch">${attrs.map(t => `<span class="${t === 'EARTH' ? 'on' : ''}">${t}</span>`).join('')}</div>`, `${chip('Declare EARTH', 'Enter', 'on')}${chip('Cancel', 'Esc')}<span class="hint">L D E W F I V · first letter</span>`) +
+      box(452, 'Another effect · Shortcut', 'Declare a Level from 1 to 12', `<div class="grid-ch lv">${Array.from({ length: 12 }, (_, i) => `<span class="${i === 3 ? 'on' : ''}">${String(i + 1).padStart(2, '0')}</span>`).join('')}</div>`, `${chip('Declare Level 4', 'Enter', 'on')}${chip('Cancel', 'Esc')}<span class="hint">1–9 · 0 then 0–2 for 10–12</span>`),
+  };
+};
+
+S.anatomy = (G = DESK) => {
+  const s = S.bPick(G);
+  return { svg: s.svg, html: s.html + callout(238, 58, '01') + callout(282, 46, '02') + callout(282, 92, '03') + callout(862, 46, '04') + callout(940, 78, '05') + callout(238, 140, '06') + callout(246, 286, '07') + callout(436, 286, '08') + callout(690, 286, '09') + callout(888, 432, '10') };
+};
+S.anatomyInk = () => Object.assign(S.bPick(), { theme: 'ink' });
+
+S.placement = () => {
+  const mini = (ox, title, lit, winBox, extra = '') => {
+    const W = 380, H = 270, cw = 34, ch = 30, gx = ox + 60, rows = [40, 76, 112, 148, 184, 220];
+    let s = `<text class="tx" x="${ox}" y="20" font-size="11" font-weight="500" letter-spacing=".08em">${title}</text>`;
+    rows.forEach((y, ri) => { for (let i = 0; i < 7; i++) { const x = gx + i * 38; const isLit = lit.some(([r, c]) => r === ri && c === i); s += `<rect class="${isLit ? 'pst' : 'zo'}" x="${x}" y="${y}" width="${cw}" height="${ch}" ${isLit ? 'style="stroke-width:2"' : ''}/>`; } });
+    s += `<text class="tx4" x="${ox}" y="${rows[0] + 20}" font-size="9">THEIR S/T</text><text class="tx4" x="${ox}" y="${rows[1] + 20}" font-size="9">THEIR M</text><text class="tx4" x="${ox}" y="${rows[2] + 20}" font-size="9">SHARED</text><text class="tx4" x="${ox}" y="${rows[3] + 20}" font-size="9">YOUR M</text><text class="tx4" x="${ox}" y="${rows[4] + 20}" font-size="9">YOUR S/T</text><text class="tx4" x="${ox}" y="${rows[5] + 20}" font-size="9">HAND</text>`;
+    const [wx, wy, ww, wh, wt] = winBox;
+    s += `<rect class="pst" x="${gx + wx}" y="${wy}" width="${ww}" height="${wh}" style="stroke-width:2.5"/><text class="tx" x="${gx + wx + 8}" y="${wy + 16}" font-size="9" font-weight="500" letter-spacing=".08em">${wt}</text>` + extra;
+    return s;
+  };
+  let s = `<svg width="1280" height="330" viewBox="0 0 1280 330" style="position:absolute;left:0;top:0"><rect class="pap" width="1280" height="330"/>`;
+  s += mini(20, 'YOUR PILES · STRIP OVER THE FAR HALF', [[3, 6], [2, 6], [4, 0], [4, 6]], [-6, 34, 278, 108, 'THE WINDOW']);
+  s += mini(440, 'ZONES · BAND OVER THE FAR HAND', [[3, 1], [3, 3], [3, 4], [3, 5]], [-6, 4, 278, 30, 'BAND']);
+  s += mini(860, 'THEIR SIDE · BAND OVER YOUR HAND', [[0, 4], [1, 1], [1, 3], [1, 0], [2, 0]], [-6, 236, 278, 30, 'BAND'], `<rect class="pst" x="${860 + 60 + 20}" y="150" width="226" height="64" style="stroke-dasharray:4 3"/><text class="tx" x="${860 + 60 + 28}" y="166" font-size="9" font-weight="500" letter-spacing=".08em">OPEN PILE ROW</text>`);
+  return { svg: s + '</svg>', html: '', G: { W: 1280, H: 330 } };
+};
+
+/* ------------------------------------------------------------------ phone scenes */
+const sheet = (y, inner, extra = '') => `<div class="w sheet" style="left:0;top:${y}px;width:360px;bottom:0;${extra}">${inner}</div>`;
+const pfoot = (back, ok) => `<div class="row" style="gap:8px;margin-top:auto">${chip(back, '', 'big')}<span class="chip big on" style="flex:1">${ok}</span></div>`;
+const phead = (card, who, what, cr, count) => `<div class="wh">${card ? thumb(card, 26) : ''}<div class="whm"><div class="m9 who">${who}</div><div class="what" style="font-size:13px">${what}</div></div><div class="side">${cr ? crumbs(cr) : ''}${count ? `<div class="count" style="font-size:15px">${count}</div>` : ''}</div></div>`;
+S.pbPick = (G = PHONE) => {
+  const w = 46;
+  const body = `<div style="overflow:hidden;margin-right:-12px"><div class="groups" style="width:max-content">${grp('Deck', 'dk', 3, `<div class="cards">${cand(C.oru, { w, coord: 'dk' })}${cand(C.vell, { w, coord: 'dk', copies: 2 })}${cand(C.ilse, { w, coord: 'dk' })}</div>`)}${grp('GY', 'gy', 2, `<div class="cards">${cand(C.vell, { w, coord: 'gy1', pick: 1 })}${cand(C.mourn, { w, coord: 'gy3' })}</div>`)}${grp('Banished', 'ban', 1, `<div class="cards">${cand(C.dusk, { w, coord: 'ban1' })}</div>`)}</div></div>`;
+  return {
+    svg: table(G, { cards: mod(lightPiles(board(G), G, COUNTS, 'gy'), 's3', { lit: 1, ring: 'pick' }), dim: true, chain: ['Five Gates Open'], noTabs: 1 }),
+    html: sheet(520, phead(C.gates, 'Five Gates Open · Shortcut', 'Special Summon 1 “Gatekeeper” from your hand, Deck, GY, banishment or Extra Deck', [['Pick', 'now'], ['Place']], '1 / 1') + body +
+      `<div class="sub">Hand · none: Colossus only by its own procedure. Extra · 1 more →</div>` + pfoot('Cancel', 'Summon Vell')),
+  };
+};
+S.pbPickInk = () => Object.assign(S.pbPick(), { theme: 'ink' });
+S.pbPick2 = (G = PHONE) => {
+  const w = 46;
+  const body = `<div class="groups">${grp('Deck', 'dk', 3, `<div class="cards">${cand(C.oru, { w, coord: 'dk', pick: 2 })}${cand(C.vell, { w, coord: 'dk', copies: 2, off: 1 })}${cand(C.ilse, { w, coord: 'dk' })}</div>`)}${grp('GY', 'gy', 2, `<div class="cards">${cand(C.vell, { w, coord: 'gy1', pick: 1 })}${cand(C.mourn, { w, coord: 'gy3' })}</div>`)}</div>`;
+  let cards = lightPiles(board(G, { src: C.muster }), G, { dk: 3, gy: 2 }, null); cards = mod(cards, 's3', { lit: 1, ring: 'pick' });
+  return {
+    svg: table(G, { cards, dim: true, chain: ["Gatekeeper's Muster"], noTabs: 1 }),
+    html: sheet(520, phead(C.muster, "Gatekeeper's Muster · Shortcut", 'Special Summon up to 2 “Gatekeeper” with different names from your Deck or GY', [['Pick', 'now'], ['Place']], '2 / 2') + body + `<div class="sub">Deck's Vell: same name as 1.</div>` + pfoot('Cancel', 'Place them')),
+  };
+};
+S.pPlace = (G = PHONE) => {
+  let cards = board(G, { src: C.muster }); cards = mod(cards, 's3', { lit: 1 });
+  cards = cards.concat([at(C.vell, 'm4', { pos: 'def', lit: 1, ring: 'dash', badge: '1' })]);
+  return {
+    svg: table(G, { cards, dim: true, chain: ["Gatekeeper's Muster"], zones: [{ at: 'm1', key: '1', g: 'atk' }, { at: 'm3', key: '3', g: 'atk', ghost: 1 }, { at: 'm5', key: '5', g: 'atk' }], zonesOff: ['e1', 'e2'], noTabs: 1 }),
+    html: sheet(600, phead(null, "Gatekeeper's Muster · Shortcut", 'Place Gatekeeper Oru · tap a lit zone', [['Pick', 'done'], ['Place', 'now']], '2 of 2') +
+      queue([{ c: C.vell, s: 'done', g: 'def', where: 'M4 · Def' }, { c: C.oru, s: 'now' }]) + pos('atk', { atk: true, def: true, set: 'face-up only' }, { big: 1, keys: false, reasons: false }) +
+      `<div class="row" style="gap:8px">${chip('Back: take Vell out', '', 'big')}</div>`) + hot(slot(G, 'm3'), 'M3'),
+  };
+};
+S.pPlaceInk = () => Object.assign(S.pPlace(), { theme: 'ink' });
+S.paPick = (G = PHONE) => ({
+  svg: table(G, { cards: mod(lightPiles(board(G), G, COUNTS, 'gy'), 's3', { lit: 1, ring: 'pick' }), dim: true, chain: ['Five Gates Open'], noTabs: 1 }),
+  html: sheet(540, phead(C.gates, 'Five Gates Open · Shortcut', 'Special Summon 1 “Gatekeeper” from 5 places', [['Pick', 'now'], ['Place']], '0 / 1') +
+    `<div class="tabs" style="overflow:hidden"><span class="tab none">Hand <span class="mo">0</span></span><span class="tab">Deck <span class="mo">3</span></span><span class="tab on">GY <span class="mo">2</span></span><span class="tab">Ban <span class="mo">1</span></span><span class="tab">Extra <span class="mo">1</span></span></div>` +
+    `<div class="cards">${cand(C.vell, { w: 52, coord: 'gy1' })}${cand(C.mourn, { w: 52, coord: 'gy3' })}</div>` + pfoot('Cancel', 'Pick one')),
+});
+S.pcPick = (G = PHONE) => {
+  let cards = lightPiles(board(G), G, COUNTS, 'gy'); cards = mod(cards, 's3', { lit: 1, ring: 'pick' });
+  const pile = `<div class="panel" style="left:8px;top:150px;width:290px"><div class="row" style="justify-content:space-between"><span class="m9">Your GY · <span class="mo">4</span></span><span class="m9 c70">2 can be</span></div><div class="cards" style="gap:6px">${cand(C.vell, { w: 58, coord: 'gy1', hov: 1 })}${cand(C.pot, { w: 58, coord: 'gy2', off: 1 })}${cand(C.mourn, { w: 58, coord: 'gy3' })}${cand(C.shard, { w: 58, coord: 'gy4', off: 1 })}</div></div>`;
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Five Gates Open'] }),
+    html: `<div class="w" style="left:0;top:96px;width:360px;border-width:0 0 2px 0;padding:6px 10px;gap:4px">${phead(C.gates, 'Five Gates Open · Shortcut', 'Tap a lit pile, then a card', [['Pick', 'now'], ['Place']], '0 / 1')}</div>` + pile,
+  };
+};
+S.pWhich = (G = PHONE) => {
+  let cards = board(G); cards = mod(cards, 'm2', { ring: 'pick' });
+  return {
+    svg: table(G, { cards, noTabs: 1 }),
+    html: sheet(520, phead(C.archivist, 'Mirrorwake Archivist · Shortcut', 'Which effect?', [['Which', 'now']], '') +
+      `<div class="olist"><div class="oi off"><span class="n">1</span><span class="t">Search <span class="rule">used this turn</span></span><span class="need">no target</span></div><div class="oi on"><span class="n">2</span><span class="t">Revive</span><span class="need">1 in your GY</span><span class="d">Cost: discard 1</span></div><div class="oi"><span class="n">3</span><span class="t">Exchange <span class="tagu">Unverified</span></span><span class="need">no target</span></div></div>` + pfoot('Cancel', 'Use Revive')),
+  };
+};
+S.pWhichInk = () => Object.assign(S.pWhich(), { theme: 'ink' });
+S.pTarget = (G = PHONE, ink = false) => {
+  let cards = board(G, { src: C.toll, srcAt: 's4' });
+  cards = mod(cards, 's4', { lit: 1, ring: 'pick' });
+  ['om1', 'om3', 'om4', 'os2', 'oban', 'gy', 'ban'].forEach(w => { cards = mod(cards, w, { lit: 1, ring: 'cand' }); });
+  cards = mod(cards, 'om1', { ring: 'pick', badge: '1' });
+  cards = mod(cards, 'ogy', { lit: 1, ring: 'cand', chip: '5' });
+  const pile = ink ? `<div class="panel" style="left:8px;top:150px;width:290px"><div class="row" style="justify-content:space-between"><span class="m9">Rival's GY · <span class="mo">5</span></span><span class="m9 c70">all can be</span></div><div class="cards" style="gap:5px">${[C.ferry, C.wisp, C.rite, C.gale, C.crane].map((c, i) => cand(c, { w: 50, coord: 'ogy' + (i + 1), pick: i === 0 ? 2 : null })).join('')}</div></div>` : '';
+  return {
+    svg: table(G, { cards, dim: true, chain: ['Ruinbell Toll'], arrows: [['s4', 'om1']], noTabs: 1 }),
+    html: sheet(596, phead(C.toll, 'Ruinbell Toll · Shortcut', 'Target up to 2 they control, or in either GY or banishment', [['Target', 'now']], ink ? '2 of 2' : '1 of 2') +
+      `<div class="row" style="gap:6px;flex-wrap:wrap"><span class="chip">1 · Thornveil <span class="k">om1 ×</span></span>${ink ? '<span class="chip">2 · Ferryman <span class="k">ogy1 ×</span></span>' : '<span class="chip dis">2 · tap a lit card</span>'}</div>` + pfoot('Cancel', ink ? 'Confirm 2' : 'Confirm 1')) + pile,
+  };
+};
+S.pTargetInk = () => Object.assign(S.pTarget(PHONE, true), { theme: 'ink' });
+S.pWaiting = (G = PHONE) => {
+  let cards = board(G); cards = mod(cards, 's3', { back: 1 });
+  cards = cards.concat([at(C.oru, 'm1', { lit: 1, ring: 'pick', badge: 'L1' }), at(C.vell, 'm4', { lit: 1, ring: 'pick', badge: 'L2', pos: 'def' })]);
+  cards = mod(cards, 'm2', { lit: 1, ring: 'cand' });
+  const tr = (ln, c, t, kind, cls = '') => `<div class="tr ${cls}" style="grid-template-columns:30px 24px 1fr auto"><span class="ln2">${ln}</span>${thumb(c, 24)}<div><div class="t">${c.n}</div><div class="d">${t}</div></div>${kind}</div>`;
+  const us = on => `<span class="seg2"><span class="${on ? 'on' : ''}" style="padding:10px 8px">Use</span><span class="${on ? '' : 'on'}" style="padding:10px 8px">Skip</span></span>`;
+  return {
+    svg: table(G, { cards, dim: true, noTabs: 1 }),
+    html: sheet(476, phead(null, '3 Shortcuts went off together', 'Put yours on the chain · Link 1 resolves last', [['Order', 'now']], '') +
+      `<div class="lbl">Must · first</div>${tr('L1', C.oru, 'Draw · mandatory', '<span class="seg2 dis"><span class="on" style="padding:10px 8px">Must</span></span>')}<div class="lbl">You can · drag ≡ to reorder</div>${tr('L2', C.vell, 'Search', us(true), 'cur')}${tr('—', C.archivist, 'Revive · 1 in GY', us(false), 'skip')}` + pfoot('Skip all', 'Put on the chain')),
+  };
+};
+S.pWaitingInk = () => Object.assign(S.pWaiting(), { theme: 'ink' });
+S.pDeclare = (G = PHONE) => {
+  let cards = board(G, { src: C.edict, srcAt: 's2' }); cards = mod(cards, 's2', { lit: 1, ring: 'pick' });
+  const keys = 'qwertyuiopasdfghjkl⇧zxcvbnm⌫'.split('');
+  return {
+    svg: table(G, { cards, dim: true, noTabs: 1 }),
+    html: sheet(136, phead(C.edict, 'Silence Edict · Shortcut', 'Declare 1 card name', [['Declare', 'now']], '') + declareBody({ n: 6 }) + `<div class="row" style="gap:8px">${chip('Cancel', '', 'big')}<span class="chip big on" style="flex:1">Declare Gatekeeper Vell</span></div>`, 'bottom:236px') +
+      `<div class="kbd" style="top:564px;height:236px">${keys.map(k => `<span>${k}</span>`).join('')}<span style="grid-column:span 10">space</span></div>`,
+  };
+};
+S.pDeclareInk = () => Object.assign(S.pDeclare(), { theme: 'ink' });
+
+/* ------------------------------------------------------------------ the glyph sheet */
+function glyphPanel(label) {
+  const sizes = [16, 20, 24, 32];
+  const row = t => `<div class="row">${sizes.map(s => `<div class="gcell">${glyph(t, s)}<span class="cap2">${s}</span></div>`).join('')}</div>`;
+  const grid = t => {
+    let lines = ''; for (let i = 0; i <= 24; i += 1) lines += `<path d="M${i} 0V24M0 ${i}H24" style="stroke:var(--i12);stroke-width:${i % 4 === 0 ? 0.08 : 0.03};fill:none"/>`;
+    return `<svg width="96" height="96" viewBox="0 0 24 24" class="g" style="color:var(--i)">${lines}${GLYPH[t]}</svg>`;
+  };
+  return `<span class="micro" style="color:var(--i70)">${label}</span>
+    <div class="gbig">${['atk', 'def', 'set'].map(t => `<figure>${grid(t)}<figcaption>${POS[t][0]} · 24 grid</figcaption></figure>`).join('')}</div>
+    <div style="display:flex;flex-direction:column;gap:10px">${['atk', 'def', 'set'].map(t => `<div class="row" style="align-items:center;gap:16px"><span class="micro" style="width:70px;color:var(--i70)">${POS[t][0]}</span>${row(t)}</div>`).join('')}</div>
+    <div class="mock" style="background:transparent;display:flex;flex-direction:column;gap:10px;color:inherit">
+      <span class="micro" style="color:var(--i70)">Chosen and not</span>
+      ${pos('def', { atk: true, def: true, set: 'This effect summons face-up' })}
+      ${pos('set', { atk: true, def: true, set: true }, { big: 1, keys: false })}
+      <span class="micro" style="color:var(--i70)">In the log, the inspector and the line's preview</span>
+      <div class="row" style="align-items:center;gap:8px;font-size:12px">${glyph('def', 16)}<span>Kai Special Summons Gatekeeper Vell to M4 in Defense</span></div>
+      <div class="row" style="align-items:center;gap:8px;font-size:12px">${glyph('set', 16)}<span>Rival Sets a monster in M2</span></div>
+      <div class="row" style="align-items:center;gap:8px;font-size:12px;font-family:var(--mono)"><span>s h2 m3 def</span><span style="color:var(--i45)">→</span>${glyph('def', 16)}<span style="font-family:var(--sans)">Normal Summon? No: Set it in M3</span></div>
+    </div>`;
+}
+
+/* ------------------------------------------------------------------ mount */
+if (typeof document !== 'undefined') {
+  const frames = [];
+  document.querySelectorAll('[data-scene]').forEach(el => {
+    const name = el.dataset.scene, sc = S[name]();
+    const G = sc.G || (name.startsWith('p') && name !== 'placement' ? PHONE : DESK);
+    const [cx, cy, cw, chh] = (el.dataset.crop || `0,0,${G.W},${G.H}`).split(',').map(Number);
+    const theme = sc.theme || 'paper';
+    el.outerHTML = `<figure><div class="frame mock ${theme}" data-cx="${cx}" data-cy="${cy}" data-cw="${cw}" style="aspect-ratio:${cw}/${chh}"><div class="stage" style="width:${G.W}px;height:${G.H}px">${sc.svg}${sc.html}</div></div>${el.dataset.cap ? `<figcaption>${el.dataset.cap}${theme === 'ink' ? '' : ''}</figcaption>` : ''}</figure>`;
+  });
+  const fit = f => { const k = f.clientWidth / +f.dataset.cw; f.firstElementChild.style.transform = `scale(${k}) translate(${-f.dataset.cx}px,${-f.dataset.cy}px)`; };
+  const all = document.querySelectorAll('.frame');
+  all.forEach(fit);
+  if ('ResizeObserver' in window) { const ro = new ResizeObserver(es => es.forEach(e => fit(e.target))); all.forEach(f => ro.observe(f)); }
+  else window.addEventListener('resize', () => all.forEach(fit));
+  document.getElementById('gp-paper').innerHTML = glyphPanel('Paper');
+  document.getElementById('gp-ink').innerHTML = glyphPanel('Ink');
+  document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    document.body.dataset.mocks = b.dataset.m;
+  }));
+}
+if (typeof module !== 'undefined') module.exports = { S, glyphPanel };
+</script>
