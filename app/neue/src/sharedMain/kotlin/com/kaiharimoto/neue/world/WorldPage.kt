@@ -69,8 +69,9 @@ fun WorldPage(h: NeueHolders) {
         world.desk.shown = { true }
         onDispose { world.desk.shown = { false } }
     }
-    // Ai asked the person something in a World conversation: the avatar goes to Thoughts' composer (§5.2).
-    val asking = h.ai.question != null
+    // Ai asked the person something, or waits on their yes (a confirmation): the avatar goes to Thoughts' composer, where
+    // it is answered, and holds its waiting pose there (§5.2, §5.7).
+    val asking = h.ai.question != null || h.ai.confirm != null
     LaunchedEffect(asking) { if (asking) world.desk.waiting() }
     WorldDeskPage(h)
 }

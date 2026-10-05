@@ -261,6 +261,11 @@ class AiState(internal val h: NeueHolders) {
         working = line
     }
 
+    /** For the studio's pictures: a question waiting on the person, with no model behind it. */
+    fun pretendAsking(words: String, options: List<String> = emptyList()) {
+        question = Question(words, options, multiple = false)
+    }
+
     /** A face Ai chose for itself (the `express` tool). */
     fun express(e: Expression, seconds: Int) = mood.express(e, seconds.toDouble(), clock())
 

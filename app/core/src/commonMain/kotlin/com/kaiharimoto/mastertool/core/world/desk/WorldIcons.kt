@@ -116,6 +116,51 @@ object WorldIcons {
     val GLYPH_SEARCH = Icon("glyph-search", listOf(box(6, 6, 14, 14), p(20, 20, 26, 26)))
     val GLYPH_NOTE = Icon("glyph-note", listOf(box(7, 5, 18, 22), p(11, 11, 21, 11), p(11, 16, 21, 16), p(11, 21, 17, 21)))
 
+    // ---- The avatar's signs (§5.7): the kind of work, beside it. Bold and few, read at 16 dp. -----------------------
+
+    /** A pen at a slant, its nib at the bottom left. */
+    val SIGN_WRITE = Icon("sign-write", listOf(closed(6, 26, 8, 20, 22, 6, 26, 10, 12, 24), p(8, 20, 12, 24)))
+
+    /** Play. */
+    val SIGN_RUN = Icon("sign-run", listOf(closed(10, 6, 25, 16, 10, 26)))
+
+    /** An open book. */
+    val SIGN_READ = Icon("sign-read", listOf(closed(4, 8, 16, 11, 16, 26, 4, 23), closed(16, 11, 28, 8, 28, 23, 16, 26)))
+
+    /** A globe: the web. */
+    val SIGN_BROWSE = Icon(
+        "sign-browse",
+        listOf(IconShape.Arc(16, 16, 12, 0, 360), p(4, 16, 28, 16), p(16, 4, 11, 10, 10, 16, 11, 22, 16, 28), p(16, 4, 21, 10, 22, 16, 21, 22, 16, 28)),
+    )
+
+    /** A pointer pressing. */
+    val SIGN_PRESS = Icon("sign-press", listOf(closed(8, 4, 8, 24, 13, 19, 17, 27, 21, 25, 17, 18, 24, 18)))
+
+    /** Three squares: thinking. */
+    val SIGN_THINK = Icon("sign-think", listOf(fill(5, 14, 4, 4), fill(14, 14, 4, 4), fill(23, 14, 4, 4)))
+
+    /** A question, squared off. */
+    val SIGN_ASK = Icon("sign-ask", listOf(p(9, 11, 9, 6, 23, 6, 23, 14, 16, 14, 16, 20), fill(14, 23, 4, 4)))
+
+    val SIGN_DONE = Icon("sign-done", listOf(p(6, 16, 13, 23, 26, 9)))
+    val SIGN_FAILED = Icon("sign-failed", listOf(p(8, 8, 24, 24), p(24, 8, 8, 24)))
+
+    /** The sign for [s]; a page shown, an app and a reply share the icons of the Browser's page, the launcher and Thoughts. */
+    fun sign(s: AvatarSign): Icon = when (s) {
+        AvatarSign.WRITE -> SIGN_WRITE
+        AvatarSign.RUN -> SIGN_RUN
+        AvatarSign.READ -> SIGN_READ
+        AvatarSign.BROWSE -> SIGN_BROWSE
+        AvatarSign.SHOW -> PAGE_CHART
+        AvatarSign.APP -> LAUNCHER
+        AvatarSign.PRESS -> SIGN_PRESS
+        AvatarSign.THINK -> SIGN_THINK
+        AvatarSign.SAY -> THOUGHTS
+        AvatarSign.ASK -> SIGN_ASK
+        AvatarSign.DONE -> SIGN_DONE
+        AvatarSign.FAILED -> SIGN_FAILED
+    }
+
     /** The fifteen glyphs by the word Ai names them with; six are the page glyphs they share an idea with. */
     val GLYPHS: Map<String, Icon> = linkedMapOf(
         "odds" to PAGE_STAT,
@@ -141,6 +186,7 @@ object WorldIcons {
         LAUNCHER, NOTICES, NEW_WORLD,
         PAGE_MARKDOWN, PAGE_CHART, PAGE_GRAPH, PAGE_FLOW, PAGE_TABLE, PAGE_STAT, PAGE_CARDS, PAGE_BOARD, PAGE_LINE, PAGE_IMAGE, PAGE_HOME,
         GLYPH_DICE, GLYPH_HAND, GLYPH_DECK, GLYPH_TALLY, GLYPH_VERSUS, GLYPH_TIMER, GLYPH_CHECK, GLYPH_SEARCH, GLYPH_NOTE,
+        SIGN_WRITE, SIGN_RUN, SIGN_READ, SIGN_BROWSE, SIGN_PRESS, SIGN_THINK, SIGN_ASK, SIGN_DONE, SIGN_FAILED,
     )
 
     fun builtIn(app: BuiltInApp): Icon = when (app) {

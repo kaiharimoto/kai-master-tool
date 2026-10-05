@@ -59,6 +59,8 @@ data class AvatarTarget(
     val status: String = "",
     /** How long it stays at the least, ms; null for the pilot's default. */
     val dwell: Long? = null,
+    /** What it goes there to do, for the avatar's caption, face and sign (§5.7); null at home. */
+    val doing: AvatarStatus? = null,
 )
 
 /**

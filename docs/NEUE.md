@@ -4313,6 +4313,20 @@ of a computer desktop"). 1.0.97's six panes and the boards canvas are gone; the 
   `offset {}`, its lean and landing squash in `graphicsLayer {}`; the loop runs only while a hop or follow is unsettled.
   Asleep it is the still `AiMark` in the taskbar and asks for no frames. `F` follows, `Shift F` skips ahead; a click opens
   Thoughts, a drag picks it up. With Follow on, a window Ai opens waits for the avatar to reach its icon (≤ 700 ms).
+- **The avatar shows what it is doing, on itself** (kai: "so the user can track its status visually better";
+  `DESKTOP.md` §5.7): a paper plate with an ink rule travels beside it — a small ink **sign** for the kind of work (pen,
+  play, open book, globe, page, pointer, three squares, a squared `?`, ✓, ✕; `WorldIcons.sign`, on the icon grid) and
+  **a few words** in the label tier, a file's name as itself in mono (*Writing* `deck-odds.js`, *Running 50,000 hands*,
+  *Reading Labrynth guide*, *Thinking*, *Ran* `hands.js`, *Waiting on you*), shortened by words and a file's parts,
+  never to a stub. It stands on the avatar's right, its left near the page's edge, placed in layout from the loop's
+  pose. **Its face is the work's**: focused writing, watching a run, reading, thinking, pleased at a run or a page,
+  worried at a failure, waiting — Ai's own twenty faces, no new geometry (a hand's petting still answers in its own).
+  **When the person is wanted** (a question, a confirmation, Python off here) it stands where it is answered and a
+  square ink ring breathes round it, stepped 20 times a second and only while it waits. All of it is core's
+  `AvatarStatus` (`resolve`, `plate`, `place`, `breath`, `words`; `AvatarStatusTest`), fed by the pilot's errand
+  (`AvatarTarget.doing`), a run's end (`WorldDeskState.ran`, `aiRunFailed`) and `AiState` (`AiNow`: the tool, a
+  question or confirmation, a reply streaming). Off with *Show Ai on the desktop*; at home, asleep or idle it fades and
+  the taskbar's line — the same words — speaks; with recede on, the person's hands on the page fold it to its sign.
 - **Never stealing focus** (`FocusPolicy`, in `WorldDeskState.arrive`): Raise, or — while the person types, pressed in
   the last 4 s, or has a menu open — Behind with a notice, or Mark with Follow off. When Ai's turn ends, `DeskTidy` puts
   away what it opened and nobody touched, keeping the answer in front.
@@ -4383,7 +4397,8 @@ reloaded after a sync or a restore; `OldDataTest.aWorldFrom1097StillReads`; `Wor
 (typed, run, streamed, pinned, an instrument, Python allowed or not and its odds agreeing with the app's).
 `tools/shoot.sh --page=world --world=demo` photographs it; `--world=fresh` an empty world; `--world-desk=fresh|several|
 working|launcher|notices|switcher` the desktop's scenes, `--world-avatar=icon|travel|caret|terminal|home` with
-`--world-avatar-t=0.5` the avatar frozen mid-hop (`DeskStudio.kt`); `--world-app=browser|thoughts|instruments|library|
+`--world-avatar-t=0.5` the avatar frozen mid-hop, `--world-status=writing|running|instrument|reading|thinking|pleased|
+worried|waiting` its status where that work is (`DeskStudio.kt`); `--world-app=browser|thoughts|instruments|library|
 hand-odds|combo-lines|matchups` one app's window, maximised (`--world-app-window=normal` at its comfort size,
 `--world-page=b5` the Browser's page, `--world-library=search:words`; `WorldAppsStudio.kt`); with `--form=phone` and
 `--theme=ink` as ever. `--world-tabs=peek|overview` shows a tab's picture under the strip, or every tab as pictures.

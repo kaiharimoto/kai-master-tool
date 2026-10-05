@@ -266,12 +266,21 @@ class WorldDeskState(private val worlds: Worlds) {
         notices = f(notices)
     }
 
-    /** A run or an instrument ended: a notice when the rules say so (§6.3). */
-    fun ran(label: String, ok: Boolean, error: String, ms: Long, pages: Int, at: Long) {
+    /**
+     * A run or an instrument ended: a notice when the rules say so (§6.3); Ai's own, the avatar says how it went beside
+     * itself — pleased, worried, or waiting on the person (§5.7).
+     */
+    fun ran(label: String, ok: Boolean, error: String, ms: Long, pages: Int, at: Long, by: String = WorldEvent.AI) {
         notify(
             if (ok) WorldNotices.runFinished(label, ms, pages, at, terminalInFront = desk.front == BuiltInApp.TERMINAL.id)
             else WorldNotices.runFailed(label, error, at),
         )
+        if (by == WorldEvent.AI && desk.working) avatar.ran(label, ok, error, at)
+    }
+
+    /** Ai's run never started or broke off with an error the Terminal does not end on (Python off here): the avatar says so. */
+    fun aiRunFailed(label: String, error: String) {
+        if (desk.working) avatar.ran(label, ok = false, error = error, at = now())
     }
 
     // ---- Ai on the desk --------------------------------------------------------------------------------------------
@@ -296,7 +305,7 @@ class WorldDeskState(private val worlds: Worlds) {
         apply(DeskOp.AiShowed)
         val tab = tabs.showing(WorldAddress.Board(boards.last()).format())?.id.orEmpty()
         // At once, never later: an arrival made after the turn ended would start a turn nobody ends.
-        arriveNow(BuiltInApp.BROWSER.ref, AiDoes.Show(tab))
+        arriveNow(BuiltInApp.BROWSER.ref, AiDoes.Show(tab, worlds.open?.board(boards.last())?.title))
     }
 
     private fun decide(ref: AppRef): FocusDecision {

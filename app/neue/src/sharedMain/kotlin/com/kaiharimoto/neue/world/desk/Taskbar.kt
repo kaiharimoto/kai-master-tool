@@ -37,6 +37,7 @@ import com.kaiharimoto.mastertool.core.input.DeskShortcuts
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.mastertool.core.world.desk.Anchor
 import com.kaiharimoto.mastertool.core.world.desk.AppRef
+import com.kaiharimoto.mastertool.core.world.desk.AvatarStatus
 import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
 import com.kaiharimoto.mastertool.core.world.desk.WorldIcons
 import com.kaiharimoto.neue.NeueHolders
@@ -331,15 +332,18 @@ private fun RowScope.AiCell(h: NeueHolders) {
             .onContextMenu { local -> h.neue.menu = MenuSpec(at[0] + local, aiMenu(h)) }
             .muClickable { desk.open(BuiltInApp.THOUGHTS.ref) },
     ) {
+        // Awake, the line says what the avatar's plate says (§5.7) — thinking, a run's end, a question — in the same words;
+        // with the avatar kept home it is the only place that says it, and the face at home wears the work's face.
+        val said = if (avatar.asleep) null else avatarStatus(h, avatar)
         Box(Modifier.size(28.dp).deskTarget(h, null, Anchor.HOME), contentAlignment = Alignment.Center) {
             // Home: the still mark asleep (no frame loop), or — the avatar off — the live face working at home.
             when {
                 avatar.asleep -> AiMark(28.dp, name = h.ai.name)
-                !shown -> com.kaiharimoto.neue.ai.avatar.AiAvatar(h.ai.face, 28.dp, pointer = { h.cursor.position }, name = h.ai.name)
+                !shown -> com.kaiharimoto.neue.ai.avatar.AiAvatar(if (h.ai.handLine != null) h.ai.face else said?.expression ?: h.ai.face, 28.dp, pointer = { h.cursor.position }, name = h.ai.name)
                 else -> Unit
             }
         }
-        Small(avatar.status, Modifier.widthIn(max = 240.dp), color = c.ink70, maxLines = 1)
+        Small(said?.words(AvatarStatus.CAPTION_DESK)?.text ?: avatar.status, Modifier.widthIn(max = 240.dp), color = c.ink70, maxLines = 1)
         if (working) {
             Tip(if (follow) "Ai's window comes forward as it arrives" else "Nothing is raised for Ai; its cell carries it", kbd = kbd(DeskAction.WORLD_FOLLOW), above = true) {
                 WordButton("Follow", on = follow) { toggleFollow(h) }
