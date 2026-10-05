@@ -14,6 +14,21 @@ import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.effects.Area
+import com.kaiharimoto.mastertool.core.duel.effects.CardScript
+import com.kaiharimoto.mastertool.core.duel.effects.CardType
+import com.kaiharimoto.mastertool.core.duel.effects.Cond
+import com.kaiharimoto.mastertool.core.duel.effects.Effect
+import com.kaiharimoto.mastertool.core.duel.effects.Filter
+import com.kaiharimoto.mastertool.core.duel.effects.Kind
+import com.kaiharimoto.mastertool.core.duel.effects.Num
+import com.kaiharimoto.mastertool.core.duel.effects.Op
+import com.kaiharimoto.mastertool.core.duel.effects.Pick
+import com.kaiharimoto.mastertool.core.duel.effects.Rel
+import com.kaiharimoto.mastertool.core.duel.effects.Spot
+import com.kaiharimoto.mastertool.core.duel.effects.Stat
+import com.kaiharimoto.mastertool.core.duel.effects.Step
+import com.kaiharimoto.mastertool.core.duel.effects.Where
 
 /**
  * Duel puzzles as an evaluation set (Phase C stage 3, `docs/phases/C.md` §5): a position with a known goal, played by Ai
@@ -195,6 +210,41 @@ object PuzzleCards {
         OOKAZI to PuzzleEffect(PuzzleEffect.Kind.DAMAGE, them = 800, text = "Inflict 800 damage to your opponent."),
         TREMENDOUS_FIRE to PuzzleEffect(PuzzleEffect.Kind.DAMAGE, them = 1000, you = 500, text = "Inflict 1000 damage to your opponent, and 500 damage to you."),
     )
+
+    /**
+     * The five Spells as effect scripts (Phase D, D.md §2.4), in our own words: what [effects] says, in the engine's
+     * vocabulary. [PuzzleEffect] still resolves them until the engine's step executor runs scripts; then the referee plays
+     * these and [PuzzleEffect] is deleted.
+     */
+    val scripts: List<CardScript> by lazy {
+        fun spell(code: Int, label: String, condition: Cond?, vararg does: Op) = CardScript(
+            card = code,
+            name = name(code),
+            effects = listOf(
+                Effect(
+                    "e1", label, Kind.ACTIVATION, from = setOf(Where.HAND, Where.SPELL_ZONE), condition = condition,
+                    does = does.map { Step(it) },
+                ),
+            ),
+        )
+        val monster = Filter.Kind(CardType.MONSTER)
+        listOf(
+            spell(
+                RAIGEKI, "Clear their field", Cond.Controls(monster, seat = Rel.THEM),
+                Op.Destroy(Pick(all = true, from = listOf(Spot(Rel.THEM, Area.MONSTERS)))),
+            ),
+            spell(
+                DARK_HOLE, "Clear the field", Cond.Controls(monster, seat = Rel.ANY),
+                Op.Destroy(Pick(all = true, from = listOf(Spot(Rel.ANY, Area.MONSTERS)))),
+            ),
+            spell(
+                FISSURE, "Their weakest", Cond.Controls(Filter.All(listOf(monster, Filter.FaceUp)), seat = Rel.THEM),
+                Op.Destroy(Pick(from = listOf(Spot(Rel.THEM, Area.MONSTERS)), where = Filter.All(listOf(Filter.FaceUp, Filter.Lowest(Stat.ATK))))),
+            ),
+            spell(OOKAZI, "Burn", null, Op.Lp(Rel.THEM, Num.Const(-800))),
+            spell(TREMENDOUS_FIRE, "Burn both", null, Op.Lp(Rel.THEM, Num.Const(-1000)), Op.Lp(Rel.YOU, Num.Const(-500))),
+        )
+    }
 
     /** The puzzles' catalog: these cards only, so a grade never depends on the pool. */
     val catalog: DuelCatalog = DuelCatalog { info[it] }

@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.duel
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -57,6 +58,12 @@ data class DuelEntry(
      * written before, and on the deal's — the table's own.
      */
     val by: Provenance? = null,
+    /**
+     * Which written effect or procedure made it (Phase D, `docs/phases/D.md` §2.1, [FxTag]): only on entries the engine
+     * made (Shortcut, Resolve by Shortcut, the goldfish's lines). Absent on every entry written by hand or before, which
+     * reads as it did (`OldDataTest`).
+     */
+    val fx: FxTag? = null,
 )
 
 /** A duel as written to a file: how it began, and everything that happened. */
@@ -146,9 +153,10 @@ data class DuelGame(
 
     /**
      * Commits [actions] as one group by [seat], all or nothing. What they leave to chance is stamped
-     * here. Anything undone is dropped: acting after an undo starts a new future.
+     * here. Anything undone is dropped: acting after an undo starts a new future. [fx]: the engine's tags, one per
+     * action in step ([FxTag], Phase D); empty for a move made by hand.
      */
-    fun act(actions: List<DuelAction>, seat: Int?, at: Long = 0L, join: Boolean = false, by: Provenance? = null): Result {
+    fun act(actions: List<DuelAction>, seat: Int?, at: Long = 0L, join: Boolean = false, by: Provenance? = null, fx: List<FxTag?> = emptyList()): Result {
         if (actions.isEmpty()) return Result(this, null)
         // [join]: one gesture made in steps (a turn's opening, 1.0.86) — the last group grows, never one behind the deal.
         val last = entries.getOrNull(cursor - 1)
@@ -163,7 +171,8 @@ data class DuelGame(
         if (next == null) return Result(this, problem)
         // Who moved, stamped as the dice are (Phase C): an Ai move with the fingerprint of the view it acted on.
         val sealed = Provenance.seal(by, state, header, played)
-        val added = stamped.mapIndexed { k, a -> DuelEntry(cursor + k, at, seat, group, a, sealed) }
+        // The engine's tags ride with their actions, one each (Phase D): stamping keeps the count, so they stay in step.
+        val added = stamped.mapIndexed { k, a -> DuelEntry(cursor + k, at, seat, group, a, sealed, fx.getOrNull(k)) }
         return Result(copy(entries = played + added, cursor = cursor + added.size, state = next), null)
     }
 

@@ -19,6 +19,8 @@ import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.ai.DuelMoves
+import com.kaiharimoto.mastertool.core.duel.effects.FxFacts
+import com.kaiharimoto.mastertool.core.duel.effects.FxRules
 import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
 import kotlinx.serialization.json.JsonObject
 
@@ -44,7 +46,9 @@ data class PuzzleTurn(
  * summoned this turn nor attacked, a Flip Summon of a face-down one; an attack once a monster from face-up Attack Position
  * in the Battle Phase, at a monster of theirs or directly only when they control none — its damage and destruction worked
  * out here ([DuelBattle], the printed numbers); a Spell from the hand in a Main Phase whose effect the puzzle writes
- * ([PuzzleEffect]), resolved at once; and talk. Refused: everything else — life points typed, a card sent, banished or
+ * ([PuzzleEffect]), resolved at once; and talk. The summon, Tribute and phase rules are read from `FxRules` (Phase D, one
+ * list for the referee and the effect engine); the Spells become scripts ([PuzzleCards.scripts]) the engine plays once its
+ * step executor runs them, and [PuzzleEffect] goes then. Refused: everything else — life points typed, a card sent, banished or
  * moved by hand, a Special Summon, a draw, the end of the turn.
  */
 object PuzzleReferee {
@@ -86,10 +90,9 @@ object PuzzleReferee {
         }
         if (moves.size != 1) return Verdict.Refuse(ONLY)
         return when (val a = moves.single()) {
-            is DuelAction.Phase -> when {
-                a.phase.ordinal <= s.phase.ordinal -> Verdict.Refuse("The phases only go forward: it is the ${s.phase.label} Phase.")
-                turn.tributes > 0 -> Verdict.Refuse("Finish the Tribute Summon first.")
-                else -> ok(listOf(a), turn)
+            is DuelAction.Phase -> {
+                FxRules.phaseRefusal(s, a.phase)?.let { return Verdict.Refuse(it) }
+                if (turn.tributes > 0) Verdict.Refuse("Finish the Tribute Summon first.") else ok(listOf(a), turn)
             }
             DuelAction.EndTurn -> Verdict.Refuse("The puzzle is this turn: stop when you are done and say DONE; the goal is checked on the table as it stands.")
             is DuelAction.Move -> {
@@ -100,13 +103,14 @@ object PuzzleReferee {
                     // A Normal Summon or Set from the hand.
                     from is Place.Pile && from.kind == PileKind.HAND && from.seat == seat && to is Place.Zone && to.seat == seat &&
                         to.kind == ZoneKind.MONSTER && (a.how == "normal" || a.how == "set") -> {
-                        if (!main) return Verdict.Refuse("Monsters are Normal Summoned or Set in your Main Phase.")
-                        if (turn.normalUsed) return Verdict.Refuse("You have Normal Summoned or Set this turn already.")
-                        if (a.over || s.at(to) != null) return Verdict.Refuse("That Monster Zone is taken: summon it to a free one.")
+                        // The game's rules for a Normal Summon are FxRules' (Phase D: one list); the zone is the table's.
                         val info = catalog.info(card.code)
-                        if (info?.kind != CardKind.MONSTER) return Verdict.Refuse("Only a Main Deck monster is Normal Summoned.")
+                        val facts = info?.let { FxFacts.of(card.code, it) }
+                        FxRules.normalRefusal(facts, null, s.phase, used = if (turn.normalUsed) 1 else 0)?.let { return Verdict.Refuse(it) }
+                        if (a.over || s.at(to) != null) return Verdict.Refuse("That Monster Zone is taken: summon it to a free one.")
+                        if (info?.kind != CardKind.MONSTER) return Verdict.Refuse(FxRules.NOT_MAIN_DECK_MONSTER)
                         val need = tributesFor(info.level ?: 0)
-                        if (turn.tributes != need) {
+                        if (FxRules.tributeRefusal(info.level ?: 0, null, turn.tributes) != null) {
                             return Verdict.Refuse(
                                 if (need == 0) "A Level ${info.level} monster needs no Tribute." else
                                     "A Level ${info.level} monster needs $need Tribute${if (need == 1) "" else "s"}: send ${if (need == 1) "a monster" else "$need monsters"} of yours to the GY first (g m1), then summon it.",
@@ -167,12 +171,8 @@ object PuzzleReferee {
         }
     }
 
-    /** Tributes a Normal Summon of a monster of [level] needs. */
-    fun tributesFor(level: Int): Int = when {
-        level >= 7 -> 2
-        level >= 5 -> 1
-        else -> 0
-    }
+    /** Tributes a Normal Summon of a monster of [level] needs: [FxRules.tributes], the one list. */
+    fun tributesFor(level: Int): Int = FxRules.tributes(level)
 
     /** Talk, which never changes the table: always admitted, never counted. */
     fun social(a: DuelAction): Boolean = a.social || a is DuelAction.Target
