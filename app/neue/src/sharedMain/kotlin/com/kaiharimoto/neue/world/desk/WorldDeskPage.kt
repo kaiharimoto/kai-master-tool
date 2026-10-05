@@ -124,6 +124,7 @@ private fun WorldDesk(h: NeueHolders) {
             .onGloballyPositioned {
                 desk.origin = it.positionInWindow()
                 desk.density = density
+                desk.avatar.bounds = com.kaiharimoto.mastertool.core.world.desk.DeskRect(0.0, 0.0, (it.size.width / density).toDouble(), (it.size.height / density).toDouble())
             },
     ) {
         Column(Modifier.fillMaxSize()) {

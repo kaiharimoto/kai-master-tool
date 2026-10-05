@@ -76,7 +76,7 @@ internal suspend fun studioDesk(h: NeueHolders, scene: String, map: Map<String, 
             h.neue.update { it.copy(world = it.world.copy(typing = 90, follow = true)) }
             desk.arriveNow(BuiltInApp.TERMINAL.ref, AiDoes.Run("hands.js"))
             clock.run(20)
-            place(BuiltInApp.TERMINAL, 0.5, 0.6, 0.46, 0.34)
+            place(BuiltInApp.TERMINAL, 0.6, 0.6, 0.38, 0.34)
             clock.run(40)
             val code = OPENINGS
             CoroutineScope(Dispatchers.Swing).launch { world.write("openings.js", code, WorldEvent.AI) }
@@ -87,13 +87,17 @@ internal suspend fun studioDesk(h: NeueHolders, scene: String, map: Map<String, 
             fun stand(app: String, anchor: Anchor) = avatar.targets.rect(app, anchor)?.let { AvatarTargets.stand(it, anchor, 28.0) }
             val editorIcon = stand(BuiltInApp.EDITOR.id, Anchor.ICON) ?: home
             when (map["world-avatar"] ?: "travel") {
-                "icon" -> avatar.pose(editorIcon, editorIcon, 1.0, "Writing openings.js")
-                "travel" -> avatar.pose(home, editorIcon, t, "Writing openings.js")
-                "caret" -> stand(BuiltInApp.EDITOR.id, Anchor.CARET)?.let { avatar.pose(it, it, 1.0, "Writing openings.js") }
-                "terminal" -> stand(BuiltInApp.TERMINAL.id, Anchor.LINE)?.let { avatar.pose(it, it, 1.0, "Running hands.js") }
+                "icon" -> avatar.pose(editorIcon, editorIcon, 1.0, "Writing openings.js", BuiltInApp.EDITOR.id)
+                "travel" -> avatar.pose(home, editorIcon, t, "Writing openings.js", BuiltInApp.EDITOR.id)
+                // At the caret the avatar is left to its own loop, riding the line as it types.
+                "caret" -> clock.run(150)
+                "terminal" -> stand(BuiltInApp.TERMINAL.id, Anchor.LINE)?.let { avatar.pose(it, it, 1.0, "Running hands.js", BuiltInApp.TERMINAL.id) }
                 "home" -> Unit
             }
             clock.run(6)
+            println("[neue-studio] caret: ${avatar.targets.rect(BuiltInApp.EDITOR.id, Anchor.CARET)} body ${avatar.targets.rect(BuiltInApp.EDITOR.id, Anchor.BODY)} typed ${world.editorText.length} typing ${world.typing} density ${desk.density} origin ${desk.origin}")
+            println("[neue-studio] avatar: ${avatar.describe()}")
+            println("[neue-studio] avatar: at ${avatar.at} asleep ${avatar.asleep} home $home icon $editorIcon caret ${stand(BuiltInApp.EDITOR.id, Anchor.CARET)}")
         }
     }
     println("[neue-studio] desk: ${desk.desk.windows.size} windows, front ${desk.desk.front}, ai ${desk.desk.ai}, avatar ${desk.avatar.status}")

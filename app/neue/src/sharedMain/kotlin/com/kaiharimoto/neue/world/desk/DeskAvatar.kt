@@ -128,6 +128,9 @@ class DeskAvatarState {
     /** [app]'s window went: its targets with it (its icon and cell stay). */
     fun forget(app: String) = targets.forget(app)
 
+    /** Where it is and what it heads for, in words: the studio's log. */
+    fun describe(): String = "current ${pilot.current} behind ${pilot.behind} at ${path?.position} target ${path?.target} since $since frozen $frozen held $held"
+
     /** Whether it stands at [app]'s icon or cell now: `arrive` waits for this before opening the window (§5.3). */
     fun standsAt(app: String): Boolean = launchedAt == app
 
@@ -137,12 +140,19 @@ class DeskAvatarState {
         at = pilot.current?.app
     }
 
+    /** The page it stands on (dp): a target past its edge (a caret scrolled off a phone) is met at the edge. */
+    var bounds: DeskRect? = null
+
     /** Where [t] is now, from [here]: its own place, else its window's taskbar cell, else its title bar; null to stay. */
-    private fun pointFor(t: AvatarTarget, here: DeskPoint): DeskPoint? =
-        targets.point(t, here, SIZE) ?: t.app?.let { app ->
+    private fun pointFor(t: AvatarTarget, here: DeskPoint): DeskPoint? {
+        val p = targets.point(t, here, SIZE) ?: t.app?.let { app ->
             targets.rect(app, Anchor.CELL)?.let { AvatarTargets.stand(it, Anchor.CELL, SIZE) }
                 ?: targets.rect(app, Anchor.TITLE)?.let { AvatarTargets.stand(it, Anchor.TITLE, SIZE) }
-        }
+        } ?: return null
+        val b = bounds ?: return p
+        val half = SIZE / 2
+        return DeskPoint(p.x.coerceIn(b.x + half, maxOf(b.x + half, b.right - half)), p.y)
+    }
 
     private fun home(): DeskPoint? = targets.rect(null, Anchor.HOME)?.center
 
@@ -153,62 +163,65 @@ class DeskAvatarState {
     internal suspend fun travel() {
         while (!frozen) {
             var rest = 0L
-            var done = false
-            withFrameNanos { n ->
-                val now = n / 1_000_000L
-                lastNow = now
-                val p = path ?: AvatarPath(home() ?: DeskPoint.ZERO, reduced).also { path = it; it.step(now) }
-                p.reduced = reduced
-                if (held || frozen) {
-                    done = true
-                    return@withFrameNanos
-                }
-                val here = p.position
-                val c = current
-                val cPoint = c?.let { pointFor(it, here) }
-                val arrived = c == null || cPoint == null || (!p.wantsFrames(now) && here.distanceTo(cPoint) < ARRIVED)
-                val t = pilot.next(now, arrived)
-                if (t != null && t !== c) {
-                    current = t
-                    since = -1L
-                    val tp = pointFor(t, here)
-                    point = tp
-                    if (tp != null) p.hopTo(tp, now)
-                } else if (t != null) {
-                    val tp = pointFor(t, here)
-                    if (tp != null && tp != point) {
-                        point = tp
-                        if (t.follow) p.follow(tp, now) else if (tp.distanceTo(p.target) > ARRIVED) p.hopTo(tp, now)
-                    }
-                }
-                val at = p.step(now)
-                val moving = p.wantsFrames(now)
-                val now2 = current
-                if (!moving && now2 != null && since < 0) {
-                    since = now
-                    if (now2.press) squashFrom = now
-                    if (now2.anchor == Anchor.LAUNCH || now2.anchor == Anchor.ICON || now2.anchor == Anchor.CELL) launchedAt = now2.app
-                }
-                val squashing = squashFrom >= 0 && now - squashFrom < SQUASH_MS
-                pose[0] = at.x.toFloat()
-                pose[1] = at.y.toFloat()
-                pose[2] = p.lean(now)
-                pose[3] = if (squashing) ((now - squashFrom).toFloat() / SQUASH_MS) else 0f
-                pose[4] = p.alpha(now)
-                tick.intValue++
-                refresh()
-                if (!moving && !squashing) {
-                    val dwell = now2?.dwell ?: AvatarPilot.DWELL_MS
-                    val left = if (now2 == null) 0L else dwell - (now - since)
-                    when {
-                        left > 0 -> rest = left
-                        pilot.next(now, true) === now2 -> done = true
-                    }
-                    refresh()
-                }
-            }
-            if (done) break
+            withFrameNanos { n -> rest = frame(n / 1_000_000L) }
+            if (rest < 0) break
             if (rest > 0) delay(minOf(rest, REST_STEP_MS))
+        }
+    }
+
+    /**
+     * One frame of the loop at [now] (ms): the pilot asked, the path stepped, the pose written. Returns 0 to be called
+     * again next frame, a wait in ms while it dwells (no frames meanwhile), or -1 when there is nothing more to do.
+     */
+    internal fun frame(now: Long): Long {
+        lastNow = now
+        val p = path ?: AvatarPath(home() ?: DeskPoint.ZERO, reduced).also { path = it; it.step(now) }
+        p.reduced = reduced
+        if (held || frozen) return -1L
+        val here = p.position
+        val c = current
+        val cPoint = c?.let { pointFor(it, here) }
+        val arrived = c == null || cPoint == null || (!p.wantsFrames(now) && here.distanceTo(cPoint) < ARRIVED)
+        val t = pilot.next(now, arrived)
+        if (t != null && t !== c) {
+            current = t
+            since = -1L
+            val tp = pointFor(t, here)
+            point = tp
+            if (tp != null) p.hopTo(tp, now)
+        } else if (t != null) {
+            val tp = pointFor(t, here)
+            if (tp != null && tp != point) {
+                point = tp
+                if (t.follow) p.follow(tp, now) else if (tp.distanceTo(p.target) > ARRIVED) p.hopTo(tp, now)
+            }
+        }
+        val at = p.step(now)
+        val moving = p.wantsFrames(now)
+        val now2 = current
+        if (!moving && now2 != null && since < 0) {
+            since = now
+            if (now2.press) squashFrom = now
+            if (now2.anchor == Anchor.LAUNCH || now2.anchor == Anchor.ICON || now2.anchor == Anchor.CELL) launchedAt = now2.app
+        }
+        val squashing = squashFrom >= 0 && now - squashFrom < SQUASH_MS
+        pose[0] = at.x.toFloat()
+        pose[1] = at.y.toFloat()
+        pose[2] = p.lean(now)
+        pose[3] = if (squashing) ((now - squashFrom).toFloat() / SQUASH_MS) else 0f
+        pose[4] = p.alpha(now)
+        tick.intValue++
+        refresh()
+        if (moving || squashing) return 0L
+        // The pilot counts its dwell from the frame after it saw the avatar arrive (at most one rest after [since]):
+        // wait that out too, and never leave while a route is waiting, or the next one would wait for a signal.
+        val dwell = (now2?.dwell ?: AvatarPilot.DWELL_MS) + REST_STEP_MS + FRAME_MS
+        val left = if (now2 == null) 0L else dwell - (now - since)
+        return when {
+            left > 0 -> left
+            pilot.behind > 0 -> FRAME_MS
+            pilot.next(now, true) === now2 -> { refresh(); -1L }
+            else -> 0L
         }
     }
 
@@ -234,7 +247,7 @@ class DeskAvatarState {
      * The studio's frozen hop (§12.4: "the hop frozen at a fraction"): from [from] to [to], [t] of the way through its
      * time, eased as the loop eases it.
      */
-    fun pose(from: DeskPoint, to: DeskPoint, t: Double, status: String) {
+    fun pose(from: DeskPoint, to: DeskPoint, t: Double, status: String, app: String? = null) {
         frozen = true
         val p = AvatarPath(from)
         p.hopTo(to, 0L)
@@ -247,6 +260,7 @@ class DeskAvatarState {
         pose[4] = 1f
         asleep = false
         this.status = status
+        this.at = app
         tick.intValue++
     }
 
@@ -262,6 +276,9 @@ class DeskAvatarState {
 
         /** A dwell is waited out in steps this long, without frames. */
         private const val REST_STEP_MS = 120L
+
+        /** About a frame. */
+        private const val FRAME_MS = 17L
     }
 }
 

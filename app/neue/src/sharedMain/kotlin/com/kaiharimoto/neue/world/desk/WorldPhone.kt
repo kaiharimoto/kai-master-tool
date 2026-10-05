@@ -88,6 +88,7 @@ internal fun WorldPhone(h: NeueHolders) {
             .onGloballyPositioned {
                 desk.origin = it.positionInWindow()
                 desk.density = density
+                desk.avatar.bounds = com.kaiharimoto.mastertool.core.world.desk.DeskRect(0.0, 0.0, (it.size.width / density).toDouble(), (it.size.height / density).toDouble())
                 // Home is the face in Neue's bar, just over the page's right end (§5.6).
                 val w = it.size.width / density
                 desk.avatar.report(null, Anchor.HOME, DeskRect(w - 78.0, -38.0, 28.0, 28.0))
@@ -99,6 +100,8 @@ internal fun WorldPhone(h: NeueHolders) {
                     desk.phoneSwitcher -> PhoneSwitcher(h)
                     desk.launcherOpen || app == null -> LauncherContent(h, phone = true) { desk.launcherOpen = false }
                     else -> key(app.key) {
+                        // The app off screen leaves no targets behind: the avatar finds it on the Switch cell.
+                        androidx.compose.runtime.DisposableEffect(app.key) { onDispose { desk.avatar.forget(app.key) } }
                         Box(
                             Modifier
                                 .fillMaxSize()

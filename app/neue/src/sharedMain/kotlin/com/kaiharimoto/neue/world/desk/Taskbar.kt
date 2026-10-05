@@ -334,9 +334,8 @@ private fun RowScope.AiCell(h: NeueHolders) {
                 else -> Unit
             }
         }
-        Small(avatar.status, Modifier.weight(1f, fill = false), color = c.ink70, maxLines = 1)
+        Small(avatar.status, Modifier.widthIn(max = 240.dp), color = c.ink70, maxLines = 1)
         if (working) {
-            Spacer(Modifier.weight(1f))
             Tip(if (follow) "Ai's window comes forward as it arrives" else "Nothing is raised for Ai; its cell carries it", kbd = kbd(DeskAction.WORLD_FOLLOW), above = true) {
                 WordButton("Follow", on = follow) { toggleFollow(h) }
             }
