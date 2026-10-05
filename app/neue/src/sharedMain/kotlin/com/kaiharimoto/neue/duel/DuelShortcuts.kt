@@ -29,7 +29,7 @@ import com.kaiharimoto.mastertool.core.duel.text.ShortcutWindow
  *
  * [Duels] forwards what outside code reads under its own names.
  */
-internal class DuelShortcuts(private val d: Duels) {
+class DuelShortcuts internal constructor(private val d: Duels) {
 
     /**
      * The written effects the table is handed (Phase D step 2): the `Effects` holder's library, any status but broken —

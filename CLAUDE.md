@@ -720,6 +720,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   the person's moves refused), API connections only, never networked; a finished one is a `DuelResult` of kind `ai-vs-ai`
   with each seat's connection and model, counted apart. Ai World's duel tables are a sandbox for scripts (kind `scripted`,
   never a record).
+  **Shortcut at the table** (Phase D step 2, `D.md` §5¾.14): the Shortcut window is the table's `Chooser`, asking by replay
+  (`ShortcutAsking`; words and placement `text/ShortcutWindow`, `PositionGlyphs`; `DuelShortcuts` part, `DeskScope.SHORTCUT_WINDOW`),
+  handed written effects at `Duels.writtenEffects` (`FxSamples` in the reserved range until the library); `--duel-shortcut=which|…|declare`.
   `tools/shoot.sh --page=duel --duel=two --duel-play=true [--duel-replay=N] [--duel-facing=true] [--duel-select=near]`;
   `--duel-match=dialog|live|over` for Ai vs Ai.
 - **Present** (1.0.70, `06`, `Ctrl 6`, `NEUE.md` §4o; kai: deck profiles for YouTube creators, "a slideshow

@@ -95,7 +95,8 @@ class Duels(val dir: File) {
     internal val picking = DuelPicking(this)
     internal val records = DuelRecords(this)
     val matches = DuelMatches(this)
-    internal val shortcutPart = DuelShortcuts(this)
+    /** Shortcut at the table (Phase D §5½, §5¾): public, as [matches] is, so the studio and the tests drive the window. */
+    val shortcutPart = DuelShortcuts(this)
 
     var game by mutableStateOf<DuelGame?>(null)
     /** The seat drawn at the bottom of the table: the one acting, in a hot-seat. */
