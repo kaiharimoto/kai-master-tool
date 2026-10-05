@@ -183,8 +183,8 @@ class DeskTest {
     @Test
     fun twelveWindowsAtMostAndTheThirteenthClosesTheLeastRecentlyUsed() {
         var d = Desk()
-        // Eleven of Ai's apps would pass its own eight: open built-ins and a few apps, the oldest kept.
-        val refs = BuiltInApp.entries.map { it.ref } + (1..5).map { AppRef.Made("a$it") }
+        // Eleven of Ai's apps would pass its own eight: open the built-ins (eight, with Effects) and Ai's apps to twelve.
+        val refs = BuiltInApp.entries.map { it.ref } + (1..(12 - BuiltInApp.entries.size)).map { AppRef.Made("a$it") }
         refs.forEachIndexed { i, r -> d = d.op(DeskOp.Open(r, at = 10L + i)) }
         assertEquals(12, d.windows.size)
         d = d.op(DeskOp.Keep("files", true))

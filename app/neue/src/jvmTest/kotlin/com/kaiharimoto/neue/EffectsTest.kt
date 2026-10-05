@@ -1,6 +1,13 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.providers.Prices
+import com.kaiharimoto.mastertool.core.duel.effects.FxAsks
 import com.kaiharimoto.mastertool.core.duel.effects.FxCodec
+import com.kaiharimoto.mastertool.core.duel.effects.FxCost
+import com.kaiharimoto.mastertool.core.duel.effects.FxFrom
+import com.kaiharimoto.mastertool.core.duel.effects.FxOffers
+import com.kaiharimoto.mastertool.core.duel.effects.FxRequest
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import com.kaiharimoto.mastertool.core.duel.effects.FxRead
 import com.kaiharimoto.mastertool.core.duel.effects.FxReviews
@@ -185,6 +192,74 @@ class EffectsTest {
         s.effects.reloadNow()
         assertEquals(FxStatus.UNTESTED, s.effects.status(HERALD))
     }
+
+    @Test
+    fun askThenGoThenWriteThenCompileThenTheLibraryAndThePane() = runBlocking {
+        // Phase D step 2, asking (D.md §3.1): nothing asked, Ai's write is refused; the person's go puts the card on the list;
+        // Ai writes it, it compiles and joins the library; what it cost is kept; another deck asking for it is told it is
+        // reused, at no cost, by any printing.
+        val s = setup()
+        withContext(Dispatchers.Main) { s.worlds.create("Effects", null, WorldEvent.YOU) }
+        val refused = withContext(Dispatchers.Main) { s.worlds.write("lib/effects/$HERALD.js", heraldJs, WorldEvent.AI) }
+        assertTrue(refused.exceptionOrNull()?.message.orEmpty().contains(FxAsks.REFUSED), refused.toString())
+        assertFalse(File(s.data, "effects/$HERALD.js").exists())
+        // fx_request's offer adds nothing; Ai cannot make the go.
+        val offer = withContext(Dispatchers.Main) { s.effects.offer("r1", "Example Herald's effect", "d1", listOf(HERALD_ALT, SQUIRE), null, null) }
+        assertEquals(listOf(HERALD), offer.write, "an alternate artwork asks for its card")
+        assertEquals(listOf(SQUIRE), offer.nothing)
+        assertTrue(s.effects.asked.asks.isEmpty())
+        assertNull(withContext(Dispatchers.Main) { s.effects.go(FxOffers.request(offer, 1), FxReviews.AI) })
+        assertTrue(s.effects.asked.asks.isEmpty())
+        // The person's Write: on the list, kept on disk.
+        val go = assertNotNull(withContext(Dispatchers.Main) { s.effects.go(FxOffers.request(offer, 1).copy(from = FxFrom.VIEWER), FxReviews.PERSON) })
+        assertEquals(listOf(HERALD), go.cards)
+        assertEquals(FxFrom.VIEWER, s.effects.asked.of(HERALD)?.from)
+        val price = Prices.of("anthropic", "claude-sonnet-5-5")
+        withContext(Dispatchers.Main) { s.effects.begin("session-1", go, Usage(input = 1_000), "anthropic/claude-sonnet-5-5", price) }
+        // Now Ai's write goes through, compiles, and the card is begun.
+        val said = withContext(Dispatchers.Main) { s.worlds.write("lib/effects/$HERALD.js", heraldJs, WorldEvent.AI) }.getOrThrow()
+        assertTrue("Compiled Example Herald" in said, said)
+        assertEquals(FxStatus.UNTESTED, s.effects.status(HERALD))
+        // Its check, in the session: what the rounds since the go cost is kept on the card.
+        withContext(Dispatchers.Main) { s.effects.checked(HERALD, "session-1", Usage(input = 21_000, output = 4_000)) }
+        val ask = assertNotNull(s.effects.asked.of(HERALD))
+        assertEquals(FxAsks.WRITTEN, ask.state)
+        assertEquals(24_000L, ask.tokens)
+        assertEquals("written for 24,000 tokens, ≈ \$0.08", FxCost.spentWords(ask))
+        // Another session's check, or a card not asked, costs nothing.
+        withContext(Dispatchers.Main) { s.effects.checked(HERALD, "other", Usage(input = 99_000)) }
+        assertEquals(24_000L, s.effects.asked.of(HERALD)?.tokens)
+        // The pane: another deck asking for it (by its other printing) is told it is reused, at no cost.
+        val again = withContext(Dispatchers.Main) { s.effects.offer("r2", "deck two's engine", "d2", listOf(HERALD_ALT), "anthropic/claude-sonnet-5-5", price) }
+        assertEquals(listOf(HERALD), again.reused)
+        assertTrue(again.toWrite.isEmpty())
+        assertEquals(0.0, again.estimate.usd)
+        // And the next estimate on this connection is its own measured figure.
+        assertTrue(again.measured && again.perCard == 24_000L, again.toString())
+        // The list is on disk, and read again with the library.
+        var waited = 0
+        while (!File(s.data, "effects/${FxPaths.ASKED}").readTextOrNull().orEmpty().contains("24000") && waited++ < 100) Thread.sleep(20)
+        val fresh = Effects.under(s.data).also { it.pool = { index } }
+        fresh.reloadNow()
+        assertEquals(24_000L, fresh.asked.of(HERALD)?.tokens)
+        assertNull(FxAsks.gate(fresh.asked, HERALD, WorldEvent.AI), "asked once, writable for its repairs")
+    }
+
+    @Test
+    fun aSessionThatStopsLeavesItsCardsAskedNotStarted() = runBlocking {
+        val s = setup()
+        val r = FxRequest("r1", at = 1, from = FxFrom.PANE, what = "two cards", cards = listOf(HERALD, BROKEN))
+        val go = assertNotNull(withContext(Dispatchers.Main) { s.effects.go(r, FxReviews.PERSON) })
+        withContext(Dispatchers.Main) {
+            s.effects.begin("session-2", go, Usage(), null, null)
+            s.effects.ended("session-2")
+        }
+        assertEquals(FxAsks.NOT_STARTED, s.effects.asked.of(HERALD)?.state)
+        assertEquals(FxAsks.NOT_STARTED, s.effects.asked.of(BROKEN)?.state)
+        assertNull(s.effects.authoring)
+    }
+
+    private fun File.readTextOrNull(): String? = takeIf { it.isFile }?.readText()
 
     companion object {
         const val HERALD = 900_000_201

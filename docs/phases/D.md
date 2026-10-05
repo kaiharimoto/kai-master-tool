@@ -1824,6 +1824,53 @@ Each step splits across agents in worktrees, with a red team beside them, as in 
 inspector, `fx_request`, `FxAsks`, `FxSuggest`, the cost, the `effects-author` skill — agent (d) and the pane's;
 the table's surfaces — agent (e). Android was not compiled locally (no SDK in the sandbox): CI's `build-app.yml` is the check.
 
+**As landed: agent (d) and the pane** (asking, suggestions, cost, the Effects app, the skill):
+- **`FxAsks`** (core `duel/effects/FxAsks.kt`): `FxAsked` is `<data>/effects/asked.json` — `asks` (one row a card: canonical
+  passcode, `at`, `from` (`FxFrom`: viewer, inspector, duel, pane, combo, chat), `request`, `what`, `deck`, `state` (asked,
+  started, written, not-started), `tokens`, `usd` (null: unpriced), `model`) and `requests` (each go with its cards and its
+  estimate; the newest 200). Versioned, read forgivingly (`OldDataTest` holds the step-2 shape and a later one's keys),
+  synced newer-wins and backed up with the library (`FxPaths.syncs` already named it). **`FxAsks.go` refuses anyone but the
+  person** (`FxReviews.PERSON`); **`FxAsks.gate`** refuses Ai's write to a card not on the list ("not asked for; offer it with
+  fx_request") and a helper while nothing is asked; the person's own saves pass. `Effects.gate` is it by default.
+- **`fx_request`** (`FxTools.request`, `ToolGroup.ASK`; `AiEffects.request`): cards by name, or a deck (`open` or an id) with a
+  scope — `engine` (its saved combos' cards and its engine-like groups), `group`, `combo`, `suggested`. It answers with
+  `FxOffers.words` and one line `Request card: {…}` (`FxOffers.embed`), which the chat reads back (`FxOffers.read`) and draws
+  as **the request card** (`neue/ai/FxRequestCard.kt`, in `AiChat`'s rows): the cards as art — to write, to repair, already
+  done (reused at no cost) — the cost, **Write** and **Not now**. A written card is reused, not offered: in step 2 that is
+  any card written and checked (UNTESTED) as well as VERIFIED, since nothing is verified until step 3.
+- **The go** (`neue/effects/EffectsAsk.kt`: `NeueHolders.writeEffects`, `go`): `Effects.go` (the asked list, kept), then a new
+  conversation in **`AiSession.MODE_EFFECTS`** (`"effects"`; `PromptBuilder`'s section, the `effects-author` skill; decks
+  closed as in Fine Tuning, `AiTools.barredIn`; three times a chat's rounds; shown in Thoughts, `AiSession.WORLD_MODES`) whose
+  first message is the request in order (`brief`). The places: **Write its effect** / **Repair its effect** in the card viewer,
+  the builder's inspector (a fold, "Effect as code") and the Duel page's inspector (`CardEffects`, `DuelCardEffects`, reached
+  through `LocalEffectsHolders`); **Write these** in the Effects app; **Write its cards** on a combo's row in the Duel page's
+  combos dialog (`ComboWriteButton`, the cost in its tip); **Write** on the request card. Each shows the cost before it.
+- **`FxSuggest`** (core): the combos' cards by how many combos use each (`comboCards`: a combo's needs read as the command
+  line reads a name, and every deck card whose full name its steps say), then the engine's groups (names reading as
+  Starter, Extender, Engine…; `FxSuggest.engine`), then the Main Deck by copies, then repairs; never a written card or a Normal
+  Monster; every printing as its card.
+- **The cost** (`FxCost`, `FxMeter`): before, `FxCost.perCard` — the mean of what cards written on the same connection cost
+  (from the asked list: "measured on this connection over N cards"; Test scores' part B does not exist yet, so this is the
+  connection's own figure), else 30,000 assumed and said so — priced by `Prices.estimate` at `Prices.of(provider, model)`,
+  `Prices.UNKNOWN` when unpriced. After, `AiState.spent` adds up every round (`AgentEvent.Round`); `Effects.begin` marks it at
+  the go and each `fx_check` in that session adds the rounds since the last mark to the card (`Effects.checked`,
+  `FxAsks.spent`; a CLI's own `costUsd` when it says one; once a round is unpriced the card's money is unknown). The run's end
+  marks the cards it never reached not started (`Effects.ended`, from `AiState.finish`).
+- **The Effects app** (`BuiltInApp.EFFECTS`, `Alt 8` — Library took `Alt 7` when the World became a desktop —
+  `DeskAction.WORLD_APP_EFFECTS`, `WorldIcons.EFFECTS`, `neue/effects/EffectsApp.kt` through `DeskApps`): the open deck (how
+  much is written; a choice of what to write first, the engine, each group, each combo, the whole deck, as art — a click
+  leaves a card out, a written one is marked reused; **Write these** with the estimate), then the library (each card's art,
+  status, words, compile error, errors, open warnings with **Accept…** and why — the person's, `FxReviews.PERSON` — accepted
+  ones with Withdraw, the asked row with what it cost, **Ask Ai about it**, **Repair it**).
+- **The `effects-author` skill** (`core/ai/skills/EffectsSkills.kt`, phase 3; `RulesTextTest` holds its tools and its rules).
+- **Tests**: `FxAsksTest`, `FxSuggestTest`, `FxCostTest` (core); `OldDataTest` (asked.json), `SyncTest` (it travels),
+  `RulesTextTest`, `WorldInputTest` (`Alt 8`); `EffectsTest` (neue: refused → offer adds nothing → Ai's go refused → the
+  person's go → Ai writes → compiles → the cost kept → another deck's offer reuses it, any printing → read again from disk;
+  a stopped session leaves its cards not started). Studio: `--effects=pane|request|viewer` (`EffectsStudio.kt`).
+- **Not done**: the deck's guide's coverage line (§4.5) with Write the engine's / Write a group's — the coverage line is step
+  3's; the pane's tests and their failures (step 3); per-viewer phone tab of the pane (the World's phone shows apps one at a
+  time, so the app is the tab).
+
 ### Step 3: tests and coverage (1.2.2, and 1.2.3 if needed)
 
 **Builds:**

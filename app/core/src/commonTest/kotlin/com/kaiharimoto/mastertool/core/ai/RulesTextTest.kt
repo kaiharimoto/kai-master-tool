@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.ai
 import com.kaiharimoto.mastertool.core.ai.rules.GameRulesSkill
 import com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer
 import com.kaiharimoto.mastertool.core.ai.skills.DeckSkills
+import com.kaiharimoto.mastertool.core.ai.skills.EffectsSkills
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
@@ -27,6 +28,7 @@ class RulesTextTest {
         "set_siding_plan", "prep_state", "log_game", "matchup_matrix", "expected_winrate", "set_event", "drill",
         "session_report", "resolve_cards", "new_deck", "watch_video", "list_decks", "list_webs", "session_search", "reader_guide",
         "present_state", "present_edit", "present_view", "analyze_deck",
+        "world_write", "fx_state", "fx_check", "fx_request",
     )
 
     private val skillBodies: Map<String, String> = mapOf(
@@ -44,6 +46,7 @@ class RulesTextTest {
         DeckSkills.DECK_PROFILE_NAME to DeckSkills.DECK_PROFILE,
         DeckSkills.SLIDE_DESIGN_NAME to DeckSkills.SLIDE_DESIGN,
         DeckSkills.RESTYLE_NAME to DeckSkills.RESTYLE,
+        EffectsSkills.AUTHOR_NAME to EffectsSkills.AUTHOR,
     )
 
     private val allTexts: List<String>
@@ -52,6 +55,7 @@ class RulesTextTest {
             DeckSkills.TOURNAMENT_PREP_DESCRIPTION, DeckSkills.FIRST_PRINCIPLES_DESCRIPTION, DeckSkills.ABOUT_YOU_DESCRIPTION,
             DeckSkills.DECK_FROM_PICTURE_DESCRIPTION, DeckSkills.REFACTOR_GUIDE_DESCRIPTION, DeckSkills.WRITE_GUIDE_DESCRIPTION,
             DeckSkills.DECK_PROFILE_DESCRIPTION, DeckSkills.SLIDE_DESIGN_DESCRIPTION, DeckSkills.RESTYLE_DESCRIPTION,
+            EffectsSkills.AUTHOR_DESCRIPTION,
         ) + com.kaiharimoto.mastertool.core.present.ai.RestyleBrief.SUGGESTIONS + AiDemo.scenes.flatMap { listOf(it.title, it.caption, it.person, it.reply) + it.activity }
 
     @Test
@@ -111,6 +115,16 @@ class RulesTextTest {
         // 1.0.72: Master UI is the default look; restyling changes the look and never the content.
         assertTrue("Master UI" in DeckSkills.DECK_PROFILE && "Master UI" in DeckSkills.SLIDE_DESIGN)
         assertTrue("never the words, the cards" in DeckSkills.RESTYLE && "`present_view`" in DeckSkills.RESTYLE)
+    }
+
+    @Test
+    fun effectsAreWrittenOnlyForAskedCardsAndNeverFromAnotherEnginesScripts() {
+        // Phase D step 2 (D.md §3.6): the asked list, the check, the words, and the licence.
+        val body = EffectsSkills.AUTHOR
+        listOf("`fx_request`", "`fx_check`", "`world_write`", "`card_info`", "`rulings`").forEach { assertTrue(it in body, it) }
+        assertTrue("Never write from another engine's scripts" in body)
+        assertTrue("Never copy the card's printed text into the file" in body)
+        assertTrue("only they accept one" in body)
     }
 
     @Test

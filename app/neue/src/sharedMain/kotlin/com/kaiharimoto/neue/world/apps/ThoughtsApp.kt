@@ -149,7 +149,7 @@ fun ThoughtsApp(h: NeueHolders, modifier: Modifier = Modifier) {
         Box(modifier.fillMaxSize()) { Help("Ai is off. Turn it on in Settings to watch it think here.", Modifier.padding(16.dp)) }
         return
     }
-    val session = ai.session?.takeIf { it.mode == AiSession.MODE_WORLD }
+    val session = ai.session?.takeIf { it.mode in AiSession.WORLD_MODES }
     var filter by remember { mutableStateOf(ThoughtsFilter.ALL) }
     val rows = remember(session?.turns, filter) { thoughts(session?.turns.orEmpty(), filter) }
     val opened = remember(session?.id) { mutableStateMapOf<String, Boolean>() }

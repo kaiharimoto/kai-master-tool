@@ -277,6 +277,17 @@ object PromptBuilder {
                     "before you take it: they are watching. Do not change their decks in this conversation.",
             )
         }
+        if (s.mode == "effects") {
+            appendLine()
+            appendLine("## This conversation writes effects as code for the cards the person asked for")
+            appendLine(
+                "Read the skill effects-author with skill_view first and follow it. Write only the cards on the asked list, one at a " +
+                    "time in the order of the request: world_write lib/effects/<passcode>.js with fx.*, then fx_check, fixing from what it " +
+                    "says until it compiles with no errors. Write from the card's meaning and the rules, never from another engine's " +
+                    "scripts and never copying the card's text into the file. Offer any other card with fx_request and wait for the " +
+                    "person's Write. Say in a line what each card does before you write it: they are watching. Do not change their decks.",
+            )
+        }
         if (s.mode == "rubric") {
             appendLine()
             appendLine("## This conversation is Shootout's interview: how the person judges a matchup")

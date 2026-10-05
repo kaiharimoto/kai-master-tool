@@ -3,6 +3,8 @@ package com.kaiharimoto.neue.ai
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.composed
+import com.kaiharimoto.mastertool.core.duel.effects.FxOffer
+import com.kaiharimoto.mastertool.core.duel.effects.FxOffers
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
@@ -111,6 +113,9 @@ private sealed interface Entry {
     data class Line(val summary: String, val isError: Boolean) : Entry
     data class Thought(val text: String) : Entry
 
+    /** Ai's `fx_request` (Phase D step 2): a request card with the cards, the cost, Write and Not now. */
+    data class Request(val offer: FxOffer) : Entry
+
     /** Where the summary begins (1.0.56): the turns above it are sent as the summary, not as themselves. */
     data class Summarized(val summary: String, val carried: Boolean) : Entry
 }
@@ -127,7 +132,10 @@ private fun rows(
     turns.forEachIndexed { i, turn ->
         if (i == summarized && summarized > 0 && summary.isNotBlank()) add(Entry.Summarized(summary, carried = false))
         when {
-            turn.role == Role.USER && turn.isToolResults -> turn.toolResults.forEach { add(Entry.Line(it.summary.ifBlank { it.name }, it.isError)) }
+            turn.role == Role.USER && turn.isToolResults -> turn.toolResults.forEach { r ->
+                val offer = if (r.name == "fx_request" && !r.isError) FxOffers.read(r.content) else null
+                add(if (offer != null) Entry.Request(offer) else Entry.Line(r.summary.ifBlank { r.name }, r.isError))
+            }
             turn.role == Role.USER -> if (turn.text.isNotBlank() || turn.images.isNotEmpty()) add(Entry.Person(turn.text, turn.images))
             else -> {
                 turn.parts.filterIsInstance<Part.Reasoning>().forEach { add(Entry.Thought(it.text)) }
@@ -196,6 +204,7 @@ fun Transcript(ai: AiState, modifier: Modifier = Modifier) {
                     }
                     is Entry.Line -> ActivityLine(row.summary, row.isError)
                     is Entry.Thought -> ReasoningView(ai, row.text, live = false, opened)
+                    is Entry.Request -> FxRequestCard(ai, row.offer)
                     is Entry.Summarized -> SummaryMark(row.summary, row.carried)
                 }
             }
@@ -846,7 +855,7 @@ fun SessionList(ai: AiState, modifier: Modifier = Modifier) {
                     Mono(
                         java.time.Instant.ofEpochMilli(s.updatedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString() +
                             (if (s.mode == AiSession.MODE_TUNE) " · Fine Tuning" else "") +
-                            (if (s.mode == AiSession.MODE_DUEL) " · Duel" else if (s.mode == AiSession.MODE_WORLD) " · World" else if (s.mode == AiSession.MODE_MATCH) " · Ai vs Ai" else "") +
+                            (if (s.mode == AiSession.MODE_DUEL) " · Duel" else if (s.mode == AiSession.MODE_WORLD) " · World" else if (s.mode == AiSession.MODE_EFFECTS) " · Effects" else if (s.mode == AiSession.MODE_MATCH) " · Ai vs Ai" else "") +
                             " · ${s.messages} messages",
                         color = c.ink45,
                     )

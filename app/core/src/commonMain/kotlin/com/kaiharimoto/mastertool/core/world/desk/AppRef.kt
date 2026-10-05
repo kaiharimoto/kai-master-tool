@@ -1,7 +1,7 @@
 package com.kaiharimoto.mastertool.core.world.desk
 
 /**
- * The seven apps every world has (`docs/world/DESKTOP.md` §3), in the order their `Alt` keys number them. [id] is the
+ * The eight apps every world has (the Effects app joined in Phase D step 2) (`docs/world/DESKTOP.md` §3), in the order their `Alt` keys number them. [id] is the
  * word `desk.json` keeps; [pinned] says whether a fresh device pins it to the taskbar (§2.2: the five 1.0.97 showed at
  * once); [comfortW] and [comfortH] are the size it opens at, as fractions of the work area (§2.3).
  */
@@ -13,6 +13,9 @@ enum class BuiltInApp(val id: String, val title: String, val alt: Int, val pinne
     THOUGHTS("thoughts", "Thoughts", 5, true, 0.32, 0.86),
     INSTRUMENTS("instruments", "Instruments", 6, false, 0.44, 0.66),
     LIBRARY("library", "Library", 7, false, 0.64, 0.86),
+
+    /** Phase D step 2 (`docs/phases/D.md` §3.5): the library of written effects, asking for more, and what each cost. */
+    EFFECTS("effects", "Effects", 8, false, 0.56, 0.82),
     ;
 
     val ref: AppRef.BuiltIn get() = AppRef.BuiltIn(this)

@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.duel.effects.FxFrom
+import com.kaiharimoto.neue.effects.CardEffects
+import com.kaiharimoto.neue.effects.LocalEffectsHolders
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -118,6 +121,7 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                     CardTags(card, state)
                     HRule()
                     Copies(card, state)
+                    ViewerEffects(card, neue)
                 }
                 ScrollbarFor(scroll)
             }
@@ -165,6 +169,7 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                     CardTags(card, state)
                     HRule()
                     Copies(card, state)
+                    ViewerEffects(card, neue)
                     HRule()
                     Micro("Do", color = c.ink70)
                     MenuColumn(entriesFor(viewing, state, neue), onDismiss = close, modifier = Modifier.fillMaxWidth())
@@ -172,6 +177,18 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                 ScrollbarFor(scroll)
             }
         }
+    }
+}
+
+/** The card's effect as code (Phase D step 2): its words, or Write its effect — while Ai is on, where the shell gives the holders. */
+@Composable
+private fun ViewerEffects(card: com.kaiharimoto.mastertool.core.model.Card, neue: NeueState) {
+    val h = LocalEffectsHolders.current ?: return
+    if (!neue.prefs.ai.enabled) return
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        HRule()
+        Micro("Effect as code", color = Mu.colors.ink70)
+        CardEffects(h, card, FxFrom.VIEWER)
     }
 }
 

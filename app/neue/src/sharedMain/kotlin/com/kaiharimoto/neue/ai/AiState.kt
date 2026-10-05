@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.ai.AgentEvent
 import com.kaiharimoto.mastertool.core.ai.AgentLoop
+import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.mastertool.core.ai.AiTools
 import com.kaiharimoto.mastertool.core.ai.ChatTurn
@@ -513,6 +514,8 @@ class AiState(internal val h: NeueHolders) {
             AiSession.MODE_TUNE, AiSession.MODE_PROFILE -> intensity.questions * 3 + 8
             // An experiment is write, run, read, fix, show — several rounds a question (1.0.97).
             AiSession.MODE_WORLD -> AgentLoop.MAX_STEPS * 2
+            // Writing effects (Phase D step 2): read, write, check and repair, a card at a time.
+            AiSession.MODE_EFFECTS -> AgentLoop.MAX_STEPS * 3
             else -> AgentLoop.MAX_STEPS
         }
         val budget = if (model.runsOwnLoop) 0 else budgetFor(connection)
@@ -569,7 +572,11 @@ class AiState(internal val h: NeueHolders) {
                             session?.let { commit(it.copy(turns = it.turns + turn, updatedAt = System.currentTimeMillis())) }
                         }
                         // What the model read this round is how full the window is now (1.0.56).
-                        is AgentEvent.Round -> if (event.measured) session?.let { commit(it.copy(context = event.usage.read)) }
+                        is AgentEvent.Round -> {
+                            // Every round's tokens, all told: what a written effect cost is read off this (Phase D step 2).
+                            spent += event.usage
+                            if (event.measured) session?.let { commit(it.copy(context = event.usage.read)) }
+                        }
                         is AgentEvent.Done -> session?.let { commit(it.copy(usage = it.usage + event.usage)) }
                         is AgentEvent.Failed -> problem = (
                             // A model that cannot see, sent a picture, says so in its own words; say it plainly.
@@ -647,6 +654,8 @@ class AiState(internal val h: NeueHolders) {
         activity = emptyList()
         // Nobody is working in Ai World now (1.0.97): its "Ai is here" comes off.
         if (h.worldStarted) h.world.leave()
+        // An effects session's run is over: the cards it never reached stay asked, not started (Phase D step 2).
+        if (h.effectsStarted) h.effects.ended(runSession)
         working = null
         tool = null
         running = false
@@ -706,6 +715,12 @@ class AiState(internal val h: NeueHolders) {
         j.cancel()
         finish(runToken, session?.id.orEmpty())
     }
+
+    /**
+     * Every model round's tokens since the app started, all conversations together (Phase D step 2): an effects session
+     * reads what a card cost as the difference between two of these (`FxMeter`). Never stored.
+     */
+    internal var spent: Usage = Usage()
 
     /** A new conversation, with the memory as it stands now. */
     fun newChat(mode: String = AiSession.MODE_CHAT) {

@@ -203,6 +203,9 @@ class SyncTest {
         listOf("fxcache/verdicts.json", "fxcache/900000001.json", "fxcache/runs/d1.json").forEach { assertNull(InboundPath.safe(it), it) }
         assertTrue(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs("900000001.review.json"))
         assertTrue(!com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs("900000001.verdict.json"))
+        // The asked list (FxAsks) travels with the library, newer wins: an ask made on the tablet is an ask on the desk.
+        assertEquals("effects/asked.json", InboundPath.safe("effects/asked.json"))
+        assertTrue(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.syncs(com.kaiharimoto.mastertool.core.duel.effects.FxPaths.ASKED))
     }
 
     @Test

@@ -81,6 +81,7 @@ private fun altKey(ref: AppRef): DeskAction? = when ((ref as? AppRef.BuiltIn)?.k
     BuiltInApp.THOUGHTS -> DeskAction.WORLD_APP_THOUGHTS
     BuiltInApp.INSTRUMENTS -> DeskAction.WORLD_APP_INSTRUMENTS
     BuiltInApp.LIBRARY -> DeskAction.WORLD_APP_LIBRARY
+    BuiltInApp.EFFECTS -> DeskAction.WORLD_APP_EFFECTS
     null -> null
 }
 

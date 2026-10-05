@@ -131,6 +131,7 @@ fun NeueHolders.commands(query: String): List<Command> {
                 cmd("World", "Thoughts", DeskAction.WORLD_APP_THOUGHTS),
                 cmd("World", "Instruments", DeskAction.WORLD_APP_INSTRUMENTS),
                 cmd("World", "Library: everything Ai knows", DeskAction.WORLD_APP_LIBRARY),
+                cmd("World", "Effects: the written effects, and asking for more", DeskAction.WORLD_APP_EFFECTS),
                 cmd("World", "The next window", DeskAction.WORLD_NEXT_WINDOW),
                 cmd("World", "Close the tab, else the window", DeskAction.WORLD_CLOSE),
                 cmd("World", "Minimise the window", DeskAction.WORLD_MINIMISE),

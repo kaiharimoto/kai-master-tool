@@ -190,7 +190,7 @@ fun NeueHolders.run(action: DeskAction) {
         // Ai World's own (1.0.97): from its keys, the palette and the menus alike.
         DeskAction.WORLD_RUN, DeskAction.WORLD_STOP, DeskAction.WORLD_FOLLOW, DeskAction.WORLD_NEW,
         DeskAction.WORLD_APP_FILES, DeskAction.WORLD_APP_EDITOR, DeskAction.WORLD_APP_TERMINAL, DeskAction.WORLD_APP_BROWSER,
-        DeskAction.WORLD_APP_THOUGHTS, DeskAction.WORLD_APP_INSTRUMENTS, DeskAction.WORLD_APP_LIBRARY, DeskAction.WORLD_LAUNCHER,
+        DeskAction.WORLD_APP_THOUGHTS, DeskAction.WORLD_APP_INSTRUMENTS, DeskAction.WORLD_APP_LIBRARY, DeskAction.WORLD_APP_EFFECTS, DeskAction.WORLD_LAUNCHER,
         DeskAction.WORLD_NEXT_WINDOW, DeskAction.WORLD_PREVIOUS_WINDOW, DeskAction.WORLD_CLOSE, DeskAction.WORLD_MINIMISE,
         DeskAction.WORLD_SNAP_UP, DeskAction.WORLD_SNAP_LEFT, DeskAction.WORLD_SNAP_RIGHT, DeskAction.WORLD_SNAP_DOWN,
         DeskAction.WORLD_TAB_NEW, DeskAction.WORLD_TAB_ADDRESS, DeskAction.WORLD_TAB_NEXT, DeskAction.WORLD_TAB_PREVIOUS,

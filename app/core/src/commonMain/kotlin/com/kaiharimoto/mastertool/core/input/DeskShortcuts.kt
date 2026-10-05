@@ -337,6 +337,8 @@ enum class DeskAction {
     WORLD_APP_THOUGHTS,
     WORLD_APP_INSTRUMENTS,
     WORLD_APP_LIBRARY,
+    /** The Effects app (Phase D step 2): the library of written effects, asking, and what each cost. */
+    WORLD_APP_EFFECTS,
     /** The launcher. */
     WORLD_LAUNCHER,
     /** The next or previous window; held, the strip of open windows. */
@@ -727,6 +729,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("5", alt = true), DeskAction.WORLD_APP_THOUGHTS, DeskScope.WORLD, "Thoughts", allowedInTextInput = true),
         DeskShortcut(KeyChord("6", alt = true), DeskAction.WORLD_APP_INSTRUMENTS, DeskScope.WORLD, "Instruments", allowedInTextInput = true),
         DeskShortcut(KeyChord("7", alt = true), DeskAction.WORLD_APP_LIBRARY, DeskScope.WORLD, "Library: everything Ai knows", allowedInTextInput = true),
+        DeskShortcut(KeyChord("8", alt = true), DeskAction.WORLD_APP_EFFECTS, DeskScope.WORLD, "Effects: the written effects, and asking for more", allowedInTextInput = true),
         DeskShortcut(KeyChord("0", alt = true), DeskAction.WORLD_LAUNCHER, DeskScope.WORLD, "The launcher: apps and worlds", allowedInTextInput = true),
         DeskShortcut(ctrl("backquote"), DeskAction.WORLD_NEXT_WINDOW, DeskScope.WORLD, "The next window; held, every open window", allowedInTextInput = true),
         DeskShortcut(ctrl("backquote", shift = true), DeskAction.WORLD_PREVIOUS_WINDOW, DeskScope.WORLD, "The previous window", allowedInTextInput = true),

@@ -904,6 +904,8 @@ object AiTools {
         AiSession.MODE_PROFILE -> DECK_CHANGING
         // Shootout (Phase S stage 3): the rubric interview and a hand judged change no deck, and stay on the matchup.
         AiSession.MODE_RUBRIC, AiSession.MODE_SHOOTOUT -> DECK_CHANGING + SWITCHING_DECKS
+        // Writing effects (Phase D step 2): the asked cards' scripts and nothing else — no deck changes, no other deck opened.
+        AiSession.MODE_EFFECTS -> DECK_CHANGING + SWITCHING_DECKS
         else -> emptySet()
     }
 

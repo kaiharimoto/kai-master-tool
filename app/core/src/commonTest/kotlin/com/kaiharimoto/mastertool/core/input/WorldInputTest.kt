@@ -35,6 +35,8 @@ class WorldInputTest {
         val apps = listOf(
             DeskAction.WORLD_APP_FILES, DeskAction.WORLD_APP_EDITOR, DeskAction.WORLD_APP_TERMINAL, DeskAction.WORLD_APP_BROWSER,
             DeskAction.WORLD_APP_THOUGHTS, DeskAction.WORLD_APP_INSTRUMENTS, DeskAction.WORLD_APP_LIBRARY,
+            // Phase D step 2: the Effects app.
+            DeskAction.WORLD_APP_EFFECTS,
         )
         apps.forEachIndexed { i, a -> assertEquals(a, DeskShortcuts.resolve(KeyChord("${i + 1}", alt = true), world), "Alt ${i + 1}") }
         // And while typing in the Editor, too.

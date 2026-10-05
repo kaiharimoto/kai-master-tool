@@ -3,7 +3,17 @@ package com.kaiharimoto.neue.effects
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.providers.Prices
+import com.kaiharimoto.mastertool.core.duel.effects.FxAsked
+import com.kaiharimoto.mastertool.core.duel.effects.FxAsks
 import com.kaiharimoto.mastertool.core.duel.effects.FxCheck
+import com.kaiharimoto.mastertool.core.duel.effects.FxCost
+import com.kaiharimoto.mastertool.core.duel.effects.FxMeter
+import com.kaiharimoto.mastertool.core.duel.effects.FxOffer
+import com.kaiharimoto.mastertool.core.duel.effects.FxOffers
+import com.kaiharimoto.mastertool.core.duel.effects.FxRequest
+import com.kaiharimoto.mastertool.core.duel.effects.FxSuggest
 import com.kaiharimoto.mastertool.core.duel.effects.FxCodec
 import com.kaiharimoto.mastertool.core.duel.effects.FxCompile
 import com.kaiharimoto.mastertool.core.duel.effects.FxEntry
@@ -57,11 +67,18 @@ class Effects(val dir: File, val cacheDir: File) {
     var onChange: () -> Unit = {}
 
     /**
-     * Why [by] may not write [card]'s source ([rel] under `lib/effects/`) now, or null when they may — the seam for the
-     * asked list (D.md §3.1, `FxAsks`: Ai's write to a card nobody asked for is refused). Null [card]: a helper (`_x.js`).
-     * Unset at step 2, so anyone may write any card: the asking agent sets it.
+     * Why [by] may not write [card]'s source ([rel] under `lib/effects/`) now, or null when they may — the asked list
+     * (D.md §3.1, [FxAsks.gate]): Ai's write to a card nobody asked for is refused; the person's own saves need no list.
+     * Null [card]: a helper (`_x.js`), Ai's only while something is asked.
      */
-    var gate: (card: Int?, rel: String, by: String) -> String? = { _, _, _ -> null }
+    var gate: (card: Int?, rel: String, by: String) -> String? = { card, _, by -> FxAsks.gate(asked, card, by) }
+
+    /** The asked list (`<data>/effects/asked.json`, [FxAsks]): what the person asked to have written, and what it cost. */
+    var asked by mutableStateOf(FxAsked())
+        private set
+
+    /** Request cards the person answered Not now, by id: the chat folds them to a line. Kept while the app runs. */
+    var declined by mutableStateOf<Set<String>>(emptySet())
 
     /** Every card the library holds, by canonical passcode: what the Effects pane lists. */
     var entries by mutableStateOf<Map<Int, FxEntry>>(emptyMap())
@@ -116,6 +133,9 @@ class Effects(val dir: File, val cacheDir: File) {
                 withContext(Dispatchers.Main) { working = null }
             }
         }
+        // The asked list travels with the library (a sync or a restore may bring a newer one).
+        val list = withContext(Dispatchers.IO) { FxAsks.decode(file(FxPaths.ASKED).takeIf { it.isFile }?.let { f -> runCatching { f.readText() }.getOrNull() }) }
+        withContext(Dispatchers.Main) { asked = list }
         publish(read.first, read.second, index)
     }
 
@@ -330,6 +350,87 @@ class Effects(val dir: File, val cacheDir: File) {
         }
     }
 
+    // ---- Asking (D.md §3.1) --------------------------------------------------------------------------------------------
+
+    /** The session writing what a go asked for: its request, the meter of its rounds, and what they are priced at. */
+    class Authoring(val session: String, val request: FxRequest, val meter: FxMeter, val model: String?, val price: Prices.Price?)
+
+    /** The effects session at work now, or null (`AiSession.MODE_EFFECTS`). On the main thread. */
+    var authoring: Authoring? = null
+        private set
+
+    /** Every printing of [codes] as its card, in order, once each. */
+    fun canonicalAll(codes: List<Int>): List<Int> {
+        val canon = canonical(pool())
+        return codes.map(canon).distinct()
+    }
+
+    /** What `fx_request` and every go offer for [cards]: sorted, priced at [model]'s own figure ([FxCost.perCard]) and [price]. */
+    fun offer(id: String, what: String, deck: String?, cards: List<Int>, model: String?, price: Prices.Price?): FxOffer =
+        FxOffers.of(id, what, deck, cards, canonical(pool()), ::status, FxCost.perCard(asked, model), price)
+
+    /**
+     * **The person's go** (D.md §3.1): [request]'s cards put on the asked list and kept, or null when [by] is not the person or
+     * nothing is to write ([FxAsks.go]). On the main thread.
+     */
+    fun go(request: FxRequest, by: String): FxRequest? {
+        val r = request.copy(cards = canonicalAll(request.cards))
+        val next = FxAsks.go(asked, r, by) ?: return null
+        asked = next
+        revision++
+        saveAsked()
+        return r
+    }
+
+    /** A session begins writing [request]: its rounds from here are what the cards cost (measured from [spent]). */
+    fun begin(session: String, request: FxRequest, spent: Usage, model: String?, price: Prices.Price?) {
+        authoring?.let { ended(it.session) }
+        authoring = Authoring(session, request, FxMeter(spent), model, price)
+    }
+
+    /** Ai began [card] (its first write). */
+    private fun began(card: Int) {
+        if (!FxAsks.asked(asked, card)) return
+        val next = FxAsks.started(asked, card)
+        if (next != asked) {
+            asked = next
+            saveAsked()
+        }
+    }
+
+    /**
+     * [card] was checked in [session] (`fx_check`): the rounds since the last check, at [spent] now, are what it cost, added to
+     * its row in the asked list. Nothing outside an effects session, nor for a card that was not asked.
+     */
+    fun checked(card: Int, session: String?, spent: Usage) {
+        val a = authoring?.takeIf { it.session == session } ?: return
+        val canon = canonical(pool())(card)
+        if (!FxAsks.asked(asked, canon)) return
+        asked = FxAsks.spent(asked, canon, a.meter.since(spent), a.price, a.model)
+        revision++
+        saveAsked()
+    }
+
+    /** The effects session [session]'s run ended: the cards it never reached stay asked, marked not started (D.md §3.6). */
+    fun ended(session: String) {
+        val a = authoring?.takeIf { it.session == session } ?: return
+        authoring = null
+        val next = FxAsks.stopped(asked, a.request.id)
+        if (next != asked) {
+            asked = next
+            saveAsked()
+        }
+    }
+
+    /** What to write first for a deck ([FxSuggest]): never a card already written. */
+    fun suggest(main: List<Int>, extra: List<Int>, combos: List<Collection<Int>>, engine: Collection<Int>, limit: Int = 12): List<FxSuggest.Pick> =
+        FxSuggest.of(main, extra, combos, engine, ::status, canonical(pool()), limit)
+
+    private fun saveAsked() {
+        val text = FxAsks.encode(asked)
+        scope.launch(Dispatchers.IO) { work.withLock { write(file(FxPaths.ASKED), text) } }
+    }
+
     // ---- The mount ------------------------------------------------------------------------------------------------------
 
     /** The library as every world sees it, at `lib/effects/` (D.md §3.3). */
@@ -356,7 +457,10 @@ class Effects(val dir: File, val cacheDir: File) {
             val card = FxPaths.sourceOf(rel)
             return when {
                 card != null && deleted -> { removed(card); "Removed $card's script from the library." }
-                card != null -> compile(card, by).words
+                card != null -> {
+                    if (by == WorldEvent.AI) withContext(Dispatchers.Main) { began(canonical(pool())(card)) }
+                    compile(card, by).words
+                }
                 FxPaths.helper(rel) -> helperChanged(rel)
                 else -> null
             }

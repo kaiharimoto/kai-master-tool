@@ -32,6 +32,7 @@ import com.kaiharimoto.mastertool.core.prep.TestGame
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.ai.AiState
+import com.kaiharimoto.neue.effects.ComboWriteButton
 import com.kaiharimoto.neue.ai.guideForPrompt
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -385,6 +386,8 @@ internal fun DuelAiDialog(h: NeueHolders) {
                         duels.combosOpen = false
                         scope.launch { neue.note = Note("${combo.name}: ${duels.playOut(combo.steps, seat, d.aiPace.toLong().coerceAtLeast(250)).text.lineSequence().first()}") }
                     }, size = BtnSize.SM, enabled = g != null && missing.isEmpty() && !duels.playing, reason = if (missing.isNotEmpty()) "Not in hand: ${missing.joinToString()}" else null)
+                    // Phase D step 2: the person's go for the cards this line uses.
+                    ComboWriteButton(h, combo, deckId) { duels.combosOpen = false }
                     MuButton("Delete", {
                         scope.launch {
                             val next = book.copy(combos = book.combos - combo)

@@ -8,7 +8,10 @@ import com.kaiharimoto.mastertool.core.data.PoolRecord
 import com.kaiharimoto.mastertool.core.duel.DuelCodec
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
+import com.kaiharimoto.mastertool.core.duel.effects.FxAsked
+import com.kaiharimoto.mastertool.core.duel.effects.FxAsks
 import com.kaiharimoto.mastertool.core.duel.effects.FxCodec
+import com.kaiharimoto.mastertool.core.duel.effects.FxRequest
 import com.kaiharimoto.mastertool.core.duel.effects.FxRead
 import com.kaiharimoto.mastertool.core.duel.effects.FxReviews
 import com.kaiharimoto.mastertool.core.duel.effects.FxShelf
@@ -700,6 +703,29 @@ class OldDataTest {
         val later = assertNotNull(FxReviews.decode("""{"version":2,"card":900000001,"accepted":[{"key":"lint-opt-copy","why":"x","at":6,"by":"person"}],"seen":3}"""))
         assertEquals(setOf("lint-opt-copy"), later.keys)
         assertEquals(null, FxReviews.decode("not json"))
+    }
+
+    @Test
+    fun theAskedListAsStep2WritesItReadsAndALaterOnesKeysAreSkipped() {
+        // Phase D step 2: `<data>/effects/asked.json` (FxAsks) — each card asked for, when, from where, its request, and what
+        // writing it cost; the requests with their estimates.
+        val v1 = """{"asks":[{"card":900000201,"at":5,"from":"viewer","request":"r1","what":"Example Herald's effect","deck":"d1",
+            "state":"written","tokens":31000,"usd":0.24,"model":"anthropic/claude-sonnet-5-5"},{"card":900000203,"at":6,"from":"pane",
+            "request":"r2"}],"requests":[{"id":"r1","at":5,"from":"viewer","what":"Example Herald's effect","deck":"d1",
+            "cards":[900000201],"estimateTokens":30000,"estimateUsd":0.08}]}"""
+        val doc = FxAsks.decode(v1)
+        assertEquals(listOf(900_000_201, 900_000_203), doc.asks.map { it.card })
+        assertEquals(31_000L, doc.of(900_000_201)?.tokens)
+        assertEquals(FxAsks.ASKED, doc.of(900_000_203)?.state, "a state left out is asked")
+        assertEquals(null, doc.of(900_000_203)?.usd)
+        assertEquals(30_000L, doc.requests.single().estimateTokens)
+        // A later build's keys (verdicts, a version 2) are skipped and the asks still read.
+        val later = FxAsks.decode("""{"version":2,"asks":[{"card":900000201,"state":"verified-later","by":"person","seen":[1]}],"pinned":[1]}""")
+        assertEquals(900_000_201, later.asks.single().card)
+        assertEquals(2, later.version)
+        // A go on a later document keeps its version.
+        assertEquals(2, FxAsks.go(later, FxRequest("r3", cards = listOf(900_000_205)), FxReviews.PERSON)?.version)
+        assertEquals(FxAsked(), FxAsks.decode("{"))
     }
 
     @Test

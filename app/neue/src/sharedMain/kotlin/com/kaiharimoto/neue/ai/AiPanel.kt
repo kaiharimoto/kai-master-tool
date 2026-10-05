@@ -123,6 +123,7 @@ private fun Head(ai: AiState, phone: Boolean) {
                 ai.writing -> "Reader's guide · " + provider.label
                 ai.session?.mode == AiSession.MODE_DUEL -> "At the duel table · " + provider.label
                 ai.session?.mode == AiSession.MODE_WORLD -> "In Ai World · " + provider.label
+                ai.session?.mode == AiSession.MODE_EFFECTS -> "Writing effects · " + provider.label
                 ai.session?.mode == AiSession.MODE_RUBRIC -> "Shootout interview · " + provider.label
                 ai.tuning -> "Fine Tuning · " + when (ai.session?.mode) {
                     AiSession.MODE_STUDY -> "studying"

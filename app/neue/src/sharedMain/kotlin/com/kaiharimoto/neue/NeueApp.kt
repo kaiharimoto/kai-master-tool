@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.neue.effects.LocalEffectsHolders
 import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.neue.builder.legalityRules
 import com.kaiharimoto.neue.builder.eventForRules
@@ -707,7 +708,7 @@ private fun NeueWindowContent(h: NeueHolders) {
         neue.stepArt(card, by)
         // A finger stepping a card's art feels it turn over (touch swarm, rec 13).
         neue.actingBy(finger = neue.touchFirst) { neue.felt(DeskEvent.ART_STEPPED) }
-    }, LocalCustomArt provides h.customArt) {
+    }, LocalCustomArt provides h.customArt, LocalEffectsHolders provides h) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK, high = neue.prefs.contrast == NeuePreferences.CONTRAST_HIGH) {
             ProvideTextMenus {
                 Shell(h)

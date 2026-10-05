@@ -208,6 +208,7 @@ private fun appKey(action: DeskAction): BuiltInApp? = when (action) {
     DeskAction.WORLD_APP_THOUGHTS -> BuiltInApp.THOUGHTS
     DeskAction.WORLD_APP_INSTRUMENTS -> BuiltInApp.INSTRUMENTS
     DeskAction.WORLD_APP_LIBRARY -> BuiltInApp.LIBRARY
+    DeskAction.WORLD_APP_EFFECTS -> BuiltInApp.EFFECTS
     else -> null
 }
 

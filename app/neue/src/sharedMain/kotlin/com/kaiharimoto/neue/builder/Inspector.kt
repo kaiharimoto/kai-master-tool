@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.mastertool.core.duel.effects.FxFrom
+import com.kaiharimoto.neue.effects.CardEffects
+import com.kaiharimoto.neue.effects.LocalEffectsHolders
 import com.kaiharimoto.mastertool.core.deck.DeckRules
 import com.kaiharimoto.mastertool.core.input.DeskWords
 import com.kaiharimoto.mastertool.core.input.TouchMetrics
@@ -193,6 +196,9 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
             Column(Modifier.zenQuiet().padding(top = 20.dp)) {
                 Fold("Details", "details", neue) { CardTags(card, state) }
                 Fold("In the deck", "deck", neue) { Copies(card, state) }
+                // Its effect written as code (Phase D step 2): the words, or Write its effect — while Ai is on.
+                val holders = LocalEffectsHolders.current
+                if (holders != null && neue.prefs.ai.enabled) Fold("Effect as code", "effects", neue) { CardEffects(holders, card, FxFrom.INSPECTOR) }
                 // The artwork last (1.0.42, kai: "not vital to deckbuilding"): which picture, and your own.
                 Fold("Artwork", "art", neue) { ArtSwitch(card, neue) }
             }

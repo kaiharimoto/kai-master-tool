@@ -820,6 +820,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   (`Ledger`), marked stale when the deck changes and checked again (`recheckGuide`). The fact-check's "ok" is held to what
   it looked up (`FactCheck.ground`). Rulings read Konami's OCG Q&A from YGOrganization first (`YgoOrg`), always with the
   OCG caveat, then Yugipedia. A new place Ai writes numbers people rely on goes through the same check.
+- **Effects are written only for cards the person asked for** (Phase D step 2, `D.md` §3.1, `NEUE.md` §4u): the ask is always
+  the person's click (Write its effect, Write these in the Effects app `Alt 8`, Write its cards, Write on `fx_request`'s card —
+  `fx_request` only offers), kept in `<data>/effects/asked.json` (`FxAsks`; `go` refuses Ai, `gate` refuses Ai's write to an
+  unasked card), and starts `AiSession.MODE_EFFECTS`; the cost is said before (`FxCost`, `Prices`) and kept after. A new place
+  that asks goes through `NeueHolders.go`.
 - **Card truth** (1.1.0, Phase B, `docs/phases/B.md`, `NEUE.md` §4s): **count copies by card, never by passcode** —
   `CardIdentity` (an alternate artwork is the same card); a new count of copies or "does the deck hold X" goes through it.
   **Legality is region and date too** (`Legality`, from each card's `formats`/`tcgDate`/`ocgDate`, schema 4); missing

@@ -4683,8 +4683,22 @@ it is refused). Every write is checked (`FxCheck` and the text's `FxLints`) and 
 - **Sync and backups** carry `effects/` (newer wins; `FxPaths.syncs`); `<data>/fxcache/` is a device folder
   (`InboundPath.DEVICE_FOLDERS`): verdicts never travel, and a script synced in is checked again here.
 - **Ai**: `fx_state` and `fx_check` (`AiEffects`). Only the person accepts a warning (`FxReviews.accept` refuses Ai).
-- Left for the rest of step 2: the Effects pane, Write its effect, asking (`FxAsks`, `fx_request`, `Effects.gate`), the cost
-  and the table's Shortcut surfaces (D.md §10, step 2, "As landed").
+- **Asking** (kai: "effects as code should be done by the Ai for cards the user wants"): Ai writes a card only when the person
+  asked, and **the ask is always the person's click** — **Write its effect** in the card viewer and both inspectors
+  (`CardEffects`), **Write these** in the Effects app, **Write its cards** on a combo's row, **Write** on Ai's request card in
+  the chat (`fx_request` only offers: `FxRequestCard`). A go puts the cards on the asked list (`FxAsks`,
+  `<data>/effects/asked.json`, synced and backed up; `FxAsks.go` refuses Ai) and starts a session in `AiSession.MODE_EFFECTS`
+  with the `effects-author` skill (`NeueHolders.writeEffects`/`go`). `Effects.gate` (`FxAsks.gate`) refuses Ai's
+  `world_write` to a card not on the list.
+- **The cost, before and after** (`FxCost`): the estimate at the connection's own figure a card (what cards written on it
+  cost), else 30,000 assumed and said so, priced by `Prices`; an unpriced connection says `Prices.UNKNOWN`. After, each
+  `fx_check` in the session adds the rounds since the last to the card (`AiState.spent`, `FxMeter`, `Effects.checked`).
+- **What to write first** is `FxSuggest`: the combos' cards, the engine's groups, the Main Deck by copies, repairs — never a
+  written card. A card written once is **reused at no cost** by every deck, in any printing.
+- **The Effects app** (`BuiltInApp.EFFECTS`, `Alt 8`, `neue/effects/EffectsApp.kt`): the open deck's coverage and choices
+  with Write these, then the library — status, words, warnings with Accept and why (the person's only), Withdraw, what each
+  cost, Ask Ai. `tools/shoot.sh --effects=pane|request|viewer`.
+- Left for step 2: the table's Shortcut surfaces (agent (e)); step 3 brings tests, verdicts and the guide's coverage line.
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

@@ -75,6 +75,9 @@ object WorldIcons {
     )
     val LIBRARY = Icon("library", listOf(box(5, 8, 5, 18), fill(12, 5, 5, 21), closed(19, 9, 23, 8, 28, 25, 24, 26), p(3, 28, 29, 28)))
 
+    /** A card (the card's own 59 : 86, near enough) with braces inside: a card's effect, written as code. */
+    val EFFECTS = Icon("effects", listOf(box(7, 4, 18, 24), p(14, 10, 12, 12, 12, 15, 10, 16, 12, 17, 12, 20, 14, 22), p(18, 10, 20, 12, 20, 15, 22, 16, 20, 17, 20, 20, 18, 22)))
+
     // ---- The desktop's own ---------------------------------------------------------------------------------------
 
     /** Four squares, the first filled. The three open ones' centre lines sit a unit in, so all four read 8 × 8. */
@@ -182,7 +185,7 @@ object WorldIcons {
 
     /** Every distinct icon, for the test and the studio's icon sheet. */
     val ALL: List<Icon> = listOf(
-        FILES, EDITOR, TERMINAL, BROWSER, THOUGHTS, INSTRUMENTS, LIBRARY,
+        FILES, EDITOR, TERMINAL, BROWSER, THOUGHTS, INSTRUMENTS, LIBRARY, EFFECTS,
         LAUNCHER, NOTICES, NEW_WORLD,
         PAGE_MARKDOWN, PAGE_CHART, PAGE_GRAPH, PAGE_FLOW, PAGE_TABLE, PAGE_STAT, PAGE_CARDS, PAGE_BOARD, PAGE_LINE, PAGE_IMAGE, PAGE_HOME,
         GLYPH_DICE, GLYPH_HAND, GLYPH_DECK, GLYPH_TALLY, GLYPH_VERSUS, GLYPH_TIMER, GLYPH_CHECK, GLYPH_SEARCH, GLYPH_NOTE,
@@ -197,6 +200,7 @@ object WorldIcons {
         BuiltInApp.THOUGHTS -> THOUGHTS
         BuiltInApp.INSTRUMENTS -> INSTRUMENTS
         BuiltInApp.LIBRARY -> LIBRARY
+        BuiltInApp.EFFECTS -> EFFECTS
     }
 
     /** A page's tab glyph; a kind from a newer build (null) draws as markdown. */

@@ -51,6 +51,7 @@ import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cards.CARD_RATIO
 import com.kaiharimoto.neue.cards.NeueCard
+import com.kaiharimoto.neue.effects.DuelCardEffects
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.H2
@@ -151,6 +152,8 @@ private fun InspectedWords(duels: Duels, game: DuelGame, uid: Int, sees: Boolean
         H2(if (sees) duels.catalog.nameOf(inst) else "A face-down card", maxLines = 2)
         if (sees && inst.token && (inst.atk != null || inst.def != null)) Mono("ATK ${inst.atk ?: "?"} / DEF ${inst.def ?: "?"}", color = c.ink)
         if (card != null) Body(card.description, color = c.ink)
+        // Its effect written as code (Phase D step 2): the words, or Write its effect.
+        if (card != null) DuelCardEffects(card)
         // What the two players agreed about this card (1.0.79).
         if (sees && inst.code != 0) duels.rulings.forCode(inst.code).forEach { r ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

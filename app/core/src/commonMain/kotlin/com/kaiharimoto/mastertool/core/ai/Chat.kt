@@ -293,6 +293,15 @@ data class AiSession(
         const val MODE_RUBRIC = "rubric"
 
         /**
+         * Writing effects as code (Phase D step 2, D.md §3.6): started only by the person's go, it writes the asked cards'
+         * `lib/effects/<passcode>.js` in Ai World where the person watches (skill `effects-author`).
+         */
+        const val MODE_EFFECTS = "effects"
+
+        /** The modes that work in Ai World, shown in its Thoughts. */
+        val WORLD_MODES = setOf(MODE_WORLD, MODE_EFFECTS)
+
+        /**
          * One seat of an Ai vs Ai match (`docs/phases/C.md` §6): the conversation a seat's session had with the referee,
          * kept for the person to read. Read-only: a message typed into it starts a new conversation.
          */

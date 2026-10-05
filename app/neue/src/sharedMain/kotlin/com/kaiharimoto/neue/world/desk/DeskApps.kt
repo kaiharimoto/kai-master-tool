@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.world.desk
 
+import com.kaiharimoto.neue.effects.effectsSummary
+import com.kaiharimoto.neue.effects.EffectsApp
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -44,6 +46,7 @@ internal object DeskApps {
             BuiltInApp.THOUGHTS.ref -> ThoughtsApp(h, modifier)
             BuiltInApp.INSTRUMENTS.ref -> InstrumentsApp(h, modifier)
             BuiltInApp.LIBRARY.ref -> LibraryApp(h, modifier)
+            BuiltInApp.EFFECTS.ref -> EffectsApp(h, modifier)
             is AppRef.Made -> AppWindow(h, ref.slug, modifier)
             else -> Unit
         }
@@ -68,6 +71,7 @@ internal object DeskApps {
         BuiltInApp.FILES.ref -> h.world.open?.title
         BuiltInApp.BROWSER.ref -> h.world.browser.current?.let { pageTitle(h, it.parsed) }
         BuiltInApp.LIBRARY.ref -> h.world.library.opened?.doc?.title
+        BuiltInApp.EFFECTS.ref -> h.builder.deckName.takeIf { it.isNotBlank() }
         is AppRef.Made -> h.world.desk.apps.firstOrNull { it.slug == ref.slug }?.let { "v${it.version}" }
         else -> null
     }
@@ -80,6 +84,7 @@ internal object DeskApps {
         BuiltInApp.BROWSER.ref -> h.world.desk.desk.tabs.let { t -> "${t.tabs.size} tabs" + (t.current?.let { " · " + pageTitle(h, it.parsed) }.orEmpty()) }
         BuiltInApp.LIBRARY.ref -> h.world.library.opened?.doc?.title ?: "Everything Ai knows"
         BuiltInApp.INSTRUMENTS.ref -> "Engineered studies, as forms"
+        BuiltInApp.EFFECTS.ref -> effectsSummary(h)
         BuiltInApp.THOUGHTS.ref -> h.ai.session?.turns?.lastOrNull { it.text.isNotBlank() }?.text?.lineSequence()?.firstOrNull()?.take(80).orEmpty()
         is AppRef.Made -> h.world.desk.apps.firstOrNull { it.slug == ref.slug }?.description.orEmpty()
         else -> ""

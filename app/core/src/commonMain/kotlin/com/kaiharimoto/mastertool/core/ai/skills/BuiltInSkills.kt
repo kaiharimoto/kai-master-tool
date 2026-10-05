@@ -207,6 +207,8 @@ object BuiltInSkills {
         // Shootout (Phase S stage 3): a hand judged as the person would, and the interview that writes the rubric.
         3 to Skill(ShootoutSkills.JUDGE_NAME, ShootoutSkills.JUDGE_DESCRIPTION, ShootoutSkills.JUDGE.trim(), builtIn = true),
         3 to Skill(ShootoutSkills.INTERVIEW_NAME, ShootoutSkills.INTERVIEW_DESCRIPTION, ShootoutSkills.INTERVIEW.trim(), builtIn = true),
+        // Effects as code (Phase D step 2): a card's effect written as a script, for the cards the person asked for.
+        3 to Skill(EffectsSkills.AUTHOR_NAME, EffectsSkills.AUTHOR_DESCRIPTION, EffectsSkills.AUTHOR.trim(), builtIn = true),
     )
 
     /** The skills a build that has shipped up to [phase] carries. */
