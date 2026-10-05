@@ -770,7 +770,7 @@ private fun PlaceBody(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.Zo
     }
     val link = q.card?.let { s.cards[it] }?.let { duels.catalog.info(it.code)?.link } == true
     PositionChips(duels, q.positions, link, big = phone)
-    Small("Click a lit zone, or press its number: ${q.among.joinToString(" · ") { ShortcutWindow.zoneKey(it) }}", color = c.ink70, maxLines = 2)
+    Small(if (phone) "Tap a lit zone" else "Click a lit zone, or press its number: ${q.among.joinToString(" · ") { ShortcutWindow.zoneKey(it) }}", color = c.ink70, maxLines = 2)
 }
 
 /** A position asked alone (§5¾.3): the three chips, large. */
