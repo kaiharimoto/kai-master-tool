@@ -188,7 +188,7 @@ class FxVocabularyTest {
         assertEquals(listOf(NormalGrant(0, tinker, Filter.NameHas("Example"))), grant.fx.grants)
         val lock = run(g, tinker, s(Op.Restrict(Restriction(Ban.SPECIAL_SUMMON_FROM_EXTRA, except = Filter.Frame(CardFrame.SYNCHRO)))))
         assertEquals(DuelAction.Lock(0, "No Special Summons from the Extra Deck, except as Example Tinker allows", Lock.UNTIL_TURN, id = 1), lock.actions.single())
-        assertEquals(listOf(InForce(Restriction(Ban.SPECIAL_SUMMON_FROM_EXTRA, except = Filter.Frame(CardFrame.SYNCHRO)), 0, tinker, 2)), lock.fx.restrictions)
+        assertEquals(listOf(InForce(Restriction(Ban.SPECIAL_SUMMON_FROM_EXTRA, except = Filter.Frame(CardFrame.SYNCHRO)), 0, tinker, 2, lock = 1)), lock.fx.restrictions, "its Lock named, so taking the Lock off lifts it")
         // Declare DARK; the Add reads it.
         val declared = run(
             g, tinker,
@@ -211,16 +211,20 @@ class FxVocabularyTest {
             listOf(DuelAction.Lp(0, -1)),
             run(g, lamp, s(Op.If(Cond.NoMonsters(Rel.THEM), then = s(Op.Lp(Rel.YOU, Num.Const(-1))), otherwise = s(Op.Lp(Rel.YOU, Num.Const(1)))))).actions,
         )
-        // AND_IF_YOU_DO and THEN need the step before to have happened in full; AND and ALSO do not.
+        // AND_IF_YOU_DO and THEN need the step before to have happened in full; WITH ("also") and ALSO ("also, after
+        // that") do not; AND ("and") is both or neither (YGOrg, Demystifying Rulings Part 5: "you have to be able to do both
+        // A and B at resolution, otherwise you do nothing").
         val nothing = Op.Send(Pick(from = listOf(you(Area.BANISHED))))
         val gain = Op.Lp(Rel.YOU, Num.Const(10))
         assertEquals(0, run(g, lamp, listOf(Step(nothing), Step(gain, Join.AND_IF_YOU_DO))).actions.size)
         assertEquals(0, run(g, lamp, listOf(Step(nothing), Step(gain, Join.THEN))).actions.size)
-        assertEquals(1, run(g, lamp, listOf(Step(nothing), Step(gain, Join.AND))).actions.size)
+        assertEquals(0, run(g, lamp, listOf(Step(nothing), Step(gain, Join.AND))).actions.size)
+        assertEquals(0, run(g, lamp, listOf(Step(gain), Step(nothing, Join.AND))).actions.size, "neither half when one cannot happen")
+        assertEquals(1, run(g, lamp, listOf(Step(nothing), Step(gain, Join.WITH))).actions.size)
         assertEquals(1, run(g, lamp, listOf(Step(nothing), Step(gain, Join.ALSO))).actions.size)
-        // AND is one batch; THEN and ALSO begin new ones.
-        val batches = run(g, lamp, listOf(Step(gain), Step(gain, Join.AND), Step(gain, Join.THEN), Step(gain, Join.ALSO))).tags.map { it.memo!!.batch!! }
-        assertEquals(listOf(0, 0, 1, 2), batches.map { it - batches[0] })
+        // AND, AND_IF_YOU_DO and WITH are one batch; THEN and ALSO begin new ones.
+        val batches = run(g, lamp, listOf(Step(gain), Step(gain, Join.AND), Step(gain, Join.WITH), Step(gain, Join.THEN), Step(gain, Join.ALSO))).tags.map { it.memo!!.batch!! }
+        assertEquals(listOf(0, 0, 0, 1, 2), batches.map { it - batches[0] })
     }
 
     @Test

@@ -17,8 +17,8 @@ import kotlin.test.assertTrue
  * D.md §8 part A, the rulings set: cases with known answers on our fictional reference cards, each graded by the table and
  * `FxState` after it. Every case names its source:
  * - **Rule**: a general rule of the game as its rulebook states it (spell speeds, SEGOC, missing the timing, costs and
- *   effects, targets at resolution), in our own words. No YGOrg Q&A number is cited here: none was looked up for this
- *   step, so where a case leans on a Q&A's reading rather than the rulebook it is marked as a house ruling instead.
+ *   effects, targets at resolution), in our own words. Where the red team looked a case up (D.md §2.3½), the page it
+ *   fetched is named: YGOrg's "Demystifying Rulings" articles and rulings updates, or Yugipedia quoting the rulebook.
  * - **House ruling**: a decision this engine makes where the rulebook is silent or the case is subtle, named as one so a
  *   later Q&A can overturn it (the test is the authority, D.md §2.3).
  *
@@ -89,16 +89,58 @@ class FxRulingsTest {
         assertEquals(7000, p.t.state.seats[1].lp)
     }
 
-    /** Rule: a once-per-turn effect is used when it is activated, so a negated activation has still used it. */
+    /**
+     * YGOrg, "Demystifying Rulings, Part 10: Negation" (fetched): "When the activation of a card or effect is negated, it's
+     * as if it was never activated at all. So if the activation of Duality is negated, another could be activated that
+     * turn" — "you can only **activate** 1 X per turn" (Example Call, [Opt.CARD]) is given back; "you can only **use**"
+     * wording stays counted (Nekroz Mirror; `FxChainTest.aNegatedActivationDoesNothingAndStillUsedItsOncePerTurn`). Its "the
+     * turn you activate this" condition is lifted with it (OCG FAQ, Rage with Eyes of Blue, YGOrg's April 2025 update).
+     */
     @Test
-    fun a07_aNegatedActivationStillUsedItsOncePerTurn() {
-        val p = FxPlays(FxRef.game(Side(hand = listOf(FxRef.CALL, FxRef.CALL), deck = listOf(FxRef.SCOUT)), them = Side(field = listOf(set(FxRef.DENIAL, 0)))))
+    fun a07_aNegatedActivationOfActivateOnceIsGivenBack() {
+        val p = FxPlays(FxRef.game(Side(hand = listOf(FxRef.CALL, FxRef.CALL), deck = listOf(FxRef.SCOUT, FxRef.LAMP)), them = Side(field = listOf(set(FxRef.DENIAL, 0)))))
         val (one, two) = p.uids(FxRef.CALL)
         p.activate(0, one)
+        assertTrue(p.t.state.locks.single().text.startsWith("No Special Summons from the Extra Deck"), "its condition binds from the activation")
         p.activate(1, p.uid(FxRef.DENIAL, 1))
         p.passBoth(0)
         p.resolve()
-        assertEquals(FxRules.OPT_USED, p.refused(0, FxMove.Activate(two, "e1")))
+        assertTrue(p.t.state.locks.isEmpty(), "a negated activation leaves no condition behind")
+        assertTrue(p.t.fx.restrictions.isEmpty())
+        assertNull(FxEngine.refusal(p.t, 0, two, "e1"), "\"you can only activate\": the negated one is as if never activated")
+    }
+
+    /**
+     * OCG FAQ (YGOrg's April 2025 rulings update, Rage with Eyes of Blue): "if only the effect was negated … you will not be
+     * able to Special Summon … due to the condition". A "the turn you activate this" condition holds when the effect alone
+     * is negated, and the use is counted.
+     */
+    @Test
+    fun a07b_anEffectNegatedKeepsTheConditionAndTheUse() {
+        val ward = FxRef.bookWith(FxRef.script(FxRef.WARD).let { w -> w.copy(effects = w.effects.map { it.copy(respond = Respond(Rel.THEM, includes = listOf(Includes.SPECIAL_SUMMON))) }) })
+        val q = FxPlays(FxRef.game(Side(hand = listOf(FxRef.CALL, FxRef.CALL), deck = listOf(FxRef.SCOUT, FxRef.LAMP)), them = Side(hand = listOf(FxRef.WARD)), book = ward))
+        val (one, two) = q.uids(FxRef.CALL)
+        q.activate(0, one)
+        q.activate(1, q.uid(FxRef.WARD, 1))
+        q.passBoth(0)
+        q.resolve()
+        assertTrue(q.t.state.seats[0].monsters.all { it == null }, "its effect did nothing")
+        assertEquals("No Special Summons from the Extra Deck", q.t.state.locks.single().text.substringBefore(","), "the condition holds")
+        assertEquals(FxRules.OPT_USED, q.refused(0, FxMove.Activate(two, "e1")), "activated, so counted")
+    }
+
+    /**
+     * OCG FAQ (Rage with Eyes of Blue): a "the turn you activate this" condition covers the whole turn — the card cannot
+     * be activated once its seat has done what the condition forbids.
+     */
+    @Test
+    fun a07c_aConditionLooksBackOverTheTurn() {
+        val p = FxPlays(FxRef.game(Side(hand = listOf(FxRef.CALL), field = listOf(Slot(FxRef.LAMP, 0), Slot(FxRef.PAWN, 1)), deck = listOf(FxRef.SCOUT), extra = listOf(FxRef.BRIDGE))))
+        val call = p.uid(FxRef.CALL)
+        assertNull(FxEngine.refusal(p.t, 0, call, "e1"))
+        val bridge = p.uid(FxRef.BRIDGE)
+        p.go(0, FxMove.Procedure(bridge, 0))
+        assertEquals("It cannot be activated the turn you Special Summon from the Extra Deck other than as it allows.", FxEngine.refusal(p.t, 0, call, "e1"))
     }
 
     /** Rule: "once per turn by name" counts every copy and every printing (an alternate artwork is the same card). */
@@ -120,7 +162,11 @@ class FxRulingsTest {
         assertTrue(p.t.state.chain.isEmpty())
     }
 
-    /** Rule: triggers set off at once form a chain: the turn player's mandatory, optional, then the other player's. */
+    /**
+     * Rule (TCG Rulebook v10, quoted by Yugipedia's "Simultaneous Effects", fetched): triggers set off at once form a chain
+     * in the order "1. Turn player's mandatory effects. 2. Non-turn player's mandatory effects. 3. Turn player's optional
+     * effects. 4. Non-turn player's optional effects." (The engine had both of the turn player's groups first.)
+     */
     @Test
     fun a09_segocOrder() {
         val p = FxPlays(
@@ -132,7 +178,7 @@ class FxRulingsTest {
         p.activate(0, p.uid(FxRef.PURGE))
         p.passBoth(1)
         assertEquals(
-            listOf(p.uid(FxRef.MANDATE), p.uid(FxRef.ECHO), p.uid(FxRef.MANDATE, 1), p.uid(FxRef.ECHO, 1)),
+            listOf(p.uid(FxRef.MANDATE), p.uid(FxRef.MANDATE, 1), p.uid(FxRef.ECHO), p.uid(FxRef.ECHO, 1)),
             p.t.fx.links.sortedBy { it.link }.map { it.uid },
         )
     }
@@ -175,9 +221,10 @@ class FxRulingsTest {
     }
 
     /**
-     * House ruling (the classic reading of a cost at Chain Link 1, held here until a YGOrg Q&A is cited): a card sent as a
-     * cost waits for the chain, and an optional "when" trigger on it misses the timing once the chain's resolution has
-     * happened after it.
+     * Rule (TCG Rulebook v10, quoted by Yugipedia's "If... You Can VS When... You Can", fetched): "if you discard 'Jinzo -
+     * Returner' to activate 'Lightning Vortex', the last thing to happen is the resolution of the effect of 'Lightning
+     * Vortex', so the optional 'when' effect … cannot be activated." A card sent as a cost waits for the chain, and an
+     * optional "when" trigger on it misses the timing.
      */
     @Test
     fun a14_aWhenTriggerSentAsACostMissesAfterTheChain() {
@@ -187,6 +234,27 @@ class FxRulingsTest {
         assertTrue(FxEngine.refusal(p.t, 0, p.uid(FxRef.ECHO), "e1")!!.contains("waits for the chain"))
         p.passBoth(1)
         assertTrue("Example Echo's Draw: missed the timing." in p.notes())
+    }
+
+    /**
+     * Rule (Problem-Solving Card Text, Part 7, quoted by Yugipedia's "If... You Can VS When... You Can", fetched): "When a
+     * chain resolves, the last thing to happen is the resolution of the effect at Chain Link 1." A card sent to the GY at
+     * Chain Link 2 misses the timing of its optional "when" trigger even when Chain Link 1 then does nothing a card can
+     * see (here a Rally, which only grants a Normal Summon); the engine counted only moves, life points and the like.
+     */
+    @Test
+    fun a14b_chainLinkOnesResolutionIsLastWhateverItDid() {
+        val p = FxPlays(FxRef.game(Side(hand = listOf(FxRef.RALLY), field = listOf(Slot(FxRef.ECHO, 0), set(FxRef.FLASH, 0)), deck = listOf(FxRef.PAWN))))
+        val echo = p.uid(FxRef.ECHO)
+        p.activate(0, p.uid(FxRef.RALLY))
+        p.pass(1)
+        p.activate(0, p.uid(FxRef.FLASH)) { d -> if (d is Decision.Cards) listOf(d.among.indexOf(echo)) else null }
+        p.passBoth(1)
+        assertEquals(PileKind.GY, (p.t.state.placeOf(echo) as Place.Pile).kind)
+        assertTrue(p.t.fx.pending.single().last, "last, while Chain Link 1 waits")
+        p.resolve()
+        assertTrue(p.t.state.chain.isEmpty())
+        assertTrue("Example Echo's Draw: missed the timing." in p.notes(), p.notes().toString())
     }
 
     /** Rule: a cost is not an effect: "sent by a card effect" is not set off by paying a cost. */
@@ -315,7 +383,11 @@ class FxRulingsTest {
         assertTrue(FxEngine.refusal(p.t, 1, p.uid(FxRef.WARD, 1), "e1")!!.contains("does not include"))
     }
 
-    /** House ruling: after a chain of triggers is built, the player who did not make its newest link may respond first. */
+    /**
+     * Rule (TCG Rulebook v10, quoted by Yugipedia's "Simultaneous Effects", fetched): after a chain of triggers is built,
+     * "as the opponent was the last one to activate an effect, the turn player has the first opportunity to activate a fast
+     * effect" — the player who did not make its newest link responds first.
+     */
     @Test
     fun h01_afterSegocTheOtherSeatOfTheNewestLinkResponds() {
         val p = FxPlays(FxRef.game(Side(hand = listOf(FxRef.MILL), deck = listOf(FxRef.MANDATE, FxRef.PAWN))))

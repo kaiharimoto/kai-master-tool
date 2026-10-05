@@ -43,6 +43,16 @@ object FxProcs {
     /** The most material sets listed for one procedure. */
     const val MOST = 256
 
+    /**
+     * The most candidate sets one search looks at (the red team, D.md §9 "a pick of a whole Deck"): a Ritual or Fusion
+     * whose materials may come from a Deck walked every subset — billions — when none fit. Deterministic: the same sets
+     * in the same order are looked at every time, so the same table always gives the same answer.
+     */
+    const val MOST_TRIED = 20_000
+
+    /** How many more candidate sets a search may look at. */
+    private class Budget(var left: Int = MOST_TRIED)
+
     /** The face-up monsters [seat] controls: what Link, Synchro and Xyz Summons use. */
     fun fieldMaterials(t: FxTable, seat: Int): List<Int> =
         FxFilters.area(Area.MONSTERS, seat, t.state).filter { t.inst(it)?.faceUp == true }
@@ -54,7 +64,7 @@ object FxProcs {
         val p = t.state.placeOf(uid)
         val procs = script.summon?.procs.orEmpty()
         return procs.mapIndexedNotNull { i, proc ->
-            if (FxWalk.unread(proc)) return@mapIndexedNotNull null
+            if (t.book.unreadProc(script.card, i)) return@mapIndexedNotNull null
             val inExtra = p is Place.Pile && p.kind == PileKind.EXTRA && p.seat == seat
             when (proc) {
                 is Proc.Link -> if (inExtra && c.link != null) build(t, seat, uid, i, proc, ProcKind.LINK, linkSets(t, seat, uid, proc)) else null
@@ -64,6 +74,29 @@ object FxProcs {
                 is Proc.Fusion, Proc.Ritual, is Proc.Unknown -> null
             }
         }
+    }
+
+    /**
+     * The indexes of the procedures [seat] may use on [uid] now: the same as [options]' (`FxMemoTest`), found without
+     * listing every material set — each search stops at the first set that leaves the monster a zone. What the engine's
+     * moves list; [options] is for the one that is made.
+     */
+    fun open(t: FxTable, seat: Int, uid: Int): List<Int> {
+        val script = t.script(uid) ?: return emptyList()
+        val c = t.card(uid) ?: return emptyList()
+        val p = t.state.placeOf(uid)
+        val inExtra = p is Place.Pile && p.kind == PileKind.EXTRA && p.seat == seat
+        fun any(kind: ProcKind, sets: Sequence<List<Int>>) =
+            FxRules.specialRefusal(t, seat, uid, kind) == null && sets.take(MOST).any { FxRules.summonZones(t, seat, uid, it.toSet()).isNotEmpty() }
+        return script.summon?.procs.orEmpty().withIndex().filter { (i, proc) ->
+            !t.book.unreadProc(script.card, i) && when (proc) {
+                is Proc.Link -> inExtra && c.link != null && any(ProcKind.LINK, linkSeq(t, seat, uid, proc))
+                is Proc.Synchro -> inExtra && CardFrame.SYNCHRO in c.frames && any(ProcKind.SYNCHRO, synchroSeq(t, seat, uid, proc))
+                is Proc.Xyz -> inExtra && c.rank != null && any(ProcKind.XYZ, xyzSeq(t, seat, uid, proc))
+                is Proc.Inherent -> inherent(t, seat, uid, i, proc) != null
+                is Proc.Fusion, Proc.Ritual, is Proc.Unknown -> false
+            }
+        }.map { it.index }
     }
 
     private fun build(t: FxTable, seat: Int, uid: Int, index: Int, proc: Proc, kind: ProcKind, sets: List<List<Int>>): ProcOption? {
@@ -106,13 +139,14 @@ object FxProcs {
 
     // ---- material sets -------------------------------------------------------------------------------------------------
 
-    /** Every subset of [pool] of a size in [sizes], in table order, smallest first. */
-    private fun subsets(pool: List<Int>, sizes: IntRange): Sequence<List<Int>> = sequence {
+    /** Every subset of [pool] of a size in [sizes], in table order, smallest first — no more than [budget] allows. */
+    private fun subsets(pool: List<Int>, sizes: IntRange, budget: Budget = Budget()): Sequence<List<Int>> = sequence {
         val n = pool.size
         for (k in sizes.first.coerceAtLeast(0)..minOf(sizes.last, n)) {
             if (k == 0) { yield(emptyList()); continue }
             val idx = IntArray(k) { it }
             while (true) {
+                if (budget.left-- <= 0) return@sequence
                 yield(idx.map { pool[it] })
                 var i = k - 1
                 while (i >= 0 && idx[i] == n - k + i) i--
@@ -124,15 +158,17 @@ object FxProcs {
     }
 
     /** The legal Link material sets for [uid] by [proc]. */
-    fun linkSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Link): List<List<Int>> {
-        val rating = t.card(uid)?.link ?: return emptyList()
+    fun linkSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Link): List<List<Int>> = linkSeq(t, seat, uid, proc).take(MOST).toList()
+
+    private fun linkSeq(t: FxTable, seat: Int, uid: Int, proc: Proc.Link): Sequence<List<Int>> {
+        val rating = t.card(uid)?.link ?: return emptySequence()
         val scope = FxScope(t, seat, uid)
         val pool = FxFilters.among(proc.each, fieldMaterials(t, seat).filter { it != uid }, scope)
         val min = proc.min.coerceAtLeast(1)
         val max = proc.max.coerceAtMost(rating).coerceAtLeast(min)
         return subsets(pool, min..max).filter { set ->
             (proc.also == null || set.any { FxFilters.matches(proc.also, it, scope) }) && reaches(set.map { linkWorth(t, it) }, rating)
-        }.take(MOST).toList()
+        }
     }
 
     /** What a Link material may count for: 1, or its rating as well when it is a Link Monster. */
@@ -146,73 +182,84 @@ object FxProcs {
     }
 
     /** The legal Synchro material sets for [uid] by [proc]: Tuners first, then the rest, each set in table order. */
-    fun synchroSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Synchro): List<List<Int>> {
-        val level = t.card(uid)?.level ?: return emptyList()
+    fun synchroSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Synchro): List<List<Int>> = synchroSeq(t, seat, uid, proc).take(MOST).toList()
+
+    /** [synchroSets] as they are found, each once. */
+    private fun synchroSeq(t: FxTable, seat: Int, uid: Int, proc: Proc.Synchro): Sequence<List<Int>> {
+        val level = t.card(uid)?.level ?: return emptySequence()
         val scope = FxScope(t, seat, uid)
         val pool = fieldMaterials(t, seat).filter { it != uid && t.level(it) != null }
         val tuners = pool.filter { t.card(it)?.tuner == true && FxFilters.matches(proc.tuner.where, it, scope) }
-        val out = LinkedHashSet<List<Int>>()
-        for (tu in subsets(tuners, proc.tuner.least..proc.tuner.most)) {
-            if (tu.isEmpty()) continue
-            val rest = FxFilters.among(proc.others.where, pool.filter { it !in tu }, scope)
-            for (others in subsets(rest, proc.others.least..proc.others.most)) {
-                if (others.isEmpty() && proc.others.least > 0) continue
-                val set = tu + others
-                if (set.sumOf { t.level(it) ?: 0 } == level) out += pool.filter { it in set }
-                if (out.size >= MOST) return out.toList()
+        return sequence {
+            for (tu in subsets(tuners, proc.tuner.least..proc.tuner.most)) {
+                if (tu.isEmpty()) continue
+                val rest = FxFilters.among(proc.others.where, pool.filter { it !in tu }, scope)
+                for (others in subsets(rest, proc.others.least..proc.others.most)) {
+                    if (others.isEmpty() && proc.others.least > 0) continue
+                    val set = tu + others
+                    if (set.sumOf { t.level(it) ?: 0 } == level) yield(pool.filter { it in set })
+                }
             }
-        }
-        return out.toList()
+        }.distinct()
     }
 
     /** The legal Xyz material sets for [uid] by [proc]. */
-    fun xyzSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Xyz): List<List<Int>> {
-        val rank = t.card(uid)?.rank ?: return emptyList()
+    fun xyzSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Xyz): List<List<Int>> = xyzSeq(t, seat, uid, proc).take(MOST).toList()
+
+    private fun xyzSeq(t: FxTable, seat: Int, uid: Int, proc: Proc.Xyz): Sequence<List<Int>> {
+        val rank = t.card(uid)?.rank ?: return emptySequence()
         val scope = FxScope(t, seat, uid)
         val pool = FxFilters.among(proc.each, fieldMaterials(t, seat), scope)
             .filter { it != uid && t.inst(it)?.token != true && t.level(it) == rank }
         val n = proc.n.coerceAtLeast(1)
-        return subsets(pool, n..(proc.max ?: n).coerceAtLeast(n)).take(MOST).toList()
+        return subsets(pool, n..(proc.max ?: n).coerceAtLeast(n))
     }
 
     /**
      * Fusion material sets for [fusion] by [proc] from [from] (the step executor's pick of places): each [Mat] its own
-     * cards, none used twice. Each set in [from]'s order.
+     * cards, none used twice. Each set in [from]'s order. With [stop], the search ends at the first set it holds, which
+     * alone is returned: the same answer to "is there one [stop] holds" as the whole list filtered, found sooner.
      */
-    fun fusionSets(t: FxTable, seat: Int, fusion: Int, proc: Proc.Fusion, from: List<Int>): List<List<Int>> {
+    fun fusionSets(t: FxTable, seat: Int, fusion: Int, proc: Proc.Fusion, from: List<Int>, stop: ((List<Int>) -> Boolean)? = null): List<List<Int>> {
         val scope = FxScope(t, seat, fusion)
         val pool = from.filter { it != fusion && t.card(it)?.monster == true }
         val out = LinkedHashSet<List<Int>>()
+        val budget = Budget()
+        var found: List<Int>? = null
         fun assign(i: Int, used: List<Int>) {
-            if (out.size >= MOST) return
+            if (found != null || out.size >= MOST || budget.left <= 0) return
             if (i == proc.materials.size) {
-                out += pool.filter { it in used }
+                val set = pool.filter { it in used }
+                if (out.add(set) && stop != null && stop(set)) found = set
                 return
             }
             val m = proc.materials[i]
             val fit = FxFilters.among(m.where, pool.filter { it !in used }, scope)
-            subsets(fit, m.least..minOf(m.most, fit.size)).forEach { pick -> if (pick.isNotEmpty() || m.least == 0) assign(i + 1, used + pick) }
+            subsets(fit, m.least..minOf(m.most, fit.size), budget).forEach { pick -> if (pick.isNotEmpty() || m.least == 0) assign(i + 1, used + pick) }
         }
         assign(0, emptyList())
-        return out.toList()
+        return found?.let(::listOf) ?: out.toList()
     }
 
     /**
      * Ritual Tribute sets for [ritual] from [from]: monsters with a Level whose Levels equal its own, or reach it with none
-     * to spare ([LevelRule.AT_LEAST]: no Tribute could be left out and still reach it).
+     * to spare ([LevelRule.AT_LEAST]: no Tribute could be left out and still reach it). [stop] as for [fusionSets].
      */
-    fun ritualSets(t: FxTable, seat: Int, ritual: Int, from: List<Int>, rule: LevelRule): List<List<Int>> {
+    fun ritualSets(t: FxTable, seat: Int, ritual: Int, from: List<Int>, rule: LevelRule, stop: ((List<Int>) -> Boolean)? = null): List<List<Int>> {
         val level = t.card(ritual)?.level ?: return emptyList()
         val pool = from.filter { it != ritual && t.card(it)?.monster == true && t.level(it) != null }
         val out = ArrayList<List<Int>>()
-        for (set in subsets(pool, 1..pool.size.coerceAtMost(12))) {
+        for (set in subsets(pool, 1..pool.size.coerceAtMost(12), Budget())) {
             val levels = set.map { t.level(it) ?: 0 }
             val sum = levels.sum()
             val ok = when (rule) {
                 LevelRule.EQUAL -> sum == level
                 LevelRule.AT_LEAST -> sum >= level && levels.all { sum - it < level }
             }
-            if (ok) out += set
+            if (ok) {
+                out += set
+                if (stop != null && stop(set)) return listOf(set)
+            }
             if (out.size >= MOST) break
         }
         return out
@@ -240,7 +287,7 @@ object FxProcs {
                 listOf(summon.copy(over = there != null)) + materials.filter { it != there }.map { DuelAction.Move(it, Place.Under(uid), how = HOW_MATERIAL) }
             }
             ProcKind.LINK, ProcKind.SYNCHRO, ProcKind.FUSION ->
-                materials.map { m -> DuelAction.Move(m, Place.Pile(t.inst(m)?.owner ?: 0, PileKind.GY), how = HOW_MATERIAL) } + summon
+                materials.map { m -> FxSteps.graveFor(t, m, t.inst(m)?.owner ?: 0).let { (to, p) -> DuelAction.Move(m, to, p, HOW_MATERIAL) } } + summon
             else -> listOf(summon)
         }
     }

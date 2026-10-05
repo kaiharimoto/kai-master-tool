@@ -89,11 +89,12 @@ class FxChainTest {
         assertEquals(setOf(m1, m2), order.triggers.map { it.uid }.toSet(), "a player orders their own")
         assertEquals(2, p.asked.filterIsInstance<Decision.YesNo>().size, "each optional trigger asked once")
         val links = p.t.fx.links.sortedBy { it.link }
+        // TCG Rulebook v10 (Yugipedia, "Simultaneous Effects"): both players' mandatory triggers before either's optional ones.
         assertEquals(
-            listOf(order.triggers[1].uid, order.triggers[0].uid, echo, theirMandate, theirEcho), links.map { it.uid },
-            "the turn player's mandatory, their optional, the other's mandatory, the other's optional",
+            listOf(order.triggers[1].uid, order.triggers[0].uid, theirMandate, echo, theirEcho), links.map { it.uid },
+            "the turn player's mandatory, the other's mandatory, the turn player's optional, the other's optional",
         )
-        assertEquals(listOf(0, 0, 0, 1, 1), links.map { it.seat })
+        assertEquals(listOf(0, 0, 1, 0, 1), links.map { it.seat })
         assertEquals(0, p.t.fx.priority, "the newest link is theirs: the turn player may respond")
         assertTrue(p.t.fx.pending.isEmpty())
     }
@@ -160,12 +161,20 @@ class FxChainTest {
         assertTrue(p.notes().any { it.startsWith("Chain Link 1: a target is no longer there") }, p.notes().toString())
     }
 
+    /**
+     * A negated activation does nothing; "use" wording counts it (YGOrg, Demystifying Rulings Part 10: Nekroz Mirror) — this
+     * Call written as "you can only use Example Call once per turn". [FxRulingsTest.a07_aNegatedActivationOfActivateOnceIsGivenBack]
+     * has the "activate" wording, given back.
+     */
     @Test
     fun aNegatedActivationDoesNothingAndStillUsedItsOncePerTurn() {
+        val call0 = FxRef.script(FxRef.CALL)
+        val used = FxRef.bookWith(call0.copy(effects = call0.effects.map { it.copy(opt = Opt.ByName()) }))
         val p = FxPlays(
             FxRef.game(
                 Side(hand = listOf(FxRef.CALL, FxRef.CALL), deck = listOf(FxRef.SCOUT, FxRef.PAWN)),
                 them = Side(field = listOf(set(FxRef.DENIAL, 0))),
+                book = used,
             ),
         )
         val (call, call2) = p.uids(FxRef.CALL)

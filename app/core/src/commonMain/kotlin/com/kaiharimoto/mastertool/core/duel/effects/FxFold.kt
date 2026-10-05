@@ -94,6 +94,11 @@ object FxFold {
         if (!setup && happening(a, tag) && fx.pending.any { it.last && it.event.batch < batch }) {
             fx = fx.copy(pending = fx.pending.map { if (it.last && it.event.batch < batch) it.copy(last = false) else it })
         }
+        // A link resolved, whatever it did: what happened before its resolution began is no longer last.
+        if (!setup && a == DuelAction.ChainResolve && fx.pending.any { it.last && it.event.batch <= fx.since }) {
+            fx = fx.copy(pending = fx.pending.map { if (it.last && it.event.batch <= fx.since) it.copy(last = false) else it })
+        }
+        if (a is DuelAction.ChainAdd || a == DuelAction.ChainResolve) fx = fx.copy(since = fx.batch)
         val events = r.events
         if (events.isNotEmpty()) fx = FxChain.gather(FxTable(after, fx.forTurn(after.turn), book, facts), events)
         return Read(fx.forTurn(after.turn), events)
@@ -172,17 +177,29 @@ object FxFold {
                         passes = 0,
                         priority = null,
                         resolving = after.chain.isNotEmpty(),
-                    )
+                    ).settled { it == top }
                 }
-                DuelAction.ChainClear -> fx = fx.copy(links = emptyList(), passes = 0, priority = null, resolving = false)
+                DuelAction.ChainClear -> fx = fx.copy(links = emptyList(), passes = 0, priority = null, resolving = false).settled { true }
                 is DuelAction.Negate -> if (memo?.effectOnly == true) {
                     fx = fx.copy(links = fx.links.map { if (it.link == a.link) it.copy(effectNegated = true) else it })
+                } else {
+                    // A negated activation is as if it was never activated (YGOrg, Demystifying Rulings Part 10; OCG FAQ on
+                    // Rage with Eyes of Blue): "you can only activate" is given back, its "the turn you activate this"
+                    // conditions are lifted, and it is no deed of the turn. "Use" wording stays counted.
+                    fx = fx.copy(
+                        uses = fx.uses.filterNot { it.link == a.link && it.refunds },
+                        restrictions = fx.restrictions.filterNot { it.link == a.link },
+                        deeds = fx.deeds.filterNot { it.link == a.link },
+                    )
                 }
+                is DuelAction.Unlock -> fx = fx.copy(restrictions = fx.restrictions.filterNot { it.lock == a.id })
                 is DuelAction.Answer -> if (!a.respond && before.chain.isNotEmpty() && !fx.resolving) {
                     fx = fx.copy(passes = fx.passes + 1, priority = if (before.solo) a.seat else 1 - a.seat)
                 }
                 is DuelAction.Lock -> memo?.restriction?.let { r ->
-                    fx = fx.copy(restrictions = fx.restrictions + InForce(r, a.seat, tag?.uid ?: 0, before.turn))
+                    val id = a.id ?: after.locks.maxOfOrNull { it.id }
+                    val link = tag?.link?.takeIf { tag.part == FxTag.ACTIVATE }
+                    fx = fx.copy(restrictions = fx.restrictions + InForce(r, a.seat, tag?.uid ?: 0, before.turn, lock = id, link = link))
                 }
                 is DuelAction.Note -> if (tag != null) note(a)
                 else -> {}
@@ -224,6 +241,7 @@ object FxFold {
                 (how == FxSummons.HOW_NORMAL || how == FxSummons.HOW_SET)
             if (normalish && !setup) {
                 val zone = dest as Place.Zone
+                fx = fx.copy(deeds = fx.deeds + Deed(zone.seat, uid, Ban.NORMAL_SUMMON))
                 val slot = FxRules.normalSlot(t, zone.seat, uid)
                 fx = fx.copy(normals = fx.normals + (zone.seat to fx.normalsUsed(zone.seat) + 1))
                 if (slot != null && slot != FxRules.OWN) fx = fx.copy(grants = fx.grants.mapIndexed { i, g -> if (i == slot) g.copy(used = true) else g })
@@ -247,6 +265,8 @@ object FxFold {
                 fx = fx.copy(summoned = fx.summoned + (uid to kind))
                 if (kind != ProcKind.NORMAL && kind != ProcKind.TRIBUTE) {
                     t.code(uid)?.let { code -> fx = fx.copy(specials = fx.specials + (zoneSeat to (fx.specials[zoneSeat].orEmpty() + code))) }
+                    val extra = from is Place.Pile && from.kind == PileKind.EXTRA
+                    fx = fx.copy(deeds = fx.deeds + Deed(zoneSeat, uid, Ban.SPECIAL_SUMMON, extra))
                 }
             }
             // Laid on top of a card: it goes beneath, a new instance.
@@ -309,7 +329,7 @@ object FxFold {
                 fx = fx.copy(tokens = fx.tokens + (uid to c))
             }
             if (setup) return
-            fx = fx.copy(summoned = fx.summoned + (uid to ProcKind.SPECIAL))
+            fx = fx.copy(summoned = fx.summoned + (uid to ProcKind.SPECIAL), deeds = fx.deeds + Deed(a.to.seat, uid, Ban.SPECIAL_SUMMON))
             event(Event.SUMMONED, uid, a.to.seat, null, a.to, null, ProcKind.SPECIAL)
             event(Event.SPECIAL_SUMMONED, uid, a.to.seat, null, a.to, null, ProcKind.SPECIAL)
         }
@@ -337,7 +357,13 @@ object FxFold {
             }
             if (uid != null && effect.isNotEmpty()) fx = fx.copy(pending = fx.pending.filterNot { it.uid == uid && it.effect == effect })
             val e = if (uid != null && effect.isNotEmpty()) t.script(uid)?.effect(effect) else null
-            if (e != null && uid != null) fx = FxRules.use(t.copy(fx = fx), a.seat, uid, effect, e.opt)
+            if (e != null && uid != null) fx = FxRules.use(t.copy(fx = fx), a.seat, uid, effect, e.opt, link)
+            if (uid != null) {
+                fx = fx.copy(deeds = fx.deeds + Deed(a.seat, uid, Ban.ACTIVATE, link = link))
+                // An activation is an event too: a Trigger Effect it sets off waits for the chain (spell speed 1 never answers).
+                val at = after.placeOf(uid)
+                event(Event.ACTIVATED, uid, a.seat, at, at, null)
+            }
             val bound = memo?.bound ?: if (a.targets.isNotEmpty()) mapOf(Pick.TARGETS to a.targets) else emptyMap()
             val lives = bound.values.flatten().distinct().associateWith { fx.life(it) }
             val l = FxLink(
@@ -361,7 +387,7 @@ object FxFold {
             val p = after.placeOf(uid)
             val seat = FxFilters.controller(uid, after) ?: return ""
             val fits = script.effects.filter { e ->
-                e.kind != Kind.CONTINUOUS && e.kind != Kind.TRIGGER && !FxWalk.unread(e) &&
+                e.kind != Kind.CONTINUOUS && e.kind != Kind.TRIGGER && !t.book.unread(script.card, e.id) &&
                     (e.from.any { FxProcs.at(p, it, seat) } || (e.kind == Kind.ACTIVATION && Where.HAND in e.from && p is Place.Zone))
             }
             return fits.singleOrNull()?.id ?: ""
@@ -377,6 +403,13 @@ object FxFold {
             memo?.grant?.let { f -> fx = fx.copy(grants = fx.grants + NormalGrant(a.seat ?: 0, tg.uid, f)) }
         }
     }
+
+    /** [this] with every use, condition and deed that [gone] chain links counted no longer tied to a link: they resolved. */
+    private fun FxState.settled(gone: (Int) -> Boolean): FxState = copy(
+        uses = uses.map { if (it.link != null && gone(it.link)) it.copy(link = null) else it },
+        restrictions = restrictions.map { if (it.link != null && gone(it.link)) it.copy(link = null) else it },
+        deeds = deeds.map { if (it.link != null && gone(it.link)) it.copy(link = null) else it },
+    )
 
     const val HOW_DESTROY = "destroy"
     const val HOW_DISCARD = "discard"

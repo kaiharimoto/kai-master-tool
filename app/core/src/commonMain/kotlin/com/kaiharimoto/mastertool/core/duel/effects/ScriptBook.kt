@@ -18,12 +18,27 @@ import com.kaiharimoto.mastertool.core.model.CardIdentity
  */
 class ScriptBook private constructor(
     private val scripts: Map<Int, CardScript>,
-    private val canon: (Int) -> Int,
+    private val canonFrom: (Int) -> Int,
     /** Built by [verified]: only verified effects and procedures are here. */
     val verifiedOnly: Boolean,
 ) {
     /** The canonical passcode of any printing. */
     fun canonical(code: Int): Int = canon(code)
+
+    /**
+     * [canonFrom], remembered a passcode at a time (a map replaced whole on a miss, so the goldfish's workers share it
+     * safely): every trigger check asks it of every card on the table, and the pool's identity look-up is not free.
+     */
+    private fun canon(code: Int): Int {
+        val now = canons
+        now[code]?.let { return it }
+        val c = canonFrom(code)
+        canons = HashMap<Int, Int>(now.size * 2 + 4).apply { putAll(now); put(code, c) }
+        return c
+    }
+
+    @kotlin.concurrent.Volatile
+    private var canons: Map<Int, Int> = emptyMap()
 
     /** [code]'s script, by any printing, or null when the card has none. */
     fun script(code: Int): CardScript? = scripts[canon(code)]
@@ -35,6 +50,24 @@ class ScriptBook private constructor(
 
     /** Every card the book holds a script for, as canonical passcodes. */
     val cards: Set<Int> get() = scripts.keys
+
+    /**
+     * Each card's effects (by id) and procedures (by index) that hold a word this build cannot read or nest too deep
+     * ([FxWalk.unread]), worked out once a book: a script never changes, and walking every effect again on every move was
+     * a tenth of the engine's time (the red team's profile).
+     */
+    private val unreadEffects: Map<Int, Set<String>> by lazy {
+        scripts.mapValues { (_, s) -> s.effects.filter(FxWalk::unread).map { it.id }.toSet() }.filterValues { it.isNotEmpty() }
+    }
+    private val unreadProcs: Map<Int, Set<Int>> by lazy {
+        scripts.mapValues { (_, s) -> s.summon?.procs.orEmpty().withIndex().filter { FxWalk.unread(it.value) }.map { it.index }.toSet() }.filterValues { it.isNotEmpty() }
+    }
+
+    /** Whether [code]'s effect [id] cannot be read by this build ([FxWalk.unread]): never offered, never used. */
+    fun unread(code: Int, id: String): Boolean = unreadEffects[canon(code)]?.contains(id) == true
+
+    /** Whether [code]'s summoning procedure [index] cannot be read by this build. */
+    fun unreadProc(code: Int, index: Int): Boolean = unreadProcs[canon(code)]?.contains(index) == true
 
     /** The cards whose scripts hold a trigger effect, as canonical passcodes: the only ones an event can set off. */
     val triggers: Set<Int> by lazy {

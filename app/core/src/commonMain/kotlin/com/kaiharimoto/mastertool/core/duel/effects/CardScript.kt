@@ -81,7 +81,14 @@ data class Effect(
     /** Chosen as it is activated, checked again as it resolves. */
     val targets: List<Pick> = emptyList(),
     val does: List<Step> = emptyList(),
-    /** The locks it leaves behind. */
+    /**
+     * "You cannot … the turn you activate this": a condition on activating it, not part of what it does (OCG FAQ, Rage with
+     * Eyes of Blue, YGOrg's April 2025 rulings update). It binds from the activation for the rest of the turn, is lifted
+     * when the activation is negated, and holds when only the effect is negated; and it cannot be activated after its
+     * seat has done what it forbids this turn. On a [Kind.CONTINUOUS] effect, what it forbids while the card is face-up.
+     * A lock that starts only once the effect resolves ("for the rest of this turn after this effect resolves") is an
+     * [Op.Restrict] step of [does] instead, and is not applied when the activation or the effect is negated (FAQ 23140).
+     */
     val leaves: List<Restriction> = emptyList(),
     /**
      * A Trap, or a set Quick-Play Spell, that may be activated the turn it was Set (D.md §2.4: "unless the script's flag
@@ -168,9 +175,18 @@ enum class Includes { SEARCH, SALVAGE, SPECIAL_SUMMON, SEND_FROM_DECK, DRAW, DES
 /** Once-per-turn rules. **Counted at activation**: a negated activation still uses it. */
 @Serializable
 sealed interface Opt {
-    /** "Only once per turn by name": every copy and every printing; [group] shares one use between effects. */
+    /**
+     * "Only once per turn by name": every copy and every printing; [group] shares one use between effects.
+     *
+     * [activate]: the text says "you can only **activate**" (as [CARD] always does), not "use": a negated activation is as
+     * if it was never activated, so it does not count (YGOrg, "Demystifying Rulings, Part 10: Negation": Pot of Duality
+     * against Nekroz Mirror). "Use" wording counts a negated activation.
+     */
     @Serializable @SerialName("name")
-    data class ByName(val times: Int = 1, val group: String? = null) : Opt
+    data class ByName(val times: Int = 1, val group: String? = null, val activate: Boolean = false) : Opt {
+        /** Whether a negated activation gives the use back. */
+        val refunds: Boolean get() = activate || group == CARD
+    }
 
     /** "Once per turn": this copy, while it stays where it is (a new instance once it leaves and comes back). */
     @Serializable @SerialName("copy")
@@ -344,17 +360,25 @@ sealed interface Filter {
 @Serializable
 data class Step(val op: ReadOp, val link: Join = Join.AND)
 
-/** How a step joins the one before it: whether it happens at the same time, and whether it needs the one before to happen. */
+/**
+ * How a step joins the one before it: whether it happens at the same time, and whether it needs the one before to happen
+ * (YGOrg, "Demystifying Rulings, Part 5: Conjunctions"; the red team, D.md §2.3).
+ */
 @Serializable
 enum class Join {
-    /** At the same time, needing nothing. */
+    /**
+     * The text's "and": at the same time, and **both or neither** — a run of steps joined by `AND` happens only when every
+     * one of them can happen at resolution; otherwise none does.
+     */
     AND,
-    /** At the same time, and only if the step before happened in full. */
+    /** "And if you do": at the same time, and only if the step before happened in full (the step before needs nothing of it). */
     AND_IF_YOU_DO,
-    /** Afterwards (a new batch), and only if the step before happened in full. */
+    /** "Then": afterwards (a new batch), and only if the step before happened in full. */
     THEN,
-    /** Afterwards (a new batch), needing nothing. */
+    /** "Also, after that": afterwards (a new batch), needing nothing. */
     ALSO,
+    /** "Also": at the same time, needing nothing — each part happens if it can. */
+    WITH,
 }
 
 /** Where a [Op.Move] or a [Op.Return] takes a card. */

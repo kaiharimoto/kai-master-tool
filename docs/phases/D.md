@@ -138,7 +138,8 @@ data class Effect(
     val cost: List<Step> = emptyList(),
     val targets: List<Pick> = emptyList(),  // chosen as it is activated, checked again as it resolves
     val does: List<Step> = emptyList(),
-    val leaves: List<Restriction> = emptyList(), // the locks it leaves behind
+    val leaves: List<Restriction> = emptyList(), // "you cannot … the turn you activate this": conditions, from the activation (§2.3½)
+    val sameTurn: Boolean = false,          // a Trap or set Quick-Play that may be activated the turn it was Set
 )
 
 enum class Kind {
@@ -172,7 +173,8 @@ enum class Event { SUMMONED, NORMAL_SUMMONED, SPECIAL_SUMMONED, FLIPPED, SENT_TO
 @Serializable
 sealed interface Opt {
     /** "Only once per turn by name": every copy and every printing; [group] shares one use between effects. */
-    @Serializable @SerialName("name") data class ByName(val times: Int = 1, val group: String? = null) : Opt
+    /** [activate]: "you can only *activate*" wording (as the group "card" always is); "use" wording when false. */
+    @Serializable @SerialName("name") data class ByName(val times: Int = 1, val group: String? = null, val activate: Boolean = false) : Opt
     /** "Once per turn": this copy, while it stays where it is (a new instance once it leaves and comes back). */
     @Serializable @SerialName("copy") data object PerCopy : Opt
     /** "Once per Duel", by name. */
@@ -180,8 +182,12 @@ sealed interface Opt {
 }
 ```
 
-**Once-per-turn is counted at activation.** A negated activation still uses it. "You can only activate 1 X per turn"
-is `ByName` with the group `"card"`. "You can only Special Summon X once per turn" is `SummonRule.oncePerTurn`.
+**Once-per-turn is counted at activation**, and what a negated activation keeps depends on the wording (YGOrg,
+"Demystifying Rulings, Part 10: Negation"; the red team, §2.3½): "you can only **use**" (and "Once per turn", `PerCopy`)
+stays counted; "you can only **activate**" (`ByName.activate`, and the group `"card"`) is given back, since a negated
+activation is as if it was never activated. A negated *effect* (the activation stands) keeps every count. "You can only
+activate 1 X per turn" is `ByName` with the group `"card"`. "You can only Special Summon X once per turn" is
+`SummonRule.oncePerTurn`.
 
 **Choosing cards and saying which cards.** A `Pick` says how many, from where, of what, and who chooses.
 - `bind` names the picked cards so later steps can refer to them ("the sent monster's Level").
@@ -212,8 +218,13 @@ sealed interface Filter {
 @Serializable
 data class Step(val op: Op, val link: Join = Join.AND)
 
-/** How a step joins the one before it: whether it happens at the same time, and whether it needs the one before to happen. */
-enum class Join { AND, AND_IF_YOU_DO, THEN, ALSO }
+/**
+ * How a step joins the one before it (YGOrg, "Demystifying Rulings, Part 5: Conjunctions"):
+ * AND "and" — at the same time, both or neither; AND_IF_YOU_DO — at the same time, only if the one before happened;
+ * THEN — afterwards, only if the one before happened; ALSO "also, after that" — afterwards, needing nothing;
+ * WITH "also" — at the same time, needing nothing.
+ */
+enum class Join { AND, AND_IF_YOU_DO, THEN, ALSO, WITH }
 
 @Serializable
 sealed interface Op {
@@ -292,33 +303,67 @@ These are the game's rules, held once in the engine (`FxChain`):
   - use speed-2 and speed-3 effects whenever their conditions allow.
 - **Adding a link.** A link joins the chain only at spell speed 2 or more, and never below the speed of the newest link
   (speed 3 answers only speed 3).
-  - The other seat gets the first chance to respond, then priority alternates.
+  - The other seat gets the first chance to respond, then priority alternates. After a chain of triggers is built, the
+    seat that did not make its newest link responds first (TCG Rulebook v10).
   - When both pass, the newest link resolves.
   - **Costs** are paid and **targets** chosen at activation. At resolution a target that left its place or no longer
     matches is dropped.
   - A negated link resolves doing nothing (`DuelAction.Negate`, `ChainLink.negated` exist already).
   - The chain's own Spells and Traps go to the GY through `DuelVerbs.resolve`, the one list for that.
 - **Batches and timing.**
-  - Steps joined by `AND` or `AND_IF_YOU_DO` are one batch: they happen at the same time.
+  - Steps joined by `AND`, `AND_IF_YOU_DO` or `WITH` are one batch: they happen at the same time.
   - `THEN` and `ALSO` start a new batch. A step that depends on the one before (`AND_IF_YOU_DO`, `THEN`) happens only
     if that step happened in full.
-  - An event is **last** when nothing happened after it in its resolution.
+  - **A run of steps joined by `AND` happens both or neither**: if one of them cannot happen at resolution, none does.
+    An effect may be activated only when its cost can be paid, its targets found, and its first part — the first step
+    and every step joined to it by `AND` — can happen.
+  - An event is **last** when nothing happened after it in its resolution, **and no later link has resolved since**:
+    when a chain resolves, the last thing to happen is Chain Link 1's resolution, whatever it did.
   - An optional `WHEN` trigger whose event was not last **misses the timing**. `IF` triggers and mandatory triggers
     never do.
 - **Simultaneous triggers (SEGOC).** Triggers that a batch, a summon or a chain's resolution set off wait until the
-  chain or action is over. Then they form a new chain in this order:
+  chain or action is over. Then they form a new chain in this order (TCG Rulebook v10):
   1. the turn player's mandatory triggers;
-  2. the turn player's optional triggers;
-  3. the other player's mandatory triggers;
+  2. the other player's mandatory triggers;
+  3. the turn player's optional triggers;
   4. the other player's optional triggers.
 
-  Each player orders their own (a `Decision`).
+  Each player orders their own (a `Decision`, which says whose it is). A trigger on an activation (`ACTIVATED`) is
+  spell speed 1 like any other: it waits for that chain to be over, and never answers it.
 - **Summons start no chain.** A Normal Summon, or a Special Summon by procedure (Link, Synchro, Xyz, Inherent), starts
   no chain. Its triggers gather afterwards.
 
 The step-1 rulings set (§8, part A) settles the exact cases. Each case is a test with a known answer from YGOrg's Q&A,
 or from a house ruling named as one. Where Konami's rules are subtle — `AND` when one half cannot happen, or a cost as
 the triggering event — the test is the authority and this section follows it.
+
+### 2.3½ Rulings the red team settled (step 1)
+
+The engine's agents listed decisions they were unsure of; the red team looked each up. Each row is held by the named
+test. "Fetched" means the page was read for this; nothing here is copied card text.
+
+| Case | The engine had | Settled as | Source | Test |
+|---|---|---|---|---|
+| SEGOC order | turn player's mandatory, their optional, then the other's | both mandatory groups (turn player's first), then both optional groups | TCG Rulebook v10, quoted by Yugipedia "Simultaneous Effects" (fetched) | `FxRulingsTest.a09`, `FxChainTest` |
+| Priority after a chain of triggers | the other seat of the newest link (house ruling) | the same, now a rule: "the turn player has the first opportunity" when the opponent made the newest link | the same | `FxRulingsTest.h01` |
+| "A and B" with one half impossible | the half that could happen, happened | **neither** happens; the activation needs the whole "and" run able | YGOrg, "Demystifying Rulings, Part 5: Conjunctions" (fetched): "you have to be able to do both A and B at resolution, otherwise you do nothing" | `FxRedTeamTest.andIsBothOrNeither…`, `FxVocabularyTest` |
+| "Also" | no word for it (`ALSO` was "also, after that") | `Join.WITH`: same time, independent | the same article | `FxVocabularyTest` |
+| What is "last" | nothing "happening" after it in the resolution | also: a later link's resolution, whatever it did | Problem-Solving Card Text Part 7, quoted by Yugipedia "If… You Can VS When… You Can" (fetched): "the last thing to happen is the resolution of the effect at Chain Link 1" | `FxRulingsTest.a14b` |
+| A "when" trigger sent as a cost | misses (house ruling) | misses: a rule | TCG Rulebook v10's Jinzo - Returner / Lightning Vortex example, quoted on the same page | `FxRulingsTest.a14` |
+| A negated activation and once-per-turn | always counted | "use" wording and "Once per turn" counted; "you can only **activate**" given back | YGOrg, "Demystifying Rulings, Part 10: Negation" (fetched): Pot of Duality against Nekroz Mirror; Infernoid Patrulea | `FxRulingsTest.a07`, `FxChainTest` |
+| "The turn you activate this" restrictions (`Effect.leaves`) | applied at resolution, skipped when negated | a **condition**: binds from the activation, lifted when the *activation* is negated, kept when only the *effect* is; the card cannot be activated after its seat did the forbidden thing that turn. A lock that starts "after this effect resolves" is an `Op.Restrict` in `does`, not applied when the activation or effect is negated | OCG FAQ on Rage with Eyes of Blue (YGOrg, "[OCG] April 2025 Rulings Update", fetched); FAQ 23140, Nadir Servant (YGOrg, "OCG 11/10/20 rulings update", fetched) | `FxRulingsTest.a07`–`a07c` |
+| A trigger on an activation (`ACTIVATED`) | put on the chain at once, as a response (even under a Counter Trap) | spell speed 1: waits for the chain to be over | Yugipedia "Spell Speed" (fetched): two speed-1 effects share a chain only when they go off at the same time | `FxRedTeamTest.aTriggerOnAnActivation…` |
+| Name declarations | only names the seat had seen | any card that exists, never a Token; the window searches the pool (`Decision.Declare.open`, `Chooser.name`) | Yugipedia "Declare" (fetched), citing the OCG Perfect Rulebook 2015 p. 47 and Konami FAQ 12551 | `FxRedTeamTest.aNameDeclaration…`, `ShortcutRedTeamTest` |
+| A Pendulum Monster leaving the field for the GY | only when destroyed face-up | whenever it would be sent from the field to the GY, face-up or face-down, by any cause: face-up to the Extra Deck | Yugipedia "Pendulum Monster" (fetched), citing the rulebook | `FxRedTeamTest.aPendulumMonster…` |
+| Destroying outside the field | the hand only | the hand, the Main Deck or the Extra Deck when the pick reaches there; never the GY or banished | Yugipedia "Destroy" (fetched) | `FxRedTeamTest.aCardInTheDeck…` |
+| A Field Spell over your own | the old one to the GY at activation | kept: sent by the game's own rule, not a cost or an effect | Yugipedia "Field Spell Card" (fetched) | `FxRedTeamTest.aFieldSpellOverYourOwn…` |
+
+**Still open** (house rulings until a source is cited): "up to n" is 1 to n, never 0 (no Q&A found; `FxFilters.bounds`
+now agrees with the executor); the other seat's Quick Effects in an open state (`FxRulingsTest.h02`); a "the turn you
+activate this" condition looks back over Normal and Special Summons and activations, but not over what is not in
+`FxState.deeds` (attacks, a Set Spell); the choices the other seat makes in a move (its optional triggers, its order,
+a pick `who = THEM`) are put to the moving seat's chooser, which must route them by `by` — the table's window must
+(step 2), the goldfish answers both seats itself.
 
 ### 2.4 Game rules the engine holds (`FxRules`)
 
@@ -327,7 +372,8 @@ the triggering event — the test is the authority and this section follows it.
 - A Trap, or a set Quick-Play Spell, cannot be activated the turn it was set, unless the script's flag allows it.
 - A Quick-Play Spell is activated from the hand only on your own turn.
 - A Link or Pendulum monster from the Extra Deck goes to an Extra Monster Zone or a zone a Link points to.
-- Materials go to the GY; Xyz materials go under the monster.
+- Materials go to the GY; Xyz materials go under the monster. A Pendulum Monster that would go from the field to the
+  GY — destroyed, Tributed, a material or sent, face-up or face-down — goes face-up to the Extra Deck instead.
 - "Cannot be Normal Summoned" is never Normal Summoned, and "must first be" is honoured.
 - Restrictions in force bind, and once-per-turn is counted.
 - The phases only go forward.
@@ -341,24 +387,67 @@ Spells become reference scripts and `PuzzleEffect` is deleted. The puzzle baseli
 **The engine never guesses: every choice is a `Decision` put to a `Chooser`.**
 
 ```kotlin
+/** What a card choice is for: what a window says, and how it draws the picked cards' way. Worked out by the engine from the step. */
+enum class Purpose { TARGET, COST, SUMMON, ADD, SEND, BANISH, DESTROY, RETURN, ATTACH, MATERIAL, TRIBUTE, DISCARD, REVEAL, OTHER }
+
+/** The effect a decision is for: its card, the effect's id ("e1", "proc", "rule"), and its short name ("Revive"). */
+data class FxSource(val uid: Int, val effect: String, val label: String = "")
+
+/** Where a step takes the cards it picks: [dest] on [seat]'s side, and the positions it allows on the field. */
+data class Landing(val dest: Dest, val seat: Int, val positions: List<CardPosition> = emptyList())
+
 sealed interface Decision {
-    data class Cards(val why: String, val among: List<Int>, val min: Int, val max: Int) : Decision
-    data class Zone(val among: List<Place.Zone>) : Decision
-    data class Order(val triggers: List<Pending>) : Decision
-    data class YesNo(val why: String) : Decision        // an optional trigger, a "you can …", chaining more
-    data class Option(val among: List<String>) : Decision // Choose; also which of a card's Shortcuts
-    data class Declare(val kind: DeclareKind, val among: List<String>) : Decision // a card name, Type, Attribute, Level
+    /**
+     * min–max of [among] (uids). [purpose] (a cost's own pick is COST; a target is TARGET, never read off [why]); [to]: where
+     * and in which positions; [from]: each candidate's place, in step with [among]; [effect]; [step]: "2 of 3" within the
+     * effect; [hidden]: some lie where only the chooser may look (its Deck); [looked]: the places the pick looked in, so a
+     * window can show a place with nothing legal; [by]: the seat that chooses when it is not the user ("your opponent chooses").
+     */
+    data class Cards(
+        val why: String, val among: List<Int>, val min: Int, val max: Int,
+        val purpose: Purpose = Purpose.OTHER, val to: Landing? = null, val from: List<Place?> = emptyList(),
+        val effect: FxSource? = null, val step: String? = null, val hidden: Boolean = false,
+        val looked: List<Spot> = emptyList(), val by: Int? = null,
+    ) : Decision
+    /** Which of [among] (the legal, free zones) [card] goes to, and the [positions] it may take there. */
+    data class Zone(val among: List<Place.Zone>, val card: Int? = null, val positions: List<CardPosition> = emptyList(), val effect: FxSource? = null) : Decision
+    /** Which of [among] [card] is summoned in: face-up Attack or Defense, or face-down Defense where it is Set. */
+    data class Position(val card: Int, val among: List<CardPosition>, val effect: FxSource? = null) : Decision
+    /** A seat's own simultaneous triggers in chain order (a permutation); [labels] never name a card hidden from the mover. */
+    data class Order(val triggers: List<Pending>, val labels: List<String> = emptyList(), val by: Int? = null) : Decision
+    /** An optional trigger, a "you can …"; [by]: whose choice it is. */
+    data class YesNo(val why: String, val effect: FxSource? = null, val by: Int? = null) : Decision
+    /** One of [among]: a Choose's options, and which of a card's Shortcuts. */
+    data class Option(val among: List<String>, val effect: FxSource? = null) : Decision
+    /** A card name, Type, Attribute or Level. [open]: a name — any card that exists, [among] only a start (§2.3½). */
+    data class Declare(val kind: DeclareKind, val among: List<String>, val effect: FxSource? = null, val open: Boolean = false) : Decision
 }
-fun interface Chooser { fun choose(d: Decision): List<Int> }
+
+fun interface Chooser {
+    /** Indexes into the decision's own list ([YesNo]: [1] yes, [0] no); out of bounds, or CANCEL, cancels the whole use. */
+    fun choose(d: Decision): List<Int>
+    /** An open name declaration answered by any card of the pool: its passcode (checked by the engine), or null. */
+    fun name(d: Decision.Declare): Int? = null
+    /** A decision with one legal answer is never put; the chooser is told it, so a line's answers stay in step. */
+    fun told(d: Decision, answer: List<Int>) {}
+}
 
 object FxEngine {
     /** Everything [seat] may start now: activations (card, effect), Normal Summon or Set, procedures, phases, pass, resolve. */
     fun moves(t: FxTable, seat: Int): List<FxMove>
     /** [move] made: the tagged actions to commit and the table after, or refused with the rule that forbids it. */
     fun play(t: FxTable, seat: Int, move: FxMove, chooser: Chooser): FxPlay
+    /** Why [seat] may not activate [uid]'s [effect] now, in words: what a Shortcut shows greyed. */
+    fun refusal(t: FxTable, seat: Int, uid: Int, effect: String): String?
 }
-data class FxTable(val state: DuelState, val fx: FxState, val book: ScriptBook, val facts: FxFacts)
+data class FxTable(val state: DuelState, val fx: FxState, val book: ScriptBook, val facts: FxFacts, val seed: Long = 0L)
 ```
+
+**Left for step 2** (the Shortcut window's review asked for them; none falls out of step 1 cleanly): `Cards.refused`,
+each candidate a place held that the pick refused, with its reason (the filter evaluator says only yes or no);
+`Zone.closed`, each zone the rules close and why (taken, no Link points there, one Extra Monster Zone a seat); and a
+pure `FxEngine.stillLegal(d, picked)` for rules over a whole set ("different names", a Level total), which needs the
+material sets carried on the decision.
 
 **The choosers:**
 - the test's `RecordMatcher` (§4.2), which answers from the record;
@@ -1003,6 +1092,17 @@ data class GoldfishResult(
   are missed, the default hand counts come down, and the run says so in the sentence.
 - **If copying `DuelState` dominates,** a search-only mutable table may stand in for it — only behind a test that it
   agrees with `DuelRules` on every action (the memo-against-old rule from 1.0.92).
+- **Measured in step 1** (`FxBenchTest`, the walker's full reference table, one core of the sandbox shared with other
+  builds, so the numbers move by a third between runs). The engine as agents (b) and (c) left it: about 4,900 a second
+  on the bench's single pass (a 40-seed warm-up), about 9,200 warm. After the red team, same harness, same machine:
+  about 5,600–5,900 on the single pass and 12,000–15,000 warm (median of five passes), with the rules fixes' own costs
+  in it. `FxChain.moves` dominated; its fixes, each held by `FxMemoTest` to the same answers as worked out afresh: a
+  book's unread effects worked out once (`ScriptBook.unread`), a table's restrictions and refusals worked out once
+  (`FxTable.inForce`, `FxTable.refusal`), a book's passcodes resolved once (`ScriptBook.canonical`), the moves' material
+  searches stopping at the first set that leaves a zone (`FxProcs.open`, `rituals`/`fusions` with `any`), and a material
+  search bounded at `FxProcs.MOST_TRIED` sets (it walked billions when none fit). The 20,000 assumption is not yet met
+  on the single pass; the next lever is `FxChain.play`'s per-action fold (`FxScribe.emit`: `DuelRules.apply` and
+  `FxFold.read` for every action), roughly half of what is left.
 
 ---
 
@@ -1066,7 +1166,11 @@ kai: "the default key staying. Shortcut should be a dedicated choice when intera
     target arrow (`DuelAction.Target`) from the activating card, so both players see what is targeted while the link
     stands.
   - **Declarations.** "Declare a card name / a Type / an Attribute / a Level" is a `Decision.Declare(kind, among)` (and an
-    `Op.Declare` binding the answer for later steps): a searchable list for a name, a short list for the rest.
+    `Op.Declare` binding the answer for later steps): a searchable list for a name, a short list for the rest. **A name
+    may be any card that exists** (§2.3½): the decision is `open`, its `among` only the names on the table the seat can
+    see, and the window searches the whole pool, answering through `Chooser.name`; the engine accepts any pool card the
+    effect lets be named (never a Token). Ai's `declare=` takes any pool card by its exact name (`Shortcuts.names`), and a
+    name that is more than one card's, or a near miss, is asked back with its choices, never guessed.
   - **Every input reaches it**, as every duel gesture does (`DuelInput`, `DuelCoverage`): a click or a tap on a lit card;
     the arrows walking only the lit cards and Space choosing; typing its place in the table's notation (`gy3`, `ob2`,
     `om1`); a finger's tap; and Ai answering in the op (`pick=` / `target=gy3,ob2`) or asked back with the options listed.
@@ -1475,10 +1579,15 @@ An older build reads every document and skips the new keys. Release notes name e
 - **Data is untrusted input**, whether a script made it or it arrived by sync.
   - It is decoded leniently and capped: 64 KB a script, 2,000 scripts, and every count clamped.
   - It is legality-checked before use.
-  - The engine has its own bounds: 1,000 actions a turn anywhere, a chain of at most 32 links, at most 64 triggers
-    gathered at once.
+  - The engine has its own bounds: 1,000 actions a move, a chain of at most 32 links, at most 64 triggers gathered at
+    once, steps nested at most 16 deep and filters and conditions 32 (`FxSteps.MOST_DEPTH`, `FxWalk.DEEPEST`: a script
+    nested deeper is never read, and is checked without recursing past that), at most `FxProcs.MOST_TRIED` (20,000)
+    candidate sets in one material search, picks clamped to 60, life points and Levels never wrapping round
+    (`FxRedTeamTest`).
   - A loop detector stops a turn once the same table and `FxState` recur through triggers alone. A script that
-    triggers itself forever ends with the verdict "loop", never a hang.
+    triggers itself forever ends with the verdict "loop", never a hang. **Step 1 bounds each move** (two cards that set
+    each other off forever make one bounded move at a time, `FxRedTeamTest.triggersThatSetEachOtherOff…`); the
+    detector itself is the goldfish's driver's, in step 4.
 - **Ai writes only what the person asked for** (§3.1).
   - Core refuses Ai's write to `lib/effects/` for a card not on the asked list.
   - Only the person's click adds to that list: `fx_request` offers, and never adds.

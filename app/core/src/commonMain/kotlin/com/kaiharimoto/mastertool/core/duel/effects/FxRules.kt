@@ -163,7 +163,7 @@ object FxRules {
     fun spellZones(t: FxTable, seat: Int, uid: Int): List<Place.Zone> {
         val c = t.card(uid) ?: return emptyList()
         return if (c.type == CardType.SPELL && c.isSpellSub("Field")) {
-            listOf(Place.Zone(seat, ZoneKind.FIELD, 0)) // a new Field Spell replaces the old (the old goes to the GY by hand)
+            listOf(Place.Zone(seat, ZoneKind.FIELD, 0)) // a new Field Spell replaces your old one, which goes to the GY by the game's own rule (Yugipedia, "Field Spell Card")
         } else t.state.freeZones(seat, ZoneKind.SPELL)
     }
 
@@ -239,14 +239,17 @@ object FxRules {
      * The restrictions binding [seat] now: those left by effects ([FxState.restrictions]) and those a face-up card's
      * [Kind.CONTINUOUS] effects apply while their condition holds.
      */
-    fun inForce(t: FxTable): List<InForce> = t.fx.restrictions + continuous(t)
+    fun inForce(t: FxTable): List<InForce> = t.inForce
+
+    /** What [inForce] reads, worked out once a table ([FxTable.inForce]). */
+    internal fun inForceNow(t: FxTable): List<InForce> = t.fx.restrictions + continuous(t)
 
     private fun continuous(t: FxTable): List<InForce> = t.state.onField().flatMap { uid ->
         val inst = t.inst(uid)
         if (inst == null || !inst.faceUp) return@flatMap emptyList()
         val script = t.script(uid) ?: return@flatMap emptyList()
         val owner = FxFilters.controller(uid, t.state) ?: return@flatMap emptyList()
-        script.effects.filter { it.kind == Kind.CONTINUOUS && !FxWalk.unread(it) }
+        script.effects.filter { it.kind == Kind.CONTINUOUS && !t.book.unread(script.card, it.id) }
             .filter { e -> e.condition == null || FxConds.holds(e.condition, FxScope(t, owner, uid)) }
             .flatMap { e -> e.leaves.flatMap { r -> seatsOf(r.seat, owner).map { InForce(r, it, uid, t.state.turn) } } }
     }
@@ -265,7 +268,7 @@ object FxRules {
     }
 
     /** Whether a restriction on [held] forbids [asked]: no Special Summons forbids those from the Extra Deck too. */
-    private fun bans(held: Ban, asked: Ban): Boolean = held == asked || (held == Ban.SPECIAL_SUMMON && asked == Ban.SPECIAL_SUMMON_FROM_EXTRA)
+    internal fun bans(held: Ban, asked: Ban): Boolean = held == asked || (held == Ban.SPECIAL_SUMMON && asked == Ban.SPECIAL_SUMMON_FROM_EXTRA)
 
     fun words(r: InForce): String {
         val what = when (r.restriction.ban) {
@@ -342,12 +345,40 @@ object FxRules {
         return if (used >= times) (if (opt == Opt.PerDuel) OPD_USED else OPT_USED) else null
     }
 
-    /** [fx] with [seat]'s use of [uid]'s [effect] counted under [opt] (nothing when there is no rule). */
-    fun use(t: FxTable, seat: Int, uid: Int, effect: String, opt: Opt?): FxState {
+    /**
+     * [fx] with [seat]'s use of [uid]'s [effect] counted under [opt] (nothing when there is no rule), for chain link [link]
+     * when it is an activation — so a negated activation can give back what "you can only activate" counted.
+     */
+    fun use(t: FxTable, seat: Int, uid: Int, effect: String, opt: Opt?, link: Int? = null): FxState {
         opt ?: return t.fx
         val card = t.code(uid) ?: return t.fx
         val life = t.fx.life(uid)
         val key = optKey(card, effect, opt, uid, life) ?: return t.fx
-        return t.fx.copy(uses = t.fx.uses + OptUse(seat, card, effect, key, uid, life, t.state.turn, duel = opt == Opt.PerDuel))
+        val refunds = (opt as? Opt.ByName)?.refunds == true
+        return t.fx.copy(uses = t.fx.uses + OptUse(seat, card, effect, key, uid, life, t.state.turn, duel = opt == Opt.PerDuel, link = link, refunds = refunds))
+    }
+
+    /**
+     * Why [seat] may not activate [e] of [uid] because of its own "the turn you activate this" conditions ([Effect.leaves]):
+     * the seat has already done this turn what one of them forbids. Null when it may.
+     */
+    fun conditionRefusal(t: FxTable, seat: Int, uid: Int, e: Effect): String? {
+        if (e.leaves.isEmpty() || e.kind == Kind.CONTINUOUS) return null
+        for (r in e.leaves) {
+            if (seat !in seatsOf(r.seat, seat)) continue
+            val done = t.fx.deeds.firstOrNull { d ->
+                d.seat == seat && !(r.ban == Ban.ACTIVATE && d.uid == uid) &&
+                    bans(r.ban, if (d.ban == Ban.SPECIAL_SUMMON && d.extra) Ban.SPECIAL_SUMMON_FROM_EXTRA else d.ban) &&
+                    (r.except == null || t.inst(d.uid) == null || !FxFilters.matches(r.except, d.uid, FxScope(t, seat, uid)))
+            } ?: continue
+            return "It cannot be activated the turn you ${deedWords(done)}" + (if (r.except != null) " other than as it allows." else ".")
+        }
+        return null
+    }
+
+    private fun deedWords(d: Deed): String = when (d.ban) {
+        Ban.NORMAL_SUMMON -> "Normal Summon or Set"
+        Ban.SPECIAL_SUMMON, Ban.SPECIAL_SUMMON_FROM_EXTRA -> if (d.extra) "Special Summon from the Extra Deck" else "Special Summon"
+        Ban.ACTIVATE -> "activate another card or effect"
     }
 }
