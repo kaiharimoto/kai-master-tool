@@ -297,7 +297,8 @@ class Shortcuts(
             engine: ShortcutEngine = ShortcutEngine.FX,
             networked: Boolean = false,
             resolveAtOnce: Boolean? = null,
-        ): Shortcuts = Shortcuts(book, facts, FxFold.fold(game.header, game.played, book, facts, game.state), engine, networked, resolveAtOnce)
+            names: ((String) -> List<Int>)? = null,
+        ): Shortcuts = Shortcuts(book, facts, FxFold.fold(game.header, game.played, book, facts, game.state), engine, networked, resolveAtOnce, names = names)
 
         /** An effect's short name: its own label, else "Effect 2" by its id (or its place in the script). */
         fun label(e: Effect, index: Int): String =

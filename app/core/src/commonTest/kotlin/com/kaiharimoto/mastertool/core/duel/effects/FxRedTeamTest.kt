@@ -140,6 +140,21 @@ class FxRedTeamTest {
         assertTrue(tributed.state.cards.getValue(swing).faceUp)
     }
 
+    /**
+     * Yugipedia, "Field Spell Card" (fetched): a Field Spell activated while you control one sends the old one to the GY
+     * "via game mechanics" — no cost, no effect. The engine already did; held here, with the "sent by an effect" trigger
+     * it must not set off.
+     */
+    @Test
+    fun aFieldSpellOverYourOwnSendsTheOldByTheRules() {
+        val p = FxPlays(FxRef.game(Side(hand = listOf(FxRef.GROUNDS), field = listOf(Slot(FxRef.GROUNDS, 0, kind = ZoneKind.FIELD)))))
+        val (old, new) = p.uids(FxRef.GROUNDS).partition { p.t.state.placeOf(it) is Place.Zone }
+        val d = p.activate(0, new.single())
+        assertEquals(DuelAction.Move(old.single(), Place.Pile(0, PileKind.GY), how = "send"), d.actions.first())
+        assertEquals(Place.Zone(0, ZoneKind.FIELD, 0), p.t.state.placeOf(new.single()))
+        assertTrue(d.events.none { it.event == Event.SENT_TO_GY && it.cause != null }, "neither a cost nor an effect")
+    }
+
     /** Yugipedia, "Destroy" (fetched): "Cards on the field, hand, Main Deck, and Extra Deck can all be destroyed by card effects." */
     @Test
     fun aCardInTheDeckIsDestroyedWhenThePickReachesThere() {
@@ -169,6 +184,18 @@ class FxRedTeamTest {
         val q = p.asked.filterIsInstance<Decision.YesNo>().single { it.by == 1 }
         assertFalse("Beacon" in q.why, q.why)
         assertEquals("Your opponent's trigger: use a card's effect?", q.why)
+    }
+
+    /** The log's note of a Level changed named the card, in a hand the other seat cannot see: it is said without its name. */
+    @Test
+    fun aLevelChangedInTheHandIsNotNamedInTheLog() {
+        val t = FxRef.table(Side(hand = listOf(FxRef.TINKER), field = listOf(Slot(FxRef.LAMP, 0))))
+        val lamp = FxRef.uid(t, FxRef.LAMP)
+        val hand = run(t, lamp, steps(Op.ChangeLevel(Pick(from = listOf(you(Area.HAND))), by = Num.Const(1))))
+        val note = (hand.actions.single() as DuelAction.Note).text
+        assertFalse("Tinker" in note, note)
+        val field = run(t, lamp, steps(Op.ChangeLevel(Pick(ref = Pick.SELF), by = Num.Const(1))))
+        assertEquals("Example Lamp is Level 4 this turn.", (field.actions.single() as DuelAction.Note).text)
     }
 
     // ---- lens 4: hostile scripts -------------------------------------------------------------------------------------

@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel.effects
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
@@ -835,9 +836,9 @@ object FxSteps {
             if (to == null && by == null) return false
             chosen.forEach { u ->
                 val now = t.level(u) ?: return@forEach
-                val next = ((to ?: now) + (by ?: 0)).coerceAtLeast(1)
+                val next = ((to ?: now).toLong() + (by ?: 0)).coerceIn(1L, FxTable.MOST_LEVEL.toLong()).toInt()
                 emit(
-                    DuelAction.Note("${name(u)} is Level $next" + (if (op.until == com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_DUEL) "." else " this turn."), seat),
+                    DuelAction.Note("${if (DuelSight.sees(s, u, 1 - seat)) name(u) else "A card the other player cannot see"} is Level $next" + (if (op.until == com.kaiharimoto.mastertool.core.duel.Lock.UNTIL_DUEL) "." else " this turn."), seat),
                     FxMemo(level = LevelChange(u, t.fx.life(u), to, by, op.until)),
                 )
             }

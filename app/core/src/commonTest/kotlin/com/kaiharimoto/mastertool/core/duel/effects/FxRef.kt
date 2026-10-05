@@ -65,6 +65,9 @@ object FxRef {
     const val LORD = 900_000_049
     const val BEACON = 900_000_050
 
+    // The red team: a Field Spell, for one over another.
+    const val GROUNDS = 900_000_051
+
     private fun monster(
         id: Int, name: String, frame: String, type: String, level: Int?, attr: CardAttribute, race: String, atk: Int, def: Int?,
         link: Int? = null, arrows: List<String> = emptyList(), scale: Int? = null, alts: List<Int> = emptyList(),
@@ -114,6 +117,7 @@ object FxRef {
         spell(OATH, "Example Oath", "Normal"),
         monster(LORD, "Example Lord", "xyz", "Xyz Effect Monster", 4, CardAttribute.LIGHT, "Warrior", 2400, 2000),
         monster(BEACON, "Example Beacon", "effect", "Effect Monster", 4, CardAttribute.WATER, "Aqua", 1500, 1500),
+        spell(GROUNDS, "Example Grounds", "Field"),
     )
 
     private fun you(area: Area) = Spot(Rel.YOU, area)
@@ -273,6 +277,11 @@ object FxRef {
 
     /** The chain's and the steps' reference cards (agents (b) and (c)): triggers of each timing, costs, a hand trap, a declaration. */
     private val chainScripts: List<CardScript> = listOf(
+        // A Field Spell: activated, gain 100 LP.
+        CardScript(
+            GROUNDS, name = "Example Grounds",
+            effects = listOf(Effect("e1", "Grounds", Kind.ACTIVATION, from = setOf(Where.HAND, Where.FIELD_ZONE), does = steps(Op.Lp(Rel.YOU, Num.Const(100))))),
+        ),
         // "When this card is sent to the GY: you can draw 1." An optional WHEN trigger: it can miss the timing.
         CardScript(
             ECHO, name = "Example Echo",

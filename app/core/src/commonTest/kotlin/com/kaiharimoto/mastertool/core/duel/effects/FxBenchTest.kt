@@ -48,6 +48,15 @@ class FxBenchTest {
         val ms = start.elapsedNow().inWholeMilliseconds.coerceAtLeast(1)
         val rate = c.plays * 1000L / ms
         println("FxBenchTest: ${c.plays} engine moves (${c.lists} move lists, ${c.actions} actions) in $ms ms: $rate moves a second on one core")
+        // The steady state a long search runs at (the red team, D.md §5.7): the same pass again, three times, warm; the
+        // median printed beside the first pass (which still pays the JIT's later tiers, and is what the floor judges).
+        val warm = (1..3).map {
+            val w = Count()
+            val m = TimeSource.Monotonic.markNow()
+            run(100L..399L, w)
+            w.plays * 1000L / m.elapsedNow().inWholeMilliseconds.coerceAtLeast(1)
+        }.sorted()
+        println("FxBenchTest: warm, ${warm[1]} moves a second (median of $warm)")
         assertTrue(rate >= FLOOR, "$rate moves a second is below the floor of $FLOOR")
     }
 

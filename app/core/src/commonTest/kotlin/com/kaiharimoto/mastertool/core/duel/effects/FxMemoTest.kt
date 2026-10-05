@@ -48,6 +48,21 @@ class FxMemoTest {
     }
 
     @Test
+    fun theProceduresListedWithoutEverySetAreTheOnesWithThem() {
+        var open = 0
+        for (t in tables()) {
+            for (seat in 0..1) {
+                t.state.cards.keys.sorted().forEach { uid ->
+                    val listed = FxProcs.open(t, seat, uid)
+                    assertEquals(FxProcs.options(t, seat, uid).map { it.index }, listed, "$uid")
+                    open += listed.size
+                }
+            }
+        }
+        kotlin.test.assertTrue(open > 0, "the walks reach procedures to compare")
+    }
+
+    @Test
     fun aBooksUnreadEffectsAreTheWalksOwn() {
         FxRef.book.cards.forEach { code ->
             val s = FxRef.book.script(code)!!

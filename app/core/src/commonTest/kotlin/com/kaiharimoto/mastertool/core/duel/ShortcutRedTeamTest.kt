@@ -1,14 +1,20 @@
 package com.kaiharimoto.mastertool.core.duel
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
+import com.kaiharimoto.mastertool.core.duel.effects.CardType
 import com.kaiharimoto.mastertool.core.duel.effects.Decision
 import com.kaiharimoto.mastertool.core.duel.effects.DeclareKind
+import com.kaiharimoto.mastertool.core.duel.effects.Filter
+import com.kaiharimoto.mastertool.core.duel.effects.Op
+import com.kaiharimoto.mastertool.core.duel.effects.Step
 import com.kaiharimoto.mastertool.core.duel.effects.FxRef
 import com.kaiharimoto.mastertool.core.duel.effects.FxRef.Side
 import com.kaiharimoto.mastertool.core.duel.effects.FxRef.Slot
 import com.kaiharimoto.mastertool.core.duel.effects.Purpose
 import com.kaiharimoto.mastertool.core.duel.text.AnswerChooser
 import com.kaiharimoto.mastertool.core.duel.text.ShortcutAnswers
+import com.kaiharimoto.mastertool.core.duel.text.ShortcutAsk
+import com.kaiharimoto.mastertool.core.duel.text.ShortcutLine
 import com.kaiharimoto.mastertool.core.model.CardId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -120,6 +126,14 @@ class ShortcutRedTeamTest {
         assertNull(twin.name(d))
         assertEquals(listOf(-1), twin.choose(d))
         assertTrue(twin.question!!.startsWith("“twin” is the name of more than one card"), twin.question)
+        // Through the line and the engine: a Shortcut declaring a name nobody has on the table.
+        val oath = FxRef.script(FxRef.OATH)
+        val naming = oath.copy(effects = listOf(oath.effects.single().copy(does = listOf(Step(Op.Declare(DeclareKind.NAME, among = Filter.Kind(CardType.MONSTER), bind = "n"))))))
+        val (g, t) = FxRef.game(Side(hand = listOf(FxRef.OATH), deck = listOf(FxRef.PAWN)), book = FxRef.bookWith(naming))
+        val sc = Shortcuts(t.book, FxRef.facts, t.fx, resolveAtOnce = true, names = names)
+        val r = ShortcutLine.answered(ShortcutAsk.Use(FxRef.uid(t, FxRef.OATH), "e1", ShortcutAnswers(zone = listOf("s1"), declare = listOf("Example Colossus"))), sc, g.state, 0, catalog)
+        assertTrue(r.ok, r.problem)
+        assertTrue(r.actions.any { it is DuelAction.Note && it.text.endsWith("declared Example Colossus.") }, r.actions.toString())
         // Not a near name off the table: "Example Col" is no card's exact name, and the list holds none like it.
         val near = AnswerChooser(ShortcutAnswers(declare = listOf("Example Col")), s, 0, catalog, names = names)
         assertNull(near.name(d))

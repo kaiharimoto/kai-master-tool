@@ -37,7 +37,7 @@ object FxSummons {
             }
             (s.seats[seat].hand + s.seats[seat].extra + s.seats[seat].gy + s.seats[seat].banished).forEach { uid ->
                 if (!known(t, uid)) return@forEach
-                FxProcs.options(t, seat, uid).forEach { add(FxMove.Procedure(uid, it.index)) }
+                FxProcs.open(t, seat, uid).forEach { add(FxMove.Procedure(uid, it)) }
             }
         }
         FxRules.phases(t, seat).forEach { add(FxMove.Phase(it)) }

@@ -103,6 +103,11 @@ object FxChain {
      */
     fun refusal(t0: FxTable, seat: Int, uid: Int, effect: String): String? {
         val t = t0.current()
+        // Worked out once a table: the moves list it, a Shortcut's list greys it, and the move made checks it again.
+        return t.refusal(seat, uid, effect) { work(t, seat, uid, effect) }
+    }
+
+    private fun work(t: FxTable, seat: Int, uid: Int, effect: String): String? {
         val s = t.state
         val inst = t.inst(uid) ?: return "No such card."
         val script = t.script(uid) ?: return "The engine has no written effect for this card: use it by hand."

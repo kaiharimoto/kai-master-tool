@@ -18,12 +18,27 @@ import com.kaiharimoto.mastertool.core.model.CardIdentity
  */
 class ScriptBook private constructor(
     private val scripts: Map<Int, CardScript>,
-    private val canon: (Int) -> Int,
+    private val canonFrom: (Int) -> Int,
     /** Built by [verified]: only verified effects and procedures are here. */
     val verifiedOnly: Boolean,
 ) {
     /** The canonical passcode of any printing. */
     fun canonical(code: Int): Int = canon(code)
+
+    /**
+     * [canonFrom], remembered a passcode at a time (a map replaced whole on a miss, so the goldfish's workers share it
+     * safely): every trigger check asks it of every card on the table, and the pool's identity look-up is not free.
+     */
+    private fun canon(code: Int): Int {
+        val now = canons
+        now[code]?.let { return it }
+        val c = canonFrom(code)
+        canons = HashMap<Int, Int>(now.size * 2 + 4).apply { putAll(now); put(code, c) }
+        return c
+    }
+
+    @kotlin.concurrent.Volatile
+    private var canons: Map<Int, Int> = emptyMap()
 
     /** [code]'s script, by any printing, or null when the card has none. */
     fun script(code: Int): CardScript? = scripts[canon(code)]

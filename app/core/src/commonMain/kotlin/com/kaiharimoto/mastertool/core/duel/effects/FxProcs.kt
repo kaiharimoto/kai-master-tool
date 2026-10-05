@@ -76,6 +76,29 @@ object FxProcs {
         }
     }
 
+    /**
+     * The indexes of the procedures [seat] may use on [uid] now: the same as [options]' (`FxMemoTest`), found without
+     * listing every material set — each search stops at the first set that leaves the monster a zone. What the engine's
+     * moves list; [options] is for the one that is made.
+     */
+    fun open(t: FxTable, seat: Int, uid: Int): List<Int> {
+        val script = t.script(uid) ?: return emptyList()
+        val c = t.card(uid) ?: return emptyList()
+        val p = t.state.placeOf(uid)
+        val inExtra = p is Place.Pile && p.kind == PileKind.EXTRA && p.seat == seat
+        fun any(kind: ProcKind, sets: Sequence<List<Int>>) =
+            FxRules.specialRefusal(t, seat, uid, kind) == null && sets.take(MOST).any { FxRules.summonZones(t, seat, uid, it.toSet()).isNotEmpty() }
+        return script.summon?.procs.orEmpty().withIndex().filter { (i, proc) ->
+            !t.book.unreadProc(script.card, i) && when (proc) {
+                is Proc.Link -> inExtra && c.link != null && any(ProcKind.LINK, linkSeq(t, seat, uid, proc))
+                is Proc.Synchro -> inExtra && CardFrame.SYNCHRO in c.frames && any(ProcKind.SYNCHRO, synchroSeq(t, seat, uid, proc))
+                is Proc.Xyz -> inExtra && c.rank != null && any(ProcKind.XYZ, xyzSeq(t, seat, uid, proc))
+                is Proc.Inherent -> inherent(t, seat, uid, i, proc) != null
+                is Proc.Fusion, Proc.Ritual, is Proc.Unknown -> false
+            }
+        }.map { it.index }
+    }
+
     private fun build(t: FxTable, seat: Int, uid: Int, index: Int, proc: Proc, kind: ProcKind, sets: List<List<Int>>): ProcOption? {
         if (FxRules.specialRefusal(t, seat, uid, kind) != null) return null
         val kept = sets.map { it to FxRules.summonZones(t, seat, uid, it.toSet()) }.filter { it.second.isNotEmpty() }
@@ -135,15 +158,17 @@ object FxProcs {
     }
 
     /** The legal Link material sets for [uid] by [proc]. */
-    fun linkSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Link): List<List<Int>> {
-        val rating = t.card(uid)?.link ?: return emptyList()
+    fun linkSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Link): List<List<Int>> = linkSeq(t, seat, uid, proc).take(MOST).toList()
+
+    private fun linkSeq(t: FxTable, seat: Int, uid: Int, proc: Proc.Link): Sequence<List<Int>> {
+        val rating = t.card(uid)?.link ?: return emptySequence()
         val scope = FxScope(t, seat, uid)
         val pool = FxFilters.among(proc.each, fieldMaterials(t, seat).filter { it != uid }, scope)
         val min = proc.min.coerceAtLeast(1)
         val max = proc.max.coerceAtMost(rating).coerceAtLeast(min)
         return subsets(pool, min..max).filter { set ->
             (proc.also == null || set.any { FxFilters.matches(proc.also, it, scope) }) && reaches(set.map { linkWorth(t, it) }, rating)
-        }.take(MOST).toList()
+        }
     }
 
     /** What a Link material may count for: 1, or its rating as well when it is a Link Monster. */
@@ -157,33 +182,37 @@ object FxProcs {
     }
 
     /** The legal Synchro material sets for [uid] by [proc]: Tuners first, then the rest, each set in table order. */
-    fun synchroSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Synchro): List<List<Int>> {
-        val level = t.card(uid)?.level ?: return emptyList()
+    fun synchroSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Synchro): List<List<Int>> = synchroSeq(t, seat, uid, proc).take(MOST).toList()
+
+    /** [synchroSets] as they are found, each once. */
+    private fun synchroSeq(t: FxTable, seat: Int, uid: Int, proc: Proc.Synchro): Sequence<List<Int>> {
+        val level = t.card(uid)?.level ?: return emptySequence()
         val scope = FxScope(t, seat, uid)
         val pool = fieldMaterials(t, seat).filter { it != uid && t.level(it) != null }
         val tuners = pool.filter { t.card(it)?.tuner == true && FxFilters.matches(proc.tuner.where, it, scope) }
-        val out = LinkedHashSet<List<Int>>()
-        for (tu in subsets(tuners, proc.tuner.least..proc.tuner.most)) {
-            if (tu.isEmpty()) continue
-            val rest = FxFilters.among(proc.others.where, pool.filter { it !in tu }, scope)
-            for (others in subsets(rest, proc.others.least..proc.others.most)) {
-                if (others.isEmpty() && proc.others.least > 0) continue
-                val set = tu + others
-                if (set.sumOf { t.level(it) ?: 0 } == level) out += pool.filter { it in set }
-                if (out.size >= MOST) return out.toList()
+        return sequence {
+            for (tu in subsets(tuners, proc.tuner.least..proc.tuner.most)) {
+                if (tu.isEmpty()) continue
+                val rest = FxFilters.among(proc.others.where, pool.filter { it !in tu }, scope)
+                for (others in subsets(rest, proc.others.least..proc.others.most)) {
+                    if (others.isEmpty() && proc.others.least > 0) continue
+                    val set = tu + others
+                    if (set.sumOf { t.level(it) ?: 0 } == level) yield(pool.filter { it in set })
+                }
             }
-        }
-        return out.toList()
+        }.distinct()
     }
 
     /** The legal Xyz material sets for [uid] by [proc]. */
-    fun xyzSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Xyz): List<List<Int>> {
-        val rank = t.card(uid)?.rank ?: return emptyList()
+    fun xyzSets(t: FxTable, seat: Int, uid: Int, proc: Proc.Xyz): List<List<Int>> = xyzSeq(t, seat, uid, proc).take(MOST).toList()
+
+    private fun xyzSeq(t: FxTable, seat: Int, uid: Int, proc: Proc.Xyz): Sequence<List<Int>> {
+        val rank = t.card(uid)?.rank ?: return emptySequence()
         val scope = FxScope(t, seat, uid)
         val pool = FxFilters.among(proc.each, fieldMaterials(t, seat), scope)
             .filter { it != uid && t.inst(it)?.token != true && t.level(it) == rank }
         val n = proc.n.coerceAtLeast(1)
-        return subsets(pool, n..(proc.max ?: n).coerceAtLeast(n)).take(MOST).toList()
+        return subsets(pool, n..(proc.max ?: n).coerceAtLeast(n))
     }
 
     /**
