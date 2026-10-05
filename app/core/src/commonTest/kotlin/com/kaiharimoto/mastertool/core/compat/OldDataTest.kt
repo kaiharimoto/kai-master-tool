@@ -28,6 +28,7 @@ import com.kaiharimoto.mastertool.core.sync.SyncPrefs
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -410,6 +411,26 @@ class OldDataTest {
         assertEquals("CANVAS", e.anchor)
         assertEquals(800f, e.w)
         assertEquals("Hi", e.plainText)
+    }
+
+    @Test
+    fun moduleSlidesAndEndCardsFrom1071StillWork() {
+        // 1.0.71–1.1.x: a siding slide without its matchup link, a ratios chart without group colours, and the end
+        // card's dashed boxes without the guide flag. 1.1.x links each siding slide to its matchup (the audit's B2),
+        // gives charts their groups (B8) and leaves guides out of exports (I2): the old shapes must still do right.
+        val input = """{\"matchups\":[{\"name\":\"Snake-Eye\",\"first\":{\"out\":[1],\"into\":[9]}},{\"name\":\"Yubel\",\"first\":{\"out\":[3],\"into\":[7]}}]}"""
+        val old = """{"id":"pmod","name":"Profile","theme":"paper","slides":[
+            {"id":"s1","title":"Siding vs Yubel","module":{"type":"SIDING","params":{"input":"$input"},"generatedAt":1},
+             "elements":[{"id":"s1-title","type":"TEXT","anchor":"STAGE","paras":[{"runs":[{"text":"vs Yubel"}]}]}]},
+            {"id":"s2","elements":[{"id":"s2-donut","type":"CHART","anchor":"STAGE","chart":{"kind":"DONUT","labels":["A (12)"],"series":[{"name":"Cards","values":[12]}]}}]},
+            {"id":"s3","layout":"END_CARD","elements":[{"id":"e1","type":"SHAPE","shape":"ROUNDED","stroke":{"color":"@line","width":3,"dash":"DASHED"},
+              "paras":[{"runs":[{"text":"Next video"}]}]},{"id":"e2","type":"TEXT","paras":[{"runs":[{"text":"Thanks for watching"}]}]}]}]}"""
+        val p = assertNotNull(PresentCodec.decode(old))
+        val siding = p.slides[0].copy(title = "Retitled")
+        assertEquals("Yubel", com.kaiharimoto.mastertool.core.present.modules.Modules.matchupOf(siding))
+        assertEquals(null, p.slides[1].elements.single().chart?.groups)
+        assertTrue(p.slides[2].elements[0].isGuide, "the old dashed box is a guide")
+        assertFalse(p.slides[2].elements[1].isGuide, "the words are content")
     }
 
     @Test

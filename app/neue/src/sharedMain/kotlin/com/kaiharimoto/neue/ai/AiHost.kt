@@ -103,7 +103,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private val webs get() = h.webs
     private val index get() = state.index
 
-    private class Answer(val content: String, val summary: String, val isError: Boolean = false)
+    private class Answer(val content: String, val summary: String, val isError: Boolean = false, val pictures: List<Part.Image> = emptyList())
 
     private fun ok(content: String, summary: String) = Answer(content, summary)
     private fun ok(content: JsonElement, summary: String) = Answer(content.toString(), summary)
@@ -141,7 +141,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         return result(call, answer)
     }
 
-    private fun result(call: Part.ToolUse, a: Answer) = Part.ToolResult(call.id, call.name, a.content, a.isError, a.summary)
+    private fun result(call: Part.ToolUse, a: Answer) = Part.ToolResult(call.id, call.name, a.content, a.isError, a.summary, pictures = a.pictures)
 
     /** What a tool is doing, while it does it. */
     private fun describe(spec: ToolSpec, input: JsonObject): String = when (spec.name) {
@@ -213,7 +213,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             }
             "recall" -> recall(ToolArgs.string(i, "query").orEmpty(), ToolArgs.string(i, "scope") ?: "this", ToolArgs.int(i, "limit") ?: 8)
             "ask_user" -> askUser(ToolArgs.string(i, "question")!!, ToolArgs.strings(i, "options"), ToolArgs.bool(i, "multiple") ?: false, ToolArgs.strings(i, "cards"), ToolArgs.strings(i, "heard"))
-            else -> (harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError) }
+            else -> (harness.run(spec.name, i) ?: banTools.run(spec.name, i) ?: prepTools.run(spec.name, i) ?: presentTools.run(spec.name, i) ?: duelTools.run(spec.name, i) ?: worldTools.run(spec.name, i) ?: shootoutTools.run(spec.name, i) ?: meta.run(spec.name, i))?.let { Answer(it.content, it.summary, it.isError, it.pictures) }
                 ?: fail("${spec.name} is not in this version of the app yet.")
         }
     }

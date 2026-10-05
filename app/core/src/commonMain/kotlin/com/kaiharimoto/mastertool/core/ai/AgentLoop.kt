@@ -236,8 +236,9 @@ class AgentLoop(
                     Part.ToolResult(call.id, call.name, "The app failed running ${call.name}: ${t.message ?: t::class.simpleName}", isError = true)
                 }.also { emit(AgentEvent.ToolDone(it)) }
             }
-            // Every result in one turn: splitting them teaches a model to stop calling tools together.
-            val answer = ChatTurn(Role.USER, results, now())
+            // Every result in one turn: splitting them teaches a model to stop calling tools together. Pictures a
+            // result brings (1.1.x) follow the results in that turn, where every wire may put a picture.
+            val answer = ChatTurn(Role.USER, results + results.flatMap { it.pictures }, now())
             history = history + answer
             emit(AgentEvent.Appended(answer))
         }

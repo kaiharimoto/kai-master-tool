@@ -28,7 +28,13 @@ import java.time.LocalDate
 import kotlin.coroutines.resume
 
 /** What a meta tool answered: for the model, for the chat, and whether it failed. */
-internal class MetaAnswer(val content: String, val summary: String, val isError: Boolean = false)
+internal class MetaAnswer(
+    val content: String,
+    val summary: String,
+    val isError: Boolean = false,
+    /** Pictures for a model that sees (1.1.x, `present_view`): sent after the results, never stored on one. */
+    val pictures: List<com.kaiharimoto.mastertool.core.ai.Part.Image> = emptyList(),
+)
 
 /**
  * Ai's reading of the meta (phase 2): YGOPRODeck's tournament decks, the field built

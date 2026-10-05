@@ -197,6 +197,8 @@ fun SlideView(
     /** How much of the background and the elements shows — never the deck, which glides on its own. */
     fade: () -> Float = { 1f },
     final: Boolean = false,
+    /** How much of the elements shows, when it is not [fade] (a morph: the background fades, the elements travel). */
+    elementFade: () -> Float = fade,
 ) {
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val density = LocalDensity.current
@@ -212,7 +214,7 @@ fun SlideView(
                 if (drawBackground) Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade().coerceIn(0f, 1f) }) { Background(ctx, slide, s) }
                 if (deck != null) DeckLayer(ctx, deck, deckKeys, s, editing)
                 if (drawElements) {
-                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade().coerceIn(0f, 1f) }) {
+                    Box(Modifier.fillMaxSize().graphicsLayer { alpha = elementFade().coerceIn(0f, 1f) }) {
                         slide.elements.forEach { e ->
                             if (e.id in hidden) return@forEach
                             if (final && (e.isGuide || (e.type == Element.CAMERA && camera == null))) return@forEach

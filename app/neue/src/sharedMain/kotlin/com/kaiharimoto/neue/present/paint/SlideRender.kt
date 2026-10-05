@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +49,13 @@ class SlideShot internal constructor(internal val layer: GraphicsLayer) {
         get() = frames.longValue
         set(v) { frames.longValue = v }
 
+    /**
+     * The moment asked for (set as [SlideRender] composes) and the moment last drawn into the layer (set as it
+     * draws): a capture waits until they are the same, so it never catches the slide before.
+     */
+    @Volatile internal var wanted: Any? = null
+    @Volatile internal var drawnFor: Any? = null
+
     /** Whether every picture the slide shows is decoded: set by [SlideRender] for the slide in it. */
     internal var picturesReady: () -> Boolean = { true }
 
@@ -58,11 +66,10 @@ class SlideShot internal constructor(internal val layer: GraphicsLayer) {
      */
     suspend fun capture(timeoutMs: Long = 10_000, settleMs: Long = 300): ImageBitmap {
         val start = withFrameMillis { it }
-        val first = drawn
         var readySince = -1L
         while (true) {
             val now = withFrameMillis { it }
-            val ready = drawn > first && waits.pending == 0 && picturesReady()
+            val ready = drawnFor != null && drawnFor === wanted && waits.pending == 0 && picturesReady()
             if (ready) {
                 if (readySince < 0) readySince = now
                 if (now - readySince >= settleMs) break
@@ -103,13 +110,18 @@ fun SlideRender(
     val slide = show.slides.getOrNull(index) ?: return
     val density = LocalDensity.current
     val pictures = remember(slide) { picturesOf(slide) }
-    shot.picturesReady = { pictures.all { ctx.bitmap(it) != null } }
+    val moment = remember(show, at, ms, widthPx, heightPx) { Any() }
+    SideEffect {
+        shot.wanted = moment
+        shot.picturesReady = { pictures.all { ctx.bitmap(it) != null } }
+    }
     Box(
         Modifier
             .requiredSize(with(density) { widthPx.toDp() }, with(density) { heightPx.toDp() })
             .drawWithContent {
                 // Recorded, never drawn here: a preview draws the layer where it wants it ([SlidePreview]).
                 shot.layer.record { this@drawWithContent.drawContent() }
+                shot.drawnFor = moment
                 // Counted without being read here, or the count would redraw the slide for ever.
                 Snapshot.withoutReadObservation { shot.drawn++ }
             },

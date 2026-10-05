@@ -152,6 +152,9 @@ class Presentations(val dir: File) {
     /** Whether the desktop found a second screen to show the slides on. Set by the window. */
     var screens by mutableStateOf(1)
 
+    /** The slides in a window of their own, and slides drawn as pictures for Ai (1.1.x, `play/PresentOutput`). */
+    val output = com.kaiharimoto.neue.present.play.PresentOutput()
+
     /** An export running: the slides drawn one by one and caught as pictures. */
     var exporting by mutableStateOf<ExportJob?>(null)
 

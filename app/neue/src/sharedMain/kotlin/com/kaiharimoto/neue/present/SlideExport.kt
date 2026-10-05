@@ -84,6 +84,8 @@ internal fun ExportOverlay(h: NeueHolders) {
     if (show.slides.getOrNull(index) == null) return
     val last = (show.builds.getOrNull(index)?.count ?: 1) - 1
 
+    // The originals of every card first (R3): a slide caught before its original arrives shows the small render.
+    LaunchedEffect(job) { wantArt(h, p) }
     LaunchedEffect(job, at) {
         shots += shot.capture()
         if (at + 1 < job.slides.size) {

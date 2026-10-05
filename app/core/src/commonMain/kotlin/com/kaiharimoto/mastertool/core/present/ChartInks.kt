@@ -86,7 +86,7 @@ object ChartInks {
             val g = groups?.getOrNull(i)?.let { ChartInk(groupColor(it) or 0xFF000000) }
             val ok = g != null && visible(g.argb, bg) && out.all { apart(it, g) }
             if (ok) {
-                out += g!!
+                out += g
             } else {
                 // The chart's own: the first of its inks not yet used and apart from every one used.
                 var pick = at(inks, next)

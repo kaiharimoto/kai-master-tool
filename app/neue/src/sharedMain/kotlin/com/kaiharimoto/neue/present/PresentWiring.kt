@@ -12,6 +12,7 @@ import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.platform.pastedPicture
 import com.kaiharimoto.neue.present.play.PresentStage
 import com.kaiharimoto.neue.present.play.PresenterConsole
+import com.kaiharimoto.neue.present.play.SlideRenderHost
 
 /** Present's keys (1.0.70, `DeskShortcuts`' Making slides and Presenting rows), run on the window's holders. */
 internal fun runPresent(h: NeueHolders, action: DeskAction) {
@@ -89,19 +90,40 @@ internal fun dismissPresent(h: NeueHolders, esc: Boolean): Boolean {
     return false
 }
 
-/** The presenter over the whole window while a presentation plays, in immersive mode for its length. */
+/**
+ * The presenter over the whole window while a presentation plays, in immersive mode for its length — or, with
+ * the slides elsewhere (another screen, or a window of their own for a recorder), the presenter's console.
+ * Slides asked for as pictures (Ai's `present_view`) are drawn here too, offscreen, whether or not one plays.
+ */
 @Composable
 internal fun PresentOverlay(h: NeueHolders) {
+    SlideRenderHost(h)
     val pl = h.present.playing ?: return
     val ctx = rememberSlideContext(h, pl.show.presentation)
-    // Full screen for the show, and back as it was after.
+    val console = consoleShown(h)
+    // Full screen for the show, and back as it was after; not with the slides in a window, which full screen
+    // would cover on one screen.
     val wasImmersive = remember(pl) { h.neue.immersive }
-    DisposableEffect(pl) {
-        if (!h.neue.immersive) {
+    androidx.compose.runtime.LaunchedEffect(pl) { wantArt(h, pl.show.presentation) }
+    DisposableEffect(pl, h.present.output.slidesWindow) {
+        if (!h.neue.immersive && !h.present.output.slidesWindow) {
             h.neue.immersive = true
             h.neue.revealed = Revealed.NONE
         }
         onDispose { if (!wasImmersive) h.neue.immersive = false }
     }
-    if (h.present.audience && h.present.screens > 1) PresenterConsole(h, ctx) else PresentStage(h.present, ctx)
+    if (console) PresenterConsole(h, ctx) else PresentStage(h.present, ctx)
 }
+
+/**
+ * Asks the art library for the originals of every card [p] draws, first (the audit's R3): until the 2 GB library
+ * is in, large cards were drawn from the small render. Called as a show starts and an export begins.
+ */
+internal fun wantArt(h: NeueHolders, p: com.kaiharimoto.mastertool.core.present.Presentation) {
+    val ids = (p.deck?.distinct.orEmpty() + p.slides.flatMap { s -> s.elements.flatMap { it.cards } }).distinct()
+    h.art.want(ids.mapNotNull { h.builder.index.byId(com.kaiharimoto.mastertool.core.model.CardId(it)) })
+}
+
+/** Whether the slides are shown elsewhere and this window is the presenter's console. */
+internal fun consoleShown(h: NeueHolders): Boolean =
+    h.present.output.slidesWindow || (h.present.audience && h.present.screens > 1)
