@@ -283,7 +283,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         }
     }
 
-    fun click(hit: Hit, shift: Boolean, alt: Boolean, x: Float, y: Float, at: Long, ctrl: Boolean = false) {
+    fun click(hit: Hit, shift: Boolean, alt: Boolean, x: Float, y: Float, at: Long, ctrl: Boolean = false, finger: Boolean = false) {
         // A link's card waiting for what it targets (1.0.90, the chain well's menu): the card clicked gets its arrow.
         duels.linkTarget?.let { from ->
             if (hit is Hit.Card && hit.frame.uid != from) { duels.targetFromLink(hit.frame.uid); return }
@@ -301,7 +301,16 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         lastClick = Triple(key, at, double)
         if (double) {
             when (hit) {
-                is Hit.Card, is Hit.Pile -> rightClick(hit, x)
+                is Hit.Card -> rightClick(hit, x)
+                // A pile's double-click is its click again, never the right-click (1.2.0, kai: "when I try to open the deck to
+                // search a card it draws me a card by accident"): the first click opened the Deck, and the second drew. With a
+                // mouse the Deck draws only by a right-click, D or a drag to the hand, as DuelInput's table says. A finger's
+                // double-tap is its right-click (DuelInput.TOUCH), so there it still draws — and the pile the first tap opened
+                // is put away, so one gesture does one thing.
+                is Hit.Pile -> if (finger) {
+                    if (duels.strip == hit.seat to hit.kind) duels.closeStrip()
+                    rightClick(hit, x)
+                }
                 else -> Unit
             }
             return
@@ -488,7 +497,7 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                     if (!dragged) continue
                 }
                 when {
-                    released -> click(hit, shift, alt, x0, y0, down.uptimeMillis, ctrl)
+                    released -> click(hit, shift, alt, x0, y0, down.uptimeMillis, ctrl, finger)
                     decided == null && moved == null -> {
                         // A hold: every verb for the card, beside it read large. By a finger it is also select mode (1.0.90):
                         // each tap after it puts a card into the selection or takes it out.
