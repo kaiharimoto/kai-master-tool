@@ -86,6 +86,7 @@ object DuelRules {
             is DuelAction.Reveal -> reveal(s, a)
             is DuelAction.Coin -> ok(thrown(s, a.seat, coin = true, if (a.heads) 1 else 0, a.toss))
             is DuelAction.Dice -> ok(thrown(s, a.seat, coin = false, a.value, a.toss))
+            is DuelAction.Stow -> seatOk(s, a.seat) ?: stow(s, a)
             is DuelAction.Chat, is DuelAction.Ping, is DuelAction.Note,
             is DuelAction.Unknown -> ok(s)
             is DuelAction.Thinking -> ok(s.copy(thinking = if (a.on) s.thinking + a.seat else s.thinking - a.seat))
@@ -109,6 +110,21 @@ object DuelRules {
     private fun thrown(s: DuelState, seat: Int, coin: Boolean, value: Int, toss: Toss?): DuelState {
         if (toss == null || seat !in s.seats.indices) return s
         return s.copy(chance = s.chance.filterNot { it.seat == seat && it.coin == coin } + Chance(seat, coin, value, toss))
+    }
+
+    /** [a]'s seat's die, coin or both back beside its Extra Deck (1.1.9); refused when none of them is out. */
+    private fun stow(s: DuelState, a: DuelAction.Stow): Outcome {
+        val out = s.chance.filter { it.seat == a.seat && (a.coin == null || it.coin == a.coin) }
+        if (out.isEmpty()) {
+            return Outcome.Refused(
+                when (a.coin) {
+                    null -> "The die and the coin are beside the Extra Deck already"
+                    true -> "The coin is beside the Extra Deck already"
+                    false -> "The die is beside the Extra Deck already"
+                },
+            )
+        }
+        return Outcome.Ok(s.copy(chance = s.chance - out.toSet()))
     }
 
     /** Applies [actions] in order, all or nothing: the first refusal names its index. */

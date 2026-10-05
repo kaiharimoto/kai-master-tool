@@ -65,7 +65,7 @@ object DuelSpeech {
         "summon", "set", "activate", "chain", "attack", "at", "target", "send", "destroy", "tribute", "banish", "add", "search", "draw",
         "mill", "flip", "pos", "move", "place", "attach", "detach", "reveal", "counter", "token", "lp", "resolve", "bp", "m1", "m2",
         "ep", "end", "next", "ss", "special", "read", "open", "look", "discard", "return", "bounce", "spin", "excavate", "shuffle",
-        "coin", "dice", "concede", "swap", "redo", "random", "roll", "throw", "first", "second", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play",
+        "coin", "dice", "concede", "swap", "redo", "random", "roll", "throw", "first", "second", "accept", "decline", "lock", "unlock", "say", "note", "?", "use", "play", "stow",
     )
 
     /** For tests. */
@@ -140,6 +140,15 @@ object DuelSpeech {
         // One move, then another.
         // The opening roll (1.0.87): "roll the dice", "I'll go first", "we'll go second".
         Rule("^(let me |i'?ll |i will )?(roll|throw)( the)? dice$", "roll"),
+        // The die and the coin put back (1.1.9): "put the dice away", "stow my coin", "put the die and coin back".
+        Rule("^(put|stow|pack|tidy)( away| back| up)? (the |my )?(dice and (the )?coin|die and (the )?coin|coin and (the )?(dice|die)|dice|die|coin)( away| back| home| up)?$") { m ->
+            val what = m.groupValues[4]
+            when {
+                " and " in what -> "stow"
+                what == "coin" -> "stow coin"
+                else -> "stow die"
+            }
+        },
         // Ordinals are digits by now ("first" → 1).
         Rule("^(i'?ll |i will |we'?ll |let me )?go (first|1st|1)$", "first"),
         Rule("^(i'?ll |i will |we'?ll |let me )?go (second|2nd|2)$", "second"),

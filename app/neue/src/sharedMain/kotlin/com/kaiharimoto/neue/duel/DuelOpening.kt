@@ -125,6 +125,12 @@ internal class DuelOpening(private val d: Duels) {
         return ok
     }
 
+    /**
+     * [seat]'s die ([coin] false), coin (true) or both (null) back beside its Extra Deck (1.1.9): a carry onto its home, a
+     * double-click on it lying out, Alt R, `stow`. One step of the log, so the guest's goes to the host and Undo takes it back.
+     */
+    fun stowChance(seat: Int, coin: Boolean? = null): Boolean = d.act(listOf(DuelAction.Stow(seat, coin)), seat)
+
     /** The roll's winner goes first, or second. */
     fun goFirst(seat: Int, first: Boolean): Boolean = d.act(listOf(DuelAction.GoFirst(seat, first)), seat)
 

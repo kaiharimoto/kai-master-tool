@@ -54,4 +54,19 @@ class DuelStripGridTest {
         assertEquals(1, g.rows)
         assertTrue(g.cells[1].left - g.cells[0].left > g.card)
     }
+
+    @Test
+    fun aLongOpenPileCoversTheChainWellAndItsWordsGoUnder() {
+        // 1.1.9 (kai: "the chain link box text is showing over some windows"): the Deck laid open reaches the middle row,
+        // so the chain well's words must sit in the table's layer — over the field's cards, under the pile's ground
+        // (Z_STRIP − ½) and its cards, and under the hands.
+        assertTrue(DuelFrames.Z_FIELD < DuelFrames.Z_CHAIN && DuelFrames.Z_CHAIN < DuelFrames.Z_HAND)
+        assertTrue(DuelFrames.Z_CHAIN < DuelFrames.Z_STRIP - 0.5f)
+        windows.forEach { (w, h, form) ->
+            val l = DuelLayouter.solve(w, h, true, form)
+            val chain = l[DuelSpot.Chain] ?: return@forEach
+            val band = DuelFrames.stripBand(l, 40)
+            assertTrue(band.top < chain.bottom && band.bottom > chain.top, "$w×$h: the open Deck misses the chain well")
+        }
+    }
 }

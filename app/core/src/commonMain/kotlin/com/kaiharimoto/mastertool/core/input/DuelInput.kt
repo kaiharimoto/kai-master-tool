@@ -59,6 +59,8 @@ enum class DuelInputAction {
     SPEAK,
     /** Throw the opening roll's dice onto the field (1.0.87). */
     THROW,
+    /** Put the die or the coin back beside the Extra Deck (1.1.9). */
+    STOW,
 }
 
 data class DuelBinding(
@@ -79,6 +81,8 @@ object DuelMouse {
     const val CTRL_CLICK = "Ctrl click"
     const val ALT_CLICK = "Alt click"
     const val DOUBLE = "Double-click"
+    /** A die or coin carried back onto its home (1.1.9). */
+    const val DRAG_HOME = "Drag onto its home"
 
     val all: List<DuelBinding> = listOf(
         DuelBinding(DuelTarget.MY_CARD, CLICK, DuelInputAction.INSPECT, "Select it: what it can do stands beside it, and the inspector reads it"),
@@ -119,6 +123,8 @@ object DuelMouse {
         DuelBinding(DuelTarget.DICE, CLICK, DuelInputAction.THROW, "Toss them onto the field with a fling of their own"),
         DuelBinding(DuelTarget.CHANCE, DRAG, DuelInputAction.THROW, "Pick it up and throw it: the die rolls, the coin flips, as fast as your hand let go"),
         DuelBinding(DuelTarget.CHANCE, CLICK, DuelInputAction.THROW, "Roll the die or flip the coin onto the field; one lying out is thrown again from where it lies"),
+        DuelBinding(DuelTarget.CHANCE, DOUBLE, DuelInputAction.STOW, "One lying out: put it back beside your Extra Deck"),
+        DuelBinding(DuelTarget.CHANCE, DRAG_HOME, DuelInputAction.STOW, "Carry it back onto its marks beside your Extra Deck: it goes home, thrown or not"),
     )
 
     fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =
@@ -169,6 +175,8 @@ object DuelTouch {
         DuelBinding(DuelTarget.DICE, TAP, DuelInputAction.THROW, "Toss them onto the field with a fling of their own"),
         DuelBinding(DuelTarget.CHANCE, DRAG, DuelInputAction.THROW, "Pick it up and throw it: the die rolls, the coin flips, as fast as your finger let go"),
         DuelBinding(DuelTarget.CHANCE, TAP, DuelInputAction.THROW, "Roll the die or flip the coin onto the field; one lying out is thrown again from where it lies"),
+        DuelBinding(DuelTarget.CHANCE, DOUBLE, DuelInputAction.STOW, "One lying out: put it back beside your Extra Deck"),
+        DuelBinding(DuelTarget.CHANCE, DuelMouse.DRAG_HOME, DuelInputAction.STOW, "Carry it back onto its marks beside your Extra Deck: it goes home, thrown or not"),
     )
 
     fun resolve(target: DuelTarget, gesture: String): DuelInputAction? =

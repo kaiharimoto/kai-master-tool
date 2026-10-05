@@ -413,6 +413,18 @@ object DuelCommand {
                     return one(DuelAction.OpeningRoll(seat), "Throw the dice")
                 } else if (bare && head != "throw") return one(DuelAction.Dice(seat), "Die")
                 "die" -> if (bare) return one(DuelAction.Dice(seat), "Die")
+                // The die and the coin back beside the Extra Deck (1.1.9, Alt R): "stow", "stow die", "stow coin".
+                "stow" -> {
+                    val what = rest.filterNot { it in setOf("the", "my", "away", "back", "home", "and") }
+                    val coin: Boolean? = when {
+                        what.isEmpty() || what.all { it in setOf("all", "both", "everything") } -> null
+                        what.all { it in setOf("die", "dice") } -> false
+                        what.all { it == "coin" } -> true
+                        what.all { it in setOf("die", "dice", "coin") } -> null
+                        else -> return Parsed.Problem("Stow what? “stow”, “stow die” or “stow coin”")
+                    }
+                    return one(DuelAction.Stow(seat, coin), when (coin) { null -> "Put the die and the coin back"; true -> "Put the coin back"; false -> "Put the die back" })
+                }
                 // The opening roll's winner chooses (1.0.87): "first", "go first", "second", "go second".
                 "first", "second", "go" -> {
                     val pick = if (head == "go") rest.singleOrNull() else if (bare) head else null
@@ -1038,7 +1050,7 @@ object DuelCommand {
     val HEADS: Set<String> = verbWords.keys + setOf(
         "draw", "d", "dr", "mill", "dump", "shuffle", "lp", "life", "dp", "draw-phase", "sp", "standby",
         "m1", "mp1", "main1", "bp", "battle", "m2", "mp2", "main2", "ep", "next", "np", "end", "pass", "et",
-        "accept", "yes", "decline", "no", "lock", "unlock", "ruling", "rule", "coin", "flip-coin", "dice", "roll", "throw", "die",
+        "accept", "yes", "decline", "no", "lock", "unlock", "ruling", "rule", "coin", "flip-coin", "dice", "roll", "throw", "die", "stow",
         "first", "second", "go", "resolve", "res", "negate", "neg", "think", "thinking", "wait", "ready", "concede", "surrender",
         "say", "chat", "note", "look", "peek", "top", "excavate", "token", "tokens", "clear", "link", "effect",
         "attack", "at", "target", "t", "point", "counter", "counters", "c", "detach", "a",

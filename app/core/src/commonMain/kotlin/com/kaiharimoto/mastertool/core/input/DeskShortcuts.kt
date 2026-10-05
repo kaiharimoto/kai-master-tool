@@ -275,6 +275,8 @@ enum class DeskAction {
     DUEL_COORDINATES,
     /** Before turn 1 (1.0.87): throw this seat's two dice for who goes first, a fling with no hand behind it. */
     DUEL_ROLL,
+    /** The person's die and coin back beside their Extra Deck (1.1.9). */
+    DUEL_STOW,
 
     /** A replay (1.0.75): a step, a phase or a turn either way; the ends; play; edit. */
     REPLAY_BACK,
@@ -611,6 +613,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("enter", shift = true), DeskAction.DUEL_PICK, DeskScope.DUEL, "Pick up the focused card: then Enter where it goes"),
         DeskShortcut(KeyChord("i"), DeskAction.DUEL_COORDINATES, DeskScope.DUEL, "Coordinates on every place, or none"),
         DeskShortcut(KeyChord("r", shift = true), DeskAction.DUEL_ROLL, DeskScope.DUEL, "Before turn 1: throw your dice for who goes first"),
+        DeskShortcut(KeyChord("r", alt = true), DeskAction.DUEL_STOW, DeskScope.DUEL, "Put your die and coin back beside your Extra Deck"),
 
         DeskShortcut(KeyChord("left"), DeskAction.REPLAY_BACK, DeskScope.REPLAY, "A step back", repeatable = true),
         DeskShortcut(KeyChord("right"), DeskAction.REPLAY_FORWARD, DeskScope.REPLAY, "A step on", repeatable = true),

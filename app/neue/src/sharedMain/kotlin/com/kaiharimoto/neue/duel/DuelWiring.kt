@@ -125,6 +125,8 @@ internal fun runDuel(h: NeueHolders, action: DeskAction) {
         DeskAction.DUEL_SELECT -> duels.selectFocused()
         // The opening roll (1.0.87): this seat's dice thrown with a fling of their own.
         DeskAction.DUEL_ROLL -> duels.throwDice(duels.bottom)
+        // The die and the coin back beside the Extra Deck (1.1.9): the seat at the bottom's, both of them.
+        DeskAction.DUEL_STOW -> duels.stowChance(duels.bottom)
         else -> Unit
     }
 }

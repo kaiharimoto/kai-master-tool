@@ -141,6 +141,7 @@ object DuelWords {
             }
             is DuelAction.Coin -> "${seatName(before, a.seat)} tosses a coin: ${if (a.heads) "heads" else "tails"}"
             is DuelAction.Dice -> "${seatName(before, a.seat)} rolls a die: ${a.value}"
+            is DuelAction.Stow -> "${seatName(before, a.seat)} puts ${when (a.coin) { null -> "the die and the coin"; true -> "the coin"; false -> "the die" }} back"
             is DuelAction.OpeningRoll -> opening(before, after, a)
             is DuelAction.GoFirst -> "${seatName(before, a.seat)} wins the roll and goes ${if (a.first) "first" else "second"}"
             is DuelAction.Chat -> "${seatName(before, a.seat)}: ${a.text}"

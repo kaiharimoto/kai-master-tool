@@ -268,6 +268,7 @@ object DuelPreview {
             }
             is DuelAction.Coin -> "Flip a coin"
             is DuelAction.Dice -> "Roll a die"
+            is DuelAction.Stow -> when (a.coin) { null -> "Put the die and the coin back"; true -> "Put the coin back"; false -> "Put the die back" }
             is DuelAction.OpeningRoll -> "Throw your dice for who goes first"
             is DuelAction.GoFirst -> if (a.first) "Go first" else "Go second"
             is DuelAction.Chat -> "Say “${a.text}”"

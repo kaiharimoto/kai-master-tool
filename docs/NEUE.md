@@ -3839,6 +3839,41 @@ dragging them from the corner also works. the coin is thrown by dragging and thr
   and **T** on tails, labelled so the face the physics leaves up reads the stamped side; the die is the opening roll's.
   `DuelTarget.CHANCE` in the mouse and finger tables. `tools/shoot.sh --page=duel --duel=two --duel-chance=landed|flying|held`.
 
+**1.1.9, put away, thrown across, over the window** (kai: "the dice and coin in the duel simulator have no way of being
+stowed away back in their zone. Also, let my dice pass the center boundary onto my opponent's field. Also, let the dice roll
+over the opening roll window instead of under it"; and "the chain link box text is showing over some windows"):
+- **Put back** (`DuelAction.Stow`, `"stow"`: a seat's die, coin, or both): carried back onto its home — crop marks in ink
+  round the home while one is carried (`HomeMarks`, `DiceStage.Home.target`/`over`), heavier with "Put back" inverted once
+  it is over them; a carry from home let go there is only set down — a double-click (a finger's double-tap) on one lying
+  out (its single click waits out `DeskMouse.DOUBLE_CLICK_MS` before it throws again), **Alt R** (`DUEL_STOW`, both of the
+  seat's), and the line's `stow`, `stow die`, `stow coin` (spoken: "put the dice away"). `DuelTarget.CHANCE` has
+  `DOUBLE` and `DRAG_HOME` → `STOW` in both tables, `DuelCoverage` its row. It is a log entry like the throw, refused when
+  nothing is out, so the host and the guest agree (the guest's is rewritten to its own seat, `DuelHost`) and Undo brings the
+  piece back where it lay; nothing is stamped. It is **social**, as a lock is: it never waits on or opens a response
+  window, never ends a thinking mark, never wakes Ai's watches, and never puts back the other seat's. **The end of the turn
+  needs nothing new**: the next move that is not talk or chance already puts every piece back (1.0.96), and End Turn is one.
+- **Across the middle** (`DiceSim.ACROSS` 12.3 die edges past the field — the middle row's ~4.4 and the other field's 8,
+  less a hair — `DiceSim.reachFor(solo)`): a hand's throw at a two-seat table (and one thrown again from where it lies)
+  carries its far wall in `Toss.reach`, so it is part of the logged, wired, replayed throw; a hard flick meets their far
+  edge and comes back. A throw from the corner, and every throw written before (no `reach`), keeps `INNER` and plays out
+  bit for bit as it did (`OldDataTest`); a reach from the wire is held to `INNER..ACROSS`. A solo table keeps `INNER`.
+  The physics never reads the window: where a window draws the far side smaller (`FAR_SHRUNK`) or not at all (one side
+  of the table), `DiceStage.shown` folds the depth past the thrower's field onto the table drawn there, and `unshown`
+  undoes it for a hand let go over it — so a piece is never drawn off the table (`DuelChanceTest`, every window, both
+  seats). The other seat's landed piece is its own simulation and may lie under yours. **The opening roll keeps `INNER`**:
+  its four dice are two separate simulations that would pass through each other in the middle, and they belong in front of
+  their own fields.
+- **The opening dice roll over the window**: the panel is at `DICE_Z − 1`, the dice's canvas at `DICE_Z` over it; the
+  canvas takes no press, so every button of the panel still takes its click. Both are in the table's own box (no `Popup`,
+  no `AnchoredBox`), so desktop and Android layer them alike.
+- **The chain well's words are the table's** (`DuelFrames.Z_CHAIN` = 3: over the field's cards, under the hands, an open
+  pile at `Z_STRIP` and every window). At 20 they stood over an open pile's rows — the Deck laid open reaches the middle
+  row on every window (`DuelStripGridTest`) — and their "Resolve" cursor answered through it. Every other window over the
+  well (the verb strip, the selection bar and ordering strip, the chain menu, the life-point pad, the opening roll's panel,
+  the Spotlight, the phone's drawers, the Ai vs Ai dialog) was already above it.
+- `tools/shoot.sh --page=duel --duel=two --duel-chance=far|home|carried|stowed`, `--duel-dice=over`, `--duel-chain=N`
+  (links on the chain), `--duel-lp=near|far`, `--duel-drawer=card|log`.
+
 **The measured duel, stage 1** (Phase C, `docs/phases/C.md`; ROADMAP: "every duel is a record you can measure, and Ai at
 the table sees and does only what a player would"):
 - **Who moved** (`Provenance`, `DuelEntry.by`): the person, Ai, the network's guest or the table; the seat Ai held and its

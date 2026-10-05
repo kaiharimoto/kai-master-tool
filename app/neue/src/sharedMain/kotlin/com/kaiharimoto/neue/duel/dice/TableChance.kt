@@ -1,10 +1,16 @@
 package com.kaiharimoto.neue.duel.dice
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.layout.Slot
+import com.kaiharimoto.neue.kit.Micro
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -65,7 +71,10 @@ internal fun drawnAt(stage: DiceStage, seat: Int, p: V3): Offset = stage.project
  * players that the players can use in game for dice rolls and coin flips. clicking on one of them will bring them to the
  * field, just dragging them from the corner also works. the coin is thrown by dragging and throwing"): kept beside the
  * Extra Deck ([DiceStage.home]); carried in the hand; thrown — [DiceSim] run once ([TossRuns]) and played back in real
- * time — and lying where they landed, reading the stamped value, until the next move puts them back.
+ * time — and lying where they landed, reading the stamped value, until the next move puts them back, or the person does
+ * (1.1.9: carried onto the home, double-clicked, Alt R, `stow` — [com.kaiharimoto.mastertool.core.duel.DuelAction.Stow]).
+ * A throw may cross the middle row onto the other seat's field; past it, it is drawn folded onto the table this window
+ * draws ([DiceStage.shown]).
  *
  * The die is the opening roll's, drawn by [drawDie]; the coin a disc of paper with an ink rim, H on its heads and T on
  * its tails, which face is which chosen so the face the physics leaves up reads the stamped side.
@@ -121,7 +130,8 @@ internal fun TableChance(duels: Duels, s: DuelState, layout: DuelLayout, playsBo
                             else -> started[k]?.let { (t - it).coerceAtLeast(0L) / 1e9 } ?: Double.MAX_VALUE
                         }
                         val pose = run.at(elapsed).single()
-                        var p = pose.p
+                        // Past the middle row, folded onto the table this window draws (1.1.9): never off it.
+                        var p = stage.shown(seat, pose.p, lying.toss.far)
                         if (lying.toss.fromCorner && elapsed < GLIDE) homeIn(stage, seat, coin)?.let { from -> p = from + (p - from) * (elapsed / GLIDE) }
                         if (coin) {
                             // The face the physics leaves up reads the stamped side.
@@ -143,20 +153,55 @@ internal fun TableChance(duels: Duels, s: DuelState, layout: DuelLayout, playsBo
         // Back to front: the farthest from the eye first.
         things.sortedByDescending { it.first }.forEach { it.second(this) }
     }
+    // Carried, its home stands out as the place to put it back (1.1.9): crop marks round it, heavier with it over them.
+    if (carry != null) stage.home(carry.seat)?.let { home ->
+        HomeMarks(home.target(carry.coin), over = home.over(carry.coin, carry.x, carry.y), below = stage.arena(carry.seat)?.turned != true)
+    }
     // What a press on them does, for the family cursor: the table's one arbiter takes the press itself.
     if (carry == null) for (seat in 0..1) {
         if (!duels.mayRoll(seat, playsBoth)) continue
         val home = stage.home(seat) ?: continue
         for (coin in listOf(false, true)) {
             val lying = chance.firstOrNull { it.seat == seat && it.coin == coin }
-            val at = lying?.let { runs[it.seat to it.coin]?.rest?.single()?.p }?.let { drawnAt(stage, seat, it) }
+            val at = lying?.let { l -> runs[l.seat to l.coin]?.rest?.single()?.p?.let { stage.shown(seat, it, l.toss.far) } }?.let { drawnAt(stage, seat, it) }
                 ?: (if (coin) home.coin else home.die).let { Offset(it.first, it.second) }
             val r = if (coin) home.coinRadius + home.size * 0.2f else home.size * 0.75f
+            val verb = if (coin) "Flip" else "Roll"
             Box(
                 Modifier.zIndex(DICE_Z).offset((at.x - r).dp, (at.y - r).dp).size((2 * r).dp)
-                    .cursorPointer(caption = if (coin) "Flip" else "Roll"),
+                    .cursorPointer(caption = if (lying != null) "$verb again · double-click puts it back" else verb),
             )
         }
+    }
+}
+
+/**
+ * A carried die's or coin's home, asking for it back (1.1.9): ink crop marks at the corners of [r] — heavier when it is
+ * [over] them, where letting go puts it back — and "Put back" beside them, [below] or above. Still: nothing here asks
+ * for frames; it is drawn again only as the carry moves.
+ */
+@Composable
+private fun HomeMarks(r: Slot, over: Boolean, below: Boolean) {
+    val c = Mu.colors
+    Canvas(Modifier.zIndex(DICE_Z - 0.5f).offset(r.left.dp, r.top.dp).size(r.width.dp, r.height.dp)) {
+        val arm = (r.width * 0.3f).dp.toPx()
+        val w = (if (over) 2.5f else 1.5f).dp.toPx()
+        val h = w / 2f
+        listOf(
+            Offset(h, h) to Offset(1f, 1f), Offset(size.width - h, h) to Offset(-1f, 1f),
+            Offset(h, size.height - h) to Offset(1f, -1f), Offset(size.width - h, size.height - h) to Offset(-1f, -1f),
+        ).forEach { (at, d) ->
+            drawLine(c.ink, at, Offset(at.x + d.x * arm, at.y), strokeWidth = w)
+            drawLine(c.ink, at, Offset(at.x, at.y + d.y * arm), strokeWidth = w)
+        }
+    }
+    val capW = 72f
+    val capH = 16f
+    Box(
+        Modifier.zIndex(DICE_Z - 0.5f).offset((r.centerX - capW / 2f).dp, (if (below) r.bottom + 2f else r.top - capH - 2f).dp).size(capW.dp, capH.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Micro("Put back", Modifier.background(if (over) c.ink else c.paper).padding(horizontal = 4.dp), color = if (over) c.paper else c.ink, size = 10.sp)
     }
 }
 

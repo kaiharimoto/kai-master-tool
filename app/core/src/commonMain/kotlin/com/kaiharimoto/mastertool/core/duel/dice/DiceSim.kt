@@ -32,6 +32,18 @@ object DiceSim {
      */
     const val INNER = 4.5
 
+    /**
+     * How far past the field's far edge the table's own die and coin may go (1.1.9, kai: "let my dice pass the center
+     * boundary onto my opponent's field"): over the middle row (about 4.4 die edges on every window) and the other seat's
+     * whole field (8) to its far edge, less a hair — so a die met at this wall still lies on their field. A constant, not
+     * the window's, as [INNER] is: the host and the guest play the same throw; a window that draws the far side smaller
+     * (or not at all) folds this depth onto what it draws ([DiceStage.shown]).
+     */
+    const val ACROSS = 12.3
+
+    /** The far wall a table throw meets: a two-seat duel's whole table, or a solo table's own half and middle row. */
+    fun reachFor(solo: Boolean): Double = if (solo) INNER else ACROSS
+
     const val DT = 1.0 / 480.0
     /** One frame kept every this many steps: sixty a second. */
     const val FRAME_EVERY = 8
@@ -113,7 +125,8 @@ object DiceSim {
         }
     }
 
-    private class Body(var p: V3, var q: Quat, var v: V3, var w: V3, val shape: Shape = Shape.DIE) {
+    /** [reach]: how far past the field's far edge its far wall stands ([INNER], or [ACROSS] for a table throw, 1.1.9). */
+    private class Body(var p: V3, var q: Quat, var v: V3, var w: V3, val shape: Shape = Shape.DIE, val reach: Double = INNER) {
         var grounded = false
         var quiet = 0.0
     }
@@ -164,15 +177,18 @@ object DiceSim {
 
     /**
      * One thing thrown on its own (1.0.96, the table's die and coin): [start] played out to rest as a [shape]. [Run.up] is
-     * the die's face on top, or for the coin 0 when its +z face is up and 1 when its −z face is.
+     * the die's face on top, or for the coin 0 when its +z face is up and 1 when its −z face is. [reach] is where its far
+     * wall stands past the field (1.1.9: [ACROSS] lets it over the other seat's field; [INNER], as before, stops it at the
+     * middle row), held to between the two.
      */
-    fun run(shape: Shape, start: DieStart): Run {
+    fun run(shape: Shape, start: DieStart, reach: Double = INNER): Run {
         val ok = listOf(start.p.x, start.p.y, start.p.z, start.q.w, start.q.x, start.q.y, start.q.z, start.v.x, start.v.y, start.v.z, start.w.x, start.w.y, start.w.z).all { it.isFinite() }
         if (!ok) {
             val pose = Pose(V3(ARENA_W / 2, ARENA_D / 2, shape.restZ), Quat.IDENTITY)
             return Run(listOf(Frame(0.0, listOf(pose))), listOf(upOf(shape, pose.q)), true)
         }
-        return play(listOf(Body(start.p, start.q.normalized(), start.v, start.w, shape)))
+        val far = if (reach.isFinite()) reach.coerceIn(INNER, ACROSS) else INNER
+        return play(listOf(Body(start.p, start.q.normalized(), start.v, start.w, shape, far)))
     }
 
     private fun play(bodies: List<Body>): Run {
@@ -190,7 +206,7 @@ object DiceSim {
         if (step % FRAME_EVERY != 0) frames += Frame(frames.last().t + FRAME_DT, bodies.map { Pose(it.p, it.q) })
         // Exactly flat, apart, inside the walls; blended in over a few frames.
         val last = frames.last().dice
-        val flat = separate(last.mapIndexed { d, pose -> flatten(bodies[d].shape, pose) }, bodies.map { it.shape })
+        val flat = separate(last.mapIndexed { d, pose -> flatten(bodies[d].shape, pose) }, bodies.map { it.shape }, bodies.first().reach)
         for (k in 1..BLEND_FRAMES) {
             val s = k.toDouble() / BLEND_FRAMES
             frames += Frame(
@@ -242,7 +258,7 @@ object DiceSim {
             }
             if (at.x < AHEAD) out += contact(b, null, r, V3.ZERO, V3(1.0, 0.0, 0.0), -at.x, WALL_BOUNCE, WALL_FRICTION)
             if (at.x > ARENA_W - AHEAD) out += contact(b, null, r, V3.ZERO, V3(-1.0, 0.0, 0.0), at.x - ARENA_W, WALL_BOUNCE, WALL_FRICTION)
-            if (at.y < -INNER + AHEAD) out += contact(b, null, r, V3.ZERO, V3(0.0, 1.0, 0.0), -INNER - at.y, WALL_BOUNCE, WALL_FRICTION)
+            if (at.y < -b.reach + AHEAD) out += contact(b, null, r, V3.ZERO, V3(0.0, 1.0, 0.0), -b.reach - at.y, WALL_BOUNCE, WALL_FRICTION)
             if (at.y > ARENA_D - AHEAD) out += contact(b, null, r, V3.ZERO, V3(0.0, -1.0, 0.0), at.y - ARENA_D, WALL_BOUNCE, WALL_FRICTION)
         }
     }
@@ -397,27 +413,27 @@ object DiceSim {
     }
 
     /** Flat dice moved apart (and inside the walls) until neither footprint overlaps the other. */
-    private fun separate(poses: List<Pose>, shapes: List<Shape>): List<Pose> {
-        if (shapes.any { it != Shape.DIE }) return poses.mapIndexed { d, p -> if (shapes[d] == Shape.COIN) insideCoin(p) else inside(p) }
-        var ps = poses.map { inside(it) }
+    private fun separate(poses: List<Pose>, shapes: List<Shape>, reach: Double): List<Pose> {
+        if (shapes.any { it != Shape.DIE }) return poses.mapIndexed { d, p -> if (shapes[d] == Shape.COIN) insideCoin(p, reach) else inside(p, reach) }
+        var ps = poses.map { inside(it, reach) }
         if (ps.size != 2) return ps
         repeat(12) {
             val (depth, axis) = overlap(ps[0], ps[1]) ?: return ps
             val half = axis * ((depth + 0.02) / 2)
-            ps = listOf(inside(ps[0].copy(p = ps[0].p - half)), inside(ps[1].copy(p = ps[1].p + half)))
+            ps = listOf(inside(ps[0].copy(p = ps[0].p - half), reach), inside(ps[1].copy(p = ps[1].p + half), reach))
         }
         // Against a wall both may be pushed back together: part them along the wall instead.
         val dx = if (ps[0].p.x <= ps[1].p.x) -1.0 else 1.0
-        return listOf(inside(ps[0].copy(p = ps[0].p + V3(dx * 0.8, 0.0, 0.0))), inside(ps[1].copy(p = ps[1].p - V3(dx * 0.8, 0.0, 0.0))))
+        return listOf(inside(ps[0].copy(p = ps[0].p + V3(dx * 0.8, 0.0, 0.0)), reach), inside(ps[1].copy(p = ps[1].p - V3(dx * 0.8, 0.0, 0.0)), reach))
     }
 
-    private fun insideCoin(pose: Pose): Pose =
-        pose.copy(p = V3(pose.p.x.coerceIn(COIN_R, ARENA_W - COIN_R), pose.p.y.coerceIn(-INNER + COIN_R, ARENA_D - COIN_R), COIN_H))
+    private fun insideCoin(pose: Pose, reach: Double): Pose =
+        pose.copy(p = V3(pose.p.x.coerceIn(COIN_R, ARENA_W - COIN_R), pose.p.y.coerceIn(-reach + COIN_R, ARENA_D - COIN_R), COIN_H))
 
-    private fun inside(pose: Pose): Pose {
+    private fun inside(pose: Pose, reach: Double): Pose {
         val (_, u, v) = footprint(pose)
         val hx = abs(u.x) + abs(v.x)
         val hy = abs(u.y) + abs(v.y)
-        return pose.copy(p = V3(pose.p.x.coerceIn(hx, ARENA_W - hx), pose.p.y.coerceIn(-INNER + hy, ARENA_D - hy), 0.5))
+        return pose.copy(p = V3(pose.p.x.coerceIn(hx, ARENA_W - hx), pose.p.y.coerceIn(-reach + hy, ARENA_D - hy), 0.5))
     }
 }

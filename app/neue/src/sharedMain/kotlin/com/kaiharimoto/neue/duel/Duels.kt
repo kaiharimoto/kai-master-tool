@@ -354,6 +354,7 @@ class Duels(val dir: File) {
     var chanceCarry by opener::chanceCarry
     var chanceRolling by opener::chanceRolling
     fun throwChance(seat: Int, coin: Boolean, toss: Toss? = null) = opener.throwChance(seat, coin, toss)
+    fun stowChance(seat: Int, coin: Boolean? = null) = opener.stowChance(seat, coin)
     var diceRolling by opener::diceRolling
     var aiOpeningSeat by opener::aiOpeningSeat
     fun mayRoll(seat: Int, playsBoth: Boolean): Boolean = opener.mayRoll(seat, playsBoth)

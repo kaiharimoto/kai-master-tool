@@ -26,6 +26,8 @@ object DuelCoverage {
     const val NEEDS_OPENING = "opening"
     /** Before turn 1, the roll won by the seat typing: go first or second (1.0.87). */
     const val NEEDS_CHOICE = "choice"
+    /** The seat's die out on the table, where it landed (1.1.9). */
+    const val NEEDS_CHANCE = "chance"
 
     /** The drop intents, by [com.kaiharimoto.mastertool.core.duel.DropSpot] kind then what it does there. */
     val INTENTS = listOf(
@@ -123,6 +125,7 @@ object DuelCoverage {
         Row("Shuffle", "shuffle"),
         Row("Click or throw your coin, by your Extra Deck", "coin"),
         Row("Click or throw your die, by your Extra Deck", "dice"),
+        Row("Drag your die or coin onto its home, or double-click it: put it back (Alt R, both)", "stow", needs = NEEDS_CHANCE),
         Row("A token", "token m5"),
         Row("Thinking", "think"),
         Row("Say", "say ok?"),
