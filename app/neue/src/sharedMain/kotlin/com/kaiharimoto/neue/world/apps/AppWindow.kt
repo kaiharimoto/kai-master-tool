@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.world.apps
 
+import com.kaiharimoto.neue.world.CardChip
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -51,16 +54,16 @@ import com.kaiharimoto.neue.Note
 import com.kaiharimoto.neue.ai.ChatCard
 import com.kaiharimoto.neue.ai.MarkdownBlock
 import com.kaiharimoto.neue.cursor.cursorPointer
-import com.kaiharimoto.neue.kit.Body
+import com.kaiharimoto.neue.world.type.Body
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.kit.FieldLabel
 import com.kaiharimoto.neue.kit.HRule
-import com.kaiharimoto.neue.kit.Help
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Help
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuCheckbox
 import com.kaiharimoto.neue.kit.MuInput
@@ -70,7 +73,7 @@ import com.kaiharimoto.neue.kit.MuSwitch
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Progress
 import com.kaiharimoto.neue.kit.Segmented
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.Stepper
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
@@ -125,6 +128,7 @@ private fun idOf(n: UiNode): String? = when (n) {
     is UiNode.DeckPicker -> n.id
     is UiNode.Table -> n.id
     is UiNode.Cards -> n.id
+    is UiNode.Card -> n.id
     else -> null
 }
 
@@ -161,7 +165,7 @@ fun AppWindow(h: NeueHolders, slug: String, modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                MuText(f.words, Modifier.weight(1f), style = MuType.small(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium), color = c.paper, maxLines = 3)
+                MuText(f.words, Modifier.weight(1f), style = WorldType.label(LocalMuFonts.current, LocalPhone.current).copy(fontWeight = FontWeight.Medium), color = c.paper, maxLines = 3)
                 MicroLink("Show code", { showCode(h, slug, f.line) }, color = c.paper)
                 if (host.offerFresh) MicroLink("Start fresh", { apps.startFresh(slug) }, color = c.paper)
             }
@@ -248,7 +252,7 @@ private fun Widget(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean) {
         is UiNode.Divider -> HRule(Modifier.padding(vertical = 4.dp))
         is UiNode.Space -> Spacer(Modifier.height(space(n.size)))
         is UiNode.Text -> {
-            val style = if (n.mono) MuType.mono(f, 12.sp) else MuType.body(f)
+            val style = if (n.mono) WorldType.mono(f, LocalPhone.current) else WorldType.body(f, LocalPhone.current)
             MuText(
                 n.text,
                 style = if (n.tone == Tone.STRONG) style.copy(fontWeight = FontWeight.Medium) else style,
@@ -258,17 +262,17 @@ private fun Widget(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean) {
         is UiNode.Kv -> Column(Modifier.fillMaxWidth()) {
             n.rows.forEach { (k, v) ->
                 Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Small(k, Modifier.weight(1f), color = c.ink45, maxLines = 2)
-                    Mono(v, color = c.ink, size = 12.sp)
+                    Small(k, Modifier.weight(1f), color = c.ink70, maxLines = 2)
+                    Mono(v, color = c.ink)
                 }
             }
         }
         is UiNode.Stat -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             MuText(n.value, style = if (n.value.length <= 8 && !inRow) MuType.display(f) else MuType.h1(f), color = c.ink, maxLines = 1)
-            if (n.label.isNotBlank()) MuText(n.label, style = MuType.row(f).copy(fontWeight = FontWeight.Medium), color = c.ink)
+            if (n.label.isNotBlank()) MuText(n.label, style = WorldType.body(f, LocalPhone.current).copy(fontWeight = FontWeight.Medium), color = c.ink)
             if (n.note.isNotBlank()) Help(n.note, color = c.ink70)
         }
-        is UiNode.Note -> Help(n.text, color = c.ink45)
+        is UiNode.Note -> Help(n.text, color = c.ink70)
         is UiNode.Markdown -> AppMarkdown(h, n.text)
         is UiNode.Button -> AppButton(h, n, s)
         is UiNode.Input -> AppInput(n, s)
@@ -294,7 +298,7 @@ private fun Widget(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean) {
         }
         is UiNode.Toggle -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MuSwitch(n.value, { v -> s.send(n.id, UiEvent.CHANGE, JsonPrimitive(v)) })
-            if (n.label.isNotBlank()) MuText(n.label, style = MuType.row(f), color = c.ink)
+            if (n.label.isNotBlank()) MuText(n.label, style = WorldType.body(f, LocalPhone.current), color = c.ink)
         }
         is UiNode.Checks -> Field(n.label, null) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -305,7 +309,7 @@ private fun Widget(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean) {
                             val next = if (v) n.values + o.value else n.values - o.value
                             s.send(n.id, UiEvent.CHANGE, JsonArray(next.distinct().map(::JsonPrimitive)))
                         })
-                        MuText(o.label, style = MuType.row(f), color = c.ink)
+                        MuText(o.label, style = WorldType.body(f, LocalPhone.current), color = c.ink)
                     }
                 }
             }
@@ -314,6 +318,7 @@ private fun Widget(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean) {
         is UiNode.DeckPicker -> DeckPicker(h, n, s)
         is UiNode.Table -> AppTable(h, n, s)
         is UiNode.Cards -> CardStrip(h, n, s)
+        is UiNode.Card -> AppCard(h, n, s)
         is UiNode.Board -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (n.title.isNotBlank()) Micro(n.title, color = c.ink70)
             // A chart in an app is the same chart as on a page: the boards' painter, at the window's width.
@@ -324,7 +329,7 @@ private fun Widget(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean) {
             if (n.label.isNotBlank()) Small(n.label, color = c.ink70)
             Progress(n.value.toFloat())
         }
-        is UiNode.Empty -> Box(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(16.dp)) { Body(n.text, color = c.ink45) }
+        is UiNode.Empty -> Box(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(16.dp)) { Body(n.text, color = c.ink70) }
         is UiNode.Broken -> BrokenLine("${n.kind}: ${n.why}")
         is UiNode.Unknown -> BrokenLine("“${n.kind}” is a widget from a newer version of the app: update to see it.")
     }
@@ -438,7 +443,7 @@ private fun AppSlider(n: UiNode.Slider, s: Sender) {
                 name = n.label.ifBlank { null },
                 valueText = fmt(v.toDouble()),
             )
-            Mono(fmt(v.toDouble()), Modifier.widthIn(min = 40.dp), color = Mu.colors.ink, size = 12.sp, align = TextAlign.End)
+            Mono(fmt(v.toDouble()), Modifier.widthIn(min = 40.dp), color = Mu.colors.ink, align = TextAlign.End)
         }
     }
 }
@@ -455,13 +460,17 @@ private fun CardPicker(h: NeueHolders, n: UiNode.CardPicker, s: Sender) {
         if (!open || query.trim().length < 2) emptyList() else index.search(query, scope = SearchScope.NAMES, limit = 6).cards
     }
     Field(n.label, null) {
-        MuInput(
-            query,
-            { t -> query = t; open = true },
-            Modifier.fillMaxWidth(),
-            placeholder = "Search the cards",
-            onSubmit = { found.firstOrNull()?.let { card -> s.send(n.id, UiEvent.CHANGE, JsonPrimitive(card.id.value)); query = card.name; open = false } },
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // The card chosen, as its art: known by its picture before its name is read.
+            if (chosen != null && !open) CardChip(h, chosen, 26.dp)
+            MuInput(
+                query,
+                { t -> query = t; open = true },
+                Modifier.weight(1f),
+                placeholder = "Search the cards",
+                onSubmit = { found.firstOrNull()?.let { card -> s.send(n.id, UiEvent.CHANGE, JsonPrimitive(card.id.value)); query = card.name; open = false } },
+            )
+        }
         if (found.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().border(1.dp, c.ink)) {
                 found.forEach { card ->
@@ -478,8 +487,13 @@ private fun CardPicker(h: NeueHolders, n: UiNode.CardPicker, s: Sender) {
                                 query = card.name
                                 open = false
                             }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                    ) { Small(card.name, color = c.ink, maxLines = 1) }
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        CardChip(h, card.name, 20.dp)
+                        Body(card.name, color = c.ink, maxLines = 1)
+                    }
                 }
             }
         }
@@ -511,7 +525,7 @@ private fun AppTable(h: NeueHolders, n: UiNode.Table, s: Sender) {
     val shown = n.rows.drop(page * PAGE).take(PAGE)
     Column(Modifier.fillMaxWidth().border(1.dp, c.ink12)) {
         Row(Modifier.fillMaxWidth().background(c.ink06).padding(vertical = 6.dp)) {
-            n.columns.forEach { col -> MuText(col.uppercase(), Modifier.weight(1f).padding(horizontal = 8.dp), style = MuType.mono(f, 10.sp).copy(fontWeight = FontWeight.Medium), color = c.ink70, maxLines = 1) }
+            n.columns.forEach { col -> Micro(col, Modifier.weight(1f).padding(horizontal = 8.dp), color = c.ink70) }
         }
         shown.forEachIndexed { i, row ->
             val at = page * PAGE + i
@@ -530,9 +544,19 @@ private fun AppTable(h: NeueHolders, n: UiNode.Table, s: Sender) {
                         }
                     }
                     .padding(vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 n.columns.indices.forEach { col ->
-                    MuText(row.getOrElse(col) { "" }, Modifier.weight(1f).padding(horizontal = 8.dp), style = MuType.small(f), color = if (col == 0) c.ink else c.ink70, maxLines = 2)
+                    val cell = row.getOrElse(col) { "" }
+                    if (col in n.cardColumns && cell.isNotBlank()) {
+                        // A column the app marked as cards: each card's art beside its name (never guessed from the words).
+                        Row(Modifier.weight(1f).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CardChip(h, cell, 20.dp)
+                            Body(cell, color = c.ink, maxLines = 2)
+                        }
+                    } else {
+                        MuText(cell, Modifier.weight(1f).padding(horizontal = 8.dp), style = WorldType.body(f, LocalPhone.current), color = if (col == 0) c.ink else c.ink70, maxLines = 2)
+                    }
                 }
             }
         }
@@ -549,6 +573,41 @@ private fun AppTable(h: NeueHolders, n: UiNode.Table, s: Sender) {
 }
 
 private const val PAGE = 50
+
+/**
+ * One card (`ui.card`): its art small beside its label, or [UiNode.Card.large] on its own a card a reader can study. The
+ * pointer on it reads it in the inspector and a click opens it large (`ChatCard`); a pickable card sends `pick`.
+ */
+@Composable
+private fun AppCard(h: NeueHolders, n: UiNode.Card, s: Sender) {
+    val c = Mu.colors
+    val index = h.builder.index
+    val name = remember(n.card, index.size) { n.card.toIntOrNull()?.let { index.byId(CardId(it))?.name } ?: n.card }
+    val pick = Modifier.let { m ->
+        if (!n.pickable) m else m.cursorPointer(caption = "Pick").pointerInput(n.card) {
+            awaitPointerEventScope {
+                while (true) {
+                    val e = awaitPointerEvent(PointerEventPass.Initial)
+                    if (e.type == PointerEventType.Release) s.send(n.id ?: "card", UiEvent.PICK, JsonPrimitive(n.card))
+                }
+            }
+        }
+    }
+    if (n.large) {
+        Column(pick, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ChatCard(h.ai, name, 168.dp)
+            if (n.label.isNotBlank()) Body(n.label, color = c.ink, maxLines = 2)
+        }
+    } else {
+        Row(pick, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ChatCard(h.ai, name, 34.dp)
+            Column {
+                Body(n.label.ifBlank { name }, color = c.ink, maxLines = 2)
+                if (n.label.isNotBlank() && n.label != name) Small(name, color = c.ink70, maxLines = 1)
+            }
+        }
+    }
+}
 
 /** A strip of card art; a pickable card sends `pick` with what the app named it by. */
 @OptIn(ExperimentalLayoutApi::class)

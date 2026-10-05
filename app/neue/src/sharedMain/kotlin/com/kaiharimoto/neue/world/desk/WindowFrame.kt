@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.world.desk
 
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -59,8 +61,8 @@ import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.animatedColor
@@ -244,7 +246,7 @@ private fun TitleBar(
             ) {
                 AppIcon(ref, 16.dp, desk.apps, color = words)
                 Micro(desk.title(app), color = words)
-                if (made) Micro("by Ai", color = if (front) c.ink70 else c.ink45, size = 10.sp)
+                if (made) Micro("by Ai", color = if (front) c.ink70 else c.ink45)
                 DeskApps.context(h, ref)?.let { ctx ->
                     Mono("· $ctx", Modifier.weight(1f, fill = false).widthIn(max = 360.dp), color = if (front) c.ink70 else c.ink45)
                 }
@@ -278,7 +280,7 @@ private fun Glyph(text: String, label: String, size: Dp, onClick: () -> Unit) {
                 .muClickable(interactionSource = source, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            MuText(text, style = MuType.small(LocalMuFonts.current).copy(fontSize = 13.sp), color = c.ink)
+            MuText(text, style = WorldType.body(LocalMuFonts.current, LocalPhone.current), color = c.ink)
         }
     }
 }

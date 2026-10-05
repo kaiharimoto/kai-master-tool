@@ -7,7 +7,8 @@ package com.kaiharimoto.mastertool.core.world.apps
  * replays exactly). Evaluated once into the sealed scope every call starts from.
  *
  * Every builder takes its props first; a container takes its children second (or as its only argument); a words widget
- * takes its text first. `ui.board(kind, body, props)` is a board's payload, as `ygo.show` takes it.
+ * takes its text first. `ui.board(kind, body, props)` is a board's payload, as `ygo.show` takes it. A card is drawn as its
+ * art: `ui.card(nameOrPasscode, {label, size: 'large'})`, `ui.cards({cards})`, a table's `cards: ['Card']` columns.
  */
 object AppPrelude {
     /** The global a call's seeded `Math` is made by: `__mathFor(seed)`. */
@@ -51,7 +52,7 @@ object AppPrelude {
     stat: leaf('stat'), button: leaf('button'), input: leaf('input'), stepper: leaf('stepper'), slider: leaf('slider'),
     select: leaf('select'), segmented: leaf('segmented'), toggle: leaf('toggle'), checks: leaf('checks'),
     cardPicker: leaf('cardPicker'), deckPicker: leaf('deckPicker'),
-    table: leaf('table'), cards: leaf('cards'), progress: leaf('progress'),
+    table: leaf('table'), cards: leaf('cards'), card: words('card', 'card'), progress: leaf('progress'),
     board: function (kind, body, props) { var o = node('board', props || {}); o.kind = String(kind); o.body = body; return o; }
   };
   g.ui = ui;

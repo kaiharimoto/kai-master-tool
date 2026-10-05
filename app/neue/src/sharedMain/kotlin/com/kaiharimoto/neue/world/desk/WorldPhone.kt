@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.world.desk
 
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -43,12 +44,13 @@ import com.kaiharimoto.mastertool.core.world.desk.DeskRect
 import com.kaiharimoto.mastertool.core.world.desk.WorldIcons
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cursor.cursorPointer
+import com.kaiharimoto.neue.world.type.Body
 import com.kaiharimoto.neue.kit.Breathe
-import com.kaiharimoto.neue.kit.Help
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Help
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuText
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
@@ -277,7 +279,7 @@ private fun PhoneSwitcher(h: NeueHolders) {
                 val ref = w.ref
                 if (ref != null) SwitchRow(h, ref)
             }
-            item { Small("Swipe a row left to close it. Words, not live pictures: nothing is drawn that is not seen.", Modifier.padding(16.dp), color = c.ink45) }
+            item { Small("Swipe a row left to close it.", Modifier.padding(16.dp), color = c.ink70) }
         }
     }
 }
@@ -317,13 +319,13 @@ private fun SwitchRow(h: NeueHolders, ref: AppRef) {
     ) {
         AppIcon(ref, 32.dp, desk.apps, color = c.ink)
         Column(Modifier.weight(1f)) {
-            MuText(desk.title(ref.key), style = MuType.row(LocalMuFonts.current).copy(fontSize = 14.sp), color = c.ink, maxLines = 1)
+            MuText(desk.title(ref.key), style = WorldType.body(LocalMuFonts.current, phone = true), color = c.ink, maxLines = 1)
             Mono(DeskApps.summary(h, ref), color = c.ink45)
         }
         Box(
             Modifier.size(40.dp).cursorPointer(label = "Close").muClickable { desk.close(ref.key) },
             contentAlignment = Alignment.Center,
-        ) { MuText("✕", color = c.ink45) }
+        ) { MuText("✕", color = c.ink70) }
     }
 }
 
@@ -342,14 +344,19 @@ private fun androidx.compose.foundation.layout.BoxScope.PhoneToast(h: NeueHolder
                 .padding(start = 12.dp, end = 12.dp, bottom = DOCK + 12.dp)
                 .fillMaxWidth()
                 .background(c.paper)
+                .cursorPointer(caption = n.action)
                 .muClickable { actOn(h, n) }
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(Modifier.weight(1f)) {
-                Micro(n.title, color = c.ink70)
-                if (n.text.isNotBlank()) Small(n.text, color = c.ink, maxLines = 2)
+                if (n.text.isNotBlank()) {
+                    Micro(n.title, color = c.ink70)
+                    Body(n.text, color = c.ink, maxLines = 2)
+                } else {
+                    Body(n.title, color = c.ink, maxLines = 2)
+                }
             }
             Micro(n.action, color = c.ink)
         }

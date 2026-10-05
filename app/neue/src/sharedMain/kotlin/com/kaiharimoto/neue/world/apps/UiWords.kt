@@ -57,6 +57,7 @@ object UiWords {
                     if (rest > 0) line(depth + 1, "… $rest more rows")
                 }
                 is UiNode.Cards -> line(depth, "cards${id(n.id)}: " + n.cards.take(20).joinToString() + if (n.pickable) " (pickable)" else "")
+                is UiNode.Card -> line(depth, "card${id(n.id)}: ${n.card}" + (if (n.label.isNotBlank()) " — ${n.label}" else "") + (if (n.large) " (large)" else "") + if (n.pickable) " (pickable)" else "")
                 is UiNode.Board -> line(depth, "board ${n.kind.id}" + (if (n.title.isNotBlank()) " “${n.title}”" else ""))
                 is UiNode.Progress -> line(depth, "progress ${(n.value * 100).toInt()}%" + if (n.label.isNotBlank()) " — ${n.label}" else "")
                 is UiNode.Empty -> line(depth, "empty: ${n.text}")

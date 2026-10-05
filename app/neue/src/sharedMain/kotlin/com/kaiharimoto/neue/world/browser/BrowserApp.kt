@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.world.browser
 
+import androidx.compose.foundation.layout.heightIn
+import com.kaiharimoto.neue.world.type.Body
+import com.kaiharimoto.neue.world.CardChip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -50,9 +53,9 @@ import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuInput
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.WordToggle
 import com.kaiharimoto.neue.kit.animatedColor
@@ -78,84 +81,33 @@ fun BrowserApp(h: NeueHolders, modifier: Modifier = Modifier, tabsHere: Boolean 
     val browser = h.world.browser
     val phone = LocalPhone.current
     var listing by remember { mutableStateOf(false) }
-    Column(modifier.fillMaxSize()) {
-        if (tabsHere && !phone) BrowserTabStrip(h)
-        BrowserToolbar(h, phone, onTabs = { listing = !listing })
-        Box(Modifier.fillMaxWidth().weight(1f)) {
-            val tab = browser.current
-            when {
-                listing && phone -> TabList(h) { listing = false }
-                tab == null -> HomePage(h, null)
-                else -> key(tab.id) { PageAt(h, tab.parsed) }
+    Box(modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            if (tabsHere && !phone) {
+                BrowserTabStrip(
+                    h,
+                    onPeek = { id -> browser.peek = id },
+                    onOverview = { browser.peek = null; browser.overview = !browser.overview },
+                )
             }
-        }
-    }
-}
-
-/** The tabs (§4): square cells 32 dp tall, 96–220 dp wide, the selected one open to the toolbar below; `+` for a new tab. */
-@Composable
-fun BrowserTabStrip(h: NeueHolders, modifier: Modifier = Modifier) {
-    val browser = h.world.browser
-    val c = Mu.colors
-    val tabs = browser.tabs
-    BoxWithConstraints(
-        modifier
-            .fillMaxWidth()
-            .height(TAB_H)
-            .deskTarget(h, BuiltInApp.BROWSER.id, Anchor.TABS)
-            .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) },
-    ) {
-        val n = tabs.tabs.size.coerceAtLeast(1)
-        val w = ((maxWidth - TAB_H) / n).coerceIn(96.dp, 220.dp)
-        Row(Modifier.fillMaxHeight().horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-            tabs.tabs.forEach { t -> key(t.id) { TabCell(h, t, t.id == tabs.selected, w) } }
-            Tip("A new tab", kbd = "Ctrl T") {
-                IconButton(Icons.Plus, { browser.open() }, size = TAB_H, label = "New tab")
-            }
-        }
-    }
-}
-
-private val TAB_H = 32.dp
-
-@Composable
-private fun TabCell(h: NeueHolders, t: Tab, selected: Boolean, width: androidx.compose.ui.unit.Dp) {
-    val browser = h.world.browser
-    val c = Mu.colors
-    val source = remember { MutableInteractionSource() }
-    val hot by source.collectIsHotAsState()
-    val title = pageTitle(h, t.parsed)
-    Row(
-        Modifier
-            .width(width)
-            .fillMaxHeight()
-            .deskTarget(h, BuiltInApp.BROWSER.id, Anchor.TAB, t.id)
-            .drawBehind {
-                val px = 1.dp.toPx()
-                if (selected) {
-                    // Open to the toolbar below: an ink edge on three sides and paper over the strip's rule.
-                    drawRect(c.paper, Offset(0f, 0f), size)
-                    drawLine(c.ink, Offset(px / 2, 0f), Offset(px / 2, size.height), px)
-                    drawLine(c.ink, Offset(0f, px / 2), Offset(size.width, px / 2), px)
-                    drawLine(c.ink, Offset(size.width - px / 2, 0f), Offset(size.width - px / 2, size.height), px)
-                } else {
-                    drawLine(c.ink12, Offset(size.width - px / 2, 6.dp.toPx()), Offset(size.width - px / 2, size.height - 6.dp.toPx()), px)
+            BrowserToolbar(h, phone, onTabs = { listing = !listing })
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                val tab = browser.current
+                when {
+                    listing && phone -> TabList(h) { listing = false }
+                    browser.overview && !phone -> TabOverview(h) { browser.overview = false }
+                    tab == null -> HomePage(h, null)
+                    else -> key(tab.id) { PageAt(h, tab.parsed) }
                 }
             }
-            .hoverable(source)
-            .cursorPointer(caption = if (selected) null else "Show")
-            .onPointer(PointerEventType.Press) { e -> if (e.buttons.isTertiaryPressed) browser.close(t.id) }
-            .muClickable(interactionSource = source) { browser.select(t.id) }
-            .padding(start = 10.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        IconView(pageGlyph(h, t.parsed), 16.dp, color = if (selected) c.ink else c.ink45)
-        Small(title, Modifier.weight(1f), color = if (selected) c.ink else c.ink45, maxLines = 1)
-        // Ai changed it while it was not selected: a 6 dp ink square, until it is.
-        if (t.mark) Box(Modifier.size(6.dp).background(c.ink))
-        // ✕ on the tab in view and the one under the pointer (always, to a finger); the others give its room to the title.
-        if (hot || selected || LocalPhone.current) IconButton(Icons.X, { browser.close(t.id) }, size = 24.dp, label = "Close tab")
+        }
+        val t = browser.peek?.let { browser.tabs.tab(it) }
+        if (t != null && !browser.overview && t.id != browser.tabs.selected) {
+            TabPeek(h, t, browser.tabX[t.id] ?: 0f) {
+                browser.peek = null
+                browser.select(t.id)
+            }
+        }
     }
 }
 
@@ -255,7 +207,7 @@ private fun TabList(h: NeueHolders, onDone: () -> Unit) {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
+                    .heightIn(min = 64.dp)
                     .background(if (t.id == browser.tabs.selected) c.ink06 else c.paper)
                     .cursorPointer(caption = "Show")
                     .muClickable { browser.select(t.id); onDone() }
@@ -264,10 +216,13 @@ private fun TabList(h: NeueHolders, onDone: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                IconView(pageGlyph(h, t.parsed), 20.dp)
+                val face = tabFace(h, t)
+                if (i < 9) Mono("${i + 1}", Modifier.width(12.dp), color = c.ink45, data = true)
+                IconView(face.glyph, 20.dp)
+                face.card?.let { CardChip(h, it, 22.dp) }
                 Column(Modifier.weight(1f)) {
-                    Small(pageTitle(h, t.parsed), color = c.ink, maxLines = 1)
-                    Mono(t.address, color = c.ink45)
+                    Body(face.title, color = c.ink, maxLines = 2)
+                    Small(face.source, color = c.ink70, maxLines = 1)
                 }
                 if (t.mark) Box(Modifier.size(6.dp).background(c.ink))
                 IconButton(Icons.X, { browser.close(t.id) }, size = 40.dp, label = "Close tab")

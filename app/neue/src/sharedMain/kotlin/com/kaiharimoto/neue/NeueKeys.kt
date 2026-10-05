@@ -152,6 +152,8 @@ fun NeueHolders.deskContext() = DeskContext(
     presenting = present.playing != null,
     onDuel = neue.page == Page.DUEL,
     onWorld = neue.page == Page.WORLD,
+    browserInFront = neue.page == Page.WORLD && worldStarted && !neue.phone &&
+        world.desk.desk.front == com.kaiharimoto.mastertool.core.world.desk.BuiltInApp.BROWSER.id,
     onShootout = neue.page == Page.SHOOTOUT,
     replaying = neue.page == Page.DUEL && duel.replay != null,
 )
@@ -193,6 +195,8 @@ fun NeueHolders.run(action: DeskAction) {
         DeskAction.WORLD_SNAP_UP, DeskAction.WORLD_SNAP_LEFT, DeskAction.WORLD_SNAP_RIGHT, DeskAction.WORLD_SNAP_DOWN,
         DeskAction.WORLD_TAB_NEW, DeskAction.WORLD_TAB_ADDRESS, DeskAction.WORLD_TAB_NEXT, DeskAction.WORLD_TAB_PREVIOUS,
         DeskAction.WORLD_TAB_BACK, DeskAction.WORLD_TAB_FORWARD, DeskAction.WORLD_SKIP,
+        DeskAction.WORLD_TAB_1, DeskAction.WORLD_TAB_2, DeskAction.WORLD_TAB_3, DeskAction.WORLD_TAB_4, DeskAction.WORLD_TAB_5,
+        DeskAction.WORLD_TAB_6, DeskAction.WORLD_TAB_7, DeskAction.WORLD_TAB_8, DeskAction.WORLD_TAB_9,
         -> com.kaiharimoto.neue.world.runWorld(this, action)
         // From a menu or the palette, where nothing is let go of: a press, and the next one sends (1.0.87).
         DeskAction.DUEL_VOICE -> duelVoice.toggle()

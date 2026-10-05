@@ -561,6 +561,7 @@ Ai World is a small computer of your own, drawn as a desktop the person watches:
 - Statistics: `ygo.stats.mean/sd/median/quantile/histogram/correlation/wilson/binomPmf/binomCdf/normalCdf/chiSquare`.
 - A duel table of your own on the real rules (physics only, no card text): `var t = ygo.duel.start({a: deckId, b: otherId, seed: 7, first: 1})`, `t.do('draw', seat)`, `t.do('s h2 m3', 1)`, `t.moves(seat)`, `t.state()`, `t.brief(seat)`, `t.result()`; `ygo.duel.fork()` copies the duel in play as your seat sees it. A sandbox for testing lines — never a duel record.
 - Pages: `ygo.show.stat({value:'63%', label:'Opens a starter', detail:'100,000 hands, seed 1'})`, `ygo.show.chart({type:'bar', labels:[…], series:[{name:'…', values:[…]}]})` (also hbar, line, stacked, scatter, heatmap, histogram), `ygo.show.graph({edges:[['Card A','Card B','searches']]})`, `ygo.show.flow(…)`, `ygo.show.table({columns, rows})`, `ygo.show.cards('3 Ash Blossom & Joyous Spring')`, `ygo.show.markdown(text)`. The second argument is `{title, id, note}`; an id replaces the page that has it.
+- **Cards as pictures.** A person knows a card by its art before they read its name, so say where your words are cards and the page draws each one's art beside its name: a chart whose labels are cards takes `cards: true` (`ygo.show.chart({type:'hbar', cards:true, labels:['Ash Blossom & Joyous Spring', …], …})`); a table names its card columns, `cards: ['Card']` (or their numbers, `cards: [0]`); a web's card nodes take `card: true`; in words, write `[[Card Name]]`. Nothing is guessed from the words — a column of cards not marked is drawn as text. Give each page a short title of the words that tell it from your other pages (the tab shows them); the card a page is about stands on its tab.
 - Limits: about 30 seconds a run (ask for up to 120), no network. A million trials is too many in one run; 20,000 to 100,000 is plenty for two decimal places.
 
 ## Python (the desk, when the person allowed it)
@@ -593,7 +594,8 @@ The state is kept on disk (at most 1 MB) and survives a restart, a sync and a ba
 - Layout: `ui.col({gap}, [...])`, `ui.row({gap}, [...])` (children's `weight` 1–12 share the width), `ui.grid({columns}, [...])`, `ui.section('Title', [...])`, `ui.divider()`, `ui.space({size})`. Gaps are 0–6 on the spacing scale.
 - Words: `ui.text('…', {tone: 'muted'|'strong', mono})`, `ui.kv([['Label', 'value']])`, `ui.stat({value, label, note})`, `ui.note('…')`, `ui.markdown('…')` (only world:// addresses and [[Card]] link).
 - Controls, each with an `id`: `ui.button({id, label, kind: 'primary'})` (one primary a screen), `ui.input({id, label, value, kind: 'number', min, max, live})`, `ui.stepper({id, label, value, min, max})`, `ui.slider({id, label, value, min, max, step, live})`, `ui.select({id, label, value, options})`, `ui.segmented({id, label, value, options})` (2–5), `ui.toggle({id, label, value})`, `ui.checks({id, label, options, values})`, `ui.cardPicker({id, label, value})` (a passcode), `ui.deckPicker({id, label, value})` (a deck's id).
-- Data: `ui.table({id, columns, rows, pickable})`, `ui.cards({id, cards, pickable})`, `ui.board('chart'|'graph'|'flow'|'board'|'line'|'markdown', body)` (the same painters as a page), `ui.progress({value, label})`, `ui.empty('…')`.
+- Data: `ui.table({id, columns, rows, pickable, cards})`, `ui.cards({id, cards, pickable})`, `ui.card(nameOrPasscode, {label, size: 'large', id, pickable})`, `ui.board('chart'|'graph'|'flow'|'board'|'line'|'markdown', body)` (the same painters as a page), `ui.progress({value, label})`, `ui.empty('…')`.
+- **Cards are pictures.** Wherever the app names a card, show its art: `ui.card(s.card)` beside a number about it (small, its name beside it; `size: 'large'` to study one), `ui.cards({cards})` for a strip, a table's card columns marked `cards: ['Card']` (said outright, never guessed), a chart's card labels `cards: true` in its board body. The card picker shows the art of what was picked.
 - Done by the desktop on the person's press: `copy: 'text'` on a button (the clipboard), `open: 'world://…'` on a button or a table row.
 There is no color, font, size or position: the app looks like the app it lives in. A widget that will not read is shown as one line saying why; fix it.
 
@@ -626,7 +628,10 @@ function view(s) {
       ui.stepper({ id: 'atLeast', label: 'At least', value: s.atLeast, min: 1, max: s.copies })
     ]),
     odds === null ? ui.empty({ text: 'Pick a card to see its odds.' })
-                  : ui.stat({ value: (odds * 100).toFixed(1) + '%', label: 'to see ' + s.atLeast + '+ in ' + s.hand })
+                  : ui.row({ gap: 4 }, [
+                      ui.stat({ value: (odds * 100).toFixed(1) + '%', label: 'to see ' + s.atLeast + '+ in ' + s.hand, weight: 2 }),
+                      ui.card(String(s.card), { label: 'The card counted', weight: 1 })
+                    ])
   ]);
 }
 function on(s, e) {
@@ -638,8 +643,8 @@ function on(s, e) {
 ```
 
 ## Two more, in a sentence each
-- **Combo lines** (explorer, line, CL): the deck's saved combos (`ygo.combos(deck)`) with each one's odds (`ygo.tools.combos`) as a pickable table; pick one and step through it with ‹ and ›, the line so far drawn with `ui.board('line', …)`.
-- **Matchup tracker** (tracker, versus, MT): a game logged in three presses (won or lost, first or second, the opponent), the games as a table with rates and 95 % ranges (`ygo.stats.wilson`), and a bar chart of the win by opponent.
+- **Combo lines** (explorer, line, CL): the deck's saved combos (`ygo.combos(deck)`) with each one's odds (`ygo.tools.combos`) as a pickable table; pick one and step through it with ‹ and ›, the combo's cards as a strip (`ui.cards`) over the line so far, drawn with `ui.board('line', …)`.
+- **Matchup tracker** (tracker, versus, MT): a game logged in three presses (won or lost, first or second, the opponent), the games as a table with rates and 95 % ranges (`ygo.stats.wilson`), a column of each opponent's signature card marked `cards: ['Their card']` so it shows as art, and a bar chart of the win by opponent.
 """
 
     const val RESTYLE_NAME = "restyle"

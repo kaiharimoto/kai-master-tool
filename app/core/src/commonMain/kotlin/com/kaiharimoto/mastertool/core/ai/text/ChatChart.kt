@@ -34,6 +34,8 @@ object ChatChart {
         val labels: List<String>,
         val series: List<Series>,
         val unit: String = "",
+        /** The labels are cards' names (`"cards": true`): drawn with each card's art beside its name. */
+        val cards: Boolean = false,
     ) {
         /** The top of the value axis: the largest bar, or the largest stack. */
         val max: Double
@@ -89,6 +91,7 @@ object ChatChart {
             labels = labels,
             series = series,
             unit = (o["unit"] as? JsonPrimitive)?.contentOrNull.orEmpty(),
+            cards = (o["cards"] as? JsonPrimitive)?.contentOrNull?.lowercase() == "true",
         )
     }
 
@@ -112,6 +115,41 @@ object ChatChart {
             unit == "%" -> "$text%"
             else -> "$text $unit"
         }
+    }
+
+    /**
+     * Every value of one chart as its bars write it, to the same number of places — the most any of them needs, at most
+     * two — so a column of numbers reads as one: `38.1%` over `31.0%`, never over `31%`.
+     */
+    fun labels(values: List<Double>, unit: String): List<String> {
+        val places = values.maxOfOrNull { places(it) } ?: 0
+        return values.map { withUnit(fixed(it, places), unit) }
+    }
+
+    /** How many places [value] needs, rounded to two: 31 → 0, 38.1 → 1, 33.76 → 2. */
+    private fun places(value: Double): Int {
+        val hundredths = kotlin.math.round(kotlin.math.abs(value) * 100).toLong()
+        return when {
+            hundredths % 100 == 0L -> 0
+            hundredths % 10 == 0L -> 1
+            else -> 2
+        }
+    }
+
+    /** [value] with exactly [places] places (0 to 2). */
+    fun fixed(value: Double, places: Int): String {
+        val scale = 10.0.pow(places)
+        val n = kotlin.math.round(kotlin.math.abs(value) * scale).toLong()
+        val sign = if (value < 0 && n != 0L) "-" else ""
+        if (places == 0) return sign + n
+        val unit = scale.toLong()
+        return sign + (n / unit) + "." + (n % unit).toString().padStart(places, '0')
+    }
+
+    private fun withUnit(text: String, unit: String) = when {
+        unit.isEmpty() -> text
+        unit == "%" -> "$text%"
+        else -> "$text $unit"
     }
 
     /** Round axis steps: 1, 2, 5 × 10ⁿ, about [ticks] of them up to [max]. */

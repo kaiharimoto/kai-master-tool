@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.world
 
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -34,9 +35,9 @@ import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.animatedColor
@@ -155,8 +156,8 @@ fun RowScope.WorldBarItems(h: NeueHolders, narrow: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        MuText(w?.title ?: "No world", Modifier.widthIn(max = if (narrow) 240.dp else 420.dp), style = MuType.row(LocalMuFonts.current).copy(fontSize = 14.sp), color = c.ink, maxLines = 1)
-        MuText("▼", style = MuType.help(LocalMuFonts.current).copy(fontSize = 10.sp), color = animatedColor(if (hot) c.ink else c.ink45))
+        MuText(w?.title ?: "No world", Modifier.widthIn(max = if (narrow) 240.dp else 420.dp), style = WorldType.body(LocalMuFonts.current, phone = true), color = c.ink, maxLines = 1)
+        MuText("▼", style = WorldType.data(LocalMuFonts.current), color = animatedColor(if (hot) c.ink else c.ink70))
     }
     if (w != null) scopeWords(h, w)?.let { s ->
         Box(Modifier.border(1.dp, c.ink25).padding(horizontal = 6.dp, vertical = 1.dp)) { Mono(s, color = c.ink45) }
@@ -209,6 +210,9 @@ private fun appKey(action: DeskAction): BuiltInApp? = when (action) {
     else -> null
 }
 
+/** `Ctrl 1`–`Ctrl 9`'s tab: 1 to 9. */
+internal fun tabNumber(action: DeskAction): Int = action.ordinal - DeskAction.WORLD_TAB_1.ordinal + 1
+
 /** The World's keys (`DeskScope.WORLD`, §9.1), and the same actions from the palette and the menus. */
 internal fun runWorld(h: NeueHolders, action: DeskAction, ctrlHeld: Boolean = false) {
     val world = h.world
@@ -252,6 +256,12 @@ internal fun runWorld(h: NeueHolders, action: DeskAction, ctrlHeld: Boolean = fa
         DeskAction.WORLD_TAB_PREVIOUS -> if (inBrowser) desk.apply(DeskOp.Tabs(tabs.step(-1)))
         DeskAction.WORLD_TAB_BACK -> if (inBrowser) tabs.selected?.let { desk.apply(DeskOp.Tabs(tabs.back(it))) }
         DeskAction.WORLD_TAB_FORWARD -> if (inBrowser) tabs.selected?.let { desk.apply(DeskOp.Tabs(tabs.forward(it))) }
+        DeskAction.WORLD_TAB_1, DeskAction.WORLD_TAB_2, DeskAction.WORLD_TAB_3, DeskAction.WORLD_TAB_4, DeskAction.WORLD_TAB_5,
+        DeskAction.WORLD_TAB_6, DeskAction.WORLD_TAB_7, DeskAction.WORLD_TAB_8, DeskAction.WORLD_TAB_9,
+        -> {
+            world.browser.jump(tabNumber(action))
+            if (!inBrowser) desk.open(BuiltInApp.BROWSER.ref)
+        }
         else -> Unit
     }
 }

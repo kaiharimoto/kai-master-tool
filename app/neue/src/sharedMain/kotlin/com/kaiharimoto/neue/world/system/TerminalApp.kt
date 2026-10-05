@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.world.system
 
+import com.kaiharimoto.neue.kit.MuText
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -56,9 +59,9 @@ import com.kaiharimoto.mastertool.core.world.desk.DeskRect
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.kit.Breathe
-import com.kaiharimoto.neue.kit.Help
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Help
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.reportsTextFocus
 import com.kaiharimoto.neue.theme.LocalMuFonts
@@ -92,7 +95,7 @@ internal fun TerminalApp(h: NeueHolders, modifier: Modifier, phone: Boolean) {
     val lines = world.terminal
     val list = rememberLazyListState()
     FollowEnd(list, world.open?.id, lines.size)
-    val base = MuType.mono(f, 12.sp).copy(lineHeight = 20.sp)
+    val base = WorldType.terminal(f, phone)
     // The last line's place and its words' width, for the avatar to wait beside (§5.2).
     val last = remember { arrayOfNulls<Any>(2) }
     fun reportLine() {
@@ -164,7 +167,7 @@ private fun Prompt(h: NeueHolders, phone: Boolean) {
     val world = h.world
     val c = Mu.colors
     val f = LocalMuFonts.current
-    val style = MuType.mono(f, 12.sp).copy(color = c.ink)
+    val style = WorldType.mono(f, LocalPhone.current).copy(color = c.ink)
     var value by remember { mutableStateOf(TextFieldValue("")) }
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
@@ -180,9 +183,9 @@ private fun Prompt(h: NeueHolders, phone: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Mono("›", color = c.ink, size = 13.sp)
+        MuText("›", style = style, color = c.ink)
         Box(Modifier.weight(1f)) {
-            if (value.text.isEmpty() && !focused) Mono("run, js, tool, open, ls, cat, help", color = c.ink25, size = 12.sp)
+            if (value.text.isEmpty() && !focused) MuText("run, js, tool, open, ls, cat, help", style = style, color = c.ink45, maxLines = 1)
             BasicTextField(
                 value = value,
                 onValueChange = { value = it },
@@ -192,7 +195,7 @@ private fun Prompt(h: NeueHolders, phone: Boolean) {
                 interactionSource = source,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .cursor(CursorMode.TEXT, fontSize = 12.sp, focused = focused)
+                    .cursor(CursorMode.TEXT, fontSize = style.fontSize, focused = focused)
                     .reportsTextFocus()
                     .onPreviewKeyEvent { e ->
                         if (e.type != KeyEventType.KeyDown || e.isCtrlPressed || e.isAltPressed || e.isMetaPressed) return@onPreviewKeyEvent false

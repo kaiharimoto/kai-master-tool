@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.world.browser
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.mastertool.core.world.desk.AiDoes
@@ -19,6 +22,15 @@ class WorldBrowser internal constructor(private val world: Worlds) {
     private val desk get() = world.desk
 
     val tabs: BrowserTabs get() = desk.desk.tabs
+
+    /** Every tab as pictures, open in place of the page (the strip's count). */
+    var overview by mutableStateOf(false)
+
+    /** The tab a resting pointer (a held finger) shows as a picture. */
+    var peek by mutableStateOf<String?>(null)
+
+    /** Where each tab stands in the strip (px from its left), written from layout: where its picture opens. Plain. */
+    internal val tabX = HashMap<String, Float>()
 
     /** Bumped to put the keyboard in the address line (`Ctrl L`): the desk's counter. */
     val addressTick: Int get() = desk.addressAsked
@@ -62,11 +74,20 @@ class WorldBrowser internal constructor(private val world: Worlds) {
 
     fun back() = tabs.current?.let { set(tabs.back(it.id)) }
     fun forward() = tabs.current?.let { set(tabs.forward(it.id)) }
-    fun select(id: String) = set(tabs.select(id))
+    fun select(id: String) {
+        overview = false
+        set(tabs.select(id))
+    }
     fun close(id: String) = set(tabs.close(id))
     fun step(n: Int) = set(tabs.step(n))
     fun move(id: String, to: Int) = set(tabs.move(id, to))
     fun keep(id: String, kept: Boolean) = set(tabs.keep(id, kept))
+
+    /** `Ctrl 1`–`Ctrl 9`: the [n]th tab, the last for 9. */
+    fun jump(n: Int) {
+        overview = false
+        set(tabs.jump(n))
+    }
 
     /** `Ctrl W` in the Browser: the selected tab closes. False when there was none (the window closes instead). */
     fun closeCurrent(): Boolean {
@@ -76,8 +97,8 @@ class WorldBrowser internal constructor(private val world: Worlds) {
     }
 
     /** A board's page in a tab without Ai walking anywhere (an instrument's *Open pages*): updated in place when one is on it. */
-    fun shown(board: String, raise: Boolean, by: String = WorldEvent.YOU) {
-        set(tabs.show(board, now(), raise, if (by == WorldEvent.AI) desk.desk.turn else 0, by))
+    fun shown(board: String, raise: Boolean, by: String = WorldEvent.YOU, group: String? = null) {
+        set(tabs.show(board, now(), raise, if (by == WorldEvent.AI) desk.desk.turn else 0, by, group))
     }
 
     /** Brings the Browser up on [address]: the person's window opens; Ai's goes through the focus policy and the avatar. */
@@ -103,6 +124,9 @@ fun WorldBrowser.key(action: DeskAction): Boolean {
         DeskAction.WORLD_TAB_BACK -> back()
         DeskAction.WORLD_TAB_FORWARD -> forward()
         DeskAction.WORLD_CLOSE -> return closeCurrent()
+        DeskAction.WORLD_TAB_1, DeskAction.WORLD_TAB_2, DeskAction.WORLD_TAB_3, DeskAction.WORLD_TAB_4, DeskAction.WORLD_TAB_5,
+        DeskAction.WORLD_TAB_6, DeskAction.WORLD_TAB_7, DeskAction.WORLD_TAB_8, DeskAction.WORLD_TAB_9,
+        -> jump(com.kaiharimoto.neue.world.tabNumber(action))
         else -> return false
     }
     return true

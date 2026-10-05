@@ -75,29 +75,30 @@ internal object HandInstruments {
         worth.firstOrNull()?.let { s.say("  the card that lifts it most: ${it.name} (${points(it.lift)} points when it is in the hand)") }
 
         val top = rows[focus]
-        s.stat("openings-headline", "“${top.text}”", pct(top.first), "going first; ${pct(top.second)} going second", read.entry.name, howMade(trials, seed))
+        s.stat("openings-headline", Goals.words(top.text), pct(top.first), "going first; ${pct(top.second)} going second", read.entry.name, howMade(trials, seed))
         s.table(
             "openings", "Opening hands — ${read.entry.name}",
             listOf("Condition", "First (5)", "Second (6)", "Simulated first", "Simulated second", "Check"),
-            rows.map { r -> listOf(r.text, pct(r.first), pct(r.second), r.simFirst?.let(::pct) ?: "—", r.simSecond?.let(::pct) ?: "—", when (r.check) { true -> "ok"; false -> "OFF"; null -> "—" }) },
+            rows.map { r -> listOf(Goals.words(r.text), pct(r.first), pct(r.second), r.simFirst?.let(::pct) ?: "—", r.simSecond?.let(::pct) ?: "—", when (r.check) { true -> "ok"; false -> "OFF"; null -> "—" }) },
             howMade(trials, seed),
         )
         if (rows.size > 1) {
             s.chart(
-                "openings-chart", "Going first or second", ChatChart.Type.HBAR, rows.map { it.text },
+                "openings-chart", "Going first or second", ChatChart.Type.HBAR, rows.map { Goals.words(it.text) },
                 listOf(ChatChart.Series("Going first (5)", rows.map { pc(it.first) }), ChatChart.Series("Going second (6)", rows.map { pc(it.second) })), "%",
                 "Exact odds.",
             )
         }
         if (bricks.isNotEmpty()) {
-            s.table("openings-bricks", "When “${goal.text}” fails", listOf("The hand holds", "Of all hands"), bricks.take(8).map { listOf(it.first, pct(it.second)) },
+            s.table("openings-bricks", "When “${Goals.words(goal.text)}” fails", listOf("The hand holds", "Of all hands"), bricks.take(8).map { listOf(it.first, pct(it.second)) },
                 "Exact, going first: the failing hands by how many of each group they hold, commonest first.")
         }
         if (worth.isNotEmpty()) {
             s.table(
-                "openings-worth", "What each card is worth to “${goal.text}”", listOf("Card", "Copies", "When it is in the hand", "Lift"),
+                "openings-worth", "What each card is worth to “${Goals.words(goal.text)}”", listOf("Card", "Copies", "When it is in the hand", "Lift"),
                 worth.take(20).map { listOf(it.name, "${it.copies}", pct(it.given), points(it.lift)) },
                 "Exact, going first: the chance of the goal when the card is in the opening hand, against the deck's ${pct(top.first)}.",
+                cards = listOf(0),
             )
         }
         if (samples > 0) {

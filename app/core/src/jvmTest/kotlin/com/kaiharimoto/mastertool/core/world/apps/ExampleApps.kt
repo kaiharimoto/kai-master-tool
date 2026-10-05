@@ -32,7 +32,10 @@ function view(s) {
       ui.stepper({ id: 'atLeast', label: 'At least', value: s.atLeast, min: 1, max: s.copies })
     ]),
     odds === null ? ui.empty({ text: 'Pick a card to see its odds.' })
-                  : ui.stat({ value: (odds * 100).toFixed(1) + '%', label: 'to see ' + s.atLeast + '+ in ' + s.hand }),
+                  : ui.row({ gap: 4 }, [
+                      ui.stat({ value: (odds * 100).toFixed(1) + '%', label: 'to see ' + s.atLeast + '+ in ' + s.hand, weight: 2 }),
+                      ui.card(String(s.card), { label: 'The card counted', weight: 1 })
+                    ]),
     ui.board('chart', { type: 'bar', title: 'By hand size', labels: ['5', '6', '7'],
       series: [{ name: 'odds', values: [5, 6, 7].map(function (n) { return s.card ? 100 * ygo.atLeast(s.size, s.copies, n, s.atLeast) : 0; }) }] })
   ]);
@@ -72,6 +75,12 @@ function load(s, deck) {
   s.step = 0;
 }
 
+function cardsOf(steps) {
+  var seen = [], m, re = /\[\[([^\]]+)\]\]/g;
+  steps.forEach(function (step) { while ((m = re.exec(step)) !== null) if (seen.indexOf(m[1]) < 0) seen.push(m[1]); });
+  return seen;
+}
+
 function view(s) {
   if (!s.deck) return ui.col([ui.deckPicker({ id: 'deck', label: 'Deck', value: s.deck }), ui.empty('Pick a deck to see its combos.')]);
   if (!s.combos.length) return ui.col([ui.deckPicker({ id: 'deck', label: 'Deck', value: s.deck }), ui.empty('This deck has no saved combos yet.')]);
@@ -82,6 +91,7 @@ function view(s) {
     ui.table({ id: 'pick', columns: ['Combo', 'Opens, first'], pickable: true,
       rows: s.combos.map(function (x) { return [x.name, x.first === null ? '—' : (x.first * 100).toFixed(1) + '%']; }) }),
     ui.section(c.name, [
+      ui.cards({ cards: cardsOf(c.steps) }),
       ui.row([
         ui.button({ id: 'back', label: '‹', disabled: s.step === 0 }),
         ui.text('Step ' + (s.step + 1) + ' of ' + c.steps.length, { mono: true }),
@@ -105,7 +115,8 @@ function on(s, e) {
     val MATCHUP_TRACKER = """
 // Matchup tracker — v1: a game is three presses; every rate says how sure it is.
 function init() {
-  return { result: 'won', order: 'first', opp: 'Snake-Eye', opponents: ['Snake-Eye', 'Tenpai', 'Yubel'], games: [] };
+  return { result: 'won', order: 'first', opp: 'Snake-Eye', opponents: ['Snake-Eye', 'Tenpai', 'Yubel'], games: [],
+           covers: { 'Snake-Eye': 'Snake-Eye Ash', 'Tenpai': 'Tenpai Dragon Chundra', 'Yubel': 'Yubel' } };
 }
 
 function rows(s) {
@@ -126,8 +137,8 @@ function view(s) {
       ui.select({ id: 'opp', label: 'Against', value: s.opp, options: s.opponents })
     ]),
     ui.button({ id: 'log', label: 'Log the game', kind: 'primary' }),
-    s.games.length === 0 ? ui.empty('No games yet: log one above.') : ui.table({ columns: ['Against', 'Games', 'Won', 'Rate', '95 % range'],
-      rows: r.map(function (x) { return [x.opp, x.n, x.won, (x.rate * 100).toFixed(0) + '%', (x.low * 100).toFixed(0) + '–' + (x.high * 100).toFixed(0) + '%']; }) }),
+    s.games.length === 0 ? ui.empty('No games yet: log one above.') : ui.table({ columns: ['Against', 'Games', 'Won', 'Rate', '95 % range', 'Their card'], cards: ['Their card'],
+      rows: r.map(function (x) { return [x.opp, x.n, x.won, (x.rate * 100).toFixed(0) + '%', (x.low * 100).toFixed(0) + '–' + (x.high * 100).toFixed(0) + '%', (s.covers || {})[x.opp] || '']; }) }),
     ui.board('chart', { type: 'bar', title: 'Game win by opponent', labels: s.opponents,
       series: [{ name: 'win %', values: r.map(function (x) { return Math.round(x.rate * 100); }) }] })
   ]);

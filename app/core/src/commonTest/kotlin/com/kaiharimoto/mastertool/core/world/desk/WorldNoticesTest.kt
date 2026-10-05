@@ -77,4 +77,26 @@ class WorldNoticesTest {
         assertEquals(49, n.unread)
         assertTrue(n.clear().tray.isEmpty())
     }
+
+    @Test
+    fun theAppANoticePointsAtAnswersItWhenItComesToTheFront() {
+        var n = WorldNotices().post(WorldNotices.newPages(6, browserInFront = false)!!, 0)
+        n = n.post(WorldNotices.appMade("Hand odds", "hand-odds"), 10_000)
+        assertNotNull(n.toast)
+        assertEquals(2, n.unread)
+        // The Terminal in front answers neither.
+        assertEquals(n, n.looked(BuiltInApp.TERMINAL.id))
+        // The Browser in front: its pages are seen, and the toast over it — "6 new pages" — goes.
+        n = WorldNotices().post(WorldNotices.newPages(6, browserInFront = false)!!, 0)
+        n = n.looked(BuiltInApp.BROWSER.id)
+        assertNull(n.toast)
+        assertEquals(0, n.unread)
+        // An app Ai made is answered by its own window, and only that one.
+        n = WorldNotices().post(WorldNotices.appMade("Hand odds", "hand-odds"), 0)
+        assertEquals(1, n.looked(AppRef.Made("combo-lines").key).unread)
+        assertEquals(0, n.looked(AppRef.Made("hand-odds").key).unread)
+        // A failed app still wants its code read.
+        n = WorldNotices().post(WorldNotices.appFailed("Hand odds", "hand-odds", "on(press draw)", 41), 0)
+        assertEquals(1, n.looked(AppRef.Made("hand-odds").key).unread)
+    }
 }

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.world.system
 
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -35,14 +37,14 @@ import com.kaiharimoto.mastertool.core.world.desk.AppRef
 import com.kaiharimoto.mastertool.core.world.desk.WorldAddress
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cursor.cursorPointer
-import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.world.type.Help
 import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.Tip
@@ -162,9 +164,9 @@ private fun FileRow(h: NeueHolders, row: TreeRow, picked: Boolean, phone: Boolea
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        MuText(row.name, Modifier.weight(1f), style = MuType.mono(LocalMuFonts.current, 12.sp), color = ink, maxLines = 1)
-        if (open && !picked) Mono("open", color = c.ink45, size = 10.sp)
-        WorldPaths.lang(row.path)?.let { Mono(it, color = if (picked) c.paper else c.ink45, size = 10.sp) }
+        MuText(row.name, Modifier.weight(1f), style = WorldType.mono(LocalMuFonts.current, LocalPhone.current), color = ink, maxLines = 1)
+        if (open && !picked) Mono("open", color = c.ink70, data = true)
+        WorldPaths.lang(row.path)?.let { Mono(it, color = if (picked) c.paper else c.ink70, data = true) }
     }
 }
 

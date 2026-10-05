@@ -297,6 +297,22 @@ class OldDataTest {
     }
 
     @Test
+    fun aDesksTabsFromBeforeTheirGroupsRead() {
+        // The desk.json 1.1.x wrote before tabs knew what made them (READABILITY.md §8): no `group`. Its tabs read
+        // ungrouped — no divider, no overview label — and a tab opened beside them groups as it should.
+        val before = """{"windows":[{"app":"browser"}],"front":"browser","tabs":{"tabs":[
+              {"id":"t1","address":"world://boards/b1","by":"ai","turn":2,"mark":true},
+              {"id":"t2","address":"world://home"}],"selected":"t2","next":3}}"""
+        val d = DeskCodec.decode(before)
+        assertEquals(listOf(null, null), d.tabs.tabs.map { it.group })
+        assertTrue(d.tabs.tabs[0].mark, "a mark an older build set stays until the tab is seen")
+        assertFalse(d.tabs.startsGroup(1))
+        val t = d.tabs.show("b2", at = 5, raise = false, group = "run@5").show("b3", at = 6, raise = false, group = "run@5")
+        assertEquals(listOf("world://boards/b1", "world://home", "world://boards/b2", "world://boards/b3"), t.tabs.map { it.address })
+        assertTrue(t.startsGroup(2))
+    }
+
+    @Test
     fun anAppFromANewerBuildReads() {
         // An app a later build made: a kind, a glyph and keys this build does not know, and a screen with a widget it
         // cannot draw. The app reads, its kind is kept as written and drawn as a viewer, and the widget says so in its place.

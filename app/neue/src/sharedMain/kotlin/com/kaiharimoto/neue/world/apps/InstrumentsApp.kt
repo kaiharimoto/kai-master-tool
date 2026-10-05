@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.world.apps
 
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -46,11 +47,11 @@ import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.FieldLabel
-import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.world.type.Help
 import com.kaiharimoto.neue.kit.LocalPhone
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuCheckbox
 import com.kaiharimoto.neue.kit.MuInput
@@ -58,7 +59,7 @@ import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.MuSwitch
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Segmented
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
@@ -131,8 +132,8 @@ private fun InstrumentList(modifier: Modifier, chosen: String, onPick: (String) 
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    MuText(title(f.instrument), style = MuType.row(LocalMuFonts.current), color = c.ink, maxLines = 1)
-                    Small(f.question, color = if (on) c.ink70 else c.ink45, maxLines = 2)
+                    MuText(title(f.instrument), style = WorldType.body(LocalMuFonts.current, LocalPhone.current), color = c.ink, maxLines = 1)
+                    Small(f.question, color = if (on) c.ink70 else c.ink70, maxLines = 2)
                 }
             }
         }
@@ -182,7 +183,7 @@ private fun InstrumentFormView(h: NeueHolders, name: String, modifier: Modifier)
                     Mono(CLOCK.format(Date(e.t)), color = c.ink45)
                     Small("${r.ms} ms · ${r.boards.size} page${if (r.boards.size == 1) "" else "s"}", Modifier.weight(1f), color = c.ink70, maxLines = 1)
                     if (r.boards.isNotEmpty()) MicroLink("Open pages", {
-                        r.boards.forEach { id -> world.browser.shown(id, raise = false, by = WorldEvent.YOU) }
+                        r.boards.forEach { id -> world.browser.shown(id, raise = false, by = WorldEvent.YOU, group = "run@${e.t}") }
                         world.browser.show(WorldAddress.Board(r.boards.first()).format())
                     }, color = c.ink)
                     MicroLink("The run", { world.browser.show(WorldAddress.Run(e.t).format()) })
@@ -227,7 +228,7 @@ private fun FormFieldView(h: NeueHolders, f: FormField, value: String, onChange:
 @Composable
 private fun Lines(value: String, onChange: (String) -> Unit, hint: String) {
     val c = Mu.colors
-    val style = MuType.mono(LocalMuFonts.current).copy(color = c.ink)
+    val style = WorldType.mono(LocalMuFonts.current, LocalPhone.current).copy(color = c.ink)
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     Box(

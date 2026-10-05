@@ -64,6 +64,8 @@ class ExampleAppsTest {
         assertEquals(3, app.field("copies").jsonPrimitive.int)
         // 1 − C(37,5)/C(40,5): a three-of in a forty-card deck, at least one in five.
         assertEquals("33.8%", picked.find<UiNode.Stat>().single().value)
+        // The card counted stands beside its odds as its art (`ui.card`), by its passcode.
+        assertEquals("14558127", picked.find<UiNode.Card>().single().card)
         val chart = picked.find<UiNode.Board>().single()
         assertEquals(BoardKind.CHART, chart.kind)
         val sixth = app.send("hand", UiEvent.CHANGE, JsonPrimitive(6))
@@ -109,7 +111,11 @@ class ExampleAppsTest {
         app.send("opp", UiEvent.CHANGE, JsonPrimitive("Tenpai"))
         val s = app.send("log", UiEvent.PRESS)
         assertEquals(5, app.field("games").jsonArray.size)
-        val rows = s.find<UiNode.Table>().single().rows
+        val table = s.find<UiNode.Table>().single()
+        // Each opponent known by its signature card: a column the app marks as cards, drawn as art.
+        assertEquals(listOf(5), table.cardColumns)
+        assertEquals("Snake-Eye Ash", table.rows[0][5])
+        val rows = table.rows
         assertEquals(listOf("Snake-Eye", "4", "3", "75%"), rows[0].take(4))
         assertEquals(listOf("Tenpai", "1", "0", "0%"), rows[1].take(4))
         // Four games say little: the range is wide.

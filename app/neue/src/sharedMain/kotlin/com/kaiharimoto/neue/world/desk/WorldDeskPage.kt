@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.world.desk
 
+import com.kaiharimoto.mastertool.core.world.desk.DeskGrid
+import com.kaiharimoto.neue.ai.LocalCardChips
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -60,7 +63,7 @@ import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.ai.avatar.AiMark
 import com.kaiharimoto.neue.cursor.cursor
 import com.kaiharimoto.neue.cursor.cursorPointer
-import com.kaiharimoto.neue.kit.Body
+import com.kaiharimoto.neue.world.type.Body
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Icons
@@ -68,8 +71,8 @@ import com.kaiharimoto.neue.kit.LocalPhone
 import com.kaiharimoto.neue.kit.LocalTouchFirst
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuText
@@ -93,21 +96,24 @@ import kotlin.math.roundToInt
  * taskbar; the desktop. A phone has no windows: one app at a time (`WorldPhone.kt`).
  */
 
-/** An icon's tile on the desktop's grid (§2.1). */
-internal val TILE_W = 88.dp
-internal val TILE_H = 80.dp
-private val GRID_GAP = 8.dp
-private val INSET = 16.dp
+/** An icon's tile on the desktop's grid (§2.1, `DeskGrid`). */
+internal val TILE_W = DeskGrid.TILE_W.dp
+internal val TILE_H = DeskGrid.TILE_H.dp
+private val GRID_GAP = DeskGrid.GAP.dp
+private val INSET = DeskGrid.INSET.dp
 
 /** The heading over Ai's apps, *Made by Ai*: the column's tiles start under it. */
-private val MADE_HEAD = 28.dp
+private val MADE_HEAD = DeskGrid.MADE_HEAD.dp
 
 @Composable
 fun WorldDeskPage(h: NeueHolders) {
-    if (LocalPhone.current) {
-        WorldPhone(h)
-    } else {
-        WorldDesk(h)
+    // Cards named in Ai's words, a guide's or a page's are drawn with their art (READABILITY.md §7).
+    androidx.compose.runtime.CompositionLocalProvider(LocalCardChips provides true) {
+        if (LocalPhone.current) {
+            WorldPhone(h)
+        } else {
+            WorldDesk(h)
+        }
     }
 }
 
@@ -138,8 +144,6 @@ private fun WorldDesk(h: NeueHolders) {
     }
 }
 
-/** How many icon columns the desktop holds: the built-ins, then Ai's apps, a column more each time one is full. */
-private fun columns(apps: Int, rows: Int): Int = 1 + if (apps == 0) 0 else (apps + rows - 1) / rows.coerceAtLeast(1)
 
 @Composable
 private fun Desktop(h: NeueHolders, width: Dp, height: Dp, finger: Boolean) {
@@ -147,10 +151,8 @@ private fun Desktop(h: NeueHolders, width: Dp, height: Dp, finger: Boolean) {
     val desk = world.desk
     val d = desk.desk
     val apps = desk.apps
-    val rows = ((height - INSET * 2 - MADE_HEAD) / TILE_H).toInt().coerceAtLeast(1)
-    val cols = columns(apps.size, rows)
-    val iconColumns = INSET + TILE_W * cols + GRID_GAP * (cols - 1)
-    val area = DeskArea(DeskRect(0.0, 0.0, width.value.toDouble(), height.value.toDouble()), iconColumns.value.toDouble())
+    val rows = DeskGrid.rows(height.value.toDouble())
+    val area = DeskGrid.area(DeskArea(DeskRect(0.0, 0.0, width.value.toDouble(), height.value.toDouble())), apps.size)
     // The reducer reads the desk's measure; composition passes its own down.
     desk.area = area
     var snap by remember { mutableStateOf<DeskRect?>(null) }
@@ -260,7 +262,7 @@ private fun DesktopIcons(h: NeueHolders, apps: List<AppManifest>, rows: Int, fin
                 .height(MADE_HEAD - 4.dp)
                 .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) },
             contentAlignment = Alignment.BottomCenter,
-        ) { Micro("Made by Ai", Modifier.padding(bottom = 6.dp), color = c.ink45, size = 10.sp) }
+        ) { Micro("Made by Ai", Modifier.padding(bottom = 6.dp), color = c.ink70) }
     }
     cells.forEach { (app, cell) ->
         val ref = AppRef.parse(app)
@@ -346,14 +348,14 @@ private fun DeskIcon(h: NeueHolders, ref: AppRef, made: AppManifest?, x: Dp, y: 
             MuText(
                 desk.title(key),
                 Modifier.widthIn(max = TILE_W - 8.dp),
-                style = MuType.small(LocalMuFonts.current).copy(fontSize = 12.sp, lineHeight = 14.sp),
+                style = WorldType.label(LocalMuFonts.current, LocalPhone.current),
                 color = c.ink,
                 maxLines = 2,
                 align = TextAlign.Center,
             )
             if (fresh) {
                 Box(Modifier.background(c.ink).padding(horizontal = 4.dp, vertical = 1.dp)) {
-                    Micro("New", color = c.paper, size = 9.sp)
+                    Micro("New", color = c.paper)
                 }
             }
         }
@@ -407,7 +409,7 @@ private fun Plate(h: NeueHolders, area: DeskArea) {
             }
         } else {
             MuText(w.title, style = MuType.h2(f), color = c.ink, maxLines = 2)
-            Mono(WorldHome.summary(w.boards.size, world.files.size, world.desk.apps.size), color = c.ink45, size = 12.sp)
+            Mono(WorldHome.summary(w.boards.size, world.files.size, world.desk.apps.size), color = c.ink70)
             Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 TextLink("Open the browser") { openAddress(h, WorldAddress.Home()) }
                 if (ai) TextLink("What ${h.ai.name} did last") { world.desk.open(BuiltInApp.THOUGHTS.ref) }
@@ -445,7 +447,7 @@ internal fun TextLink(text: String, onClick: () -> Unit) {
     MuText(
         text,
         Modifier.cursorPointer(showsWords = true).deskPointer(text, onTap = { onClick() }),
-        style = MuType.body(LocalMuFonts.current).copy(textDecoration = TextDecoration.Underline),
+        style = WorldType.body(LocalMuFonts.current, LocalPhone.current).copy(textDecoration = TextDecoration.Underline),
         color = c.ink,
         maxLines = 1,
     )

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.world.system
 
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -53,15 +55,15 @@ import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Breathe
-import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.world.type.Help
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.ScrollbarFor
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
@@ -143,7 +145,7 @@ private fun EditorBar(h: NeueHolders, phone: Boolean) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Mono(path, Modifier.widthIn(max = 240.dp), color = animatedColor(if (hot) c.ink else c.ink70), size = 12.sp)
+                Mono(path, Modifier.widthIn(max = 240.dp), color = animatedColor(if (hot) c.ink else c.ink70))
                 Mono("▾", color = c.ink45)
             }
         }
@@ -159,7 +161,7 @@ private fun EditorBar(h: NeueHolders, phone: Boolean) {
                 Small("Edited", color = c.ink70, maxLines = 1)
                 MicroLink("Save", { world.saveEditor() }, color = c.ink)
             }
-            path != null -> Small("Saved", color = c.ink45, maxLines = 1)
+            path != null -> Small("Saved", color = c.ink70, maxLines = 1)
         }
     }
 }
@@ -170,7 +172,7 @@ private fun CodeField(h: NeueHolders) {
     val world = h.world
     val c = Mu.colors
     val f = LocalMuFonts.current
-    val style = MuType.mono(f, 13.sp).copy(color = c.ink, lineHeight = 22.sp)
+    val style = WorldType.code(f, LocalPhone.current).copy(color = c.ink)
     val text = world.editorText
     val lines = remember(text) { text.count { it == '\n' } + 1 }
     val numbers = remember(lines) { (1..lines).joinToString("\n") }
@@ -215,7 +217,7 @@ private fun CodeField(h: NeueHolders) {
                         modifier = Modifier
                             .widthIn(min = room - gutter - 8.dp)
                             .onGloballyPositioned { laid[0] = it; reportCaret() }
-                            .cursor(CursorMode.TEXT, fontSize = 13.sp, singleLine = false, focused = focused, reason = if (world.typing) "Ai is still typing" else null)
+                            .cursor(CursorMode.TEXT, fontSize = style.fontSize, singleLine = false, focused = focused, reason = if (world.typing) "Ai is still typing" else null)
                             .reportsTextFocus()
                             .onFocusChanged { if (!it.isFocused) world.saveEditor() }
                             .padding(end = 16.dp),
@@ -233,6 +235,7 @@ private fun LargeFile(h: NeueHolders, path: String) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     val lines = remember(h.world.editorText) { h.world.editorText.lines() }
+    val code = WorldType.code(f, LocalPhone.current)
     val list = rememberLazyListState()
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -243,8 +246,8 @@ private fun LargeFile(h: NeueHolders, path: String) {
             LazyColumn(Modifier.fillMaxSize(), state = list) {
                 itemsIndexed(lines) { i, line ->
                     Row {
-                        MuText((i + 1).toString(), Modifier.width(64.dp).padding(end = 14.dp), style = MuType.mono(f, 13.sp).copy(color = c.ink45, textAlign = TextAlign.End), maxLines = 1)
-                        MuText(line, style = MuType.mono(f, 13.sp), color = c.ink, maxLines = 1)
+                        MuText((i + 1).toString(), Modifier.width(64.dp).padding(end = 14.dp), style = code.copy(color = c.ink45, textAlign = TextAlign.End), maxLines = 1)
+                        MuText(line, style = code, color = c.ink, maxLines = 1)
                     }
                 }
             }

@@ -64,6 +64,43 @@ class BrowserTabsTest {
     }
 
     @Test
+    fun aRunsPagesStandTogetherInTheOrderMade() {
+        var t = BrowserTabs().open(home, at = 1).open("world://boards/x", at = 2)
+        t = t.select(t.tabs[0].id)
+        listOf("a", "b", "c").forEachIndexed { i, b -> t = t.show(b, at = 10L + i, raise = false, group = "run:openings.js@10") }
+        assertEquals(listOf(home, "world://boards/a", "world://boards/b", "world://boards/c", "world://boards/x"), t.tabs.map { it.address })
+        // A later page of the same run joins its group even with another tab selected.
+        t = t.select(t.tabs.last().id).show("d", at = 20, raise = false, group = "run:openings.js@10")
+        assertEquals("world://boards/d", t.tabs[4].address)
+        assertTrue(t.startsGroup(1), "a divider before the run's pages")
+        assertFalse(t.startsGroup(2), "none inside them")
+        assertTrue(t.startsGroup(5), "and one after")
+        assertFalse(t.startsGroup(0))
+    }
+
+    @Test
+    fun ctrlNumberJumpsToATabAndNineToTheLast() {
+        var t = BrowserTabs().open(home, at = 1)
+        listOf("a", "b", "c").forEach { t = t.open("world://boards/$it", at = 2) }
+        assertEquals(t.tabs[1].id, t.jump(2).selected)
+        assertEquals(t.tabs.last().id, t.jump(9).selected)
+        assertEquals(t.selected, t.jump(7).selected, "past the tabs there are: nothing")
+    }
+
+    @Test
+    fun aTabThePersonOpensIsNeverMarked() {
+        var t = BrowserTabs().open(home, at = 1)
+        t = t.open("world://boards/a", at = 2, by = WorldEvent.YOU, select = false)
+        assertFalse(t.showing("world://boards/a")!!.mark, "the person's own tab is not news to them")
+        // An instrument the person ran opens its pages the same way: unmarked.
+        t = t.show("b", at = 3, raise = false, by = WorldEvent.YOU)
+        assertFalse(t.showing("world://boards/b")!!.mark)
+        // Ai's, beside the one being read, is.
+        t = t.show("c", at = 4, raise = false, by = WorldEvent.AI)
+        assertTrue(t.showing("world://boards/c")!!.mark)
+    }
+
+    @Test
     fun twentyTabsAndTheOldestOfAisGoesFirst() {
         var t = BrowserTabs().open(home, at = 0, by = WorldEvent.YOU)
         for (i in 1..19) t = t.show("b$i", at = i.toLong(), raise = false, turn = 1)

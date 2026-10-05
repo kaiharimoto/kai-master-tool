@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.composed
 import com.kaiharimoto.mastertool.core.ai.AiSession
@@ -423,10 +424,49 @@ private fun CardChip(ai: AiState, card: com.kaiharimoto.mastertool.core.model.Ca
  */
 internal val LocalCardLink = androidx.compose.runtime.compositionLocalOf<((String) -> Unit)?> { null }
 
+/**
+ * Cards named in words drawn with their art too, a small card set in the line before the name (kai, for Ai World:
+ * "integrate card images where possible/needed for maximum visual pickup"). Ai World provides it — Thoughts, the
+ * Library, a page — and the Ai panel keeps its words. Only a name the pool knows gets a picture.
+ */
+val LocalCardChips = androidx.compose.runtime.compositionLocalOf { false }
+
+/** Who a card's name is, for [styled]'s inline art: given by [MarkdownBlock]. */
+private val LocalCardKnown = androidx.compose.runtime.compositionLocalOf<((String) -> Boolean)?> { null }
+
+/** The inline id of a card's art before its name. */
+private fun chipId(name: String) = "card:$name"
+
+/**
+ * Words with their cards' art in the line, where [LocalCardChips] is on: the art [ChatCard] draws (the person's chosen
+ * artwork, the small render at the size drawn), as tall as a capital and a half, a click on it opening the card large.
+ */
+@Composable
+internal fun InlineWords(ai: AiState, inlines: List<Inline>, modifier: Modifier = Modifier, style: androidx.compose.ui.text.TextStyle, color: androidx.compose.ui.graphics.Color) {
+    val text = styled(inlines)
+    if (!LocalCardChips.current) {
+        MuText(text, modifier, style = style, color = color)
+        return
+    }
+    val names = remember(inlines) { inlines.filterIsInstance<Inline.Card>().map { it.name }.distinct() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val tall = style.fontSize.value * 1.4f
+    val wide = tall * com.kaiharimoto.neue.cards.CARD_RATIO
+    val map = remember(names, tall, density) {
+        names.associate { name ->
+            chipId(name) to androidx.compose.foundation.text.InlineTextContent(
+                androidx.compose.ui.text.Placeholder((wide + 4f).sp, tall.sp, androidx.compose.ui.text.PlaceholderVerticalAlign.TextCenter),
+            ) { ChatCard(ai, name, with(density) { wide.sp.toDp() }) }
+        }
+    }
+    MuText(text, modifier, style = style, color = color, inlineContent = map)
+}
+
 @Composable
 internal fun MarkdownBlock(ai: AiState, block: Block) {
     val open: (String) -> Unit = remember(ai) { { name -> cardNamed(ai, name)?.let { ai.h.neue.viewing = Viewing(it, null, 0) } } }
-    androidx.compose.runtime.CompositionLocalProvider(LocalCardLink provides open) { BlockBody(ai, block) }
+    val known: (String) -> Boolean = remember(ai, ai.h.builder.index.size) { { name -> cardNamed(ai, name) != null } }
+    androidx.compose.runtime.CompositionLocalProvider(LocalCardLink provides open, LocalCardKnown provides known) { BlockBody(ai, block) }
 }
 
 @Composable
@@ -434,13 +474,13 @@ private fun BlockBody(ai: AiState, block: Block) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     when (block) {
-        is Block.Heading -> MuText(styled(block.inlines), style = if (block.level <= 2) MuType.row(f).copy(fontWeight = FontWeight.Bold) else MuType.row(f).copy(fontWeight = FontWeight.Medium), color = c.ink)
-        is Block.Paragraph -> MuText(styled(block.inlines), style = MuType.row(f), color = c.ink)
+        is Block.Heading -> InlineWords(ai, block.inlines, style = if (block.level <= 2) MuType.row(f).copy(fontWeight = FontWeight.Bold) else MuType.row(f).copy(fontWeight = FontWeight.Medium), color = c.ink)
+        is Block.Paragraph -> InlineWords(ai, block.inlines, style = MuType.row(f), color = c.ink)
         is Block.Bullets -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             block.items.forEach { item ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     MuText("–", style = MuType.row(f), color = c.ink45)
-                    MuText(styled(item), style = MuType.row(f), color = c.ink)
+                    InlineWords(ai, item, style = MuType.row(f), color = c.ink)
                 }
             }
         }
@@ -448,7 +488,7 @@ private fun BlockBody(ai: AiState, block: Block) {
             block.items.forEachIndexed { n, item ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Mono((block.start + n).toString().padStart(2, '0'), color = c.ink45)
-                    MuText(styled(item), style = MuType.row(f), color = c.ink)
+                    InlineWords(ai, item, style = MuType.row(f), color = c.ink)
                 }
             }
         }
@@ -462,7 +502,7 @@ private fun BlockBody(ai: AiState, block: Block) {
         is Block.Pending -> PendingBlock(block)
         is Block.Quote -> Row(
             Modifier.drawBehind { drawLine(c.ink25, Offset(0f, 0f), Offset(0f, size.height), 2.dp.toPx()) }.padding(start = 10.dp),
-        ) { MuText(styled(block.inlines), style = MuType.row(f), color = c.ink70) }
+        ) { InlineWords(ai, block.inlines, style = MuType.row(f), color = c.ink70) }
         is Block.Table -> TableBlock(block) { styled(it) }
         Block.Rule -> Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).drawBehind { drawLine(c.ink12, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) })
     }
@@ -473,6 +513,7 @@ internal fun styled(inlines: List<Inline>): AnnotatedString {
     val f = LocalMuFonts.current
     val mono = MuType.mono(f, 12.sp).fontFamily
     val link = LocalCardLink.current
+    val known = if (LocalCardChips.current) LocalCardKnown.current else null
     val card = SpanStyle(fontWeight = FontWeight.Medium, textDecoration = TextDecoration.Underline)
     return buildAnnotatedString {
         inlines.forEach { i ->
@@ -481,7 +522,15 @@ internal fun styled(inlines: List<Inline>): AnnotatedString {
                 is Inline.Bold -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(i.text) }
                 is Inline.Italic -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(i.text) }
                 is Inline.Code -> withStyle(SpanStyle(fontFamily = mono)) { append(i.text) }
-                is Inline.Card -> if (link != null) {
+                is Inline.Card -> if (known?.invoke(i.name) == true) {
+                    appendInlineContent(chipId(i.name), "▪")
+                    withLink(
+                        androidx.compose.ui.text.LinkAnnotation.Clickable(
+                            "card:${i.name}",
+                            androidx.compose.ui.text.TextLinkStyles(style = card, hoveredStyle = card.copy(fontWeight = FontWeight.Bold)),
+                        ) { link?.invoke(i.name) },
+                    ) { append(i.name) }
+                } else if (link != null) {
                     // A card in the words opens large on a click (1.0.55); it was only underlined.
                     withLink(
                         androidx.compose.ui.text.LinkAnnotation.Clickable(
@@ -842,8 +891,9 @@ internal fun ReasoningView(ai: AiState, text: String, live: Boolean, opened: Mut
             Micro(if (live) "Thinking" else "How it thought", color = c.ink45)
             Mono(if (open) "−" else "+", color = c.ink45)
         }
-        val shown = if (open) text.trim() else text.trim().lineSequence().filter { it.isNotBlank() }.take(2).joinToString("\n") { it.take(160) }
-        MuText(shown, style = MuType.small(LocalMuFonts.current), color = c.ink45, maxLines = if (open) Int.MAX_VALUE else 3)
+        // Folded, its first lines whole and cut with … where they run out of room — never stopped mid-word with no mark.
+        val shown = if (open) text.trim() else text.trim().lineSequence().filter { it.isNotBlank() }.take(2).joinToString("\n")
+        MuText(shown, style = MuType.small(LocalMuFonts.current), color = c.ink45, maxLines = if (open) Int.MAX_VALUE else 2)
     }
 }
 

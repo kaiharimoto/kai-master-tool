@@ -87,6 +87,20 @@ data class WorldNotices(
 
     fun clear(): WorldNotices = copy(tray = emptyList(), toast = null, held = false)
 
+    /**
+     * [app] came to the front: the notices it answers by being looked at are read, and their toast goes — "6 new pages"
+     * standing over the Browser that shows them was noise ([answers]).
+     */
+    fun looked(app: String): WorldNotices {
+        val shown = toast?.let { answers(it, app) } == true
+        if (!shown && tray.none { !it.read && answers(it, app) }) return this
+        return copy(
+            tray = tray.map { if (!it.read && answers(it, app)) it.copy(read = true) else it },
+            toast = if (shown) null else toast,
+            held = if (shown) false else held,
+        )
+    }
+
     companion object {
         const val TOAST_MS = 5_000L
         const val GAP_MS = 2_000L
@@ -96,6 +110,19 @@ data class WorldNotices(
         const val LONG_RUN_MS = 3_000L
 
         private fun pages(n: Int) = if (n == 1) "1 new page" else "$n new pages"
+
+        /**
+         * Whether [app] in front answers [n]: the Browser its new pages, the Terminal a run's end, Thoughts a question,
+         * the window Ai is in its "Ai is in …", an app Ai made its own window. A failed app still wants its code read.
+         */
+        fun answers(n: Notice, app: String): Boolean = when (n.kind) {
+            NoticeKind.NEW_PAGES -> app == BuiltInApp.BROWSER.id
+            NoticeKind.RUN_FINISHED, NoticeKind.RUN_FAILED -> app == BuiltInApp.TERMINAL.id
+            NoticeKind.WAITING -> app == BuiltInApp.THOUGHTS.id
+            NoticeKind.AI_IS_IN -> n.address == app
+            NoticeKind.APP_MADE -> (n.address?.let(WorldAddress::parse) as? WorldAddress.App)?.let { AppRef.Made(it.slug).key } == app
+            NoticeKind.APP_FAILED, NoticeKind.WINDOW_CLOSED -> false
+        }
 
         // ---- The rules (§6.3): whether a thing that happened is a notice, and its words. -------------------------
 

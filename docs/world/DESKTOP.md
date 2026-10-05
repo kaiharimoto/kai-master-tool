@@ -229,11 +229,15 @@ A terminal you cannot type in reads as a picture of one. A prompt line under the
 Anything else is a page that says there is no such page and offers the nearest title.
 
 **Chrome** (`neue/world/browser/`):
-- **Tabs in the title bar**, as Chrome has them: square cells 32 dp tall, 96–220 dp wide, the page's kind glyph at
-  16 dp (§7.2), its title, and `✕` on hover (always, to a finger). The selected tab is paper and open to the toolbar
-  below (an ink edge on three sides); the others are paper with ink-45 words and ink-12 separators. A tab Ai changed
-  while it was not selected wears a 6 dp ink square until it is. `+` opens `world://home`. Past the room, the strip
-  scrolls with `‹ ›`. Drag reorders; a middle-click closes.
+- **Tabs under the title bar**: square cells 36 dp tall, 176–220 dp wide (`TabStrip`), each its number (`Ctrl 1`–`9`),
+  the page's kind glyph at 16 dp (§7.2), the art of the card the page is about (`PageLead`), its title shortened to the
+  words that tell it apart (`TabTitles`, never under 12 characters), and `✕` on hover and the selected one (always, to
+  a finger). The selected tab is paper and open to the toolbar below (an ink edge on three sides); the others are paper
+  with ink-70 words and ink-12 separators, a darker rule where another run's pages begin (`Tab.group`). A tab Ai opened
+  or changed while it was not selected wears a 6 dp ink square on its glyph's corner until it is; the person's own tabs
+  never do. `+` opens `world://home`. Past the room, whole tabs fill it and a count at the strip's end (`+6 ▾`) opens
+  every tab as pictures — searched, closed, dragged to reorder. A pointer resting on a tab shows its page small with its
+  whole title and source. A middle-click closes. The rules are `docs/world/READABILITY.md` §4, §8.
 - **The toolbar**: `←` `→` `↻`, the address as an underline field (mono, `world://` in ink-45), **Keep** (a kept tab is
   never put away, §6.4), and ⋯ (Copy address, Open the source file, Show the run, Open in a new tab, Take the page down
   — confirmed).

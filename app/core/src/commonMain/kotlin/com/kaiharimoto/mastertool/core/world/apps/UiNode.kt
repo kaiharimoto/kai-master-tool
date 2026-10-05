@@ -126,6 +126,22 @@ sealed class UiNode {
         /** A row's address, opened on the person's press (`open` per row, §8.4). */
         val open: List<String?> = emptyList(),
         override val weight: Int? = null,
+        /** The columns whose cells are cards' names (`cards: [0]` or the columns' names): drawn with the card's art. Never guessed. */
+        val cardColumns: List<Int> = emptyList(),
+    ) : UiNode()
+
+    /**
+     * One card, by name or passcode, as its art (`ui.card('Ash Blossom & Joyous Spring', { size: 'large' })`): [large] a
+     * card a reader can study, else a small one beside its [label] (the card's own name when blank). A pointer on it reads
+     * it in the inspector; a click opens it large. [pickable] sends `pick` with the card.
+     */
+    data class Card(
+        val card: String,
+        val large: Boolean = false,
+        val label: String = "",
+        val id: String? = null,
+        val pickable: Boolean = false,
+        override val weight: Int? = null,
     ) : UiNode()
 
     /** A strip of card art: passcodes or names. */

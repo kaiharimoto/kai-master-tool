@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.world.browser
 
+import com.kaiharimoto.neue.world.type.MonoLink
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -55,15 +58,15 @@ import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.EmptyState
-import com.kaiharimoto.neue.kit.Help
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Help
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.ScrollbarFor
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
@@ -167,7 +170,8 @@ private fun BoardPage(h: NeueHolders, id: String) {
     val b = w.board(id) ?: return NoPage(h, WorldAddress.Board(id).format(), "this page was taken down, or never pinned")
     val run = runOf(h, id)
     PageColumn {
-        PageHead((b.type?.id ?: b.kind).uppercase(), b.title.ifBlank { b.id }, b.note, Modifier.deskTarget(h, BuiltInApp.BROWSER.id, Anchor.HEAD)) {
+        val head = if (LocalPagePreview.current) Modifier else Modifier.deskTarget(h, BuiltInApp.BROWSER.id, Anchor.HEAD)
+        PageHead((b.type?.id ?: b.kind).uppercase(), b.title.ifBlank { b.id }, b.note, head) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 val src = b.source
                 if (src != null) {
@@ -176,7 +180,7 @@ private fun BoardPage(h: NeueHolders, id: String) {
                         val slug = src.removePrefix("apps/").substringBefore('/')
                         MicroLink(world.apps.manifest(slug)?.title ?: slug, { world.apps.windows.open(AppRef.Made(slug), WorldEvent.YOU) }, color = Mu.colors.ink)
                     } else {
-                        MicroLink(src, { world.browser.go(WorldAddress.File(src).format()) }, color = Mu.colors.ink)
+                        MonoLink(src, { world.browser.go(WorldAddress.File(src).format()) }, color = Mu.colors.ink)
                     }
                 }
                 if (run != null) {
@@ -249,8 +253,8 @@ private fun ColumnScope.Lines(text: String) {
         LazyColumn(Modifier.fillMaxSize().padding(vertical = 8.dp), state = list) {
             itemsIndexed(lines) { i, l ->
                 Row(Modifier.padding(horizontal = 8.dp)) {
-                    MuText((i + 1).toString().padStart(width), Modifier.padding(end = 12.dp), style = MuType.mono(f, 12.sp).copy(textAlign = TextAlign.End), color = c.ink45)
-                    MuText(l, style = MuType.mono(f, 12.sp), color = c.ink)
+                    MuText((i + 1).toString().padStart(width), Modifier.padding(end = 12.dp), style = WorldType.mono(f, LocalPhone.current).copy(textAlign = TextAlign.End), color = c.ink45)
+                    MuText(l, style = WorldType.mono(f, LocalPhone.current), color = c.ink)
                 }
             }
         }
@@ -315,12 +319,12 @@ private fun RunPage(h: NeueHolders, t: Long) {
             } else {
                 if (r.out.isNotBlank()) {
                     Micro("Output", color = c.ink45)
-                    MuText(r.out, Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(10.dp), style = MuType.mono(f, 12.sp), color = c.ink70)
+                    MuText(r.out, Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(10.dp), style = WorldType.mono(f, LocalPhone.current), color = c.ink70)
                     if (r.cut) Help("The output ran past what is kept: the whole of it is in out/, if it was written there.")
                 }
                 if (r.err.isNotBlank()) {
                     Micro("Error", color = c.ink45)
-                    MuText(r.err, Modifier.fillMaxWidth().border(1.dp, c.ink).padding(10.dp), style = MuType.mono(f, 12.sp).copy(fontWeight = FontWeight.Medium), color = c.ink)
+                    MuText(r.err, Modifier.fillMaxWidth().border(1.dp, c.ink).padding(10.dp), style = WorldType.mono(f, LocalPhone.current).copy(fontWeight = FontWeight.Medium), color = c.ink)
                 }
                 if (r.boards.isNotEmpty()) {
                     Micro("Pages it pinned", color = c.ink45)
@@ -442,7 +446,7 @@ private fun PageRow(h: NeueHolders, address: String, title: String, kind: String
         IconView(glyph, 16.dp)
         Column(Modifier.weight(1f)) {
             Small(title, color = c.ink, maxLines = 1)
-            if (note.isNotBlank()) Small(note, color = c.ink45, maxLines = 1)
+            if (note.isNotBlank()) Small(note, color = c.ink70, maxLines = 1)
         }
         if (kind.isNotBlank()) Mono(kind, color = c.ink45)
     }
@@ -468,7 +472,7 @@ private fun HomeAppRow(h: NeueHolders, slug: String, title: String, description:
         TileView(tile, 20.dp)
         Column(Modifier.weight(1f)) {
             Small(title, color = c.ink, maxLines = 1)
-            if (description.isNotBlank()) Small(description, color = c.ink45, maxLines = 1)
+            if (description.isNotBlank()) Small(description, color = c.ink70, maxLines = 1)
         }
         Mono("by Ai", color = c.ink45)
     }

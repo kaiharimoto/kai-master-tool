@@ -19,6 +19,12 @@ data class Tab(
     val kept: Boolean = false,
     val mark: Boolean = false,
     val opened: Long = 0L,
+    /**
+     * What made it, so related pages sit together (a run's pages, an instrument's, one `world_show` of several): tabs of
+     * one group open side by side, in the order made, and the strip draws a quiet divider between groups. Null for a tab
+     * the person opened on its own, and for every tab an older build kept.
+     */
+    val group: String? = null,
 ) {
     val byAi: Boolean get() = by == WorldEvent.AI
     val parsed: WorldAddress get() = WorldAddress.parse(address)
@@ -43,12 +49,13 @@ data class BrowserTabs(
     fun showing(address: String): Tab? = tabs.firstOrNull { it.address == address }
 
     /**
-     * A new tab on [address]: selected when [select], else opened beside the selected one with its mark (Ai's tab while
-     * the person reads another, §4). The 21st closes the oldest that may go.
+     * A new tab on [address]: selected when [select], else opened beside the selected one — with its mark only when Ai
+     * opened it while the person reads another (§4): a tab the person opens themselves is never news to them. The 21st
+     * closes the oldest that may go.
      */
-    fun open(address: String, at: Long, by: String = WorldEvent.YOU, turn: Int = 0, select: Boolean = true): BrowserTabs {
-        val t = Tab("t$next", address, by = by, turn = turn, mark = !select && selected != null, opened = at)
-        val i = tabs.indexOfFirst { it.id == selected }
+    fun open(address: String, at: Long, by: String = WorldEvent.YOU, turn: Int = 0, select: Boolean = true, group: String? = null): BrowserTabs {
+        val t = Tab("t$next", address, by = by, turn = turn, mark = !select && selected != null && by == WorldEvent.AI, opened = at, group = group)
+        val i = place(group)
         val placed = if (i < 0) tabs + t else tabs.subList(0, i + 1) + t + tabs.subList(i + 1, tabs.size)
         val opened = copy(tabs = placed, next = next + 1, selected = if (select || selected == null) t.id else selected)
         return opened.trim()
@@ -58,11 +65,11 @@ data class BrowserTabs(
      * `world_show` (§4): a board's page opened in a tab. A tab already on it is updated in place — selected when [raise],
      * else marked — and a new one opens when none is.
      */
-    fun show(board: String, at: Long, raise: Boolean, turn: Int = 0, by: String = WorldEvent.AI): BrowserTabs {
+    fun show(board: String, at: Long, raise: Boolean, turn: Int = 0, by: String = WorldEvent.AI, group: String? = null): BrowserTabs {
         val address = WorldAddress.Board(board).format()
         val there = showing(address)
         return when {
-            there == null -> open(address, at, by, turn, select = raise)
+            there == null -> open(address, at, by, turn, select = raise, group = group)
             raise -> select(there.id)
             there.id == selected -> this
             else -> copy(tabs = tabs.map { if (it.id == there.id) it.copy(mark = true) else it })
@@ -102,6 +109,34 @@ data class BrowserTabs(
         val i = tabs.indexOfFirst { it.id == selected }.coerceAtLeast(0)
         return select(tabs[((i + steps) % tabs.size + tabs.size) % tabs.size].id)
     }
+
+    /**
+     * The tab a new one opens after: the selected one — or, when the new tab belongs to a [group] already open, the last
+     * of that group, so a run's pages stand together in the order they were made. −1: at the end.
+     */
+    private fun place(group: String?): Int {
+        if (group != null) {
+            val last = tabs.indexOfLast { it.group == group }
+            if (last >= 0) return last
+        }
+        return tabs.indexOfFirst { it.id == selected }
+    }
+
+    /**
+     * `Ctrl 1`–`Ctrl 8`: the [n]th tab (from 1); `Ctrl 9`, the last, as browsers have it. Past the tabs there are, nothing
+     * changes.
+     */
+    fun jump(n: Int): BrowserTabs {
+        val t = when {
+            n == 9 -> tabs.lastOrNull()
+            n in 1..8 -> tabs.getOrNull(n - 1)
+            else -> null
+        } ?: return this
+        return select(t.id)
+    }
+
+    /** Whether a divider stands before the tab at [i]: the tab before it was made by something else (§4's groups). */
+    fun startsGroup(i: Int): Boolean = i > 0 && i < tabs.size && tabs[i].group != tabs[i - 1].group
 
     /** [id] dragged to stand at [to]. */
     fun move(id: String, to: Int): BrowserTabs {

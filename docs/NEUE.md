@@ -4386,7 +4386,30 @@ working|launcher|notices|switcher` the desktop's scenes, `--world-avatar=icon|tr
 `--world-avatar-t=0.5` the avatar frozen mid-hop (`DeskStudio.kt`); `--world-app=browser|thoughts|instruments|library|
 hand-odds|combo-lines|matchups` one app's window, maximised (`--world-app-window=normal` at its comfort size,
 `--world-page=b5` the Browser's page, `--world-library=search:words`; `WorldAppsStudio.kt`); with `--form=phone` and
-`--theme=ink` as ever.
+`--theme=ink` as ever. `--world-tabs=peek|overview` shows a tab's picture under the strip, or every tab as pictures.
+
+**Reading at a glance** (1.1.x, `docs/world/READABILITY.md`; kai: "I'm having readability issues with the World
+interfaces … set visual guidelines and rules on text sizes and layouts"; "integrate card images where possible/needed
+for maximum visual pickup"). **One type scale** (`neue/world/type/WorldType.kt`: title 20, heading 15/16, body 13/14,
+label 12/13, micro 11, mono 12/13, chart data 11 — desk/phone), the World's own `Body`, `Small`, `Help`, `Mono`,
+`Micro`, `MicroLink`, `MonoLink`; **a measure** of 72 characters (`readingMeasure()`: Thoughts and the Library set one
+reading column, centred in a wide window); **titles never cut to a stub** (`TabTitles`: the distinctive words, never
+under 12 characters, the whole title in a tip, a preview and the overview; `Goals.words`: "Starters ≥ 1", not
+`"Starters">=1`); **ink-45 never for words of a reading tier, ink-25 and ink-12 never for words**. Held by
+`WorldReadabilityTest` (no raw `.sp`, no kit text below the scale, no faint words, the floors) and core's
+`TabTitlesTest`, `TabStripTest`, `GoalWordsTest`. **Tabs anyone can tell apart**: a number (`Ctrl 1`–`Ctrl 9` while the
+Browser is in front — the pages' `Ctrl` digits give way, `DeskShortcut.yieldsToTabs`), the kind's glyph, the art of the
+card the page is about (`PageLead`), a short title, Ai's mark as a square on the glyph's corner (only on Ai's tabs:
+`BrowserTabs.open`), a run's pages together (`Tab.group`, a darker rule between groups); tabs 176–220 dp
+(`TabStrip.fit`), whole tabs and a count past the room; a pointer resting on a tab shows the page small (`TabPeek`,
+`PagePreview`: the page's own painters through one layer, `LocalPagePreview` keeps it from the avatar); the count opens
+every tab as pictures (`TabOverview`: searched, closed, dragged to reorder). **Cards are pictures**: a chart's
+`cards: true` labels and a table's `cards: ['Card']` columns draw each card's art (`CardChip` over `ChatCard`/`NeueCard`,
+the person's artworks applied); `ui.card` in apps, the card picker's art, the example apps; `[[Card]]` in Thoughts, the
+Library and pages draws a small card in the line (`LocalCardChips`, `InlineWords`). Held by `CardFieldsTest`,
+`PageLeadTest`, `ExampleAppsTest`. Also: the work area is measured from the apps there are now (`DeskGrid`: a window
+opened on a just-made app no longer lands on its icon column), a window come to the front reads the notices it answers
+(`WorldNotices.looked`: no "6 new pages" over the Browser), and the toast stands over the tray it goes into.
 
 ### 4s. Card truth (1.1.0, Phase B; `docs/phases/B.md`)
 

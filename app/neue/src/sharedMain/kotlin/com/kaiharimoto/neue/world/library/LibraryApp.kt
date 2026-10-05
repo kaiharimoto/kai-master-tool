@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.world.library
 
+import com.kaiharimoto.neue.world.type.readingMeasure
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -59,17 +61,17 @@ import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.EmptyState
-import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.world.type.Help
 import com.kaiharimoto.neue.kit.LocalPhone
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.ScrollbarFor
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
@@ -214,7 +216,7 @@ private fun ShelfRow(title: String, count: Int, on: Boolean, onClick: () -> Unit
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MuText(title, Modifier.weight(1f), style = MuType.row(LocalMuFonts.current), color = c.ink, maxLines = 1)
+            MuText(title, Modifier.weight(1f), style = WorldType.body(LocalMuFonts.current, LocalPhone.current), color = c.ink, maxLines = 1)
             Mono(count.toString(), color = if (on) c.ink70 else c.ink45)
         }
     }
@@ -333,7 +335,9 @@ private fun Document(h: NeueHolders, o: WorldLibrary.Opened, contents: Boolean) 
 }
 
 /** The reading measure: 68 characters of body text. */
-private val MEASURE = 620.dp
+/** The document's column: the World's reading measure (READABILITY.md §2), measured in the body tier. */
+private val MEASURE: androidx.compose.ui.unit.Dp
+    @Composable get() = readingMeasure()
 
 /** The memory file [doc] is, for Ai's brain (`MemoryDialog`), or null when it is not one the brain edits. */
 private fun editable(doc: LibraryDoc): String? = when (doc.kind) {
@@ -358,7 +362,7 @@ private fun RowView(h: NeueHolders, r: DocRow) {
     val f = LocalMuFonts.current
     Box(Modifier.widthIn(max = MEASURE).padding(bottom = 10.dp)) {
         if (r.heading != null) {
-            MuText(r.heading, Modifier.padding(top = 12.dp), style = if (r.level <= 2) MuType.h2(f) else MuType.row(f).copy(fontWeight = FontWeight.Medium), color = c.ink)
+            MuText(r.heading, Modifier.padding(top = 12.dp), style = if (r.level <= 2) WorldType.title(f) else WorldType.heading(f, LocalPhone.current), color = c.ink)
         } else {
             val blocks = remember(r.text) { ChatMarkdown.parse(r.text) }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { blocks.forEach { MarkdownBlock(h.ai, it) } }
@@ -391,7 +395,7 @@ private fun BookOutline(text: String) {
             Column(Modifier.fillMaxWidth().border(1.dp, c.ink12).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Mono((i + 1).toString().padStart(2, '0'), color = c.ink45)
-                    MuText(ch.title, style = MuType.row(LocalMuFonts.current).copy(fontWeight = FontWeight.Medium), color = c.ink)
+                    MuText(ch.title, style = WorldType.heading(LocalMuFonts.current, LocalPhone.current), color = c.ink)
                 }
                 if (ch.summary.isNotBlank()) Small(ch.summary, color = c.ink70)
                 Mono(if (ch.written) ch.sections.joinToString(" · ") { it.title } else "planned, not written yet", color = c.ink45)
@@ -434,7 +438,7 @@ private fun Reports(text: String) {
 private fun Score(label: String, n: Int) {
     Column {
         Micro(label, color = Mu.colors.ink45)
-        Mono("$n / 100", color = Mu.colors.ink, size = 14.sp)
+        MuText("$n / 100", style = WorldType.heading(LocalMuFonts.current, LocalPhone.current).copy(fontFamily = LocalMuFonts.current.mono), color = Mu.colors.ink)
     }
 }
 
@@ -464,8 +468,8 @@ private fun Evidence(text: String) {
                 MuText(
                     p.status.name.lowercase(),
                     Modifier.weight(1f).padding(horizontal = 8.dp),
-                    style = MuType.mono(LocalMuFonts.current, 11.sp).copy(fontWeight = if (p.status == Proven.Status.CHECKED) FontWeight.Normal else FontWeight.Bold),
-                    color = if (p.status == Proven.Status.CHECKED) c.ink45 else c.ink,
+                    style = WorldType.mono(LocalMuFonts.current, LocalPhone.current).copy(fontWeight = if (p.status == Proven.Status.CHECKED) FontWeight.Normal else FontWeight.Bold),
+                    color = if (p.status == Proven.Status.CHECKED) c.ink70 else c.ink,
                 )
             }
         }
@@ -528,7 +532,7 @@ private fun HitRow(h: NeueHolders, hit: LibraryHit) {
             }
             .padding(horizontal = 8.dp, vertical = 5.dp),
     ) {
-        MuText(text, style = MuType.small(f), color = c.ink70, maxLines = 3)
+        MuText(text, style = WorldType.label(f, LocalPhone.current), color = c.ink70, maxLines = 3)
     }
 }
 

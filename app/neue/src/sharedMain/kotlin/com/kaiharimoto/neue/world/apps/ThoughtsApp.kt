@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.world.apps
 
+import com.kaiharimoto.neue.world.type.Body
+import com.kaiharimoto.neue.world.type.readingMeasure
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -50,17 +53,17 @@ import com.kaiharimoto.neue.ai.avatar.AiMark
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
-import com.kaiharimoto.neue.kit.Help
+import com.kaiharimoto.neue.world.type.Help
 import com.kaiharimoto.neue.kit.LocalPhone
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.Segmented
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
@@ -155,6 +158,9 @@ fun ThoughtsApp(h: NeueHolders, modifier: Modifier = Modifier) {
     val words = filter != ThoughtsFilter.ACTIONS
     val tail = rows.size + (if (live) ai.activity.size + ai.reasoning.length / 200 + ai.streaming.length / 80 else 0)
     FollowEnd(list, session?.id, tail)
+    // One reading column (READABILITY.md §2): 72 characters of prose at most, centred in a window wider than that, so a
+    // maximised Thoughts on a 1920 desk reads as a page, not a banner.
+    val column = readingMeasure() + 32.dp
     Column(modifier.fillMaxSize()) {
         Row(
             Modifier
@@ -182,28 +188,39 @@ fun ThoughtsApp(h: NeueHolders, modifier: Modifier = Modifier) {
                 state = list,
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 items(rows) { row ->
-                    when (row) {
-                        is Thought.Asked -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Micro("You", color = c.ink45)
-                            Small(row.text, color = c.ink, maxLines = 6)
+                    Box(Modifier.widthIn(max = column).fillMaxWidth()) {
+                        when (row) {
+                            is Thought.Asked -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Micro("You", color = c.ink70)
+                                Body(row.text, color = c.ink, maxLines = 6)
+                            }
+                            is Thought.Reasoned -> ReasoningView(ai, row.text, live = false, opened)
+                            is Thought.Said -> ReplyView(ai, row.text)
+                            is Thought.Did -> DidRow(h, row)
                         }
-                        is Thought.Reasoned -> ReasoningView(ai, row.text, live = false, opened)
-                        is Thought.Said -> ReplyView(ai, row.text)
-                        is Thought.Did -> DidRow(h, row)
                     }
                 }
-                if (live && words && ai.reasoning.isNotBlank()) item { ReasoningView(ai, ai.reasoning, live = true, opened) }
-                if (live && filter != ThoughtsFilter.WORDS) items(ai.activity) { DidRow(h, Thought.Did("→", it.summary.ifBlank { it.name }, it.isError, null)) }
-                if (live && words && ai.streaming.isNotEmpty()) item { ReplyView(ai, ai.streaming, live = true) }
+                if (live && words && ai.reasoning.isNotBlank()) item { Box(Modifier.widthIn(max = column).fillMaxWidth()) { ReasoningView(ai, ai.reasoning, live = true, opened) } }
+                if (live && filter != ThoughtsFilter.WORDS) items(ai.activity) { Box(Modifier.widthIn(max = column).fillMaxWidth()) { DidRow(h, Thought.Did("→", it.summary.ifBlank { it.name }, it.isError, null)) } }
+                if (live && words && ai.streaming.isNotEmpty()) item { Box(Modifier.widthIn(max = column).fillMaxWidth()) { ReplyView(ai, ai.streaming, live = true) } }
             }
             ScrollbarFor(list)
         }
-        if (session != null && ai.configured) {
-            Composer(ai, Modifier.deskTarget(h, BuiltInApp.THOUGHTS.id, Anchor.COMPOSER), phone = phone)
-        } else {
-            AskLine(h)
+        // The composer under the column, as wide as it; its rule the window's width.
+        Box(
+            Modifier.fillMaxWidth().drawBehind { drawLine(c.ink, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) },
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Box(Modifier.widthIn(max = column)) {
+                if (session != null && ai.configured) {
+                    Composer(ai, Modifier.deskTarget(h, BuiltInApp.THOUGHTS.id, Anchor.COMPOSER), phone = phone)
+                } else {
+                    AskLine(h)
+                }
+            }
         }
     }
 }
@@ -228,7 +245,7 @@ private fun DidRow(h: NeueHolders, d: Thought.Did) {
         verticalAlignment = Alignment.Top,
     ) {
         Mono(if (d.isError) "✕" else d.glyph, Modifier.widthIn(min = 14.dp), color = if (d.isError) c.ink else c.ink70)
-        MuText(d.words, Modifier.weight(1f), style = MuType.mono(f), color = if (d.isError) c.ink else c.ink70, maxLines = 3)
+        MuText(d.words, Modifier.weight(1f), style = WorldType.mono(f, LocalPhone.current), color = if (d.isError) c.ink else c.ink70, maxLines = 3)
     }
 }
 

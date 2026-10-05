@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.world.desk
 
+import com.kaiharimoto.mastertool.core.world.desk.DeskGrid
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +86,12 @@ class WorldDeskState(private val worlds: Worlds) {
 
     /** The notices' tray, open (§6.3). */
     var trayOpen by mutableStateOf(false)
+
+    /**
+     * How far the tray's right edge stands in from the desk's (px), written by the taskbar from layout and read by the
+     * toast in its own layout: the toast stands over the tray it goes into (§6.3), never over Ai's cell.
+     */
+    val trayEdge = androidx.compose.runtime.mutableFloatStateOf(0f)
 
     /** `Ctrl \`` held: the open windows in the order they will be walked, and the one chosen (§9.1). */
     var switching by mutableStateOf<Switching?>(null)
@@ -183,9 +190,13 @@ class WorldDeskState(private val worlds: Worlds) {
 
     /** [op] through core's reducer; the windows it closed to make room are said in a notice (§2.3). */
     fun apply(op: DeskOp) {
-        val step = desk.step(op, area)
+        // The icon columns as they stand now: an app Ai has just made has its column before its window opens.
+        val step = desk.step(op, DeskGrid.area(area, apps.size))
         val before = desk
         desk = step.desk
+        // A window come to the front answers the notices it is the answer to ("6 new pages" over the Browser itself).
+        val front = desk.front
+        if (front != null && front != before.front) notices = notices.looked(front)
         step.evicted.forEach { notify(WorldNotices.windowClosed(title(it))) }
         val open = desk.windows.map { it.app }.toSet()
         val pins = pinned()
@@ -269,14 +280,16 @@ class WorldDeskState(private val worlds: Worlds) {
      * Pages pinned ([boards]): each opens in its tab (`BrowserTabs.show` — a board pinned again updates its tab in
      * place), and when Ai pinned them it walks to the Browser to open the last (§4, §5.2).
      */
-    fun showed(boards: List<String>, by: String) {
+    fun showed(boards: List<String>, by: String, group: String? = null) {
         if (boards.isEmpty()) return
         val ai = by == WorldEvent.AI
         val browserFront = desk.front == BuiltInApp.BROWSER.id
         // Ai's pages come forward as the focus policy lets them; the person's own run's open beside the tab in view.
         val raise = if (ai) decide(BuiltInApp.BROWSER.ref) == FocusDecision.RAISE else browserFront
         var tabs = desk.tabs
-        boards.forEach { b -> tabs = tabs.show(b, now(), raise = raise, turn = desk.turn, by = by) }
+        // The pages of one run or one show stand together, in the order made (§4's groups).
+        val made = group ?: "show@${now()}"
+        boards.forEach { b -> tabs = tabs.show(b, now(), raise = raise, turn = desk.turn, by = by, group = made) }
         apply(DeskOp.Tabs(tabs))
         notify(WorldNotices.newPages(boards.size, browserFront || raise, WorldAddress.Board(boards.last()).format()))
         if (!ai) return

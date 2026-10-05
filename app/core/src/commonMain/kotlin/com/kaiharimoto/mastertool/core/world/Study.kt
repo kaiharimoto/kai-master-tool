@@ -35,13 +35,15 @@ internal class Study {
     fun stat(id: String, title: String, value: String, label: String, detail: String, note: String) =
         board(id, title, BoardKind.STAT, WorldStat.encode(WorldStat(value.take(24), label.take(120), detail.take(400))), note)
 
-    fun table(id: String, title: String, columns: List<String>, rows: List<List<String>>, note: String) =
-        board(id, title, BoardKind.TABLE, WorldTable.encode(WorldTable("", columns, rows.take(WorldTable.MAX_ROWS))), note)
+    /** A table; [cards] are the columns that hold cards' names, drawn with their art. */
+    fun table(id: String, title: String, columns: List<String>, rows: List<List<String>>, note: String, cards: List<Int> = emptyList()) =
+        board(id, title, BoardKind.TABLE, WorldTable.encode(WorldTable("", columns, rows.take(WorldTable.MAX_ROWS), cards)), note)
 
-    fun chart(id: String, title: String, type: ChatChart.Type, labels: List<String>, series: List<ChatChart.Series>, unit: String, note: String) =
+    /** A chart; [cards] when its labels are cards' names, drawn with their art. */
+    fun chart(id: String, title: String, type: ChatChart.Type, labels: List<String>, series: List<ChatChart.Series>, unit: String, note: String, cards: Boolean = false) =
         board(
             id, title, BoardKind.CHART,
-            WorldChart.encode(WorldChart.Bars(ChatChart.Chart(type, "", labels.take(ChatChart.MAX_LABELS).map { it.take(40) }, series.take(ChatChart.MAX_SERIES).map { s -> s.copy(values = s.values.take(ChatChart.MAX_LABELS)) }, unit))),
+            WorldChart.encode(WorldChart.Bars(ChatChart.Chart(type, "", labels.take(ChatChart.MAX_LABELS).map { it.take(40) }, series.take(ChatChart.MAX_SERIES).map { s -> s.copy(values = s.values.take(ChatChart.MAX_LABELS)) }, unit, cards))),
             note,
         )
 

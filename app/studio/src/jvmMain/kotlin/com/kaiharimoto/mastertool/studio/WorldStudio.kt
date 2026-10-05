@@ -46,7 +46,7 @@ internal fun studioWorld(h: NeueHolders, map: Map<String, String>) {
 
     val specs = listOf(
         Triple("stat", "Opens a starter", """{"value":"63.4%","label":"Opens a starter","detail":"Of 100,000 seeded five-card hands, going first. 1 in 8 opens two."}"""),
-        Triple("chart", "Starters seen", """{"type":"hbar","title":"","labels":["${q(n(0))}","${q(n(1))}","${q(n(2))}","${q(n(3))}","${q(n(4))}"],"series":[{"name":"in hand","values":[38.1,33.2,29.8,21.4,12.9]},{"name":"live","values":[31.0,30.1,22.6,18.9,10.2]}],"unit":"%"}"""),
+        Triple("chart", "Starters seen", """{"type":"hbar","cards":true,"title":"","labels":["${q(n(0))}","${q(n(1))}","${q(n(2))}","${q(n(3))}","${q(n(4))}"],"series":[{"name":"in hand","values":[38.1,33.2,29.8,21.4,12.9]},{"name":"live","values":[31.0,30.1,22.6,18.9,10.2]}],"unit":"%"}"""),
         Triple("chart", "Hand strength", run {
             val r = Random(11)
             val a = (0 until 70).joinToString(",") { val x = r.nextDouble() * 10; "[${"%.2f".format(x)},${"%.2f".format(x * 0.7 + r.nextDouble() * 3)}]" }
@@ -60,7 +60,7 @@ internal fun studioWorld(h: NeueHolders, map: Map<String, String>) {
             val rows = (0 until 14).joinToString(",") { i ->
                 """["${q(n(i))}",${3 - i % 3},"${"%.1f".format(40.0 - i * 2.3)}%","${listOf("Starter", "Extender", "Hand trap", "Brick")[i % 4]}","${"%.2f".format(1.0 - i * 0.05)}"]"""
             }
-            """{"columns":["Card","Copies","Opens","Role","Value"],"rows":[$rows]}"""
+            """{"columns":["Card","Copies","Opens","Role","Value"],"rows":[$rows],"cards":["Card"]}"""
         }),
         Triple("chart", "Starters by turn", """{"type":"line","title":"","labels":["T1","T2","T3","T4","T5"],"series":[{"name":"going first","values":[63,71,78,83,87]},{"name":"going second","values":[68,75,81,85,89]}],"unit":"%"}"""),
         Triple("chart", "What a hand holds", """{"type":"stacked","title":"","labels":["0","1","2","3+"],"series":[{"name":"starters","values":[36,41,17,6]},{"name":"hand traps","values":[22,30,12,4]},{"name":"bricks","values":[12,9,4,1]}]}"""),

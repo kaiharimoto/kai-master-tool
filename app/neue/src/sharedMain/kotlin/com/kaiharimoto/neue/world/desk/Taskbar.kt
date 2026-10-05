@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.world.desk
 
+import androidx.compose.ui.layout.boundsInParent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -44,9 +45,9 @@ import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.MenuEntry
 import com.kaiharimoto.neue.kit.MenuSpec
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.Mono
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.Mono
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
@@ -276,6 +277,10 @@ private fun RowScope.NoticesPart(h: NeueHolders) {
     val unread = desk.notices.unread
     Part(
         Modifier
+            .onGloballyPositioned { c ->
+                val bar = c.parentLayoutCoordinates ?: return@onGloballyPositioned
+                desk.trayEdge.floatValue = bar.size.width - c.boundsInParent().right
+            }
             .cursorPointer(caption = "Notices")
             .muClickable {
                 desk.trayOpen = !desk.trayOpen

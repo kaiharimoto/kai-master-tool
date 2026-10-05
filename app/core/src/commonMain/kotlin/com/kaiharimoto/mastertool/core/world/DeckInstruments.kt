@@ -71,7 +71,7 @@ internal object DeckInstruments {
         }
         s.table("card-access", "Each card's access", listOf("Card", "Copies", "With its searchers", "Searched by"),
             access.take(30).map { listOf(it.first, "${it.second}", "${it.third}", searchers.getValue(it.first).joinToString()) },
-            "Copies plus the copies of every card that searches it from the Deck: how many cards in the deck lead to it.")
+            "Copies plus the copies of every card that searches it from the Deck: how many cards in the deck lead to it.", cards = listOf(0))
         return s.done(obj(
             "nodes" to JsonPrimitive(cards.size),
             "edges" to JsonArray(edgeList.map { strs(listOf(it.first, it.second, it.third)) }),

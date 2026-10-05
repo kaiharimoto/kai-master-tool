@@ -1,5 +1,10 @@
 package com.kaiharimoto.neue.world.desk
 
+import com.kaiharimoto.neue.world.type.Body
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
+import com.kaiharimoto.neue.kit.LocalPhone
+import com.kaiharimoto.neue.world.type.WorldType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
@@ -50,16 +55,16 @@ import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.BtnVariant
-import com.kaiharimoto.neue.kit.Help
-import com.kaiharimoto.neue.kit.Micro
-import com.kaiharimoto.neue.kit.MicroLink
-import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.world.type.Help
+import com.kaiharimoto.neue.world.type.Micro
+import com.kaiharimoto.neue.world.type.MicroLink
+import com.kaiharimoto.neue.world.type.Mono
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.RequestFocusOnce
-import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.world.type.Small
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.collectIsHotAsState
 import com.kaiharimoto.neue.kit.muClickable
@@ -154,7 +159,7 @@ internal fun LauncherContent(h: NeueHolders, phone: Boolean, close: () -> Unit) 
             onSubmit = { found.firstOrNull()?.let { go(it.open) } },
         )
         if (q.isNotBlank()) {
-            if (found.isEmpty()) Help("Nothing here is called that.", color = c.ink45)
+            if (found.isEmpty()) Help("Nothing here is called that.", color = c.ink70)
             found.forEach { f -> FoundRow(f) { go(f.open) } }
         } else {
             // The open windows first: the way between them when `Ctrl \`` is out of reach (§9.1).
@@ -201,7 +206,7 @@ private fun Section(title: String) {
             .fillMaxWidth()
             .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
             .padding(bottom = 6.dp),
-    ) { Micro(title, color = c.ink45, size = 10.sp) }
+    ) { Micro(title, color = c.ink70) }
 }
 
 /** An app as a tile: its icon over its name (the launcher's grid, the switcher's strip). */
@@ -224,7 +229,7 @@ internal fun AppTile(h: NeueHolders, ref: AppRef, width: Dp, compact: Boolean = 
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             AppIcon(ref, if (compact) 24.dp else 32.dp, desk.apps, color = c.ink)
-            MuText(desk.title(ref.key), Modifier.padding(horizontal = 2.dp), style = MuType.small(LocalMuFonts.current).copy(fontSize = 11.sp), color = c.ink, maxLines = 1, align = TextAlign.Center)
+            MuText(desk.title(ref.key), Modifier.padding(horizontal = 2.dp), style = WorldType.label(LocalMuFonts.current, LocalPhone.current), color = c.ink, maxLines = 2, align = TextAlign.Center)
         }
     }
 }
@@ -247,8 +252,8 @@ private fun MadeRow(h: NeueHolders, ref: AppRef, title: String, description: Str
     ) {
         AppIcon(ref, 32.dp, h.world.desk.apps, color = c.ink)
         Column(Modifier.weight(1f)) {
-            MuText(title, style = MuType.row(LocalMuFonts.current), color = c.ink, maxLines = 1)
-            if (description.isNotBlank()) Small(description, color = c.ink45, maxLines = 1)
+            MuText(title, style = WorldType.body(LocalMuFonts.current, LocalPhone.current), color = c.ink, maxLines = 1)
+            if (description.isNotBlank()) Small(description, color = c.ink70, maxLines = 1)
         }
     }
 }
@@ -269,7 +274,7 @@ private fun WorldRow(title: String, hint: String, open: Boolean, onClick: () -> 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        MuText(title, Modifier.weight(1f), style = MuType.row(LocalMuFonts.current), color = c.ink, maxLines = 1)
+        MuText(title, Modifier.weight(1f), style = WorldType.body(LocalMuFonts.current, LocalPhone.current), color = c.ink, maxLines = 1)
         Mono(hint, color = c.ink45)
     }
 }
@@ -290,8 +295,8 @@ private fun FoundRow(f: Found, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Micro(f.kind, Modifier.width(48.dp), color = c.ink45, size = 10.sp)
-        MuText(f.title, Modifier.weight(1f), style = MuType.row(LocalMuFonts.current), color = c.ink, maxLines = 1)
+        Micro(f.kind, Modifier.width(56.dp), color = c.ink70)
+        MuText(f.title, Modifier.weight(1f), style = WorldType.body(LocalMuFonts.current, LocalPhone.current), color = c.ink, maxLines = 1)
     }
 }
 
@@ -354,7 +359,8 @@ private fun BoxScope.Toast(h: NeueHolders, n: Notice, bottom: Dp) {
         Row(
             Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = bottom + 12.dp)
+                // Over the tray's corner (§6.3): its right edge on the tray's, read in layout.
+                .offset { IntOffset(-desk.trayEdge.floatValue.toInt().coerceAtLeast(12.dp.roundToPx()), -(bottom + 12.dp).roundToPx()) }
                 .widthIn(max = 420.dp)
                 .background(c.paper)
                 .onPointer(PointerEventType.Enter) { desk.noticesNow { it.hold(true, WorldDeskState.now()) } }
@@ -363,8 +369,13 @@ private fun BoxScope.Toast(h: NeueHolders, n: Notice, bottom: Dp) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Micro(n.title, color = c.ink70)
-            if (n.text.isNotBlank()) Small(n.text, Modifier.weight(1f, fill = false), color = c.ink, maxLines = 2)
+            // A notice with words beside its kind: the kind in micro caps, the words in the body tier. Without: its title is the words.
+            if (n.text.isNotBlank()) {
+                Micro(n.title, color = c.ink70)
+                Body(n.text, Modifier.weight(1f, fill = false), color = c.ink, maxLines = 2)
+            } else {
+                Body(n.title, Modifier.weight(1f, fill = false), color = c.ink, maxLines = 2)
+            }
             if (n.kind != NoticeKind.WINDOW_CLOSED) {
                 MuButton(n.action, { actOn(h, n) }, size = com.kaiharimoto.neue.kit.BtnSize.SM, variant = BtnVariant.SECONDARY)
             }
@@ -406,7 +417,7 @@ internal fun BoxScope.Tray(h: NeueHolders, bottom: Dp) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Column(Modifier.weight(1f)) {
-                        MuText(n.title, style = MuType.row(LocalMuFonts.current), color = c.ink, maxLines = 1)
+                        MuText(n.title, style = WorldType.body(LocalMuFonts.current, LocalPhone.current), color = c.ink, maxLines = 1)
                         if (n.text.isNotBlank()) Small(n.text, color = c.ink70, maxLines = 2)
                     }
                     if (n.kind != NoticeKind.WINDOW_CLOSED) MicroLink(n.action, { actOn(h, n) }, color = c.ink)

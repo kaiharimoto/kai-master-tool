@@ -650,7 +650,7 @@ class Worlds(val dir: File) {
             touch(w)
             selectedBoard = placed.last().id
             // Each page opens in the Browser's tab (§4), Ai walking there to open it; `world_show open: false` pins only.
-            if (tab) desk.showed(placed.map { it.id }, by)
+            if (tab) desk.showed(placed.map { it.id }, by, group = "${source ?: "show"}@${now()}")
         }
         return placed
     }
