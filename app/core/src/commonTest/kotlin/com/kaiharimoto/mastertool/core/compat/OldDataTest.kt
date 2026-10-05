@@ -10,6 +10,8 @@ import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
 import com.kaiharimoto.mastertool.core.duel.effects.FxCodec
 import com.kaiharimoto.mastertool.core.duel.effects.FxRead
+import com.kaiharimoto.mastertool.core.duel.effects.FxReviews
+import com.kaiharimoto.mastertool.core.duel.effects.FxShelf
 import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.duel.effects.FxVocab
 import com.kaiharimoto.mastertool.core.duel.effects.Opt
@@ -671,6 +673,33 @@ class OldDataTest {
         // A later vocabulary's script is never decoded, so never rewritten.
         val later = FxCodec.read(v1.replace("\"card\":900000001,", "\"card\":900000001,\"vocab\":${FxVocab.VERSION + 1},"))
         assertTrue(later is FxRead.Newer)
+    }
+
+    @Test
+    fun aCompiledScriptWithItsSourceAndAReviewStillReadAndANewerScriptIsNeverCompiledOver() {
+        // Phase D step 2: `<data>/effects/<passcode>.json` as the library writes it — its vocabulary written out, and the
+        // source's hash beside the printed text's.
+        val file = """{"card":900000001,"vocab":1,"name":"Example Scout","text":"0123456789ab","source":"ba9876543210","effects":[{"id":"e1",
+            "label":"Search","kind":"TRIGGER","from":["MONSTER_ZONE"],"trigger":{"on":{"event":"SUMMONED","summon":["NORMAL","SPECIAL"]},"optional":true},
+            "opt":{"t":"name"},"does":[{"op":{"t":"add","pick":{"from":[{"rel":"YOU","area":"DECK"}],"where":{"t":"name-has","word":"Example"}}}}]}]}"""
+        val s = assertNotNull(FxCodec.decode(file))
+        assertEquals("ba9876543210", s.source)
+        // The source's hash is never part of the script's: a comment in the source re-verifies nothing.
+        assertEquals(FxCodec.hash(s.copy(source = "")), FxCodec.hash(s))
+        assertFalse(FxShelf.needsCompile("ba9876543210", FxRead.Script(s)))
+        // A step-1 file (no source hash) reads and is compiled again from its source once one is there.
+        val step1 = assertNotNull(FxCodec.decode(file.replace(",\"source\":\"ba9876543210\"", "")))
+        assertTrue(FxShelf.needsCompile("ba9876543210", FxRead.Script(step1)))
+        // A newer vocabulary's compiled script is kept unread and untouched: never compiled over from its source.
+        val newer = FxCodec.read(file.replace("\"vocab\":1", "\"vocab\":${FxVocab.VERSION + 1}"))
+        assertTrue(newer is FxRead.Newer)
+        assertFalse(FxShelf.needsCompile("ffffffffffff", newer))
+        // `<passcode>.review.json`: the person's accepted warnings, with why; a later build's keys are skipped.
+        val review = assertNotNull(FxReviews.decode("""{"card":900000001,"accepted":[{"key":"lint-quick@e2","why":"the Quick Effect is the other card's","at":5}]}"""))
+        assertEquals(setOf("lint-quick@e2"), review.keys)
+        val later = assertNotNull(FxReviews.decode("""{"version":2,"card":900000001,"accepted":[{"key":"lint-opt-copy","why":"x","at":6,"by":"person"}],"seen":3}"""))
+        assertEquals(setOf("lint-opt-copy"), later.keys)
+        assertEquals(null, FxReviews.decode("not json"))
     }
 
     @Test

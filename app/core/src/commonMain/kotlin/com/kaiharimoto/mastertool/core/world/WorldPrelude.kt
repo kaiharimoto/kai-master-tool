@@ -184,6 +184,7 @@ object WorldPrelude {
       };
     })()
   };
+${FxPrelude.JS}
   g.ygo = ygo;
 })(this);
 """

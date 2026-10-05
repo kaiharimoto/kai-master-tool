@@ -109,6 +109,15 @@ class Worlds(val dir: File) {
 
     /** The desktop (1.1.x, `docs/world/DESKTOP.md`): windows, the avatar, notices — the shell's own part of this holder. */
     val desk = WorldDeskState(this)
+    /**
+     * The app's folders every world sees (Phase D step 2: the effects library at `lib/effects/`, [WorldMount]): a path under
+     * one is read, listed, written and deleted there, never in the world's own files.
+     */
+    val mounts = mutableListOf<WorldMount>()
+
+    /** The mount [path] lies under, and the path under it; null for a world's own file. */
+    private fun mountOf(path: String): Pair<WorldMount, String>? =
+        mounts.firstNotNullOfOrNull { m -> path.takeIf { it.startsWith(m.prefix) }?.removePrefix(m.prefix)?.takeIf { it.isNotEmpty() }?.let { m to it } }
 
     var list by mutableStateOf<List<World>>(emptyList())
         private set
@@ -240,9 +249,13 @@ class Worlds(val dir: File) {
     private fun refreshFiles() {
         val w = open ?: run { files = emptyList(); return }
         val base = filesDir(w)
-        files = base.walkTopDown().filter { it.isFile && !it.name.endsWith(".tmp") }.map { it.relativeTo(base).invariantSeparatorsPath }
-            .filter { !it.startsWith(".") }.sorted().toList()
+        val own = base.walkTopDown().filter { it.isFile && !it.name.endsWith(".tmp") }.map { it.relativeTo(base).invariantSeparatorsPath }
+            .filter { !it.startsWith(".") && mountOf(it) == null }.sorted().toList()
+        files = own + mounts.flatMap { m -> runCatching { m.listed() }.getOrDefault(emptyList()) }
     }
+
+    /** Lists the files again: a mount's folder changed outside a world (a sync, a compile). */
+    fun refreshListing() = refreshFiles()
 
     /** Opens [path] in the editor (the person's click, or Ai's). */
     fun showFile(path: String?) {
@@ -265,7 +278,8 @@ class Worlds(val dir: File) {
     fun sizeOf(path: String): Long? {
         val w = open ?: return null
         val safe = WorldPaths.safe(path) ?: return null
-        return File(filesDir(w), safe).takeIf { it.isFile }?.length()
+        val f = mountOf(safe)?.let { (m, rel) -> if (m.readable(rel)) File(m.dir, rel) else return null } ?: File(filesDir(w), safe)
+        return f.takeIf { it.isFile }?.length()
     }
 
     private fun readRaw(path: String): String? {
@@ -273,7 +287,8 @@ class Worlds(val dir: File) {
         val safe = WorldPaths.safe(path) ?: return null
         // An app's code is under the world's apps/, beside files/ (§8.2): the Editor and world_read read it there.
         WorldApps.slugOfCode(safe)?.let { slug -> return apps.code(slug) }
-        return File(filesDir(w), safe).takeIf { it.isFile }?.let { if (it.length() > MAX_FILE) it.readText().take(MAX_FILE) else it.readText() }
+        val f = mountOf(safe)?.let { (m, rel) -> if (m.readable(rel)) File(m.dir, rel) else return null } ?: File(filesDir(w), safe)
+        return f.takeIf { it.isFile }?.let { if (it.length() > MAX_FILE) it.readText().take(MAX_FILE) else it.readText() }
     }
 
     // ---- Files ----------------------------------------------------------------------------------------------
@@ -292,6 +307,12 @@ class Worlds(val dir: File) {
             edited = false
             return@runCatching "Saved ${m.title} as v${m.version}."
         }
+        val mounted = mountOf(safe)
+        if (mounted != null) {
+            val (m, rel) = mounted
+            require(m.writable(rel)) { "${m.prefix} holds the app's own files: write $safe as one of them, or somewhere else in the world." }
+            m.refuse(rel, by)?.let { error(it) }
+        }
         if (by == WorldEvent.AI) {
             // Take over (§5.5): a file the person is editing, or changed since Ai last read it, is theirs.
             val unsaved = editorPath == safe && edited
@@ -301,7 +322,7 @@ class Worlds(val dir: File) {
             typeOut(safe, text)
         }
         withContext(Dispatchers.IO) {
-            val f = File(filesDir(w), safe)
+            val f = mounted?.let { (m, rel) -> File(m.dir, rel) } ?: File(filesDir(w), safe)
             f.parentFile?.mkdirs()
             val tmp = File(f.path + ".tmp")
             tmp.writeText(text)
@@ -319,7 +340,9 @@ class Worlds(val dir: File) {
         if (by == WorldEvent.AI) aiSaw[safe] = text.hashCode() else yours += safe
         touch(w.copy(open = safe))
         log(WorldEvent(now(), WorldEvent.Kind.WRITE, by, path = safe, text = "Wrote $safe (${text.lines().size} lines)"))
-        "Wrote $safe: ${text.lines().size} lines."
+        val heard = mounted?.let { (m, rel) -> m.changed(rel, by, deleted = false) }
+        heard?.let { line(TermLine.Kind.NOTE, it) }
+        "Wrote $safe: ${text.lines().size} lines." + heard?.let { "\n$it" }.orEmpty()
     }
 
     /** Ai's text, typed in at the person's chosen pace, never longer than a few seconds whatever its length. */
@@ -350,13 +373,20 @@ class Worlds(val dir: File) {
     suspend fun delete(path: String, by: String = WorldEvent.AI): Result<String> = runCatching {
         val w = open ?: error("No world is open.")
         val safe = WorldPaths.safe(path) ?: error("“$path” is not a path inside the world")
-        val f = File(filesDir(w), safe)
+        val mounted = mountOf(safe)
+        if (mounted != null) {
+            val (m, rel) = mounted
+            require(m.writable(rel)) { "${m.prefix} holds the app's own files: $safe is not one a world deletes." }
+            m.refuse(rel, by)?.let { error(it) }
+        }
+        val f = mounted?.let { (m, rel) -> File(m.dir, rel) } ?: File(filesDir(w), safe)
         require(f.isFile) { "There is no $safe." }
         withContext(Dispatchers.IO) { f.delete() }
         refreshFiles()
         if (editorPath == safe) showFile(files.firstOrNull())
         log(WorldEvent(now(), WorldEvent.Kind.DELETE, by, path = safe, text = "Deleted $safe"))
-        "Deleted $safe."
+        val heard = mounted?.let { (m, rel) -> m.changed(rel, by, deleted = true) }
+        "Deleted $safe." + heard?.let { "\n$it" }.orEmpty()
     }
 
     /** The person took the Editor over while Ai typed: the typing finishes at once and the file is theirs (§5.5). */
@@ -596,7 +626,7 @@ class Worlds(val dir: File) {
     internal suspend fun hostForApps(): WorldHost = open?.let { hostIn(it) } ?: host()
 
     /** The app as [w]'s code reads it, its own files included (`ygo.use`). */
-    private suspend fun hostIn(w: World): WorldHost = host().let { (it as? WorldSnapshot)?.reading(filesDir(w)) ?: it }
+    private suspend fun hostIn(w: World): WorldHost = host().let { (it as? WorldSnapshot)?.reading(filesDir(w), mounts.toList()) ?: it }
 
     /** Runs an instrument in the open world: its lines in the terminal, its boards pinned. */
     suspend fun tool(name: String, args: JsonObject, by: String = WorldEvent.AI): Result<RunOutcome> = runCatching {

@@ -1766,6 +1766,64 @@ Each step splits across agents in worktrees, with a red team beside them, as in 
 - (d) asking, suggestions and cost: the four places in the interface, `FxAsks`, `fx_request`, `FxSuggest`;
 - (e) the table: Shortcut's surfaces, the `Chooser` prompts, Resolve by Shortcut.
 
+**As landed: agents (a), (b) and (c)** (the builder, compiler and checker; the library's storage; the lints and the words):
+- **`ygo.fx`** (alias `fx`, `core/world/FxPrelude.kt`, spliced into `WorldPrelude.JS`): a builder per word — `fx.card`,
+  the five kinds (`fx.ignition`, `fx.trigger`, `fx.quick`, `fx.activation`, `fx.continuous`), `fx.on.<event>` for every
+  `Event`, `fx.opt.*`, `fx.pick`/`fx.spot`, every filter (`fx.nameHas`, `fx.level(1, 4)`, `fx.all`…), `fx.num.*`,
+  `fx.cond.*`, every op (`fx.add`, `fx.returnTo`, `fx.specialSummon`, `fx.ifThen`…), the joins (`fx.then`, `fx.andIfYouDo`,
+  `fx.also` for ALSO, `fx.alongside` for WITH), `fx.restriction`, `fx.summon`, `fx.mat`, `fx.proc.*`. Each returns the
+  compiled JSON's own shape and checks its arguments (an unknown option or word fails, naming the builder and the effect).
+  Each builder carries its word (`.word`); `FxPreludeTest` holds `fx.words()` to every serial name of `Op`, `Filter`,
+  `Cond`, `Num`, `Opt`, `Proc` and every `Kind` and `Event`, holds `fx.enums` to every enum, and compiles a script of every
+  word with nothing unknown. A trigger about itself with no `from` is used from where its event leaves the card.
+  Rhino counts lines by statement, so an error names the statement's first line (`JsRuntime.describe` now walks past the
+  prelude's frames to the script's).
+- **`FxCompile`** (core jvmMain, on `JsRuntime` with `data = true`): 5 s, 400 M steps, 64 MB, a 64 KB source; the last value
+  is read **as data** by `JsData` (Kotlin walking Rhino's objects — a function, a getter or setter, a cycle, a date or
+  anything not plain is refused with its path, "effects[0].does[1].op"; never `JSON.stringify`, which drops a function in
+  silence), decoded by `FxCodec.read`, and made whole by `FxShelf.fill`: the pool's name, `text` (`FxCodec.textOf`, line
+  endings aside), `source` (**new, `CardScript.source`**: the source's 12-hex hash, never part of `FxCodec.hash`, so a
+  comment in the source re-verifies nothing) and, for a Spell's or Trap's activation that says nowhere, where its kind is
+  activated from. The file is `FxCodec.file`: `vocab` written out.
+- **`FxCheck`** (layers 1–3, `FxFinding` with a `code` and a `key` = `code@effect`) and **`FxLints`** (layer 4, warnings
+  only, codes `lint-*`: errata `lint-text-changed`, `opt-name`/`opt-each`/`opt-shared`/`opt-card`/`opt-copy`, `quick`,
+  `timing-when`/`timing-if`/`timing`, `optional`, `cost`, `target`, `summon-normal`/`summon-first`, `names`, `level`,
+  `attribute`, `race`, `count`); `FxCheck.full` runs both. **`FxWords`** reads a script back in our own sentences, one line
+  an effect plus the summoning rules.
+- **The library** (`core/duel/effects/FxLibrary.kt`): `FxPaths` (`<data>/effects/`, `<data>/fxcache/`, the mount
+  `lib/effects/`, the 2,000 cap; a world writes only `<passcode>.js` and `_helper.js` — never the compiled `.json`, the
+  `.review.json` or `asked.json`; `syncs` names what may arrive), `FxReview` (`<passcode>.review.json`: the person's accepted
+  warnings with why; `FxReviews.accept` refuses Ai and an empty why), `FxStatus` (step 2 knows no tests: UNTESTED, WARNED,
+  BROKEN, UNSUPPORTED, MISSING, NONE), `FxEntry`, `FxShelf` (`needsCompile` — **never over a newer build's script** —,
+  `status`, `book`: every script without an error, any printing resolved), and `FxHost` (the pool and the helpers, for a
+  compile). `fxcache` joined `InboundPath.DEVICE_FOLDERS`.
+- **neue**: `Effects` (`neue/effects/Effects.kt`, lazy `h.effects`, `h.effectsStarted`): reads the library off the frame
+  thread, compiles what changed, checks every script on each load (and again once a pool that was still downloading
+  arrives), keeps `entries` (the pane's), `book` (any thread) and `revision` (moves with every change). `WorldMount`
+  (`neue/world/WorldMount.kt`): `Worlds.mounts` routes a path under `lib/effects/` — read, listed, written, deleted — to the
+  library, and `WorldSnapshot.file` does for `ygo.use`; a write is compiled and checked at once and the writer told how
+  ("Compiled Example Herald (…): 1 effect; 0 errors, 0 warnings open"); a helper's change compiles again every card that uses
+  it; a deleted source takes its compiled script with it. Sync (`NeueSyncLocal`, newer wins, `"effects"` reloads the
+  library) and backups (`BackupCenter`) carry `effects/` by `FxPaths.syncs` and never `fxcache/`.
+- **Ai**: `fx_state` (read-only: a card in words beside its text with every finding, a deck's cards with their status, or
+  the library's counts) and `fx_check` (compile and check one card, with the words) — `FxTools` in core, `AiEffects` in neue.
+
+**Seams left for agent (d) and the pane** (each named on its member):
+- `Effects.gate(card, rel, by)`: the asked list's check (`FxAsks`) for a write under `lib/effects/` — return the refusal in
+  words ("not asked for; offer it with fx_request"); `by` is `WorldEvent.AI` or `WorldEvent.YOU`. A helper passes `card` null.
+- `Effects.entries` / `status` / `words` / `outcome` / `accept` / `withdraw` / `describe*`: what the Effects pane and the
+  inspector's "Effects" draw; `accept` already refuses Ai.
+- `Effects.compile(card, by)` returns the entry and the words; `fx_check` is it. Its cost (the session's rounds between
+  starting a card and its `fx_check`) is agent (d)'s to keep in `asked.json` (already allowed to travel by `FxPaths.syncs`).
+- `Effects.book` and `Effects.revision`: the table's `Shortcuts.of(game, h.effects.book, FxFacts.over(index::byId), …)`
+  (agent (e)); rebuild when `revision` moves. `verified` stays false until step 3.
+- `FxStatus.VERIFIED`/`FAILING`, `fxcache/` and `decks/`/`goldfish/` under `effects/` are step 3's and 4's; their paths
+  already sync (or, for `fxcache/`, never).
+
+**Not done in step 2 by these agents:** the Effects pane's interface (`Alt 7`), **Write its effect** in the viewer and the
+inspector, `fx_request`, `FxAsks`, `FxSuggest`, the cost, the `effects-author` skill — agent (d) and the pane's;
+the table's surfaces — agent (e). Android was not compiled locally (no SDK in the sandbox): CI's `build-app.yml` is the check.
+
 ### Step 3: tests and coverage (1.2.2, and 1.2.3 if needed)
 
 **Builds:**
