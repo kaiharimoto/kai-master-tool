@@ -4,7 +4,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.kaiharimoto.mastertool.core.board.CardPosition
-import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
@@ -17,7 +16,6 @@ import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.effects.DeclareKind
 import com.kaiharimoto.mastertool.core.duel.effects.Decision
 import com.kaiharimoto.mastertool.core.input.DeskAction
-import com.kaiharimoto.mastertool.core.duel.effects.catalog
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.text.ShortcutAsk
 import com.kaiharimoto.mastertool.core.duel.text.ShortcutWindow
@@ -53,9 +51,6 @@ class DuelShortcuts internal constructor(private val d: Duels) {
         memo?.let { if (it.game === g && it.base === base && it.net == net) return it.sc }
         return base.at(g, networked = net).also { memo = Memo(g, base, net, it) }
     }
-
-    /** A card the pool does not hold, named by the written effects' facts: the reserved range's samples. */
-    fun catalogFallback(): DuelCatalog = written()?.facts?.catalog() ?: DuelCatalog.NONE
 
     // ---- the window ---------------------------------------------------------------------------------------------
 
@@ -219,7 +214,12 @@ class DuelShortcuts internal constructor(private val d: Duels) {
         if (typed != null) { typed = null; return }
         if (d.strip != null) { d.closeStrip(); return }
         val a = asking ?: return close()
-        val prev = a.back() ?: return close()
+        var prev = a.back() ?: return close()
+        // A position the zone's chips answered goes back with its zone: Esc takes the card out of the zone (§5¾.5).
+        val asked = question?.asked.orEmpty()
+        val last = asked.lastOrNull()
+        val before = asked.getOrNull(asked.size - 2)
+        if (last is Decision.Position && before is Decision.Zone && before.card == last.card) prev = prev.back() ?: return close()
         advance(prev)
     }
 

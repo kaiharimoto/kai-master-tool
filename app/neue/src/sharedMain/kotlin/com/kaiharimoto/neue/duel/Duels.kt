@@ -39,6 +39,7 @@ import com.kaiharimoto.mastertool.core.duel.ai.Trigger
 import com.kaiharimoto.mastertool.core.duel.ai.Watch
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import com.kaiharimoto.mastertool.core.duel.effects.FxTag
+import com.kaiharimoto.mastertool.core.duel.effects.catalog
 import com.kaiharimoto.mastertool.core.duel.net.DuelHost
 import com.kaiharimoto.mastertool.core.duel.record.DuelResult
 import com.kaiharimoto.mastertool.core.duel.replay.ReplayUnit
@@ -1199,19 +1200,21 @@ class Duels(val dir: File) {
     }
 
     /** The pool the catalog was made from, and the catalog: one per pool, so asking again changes nothing (1.0.92). */
-    private var indexed: Pair<CardIndex, DuelCatalog>? = null
+    private var indexed: Triple<CardIndex, Any?, DuelCatalog>? = null
 
     /**
      * The duel reads its cards from [index]: the same catalog for the same pool, each card read off it once
      * ([DuelCatalog.cached]) — Ai's every tool call asks, and a new catalog each time made the log read itself again.
+     * A card the pool does not hold is read off the written effects' facts (Phase D: the reserved range's samples), so a
+     * new set of written effects is a new catalog too: a miss kept from before them would hide their names.
      */
     fun useIndex(index: CardIndex) {
-        val made = indexed?.takeIf { it.first === index }
-            ?: (index to DuelCatalog.cached { code ->
-                // A card the pool does not hold is read off the written effects' facts (Phase D: the reserved range's samples).
-                index.byId(CardId(code))?.let(DuelCardInfo::of) ?: shortcutPart.catalogFallback().info(code)
+        val base = shortcutPart.written()
+        val made = indexed?.takeIf { it.first === index && it.second === base }
+            ?: Triple(index, base as Any?, DuelCatalog.cached { code ->
+                index.byId(CardId(code))?.let(DuelCardInfo::of) ?: base?.facts?.catalog()?.info(code)
             }).also { indexed = it }
-        if (catalog !== made.second) catalog = made.second
+        if (catalog !== made.third) catalog = made.third
     }
 
     /** What the knowledge setting lets the table show: both seats' eyes, or the bottom seat's alone. */

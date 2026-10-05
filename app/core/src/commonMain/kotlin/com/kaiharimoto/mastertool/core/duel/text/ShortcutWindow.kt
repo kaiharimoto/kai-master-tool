@@ -352,15 +352,21 @@ object ShortcutWindow {
 
     /** The words for the answer Esc takes back: "take Vell out of M4", "let Vell go", "undo Which". */
     fun lastWords(asking: ShortcutAsking, asked: List<Decision>, s: DuelState, seat: Int, catalog: DuelCatalog): String? {
-        val d = asked.lastOrNull() ?: return null
-        val a = (asking.given.lastOrNull() as? Given.Pick)?.answer ?: return null
+        var d = asked.lastOrNull() ?: return null
+        var a = (asking.given.lastOrNull() as? Given.Pick)?.answer ?: return null
+        // A position the zone's chips answered goes back with its zone: say the zone.
+        val before = asked.getOrNull(asked.size - 2)
+        if (d is Decision.Position && before is Decision.Zone && before.card == d.card) {
+            d = before
+            a = (asking.given.getOrNull(asking.given.size - 2) as? Given.Pick)?.answer ?: return null
+        }
         fun name(u: Int?) = u?.let { s.cards[it] }?.let { c -> if (DuelSight.sees(s, c.uid, seat) || c.owner == seat) catalog.nameOf(c) else null } ?: "it"
         return when (d) {
             is Decision.Zone -> d.among.getOrNull(a.singleOrNull() ?: -1)?.let { z -> "take ${name(d.card)} out of ${zoneLabel(z, seat)}" }
             is Decision.Position -> "${name(d.card)}'s position"
             is Decision.Cards -> if (a.size == 1) "let ${name(d.among.getOrNull(a.single()))} go" else "let these ${a.size} go"
             is Decision.Option -> d.among.getOrNull(a.singleOrNull() ?: -1)?.let { "not $it" }
-            is Decision.YesNo -> if (a.singleOrNull() == 1) "not yes" else "not no"
+            is Decision.YesNo -> if (a.singleOrNull() == 1) "the last Use" else "the last Skip"
             is Decision.Order -> "the order"
             is Decision.Declare -> "the declaration"
         }
@@ -505,6 +511,7 @@ object ShortcutWindow {
             val ok = p in allowed
             val why = when {
                 ok -> null
+                link && p == CardPosition.FACE_DOWN_DEF -> "A Link is never Set"
                 link && p != CardPosition.FACE_UP_ATK -> "A Link is never in Defense"
                 p == CardPosition.FACE_DOWN_DEF && allowed.any { it.faceUp } -> "This effect summons face-up"
                 p == CardPosition.FACE_UP_DEF && allowed == listOf(CardPosition.FACE_UP_ATK) -> "This effect summons in Attack"

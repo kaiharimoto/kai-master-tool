@@ -2027,16 +2027,20 @@ private fun studioShortcut(h: com.kaiharimoto.neue.NeueHolders, shot: String) {
 
     when (shot) {
         "which" -> d.useShortcut(U.HERALD)
+        // A two-seat table: the activation is a link the other seat may answer, and the summon is asked as it resolves.
         "pick" -> {
             d.useShortcut(U.HERALD, "call")
+            d.resolveByShortcut(all = false)
             pick(U.VELL_GY)
         }
         "pick2" -> {
             d.useShortcut(U.HERALD, "rally")
+            d.resolveByShortcut(all = false)
             pick(U.VELL_HAND, U.VELL_GY)
         }
         "place" -> {
             d.useShortcut(U.HERALD, "rally")
+            d.resolveByShortcut(all = false)
             pick(U.VELL_HAND, U.VELL_GY)
             part.confirm()
             part.choosePosition(com.kaiharimoto.mastertool.core.board.CardPosition.FACE_UP_DEF)

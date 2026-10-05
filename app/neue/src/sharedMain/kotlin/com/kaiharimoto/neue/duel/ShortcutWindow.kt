@@ -265,9 +265,10 @@ private fun ShortcutMarks(duels: Duels, s: DuelState, l: DuelLayout, frames: Lis
                 Box(
                     Modifier.zIndex(MARK_Z).offset(b.left.dp, b.top.dp).size(b.width.dp, b.height.dp)
                         .then(if (opens) Modifier.cursorPointer(caption = "Open it as a row") else Modifier),
-                    contentAlignment = Alignment.BottomCenter,
+                    contentAlignment = Alignment.TopCenter,
                 ) {
-                    Box(Modifier.padding(bottom = 2.dp).background(c.paper).border(1.dp, c.ink).padding(horizontal = 3.dp)) {
+                    // At the pile's head, clear of its own count at the foot.
+                    Box(Modifier.padding(top = 3.dp).background(c.paper).border(1.dp, c.ink).padding(horizontal = 3.dp)) {
                         Micro("$n $word", color = c.ink, size = 8.sp)
                     }
                 }
@@ -457,7 +458,10 @@ private fun Foot(duels: Duels, s: DuelState, step: ShortcutStep.Asking, a: Short
         Box(
             Modifier.height(buttonH).border(1.dp, c.ink).cursorPointer(caption = back, showsWords = true).muClickable { part.back() }.padding(horizontal = 10.dp),
             contentAlignment = Alignment.Center,
-        ) { Micro(back, color = c.ink, maxLines = 1) }
+        ) {
+            // A phone keeps Back short, so the inverted Enter fills the rest of the row (§5¾.11); its words are the cursor's.
+            Micro(if (phone) back.substringBefore(":") else back, color = c.ink, maxLines = 1)
+        }
         if (body != ShortcutWindow.Body.DECLARE && body != ShortcutWindow.Body.YES_NO) {
             val ready = waits == null
             Box(
@@ -602,7 +606,7 @@ private fun Cell(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.Cards, 
     val coord = ShortcutWindow.coord(s, uid, seat, duels.shown?.header?.seed ?: 0L) ?: ""
     val w = if (phone) 40.dp else 46.dp
     Column(
-        Modifier.width(w + 6.dp)
+        Modifier.width(w + 14.dp)
             .cursorPointer(caption = "${if (q.purpose == Purpose.TARGET) "Target" else "Pick"} · $coord", emphasis = true)
             .muClickable {
                 // A hidden pile's copies are one cell: a click takes the next copy, or lets the last go.
@@ -620,7 +624,8 @@ private fun Cell(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.Cards, 
             if (n != null) Box(Modifier.align(Alignment.TopStart).background(c.ink).border(1.dp, c.paper).padding(horizontal = 4.dp)) { Mono("$n", color = c.paper, size = 11.sp) }
             if (indices.size > 1) Box(Modifier.align(Alignment.BottomEnd).background(c.paper).border(1.dp, c.ink).padding(horizontal = 3.dp)) { Mono("×${indices.size}", color = c.ink, size = 10.sp) }
         }
-        Micro(nameFor(duels, s, uid, seat), color = if (offered) c.ink else c.ink45, size = 8.sp, maxLines = 1)
+        // On a phone the card's face names it; the cell keeps its coordinate.
+        if (!phone) Micro(nameFor(duels, s, uid, seat), color = if (offered) c.ink else c.ink45, size = 8.sp, maxLines = 2, align = androidx.compose.ui.text.style.TextAlign.Center)
         Mono(coord, color = c.ink45, size = 9.sp)
     }
 }
@@ -812,11 +817,12 @@ private fun DeclareBody(h: NeueHolders, duels: Duels, s: DuelState, q: Decision.
     val focus = remember { FocusRequester() }
     if (q.kind == DeclareKind.NAME) {
         val rows = remember(q, query) {
-            val onTable = q.among.mapIndexed { i, n -> DeclareRow(n, "On the table", index = i) }.filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
+            // The names the seat has seen first, then any card of the pool: a few of each, so both are in reach.
+            val onTable = q.among.mapIndexed { i, n -> DeclareRow(n, "Seen", index = i) }.filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
             val pool = if (!q.open || query.isBlank()) emptyList() else h.builder.index.search(query, limit = 12).cards
                 .filter { card -> onTable.none { it.name.equals(card.name, ignoreCase = true) } }
                 .map { card -> DeclareRow(card.name, listOfNotNull(card.frameType.substringBefore('_').replaceFirstChar { it.uppercase() }, card.level?.let { "Level $it" }).joinToString(" · "), code = card.id.value) }
-            (onTable + pool).take(9)
+            if (pool.isEmpty()) onTable.take(9) else onTable.take(4) + pool.take(9 - minOf(4, onTable.size))
         }
         fun choose(r: DeclareRow) { if (r.code != null) part.named(r.code) else r.index?.let { part.answer(listOf(it)) } }
         MuInput(

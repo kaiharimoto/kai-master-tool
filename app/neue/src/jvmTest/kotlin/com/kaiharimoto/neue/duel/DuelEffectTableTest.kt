@@ -154,6 +154,12 @@ class DuelEffectTableTest {
     }
 
     @Test
+    fun aCardThePoolLacksIsNamedFromTheWrittenEffectsFacts() = table { d ->
+        d.useIndex(com.kaiharimoto.mastertool.core.search.CardIndex.EMPTY)
+        assertEquals("Gatekeeper Herald", d.catalog.info(FxSamples.HERALD)?.name)
+    }
+
+    @Test
     fun aNetworkedTableRefusesTheVerbInWords() = table { d ->
         d.role = Duels.NetRole.HOST
         try {
