@@ -15,6 +15,7 @@ import com.kaiharimoto.mastertool.core.world.WorldCanvas
 import com.kaiharimoto.mastertool.core.world.WorldCodec
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.mastertool.core.world.WorldHost
+import com.kaiharimoto.mastertool.core.world.WorldLimits
 import com.kaiharimoto.mastertool.core.world.WorldPaths
 import com.kaiharimoto.mastertool.core.world.WorldPrefs
 import com.kaiharimoto.mastertool.core.world.WorldPrelude
@@ -587,7 +588,8 @@ class Worlds(val dir: File) {
     }
 
     companion object {
-        const val MAX_FILE = 200_000
+        // 16 MB from 1.1.x (`docs/world/DESKTOP.md` §11): the number lives in core, beside the World's other limits.
+        const val MAX_FILE = WorldLimits.MAX_FILE
         const val MAX_OUTPUT = 64_000
         const val MAX_TERMINAL = 2_000
         const val MAX_ACTIVITY = 500

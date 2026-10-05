@@ -167,8 +167,12 @@ fun NeueHolders.run(action: DeskAction) {
         -> runShootout(this, action)
         // Ai World's own (1.0.97): from its keys, the palette and the menus alike.
         DeskAction.WORLD_RUN, DeskAction.WORLD_STOP, DeskAction.WORLD_FOLLOW, DeskAction.WORLD_NEW,
-        DeskAction.WORLD_PANE_FILES, DeskAction.WORLD_PANE_EDITOR, DeskAction.WORLD_PANE_TERMINAL,
-        DeskAction.WORLD_PANE_BOARDS, DeskAction.WORLD_PANE_THOUGHTS, DeskAction.WORLD_PANE_ACTIVITY,
+        DeskAction.WORLD_APP_FILES, DeskAction.WORLD_APP_EDITOR, DeskAction.WORLD_APP_TERMINAL, DeskAction.WORLD_APP_BROWSER,
+        DeskAction.WORLD_APP_THOUGHTS, DeskAction.WORLD_APP_INSTRUMENTS, DeskAction.WORLD_APP_LIBRARY, DeskAction.WORLD_LAUNCHER,
+        DeskAction.WORLD_NEXT_WINDOW, DeskAction.WORLD_PREVIOUS_WINDOW, DeskAction.WORLD_CLOSE, DeskAction.WORLD_MINIMISE,
+        DeskAction.WORLD_SNAP_UP, DeskAction.WORLD_SNAP_LEFT, DeskAction.WORLD_SNAP_RIGHT, DeskAction.WORLD_SNAP_DOWN,
+        DeskAction.WORLD_TAB_NEW, DeskAction.WORLD_TAB_ADDRESS, DeskAction.WORLD_TAB_NEXT, DeskAction.WORLD_TAB_PREVIOUS,
+        DeskAction.WORLD_TAB_BACK, DeskAction.WORLD_TAB_FORWARD, DeskAction.WORLD_SKIP,
         -> com.kaiharimoto.neue.world.runWorld(this, action)
         // From a menu or the palette, where nothing is let go of: a press, and the next one sends (1.0.87).
         DeskAction.DUEL_VOICE -> duelVoice.toggle()

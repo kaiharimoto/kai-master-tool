@@ -150,6 +150,14 @@ object WorldPrelude {
     })(),
     // One of your own instruments (a file under lib/, say): run in the global scope, its functions yours to call; its last value returned.
     use: function (path) { return (0, eval)(call('file', { path: String(path) })); },
+    // A file of this world read a page at a time: {text, from, next, total}; next is null at the end.
+    read: function (path, from) { return call('read', { path: String(path), from: from || 0 }); },
+    // What Ai knows (guides, books, notes, reports, evidence, rubrics), read-only: list(scope), read(path, from), search(q, scope).
+    knowledge: {
+      list: function (scope) { return call('knowledgeList', { scope: scope === undefined || scope === null ? null : String(scope) }); },
+      read: function (path, from) { return call('knowledgeRead', { path: String(path), from: from || 0 }); },
+      search: function (q, scope) { return call('knowledgeSearch', { q: String(q), scope: scope === undefined || scope === null ? null : String(scope) }); }
+    },
     duel: (function () {
       // A table of the script's own, a sandbox for testing lines (Phase C): a seed (a fresh one when none is given; t.seed
       // says which), first (the seat that has turn 1), or fork: true for the duel in play as Ai's seat sees it. The script

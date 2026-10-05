@@ -45,9 +45,9 @@ class JsRuntime(private val limits: Limits = Limits()) {
     )
 
     /** Why a run was stopped: thrown inside the interpreter, past any `catch` a script writes. */
-    private class Stop(message: String) : Error(message)
+    internal class Stop(message: String) : Error(message)
 
-    private class Budget(val limits: Limits, val stop: () -> Boolean) {
+    internal class Budget(val limits: Limits, val stop: () -> Boolean) {
         val started = System.currentTimeMillis()
         val heapAtStart = used()
         val heapCap = minOf(limits.heapMb * MB, Runtime.getRuntime().maxMemory() / 4)
@@ -86,7 +86,7 @@ class JsRuntime(private val limits: Limits = Limits()) {
         private fun used(): Long = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
     }
 
-    private object Factory : ContextFactory() {
+    internal object Factory : ContextFactory() {
         override fun makeContext(): Context = super.makeContext().apply {
             optimizationLevel = -1
             languageVersion = Context.VERSION_ES6
@@ -103,15 +103,24 @@ class JsRuntime(private val limits: Limits = Limits()) {
     /**
      * Runs [code] (named [name] in errors) with `ygo` over [api]. Each line printed goes to [onLine] as it is printed,
      * from the script's thread. [stop] is asked as the script runs. Blocks the caller until the script ends or is
-     * given up on.
+     * given up on. [everyLine] hears every line, past what is kept too: the whole output, for the run's log file
+     * (`RunLog`, `docs/world/DESKTOP.md` §11).
      */
-    fun run(code: String, name: String, api: WorldApi, onLine: (String) -> Unit = {}, stop: () -> Boolean = { false }): Result {
+    fun run(
+        code: String,
+        name: String,
+        api: WorldApi,
+        onLine: (String) -> Unit = {},
+        stop: () -> Boolean = { false },
+        everyLine: (String) -> Unit = {},
+    ): Result {
         val out = StringBuilder()
         var cut = false
         val lock = Any()
         val given = AtomicBoolean(false)
         fun print(line: String) = synchronized(lock) {
             if (given.get()) return@synchronized
+            everyLine(line)
             if (out.length + line.length + 1 > limits.output) {
                 if (!cut) {
                     cut = true
@@ -194,10 +203,10 @@ class JsRuntime(private val limits: Limits = Limits()) {
     }
 
     companion object {
-        private val BUDGET = Any()
+        internal val BUDGET = Any()
         private const val MB = 1024L * 1024L
-        private const val STACK = 16L * MB
-        private const val GRACE = 2_000L
+        internal const val STACK = 16L * MB
+        internal const val GRACE = 2_000L
 
         /** A Rhino error in words, with where: "TypeError: x is undefined (sim.js, line 12)". */
         fun describe(e: RhinoException): String {

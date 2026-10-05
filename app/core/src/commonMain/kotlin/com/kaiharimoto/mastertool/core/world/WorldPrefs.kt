@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.world
 
+import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
 import kotlinx.serialization.Serializable
 
 /**
@@ -18,4 +19,10 @@ data class WorldPrefs(
     val follow: Boolean = true,
     /** The world open last. */
     val open: String? = null,
+    /** The apps pinned to the desktop's taskbar, by `AppRef.key` (1.1.x, `docs/world/DESKTOP.md` §2.2). */
+    val pinned: List<String> = BuiltInApp.PINNED,
+    /** Ai's avatar moves about the desktop to what it uses (§5.5); off, it stays home and the window shows the still mark. */
+    val avatar: Boolean = true,
+    /** While Ai works with Follow on, the windows it is not in recede: their content drawn at 45 % (§6.2). */
+    val recede: Boolean = true,
 )

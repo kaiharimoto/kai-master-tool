@@ -307,12 +307,38 @@ enum class DeskAction {
     /** The page follows Ai to the pane it is working in, or stays where the person put it. */
     WORLD_FOLLOW,
     WORLD_NEW,
-    WORLD_PANE_FILES,
-    WORLD_PANE_EDITOR,
-    WORLD_PANE_TERMINAL,
-    WORLD_PANE_BOARDS,
-    WORLD_PANE_THOUGHTS,
-    WORLD_PANE_ACTIVITY,
+
+    // Ai World as a desktop (1.1.x, `docs/world/DESKTOP.md` §9.1): the seven apps by Alt and their number — open, or
+    // bring forward; on the one in front, minimise (these replace 1.0.97's pane keys; nothing stores a DeskAction).
+    WORLD_APP_FILES,
+    WORLD_APP_EDITOR,
+    WORLD_APP_TERMINAL,
+    WORLD_APP_BROWSER,
+    WORLD_APP_THOUGHTS,
+    WORLD_APP_INSTRUMENTS,
+    WORLD_APP_LIBRARY,
+    /** The launcher. */
+    WORLD_LAUNCHER,
+    /** The next or previous window; held, the strip of open windows. */
+    WORLD_NEXT_WINDOW,
+    WORLD_PREVIOUS_WINDOW,
+    /** The Browser's tab, else the window in front. */
+    WORLD_CLOSE,
+    WORLD_MINIMISE,
+    /** Maximise or restore; snap left; snap right; restore, then minimise. */
+    WORLD_SNAP_UP,
+    WORLD_SNAP_LEFT,
+    WORLD_SNAP_RIGHT,
+    WORLD_SNAP_DOWN,
+    /** In the Browser: a new tab, the address, the next and previous tab, back and forward. */
+    WORLD_TAB_NEW,
+    WORLD_TAB_ADDRESS,
+    WORLD_TAB_NEXT,
+    WORLD_TAB_PREVIOUS,
+    WORLD_TAB_BACK,
+    WORLD_TAB_FORWARD,
+    /** Skip ahead: Ai's typing finishes, its waiting targets dropped, the hop under way ends in 120 ms. */
+    WORLD_SKIP,
 
     // Shootout (1.1.2, Phase S): hands judged, cards rated.
     GO_SHOOTOUT,
@@ -642,14 +668,32 @@ object DeskShortcuts {
         // Ai World (1.0.97).
         DeskShortcut(ctrl("enter"), DeskAction.WORLD_RUN, DeskScope.WORLD, "Run the file in the editor", allowedInTextInput = true),
         DeskShortcut(ctrl("period"), DeskAction.WORLD_STOP, DeskScope.WORLD, "Stop the run", allowedInTextInput = true),
-        DeskShortcut(KeyChord("f"), DeskAction.WORLD_FOLLOW, DeskScope.WORLD, "Follow Ai from pane to pane, or stay put"),
+        DeskShortcut(KeyChord("f"), DeskAction.WORLD_FOLLOW, DeskScope.WORLD, "Follow Ai to the window it works in, or stay put"),
+        DeskShortcut(KeyChord("f", shift = true), DeskAction.WORLD_SKIP, DeskScope.WORLD, "Skip ahead: Ai's typing and travel finish at once"),
         DeskShortcut(KeyChord("n", alt = true), DeskAction.WORLD_NEW, DeskScope.WORLD, "A new world"),
-        DeskShortcut(KeyChord("1", alt = true), DeskAction.WORLD_PANE_FILES, DeskScope.WORLD, "Files", allowedInTextInput = true),
-        DeskShortcut(KeyChord("2", alt = true), DeskAction.WORLD_PANE_EDITOR, DeskScope.WORLD, "Editor", allowedInTextInput = true),
-        DeskShortcut(KeyChord("3", alt = true), DeskAction.WORLD_PANE_TERMINAL, DeskScope.WORLD, "Terminal", allowedInTextInput = true),
-        DeskShortcut(KeyChord("4", alt = true), DeskAction.WORLD_PANE_BOARDS, DeskScope.WORLD, "Boards", allowedInTextInput = true),
-        DeskShortcut(KeyChord("5", alt = true), DeskAction.WORLD_PANE_THOUGHTS, DeskScope.WORLD, "Thoughts", allowedInTextInput = true),
-        DeskShortcut(KeyChord("6", alt = true), DeskAction.WORLD_PANE_ACTIVITY, DeskScope.WORLD, "Activity", allowedInTextInput = true),
+        // Ai World as a desktop (1.1.x, `docs/world/DESKTOP.md` §9.1).
+        DeskShortcut(KeyChord("1", alt = true), DeskAction.WORLD_APP_FILES, DeskScope.WORLD, "Files: open, bring forward, or minimise", allowedInTextInput = true),
+        DeskShortcut(KeyChord("2", alt = true), DeskAction.WORLD_APP_EDITOR, DeskScope.WORLD, "Editor", allowedInTextInput = true),
+        DeskShortcut(KeyChord("3", alt = true), DeskAction.WORLD_APP_TERMINAL, DeskScope.WORLD, "Terminal", allowedInTextInput = true),
+        DeskShortcut(KeyChord("4", alt = true), DeskAction.WORLD_APP_BROWSER, DeskScope.WORLD, "Browser", allowedInTextInput = true),
+        DeskShortcut(KeyChord("5", alt = true), DeskAction.WORLD_APP_THOUGHTS, DeskScope.WORLD, "Thoughts", allowedInTextInput = true),
+        DeskShortcut(KeyChord("6", alt = true), DeskAction.WORLD_APP_INSTRUMENTS, DeskScope.WORLD, "Instruments", allowedInTextInput = true),
+        DeskShortcut(KeyChord("7", alt = true), DeskAction.WORLD_APP_LIBRARY, DeskScope.WORLD, "Library: everything Ai knows", allowedInTextInput = true),
+        DeskShortcut(KeyChord("0", alt = true), DeskAction.WORLD_LAUNCHER, DeskScope.WORLD, "The launcher: apps and worlds", allowedInTextInput = true),
+        DeskShortcut(ctrl("backquote"), DeskAction.WORLD_NEXT_WINDOW, DeskScope.WORLD, "The next window; held, every open window", allowedInTextInput = true),
+        DeskShortcut(ctrl("backquote", shift = true), DeskAction.WORLD_PREVIOUS_WINDOW, DeskScope.WORLD, "The previous window", allowedInTextInput = true),
+        DeskShortcut(ctrl("w"), DeskAction.WORLD_CLOSE, DeskScope.WORLD, "Close the tab in the Browser, else the window", allowedInTextInput = true),
+        DeskShortcut(ctrl("m"), DeskAction.WORLD_MINIMISE, DeskScope.WORLD, "Minimise the window", allowedInTextInput = true),
+        DeskShortcut(KeyChord("up", alt = true, shift = true), DeskAction.WORLD_SNAP_UP, DeskScope.WORLD, "Maximise the window, or restore it"),
+        DeskShortcut(KeyChord("left", alt = true, shift = true), DeskAction.WORLD_SNAP_LEFT, DeskScope.WORLD, "Snap the window to the left half"),
+        DeskShortcut(KeyChord("right", alt = true, shift = true), DeskAction.WORLD_SNAP_RIGHT, DeskScope.WORLD, "Snap the window to the right half"),
+        DeskShortcut(KeyChord("down", alt = true, shift = true), DeskAction.WORLD_SNAP_DOWN, DeskScope.WORLD, "Restore the window, then minimise it"),
+        DeskShortcut(ctrl("t"), DeskAction.WORLD_TAB_NEW, DeskScope.WORLD, "A new tab in the Browser", allowedInTextInput = true),
+        DeskShortcut(ctrl("l"), DeskAction.WORLD_TAB_ADDRESS, DeskScope.WORLD, "The Browser's address", allowedInTextInput = true),
+        DeskShortcut(ctrl("tab"), DeskAction.WORLD_TAB_NEXT, DeskScope.WORLD, "The next tab", allowedInTextInput = true),
+        DeskShortcut(ctrl("tab", shift = true), DeskAction.WORLD_TAB_PREVIOUS, DeskScope.WORLD, "The previous tab", allowedInTextInput = true),
+        DeskShortcut(KeyChord("left", alt = true), DeskAction.WORLD_TAB_BACK, DeskScope.WORLD, "Back, in the Browser"),
+        DeskShortcut(KeyChord("right", alt = true), DeskAction.WORLD_TAB_FORWARD, DeskScope.WORLD, "Forward, in the Browser"),
         // Shootout (1.1.2): one key per answer, so a trial is a glance and a press.
         DeskShortcut(KeyChord("1"), DeskAction.SHOOTOUT_ANSWER_1, DeskScope.SHOOTOUT, "Clear win, or the hand plays through"),
         DeskShortcut(KeyChord("2"), DeskAction.SHOOTOUT_ANSWER_2, DeskScope.SHOOTOUT, "Lean win"),
@@ -771,6 +815,7 @@ object DeskShortcuts {
         "tab" -> "Tab"
         "bracketleft" -> "["
         "bracketright" -> "]"
+        "backquote" -> "`"
         else -> key.uppercase()
     }
 }

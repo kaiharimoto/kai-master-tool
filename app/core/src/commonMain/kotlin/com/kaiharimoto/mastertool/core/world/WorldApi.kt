@@ -1,6 +1,8 @@
 package com.kaiharimoto.mastertool.core.world
 
 import com.kaiharimoto.mastertool.core.ai.calc.Calc
+import com.kaiharimoto.mastertool.core.ai.library.LibraryDoc
+import com.kaiharimoto.mastertool.core.ai.library.LibraryHit
 import com.kaiharimoto.mastertool.core.ai.rules.Yugipedia
 import com.kaiharimoto.mastertool.core.cards.BanlistHistory
 import com.kaiharimoto.mastertool.core.cards.BanlistMatch
@@ -35,6 +37,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
@@ -103,6 +106,25 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
             val path = args.str("path")?.let(WorldPaths::safe) ?: throw IllegalArgumentException("use needs a path inside the world, like 'lib/brick_rate.js'")
             host.file(path)?.let(::JsonPrimitive) ?: throw IllegalArgumentException("there is no $path in this world: world_write it first (world_state lists the files)")
         }
+        "read" -> read(args)
+        "knowledgeList" -> knowledge().list(args.str("scope")).let { docs -> JsonArray(docs.take(MAX_LISTED).map(::docJson)) }
+        "knowledgeRead" -> {
+            val path = args.str("path") ?: throw IllegalArgumentException("knowledge.read needs a path from knowledge.list()")
+            val (doc, page) = knowledge().read(path, (args.int("from") ?: 0).coerceAtLeast(0))
+                ?: throw IllegalArgumentException("no document “$path” in what Ai knows: knowledge.list() names them")
+            pageJson(page) { put("title", doc.title); put("kind", doc.kind.name.lowercase()) }
+        }
+        "knowledgeSearch" -> {
+            val q = args.str("q") ?: throw IllegalArgumentException("knowledge.search needs words to look for")
+            JsonArray(knowledge().search(q, args.str("scope"), (args.int("limit") ?: WorldLimits.KNOWLEDGE_HITS)).map { h ->
+                buildJsonObject {
+                    put("path", h.doc.path)
+                    put("title", h.doc.title)
+                    put("offset", h.offset)
+                    put("line", h.line)
+                }
+            })
+        }
         "tools" -> JsonArray(Instruments.ALL.map { t ->
             buildJsonObject {
                 put("name", t.name)
@@ -142,6 +164,34 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
     }
 
     private fun find(q: String): Card? = q.trim().toIntOrNull()?.let(host::cardById) ?: host.cardNamed(q)
+
+    // ---- Reading: the world's own files in pages, and what Ai knows (`docs/world/DESKTOP.md` §8.6, §10.4) ----------
+
+    /** `ygo.read(path, from)`: a page of a file of this world, through [WorldPaths.safe]. */
+    private fun read(a: JsonObject): JsonElement {
+        val path = a.str("path")?.let(WorldPaths::safe) ?: throw IllegalArgumentException("read needs a path inside the world, like 'notes/plan.md'")
+        val text = host.file(path) ?: throw IllegalArgumentException("there is no $path in this world (world_state lists the files)")
+        return pageJson(WorldPage.of(text, (a.int("from") ?: 0).coerceAtLeast(0), WorldLimits.SCRIPT_READ_PAGE)) { put("path", path) }
+    }
+
+    private fun knowledge(): WorldKnowledge = host.knowledge() ?: throw IllegalArgumentException("what Ai knows is not open to code here")
+
+    private fun pageJson(p: WorldPage, more: JsonObjectBuilder.() -> Unit) = buildJsonObject {
+        more()
+        put("text", p.text)
+        put("from", p.from)
+        put("next", p.next?.let(::JsonPrimitive) ?: JsonNull)
+        put("total", p.total)
+    }
+
+    private fun docJson(d: LibraryDoc) = buildJsonObject {
+        put("path", d.path)
+        put("kind", d.kind.name.lowercase())
+        put("scope", d.scope)
+        put("title", d.title)
+        put("bytes", d.bytes)
+        put("updated", d.updated)
+    }
 
     // ---- The Forbidden & Limited lists by date (1.1.1): what the app keeps from Yugipedia, never fetched here. ----
 
@@ -484,6 +534,9 @@ class WorldApi(private val host: WorldHost, private val limits: Limits = Limits(
     companion object {
         const val MAX_SAMPLE = 1_000_000
 
+        /** `ygo.knowledge.list` lists at most this many documents. */
+        const val MAX_LISTED = 2_000
+
         /** What a sandbox table's ending says it is: a script's, never a game (`docs/phases/C.md` §6). */
         const val SCRIPTED = "scripted"
 
@@ -544,6 +597,25 @@ interface WorldHost {
      * its own decklist, never the live table itself; null when no duel is in play, or it is a networked table.
      */
     fun liveDuel(): DuelFork.Source? = null
+
+    /** What Ai knows, read-only, for `ygo.knowledge` (`docs/world/DESKTOP.md` §10.4); null where the app gives none. */
+    fun knowledge(): WorldKnowledge? = null
+}
+
+/**
+ * Everything Ai knows — guides, books, notes, reports, evidence, rubrics — as a world's code may read it (§10.4):
+ * `ygo.knowledge.list(scope)`, `read(path, from)` in pages, `search(q, scope)`. Read-only; only what the Library's
+ * catalogue lists. `LibraryKnowledge` (core `ai/library`) is the app's.
+ */
+interface WorldKnowledge {
+    /** The documents for [scope] (`deck:<id>`, `web:<id>`, `ai`; null for all). */
+    fun list(scope: String?): List<LibraryDoc>
+
+    /** A page of [path] from [from], or null when the catalogue has no such document. */
+    fun read(path: String, from: Int): Pair<LibraryDoc, WorldPage>?
+
+    /** The first [limit] hits for [q] in [scope]. */
+    fun search(q: String, scope: String?, limit: Int): List<LibraryHit>
 }
 
 internal fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.contentOrNull

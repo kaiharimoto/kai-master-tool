@@ -119,6 +119,8 @@ data class WorldEvent(
     /** One line, in words. */
     val text: String = "",
     val run: RunRecord? = null,
+    /** The app an [Kind.APP] event is about: its slug (1.1.x). */
+    val app: String? = null,
 ) {
     @Serializable
     enum class Kind {
@@ -129,6 +131,9 @@ data class WorldEvent(
         @SerialName("show") SHOW,
         @SerialName("unshow") UNSHOW,
         @SerialName("note") NOTE,
+
+        /** An app made, changed, deleted, or one that threw (`docs/world/DESKTOP.md` §8.6 point 6): [WorldEvent.app] names it. */
+        @SerialName("app") APP,
     }
 
     companion object {

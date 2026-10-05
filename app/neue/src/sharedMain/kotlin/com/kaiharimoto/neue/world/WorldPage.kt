@@ -374,12 +374,12 @@ internal fun runWorld(h: NeueHolders, action: DeskAction) {
         DeskAction.WORLD_STOP -> world.stop()
         DeskAction.WORLD_FOLLOW -> toggleFollow(h)
         DeskAction.WORLD_NEW -> newWorld(h)
-        DeskAction.WORLD_PANE_FILES -> bring(WorldPane.FILES)
-        DeskAction.WORLD_PANE_EDITOR -> bring(WorldPane.EDITOR)
-        DeskAction.WORLD_PANE_TERMINAL -> bring(WorldPane.TERMINAL)
-        DeskAction.WORLD_PANE_BOARDS -> bring(WorldPane.BOARDS)
-        DeskAction.WORLD_PANE_THOUGHTS -> bring(WorldPane.THOUGHTS)
-        DeskAction.WORLD_PANE_ACTIVITY -> bring(WorldPane.ACTIVITY)
+        // The desktop's app keys (core's 1.1.x table) on 1.0.97's panes, until the desktop page replaces this one.
+        DeskAction.WORLD_APP_FILES -> bring(WorldPane.FILES)
+        DeskAction.WORLD_APP_EDITOR -> bring(WorldPane.EDITOR)
+        DeskAction.WORLD_APP_TERMINAL -> bring(WorldPane.TERMINAL)
+        DeskAction.WORLD_APP_BROWSER -> bring(WorldPane.BOARDS)
+        DeskAction.WORLD_APP_THOUGHTS -> bring(WorldPane.THOUGHTS)
         else -> Unit
     }
 }

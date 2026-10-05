@@ -45,6 +45,7 @@ object DeskKeys {
         Key.MoveEnd to "end",
         Key.LeftBracket to "bracketleft",
         Key.RightBracket to "bracketright",
+        Key.Grave to "backquote",
         Key.Zero to "0",
         Key.One to "1",
         Key.Two to "2",
