@@ -588,8 +588,11 @@ class AiEndToEndTest {
         // Past every old cap, through the tool Ai writes with: never refused for size.
         val guide = h.tool("memory", "action" to "add", "scope" to "guide", "text" to "Weak points: [[Nibiru, the Primal Being]] ends the line at five summons.")
         assertFalse(guide.isError, guide.content)
+        // Ai's notes to self are one file for the whole app, and this test's data folder outlives a run, so each run's
+        // lessons carry their own mark or a second run would write what is "already remembered".
+        val run = UUID.randomUUID().toString().take(8)
         repeat(30) { n ->
-            val agent = h.tool("memory", "action" to "add", "scope" to "agent", "text" to "Lesson ${"x".repeat(n + 1)}: " + "check the banlist before quoting limits, ".repeat(6))
+            val agent = h.tool("memory", "action" to "add", "scope" to "agent", "text" to "Lesson $run ${"x".repeat(n + 1)}: " + "check the banlist before quoting limits, ".repeat(6))
             assertFalse(agent.isError, agent.content)
             val deck = h.tool("memory", "action" to "add", "scope" to "deck", "text" to "Note ${"y".repeat(n + 1)}: " + "this list sides into the mirror, ".repeat(6))
             assertFalse(deck.isError, deck.content)
