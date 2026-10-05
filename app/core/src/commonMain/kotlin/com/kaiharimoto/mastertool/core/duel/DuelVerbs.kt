@@ -2,6 +2,8 @@ package com.kaiharimoto.mastertool.core.duel
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
+import com.kaiharimoto.mastertool.core.duel.effects.Chooser
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.model.Attribute
 import com.kaiharimoto.mastertool.core.model.Card
 import kotlin.concurrent.Volatile
@@ -163,6 +165,12 @@ enum class DuelVerb(val label: String) {
     MOVE("Move"),
     /** In the Battle Phase a face-up Attack Position monster attacks: then a click on their monster, or their life points (1.0.86). */
     ATTACK("Attack"),
+    /**
+     * The card's written effect does its moves for you (Phase D §5½, kai: "a dedicated choice when interacting with a card
+     * if it has one set"): offered only on a card with a script ([Shortcuts]); never a card's default, and never run by a
+     * drag or by Activate, which stays the manual verb that puts an effect on the chain by hand.
+     */
+    SHORTCUT("Shortcut"),
 }
 
 object DuelVerbs {
@@ -197,8 +205,11 @@ object DuelVerbs {
         }
     }
 
-    /** The verbs that make sense for [uid] where it is, for the inspector's column — the default first. */
-    fun offered(s: DuelState, seat: Int, uid: Int, catalog: DuelCatalog): List<DuelVerb> {
+    /**
+     * The verbs that make sense for [uid] where it is, for the inspector's column — the default first, then Shortcut when
+     * [shortcuts] holds a written effect for the card (none at a table without them: every table before the library).
+     */
+    fun offered(s: DuelState, seat: Int, uid: Int, catalog: DuelCatalog, shortcuts: Shortcuts? = null): List<DuelVerb> {
         val card = s.cards[uid] ?: return emptyList()
         val kind = kindOf(card, catalog)
         val monster = kind == CardKind.MONSTER || kind == CardKind.EXTRA_MONSTER || kind == CardKind.TOKEN
@@ -242,7 +253,8 @@ object DuelVerbs {
             else -> emptyList()
         }
         val d = default(s, seat, uid, catalog)
-        return (listOf(d) + list).distinct()
+        val written = if (shortcuts?.has(s, seat, uid) == true) listOf(DuelVerb.SHORTCUT) else emptyList()
+        return (listOf(d) + written + list).distinct()
     }
 
     /** Whether [verb] on [uid] puts it in a zone, so a key can ask which one (numbers on the free zones). */
@@ -284,6 +296,12 @@ object DuelVerbs {
         host: Int? = null,
         /** For [DuelVerb.ATTACK]: a direct attack. Otherwise [host] is the monster attacked. */
         direct: Boolean = false,
+        /** For [DuelVerb.SHORTCUT]: the table's written effects; without them no card has one. */
+        shortcuts: Shortcuts? = null,
+        /** For [DuelVerb.SHORTCUT]: which effect (its id or short name); null asks [chooser] when there are several. */
+        effect: String? = null,
+        /** For [DuelVerb.SHORTCUT]: who answers the engine's choices; by default the first one cancels. */
+        chooser: Chooser = Chooser { Chooser.CANCEL },
     ): VerbResult {
         val card = s.cards[uid] ?: return VerbResult.no("No such card")
         val from = s.placeOf(uid) ?: return VerbResult.no("That card has left the duel")
@@ -438,6 +456,7 @@ object DuelVerbs {
                 direct -> VerbResult(listOf(DuelAction.Attack(seat, uid, null)))
                 else -> VerbResult(emptyList(), needsTarget = true)
             }
+            DuelVerb.SHORTCUT -> shortcuts?.use(s, seat, uid, effect, chooser)?.verb() ?: VerbResult.no(Shortcuts.NO_SCRIPT)
             DuelVerb.TARGET -> {
                 // A second time takes the arrow away.
                 val drawn = s.arrows.firstOrNull { it.seat == seat && it.from == null && uid in it.to }
@@ -552,6 +571,10 @@ data class VerbResult(
     val needsHost: Boolean = false,
     /** An attack waiting for what it attacks: a monster, or the other player directly (1.0.86). */
     val needsTarget: Boolean = false,
+    /** A Shortcut's: the engine's tag of each action, in step (`DuelGame.act`'s `fx`); empty for a verb made by hand. */
+    val fx: List<FxTag?> = emptyList(),
+    /** A Shortcut cancelled (Esc): nothing to commit, and nothing to say. */
+    val cancelled: Boolean = false,
 ) {
     companion object {
         fun no(why: String) = VerbResult(emptyList(), why)

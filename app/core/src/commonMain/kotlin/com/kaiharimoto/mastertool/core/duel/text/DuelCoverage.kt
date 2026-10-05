@@ -60,6 +60,7 @@ object DuelCoverage {
         Row("Place (as a Continuous Spell)", "place h3 in s4", DuelVerb.PLACE),
         Row("Drag from zone to zone", "move m1 to m5", DuelVerb.MOVE),
         Row("Shift A, then a click on their monster: attack", "a m1 om1", DuelVerb.ATTACK),
+        Row("U: Shortcut, the written effect does its moves", "u h1", DuelVerb.SHORTCUT),
         // ---- drops: where a carried card is let go ----
         Row("Drop on an empty Monster Zone", "h1 to m3", intent = "zone.place"),
         Row("Alt-drop on an empty zone: set", "e h1 m3", intent = "zone.set"),
@@ -87,6 +88,9 @@ object DuelCoverage {
         Row("Shift Q: resolve the whole chain", "resolve all", needs = NEEDS_CHAIN),
         Row("Enter on a link in the chain well: Negate", "negate 1", needs = NEEDS_CHAIN),
         Row("Y with no Ai at the table: No response", "pass", needs = NEEDS_CHAIN),
+        // ---- Shortcut's chain (Phase D §5½) ----
+        Row("Enter on a link: Resolve as written", "resolve by shortcut", needs = NEEDS_CHAIN),
+        Row("Shift Q, then U: the whole chain as written", "resolve all by shortcut", needs = NEEDS_CHAIN),
         // ---- several cards, one move (1.0.90) ----
         Row("Ctrl-click several, then G", "g h1 h2"),
         Row("Ctrl-click across the GY and the hand, then B", "b gy1 h3"),

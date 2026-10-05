@@ -36,6 +36,8 @@ class DuelVerbKeysTest {
         DeskAction.DUEL_COUNTER_DOWN to DuelVerb.COUNTER_DOWN,
         DeskAction.DUEL_TARGET to DuelVerb.TARGET,
         DeskAction.DUEL_ATTACK to DuelVerb.ATTACK,
+        // Phase D §5½: U, the Shortcut.
+        DeskAction.DUEL_SHORTCUT to DuelVerb.SHORTCUT,
     )
 
     /** `DuelRails.VERB_KEYS`, as it was written out. */
@@ -47,6 +49,7 @@ class DuelVerbKeysTest {
         DuelVerb.EXTRA to DeskAction.DUEL_EXTRA, DuelVerb.ATTACH to DeskAction.DUEL_ATTACH, DuelVerb.REVEAL to DeskAction.DUEL_REVEAL,
         DuelVerb.COUNTER_UP to DeskAction.DUEL_COUNTER_UP, DuelVerb.COUNTER_DOWN to DeskAction.DUEL_COUNTER_DOWN, DuelVerb.TARGET to DeskAction.DUEL_TARGET,
         DuelVerb.ATTACK to DeskAction.DUEL_ATTACK,
+        DuelVerb.SHORTCUT to DeskAction.DUEL_SHORTCUT,
     )
 
     @Test

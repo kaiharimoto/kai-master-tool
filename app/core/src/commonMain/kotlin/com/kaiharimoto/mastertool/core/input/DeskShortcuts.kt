@@ -237,6 +237,11 @@ enum class DeskAction {
     /** In the Battle Phase: attack with it, then click their monster or their life points (1.0.86). */
     DUEL_ATTACK,
     /**
+     * Shortcut (Phase D §5½): the card's written effect does its moves, its choices asked on the page. U, a free letter
+     * in the duel before (which opened Command mode, as every free letter still does).
+     */
+    DUEL_SHORTCUT,
+    /**
      * Command mode's voice (1.0.87, kai: "hold a key to talk"): held, the microphone listens; let go, what was
      * said is written out and shown as a move to confirm. A [HELD] action: pressed and let go by a hand only.
      */
@@ -585,6 +590,7 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("c", shift = true), DeskAction.DUEL_COUNTER_DOWN, DeskScope.DUEL, "Take a counter off it", repeatable = true),
         DeskShortcut(KeyChord("t"), DeskAction.DUEL_TARGET, DeskScope.DUEL, "Target it, or take the arrow back"),
         DeskShortcut(KeyChord("a", shift = true), DeskAction.DUEL_ATTACK, DeskScope.DUEL, "Attack with it: then click their monster, or their life points for a direct attack"),
+        DeskShortcut(KeyChord("u"), DeskAction.DUEL_SHORTCUT, DeskScope.DUEL, "Shortcut: its written effect does the moves, asking you each choice"),
         // Hold to speak (1.0.87). While typing in the command line M types an m ("m3"), so Alt M is the same key there.
         DeskShortcut(KeyChord("m"), DeskAction.DUEL_VOICE, DeskScope.DUEL, "Hold to speak a command; let go to send", hold = true),
         DeskShortcut(KeyChord("m", alt = true), DeskAction.DUEL_VOICE, DeskScope.DUEL, "Hold to speak a command, also while typing", allowedInTextInput = true, hold = true),

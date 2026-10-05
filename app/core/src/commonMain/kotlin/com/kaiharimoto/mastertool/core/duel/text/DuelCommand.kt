@@ -65,6 +65,12 @@ object DuelCommand {
          */
         data class Many(val parts: List<Actions>, val lines: List<String>) : Parsed
 
+        /**
+         * A Shortcut (Phase D §5½): a card's written effect used, or the chain resolved as written. The engine makes it, so
+         * the caller runs it with its own chooser — the person's window, or the line's answers ([ShortcutLine.answered]).
+         */
+        data class Shortcut(val ask: ShortcutAsk, val said: String) : Parsed
+
         /** A question about the table, answered in words through the asker's eyes ([DuelAnswer]); nothing moves. */
         data class Query(val kind: QueryKind, val theirs: Boolean = false, val arg: String = "", val uid: Int? = null) : Parsed
 
@@ -139,6 +145,8 @@ object DuelCommand {
         "discard random", "random oh to gy", "banish random ex down", "random h2 h4 kb", "ks h1",
         // The chain by keys, several cards at once (1.0.90, kai).
         "resolve all", "negate 2", "g gy1 h2 ban1", "k gy1 gy3", "kb gy1 gy3", "t om1 om2",
+        // Shortcut (Phase D §5½): a card's written effect; `use` stays Activate.
+        "u h2", "u h2 e2", "u h2 search", "u gy1 e2 target=om1", "resolve by shortcut", "resolve all by shortcut",
     )
 
     /** Heads whose words are free text: a `;` in them is theirs, not a join. */
@@ -421,8 +429,14 @@ object DuelCommand {
                         return one(DuelAction.GoFirst(seat, pick == "first"), if (pick == "first") "Go first" else "Go second")
                     }
                 }
-                // The whole chain, link by link (1.0.90, Shift Q): "resolve all", "resolve the whole chain".
-                "resolve", "res" -> if (rest.isNotEmpty() && rest.joinToString(" ") in RESOLVE_ALL) {
+                // The chain resolved as written (Phase D §5½): "resolve by shortcut", "resolve all by shortcut".
+                "resolve", "res" -> if (byShortcut(rest) != null) {
+                    if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to resolve")
+                    val (body, answers) = ShortcutAnswers.split(rest)
+                    val all = byShortcut(body) == true
+                    return Parsed.Shortcut(ShortcutAsk.Resolve(all, answers), if (all) "Resolve the whole chain by Shortcut" else "Resolve Chain Link ${s.chain.size} by Shortcut")
+                } else if (rest.isNotEmpty() && rest.joinToString(" ") in RESOLVE_ALL) {
+                    // The whole chain, link by link (1.0.90, Shift Q): "resolve all", "resolve the whole chain".
                     if (s.chain.isEmpty()) return Parsed.Problem("There is no chain to resolve")
                     return Parsed.Actions(DuelVerbs.resolveAll(s, catalog), "Resolve the whole chain (${s.chain.size} link${if (s.chain.size == 1) "" else "s"})")
                 } else if (bare || (rest.size == 1 && rest.single() in setOf("keep", "stay", "stays", "chain", "it"))) {
@@ -474,6 +488,9 @@ object DuelCommand {
                 }
             }
 
+            // ---- Shortcut (Phase D §5½): `u h2`, `u h2 e2`, `shortcut scout search pick=…` -----------------------------
+            if ((head == "shortcut" || head == "u") && !bare && !namesCard(lower)) return shortcut(rest)
+
             // ---- attacks, arrows, counters, materials ---------------------------------------------------
             if ((head == "attack" || head == "at" || " attacks " in " $lower ") && !namesCard(lower)) return attack(lower)
             // "a m3 om1" / "a m3 direct": Activate's key letter attacks only with two monsters, or direct (1.0.87).
@@ -495,6 +512,46 @@ object DuelCommand {
             }
             several(words)?.let { return it }
             return cardCommand(words)
+        }
+
+        /**
+         * A Shortcut line's card, its effect and the choices it gives: `u h2`, `u h2 e2`, `u h2 search`, `shortcut example
+         * scout e1 pick=example lamp`. The card is a coordinate or a name; whatever follows it is the effect, by its id or its
+         * short name ("e2" there is an effect, never the Extra Monster Zone). Only a card the seat sees: a Shortcut reads what
+         * the card is.
+         */
+        fun shortcut(rest: List<String>): Parsed {
+            val (body, answers) = ShortcutAnswers.split(rest)
+            if (body.isEmpty()) return Parsed.Problem("Which card's Shortcut? “u h2”, “u h2 e2”")
+            val (uid, used) = shortcutCard(body) ?: return when (val l = look(body.joinToString(" "), Want.ANY)) {
+                is Lookup.Many -> Parsed.Problem(manyWords(body.joinToString(" "), l))
+                is Lookup.None -> none(l)
+                is Lookup.One -> Parsed.Problem("Which card's Shortcut? “u h2”, “u h2 e2”")
+            }
+            if (!DuelSight.sees(s, uid, seat)) return Parsed.Problem("You cannot see that card: a Shortcut reads what the card is")
+            val effect = body.drop(used).joinToString(" ").trim().ifEmpty { null }
+            val byName = DuelNotation.parse(body.first()) == null
+            return Parsed.Shortcut(ShortcutAsk.Use(uid, effect, answers), "Shortcut: ${label(uid, byName)}${effect?.let { " · $it" } ?: ""}")
+        }
+
+        /**
+         * The card at the head of [body] and how many words named it: a coordinate is one word; a name is the longest run of
+         * words that is a card's name exactly, else the longest that names one card closely — so "example scout e1" is
+         * Example Scout and its effect e1.
+         */
+        fun shortcutCard(body: List<String>): Pair<Int, Int>? {
+            if (DuelNotation.parse(body.first()) != null) return (look(body.first()) as? Lookup.One)?.let { it.uid to 1 }
+            for (k in body.size downTo 1) {
+                val q = body.take(k).joinToString(" ")
+                val l = look(q, Want.ANY) as? Lookup.One ?: continue
+                if (catalog.nameOf(s.cards.getValue(l.uid)).equals(q, ignoreCase = true)) return l.uid to k
+            }
+            for (k in body.size downTo 1) {
+                val q = body.take(k).joinToString(" ")
+                val l = look(q, Want.ANY) as? Lookup.One ?: continue
+                if (NameScore.of(q, catalog.nameOf(s.cards.getValue(l.uid))) >= 70) return l.uid to k
+            }
+            return null
         }
 
         /** "negate" alone is 0 (the newest link); "2", "link 2", "chain link 2", "cl2", "l2" its number; anything else null. */
@@ -938,6 +995,8 @@ object DuelCommand {
             if (blind && (verb ?: DuelVerb.DEFAULT) !in BLIND_VERBS) return blindProblem(null)
             val v = verb ?: DuelVerb.DEFAULT
             if (v == DuelVerb.MOVE && placeZone == null) return Parsed.Problem("Move $name where? “move $query to m4”")
+            // "scout shortcut": the verb after the name is the same Shortcut, its effect asked.
+            if (v == DuelVerb.SHORTCUT) return Parsed.Shortcut(ShortcutAsk.Use(uid), "Shortcut: $name")
             val result = DuelVerbs.actions(s, seat, uid, v, catalog, placeZone, host)
             if (result.needsHost) return Parsed.Problem("Attach $name to which card? “attach $query to <card>”")
             if (result.needsTarget) return Parsed.Problem("Attack what with $name? “$query attacks <card>”, or “$query attacks directly”")
@@ -963,6 +1022,18 @@ object DuelCommand {
     }
 
     private val DIRECT = setOf("direct", "directly", "d", "dir", "lp", "face")
+
+    /** "resolve by shortcut" (false), "resolve all by shortcut" (true), or neither (null) — answers after it aside. */
+    private fun byShortcut(rest: List<String>): Boolean? {
+        val body = ShortcutAnswers.split(rest).first
+        if (body.size < 2 || body[body.size - 2] != "by" || body.last() !in setOf("shortcut", "shortcuts")) return null
+        val before = body.dropLast(2).joinToString(" ")
+        return when {
+            before.isEmpty() -> false
+            before in RESOLVE_ALL -> true
+            else -> null
+        }
+    }
 
     /** "resolve …" that resolves every link (1.0.90). */
     private val RESOLVE_ALL = setOf("all", "everything", "whole chain", "the whole chain", "the chain all", "chain all", "all links", "the lot", "it all")
@@ -1021,6 +1092,8 @@ object DuelCommand {
         "counter" to DuelVerb.COUNTER_UP, "uncounter" to DuelVerb.COUNTER_DOWN,
         "place" to DuelVerb.PLACE, "put" to DuelVerb.PLACE, "move" to DuelVerb.MOVE,
         "do" to DuelVerb.DEFAULT,
+        // Phase D §5½: the written effect's own word. `use` above stays Activate — a saved combo's step never changes meaning.
+        "shortcut" to DuelVerb.SHORTCUT,
     ) +
         // The duel's verb keys (`DeskShortcuts`, DUEL scope), as a head before a coordinate (1.0.87); Shift's verbs by two letters.
         DuelLetters.WORDS

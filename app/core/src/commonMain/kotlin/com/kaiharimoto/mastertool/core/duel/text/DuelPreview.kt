@@ -33,6 +33,10 @@ object DuelPreview {
         is Parsed.Actions -> actions(listOf(parsed), parsed, s, seat, catalog, secret)
         is Parsed.Many -> actions(parsed.parts, parsed, s, seat, catalog, secret)
         is Parsed.Ruling -> Preview(true, "Keep a house ruling: ${parsed.card?.let { "$it — " } ?: ""}${parsed.text}", emptyList(), emptySet(), emptyList(), null, emptyList(), parsed)
+        // The engine makes a Shortcut with the choices it asks for: the preview says what is asked, and lights the card.
+        is Parsed.Shortcut -> Preview(
+            true, parsed.said, emptyList(), setOfNotNull((parsed.ask as? ShortcutAsk.Use)?.uid), emptyList(), null, emptyList(), parsed,
+        )
         is Parsed.Query -> Preview(true, DuelAnswer.answer(parsed, s, seat, catalog, secret), emptyList(), setOfNotNull(parsed.uid), emptyList(), null, emptyList(), parsed)
         is Parsed.Ui -> {
             val words = when (parsed.kind) {

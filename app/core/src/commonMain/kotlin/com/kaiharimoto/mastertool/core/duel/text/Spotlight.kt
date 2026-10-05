@@ -169,6 +169,7 @@ object Spotlight {
                 if (!p.ok) problem = p.problem
             }
             is Parsed.Ui, is Parsed.Ruling -> rows += Row(RowKind.MOVE, p.words, line = text, uid = (parsed as? Parsed.Ui)?.uid)
+            is Parsed.Shortcut -> rows += Row(RowKind.MOVE, p.words, line = text, uid = (parsed.ask as? ShortcutAsk.Use)?.uid)
             is Parsed.Problem -> {
                 problem = p.problem
                 p.fixes.take(3).forEachIndexed { i, fix ->

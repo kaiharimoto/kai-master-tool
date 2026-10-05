@@ -20,6 +20,7 @@ import com.kaiharimoto.mastertool.core.duel.ViewCard
 import com.kaiharimoto.mastertool.core.duel.text.DuelWords
 import com.kaiharimoto.mastertool.core.duel.DuelCatalog
 import com.kaiharimoto.mastertool.core.duel.DuelFolds
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 
 /**
  * The host's side of a networked duel, pure: what a guest's intent comes to on the real table, and what
@@ -29,6 +30,12 @@ import com.kaiharimoto.mastertool.core.duel.DuelFolds
  * guest was never shown.
  */
 object DuelHost {
+
+    /**
+     * Shortcut at a networked table (Phase D §5½ 5): refused in words. The guest's own engine would need cards its view does
+     * not hold, and the host's would play moves the guest never saw chosen; the moves are made by hand there.
+     */
+    const val NO_SHORTCUTS = "Shortcuts are not played at a networked table: make the moves by hand"
 
     /** [actions] with every ref turned into a uid, or the reason one could not be. */
     fun resolve(s: DuelState, seat: Int, secret: Long, actions: List<DuelAction>): Pair<List<DuelAction>?, String?> {
@@ -107,7 +114,18 @@ object DuelHost {
      * other player (unless [force]), and opening one for the other player when their [windows] setting
      * asks for it.
      */
-    fun act(game: DuelGame, seat: Int, actions: List<DuelAction>, windows: Map<Int, String>, force: Boolean = false, at: Long = 0L, by: Provenance? = null): DuelGame.Result {
+    fun act(
+        game: DuelGame,
+        seat: Int,
+        actions: List<DuelAction>,
+        windows: Map<Int, String>,
+        force: Boolean = false,
+        at: Long = 0L,
+        by: Provenance? = null,
+        /** The engine's tags, when the moves are a Shortcut's: refused here ([NO_SHORTCUTS]). */
+        fx: List<FxTag?> = emptyList(),
+    ): DuelGame.Result {
+        if (fx.any { it != null }) return DuelGame.Result(game, NO_SHORTCUTS)
         val w = game.state.window
         val tableMoves = actions.any { !it.social && it !is DuelAction.Answer }
         if (w != null && w.opener == seat && tableMoves && !force) {

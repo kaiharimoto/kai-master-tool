@@ -12,11 +12,16 @@ import com.kaiharimoto.mastertool.core.duel.DuelState
 import com.kaiharimoto.mastertool.core.duel.Outcome
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
+import com.kaiharimoto.mastertool.core.duel.Shortcuts
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.effects.Chooser
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.duel.nameOf
 import com.kaiharimoto.mastertool.core.duel.text.DuelCommand
 import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
 import com.kaiharimoto.mastertool.core.duel.text.NameScore
+import com.kaiharimoto.mastertool.core.duel.text.ShortcutAnswers
+import com.kaiharimoto.mastertool.core.duel.text.ShortcutLine
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -49,9 +54,20 @@ object ComboCodec {
     fun path(deckId: String): String = "combos/${deckId.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.ifBlank { "deck" }}.json"
 }
 
-/** A combo played step by step: each step's actions, or where and why it stopped. */
-data class ComboRun(val steps: List<Pair<String, List<DuelAction>>>, val stoppedAt: Int? = null, val problem: String? = null) {
+/**
+ * A combo played step by step: each step's actions, or where and why it stopped. [fx]: a Shortcut step's engine tags, by
+ * the step's place in [steps], one per action — committed with it (`DuelGame.act`'s `fx`) so its entries carry them.
+ */
+data class ComboRun(
+    val steps: List<Pair<String, List<DuelAction>>>,
+    val stoppedAt: Int? = null,
+    val problem: String? = null,
+    val fx: Map<Int, List<FxTag?>> = emptyMap(),
+) {
     val ok: Boolean get() = problem == null
+
+    /** Step [i]'s tags: empty for a step made by hand. */
+    fun tags(i: Int): List<FxTag?> = fx[i].orEmpty()
 }
 
 object ComboRunner {
@@ -68,9 +84,23 @@ object ComboRunner {
      * Each step parsed on the table as the steps before it left it — dry-run all the way, so a combo
      * that would stop halfway says where before anything moves.
      */
-    fun plan(s: DuelState, seat: Int, steps: List<String>, catalog: DuelCatalog, secret: Long = 0L): ComboRun {
+    fun plan(
+        s: DuelState,
+        seat: Int,
+        steps: List<String>,
+        catalog: DuelCatalog,
+        secret: Long = 0L,
+        /** The table's written effects, for a Shortcut step (`u h2 e1 pick=…`); without them such a step stops the plan. */
+        shortcuts: Shortcuts? = null,
+        /** Who answers a Shortcut's choice its step does not settle; null: the plan stops and asks it back. */
+        guess: Chooser? = null,
+    ): ComboRun {
         var state = s
         val out = mutableListOf<Pair<String, List<DuelAction>>>()
+        val tags = mutableMapOf<Int, List<FxTag?>>()
+        // The engine's state carried along the plan: a Shortcut's own, else folded over the moves made by hand.
+        var written = shortcuts
+        fun byHand(before: DuelState, actions: List<DuelAction>) { written = written?.after(before, actions, seat) }
         steps.forEachIndexed { i, text ->
             // A combo's steps name cards, never places: copies on the field are taken in turn (anyCopy). [secret] is the
             // duel's (its seed), so `oh2` is the card the brief and DuelView show there (Phase C stage 2; it was 0: another order).
@@ -80,23 +110,40 @@ object ComboRunner {
                 is DuelCommand.Parsed.Ruling -> return ComboRun(out, i, "Step ${i + 1} (“$text”): a ruling is kept with duel_ruling, not played")
                 is DuelCommand.Parsed.Actions -> {
                     val (next, why) = DuelRules.applyAll(state, p.actions, seat)
-                    if (next == null) return ComboRun(out, i, "Step ${i + 1} (“$text”): $why")
+                    if (next == null) return ComboRun(out, i, "Step ${i + 1} (“$text”): $why", tags)
                     out += text to p.actions
+                    byHand(state, p.actions)
                     state = next
                 }
                 // Moves joined with ";": each its own step, so a phase change is never one gesture with a move (1.0.87).
                 is DuelCommand.Parsed.Many -> p.parts.forEachIndexed { k, part ->
                     val (next, why) = DuelRules.applyAll(state, part.actions, seat)
-                    if (next == null) return ComboRun(out, i, "Step ${i + 1} (“${p.lines.getOrElse(k) { text }}”): $why")
+                    if (next == null) return ComboRun(out, i, "Step ${i + 1} (“${p.lines.getOrElse(k) { text }}”): $why", tags)
                     out += p.lines.getOrElse(k) { text } to part.actions
+                    byHand(state, part.actions)
+                    state = next
+                }
+                // A Shortcut (Phase D §5½): the engine makes it with the choices the step gives, its tags kept with it.
+                is DuelCommand.Parsed.Shortcut -> {
+                    val sc = written ?: return ComboRun(out, i, "Step ${i + 1} (“$text”): $NO_SHORTCUTS", tags)
+                    val r = ShortcutLine.answered(p.ask, sc, state, seat, catalog, secret, guess)
+                    r.problem?.let { return ComboRun(out, i, "Step ${i + 1} (“$text”): $it", tags) }
+                    val (next, why) = DuelRules.applyAll(state, r.actions, seat)
+                    if (next == null || r.actions.isEmpty()) return ComboRun(out, i, "Step ${i + 1} (“$text”): ${why ?: "nothing to do"}", tags)
+                    tags[out.size] = r.tags
+                    out += text to r.actions
+                    written = sc.withFx(r.fx)
                     state = next
                 }
                 is DuelCommand.Parsed.Query, is DuelCommand.Parsed.Ui ->
-                    return ComboRun(out, i, "Step ${i + 1} (“$text”): a question or the table's chrome, not a move")
+                    return ComboRun(out, i, "Step ${i + 1} (“$text”): a question or the table's chrome, not a move", tags)
             }
         }
-        return ComboRun(out)
+        return ComboRun(out, fx = tags)
     }
+
+    /** A Shortcut step at a table with no written effects. */
+    const val NO_SHORTCUTS = Shortcuts.NONE_AT_TABLE
 
     /**
      * A planned line held to what a player may do to cards it cannot see ([DuelReach], Phase C): Ai's lines are, as the
@@ -153,14 +200,75 @@ object ComboRecorder {
     fun steps(start: DuelState, entries: List<DuelEntry>, catalog: DuelCatalog, seat: Int? = null, secret: Long = 0L): List<String> {
         var s = start
         val out = mutableListOf<String>()
-        entries.forEach { e ->
+        // A Shortcut is written back as one step (Phase D §5½), never as the moves the engine made: the whole group it made
+        // — a resolve-all's links made by hand too — is that one step, written as the group begins.
+        val kinds = entries.groupBy { it.group }.mapValues { (_, g) -> shortcutKind(g) }
+        val written = HashSet<Int>()
+        entries.forEachIndexed { k, e ->
             val after = (DuelRules.apply(s, e.action, e.seat) as? Outcome.Ok)?.state ?: s
             val before = s
             val knows: (Int) -> Boolean = if (seat == null) { _ -> true } else { uid -> knew(before, after, uid, seat) }
-            command(before, e.action, catalog, knows) { uid -> seat?.let { DuelNotation.coordOf(before, uid, it, secret) } }?.let { out += it }
+            val coord: (Int) -> String? = { uid -> seat?.let { DuelNotation.coordOf(before, uid, it, secret) } }
+            when {
+                e.group in written -> Unit
+                kinds[e.group] != null -> {
+                    written += e.group
+                    shortcut(before, entries.drop(k).takeWhile { it.group == e.group }, catalog, seat, secret)?.let { out += it }
+                }
+                else -> command(before, e.action, catalog, knows, coord)?.let { out += it }
+            }
             s = after
         }
         return out
+    }
+
+    /** Whether a group holds a Shortcut's use (true) or only a resolution as written (false), or neither (null): a summon's procedure. */
+    private fun shortcutKind(group: List<DuelEntry>): Boolean? {
+        val tags = group.mapNotNull { it.fx }
+        return when {
+            tags.any { it.part == FxTag.COST || it.part == FxTag.ACTIVATE } -> true
+            tags.any { it.part == FxTag.RESOLVE } -> false
+            else -> null
+        }
+    }
+
+    /**
+     * A Shortcut's [group] as one step, on the table [start] before it: `u <card> <effect>` with the cards and zones it chose
+     * (`pick=`, `target=`, `zone=`), so a combo makes the same choices against any shuffle; or `resolve by shortcut`
+     * (`resolve all by shortcut` when it resolved more than one link). Each card is named as [seat] knew it, else by its
+     * place; null when the card used cannot be written for [seat].
+     */
+    private fun shortcut(start: DuelState, group: List<DuelEntry>, catalog: DuelCatalog, seat: Int?, secret: Long): String? {
+        if (shortcutKind(group) == false) {
+            return if (group.count { it.action == DuelAction.ChainResolve } > 1) "resolve all by shortcut" else "resolve by shortcut"
+        }
+        val tag = group.mapNotNull { it.fx }.first { it.part == FxTag.COST || it.part == FxTag.ACTIVATE }
+        var name: String? = null
+        val picks = mutableListOf<String>()
+        val targets = mutableListOf<String>()
+        val zones = mutableListOf<String>()
+        var s = start
+        group.forEach { e ->
+            val before = s
+            val after = (DuelRules.apply(before, e.action, e.seat) as? Outcome.Ok)?.state ?: before
+            fun n(uid: Int): String? = when {
+                seat == null || knew(before, after, uid, seat) -> before.cards[uid]?.let { catalog.nameOf(it) }
+                else -> DuelNotation.coordOf(before, uid, seat, secret)
+            }
+            if (name == null && tag.uid in before.cards) name = n(tag.uid)
+            if (e.fx != null) when (val a = e.action) {
+                is DuelAction.ChainAdd -> a.targets.forEach { t -> n(t)?.let { targets += it } }
+                is DuelAction.Target -> if (a.on) a.to.forEach { t -> n(t)?.let { targets += it } }
+                is DuelAction.Move -> {
+                    if (a.uid != tag.uid) n(a.uid)?.let { if (it !in picks) picks += it }
+                    (a.to as? Place.Zone)?.let { z -> DuelNotation.slotCoord(z, e.seat ?: seat ?: 0)?.let { zones += it } }
+                }
+                else -> Unit
+            }
+            s = after
+        }
+        val card = name ?: return null
+        return "u $card ${tag.effect}" + ShortcutAnswers(pick = picks, target = targets.distinct(), zone = zones).words()
     }
 
     /** Whether [seat] knew [uid] across a move: seen before or after it, or a card of its own Deck or Extra Deck. */
