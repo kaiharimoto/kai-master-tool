@@ -397,6 +397,13 @@ object FxRef {
     val facts: FxFacts = FxFacts.of(cards)
     val book: ScriptBook = ScriptBook.all(scripts + chainScripts, facts::canonical)
 
+    /** Every reference script, [replace] standing in for the one of the same card (or added): a variant for one case. */
+    fun bookWith(vararg replace: CardScript): ScriptBook =
+        ScriptBook.all((scripts + chainScripts).filter { o -> replace.none { it.card == o.card } } + replace, facts::canonical)
+
+    /** [code]'s reference script. */
+    fun script(code: Int): CardScript = (scripts + chainScripts).first { it.card == code }
+
     fun card(code: Int): Card = cards.first { code in it.passcodes.map(CardId::value) }
 
     /** A card in a zone: [index] 0 is m1 (or the EMZ's left), in [pos]. */

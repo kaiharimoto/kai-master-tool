@@ -35,6 +35,11 @@ data class FxState(
     val specials: Map<Int, Set<Int>> = emptyMap(),
     /** Restrictions in force. */
     val restrictions: List<InForce> = emptyList(),
+    /**
+     * What each seat did this turn that a "the turn you activate this" condition asks about ([Effect.leaves]): its Normal
+     * Summons and Sets, its Special Summons (from the Extra Deck or not) and its activations.
+     */
+    val deeds: List<Deed> = emptyList(),
     /** Each chain link's effect, targets and bindings, in step with `DuelState.chain` (agent (b)). */
     val links: List<FxLink> = emptyList(),
     /** Triggers waiting to go on a chain (agent (b)). */
@@ -86,6 +91,7 @@ data class FxState(
         setCards = emptySet(),
         specials = emptyMap(),
         restrictions = restrictions.filter { it.restriction.until == Lock.UNTIL_DUEL },
+        deeds = emptyList(),
         links = emptyList(),
         pending = emptyList(),
         levels = levels.filter { it.until == Lock.UNTIL_DUEL },
@@ -116,7 +122,11 @@ data class FxState(
 @Serializable
 data class Declared(val kind: DeclareKind, val value: Int = 0, val word: String = "")
 
-/** A once-per-turn use: counted under [key] (`FxRules.optKey`), by [seat], of [card] (canonical) [effect] on [uid]. */
+/**
+ * A once-per-turn use: counted under [key] (`FxRules.optKey`), by [seat], of [card] (canonical) [effect] on [uid]. [link]:
+ * the chain link it was counted for while that link stands; [refunds]: "you can only activate" wording, given back when
+ * that activation is negated ([Opt.ByName.refunds]).
+ */
 data class OptUse(
     val seat: Int,
     val card: Int,
@@ -128,13 +138,21 @@ data class OptUse(
     val turn: Int,
     /** Once per Duel: never dropped at the turn's end. */
     val duel: Boolean = false,
+    val link: Int? = null,
+    val refunds: Boolean = false,
 )
+
+/** Something [seat] did this turn with [uid] ([FxState.deeds]): [ban] names it as a restriction would; [extra] from the Extra Deck. */
+data class Deed(val seat: Int, val uid: Int, val ban: Ban, val extra: Boolean = false, val link: Int? = null)
 
 /** "Normal Summon 1 more": for [seat], of a monster [filter] matches (judged as [source]'s controller would). */
 data class NormalGrant(val seat: Int, val source: Int, val filter: Filter = Filter.Any, val used: Boolean = false)
 
-/** A [restriction] in force on [seat] (absolute), left by [source]. */
-data class InForce(val restriction: Restriction, val seat: Int, val source: Int, val turn: Int)
+/**
+ * A [restriction] in force on [seat] (absolute), left by [source]. [lock]: the table's `Lock` that shows it; [link]: the
+ * chain link whose activation set it ([Effect.leaves]) while that link stands — lifted if that activation is negated.
+ */
+data class InForce(val restriction: Restriction, val seat: Int, val source: Int, val turn: Int, val lock: Int? = null, val link: Int? = null)
 
 /** A Level changed by an effect: set [to], or moved [by], while [uid] stays the instance [life], until [until]. */
 @Serializable

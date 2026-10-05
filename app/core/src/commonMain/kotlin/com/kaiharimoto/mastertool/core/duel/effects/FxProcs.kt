@@ -43,6 +43,16 @@ object FxProcs {
     /** The most material sets listed for one procedure. */
     const val MOST = 256
 
+    /**
+     * The most candidate sets one search looks at (the red team, D.md §9 "a pick of a whole Deck"): a Ritual or Fusion
+     * whose materials may come from a Deck walked every subset — billions — when none fit. Deterministic: the same sets
+     * in the same order are looked at every time, so the same table always gives the same answer.
+     */
+    const val MOST_TRIED = 20_000
+
+    /** How many more candidate sets a search may look at. */
+    private class Budget(var left: Int = MOST_TRIED)
+
     /** The face-up monsters [seat] controls: what Link, Synchro and Xyz Summons use. */
     fun fieldMaterials(t: FxTable, seat: Int): List<Int> =
         FxFilters.area(Area.MONSTERS, seat, t.state).filter { t.inst(it)?.faceUp == true }
@@ -106,13 +116,14 @@ object FxProcs {
 
     // ---- material sets -------------------------------------------------------------------------------------------------
 
-    /** Every subset of [pool] of a size in [sizes], in table order, smallest first. */
-    private fun subsets(pool: List<Int>, sizes: IntRange): Sequence<List<Int>> = sequence {
+    /** Every subset of [pool] of a size in [sizes], in table order, smallest first — no more than [budget] allows. */
+    private fun subsets(pool: List<Int>, sizes: IntRange, budget: Budget = Budget()): Sequence<List<Int>> = sequence {
         val n = pool.size
         for (k in sizes.first.coerceAtLeast(0)..minOf(sizes.last, n)) {
             if (k == 0) { yield(emptyList()); continue }
             val idx = IntArray(k) { it }
             while (true) {
+                if (budget.left-- <= 0) return@sequence
                 yield(idx.map { pool[it] })
                 var i = k - 1
                 while (i >= 0 && idx[i] == n - k + i) i--
@@ -183,15 +194,16 @@ object FxProcs {
         val scope = FxScope(t, seat, fusion)
         val pool = from.filter { it != fusion && t.card(it)?.monster == true }
         val out = LinkedHashSet<List<Int>>()
+        val budget = Budget()
         fun assign(i: Int, used: List<Int>) {
-            if (out.size >= MOST) return
+            if (out.size >= MOST || budget.left <= 0) return
             if (i == proc.materials.size) {
                 out += pool.filter { it in used }
                 return
             }
             val m = proc.materials[i]
             val fit = FxFilters.among(m.where, pool.filter { it !in used }, scope)
-            subsets(fit, m.least..minOf(m.most, fit.size)).forEach { pick -> if (pick.isNotEmpty() || m.least == 0) assign(i + 1, used + pick) }
+            subsets(fit, m.least..minOf(m.most, fit.size), budget).forEach { pick -> if (pick.isNotEmpty() || m.least == 0) assign(i + 1, used + pick) }
         }
         assign(0, emptyList())
         return out.toList()
@@ -205,7 +217,7 @@ object FxProcs {
         val level = t.card(ritual)?.level ?: return emptyList()
         val pool = from.filter { it != ritual && t.card(it)?.monster == true && t.level(it) != null }
         val out = ArrayList<List<Int>>()
-        for (set in subsets(pool, 1..pool.size.coerceAtMost(12))) {
+        for (set in subsets(pool, 1..pool.size.coerceAtMost(12), Budget())) {
             val levels = set.map { t.level(it) ?: 0 }
             val sum = levels.sum()
             val ok = when (rule) {
@@ -240,7 +252,7 @@ object FxProcs {
                 listOf(summon.copy(over = there != null)) + materials.filter { it != there }.map { DuelAction.Move(it, Place.Under(uid), how = HOW_MATERIAL) }
             }
             ProcKind.LINK, ProcKind.SYNCHRO, ProcKind.FUSION ->
-                materials.map { m -> DuelAction.Move(m, Place.Pile(t.inst(m)?.owner ?: 0, PileKind.GY), how = HOW_MATERIAL) } + summon
+                materials.map { m -> FxSteps.graveFor(t, m, t.inst(m)?.owner ?: 0).let { (to, p) -> DuelAction.Move(m, to, p, HOW_MATERIAL) } } + summon
             else -> listOf(summon)
         }
     }

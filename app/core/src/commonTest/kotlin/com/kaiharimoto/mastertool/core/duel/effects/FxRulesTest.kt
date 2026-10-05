@@ -78,7 +78,8 @@ class FxRulesTest {
         assertFalse(moves.any { it is FxMove.NormalSummon && it.uid == FxRef.uid(t, FxRef.FLASH) }, "a Spell is not summoned")
         val tinker = FxRef.uid(t, FxRef.TINKER)
         val lamp = FxRef.uid(t, FxRef.LAMP)
-        val chooser = FxRef.Answers({ d -> assertIs<Decision.Cards>(d); assertEquals(2 to 2, d.min to d.max); listOf(0, 1) }, { d -> assertIs<Decision.Zone>(d); listOf(1) })
+        // Both monsters it controls are the two Tributes it needs: one legal answer, never asked (D.md §2.5).
+        val chooser = FxRef.Answers({ d -> assertIs<Decision.Zone>(d); listOf(1) })
         val p = assertIs<FxPlay.Done>(FxEngine.play(t, 0, FxMove.NormalSummon(colossus), chooser))
         assertEquals(
             listOf(
@@ -111,7 +112,7 @@ class FxRulesTest {
         // A cancel commits nothing; an answer out of bounds is a cancel.
         val colossus = FxRef.uid(t, FxRef.COLOSSUS)
         assertEquals(FxPlay.Cancelled, FxEngine.play(t, 0, FxMove.NormalSummon(colossus), FxRef.Answers({ Chooser.CANCEL })))
-        assertEquals(FxPlay.Cancelled, FxEngine.play(t, 0, FxMove.NormalSummon(colossus), FxRef.Answers({ listOf(0) })), "two Tributes, not one")
+        assertEquals(FxPlay.Cancelled, FxEngine.play(t, 0, FxMove.NormalSummon(colossus), FxRef.Answers({ listOf(9) })), "a zone out of bounds")
         // A card the engine does not know is summoned by hand.
         val blank = t.copy(book = ScriptBook.EMPTY)
         assertFalse(FxEngine.moves(blank, 0).any { it is FxMove.NormalSummon && it.uid == FxRef.uid(t, FxRef.SCOUT) })

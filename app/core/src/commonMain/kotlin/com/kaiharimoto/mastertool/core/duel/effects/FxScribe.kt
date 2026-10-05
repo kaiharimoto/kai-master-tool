@@ -26,7 +26,7 @@ internal class FxStop(val why: String?) : RuntimeException(why ?: "cancelled") {
  * entry ([FxFold.read]) — so what the engine knows is exactly what its log says. Chance is stamped as the log will stamp
  * it: a shuffle by the duel's dice for its roll, a token's uid and a lock's id as `DuelIds` would give them.
  */
-internal class FxScribe(start: FxTable, private val chooser: Chooser, private val by: Int?) {
+internal class FxScribe(start: FxTable, private val chooser: Chooser, val by: Int?) {
     var t: FxTable = start
         private set
     val actions = ArrayList<DuelAction>()
@@ -60,14 +60,28 @@ internal class FxScribe(start: FxTable, private val chooser: Chooser, private va
      * bounds cancels the whole use.
      */
     fun ask(d: Decision): List<Int> {
-        single(d)?.let { return it }
+        single(d)?.let {
+            chooser.told(d, it)
+            return it
+        }
         val answer = chooser.choose(d)
         if (!Chooser.legal(d, answer)) throw FxStop.cancel()
         return answer
     }
 
+    /**
+     * An open name declaration ([Decision.Declare.open]): any card of the pool by [Chooser.name] — accepted when [fits]
+     * says it may be declared — or one of [Decision.Declare.among] by [ask]. Null: answered from the list, at [ask]'s index.
+     */
+    fun named(d: Decision.Declare, fits: (Int) -> Boolean): Int? {
+        val code = chooser.name(d) ?: return null
+        if (!fits(code)) throw FxStop.cancel()
+        return code
+    }
+
     /** The one legal answer to [d], or null when there is a choice to make. */
     private fun single(d: Decision): List<Int>? = when (d) {
+        is Decision.Declare -> if (!d.open && d.among.size == 1) listOf(0) else null
         is Decision.Cards -> when {
             d.max <= 0 -> emptyList()
             d.min == d.max && d.among.size == d.min -> d.among.indices.toList()
@@ -78,7 +92,6 @@ internal class FxScribe(start: FxTable, private val chooser: Chooser, private va
         is Decision.Order -> if (d.triggers.size <= 1) d.triggers.indices.toList() else null
         is Decision.YesNo -> null
         is Decision.Option -> if (d.among.size == 1) listOf(0) else null
-        is Decision.Declare -> if (d.among.size == 1) listOf(0) else null
     }
 
     fun done(prefix: List<FxEvent> = emptyList()): FxPlay.Done = FxPlay.Done(actions.toList(), tags.toList(), t.state, t.fx, prefix + events)

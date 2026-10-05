@@ -265,7 +265,7 @@ object FxRules {
     }
 
     /** Whether a restriction on [held] forbids [asked]: no Special Summons forbids those from the Extra Deck too. */
-    private fun bans(held: Ban, asked: Ban): Boolean = held == asked || (held == Ban.SPECIAL_SUMMON && asked == Ban.SPECIAL_SUMMON_FROM_EXTRA)
+    internal fun bans(held: Ban, asked: Ban): Boolean = held == asked || (held == Ban.SPECIAL_SUMMON && asked == Ban.SPECIAL_SUMMON_FROM_EXTRA)
 
     fun words(r: InForce): String {
         val what = when (r.restriction.ban) {
@@ -342,12 +342,40 @@ object FxRules {
         return if (used >= times) (if (opt == Opt.PerDuel) OPD_USED else OPT_USED) else null
     }
 
-    /** [fx] with [seat]'s use of [uid]'s [effect] counted under [opt] (nothing when there is no rule). */
-    fun use(t: FxTable, seat: Int, uid: Int, effect: String, opt: Opt?): FxState {
+    /**
+     * [fx] with [seat]'s use of [uid]'s [effect] counted under [opt] (nothing when there is no rule), for chain link [link]
+     * when it is an activation — so a negated activation can give back what "you can only activate" counted.
+     */
+    fun use(t: FxTable, seat: Int, uid: Int, effect: String, opt: Opt?, link: Int? = null): FxState {
         opt ?: return t.fx
         val card = t.code(uid) ?: return t.fx
         val life = t.fx.life(uid)
         val key = optKey(card, effect, opt, uid, life) ?: return t.fx
-        return t.fx.copy(uses = t.fx.uses + OptUse(seat, card, effect, key, uid, life, t.state.turn, duel = opt == Opt.PerDuel))
+        val refunds = (opt as? Opt.ByName)?.refunds == true
+        return t.fx.copy(uses = t.fx.uses + OptUse(seat, card, effect, key, uid, life, t.state.turn, duel = opt == Opt.PerDuel, link = link, refunds = refunds))
+    }
+
+    /**
+     * Why [seat] may not activate [e] of [uid] because of its own "the turn you activate this" conditions ([Effect.leaves]):
+     * the seat has already done this turn what one of them forbids. Null when it may.
+     */
+    fun conditionRefusal(t: FxTable, seat: Int, uid: Int, e: Effect): String? {
+        if (e.leaves.isEmpty() || e.kind == Kind.CONTINUOUS) return null
+        for (r in e.leaves) {
+            if (seat !in seatsOf(r.seat, seat)) continue
+            val done = t.fx.deeds.firstOrNull { d ->
+                d.seat == seat && !(r.ban == Ban.ACTIVATE && d.uid == uid) &&
+                    bans(r.ban, if (d.ban == Ban.SPECIAL_SUMMON && d.extra) Ban.SPECIAL_SUMMON_FROM_EXTRA else d.ban) &&
+                    (r.except == null || t.inst(d.uid) == null || !FxFilters.matches(r.except, d.uid, FxScope(t, seat, uid)))
+            } ?: continue
+            return "It cannot be activated the turn you ${deedWords(done)}" + (if (r.except != null) " other than as it allows." else ".")
+        }
+        return null
+    }
+
+    private fun deedWords(d: Deed): String = when (d.ban) {
+        Ban.NORMAL_SUMMON -> "Normal Summon or Set"
+        Ban.SPECIAL_SUMMON, Ban.SPECIAL_SUMMON_FROM_EXTRA -> if (d.extra) "Special Summon from the Extra Deck" else "Special Summon"
+        Ban.ACTIVATE -> "activate another card or effect"
     }
 }

@@ -62,9 +62,11 @@ sealed interface FxRun {
  * `DuelRules` as it is made and folded into `FxState` from its tagged entry ([FxScribe], [FxFold]). The summons
  * (`FxSummons`, an inherent summon's cost) and the chain (`FxChain`) run their steps here.
  *
- * - **Joins.** Steps joined by [Join.AND] or [Join.AND_IF_YOU_DO] are one batch, happening at the same time; [Join.THEN]
- *   and [Join.ALSO] begin a new batch. A dependent step ([Join.AND_IF_YOU_DO], [Join.THEN]) happens only if the step
- *   before it happened in full. Each action carries its batch ([FxMemo.batch]), which is what "last" reads.
+ * - **Joins** (YGOrg, "Demystifying Rulings, Part 5: Conjunctions"). Steps joined by [Join.AND], [Join.AND_IF_YOU_DO] or
+ *   [Join.WITH] are one batch, happening at the same time; [Join.THEN] and [Join.ALSO] begin a new batch. A dependent step
+ *   ([Join.AND_IF_YOU_DO], [Join.THEN]) happens only if the step before it happened in full. A run of steps joined by
+ *   [Join.AND] happens both or neither: when one of them cannot happen, none does. Each action carries its batch
+ *   ([FxMemo.batch]), which is what "last" reads.
  * - **Choices** are the [Chooser]'s, asked only when there is more than one legal answer: which cards (a pick's
  *   candidates, judged by `FxFilters` through the acting seat's eyes, at most [Pick.MOST]), a zone, a position, an
  *   option, a declaration. "Up to n" is 1 to n. A pick of [Pick.all] or [Pick.top] is no choice.
@@ -81,6 +83,12 @@ sealed interface FxRun {
  * - [Op.Unknown] is refused (an effect holding one is never offered: `FxWalk.unread`).
  */
 object FxSteps {
+    /**
+     * How deep steps may nest ([Op.Choose], [Op.If]) for the engine to run them (D.md §3.4 lets a script nest 6 deep; a
+     * script nested deeper than this is never read: `FxWalk.unread`), so a hostile script cannot overflow the stack.
+     */
+    const val MOST_DEPTH = 16
+
     /** Runs [steps] for [act] on [t]. */
     fun run(t: FxTable, act: FxAct, steps: List<Step>, chooser: Chooser): FxRun {
         if (steps.isEmpty()) return FxRun.Done(emptyList(), emptyList(), t.state, t.fx, bound = act.bound, declared = act.declared)
@@ -131,6 +139,16 @@ object FxSteps {
      */
     fun able(t: FxTable, act: FxAct, steps: List<Step>): Boolean = steps.all { able(t, act, it.op) }
 
+    /** The last index of the run of steps joined by [Join.AND] that starts at [from]: they happen both or neither. */
+    fun andRun(steps: List<Step>, from: Int): Int {
+        var j = from
+        while (j + 1 < steps.size && steps[j + 1].link == Join.AND) j++
+        return j
+    }
+
+    /** What must be able to happen for an effect that does [steps] to be activated: its first step and the "and" run it starts. */
+    fun firstPart(steps: List<Step>): List<Step> = if (steps.isEmpty()) steps else steps.subList(0, andRun(steps, 0) + 1)
+
     /** Whether [targets] each have enough legal targets now, none chosen twice. */
     fun ableTargets(t: FxTable, act: FxAct, targets: List<Pick>): Boolean {
         val scope = act.scope(t)
@@ -159,7 +177,7 @@ object FxSteps {
             is Op.Add -> enough(op.pick) { !inPile(s, it, PileKind.HAND) }
             is Op.Send -> enough(op.pick) { !inPile(s, it, PileKind.GY) }
             is Op.Discard -> enough(handPick(op.pick)) { inPile(s, it, PileKind.HAND) }
-            is Op.Destroy -> enough(op.pick) { u -> s.placeOf(u).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } }
+            is Op.Destroy -> enough(op.pick) { destructible(s, it) }
             is Op.Banish -> enough(op.pick) { !inPile(s, it, PileKind.BANISHED) }
             is Op.Tribute -> enough(tributePick(op.pick))
             is Op.Return -> enough(op.pick)
@@ -181,7 +199,8 @@ object FxSteps {
             is Op.PayLp -> FxConds.value(op.n, scope)?.let { s.seats[seat].lp >= it } ?: false
             is Op.Counter -> enough(op.pick) { s.placeOf(it) is Place.Zone }
             is Op.Choose -> op.options.any { o -> o.isEmpty() || able(t, act, o.first().op) }
-            is Op.Declare -> declarable(t, act, op).isNotEmpty()
+            // Any card that exists may be named, on the table or not: a name declaration can always be made.
+            is Op.Declare -> op.kind == DeclareKind.NAME || declarable(t, act, op).isNotEmpty()
             is Op.Lp, is Op.NormalSummonAgain, is Op.If, is Op.Restrict -> true
             is Op.Unknown -> false
         }
@@ -190,6 +209,28 @@ object FxSteps {
     // ---- shared look-ups --------------------------------------------------------------------------------------------
 
     private fun inPile(s: DuelState, uid: Int, kind: PileKind) = s.placeOf(uid).let { it is Place.Pile && it.kind == kind }
+
+    /**
+     * Whether [uid] can be destroyed where it is: on the field, or in a hand, a Main Deck or an Extra Deck when the pick
+     * reaches there — never in the GY or banished (Yugipedia, "Destroy").
+     */
+    internal fun destructible(s: DuelState, uid: Int): Boolean = when (val p = s.placeOf(uid)) {
+        is Place.Zone -> true
+        is Place.Pile -> p.kind == PileKind.HAND || p.kind == PileKind.DECK || p.kind == PileKind.EXTRA
+        else -> false
+    }
+
+    /**
+     * Where [uid], owned by [owner], goes when it would be sent to the GY: a Pendulum Monster leaving the field — a Monster
+     * Zone or a Pendulum Zone, face-up or face-down, destroyed, Tributed, used as material or sent — goes face-up to its
+     * owner's Extra Deck instead (Yugipedia, "Pendulum Monster", citing the rulebook); anything else to the GY.
+     */
+    internal fun graveFor(t: FxTable, uid: Int, owner: Int): Pair<Place.Pile, CardPosition?> {
+        val c = t.card(uid)
+        val onField = t.state.placeOf(uid) is Place.Zone
+        return if (onField && c != null && c.monster && c.pendulum && t.inst(uid)?.token != true) Place.Pile(owner, PileKind.EXTRA) to CardPosition.FACE_UP_ATK
+        else Place.Pile(owner, PileKind.GY) to null
+    }
 
     /** A discard is from the hand: your own unless it says. */
     internal fun handPick(p: Pick): Pick = if (p.from.isEmpty() && p.ref == null) p.copy(from = listOf(Spot(Rel.YOU, Area.HAND))) else p
@@ -260,7 +301,21 @@ object FxSteps {
         }
     }
 
-    /** What [op] may declare for [act]: names of the cards its seat can see (its own, and what is public), or a fixed list. */
+    /**
+     * Whether the card [code] (any printing; on the table or not) may be declared for [op]: a card of the pool — no Token
+     * (Yugipedia, "Declare", citing Konami's FAQ) — that [Op.Declare.among] lets be named, judged on its printed facts.
+     */
+    internal fun nameable(t: FxTable, act: FxAct, op: Op.Declare, code: Int): Boolean {
+        val c = t.facts[code] ?: return false
+        if (CardFrame.TOKEN in c.frames) return false
+        return op.among == null || FxFilters.printed(op.among, c, t.book.script(code), act.scope(t))
+    }
+
+    /**
+     * Names to start a declaration from ([Decision.Declare.among]): the cards [act]'s seat can see (its own, and what is
+     * public) — never a hidden card of the other seat's; for a Type, an Attribute or a Level, the fixed list. A name may
+     * be any card that exists ([nameable]), which the chooser gives by [Chooser.name].
+     */
     internal fun declarable(t: FxTable, act: FxAct, op: Op.Declare): List<Declared> = when (op.kind) {
         DeclareKind.NAME -> {
             val scope = act.scope(t)
@@ -338,9 +393,12 @@ object FxSteps {
         }
 
         /** [min]–[max] of [among], chosen for [purpose] (a cost's own pick is a [Purpose.COST]): the uids. */
-        fun cards(verb: String, among: List<Int>, min: Int, max: Int, purpose: Purpose, to: Landing? = null, who: Rel = Rel.YOU): List<Int> {
+        fun cards(verb: String, among: List<Int>, min: Int, max: Int, purpose: Purpose, to: Landing? = null, who: Rel = Rel.YOU, looked: List<Spot> = emptyList()): List<Int> {
             val why = if (act.part == FxTag.COST && purpose != Purpose.TARGET) Purpose.COST else purpose
-            val d = Decision.Cards(why(verb, who), among, min, max, why, to, among.map { s.placeOf(it) }, source, stepWords(), hidden(among))
+            val d = Decision.Cards(
+                why(verb, who), among, min, max, why, to, among.map { s.placeOf(it) }, source, stepWords(), hidden(among),
+                looked = looked, by = if (who == Rel.THEM) 1 - seat else null,
+            )
             return sc.ask(d).map { among[it] }
         }
 
@@ -364,12 +422,22 @@ object FxSteps {
         fun steps(list: List<Step>): Boolean {
             var prev = true
             var all = true
+            // The run of "and" steps the current one belongs to, and whether it has failed: both or neither.
+            var runEnd = -1
+            var runFailed = false
+            if (depth >= MOST_DEPTH) throw FxStop.refuse("This effect nests its steps deeper than $MOST_DEPTH.")
             depth++
             list.forEachIndexed { i, step ->
                 if (depth == 1) at = i
                 if (i > 0 && (step.link == Join.THEN || step.link == Join.ALSO)) batch++
+                if (i > runEnd) {
+                    runEnd = andRun(list, i)
+                    // "A and B": both must be able to happen at resolution, or neither does (YGOrg, Part 5).
+                    runFailed = runEnd > i && !able(t, act.copy(bound = bound.toMap(), declared = declared.toMap()), list.subList(i, runEnd + 1))
+                }
                 val needs = step.link == Join.AND_IF_YOU_DO || step.link == Join.THEN
-                val ok = if (needs && !prev) false else op(step.op)
+                val ok = if (runFailed || (needs && !prev)) false else op(step.op)
+                if (!ok && i < runEnd) runFailed = true
                 prev = ok
                 all = all && ok
             }
@@ -386,7 +454,7 @@ object FxSteps {
                 val max = if (p.all) c.size else minOf(p.n.coerceIn(1, Pick.MOST), c.size)
                 val min = if (p.all) c.size else need
                 at = i
-                val chosen = cards("Target", c, min, max, Purpose.TARGET, who = p.who)
+                val chosen = cards("Target", c, min, max, Purpose.TARGET, who = p.who, looked = p.from)
                 bound[targetKey(i)] = chosen
                 p.bind?.let { bound[it] = chosen }
                 all += chosen
@@ -422,7 +490,7 @@ object FxSteps {
                     val need = pick.n.coerceIn(1, Pick.MOST)
                     val max = minOf(need, c.size)
                     val min = if (pick.upTo) 1 else max
-                    chosen = cards(verb, c, min, max, purpose, to, pick.who)
+                    chosen = cards(verb, c, min, max, purpose, to, pick.who, pick.from)
                     whole = chosen.size >= (if (pick.upTo) 1 else need)
                 }
             }
@@ -525,7 +593,12 @@ object FxSteps {
             }
             val (chosen, whole) = choose(pick, verb, purpose, landing(dest), keep)
             if (chosen.isEmpty()) return false
-            chosen.forEach { u -> emit(DuelAction.Move(u, redirect(u, Place.Pile(owner(u), kind, at)), pos(u, kind, pos), how)) }
+            chosen.forEach { u ->
+                if (kind == PileKind.GY) {
+                    val (to, p) = graveFor(t, u, owner(u))
+                    emit(DuelAction.Move(u, to, p, how))
+                } else emit(DuelAction.Move(u, redirect(u, Place.Pile(owner(u), kind, at)), pos(u, kind, pos), how))
+            }
             return whole
         }
 
@@ -561,16 +634,12 @@ object FxSteps {
         }
 
         private fun destroy(pick: Pick): Boolean {
-            // Only a card on the field, or in a hand, is destroyed.
-            val (chosen, whole) = choose(pick, "Destroy", Purpose.DESTROY, landing(Dest.GY)) { u -> s.placeOf(u).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } }
+            // A card on the field, or in a hand or a Deck the pick reaches; never in the GY or banished.
+            val (chosen, whole) = choose(pick, "Destroy", Purpose.DESTROY, landing(Dest.GY)) { destructible(s, it) }
             if (chosen.isEmpty()) return false
             chosen.forEach { u ->
-                val c = t.card(u)
-                val onField = s.placeOf(u) is Place.Zone
-                // A Pendulum Monster destroyed on the field goes to the Extra Deck face-up.
-                val to = if (onField && c?.pendulum == true && c.monster && t.inst(u)?.faceUp == true) Place.Pile(owner(u), PileKind.EXTRA)
-                else Place.Pile(owner(u), PileKind.GY)
-                emit(DuelAction.Move(u, to, if (to.kind == PileKind.EXTRA) CardPosition.FACE_UP_ATK else null, FxFold.HOW_DESTROY))
+                val (to, p) = graveFor(t, u, owner(u))
+                emit(DuelAction.Move(u, to, p, FxFold.HOW_DESTROY))
             }
             return whole
         }
@@ -660,7 +729,7 @@ object FxSteps {
             if (options.isEmpty()) return false
             val uid = cards("Fusion Summon", options.map { it.first }, 1, 1, Purpose.SUMMON, landing(Dest.MONSTER_ZONE, positions(Pos.EITHER))).single()
             val set = materials(uid, options.first { it.first == uid }.second, "Fusion Summon")
-            set.forEach { m -> emit(DuelAction.Move(m, Place.Pile(owner(m), PileKind.GY), how = FxProcs.HOW_MATERIAL), FxMemo(summon = ProcKind.FUSION)) }
+            set.forEach { m -> graveFor(t, m, owner(m)).let { (to, p) -> emit(DuelAction.Move(m, to, p, FxProcs.HOW_MATERIAL), FxMemo(summon = ProcKind.FUSION)) } }
             val z = zone(uid, FxRules.summonZones(t, seat, uid), positions(Pos.EITHER)) ?: throw FxStop.refuse("No zone is free for ${name(uid)}.")
             emit(DuelAction.Move(uid, z, position(uid, positions(Pos.EITHER)), "fusion"))
             return true
@@ -671,7 +740,7 @@ object FxSteps {
             if (options.isEmpty()) return false
             val uid = cards("Ritual Summon", options.map { it.first }, 1, 1, Purpose.SUMMON, landing(Dest.MONSTER_ZONE, positions(Pos.EITHER))).single()
             val set = materials(uid, options.first { it.first == uid }.second, "Ritual Summon")
-            set.forEach { m -> emit(DuelAction.Move(m, Place.Pile(owner(m), PileKind.GY), how = FxSummons.HOW_TRIBUTE), FxMemo(summon = ProcKind.RITUAL)) }
+            set.forEach { m -> graveFor(t, m, owner(m)).let { (to, p) -> emit(DuelAction.Move(m, to, p, FxSummons.HOW_TRIBUTE), FxMemo(summon = ProcKind.RITUAL)) } }
             val z = zone(uid, FxRules.summonZones(t, seat, uid), positions(Pos.EITHER)) ?: throw FxStop.refuse("No zone is free for ${name(uid)}.")
             emit(DuelAction.Move(uid, z, position(uid, positions(Pos.EITHER)), "ritual"))
             return true
@@ -738,7 +807,16 @@ object FxSteps {
             val n = negatable(t, act, op) ?: return false
             val card = s.chain[n - 1].uid
             if (op.what == NegWhat.ACTIVATION) {
-                DuelVerbs.negate(s, seat, n, t.facts.catalog()).actions.forEach { emit(it) }
+                // The locks its "the turn you activate this" conditions set come off with it: as if never activated.
+                val locks = t.fx.restrictions.filter { it.link == n }.mapNotNull { it.lock }
+                DuelVerbs.negate(s, seat, n, t.facts.catalog()).actions.forEach { a ->
+                    // A negated Pendulum card leaves its zone for the Extra Deck, face-up, as any would-be GY trip from the field.
+                    if (a is DuelAction.Move && a.to is Place.Pile && (a.to as Place.Pile).kind == PileKind.GY) {
+                        val (to, p) = graveFor(t, a.uid, owner(a.uid))
+                        emit(a.copy(to = to, pos = p ?: a.pos))
+                    } else emit(a)
+                }
+                locks.forEach { emit(DuelAction.Unlock(it)) }
             } else {
                 emit(DuelAction.Negate(seat, n), FxMemo(effectOnly = true))
             }
@@ -790,8 +868,18 @@ object FxSteps {
 
         private fun declare(op: Op.Declare): Boolean {
             val among = declarable(t, act, op)
-            if (among.isEmpty()) return false
-            val d = among[sc.ask(Decision.Declare(op.kind, among.map { it.word }, source)).single()]
+            val open = op.kind == DeclareKind.NAME
+            if (among.isEmpty() && !open) return false
+            val ask = Decision.Declare(op.kind, among.map { it.word }, source, open = open)
+            // A name: any card that exists may be declared, on the table or not (Yugipedia, "Declare").
+            val named = if (open) sc.named(ask) { code -> nameable(t, act, op, code) } else null
+            val d = if (named != null) {
+                val code = t.book.canonical(named)
+                Declared(DeclareKind.NAME, value = code, word = t.facts[named]?.name ?: t.facts[code]?.name ?: "$code")
+            } else {
+                if (among.isEmpty()) throw FxStop.cancel()
+                among[sc.ask(ask).single()]
+            }
             declared[op.bind] = d
             emit(DuelAction.Note("${name(act.uid)}: declared ${d.word}.", seat), FxMemo(declared = mapOf(op.bind to d)))
             return true

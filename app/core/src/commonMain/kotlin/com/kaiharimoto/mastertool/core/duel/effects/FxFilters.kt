@@ -86,6 +86,34 @@ object FxFilters {
         }
     }
 
+    /**
+     * Whether a card off the table, [c] (its printed facts, and its [script] for "always treated as"), matches [f] — what a
+     * name declaration may name ([Op.Declare.among]). Only what is printed is judged: where a card is, its face and who
+     * controls it say nothing of a card that is only a name, so they hold; a filter about a bound card, a declaration or
+     * the lowest and highest among cards cannot be judged of a name alone and does not hold.
+     */
+    fun printed(f: Filter, c: FxCard, script: CardScript?, scope: FxScope): Boolean = when (f) {
+        Filter.Any, Filter.NotSelf, Filter.FaceUp, Filter.FaceDown, is Filter.Controller -> true
+        Filter.Self, is Filter.Same, is Filter.Lowest, is Filter.Highest, is Filter.Declared, is Filter.Unknown -> false
+        is Filter.Name -> scope.t.book.canonical(c.code) == scope.t.book.canonical(f.card)
+        is Filter.NameHas -> {
+            val w = f.word.trim().lowercase()
+            w.isNotEmpty() && (phrase(c.name.lowercase(), w) || script?.alsoNamed?.any { it.trim().lowercase() == w || phrase(it.lowercase(), w) } == true)
+        }
+        is Filter.Kind -> c.type == f.type && (f.sub == null || c.isSpellSub(f.sub))
+        is Filter.Frame -> f.frame in c.frames
+        is Filter.Attribute -> c.attribute?.let { it in f.any } == true
+        is Filter.Race -> c.race?.let { r -> f.any.any { it.equals(r, ignoreCase = true) } } == true
+        is Filter.Level -> c.level?.let { it in f.span } == true
+        is Filter.Rank -> c.rank?.let { it in f.span } == true
+        is Filter.LinkRating -> c.link?.let { it in f.span } == true
+        is Filter.Atk -> c.atk?.let { it in f.span } == true
+        is Filter.Def -> c.def?.let { it in f.span } == true
+        is Filter.All -> f.all.all { printed(it, c, script, scope) }
+        is Filter.AnyOf -> f.any.any { printed(it, c, script, scope) }
+        is Filter.Not -> f.not !is Filter.Unknown && !printed(f.not, c, script, scope)
+    }
+
     /** The cards of [uids] that match [f], in their order, the lowest and highest judged among them. */
     fun among(f: Filter, uids: List<Int>, scope: FxScope): List<Int> {
         if (f is Filter.All) {

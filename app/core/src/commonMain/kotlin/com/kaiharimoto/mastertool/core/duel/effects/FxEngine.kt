@@ -53,6 +53,10 @@ sealed interface Decision {
         val effect: FxSource? = null,
         val step: String? = null,
         val hidden: Boolean = false,
+        /** The places the pick looked in ([Pick.from]: a seat and an area), so a window can show a place with nothing legal. */
+        val looked: List<Spot> = emptyList(),
+        /** The seat that chooses, when it is not the one using the effect ("your opponent chooses"); null: the user. */
+        val by: Int? = null,
     ) : Decision
 
     /** Which of [among] (only the legal, free zones) [card] goes to, and the [positions] it may take there. */
@@ -66,17 +70,25 @@ sealed interface Decision {
     /** Which of [among] [card] is summoned in: face-up Attack or Defense, or face-down Defense where it is Set. */
     data class Position(val card: Int, val among: List<CardPosition>, val effect: FxSource? = null) : Decision
 
-    /** The order a player puts their own simultaneous triggers on the chain: the answer is a permutation. [labels]: each one's card and effect. */
-    data class Order(val triggers: List<Pending>, val labels: List<String> = emptyList()) : Decision
+    /**
+     * The order a player puts their own simultaneous triggers on the chain: the answer is a permutation. [labels]: each
+     * one's card and effect, never naming a card hidden from the seat that moves. [by]: the seat whose triggers they are.
+     */
+    data class Order(val triggers: List<Pending>, val labels: List<String> = emptyList(), val by: Int? = null) : Decision
 
-    /** An optional trigger, a "you can …", chaining more. */
-    data class YesNo(val why: String, val effect: FxSource? = null) : Decision
+    /** An optional trigger, a "you can …", chaining more. [by]: the seat whose choice it is (a trigger's controller). */
+    data class YesNo(val why: String, val effect: FxSource? = null, val by: Int? = null) : Decision
 
     /** One of [among]: a [Op.Choose]'s options, and which of a card's Shortcuts to run. */
     data class Option(val among: List<String>, val effect: FxSource? = null) : Decision
 
-    /** A declaration ([Op.Declare]): one of [among] — card names (searchable), Types, Attributes or Levels. */
-    data class Declare(val kind: DeclareKind, val among: List<String>, val effect: FxSource? = null) : Decision
+    /**
+     * A declaration ([Op.Declare]): one of [among] — card names, Types, Attributes or Levels. [open]: a card name, where
+     * **any card that exists may be declared** (Yugipedia, "Declare", citing the OCG Perfect Rulebook): [among] is then
+     * only the names on the table the seat can see, a start for the search, and the chooser may answer with any card of
+     * the pool through [Chooser.name].
+     */
+    data class Declare(val kind: DeclareKind, val among: List<String>, val effect: FxSource? = null, val open: Boolean = false) : Decision
 }
 
 /**
@@ -86,6 +98,19 @@ sealed interface Decision {
  */
 fun interface Chooser {
     fun choose(d: Decision): List<Int>
+
+    /**
+     * An open name declaration ([Decision.Declare.open]) answered by any card of the pool: its passcode, or null to answer
+     * from [Decision.Declare.among] by [choose] instead. The engine accepts a passcode the pool knows that matches what the
+     * effect lets be declared, and cancels on any other.
+     */
+    fun name(d: Decision.Declare): Int? = null
+
+    /**
+     * [d] was settled without asking — it had one legal answer, [answer] (D.md §2.5) — so a chooser reading answers from a
+     * line (`zone=`, `pos=`, `pick=`) can keep its answers in step with the decisions.
+     */
+    fun told(d: Decision, answer: List<Int>) {}
 
     companion object {
         /** The answer that cancels the whole use. */

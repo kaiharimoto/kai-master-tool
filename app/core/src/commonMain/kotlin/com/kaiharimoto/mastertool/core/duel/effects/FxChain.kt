@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel.effects
 
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelSight
 import com.kaiharimoto.mastertool.core.duel.DuelVerbs
 import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
@@ -15,9 +16,13 @@ import com.kaiharimoto.mastertool.core.duel.ZoneKind
  *   (ignitions, Normal, Field, Continuous and Ritual Spells); speed-2 and speed-3 effects are used whenever their
  *   conditions allow, by either player (house ruling: the other player's chance to act in an open state, as at a phase's
  *   end, is not modelled apart).
- * - **Activation.** Once-per-turn is counted at activation (a negated activation still used it); then the card's own move
- *   (a Spell or Trap from the hand to its zone, a set one turned face-up), the costs paid in full ([FxTag.COST]), the
- *   targets chosen ([FxTag.ACTIVATE]), and the link (`ChainAdd`, carrying its targets and, in its memo, every binding).
+ * - **Activation.** Once-per-turn is counted at activation — "use" wording stays counted when the activation is negated,
+ *   "you can only activate" wording is given back ([Opt.ByName.refunds]); then the card's own move (a Spell or Trap from
+ *   the hand to its zone, a set one turned face-up), the costs paid in full ([FxTag.COST]), the targets chosen
+ *   ([FxTag.ACTIVATE]), the link (`ChainAdd`, carrying its targets and, in its memo, every binding), and its "the turn you
+ *   activate this" conditions as locks ([Effect.leaves]), lifted if the activation is negated. It may be activated only
+ *   when its cost can be paid, its targets found and its first part — the first step and every step joined to it by
+ *   "and" — can happen.
  * - **Adding a link.** Only at spell speed 2 or more, and never below the newest link's speed (speed 3 answers only speed
  *   3); never while the chain resolves; at most [MOST_LINKS]. A Quick Effect that answers something ([Effect.respond])
  *   needs a newest link that matches it.
@@ -25,14 +30,15 @@ import com.kaiharimoto.mastertool.core.duel.ZoneKind
  *   passes in a row and the newest link resolves. A one-player table passes once. [Resolve][FxMove.Resolve] resolves the
  *   newest link whatever priority says: the manual table's players keep their own.
  * - **Resolution.** A negated link does nothing. Otherwise its targets are checked again — one that moved since it was
- *   targeted (a new instance) or no longer matches its pick is dropped, and the log says so — and its steps run; then
- *   the restrictions it leaves. The link leaves through `DuelVerbs.resolve`, which, with the last link, sends the chain's
- *   own Normal, Quick-Play and Ritual Spells and Normal and Counter Traps to the GY: the one list.
- * - **Triggers** ([gather]) wait for the chain or the action to be over, then form a new chain by SEGOC ([segoc]): the turn
- *   player's mandatory, their optional, the other's mandatory, the other's optional, each player ordering their own
- *   ([Decision.Order]) and saying yes or no to each optional one ([Decision.YesNo]). An optional `WHEN` trigger whose event
- *   was not the last thing to happen misses the timing; `IF` and mandatory triggers never do. A trigger let go is said in
- *   the log ([FxTag.SKIP]). A trigger on an activation ([Event.ACTIVATED]) answers it at once instead, as a response.
+ *   targeted (a new instance) or no longer matches its pick is dropped, and the log says so — and its steps run. The
+ *   link leaves through `DuelVerbs.resolve`, which, with the last link, sends the chain's own Normal, Quick-Play and
+ *   Ritual Spells and Normal and Counter Traps to the GY: the one list.
+ * - **Triggers** ([gather]) wait for the chain or the action to be over, then form a new chain by SEGOC ([segoc]), in the
+ *   rulebook's order: the turn player's mandatory, the other's mandatory, the turn player's optional, the other's
+ *   optional, each player ordering their own ([Decision.Order]) and saying yes or no to each optional one
+ *   ([Decision.YesNo]). An optional `WHEN` trigger whose event was not the last thing to happen misses the timing; `IF`
+ *   and mandatory triggers never do. A trigger let go is said in the log ([FxTag.SKIP]). A trigger on an activation
+ *   ([Event.ACTIVATED]) is spell speed 1 like any other: it waits for that chain to be over, never answers it.
  * - **Summons start no chain**: their triggers gather afterwards (`FxEngine.play`).
  *
  * Bounds (§7): a chain of at most [MOST_LINKS] links, at most [MOST_TRIGGERS] triggers waiting at once, a thousand actions
@@ -101,7 +107,7 @@ object FxChain {
         val inst = t.inst(uid) ?: return "No such card."
         val script = t.script(uid) ?: return "The engine has no written effect for this card: use it by hand."
         val e = script.effect(effect) ?: return "It has no effect $effect."
-        if (FxWalk.unread(e)) return "This effect is written in a newer build's words."
+        if (FxWalk.unread(e)) return if (FxWalk.tooDeep(e)) "This effect nests deeper than the engine reads." else "This effect is written in a newer build's words."
         if (e.kind == Kind.CONTINUOUS) return "A continuous effect is never activated: it applies while the card is face-up."
         val place = s.placeOf(uid) ?: return "That card has left the duel."
         if (FxFilters.controller(uid, s) != seat) return "Only its controller uses it."
@@ -123,13 +129,11 @@ object FxChain {
         val waiting = t.fx.pending.any { it.uid == uid && it.effect == effect }
         val mine = s.solo || s.active == seat
         if (e.kind == Kind.TRIGGER) {
-            if (e.trigger?.on?.event == Event.ACTIVATED) {
-                answers(t, seat, uid, e)?.let { return it }
-            } else {
-                if (!waiting) return "A trigger effect is used when its event happens: nothing set it off now" +
-                    (if (t.fx.inferred) " (as far as a log made by hand tells)." else ".")
-                if (s.chain.isNotEmpty()) return "It waits for the chain to be over, then goes on a new chain."
-            }
+            // Spell speed 1, a trigger on an activation too: it never answers a link; it waits for the chain to be over
+            // (Yugipedia, "Spell Speed": two speed-1 effects share a chain only when they go off at the same time).
+            if (!waiting) return "A trigger effect is used when its event happens: nothing set it off now" +
+                (if (t.fx.inferred) " (as far as a log made by hand tells)." else ".")
+            if (s.chain.isNotEmpty()) return "It waits for the chain to be over, then goes on a new chain."
         } else if (speed <= 1) {
             if (!mine) return FxRules.NOT_TURN
             if (!FxRules.main(s.phase)) return "Spell speed 1: only in your Main Phase."
@@ -151,22 +155,21 @@ object FxChain {
         if (e.condition != null && !FxConds.holds(e.condition, FxScope(t, seat, uid))) return "Its condition does not hold now."
         FxRules.optRefusal(t, seat, uid, effect, e.opt)?.let { return it }
         FxRules.restricted(t, seat, Ban.ACTIVATE, uid)?.let { return FxRules.words(it) }
-        val act = FxAct(seat, uid, t.code(uid) ?: 0, effect, FxTag.COST, link = s.chain.size + 1, bound = mapOf(Pick.SELF to listOf(uid)))
-        if (!FxSteps.able(t, act, e.cost)) return "Its cost cannot be paid now."
-        if (!FxSteps.ableTargets(t, act, e.targets)) return "It has no legal target now."
-        e.does.firstOrNull()?.let { first -> if (!FxSteps.able(t, act, first.op)) return "It would do nothing now." }
-        return null
+        FxRules.conditionRefusal(t, seat, uid, e)?.let { return it }
+        return feasible(t, seat, uid, effect, e)
     }
 
-    /** Why a trigger on an activation does not answer the newest link now; null when it does. */
-    private fun answers(t: FxTable, seat: Int, uid: Int, e: Effect): String? {
-        val s = t.state
-        val top = s.chain.lastOrNull() ?: return "It answers an activation: nothing is being activated."
-        val tr = e.trigger ?: return "It has no event."
-        val pri = t.fx.priority
-        if (pri != null && pri != seat) return "Your opponent may respond first."
-        if (tr.self && top.uid != uid) return "It answers its own activation."
-        if (!tr.self && tr.about != null && (top.uid == null || !FxFilters.matches(tr.about, top.uid, FxScope(t, seat, uid)))) return "It does not answer that activation."
+    /**
+     * Why [uid]'s [e] could not be activated now for what it pays and does, in words; null when it could: its cost paid in
+     * full, enough targets, and its first part able to happen — the first step with every step joined to it by "and",
+     * since "and" happens both or neither (YGOrg, "Demystifying Rulings, Part 5: Conjunctions"). Later parts joined by
+     * "then", "and if you do" or "also" may fail without making the activation illegal.
+     */
+    private fun feasible(t: FxTable, seat: Int, uid: Int, effect: String, e: Effect): String? {
+        val act = FxAct(seat, uid, t.code(uid) ?: 0, effect, FxTag.COST, link = t.state.chain.size + 1, bound = mapOf(Pick.SELF to listOf(uid)))
+        if (!FxSteps.able(t, act, e.cost)) return "Its cost cannot be paid now."
+        if (!FxSteps.ableTargets(t, act, e.targets)) return "It has no legal target now."
+        if (!FxSteps.able(t, act, FxSteps.firstPart(e.does))) return "It would do nothing now."
         return null
     }
 
@@ -268,6 +271,8 @@ object FxChain {
             DuelAction.ChainAdd(seat, uid, note = e.label, targets = targets),
             act.tag().copy(memo = FxMemo(batch = sc.t.fx.batch + 1, bound = bound, declared = aimed.declared)),
         )
+        // "The turn you activate this": its conditions bind from the activation, lifted only if the activation is negated.
+        if (e.leaves.isNotEmpty()) FxSteps.exec(sc, act.copy(bound = aimed.bound, declared = aimed.declared), e.leaves.map { Step(Op.Restrict(it), Join.WITH) })
     }
 
     /** The newest link resolves on the scribe's table; with the last one, the triggers waiting form a new chain. */
@@ -284,9 +289,7 @@ object FxChain {
         val act = FxAct(fl.seat, fl.uid, fl.card, fl.effect, FxTag.RESOLVE, n, fl.bound, fl.script, fl.verified, fl.declared)
         if (!cl.negated && !fl.effectNegated) {
             val bound = recheck(sc, act, fl, e)
-            val r = FxSteps.exec(sc, act.copy(bound = bound), e.does)
-            // What it leaves behind, once it has resolved.
-            if (e.leaves.isNotEmpty()) FxSteps.exec(sc, act.copy(bound = r.bound, declared = r.declared), e.leaves.map { Step(Op.Restrict(it), Join.ALSO) })
+            FxSteps.exec(sc, act.copy(bound = bound), e.does)
         }
         DuelVerbs.resolve(sc.t.state, sc.t.facts.catalog()).forEach { a ->
             val tag = if (a == DuelAction.ChainResolve) act.tag().copy(memo = FxMemo(batch = sc.t.fx.batch + 1))
@@ -341,7 +344,7 @@ object FxChain {
                 for (e in script.effects) {
                     if (e.kind != Kind.TRIGGER || FxWalk.unread(e)) continue
                     val tr = e.trigger ?: continue
-                    if (tr.on.event == Event.ACTIVATED || !fits(tr.on, ev)) continue
+                    if (!fits(tr.on, ev)) continue
                     if (ev.uid != 0) {
                         if (tr.self && ev.uid != uid) continue
                         if (!tr.self && tr.about != null && !FxFilters.matches(tr.about, ev.uid, FxScope(t, seat, uid))) continue
@@ -387,8 +390,10 @@ object FxChain {
         sc.t.fx.pending.forEach { p ->
             if (!p.mandatory && !p.last && timing(sc.t, p) == Timing.WHEN) skip(sc, p, "missed the timing")
         }
+        // The rulebook's order (TCG Rulebook v10, as Yugipedia's "Simultaneous Effects" quotes it): the turn player's
+        // mandatory triggers, the other player's mandatory ones, then the turn player's optional ones, then theirs.
         val tp = sc.t.state.active
-        for ((seat, mandatory) in listOf(tp to true, tp to false, 1 - tp to true, 1 - tp to false)) {
+        for ((seat, mandatory) in listOf(tp to true, 1 - tp to true, tp to false, 1 - tp to false)) {
             var group = sc.t.fx.pending.filter { it.seat == seat && it.mandatory == mandatory }
             if (group.isEmpty()) continue
             group = group.filter { p ->
@@ -396,13 +401,16 @@ object FxChain {
                 if (why != null) skip(sc, p, why)
                 why == null
             }
+            // Each decision says whose it is ([Decision.YesNo.by], [Decision.Order.by]); its words never name a card hidden
+            // from the seat whose move this is (the red team: an opponent's hand trap was named in the question).
+            val viewer = sc.by ?: tp
             if (!mandatory) group = group.filter { p ->
                 val e = sc.t.book.effect(p.card, p.effect)
-                val yes = sc.ask(Decision.YesNo("${whose(sc, seat)}use ${label(sc.t, p)}?", FxSource(p.uid, p.effect, e?.label.orEmpty()))).single() == 1
+                val yes = sc.ask(Decision.YesNo("${whose(viewer, seat)}use ${label(sc.t, p, viewer)}?", FxSource(p.uid, p.effect, e?.label.orEmpty()), by = seat)).single() == 1
                 if (!yes) skip(sc, p, "not used")
                 yes
             }
-            val ordered = if (group.size > 1) sc.ask(Decision.Order(group, group.map { label(sc.t, it) })).map { group[it] } else group
+            val ordered = if (group.size > 1) sc.ask(Decision.Order(group, group.map { label(sc.t, it, viewer) }, by = seat)).map { group[it] } else group
             ordered.forEach { p ->
                 val why = usable(sc.t, p)
                 if (why != null) skip(sc, p, why) else activate(sc, p.seat, p.uid, p.effect)
@@ -410,14 +418,16 @@ object FxChain {
         }
     }
 
-    private fun whose(sc: FxScribe, seat: Int): String = if (seat == sc.t.state.active) "" else "Your opponent's trigger: "
+    private fun whose(viewer: Int, seat: Int): String = if (seat == viewer) "" else "Your opponent's trigger: "
 
     private fun timing(t: FxTable, p: Pending): Timing? = t.book.effect(p.card, p.effect)?.trigger?.timing
 
-    /** A waiting trigger's card and effect, in words: "Example Scout's Search". */
-    private fun label(t: FxTable, p: Pending): String {
-        val name = t.card(p.uid)?.name ?: "a card"
+    /** A waiting trigger's card and effect, in words: "Example Scout's Search" — "A card's effect" where [viewer] cannot see it. */
+    private fun label(t: FxTable, p: Pending, viewer: Int? = null): String {
+        val seen = viewer == null || DuelSight.sees(t.state, p.uid, viewer)
         val e = t.book.effect(p.card, p.effect)
+        if (!seen) return "a card's effect"
+        val name = t.card(p.uid)?.name ?: "a card"
         return "$name's " + (e?.label?.takeIf { it.isNotBlank() } ?: "effect")
     }
 
@@ -432,10 +442,8 @@ object FxChain {
         if (e.condition != null && !FxConds.holds(e.condition, FxScope(t, p.seat, p.uid))) return "its condition does not hold"
         FxRules.optRefusal(t, p.seat, p.uid, p.effect, e.opt)?.let { return "once per turn: used" }
         FxRules.restricted(t, p.seat, Ban.ACTIVATE, p.uid)?.let { return "a restriction forbids it" }
-        val act = FxAct(p.seat, p.uid, p.card, p.effect, FxTag.COST, link = t.state.chain.size + 1, bound = mapOf(Pick.SELF to listOf(p.uid)))
-        if (!FxSteps.able(t, act, e.cost)) return "its cost cannot be paid"
-        if (!FxSteps.ableTargets(t, act, e.targets)) return "it has no legal target"
-        return null
+        FxRules.conditionRefusal(t, p.seat, p.uid, e)?.let { return "a condition of its own forbids it" }
+        return feasible(t, p.seat, p.uid, p.effect, e)?.let { it.replaceFirstChar(Char::lowercaseChar).removeSuffix(".").removeSuffix(" now") }
     }
 
     /** [p] let go, said in the log; a card hidden from the other seat now is not named. */

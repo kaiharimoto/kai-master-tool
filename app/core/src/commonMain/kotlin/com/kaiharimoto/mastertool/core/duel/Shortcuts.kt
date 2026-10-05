@@ -110,9 +110,14 @@ class Shortcuts(
     val resolveAtOnce: Boolean? = null,
     /** Whether a card's effect is verified (§4.4): none is until the tests of step 3. */
     private val verified: (code: Int, effect: String) -> Boolean = { _, _ -> false },
+    /**
+     * The pool's cards by exact name, any case — their passcodes: how a line's `declare=` names a card that is not on the
+     * table (any card that exists may be declared). Null where the pool is not at hand: only the table's names are read.
+     */
+    val names: ((String) -> List<Int>)? = null,
 ) {
     /** The same, with the engine's state [next] — after a step of a plan. */
-    fun withFx(next: FxState?): Shortcuts = Shortcuts(book, facts, next, engine, networked, resolveAtOnce, verified)
+    fun withFx(next: FxState?): Shortcuts = Shortcuts(book, facts, next, engine, networked, resolveAtOnce, verified, names)
 
     /** The engine's view of [s]. */
     fun table(s: DuelState): FxTable = FxTable(s, fx ?: FxState.at(s), book, facts).current()

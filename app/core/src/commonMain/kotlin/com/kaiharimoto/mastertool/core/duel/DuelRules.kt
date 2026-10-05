@@ -34,7 +34,7 @@ object DuelRules {
             is DuelAction.Position -> position(s, a)
             is DuelAction.Counter -> counter(s, a)
             is DuelAction.Token -> token(s, a)
-            is DuelAction.Lp -> seatOk(s, a.seat) ?: ok(s.withSeat(a.seat) { it.copy(lp = (a.set ?: (it.lp + a.delta)).coerceAtLeast(0)) })
+            is DuelAction.Lp -> seatOk(s, a.seat) ?: ok(s.withSeat(a.seat) { it.copy(lp = (a.set?.toLong() ?: (it.lp.toLong() + a.delta)).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()) })
             is DuelAction.Phase -> ok(s.copy(phase = a.phase, proposal = null))
             DuelAction.EndTurn -> ok(
                 s.rehidden().copy(

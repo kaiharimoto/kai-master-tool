@@ -11,6 +11,7 @@ import com.kaiharimoto.mastertool.core.duel.Shortcuts
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.effects.Chooser
 import com.kaiharimoto.mastertool.core.duel.effects.Decision
+import com.kaiharimoto.mastertool.core.duel.effects.Purpose
 import com.kaiharimoto.mastertool.core.duel.nameOf
 
 /** What a Shortcut line asks (Phase D §5½): a card's Shortcut used, or the chain resolved as written. */
@@ -101,6 +102,19 @@ data class ShortcutAnswers(
  * A [Chooser] that answers from a line's [answers] (Ai's op, a combo's step), reading cards by coordinate or by name as the
  * seat would name them — any copy of a name will do. A choice the answers do not settle goes to [fallback] (a saved combo's
  * first legal answer), or, with none, cancels the use and leaves [question]: the choice asked back, its options listed.
+ *
+ * **Never a guess** (the red team, D.md §9): a word that names cards of more than one name equally well ("Example" for
+ * Example Scout and Example Tinker) settles nothing — the choice is asked back with the names it could mean, as
+ * `DuelCommand.lookup` does. An exact name beats a prefix, a prefix beats word starts.
+ *
+ * **In step with the decisions**: `zone=` and `pos=` (and `pick=`) are read in order, including for the choices the
+ * engine settled without asking ([Chooser.told]) — a combo writes every zone and position it took. A position is paired
+ * with the monster zone given before it; where the zone fixes the position, a `pos=` word is taken for it only when it
+ * says that very position, so a line that gives positions only where there was a choice stays aligned too.
+ *
+ * A target is a [Purpose.TARGET] pick, never read off the words of its `why`. A name declaration ([Decision.Declare.open])
+ * takes any card of the pool by its exact name through [names], a card on the table by its name, and lists the choices
+ * when a name is ambiguous.
  */
 class AnswerChooser(
     answers: ShortcutAnswers,
@@ -109,6 +123,8 @@ class AnswerChooser(
     private val catalog: DuelCatalog,
     private val secret: Long = 0L,
     private val fallback: Chooser? = null,
+    /** The pool's cards by exact name, any case: passcodes ([Shortcuts.names]); null where the pool is not at hand. */
+    private val names: ((String) -> List<Int>)? = null,
 ) : Chooser {
     private val picks = answers.pick.toMutableList()
     private val targets = answers.target.toMutableList()
@@ -119,42 +135,107 @@ class AnswerChooser(
     private val positions = answers.pos.toMutableList()
     /** The position given with the monster zone just taken: `zone=m3 pos=def` go together. */
     private var paired: String? = null
+    /** A monster zone was just taken: the next position decision is its own, and [paired] (if any) answers it. */
+    private var zoneTook = false
 
     /** The choice asked back, in words, when the answers did not settle it. */
     var question: String? = null
         private set
 
+    /** A word that named more than one card, said when the choice is asked back. */
+    private var ambiguous: String? = null
+
     override fun choose(d: Decision): List<Int> {
         val a = answer(d)
+        val why = ambiguous
+        ambiguous = null
         if (a != null && Chooser.legal(d, a)) return a
         fallback?.choose(d)?.let { return it }
-        question = ask(d)
+        question = (why?.let { "$it. " } ?: "") + ask(d)
         return Chooser.CANCEL
+    }
+
+    override fun told(d: Decision, answer: List<Int>) {
+        when (d) {
+            is Decision.Zone -> answer.singleOrNull()?.let { d.among.getOrNull(it) }?.let { z ->
+                val k = zones.indexOfFirst { DuelNotation.slotCoord(z, seat)?.equals(it, ignoreCase = true) == true }
+                if (k >= 0) {
+                    zones.removeAt(k)
+                    pair(z, d.positions)
+                }
+            }
+            is Decision.Position -> {
+                val p = answer.singleOrNull()?.let { d.among.getOrNull(it) }
+                // A position settled without asking: the word its zone took is spent; with no zone before it, the next
+                // word is spent when it says that position.
+                if (zoneTook) paired = null
+                else if (p != null) positions.firstOrNull()?.let { w -> if (positionOf(w) == p) positions.removeAt(0) }
+                zoneTook = false
+            }
+            is Decision.Cards -> {
+                val queue = queueFor(d)
+                answer.mapNotNull { d.among.getOrNull(it) }.forEach { uid ->
+                    val k = queue.indexOfFirst { w -> names(uid, w) }
+                    if (k >= 0) queue.removeAt(k)
+                }
+            }
+            else -> {}
+        }
+    }
+
+    override fun name(d: Decision.Declare): Int? {
+        if (!d.open) return null
+        val w = declares.firstOrNull() ?: return null
+        // A name on the table first, by the list's own words, so a declaration answered there keeps its index.
+        if (d.among.any { it.equals(w.trim(), ignoreCase = true) }) return null
+        val found = names?.invoke(w.trim()).orEmpty().distinct()
+        return when (found.size) {
+            0 -> null
+            1 -> found.single().also { declares.removeAt(0) }
+            else -> null.also { ambiguous = "“$w” is the name of more than one card" }
+        }
+    }
+
+    /** The queue a card choice reads: a target's `target=` when it has any, else `pick=`. */
+    private fun queueFor(d: Decision.Cards): MutableList<String> = if (d.purpose == Purpose.TARGET && targets.isNotEmpty()) targets else picks
+
+    /** [z] taken with [allowed] positions: the next `pos=` word goes with it, when there is a choice or it says the fixed one. */
+    private fun pair(z: Place.Zone, allowed: List<CardPosition>) {
+        if (z.kind != ZoneKind.MONSTER && z.kind != ZoneKind.EMZ) return
+        zoneTook = true
+        val next = positions.firstOrNull()
+        paired = when {
+            next == null -> null
+            allowed.size == 1 -> if (positionOf(next) == allowed.single()) positions.removeAt(0).let { null } else null
+            else -> positions.removeAt(0)
+        }
     }
 
     private fun answer(d: Decision): List<Int>? = when (d) {
         is Decision.Cards -> {
-            val targeting = d.why.lowercase().startsWith("target")
-            val from = if (targeting && targets.isNotEmpty()) targets else picks
+            val from = queueFor(d)
             if (from.isEmpty()) null else {
-                // Each answer taken by the first card it names that is not chosen yet; an answer naming none stays for later.
+                // Each answer taken by the card it names best that is not chosen yet; an answer naming none stays for later.
                 val chosen = mutableListOf<Int>()
                 val words = from.iterator()
                 while (words.hasNext() && chosen.size < d.max) {
                     val w = words.next()
-                    val i = d.among.indices.firstOrNull { k -> k !in chosen && names(d.among[k], w) }
-                    if (i != null) { chosen += i; words.remove() }
+                    val i = best(w, d.among.indices.filter { it !in chosen }) { d.among[it] } ?: if (ambiguous != null) return null else continue
+                    chosen += i
+                    words.remove()
                 }
                 chosen.takeIf { it.size >= d.min }
             }
         }
         is Decision.Zone -> take(zones) { w -> d.among.indexOfFirst { DuelNotation.slotCoord(it, seat)?.equals(w, ignoreCase = true) == true } }
-            ?.also { a -> if (d.among[a.single()].let { it.kind == ZoneKind.MONSTER || it.kind == ZoneKind.EMZ }) paired = positions.removeFirstOrNull() }
+            ?.also { a -> pair(d.among[a.single()], d.positions) }
         is Decision.Position -> {
             val mine = paired
+            val fromZone = zoneTook
             paired = null
+            zoneTook = false
             mine?.let { w -> positionOf(w)?.let { d.among.indexOf(it) }?.takeIf { it >= 0 }?.let(::listOf) }
-                ?: take(positions) { w -> positionOf(w)?.let { d.among.indexOf(it) } ?: -1 }
+                ?: if (fromZone) null else take(positions) { w -> positionOf(w)?.let { d.among.indexOf(it) } ?: -1 }
         }
         is Decision.YesNo -> take(options) { w ->
             when (w.lowercase()) {
@@ -166,12 +247,55 @@ class AnswerChooser(
         is Decision.Option -> take(options) { w ->
             w.toIntOrNull()?.let { it - 1 }?.takeIf { it in d.among.indices }
                 ?: d.among.indexOfFirst { it.equals(w, ignoreCase = true) }.takeIf { it >= 0 }
-                ?: d.among.indexOfFirst { NameScore.of(w, it) >= 70 }
+                ?: bestWord(w, d.among)
+                ?: -1
         }
         is Decision.Declare -> take(declares) { w ->
-            d.among.indexOfFirst { it.equals(w, ignoreCase = true) }.takeIf { it >= 0 } ?: d.among.indexOfFirst { NameScore.of(w, it) >= 70 }
+            d.among.indexOfFirst { it.equals(w.trim(), ignoreCase = true) }.takeIf { it >= 0 }
+                // A name may be any card: only an exact name settles one off the table ([name]); on it, the best clear match.
+                ?: (if (d.open) null else bestWord(w, d.among))
+                ?: -1
         }
         is Decision.Order -> order.map { it - 1 }.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * The one of [among] (indexes, [uid] of each) that [w] names best — a coordinate exactly, else a name the seat may give
+     * at the best score (exact, then a prefix, then word starts); null when none does, or when the best names more than
+     * one card name ([ambiguous] says which).
+     */
+    private fun best(w: String, among: List<Int>, uid: (Int) -> Int): Int? {
+        if (DuelNotation.parse(w) != null) return among.firstOrNull { names(uid(it), w) }
+        var top = 0
+        val tops = mutableListOf<Int>()
+        among.forEach { i ->
+            val u = uid(i)
+            val card = s.cards[u] ?: return@forEach
+            if (!nameable(u)) return@forEach
+            val score = NameScore.of(w, catalog.nameOf(card)).takeIf { it >= 70 } ?: 0
+            when {
+                score > top -> { top = score; tops.clear(); tops += i }
+                score == top && score > 0 -> tops += i
+            }
+        }
+        val distinct = tops.map { s.cards[uid(it)]?.let(catalog::nameOf) }.distinct()
+        if (distinct.size > 1) {
+            ambiguous = "“$w” could be ${distinct.joinToString(" or ")}"
+            return null
+        }
+        return tops.firstOrNull()
+    }
+
+    /** The one of [among] (words) that [w] names best, at the best score; null when none or more than one does. */
+    private fun bestWord(w: String, among: List<String>): Int? {
+        val scored = among.mapIndexed { i, a -> i to NameScore.of(w, a) }.filter { it.second >= 70 }
+        val top = scored.maxOfOrNull { it.second } ?: return null
+        val tops = scored.filter { it.second == top }
+        if (tops.map { among[it.first].lowercase() }.distinct().size > 1) {
+            ambiguous = "“$w” could be ${tops.joinToString(" or ") { among[it.first] }}"
+            return null
+        }
+        return tops.first().first
     }
 
     /** The first of [queue] that [index] finds in the decision, taken out. */
@@ -210,7 +334,7 @@ class AnswerChooser(
 
     private fun ask(d: Decision): String = when (d) {
         is Decision.Cards -> {
-            val key = if (d.why.lowercase().startsWith("target")) "target" else "pick"
+            val key = if (d.purpose == Purpose.TARGET) "target" else "pick"
             val n = if (d.min == d.max) "${d.min}" else "${d.min} to ${d.max}"
             "${d.why}: which $n? Say $key=…, among: ${d.among.joinToString(" · ") { label(it) }}"
         }
@@ -218,8 +342,13 @@ class AnswerChooser(
         is Decision.Position -> "Which position? Say pos=…, among: ${d.among.joinToString(" · ") { positionWord(it) }}"
         is Decision.YesNo -> "${d.why}? Say option=yes or option=no"
         is Decision.Option -> "Which? Say option=…, among: ${d.among.joinToString(" · ")}"
-        is Decision.Declare -> "Declare which? Say declare=…, among: ${d.among.take(DECLARE_SHOWN).joinToString(" · ")}${if (d.among.size > DECLARE_SHOWN) " …" else ""}"
-        is Decision.Order -> "In which order on the chain? Say order=…, numbering: ${d.triggers.mapIndexed { i, p -> "${i + 1} ${s.cards[p.uid]?.let { catalog.nameOf(it) } ?: "a card"}" }.joinToString(" · ")}"
+        is Decision.Declare -> {
+            val shown = d.among.take(DECLARE_SHOWN).joinToString(" · ") + if (d.among.size > DECLARE_SHOWN) " …" else ""
+            if (d.open) "Declare which card? Say declare=… with any card's exact name" + (if (shown.isNotEmpty()) " — on the table: $shown" else "")
+            else "Declare which? Say declare=…, among: $shown"
+        }
+        // Only the seat's own triggers are named, and only where it may name them.
+        is Decision.Order -> "In which order on the chain? Say order=…, numbering: ${d.triggers.mapIndexed { i, p -> "${i + 1} ${if (nameable(p.uid)) s.cards[p.uid]?.let { catalog.nameOf(it) } ?: "a card" else "a card"}" }.joinToString(" · ")}"
     }
 
     companion object {
@@ -268,7 +397,7 @@ object ShortcutLine {
             is ShortcutAsk.Use -> ask.answers
             is ShortcutAsk.Resolve -> ask.answers
         }
-        val chooser = AnswerChooser(answers, s, seat, catalog, secret, fallback)
+        val chooser = AnswerChooser(answers, s, seat, catalog, secret, fallback, shortcuts.names)
         val r = run(ask, shortcuts, s, seat, catalog, chooser)
         return if (r.cancelled) ShortcutResult.no(chooser.question ?: "Cancelled") else r
     }

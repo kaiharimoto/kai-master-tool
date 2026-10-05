@@ -24,21 +24,80 @@ object FxWalk {
     /** Every step of [e]: its cost, then what it does. */
     fun steps(e: Effect): List<Step> = steps(e.cost) + steps(e.does)
 
-    /** How deep [steps] nest: 1 for a flat list (D.md §3.4 allows 6). */
-    fun depth(steps: List<Step>): Int = if (steps.isEmpty()) 0 else 1 + (steps.maxOfOrNull { s ->
+    /** How deep [steps] nest: 1 for a flat list (D.md §3.4 allows 6); counted no further than [cap]. */
+    fun depth(steps: List<Step>, cap: Int = DEEPEST): Int = if (steps.isEmpty()) 0 else if (cap <= 0) 1 else 1 + (steps.maxOfOrNull { s ->
         when (val op = s.op) {
-            is Op.Choose -> op.options.maxOfOrNull(::depth) ?: 0
-            is Op.If -> maxOf(depth(op.then), depth(op.otherwise))
+            is Op.Choose -> op.options.maxOfOrNull { depth(it, cap - 1) } ?: 0
+            is Op.If -> maxOf(depth(op.then, cap - 1), depth(op.otherwise, cap - 1))
             else -> 0
         }
     } ?: 0)
 
-    fun unread(f: Filter?): Boolean = when (f) {
+    /** Deeper than any walk goes: a filter or a condition nested past this, or steps past [FxSteps.MOST_DEPTH], is never read. */
+    const val DEEPEST = 32
+
+    /**
+     * Whether [e] nests deeper than the engine walks — steps past [FxSteps.MOST_DEPTH], filters or conditions past
+     * [DEEPEST] — checked without ever going deeper than that itself, so a hostile script cannot overflow the stack.
+     * Such an effect is unread: never offered, never used.
+     */
+    fun tooDeep(e: Effect): Boolean {
+        fun f(x: Filter?, d: Int): Boolean = x != null && (d > DEEPEST || when (x) {
+            is Filter.All -> x.all.any { f(it, d + 1) }
+            is Filter.AnyOf -> x.any.any { f(it, d + 1) }
+            is Filter.Not -> f(x.not, d + 1)
+            else -> false
+        })
+        fun n(x: Num?, d: Int): Boolean = x is Num.Count && f(x.where, d + 1)
+        fun c(x: Cond?, d: Int): Boolean = x != null && (d > DEEPEST || when (x) {
+            is Cond.All -> x.all.any { c(it, d + 1) }
+            is Cond.AnyOf -> x.any.any { c(it, d + 1) }
+            is Cond.Not -> c(x.not, d + 1)
+            is Cond.Controls -> f(x.where, d + 1) || n(x.n, d + 1)
+            is Cond.Count -> f(x.where, d + 1) || n(x.n, d + 1)
+            is Cond.Newest -> f(x.about, d + 1)
+            else -> false
+        })
+        fun p(x: Pick) = f(x.where, 0)
+        fun s(list: List<Step>, d: Int): Boolean = d > FxSteps.MOST_DEPTH || list.any { st ->
+            when (val op = st.op) {
+                is Op.Choose -> op.options.any { s(it, d + 1) }
+                is Op.If -> c(op.cond, 0) || s(op.then, d + 1) || s(op.otherwise, d + 1)
+                is Op.Move -> p(op.pick)
+                is Op.Add -> p(op.pick)
+                is Op.Send -> p(op.pick)
+                is Op.Discard -> p(op.pick)
+                is Op.Destroy -> p(op.pick)
+                is Op.Banish -> p(op.pick)
+                is Op.Tribute -> p(op.pick)
+                is Op.Return -> p(op.pick)
+                is Op.Reveal -> p(op.pick)
+                is Op.SpecialSummon -> p(op.pick)
+                is Op.Attach -> p(op.pick)
+                is Op.Counter -> p(op.pick)
+                is Op.ChangeLevel -> p(op.pick)
+                is Op.FusionSummon -> f(op.fusion, 0)
+                is Op.RitualSummon -> f(op.ritual, 0)
+                is Op.SynchroSummon -> f(op.f, 0)
+                is Op.XyzSummon -> f(op.f, 0)
+                is Op.LinkSummon -> f(op.f, 0)
+                is Op.NormalSummonAgain -> f(op.filter, 0)
+                is Op.Declare -> f(op.among, 0)
+                is Op.Restrict -> f(op.restriction.except, 0)
+                else -> false
+            }
+        }
+        return s(e.cost, 1) || s(e.does, 1) || c(e.condition, 0) || f(e.trigger?.about, 0) || f(e.respond?.about, 0) ||
+            e.targets.any(::p) || e.leaves.any { f(it.except, 0) }
+    }
+
+    /** Whether [f] holds a word this build cannot read, or nests past [DEEPEST] (never walked deeper than that). */
+    fun unread(f: Filter?, d: Int = 0): Boolean = when (f) {
         null -> false
         is Filter.Unknown -> true
-        is Filter.All -> f.all.any(::unread)
-        is Filter.AnyOf -> f.any.any(::unread)
-        is Filter.Not -> unread(f.not)
+        is Filter.All -> d >= DEEPEST || f.all.any { unread(it, d + 1) }
+        is Filter.AnyOf -> d >= DEEPEST || f.any.any { unread(it, d + 1) }
+        is Filter.Not -> d >= DEEPEST || unread(f.not, d + 1)
         else -> false
     }
 
@@ -49,7 +108,8 @@ object FxWalk {
         else -> false
     }
 
-    fun unread(c: Cond?): Boolean = when (c) {
+    /** Whether [c] holds a word this build cannot read, or nests past [DEEPEST]. */
+    fun unread(c: Cond?, d: Int = 0): Boolean = when (c) {
         null -> false
         is Cond.Unknown -> true
         is Cond.Controls -> unread(c.where) || unread(c.n)
@@ -57,9 +117,9 @@ object FxWalk {
         is Cond.Newest -> unread(c.about)
         is Cond.Lp -> unread(c.n)
         is Cond.Compare -> unread(c.left) || unread(c.right)
-        is Cond.All -> c.all.any(::unread)
-        is Cond.AnyOf -> c.any.any(::unread)
-        is Cond.Not -> unread(c.not)
+        is Cond.All -> d >= DEEPEST || c.all.any { unread(it, d + 1) }
+        is Cond.AnyOf -> d >= DEEPEST || c.any.any { unread(it, d + 1) }
+        is Cond.Not -> d >= DEEPEST || unread(c.not, d + 1)
         else -> false
     }
 
@@ -102,12 +162,13 @@ object FxWalk {
         is Proc.Xyz -> unread(p.each)
         is Proc.Link -> unread(p.each) || unread(p.also)
         Proc.Ritual -> false
-        is Proc.Inherent -> unread(p.condition) || p.opt is Opt.Unknown || p.cost.any { unread(it.op) }
+        is Proc.Inherent -> tooDeep(Effect(FxTag.PROC, kind = Kind.IGNITION, condition = p.condition, cost = p.cost)) ||
+            unread(p.condition) || p.opt is Opt.Unknown || p.cost.any { unread(it.op) }
     }
 
     /** Whether anything in [e] is a word this build cannot read: such an effect is never used. */
     fun unread(e: Effect): Boolean =
-        e.opt is Opt.Unknown || unread(e.condition) || unread(e.trigger?.about) || unread(e.respond?.about) ||
+        tooDeep(e) || e.opt is Opt.Unknown || unread(e.condition) || unread(e.trigger?.about) || unread(e.respond?.about) ||
             e.targets.any(::unread) || (steps(e.cost) + steps(e.does)).any { unread(it.op) } || e.leaves.any { unread(it.except) }
 
     /** What an activation of [e] includes, read off what it does (its cost is not what it includes). */
