@@ -31,6 +31,7 @@ import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
 import com.kaiharimoto.mastertool.core.shootout.store.TrialNote
 import com.kaiharimoto.mastertool.core.shootout.store.TrustSettings
 import com.kaiharimoto.mastertool.core.shootout.teach.Rubric
+import com.kaiharimoto.mastertool.core.shootout.teach.TeachGate
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
 import com.kaiharimoto.mastertool.core.siding.SidePlan
 import com.kaiharimoto.mastertool.core.siding.Turn
@@ -150,6 +151,19 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     /** The hands the person has judged for the deck and target chosen: what the page counts, never Ai's answers. */
     val handsJudged: Int get() = log?.trials?.count { it.judge == StoredTrial.PERSON } ?: 0
 
+    /** What the deck's other matchups' files say about teaching (read with the deck), and whether any of them has a rubric. */
+    private var elsewhere by mutableStateOf(TeachGate.Tally())
+    private var rubricElsewhere by mutableStateOf(false)
+
+    /** The deck's hands judged and whether Ai was taught, over every matchup: the gate for teaching (kai's choice, 1.1.8). */
+    val deckTally: TeachGate.Tally get() = elsewhere + (log?.let(TeachGate::tally) ?: TeachGate.Tally())
+
+    /**
+     * Whether Setup offers teaching Ai: from [TeachGate.HANDS] hands judged for the deck, or always once Ai has been taught
+     * on any of its matchups (an answer of Ai's, a teaching mode, the gate's settings, a rubric).
+     */
+    val teachShown: Boolean get() = TeachGate.shown(deckTally, rubric = rubricElsewhere || !rubricText.isNullOrBlank())
+
     /**
      * Whether a session is under way. The view (state) is read first, so whoever asks — the window's bar too — hears a
      * session begin and end; `run` is not state, and read first it hid the view from the bar's first look.
@@ -242,9 +256,24 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
         problem = why
         this.log = log
         rubricText = withContext(Dispatchers.IO) { File(dataDir, ShootoutPaths.rubric(deck, them?.entry?.id)).takeIf { it.isFile }?.readText() }
+        // The deck's other matchups, for the teaching gate: counted per deck, so a new opponent keeps what the page has learned.
+        val (tally, rubrics) = withContext(Dispatchers.IO) { deckElsewhere(deck, path) }
+        elsewhere = tally
+        rubricElsewhere = rubrics
         bench = if (why == null) withContext(Dispatchers.Default) { Bench.of(input) } else null
         results = null
         teach.forget()
+        teach.readProgress()
+    }
+
+    /** The deck's other trial files, tallied, and whether any of its matchups keeps a rubric; [path] is the file read now. */
+    private fun deckElsewhere(deck: String, path: String): Pair<TeachGate.Tally, Boolean> {
+        val files = File(dataDir, ShootoutPaths.folder(deck)).listFiles().orEmpty().filter { it.isFile && !it.name.startsWith(".") }
+        val mine = File(path).name
+        val tally = files.filter { it.name.endsWith(".json") && it.name != mine }
+            .mapNotNull { f -> try { ShootoutCodec.decode(f.readText()) } catch (e: Exception) { null } }
+            .fold(TeachGate.Tally()) { acc, l -> acc + TeachGate.tally(l) }
+        return tally to files.any { it.name.endsWith(ShootoutPaths.RUBRIC) && it.length() > 0 }
     }
 
     /** A session begun on the deck and target chosen, or the one under way carried on. */
@@ -587,6 +616,8 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
                 deckId = null
                 bench = null
                 log = null
+                elsewhere = TeachGate.Tally()
+                rubricElsewhere = false
                 results = null
                 view = View.SETUP
             }
@@ -621,7 +652,11 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
                 is Proposal.Compare -> r0.prefer(p, b.ids(p.left).count { it == favourite } >= b.ids(p.right).count { it == favourite }, "demo-$i", at = 1_760_000_000_000L + i * 7_000L, session = "demo")
             }
         }
-        val r = if (teaching != null) demoTeaching(r0) else r0
+        val r = when (teaching) {
+            null -> r0
+            "early" -> demoEarly(r0)
+            else -> demoTeaching(r0)
+        }
         log = r.log
         when (show) {
             View.RESULTS -> {
@@ -702,6 +737,16 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
             "- Going second, a hand without a board breaker is a lean loss at best, whatever else it holds.\n" +
             "- Two garnets in five cards is a clear loss going first; one garnet with a starter is a coin flip.\n"
         return r
+    }
+
+    /**
+     * The studio's store early in teaching (`--shootout-teach=early`): the demo's first 12 answers kept as a calibration set
+     * Ai has not sat its exam on, nothing else taught. Never in the app.
+     */
+    private fun demoEarly(r0: ShootoutRun): ShootoutRun {
+        val person = r0.log.trials.filter { it.judge == StoredTrial.PERSON }.take(12).map { it.id }.toSet()
+        val retagged = r0.log.trials.map { t -> if (t.id in person) t.copy(mode = TeachModes.CALIBRATION, session = "cal-demo") else t }
+        return ShootoutRun(r0.bench, r0.log.copy(trials = retagged), seed = 5)
     }
 
     /** The studio's teaching screen (`--shootout-teach=`): set before [demo]. */

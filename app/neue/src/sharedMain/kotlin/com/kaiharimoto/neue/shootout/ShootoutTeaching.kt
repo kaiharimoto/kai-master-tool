@@ -23,7 +23,10 @@ import com.kaiharimoto.mastertool.core.shootout.teach.Prediction
 import com.kaiharimoto.mastertool.core.shootout.teach.Route
 import com.kaiharimoto.mastertool.core.shootout.teach.Similarity
 import com.kaiharimoto.mastertool.core.shootout.teach.Situation
+import com.kaiharimoto.mastertool.core.shootout.teach.TeachAction
 import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
+import com.kaiharimoto.mastertool.core.shootout.teach.TeachProgress
+import com.kaiharimoto.mastertool.core.shootout.teach.TeachSteps
 import com.kaiharimoto.mastertool.core.shootout.teach.Trust
 import com.kaiharimoto.mastertool.core.shootout.teach.TrustState
 import com.kaiharimoto.neue.NeueHolders
@@ -91,8 +94,11 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
     /** Why Ai could not judge the last hand, in words. */
     var trouble by mutableStateOf<String?>(null)
 
-    /** Ai's one question about the hand just answered (apprentice), or the person's own note being written. */
-    class Ask(val trial: String, val question: String?, val aiSaid: String?, val youSaid: String?)
+    /**
+     * Ai's one question about the hand just answered (apprentice), or the person's own note being written. [shown] is that
+     * hand as it was kept, drawn small in the card (kai's choice, 1.1.8), since the next hand is on screen by then.
+     */
+    class Ask(val trial: String, val question: String?, val aiSaid: String?, val youSaid: String?, val shown: StoredTrial? = null)
 
     var ask by mutableStateOf<Ask?>(null)
     var draft by mutableStateOf("")
@@ -297,7 +303,7 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
                 if (m == TeachModes.AUDIT || r.log.trials.size % 10 == 0) state = readState(r)
                 if (mode == Mode.APPRENTICE && Apprentice.asks(got.verdict, kept, sinceQuestion) && ask == null) {
                     sinceQuestion = 0
-                    ask = Ask(kept.id, got.verdict.question, words(got.answer, got.prefersLeft, r.bench), words(Answer.entries.firstOrNull { it.name == kept.answer }, kept.prefer?.let { it == StoredTrial.LEFT }, r.bench))
+                    ask = Ask(kept.id, got.verdict.question, words(got.answer, got.prefersLeft, r.bench), words(Answer.entries.firstOrNull { it.name == kept.answer }, kept.prefer?.let { it == StoredTrial.LEFT }, r.bench), shown = kept)
                     draft = ""
                 }
             }
@@ -327,7 +333,7 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
     /** A note of the person's own on the hand just answered. */
     fun noteOnLast() {
         val id = lastAnswered ?: return
-        ask = Ask(id, null, null, null)
+        ask = Ask(id, null, null, null, shown = s.log?.trials?.lastOrNull { it.id == id })
         draft = ""
     }
 
@@ -345,6 +351,7 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
         setId = null
         state = null
         ask = null
+        progress = null
         if (exam?.finished != false) exam = null
     }
 
@@ -418,6 +425,42 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
             .maxByOrNull { it.at }?.session
     }
 
+    // ---- the steps (kai's choice, 1.1.8) -----------------------------------------------------------------------------
+
+    /** The four steps of teaching on the matchup chosen, read off the frame thread as its trials change; null until read. */
+    var progress by mutableStateOf<TeachProgress?>(null)
+        private set
+
+    /** Reads [progress] afresh from the trials kept. */
+    fun readProgress() {
+        val b = s.bench ?: return
+        val l = s.log ?: return
+        val name = h.ai.name
+        scope.launch {
+            val read = withContext(Dispatchers.Default) { TeachSteps.of(b, l, name) }
+            if (s.log === l) progress = read
+        }
+    }
+
+    /** A step moved on: a session begun in its mode, Ai's exam, or the trust panel. */
+    fun act(action: TeachAction) {
+        when (action) {
+            TeachAction.CALIBRATION -> begin(Mode.CALIBRATION)
+            TeachAction.APPRENTICE -> begin(Mode.APPRENTICE)
+            TeachAction.SUPERVISED -> begin(Mode.SUPERVISED)
+            TeachAction.EXAM -> startExam()
+            TeachAction.TRUST -> openTrust()
+        }
+    }
+
+    /** A session begun in [m]: the mode is chosen for the session it begins, and Just me is a session without one. */
+    fun begin(m: Mode) {
+        if (s.running || examRunning) return
+        mode = if (h.ai.enabled) m else Mode.JUDGE
+        if (s.view == Shootouts.View.EXAM) s.view = Shootouts.View.SETUP
+        s.start()
+    }
+
     // ---- the trust panel ----------------------------------------------------------------------------------------------
 
     fun openTrust() {
@@ -471,7 +514,8 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
             "question" -> {
                 mode = Mode.APPRENTICE
                 lastAnswered = r.log.trials.lastOrNull { it.judge == StoredTrial.PERSON }?.id
-                ask = Ask(lastAnswered ?: "demo", "What made it a win — would you still call it one if they held a second hand trap?", "Lean loss", "Lean win")
+                val shown = r.log.trials.lastOrNull { it.id == lastAnswered }
+                ask = Ask(lastAnswered ?: "demo", "What made it a win — would you still call it one if they held a second hand trap?", "Lean loss", "Lean win", shown)
                 draft = "Their Ash hits the searcher, but the extender still"
                 solo = 0
             }
@@ -494,6 +538,7 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
                 trustOpen = true
             }
             "rubric" -> rubricOpen = true
+            "early" -> Unit
             else -> mode = Mode.APPRENTICE
         }
     }
