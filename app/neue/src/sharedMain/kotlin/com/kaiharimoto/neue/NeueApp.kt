@@ -226,7 +226,13 @@ class NeueHolders(
     val customArt = CustomArt(java.io.File(Platform.dataDir, "custom-art")).also { neue.customArt = it }
 
     /** Present (1.0.70): the presentations, the one open in the editor, and the one playing. */
-    val present: Presentations by lazy { Presentations(java.io.File(Platform.dataDir, "present")) }
+    private val presentHolder = lazy { Presentations(java.io.File(Platform.dataDir, "present")) }
+    val present: Presentations by presentHolder
+
+    /** The presentation being made written now, when Present was opened: the app closing (the editor's audit, B12). */
+    fun flushPresent() {
+        if (presentHolder.isInitialized()) present.flushNow()
+    }
 
     /** Duel (1.0.74): the duel in play, its table, its log; kept in `<data>/duel/`. */
     private val duelHolder = lazy { Duels(java.io.File(Platform.dataDir, "duel")).also { d -> d.context = { duelContext(this) } } }
@@ -563,6 +569,7 @@ fun NeueEffects(h: NeueHolders) {
                 neue.flush()
                 h.prep.flush()
                 h.flushDuel()
+                h.flushPresent()
             }
         }
     }

@@ -32,7 +32,7 @@ class CompiledShow(val presentation: Presentation) {
     private val frames = HashMap<Pair<Int, Boolean>, StageFrame>()
 
     /** The webcam zone on slide [i], or null. */
-    fun zone(i: Int): Box? = slides.getOrNull(i)?.let { WebcamLayout.zone(presentation.webcam, it.camera) }
+    fun zone(i: Int): Box? = slides.getOrNull(i)?.let { WebcamLayout.zone(presentation.webcam, it.camera, it.cameraBox) }
 
     /** The room slide [i] leaves its content. */
     fun stage(i: Int): Box = WebcamLayout.stage(zone(i))

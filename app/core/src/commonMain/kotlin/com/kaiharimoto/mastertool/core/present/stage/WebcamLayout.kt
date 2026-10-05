@@ -139,13 +139,16 @@ object WebcamLayout {
     /** The safe area of the canvas. */
     val safe: Box get() = Box.CANVAS.inset(SAFE)
 
-    /** The zone on the canvas, or null when the camera is off or hidden on this slide. */
-    fun zone(z: WebcamZone, camera: String = "DEFAULT"): Box? {
+    /**
+     * The zone on the canvas, or null when the camera is off or hidden on this slide. A slide whose
+     * [camera] is `CUSTOM` stands it in [slideBox], its own; without one, in the presentation's box.
+     */
+    fun zone(z: WebcamZone, camera: String = "DEFAULT", slideBox: Box? = null): Box? {
         if (!z.enabled || camera == "HIDDEN") return null
         val preset = if (camera != "DEFAULT" && camera in WebcamZone.PRESETS) camera else z.preset
         val canvas = Box.CANVAS
         if (preset == WebcamZone.CUSTOM) {
-            val b = z.box ?: return zone(z.copy(preset = WebcamZone.BOTTOM_RIGHT))
+            val b = (if (camera == WebcamZone.CUSTOM) slideBox else null) ?: z.box ?: return zone(z.copy(preset = WebcamZone.BOTTOM_RIGHT))
             val w = b.w.coerceIn(120f, canvas.w)
             val h = b.h.coerceIn(120f, canvas.h)
             return Box(b.x.coerceIn(0f, canvas.w - w), b.y.coerceIn(0f, canvas.h - h), w, h)

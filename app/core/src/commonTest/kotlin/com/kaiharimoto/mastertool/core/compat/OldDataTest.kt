@@ -527,6 +527,23 @@ class OldDataTest {
     }
 
     @Test
+    fun aCameraElementFrom1070MovesTheSlidesCamera() {
+        // 1.0.70–1.1.x: the Big camera layout and More ▾ → Camera wrote a Camera element, which drew a second frame
+        // and never moved the zone; a Morph transition, which drew a fade. Both read on: the element becomes the
+        // slide's own camera box (no element left to draw twice), and Morph stays stored as it was.
+        val old = """{"id":"pcam","name":"Profile","theme":"paper","webcam":{"enabled":true},
+            "slides":[{"id":"s1","layout":"CAMERA_BIG","transition":{"kind":"MORPH"},"elements":[
+              {"id":"c","type":"CAMERA","x":96,"y":140,"w":1100,"h":800},
+              {"id":"t","type":"TEXT","x":1260,"y":200,"w":560,"h":200,"paras":[{"runs":[{"text":"Hi, I'm…"}]}]}]}]}"""
+        val p = assertNotNull(PresentCodec.decode(old))
+        val s = p.slides.single()
+        assertEquals(listOf("t"), s.elements.map { it.id })
+        assertEquals("CUSTOM", s.camera)
+        assertEquals(com.kaiharimoto.mastertool.core.present.stage.Box(96f, 140f, 1100f, 800f), s.cameraBox)
+        assertEquals("MORPH", s.transition.kind)
+    }
+
+    @Test
     fun aBanlistCacheFrom111StillReads() {
         // 1.1.1: `<data>/banlists/tcg.json` as the first build with the banlist history writes it (a cache; never synced).
         val old = """{"version":1,"region":"TCG","lists":[{"region":"TCG","title":"April 2025 Lists (TCG)","start":"2025-04-07",

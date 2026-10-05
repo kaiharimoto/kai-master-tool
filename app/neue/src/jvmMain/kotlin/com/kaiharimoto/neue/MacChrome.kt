@@ -44,6 +44,7 @@ object MacChrome {
             desktop.setQuitHandler { _, response ->
                 h.neue.flush()
                 h.flushDuel()
+                h.flushPresent()
                 response.cancelQuit()
                 quit()
             }

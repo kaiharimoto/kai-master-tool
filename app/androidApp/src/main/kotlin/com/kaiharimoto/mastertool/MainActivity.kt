@@ -332,10 +332,10 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
                 LaunchedEffect(h.neue.immersive) { showImmersive(h.neue.immersive) }
                 // Deep zen is a picture to be looked at: the screen stays on for it (touch swarm,
                 // rec 30), and the system's timeout returns when zen wakes or immersive ends.
-                // A card shown full screen is looked at too (v1.3.6).
-                // A presentation playing is looked at for its length too (1.1.x, the audit's B9).
-                val keepOn = h.neue.immersive && h.neue.zen == com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP || h.neue.showcase != null ||
-                    h.present.playing != null
+                // A card shown full screen is looked at too (v1.3.6), and a presentation is talked over
+                // for longer than any screen timeout (Present's audit, B9).
+                val keepOn = h.neue.immersive && h.neue.zen == com.kaiharimoto.mastertool.core.motion.ZenPhase.DEEP ||
+                    h.neue.showcase != null || h.present.playing != null
                 LaunchedEffect(keepOn) {
                     if (keepOn) {
                         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -396,6 +396,8 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         super.onStart()
         // Back in sight: the "Ai answered" notice has done its job.
         AiWorkService.seen(this)
+        // onStop let the screen sleep; a presentation still playing keeps it awake again (B9).
+        if (holders?.present?.playing != null) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     /**
@@ -418,6 +420,8 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
         val h = holders ?: return
         val state = h.builder
         if (state.dirty && (state.deckId != null || state.deck.totalCards > 0)) state.save(quiet = true)
+        // A slide's last edit, before the tablet is put away and the app killed in the background (B12).
+        h.flushPresent()
     }
 
     override fun onNewIntent(intent: Intent) {

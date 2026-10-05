@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.layout.Revealed
 import com.kaiharimoto.mastertool.core.present.SlideLayouts
 import com.kaiharimoto.mastertool.core.present.edit.PresentEdits
+import com.kaiharimoto.mastertool.core.present.edit.SlideZoom
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.platform.pastedPicture
@@ -49,6 +50,9 @@ internal fun runPresent(h: NeueHolders, action: DeskAction) {
         DeskAction.TEXT_BOLD -> bold(h)
         DeskAction.TEXT_ITALIC -> italic(h)
         DeskAction.TEXT_UNDERLINE -> underline(h)
+        DeskAction.PRESENT_ZOOM_IN -> present.zoomBy(SlideZoom.STEP)
+        DeskAction.PRESENT_ZOOM_OUT -> present.zoomBy(1f / SlideZoom.STEP)
+        DeskAction.PRESENT_ZOOM_FIT -> present.zoomBy(null)
         DeskAction.PRESENT_NEXT -> present.next()
         DeskAction.PRESENT_PREVIOUS -> present.previous()
         DeskAction.PRESENT_FIRST -> present.first()
@@ -84,8 +88,12 @@ internal fun dismissPresent(h: NeueHolders, esc: Boolean): Boolean {
     if (present.restyling) { present.restyling = false; return true }
     if (present.exporting != null) { present.exporting = null; return true }
     if (present.confirmDelete != null) { present.confirmDelete = null; return true }
+    if (present.confirmFromGroups) { present.confirmFromGroups = false; return true }
+    if (present.namingSection != null) { present.namingSection = null; h.focus?.clearFocus(); return true }
     if (present.editingText != null) { present.editingText = null; h.focus?.clearFocus(); return true }
     if (present.selection.isNotEmpty()) { present.selection = emptySet(); return true }
+    if (present.cameraPicked) { present.cameraPicked = false; return true }
+    if (present.slidesPicked.isNotEmpty()) { present.slidesPicked = emptySet(); return true }
     if (!esc && present.open != null) { present.close(); return true }
     return false
 }

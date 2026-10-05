@@ -157,6 +157,11 @@ enum class DeskAction {
     TEXT_ITALIC,
     TEXT_UNDERLINE,
 
+    /** The slide being made drawn larger or smaller round its middle, or fitted to the window again (the editor's audit, M2). */
+    PRESENT_ZOOM_IN,
+    PRESENT_ZOOM_OUT,
+    PRESENT_ZOOM_FIT,
+
     /** While presenting: the next click, or the one before. */
     PRESENT_NEXT,
     PRESENT_PREVIOUS,
@@ -538,8 +543,8 @@ object DeskShortcuts {
         DeskShortcut(ctrl("z"), DeskAction.UNDO, DeskScope.PRESENT_EDIT, "Undo", repeatable = true),
         DeskShortcut(ctrl("z", shift = true), DeskAction.REDO, DeskScope.PRESENT_EDIT, "Redo", repeatable = true),
         DeskShortcut(ctrl("y"), DeskAction.REDO, DeskScope.PRESENT_EDIT, "Redo", repeatable = true),
-        DeskShortcut(KeyChord("delete"), DeskAction.REMOVE_SELECTED, DeskScope.PRESENT_EDIT, "Delete the selection or the slide"),
-        DeskShortcut(KeyChord("backspace"), DeskAction.REMOVE_SELECTED, DeskScope.PRESENT_EDIT, "Delete the selection or the slide"),
+        DeskShortcut(KeyChord("delete"), DeskAction.REMOVE_SELECTED, DeskScope.PRESENT_EDIT, "Delete the selection, or the slides picked in the list"),
+        DeskShortcut(KeyChord("backspace"), DeskAction.REMOVE_SELECTED, DeskScope.PRESENT_EDIT, "Delete the selection, or the slides picked in the list"),
         DeskShortcut(KeyChord("left"), DeskAction.NUDGE_LEFT, DeskScope.PRESENT_EDIT, "Nudge left, or the slide before", repeatable = true),
         DeskShortcut(KeyChord("right"), DeskAction.NUDGE_RIGHT, DeskScope.PRESENT_EDIT, "Nudge right, or the slide after", repeatable = true),
         DeskShortcut(KeyChord("up"), DeskAction.NUDGE_UP, DeskScope.PRESENT_EDIT, "Nudge up, or the slide before", repeatable = true),
@@ -551,6 +556,9 @@ object DeskShortcuts {
         DeskShortcut(ctrl("b"), DeskAction.TEXT_BOLD, DeskScope.PRESENT_EDIT, "Bold", allowedInTextInput = true),
         DeskShortcut(KeyChord("i", ctrl = true, alt = true), DeskAction.TEXT_ITALIC, DeskScope.PRESENT_EDIT, "Italic", allowedInTextInput = true),
         DeskShortcut(ctrl("u"), DeskAction.TEXT_UNDERLINE, DeskScope.PRESENT_EDIT, "Underline", allowedInTextInput = true),
+        DeskShortcut(KeyChord("equals", ctrl = true, alt = true), DeskAction.PRESENT_ZOOM_IN, DeskScope.PRESENT_EDIT, "Zoom into the slide", repeatable = true),
+        DeskShortcut(KeyChord("minus", ctrl = true, alt = true), DeskAction.PRESENT_ZOOM_OUT, DeskScope.PRESENT_EDIT, "Zoom out of the slide", repeatable = true),
+        DeskShortcut(KeyChord("0", ctrl = true, alt = true), DeskAction.PRESENT_ZOOM_FIT, DeskScope.PRESENT_EDIT, "The whole slide in the window"),
 
         DeskShortcut(KeyChord("right"), DeskAction.PRESENT_NEXT, DeskScope.PRESENTING, "Next", repeatable = true),
         DeskShortcut(KeyChord("space"), DeskAction.PRESENT_NEXT, DeskScope.PRESENTING, "Next"),
