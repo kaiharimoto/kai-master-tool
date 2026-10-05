@@ -4144,7 +4144,12 @@ reloaded after either), and **deleted with the deck** (the library's Delete and 
   phone, two rows of four with draws); a card is read below the hands on hover (a finger holds it). **The turn's draw** is
   marked `Draw` and named by its place ("6 cards · the 6th is their draw"); **cards drawn by effects** (`D`, `Shift D`,
   `TrialDraws`) stand apart after a hairline under "Drawn by effects · not rated", marked +1, +2…; the cards' limit marks
-  are left off here, since the deck's legality is not the question and Forbidden's "0" read as a draw tag. A rating asks
+  are left off here, since the deck's legality is not the question and Forbidden's "0" read as a draw tag. **The marked
+  sixth is the top of the deck** (1.1.7, kai: "If a card draws for effect, it would draw the 6th card, and the next card
+  would be the next top card"): the second player's first draw by an effect takes it, and the turn's draw moves to the
+  next card down, standing after the drawn ones under "Off the top · drawn by effects, then the turn's draw"
+  (`TrialDraws.shown`); the hand's words become "they drew 2 by effects before their draw". The six rated are in hand by
+  that player's turn either way, so the model is unchanged; what is kept with the answer is what was shown. A rating asks
   its **question** over **five boxes** ("How does this game go for you?", or for the deck alone "How often does a hand like
   this do what the deck wants?"), each a word and its band in tens ("Clear win · 8+ in 10"), under keys 1–5 on the desk (a
   click, or a swipe on a phone, its answer named over the hands while the finger moves); a comparison is **two hands**,

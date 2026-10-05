@@ -361,40 +361,48 @@ private fun progressWords(s: Shootouts): String {
 /**
  * A rating's hands: theirs above (smaller), yours below, each as large as the room allows. A hand of six is the player
  * going second's, and its turn's draw stands sixth, marked; cards turned up for draws by effects stand apart after a
- * hairline, marked +1, +2… and "not rated" (1.1.5, kai: "The sixth card should be marked as their top deck"; design
- * review, 1.1.6).
+ * hairline, marked +1, +2… (1.1.5, kai: "The sixth card should be marked as their top deck"; design review, 1.1.6). The
+ * marked sixth is the top of the deck, so an effect's draw takes it and the turn's draw moves to the next card, which
+ * stands after the drawn ones (1.1.7, kai).
  */
 @Composable
 private fun RateHands(h: NeueHolders, p: Proposal.Rate, width: Dp, height: Dp, phone: Boolean) {
     val s = h.shootout
-    val mine = s.myHand(p)
-    val myDrawn = s.myDrawn(p)
-    val theirs = s.theirHand(p)
-    val theirDrawn = s.theirDrawn(p)
+    val mine = s.myShown(p)
+    val theirs = s.theirShown(p)
     val gap = if (phone) 6.dp else 12.dp
     val label = 28.dp
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
         if (theirs != null) {
             val room = height - label * 2 - gap * 3
             HandHead(handWords("Their hand", theirs), "Draw for them", keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"), phone) { s.drawTheirs() }
-            Hand(h, theirs, theirDrawn, width, room * 0.38f, gap, phone)
+            Hand(h, theirs, width, room * 0.38f, gap, phone)
             HandHead(handWords("Your hand", mine), "Draw for you", keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"), phone) { s.drawMine() }
-            Hand(h, mine, myDrawn, width, room * 0.62f, gap, phone)
+            Hand(h, mine, width, room * 0.62f, gap, phone)
         } else {
             HandHead(handWords("Your hand", mine), "Draw a card", keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"), phone) { s.drawMine() }
-            Hand(h, mine, myDrawn, width, height - label - gap, gap, phone)
+            Hand(h, mine, width, height - label - gap, gap, phone)
         }
     }
 }
 
 /**
- * "Their hand · 6 cards · the 6th is their draw": the draw named by its place, so the words stay true when cards drawn by
- * effects follow it (design review, 1.1.6). Those carry their own words, over them.
+ * "Their hand · 6 cards · the 6th is their draw": the draw named by its place (design review, 1.1.6). Once an effect has
+ * drawn the top card the hand is the five, and the words say the turn's draw comes after: "they drew 2 by effects before
+ * their draw" (1.1.7). Cards drawn by effects carry their own words, over them.
  */
-private fun handWords(whose: String, hand: TrialDraws.Ordered): String = buildList {
-    val n = hand.opening.size + (if (hand.draw != null) 1 else 0)
-    add("$whose · $n cards")
-    if (hand.draw != null) add(if (whose == "Your hand") "the ${ordinal(n)} is your draw" else "the ${ordinal(n)} is their draw")
+private fun handWords(whose: String, hand: TrialDraws.Shown): String = buildList {
+    val yours = whose == "Your hand"
+    if (hand.shifted) {
+        add("$whose · ${hand.opening.size} cards")
+        val k = hand.drawn.size
+        val drew = "${if (yours) "you" else "they"} drew $k by effects"
+        add(if (hand.draw != null) "$drew before ${if (yours) "your" else "their"} draw" else "$drew; no card is left to draw")
+    } else {
+        val n = hand.opening.size + (if (hand.draw != null) 1 else 0)
+        add("$whose · $n cards")
+        if (hand.draw != null) add(if (yours) "the ${ordinal(n)} is your draw" else "the ${ordinal(n)} is their draw")
+    }
 }.joinToString(" · ")
 
 private fun ordinal(n: Int): String = when (n) {
@@ -428,9 +436,9 @@ private fun CompareHands(h: NeueHolders, p: Proposal.Compare, width: Dp, height:
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
         val room = if (theirs != null) height * 0.72f else height
         if (theirs != null) {
-            val ordered = s.theirHand(p) ?: TrialDraws.Ordered(theirs, null)
-            HandHead(handWords("Their hand", ordered), "Draw for them", keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"), phone) { s.drawTheirs() }
-            Hand(h, ordered, s.theirDrawn(p), width, height * 0.22f, gap, phone)
+            val shown = s.theirShown(p) ?: TrialDraws.Shown(theirs, emptyList(), null, false)
+            HandHead(handWords("Their hand", shown), "Draw for them", keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"), phone) { s.drawTheirs() }
+            Hand(h, shown, width, height * 0.22f, gap, phone)
         }
         val stacked = phone || width < 900.dp
         val pairs = listOf(true to bench.ids(p.left), false to bench.ids(p.right))
@@ -469,16 +477,21 @@ private fun Choice(h: NeueHolders, left: Boolean, ids: List<Int>, width: Dp, hei
             Micro(if (left) "This hand" else "Or this hand", Modifier.weight(1f), color = c.ink70)
             KeyCap(if (left) "←" else "→")
         }
-        Hand(h, TrialDraws.Ordered(ids, null), emptyList(), width, height, gap, phone)
+        Hand(h, TrialDraws.Shown(ids, emptyList(), null, false), width, height, gap, phone)
     }
 }
 
 /** One row of a hand: the cards that are rated, then — apart — cards drawn by effects; [labelled] says the drawn ones' words go over them. */
 private class HandRow(val rated: List<Pair<Int, String?>>, val drawn: List<Pair<Int, String?>>, val labelled: Boolean)
 
-/** The micro words over cards drawn by effects. */
+/**
+ * The micro words over cards drawn by effects. Off the top of the second player's deck the first is their marked sixth,
+ * which is rated, and the turn's draw follows the drawn ones, so those words say what the cards are instead (1.1.7).
+ */
 private const val DRAWN_WORDS = "Drawn by effects · not rated"
 private const val DRAWN_SHORT = "Drawn · not rated"
+private const val TOP_WORDS = "Off the top · drawn by effects, then the turn's draw"
+private const val TOP_SHORT = "Off the top"
 
 /** The drawn cards' label's height, and the hairline's room either side. */
 private val DRAWN_LABEL = 18.dp
@@ -517,13 +530,16 @@ private fun separator(gap: Dp): Dp = gap * 2 + 1.dp
 
 /**
  * A hand as card art in [handRows], each card as large as [width] × [height] allows; the turn's draw wears "Draw", cards
- * drawn by effects "+1", "+2"… after a hairline, under "Drawn by effects · not rated" (design review, 1.1.6).
+ * drawn by effects "+1", "+2"… after a hairline, under "Drawn by effects · not rated" (design review, 1.1.6). Once an
+ * effect has taken the top card, the turn's draw stands after the drawn ones, in the order the cards came off the deck,
+ * under "Off the top" (1.1.7).
  */
 @Composable
-private fun Hand(h: NeueHolders, hand: TrialDraws.Ordered, drawn: List<Int>, width: Dp, height: Dp, gap: Dp, phone: Boolean) {
+private fun Hand(h: NeueHolders, hand: TrialDraws.Shown, width: Dp, height: Dp, gap: Dp, phone: Boolean) {
     val c = Mu.colors
-    val rated = hand.opening.map { it to null } + listOfNotNull(hand.draw?.let { it to "Draw" })
-    val extra = drawn.mapIndexed { i, id -> id to "+${i + 1}" }
+    val turn = hand.draw?.let { it to "Draw" }
+    val rated = hand.opening.map { it to null } + listOfNotNull(turn.takeUnless { hand.shifted })
+    val extra = hand.drawn.mapIndexed { i, id -> id to "+${i + 1}" } + listOfNotNull(turn.takeIf { hand.shifted })
     val rows = handRows(rated, extra, phone)
     val across = rows.maxOf { it.rated.size + it.drawn.size }.coerceAtLeast(1)
     val sep = if (rows.any { it.rated.isNotEmpty() && it.drawn.isNotEmpty() }) separator(gap) else 0.dp
@@ -541,7 +557,10 @@ private fun Hand(h: NeueHolders, hand: TrialDraws.Ordered, drawn: List<Int>, wid
                     }
                     if (row.drawn.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            if (row.labelled) Micro(if (phone) DRAWN_SHORT else DRAWN_WORDS, Modifier.height(DRAWN_LABEL - 2.dp), color = c.ink45)
+                            if (row.labelled) {
+                                val words = if (hand.shifted) (if (phone) TOP_SHORT else TOP_WORDS) else if (phone) DRAWN_SHORT else DRAWN_WORDS
+                                Micro(words, Modifier.height(DRAWN_LABEL - 2.dp), color = c.ink45)
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                                 row.drawn.forEachIndexed { i, (id, mark) -> key("d", i, id) { HandCard(h, id, cardW, mark) } }
                             }

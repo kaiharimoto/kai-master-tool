@@ -65,11 +65,18 @@ data class StoredTrial(
     val of: String? = null,
     /** How the answer was given (stage 3): one of [TeachModes] — `calibration`, `apprentice`, `supervised`, `solo`, `audit`, `exam`. */
     val mode: String? = null,
-    /** Your turn's draw, marked on screen, when you went second (1.1.5, `TrialDraws`); one of [hand]. */
+    /**
+     * Your turn's draw, marked on screen, when you went second (1.1.5, `TrialDraws`). One of [hand] when nothing was drawn
+     * by an effect; from 1.1.7 an effect's draw takes the top card first, so after one the turn's draw is the next card
+     * down and the marked sixth is the first of [drew]. 1.1.5–1.1.6 wrote it as one of [hand] always.
+     */
     val turnDraw: Int? = null,
-    /** Their turn's draw, when they went second; one of [opponent]. */
+    /** Their turn's draw as shown, when they went second; likewise. */
     val theirTurnDraw: Int? = null,
-    /** Cards turned up for your draws by card effects (1.1.5): a look ahead, never part of the rated hand. */
+    /**
+     * Cards turned up for your draws by card effects (1.1.5), in order. From 1.1.7 they come off the top, so when you went
+     * second the first is the sixth of [hand]; 1.1.5–1.1.6 drew them from under it. Cards past the hand are never rated.
+     */
     val drew: List<Int> = emptyList(),
     /** Cards turned up for their draws by card effects. */
     val theyDrew: List<Int> = emptyList(),

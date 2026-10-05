@@ -311,13 +311,14 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     /** One more card off your deck for an effect that draws; a comparison has two hands of yours, so none. */
     fun drawMine() {
         val p = proposal as? Proposal.Rate ?: return
-        if (myDraws < myRest(p).size) myDraws++
+        if (myDraws < TrialDraws.deckSize(myHand(p), myRest(p))) myDraws++
     }
 
     /** One more card off their deck. */
     fun drawTheirs() {
         val p = proposal ?: return
-        if (theirDraws < theirRest(p).size) theirDraws++
+        val hand = theirHand(p) ?: return
+        if (theirDraws < TrialDraws.deckSize(hand, theirRest(p))) theirDraws++
     }
 
     private fun myRest(p: Proposal.Rate): List<Int> = bench?.restIds(p.stratum, p.hand).orEmpty()
@@ -332,19 +333,23 @@ class Shootouts(private val dataDir: File, private val h: NeueHolders) {
     fun theirHand(p: Proposal): TrialDraws.Ordered? =
         p.opponent?.let { o -> bench?.opponentIds(o) }?.let { TrialDraws.ordered(it, TrialDraws.seed(shownId, TrialDraws.THEIRS)) }
 
-    /** The cards turned up so far for your draws, in order. */
-    fun myDrawn(p: Proposal.Rate): List<Int> = TrialDraws.drawn(myRest(p), myDraws, TrialDraws.seed(shownId, TrialDraws.MY_DRAWS))
+    /**
+     * Your hand as it stands after your draws by effects: off the top, so when you went second the first takes your marked
+     * sixth and the turn's draw is the next card down (1.1.7, kai).
+     */
+    fun myShown(p: Proposal.Rate): TrialDraws.Shown =
+        TrialDraws.shown(myHand(p), myRest(p), myDraws, TrialDraws.seed(shownId, TrialDraws.MY_DRAWS))
 
-    /** The cards turned up so far for theirs. */
-    fun theirDrawn(p: Proposal): List<Int> = TrialDraws.drawn(theirRest(p), theirDraws, TrialDraws.seed(shownId, TrialDraws.THEIR_DRAWS))
+    /** Their hand after their draws by effects, likewise. */
+    fun theirShown(p: Proposal): TrialDraws.Shown? =
+        theirHand(p)?.let { TrialDraws.shown(it, theirRest(p), theirDraws, TrialDraws.seed(shownId, TrialDraws.THEIR_DRAWS)) }
 
     /** What the trial on screen showed beyond its hands, kept with the answer. */
-    private fun seen(p: Proposal): SeenDraws = SeenDraws(
-        turnDraw = (p as? Proposal.Rate)?.let { myHand(it).draw },
-        theirTurnDraw = theirHand(p)?.draw,
-        drew = (p as? Proposal.Rate)?.let(::myDrawn).orEmpty(),
-        theyDrew = theirDrawn(p),
-    )
+    private fun seen(p: Proposal): SeenDraws {
+        val mine = (p as? Proposal.Rate)?.let(::myShown)
+        val theirs = theirShown(p)
+        return SeenDraws(turnDraw = mine?.draw, theirTurnDraw = theirs?.draw, drew = mine?.drawn.orEmpty(), theyDrew = theirs?.drawn.orEmpty())
+    }
 
     private fun show(r: ShootoutRun, p: Proposal) {
         shownId = nextId()
