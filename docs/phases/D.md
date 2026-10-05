@@ -380,7 +380,7 @@ An example of what Ai writes in `lib/effects/<passcode>.js`, through the prelude
 made up for this note; real cards are written from their own meaning.
 
 ```js
-fx.card(90000001, {
+fx.card(900000001, {
   effects: [
     fx.trigger('e1', { on: fx.on.summoned('normal', 'special'), optional: true, opt: fx.opt.byName(),
       does: [ fx.add({ from: 'your deck', where: fx.all(fx.nameHas('Example'), fx.monster(), fx.level(1, 4)) }) ] }),
@@ -1228,7 +1228,7 @@ Each step splits across agents in worktrees, with a red team beside them, as in 
 - `core/duel/effects`: the model and codec (§2.2), `FxRules`, `FxChain`, the steps, `FxState` and `FxFold`, `FxFacts`,
   `ScriptBook`, choices (§2.5);
 - `DuelEntry.fx`;
-- reference scripts in commonTest, for fictional cards in a reserved passcode range;
+- reference scripts in commonTest, for fictional cards in the reserved passcode range 900000000–900000999 (`FxVocab.RESERVED`: nine digits, so no Konami passcode can land there);
 - `PuzzleReferee` reading its summon rules from `FxRules`, and the puzzle Spells as scripts (`PuzzleEffect` deleted);
 - the verb's core (§5½), never offered yet because no library exists:
   - `DuelVerb.SHORTCUT` in `DuelVerbs.offered` and `actions` with a `Chooser`;
