@@ -14,13 +14,17 @@ object SyncMerges {
      * not text.
      */
     fun entries(base: ByteArray?, mine: ByteArray, theirs: ByteArray, mineNewer: Boolean): ByteArray? {
-        val b = base?.decodeToString()?.let(AiMemory::parse)?.entries.orEmpty().toSet()
+        val b = base?.decodeToString()?.let(AiMemory::parse)?.entries.orEmpty().toHashSet()
         val m = AiMemory.parse(mine.decodeToString())
         val t = AiMemory.parse(theirs.decodeToString())
-        val removedThere = if (base == null) emptySet() else b - t.entries.toSet()
-        val removedHere = if (base == null) emptySet() else b - m.entries.toSet()
+        // Sets throughout (1.1.9): a memory file has no cap now, and a guide of a megabyte merges in one pass, never
+        // entries × entries.
+        val mineSet = m.entries.toHashSet()
+        val removedThere = if (base == null) emptySet() else b - t.entries.toHashSet()
+        val removedHere = if (base == null) emptySet() else b - mineSet
         val kept = m.entries.filter { it !in removedThere }
-        val added = t.entries.filter { it !in m.entries && it !in removedHere && it !in kept }
+        val seen = kept.toHashSet()
+        val added = t.entries.filter { it !in mineSet && it !in removedHere && seen.add(it) }
         val preamble = (if (mineNewer) m else t).preamble
         return m.copy(preamble = preamble, entries = kept + added).render().encodeToByteArray()
     }

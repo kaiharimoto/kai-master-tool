@@ -27,6 +27,8 @@ import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryQuery
+import com.kaiharimoto.mastertool.core.ai.memory.Persona
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryScope
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryWrite
 import com.kaiharimoto.mastertool.core.ai.skills.BuiltInSkills
@@ -199,7 +201,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "run_action" -> runAction(ToolArgs.string(i, "action")!!)
             "set_setting" -> setSetting(ToolArgs.string(i, "key")!!, ToolArgs.element(i, "value") ?: JsonNull)
             "memory" -> memory(ToolArgs.string(i, "action")!!, ToolArgs.string(i, "scope")!!, ToolArgs.string(i, "text"), ToolArgs.string(i, "old_text"))
-            "memory_read" -> memoryRead(ToolArgs.string(i, "scope")!!, ToolArgs.string(i, "id"))
+            "memory_read" -> memoryRead(
+                ToolArgs.string(i, "scope")!!, ToolArgs.string(i, "id"), ToolArgs.string(i, "query"), ToolArgs.string(i, "label"),
+                ToolArgs.int(i, "from"), ToolArgs.int(i, "count"),
+            )
             "skill_view" -> skillView(ToolArgs.string(i, "name")!!)
             "skill_manage" -> skillManage(i)
             "session_search" -> sessionSearch(ToolArgs.string(i, "query")!!, ToolArgs.int(i, "limit") ?: 12)
@@ -275,7 +280,12 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
 
     private fun presentDeck() = if (neue.page == Page.PRESENT) h.present.open?.deck?.takeIf { it.deckId != null } else null
 
-    fun notes(scope: MemoryScope): String = ai.files.entries(scope.kind, scope.id)
+    /**
+     * The scope's notes as the prompt holds them (1.1.9): the whole file when it fits its room on the model in use, else
+     * the entries most relevant to [query] and the scope, with the index line for the rest.
+     */
+    fun notes(scope: MemoryScope, query: String = ""): String =
+        ai.promptMemory(scope.kind, scope.id, if (scope.kind == MemoryKind.WEB) "web" else "deck", query)
 
     /** What <app_context> says: the date, the device, the page, the open deck, the selection. */
     fun situation(): List<String> = buildList {
@@ -1027,13 +1037,15 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         val carried = before.joinToString("\n")
         val sources = Evidence.sources(ai.session?.turns.orEmpty()) + Evidence.Source(CARRIED, "", carried)
         var next = Ledger.prune(was, after)
-        after.filter { it !in before }.forEach { entry ->
+        // A set: a guide of thousands of entries is compared in one pass (1.1.9).
+        val held = before.toHashSet()
+        after.filter { it !in held }.forEach { entry ->
             when (val v = Evidence.judge(entry, sources, deck, now)) {
                 Evidence.Verdict.Words -> Unit
                 is Evidence.Verdict.Refused -> error(v.message)
                 is Evidence.Verdict.Proved -> {
                     // A number carried from the guide keeps the proof it had there.
-                    val earlier = was.filter { p -> p.entry == replaced || p.entry in before }.flatMap { it.proofs }
+                    val earlier = was.filter { p -> p.entry == replaced || p.entry in held }.flatMap { it.proofs }
                     val proofs = v.proven.proofs.flatMap { p -> if (p.tool == CARRIED) earlier.ifEmpty { listOf(p) } else listOf(p) }.distinct()
                     val status = if (proofs.any { it.tool == CARRIED } && v.proven.status == Proven.Status.CHECKED) {
                         was.firstOrNull { it.entry == replaced }?.status ?: Proven.Status.CHECKED
@@ -1074,7 +1086,11 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         // What one Fine Tuning run may add to the guide, by its intensity (1.0.66: Deep, 20,000 characters).
         if (write is MemoryWrite.Done && kind == MemoryKind.GUIDE && action != "rewrite") {
             ai.guideRoom()?.let { (start, budget, label) ->
-                GuideBudget.refusal(start, write.doc.used, budget, label)?.let { return fail(it) }
+                GuideBudget.refusal(start, write.doc.used, budget, label)?.let {
+                    // The run is full, never the guide (1.1.9): the person is told when the run ends, and the next run carries on.
+                    ai.guideFilled = GuideBudget.filled(budget, label)
+                    return fail(it)
+                }
             }
         }
         return when (write) {
@@ -1092,9 +1108,22 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
         }
     }
 
-    private fun memoryRead(scope: String, id: String?): Answer {
+    /**
+     * A memory file read a page at a time (1.1.9): the files have no cap, so this is how Ai reaches what its prompt left
+     * out — by [query], [label] or range ([from], [count]), each entry numbered by its place in the file.
+     */
+    private suspend fun memoryRead(scope: String, id: String?, query: String?, label: String?, from: Int?, count: Int?): Answer {
         val (kind, fid, name) = memoryTarget(scope, id) ?: return fail("Nothing in scope for $scope.")
-        return ok(ai.files.memory(kind, fid, name).render().ifBlank { "(empty)" }, "Read ${kind.name.lowercase()} memory")
+        val doc = withContext(Dispatchers.IO) { ai.files.memory(kind, fid, name) }
+        val title = doc.preamble.firstOrNull { it.startsWith("# ") }?.removePrefix("# ")?.trim() ?: AiMemory.title(kind, name)
+        val text = withContext(Dispatchers.Default) { MemoryQuery.read(doc, title, query, label, from, count) }
+        val how = when {
+            !query.isNullOrBlank() -> " for “${query.trim()}”"
+            !label.isNullOrBlank() -> " under ${label.trim()}"
+            from != null -> " from entry $from"
+            else -> ""
+        }
+        return ok(text, "Read ${kind.name.lowercase()} memory$how")
     }
 
     private fun skillView(name: String): Answer {
@@ -1161,6 +1190,19 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     /** Words found in this conversation's saved history, the summarised part too, or in every conversation (1.0.56). */
     private suspend fun recall(query: String, scope: String, limit: Int): Answer {
         if (query.isBlank()) return fail("Say what to find.")
+        // Everything Ai remembers (1.1.9): every memory file, entry by entry — what a prompt's budget left out.
+        if (scope == "memory") {
+            val hits = withContext(Dispatchers.IO) {
+                val files = ai.files.memoryFiles().filter { it.name != Persona.FILE }
+                    .associate { it.relativeTo(ai.files.root).invariantSeparatorsPath to it.readText() }
+                MemoryQuery.search(files, query, limit.coerceIn(1, 30))
+            }
+            val said = hits.joinToString("\n") { "${it.path} [${it.number}]: ${it.excerpt}" }
+            return ok(
+                if (hits.isEmpty()) "Nothing in memory holds “$query”." else "$said\n(memory_read with the file's scope and from = the number reads an entry whole, with its neighbours.)",
+                "Recalled “$query” from memory",
+            )
+        }
         val current = ai.session
         val pool = if (scope == "all") (withContext(Dispatchers.IO) { ai.files.sessions() }.filter { it.id != current?.id } + listOfNotNull(current)) else listOfNotNull(current)
         val hits = Recall.search(pool, query, limit.coerceIn(1, 30))

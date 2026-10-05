@@ -1,5 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai
 
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryBudget
+
 /**
  * How many tokens a model can read at once (1.0.56): the size of the gauge in Ai's panel, and the
  * budget past which a conversation's oldest turns are summarised. Read off the model's name, as
@@ -66,13 +68,20 @@ object ContextBreakdown {
         var results = 0
         var pictures = 0
         var context = 0
+        // The memory put in front of messages (1.1.9: the deck's guide, the scope's notes, within their budgets) is
+        // marked as such in the app's blocks, and counted with the memory in the instructions, not as the page.
+        var shown = 0
         session.sent.forEach { t ->
             t.parts.forEach { p ->
                 when (p) {
                     is Part.Text, is Part.ToolUse, is Part.Opaque -> words += Compaction.sizeOf(p)
                     is Part.ToolResult -> results += Compaction.sizeOf(p)
                     is Part.Image -> pictures += Compaction.sizeOf(p)
-                    is Part.Context -> context += Compaction.sizeOf(p)
+                    is Part.Context -> {
+                        val mem = MemoryBudget.taggedChars(p.text)
+                        shown += mem
+                        context += Compaction.sizeOf(p) - mem
+                    }
                     is Part.Activity, is Part.Reasoning -> Unit
                 }
             }
@@ -80,7 +89,7 @@ object ContextBreakdown {
         val raw = listOf(
             "Voice and instructions" to voice,
             "Rules of the game" to rules,
-            "Memory" to memory,
+            "Memory" to memory + shown,
             "Skills" to skills,
             "Tools" to Compaction.toolChars(tools),
             "What the app showed" to context,

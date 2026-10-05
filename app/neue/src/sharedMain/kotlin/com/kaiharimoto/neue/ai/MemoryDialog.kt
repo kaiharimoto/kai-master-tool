@@ -3,6 +3,13 @@ package com.kaiharimoto.neue.ai
 import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryReview
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryDoc
+import com.kaiharimoto.mastertool.core.ai.text.Block
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import com.kaiharimoto.neue.kit.BtnSize
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.kaiharimoto.mastertool.core.ai.text.ChatMarkdown
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutPaths
 import com.kaiharimoto.neue.kit.MuText
@@ -68,25 +75,34 @@ fun MemoryDialog(ai: AiState) {
     val stamp = remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val groups = remember(stamp.intValue) { brainGroups(ai) }
     androidx.compose.runtime.LaunchedEffect(Unit) { ai.deckNames = ai.h.webs.libraryDecks().associate { it.entry.id to it.entry.name } }
-    // What was on disk when the file was opened: a save is the person's change to it, never a copy over what Ai wrote since.
-    val loaded = remember(path, stamp.intValue) { ai.files.read(path) }
-    var text by remember(path, stamp.intValue) { mutableStateOf(loaded ?: if (path == Persona.FILE) ai.files.soul(ai.name) else "") }
-    var saved by remember(path, stamp.intValue) { mutableStateOf(true) }
+    // Read off the frame thread (1.1.9: a file has no cap, and a guide may be a megabyte): what was on disk when the file
+    // was opened — a save is the person's change to it, never a copy over what Ai wrote since — parsed for reading.
+    val file by androidx.compose.runtime.produceState<BrainFile?>(null, path, stamp.intValue) {
+        value = withContext(Dispatchers.IO) { BrainFile.read(ai, path) }
+    }
+    // Never another file's text under this one's name while the new one is read.
+    val loaded = file?.takeIf { it.path == path }
     var editing by remember(path) { mutableStateOf(false) }
+    // Edit: the whole file, or — past [BrainFile.WHOLE] characters — one page of entries at a time.
+    var page by remember(path) { mutableStateOf(0) }
+    var text by remember(path, stamp.intValue, loaded, page) { mutableStateOf(loaded?.editText(page).orEmpty()) }
+    var saved by remember(path, stamp.intValue, loaded, page) { mutableStateOf(true) }
     fun save() {
-        ai.saveByHand(path, loaded, text)
+        val f = loaded ?: return
+        if (saved) return
+        ai.saveByHand(path, f.raw, f.withPage(page, text))
         saved = true
         stamp.intValue++
     }
     // Moving to another file keeps what was typed: nothing is lost to a click.
     fun open(next: String) {
-        if (!saved) save()
+        save()
         ai.memoryOpen = next
     }
     MuDialog(
         title = "${ai.name}'s brain",
         onDismiss = {
-            if (!saved) save()
+            save()
             ai.memoryOpen = null
         },
         width = 1080.dp,
@@ -95,7 +111,7 @@ fun MemoryDialog(ai: AiState) {
         footer = {
             if (path.startsWith("guides/")) {
                 MuButton("Open as the guide", {
-                    if (!saved) save()
+                    save()
                     val id = path.removePrefix("guides/").removeSuffix(".md")
                     ai.memoryOpen = null
                     ai.docOpen = LivingDoc.Guide(id, deckName(ai, id))
@@ -103,13 +119,13 @@ fun MemoryDialog(ai: AiState) {
             }
             if (path == "USER.md") {
                 MuButton("Open as your profile", {
-                    if (!saved) save()
+                    save()
                     ai.memoryOpen = null
                     ai.docOpen = LivingDoc.Profile
                 }, variant = BtnVariant.GHOST)
             }
             MuButton("Close", {
-                if (!saved) save()
+                save()
                 ai.memoryOpen = null
             }, variant = BtnVariant.GHOST)
             MuButton(if (saved) "Saved" else "Save", { save() }, variant = BtnVariant.PRIMARY, enabled = !saved, reason = "Nothing changed")
@@ -127,44 +143,122 @@ fun MemoryDialog(ai: AiState) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f)) {
                         MuText(label(ai, path), style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 1)
-                        Mono(path + (fullness(path, text)?.let { " · $it" } ?: ""), color = c.ink45)
+                        Mono(path + (loaded?.let { fullness(path, it) }?.let { " · $it" } ?: ""), color = c.ink45)
                     }
                     Segmented(editing, listOf(false, true), { if (it) "Edit" else "Read" }, { editing = it }, small = true)
                 }
-                if (editing) {
-                    val source = remember { MutableInteractionSource() }
-                    val focused by source.collectIsFocusedAsState()
-                    val style = MuType.mono(LocalMuFonts.current).copy(color = c.ink)
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(460.dp)
-                            .border(1.dp, animatedColor(if (focused) c.ink else c.ink25))
-                            .cursor(CursorMode.TEXT, fontSize = style.fontSize, singleLine = false, focused = focused)
-                            .verticalScroll(rememberScrollState())
-                            .padding(12.dp),
-                    ) {
-                        BasicTextField(
-                            value = text,
-                            onValueChange = { text = it; saved = false },
-                            textStyle = style,
-                            cursorBrush = SolidColor(c.ink),
-                            interactionSource = source,
-                            modifier = Modifier.fillMaxWidth().reportsTextFocus(),
-                        )
+                when {
+                    loaded == null -> Box(Modifier.fillMaxWidth().height(460.dp).border(1.dp, c.ink12).padding(16.dp)) { Help("Reading…") }
+                    editing -> {
+                        if (loaded.paged) {
+                            // A very large file is edited a page of entries at a time; reading shows it whole.
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                val (from, to) = loaded.pageRange(page)
+                                Small("Entries ${from + 1}–$to of ${loaded.entryCount}", Modifier.weight(1f), color = c.ink70)
+                                MuButton("Previous", { save(); page-- }, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = page > 0, reason = "This is the first page")
+                                MuButton("Next", { save(); page++ }, variant = BtnVariant.GHOST, size = BtnSize.SM, enabled = page < loaded.pages - 1, reason = "This is the last page")
+                            }
+                        }
+                        val source = remember { MutableInteractionSource() }
+                        val focused by source.collectIsFocusedAsState()
+                        val style = MuType.mono(LocalMuFonts.current).copy(color = c.ink)
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(if (loaded.paged) 420.dp else 460.dp)
+                                .border(1.dp, animatedColor(if (focused) c.ink else c.ink25))
+                                .cursor(CursorMode.TEXT, fontSize = style.fontSize, singleLine = false, focused = focused)
+                                .verticalScroll(rememberScrollState())
+                                .padding(12.dp),
+                        ) {
+                            BasicTextField(
+                                value = text,
+                                onValueChange = { text = it; saved = false },
+                                textStyle = style,
+                                cursorBrush = SolidColor(c.ink),
+                                interactionSource = source,
+                                modifier = Modifier.fillMaxWidth().reportsTextFocus(),
+                            )
+                        }
                     }
-                } else {
-                    // Read: the file as a document, the way the chat draws Ai's answers.
-                    val blocks = remember(text) { ChatMarkdown.parse(text) }
-                    Column(
-                        Modifier.fillMaxWidth().height(460.dp).border(1.dp, c.ink12).verticalScroll(rememberScrollState()).padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (text.isBlank()) Help("Empty: ${ai.name} writes here as it learns, or switch to Edit and write it yourself.")
-                        blocks.forEach { MarkdownBlock(ai, it) }
+                    else -> {
+                        // Read: the file as a document, the way the chat draws Ai's answers — every entry its own row of a
+                        // lazy list, so a guide of thousands of entries scrolls as lightly as one of ten.
+                        LazyColumn(
+                            Modifier.fillMaxWidth().height(460.dp).border(1.dp, c.ink12),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (loaded.blocks.isEmpty()) item { Help("Empty: ${ai.name} writes here as it learns, or switch to Edit and write it yourself.") }
+                            items(loaded.blocks.size) { i -> MarkdownBlock(ai, loaded.blocks[i]) }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * A brain file as the dialog shows it (1.1.9), read and parsed off the frame thread: its text, its entries, and its
+ * blocks one entry each, for a lazy list. Past [WHOLE] characters a memory file is edited a page of entries at a time.
+ */
+private class BrainFile(
+    val path: String,
+    /** What is on disk, or null when the file is not there yet. */
+    val raw: String?,
+    val text: String,
+    /** The file's entries and preamble, for a memory file; null for the voice and skills. */
+    val doc: MemoryDoc?,
+    val blocks: List<Block>,
+) {
+    val entryCount: Int get() = doc?.entries?.size ?: 0
+    val paged: Boolean get() = doc != null && text.length > WHOLE && entryCount > PAGE
+    val pages: Int get() = if (!paged) 1 else (entryCount + PAGE - 1) / PAGE
+
+    /** Page [page]'s entries: where it starts, and where the next does. */
+    fun pageRange(page: Int): Pair<Int, Int> {
+        val from = (page.coerceIn(0, pages - 1)) * PAGE
+        return from to minOf(entryCount, from + PAGE)
+    }
+
+    /** What the editor holds on [page]: the whole file, or that page's entries as `- ` lines. */
+    fun editText(page: Int): String {
+        if (!paged) return text
+        val (from, to) = pageRange(page)
+        return doc!!.entries.subList(from, to).joinToString("\n") { "- $it" } + "\n"
+    }
+
+    /** The whole file with [page] edited to [edited]: the other pages and the heading as they were read. */
+    fun withPage(page: Int, edited: String): String {
+        if (!paged) return edited
+        val (from, to) = pageRange(page)
+        val d = doc!!
+        val mine = AiMemory.parse(edited).let { it.preamble.filter(String::isNotBlank) + it.entries }
+        return d.copy(entries = d.entries.subList(0, from) + mine + d.entries.subList(to, d.entries.size)).render()
+    }
+
+    companion object {
+        /** Past this many characters a memory file is edited a page at a time: one text field never holds a megabyte. */
+        const val WHOLE = 60_000
+
+        /** Entries on a page. */
+        const val PAGE = 200
+
+        fun read(ai: AiState, path: String): BrainFile {
+            val raw = ai.files.read(path)
+            val text = raw ?: if (path == Persona.FILE) ai.files.soul(ai.name) else ""
+            val memory = path.endsWith(".md") && path != Persona.FILE && !path.startsWith("skills/")
+            val doc = if (memory) AiMemory.parse(text) else null
+            // One block an entry: a list item is a row of its own, so the list is lazy all the way down.
+            val blocks = ChatMarkdown.parse(text).flatMap { b ->
+                when (b) {
+                    is Block.Bullets -> b.items.map { Block.Bullets(listOf(it)) }
+                    is Block.Numbered -> b.items.mapIndexed { i, item -> Block.Numbered(listOf(item), b.start + i) }
+                    else -> listOf(b)
+                }
+            }
+            return BrainFile(path, raw, text, doc, blocks)
         }
     }
 }
@@ -187,14 +281,17 @@ private fun brainGroups(ai: AiState): List<Pair<String, List<String>>> {
     ).filter { it.second.isNotEmpty() }
 }
 
-/** How full a bounded memory file is, in characters against its limit. */
-private fun fullness(path: String, text: String): String? {
+/** How full a memory file is: the profile against its cap; the files with none (1.1.9) by their entries and size. */
+private fun fullness(path: String, file: BrainFile): String? {
     val kind = MemoryKind.entries.firstOrNull { k ->
         if (k.file.contains("%s")) path.startsWith(k.file.substringBefore("%s")) else path == k.file
     } ?: return null
-    val used = AiMemory.parse(text).used
-    // A guide has no cap (1.0.65): its size in words' worth of characters, not a share of one.
-    if (!kind.bounded) return "${used / 1000}k characters".takeIf { used >= 1000 } ?: "$used characters"
+    val doc = file.doc ?: return null
+    val used = doc.used
+    if (!kind.bounded) {
+        val size = if (used >= 1000) "${used / 1000}k characters" else "$used characters"
+        return "${doc.entries.size} ${if (doc.entries.size == 1) "entry" else "entries"} · $size · no cap"
+    }
     return "${used * 100 / kind.limit}% full"
 }
 

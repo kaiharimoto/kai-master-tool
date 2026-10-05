@@ -411,7 +411,7 @@ class AiState(internal val h: NeueHolders) {
         attached = emptyList()
         if (MoodTracker.isThanks(words)) mood.thanked(clock())
         // A seat's conversation of an Ai vs Ai match is read, never carried on: a message starts a new one.
-        val current = session?.takeIf { it.connection == connection.id && it.mode != AiSession.MODE_MATCH } ?: begin(connection)
+        val current = session?.takeIf { it.connection == connection.id && it.mode != AiSession.MODE_MATCH } ?: begin(connection, query = words)
         val images = pictures.map { files.putImage(current.id, it.bytes, it.mime, it.width, it.height) }
         val scope = host.scope()
         val scopeChanged = scope?.path != current.scopeShown
@@ -422,12 +422,13 @@ class AiState(internal val h: NeueHolders) {
         val pinned = current.takeIf { it.mode in AiSession.DECK_MODES && it.deckId != null }
         val deckId = pinned?.deckId ?: h.builder.deckId
         val deckName = pinned?.deckName ?: h.builder.deckName
+        // Within its room on this model (1.1.9): the entries most relevant to these words, and a line for the rest.
         val guide = if (deckId != null && deckId != current.guideShown) {
-            guideForPrompt(deckId).takeIf { it.isNotBlank() }?.let { listOf("", "Your guide to how “$deckName” plays (memory scope guide; a mark in brackets says whether its number still holds):", it) }.orEmpty()
+            guideBlock(deckId, deckName, words)?.let { listOf("", it) }.orEmpty()
         } else {
             emptyList()
         }
-        val context = PromptBuilder.context(renamed + host.situation() + guide, scope, scope?.let { host.notes(it) }, scopeChanged)
+        val context = PromptBuilder.context(renamed + host.situation() + guide, scope, scope?.takeIf { scopeChanged }?.let { host.notes(it, words) }, scopeChanged)
         val turn = ChatTurn.user(words, context, System.currentTimeMillis(), images)
         val next = current.copy(
             turns = current.turns + turn,
@@ -778,6 +779,9 @@ class AiState(internal val h: NeueHolders) {
     /** The guide's size at the start of a Fine Tuning run, the run's room and its intensity's name; null outside one. */
     internal var guideStart: Triple<Int, Int, String>? = null
 
+    /** What the person is told when this run ends, once it used all of its room in the guide (1.1.9); null while it has room. */
+    internal var guideFilled: String? = null
+
     /** Learn About You's launcher is open. */
     var profileAsk by mutableStateOf(false)
 
@@ -825,14 +829,15 @@ class AiState(internal val h: NeueHolders) {
         if (session?.id == id) session = null
     }
 
-    internal fun begin(connection: AiConnection, mode: String = AiSession.MODE_CHAT): AiSession {
+    /** A new conversation; [query], the person's first words, says which of Ai's own notes are most relevant (1.1.9). */
+    internal fun begin(connection: AiConnection, mode: String = AiSession.MODE_CHAT, query: String = ""): AiSession {
         val now = System.currentTimeMillis()
         val s = AiSession(
             id = UUID.randomUUID().toString(),
             createdAt = now,
             updatedAt = now,
             connection = connection.id,
-            system = systemPrompt(connection, mode),
+            system = systemPrompt(connection, mode, query),
             mode = mode,
         )
         session = s
@@ -840,14 +845,15 @@ class AiState(internal val h: NeueHolders) {
     }
 
     /** The instructions a conversation starts with, frozen for its length. */
-    fun systemPrompt(connection: AiConnection?, mode: String = AiSession.MODE_CHAT): String {
+    fun systemPrompt(connection: AiConnection?, mode: String = AiSession.MODE_CHAT, query: String = ""): String {
         val wire = connection?.let { Providers.byId(it.provider)?.wire }
         return PromptBuilder.system(
             PromptBuilder.Setup(
                 name = name,
                 soul = files.soul(name),
                 userMemory = files.entries(MemoryKind.USER),
-                agentMemory = files.entries(MemoryKind.AGENT),
+                // Ai's own notes have no cap (1.1.9): the prompt holds what fits their room on this connection's model.
+                agentMemory = promptMemory(MemoryKind.AGENT, null, "agent", query, on = connection),
                 skillsIndex = Skills.index(skills()),
                 device = when {
                     h.neue.phone -> "phone"

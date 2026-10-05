@@ -24,7 +24,7 @@ class GuideWorkTest {
         assertNull(GuideBudget.refusal(startUsed = 30_000, nextUsed = 50_000, budget = 20_000, intensity = "Deep"))
         val refused = GuideBudget.refusal(startUsed = 30_000, nextUsed = 50_001, budget = 20_000, intensity = "Deep")
         assertNotNull(refused)
-        assertTrue("20000" in refused && "Deep" in refused)
+        assertTrue("20,000" in refused && "Deep" in refused)
         // Shrinking is always allowed.
         assertNull(GuideBudget.refusal(10_000, 2_000, 5_000, "Quick"))
         assertEquals("1,234,567", GuideBudget.grouped(1_234_567))

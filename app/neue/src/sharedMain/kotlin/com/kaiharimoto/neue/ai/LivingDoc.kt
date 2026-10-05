@@ -56,6 +56,10 @@ import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 
 /**
  * A living document Ai keeps (1.0.54, kai: "a living document for each deck that is a guide that
@@ -74,13 +78,20 @@ fun LivingDocDialog(ai: AiState) {
     val stamp = remember(open) { mutableIntStateOf(0) }
     when (open) {
         is LivingDoc.Guide -> {
-            val doc = remember(open, stamp.intValue) { GuideDoc.parse(ai.files.read(AiMemory.path(MemoryKind.GUIDE, open.deckId))) }
-            val reports = remember(open, stamp.intValue) { ai.files.reports(open.deckId) }
+            // Read and sorted off the frame thread (1.1.9): the guide has no cap, and may be thousands of entries.
+            val read by androidx.compose.runtime.produceState<GuideRead?>(null, open, stamp.intValue) {
+                val print = h.builder.deck.takeIf { h.builder.deckId == open.deckId }?.let(Ledger::fingerprint)
+                value = withContext(Dispatchers.IO) { GuideRead.of(ai, open.deckId, print) }
+            }
+            val doc = read?.doc ?: GuideDoc("", emptyList())
+            val reports = read?.reports.orEmpty()
             MuDialog(
                 title = "How ${open.deckName} plays",
                 onDismiss = { ai.docOpen = null },
                 width = 880.dp,
-                description = "${ai.name}'s guide to this deck, kept across every Fine Tuning session. ${sessionsWords(reports.size)}.",
+                description = "${ai.name}'s guide to this deck, kept across every Fine Tuning session. ${sessionsWords(reports.size)}." +
+                    (read?.let { r -> if (r.doc.entryCount > 0) " ${r.doc.entryCount} entries, all of them here." else "" } ?: ""),
+                scrolls = false,
                 footer = {
                     MuButton("Edit in the brain", {
                         ai.docOpen = null
@@ -112,36 +123,40 @@ fun LivingDocDialog(ai: AiState) {
                     }, variant = BtnVariant.PRIMARY, icon = Icons.Export, enabled = !making, reason = "The PDF is being made")
                 },
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    val latest = reports.lastOrNull()
-                    if (latest != null) {
-                        Micro("How well it knows this deck", color = Mu.colors.ink70)
-                        ScoresRow(latest, reports)
-                        if (reports.size >= 2) HistoryBars(reports.takeLast(8))
-                        if (latest.why.isNotBlank()) Small(latest.why, color = Mu.colors.ink70)
-                    } else {
-                        Help("No session has scored this deck yet: each Fine Tuning session ends with ${ai.name}'s confidence, and it shows here.")
+                // Every entry its own row of a lazy list (1.1.9): the whole guide, never cut, and light to scroll.
+                val r = read
+                LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (r == null) item { Help("Reading the guide…") }
+                    if (r != null) item {
+                        Column(Modifier.padding(bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            val latest = reports.lastOrNull()
+                            if (latest != null) {
+                                Micro("How well it knows this deck", color = Mu.colors.ink70)
+                                ScoresRow(latest, reports)
+                                if (reports.size >= 2) HistoryBars(reports.takeLast(8))
+                                if (latest.why.isNotBlank()) Small(latest.why, color = Mu.colors.ink70)
+                            } else {
+                                Help("No session has scored this deck yet: each Fine Tuning session ends with ${ai.name}'s confidence, and it shows here.")
+                            }
+                            val cards = remember(doc) { AiDocs.keyCards(h, doc) }
+                            if (cards.isNotEmpty()) KeyCards(ai, cards)
+                        }
                     }
-                    val cards = remember(doc) { AiDocs.keyCards(h, doc) }
-                    if (cards.isNotEmpty()) KeyCards(ai, cards)
                     // Each number's proof, as it stands (1.0.98, the evidence ledger): checked, stale, contradicted, estimate.
-                    val ledger = remember(open, stamp.intValue) {
-                        val print = h.builder.deck.takeIf { h.builder.deckId == open.deckId }?.let(Ledger::fingerprint)
-                        Ledger.read(ai.files.read(Ledger.path(open.deckId))).let { l -> print?.let { Ledger.staleAgainst(l, it) } ?: l }
-                    }
-                    Sections(doc, empty = "The guide is empty. Teach ${ai.name} the deck, let it study it, or have it learn it from first principles.") { e ->
-                        ledger.firstOrNull { it.entry == e || it.entry.endsWith(e) }
-                    }
+                    if (r != null) sections(r.doc, empty = "The guide is empty. Teach ${ai.name} the deck, let it study it, or have it learn it from first principles.") { e -> r.proofOf(e) }
                 }
             }
         }
         LivingDoc.Profile -> {
-            val doc = remember(stamp.intValue) { GuideDoc.profile(ai.files.read(AiMemory.path(MemoryKind.USER))) }
+            val doc = androidx.compose.runtime.produceState(GuideDoc("", emptyList()), stamp.intValue) {
+                value = withContext(Dispatchers.IO) { GuideDoc.profile(ai.files.read(AiMemory.path(MemoryKind.USER))) }
+            }.value
             MuDialog(
                 title = "What ${ai.name} knows about you",
                 onDismiss = { ai.docOpen = null },
                 width = 760.dp,
                 description = "Your profile: in front of ${ai.name} in every conversation, and built on each time it learns about you.",
+                scrolls = false,
                 footer = {
                     MuButton("Edit in the brain", {
                         ai.docOpen = null
@@ -153,7 +168,9 @@ fun LivingDocDialog(ai: AiState) {
                     }, variant = BtnVariant.PRIMARY, arrow = true, enabled = ai.configured, reason = "Set up ${ai.name} first")
                 },
             ) {
-                Sections(doc, empty = "Nothing yet. Learn About You is an interview — your goals, your preferences, how you work — and what ${ai.name} learns is kept here.")
+                LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    sections(doc, empty = "Nothing yet. Learn About You is an interview — your goals, your preferences, how you work — and what ${ai.name} learns is kept here.")
+                }
             }
         }
     }
@@ -253,34 +270,61 @@ private fun KeyCards(ai: AiState, cards: List<ReportPdf.KeyCard>) {
     }
 }
 
-/** Each section numbered over a rule, its entries as hanging lines with their cards in bold. */
-@Composable
-private fun Sections(doc: GuideDoc, empty: String, proofOf: (String) -> Proven? = { null }) {
-    val c = Mu.colors
-    val f = LocalMuFonts.current
+/**
+ * Each section numbered over a rule, its entries as hanging lines with their cards in bold — each heading and each entry
+ * an item of the lazy list it is put in (1.1.9), so a guide of any length is shown whole and scrolls lightly.
+ */
+private fun LazyListScope.sections(doc: GuideDoc, empty: String, proofOf: (String) -> Proven? = { null }) {
     if (doc.isEmpty) {
-        Help(empty)
+        item { Help(empty) }
         return
     }
-    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        doc.sections.forEachIndexed { i, s ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    doc.sections.forEachIndexed { i, s ->
+        item(key = "section-$i") {
+            val c = Mu.colors
+            val f = LocalMuFonts.current
+            Column(Modifier.padding(top = if (i == 0) 0.dp else 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Mono((i + 1).toString().padStart(2, '0'), color = c.ink45)
                     MuText(s.name, Modifier.weight(1f), style = MuType.body(f).copy(fontWeight = FontWeight.Bold, fontSize = 17.sp), color = c.ink)
                     Mono(s.entries.size.toString(), color = c.ink45)
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink))
-                s.entries.forEach { e ->
-                    Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Mono("–", color = c.ink45)
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            MuText(styled(ChatMarkdown.inline(e)), Modifier.fillMaxWidth(), style = MuType.body(f).copy(fontSize = 14.sp), color = c.ink)
-                            proofOf(e)?.let { p -> ProofLine(p) }
-                        }
-                    }
+            }
+        }
+        items(s.entries.size) { k ->
+            val e = s.entries[k]
+            val c = Mu.colors
+            val f = LocalMuFonts.current
+            Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Mono("–", color = c.ink45)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    MuText(styled(ChatMarkdown.inline(e)), Modifier.fillMaxWidth(), style = MuType.body(f).copy(fontSize = 14.sp), color = c.ink)
+                    proofOf(e)?.let { p -> ProofLine(p) }
                 }
             }
+        }
+    }
+}
+
+/**
+ * A deck's guide as the living document shows it (1.1.9), read off the frame thread: the guide sorted by its labels,
+ * the reports, and each entry's proof found by its words in one lookup, never a search of the ledger per entry.
+ */
+private class GuideRead(val doc: GuideDoc, val reports: List<SessionReport>, private val proofs: Map<String, Proven>) {
+    fun proofOf(entry: String): Proven? = proofs[entry]
+
+    companion object {
+        fun of(ai: AiState, deckId: String, print: String?): GuideRead {
+            val doc = GuideDoc.parse(ai.files.read(AiMemory.path(MemoryKind.GUIDE, deckId)))
+            val ledger = Ledger.read(ai.files.read(Ledger.path(deckId))).let { l -> print?.let { Ledger.staleAgainst(l, it) } ?: l }
+            // A section shows an entry without its label: a proof is found by the whole entry or by what follows the label.
+            val proofs = HashMap<String, Proven>()
+            ledger.forEach { p ->
+                proofs.putIfAbsent(p.entry, p)
+                proofs.putIfAbsent(GuideDoc.split(p.entry).second, p)
+            }
+            return GuideRead(doc, ai.files.reports(deckId), proofs)
         }
     }
 }

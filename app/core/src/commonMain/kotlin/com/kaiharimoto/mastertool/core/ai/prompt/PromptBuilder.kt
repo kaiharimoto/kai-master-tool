@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai.prompt
 
+import com.kaiharimoto.mastertool.core.ai.memory.MemoryBudget
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryKind
 import com.kaiharimoto.mastertool.core.ai.memory.MemoryScope
 import com.kaiharimoto.mastertool.core.ai.rules.RulesPrimer
@@ -179,12 +180,17 @@ object PromptBuilder {
         appendLine("## Memory")
         appendLine(
             """
-            You remember across conversations through the `memory` tool, in short entries:
+            You remember across conversations through the `memory` tool, in entries:
             - user: facts about the person — their events and dates, format, decks, playstyle, what they want from you.
-            - agent: what you learned about doing this job well for them.
+            - agent: what you learned about doing this job well for them, and the game's lessons you keep for yourself.
             - deck / web: notes on the deck or the web in scope (it arrives in <app_context> when it changes).
+            - guide: how the open deck plays (it arrives in <app_context> once a conversation).
             Write when you learn something that will still matter next week, the moment you learn it; replace an entry
-            when it changes; never store a conversation. Below is your memory as it stood when this conversation began.
+            when it changes; never store a conversation. What you know of the game is never refused for size: your notes,
+            a deck's or web's notes and a deck's guide keep everything (the profile alone is bounded). When a file is larger
+            than its room here, you are shown its most relevant entries and a line beginning "(${MemoryBudget.INDEX_MARK}" that
+            says how many more there are: read them with memory_read (a query, a label, or from and count) or recall scope
+            memory before you say you do not know. Below is your memory as it stood when this conversation began.
             """.trimIndent(),
         )
         appendLine()
@@ -301,7 +307,8 @@ object PromptBuilder {
             val what = if (scope.kind == MemoryKind.WEB) "web" else "deck"
             appendLine()
             appendLine("Your notes on the $what “${scope.name}” (memory scope $what):")
-            appendLine(notes?.trim()?.takeIf { it.isNotEmpty() } ?: "(none yet)")
+            // Marked as memory (1.1.9), so the context gauge counts it as memory and not the page.
+            appendLine(notes?.trim()?.takeIf { it.isNotEmpty() }?.let { MemoryBudget.tagged(scope.path, it) } ?: "(none yet)")
         }
     }.trim()
 }

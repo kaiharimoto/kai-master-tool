@@ -166,15 +166,32 @@ fun ContextPanel(ai: AiState) {
             }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Micro("What it remembers, read every time", color = c.ink70)
-                val memory = listOf(
-                    "About you" to AiMemory.path(MemoryKind.USER),
-                    "Its own notes" to AiMemory.path(MemoryKind.AGENT),
-                ) + listOfNotNull(ai.h.builder.deckId?.let { "This deck's guide" to AiMemory.path(MemoryKind.GUIDE, it) })
-                memory.forEach { (label, path) ->
-                    val size = ai.files.read(path)?.length ?: 0
+                val deckId = ai.h.builder.deckId
+                // Kept whole, read within a budget (1.1.9): each file's size, and how much of it goes in front of the model.
+                // Measured off the frame thread: a guide may be a megabyte.
+                val memory by androidx.compose.runtime.produceState(emptyList<Triple<String, String, Pair<Int, Int>>>(), deckId, s.id) {
+                    val files = listOf(
+                        Triple("About you", MemoryKind.USER, null),
+                        Triple("Its own notes", MemoryKind.AGENT, null),
+                    ) + listOfNotNull(deckId?.let { Triple("This deck's guide", MemoryKind.GUIDE, it) })
+                    value = files.map { (label, kind, id) ->
+                        val path = AiMemory.path(kind, id)
+                        val size = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ai.files.read(path)?.length ?: 0 }
+                        Triple(label, path, size to minOf(size, ai.memoryRoom(kind)))
+                    }
+                }
+                memory.forEach { (label, path, sizes) ->
+                    val (size, read) = sizes
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Small(label, Modifier.weight(1f), color = c.ink)
-                        Mono(if (size == 0) "empty" else "${ContextWindows.words(size / 4L)} tokens", color = c.ink45)
+                        Mono(
+                            when {
+                                size == 0 -> "empty"
+                                read >= size -> "${ContextWindows.words(size / 4L)} tokens"
+                                else -> "${ContextWindows.words(read / 4L)} of ${ContextWindows.words(size / 4L)} tokens"
+                            },
+                            color = c.ink45,
+                        )
                         MuButton("Open", { ai.contextOpen = false; ai.memoryOpen = path }, variant = BtnVariant.GHOST, size = BtnSize.SM)
                     }
                 }
