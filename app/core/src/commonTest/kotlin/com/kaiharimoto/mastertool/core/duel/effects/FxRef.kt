@@ -3,6 +3,7 @@ package com.kaiharimoto.mastertool.core.duel.effects
 import com.kaiharimoto.mastertool.core.board.CardPosition
 import com.kaiharimoto.mastertool.core.board.DuelPhase
 import com.kaiharimoto.mastertool.core.duel.DuelAction
+import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.DuelHeader
 import com.kaiharimoto.mastertool.core.duel.DuelRules
 import com.kaiharimoto.mastertool.core.duel.DuelSetup
@@ -51,6 +52,19 @@ object FxRef {
     const val CROSSROADS = 900_000_038
     const val SNARE = 900_000_039
 
+    // Agents (b) and (c): the chain, the triggers and the steps.
+    const val ECHO = 900_000_040
+    const val MANDATE = 900_000_041
+    const val EMBER = 900_000_042
+    const val PURGE = 900_000_043
+    const val MILL = 900_000_044
+    const val SIEVE = 900_000_045
+    const val OFFERING = 900_000_046
+    const val WARD = 900_000_047
+    const val OATH = 900_000_048
+    const val LORD = 900_000_049
+    const val BEACON = 900_000_050
+
     private fun monster(
         id: Int, name: String, frame: String, type: String, level: Int?, attr: CardAttribute, race: String, atk: Int, def: Int?,
         link: Int? = null, arrows: List<String> = emptyList(), scale: Int? = null, alts: List<Int> = emptyList(),
@@ -89,6 +103,17 @@ object FxRef {
         spell(EDICT, "Example Edict", "Continuous"),
         spell(CROSSROADS, "Example Crossroads", "Normal"),
         trap(SNARE, "Example Snare", "Normal"),
+        monster(ECHO, "Example Echo", "effect", "Effect Monster", 3, CardAttribute.DARK, "Fiend", 1100, 900),
+        monster(MANDATE, "Example Mandate", "effect", "Effect Monster", 2, CardAttribute.EARTH, "Rock", 600, 1500),
+        monster(EMBER, "Example Ember", "effect", "Effect Monster", 3, CardAttribute.FIRE, "Pyro", 1300, 500),
+        spell(PURGE, "Example Purge", "Normal"),
+        spell(MILL, "Example Mill", "Normal"),
+        spell(SIEVE, "Example Sieve", "Normal"),
+        spell(OFFERING, "Example Offering", "Normal"),
+        monster(WARD, "Example Ward", "effect", "Tuner Effect Monster", 3, CardAttribute.LIGHT, "Fairy", 0, 1800),
+        spell(OATH, "Example Oath", "Normal"),
+        monster(LORD, "Example Lord", "xyz", "Xyz Effect Monster", 4, CardAttribute.LIGHT, "Warrior", 2400, 2000),
+        monster(BEACON, "Example Beacon", "effect", "Effect Monster", 4, CardAttribute.WATER, "Aqua", 1500, 1500),
     )
 
     private fun you(area: Area) = Spot(Rel.YOU, area)
@@ -246,8 +271,131 @@ object FxRef {
         ),
     )
 
+    /** The chain's and the steps' reference cards (agents (b) and (c)): triggers of each timing, costs, a hand trap, a declaration. */
+    private val chainScripts: List<CardScript> = listOf(
+        // "When this card is sent to the GY: you can draw 1." An optional WHEN trigger: it can miss the timing.
+        CardScript(
+            ECHO, name = "Example Echo",
+            effects = listOf(
+                Effect(
+                    "e1", "Draw", Kind.TRIGGER, from = setOf(Where.GY), opt = Opt.ByName(),
+                    trigger = Trigger(On(Event.SENT_TO_GY), timing = Timing.WHEN, optional = true),
+                    does = steps(Op.Draw(1)),
+                ),
+            ),
+        ),
+        // "If this card is sent to the GY: gain 500 LP." Mandatory, IF: never misses the timing.
+        CardScript(
+            MANDATE, name = "Example Mandate",
+            effects = listOf(
+                Effect(
+                    "e1", "Mend", Kind.TRIGGER, from = setOf(Where.GY),
+                    trigger = Trigger(On(Event.SENT_TO_GY), timing = Timing.IF, optional = false),
+                    does = steps(Op.Lp(Rel.YOU, Num.Const(500))),
+                ),
+            ),
+        ),
+        // "If this card is sent to the GY by a card effect: you can inflict 300 damage." Not by a cost.
+        CardScript(
+            EMBER, name = "Example Ember",
+            effects = listOf(
+                Effect(
+                    "e1", "Rekindle", Kind.TRIGGER, from = setOf(Where.GY),
+                    trigger = Trigger(On(Event.SENT_TO_GY, cause = Cause.EFFECT), timing = Timing.IF, optional = true),
+                    does = steps(Op.Lp(Rel.THEM, Num.Const(-300))),
+                ),
+            ),
+        ),
+        // Destroy every monster on the field.
+        CardScript(
+            PURGE, name = "Example Purge",
+            effects = listOf(
+                Effect(
+                    "e1", "Purge", Kind.ACTIVATION, from = fromSpellOrHand, condition = Cond.Controls(monster, seat = Rel.ANY),
+                    does = steps(Op.Destroy(Pick(all = true, from = listOf(Spot(Rel.ANY, Area.MONSTERS))))),
+                ),
+            ),
+        ),
+        // Send 1 Example monster from the Deck to the GY, then gain 100 LP: the send is no longer last.
+        CardScript(
+            MILL, name = "Example Mill",
+            effects = listOf(
+                Effect(
+                    "e1", "Mill", Kind.ACTIVATION, from = fromSpellOrHand,
+                    does = listOf(Step(Op.Send(Pick(from = listOf(you(Area.DECK)), where = all(example, monster)))), Step(Op.Lp(Rel.YOU, Num.Const(100)), Join.THEN)),
+                ),
+            ),
+        ),
+        // The same, at the same time: the send stays last.
+        CardScript(
+            SIEVE, name = "Example Sieve",
+            effects = listOf(
+                Effect(
+                    "e1", "Sieve", Kind.ACTIVATION, from = fromSpellOrHand,
+                    does = listOf(Step(Op.Send(Pick(from = listOf(you(Area.DECK)), where = all(example, monster)))), Step(Op.Lp(Rel.YOU, Num.Const(100)), Join.AND)),
+                ),
+            ),
+        ),
+        // Cost: discard 1 monster; draw 1.
+        CardScript(
+            OFFERING, name = "Example Offering",
+            effects = listOf(
+                Effect(
+                    "e1", "Offer", Kind.ACTIVATION, from = fromSpellOrHand,
+                    cost = steps(Op.Discard(Pick(from = listOf(you(Area.HAND)), where = monster))),
+                    does = steps(Op.Draw(1)),
+                ),
+            ),
+        ),
+        // From the hand, when the opponent activates an effect that adds from the Deck: discard this card; negate that effect.
+        CardScript(
+            WARD, name = "Example Ward",
+            effects = listOf(
+                Effect(
+                    "e1", "Ward", Kind.QUICK, from = setOf(Where.HAND), opt = Opt.ByName(),
+                    respond = Respond(Rel.THEM, includes = listOf(Includes.SEARCH)),
+                    cost = steps(Op.Discard(Pick(ref = Pick.SELF))),
+                    does = steps(Op.Negate(NegWhat.EFFECT)),
+                ),
+            ),
+        ),
+        // Declare an Attribute; add 1 Example monster of it from the Deck.
+        CardScript(
+            OATH, name = "Example Oath",
+            effects = listOf(
+                Effect(
+                    "e1", "Oath", Kind.ACTIVATION, from = fromSpellOrHand,
+                    does = listOf(
+                        Step(Op.Declare(DeclareKind.ATTRIBUTE, bind = "a")),
+                        Step(Op.Add(Pick(from = listOf(you(Area.DECK)), where = all(example, monster, Filter.Declared("a")))), Join.THEN),
+                    ),
+                ),
+            ),
+        ),
+        // An Xyz: detach 1 to draw 1; attach an Example monster from your GY.
+        CardScript(
+            LORD, name = "Example Lord",
+            summon = SummonRule(normal = false, procs = listOf(Proc.Xyz(2))),
+            effects = listOf(
+                Effect("e1", "Study", Kind.IGNITION, from = setOf(Where.MONSTER_ZONE), opt = Opt.PerCopy, cost = steps(Op.Detach(1)), does = steps(Op.Draw(1))),
+                Effect("e2", "Gather", Kind.IGNITION, from = setOf(Where.MONSTER_ZONE), opt = Opt.PerCopy, does = steps(Op.Attach(Pick(from = listOf(you(Area.GY)), where = all(example, monster))))),
+            ),
+        ),
+        // "If an Example monster is Special Summoned to your field: you can Special Summon this card from your hand." About another card.
+        CardScript(
+            BEACON, name = "Example Beacon",
+            effects = listOf(
+                Effect(
+                    "e1", "Answer", Kind.TRIGGER, from = setOf(Where.HAND), opt = Opt.ByName(),
+                    trigger = Trigger(On(Event.SPECIAL_SUMMONED), self = false, about = all(example, monster, Filter.Controller(Rel.YOU)), timing = Timing.IF),
+                    does = steps(Op.SpecialSummon(Pick(ref = Pick.SELF))),
+                ),
+            ),
+        ),
+    )
+
     val facts: FxFacts = FxFacts.of(cards)
-    val book: ScriptBook = ScriptBook.all(scripts, facts::canonical)
+    val book: ScriptBook = ScriptBook.all(scripts + chainScripts, facts::canonical)
 
     fun card(code: Int): Card = cards.first { code in it.passcodes.map(CardId::value) }
 
@@ -269,6 +417,27 @@ object FxRef {
      * The Deck keeps its written order, top first.
      */
     fun table(you: Side, them: Side = Side(), turn: Int = 2, active: Int = 0, phase: DuelPhase = DuelPhase.MAIN1, book: ScriptBook = this.book): FxTable {
+        val (header, lay) = layout(you, them, turn, active, phase)
+        val (next, problem) = DuelRules.applyAll(DuelSetup.initial(header), lay)
+        val state = next ?: error("the test table does not lay out: $problem")
+        return FxTable(state, FxState.at(state), book, facts)
+    }
+
+    /**
+     * The same table as a duel in play: its layout committed as the table's own entries (`seat` null, behind undo), and the
+     * engine's state folded from that log ([FxFold.fold]) with the duel's [seed] — what the fold and physics tests start from.
+     */
+    fun game(you: Side, them: Side = Side(), turn: Int = 2, active: Int = 0, phase: DuelPhase = DuelPhase.MAIN1, book: ScriptBook = this.book, seed: Long = 7L): Pair<DuelGame, FxTable> {
+        val (h, lay) = layout(you, them, turn, active, phase)
+        val header = h.copy(seed = seed)
+        val laid = DuelGame(header, emptyList(), 0, DuelSetup.initial(header), 0).act(lay, null)
+        check(laid.ok) { "the test table does not lay out: ${laid.problem}" }
+        val g = laid.game.copy(floor = laid.game.cursor)
+        return g to FxTable(g.state, FxFold.fold(header, g.played, book, facts, g.state), book, facts, seed)
+    }
+
+    /** The deal and the table's own moves that lay [you] and [them] out. */
+    private fun layout(you: Side, them: Side, turn: Int, active: Int, phase: DuelPhase): Pair<DuelHeader, List<DuelAction>> {
         val sides = listOf(you, them)
         fun ed(code: Int) = facts[code]?.extraDeck == true
         val setups = sides.map { s ->
@@ -278,7 +447,6 @@ object FxRef {
         }
         // Whoever went first, seat [active] has turn [turn].
         val header = DuelHeader(seats = setups, handSize = 0, first = (active + turn - 1) % 2)
-        var state = DuelSetup.initial(header)
         val lay = ArrayList<DuelAction>()
         repeat(turn - 1) { lay += DuelAction.EndTurn }
         sides.forEachIndexed { seat, s ->
@@ -293,9 +461,7 @@ object FxRef {
             s.field.filter { ed(it.code) }.forEach { slot -> lay += DuelAction.Move(e++, Place.Zone(seat, slot.kind, slot.index), slot.pos, "place") }
         }
         lay += DuelAction.Phase(phase)
-        val (next, problem) = DuelRules.applyAll(state, lay)
-        state = next ?: error("the test table does not lay out: $problem")
-        return FxTable(state, FxState.at(state), book, facts)
+        return header to lay
     }
 
     /** The uids of [seat]'s copies of [code] (any printing), in uid order. */

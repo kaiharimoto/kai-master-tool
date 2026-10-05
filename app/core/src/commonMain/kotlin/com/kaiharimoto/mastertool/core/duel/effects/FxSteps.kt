@@ -159,7 +159,7 @@ object FxSteps {
             is Op.Add -> enough(op.pick) { !inPile(s, it, PileKind.HAND) }
             is Op.Send -> enough(op.pick) { !inPile(s, it, PileKind.GY) }
             is Op.Discard -> enough(handPick(op.pick)) { inPile(s, it, PileKind.HAND) }
-            is Op.Destroy -> enough(op.pick)
+            is Op.Destroy -> enough(op.pick) { u -> s.placeOf(u).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } }
             is Op.Banish -> enough(op.pick) { !inPile(s, it, PileKind.BANISHED) }
             is Op.Tribute -> enough(tributePick(op.pick))
             is Op.Return -> enough(op.pick)
@@ -509,7 +509,8 @@ object FxSteps {
         }
 
         private fun destroy(pick: Pick): Boolean {
-            val (chosen, whole) = choose(pick, "Destroy")
+            // Only a card on the field, or in a hand, is destroyed.
+            val (chosen, whole) = choose(pick, "Destroy") { u -> s.placeOf(u).let { it is Place.Zone || (it is Place.Pile && it.kind == PileKind.HAND) } }
             if (chosen.isEmpty()) return false
             chosen.forEach { u ->
                 val c = t.card(u)
@@ -747,7 +748,6 @@ object FxSteps {
             Ban.NORMAL_SUMMON -> "No Normal Summons or Sets"
             Ban.ACTIVATE -> "No activations"
         }
-        val except = if (r.except != null) ", except as $source allows" else ""
-        return "$what$except ($source)"
+        return if (r.except != null) "$what, except as $source allows" else "$what ($source)"
     }
 }
