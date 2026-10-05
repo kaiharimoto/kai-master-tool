@@ -23,8 +23,8 @@ import java.io.File
 
 /**
  * What runs inside the World's windows, photographed one app at a time (agent C, `docs/world/DESKTOP.md` §12.4), on the
- * `--world=demo` world: `--world-app=browser|thoughts|instruments|library|hand-odds|combo-lines|matchups` draws that app
- * full-size alone (`world.apps.solo`) until the desktop's page frames it; `--world-page=b5` is the Browser's selected page
+ * `--world=demo` world: `--world-app=browser|thoughts|instruments|library|hand-odds|combo-lines|matchups` opens that app's
+ * window on the desktop, maximised (`--world-app-window=normal` keeps its comfort size); `--world-page=b5` is the Browser's selected page
  * (`home` for the new-tab page); `--world-library=search:<words>` searches the Library; `--world-app-fail=true` makes the
  * app's next press throw, to show the error line.
  */
@@ -83,7 +83,10 @@ internal suspend fun studioWorldApps(h: NeueHolders, map: Map<String, String>, c
     // The Library: what Ai knows about the builder's deck and itself.
     seedLibrary(h, now)
     val app = BuiltInApp.of(which)?.ref ?: AppRef.Made(which)
-    world.apps.solo = app
+    // Its window, opened by the person and given the work area (`--world-app-window=normal` leaves it at its comfort size).
+    world.desk.open(app)
+    clock.run(10)
+    if (map["world-app-window"] != "normal") world.desk.apply(com.kaiharimoto.mastertool.core.world.desk.DeskOp.ToggleMaximise(app.key, System.currentTimeMillis()))
     clock.run(30)
     if (app is AppRef.Made) {
         // Wait for its first screen, then play a few events as the person would.

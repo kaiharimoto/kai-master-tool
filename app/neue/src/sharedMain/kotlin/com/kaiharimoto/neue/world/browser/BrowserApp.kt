@@ -37,6 +37,9 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.world.WorldEvent
+import com.kaiharimoto.mastertool.core.world.desk.Anchor
+import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
+import com.kaiharimoto.neue.world.desk.deskTarget
 import com.kaiharimoto.mastertool.core.world.desk.Tab
 import com.kaiharimoto.mastertool.core.world.desk.WorldAddress
 import com.kaiharimoto.neue.NeueHolders
@@ -58,8 +61,7 @@ import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.kit.onPointer
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.theme.Mu
-import com.kaiharimoto.neue.world.apps.GLYPH_SMALL
-import com.kaiharimoto.neue.world.apps.WorldIcon
+import com.kaiharimoto.neue.world.desk.IconView
 
 /*
  * The World's Browser (`docs/world/DESKTOP.md` §4): every board a page, one per tab, as Chrome has them — tabs, back and
@@ -100,6 +102,7 @@ fun BrowserTabStrip(h: NeueHolders, modifier: Modifier = Modifier) {
         modifier
             .fillMaxWidth()
             .height(TAB_H)
+            .deskTarget(h, BuiltInApp.BROWSER.id, Anchor.TABS)
             .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) },
     ) {
         val n = tabs.tabs.size.coerceAtLeast(1)
@@ -126,6 +129,7 @@ private fun TabCell(h: NeueHolders, t: Tab, selected: Boolean, width: androidx.c
         Modifier
             .width(width)
             .fillMaxHeight()
+            .deskTarget(h, BuiltInApp.BROWSER.id, Anchor.TAB, t.id)
             .drawBehind {
                 val px = 1.dp.toPx()
                 if (selected) {
@@ -146,7 +150,7 @@ private fun TabCell(h: NeueHolders, t: Tab, selected: Boolean, width: androidx.c
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        WorldIcon(pageGlyph(h, t.parsed), GLYPH_SMALL, color = if (selected) c.ink else c.ink45)
+        IconView(pageGlyph(h, t.parsed), 16.dp, color = if (selected) c.ink else c.ink45)
         Small(title, Modifier.weight(1f), color = if (selected) c.ink else c.ink45, maxLines = 1)
         // Ai changed it while it was not selected: a 6 dp ink square, until it is.
         if (t.mark) Box(Modifier.size(6.dp).background(c.ink))
@@ -263,7 +267,7 @@ private fun TabList(h: NeueHolders, onDone: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                WorldIcon(pageGlyph(h, t.parsed), 20.dp)
+                IconView(pageGlyph(h, t.parsed), 20.dp)
                 Column(Modifier.weight(1f)) {
                     Small(pageTitle(h, t.parsed), color = c.ink, maxLines = 1)
                     Mono(t.address, color = c.ink45)

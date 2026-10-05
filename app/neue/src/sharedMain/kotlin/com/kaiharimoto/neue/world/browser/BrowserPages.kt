@@ -42,7 +42,9 @@ import com.kaiharimoto.mastertool.core.world.InstrumentForm
 import com.kaiharimoto.mastertool.core.world.WorldCodec
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.mastertool.core.world.WorldPaths
+import com.kaiharimoto.mastertool.core.world.desk.Anchor
 import com.kaiharimoto.mastertool.core.world.desk.AppRef
+import com.kaiharimoto.neue.world.desk.deskTarget
 import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
 import com.kaiharimoto.mastertool.core.world.desk.Icon
 import com.kaiharimoto.mastertool.core.world.desk.WorldAddress
@@ -70,9 +72,8 @@ import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 import com.kaiharimoto.neue.world.BoardBody
-import com.kaiharimoto.neue.world.apps.GLYPH_SMALL
-import com.kaiharimoto.neue.world.apps.WorldIcon
-import com.kaiharimoto.neue.world.apps.WorldTile
+import com.kaiharimoto.neue.world.desk.IconView
+import com.kaiharimoto.neue.world.desk.TileView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
@@ -147,9 +148,9 @@ private fun PageColumn(content: @Composable ColumnScope.() -> Unit) {
 
 /** A page's head (§4): the kind in micro caps, the title in h2, Ai's note, and where it came from. */
 @Composable
-private fun PageHead(kind: String, title: String, note: String = "", from: @Composable (() -> Unit)? = null) {
+private fun PageHead(kind: String, title: String, note: String = "", modifier: Modifier = Modifier, from: @Composable (() -> Unit)? = null) {
     val c = Mu.colors
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Micro(kind, color = c.ink45)
         MuText(title, style = MuType.h2(LocalMuFonts.current), color = c.ink, maxLines = 2)
         if (note.isNotBlank()) Small(note, color = c.ink70, maxLines = 4)
@@ -166,7 +167,7 @@ private fun BoardPage(h: NeueHolders, id: String) {
     val b = w.board(id) ?: return NoPage(h, WorldAddress.Board(id).format(), "this page was taken down, or never pinned")
     val run = runOf(h, id)
     PageColumn {
-        PageHead((b.type?.id ?: b.kind).uppercase(), b.title.ifBlank { b.id }, b.note) {
+        PageHead((b.type?.id ?: b.kind).uppercase(), b.title.ifBlank { b.id }, b.note, Modifier.deskTarget(h, BuiltInApp.BROWSER.id, Anchor.HEAD)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 val src = b.source
                 if (src != null) {
@@ -438,7 +439,7 @@ private fun PageRow(h: NeueHolders, address: String, title: String, kind: String
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        WorldIcon(glyph, GLYPH_SMALL)
+        IconView(glyph, 16.dp)
         Column(Modifier.weight(1f)) {
             Small(title, color = c.ink, maxLines = 1)
             if (note.isNotBlank()) Small(note, color = c.ink45, maxLines = 1)
@@ -464,7 +465,7 @@ private fun HomeAppRow(h: NeueHolders, slug: String, title: String, description:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        WorldTile(tile, 20.dp)
+        TileView(tile, 20.dp)
         Column(Modifier.weight(1f)) {
             Small(title, color = c.ink, maxLines = 1)
             if (description.isNotBlank()) Small(description, color = c.ink45, maxLines = 1)

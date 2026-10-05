@@ -23,8 +23,7 @@ import com.kaiharimoto.mastertool.core.world.apps.StateRead
 import com.kaiharimoto.mastertool.core.world.apps.UiEvent
 import com.kaiharimoto.mastertool.core.world.apps.UiTree
 import com.kaiharimoto.mastertool.core.world.desk.AppRef
-import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
-import com.kaiharimoto.neue.world.WorldPane
+import com.kaiharimoto.mastertool.core.world.desk.AiDoes
 import com.kaiharimoto.neue.world.Worlds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,8 +39,8 @@ import java.util.concurrent.Executors
 
 /**
  * What the desktop answers for what runs inside its windows (`docs/world/DESKTOP.md` §13): a window opened or brought
- * forward for [by] (Ai's through the focus policy, never past it), closed, or asked about. The desktop shell sets its own
- * ([WorldApps.windows]); until it does, [PaneWindows] puts each app in 1.0.97's panes or gives it the page.
+ * forward for [by] (Ai's through the focus policy and the avatar, never past it), closed, or asked about. [DeskWindows]
+ * is the desktop's; a test may set its own.
  */
 interface WorldWindows {
     fun open(app: AppRef, by: String)
@@ -49,33 +48,25 @@ interface WorldWindows {
     fun isOpen(app: AppRef): Boolean = false
 }
 
-/** The windows before the desktop: the five panes 1.0.97 had, and the page given whole to anything else ([WorldApps.solo]). */
-class PaneWindows(private val world: Worlds) : WorldWindows {
+/** The windows of the World's desktop (`WorldDeskState`): the person's open at once; Ai's arrive as the focus policy decides. */
+class DeskWindows(private val world: Worlds) : WorldWindows {
     override fun open(app: AppRef, by: String) {
-        val pane = (app as? AppRef.BuiltIn)?.let {
-            when (it.kind) {
-                BuiltInApp.FILES -> WorldPane.FILES
-                BuiltInApp.EDITOR -> WorldPane.EDITOR
-                BuiltInApp.TERMINAL -> WorldPane.TERMINAL
-                BuiltInApp.BROWSER -> WorldPane.BOARDS
-                BuiltInApp.THOUGHTS -> WorldPane.THOUGHTS
-                else -> null
+        if (by == WorldEvent.AI) {
+            val does = when (app) {
+                is AppRef.Made -> AiDoes.OpenApp(app.slug, world.apps.manifest(app.slug)?.title ?: app.slug)
+                is AppRef.BuiltIn -> AiDoes.Read(app, app.kind.title)
             }
+            world.desk.arriveNow(app, does)
+        } else {
+            world.desk.open(app)
         }
-        if (pane == null) {
-            // Instruments, the Library and Ai's apps have no pane: they take the page until the desktop gives them windows.
-            if (by == WorldEvent.YOU || world.prefs().follow) world.apps.solo = app
-            return
-        }
-        if (by == WorldEvent.AI) world.arrive(pane) else world.focus = pane
-        if (by == WorldEvent.YOU) world.apps.solo = null
     }
 
     override fun close(app: AppRef) {
-        if (world.apps.solo == app) world.apps.solo = null
+        if (world.desk.desk.isOpen(app.key)) world.desk.close(app.key)
     }
 
-    override fun isOpen(app: AppRef): Boolean = app is AppRef.BuiltIn && app.kind.pinned || world.apps.solo == app
+    override fun isOpen(app: AppRef): Boolean = world.desk.desk.isOpen(app.key)
 }
 
 /**
@@ -150,11 +141,8 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
 
     private val hosts = mutableStateMapOf<String, AppHost>()
 
-    /** The desktop's windows; [PaneWindows] until the desktop sets its own. */
-    var windows: WorldWindows = PaneWindows(world)
-
-    /** An app given the whole page (1.0.97's page has no window for it, and the studio's `--world-app=`). */
-    var solo by mutableStateOf<AppRef?>(null)
+    /** The desktop's windows. */
+    var windows: WorldWindows = DeskWindows(world)
 
     /** The instrument the Instruments app shows next (a page's *Run it in Instruments*). */
     var instrumentsPick by mutableStateOf<String?>(null)
@@ -176,7 +164,6 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
     internal fun load(dir: File?) {
         flushAll()
         hosts.clear()
-        solo = null
         folder = dir
         list = emptyList()
         unopened = emptySet()
@@ -450,7 +437,9 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
         list = list.filterNot { it.slug == made.slug } + made
         if (by == WorldEvent.AI) {
             unopened = unopened + made.slug
-            onAiApp(made.slug)
+            onAiApp(made.slug, made.title, true)
+        } else {
+            world.desk.refreshApps()
         }
         made
     }
@@ -465,7 +454,7 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
         world.log(event)
         list = list.map { if (it.slug == slug) next else it }
         hosts[slug]?.let { reloadCode(it, old.version) }
-        if (by == WorldEvent.AI) onAiApp(slug)
+        if (by == WorldEvent.AI) onAiApp(slug, next.title, false) else world.desk.refreshApps()
         next
     }
 
@@ -476,6 +465,7 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
         val (next, event) = withContext(Dispatchers.IO) { store.back(slug, to, System.currentTimeMillis(), by) }.getOrThrow()
         world.log(event)
         list = list.map { if (it.slug == slug) next else it }
+        if (by == WorldEvent.AI) onAiApp(slug, next.title, false) else world.desk.refreshApps()
         hosts[slug]?.let { reloadCode(it, old.version) }
         next
     }
@@ -493,6 +483,7 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
         world.log(event)
         list = list.filterNot { it.slug == slug }
         unopened = unopened - slug
+        world.desk.refreshApps()
         "Deleted $slug."
     }
 
@@ -539,8 +530,8 @@ class WorldApps internal constructor(private val world: Worlds, private val runn
         }
     }
 
-    /** Ai made or changed [slug] this turn: the desktop's `DeskOp.AiMadeApp` (its window is where the answer is, §6.4). */
-    var onAiApp: (String) -> Unit = {}
+    /** Ai made ([made]) or changed [slug] this turn: the desktop's `aiMadeApp` (its window is where the answer is, §6.4). */
+    var onAiApp: (slug: String, name: String, made: Boolean) -> Unit = { slug, name, made -> world.desk.aiMadeApp(slug, name, made) }
 
     /** The screen of [slug] in words, when its window is open. */
     fun screen(slug: String): String? = hosts[slug]?.tree?.let { UiWords.describe(it.root) }

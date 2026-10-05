@@ -7,6 +7,7 @@ import com.kaiharimoto.mastertool.core.world.WorldPaths
 import com.kaiharimoto.mastertool.core.world.apps.AppCodec
 import com.kaiharimoto.mastertool.core.world.apps.AppManifest
 import com.kaiharimoto.mastertool.core.world.apps.UiEvent
+import com.kaiharimoto.mastertool.core.world.desk.AiDoes
 import com.kaiharimoto.mastertool.core.world.desk.AppRef
 import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
 import com.kaiharimoto.mastertool.core.world.desk.DeskSize
@@ -38,30 +39,31 @@ internal class AiWorldApps(private val h: NeueHolders) {
         val numbered = page.text.removeSuffix("\n").lines().mapIndexed { n, l -> "${(first + n).toString().padStart(5)}  $l" }.joinToString("\n")
         if (from == 0) {
             world.showFile(WorldPaths.safe(path) ?: path)
-            world.apps.windows.open(BuiltInApp.EDITOR.ref, WorldEvent.AI)
+            world.desk.arriveNow(BuiltInApp.EDITOR.ref, AiDoes.Read(BuiltInApp.EDITOR.ref, path.substringAfterLast('/')))
         }
         val footer = page.footer(path)
         return ok(numbered + if (footer.isNotEmpty()) "\n$footer" else "", "Read $path" + if (page.from > 0) " from ${page.from}" else "")
     }
 
     /** `world_open`: what the person asked to see, brought up through the desktop's focus rules — never past them. */
-    fun open(raw: String): MetaAnswer {
+    suspend fun open(raw: String): MetaAnswer {
         val word = raw.trim()
         if (word.isEmpty()) return fail("world_open needs an address, a file's path, or an app's name.")
         BuiltInApp.entries.firstOrNull { it.id.equals(word, ignoreCase = true) || it.title.equals(word, ignoreCase = true) }?.let { app ->
-            apps.windows.open(app.ref, WorldEvent.AI)
+            world.arrive(app.ref, AiDoes.Read(app.ref, app.title))
             return ok("Opened ${app.title}.", "Opened ${app.title}")
         }
         if (word.startsWith(WorldAddress.SCHEME, ignoreCase = true)) {
             return when (val a = WorldAddress.parse(word)) {
                 is WorldAddress.Unknown -> fail("“${a.raw}” is no page: ${a.why}. world://home lists every page.")
                 is WorldAddress.App -> if (apps.manifest(a.slug) == null) fail("There is no app “${a.slug}”. world_state lists the apps.") else {
-                    apps.windows.open(AppRef.Made(a.slug), WorldEvent.AI)
+                    world.arrive(AppRef.Made(a.slug), AiDoes.OpenApp(a.slug, apps.manifest(a.slug)?.title ?: a.slug))
                     ok("Opened the app ${a.slug}.", "Opened ${apps.manifest(a.slug)?.title ?: a.slug}")
                 }
                 else -> {
                     world.open ?: return fail("No world is open.")
-                    world.browser.show(a.format(), WorldEvent.AI)
+                    world.browser.go(a.format(), WorldEvent.AI)
+                    world.arrive(BuiltInApp.BROWSER.ref, AiDoes.Show(world.browser.tabs.selected.orEmpty()))
                     ok("Opened ${a.format()} in the Browser.", "Opened ${a.format()}")
                 }
             }
@@ -70,7 +72,7 @@ internal class AiWorldApps(private val h: NeueHolders) {
         if (world.read(path) == null) return fail("There is no $path. world_state lists the files.")
         world.saveEditor()
         world.showFile(path)
-        apps.windows.open(BuiltInApp.EDITOR.ref, WorldEvent.AI)
+        world.arrive(BuiltInApp.EDITOR.ref, AiDoes.Read(BuiltInApp.EDITOR.ref, path))
         return ok("Opened $path in the Editor.", "Opened $path")
     }
 
@@ -92,7 +94,7 @@ internal class AiWorldApps(private val h: NeueHolders) {
             }
             "open" -> {
                 val m = apps.manifest(slug) ?: return fail("There is no app “$slug”. world_state lists the apps.")
-                apps.windows.open(AppRef.Made(slug), WorldEvent.AI)
+                world.arrive(AppRef.Made(slug), AiDoes.OpenApp(slug, m.title))
                 ok("Opened ${m.title} (v${m.version}).\n" + apps.screenNow(slug), "Opened ${m.title}")
             }
             "close" -> {
@@ -104,6 +106,7 @@ internal class AiWorldApps(private val h: NeueHolders) {
                 val id = ToolArgs.string(i, "id") ?: return fail("press needs the widget's id: open the app to see them.")
                 val type = ToolArgs.string(i, "type") ?: UiEvent.PRESS
                 val value = i["value"] ?: if (type == UiEvent.PRESS) JsonPrimitive(true) else JsonNull
+                apps.manifest(slug)?.let { m -> world.arrive(AppRef.Made(slug), AiDoes.Press(slug, m.title, id)) }
                 apps.press(slug, id, type, value).fold({ ok(it, "Pressed $id in $slug") }, { fail(it.message.orEmpty()) })
             }
             "state" -> apps.stateForAi(slug)?.let { ok(it, "Read $slug's state") } ?: fail("There is no app “$slug”.")
@@ -136,7 +139,7 @@ internal class AiWorldApps(private val h: NeueHolders) {
         typeIn(slug, code)
         val made = apps.make(m, code, WorldEvent.AI).getOrElse { return fail(it.message.orEmpty()) }
         val open = ToolArgs.bool(i, "open") != false
-        if (open) apps.windows.open(AppRef.Made(slug), WorldEvent.AI)
+        if (open) world.arrive(AppRef.Made(slug), AiDoes.MakeApp(slug, made.title))
         val screen = if (open) apps.screenNow(slug) else "(not opened: world_app open shows it)"
         return ok(
             "Made ${made.title} (v1) at world://apps/$slug, its code at ${WorldApps.codePath(slug)}.\n$screen\n" +
@@ -178,7 +181,7 @@ internal class AiWorldApps(private val h: NeueHolders) {
     /** Ai's code typed into the Editor as the person watches, before it is checked (§8.7). */
     private suspend fun typeIn(slug: String, code: String) {
         world.saveEditor()
-        apps.windows.open(BuiltInApp.EDITOR.ref, WorldEvent.AI)
+        world.arrive(BuiltInApp.EDITOR.ref, AiDoes.Write(WorldApps.codePath(slug)))
         world.typeOut(WorldApps.codePath(slug), code)
         world.edited = false
     }

@@ -80,6 +80,7 @@ import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
 import com.kaiharimoto.neue.theme.MuType
 import com.kaiharimoto.neue.world.BoardBody
+import com.kaiharimoto.neue.world.desk.deskTarget
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
@@ -108,7 +109,24 @@ private fun num(d: Double): JsonPrimitive = if (d == Math.floor(d) && kotlin.mat
 private fun fmt(d: Double): String = if (d == Math.floor(d) && kotlin.math.abs(d) < 1e15) d.toLong().toString() else "%.2f".format(d)
 
 /** What a widget sends: the window's [send], with the widget's id. */
-private class Sender(val send: (id: String, type: String, value: JsonElement) -> Unit, val live: (id: String, value: JsonElement, done: Boolean) -> Unit)
+private class Sender(val app: String, val send: (id: String, type: String, value: JsonElement) -> Unit, val live: (id: String, value: JsonElement, done: Boolean) -> Unit)
+
+/** The id a widget's events carry, for the avatar to walk to it (`world_app press`, §5.2). */
+private fun idOf(n: UiNode): String? = when (n) {
+    is UiNode.Button -> n.id.ifEmpty { null }
+    is UiNode.Input -> n.id
+    is UiNode.Stepper -> n.id
+    is UiNode.Slider -> n.id
+    is UiNode.Select -> n.id
+    is UiNode.Segmented -> n.id
+    is UiNode.Toggle -> n.id
+    is UiNode.Checks -> n.id
+    is UiNode.CardPicker -> n.id
+    is UiNode.DeckPicker -> n.id
+    is UiNode.Table -> n.id
+    is UiNode.Cards -> n.id
+    else -> null
+}
 
 /**
  * The window of the app [slug] (§8): its screen, its state on disk, its errors and its versions. The desktop's frame
@@ -122,6 +140,7 @@ fun AppWindow(h: NeueHolders, slug: String, modifier: Modifier = Modifier) {
     val c = Mu.colors
     val sender = remember(host) {
         Sender(
+            app = com.kaiharimoto.mastertool.core.world.desk.AppRef.Made(slug).key,
             send = { id, type, value -> apps.send(host, id, type, value) },
             live = { id, value, done ->
                 val now = System.currentTimeMillis()
@@ -188,6 +207,17 @@ internal fun showCode(h: NeueHolders, slug: String, line: Int? = null) {
 
 @Composable
 private fun Node(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean = false) {
+    // A widget with an id is a place the avatar can go: reported from layout, never composition (§5.2).
+    val id = idOf(n)
+    if (id != null) {
+        Box(Modifier.deskTarget(h, s.app, com.kaiharimoto.mastertool.core.world.desk.Anchor.WIDGET, id)) { Widget(h, n, s, inRow) }
+    } else {
+        Widget(h, n, s, inRow)
+    }
+}
+
+@Composable
+private fun Widget(h: NeueHolders, n: UiNode, s: Sender, inRow: Boolean) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     when (n) {

@@ -36,7 +36,9 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
     val onBuilder = neue.page == Page.BUILDER
     val next = neue.orientation.next()
     return buildList {
-        add(MenuEntry("Search cards and commands", hint = "Search") { neue.paletteOpen = true })
+        // Ai World's own first, on its page (DESKTOP.md §2.5): the world picker, New world, Follow, Skip, Close this app.
+        if (neue.page == Page.WORLD) addAll(com.kaiharimoto.neue.world.worldPhoneMenu(this@phoneMenu, at))
+        add(MenuEntry("Search cards and commands", hint = "Search", separatorBefore = neue.page == Page.WORLD) { neue.paletteOpen = true })
         if (neue.prefs.ai.enabled) add(MenuEntry(ai.name, hint = "Your assistant") { ai.setOpen(true) })
         if (neue.prefs.ai.enabled) add(MenuEntry("Look into ${ai.name}", hint = "What it knows") { ai.memoryOpen = "USER.md" })
         if (neue.prefs.ai.enabled) add(MenuEntry("${ai.name}'s test scores", hint = "Known answers") { ai.trustOpen = true })
@@ -119,7 +121,22 @@ fun NeueHolders.commands(query: String): List<Command> {
             if (neue.page == Page.WORLD) listOf(
                 cmd("World", "Run the file in the editor", DeskAction.WORLD_RUN),
                 cmd("World", "Stop the run", DeskAction.WORLD_STOP),
-                cmd("World", if (neue.prefs.world.follow) "Stay put: stop following Ai" else "Follow Ai from pane to pane", DeskAction.WORLD_FOLLOW),
+                cmd("World", if (neue.prefs.world.follow) "Stay put: stop following Ai" else "Follow Ai to the window it works in", DeskAction.WORLD_FOLLOW),
+                cmd("World", "Skip ahead: Ai's typing and travel finish at once", DeskAction.WORLD_SKIP),
+                cmd("World", "The launcher: apps and worlds", DeskAction.WORLD_LAUNCHER),
+                cmd("World", "Files", DeskAction.WORLD_APP_FILES),
+                cmd("World", "Editor", DeskAction.WORLD_APP_EDITOR),
+                cmd("World", "Terminal", DeskAction.WORLD_APP_TERMINAL),
+                cmd("World", "Browser", DeskAction.WORLD_APP_BROWSER),
+                cmd("World", "Thoughts", DeskAction.WORLD_APP_THOUGHTS),
+                cmd("World", "Instruments", DeskAction.WORLD_APP_INSTRUMENTS),
+                cmd("World", "Library: everything Ai knows", DeskAction.WORLD_APP_LIBRARY),
+                cmd("World", "The next window", DeskAction.WORLD_NEXT_WINDOW),
+                cmd("World", "Close the tab, else the window", DeskAction.WORLD_CLOSE),
+                cmd("World", "Minimise the window", DeskAction.WORLD_MINIMISE),
+                cmd("World", "Maximise the window, or restore it", DeskAction.WORLD_SNAP_UP),
+                cmd("World", "Snap the window left", DeskAction.WORLD_SNAP_LEFT),
+                cmd("World", "Snap the window right", DeskAction.WORLD_SNAP_RIGHT),
             ) else emptyList()
         ),
         Page.DUEL to listOf(

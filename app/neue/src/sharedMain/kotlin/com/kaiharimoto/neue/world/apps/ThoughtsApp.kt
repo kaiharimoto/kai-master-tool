@@ -36,7 +36,9 @@ import com.kaiharimoto.mastertool.core.ai.Role
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.ai.text.ChatFollow
 import com.kaiharimoto.mastertool.core.world.WorldEvent
+import com.kaiharimoto.mastertool.core.world.desk.Anchor
 import com.kaiharimoto.mastertool.core.world.desk.AppRef
+import com.kaiharimoto.neue.world.desk.deskTarget
 import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
 import com.kaiharimoto.mastertool.core.world.desk.WorldAddress
 import com.kaiharimoto.neue.NeueHolders
@@ -199,7 +201,7 @@ fun ThoughtsApp(h: NeueHolders, modifier: Modifier = Modifier) {
             ScrollbarFor(list)
         }
         if (session != null && ai.configured) {
-            Composer(ai, phone = phone)
+            Composer(ai, Modifier.deskTarget(h, BuiltInApp.THOUGHTS.id, Anchor.COMPOSER), phone = phone)
         } else {
             AskLine(h)
         }

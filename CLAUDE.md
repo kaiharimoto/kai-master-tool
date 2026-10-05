@@ -767,6 +767,19 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   time, off the main thread; Ai's code typed into the editor), `AiWorld` Ai's tools (`world_state/new/write/read/run/tool/show`),
   `MODE_WORLD` and the `ai-world` skill; `WorldPaint.kt` is the World's one file allowed colour. `<data>/world/` is
   synced and backed up; the `WORLD` start step asks about Python on the desk. `tools/shoot.sh --page=world --world=demo`.
+  **Since 1.1.x it is a desktop** (`docs/world/DESKTOP.md`, kai: "a simulation of a computer desktop"; 1.0.97's panes and
+  the boards canvas are gone): `core/world/desk` is the model (`Desk` + `DeskOp` through one reducer, `desk.json` by
+  `DeskCodec`, `FocusPolicy`, `DeskTidy`, `AvatarPilot`/`AvatarPath`, `WorldIcons`, `WorldNotices`), `neue/world/desk/`
+  the shell — `WorldDeskState` (the owned part of `Worlds`: every window change goes through `apply(DeskOp)`; Ai through
+  `arrive`, never past the focus policy), `WorldDeskPage` (icons, plate, windows), `WindowFrame` (ink title bar in front,
+  3 dp keep-out, no shadow; recede at 45 %), `Taskbar` (Ai's cell is the face on this page: no `AiBadge` here),
+  `Launcher.kt`, `WorldPhone` (one app at a time, a dock), `IconPaint` — and `neue/world/system/` the shell's own Files,
+  Editor (Take over) and Terminal (`TerminalCommand`). **What runs inside a window is asked of `DeskApps`, the one seam**
+  for the app host (Browser, Thoughts, Instruments, Library, Ai's apps). **Ai's avatar moves in `DeskAvatar.kt` alone**
+  (kai's waiver; `MasterUiLawTest.movementIsNamed` refuses animated offsets and translation anywhere else in
+  `neue/world/`): its pose a plain array read in `offset {}`/`graphicsLayer {}`, its loop only while unsettled, asleep the
+  still `AiMark`. The desktop's arrows and Enter are `worldDeskKey`, never `DeskShortcuts`. `--world-desk=…`,
+  `--world-avatar=…` photograph it.
 - **Shootout** (1.1.2, `09`, `Ctrl 9`, Phase S stage 2, `NEUE.md` §4t, `docs/phases/S.md`): hands judged one at a time, every card
   rated with its range. `core/shootout/bench`: `Bench` (canonical cards, roles from the groups, sided strata only with **both**
   plans — else *waiting*, never game-one hands), `ShootoutRun` (a session; the picker at its tuned settings, `STOP` ±5),
