@@ -794,6 +794,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   `<data>/banlists/`, never synced) behind `BanSource`; a new place that checks copy limits takes a `BanSource`.
   **The builder checks `DeckRules`** (1.1.1): a chosen day's list or Genesys, set from `NeuePreferences.legalAsOf`/
   `genesys`/`genesysCap` by `legalityRules`; read `state.rulesInForce`, never `state.format` alone, for "legal in …".
+  **What is played is `PlayChoice`** (1.1.8, `TCG | OCG | Genesys` in the bar): Genesys is `genesys = true` with the
+  region kept TCG, never OCG beside it (`setPlay`); a card the builder draws takes `state.marks` (`CardMarks`: a failing
+  card's inverted ✕, Genesys points, else the list's mark), and is given its `section` only when drawn in the deck.
 - **Outside text is in an envelope** (1.0.97): every tool result read from outside the app goes through `Untrusted.wrap`,
   and `web_fetch` through `UrlGuard`; a new tool that brings outside text in must do the same. The red team on Ai's
   learning and real-world intelligence, its research and the roadmap: `docs/AI-INTELLIGENCE.md`.

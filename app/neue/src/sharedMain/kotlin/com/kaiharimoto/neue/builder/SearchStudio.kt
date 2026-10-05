@@ -265,7 +265,7 @@ fun SearchStudio(state: DeckBuilderState, neue: NeueState) {
                                         card = card,
                                         modifier = Modifier.fillMaxSize(),
                                         format = state.format,
-                                        limits = state.limits,
+                                        marks = state.marks,
                                         copies = state.copiesInDeck(card.id),
                                         selected = card == picked,
                                         dimmed = list == null && state.remaining(card) <= 0,
@@ -332,7 +332,7 @@ private fun Reading(card: Card, state: DeckBuilderState, neue: NeueState, listId
     val scroll = rememberScrollState()
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            NeueCard(card, Modifier.fillMaxWidth().aspectRatio(CARD_RATIO), format = state.format, foil = neue.prefs.foil, limits = state.limits)
+            NeueCard(card, Modifier.fillMaxWidth().aspectRatio(CARD_RATIO), format = state.format, foil = neue.prefs.foil, marks = state.marks)
             ArtSwitch(card, neue)
             CardHeading(card, standing = state.standingOf(card))
             SelectionContainer { Body(card.description.ifBlank { "No card text." }, color = c.ink) }

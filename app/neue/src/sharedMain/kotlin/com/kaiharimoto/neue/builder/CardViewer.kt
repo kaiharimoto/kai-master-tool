@@ -107,7 +107,7 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                                 IconButton(Icons.X, close, size = 40.dp, label = "Close")
                             }
                         },
-                        art = { NeueCard(card = card, modifier = Modifier.fillMaxSize(), format = state.format, foil = neue.prefs.foil, limits = state.limits) },
+                        art = { NeueCard(card = card, modifier = Modifier.fillMaxSize(), format = state.format, foil = neue.prefs.foil, marks = state.marks) },
                         body = { style -> SelectionContainer { MuText(text, style = style, color = c.ink) } },
                     )
                     HRule(color = c.ink)
@@ -140,7 +140,7 @@ fun CardViewer(state: DeckBuilderState, neue: NeueState) {
                 card = card,
                 modifier = Modifier.size(artWidth, artHeight),
                 format = state.format,
-                limits = state.limits,
+                marks = state.marks,
                 foil = neue.prefs.foil,
             )
             Box(Modifier.width(details).height(artHeight)) {

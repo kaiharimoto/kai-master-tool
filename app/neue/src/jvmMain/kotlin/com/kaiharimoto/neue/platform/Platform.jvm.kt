@@ -90,6 +90,11 @@ actual object Platform {
 
     actual suspend fun takePhoto(): PickedFile? = null
 
+    /** The desk types a day: quick with a keyboard, and the date in one shape. */
+    actual val picksDays: Boolean = false
+
+    actual suspend fun pickDay(initial: String?, dark: Boolean): String? = null
+
     /** A computer does not freeze a window's process when another has the focus. */
     actual fun working(on: Boolean, title: String, line: String) = Unit
 

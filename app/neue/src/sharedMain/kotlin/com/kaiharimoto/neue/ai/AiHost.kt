@@ -34,6 +34,7 @@ import com.kaiharimoto.mastertool.core.ai.skills.Skill
 import com.kaiharimoto.mastertool.core.ai.skills.Skills
 import com.kaiharimoto.mastertool.core.ai.wire.OpenAiStream
 import com.kaiharimoto.mastertool.core.data.StoredDeck
+import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.mastertool.core.deck.DeckEdit
 import com.kaiharimoto.mastertool.core.deck.DeckEditor
 import com.kaiharimoto.mastertool.core.deck.DeckGroup
@@ -170,7 +171,7 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
             "list_decks" -> listDecks(ToolArgs.string(i, "query"))
             "get_deck" -> getDeck(ToolArgs.string(i, "deck_id"))
             "validate_deck" -> validate(ToolArgs.string(i, "deck_id"), ToolArgs.string(i, "format"), ToolArgs.string(i, "as_of"))
-            "get_settings" -> ok(AiSettings.describe(neue.prefs, state.format.name, state.searchEffects), "Read the settings")
+            "get_settings" -> ok(AiSettings.describe(neue.prefs, h.play.label, state.searchEffects), "Read the settings")
             "list_webs" -> listWebs()
             "get_web" -> getWeb(ToolArgs.string(i, "web_id")!!)
             "get_siding" -> getSiding(ToolArgs.string(i, "deck_id")!!, ToolArgs.string(i, "against"))
@@ -951,9 +952,10 @@ class AiHost(private val h: NeueHolders, private val ai: AiState) {
     private suspend fun setSetting(key: String, value: JsonElement): Answer {
         when (key) {
             AiSettings.FORMAT -> {
-                val f = runCatching { Format.valueOf((value as JsonPrimitive).content.uppercase()) }.getOrNull() ?: return fail("format is TCG or OCG.")
-                h.setFormat(f)
-                return ok("Format: ${f.name}.", "Format set to ${f.name}")
+                // What is played (1.1.8): the bar's three choices, Genesys among them.
+                val play = (value as? JsonPrimitive)?.content?.let(PlayChoice::parse) ?: return fail("format is TCG, OCG or Genesys.")
+                h.setPlay(play)
+                return ok("Playing ${play.label}.", "Set to ${play.label}")
             }
             AiSettings.SEARCH_EFFECTS -> {
                 val on = (value as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: return fail("searchEffects is true or false.")

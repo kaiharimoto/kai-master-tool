@@ -58,6 +58,22 @@ class StartStepsTest {
     }
 
     @Test
+    fun whatYouPlayIsAskedOfSomeoneNewAndOfPeopleUpdating() {
+        // Someone new: right after the look, before their decks.
+        val fresh = StartSteps.pending("1.1.8", StartPrefs(), nothing, android = false)
+        assertEquals(listOf(StartStep.LOOK, StartStep.PLAY, StartStep.DECKS), fresh.take(3))
+        // Someone updating, on each track: the step arrived in Neue 1.1.8 and APK v1.3.86.
+        val settled = someone.copy(voiceReady = true, worldReady = true)
+        assertEquals(listOf(StartStep.PLAY), StartSteps.pending("1.1.8", StartPrefs(seen = "1.1.7"), settled, android = false))
+        assertEquals(listOf(StartStep.PLAY), StartSteps.pending("1.3.86", StartPrefs(seen = "1.3.85"), settled, android = true))
+        // Not before it arrives, not once answered, and not to someone who chose Genesys or a day already.
+        assertEquals(emptyList(), StartSteps.pending("1.1.7", StartPrefs(seen = "1.1.6"), settled, android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.1.8", StartPrefs(seen = "1.1.7", done = listOf("play")), settled, android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.1.8", StartPrefs(seen = "1.1.7"), settled.copy(rulesChosen = true), android = false))
+        assertEquals(StartStep.PLAY, StartStep.of("play"))
+    }
+
+    @Test
     fun aBackupComesFirstWhenAVersionIsNewHere() {
         assertEquals("Before 1.0.69 (from 1.0.68)", Backups.due("1.0.68", "1.0.69", null, 0, hasData = true))
         // The first version that keeps a record: work already there is backed up before anything changes.

@@ -88,6 +88,7 @@ import com.kaiharimoto.neue.duel.dice.DIE_HOME
 import com.kaiharimoto.neue.kit.MenuSpec
 import com.kaiharimoto.neue.pages.GuideExport
 import com.kaiharimoto.neue.phoneMenu
+import com.kaiharimoto.neue.playMenu
 import com.kaiharimoto.mastertool.core.present.modules.ModuleInput
 import com.kaiharimoto.mastertool.core.present.modules.SideMatchup
 import com.kaiharimoto.mastertool.core.present.modules.SideTurn
@@ -571,7 +572,7 @@ fun neueMain(args: Array<String>) {
                 h.decksKnown = !fresh
                 h.neue.update { it.copy(start = StartPrefs(seen = if (fresh) "" else "1.0.60")) }
                 h.neue.startSteps = if (fresh) StartStep.entries.toList()
-                else listOf(StartStep.SYNC, StartStep.AI, StartStep.ART)
+                else listOf(StartStep.PLAY, StartStep.SYNC, StartStep.AI, StartStep.ART)
                 StudioStart.at = spec.substringAfter(':', "0").toIntOrNull() ?: 0
                 clock.run(20)
             }
@@ -840,7 +841,11 @@ fun neueMain(args: Array<String>) {
             // The studio draws without the app's effects, so the rules the effect would set are set here.
             if (map["genesys"] != null || map["legal-as-of"] != null) {
                 h.builder.rules = kotlinx.coroutines.runBlocking { h.legalityRules(h.neue.prefs, h.builder.format) }
+                // The overflow's rows read the rules: made again now they are set.
+                if (map["phonemenu"] == "true") h.neue.menu = MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.phoneMenu(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f)))
             }
+            // --playmenu=true: the phone's "Play:" row opened, TCG, OCG or Genesys (1.1.8).
+            if (map["playmenu"] == "true") h.neue.menu = MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.playMenu())
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())
             map["zen"]?.let { phase ->

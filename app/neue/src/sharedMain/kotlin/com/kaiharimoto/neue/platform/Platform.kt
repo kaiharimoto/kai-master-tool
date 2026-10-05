@@ -64,6 +64,18 @@ expect object Platform {
     suspend fun takePhoto(): PickedFile?
 
     /**
+     * Whether a day is chosen with the platform's own date picker (1.1.8, the 1.1.2 design review, finding 6, kai's
+     * choice): Android's, where dashes are a keyboard page away. The desk types the date, which is quick with keys.
+     */
+    val picksDays: Boolean
+
+    /**
+     * The platform's date picker, open on [initial] (`yyyy-MM-dd`; today when null), drawn [dark] or light to match
+     * the app: the day chosen as `yyyy-MM-dd`, or null when it was put away.
+     */
+    suspend fun pickDay(initial: String?, dark: Boolean): String?
+
+    /**
      * Ai is at work, or has stopped (1.0.61, kai: "I want to be able to [switch apps] without the
      * conversation cutting off"). On Android a foreground service keeps the process and its
      * connection alive while the app is out of sight, [line] its notification; the desk needs none.

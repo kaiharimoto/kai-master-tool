@@ -4037,7 +4037,7 @@ The card data everything stands on, made correct:
   once more, `PoolRecord.misc`). The `formats` list decides where — a Speed Duel card has a TCG date and is no Advanced
   card — and the date when. The builder checks as of today, Prep as of the event's day; the inspector says "Not in the
   TCG" or "Not in the TCG until 8 Oct 2026". A pool without the data is *unknown*, never illegal. `GenesysRules` (points, no Link or
-  Pendulum) is in core; the builder's Genesys switch waits for a format choice older builds can read.
+  Pendulum) is in core; since 1.1.8 Genesys stands in the builder's bar beside TCG and OCG (below).
 - **Every banlist, by date** (`core/cards`, `neue/banlist/BanlistCenter`): Yugipedia's `{{Limitation list}}` pages, 82
   TCG and 88 OCG, parsed and kept as a device-only cache in `<data>/banlists/`; `BanSource` lets the validator check a
   dated list. Ai's `banlist` (a day's list, a card's history, what moved), `validate_deck` and `hand_odds` with `as_of`
@@ -4075,6 +4075,40 @@ The card data everything stands on, made correct:
   lists and says it was inferred (Yugipedia's "January 2016 Lists" omits Pot of Greed). **A card is "not released" in a
   region only when YGOPRODeck and Yugipedia agree** (`RegionNames`, `Card.absentFrom`): the pool alone called Trap Holic
   OCG-only a year after its TCG print; where they disagree it is unknown, never illegal.
+- **What is played, and what stands in a card's corner** (1.1.8, kai's choices from the 1.1.2 design review, findings
+  3, 5, 6, 8 and 15: "These recommendations are all great"):
+  - **`TCG | OCG | Genesys` in the bar** (`PlayChoice`, core). Genesys is a format a player picks, so it stands where
+    the region does. It is stored as the two values older builds read: choosing Genesys writes `genesys = true` and
+    keeps the region (`UiPreferences.format`) **TCG**, so a build from before reads a valid TCG with its Genesys switch
+    on; TCG or OCG turns Genesys off (`NeueHolders.setPlay`, `play`). No new preference. However Genesys came on — the
+    drawer's Forbidden & Limited | Genesys (kept, and agreeing with the bar), Ai, another device, a 1.1.1 build that kept
+    OCG beside it — the region settles to TCG (`PlayChoice.settledFormat`, an effect in `NeueEffects`). The phone's ⋯
+    has one row, "Play: Genesys", opening the three; the palette offers "Play TCG / OCG / Genesys" (each but the one in
+    force); Ai's `format` setting takes Genesys too.
+  - **The corner** (`CardMarks`, `CornerMark`, core; `DeckBuilderState.marks`, handed to every card the builder draws
+    — deck, pool, search, inspector, viewer, showcase, the carried card — as `NeueCard(marks =, section =)`): one mark at
+    most, in the slot the limit mark always used. **A card in the deck that fails a check of its own wears an inverted
+    `✕`**, its tip the issue's words: not released by the day, over the day's limit, a Link or Pendulum in Genesys, in a
+    section it may not stand in. Failures are read off `validation` — the rules in force — by card (`CardFailures`,
+    through `CardIdentity`, so an alternate artwork fails with its card); a misplaced card fails in that section only;
+    whole-deck errors (sizes, points over the cap) and warnings mark no card. Only a card drawn *in* the deck is given
+    its section, so the pool and a search never show `✕`. **In Genesys a card's points** stand there instead, in a
+    paper block with an ink rule (like the copy count, so it never reads as a Forbidden `0`), and no limit marks (there
+    is no list); a card worth nothing or with no points known shows nothing. Shown whatever the Limit marks setting
+    says: points are what a Genesys deck is built around, not a list players know by heart. Otherwise the list's marks
+    as before (Forbidden always, Limited and Semi-Limited with Limit marks on). The screenshot and Siding keep the list's
+    marks only.
+  - **Android's own date picker** for Lists and cards as of → A day (`Platform.picksDays`/`pickDay`, handed in by
+    `MainActivity` as `dayPicker`: `android.app.DatePickerDialog` in `Theme.MasterTool.DayPaper`/`DayInk`, ink on
+    paper or paper on ink). Choosing A day opens it; the day reads back in words with Change beside it. The desk keeps
+    the typed field.
+  - **"What do you play?"** (`StartStep.PLAY`, Neue 1.1.8, APK v1.3.86): right after Paper or ink for someone new,
+    and offered to people updating so players learn Genesys is there — never once Genesys or a day was chosen
+    (`StartState.rulesChosen`). The bar's own choice, the cap under Genesys (`GenesysCapField`, shared with the
+    drawer), and **Check against a past list**, which opens Legality on the builder once the setup is put away
+    (`NeueState.afterStart`, `startEnded`: never under the setup, where Esc would close it unseen).
+  - Studio: `--genesys=true` (the bar and the points), `--legal-as-of=2005-04-01` (the crosses), `--start=new:1` (the
+    step), `--phonemenu=true`, `--playmenu=true`.
 - **The field read honestly**: illegal lists dropped (`FieldLegality`), one window for every tier (`RecentDecks.window`),
   average-linkage clustering that keeps hybrids apart, the mirror kept in the expected match win, Game 1 played at the
   pre-side rates and games 2–3 at the sided ones (`TestStats`), `hand_odds` exact with overlapping sets and naming what

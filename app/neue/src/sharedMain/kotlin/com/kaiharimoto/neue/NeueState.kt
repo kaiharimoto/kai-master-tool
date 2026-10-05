@@ -253,8 +253,24 @@ class NeueState(
 
     /** The setup put away for now: this version counts as seen, the steps not done. */
     fun startLater() {
-        startSteps = emptyList()
+        startEnded()
         update { it.copy(start = it.start.copy(seen = Platform.version)) }
+    }
+
+    /**
+     * A drawer asked for from inside the setup (1.1.8: "Check against a past list" opens Legality), opened once the
+     * setup is put away — never under it, where Esc would close it unseen.
+     */
+    var afterStart: Drawer? = null
+
+    /** The setup is over, finished or put away: what was asked for from inside it opens on the builder. */
+    fun startEnded() {
+        startSteps = emptyList()
+        afterStart?.let {
+            afterStart = null
+            page = Page.BUILDER
+            drawer = it
+        }
     }
 
     /** The reader's guide open over the window, on this deck's book (1.0.67); Esc and Back close it. */

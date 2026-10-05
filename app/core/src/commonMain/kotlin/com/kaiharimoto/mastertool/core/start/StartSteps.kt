@@ -22,6 +22,13 @@ enum class StartStep(
     val newOnly: Boolean = false,
 ) {
     LOOK("look", "1.0.0", "1.3.0", newOnly = true),
+
+    /**
+     * What do you play (Neue 1.1.8, APK v1.3.86; the 1.1.2 design review, finding 15): TCG, OCG or Genesys with its
+     * cap, and a way to the Legality drawer for a past list. Offered to people updating too, so players learn Genesys
+     * is there; never once they have chosen Genesys or a day themselves.
+     */
+    PLAY("play", "1.1.8", "1.3.86"),
     DECKS("decks", "1.0.0", "1.3.0", newOnly = true),
     SYNC("sync", "1.0.68", "1.3.45"),
     AI("ai", "1.0.43", "1.3.20"),
@@ -54,6 +61,8 @@ data class StartState(
     val voiceReady: Boolean = true,
     /** Ai World needs nothing more here (1.0.97): Python was decided on, or this is a phone or tablet, which has none. */
     val worldReady: Boolean = true,
+    /** What the deck is checked against was chosen already (Genesys on, or a day set): nothing to tell them. */
+    val rulesChosen: Boolean = false,
 )
 
 /** This device's own record of the setup (a field of `NeuePreferences`, never synced). */
@@ -90,6 +99,7 @@ object StartSteps {
 
     private fun settled(step: StartStep, s: StartState): Boolean = when (step) {
         StartStep.LOOK -> false
+        StartStep.PLAY -> s.rulesChosen
         StartStep.DECKS -> s.hasDecks
         StartStep.SYNC -> s.syncOn
         StartStep.AI -> s.aiConnected || !s.aiEnabled

@@ -79,7 +79,7 @@ object AiSettings {
         "ai.speakReplies" to "Whether replies are spoken aloud: talk (in talk mode) or never.",
         "ai.speechRate" to "How fast replies are spoken aloud, 0.5 to 2; 1 is the voice's own pace.",
         "ai.factCheck" to "Whether each answer's claims about cards, rulings and numbers are checked against the card text once written, and corrected if wrong.",
-        FORMAT to "The banlist the builder checks against: TCG or OCG.",
+        FORMAT to "What the builder plays, as its bar offers it: TCG, OCG or Genesys. Genesys turns genesys on and keeps the region TCG; TCG or OCG turns genesys off.",
         "legalAsOf" to "The day the builder checks legality on, yyyy-MM-dd: that day's Forbidden & Limited list and the cards released by then. \"\" is today.",
         "genesys" to "The builder checks Konami's Genesys format instead of the Forbidden & Limited list: points under a cap, TCG cards, no Link or Pendulum monsters.",
         "genesysCap" to "The Genesys points cap the builder checks against (10–1000); 100 unless an event sets another.",

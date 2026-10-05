@@ -267,6 +267,8 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             answer = { title, line ->
                 if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) AiWorkService.answered(this, title, line)
             },
+            // "Lists and cards as of → A day" (1.1.8): Android's own date picker, not a field of dashes.
+            dayPicker = { initial, dark -> pickDay(initial, dark) },
         )
 
         val app = application as MasterToolApplication
@@ -578,6 +580,32 @@ class MainActivity : ComponentActivity(), DeckFileAccess {
             if (taken && file.length() > 0) PickedFile("photo.jpg", upright(file)) else null
         } finally {
             file.delete()
+        }
+    }
+
+    /**
+     * Android's own date picker (1.1.8, the 1.1.2 design review, finding 6, kai's choice), in paper or ink to match the
+     * app (`Theme.MasterTool.Day*`: the dialog's accent is ink on paper, paper on ink). Opens on [initial] or today; the
+     * day chosen as `yyyy-MM-dd`, or null when it is put away. OK fires the date before the dismiss, so the first
+     * completion is the answer.
+     */
+    private suspend fun pickDay(initial: String?, dark: Boolean): String? = withContext(Dispatchers.Main) {
+        val start = initial?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() } ?: java.time.LocalDate.now()
+        val chosen = CompletableDeferred<String?>()
+        val dialog = android.app.DatePickerDialog(
+            this@MainActivity,
+            if (dark) R.style.Theme_MasterTool_DayInk else R.style.Theme_MasterTool_DayPaper,
+            { _, year, month, day -> chosen.complete(java.time.LocalDate.of(year, month + 1, day).toString()) },
+            start.year,
+            start.monthValue - 1,
+            start.dayOfMonth,
+        )
+        dialog.setOnDismissListener { chosen.complete(null) }
+        dialog.show()
+        try {
+            chosen.await()
+        } finally {
+            if (dialog.isShowing) dialog.dismiss()
         }
     }
 

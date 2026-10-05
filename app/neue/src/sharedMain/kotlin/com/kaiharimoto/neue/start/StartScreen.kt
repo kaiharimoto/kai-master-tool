@@ -1,5 +1,8 @@
 package com.kaiharimoto.neue.start
 
+import com.kaiharimoto.neue.builder.GenesysCapField
+import com.kaiharimoto.neue.Drawer
+import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -76,7 +79,7 @@ fun StartScreen(h: NeueHolders, modifier: Modifier = Modifier) {
     fun next(done: Boolean = true) {
         if (done) neue.update { it.copy(start = it.start.copy(done = (it.start.done + step.id).distinct())) }
         if (at < steps.lastIndex) at++ else {
-            neue.startSteps = emptyList()
+            neue.startEnded()
             neue.update { it.copy(start = it.start.copy(seen = Platform.version)) }
         }
     }
@@ -160,10 +163,12 @@ fun startState(h: NeueHolders) = StartState(
     artSettled = !h.neue.prefs.hdArt || h.art.count.complete,
     voiceReady = !Voice.usesModels || !Voice.needsModel(h.ai.voiceModel),
     worldReady = !WorldPython.possible || h.neue.prefs.world.python,
+    rulesChosen = h.neue.prefs.genesys || h.neue.prefs.legalAsOf.isNotBlank(),
 )
 
 private fun short(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.LOOK -> "Paper or ink"
+    StartStep.PLAY -> "What you play"
     StartStep.DECKS -> "Your decks"
     StartStep.SYNC -> "Every device"
     StartStep.AI -> h.neue.prefs.ai.name
@@ -174,6 +179,7 @@ private fun short(step: StartStep, h: NeueHolders) = when (step) {
 
 private fun title(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.LOOK -> "Paper or ink"
+    StartStep.PLAY -> "What do you play?"
     StartStep.DECKS -> "Bring your decks"
     StartStep.SYNC -> "Your decks on every device"
     StartStep.AI -> "Meet ${h.neue.prefs.ai.name}"
@@ -194,6 +200,32 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
             Labelled("Theme") { Segmented(prefs.theme, NeueTheme.entries, { if (it == NeueTheme.PAPER) "Paper" else "Ink" }, { t -> neue.update { it.copy(theme = t) } }) }
             Labelled("Foil") { Segmented(prefs.foil, Foils.all.map { it.id }, Foils::label, { f -> neue.update { it.copy(foil = f) } }) }
             Help("The foil is the light on a card's face; it follows the pointer, or the tilt of a phone.")
+        }
+        // What do you play (1.1.8, the 1.1.2 design review, finding 15): the bar's own choice, so Genesys is found.
+        StartStep.PLAY -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Small("The deck is checked against it as you build: which cards are out, and how many of each you may play.", color = c.ink70)
+            val play = h.play
+            Labelled("Play") { Segmented(play, PlayChoice.entries, { it.label }, h::setPlay) }
+            Help(
+                when (play) {
+                    PlayChoice.TCG -> "The TCG's Forbidden & Limited List, and the cards released in the TCG."
+                    PlayChoice.OCG -> "The OCG's Forbidden & Limited List, and the cards released in the OCG."
+                    PlayChoice.GENESYS -> "Konami's points format: no Forbidden & Limited List, TCG cards, no Link or Pendulum monsters, and the whole deck's points under a cap. Each card's points stand in its corner."
+                },
+            )
+            if (play == PlayChoice.GENESYS) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { GenesysCapField(neue) }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                MuButton("Check against a past list", {
+                    // Legality, opened on the builder once the setup is put away.
+                    neue.afterStart = Drawer.ISSUES
+                    next()
+                }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
+                Help(
+                    "Any day's list since 2002 is in Legality: " +
+                        (if (neue.phone) "the line under the deck's name, or ⋯ › Legality." else "the ✓ beside the deck's name, or I.") +
+                        " It opens when you finish here.",
+                )
+            }
         }
         StartStep.DECKS -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Small(

@@ -69,7 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
-import com.kaiharimoto.mastertool.core.model.Format
+import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.Drawer
 import com.kaiharimoto.neue.NeueState
@@ -255,7 +255,8 @@ val IMMERSIVE_TOP = 32.dp
 fun RowScope.BuilderBar(
     state: DeckBuilderState,
     neue: NeueState,
-    onFormat: (Format) -> Unit,
+    play: PlayChoice,
+    onPlay: (PlayChoice) -> Unit,
     onScreenshot: () -> Unit,
     onSave: () -> Unit,
     narrow: Boolean,
@@ -287,7 +288,8 @@ fun RowScope.BuilderBar(
         }
     }
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
-    Segmented(state.format, Format.entries, { it.name }, onFormat, small = true, compact = true)
+    // What is played (the 1.1.2 design review, finding 3, kai's option A): Genesys stands where the region does.
+    Segmented(play, PlayChoice.entries, { it.label }, onPlay, small = true, compact = true)
     Box(Modifier.width(1.dp).height(20.dp).background(c.ink25))
     // On a tablet (touch swarm, rec 16) Import and Export keep their words — an icon
     // with no hover to name it is a guess — and the deck picture, which has no

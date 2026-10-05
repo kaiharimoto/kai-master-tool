@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.neue.builder.legalityRules
 import com.kaiharimoto.neue.builder.eventForRules
 import androidx.compose.animation.Crossfade
@@ -336,6 +337,18 @@ class NeueHolders(
         layout.update { it.copy(format = format) }
     }
 
+    /**
+     * What the person plays (the 1.1.2 design review, finding 3): the bar's `TCG | OCG | Genesys`. Genesys turns the
+     * Genesys switch on and keeps the stored region TCG, so an older build reads a valid TCG; TCG or OCG turns it off.
+     */
+    fun setPlay(choice: PlayChoice) {
+        if (builder.format != choice.format) setFormat(choice.format)
+        if (neue.prefs.genesys != choice.genesys) neue.update { it.copy(genesys = choice.genesys) }
+    }
+
+    /** What the bar shows now. */
+    val play: PlayChoice get() = PlayChoice.of(builder.format, neue.prefs.genesys)
+
     fun setSearchEffects(on: Boolean) {
         builder.onSearchEffectsChange(on)
         layout.update { it.copy(searchEffects = on) }
@@ -560,6 +573,11 @@ fun NeueEffects(h: NeueHolders) {
         LaunchedEffect(p.legalAsOf, p.genesys, p.genesysCap, state.format, state.index) {
             state.rules = h.legalityRules(p, state.format)
         }
+        // Genesys is TCG cards (1.1.8): however Genesys came on — the drawer, Ai, another device, a 1.1.1 build that
+        // kept OCG beside it — the region settles to TCG, so the pool, the bar and the check say one thing.
+        LaunchedEffect(p.genesys, state.format, neue.ready) {
+            if (neue.ready) PlayChoice.settledFormat(state.format, p.genesys)?.let(h::setFormat)
+        }
         // Where cards are printed, a second opinion (1.1.1): the pool alone called Trap Holic OCG-only a year after its
         // TCG print. Laid over the pool once read; a pool loaded later is built with it already.
         LaunchedEffect(Unit) {
@@ -726,7 +744,7 @@ private fun Shell(h: NeueHolders) {
             },
         ) { narrow ->
             if (neue.page == Page.BUILDER) {
-                BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow, webs = h.webs, onStepWeb = h::stepWeb, onOpenDeck = h::openDeck)
+                BuilderBar(state, neue, h.play, h::setPlay, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow, webs = h.webs, onStepWeb = h::stepWeb, onOpenDeck = h::openDeck)
             } else if (neue.page == Page.DUEL) {
                 DuelBarItems(h, narrow)
             } else if (neue.page == Page.SHOOTOUT && h.shootout.running) {
@@ -878,7 +896,7 @@ private fun Shell(h: NeueHolders) {
         // Its own composable (1.0.92): the pointer is read as it is placed, not here, so the
         // shell does not recompose on every move of a carried card.
         val carry = rememberCarryMotion(h.drag)
-        h.drag.held?.let { held -> CarriedCard(h.drag, held, carry, state.format, neue.prefs.foil, state.limits) }
+        h.drag.held?.let { held -> CarriedCard(h.drag, held, carry, state.format, neue.prefs.foil, state.marks) }
 
         // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
         if (neue.aiSheet) AiPanel(h, Modifier.fillMaxSize(), phone = true)

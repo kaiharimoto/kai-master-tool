@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue
 
+import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.mastertool.core.ai.AiSession
 import com.kaiharimoto.neue.ai.openWizard
 import com.kaiharimoto.neue.ai.startRubricInterview
@@ -10,7 +11,6 @@ import com.kaiharimoto.neue.ai.openProfile
 import androidx.compose.ui.geometry.Offset
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
-import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.prefs.NeueTheme
 import com.kaiharimoto.mastertool.core.ydk.DeckExportFormat
 import com.kaiharimoto.neue.builder.CardActions
@@ -49,8 +49,9 @@ fun NeueHolders.phoneMenu(at: Offset): List<MenuEntry> {
             add(MenuEntry("History…", enabled = state.canUndo || state.canRedo, reason = "Nothing changed yet") {
                 neue.menu = MenuSpec(at, historyMenu(state, touch = true))
             })
-            add(MenuEntry("Format: ${state.format.name}", hint = "Switch to ${if (state.format == Format.TCG) "OCG" else "TCG"}") {
-                setFormat(if (state.format == Format.TCG) Format.OCG else Format.TCG)
+            // One row for what is played (1.1.8): TCG, OCG or Genesys, chosen from a second menu where this one opened.
+            add(MenuEntry("Play: ${play.label}", hint = "The region, or Genesys") {
+                neue.menu = MenuSpec(at, playMenu())
             })
             // Always there (1.1.1): what the deck is checked against is chosen in the drawer.
             val count = state.validation.errors.size + state.validation.warnings.size
@@ -170,16 +171,10 @@ fun NeueHolders.commands(query: String): List<Command> {
         cmd("Cards", if (neue.prefs.poolList != null) "Show every card in the pool" else "Show the list in the pool", DeskAction.SHOW_LIST),
         Command("Cards", "New list of cards") { neue.showList(neue.newList()) },
         cmd("Deck", "New group", DeskAction.NEW_GROUP),
-        Command(
-            "Deck",
-            if (neue.prefs.genesys) "Check against the Forbidden & Limited list" else "Check against Genesys",
-            words = if (neue.prefs.genesys) LEGALITY_WORDS else GENESYS_WORDS,
-        ) {
-            neue.update { it.copy(genesys = !it.genesys) }
-        },
-        Command("Deck", "Format: ${if (builder.format == Format.TCG) "switch to OCG" else "switch to TCG"}", words = listOf("region", "TCG", "OCG")) {
-            setFormat(if (builder.format == Format.TCG) Format.OCG else Format.TCG)
-        },
+        // What is played (1.1.8): the bar's three choices, each but the one in force.
+        *PlayChoice.entries.filter { it != play }.map { choice ->
+            Command("Deck", "Play ${choice.label}", words = playWords(choice)) { setPlay(choice) }
+        }.toTypedArray(),
         cmd("App", if (neue.prefs.theme == NeueTheme.PAPER) "Switch to ink (dark)" else "Switch to paper (light)", DeskAction.TOGGLE_THEME),
         cmd("App", "Show or hide the pool", DeskAction.TOGGLE_POOL),
         cmd("App", "Show or hide the inspector", DeskAction.TOGGLE_INSPECTOR),
@@ -241,5 +236,23 @@ fun NeueHolders.commands(query: String): List<Command> {
 /** What the Legality row answers to besides its name: what people call the list and the drawer. */
 private val LEGALITY_WORDS = listOf("issues", "banlist", "ban list", "F&L", "forbidden", "limited", "format", "legal", "check against")
 
-/** What the Genesys row answers to. */
+/** What a person may type for a choice of what is played: the region's words, or Genesys's. */
+private fun playWords(choice: PlayChoice): List<String> = when (choice) {
+    PlayChoice.GENESYS -> GENESYS_WORDS
+    else -> listOf("format", "region", choice.label, "play")
+}
+
+/** The phone's second menu for what is played: the three choices, the one in force ticked. */
+fun NeueHolders.playMenu(): List<MenuEntry> = PlayChoice.entries.map { choice ->
+    MenuEntry(
+        choice.label,
+        hint = when {
+            choice == play -> "✓"
+            choice == PlayChoice.GENESYS -> "Points, no list"
+            else -> null
+        },
+    ) { setPlay(choice) }
+}
+
+/** What Genesys answers to. */
 private val GENESYS_WORDS = listOf("genesys", "points", "format", "legal")

@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.builder
 
+import com.kaiharimoto.neue.platform.Platform
+import com.kaiharimoto.mastertool.core.prefs.NeueTheme
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -87,17 +91,24 @@ internal fun RulesPicker(state: DeckBuilderState, neue: NeueState, event: PrepEv
             neue.update { it.copy(genesys = on) }
         }, small = true)
         if (p.genesys) {
-            var cap by remember { mutableStateOf(p.genesysCap.toString()) }
-            FieldLabel("Points cap", Modifier.padding(top = 8.dp), hint = "100 unless the event sets another")
-            MuInput(cap, { v ->
-                cap = v.filter(Char::isDigit).take(4)
-                cap.toIntOrNull()?.takeIf { it in NeuePreferences.MIN_GENESYS_CAP..NeuePreferences.MAX_GENESYS_CAP }
-                    ?.let { n -> neue.update(debounce = true) { it.copy(genesysCap = n) } }
-            }, Modifier.width(120.dp), placeholder = "100", mono = true)
+            GenesysCapField(neue, Modifier.padding(top = 8.dp))
             GenesysPoints(state, neue)
         }
         DayPicker(state, neue, event)
     }
+}
+
+/** The Genesys points cap, typed: kept once it is a number in range. The drawer's, and the setup's "What do you play?". */
+@Composable
+internal fun GenesysCapField(neue: NeueState, modifier: Modifier = Modifier) {
+    val p = neue.prefs
+    var cap by remember { mutableStateOf(p.genesysCap.toString()) }
+    FieldLabel("Points cap", modifier, hint = "100 unless the event sets another")
+    MuInput(cap, { v ->
+        cap = v.filter(Char::isDigit).take(4)
+        cap.toIntOrNull()?.takeIf { it in NeuePreferences.MIN_GENESYS_CAP..NeuePreferences.MAX_GENESYS_CAP }
+            ?.let { n -> neue.update(debounce = true) { it.copy(genesysCap = n) } }
+    }, Modifier.width(120.dp), placeholder = "100", mono = true)
 }
 
 /** The deck's Genesys points against the cap, as the kit's bar, and the five cards that cost the most. */
@@ -148,6 +159,16 @@ private fun DayPicker(state: DeckBuilderState, neue: NeueState, event: PrepEvent
         else -> DayMode.DAY
     }
     var typed by remember { mutableStateOf(p.legalAsOf.takeIf { mode == DayMode.DAY }.orEmpty()) }
+    // Android picks a day with its own date picker (1.1.8, finding 6, kai's choice); the desk types it.
+    val scope = rememberCoroutineScope()
+    val dark = p.theme == NeueTheme.INK
+    fun pickDay() {
+        scope.launch {
+            val day = Platform.pickDay(p.legalAsOf.ifBlank { null }, dark) ?: return@launch
+            typed = day
+            neue.update { it.copy(legalAsOf = day) }
+        }
+    }
     FieldLabel("Lists and cards as of", Modifier.padding(top = 8.dp))
     val modes = listOfNotNull(DayMode.TODAY, DayMode.DAY, DayMode.EVENT.takeIf { eventDay != null })
     Segmented(mode, modes, { m ->
@@ -165,6 +186,7 @@ private fun DayPicker(state: DeckBuilderState, neue: NeueState, event: PrepEvent
             DayMode.DAY -> {
                 picking = true
                 typed = p.legalAsOf
+                if (Platform.picksDays) pickDay()
             }
             DayMode.EVENT -> {
                 picking = false
@@ -172,7 +194,14 @@ private fun DayPicker(state: DeckBuilderState, neue: NeueState, event: PrepEvent
             }
         }
     }, small = true)
-    if (mode == DayMode.DAY) {
+    if (mode == DayMode.DAY && Platform.picksDays) {
+        // The day in words, and the platform's picker to change it: never a field of dashes on a phone's keyboard.
+        val read = Dates.parseDay(p.legalAsOf)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Small(read?.let(Dates::day) ?: "No day chosen yet.", color = if (read != null) c.ink else c.ink45)
+            MuButton(if (read != null) "Change" else "Choose a day", { pickDay() }, variant = BtnVariant.SECONDARY, size = BtnSize.SM)
+        }
+    } else if (mode == DayMode.DAY) {
         MuInput(typed, { v ->
             typed = v.take(10)
             val day = Dates.parseDay(typed)

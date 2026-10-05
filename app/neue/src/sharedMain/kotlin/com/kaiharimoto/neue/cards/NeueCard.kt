@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -62,7 +63,11 @@ import com.kaiharimoto.neue.art.LocalCustomArt
 import coil3.compose.AsyncImagePainter
 import com.kaiharimoto.mastertool.core.layout.ArtFrame
 import com.kaiharimoto.mastertool.core.deck.BanSource
-import com.kaiharimoto.mastertool.core.model.BanStatus
+import com.kaiharimoto.mastertool.core.deck.CardMarks
+import com.kaiharimoto.mastertool.core.deck.CornerMark
+import com.kaiharimoto.mastertool.core.deck.DeckRules
+import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.neue.kit.Tip
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.neue.kit.Hatch
@@ -137,6 +142,13 @@ fun NeueCard(
      * 1.1.2 design review, finding 1) — none in Genesys, a dated list's status — else the pool's list in [format].
      */
     limits: BanSource? = null,
+    /**
+     * Every corner mark from the rules in force (`DeckBuilderState.marks`, the 1.1.2 design review, findings 5 and 8):
+     * a card's Genesys points while Genesys is on, a failing card's `✕`, else the list's mark. Wins over [limits].
+     */
+    marks: CardMarks? = null,
+    /** Where the card stands in the deck, for a card drawn there: only a card in the deck can wear `✕`. */
+    section: DeckSection? = null,
 ) {
     // The artwork chosen for this card (1.0.14): the same card with another picture,
     // under that picture's passcode, so the originals and the name masks keep apart.
@@ -155,7 +167,12 @@ fun NeueCard(
     } else {
         null
     }
-    NeueCardFace(drawn, modifier, format, copies, selected, dimmed, foil, marker, outlined, motion, chip, limits?.statusOf(card))
+    // The corner's mark, worked out on the card itself (not the artwork drawn), from the marks handed in, else the
+    // list [limits] or the pool's in [format] names.
+    val limitMarks = LocalLimitMarks.current
+    val rules = marks ?: remember(limits, format) { CardMarks(DeckRules(format, limits = limits)) }
+    val corner = rules.of(card, section, limitMarks)
+    NeueCardFace(drawn, modifier, copies, selected, dimmed, foil, marker, outlined, motion, chip, corner)
 }
 
 /** Steps a card's artwork: provided by the window, which owns the choice (`NeueState.stepArt`). */
@@ -172,7 +189,6 @@ val LocalArts = compositionLocalOf<Map<Int, Int>> { emptyMap() }
 private fun NeueCardFace(
     card: Card,
     modifier: Modifier,
-    format: Format,
     copies: Int,
     selected: Boolean,
     dimmed: Boolean,
@@ -181,8 +197,8 @@ private fun NeueCardFace(
     outlined: Boolean,
     motion: (() -> LeanPose)?,
     artChip: ArtChip? = null,
-    /** The status under the chosen rules, when the caller has them; else the pool's in [format]. */
-    ruled: BanStatus? = null,
+    /** What stands in the top-left corner: a failure's `✕`, Genesys points or the list's mark ([CardMarks]). */
+    corner: CornerMark? = null,
 ) {
     val c = Mu.colors
     var art by remember(card.id) { mutableStateOf(ArtState.LOADING) }
@@ -409,17 +425,32 @@ private fun NeueCardFace(
             }
         }
 
-        val ban = ruled ?: card.banStatus(format)
-        // Forbidden always shows; Limited and Semi-Limited only when asked for (kai, 1.0.73).
-        if (ban != BanStatus.UNLIMITED && (ban.maxCopies == 0 || LocalLimitMarks.current)) {
-            Inverted {
+        // The corner (`CardMarks`): Forbidden always shows, Limited and Semi-Limited only when asked for (kai, 1.0.73);
+        // in Genesys the card's points instead, in a paper block like the copy count; a card failing the rules in force
+        // an inverted ✕, its tip the issue's words (1.1.8).
+        when (corner) {
+            is CornerMark.Limit -> Inverted {
                 Box(
                     Modifier.align(Alignment.TopStart).padding(3.dp).size(16.dp).background(Mu.colors.paper),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Mono(ban.maxCopies.toString(), color = Mu.colors.ink, size = 10.sp, align = TextAlign.Center)
+                    Mono(corner.copies.toString(), color = Mu.colors.ink, size = 10.sp, align = TextAlign.Center)
                 }
             }
+            is CornerMark.Points -> Box(
+                Modifier.align(Alignment.TopStart).padding(3.dp).heightIn(min = 16.dp).background(c.paper).border(1.dp, c.ink).padding(horizontal = 3.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Mono(corner.points.toString(), color = c.ink, size = 10.sp, align = TextAlign.Center)
+            }
+            is CornerMark.Fails -> Tip(corner.why, Modifier.align(Alignment.TopStart).padding(3.dp)) {
+                Inverted {
+                    Box(Modifier.size(16.dp).background(Mu.colors.paper), contentAlignment = Alignment.Center) {
+                        Mono("✕", color = Mu.colors.ink, size = 10.sp, align = TextAlign.Center)
+                    }
+                }
+            }
+            null -> Unit
         }
         if (copies > 0) {
             Box(

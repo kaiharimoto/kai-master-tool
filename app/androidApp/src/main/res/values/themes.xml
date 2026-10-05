@@ -6,4 +6,20 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- Android's date picker (1.1.8, "Lists and cards as of → A day"), in Master UI's two fills: ink on paper. -->
+    <style name="Theme.MasterTool.DayPaper" parent="android:Theme.Material.Light.Dialog">
+        <item name="android:colorAccent">@color/ink</item>
+        <item name="android:colorPrimary">@color/ink</item>
+        <item name="android:colorBackground">@color/paper</item>
+        <item name="android:textColorPrimary">@color/ink</item>
+    </style>
+
+    <!-- And paper on ink, when the app is in ink. -->
+    <style name="Theme.MasterTool.DayInk" parent="android:Theme.Material.Dialog">
+        <item name="android:colorAccent">@color/paper</item>
+        <item name="android:colorPrimary">@color/paper</item>
+        <item name="android:colorBackground">@color/ink</item>
+        <item name="android:textColorPrimary">@color/paper</item>
+    </style>
 </resources>

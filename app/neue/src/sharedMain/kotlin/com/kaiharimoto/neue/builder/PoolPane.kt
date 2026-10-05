@@ -309,7 +309,7 @@ fun PoolPane(
                                 motion = press::pose,
                                 artChip = false,
                                 format = state.format,
-                                limits = state.limits,
+                                marks = state.marks,
                                 copies = state.copiesInDeck(card.id),
                                 selected = selected,
                                 outlined = outlined,

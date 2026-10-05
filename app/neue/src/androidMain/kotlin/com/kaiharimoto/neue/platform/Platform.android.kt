@@ -42,6 +42,9 @@ actual object Platform {
     /** The activity's camera app, for a photo to show Ai (1.0.55). */
     private var camera: (suspend () -> PickedFile?)? = null
 
+    /** The activity's own date picker (1.1.8): the day it opened on and the theme in, the day chosen out. */
+    private var dayPicker: (suspend (String?, Boolean) -> String?)? = null
+
     /** The activity asking for a runtime permission (1.0.57: the microphone): granted or not. */
     internal var permission: (suspend (String) -> Boolean)? = null
         private set
@@ -76,7 +79,9 @@ actual object Platform {
         permission: (suspend (String) -> Boolean)? = null,
         work: ((Boolean, String, String) -> Unit)? = null,
         answer: ((String, String) -> Unit)? = null,
+        dayPicker: (suspend (String?, Boolean) -> String?)? = null,
     ) {
+        this.dayPicker = dayPicker
         this.work = work
         this.answer = answer
         this.context = context.applicationContext
@@ -157,6 +162,11 @@ actual object Platform {
         get() = camera != null && runCatching { context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY) }.getOrDefault(false)
 
     actual suspend fun takePhoto(): PickedFile? = camera?.invoke()
+
+    actual val picksDays: Boolean
+        get() = dayPicker != null
+
+    actual suspend fun pickDay(initial: String?, dark: Boolean): String? = dayPicker?.invoke(initial, dark)
 
     actual suspend fun scanQr(from: QrSource): QrScan = when (from) {
         QrSource.CAMERA -> scanner?.invoke() ?: QrScan.NoCamera

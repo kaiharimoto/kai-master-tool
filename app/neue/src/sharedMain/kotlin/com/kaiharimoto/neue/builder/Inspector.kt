@@ -180,7 +180,7 @@ private fun InspectedCard(card: Card, state: DeckBuilderState, neue: NeueState) 
                             if (custom == null) base else base.dragAndDropTarget(shouldStartDragAndDrop = { com.kaiharimoto.neue.platform.mayBePicture(it) }, target = drop)
                         },
                         format = state.format,
-                        limits = state.limits,
+                        marks = state.marks,
                         foil = neue.prefs.foil,
                     )
                 },

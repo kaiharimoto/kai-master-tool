@@ -1,6 +1,8 @@
 package com.kaiharimoto.mastertool.ui.deckbuilder
 
 import com.kaiharimoto.mastertool.core.deck.BanSource
+import com.kaiharimoto.mastertool.core.deck.CardFailures
+import com.kaiharimoto.mastertool.core.deck.CardMarks
 import com.kaiharimoto.mastertool.core.deck.DeckRules
 import com.kaiharimoto.mastertool.core.prep.IsoDate
 import androidx.compose.runtime.derivedStateOf
@@ -383,6 +385,13 @@ class DeckBuilderState(
      * toast and the card marks alike. One instance while the rules stand, so a card handed it does not redraw.
      */
     val limits: BanSource by derivedStateOf { rulesInForce.banSource }
+
+    /**
+     * Every card's corner mark (the 1.1.2 design review, findings 5 and 8): the rules in force — Genesys points, else
+     * the list's marks — and the deck's own failures, read off [validation] by card, so a card that fails wears `✕`.
+     * One instance while the rules and the deck stand.
+     */
+    val marks: CardMarks by derivedStateOf { CardMarks(rulesInForce, CardFailures.of(validation, index::byId)) }
 
     val statistics: DeckStatistics by derivedStateOf {
         DeckStatistics.of(deck, index::byId, statsSection)
