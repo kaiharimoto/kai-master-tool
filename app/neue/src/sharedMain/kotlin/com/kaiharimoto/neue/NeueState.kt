@@ -383,6 +383,9 @@ class NeueState(
         }
     }
 
+    /** How many double-tap windows after the viewer opened a late second tap still closes it. */
+    private val LATE_SECOND_TAP = 4
+
     /** The viewer this timer opened, and when: a double-tap's second tap arriving late closes it (1.0.32). Plain. */
     private var softOpened: Viewing? = null
     private var softOpenedAt = 0L
@@ -417,8 +420,11 @@ class NeueState(
         viewJob = null
         val opened = softOpened
         softOpened = null
+        // The second tap is a double-tap by its own events' clock, so the viewer its first tap's timer opened is
+        // closed however late a busy phone delivers it (1.1.15: the CI phone's second tap came 590 ms after the
+        // open). Bounded all the same, so a tap long after is never taken for one.
         if (secondTap && opened != null && viewing === opened &&
-            System.nanoTime() / 1_000_000 - softOpenedAt < DeskTouch.PHONE_VIEW_MS
+            System.nanoTime() / 1_000_000 - softOpenedAt < DeskTouch.PHONE_VIEW_MS * LATE_SECOND_TAP
         ) {
             trace("close, a second tap")
             viewing = null
