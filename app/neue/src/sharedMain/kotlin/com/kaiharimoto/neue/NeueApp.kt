@@ -192,6 +192,7 @@ import com.kaiharimoto.neue.world.WorldPage
 import com.kaiharimoto.neue.world.desk.WorldPhoneTitle
 import com.kaiharimoto.neue.shootout.ShootoutPage
 import com.kaiharimoto.neue.shootout.Shootouts
+import com.kaiharimoto.mastertool.core.duel.Shortcuts
 import com.kaiharimoto.neue.effects.Effects
 import com.kaiharimoto.neue.shootout.dismissShootout
 import com.kaiharimoto.neue.world.WorldSnapshot
@@ -238,7 +239,21 @@ class NeueHolders(
     }
 
     /** Duel (1.0.74): the duel in play, its table, its log; kept in `<data>/duel/`. */
-    private val duelHolder = lazy { Duels(java.io.File(Platform.dataDir, "duel")).also { d -> d.context = { duelContext(this) } } }
+    private val duelHolder = lazy {
+        Duels(java.io.File(Platform.dataDir, "duel")).also { d ->
+            d.context = { duelContext(this) }
+            // Shortcut at the table (Phase D §5½): the effects library's book and the pool's facts, rebuilt when the book
+            // moves on (`Effects.revision`) or the pool changes; none written, nothing offered.
+            var memo: Pair<Pair<Int, Any>, Shortcuts?>? = null
+            d.writtenEffects = {
+                val e = effects
+                val key = e.revision to (builder.index as Any)
+                memo?.takeIf { it.first == key }?.second
+                    ?: (if (e.book.size == 0) null else Shortcuts.written(e.book, e.facts(), names = e.names()))
+                        .also { memo = key to it }
+            }
+        }
+    }
     val duel: Duels by duelHolder
 
     /** Whether the duel holder exists this run (Phase C stage 3: a World's fork reads the page's duel, else the one on disk). */
