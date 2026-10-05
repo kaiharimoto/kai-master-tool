@@ -7,7 +7,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class StartStepsTest {
-    private val nothing = StartState(hasDecks = false, syncOn = false, aiEnabled = true, aiConnected = false, artSettled = false, voiceReady = false, worldReady = false)
+    private val nothing = StartState(hasDecks = false, syncOn = false, aiEnabled = true, aiConnected = false, artSettled = false, voiceReady = false, worldReady = false, recordReady = false)
     private val someone = nothing.copy(hasDecks = true)
 
     @Test
@@ -23,6 +23,15 @@ class StartStepsTest {
         assertEquals(emptyList(), StartSteps.pending("1.3.75", StartPrefs(seen = "1.3.74"), someone.copy(voiceReady = true, worldReady = true), android = true))
         // With Ai off there is no World to set up.
         assertEquals(emptyList(), StartSteps.pending("1.0.97", StartPrefs(seen = "1.0.96"), someone.copy(voiceReady = true, aiEnabled = false), android = false))
+    }
+
+    @Test
+    fun recordingAsksForTheCameraOnTheDeskOnly() {
+        // 1.1.13: the desk asks which camera and microphone; a phone or tablet cannot record a take yet, so it is ready.
+        val ready = someone.copy(voiceReady = true, worldReady = true)
+        assertEquals(listOf(StartStep.RECORD), StartSteps.pending("1.1.13", StartPrefs(seen = "1.1.12"), ready.copy(recordReady = false), android = false))
+        assertEquals(emptyList(), StartSteps.pending("1.3.91", StartPrefs(seen = "1.3.90"), ready.copy(recordReady = true), android = true))
+        assertEquals(emptyList(), StartSteps.pending("1.1.13", StartPrefs(seen = "1.1.12", done = listOf("record")), ready.copy(recordReady = false), android = false))
     }
 
     @Test

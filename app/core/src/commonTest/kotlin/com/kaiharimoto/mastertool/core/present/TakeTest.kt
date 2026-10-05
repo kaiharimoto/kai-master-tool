@@ -92,8 +92,21 @@ class TakeTest {
     @Test
     fun theEncoderIsTheMachinesOwnFirstAndAlwaysSomething() {
         assertEquals("h264_videotoolbox", EncoderPick.pick(EncoderPick.MAC) { true })
-        assertEquals("libopenh264", EncoderPick.pick(EncoderPick.WINDOWS) { it == "libopenh264" || it == "mpeg4" })
-        EncoderPick.order(EncoderPick.LINUX).let { assertEquals("mpeg4", it.last()) }
+        // No machine H.264: VP9, never the bundled OpenH264 (no patent licence for a build from source).
+        assertEquals(EncoderPick.VP9, EncoderPick.pick(EncoderPick.WINDOWS) { it == EncoderPick.VP9 || it == "libopenh264" || it == "mpeg4" })
+        for (os in listOf(EncoderPick.MAC, EncoderPick.WINDOWS, EncoderPick.LINUX)) {
+            val order = EncoderPick.order(os)
+            assertEquals(EncoderPick.VP9, order.last(), "$os falls back to VP9")
+            assertTrue(order.none { it in EncoderPick.NEVER || it == "mpeg4" }, "$os asks for $order")
+        }
+        assertEquals("mp4", EncoderPick.container("h264_mf"))
+        assertEquals("aac", EncoderPick.audioCodec("h264_videotoolbox"))
+        assertEquals("mp4", EncoderPick.container(EncoderPick.VP9))
+        assertEquals("libopus", EncoderPick.audioCodec(EncoderPick.VP9))
+        assertEquals("realtime", EncoderPick.options(EncoderPick.VP9)["deadline"])
+        assertEquals(EncoderPick.MAC, EncoderPick.osOf("Mac OS X"))
+        assertEquals(EncoderPick.WINDOWS, EncoderPick.osOf("Windows 11"))
+        assertEquals(EncoderPick.LINUX, EncoderPick.osOf("Linux"))
         assertEquals(8_087_040, EncoderPick.bitrate(1920, 1080, 30))
     }
 

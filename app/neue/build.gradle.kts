@@ -11,6 +11,20 @@ plugins {
 // Neue Master Tool, in Master UI: the app. Its own release track (`neue-v*`,
 // release-neue.yml) and data directory; built on :core and :builder alone.
 //
+// Present's recording (1.1.13): the natives of FFmpeg and JavaCPP for the system this build runs on, and only
+// those — release-neue.yml packages each installer on its own system (Windows x64, a Mac of each processor,
+// Linux x64), so every installer carries one platform's ~21–31 MB and never the others'. -Pneue.javacppPlatform
+// overrides it (e.g. `macosx-x86_64` for a cross-check).
+val javacppPlatform: String = providers.gradleProperty("neue.javacppPlatform").orNull ?: run {
+    val os = System.getProperty("os.name").lowercase()
+    val arch = System.getProperty("os.arch").lowercase().let { if (it == "aarch64" || it == "arm64") "arm64" else "x86_64" }
+    when {
+        "mac" in os || "darwin" in os -> "macosx-$arch"
+        "win" in os -> "windows-$arch"
+        else -> "linux-$arch"
+    }
+}
+
 // Two targets. `jvm` is the desktop app (packaged below); `android` is the same
 // app as a library the APK (`:androidApp`) hosts. Almost all of it lives in
 // `sharedMain`, a source set between the two: both targets are JVM, so the JDK
@@ -50,6 +64,14 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.sqldelight.driver.jvm)
                 implementation(libs.whisper.jni)
+                // Present's recording (1.1.13): the camera, and the video rendered from a take. JavaCV alone, without
+                // the ~1 GB its POM pulls (OpenCV, OpenBLAS, librealsense…); JavaCPP and the LGPL FFmpeg named here,
+                // with this platform's natives. Never an `-gpl` classifier. Never in the APK: jvmMain is the desk's.
+                implementation("${libs.javacv.get().module}:${libs.versions.javacv.get()}") { isTransitive = false }
+                implementation(libs.javacpp)
+                implementation(libs.ffmpeg)
+                implementation("${libs.javacpp.get().module}:${libs.versions.javacpp.get()}:$javacppPlatform")
+                implementation("${libs.ffmpeg.get().module}:${libs.versions.ffmpeg.get()}:$javacppPlatform")
             }
         }
         androidMain {
@@ -103,6 +125,9 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Dmg, TargetFormat.Deb)
+            // FFmpeg's licence and how to replace it travel with every installer (1.1.13, the LGPL's terms):
+            // `packaged/common/licenses/`, in the app's resources folder.
+            appResourcesRootDir.set(project.layout.projectDirectory.dir("packaged"))
             packageName = "NeueMasterTool"
             packageVersion = neueVersion
             description = "Neue Master Tool - a Yu-Gi-Oh! deck builder for the desktop"
@@ -135,10 +160,13 @@ compose.desktop {
                 dockName = "Neue Master Tool"
                 appCategory = "public.app-category.games"
                 // Voice input (1.0.57): macOS asks the person before the microphone opens, in these words.
+                // Recording a take (1.1.13): the camera, and the microphone's second use, in the same words.
                 infoPlist {
                     extraKeysRawXml = """
                         <key>NSMicrophoneUsageDescription</key>
-                        <string>Neue Master Tool listens only while you speak to Ai, and turns your words into text on this Mac.</string>
+                        <string>Neue Master Tool listens while you speak to Ai, turning your words into text on this Mac, and records your voice when you record a take of a presentation.</string>
+                        <key>NSCameraUsageDescription</key>
+                        <string>Neue Master Tool shows your camera in a presentation's camera zone and records it when you record a take. The video stays on this Mac.</string>
                     """.trimIndent()
                 }
 

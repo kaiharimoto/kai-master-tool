@@ -619,6 +619,8 @@ fun neueMain(args: Array<String>) {
                         println("[neue-studio] present view of slide $n: ${if (bytes != null) "${image?.width}×${image?.height}" else "none"} after $frames frames")
                     }
                 }
+                // --present-record=setup|countdown|bar|paused|takes|rendering|render: recording a take (1.1.13).
+                studioRecord(h, map, clock, out, name)
                 map["present-frames"]?.let { spec ->
                     val (n, k) = spec.split(",").map { it.toInt() }
                     if (h.present.playing == null) { h.present.present(h.present.slideIndex); clock.run(90) }

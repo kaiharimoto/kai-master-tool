@@ -2923,7 +2923,7 @@ desktop that might be outdated or be outdated by changes we make in the future, 
   rises with tested migrations; the deck payload passes through untouched; every shape older versions
   wrote is held in `OldDataTest`, and a release that changes one adds its old shape there.
 
-### 4o. Present: deck profiles as slides (1.0.70–1.0.72)
+### 4o. Present: deck profiles as slides (1.0.70–1.1.13)
 
 kai: "There's a lot of content creators on YouTube who do deck profiles explaining and presenting their
 deck by using a webcam and a screen recording of their deck list on duelingbook … Present mode should work
@@ -2931,10 +2931,11 @@ like a slideshow presentation creator that's animated and interactive, as well a
 app using a webcam. If a webcam option is on, the presentation will allocate a zone for the webcam and build
 around it." Google Slides is the benchmark. Built so far: **1.0.70** the editor, the three ways of telling a
 deck and presenting; **1.0.71** modules and Ai building it; **1.0.72** Master UI by default and Restyle;
-**1.0.73** sane geometry; **1.1.x** the audit's fixes (`docs/present/AUDIT.md`). **Recording is not built yet**:
-no camera is opened and no take is made. The version numbers once planned for it (1.0.72–1.0.75) went to other
-work; the plan is the audit's track A (JavaCV/FFmpeg LGPL on the desk, CameraX and `MediaCodec` on Android).
-Until then a creator records with OBS: Green screen in the camera zone, and **Slides in a window** (below).
+**1.0.73** sane geometry; **1.1.x** the audit's fixes (`docs/present/AUDIT.md`); **1.1.13 recording a take** on the
+desk (the audit's track A, *Recording a take* below, `docs/present/RECORDING.md`): the camera live in its zone, the
+show, camera and voice recorded, the video rendered afterwards by the same painter. Android records nothing yet
+(a seam for CameraX and `MediaCodec`). A creator may still record with OBS: Green screen in the camera zone, and
+**Slides in a window** (below).
 
 **`06 Present`** (`Page.PRESENT`, `Ctrl 6`, `present/PresentPage.kt`): the library of presentations
 (a picture of each first slide, Open, Present, Duplicate, Delete), **New deck profile** (a saved deck, how
@@ -3036,7 +3037,41 @@ screen, and this window the presenter's console (`PresenterConsole`).
 broken slide or element dropped alone, never the file), pictures content-addressed in
 `<data>/present/media/`; synced as files and backed up (`SYNC.md`); `NeuePreferences.present` (`PresentPrefs`,
 synced, internal to Ai) remembers how the last profile was started. No schema change. `OldDataTest` holds the
-1.0.70 shape.
+1.0.70 shape. **Takes** (1.1.13) are `<data>/present/<id>/takes/<take>/` and **this device's own** — never synced,
+never backed up (`TakePaths.syncs`, asked by `NeueSyncLocal` and `BackupCenter` both ways); `NeuePreferences.record`
+(`RecordPrefs`) is device-only and internal to Ai.
+
+**Recording a take** (1.1.13, the audit's track A; `docs/present/RECORDING.md` has it whole):
+- **Record what happened, draw the video afterwards.** While presenting, a take keeps the presenter's events
+  (`TakeEvent`, written by `TakeLog` from `Playing.view()` on the take's own clock, `TakeClock`, which a pause stops),
+  the camera as MJPEG in `camera.mkv` and the microphone as WAV — and the presentation frozen beside them. **Render**
+  replays the events frame by frame (`RenderPlan.walk`) through **`StageView`** — the presenter's own drawing, drawn out
+  of `PresentStage` for this — with the camera's recorded frame cropped into its zone (`CameraFit`), offscreen in an
+  `ImageComposeScene` on a thread of its own (`TakeRenderer`), under the window's composition locals. So the video is the
+  slides to the pixel, recording costs the show nothing, and a take renders again.
+- **Keys**: Present ▾ › Record a take or **Ctrl Shift R** presents from this slide with a count-in (none, 3 or 5 s);
+  presenting, **R** records, pauses and carries on, **M** marks a chapter, **Shift R** stops and keeps the take, **Esc**
+  ends the show and keeps it; **Ctrl Alt R** the Takes. The **recording bar** (the presenter's alone; never the
+  audience's, never in the video) does the same: the light (click/tap pauses, right-click/held finger marks), Pause, Mark,
+  Stop — `PresentTarget.RECORD_LIGHT`/`RECORD_STOP` rows read by `PresentGestures.classify`. The console has it too.
+- **The live camera** stands in its zone while presenting (`liveCamera`, `CameraPicture`, cropped to fill, mirrored by the
+  Theme tab's switch), for the stage, the audience's window and the console.
+- **Takes** (Present ▾ › Takes): length, date, camera, sound, clicks, size; Render (again) with its last frame, frames done
+  and time left, and Stop; Play; Save a copy; Show in folder; **Copy chapters** (`Chapters`); Rename; Delete.
+  **Camera and microphone** (Present ▾, the Theme tab, the Takes, the start step `RECORD` from 1.1.13 / APK v1.3.91):
+  the camera with its picture, the microphone with its level, no sound, count-in, 30 or 60 a second, the camera while
+  presenting.
+- **The desk**: JavaCV 1.5.14 without its transitives, JavaCPP, and bytedeco's LGPL FFmpeg 8.1.2 (never `-gpl`), each
+  installer with its own platform's natives (`javacppPlatform`); the camera through FFmpeg's DirectShow, AVFoundation or
+  Video4Linux input, listed off FFmpeg's log (`CameraNames`); the microphone through Java Sound. `EncoderPick`: the
+  machine's own H.264 with AAC, else VP9 with Opus — **never the bundled OpenH264**, which Cisco's patent licence does
+  not cover — always in an MP4 (a WebM through JavaCV misstated its sound's length). The LGPL and how to replace FFmpeg
+  travel with every installer (`neue/packaged/common/licenses/`). The Mac's `Info.plist` asks for the camera and the
+  microphone in words; a signed build has both entitlements.
+- **Android**: `Capture.canRecord` false, said wherever recording is offered — the seam for CameraX and `MediaCodec`.
+- **Proof without a camera**: `-Dneue.camera=synthetic` (`SyntheticCamera`, a silent microphone); `TakeRenderTest`
+  renders a real three-second MP4 and reads it back (ffprobe when present); `tools/shoot.sh --page=present --present=demo
+  --present-record=setup|countdown|bar|paused|takes|rendering|render`.
 
 **Input as data**: `DeskShortcuts` has two new scopes, Making slides (`PRESENT_EDIT`) and Presenting
 (`PRESENTING`, during which the page keys are dead); the mouse and the finger are `PresentMouse` and
@@ -3228,7 +3263,7 @@ fully functional"):
   everyone sees it) and "Speaker notes · only you see them"; "Notes on N of M · Rehearsed" over the notes jumps to
   what it names; a deck slide's cards toggle focus on a click whenever nothing is selected, whichever tab is open; the
   Item tab lists what is on the slide when nothing is selected; the Theme tab's faces are labelled Headings and
-  Words; the camera says plainly that recording is coming and that Green screen and OBS record today; Big number,
+  Words; the camera says plainly where it stands and how a take records it (on Android: that the desktop app records); Big number,
   Table and Chart arrive as visible blanks (`Placeholders`), flagged until filled in; "Slides from groups" asks
   before replacing deck slides that hold work, and switching style moves the whole-deck step
   (`EditorEdits.retell`); the New dialog can profile the builder's open deck unsaved.

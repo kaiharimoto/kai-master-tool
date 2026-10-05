@@ -14,6 +14,9 @@ import com.kaiharimoto.neue.platform.pastedPicture
 import com.kaiharimoto.neue.present.play.PresentStage
 import com.kaiharimoto.neue.present.play.PresenterConsole
 import com.kaiharimoto.neue.present.play.SlideRenderHost
+import com.kaiharimoto.neue.present.record.mark
+import com.kaiharimoto.neue.present.record.record
+import com.kaiharimoto.neue.present.record.stopRecording
 
 /** Present's keys (1.0.70, `DeskShortcuts`' Making slides and Presenting rows), run on the window's holders. */
 internal fun runPresent(h: NeueHolders, action: DeskAction) {
@@ -64,6 +67,10 @@ internal fun runPresent(h: NeueHolders, action: DeskAction) {
         DeskAction.PRESENT_PEN -> present.togglePen()
         DeskAction.PRESENT_CLEAR_INK -> present.clearInk()
         DeskAction.PRESENT_NOTES -> present.toggleNotes()
+        DeskAction.PRESENT_RECORD -> present.takes.record(h)
+        DeskAction.PRESENT_RECORD_STOP -> present.takes.stopRecording(h, thenShow = false)
+        DeskAction.PRESENT_MARK -> present.takes.mark(h)
+        DeskAction.PRESENT_TAKES -> present.open?.let { present.takes.show(it) }
         else -> Unit
     }
 }
@@ -81,6 +88,9 @@ internal fun dismissPresent(h: NeueHolders, esc: Boolean): Boolean {
         return true
     }
     if (h.neue.page != Page.PRESENT || h.neue.hasTop || h.overlays.isOpen) return false
+    if (present.takes.confirmDelete != null) { present.takes.confirmDelete = null; return true }
+    if (present.takes.settingUp) { present.takes.settingUp = false; return true }
+    if (present.takes.showing) { present.takes.showing = false; present.takes.renaming = null; return true }
     if (present.pickingCards != null) { present.pickingCards = null; return true }
     if (present.creating) { present.creating = false; return true }
     if (present.addingModule != null) { present.addingModule = null; return true }
@@ -106,6 +116,8 @@ internal fun dismissPresent(h: NeueHolders, esc: Boolean): Boolean {
 @Composable
 internal fun PresentOverlay(h: NeueHolders) {
     SlideRenderHost(h)
+    // Recording (1.1.13): the live camera, a render's drawing, the Takes and camera-and-microphone dialogs.
+    com.kaiharimoto.neue.present.record.TakesHost(h)
     val pl = h.present.playing ?: return
     val ctx = rememberSlideContext(h, pl.show.presentation)
     val console = consoleShown(h)
@@ -120,7 +132,8 @@ internal fun PresentOverlay(h: NeueHolders) {
         }
         onDispose { if (!wasImmersive) h.neue.immersive = false }
     }
-    if (console) PresenterConsole(h, ctx) else PresentStage(h.present, ctx)
+    val camera = com.kaiharimoto.neue.present.record.liveCamera(h.present.takes.camera, pl.show.presentation.webcam.mirror)
+    if (console) PresenterConsole(h, ctx) else PresentStage(h.present, ctx, camera = camera)
 }
 
 /**

@@ -109,8 +109,6 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
         }
     }
     val show = pl.show
-    val p = show.presentation
-    val allKeys = remember(p.deck) { p.deck?.let { d -> DeckStage.copies(d).map { it.key } }.orEmpty() }
 
     // The frame clock: every frame while a transition, a build, the whole-deck view, the laser
     // or the pen moves; asleep once they have settled, until the next move wakes it.
@@ -125,7 +123,6 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
         }
     }
 
-    var laserAt by remember { mutableStateOf<Offset?>(null) }
 
     BoxWithConstraints(
         modifier.fillMaxSize().background(Color.Black)
@@ -142,6 +139,11 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                     while (true) {
                         val event = awaitPointerEvent()
                         val change = event.changes.firstOrNull() ?: continue
+                        // A press a control over the slide took (the recording bar, 1.1.13) is not a click on the slide.
+                        if (change.isConsumed && (event.type == PointerEventType.Press || event.type == PointerEventType.Release)) {
+                            if (event.type == PointerEventType.Press) downAt = null
+                            continue
+                        }
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
                         val s = min(w / Presentation.WIDTH, h / Presentation.HEIGHT)
@@ -155,7 +157,7 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                         }
                         when (event.type) {
                             PointerEventType.Move -> {
-                                if (pl.laser) laserAt = Offset(cx, cy)
+                                if (pl.laser) pl.laserAt = Offset(cx, cy)
                                 if (drawing) {
                                     val strokes = pl.ink
                                     if (strokes.isNotEmpty()) pl.ink = strokes.dropLast(1) + listOf(strokes.last() + (cx to cy))
@@ -163,7 +165,7 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                                 val d = downAt
                                 if (d != null && !pl.pen && change.uptimeMillis - downTime > 450 && (change.position - d).getDistance() < 24f) {
                                     pl.laser = true
-                                    laserAt = Offset(cx, cy)
+                                    pl.laserAt = Offset(cx, cy)
                                 }
                             }
                             PointerEventType.Press -> {
@@ -205,102 +207,124 @@ fun PresentStage(present: Presentations, ctx: SlideContext, modifier: Modifier =
                                 }
                                 change.consume()
                             }
-                            PointerEventType.Exit -> laserAt = null
+                            PointerEventType.Exit -> pl.laserAt = null
                         }
                     }
                 }
             },
         contentAlignment = Alignment.Center,
     ) {
-        val cursor = pl.cursor
-        val from = pl.from
-        val slide = show.slides.getOrNull(cursor.slide) ?: return@BoxWithConstraints
-        val fromSlide = from?.slide?.takeIf { it != cursor.slide }?.let { show.slides.getOrNull(it) }
-        val transition = slide.transition
-        val bothDeck = fromSlide?.deck != null && slide.deck != null
-
-        // The fraction of the way into the slide, eased; 1 once arrived.
-        fun arrived(): Float {
-            if (fromSlide == null) return 1f
-            val d = if (bothDeck) maxOf(transition.durationMs, 700) else transition.durationMs
-            if (transition.kind == Transition.NONE && !bothDeck) return 1f
-            return Ease.apply(Ease.IN_OUT, (pl.ms.toFloat() / d.coerceAtLeast(1)).coerceIn(0f, 1f))
-        }
-        fun overviewAmount(): Float {
-            val t = ((pl.now - pl.overviewSince) / 1_000_000f / OVERVIEW_MS).coerceIn(0f, 1f)
-            val e = Ease.apply(Ease.IN_OUT, t)
-            return if (pl.overview) e else 1f - e
-        }
-        val fromFrame = from?.slide?.let { show.deckFrame(it) }
-        val toFrame = show.deckFrame(cursor.slide)
-        val overviewFrame = remember(cursor.slide) { show.deckFrame(cursor.slide, overview = true) }
-        val deckFrame: () -> StageFrame? = {
-            if (overviewAmount() > 0.001f) null else if (fromSlide != null || fromFrame != null && from.slide != cursor.slide) StageTween.between(fromFrame, toFrame, arrived()) else toFrame
-        }
-        val state: (Element) -> ElementState = { e ->
-            show.state(cursor, e, if (pl.backward) Long.MAX_VALUE / 4 else (pl.ms - transitionLead(pl)).coerceAtLeast(0))
-        }
-
-        // Morph (1.1.x, the audit's M7): elements with a partner on the slide leaving travel from it; the rest fade.
-        val morph = transition.kind == Transition.MORPH && fromSlide != null && from != null
-        val partners = remember(fromSlide, slide, morph) {
-            if (morph && fromSlide != null && from != null) Morph.pairs(fromSlide, show.stage(from.slide), slide, show.stage(cursor.slide)) else emptyList()
-        }
-        val travelling = remember(partners) { partners.associateBy { it.to } }
-        val left = remember(partners) { partners.map { it.from }.toSet() }
-
-        Box(Modifier.fillMaxSize()) {
-            // The slide leaving, under the one arriving.
-            if (fromSlide != null) {
-                SlideView(
-                    ctx, fromSlide, show.zone(from.slide), show.stage(from.slide),
-                    Modifier.fillMaxSize().graphicsLayer { applyLeaving(this, transition, arrived(), size.width, size.height) },
-                    state = if (!morph) ({ ElementState.SHOWN }) else ({ e -> if (e.id in left) ElementState.HIDDEN else ElementState(alpha = 1f - arrived()) }),
-                    fade = { if (arrived() >= 1f) 0f else 1f },
-                    camera = camera,
-                )
-            }
-            SlideView(
-                ctx, slide, show.zone(cursor.slide), show.stage(cursor.slide),
-                Modifier.fillMaxSize().graphicsLayer { applyArriving(this, transition, arrived(), size.width, size.height, bothDeck) },
-                deck = if (slide.deck != null || fromSlide?.deck != null) deckFrame else null,
-                deckKeys = allKeys,
-                state = if (!morph) state else ({ e ->
-                    val built = state(e)
-                    val p = travelling[e.id]
-                    if (p == null) {
-                        built.copy(alpha = built.alpha * arrived())
-                    } else {
-                        val t = Morph.travel(p, arrived())
-                        built.copy(dx = built.dx + t.dx, dy = built.dy + t.dy, scale = built.scale * t.scale)
-                    }
-                }),
-                fade = { if (bothDeck || transition.kind == Transition.FADE || transition.kind == Transition.MORPH) arrived() else 1f },
-                elementFade = { if (morph) 1f else if (bothDeck || transition.kind == Transition.FADE) arrived() else 1f },
-                camera = camera,
-            )
-            // The whole deck, on demand.
-            if (p.deck != null) {
-                Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (overviewAmount() > 0.001f) 1f else 0f }) {
-                    OverviewLayer(ctx, { overviewAmount() }, { toFrame }, { overviewFrame }, allKeys, show.zone(cursor.slide), camera)
-                }
-            }
-            // Laser and pen over everything.
-            Canvas(Modifier.fillMaxSize()) {
-                val s = min(size.width / Presentation.WIDTH, size.height / Presentation.HEIGHT)
-                val ox = (size.width - Presentation.WIDTH * s) / 2f
-                val oy = (size.height - Presentation.HEIGHT * s) / 2f
-                translate(ox, oy) {
-                    drawInk(ctx, pl.ink, s)
-                    val l = laserAt
-                    if (pl.laser && l != null) drawLaser(ctx, l.x, l.y, s)
-                }
-            }
-            pl.blank?.let { b -> Box(Modifier.fillMaxSize().background(if (b == "W") Color.White else Color.Black)) }
-            if (pl.notes && !audience) NotesPanel(pl, Modifier.align(Alignment.BottomCenter))
-        }
+        StageView(pl, ctx, camera)
+        if (pl.notes && !audience) NotesPanel(pl, Modifier.align(Alignment.BottomCenter))
+        // The recording bar (1.1.13): the presenter's only, never the audience's — and never in the video, which is
+        // drawn afterwards from what was done.
+        if (!audience) com.kaiharimoto.neue.present.record.RecordBar(present, Modifier.align(Alignment.TopStart).padding(16.dp), idle = idle)
+        if (!audience) com.kaiharimoto.neue.present.record.CountIn(present, Modifier.align(Alignment.Center))
     }
 }
+
+/**
+ * What the audience sees of a show at one moment (1.1.13, drawn out of [PresentStage]): the slide leaving and the one
+ * arriving through its transition, the builds, the deck gliding, the whole deck, the pen, the laser and a blank screen
+ * — all read off [pl], in the draw and layer phases, so a moving frame never recomposes. [PresentStage] draws it live;
+ * the take renderer draws it offscreen, frame by frame, with [pl] set from the take's events and [final] on (no empty
+ * camera panel), so a video is the show as it was.
+ */
+@Composable
+fun StageView(pl: Playing, ctx: SlideContext, camera: (@Composable () -> Unit)?, final: Boolean = false) {
+    val show = pl.show
+    val p = show.presentation
+    val allKeys = remember(p.deck) { p.deck?.let { d -> DeckStage.copies(d).map { it.key } }.orEmpty() }
+    val cursor = pl.cursor
+    val from = pl.from
+    val slide = show.slides.getOrNull(cursor.slide) ?: return
+    val fromSlide = from?.slide?.takeIf { it != cursor.slide }?.let { show.slides.getOrNull(it) }
+    val transition = slide.transition
+    val bothDeck = fromSlide?.deck != null && slide.deck != null
+
+    // The fraction of the way into the slide, eased; 1 once arrived.
+    fun arrived(): Float {
+        if (fromSlide == null) return 1f
+        val d = if (bothDeck) maxOf(transition.durationMs, 700) else transition.durationMs
+        if (transition.kind == Transition.NONE && !bothDeck) return 1f
+        return Ease.apply(Ease.IN_OUT, (pl.ms.toFloat() / d.coerceAtLeast(1)).coerceIn(0f, 1f))
+    }
+    fun overviewAmount(): Float {
+        val t = ((pl.now - pl.overviewSince) / 1_000_000f / OVERVIEW_MS).coerceIn(0f, 1f)
+        val e = Ease.apply(Ease.IN_OUT, t)
+        return if (pl.overview) e else 1f - e
+    }
+    val fromFrame = from?.slide?.let { show.deckFrame(it) }
+    val toFrame = show.deckFrame(cursor.slide)
+    val overviewFrame = remember(cursor.slide) { show.deckFrame(cursor.slide, overview = true) }
+    val deckFrame: () -> StageFrame? = {
+        if (overviewAmount() > 0.001f) null else if (fromSlide != null || fromFrame != null && from.slide != cursor.slide) StageTween.between(fromFrame, toFrame, arrived()) else toFrame
+    }
+    val state: (Element) -> ElementState = { e ->
+        show.state(cursor, e, if (pl.backward) Long.MAX_VALUE / 4 else (pl.ms - transitionLead(pl)).coerceAtLeast(0))
+    }
+
+    // Morph (1.1.x, the audit's M7): elements with a partner on the slide leaving travel from it; the rest fade.
+    val morph = transition.kind == Transition.MORPH && fromSlide != null && from != null
+    val partners = remember(fromSlide, slide, morph) {
+        if (morph && fromSlide != null && from != null) Morph.pairs(fromSlide, show.stage(from.slide), slide, show.stage(cursor.slide)) else emptyList()
+    }
+    val travelling = remember(partners) { partners.associateBy { it.to } }
+    val left = remember(partners) { partners.map { it.from }.toSet() }
+
+    Box(Modifier.fillMaxSize()) {
+        // The slide leaving, under the one arriving.
+        if (fromSlide != null) {
+            SlideView(
+                ctx, fromSlide, show.zone(from.slide), show.stage(from.slide),
+                Modifier.fillMaxSize().graphicsLayer { applyLeaving(this, transition, arrived(), size.width, size.height) },
+                state = if (!morph) ({ ElementState.SHOWN }) else ({ e -> if (e.id in left) ElementState.HIDDEN else ElementState(alpha = 1f - arrived()) }),
+                fade = { if (arrived() >= 1f) 0f else 1f },
+                camera = camera,
+                final = final,
+            )
+        }
+        SlideView(
+            ctx, slide, show.zone(cursor.slide), show.stage(cursor.slide),
+            Modifier.fillMaxSize().graphicsLayer { applyArriving(this, transition, arrived(), size.width, size.height, bothDeck) },
+            deck = if (slide.deck != null || fromSlide?.deck != null) deckFrame else null,
+            deckKeys = allKeys,
+            state = if (!morph) state else ({ e ->
+                val built = state(e)
+                val m = travelling[e.id]
+                if (m == null) {
+                    built.copy(alpha = built.alpha * arrived())
+                } else {
+                    val t = Morph.travel(m, arrived())
+                    built.copy(dx = built.dx + t.dx, dy = built.dy + t.dy, scale = built.scale * t.scale)
+                }
+            }),
+            fade = { if (bothDeck || transition.kind == Transition.FADE || transition.kind == Transition.MORPH) arrived() else 1f },
+            elementFade = { if (morph) 1f else if (bothDeck || transition.kind == Transition.FADE) arrived() else 1f },
+            camera = camera,
+            final = final,
+        )
+        // The whole deck, on demand.
+        if (p.deck != null) {
+            Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (overviewAmount() > 0.001f) 1f else 0f }) {
+                OverviewLayer(ctx, { overviewAmount() }, { toFrame }, { overviewFrame }, allKeys, show.zone(cursor.slide), camera, final)
+            }
+        }
+        // Laser and pen over everything.
+        Canvas(Modifier.fillMaxSize()) {
+            val s = min(size.width / Presentation.WIDTH, size.height / Presentation.HEIGHT)
+            val ox = (size.width - Presentation.WIDTH * s) / 2f
+            val oy = (size.height - Presentation.HEIGHT * s) / 2f
+            translate(ox, oy) {
+                drawInk(ctx, pl.ink, s)
+                val l = pl.laserAt
+                if (pl.laser && l != null) drawLaser(ctx, l.x, l.y, s)
+            }
+        }
+        pl.blank?.let { b -> Box(Modifier.fillMaxSize().background(if (b == "W") Color.White else Color.Black)) }
+    }
+}
+
 
 /** The slide an element at ([x], [y]) on slide [i] links to, if one does. */
 private fun linkAt(show: CompiledShow, i: Int, x: Float, y: Float): String? {
@@ -371,6 +395,7 @@ private fun OverviewLayer(
     keys: List<String>,
     zone: com.kaiharimoto.mastertool.core.present.stage.Box?,
     camera: (@Composable () -> Unit)?,
+    final: Boolean = false,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) { drawThemeBackground(ctx, amount()) }
@@ -386,6 +411,7 @@ private fun OverviewLayer(
             drawBackground = false,
             drawElements = false,
             camera = camera,
+            final = final,
         )
     }
 }

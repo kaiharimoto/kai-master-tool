@@ -164,6 +164,7 @@ fun startState(h: NeueHolders) = StartState(
     voiceReady = !Voice.usesModels || !Voice.needsModel(h.ai.voiceModel),
     worldReady = !WorldPython.possible || h.neue.prefs.world.python,
     rulesChosen = h.neue.prefs.genesys || h.neue.prefs.legalAsOf.isNotBlank(),
+    recordReady = !com.kaiharimoto.neue.platform.Capture.canRecord || h.neue.prefs.record.chosen,
 )
 
 private fun short(step: StartStep, h: NeueHolders) = when (step) {
@@ -175,6 +176,7 @@ private fun short(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.ART -> "Offline art"
     StartStep.VOICE -> "Keys and voice"
     StartStep.WORLD -> "Ai World"
+    StartStep.RECORD -> "Camera"
 }
 
 private fun title(step: StartStep, h: NeueHolders) = when (step) {
@@ -186,6 +188,7 @@ private fun title(step: StartStep, h: NeueHolders) = when (step) {
     StartStep.ART -> "Every card's picture, offline"
     StartStep.VOICE -> "Duel by keys and voice"
     StartStep.WORLD -> "${h.neue.prefs.ai.name}'s own computer"
+    StartStep.RECORD -> "Record deck profiles with your camera"
 }
 
 @Composable
@@ -304,6 +307,23 @@ private fun Body(h: NeueHolders, step: StartStep, next: () -> Unit) {
                 MuButton("JavaScript is enough", { next() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
             }
             Help("Change it any time in Settings › Ai World.")
+        }
+        // Recording a take (1.1.13): the camera and microphone, chosen once; on a Mac the system asks the first time.
+        StartStep.RECORD -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Small(
+                "Present (Ctrl 6) records deck profiles for YouTube: present your slides, and your camera, your voice and every " +
+                    "click are recorded; then the video is made from them, the slides drawn to the pixel with you in the camera's zone.",
+                color = c.ink70,
+            )
+            com.kaiharimoto.neue.present.record.RecordDevices(h, preview = false)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MuButton("These are the ones", {
+                    neue.update { it.copy(record = it.record.copy(chosen = true)) }
+                    next()
+                }, variant = BtnVariant.SECONDARY, size = BtnSize.SM)
+                MuButton("Later", { next() }, variant = BtnVariant.GHOST, size = BtnSize.SM)
+            }
+            Help("Change them any time: Present ▾ › Camera and microphone. Takes stay on this computer.")
         }
         StartStep.ART -> Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Small(

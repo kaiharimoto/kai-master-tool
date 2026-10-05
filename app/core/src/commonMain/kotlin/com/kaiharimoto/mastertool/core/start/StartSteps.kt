@@ -39,6 +39,12 @@ enum class StartStep(
 
     /** Ai World (1.0.97): on the desk, whether Python may run for Ai — the person's call, asked once. */
     WORLD("world", "1.0.97", "1.3.75"),
+
+    /**
+     * Recording a take on Present (Neue 1.1.13, APK v1.3.91): choose the camera and microphone, and on a Mac let the
+     * system ask for them once. Offered only where a take can be recorded (the desk, for now).
+     */
+    RECORD("record", "1.1.13", "1.3.91"),
     ;
 
     companion object {
@@ -63,6 +69,11 @@ data class StartState(
     val worldReady: Boolean = true,
     /** What the deck is checked against was chosen already (Genesys on, or a day set): nothing to tell them. */
     val rulesChosen: Boolean = false,
+    /**
+     * Recording needs nothing more here (1.1.13): the camera and microphone were chosen, or this platform cannot
+     * record a take yet (a phone or tablet).
+     */
+    val recordReady: Boolean = true,
 )
 
 /** This device's own record of the setup (a field of `NeuePreferences`, never synced). */
@@ -106,5 +117,6 @@ object StartSteps {
         StartStep.ART -> s.artSettled
         StartStep.VOICE -> s.voiceReady
         StartStep.WORLD -> s.worldReady || !s.aiEnabled
+        StartStep.RECORD -> s.recordReady
     }
 }

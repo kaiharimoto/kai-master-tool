@@ -15,6 +15,14 @@ whisperJni = "1.7.1"
 # Ai World's JavaScript (1.0.97): Mozilla Rhino, MPL-2.0, pure Java, interpreted on Android too. 1.7.15 on purpose:
 # 1.8+ require jdk.dynalink and java.beans, which Android does not have.
 rhino = "1.7.15.1"
+# Present's recording (1.1.13), the desk only: JavaCV (Apache 2.0) over JavaCPP (Apache 2.0) and bytedeco's FFmpeg
+# build WITHOUT a classifier suffix — LGPL v3, built --enable-version3 and never --enable-gpl. Never the `-gpl`
+# classifiers (x264, x265): this app is MIT. JavaCV's own POM pulls OpenCV, OpenBLAS, librealsense and more (about
+# 1 GB of natives), so it is taken without its transitives and javacpp + ffmpeg are named here alone; each
+# installer carries its own platform's natives only (`neue/build.gradle.kts`). `docs/present/RECORDING.md`.
+javacv = "1.5.14"
+javacpp = "1.5.14"
+ffmpeg = "8.1.2-1.5.14"
 
 # JDK used for every module's toolchain and bytecode target.
 jdk = "21"
@@ -28,6 +36,9 @@ compileSdk = "36"
 [libraries]
 whisper-jni = { module = "io.github.givimad:whisper-jni", version.ref = "whisperJni" }
 rhino = { module = "org.mozilla:rhino", version.ref = "rhino" }
+javacv = { module = "org.bytedeco:javacv", version.ref = "javacv" }
+javacpp = { module = "org.bytedeco:javacpp", version.ref = "javacpp" }
+ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "ffmpeg" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }

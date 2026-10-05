@@ -51,6 +51,22 @@ class Playing(val show: CompiledShow, start: Cursor) {
     /** The pen's strokes on this slide, in canvas units. */
     var ink by mutableStateOf<List<List<Pair<Float, Float>>>>(emptyList())
 
+    /**
+     * Where the laser points, in canvas units, while the pointer is over the slide (1.1.13: on the presenter, so a
+     * take records it; it was the stage's own).
+     */
+    var laserAt by mutableStateOf<androidx.compose.ui.geometry.Offset?>(null)
+
+    /** What the audience sees, as a take records it. */
+    fun view(): com.kaiharimoto.mastertool.core.present.record.PresenterView =
+        com.kaiharimoto.mastertool.core.present.record.PresenterView(
+            cursor = cursor,
+            overview = overview,
+            blank = blank,
+            laser = if (laser) laserAt?.let { it.x to it.y } else null,
+            ink = ink,
+        )
+
     /** When the show began, for the presenter's clock; and each slide's time, for rehearsing. */
     val startedAt = System.nanoTime()
     var slideStartedAt = System.nanoTime()
@@ -162,6 +178,9 @@ class Presentations(val dir: File) {
 
     /** Whether the desktop found a second screen to show the slides on. Set by the window. */
     var screens by mutableStateOf(1)
+
+    /** The takes recorded (1.1.13, `record/TakeLibrary`): this device's own, under `<data>/present/<id>/takes/`. */
+    val takes = com.kaiharimoto.neue.present.record.TakeLibrary(dir)
 
     /** The slides in a window of their own, and slides drawn as pictures for Ai (1.1.x, `play/PresentOutput`). */
     val output = com.kaiharimoto.neue.present.play.PresentOutput()
@@ -440,6 +459,8 @@ class Presentations(val dir: File) {
         library = library.filterNot { it.id == p.id }
         if (open?.id == p.id) open = null
         scope.launch { io.withLock { withContext(Dispatchers.IO) { File(dir, "${p.id}.json").delete() } } }
+        // Its takes go with it: they are this device's, and nothing else reads them.
+        takes.deleteAll(p.id)
     }
 
     /** A copy of [p] under a new id and name, put in the library. */

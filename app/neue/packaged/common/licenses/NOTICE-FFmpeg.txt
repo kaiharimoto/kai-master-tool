@@ -1,0 +1,28 @@
+Neue Master Tool records takes of a presentation with FFmpeg
+============================================================
+
+Neue Master Tool (MIT) uses FFmpeg to open the camera and to make the video of a take
+(Present, "Record a take"). FFmpeg reaches the app through JavaCV and JavaCPP.
+
+  FFmpeg 8.1.2, as built by the bytedeco project (org.bytedeco:ffmpeg:8.1.2-1.5.14,
+  without the "-gpl" classifier): built with --enable-version3 and WITHOUT
+  --enable-gpl, so licensed under the GNU Lesser General Public License, version 3
+  (LGPL-3.0.txt here; it builds on the GNU General Public License, version 3,
+  GPL-3.0.txt here). It carries libvpx (BSD), libopus (BSD), libaom (BSD), SVT-AV1 (BSD),
+  LAME (LGPL) and OpenH264 (BSD) among others; Neue Master Tool never asks for OpenH264.
+  FFmpeg's source: https://ffmpeg.org/download.html
+  The build script: https://github.com/bytedeco/javacpp-presets/tree/master/ffmpeg
+
+  JavaCV 1.5.14 and JavaCPP 1.5.14 (https://github.com/bytedeco/javacv), under the
+  Apache License 2.0.
+
+Replacing FFmpeg
+----------------
+FFmpeg's libraries are separate shared libraries (libavcodec, libavformat, libavdevice,
+libavutil, libswscale, libswresample, libavfilter and their JNI bridges), carried inside
+the jar named ffmpeg-8.1.2-1.5.14-<platform>.jar in the app's folder and unpacked by
+JavaCPP into its cache (~/.javacpp/cache) when they are first used. To use FFmpeg
+libraries of your own, build the same FFmpeg version with the bytedeco presets (or
+compatible libraries), and either replace that jar, or place your libraries in the cache
+folder JavaCPP unpacks to, or start the app with -Dorg.bytedeco.javacpp.pathsFirst=true
+and your libraries' folder on java.library.path.

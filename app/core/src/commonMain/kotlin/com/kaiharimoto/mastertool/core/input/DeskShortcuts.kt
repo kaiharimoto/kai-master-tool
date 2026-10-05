@@ -179,6 +179,21 @@ enum class DeskAction {
     /** While presenting: the speaker notes over the slide, or away. */
     PRESENT_NOTES,
 
+    /**
+     * Recording a take (1.1.13): from the editor, present from this slide and record; while presenting, record —
+     * again pauses, again carries on.
+     */
+    PRESENT_RECORD,
+
+    /** While recording: stop, and keep the take. The show goes on. */
+    PRESENT_RECORD_STOP,
+
+    /** While recording: a chapter marked here. */
+    PRESENT_MARK,
+
+    /** The takes recorded of the open presentation: render, play, chapters. */
+    PRESENT_TAKES,
+
     /** Duel (1.0.74): the duel simulator — a table, two seats, every card moved by hand. */
     GO_DUEL,
     DUEL_NEW,
@@ -580,6 +595,11 @@ object DeskShortcuts {
         DeskShortcut(KeyChord("e"), DeskAction.PRESENT_PEN, DeskScope.PRESENTING, "Draw on the slide"),
         DeskShortcut(KeyChord("e", shift = true), DeskAction.PRESENT_CLEAR_INK, DeskScope.PRESENTING, "Clear the drawing"),
         DeskShortcut(KeyChord("s"), DeskAction.PRESENT_NOTES, DeskScope.PRESENTING, "Speaker notes"),
+        DeskShortcut(KeyChord("r"), DeskAction.PRESENT_RECORD, DeskScope.PRESENTING, "Record a take; again pauses, again carries on"),
+        DeskShortcut(KeyChord("r", shift = true), DeskAction.PRESENT_RECORD_STOP, DeskScope.PRESENTING, "Stop recording and keep the take"),
+        DeskShortcut(KeyChord("m"), DeskAction.PRESENT_MARK, DeskScope.PRESENTING, "Mark a chapter here while recording"),
+        DeskShortcut(ctrl("r", shift = true), DeskAction.PRESENT_RECORD, DeskScope.PRESENT_EDIT, "Record a take from this slide", allowedInTextInput = true),
+        DeskShortcut(KeyChord("r", ctrl = true, alt = true), DeskAction.PRESENT_TAKES, DeskScope.PRESENT_EDIT, "The takes recorded: render, play, chapters", allowedInTextInput = true),
 
         DeskShortcut(ctrl("n", shift = true), DeskAction.DUEL_NEW, DeskScope.DUEL, "New duel", allowedInTextInput = true),
         DeskShortcut(ctrl("z"), DeskAction.UNDO, DeskScope.DUEL, "Undo", repeatable = true),

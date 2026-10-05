@@ -233,7 +233,12 @@ private fun SlideProps(h: NeueHolders, p: Presentation, slide: Slide, ctx: Slide
 }
 
 /** The camera's promise, said plainly until it can be kept (the audit's newcomer item 1). */
-internal const val CAMERA_NOTE = "Your camera goes here when you record. Recording is coming; for now choose Green screen in the Theme tab and record with OBS."
+internal val CAMERA_NOTE: String
+    get() = if (com.kaiharimoto.neue.platform.Capture.canRecord) {
+        "Your camera stands here while you present, and in the video when you record a take (Present ▾ › Record a take)."
+    } else {
+        "Your camera stands here in a take recorded with the desktop app. Recording with OBS? Choose Green screen in the Theme tab."
+    }
 
 /** Where the camera stands on this slide: the presentation's place, hidden, a corner, or a box of its own (B6). */
 @Composable
@@ -842,6 +847,14 @@ private fun ThemeProps(h: NeueHolders, p: Presentation, ctx: SlideContext) {
         FieldLabel("Border")
         ColorField(z.border, ctx.theme, { put(z.copy(border = it)) }, Modifier.fillMaxWidth(), none = true)
         MuSlider(z.borderWidth, { put(z.copy(borderWidth = it)) }, Modifier.fillMaxWidth(), 0f..24f, name = "Border width")
+        // Recording (1.1.13): the picture mirrored or not, and which camera.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MuSwitch(z.mirror, { put(z.copy(mirror = it)) })
+            Small("Mirrored, as you see yourself", Modifier.weight(1f))
+        }
+        if (com.kaiharimoto.neue.platform.Capture.canRecord) {
+            MuButton("Camera and microphone…", { present.takes.settingUp = true }, Modifier.fillMaxWidth(), size = BtnSize.SM, variant = BtnVariant.GHOST, icon = Icons.Camera)
+        }
         FieldLabel("Before the camera is live", hint = "in the editor and for your own recorder")
         Segmented(z.fill, listOf(WebcamZone.FILL_THEME, WebcamZone.FILL_CHROMA, WebcamZone.FILL_NONE), { when (it) { WebcamZone.FILL_CHROMA -> "Green screen"; WebcamZone.FILL_NONE -> "Clear"; else -> "Panel" } }, { put(z.copy(fill = it)) }, small = true)
         Help("Green screen fills the zone with keying green, so a recorder of your own (OBS) can put your camera there. Panel and Clear are for the editor only: while presenting and in exports the zone stays empty until the camera is live.")

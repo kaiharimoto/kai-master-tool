@@ -71,25 +71,3 @@ object Chapters {
     }
 }
 
-/**
- * Which H.264 encoder a render asks FFmpeg for (1.0.72), best first for each system: the
- * machine's own hardware where FFmpeg's LGPL build has it, then OpenH264, then MPEG-4 Part 2,
- * which every build carries. The first one that opens wins.
- */
-object EncoderPick {
-    const val MAC = "MAC"
-    const val WINDOWS = "WINDOWS"
-    const val LINUX = "LINUX"
-
-    fun order(os: String): List<String> = when (os) {
-        MAC -> listOf("h264_videotoolbox", "libopenh264", "mpeg4")
-        WINDOWS -> listOf("h264_mf", "h264_nvenc", "h264_qsv", "h264_amf", "libopenh264", "mpeg4")
-        else -> listOf("h264_nvenc", "libopenh264", "mpeg4")
-    }
-
-    /** The first of [os]'s encoders [opens] says it can start. */
-    fun pick(os: String, opens: (String) -> Boolean): String? = order(os).firstOrNull(opens)
-
-    /** The bit rate for a frame size, in bits a second: about 8 Mb/s at 1080p30, as YouTube asks. */
-    fun bitrate(width: Int, height: Int, fps: Int): Int = (width.toLong() * height * fps * 0.13).toInt().coerceIn(2_000_000, 20_000_000)
-}

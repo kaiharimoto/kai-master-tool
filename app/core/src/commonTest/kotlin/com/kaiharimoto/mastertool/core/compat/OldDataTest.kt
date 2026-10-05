@@ -544,6 +544,28 @@ class OldDataTest {
     }
 
     @Test
+    fun aTakeFrom1113StillReadsAndRecordingSettingsAreTheDevicesOwn() {
+        // 1.1.13: `<data>/present/<id>/takes/<take>/take.json` as the first build that records writes it, finished and
+        // rendered; and one the app closed on mid-take, which says so.
+        val old = """{"id":"t1760000000000","presentationId":"p1","name":"Take 1","startedAt":1760000000000,"durationMs":45000,
+            "events":[{"at":0,"kind":"GO"},{"at":12000,"kind":"GO","slide":1},{"at":13000,"kind":"LASER","x":640.0,"y":360.0},
+            {"at":14000,"kind":"LASER_OFF"},{"at":20000,"kind":"MARK","text":"The engine"}],
+            "camera":"camera.mkv","audio":"audio.wav","rendered":"Take 1.webm","renderedCodec":"libvpx-vp9","renderedAt":1760000100000}"""
+        val t = assertNotNull(com.kaiharimoto.mastertool.core.present.record.TakeCodec.decode(old))
+        assertTrue(t.finished)
+        assertEquals(30, t.fps)
+        assertEquals("Take 1.webm", t.rendered)
+        assertEquals(1, com.kaiharimoto.mastertool.core.present.record.TakeTimeline.stateAt(t.events, 12_500).cursor.slide)
+        val cut = assertNotNull(com.kaiharimoto.mastertool.core.present.record.TakeCodec.decode("""{"id":"t2","presentationId":"p1","finished":false,"events":[{"at":0,"kind":"GO"}]}"""))
+        assertFalse(cut.finished)
+        // Settings written before recording existed read with it off and nothing chosen; it is never synced.
+        val prefs = this.prefs.decodeFromString(NeuePreferences.serializer(), """{"theme":"PAPER"}""")
+        assertEquals(null, prefs.record.camera)
+        assertFalse(prefs.record.chosen)
+        assertTrue("record" in com.kaiharimoto.mastertool.core.sync.SyncedPrefs.DEVICE)
+    }
+
+    @Test
     fun aBanlistCacheFrom111StillReads() {
         // 1.1.1: `<data>/banlists/tcg.json` as the first build with the banlist history writes it (a cache; never synced).
         val old = """{"version":1,"region":"TCG","lists":[{"region":"TCG","title":"April 2025 Lists (TCG)","start":"2025-04-07",

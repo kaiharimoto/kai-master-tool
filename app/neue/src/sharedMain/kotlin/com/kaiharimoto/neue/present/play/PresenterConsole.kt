@@ -89,6 +89,9 @@ fun PresenterConsole(h: NeueHolders, ctx: SlideContext) {
             Mono("this slide %d:%02d".format(onSlide / 60, onSlide % 60), color = c.ink45)
             slide.durationMs?.let { d -> Mono("rehearsed %d:%02d".format(d / 60000, d / 1000 % 60), color = c.ink45) }
         }
+        // Recording a take (1.1.13): the bar lives here, on the presenter's screen, never the audience's.
+        com.kaiharimoto.neue.present.record.RecordBar(present)
+        com.kaiharimoto.neue.present.record.CountIn(present)
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(Modifier.weight(1.6f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(
@@ -116,6 +119,7 @@ fun PresenterConsole(h: NeueHolders, ctx: SlideContext) {
                         deck = if (slide.deck != null) ({ show.deckFrame(cursor.slide) }) else null,
                         deckKeys = show.deckFrame(cursor.slide)?.cards?.map { it.key }.orEmpty(),
                         state = { e -> show.state(cursor, e, Long.MAX_VALUE / 4) },
+                        camera = com.kaiharimoto.neue.present.record.liveCamera(present.takes.camera, show.presentation.webcam.mirror),
                     )
                     Canvas(Modifier.fillMaxSize()) { drawInk(ctx, pl.ink, size.width / Presentation.WIDTH) }
                     pl.blank?.let { b ->
@@ -204,7 +208,9 @@ fun PresentAudience(h: NeueHolders, ctx: SlideContext) {
         LocalLimitMarks provides neue.prefs.limitMarks,
     ) {
         MuTheme(ink = neue.prefs.theme == NeueTheme.INK) {
-            PresentStage(h.present, ctx, audience = true)
+            val pl = h.present.playing
+            val camera = com.kaiharimoto.neue.present.record.liveCamera(h.present.takes.camera, pl?.show?.presentation?.webcam?.mirror ?: true)
+            PresentStage(h.present, ctx, camera = camera, audience = true)
         }
     }
 }

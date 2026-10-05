@@ -750,9 +750,18 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   never content; **Undo restyle** via `Presentations.restyleBefore`). **1.0.73**: geometry is sane wherever it
   enters (`Geometry.sane` on decode, paste and Ai's writes; a canvas box over a stage placeholder lands as
   written) and the painter never asks `Constraints` for more than `MAX_MEASURE`/`MAX_LAYOUT` (kai's crash,
-  `SlidePaintTest`). Next: 1.0.74 recording (JavaCV/FFmpeg, LGPL; `core/present/record` holds the take timeline,
-  chapters and encoder choice already), 1.0.75 Android recording and extras. `tools/shoot.sh --page=present --present=demo …` photographs it
-  (`--present-mode=restyle` the dialog).
+  `SlidePaintTest`). **1.1.13, recording a take** (`docs/present/RECORDING.md`): record what happened, draw the video
+  afterwards — the presenter's events (`TakeLog` on a pausable `TakeClock`), the camera (MJPEG `camera.mkv`) and the
+  microphone (`audio.wav`), the presentation frozen beside them; Render replays the events through `StageView` (the
+  presenter's own drawing) offscreen with the camera in its zone (`RenderPlan`, `CameraFit`, jvmMain `TakeRenderer`).
+  `core/present/record` is the logic; `neue/present/record` the holder (`Presentations.takes`), the bar, the Takes and
+  Camera-and-microphone dialogs; `platform/Capture` the seam (desk: JavaCV + bytedeco's **LGPL** FFmpeg, no transitives,
+  one platform's natives per installer, never `-gpl`; Android: `canRecord = false`, the seam for CameraX/`MediaCodec`).
+  `EncoderPick`: the OS's H.264, else VP9 + Opus, always MP4 — **never the bundled OpenH264**. Takes live in
+  `<data>/present/<id>/takes/` and **never sync or back up** (`TakePaths.syncs`); `NeuePreferences.record` is
+  device-only. `-Dneue.camera=synthetic` stands in for a camera; `TakeRenderTest` renders a real MP4.
+  `tools/shoot.sh --page=present --present=demo …` photographs it (`--present-mode=restyle` the dialog,
+  `--present-record=setup|countdown|bar|paused|takes|rendering|render` recording).
 
 - **Ai World** (1.0.97, `08`, `Ctrl 8`, `NEUE.md` §4r; kai: "a free environment to build using coding tools … that the
   user can see and watch live"): Ai's own computer. `core/world` is the model (`World`, `Board` — its kind kept as its
