@@ -19,8 +19,16 @@ import com.kaiharimoto.mastertool.core.duel.ZoneKind
 import com.kaiharimoto.mastertool.core.duel.ai.ComboRunner
 import com.kaiharimoto.mastertool.core.duel.ai.DuelBrief
 import com.kaiharimoto.mastertool.core.duel.ai.DuelMoves
+import com.kaiharimoto.mastertool.core.duel.effects.Chooser
+import com.kaiharimoto.mastertool.core.duel.effects.Decision
+import com.kaiharimoto.mastertool.core.duel.effects.FxEngine
 import com.kaiharimoto.mastertool.core.duel.effects.FxFacts
+import com.kaiharimoto.mastertool.core.duel.effects.FxMove
+import com.kaiharimoto.mastertool.core.duel.effects.FxPlay
 import com.kaiharimoto.mastertool.core.duel.effects.FxRules
+import com.kaiharimoto.mastertool.core.duel.effects.FxState
+import com.kaiharimoto.mastertool.core.duel.effects.FxTable
+import com.kaiharimoto.mastertool.core.duel.effects.FxTag
 import com.kaiharimoto.mastertool.core.duel.text.DuelNotation
 import kotlinx.serialization.json.JsonObject
 
@@ -45,16 +53,15 @@ data class PuzzleTurn(
  * two (each Tribute a monster of yours sent to the GY just before); a position change once a turn for a monster neither
  * summoned this turn nor attacked, a Flip Summon of a face-down one; an attack once a monster from face-up Attack Position
  * in the Battle Phase, at a monster of theirs or directly only when they control none — its damage and destruction worked
- * out here ([DuelBattle], the printed numbers); a Spell from the hand in a Main Phase whose effect the puzzle writes
- * ([PuzzleEffect]), resolved at once; and talk. The summon, Tribute and phase rules are read from `FxRules` (Phase D, one
- * list for the referee and the effect engine); the Spells become scripts ([PuzzleCards.scripts]) the engine plays once its
- * step executor runs them, and [PuzzleEffect] goes then. Refused: everything else — life points typed, a card sent, banished or
+ * out here ([DuelBattle], the printed numbers); a Spell from the hand in a Main Phase, played by the effect engine
+ * (`FxEngine`) from its script ([PuzzleCards.scripts]) and resolved at once; and talk. The summon, Tribute and phase rules
+ * are read from `FxRules` (Phase D, one list for the referee and the effect engine). Refused: everything else — life points typed, a card sent, banished or
  * moved by hand, a Special Summon, a draw, the end of the turn.
  */
 object PuzzleReferee {
     sealed interface Verdict {
         /** [actions] are what is committed (the move and what follows from it); [turn] the facts after it. */
-        data class Admit(val actions: List<DuelAction>, val turn: PuzzleTurn, val move: Boolean) : Verdict
+        data class Admit(val actions: List<DuelAction>, val turn: PuzzleTurn, val move: Boolean, val fx: List<FxTag?> = emptyList()) : Verdict
         data class Refuse(val why: String) : Verdict
     }
 
@@ -68,25 +75,23 @@ object PuzzleReferee {
         if (turn.moves >= budget) return Verdict.Refuse("The puzzle's $budget moves are spent.")
         val them = 1 - seat
         val main = s.phase == DuelPhase.MAIN1 || s.phase == DuelPhase.MAIN2
-        fun ok(list: List<DuelAction>, next: PuzzleTurn) = Verdict.Admit(talk + list, next.copy(moves = next.moves + 1), move = true)
+        fun ok(list: List<DuelAction>, next: PuzzleTurn, tags: List<FxTag?> = emptyList()) =
+            Verdict.Admit(talk + list, next.copy(moves = next.moves + 1), move = true, fx = if (tags.isEmpty()) emptyList() else talk.map { null } + tags)
         if (s.active != seat) return Verdict.Refuse("It is not your turn.")
 
         // A Spell of the puzzle's from the hand: the move into the zone (and its chain link) becomes its whole resolution.
         val spellMove = moves.firstOrNull { a ->
-            a is DuelAction.Move && a.how == "activate" && inHand(s, a.uid, seat) && PuzzleCards.effects.containsKey(s.cards[a.uid]?.code) &&
+            a is DuelAction.Move && a.how == "activate" && inHand(s, a.uid, seat) && PuzzleCards.book.has(s.cards[a.uid]?.code ?: 0) &&
                 a.to.let { it is Place.Zone && it.kind == ZoneKind.SPELL && it.seat == seat }
         } as DuelAction.Move?
         if (spellMove != null && moves.all { it == spellMove || (it is DuelAction.ChainAdd && it.uid == spellMove.uid) }) {
             if (!main) return Verdict.Refuse("A Normal Spell is activated in your Main Phase.")
             if (turn.tributes > 0) return Verdict.Refuse("Finish the Tribute Summon first: Tributes are paid as the monster is summoned.")
-            val effect = PuzzleCards.effects.getValue(s.cards.getValue(spellMove.uid).code)
-            val zone = spellMove.to as Place.Zone
-            val result = resolve(s, seat, effect, catalog) ?: return Verdict.Refuse(cannot(effect))
-            return ok(
-                listOf(DuelAction.Move(spellMove.uid, zone, CardPosition.FACE_UP_ATK, "activate")) + result +
-                    DuelAction.Move(spellMove.uid, Place.Pile(seat, PileKind.GY), how = "resolve"),
-                turn,
-            )
+            // The effect engine plays it from its script: activated, then resolved at once, since nobody responds.
+            return when (val r = spell(s, seat, spellMove.uid, spellMove.to as Place.Zone)) {
+                is SpellPlay.No -> Verdict.Refuse(r.why)
+                is SpellPlay.Made -> ok(r.actions, turn, r.tags)
+            }
         }
         if (moves.size != 1) return Verdict.Refuse(ONLY)
         return when (val a = moves.single()) {
@@ -179,32 +184,33 @@ object PuzzleReferee {
 
     private fun inHand(s: DuelState, uid: Int, seat: Int) = s.placeOf(uid).let { it is Place.Pile && it.kind == PileKind.HAND && it.seat == seat }
 
-    /** The Spell's effect as table moves, or null when it cannot be activated now. */
-    private fun resolve(s: DuelState, seat: Int, e: PuzzleEffect, catalog: DuelCatalog): List<DuelAction>? {
-        fun destroy(uids: List<Int>) = uids.map { u -> DuelAction.Move(u, Place.Pile(s.cards.getValue(u).owner, PileKind.GY), how = "destroy") }
-        val them = 1 - seat
-        return when (e.kind) {
-            PuzzleEffect.Kind.DESTROY_THEIRS -> PuzzleGoal.monsters(s, them).takeIf { it.isNotEmpty() }?.let(::destroy)
-            PuzzleEffect.Kind.DESTROY_ALL -> (PuzzleGoal.monsters(s, seat) + PuzzleGoal.monsters(s, them)).takeIf { it.isNotEmpty() }?.let(::destroy)
-            PuzzleEffect.Kind.DESTROY_THEIR_LOWEST -> {
-                val up = PuzzleGoal.monsters(s, them).filter { s.cards[it]?.faceUp == true }
-                val atk = up.associateWith { u -> s.cards.getValue(u).let { it.atk ?: catalog.info(it.code)?.atk ?: 0 } }
-                val low = atk.values.minOrNull() ?: return null
-                val lowest = atk.filterValues { it == low }.keys.toList()
-                // A tie is the player's to choose: no puzzle asks it, so it is never guessed.
-                lowest.singleOrNull()?.let { destroy(listOf(it)) }
-            }
-            PuzzleEffect.Kind.DAMAGE -> buildList {
-                if (e.them > 0) add(DuelAction.Lp(them, delta = -e.them))
-                if (e.you > 0) add(DuelAction.Lp(seat, delta = -e.you))
-            }
-        }
+    private sealed interface SpellPlay {
+        data class Made(val actions: List<DuelAction>, val tags: List<FxTag>) : SpellPlay
+        data class No(val why: String) : SpellPlay
     }
 
-    private fun cannot(e: PuzzleEffect): String = when (e.kind) {
-        PuzzleEffect.Kind.DESTROY_THEIR_LOWEST -> "It needs one face-up monster of theirs with the lowest ATK."
-        else -> "It has nothing to destroy."
+    /**
+     * The puzzle Spell [uid] activated by [seat] into [zone] and resolved, through the effect engine (`FxEngine`) from its
+     * script ([PuzzleCards.scripts]): the tagged actions, or why not. A choice the solver did not make (a tie for the lowest
+     * ATK) is never guessed: it is refused.
+     */
+    private fun spell(s: DuelState, seat: Int, uid: Int, zone: Place.Zone): SpellPlay {
+        val chooser = Chooser { d -> if (d is Decision.Zone && zone in d.among) listOf(d.among.indexOf(zone)) else Chooser.CANCEL }
+        val t = FxTable(s, FxState.at(s), PuzzleCards.book, PuzzleCards.facts)
+        val activated = when (val p = FxEngine.play(t, seat, FxMove.Activate(uid, "e1"), chooser)) {
+            is FxPlay.Done -> p
+            is FxPlay.Refused -> return SpellPlay.No(p.why)
+            FxPlay.Cancelled -> return SpellPlay.No(UNCHOSEN)
+        }
+        val resolved = when (val p = FxEngine.play(FxTable(activated.state, activated.fx, PuzzleCards.book, PuzzleCards.facts), seat, FxMove.Resolve, chooser)) {
+            is FxPlay.Done -> p
+            is FxPlay.Refused -> return SpellPlay.No(p.why)
+            FxPlay.Cancelled -> return SpellPlay.No(UNCHOSEN)
+        }
+        return SpellPlay.Made(activated.actions + resolved.actions, activated.tags + resolved.tags)
     }
+
+    private const val UNCHOSEN = "It asks a choice this referee does not make for you (a tie is yours to break by hand)."
 }
 
 /**
@@ -253,7 +259,7 @@ class PuzzleTable(val puzzle: Puzzle, private val catalog: DuelCatalog = PuzzleC
             when (val v = PuzzleReferee.admit(now.state, facts, seat, actions, catalog, puzzle.budget)) {
                 is PuzzleReferee.Verdict.Refuse -> return Played(op, false, v.why)
                 is PuzzleReferee.Verdict.Admit -> {
-                    val r = now.act(v.actions, seat, by = by)
+                    val r = now.act(v.actions, seat, by = by, fx = v.fx)
                     if (!r.ok) return Played(op, false, r.problem ?: "The table refused it.")
                     now = r.game
                     facts = v.turn
@@ -290,7 +296,7 @@ class PuzzleTable(val puzzle: Puzzle, private val catalog: DuelCatalog = PuzzleC
         if (turn.tributes > 0) appendLine("Tributes paid: ${turn.tributes}, for the Normal Summon you make next.")
         if (turn.normalUsed) appendLine("Your Normal Summon for this turn is used.")
         val spells = (state.seats[seat].hand.mapNotNull { state.cards[it]?.code }).distinct().mapNotNull { c ->
-            PuzzleCards.effects[c]?.let { "${PuzzleCards.name(c)} (Normal Spell): ${it.text}" }
+            PuzzleCards.words[c]?.let { "${PuzzleCards.name(c)} (Normal Spell): $it" }
         }
         if (spells.isNotEmpty()) appendLine("Your Spells: " + spells.joinToString(" "))
         appendLine()

@@ -22,7 +22,6 @@ import com.kaiharimoto.mastertool.core.duel.text.ShortcutAnswers
 import com.kaiharimoto.mastertool.core.duel.text.ShortcutAsk
 import com.kaiharimoto.mastertool.core.duel.text.ShortcutLine
 import com.kaiharimoto.mastertool.core.model.CardId
-import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -391,7 +390,6 @@ class DuelShortcutVerbTest {
      * Through the real engine: Lamp's Send on the reference scripts, one group, every entry tagged. Waits for the chain and
      * the steps (agents (b) and (c)): today `FxChain.play` refuses every activation.
      */
-    @Ignore
     @Test
     fun endToEndThroughTheRealEngine() {
         val g = game()

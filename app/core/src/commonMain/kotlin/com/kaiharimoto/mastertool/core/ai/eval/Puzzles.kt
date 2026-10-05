@@ -20,11 +20,13 @@ import com.kaiharimoto.mastertool.core.duel.effects.CardType
 import com.kaiharimoto.mastertool.core.duel.effects.Cond
 import com.kaiharimoto.mastertool.core.duel.effects.Effect
 import com.kaiharimoto.mastertool.core.duel.effects.Filter
+import com.kaiharimoto.mastertool.core.duel.effects.FxFacts
 import com.kaiharimoto.mastertool.core.duel.effects.Kind
 import com.kaiharimoto.mastertool.core.duel.effects.Num
 import com.kaiharimoto.mastertool.core.duel.effects.Op
 import com.kaiharimoto.mastertool.core.duel.effects.Pick
 import com.kaiharimoto.mastertool.core.duel.effects.Rel
+import com.kaiharimoto.mastertool.core.duel.effects.ScriptBook
 import com.kaiharimoto.mastertool.core.duel.effects.Spot
 import com.kaiharimoto.mastertool.core.duel.effects.Stat
 import com.kaiharimoto.mastertool.core.duel.effects.Step
@@ -40,7 +42,7 @@ import com.kaiharimoto.mastertool.core.duel.effects.Where
  * referee ([PuzzleReferee]) that admits only what the game's rules allow in a turn — a Normal Summon or Set with its
  * Tributes, a position change, a Flip Summon, the phases forward, an attack once a monster and directly only at an empty
  * field — works out battle itself by the printed numbers ([com.kaiharimoto.mastertool.core.duel.DuelBattle]), and
- * resolves the puzzle's Spells as their text says, written here as table moves ([PuzzleEffect]). Life points and cards
+ * resolves the puzzle's Spells through the effect engine, from their scripts ([PuzzleCards.scripts]). Life points and cards
  * move only that way, so a goal can never be met by a manual move a real duel forbids. Every monster is a Normal Monster
  * (no text to automate), the opponent has no hand and nothing set, and never responds.
  */
@@ -129,23 +131,6 @@ sealed interface PuzzleGoal {
     }
 }
 
-/**
- * What a puzzle's Spell does, as the referee resolves it — the card's text written as table moves, for the few cards
- * the set uses; nothing reads card text.
- */
-data class PuzzleEffect(val kind: Kind, val them: Int = 0, val you: Int = 0, val text: String) {
-    enum class Kind {
-        /** Destroy all monsters your opponent controls (Raigeki). */
-        DESTROY_THEIRS,
-        /** Destroy all monsters on the field (Dark Hole). */
-        DESTROY_ALL,
-        /** Destroy the 1 face-up monster your opponent controls with the lowest ATK (Fissure). */
-        DESTROY_THEIR_LOWEST,
-        /** Inflict [them] damage to your opponent, and [you] to you (Ookazi, Hinotama, Tremendous Fire). */
-        DAMAGE,
-    }
-}
-
 /** The cards the puzzles use: Normal Monsters and a few Normal Spells, their printed facts (passcodes as printed). */
 object PuzzleCards {
     const val BLUE_EYES = 89631139
@@ -203,18 +188,19 @@ object PuzzleCards {
         TREMENDOUS_FIRE to spell("Tremendous Fire"),
     )
 
-    val effects: Map<Int, PuzzleEffect> = mapOf(
-        RAIGEKI to PuzzleEffect(PuzzleEffect.Kind.DESTROY_THEIRS, text = "Destroy all monsters your opponent controls."),
-        DARK_HOLE to PuzzleEffect(PuzzleEffect.Kind.DESTROY_ALL, text = "Destroy all monsters on the field."),
-        FISSURE to PuzzleEffect(PuzzleEffect.Kind.DESTROY_THEIR_LOWEST, text = "Destroy the 1 face-up monster your opponent controls that has the lowest ATK (your choice, if tied)."),
-        OOKAZI to PuzzleEffect(PuzzleEffect.Kind.DAMAGE, them = 800, text = "Inflict 800 damage to your opponent."),
-        TREMENDOUS_FIRE to PuzzleEffect(PuzzleEffect.Kind.DAMAGE, them = 1000, you = 500, text = "Inflict 1000 damage to your opponent, and 500 damage to you."),
+    /** What each Spell does, in our own words: what the brief and the prompt tell the solver. */
+    val words: Map<Int, String> = mapOf(
+        RAIGEKI to "Every monster your opponent controls is destroyed.",
+        DARK_HOLE to "Every monster on the field, yours and theirs, is destroyed.",
+        FISSURE to "Your opponent's face-up monster with the lowest ATK is destroyed (a tie is yours to break).",
+        OOKAZI to "Your opponent takes 800 damage.",
+        TREMENDOUS_FIRE to "Your opponent takes 1000 damage, and you take 500.",
     )
 
     /**
-     * The five Spells as effect scripts (Phase D, D.md §2.4), in our own words: what [effects] says, in the engine's
-     * vocabulary. [PuzzleEffect] still resolves them until the engine's step executor runs scripts; then the referee plays
-     * these and [PuzzleEffect] is deleted.
+     * The five Spells as effect scripts (Phase D, D.md §2.4), in our own words: what [words] says, in the engine's
+     * vocabulary. The referee plays them through the effect engine (`FxEngine`): activated, then resolved at once, since the
+     * opponent never responds.
      */
     val scripts: List<CardScript> by lazy {
         fun spell(code: Int, label: String, condition: Cond?, vararg does: Op) = CardScript(
@@ -248,6 +234,10 @@ object PuzzleCards {
 
     /** The puzzles' catalog: these cards only, so a grade never depends on the pool. */
     val catalog: DuelCatalog = DuelCatalog { info[it] }
+
+    /** The puzzles' cards as the effect engine reads them, and their scripts. */
+    val facts: FxFacts by lazy { FxFacts.catalog { info[it] } }
+    val book: ScriptBook by lazy { ScriptBook.all(scripts) }
 
     fun name(code: Int): String = info[code]?.name ?: "#$code"
 }
@@ -461,7 +451,7 @@ object Puzzles {
     /** What a puzzle asks, word for word: the goal, the budget, the Spells in hand; the table is read with the tools. */
     fun prompt(p: Puzzle): String = buildString {
         append("Puzzle ${p.id}, “${p.title}”: ${p.goal.words}. You have at most ${p.budget} moves. ")
-        val spells = p.setup.hand.distinct().mapNotNull { c -> PuzzleCards.effects[c]?.let { "${PuzzleCards.name(c)}: ${it.text}" } }
+        val spells = p.setup.hand.distinct().mapNotNull { c -> PuzzleCards.words[c]?.let { "${PuzzleCards.name(c)}: $it" } }
         if (spells.isNotEmpty()) append("Your Spells do what they say: ${spells.joinToString(" ")} ")
         append("Read the table with duel_state, see the legal moves with duel_moves, and play with duel_act. When you have finished, reply DONE.")
     }

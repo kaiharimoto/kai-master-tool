@@ -148,7 +148,7 @@ class PuzzleTest {
         lines.forEach { assertTrue(t.admits(it), "the menu offered $it") }
         val (brief, err) = t.tool("duel_state", JsonObject(emptyMap()))
         assertFalse(err)
-        assertTrue("Goal: reduce your opponent to 0 LP" in brief && "Raigeki (Normal Spell): Destroy all monsters your opponent controls." in brief, brief)
+        assertTrue("Goal: reduce your opponent to 0 LP" in brief && "Raigeki (Normal Spell): Every monster your opponent controls is destroyed." in brief, brief)
         val (act, bad) = t.tool("duel_act", ops("bp", "lp opp -4200"))
         assertTrue(bad && "✓ bp" in act && "✗ lp opp -4200" in act, act)
         assertTrue(t.tool("card_info", JsonObject(emptyMap())).second, "no look-ups in a puzzle")
