@@ -190,13 +190,23 @@ fun Breathe(modifier: Modifier = Modifier, running: Boolean = true, color: Color
     )
 }
 
-/** Empty state (§6): a display sentence with a full stop, one line under it, an optional action. */
+/**
+ * Empty state (§6): a display sentence with a full stop, one line under it, an optional action. [inset] is its
+ * left and right margin, so it can line up with what stands above it (a drawer's 24).
+ */
 @Composable
-fun EmptyState(title: String, line: String, modifier: Modifier = Modifier, boxed: Boolean = false, action: (@Composable () -> Unit)? = null) {
+fun EmptyState(
+    title: String,
+    line: String,
+    modifier: Modifier = Modifier,
+    boxed: Boolean = false,
+    inset: Dp = 32.dp,
+    action: (@Composable () -> Unit)? = null,
+) {
     val c = Mu.colors
     Column(
         modifier
-            .let { if (boxed) it.border(1.dp, c.ink).padding(40.dp) else it.padding(horizontal = 32.dp, vertical = 64.dp) },
+            .let { if (boxed) it.border(1.dp, c.ink).padding(40.dp) else it.padding(horizontal = inset, vertical = 64.dp) },
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         MuText(title, Modifier.widthIn(max = 672.dp), MuType.display(LocalMuFonts.current))
@@ -223,15 +233,15 @@ fun SectionTitle(n: Int?, title: String, modifier: Modifier = Modifier, trailing
     }
 }
 
-/** A micro-caps strip heading a list: `Main deck … 40`. */
+/** A micro-caps strip heading a list: `Main deck … 40`. [inset] lines it up with the rows under it. */
 @Composable
-fun Strip(label: String, modifier: Modifier = Modifier, dense: Boolean = false, trailing: (@Composable () -> Unit)? = null) {
+fun Strip(label: String, modifier: Modifier = Modifier, dense: Boolean = false, inset: Dp = 16.dp, trailing: (@Composable () -> Unit)? = null) {
     val c = Mu.colors
     Row(
         modifier
             .fillMaxWidth()
             .drawBehind { drawLine(c.ink, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-            .padding(horizontal = 16.dp, vertical = if (dense) 0.dp else 10.dp),
+            .padding(horizontal = inset, vertical = if (dense) 0.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

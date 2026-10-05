@@ -1,6 +1,10 @@
 package com.kaiharimoto.neue.shell
 
 import com.kaiharimoto.neue.builder.RulesPicker
+import com.kaiharimoto.neue.builder.showInDeck
+import com.kaiharimoto.mastertool.core.deck.DeckIssue
+import com.kaiharimoto.mastertool.core.prep.PrepEvent
+import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.cursor.cursorPointer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,7 +38,6 @@ import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.ui.deckbuilder.DeckBuilderState
 import com.kaiharimoto.neue.Drawer
 import com.kaiharimoto.neue.NeueState
-import com.kaiharimoto.neue.Selection
 import com.kaiharimoto.neue.cards.GroupMarkers
 import com.kaiharimoto.neue.kit.BtnSize
 import com.kaiharimoto.neue.kit.BtnVariant
@@ -56,71 +59,80 @@ import com.kaiharimoto.neue.kit.Strip
 import com.kaiharimoto.neue.theme.Inverted
 import com.kaiharimoto.neue.theme.Mu
 
-/** The right-hand drawer: what is wrong with the deck. (The groups are edited beside the deck since 1.0.15.) */
+/**
+ * The right-hand drawer: what the deck is checked against, and what fails it (the 1.1.2 design review, finding 4:
+ * the ✓ opens it to choose the rules, so it is Legality, not Issues). [event] is the Prep event whose day it offers.
+ * (The groups are edited beside the deck since 1.0.15.)
+ */
 @Composable
-fun BoxScope.Drawers(state: DeckBuilderState, neue: NeueState) {
+fun BoxScope.Drawers(state: DeckBuilderState, neue: NeueState, event: PrepEvent? = null) {
     val open = neue.drawer
     MuDrawer(
         visible = open != null,
         onDismiss = { neue.drawer = null },
         header = {
-            H2("Issues")
-            Small("What stops the deck being legal, then what is worth a look.", Modifier.padding(top = 4.dp))
+            H2("Legality")
+            Small("What the deck is checked against, and what fails it.", Modifier.padding(top = 4.dp))
         },
     ) {
         when (open) {
-            Drawer.ISSUES -> Issues(state, neue)
+            Drawer.ISSUES -> Issues(state, neue, event)
             null -> Unit
         }
     }
 }
 
 @Composable
-private fun Issues(state: DeckBuilderState, neue: NeueState) {
+private fun Issues(state: DeckBuilderState, neue: NeueState, event: PrepEvent?) {
     val c = Mu.colors
     val validation = state.validation
     val scroll = rememberScrollState()
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().verticalScroll(scroll)) {
-            RulesPicker(state, neue)
+            RulesPicker(state, neue, event)
             if (validation.issues.isEmpty()) {
-                Small("Nothing. The deck is legal in ${state.rulesInForce.words()}.", Modifier.padding(24.dp), color = c.ink70)
+                // Kit §6's empty state: the verdict, then what it was checked against in one line.
+                val words = state.rulesInForce.words()
+                EmptyState("Legal.", "In $words.", inset = 24.dp)
             }
             listOf(IssueSeverity.ERROR to "Not legal", IssueSeverity.WARNING to "Worth a look").forEach { (severity, heading) ->
                 val rows = validation.issues.filter { it.severity == severity }
-                if (rows.isEmpty()) return@forEach
-                Strip(heading) { Mono(rows.size.toString()) }
-                rows.forEach { issue ->
-                    // Failure is the whole row inverted with ✕ (§10); a warning is a plain row.
-                    Inverted(severity == IssueSeverity.ERROR) {
-                        val inner = Mu.colors
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .background(if (severity == IssueSeverity.ERROR) inner.paper else Color.Transparent)
-                                .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
-                                .padding(horizontal = 24.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            Micro(if (severity == IssueSeverity.ERROR) "✕ Failed" else "— Note", color = inner.ink)
-                            RowText(issue.message, Modifier.weight(1f), color = inner.ink.copy(alpha = 0.8f), maxLines = 3)
-                            val section = issue.section
-                            val id = issue.cardId
-                            if (section != null && id != null) {
-                                MuButton("Show", {
-                                    val index = state.deck[section].indexOf(id)
-                                    val card = state.index.byId(id)
-                                    if (index >= 0 && card != null) neue.selection = Selection.InDeck(card, section, index)
-                                    neue.drawer = null
-                                }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
-                            }
-                        }
+                if (rows.isNotEmpty()) IssueRows(state, neue, rows, severity, heading)
+            }
+        }
+        ScrollbarFor(scroll)
+    }
+}
+
+/** One severity's issues under its strip, each with Show when it names a card the deck holds. */
+@Composable
+private fun IssueRows(state: DeckBuilderState, neue: NeueState, rows: List<DeckIssue>, severity: IssueSeverity, heading: String) {
+    val c = Mu.colors
+    Column {
+        Strip(heading, inset = 24.dp) { Mono(rows.size.toString()) }
+        rows.forEach { issue ->
+            // Failure is the whole row inverted with ✕ (§10); a warning is a plain row.
+            Inverted(severity == IssueSeverity.ERROR) {
+                val inner = Mu.colors
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(if (severity == IssueSeverity.ERROR) inner.paper else Color.Transparent)
+                        .drawBehind { drawLine(c.ink12, Offset(0f, size.height - 0.5f), Offset(size.width, size.height - 0.5f), 1.dp.toPx()) }
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Micro(if (severity == IssueSeverity.ERROR) "✕ Failed" else "— Note", color = inner.ink)
+                    RowText(issue.message, Modifier.weight(1f), color = inner.ink.copy(alpha = 0.8f), maxLines = 3)
+                    // A card's issue shows it wherever the deck holds it, named section or not (finding 5).
+                    val id = issue.cardId
+                    if (id != null && (issue.section != null || DeckSection.entries.any { id in state.deck[it] })) {
+                        MuButton("Show", { showInDeck(state, neue, id, issue.section) }, variant = BtnVariant.SUBTLE, size = BtnSize.SM, arrow = true)
                     }
                 }
             }
         }
-        ScrollbarFor(scroll)
     }
 }
 

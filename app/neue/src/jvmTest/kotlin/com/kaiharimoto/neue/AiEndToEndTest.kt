@@ -274,10 +274,10 @@ class AiEndToEndTest {
 
         // The builder checks a chosen day (1.1.1): its list, named, and validate_deck reads the same.
         h.builder.rules = h.legalityRules(h.neue.prefs.copy(legalAsOf = "2025-05-01"), Format.TCG)
-        assertEquals("TCG on 1 May 2025 (the April 2025 Lists (TCG))", h.builder.rulesInForce.words())
+        assertEquals("TCG on 1 May 2025, by the April 2025 Lists (TCG)", h.builder.rulesInForce.words())
         assertTrue(h.builder.validation.errors.any { it.message == "Raigeki is Forbidden on the April 2025 Lists (TCG), deck has 3." }, h.builder.validation.errors.toString())
         val asBuilder = h.tool("validate_deck")
-        assertTrue("in TCG on 1 May 2025 (the April 2025 Lists (TCG))" in asBuilder.content && "Raigeki is Forbidden" in asBuilder.content, asBuilder.content)
+        assertTrue("in TCG on 1 May 2025, by the April 2025 Lists (TCG)" in asBuilder.content && "Raigeki is Forbidden" in asBuilder.content, asBuilder.content)
         // Genesys: no list, so Raigeki is fine.
         h.builder.rules = h.legalityRules(h.neue.prefs.copy(genesys = true), Format.TCG)
         assertTrue(h.builder.validation.errors.none { "Raigeki" in it.message }, h.builder.validation.errors.toString())

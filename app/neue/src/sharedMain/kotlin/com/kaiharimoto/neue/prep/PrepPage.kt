@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.ai.text.ChatChart
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.deck.DeckValidator
+import com.kaiharimoto.mastertool.core.deck.DeckRules
+import androidx.compose.runtime.produceState
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
 import com.kaiharimoto.mastertool.core.prep.Checklist
@@ -121,7 +123,7 @@ enum class PrepTab(val title: String) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun PrepPage(prep: Prep, webs: Webs, state: DeckBuilderState, neue: NeueState, reload: Int) {
+internal fun PrepPage(prep: Prep, webs: Webs, state: DeckBuilderState, neue: NeueState, reload: Int, rulesOn: RulesOn? = null) {
     val c = Mu.colors
     val phone = LocalPhone.current
     var library by remember { mutableStateOf<List<StoredDeck>>(emptyList()) }
@@ -158,7 +160,7 @@ internal fun PrepPage(prep: Prep, webs: Webs, state: DeckBuilderState, neue: Neu
                 EventHead(event, prep.today(), web, mine)
                 MuTabs(prep.tab, PrepTab.entries, { it.title }, { prep.tab = it })
                 when (prep.tab) {
-                    PrepTab.PLAN -> PlanTab(prep, event, webs, web, mine, library, state)
+                    PrepTab.PLAN -> PlanTab(prep, event, webs, web, mine, library, state, rulesOn)
                     PrepTab.PRACTICE -> PracticeTab(prep, event, webs, web, mine, library, state, neue)
                     PrepTab.DRILLS -> DrillsTab(prep, webs, mine, state, neue)
                     PrepTab.DECKLIST -> DecklistTab(prep, event, webs, mine, state, neue)
@@ -239,7 +241,7 @@ private fun methodName(m: String) = when (m) {
 }
 
 @Composable
-private fun PlanTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, mine: StoredDeck?, library: List<StoredDeck>, state: DeckBuilderState) {
+private fun PlanTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, mine: StoredDeck?, library: List<StoredDeck>, state: DeckBuilderState, rulesOn: RulesOn?) {
     fun put(e: PrepEvent) = prep.putEvent(e, activate = false, typing = true)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 900.dp
@@ -248,7 +250,7 @@ private fun PlanTab(prep: Prep, event: PrepEvent, webs: Webs, web: DeckWeb?, min
             Column(m, verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 CountdownBox(event, prep.today())
                 PolicyBox(event)
-                ReadyBox(event, webs, mine, state)
+                ReadyBox(event, webs, mine, state, rulesOn)
             }
         }
         if (wide) {
@@ -354,32 +356,47 @@ private fun PolicyBox(event: PrepEvent) {
     }
 }
 
+/** The rules a deck is checked by on a day (`yyyy-MM-dd`): the builder's choice — Genesys or not — with that day's list. */
+typealias RulesOn = suspend (String) -> DeckRules
+
 @Composable
-private fun ReadyBox(event: PrepEvent, webs: Webs, mine: StoredDeck?, state: DeckBuilderState) {
+private fun ReadyBox(event: PrepEvent, webs: Webs, mine: StoredDeck?, state: DeckBuilderState, rulesOn: RulesOn?) {
     val c = Mu.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro("Ready to register", color = c.ink70)
         if (mine == null) {
             Small("Choose your deck, and it is checked here: its legality on the day and every siding plan.", color = c.ink45)
-            return@Column
+        } else {
+            ReadyItems(event, webs, mine, state, rulesOn)
         }
-        val deck = webs.deckOf(mine, state)
-        val items = remember(deck, state.index, state.format, webs.revision, event.tier, event.date) {
-            // As of the event's day (Phase B): a card out by then is legal there, one not yet out is not.
-            val onTheDay = event.date.takeIf { IsoDate.epochDay(it) != null }
-            EventCheck.check(deck, DeckValidator.validate(deck, state.index::byId, state.format, onTheDay), webs.sidingOf(mine, state), event.tier)
-        }
-        items.forEach { item ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Mono(if (!item.ok) "✕" else if (item.warning) "·" else "✓", Modifier.width(14.dp), color = c.ink, size = 13.sp)
-                Column(Modifier.weight(1f)) {
-                    MuText(item.title, style = MuType.body(LocalMuFonts.current).copy(fontSize = 14.sp, fontWeight = if (item.ok) FontWeight.Normal else FontWeight.Bold), color = c.ink)
-                    if (item.detail.isNotBlank()) Small(item.detail, color = c.ink45)
-                }
+    }
+}
+
+@Composable
+private fun ReadyItems(event: PrepEvent, webs: Webs, mine: StoredDeck, state: DeckBuilderState, rulesOn: RulesOn?) {
+    val c = Mu.colors
+    // As of the event's day (Phase B): a card out by then is legal there, one not yet out is not. And by the rules the
+    // builder checks with (the 1.1.2 design review, finding 1): Genesys when chosen, else the list in force that day.
+    val onTheDay = event.date.takeIf { IsoDate.epochDay(it) != null }
+    val rules by produceState<DeckRules?>(null, onTheDay, state.rules, state.format) {
+        value = if (onTheDay != null) rulesOn?.invoke(onTheDay) else null
+    }
+    val deck = webs.deckOf(mine, state)
+    val items = remember(deck, state.index, state.format, webs.revision, event.tier, event.date, rules) {
+        val validation = rules?.validate(deck, state.index::byId, onTheDay ?: state.today)
+            ?: DeckValidator.validate(deck, state.index::byId, state.format, onTheDay)
+        EventCheck.check(deck, validation, webs.sidingOf(mine, state), event.tier)
+    }
+    items.forEach { item ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Mono(if (!item.ok) "✕" else if (item.warning) "·" else "✓", Modifier.width(14.dp), color = c.ink, size = 13.sp)
+            Column(Modifier.weight(1f)) {
+                MuText(item.title, style = MuType.body(LocalMuFonts.current).copy(fontSize = 14.sp, fontWeight = if (item.ok) FontWeight.Normal else FontWeight.Bold), color = c.ink)
+                if (item.detail.isNotBlank()) Small(item.detail, color = c.ink45)
             }
         }
-        Help("Checked against the Forbidden & Limited List the card pool knows today; the list in force on the event's date may differ.")
     }
+    Help(rules?.let { "Checked in ${it.words()}." } ?: "Checked against the Forbidden & Limited List the card pool knows today; the list in force on the event's date may differ.")
 }
 
 // ---------------------------------------------------------------- Practice

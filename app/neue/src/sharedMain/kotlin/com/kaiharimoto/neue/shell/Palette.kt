@@ -3,6 +3,12 @@ package com.kaiharimoto.neue.shell
 import androidx.compose.foundation.layout.imePadding
 import com.kaiharimoto.mastertool.core.duel.text.CommandHelp
 import com.kaiharimoto.mastertool.core.input.DeskMenuBar
+import com.kaiharimoto.mastertool.core.text.Words
+import com.kaiharimoto.mastertool.core.ai.text.MicroCaps
+import com.kaiharimoto.neue.kit.Hint
+import com.kaiharimoto.neue.kit.LocalKeepCase
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
 import com.kaiharimoto.mastertool.core.input.DuelMouse
 import com.kaiharimoto.mastertool.core.input.DuelTarget
 import com.kaiharimoto.mastertool.core.input.DuelTouch
@@ -101,6 +107,8 @@ data class Command(
     val hint: String? = null,
     /** Shift + Enter, where it means something (add a card to the side deck). */
     val alt: (() -> Unit)? = null,
+    /** What else the row answers to, beyond its label and group ("banlist" finds Legality). */
+    val words: List<String> = emptyList(),
     val run: () -> Unit,
 )
 
@@ -241,6 +249,17 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                                 }
                             },
                     ) {
+                        // The group column is as wide as the longest group showing, so none is cut ("SHOO…", finding 11).
+                        val measurer = rememberTextMeasurer()
+                        val fonts = LocalMuFonts.current
+                        val keep = LocalKeepCase.current
+                        val density = LocalDensity.current
+                        val groupWidth = remember(rows, fonts, keep, density) {
+                            val widest = rows.map { it.group }.distinct().maxOfOrNull { group ->
+                                measurer.measure(MicroCaps.of(group, keep), MuType.micro(fonts), maxLines = 1).size.width
+                            } ?: 0
+                            with(density) { widest.toDp() + 2.dp }.coerceIn(48.dp, 120.dp)
+                        }
                         LazyColumn(state = list) {
                             itemsIndexed(rows) { i, row ->
                                 val on = i == highlighted
@@ -257,9 +276,9 @@ fun CommandPalette(commands: (String) -> List<Command>, onDismiss: () -> Unit) {
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                                     ) {
-                                        Micro(row.group, Modifier.width(48.dp), color = if (on) inner.ink.copy(alpha = 0.6f) else c.ink45)
+                                        Micro(row.group, Modifier.width(groupWidth), color = if (on) inner.ink.copy(alpha = 0.6f) else c.ink45)
                                         RowText(row.label, Modifier.weight(1f), color = inner.ink)
-                                        if (row.hint != null) Mono(row.hint, color = if (on) inner.ink.copy(alpha = 0.6f) else c.ink45)
+                                        if (row.hint != null) Hint(row.hint, color = if (on) inner.ink.copy(alpha = 0.6f) else c.ink45)
                                     }
                                 }
                                 if (i < rows.lastIndex) HRule()
@@ -329,7 +348,7 @@ private fun KeyTable() {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                RowText(if (row.action == DeskAction.AI_PANEL) "${com.kaiharimoto.mastertool.core.input.DeskMenuBar.aiName}: open or close" else row.description, Modifier.weight(1f))
+                                RowText(if (row.action == DeskAction.AI_PANEL) "${com.kaiharimoto.mastertool.core.input.DeskMenuBar.aiName}: open or close" else Words.named(row.description, DeskMenuBar.aiName), Modifier.weight(1f))
                                 Kbd(DeskShortcuts.kbd(row.chord))
                             }
                             HRule()
@@ -358,7 +377,7 @@ private fun DuelGestureTable(touch: Boolean) {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                RowText(row.description, Modifier.weight(1f))
+                                RowText(Words.named(row.description, DeskMenuBar.aiName), Modifier.weight(1f))
                                 Kbd(row.gesture, always = true)
                             }
                             HRule()
@@ -433,7 +452,7 @@ private fun ShootoutGestureTable(touch: Boolean) {
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
-                                    RowText(row.description, Modifier.weight(1f))
+                                    RowText(Words.named(row.description, DeskMenuBar.aiName), Modifier.weight(1f))
                                     Kbd(row.gesture, always = true)
                                 }
                                 HRule()
@@ -463,7 +482,7 @@ private fun PresentGestureTable(touch: Boolean) {
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                RowText(row.description, Modifier.weight(1f))
+                                RowText(Words.named(row.description, DeskMenuBar.aiName), Modifier.weight(1f))
                                 Kbd(row.gesture, always = true)
                             }
                             HRule()
@@ -493,7 +512,7 @@ private fun GestureTable(touch: Boolean) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        RowText(description, Modifier.weight(1f))
+                        RowText(Words.named(description, DeskMenuBar.aiName), Modifier.weight(1f))
                         Kbd(gesture, always = true)
                     }
                     HRule()
@@ -510,7 +529,7 @@ private fun GestureTable(touch: Boolean) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        RowText(row.description, Modifier.weight(1f))
+                        RowText(Words.named(row.description, DeskMenuBar.aiName), Modifier.weight(1f))
                         Kbd(row.gesture.label, always = true)
                     }
                     HRule()

@@ -77,6 +77,9 @@ import com.kaiharimoto.neue.kit.BtnVariant
 import com.kaiharimoto.neue.kit.IconButton
 import com.kaiharimoto.neue.kit.Icons
 import com.kaiharimoto.neue.kit.Micro
+import com.kaiharimoto.neue.kit.Mono
+import com.kaiharimoto.neue.kit.muClickable
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.kaiharimoto.neue.kit.MicroLink
 import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.Segmented
@@ -262,7 +265,8 @@ fun RowScope.BuilderBar(
     val c = Mu.colors
     // A deck of a web (1.0.33): the web, where the deck stands in it, and ‹ › through it.
     webs?.webOf(state.deckId)?.let { web -> WebSwitch(web, webs, state, neue, onStepWeb, onOpenDeck) }
-    DeckNameField(state, Modifier.weight(1f, fill = false).widthIn(min = 140.dp, max = 560.dp))
+    // The field hugs the name, so the ✓ stands right after it (the 1.1.2 design review, finding 2), not 140 px away.
+    DeckNameField(state, Modifier.weight(1f, fill = false), hug = true)
     Standing(state, neue, compact = true)
     Box(Modifier.weight(1f))
     Tip("Undo", kbd = kbd(DeskAction.UNDO)) { IconButton(Icons.Undo, state::undo, enabled = state.canUndo, size = 32.dp, label = "Undo", reason = "Nothing to undo") }
@@ -323,10 +327,11 @@ fun RowScope.BuilderBar(
 
 /**
  * The deck's name: the page's title, and editable where it stands. The desk's bar
- * and the phone's (v1.3.5) both write it; [small] is the phone's size.
+ * and the phone's (v1.3.5) both write it; [small] is the phone's size. [hug] sizes the
+ * field to the name (between 48 and 560 dp), so what stands after it stands right after it.
  */
 @Composable
-fun DeckNameField(state: DeckBuilderState, modifier: Modifier = Modifier, small: Boolean = false) {
+fun DeckNameField(state: DeckBuilderState, modifier: Modifier = Modifier, small: Boolean = false, hug: Boolean = false) {
     val c = Mu.colors
     val f = LocalMuFonts.current
     val source = remember { MutableInteractionSource() }
@@ -334,19 +339,30 @@ fun DeckNameField(state: DeckBuilderState, modifier: Modifier = Modifier, small:
     val focused by source.collectIsFocusedAsState()
     val hovered by source.collectIsHotAsState()
     val line = animatedColor(if (focused) c.ink else if (hovered) c.ink25 else c.paper)
+    // A field clips to its line, and the type scale's display leading is
+    // tighter than a descender: the tail of a y was cut off at 1.05.
+    val style = if (small) MuType.h2(f).copy(color = c.ink, fontSize = 17.sp, lineHeight = 24.sp) else MuType.h2(f).copy(color = c.ink, lineHeight = 28.sp)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val hugged = if (hug) {
+        val px = remember(state.deckName, style, measurer) { measurer.measure(state.deckName.ifEmpty { " " }, style, maxLines = 1).size.width }
+        // Room for the caret at the end of the name.
+        with(density) { (px.toDp() + 4.dp).coerceIn(48.dp, 560.dp) }
+    } else {
+        null
+    }
     BasicTextField(
         value = state.deckName,
         onValueChange = state::rename,
         singleLine = true,
-        // A field clips to its line, and the type scale's display leading is
-        // tighter than a descender: the tail of a y was cut off at 1.05.
-        textStyle = if (small) MuType.h2(f).copy(color = c.ink, fontSize = 17.sp, lineHeight = 24.sp) else MuType.h2(f).copy(color = c.ink, lineHeight = 28.sp),
+        textStyle = style,
         cursorBrush = SolidColor(c.ink),
         interactionSource = source,
         // Enter is done: the name is kept, and the field lets go.
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
         modifier = modifier
+            .let { if (hugged != null) it.width(hugged) else it }
             .onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown && (e.key == Key.Enter || e.key == Key.NumPadEnter)) {
                     focusManager.clearFocus()
@@ -380,6 +396,11 @@ private fun Tool(label: String, tip: String, icon: androidx.compose.ui.graphics.
  * is the desk's bar (1.0.41, kai: "Legal in TCG seems like it's taking more space than
  * it is useful"): a legal deck is a ✓ with its words in the tip — the format is beside
  * it — and issues and notes are counted; the phone, with a line to itself, keeps words.
+ *
+ * The bare ✓ is only the default's (the bar's region, today). A chosen day or Genesys says
+ * so after it in mono — `✓ 1 May 2025`, `✓ Genesys 92/100`, `✕ 2 · Genesys 466/100` — since
+ * a choice forgotten (and synced to every device) is exactly when the words are needed
+ * (the 1.1.2 design review, finding 2). The phone's line is the short form (finding 9).
  */
 @Composable
 internal fun Standing(state: DeckBuilderState, neue: NeueState, compact: Boolean = false) {
@@ -387,27 +408,46 @@ internal fun Standing(state: DeckBuilderState, neue: NeueState, compact: Boolean
     val validation = state.validation
     val issues = validation.errors.size
     val notes = validation.warnings.size
-    val rules = state.rulesInForce.words()
+    val ruled = state.rulesInForce
+    val rules = ruled.words()
+    val points = remember(state.deck, state.rules, state.index) { ruled.points(state.deck, state.index::byId)?.points }
+    val tag = ruled.tag(points)
+    val short = ruled.short(points)
+    val key = kbd(DeskAction.ISSUES)
+    val open = { neue.drawer = Drawer.ISSUES }
     when {
-        issues > 0 -> Tip("${if (issues == 1) "An issue" else "$issues issues"} stop this deck being played in $rules. Click to read them") {
-            MicroLink(
-                if (compact) "✕ $issues" else "✕ $issues ${if (issues == 1) "issue" else "issues"} →",
-                { neue.drawer = Drawer.ISSUES },
-                color = c.ink,
-            )
+        issues > 0 -> Tip("${if (issues == 1) "An issue" else "$issues issues"} stop this deck being played in $rules. Click to read them", kbd = key) {
+            if (compact) Mark("✕ $issues", tag?.let { "· $it" }, c.ink, open) else MicroLink("✕ $issues ${if (issues == 1) "issue" else "issues"} · $short →", open, color = c.ink)
         }
-        notes > 0 -> Tip("Legal in $rules, with ${if (notes == 1) "a note" else "$notes notes"}. Click to read") {
-            MicroLink(
-                if (compact) "✓ $notes" else "Legal · $notes ${if (notes == 1) "note" else "notes"} →",
-                { neue.drawer = Drawer.ISSUES },
-                color = c.ink70,
-            )
+        notes > 0 -> Tip("Legal in $rules, with ${if (notes == 1) "a note" else "$notes notes"}. Click to read", kbd = key) {
+            if (compact) Mark("✓ $notes", tag?.let { "· $it" }, c.ink70, open) else MicroLink("Legal · $short · $notes ${if (notes == 1) "note" else "notes"} →", open, color = c.ink70)
         }
         // The ✓ opens the drawer too (1.1.1): what it is checked against is chosen there.
-        compact -> Tip("Legal in $rules. Click to choose what it is checked against") {
-            MicroLink("✓", { neue.drawer = Drawer.ISSUES }, color = c.ink70)
+        compact -> Tip("Legal in $rules. Click to choose what it is checked against", kbd = key) {
+            Mark("✓", tag, c.ink70, open)
         }
-        else -> MicroLink("Legal in $rules", { neue.drawer = Drawer.ISSUES }, color = c.ink70)
+        else -> Tip("Legal in $rules. Tap to choose what it is checked against") {
+            MicroLink("Legal · $short", open, color = c.ink70)
+        }
+    }
+}
+
+/** The bar's standing: its glyph in micro caps and, when the rules are not the default, what they are in mono. */
+@Composable
+private fun Mark(glyph: String, tag: String?, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHotAsState()
+    val shown = animatedColor(if (hovered) Mu.colors.ink else color)
+    Row(
+        Modifier
+            .hoverable(source)
+            .cursorPointer(caption = "Legality")
+            .muClickable(interactionSource = source, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Micro(glyph, color = shown)
+        if (tag != null) Mono(tag, color = shown)
     }
 }
 

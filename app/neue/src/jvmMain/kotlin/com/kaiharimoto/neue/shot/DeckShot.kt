@@ -28,6 +28,7 @@ import com.kaiharimoto.mastertool.core.layout.BandLayout
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.DeckSection
+import com.kaiharimoto.mastertool.core.deck.BanSource
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.remote.CardSetRelease
 import com.kaiharimoto.neue.cards.Marker
@@ -70,6 +71,8 @@ data class ShotModel(
     val names: String = NameStyles.FOIL,
     /** The picture's shape: the Settings page's choice. */
     val style: ShotStyle = ShotStyle.PICTURE,
+    /** The rules the builder checks against, for the limit marks (finding 1); null is the pool's list in [format]. */
+    val limits: BanSource? = null,
 )
 
 /**
@@ -132,7 +135,7 @@ object DeckShot {
                 )
             }
             if (card != null) {
-                val ban = card.banStatus(model.format)
+                val ban = model.limits?.statusOf(card) ?: card.banStatus(model.format)
                 if (ban != BanStatus.UNLIMITED) {
                     Inverted {
                         Box(

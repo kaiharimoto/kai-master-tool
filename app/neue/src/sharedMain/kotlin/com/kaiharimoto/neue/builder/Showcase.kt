@@ -127,6 +127,7 @@ fun Showcase(state: DeckBuilderState, neue: NeueState) {
                                 IntOffset(p.left.toInt(), p.top.toInt())
                             },
                         format = state.format,
+                        limits = state.limits,
                         foil = foil,
                         motion = { val t = tilt(); LeanPose(rotationX = -t.y * 4f, rotationY = t.x * 4f) },
                     )
@@ -138,6 +139,7 @@ fun Showcase(state: DeckBuilderState, neue: NeueState) {
                             .offset { IntOffset(p.left.toInt(), p.top.toInt()) }
                             .size(with(density) { p.width.toDp() }, with(density) { p.height.toDp() }),
                         format = state.format,
+                        limits = state.limits,
                         foil = foil,
                         // Turned against the hand: the card seems to stay put as the phone turns round it.
                         motion = { val t = tilt(); LeanPose(rotationX = t.y * TURN_DEGREES, rotationY = -t.x * TURN_DEGREES) },

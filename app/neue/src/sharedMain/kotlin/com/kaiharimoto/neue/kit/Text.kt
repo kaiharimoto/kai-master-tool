@@ -10,6 +10,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.kaiharimoto.mastertool.core.ai.text.MicroCaps
+import com.kaiharimoto.mastertool.core.text.Words
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.LocalMuText
 import com.kaiharimoto.neue.theme.Mu
@@ -118,12 +119,19 @@ fun Small(text: String, modifier: Modifier = Modifier, color: Color = Mu.colors.
 fun Help(text: String, modifier: Modifier = Modifier, color: Color = Mu.colors.ink45, maxLines: Int = Int.MAX_VALUE) =
     MuText(text, modifier, MuType.help(LocalMuFonts.current), color, maxLines)
 
-/** A percentage the way the family writes one: `57%`, `<1%`, `>99%`, `100%`. */
-fun percent(p: Double): String = when {
-    p.isNaN() -> "--"
-    p <= 0.0 -> "0%"
-    p >= 1.0 -> "100%"
-    p < 0.01 -> "<1%"
-    p > 0.99 -> ">99%"
-    else -> "${(p * 100).let { kotlin.math.round(it * 10) / 10 }.let { if (it == it.toLong().toDouble()) it.toLong().toString() else it.toString() }}%"
+/**
+ * A hint beside a label or a menu row, in the voice it is written in (kit §3, the 1.1.2 design review, finding 12):
+ * a key, a count or a date in mono; prose ("100 unless the event sets another") in the sans at ink-45 — mono is
+ * for data, never prose. `Words.isProse` decides.
+ */
+@Composable
+fun Hint(text: String, modifier: Modifier = Modifier, color: Color = Mu.colors.ink45) {
+    if (Words.isProse(text)) {
+        MuText(text, modifier, MuType.help(LocalMuFonts.current), color, maxLines = 1)
+    } else {
+        Mono(text, modifier, color)
+    }
 }
+
+/** A percentage the way the family writes one: `57%`, `<1%`, `>99%`, `100%` (one formatter, `Words.percent`). */
+fun percent(p: Double): String = Words.percent(p)

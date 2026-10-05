@@ -1,6 +1,7 @@
 package com.kaiharimoto.neue
 
 import com.kaiharimoto.neue.builder.legalityRules
+import com.kaiharimoto.neue.builder.eventForRules
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -796,7 +797,7 @@ private fun Shell(h: NeueHolders) {
                             Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
                             Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
                             Page.FORMAT -> FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
-                            Page.PREP -> PrepPage(h.prep, h.webs, state, neue, h.decksReload)
+                            Page.PREP -> PrepPage(h.prep, h.webs, state, neue, h.decksReload) { day -> h.legalityRules(neue.prefs.copy(legalAsOf = day), state.format) }
                             Page.PRESENT -> PresentPage(h)
                             Page.DUEL -> DuelPage(h)
                             Page.WORLD -> WorldPage(h)
@@ -822,7 +823,7 @@ private fun Shell(h: NeueHolders) {
                             )
                         }
                     }
-                    Drawers(state, neue)
+                    Drawers(state, neue, eventForRules(h.prep.doc.events, h.prep.doc.activeEvent, state.today))
                 }
                 // Ai's panel (1.0.43): docked beside every page, the page re-fitting beside it —
                 // in immersive mode too (1.0.46); on a phone it is a sheet.
@@ -872,7 +873,7 @@ private fun Shell(h: NeueHolders) {
         // Its own composable (1.0.92): the pointer is read as it is placed, not here, so the
         // shell does not recompose on every move of a carried card.
         val carry = rememberCarryMotion(h.drag)
-        h.drag.held?.let { held -> CarriedCard(h.drag, held, carry, state.format, neue.prefs.foil) }
+        h.drag.held?.let { held -> CarriedCard(h.drag, held, carry, state.format, neue.prefs.foil, state.limits) }
 
         // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
         if (neue.aiSheet) AiPanel(h, Modifier.fillMaxSize(), phone = true)

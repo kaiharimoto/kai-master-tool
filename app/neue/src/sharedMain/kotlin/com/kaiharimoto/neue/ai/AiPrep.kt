@@ -4,8 +4,11 @@ import com.kaiharimoto.mastertool.core.ai.CardWords
 import com.kaiharimoto.mastertool.core.ai.Resolved
 import com.kaiharimoto.mastertool.core.ai.ToolArgs
 import com.kaiharimoto.mastertool.core.data.StoredDeck
+import com.kaiharimoto.mastertool.core.deck.DeckValidation
 import com.kaiharimoto.mastertool.core.deck.DeckValidator
 import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.neue.builder.legalityRules
 import com.kaiharimoto.mastertool.core.prep.Countdown
 import com.kaiharimoto.mastertool.core.prep.Drill
 import com.kaiharimoto.mastertool.core.prep.EventCheck
@@ -56,6 +59,16 @@ internal class AiPrep(private val h: NeueHolders) {
         e.deadline?.let { append(" due $it") }
     }
 
+    /**
+     * [deck] checked as of [e]'s day by the rules the builder checks with (the 1.1.2 design review, finding 1): Genesys
+     * when chosen, else the list in force that day — as the Prep page checks it.
+     */
+    private suspend fun onDay(e: PrepEvent, deck: Deck): DeckValidation {
+        val day = e.date.takeIf { IsoDate.epochDay(it) != null }
+            ?: return DeckValidator.validate(deck, state.index::byId, state.format, null)
+        return h.legalityRules(h.neue.prefs.copy(legalAsOf = day), state.format).validate(deck, state.index::byId, day)
+    }
+
     private suspend fun prepState(eventId: String?): MetaAnswer {
         val doc = prep.doc
         if (doc.events.isEmpty()) return ok("No events yet. Make one with set_event.", "Prep: no events")
@@ -82,7 +95,7 @@ internal class AiPrep(private val h: NeueHolders) {
                 val d = webs.deckOf(mine, state)
                 appendLine()
                 appendLine("Ready to register:")
-                EventCheck.check(d, DeckValidator.validate(d, state.index::byId, state.format, e.date.takeIf { IsoDate.epochDay(it) != null }), webs.sidingOf(mine, state), e.tier).forEach { item ->
+                EventCheck.check(d, onDay(e, d), webs.sidingOf(mine, state), e.tier).forEach { item ->
                     appendLine("- ${if (!item.ok) "✕" else if (item.warning) "·" else "✓"} ${item.title}${if (item.detail.isNotBlank()) ": " + item.detail.replace("\n", "; ") else ""}")
                 }
             }

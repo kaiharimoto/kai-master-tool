@@ -46,9 +46,12 @@ sealed interface DeckEdit {
  */
 object DeckEditor {
 
-    /** Copies of [card] allowed across main + extra + side combined. */
-    fun copyLimit(card: Card, format: Format): Int =
-        min(Deck.MAX_COPIES, card.banStatus(format).maxCopies)
+    /**
+     * Copies of [card] allowed across main + extra + side combined: by [limits] when given — the rules the person
+     * chose, a dated list or Genesys's none (`DeckRules.banSource`, 1.1.1) — else the pool's list in [format].
+     */
+    fun copyLimit(card: Card, format: Format, limits: BanSource? = null): Int =
+        min(Deck.MAX_COPIES, (limits?.statusOf(card) ?: card.banStatus(format)).maxCopies)
 
     /** Whether [card] is allowed to live in [section] at all. */
     fun sectionAccepts(card: Card, section: DeckSection): Boolean = when (section) {
@@ -63,7 +66,8 @@ object DeckEditor {
         card: Card,
         section: DeckSection = card.requiredSection(),
         format: Format = Format.TCG,
-    ): DeckEdit = addAt(deck, card, section, deck[section].size, format)
+        limits: BanSource? = null,
+    ): DeckEdit = addAt(deck, card, section, deck[section].size, format, limits)
 
     /**
      * Adds a copy at an exact position, for a drop onto a particular slot.
@@ -78,6 +82,7 @@ object DeckEditor {
         section: DeckSection,
         index: Int,
         format: Format = Format.TCG,
+        limits: BanSource? = null,
     ): DeckEdit {
         if (!card.isPlayable) return DeckEdit.Rejected(RejectionReason.NOT_PLAYABLE, card)
         if (!sectionAccepts(card, section)) {
@@ -89,7 +94,7 @@ object DeckEditor {
             return DeckEdit.Rejected(RejectionReason.SECTION_FULL, card)
         }
 
-        val limit = copyLimit(card, format)
+        val limit = copyLimit(card, format, limits)
         // By card, not printing: an alternate artwork is the same card (Phase B).
         if (CardIdentity.copiesOf(deck, card) >= limit) {
             return DeckEdit.Rejected(RejectionReason.COPY_LIMIT, card)
@@ -242,6 +247,7 @@ object DeckEditor {
         section: DeckSection,
         count: Int,
         format: Format = Format.TCG,
+        limits: BanSource? = null,
     ): DeckEdit {
         if (!card.isPlayable) return DeckEdit.Rejected(RejectionReason.NOT_PLAYABLE, card)
         if (!sectionAccepts(card, section)) {
@@ -252,7 +258,7 @@ object DeckEditor {
         val currentHere = contents.count { it == card.id }
         val elsewhere = CardIdentity.copiesOf(deck, card) - currentHere
         val roomInSection = section.maxSize - (contents.size - currentHere)
-        val allowedByBanlist = copyLimit(card, format) - elsewhere
+        val allowedByBanlist = copyLimit(card, format, limits) - elsewhere
 
         val target = count.coerceIn(0, minOf(roomInSection, allowedByBanlist).coerceAtLeast(0))
 
@@ -275,10 +281,10 @@ object DeckEditor {
         )
 
     /** Convenience for showing a "3 / 3" style badge next to a search result. */
-    fun remainingCopies(deck: Deck, card: Card, format: Format = Format.TCG): Int =
-        (copyLimit(card, format) - CardIdentity.copiesOf(deck, card)).coerceAtLeast(0)
+    fun remainingCopies(deck: Deck, card: Card, format: Format = Format.TCG, limits: BanSource? = null): Int =
+        (copyLimit(card, format, limits) - CardIdentity.copiesOf(deck, card)).coerceAtLeast(0)
 
     /** True when the card is banned outright and should be shown as unusable. */
-    fun isForbidden(card: Card, format: Format = Format.TCG): Boolean =
-        card.banStatus(format) == BanStatus.FORBIDDEN
+    fun isForbidden(card: Card, format: Format = Format.TCG, limits: BanSource? = null): Boolean =
+        (limits?.statusOf(card) ?: card.banStatus(format)) == BanStatus.FORBIDDEN
 }

@@ -4,6 +4,7 @@ import com.kaiharimoto.mastertool.core.TestCards
 import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.CardId
 import com.kaiharimoto.mastertool.core.model.Deck
+import com.kaiharimoto.mastertool.core.model.DeckSection
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.search.CardIndex
 import kotlin.test.Test
@@ -21,7 +22,7 @@ class DeckRulesTest {
     @Test
     fun theWordsSayWhatIsChecked() {
         assertEquals("TCG", DeckRules().words())
-        assertEquals("OCG on 1 May 2025 (the April 2025 Lists (OCG))", DeckRules(Format.OCG, "2025-05-01", listName = "April 2025 Lists (OCG)").words())
+        assertEquals("OCG on 1 May 2025, by the April 2025 Lists (OCG)", DeckRules(Format.OCG, "2025-05-01", listName = "April 2025 Lists (OCG)").words())
         assertEquals("Genesys, 100 points", DeckRules(genesysCap = 100).words())
     }
 
@@ -43,9 +44,21 @@ class DeckRulesTest {
         // No Forbidden & Limited list: three Maxx "C" are no copy problem.
         assertTrue(r.errors.none { "Forbidden" in it.message }, r.errors.toString())
         assertTrue(r.errors.any { it.message == "The deck costs 187 Genesys points; the cap is 100." }, r.errors.toString())
-        assertTrue(r.errors.any { "Accesscode Talker is a Link or Pendulum monster" in it.message && it.cardId == talker.id }, r.errors.toString())
+        assertTrue(r.errors.any { "Accesscode Talker is a Link monster" in it.message && it.cardId == talker.id && it.section == DeckSection.EXTRA }, r.errors.toString())
         assertEquals(187, DeckRules(genesysCap = 100).points(three, index::byId)?.points)
         assertTrue(DeckRules(genesysCap = 200).validate(three.copy(extra = emptyList()), index::byId, "2026-10-04").isLegal)
+    }
+
+    @Test
+    fun theCostliestCardsAreNamedDearestFirst() {
+        val three = deck(List(3) { maxx.id })
+        val r = DeckRules(genesysCap = 100).points(three, index::byId)!!
+        // Three Maxx "C" at 50 each lead; the 37 fillers at 1 each are one line apiece after it.
+        assertEquals(GenesysRules.Cost(maxx.id, maxx.name, 3, 50), r.costs.first())
+        assertEquals(150, r.costs.first().total)
+        assertEquals(87, r.over)
+        // Cards worth nothing are not costs.
+        assertTrue(r.costs.none { it.id == talker.id })
     }
 
     @Test

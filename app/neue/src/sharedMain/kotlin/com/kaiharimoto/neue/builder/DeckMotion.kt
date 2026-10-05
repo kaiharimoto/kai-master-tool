@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.input.CarryOffset
+import com.kaiharimoto.mastertool.core.deck.BanSource
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.kit.Hatch
@@ -192,7 +193,7 @@ fun rememberCarryMotion(drag: NeueDrag): CarryMotion {
  * wherever the pointer is. A finger's card rides above the finger (`CarryOffset`).
  */
 @Composable
-fun CarriedCard(drag: NeueDrag, held: Held, carry: CarryMotion, format: Format, foil: String) {
+fun CarriedCard(drag: NeueDrag, held: Held, carry: CarryMotion, format: Format, foil: String, limits: BanSource? = null) {
     val c = Mu.colors
     val density = LocalDensity.current
     // Worked out with the pointer anywhere (here the origin): reading where it is would recompose on every move.
@@ -209,6 +210,7 @@ fun CarriedCard(drag: NeueDrag, held: Held, carry: CarryMotion, format: Format, 
             held.card,
             Modifier.fillMaxSize(),
             format = format,
+            limits = limits,
             foil = foil,
             outlined = true,
             motion = { carry.pose(width) },

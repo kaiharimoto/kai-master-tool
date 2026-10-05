@@ -1176,6 +1176,7 @@ private fun DeckSectionPane(
                                     lean.copy(lift = lean.lift + pressed.lift + carried) + drift
                                 },
                                 format = state.format,
+                                limits = state.limits,
                                 // No artwork chip on the card (kai, 1.0.89: "distracting and not necessary"): the
                                 // inspector's arrows and A step the art.
                                 artChip = false,
