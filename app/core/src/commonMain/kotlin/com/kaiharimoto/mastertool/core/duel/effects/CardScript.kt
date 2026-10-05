@@ -667,9 +667,9 @@ sealed interface Cond {
  */
 @Serializable
 data class FxTag(
-    /** The card whose effect or procedure it is. */
+    /** The card whose effect or procedure it is; 0 for a move of the turn's own (the phase moving on). */
     val uid: Int,
-    /** "e1"…, [PROC], or [RULE] (a Normal Summon, the chain's own Spells to the GY). */
+    /** "e1"…, [PROC], or [RULE] (a Normal Summon or Set, the phase, the chain's own Spells to the GY). */
     val effect: String,
     /** [COST], [ACTIVATE], [RESOLVE], [PROC], [RULE]. */
     val part: String,
