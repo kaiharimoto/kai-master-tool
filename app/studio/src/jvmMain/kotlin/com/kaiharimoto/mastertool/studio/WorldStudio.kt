@@ -13,7 +13,6 @@ import com.kaiharimoto.mastertool.core.world.WorldCanvas
 import com.kaiharimoto.mastertool.core.world.WorldEvent
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.world.TermLine
-import com.kaiharimoto.neue.world.WorldPane
 import java.awt.Color
 import java.awt.image.BufferedImage
 import java.io.File
@@ -23,9 +22,19 @@ import kotlin.random.Random
 /**
  * `--world=demo` (1.0.97): a world seeded straight onto Ai World's page — files, a run's lines, the activity, a short
  * conversation in Thoughts and one board of every kind — so the page can be photographed without a model.
- * `--world-pane=boards|editor|…` gives that pane the page; `--world-ai=editor|…` puts Ai in that pane (editor by default).
+ * `--world=fresh` seeds a world with nothing in it yet, for the fresh desktop. The desktop's own scenes are
+ * `--world-desk=…` (`DeskStudio.kt`).
  */
 internal fun studioWorld(h: NeueHolders, map: Map<String, String>) {
+    if (map["world"] == "fresh") {
+        val now = System.currentTimeMillis()
+        val w = World(id = "wfresh", title = "lab openings", scope = h.builder.deckId?.let { World.SCOPE_DECK + it }, created = now, updated = now)
+        // A desk left by an earlier run is not this picture's.
+        File(h.world.dir, "${w.id}/desk.json").delete()
+        h.world.seed(w, mapOf("README.md" to "# lab openings\n"), emptyList(), emptyList(), null)
+        println("[neue-studio] world: fresh")
+        return
+    }
     val now = System.currentTimeMillis()
     val index = h.builder.index
     // The builder's cards, by name, so the boards that draw art draw real cards.
@@ -128,14 +137,10 @@ ygo.show.stat({ value: (opens / 1000).toFixed(1) + '%', label: 'Opens a starter'
         WorldEvent(t + 41_000, WorldEvent.Kind.WRITE, WorldEvent.YOU, path = "notes/plan.md", text = "Wrote notes/plan.md (3 lines)"),
         WorldEvent(t + 50_000, WorldEvent.Kind.SHOW, WorldEvent.AI, board = "b14", text = "Pinned “What I found”"),
     )
+    File(h.world.dir, "${w.id}/desk.json").delete()
     h.world.seed(w, files, lines, events, "openings.js")
     picture(File(h.world.dir, "${w.id}/files/out/hands.png"))
-    h.world.selectedBoard = "b5"
-    h.world.aiPane = (map["world-ai"] ?: "editor").let { a -> WorldPane.entries.firstOrNull { it.name.equals(a, ignoreCase = true) } }
-    map["world-pane"]?.let { p -> WorldPane.entries.firstOrNull { it.name.equals(p, ignoreCase = true) } }?.let {
-        h.world.maximized = it
-        h.world.focus = it
-    }
+    h.world.selectedBoard = "b1"
     fun result(name: String, summary: String) = Part.ToolResult("t-$name", name, "{}", summary = summary)
     h.ai.preview(
         AiSession(

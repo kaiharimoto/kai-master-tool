@@ -570,12 +570,14 @@ fun neueMain(args: Array<String>) {
                 }
                 println("[neue-studio] present: ${p.slides.size} slides, ${p.deck?.groups?.size ?: 0} groups, style ${p.style}")
             }
-            // --world=demo: a world seeded onto Ai World's page (1.0.97), every kind of board on its canvas;
-            // --world-pane=boards|editor|… gives that pane the page, --world-ai=… puts Ai in it (`WorldStudio.kt`).
-            if (map["world"] == "demo") {
+            // --world=demo: a world seeded onto Ai World's page (1.0.97), a board of every kind; --world=fresh, an empty one.
+            if (map["world"] == "demo" || map["world"] == "fresh") {
                 studioWorld(h, map)
                 h.neue.page = Page.WORLD
                 clock.run(120)
+                // --world-desk=fresh|several|working|launcher|notices|switcher, --world-avatar=icon|travel|caret|terminal|home,
+                // --world-avatar-t=0.5: the desktop's scenes (DESKTOP.md §12.4, `DeskStudio.kt`).
+                map["world-desk"]?.let { studioDesk(h, it, map, clock) }
             }
             // --shootout=demo: Shootout's page with answers given (1.1.2, `ShootoutStudio.kt`): --shootout-target=alone|matchup,
             // --shootout-view=trial|results|setup, --shootout-answers=N.

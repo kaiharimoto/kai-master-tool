@@ -110,6 +110,27 @@ class MasterUiLawTest {
         scan("§7 · one easing, no springs", Regex("""\bspring\(|Spring\.|FastOutSlowInEasing|scaleIn\(|scaleOut\(""")),
     )
 
+    /**
+     * Nothing moves by itself (§7), and kai waived that for named things only: the cards' lean, zen, the dice — and, in
+     * Ai World (1.1.x, `docs/world/DESKTOP.md` §5.1, §12.3), Ai's avatar, in `DeskAvatar.kt` alone. Elsewhere in
+     * `neue/world/` a window moves only under the person's hand: no animated offsets, no translation. Fades stay allowed.
+     */
+    @Test
+    fun movementIsNamed() {
+        val moving = Regex("""animateOffsetAsState|animateDpAsState|animateIntOffsetAsState|Animatable\([^)]*Offset|translationX|translationY""")
+        val world = sources.filter { f -> f.invariantSeparatorsPath.contains("/neue/world/") && f.unit != "DeskAvatar.kt" }
+        assertTrue(world.isNotEmpty(), "Read no files from neue/world/: the test is looking in the wrong place")
+        val breaches = world.flatMap { file ->
+            file.readLines().mapIndexedNotNull { i, line ->
+                if (moving.containsMatchIn(line.substringBefore("//"))) Breach(file, i + 1, line, "§7 · only the named move (DeskAvatar.kt)") else null
+            }
+        }
+        assertNone(breaches)
+        // The avatar's file is where the movement is: if it stops moving, the waiver should go with it.
+        val avatar = sources.firstOrNull { it.name == "DeskAvatar.kt" }
+        assertTrue(avatar != null && "offset" in avatar.readText(), "DeskAvatar.kt is the one file in neue/world/ allowed to move")
+    }
+
     @Test
     fun aQuietVoice() {
         // Exclamation marks and the Mac command glyph in string literals (§9).

@@ -19,6 +19,10 @@ import com.kaiharimoto.mastertool.core.world.WorldLimits
 import com.kaiharimoto.mastertool.core.world.WorldPaths
 import com.kaiharimoto.mastertool.core.world.WorldPrefs
 import com.kaiharimoto.mastertool.core.world.WorldPrelude
+import com.kaiharimoto.mastertool.core.world.desk.AiDoes
+import com.kaiharimoto.mastertool.core.world.desk.AppRef
+import com.kaiharimoto.mastertool.core.world.desk.BuiltInApp
+import com.kaiharimoto.neue.world.desk.WorldDeskState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,14 +37,23 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import java.io.File
 
-/** The panes of the World's screen, in the order the keys number them. */
-enum class WorldPane(val title: String) {
-    FILES("Files"),
-    EDITOR("Editor"),
-    TERMINAL("Terminal"),
-    BOARDS("Boards"),
-    THOUGHTS("Thoughts"),
-    ACTIVITY("Activity"),
+/**
+ * 1.0.97's six panes, by name. The desktop (1.1.x, `docs/world/DESKTOP.md` §3) has apps in windows instead; these are
+ * kept so a caller that says "Ai is in the Editor" in the old words still lands Ai in the right window ([app]): the
+ * boards are the Browser now, and the activity is Thoughts.
+ */
+enum class WorldPane(val title: String, val app: BuiltInApp) {
+    FILES("Files", BuiltInApp.FILES),
+    EDITOR("Editor", BuiltInApp.EDITOR),
+    TERMINAL("Terminal", BuiltInApp.TERMINAL),
+    BOARDS("Boards", BuiltInApp.BROWSER),
+    THOUGHTS("Thoughts", BuiltInApp.THOUGHTS),
+    ACTIVITY("Activity", BuiltInApp.THOUGHTS),
+    ;
+
+    companion object {
+        fun of(app: String?): WorldPane? = entries.firstOrNull { it.app.id == app }
+    }
 }
 
 /** One line of the World's terminal. */
@@ -83,8 +96,14 @@ class Worlds(val dir: File) {
     /** This device's World settings, read when needed. */
     var prefs: () -> WorldPrefs = { WorldPrefs() }
 
-    /** Asked when Ai starts work in a world with [WorldPrefs.follow] on: brings the World page forward. */
+    /**
+     * Asked when Ai starts work in a world with [WorldPrefs.follow] on and the focus policy lets it (§6.1): brings the
+     * World page forward.
+     */
     var comeForward: () -> Unit = {}
+
+    /** The desktop (1.1.x, `docs/world/DESKTOP.md`): windows, the avatar, notices — the shell's own part of this holder. */
+    val desk = WorldDeskState(this)
 
     var list by mutableStateOf<List<World>>(emptyList())
         private set
@@ -106,6 +125,15 @@ class Worlds(val dir: File) {
     var typing by mutableStateOf(false)
         private set
 
+    /**
+     * Files the person took over or changed while Ai worked (§5.5): Ai's next whole write to one is refused until it
+     * reads it again ([aiSaw] then matches), so the person's own edit is never overwritten.
+     */
+    private val yours = HashSet<String>()
+
+    /** What each file held when Ai last read or wrote it, by path. */
+    private val aiSaw = HashMap<String, Int>()
+
     val terminal = mutableStateListOf<TermLine>()
 
     /** What is running, in words, or null. */
@@ -115,16 +143,10 @@ class Worlds(val dir: File) {
     var activity by mutableStateOf<List<WorldEvent>>(emptyList())
         private set
 
-    /** The pane Ai is working in now, or null when it is not working here. */
-    var aiPane by mutableStateOf<WorldPane?>(null)
+    /** Where Ai is working now, in 1.0.97's words: the window the desk says it is in. */
+    val aiPane: WorldPane? get() = WorldPane.of(desk.desk.ai)
 
-    /** The pane the person brought forward (the keys' and the phone's tabs). */
-    var focus by mutableStateOf(WorldPane.EDITOR)
-
-    /** A pane given the whole page, or null. */
-    var maximized by mutableStateOf<WorldPane?>(null)
-
-    /** The board picked on the canvas. */
+    /** The board shown last (pinned, or picked from a page). */
     var selectedBoard by mutableStateOf<String?>(null)
 
     /** The person pressed Skip on Ai's typing. */
@@ -135,6 +157,9 @@ class Worlds(val dir: File) {
 
     private fun root(w: World): File = File(dir, w.id)
     private fun filesDir(w: World): File = File(root(w), "files")
+
+    /** The open world's folder, for what keeps its own files beside `world.json` (the desk, the apps). */
+    val openRoot: File? get() = open?.let(::root)
 
     // ---- Loading, making and opening worlds --------------------------------------------------------------------
 
@@ -179,9 +204,15 @@ class Worlds(val dir: File) {
         terminal.clear()
         selectedBoard = null
         activity = WorldCodec.events(File(root(w), "log.jsonl").takeIf { it.isFile }?.readText()).takeLast(MAX_ACTIVITY)
+        yours.clear()
+        aiSaw.clear()
         val first = w.open ?: files.firstOrNull { WorldPaths.lang(it) != null } ?: files.firstOrNull()
         showFile(first)
+        desk.load(root(w))
     }
+
+    /** The files read again from disk (the Files window's own refresh). */
+    fun refresh() = refreshFiles()
 
     private fun refreshFiles() {
         val w = open ?: run { files = emptyList(); return }
@@ -193,11 +224,28 @@ class Worlds(val dir: File) {
     /** Opens [path] in the editor (the person's click, or Ai's). */
     fun showFile(path: String?) {
         editorPath = path
-        editorText = path?.let { read(it) }.orEmpty()
+        editorText = path?.let { readRaw(it) }.orEmpty()
         edited = false
     }
 
+    /** [path] as Ai reads it (`world_read`, an edit's base): what it saw is remembered, so its next write is allowed. */
     fun read(path: String): String? {
+        val text = readRaw(path) ?: return null
+        WorldPaths.safe(path)?.let { aiSaw[it] = text.hashCode() }
+        return text
+    }
+
+    /** [path] as the person reads it (`cat`, a page): nothing remembered for Ai. */
+    fun peek(path: String): String? = readRaw(path)
+
+    /** A file's size in bytes, or null when there is none: the Editor opens a large one read-only (§3). */
+    fun sizeOf(path: String): Long? {
+        val w = open ?: return null
+        val safe = WorldPaths.safe(path) ?: return null
+        return File(filesDir(w), safe).takeIf { it.isFile }?.length()
+    }
+
+    private fun readRaw(path: String): String? {
         val w = open ?: return null
         val safe = WorldPaths.safe(path) ?: return null
         return File(filesDir(w), safe).takeIf { it.isFile }?.let { if (it.length() > MAX_FILE) it.readText().take(MAX_FILE) else it.readText() }
@@ -211,7 +259,11 @@ class Worlds(val dir: File) {
         val safe = WorldPaths.safe(path) ?: error("“$path” is not a path inside the world: relative, plain letters, no ..")
         require(text.length <= MAX_FILE) { "a file holds at most ${MAX_FILE / 1000}k characters" }
         if (by == WorldEvent.AI) {
-            arrive(WorldPane.EDITOR)
+            // Take over (§5.5): a file the person is editing, or changed since Ai last read it, is theirs.
+            val unsaved = editorPath == safe && edited
+            val changed = safe in yours && readRaw(safe)?.hashCode() != aiSaw[safe]
+            check(!unsaved && !changed) { "The person is editing $safe: read it again with world_read and send edits." }
+            desk.arrive(BuiltInApp.EDITOR.ref, AiDoes.Write(safe))
             typeOut(safe, text)
         }
         withContext(Dispatchers.IO) {
@@ -230,6 +282,7 @@ class Worlds(val dir: File) {
             editorText = text
             edited = false
         }
+        if (by == WorldEvent.AI) aiSaw[safe] = text.hashCode() else yours += safe
         touch(w.copy(open = safe))
         log(WorldEvent(now(), WorldEvent.Kind.WRITE, by, path = safe, text = "Wrote $safe (${text.lines().size} lines)"))
         "Wrote $safe: ${text.lines().size} lines."
@@ -249,7 +302,7 @@ class Worlds(val dir: File) {
             val frame = 16L
             val perFrame = maxOf(cps * frame / 1000.0, text.length / (MAX_TYPING_MS / frame.toDouble())).toInt().coerceAtLeast(1)
             var n = 0
-            while (n < text.length && !skipTyping && !stopAsked) {
+            while (n < text.length && !skipTyping && !stopAsked && !takenOver) {
                 n = minOf(text.length, n + perFrame)
                 editorText = text.take(n)
                 delay(frame)
@@ -270,6 +323,50 @@ class Worlds(val dir: File) {
         if (editorPath == safe) showFile(files.firstOrNull())
         log(WorldEvent(now(), WorldEvent.Kind.DELETE, by, path = safe, text = "Deleted $safe"))
         "Deleted $safe."
+    }
+
+    /** The person took the Editor over while Ai typed: the typing finishes at once and the file is theirs (§5.5). */
+    var takenOver by mutableStateOf(false)
+        private set
+
+    /** Take over (the Editor's bar while Ai types). */
+    fun takeOver() {
+        takenOver = true
+        skipTyping = true
+        editorPath?.let { yours += it }
+    }
+
+    /** The person typed in the editor: the file is theirs until Ai reads it again. */
+    fun personEdited(text: String) {
+        if (typing) return
+        editorText = text
+        edited = true
+        editorPath?.let { yours += it }
+    }
+
+    /** Skip ahead (§5.5): Ai's typing finishes at once, the avatar's waiting targets are dropped. Ai is not stopped. */
+    fun skip() {
+        skipTyping = true
+        desk.avatar.skip()
+    }
+
+    /** The person's rename, from Files: the file written under [to] and the old one deleted. */
+    suspend fun rename(path: String, to: String): Result<String> = runCatching {
+        val w = open ?: error("No world is open.")
+        val from = WorldPaths.safe(path) ?: error("“$path” is not a path inside the world")
+        val dest = WorldPaths.safe(to) ?: error("“$to” is not a path inside the world: relative, plain letters, no ..")
+        require(dest !in files) { "There is a $dest already." }
+        val text = readRaw(from) ?: error("There is no $from.")
+        withContext(Dispatchers.IO) {
+            val f = File(filesDir(w), dest)
+            f.parentFile?.mkdirs()
+            f.writeText(text)
+            File(filesDir(w), from).delete()
+        }
+        refreshFiles()
+        if (editorPath == from) showFile(dest)
+        log(WorldEvent(now(), WorldEvent.Kind.WRITE, WorldEvent.YOU, path = dest, text = "Renamed $from to $dest"))
+        "Renamed $from to $dest."
     }
 
     /** The person's own edit in the editor, saved. */
@@ -315,6 +412,14 @@ class Worlds(val dir: File) {
         scope.launch { removeBoard(id, WorldEvent.YOU) }
     }
 
+    /** The person's line at the Terminal, a file's Run, a rename: launched here, what stops it said in the terminal. */
+    fun launch(block: suspend () -> Result<*>) {
+        scope.launch { block().onFailure { line(TermLine.Kind.ERR, it.message ?: "That did not run.") } }
+    }
+
+    /** A line of the person's own in the Terminal (the command they typed, `ls`, `cat`, `help`). */
+    fun print(kind: TermLine.Kind, text: String) = line(kind, text)
+
     /**
      * A world put on screen at once, for the studio's photographs (`--world=demo`): its files written, the terminal
      * and activity as given, [editor] open — no typing, no runs.
@@ -331,6 +436,7 @@ class Worlds(val dir: File) {
         terminal += lines
         activity = events
         showFile(editor)
+        desk.load(root(w))
     }
 
     // ---- Running ----------------------------------------------------------------------------------------------
@@ -349,9 +455,9 @@ class Worlds(val dir: File) {
             else -> error("Give a path to run, or code.")
         }
         val language = safe?.let { WorldPaths.lang(it) ?: error("$it is not code: .js or .py") } ?: (lang ?: WorldPaths.LANG_JS)
-        if (by == WorldEvent.AI) arrive(WorldPane.TERMINAL)
         val limit = seconds.coerceIn(1, 120)
         val label = safe ?: "snippet.$language"
+        if (by == WorldEvent.AI) desk.arrive(BuiltInApp.TERMINAL.ref, AiDoes.Run(label))
         running = label
         stopAsked = false
         line(TermLine.Kind.COMMAND, "${if (language == WorldPaths.LANG_PY) "python" else "js"} $label")
@@ -362,8 +468,9 @@ class Worlds(val dir: File) {
             val boards = pin(api.shown, safe, by)
             val record = outcome.first.copy(path = safe, boards = boards.map { it.id }, ms = now() - started)
             line(if (record.ok) TermLine.Kind.NOTE else TermLine.Kind.ERR, if (record.ok) "— done in ${record.ms} ms" + (if (boards.isNotEmpty()) ", ${boards.size} board(s)" else "") else record.err)
-            log(WorldEvent(now(), WorldEvent.Kind.RUN, by, path = safe, text = (if (record.ok) "Ran " else "Failed ") + label, run = record.copy(out = record.out.take(4_000))))
-            if (boards.isNotEmpty() && by == WorldEvent.AI) arrive(WorldPane.BOARDS)
+            val at = now()
+            log(WorldEvent(at, WorldEvent.Kind.RUN, by, path = safe, text = (if (record.ok) "Ran " else "Failed ") + label, run = record.copy(out = record.out.take(4_000))))
+            desk.ran(label, record.ok, record.err, record.ms, boards.size, at)
             RunOutcome(record, boards, outcome.second)
         } finally {
             running = null
@@ -436,7 +543,7 @@ class Worlds(val dir: File) {
     suspend fun tool(name: String, args: JsonObject, by: String = WorldEvent.AI): Result<RunOutcome> = runCatching {
         val w = open ?: error("No world is open: world_new makes one.")
         check(running == null) { "Something is running already: wait for it, or stop it." }
-        if (by == WorldEvent.AI) arrive(WorldPane.TERMINAL)
+        if (by == WorldEvent.AI) desk.arrive(BuiltInApp.TERMINAL.ref, AiDoes.Tool(name))
         running = "instrument $name"
         stopAsked = false
         line(TermLine.Kind.COMMAND, "instrument $name ${args.toString().take(200)}")
@@ -448,8 +555,9 @@ class Worlds(val dir: File) {
             val boards = pin(result.boards, null, by)
             val record = RunRecord("instrument", path = name, ok = true, ms = now() - started, out = result.lines.joinToString("\n"), boards = boards.map { it.id })
             line(TermLine.Kind.NOTE, "— done in ${record.ms} ms, ${boards.size} board(s)")
-            log(WorldEvent(now(), WorldEvent.Kind.RUN, by, text = "Instrument $name", run = record))
-            if (boards.isNotEmpty() && by == WorldEvent.AI) arrive(WorldPane.BOARDS)
+            val at = now()
+            log(WorldEvent(at, WorldEvent.Kind.RUN, by, text = "Instrument $name", run = record))
+            desk.ran(name, ok = true, error = "", ms = record.ms, pages = boards.size, at = at)
             RunOutcome(record, boards, result.answer.toString().take(4_000))
         } catch (e: IllegalArgumentException) {
             line(TermLine.Kind.ERR, e.message.orEmpty())
@@ -482,6 +590,8 @@ class Worlds(val dir: File) {
         if (placed.isNotEmpty()) {
             touch(w)
             selectedBoard = placed.last().id
+            // Each page opens in the Browser's tab (§4), Ai walking there to open it.
+            desk.showed(placed.map { it.id }, by)
         }
         return placed
     }
@@ -490,7 +600,6 @@ class Worlds(val dir: File) {
     suspend fun putBoard(id: String?, kind: String, title: String?, body: String, note: String?, by: String = WorldEvent.AI): Result<Board> = runCatching {
         open ?: error("No world is open: world_new makes one.")
         val (k, payload) = ShowSpec.parse(kind, body).getOrElse { throw IllegalArgumentException(it.message) }
-        if (by == WorldEvent.AI) arrive(WorldPane.BOARDS)
         pin(listOf(WorldApi.Shown(id?.filter { it.isLetterOrDigit() || it in "-_" }?.take(40)?.ifEmpty { null }, title.orEmpty().ifEmpty { k.name.lowercase() }, k, payload, note.orEmpty())), null, by).single()
     }
 
@@ -502,28 +611,33 @@ class Worlds(val dir: File) {
         "Took down $id."
     }
 
-    /** The person moved a board on the canvas. */
-    fun moveBoard(id: String, x: Double, y: Double) {
-        val w = open ?: return
-        val b = w.board(id) ?: return
-        scope.launch { touch(w.put(b.copy(x = x, y = y))) }
-    }
-
     // ---- Keeping it --------------------------------------------------------------------------------------------
 
-    /** Ai has started work in [pane]: the person sees it there, and the page comes forward if they asked it to. */
+    /**
+     * Ai has started work in [pane] (1.0.97's words, kept for its tools): it arrives in that app's window on the desk,
+     * as the focus policy decides (§6.1), without the wait for the avatar ([WorldDeskState.arrive] waits).
+     */
     fun arrive(pane: WorldPane) {
-        aiPane = pane
-        if (prefs().follow) {
-            focus = pane
-            comeForward()
+        val does = when (pane) {
+            WorldPane.FILES -> AiDoes.Read(pane.app.ref, "the files")
+            WorldPane.EDITOR -> AiDoes.Read(pane.app.ref, editorPath?.substringAfterLast('/') ?: "a file")
+            WorldPane.TERMINAL -> AiDoes.Run(running ?: "a run")
+            WorldPane.BOARDS -> AiDoes.Show(desk.desk.tabs.selected.orEmpty())
+            WorldPane.THOUGHTS, WorldPane.ACTIVITY -> AiDoes.Read(pane.app.ref, "its thoughts")
         }
+        desk.arriveNow(pane.app.ref, does)
     }
 
-    /** Ai has finished its turn: nobody is working here now. */
+    /** Ai has started work in [app] (`world_open`, an app's window): through the focus policy, never past it. */
+    suspend fun arrive(app: AppRef, does: AiDoes) = desk.arrive(app, does)
+
+    /** Ai has finished its turn: nobody is working here now, and what it opened and nobody touched is put away (§6.4). */
     fun leave() {
-        aiPane = null
+        takenOver = false
+        desk.turnEnd()
     }
+
+    internal fun now() = System.currentTimeMillis()
 
     private fun line(kind: TermLine.Kind, text: String) {
         scope.launch {
@@ -560,8 +674,6 @@ class Worlds(val dir: File) {
             io.withLock { withContext(Dispatchers.IO) { File(root(w), "log.jsonl").appendText(WorldCodec.line(e) + "\n") } }
         }
     }
-
-    private fun now() = System.currentTimeMillis()
 
     /** The world as Ai reads it (`world_state`): its files, boards and last runs. */
     fun describe(w: World? = open): String {
