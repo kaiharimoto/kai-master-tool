@@ -73,7 +73,7 @@ provenance and chance are stamped as they always are, and `DuelRules` checks the
 - **A verified line can be shown.** The goldfish's line for any hand opens as a replay on the Duel page, every move a
   real one.
 - **The manual table stays manual.** A drag, a right-click, Default and the default key do what they did. The engine
-  acts at the table only when the person picks **Use the effect** (§5½), and what it does there is ordinary moves too.
+  acts at the table only when the person picks **Shortcut** (§5½), and what it does there is ordinary moves too.
 
 **Rejected:**
 - *A second state machine with its own state.* Replay, redaction, sync and provenance would all have to be rebuilt
@@ -362,7 +362,7 @@ data class FxTable(val state: DuelState, val fx: FxState, val book: ScriptBook, 
 - the test's `RecordMatcher` (§4.2), which answers from the record;
 - the goldfish search, which tries each answer in turn;
 - a combo's `PlanChooser`, which answers by the names its steps give, either copy, as `anyCopy` does;
-- the table's `Chooser` for **Use the effect** (§5½), which asks the person on the page, or reads Ai's choices from
+- the table's `Chooser` for **Shortcut** (§5½), which asks the person on the page, or reads Ai's choices from
   its op.
 
 For the search, a choice of a subset is split into a chain of yes/no choices, the shape the research found works
@@ -1004,7 +1004,7 @@ data class GoldfishResult(
 
 ---
 
-## 5½. At the table: Use the effect (kai's decision)
+## 5½. At the table: Shortcut (kai's decision)
 
 kai: "the default key staying. Shortcut should be a dedicated choice when interacting with a card if it has one set."
 
@@ -1013,7 +1013,8 @@ kai: "the default key staying. Shortcut should be a dedicated choice when intera
   today: `DuelVerbs.default`, untouched, whether or not the card has a written effect.
 - Every manual verb stays as it is. A written effect never runs because a card was dragged or activated by hand.
 
-**2. A verb of its own: "Use the effect"** (`DuelVerb.EFFECT`, label "Use the effect").
+**2. A verb of its own: "Shortcut"** (`DuelVerb.SHORTCUT`, label "Shortcut").
+- **Named Shortcut, not "Shortcut"** (kai: "To differentiate between activate effect and to use a shortcut, let's rename it to just Shortcut"): Activate is the manual verb that puts a card's effect on the chain by hand; Shortcut is the written effect doing its moves for you. The two words never meet.
 - **Offered only on a card that has a written effect** in the library (any status but `BROKEN`), by `DuelVerbs.offered`.
   Because it lives in `DuelVerbs`, every surface reads it from the one list:
   - the verb strip beside the selected card (`VerbStrip`);
@@ -1022,12 +1023,12 @@ kai: "the default key staying. Shortcut should be a dedicated choice when intera
   - a finger's verb strip and the held card's menu;
   - the command line;
   - Ai.
-- **Its key is `U`** (`DeskAction.DUEL_EFFECT`, `DeskScope.DUEL`).
+- **Its key is `U`** (`DeskAction.DUEL_SHORTCUT`, `DeskScope.DUEL`).
   - `U` is free in that scope today; `ctrl U` is Present's underline, in another scope.
   - `U` alone now runs the verb instead of opening Command mode, as any free letter did. Command mode keeps `/`,
     `Ctrl L` and every other free letter.
-- **Its letter is `u`** (`DuelLetters.ROWS`: `Letter("u", DuelVerb.EFFECT, DeskAction.DUEL_EFFECT, "Use the effect")`),
-  typed as `u h2` or `u h2 e2` (an effect by its id or its short name), with the typed words `effect` and `fx`.
+- **Its letter is `u`** (`DuelLetters.ROWS`: `Letter("u", DuelVerb.SHORTCUT, DeskAction.DUEL_SHORTCUT, "Shortcut")`),
+  typed as `u h2` or `u h2 e2` (an effect by its id or its short name), with the typed word `shortcut`.
   - **The word `use` keeps its meaning.** `DuelCommand` already reads `use` as Activate, and saved combos' steps may
     hold it. A stored step must never change meaning.
 - **The tests that hold it:**
@@ -1047,26 +1048,26 @@ kai: "the default key staying. Shortcut should be a dedicated choice when intera
 - **One undo group.** The cost, the targets and the chain link are one group. When nothing can respond, the
   resolution joins that same group, so one undo takes back the whole effect. That is a one-player table, or response
   windows off with the link resolved at once. When the other seat may respond, the resolution is its own group, made
-  by **Resolve as written** (3).
+  by **Resolve by Shortcut** (3).
 - **Ordinary moves, marked as made by code.**
   - The moves land in the log as ordinary `DuelAction`s, committed through `DuelGame.act`.
   - Provenance keeps `by`, so the results still count players: the player who chose to use it, whether the person or
     Ai.
   - Each entry carries `DuelEntry.fx` with the card, the effect, the script's hash and `verified`. The log's line
-    reads "Albaz · Search (written effect)", and "(unverified)" where it was.
+    reads "Albaz · Search (Shortcut)", and "(unverified)" where it was.
 - **Unverified effects are offered too, marked unverified** on every surface that lists them. The person decides at
   the table. Only the goldfish's search is limited to verified effects.
 - **`FxState` at a hand-made table** is inferred from the log as tests infer it (§4.2). A use the inference cannot
   judge is offered with its rule's doubt said, never refused silently.
 
-**3. The chain: Resolve as written.**
+**3. The chain: Resolve by Shortcut.**
 - When the newest link's card has a written effect, the chain menu (`ChainMenu`, Enter on a link) offers **Resolve as
   written** beside **Resolve** (by hand, as today, and still first).
 - `Shift Q` (`DUEL_RESOLVE_ALL`) does exactly what it does today when no link has a written effect. When one does, it
   opens a two-choice strip:
   - **By hand** — Enter, as today;
-  - **As written** — `U`, which resolves each written link through the engine and the others by hand, in order.
-- `resolve as written` and `resolve all as written` are the typed forms.
+  - **By Shortcut** — `U`, which resolves each written link through the engine and the others by hand, in order.
+- `resolve by shortcut` and `resolve all by shortcut` are the typed forms.
 
 **4. Later: cards that play themselves.**
 - An optional duel setting, **"Cards with written effects play themselves"** (`DuelPrefs.autoEffects`, off by
@@ -1101,7 +1102,7 @@ later switch is one new `DuelPrefs` field, described in `AiSettings` and sorted 
 | `<data>/effects/decks/<deck>.tests.json` | the person's tests set aside (with why), pinned engine cards | yes | yes; deleted with the deck | `OldDataTest` |
 | `<data>/effects/goldfish/<deck>.json` | the deck's targets and its kept `GoldfishResult`s (versioned) | yes | yes; deleted with the deck | `OldDataTest` |
 | `<data>/fxcache/` | verdicts and test runs, recomputed | **never** (`InboundPath.DEVICE_FOLDERS`) | no | `SyncTest` |
-| `DuelEntry.fx` | engine-made entries only: Use the effect, Resolve as written, the goldfish's lines (`verified` among it) | with the duel | with the duel | `OldDataTest`: an entry with and without it |
+| `DuelEntry.fx` | engine-made entries only: Shortcut, Resolve by Shortcut, the goldfish's lines (`verified` among it) | with the duel | with the duel | `OldDataTest`: an entry with and without it |
 | `Combo.by`, `Combo.confirmed` | who wrote a combo; the person's confirmation | as combos | as combos | `OldDataTest`: a combo without them |
 | `Proof.library` | the library fingerprint of a goldfish number | as the ledger | as the ledger | `OldDataTest`: a proof without it |
 
@@ -1139,7 +1140,7 @@ An older build reads every document and skips the new keys. Release notes name e
   - Everything shown to Ai (failures, `fx_state`) is written through the tested seat's eyes.
   - A networked duel's replay gives tests only for the host's own library decks; the guest's hidden cards stay
     unnamed.
-  - The engine plays at no networked table in Phase D: Use the effect is refused there (§5½).
+  - The engine plays at no networked table in Phase D: Shortcut is refused there (§5½).
   - Ai's use of the verb is held to `DuelReach` and its knowledge, like any of its moves.
 - **Licence.**
   - No ygopro or EDOPro scripts are bundled, linked or consulted, and the vocabulary uses none of their identifiers.
@@ -1178,7 +1179,7 @@ Before each step ships, through these lenses. Each finding is held by a test.
 | **The rules** | speeds, SEGOC, missing the timing, costs against effects, targets at resolution, once-per-turn under negation, Extra Deck zones | part A; any case found wrong becomes a new case |
 | **The record** | sloppy manual logs (a chain never resolved, a search dragged with no activation, moves before resolve), logs with no provenance or tags, alternate artworks, errata | episode tests on hand-made fixture logs: such logs read as unexplained or ambiguous, never as a pass |
 | **Statistics** | seeds across threads and devices; a reduced hand that was not equivalent; an interval that is too narrow; the undecided share hidden; skeletons miscounted | toy decks against exact odds; memo against no memo; the same seed on the JVM and in an Android unit test; the sentence always states undecided |
-| **The table's default** | a written effect running where the person meant a manual move: right-click, Default, Space, `Shift Q`, or a saved combo's `use` step | `DuelEffectVerbTest`'s rows for every card in every place; `use` pinned to Activate; `Shift Q` unchanged with no written link |
+| **The table's default** | a written effect running where the person meant a manual move: right-click, Default, Space, `Shift Q`, or a saved combo's `use` step | `DuelShortcutVerbTest`'s rows for every card in every place; `use` pinned to Activate; `Shift Q` unchanged with no written link |
 | **Writing without a go** | Ai writing a card nobody asked for: through `world_write`, a helper file, a request it answers itself, or by reading a chat message as a go | the asked list enforced in core (`FxAsksTest`); `fx_request` cannot add; helpers (`_*.js`) compile into no card of their own |
 | **Unknown cards** | a number that quietly counts an unknown card as working, or as a brick; a recorded line that needs one reported as 0 % | the inert rules (§5.5) tested on a deck with unknown cards; not-computable runs refused by name; the headline's "at least" and its two shares |
 | **Performance and denial** | a trigger loop; a pick of a whole Deck; a phone's heat; a run that will not stop | bounds tests; the loop verdict; cancellation tests; the benchmarks |
@@ -1203,10 +1204,10 @@ Each step splits across agents in worktrees, with a red team beside them, as in 
 - reference scripts in commonTest, for fictional cards in a reserved passcode range;
 - `PuzzleReferee` reading its summon rules from `FxRules`, and the puzzle Spells as scripts (`PuzzleEffect` deleted);
 - the verb's core (§5½), never offered yet because no library exists:
-  - `DuelVerb.EFFECT` in `DuelVerbs.offered` and `actions` with a `Chooser`;
-  - the letter `u` and the words `effect` and `fx` in `DuelLetters` and `DuelCommand`, with `use` still Activate;
-  - `DeskAction.DUEL_EFFECT` on `U`;
-  - `resolve as written` and `resolve all as written`;
+  - `DuelVerb.SHORTCUT` in `DuelVerbs.offered` and `actions` with a `Chooser`;
+  - the letter `u` and the word `shortcut` in `DuelLetters` and `DuelCommand`, with `use` still Activate;
+  - `DeskAction.DUEL_SHORTCUT` on `U`;
+  - `resolve by shortcut` and `resolve all by shortcut`;
   - `ComboRecorder` writing `u …`;
   - `DuelMoves` listing it;
 - part A.
@@ -1225,7 +1226,7 @@ Each step splits across agents in worktrees, with a red team beside them, as in 
   `DuelRules.applyAll`;
 - `FxFoldTest`: a tagged log's fold equals the engine's own `FxState`;
 - `PuzzleTest`: unchanged baselines;
-- `DuelEffectVerbTest`:
+- `DuelShortcutVerbTest`:
   - the default verb of every card in every place is unchanged, with or without a script;
   - `use` still parses as Activate;
   - `u` uses a reference card's effect as one undo group, with `fx` and provenance on every entry;
@@ -1262,10 +1263,10 @@ Each step splits across agents in worktrees, with a red team beside them, as in 
   - `FxSuggest`;
   - the cost before (`Prices.estimate`) and after (`Prices.cost`);
 - **at the table** (§5½), on every surface, as soon as a card has a written effect (marked unverified until step 3):
-  - **Use the effect** in the verb strip, the Enter menu, the inspector and a finger's menus, and on `U`;
+  - **Shortcut** in the verb strip, the Enter menu, the inspector and a finger's menus, and on `U`;
   - the table `Chooser`'s prompts;
-  - **Resolve as written** in `ChainMenu` and on `Shift Q`'s strip;
-  - the log's "(written effect)";
+  - **Resolve by Shortcut** in `ChainMenu` and on `Shift Q`'s strip;
+  - the log's "(Shortcut)";
   - the verb refused at a networked table;
 - `AiEffects` and the `effects-author` skill.
 
@@ -1295,7 +1296,7 @@ Each step splits across agents in worktrees, with a red team beside them, as in 
 - (b) the library, sync, backups and pane (neue);
 - (c) the lints and the words;
 - (d) asking, suggestions and cost: the four places in the interface, `FxAsks`, `fx_request`, `FxSuggest`;
-- (e) the table: Use the effect's surfaces, the `Chooser` prompts, Resolve as written.
+- (e) the table: Shortcut's surfaces, the `Chooser` prompts, Resolve by Shortcut.
 
 ### Step 3: tests and coverage (1.2.2, and 1.2.3 if needed)
 
@@ -1374,15 +1375,15 @@ a card's activation by its default uses its written effect, **verified effects o
 is.
 
 **Done when:**
-- with the switch off, `DuelEffectVerbTest`'s default rows are unchanged;
-- with it on, only verified effects play themselves, and an unverified one is offered by **Use the effect** alone.
+- with the switch off, `DuelShortcutVerbTest`'s default rows are unchanged;
+- with it on, only verified effects play themselves, and an unverified one is offered by **Shortcut** alone.
 
 ### Out of scope for Phase D
 
 - Everything §2.6 leaves out of the vocabulary.
 - **The opponent.** The goldfish has none. "Through an Ash" belongs to Phase E, though tests already run the other
   seat's scripted cards.
-- **The engine beyond Use the effect.**
+- **The engine beyond Shortcut.**
   - At a networked table.
   - Choosing Ai's moves by search: Ai uses the verb as a player does, and never searches with it.
   - The "play themselves" switch (§5½ 4), which is the step after the goldfish.
@@ -1412,11 +1413,11 @@ is.
 - kai: "the default key staying. Shortcut should be a dedicated choice when interacting with a card if it has one
   set."
 - The default action never changes: right-click, Default and the default key do what they do today.
-- A dedicated verb, **Use the effect** (`U`, the letter `u`), is offered only on a card with a written effect:
+- A dedicated verb, **Shortcut** (`U`, the letter `u`), is offered only on a card with a written effect:
   - unverified effects are offered too, marked so;
   - the person makes the choices;
   - the whole effect is one undo group, logged as ordinary moves tagged as made by code.
-- Resolving a written link offers **Resolve as written** in `ChainMenu` and on `Shift Q`.
+- Resolving a written link offers **Resolve by Shortcut** in `ChainMenu` and on `Shift Q`.
 - Ai and the typed line reach the same verb through `DuelVerbs`.
 - **Cards that play themselves** (a switch, off by default, verified effects only) is a later step.
 
