@@ -12,6 +12,7 @@ import com.kaiharimoto.mastertool.core.ai.ToolRunner
 import com.kaiharimoto.mastertool.core.ai.ToolSpec
 import com.kaiharimoto.mastertool.core.ai.TurnRequest
 import com.kaiharimoto.mastertool.core.ai.Usage
+import com.kaiharimoto.mastertool.core.ai.providers.Prices
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelGame
 import com.kaiharimoto.mastertool.core.duel.Provenance
@@ -29,8 +30,11 @@ interface MatchPlayer {
     suspend fun cue(text: String, tools: ToolRunner): CueResult
 }
 
-/** What a cue cost, in tokens read and written, and why it failed if it did. */
-data class CueResult(val tokens: Long = 0, val failed: String? = null)
+/**
+ * What a cue cost, in tokens read and written, and why it failed if it did; [usage] is the same split by kind (new, cached
+ * and written), so the watcher's counter can price each seat at its own model's rates (`Prices`).
+ */
+data class CueResult(val tokens: Long = 0, val failed: String? = null, val usage: Usage = Usage())
 
 /**
  * One seat's session (`docs/phases/C.md` §6): a headless agent run of its own — its own backend and model, its own
@@ -83,7 +87,7 @@ class AgentPlayer(
             session = session.copy(usage = session.usage + spent, updatedAt = now())
             withContext(NonCancellable) { keep(session) }
         }
-        return CueResult(spent.read + spent.output, failed)
+        return CueResult(spent.read + spent.output, failed, spent)
     }
 
     /**
@@ -124,8 +128,14 @@ class AiMatch(
     private val status: (String) -> Unit = {},
     /** The tokens spent so far, both seats, after each cue: the watcher's counter against the budget. */
     private val spent: (Long) -> Unit = {},
+    /** Each seat's tokens so far by kind, after each cue: what the counter prices, seat by seat. */
+    private val used: (List<Usage>) -> Unit = {},
 ) {
     var memo = MatchMemo()
+        private set
+
+    /** Each seat's tokens so far, by kind. */
+    var usage: List<Usage> = List(players.size) { Usage() }
         private set
 
     private val rules get() = table.rules
@@ -171,7 +181,9 @@ class AiMatch(
                     if (r.failed != null) table.say("${DuelWords.seatName(table.state, seat)}'s session failed this cue: ${r.failed.take(160)}")
                     val after = MatchReferee.after(g, table.game, MatchReferee.Cued(seat, n.kind, table.movesSince(from, seat), r.failed, r.tokens), memo, rules)
                     memo = after.memo
+                    usage = usage.mapIndexed { i, u -> if (i == seat) u + r.usage else u }
                     spent(memo.tokens)
+                    used(usage)
                     for (t in after.table) {
                         if (t.note == MatchReferee.RESOLVE_FOR) resolved(seat, "${DuelWords.seatName(table.state, seat)} did not resolve its link: the table resolves it.")
                         else table.table(t.seat, t.actions, t.note)
@@ -249,6 +261,17 @@ class AiMatch(
             val estimate = cues * TOKENS_PER_CUE
             return Cost(cues, estimate, minOf(estimate, rules.tokenCap))
         }
+
+        /**
+         * What [cost] may come to in dollars, each seat at its own list [prices] (`Prices.of`), the tokens it can spend
+         * shared evenly between the seats and split as `Prices.assumed` says; null when a seat's model has no price.
+         */
+        fun dollars(cost: Cost, prices: List<Prices.Price?>): Double? =
+            Prices.total(prices.map { it to Prices.assumed(cost.tokens / prices.size.coerceAtLeast(1)) })
+
+        /** What the seats have spent so far in dollars, each [usage] at its own [prices]; null when a seat has none. */
+        fun dollars(usage: List<Usage>, prices: List<Prices.Price?>): Double? =
+            Prices.total(prices.mapIndexed { i, p -> p to (usage.getOrNull(i) ?: Usage()) })
 
         /** The token budgets the start dialog offers, both seats. */
         val BUDGETS: List<Long> = listOf(250_000L, 500_000L, 1_000_000L, 2_000_000L)

@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.duel.match
 
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.duel.CardKind
 import com.kaiharimoto.mastertool.core.duel.DuelAction
 import com.kaiharimoto.mastertool.core.duel.DuelCardInfo
@@ -83,7 +84,7 @@ class AiMatchTest {
             cues += text.lineSequence().first()
             this.tools = tools
             act(text)
-            return CueResult(tokens = 1_000)
+            return CueResult(tokens = 1_000, usage = Usage(input = 200, output = 100, cacheRead = 700))
         }
     }
 
@@ -109,7 +110,13 @@ class AiMatchTest {
         assertTrue(first is MatchReferee.Next.Table && first.actions.single() is DuelAction.OpeningRoll, first.toString())
         val a = summoner()
         val b = summoner()
-        val end = AiMatch(t, listOf(a, b), engines()).run()
+        var told: List<Usage> = emptyList()
+        val match = AiMatch(t, listOf(a, b), engines(), used = { told = it })
+        val end = match.run()
+        // Each seat's tokens are kept by kind, its own cues only, so each can be priced at its own model's rates.
+        assertEquals(listOf(Usage(200L * a.cues.size, 100L * a.cues.size, 700L * a.cues.size), Usage(200L * b.cues.size, 100L * b.cues.size, 700L * b.cues.size)), match.usage)
+        assertEquals(match.usage, told)
+        assertEquals(1_000L * (a.cues.size + b.cues.size), match.memo.tokens)
         val r = assertNotNull(end.result)
         assertEquals(DuelResult.AI_VS_AI, r.kind)
         assertEquals(DuelResult.LIMIT, r.how)

@@ -17,7 +17,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.providers.ModelNames
+import com.kaiharimoto.mastertool.core.ai.providers.Prices
 import com.kaiharimoto.mastertool.core.ai.providers.Providers
 import com.kaiharimoto.mastertool.core.data.StoredDeck
 import com.kaiharimoto.mastertool.core.duel.match.AiMatch
@@ -43,10 +45,13 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuDialog
 import com.kaiharimoto.neue.kit.MuInput
 import com.kaiharimoto.neue.kit.MuSelect
+import com.kaiharimoto.neue.kit.MuText
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.Tip
+import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
+import com.kaiharimoto.neue.theme.MuType
 
 /** A deck a seat of the match can sit down with: the builder's, or one from the library. */
 private data class MatchDeck(val id: String?, val name: String, val deck: Deck)
@@ -134,12 +139,13 @@ internal fun AiVsAiDialog(h: NeueHolders) {
         width = 600.dp,
         description = "Two Ai players play each other, each seeing only its own hand, deck guide and combos. You watch both hands. Your own duel waits, untouched.",
         footer = {
-            // What it may spend, said before it starts, beside the button that spends it (the kit's §16.4).
-            Mono(
-                "≈ ${tokens(cost.estimate)} tokens${if (cost.capped) "" else " at most"} · stops at ${tokens(budget)}",
-                Modifier.align(Alignment.CenterVertically).padding(end = 8.dp),
-                color = c.ink70,
-            )
+            // What it may spend, said before it starts, beside the button that spends it (the kit's §16.4): in tokens, and
+            // in money at each seat's list prices with the table's date — or where to look when a model has none (finding 4).
+            val dollars = if (choice.connections.size == 2) AiMatch.dollars(cost, choice.connections.map { Prices.of(it.provider, it.model) }) else null
+            Column(Modifier.align(Alignment.CenterVertically).padding(end = 8.dp)) {
+                Mono("≈ ${tokens(cost.estimate)} tokens${if (cost.capped) "" else " at most"} · stops at ${tokens(budget)}", color = c.ink70)
+                Mono(Prices.words(dollars), color = c.ink70)
+            }
             MuButton("Cancel", { duels.matches.dialogOpen = false }, variant = BtnVariant.GHOST)
             MuButton(
                 "Start the match",
@@ -241,8 +247,22 @@ private fun seatsWords(m: DuelMatches, bottom: Int): String {
     return "↓ ${seat(bottom)} · ↑ ${seat(1 - bottom)}"
 }
 
-/** The spend so far against the budget: "≈ 210k of 1M tokens". */
-private fun spendWords(m: DuelMatches, short: Boolean = false): String = "≈ ${tokens(m.spent)} of ${tokens(m.budget)}" + if (short) "" else " tokens"
+/**
+ * The spend so far against the budget, and in money when every seat's model has a list price: "≈ 210k of 1M tokens ·
+ * ≈ $0.80". [short] is the phone's first line, tokens only — its money has a line of its own with the date.
+ */
+private fun spendWords(m: DuelMatches, short: Boolean = false): String =
+    if (short) "≈ ${tokens(m.spent)} of ${tokens(m.budget)}"
+    else "≈ ${tokens(m.spent)} of ${tokens(m.budget)} tokens" + (m.dollars?.let { " · ≈ ${Prices.dollars(it)}" } ?: "")
+
+/** The spend seat by seat, with the prices' date: "At list prices, Oct 2026: Opus 5.5 ≈ $0.50 · GPT-5 ≈ $0.30". */
+private fun spendTip(m: DuelMatches): String {
+    val seats = m.models.mapIndexed { i, name ->
+        val p = m.prices.getOrNull(i)
+        "$name " + if (p == null) "— ${Prices.UNKNOWN}" else "≈ ${Prices.dollars(Prices.cost(p, m.usage.getOrNull(i) ?: Usage()))}"
+    }
+    return "At list prices, ${Prices.AS_OF}: ${seats.joinToString(" · ")}. Tokens are both players' together, against the budget."
+}
 
 /** Each seat's conversation, to read once the match is over: "Read Opus 5.5's game", the bottom seat first. */
 @Composable
@@ -274,7 +294,7 @@ internal fun RowScope.MatchStatus(h: NeueHolders) {
         Breathe()
         Micro("Watching · Ai vs Ai", color = c.ink)
         Small("${seatsWords(m, bottom)} · turn ${g.state.turn} · ${m.status ?: "Dealing"}", Modifier.weight(1f), color = c.ink, maxLines = 1)
-        Mono(spendWords(m), color = c.ink70)
+        Tip(spendTip(m)) { Mono(spendWords(m), color = c.ink70) }
         Tip(STOP_TIP, kbd = DeskShortcuts.chordFor(DeskAction.DISMISS)?.let(DeskShortcuts::kbd)) {
             MuButton("Stop", { m.stop() }, size = BtnSize.SM, variant = BtnVariant.PRIMARY)
         }
@@ -310,6 +330,8 @@ internal fun PhoneMatchBar(h: NeueHolders) {
         }
         Small(if (m.running) m.status ?: "Dealing" else m.ended.orEmpty(), color = c.ink)
         Small(seatsWords(m, h.duel.bottom), color = c.ink70)
+        // The money on a line of its own, with its date: the first line has no room for it at 360 dp.
+        if (m.running) MuText(m.dollars?.let { Prices.words(it) } ?: "Cost: ${Prices.UNKNOWN}", style = MuType.mono(LocalMuFonts.current), color = c.ink70)
         if (!m.running && m.sessions.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { ReadButtons(h) }
         }

@@ -68,7 +68,7 @@ internal fun AiState.checkLastAnswer() {
 }
 
 /**
- * The checker run on [reply] (1.0.58; one function since 1.0.99, so Trust's planted errors test exactly the checker the
+ * The checker run on [reply] (1.0.58; one function since 1.0.99, so Test scores' planted errors test exactly the checker the
  * chat uses): a fresh mind with the look-up tools only, its "ok"s held to what it looked up ([FactCheck.ground]).
  */
 internal suspend fun AiState.runChecker(model: ModelBackend, connection: AiConnection, reply: String): Pair<List<FactCheck.Claim>, Usage> {

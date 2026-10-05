@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.studio
 
 import com.kaiharimoto.mastertool.core.ai.Part
 import com.kaiharimoto.mastertool.core.ai.ToolRunner
+import com.kaiharimoto.mastertool.core.ai.Usage
 import com.kaiharimoto.mastertool.core.ai.providers.ModelNames
 import com.kaiharimoto.mastertool.core.duel.DuelPrefs
 import com.kaiharimoto.mastertool.core.duel.Provenance
@@ -149,6 +150,7 @@ private class Script(private val hold: Boolean) : MatchPlayer {
                 call("duel_act", listOf("end"))
             }
         }
-        return CueResult(tokens = 16_500)
+        // Split as a cue of a real match splits: most of it the cached table and tools, a few lines written.
+        return CueResult(tokens = 16_500, usage = Usage(input = 3_000, output = 1_500, cacheRead = 12_000))
     }
 }

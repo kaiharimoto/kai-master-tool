@@ -1,4 +1,4 @@
-# Phase A: Trust (1.0.99)
+# Phase A: Trust (1.0.99) — Settings shows it as **Test scores** since the design review (finding 8)
 
 **Problem.** Nothing measures how good Ai is. A connection's model is trusted or not on impressions. Nobody knows how many
 of Ai's mistakes the fact-checker catches, so a change to the harness, a skill or a prompt cannot be shown to help.

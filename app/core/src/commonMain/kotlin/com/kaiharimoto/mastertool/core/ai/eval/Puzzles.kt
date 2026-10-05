@@ -416,7 +416,7 @@ object Puzzles {
         append("Read the table with duel_state, see the legal moves with duel_moves, and play with duel_act. When you have finished, reply DONE.")
     }
 
-    /** The set Trust runs: each puzzle an item, graded by playing it ([PuzzleTable]). */
+    /** The set Test scores runs: each puzzle an item, graded by playing it ([PuzzleTable]). */
     fun set(): EvalSet = EvalSet(
         EvalSets.PUZZLES,
         "Duel puzzles",

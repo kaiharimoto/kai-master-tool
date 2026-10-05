@@ -1401,7 +1401,8 @@ The long reasons sit under the first table only where they must; the third is to
         }
         // 1.0.54: the living guide, the session's end, the brain, quick settings, the profile, a petted face.
         "guide", "refactor", "end", "brain", "quick", "profile", "about", "petted" -> studioAi154(h, mode)
-        // 1.0.99: Trust, with sample runs — hand odds and rulings scored, decklists not run yet, the checker's catch rate.
+        // 1.0.99: Test scores (named Trust then), with sample runs — hand odds checked, rulings relied on, decklists not run
+        // yet, the checker's catch rate, the puzzles done yourself: each verdict shown once.
         "trust" -> {
             val ai = h.ai
             val conn = ai.prefs.connection?.id ?: "anthropic-demo"
@@ -1423,15 +1424,17 @@ The long reasons sit under the first table only where they must; the third is to
             val now = System.currentTimeMillis()
             val runs = listOf(
                 sample(EvalSets.handOdds(), 6, 3, now - 86_400_000),
-                sample(EvalSets.rulings(), 10, 1, now - 3_600_000),
+                sample(EvalSets.rulings(), 25, 1, now - 3_600_000),
                 sample(EvalSets.planted(), 5, 1, now - 600_000),
                 // The puzzles too, so the scale has a score on it.
-                sample(EvalSets.byId(EvalSets.PUZZLES)!!, 3, 1, now - 300_000),
+                sample(EvalSets.byId(EvalSets.PUZZLES)!!, 2, 1, now - 300_000),
             )
             ai.files.write(EvalLog.path(conn), EvalLog.write(runs))
             ai.evalVersion++
             // --ai-step=open: the odds, the checker and the puzzles opened out to their details and misses.
             if (step == "open") ai.trustExpanded = setOf(EvalSets.HAND_ODDS, EvalSets.PLANTED, EvalSets.PUZZLES)
+            // --ai-step=confirm: hand odds' Run asking first what it will spend, in tokens and at list prices.
+            if (step == "confirm") ai.trustAsking = EvalSets.HAND_ODDS
             ai.trustOpen = true
         }
         // 1.0.67: the reader's guide, the sample book open in the reader; --ai=reader-lines lands on the first line,
