@@ -11,6 +11,9 @@ import com.kaiharimoto.mastertool.core.present.play.Builds
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ModulesTest {
@@ -94,5 +97,115 @@ class ModulesTest {
         val table = done.elements.first { it.type == Element.TABLE }
         assertEquals(3, table.table.size, "the table is the fresh one")
         assertEquals(done.elements.size, done.elements.map { it.id }.toSet().size)
+    }
+
+    // ---- the audit's module findings (1.1.x) -----------------------------------------------
+
+    private val two = ModuleInput(
+        matchups = listOf(
+            SideMatchup("Snake-Eye", SideTurn(listOf(1, 1), listOf(9, 9), "Stop it early"), SideTurn(listOf(2), listOf(8), "Break the board, then out-grind")),
+            SideMatchup("Yubel", SideTurn(listOf(3), listOf(7), "Keep it small"), SideTurn(listOf(4), listOf(6), "Out them with removal")),
+        ),
+    )
+
+    private fun cardsOf(s: Slide, slot: String) = s.elements.first { it.id == "${s.id}-$slot" }.cards
+
+    @Test
+    fun aSidingRefreshFollowsItsOwnMatchupNeverTheTitle() {
+        // B2: retitled on the Slide tab, the Yubel slide was refreshed into Snake-Eye's.
+        val yubel = Modules.generate(Modules.SIDING, two, 0L, r).first { it.title == "Siding vs Yubel" }
+        assertEquals("Yubel", yubel.module?.params?.get(Modules.PARAM_MATCHUP))
+        val retitled = yubel.copy(title = "The hard one")
+        val fresh = Modules.generate(Modules.SIDING, two, 1L, r)
+        val done = (Modules.refreshed(retitled, fresh) as Modules.Refreshed.Made).slide
+        assertEquals("The hard one", done.title, "the person's title stays")
+        assertEquals("vs Yubel", done.elements.first { it.id == "${done.id}-title" }.plainText)
+        assertEquals(listOf(3), cardsOf(done, "first-out"))
+        assertEquals("Yubel", done.module?.params?.get(Modules.PARAM_MATCHUP), "the link survives a refresh")
+    }
+
+    @Test
+    fun aSidingSlideWhoseMatchupIsGoneIsLeftAndSaysSo() {
+        val yubel = Modules.generate(Modules.SIDING, two, 0L, r).first { it.title == "Siding vs Yubel" }
+        val renamed = two.copy(matchups = listOf(two.matchups[0], two.matchups[1].copy(name = "Yubel Fiendsmith")))
+        val gone = Modules.refreshed(yubel, Modules.generate(Modules.SIDING, renamed, 1L, r))
+        assertTrue(gone is Modules.Refreshed.Gone, "never the first matchup instead")
+        assertTrue("Yubel" in gone.why)
+    }
+
+    @Test
+    fun aSidingSlideMadeBeforeTheLinkFindsItsMatchupByWhatItMade() {
+        // A 1.0.71 slide: no matchup param, retitled; its untouched title element still names it.
+        val made = Modules.generate(Modules.SIDING, two, 0L, r).first { it.title == "Siding vs Yubel" }
+        val old = made.copy(title = "Retitled", module = made.module!!.copy(params = made.module!!.params - Modules.PARAM_MATCHUP))
+        assertEquals("Yubel", Modules.matchupOf(old))
+        val done = (Modules.refreshed(old, Modules.generate(Modules.SIDING, two, 1L, r)) as Modules.Refreshed.Made).slide
+        assertEquals(listOf(4), cardsOf(done, "second-out"))
+        // Its title element changed by hand too: the slide's own title as it was made.
+        val edited = old.copy(title = "Siding vs Yubel", elements = old.elements.map { if (it.id.endsWith("-title")) it.copy(paras = listOf(Para.of("Mine")), edited = true) else it })
+        assertEquals("Yubel", Modules.matchupOf(edited))
+    }
+
+    @Test
+    fun theNoMatchupsSlideRefreshesIntoTheFirstMatchupThereIs() {
+        val empty = Modules.generate(Modules.SIDING, ModuleInput(), 0L, r).single()
+        assertNull(Modules.matchupOf(empty))
+        assertTrue(Modules.refreshed(empty, Modules.generate(Modules.SIDING, ModuleInput(), 1L, r)) is Modules.Refreshed.Gone)
+        val done = Modules.refreshed(empty, Modules.generate(Modules.SIDING, two, 1L, r))
+        assertEquals("Snake-Eye", (done as Modules.Refreshed.Made).slide.module?.params?.get(Modules.PARAM_MATCHUP))
+    }
+
+    @Test
+    fun everyElementOfAClickedTurnBuildsOnItsClick() {
+        // B7: the going-second why stood alone under an empty band before its click.
+        val withNote = Modules.generate(Modules.SIDING, two, 0L, r).first()
+        val noChange = Modules.generate(Modules.SIDING, ModuleInput(matchups = listOf(SideMatchup("A", SideTurn(listOf(1), listOf(2)), SideTurn()))), 0L, r).single()
+        for (s in listOf(withNote, noChange)) {
+            val builds = Builds.compile(s)
+            assertEquals(2, builds.count, "the arrival, then the second turn")
+            val second = s.elements.filter { it.id.startsWith("${s.id}-second") }
+            assertTrue(second.size >= 2, "the label and something more")
+            second.forEach { e ->
+                assertFalse(Builds.state(builds, e, 0, Long.MAX_VALUE / 4).visible, "${e.id} waits for its click")
+                assertTrue(Builds.state(builds, e, 1, Long.MAX_VALUE / 4).visible, "${e.id} comes in on it")
+            }
+            s.elements.filter { it.id.startsWith("${s.id}-first") }.forEach { e ->
+                assertTrue(Builds.state(builds, e, 0, Long.MAX_VALUE / 4).visible, "${e.id} is there on arrival")
+            }
+        }
+    }
+
+    @Test
+    fun aComboArrowComesWithTheCardItPointsAt() {
+        val s = Modules.generate(Modules.COMBO, ModuleInput(picks = listOf(Pick(1, "a"), Pick(2, "b"), Pick(3, "c"))), 0L, r).single()
+        val builds = Builds.compile(s)
+        val arrow = s.elements.first { it.id.endsWith("comboArrow0") }
+        assertFalse(Builds.state(builds, arrow, 1, Long.MAX_VALUE / 4).visible, "not with the first card")
+        assertTrue(Builds.state(builds, arrow, 2, Long.MAX_VALUE / 4).visible, "with the second")
+    }
+
+    @Test
+    fun aDataModuleWithNoDataSaysWhatToMakeFirst() {
+        assertNotNull(Modules.missing(Modules.MATCHUPS, ModuleInput()))
+        assertNotNull(Modules.missing(Modules.SIDING, ModuleInput()))
+        assertNotNull(Modules.missing(Modules.ODDS, ModuleInput()))
+        assertNotNull(Modules.missing(Modules.RATIOS, ModuleInput(odds = listOf(GroupOdds("Empty", 0.0, 0.0, 0)))))
+        assertNull(Modules.missing(Modules.MATCHUPS, ModuleInput(rows = listOf(MatchRow("A", games = 2)))))
+        assertNull(Modules.missing(Modules.PERFORMERS, ModuleInput()), "picked by hand: never refused")
+    }
+
+    @Test
+    fun titlesTheDialogAsksForAreDrawn() {
+        // I3: Siding ignored the Title; Decklist listed it but drew none.
+        val siding = Modules.generate(Modules.SIDING, two.copy(title = "Regionals"), 0L, r).first()
+        assertEquals("Regionals · vs Snake-Eye", siding.elements.first { it.id.endsWith("-title") }.plainText)
+        val list = Modules.generate(Modules.DECKLIST, ModuleInput(title = "Labrynth"), 0L, r).single()
+        assertEquals("Labrynth", list.elements.first { it.id.endsWith("-title") }.plainText)
+    }
+
+    @Test
+    fun ratiosCarryTheGroupsColours() {
+        val s = Modules.generate(Modules.RATIOS, ModuleInput(odds = listOf(GroupOdds("A", 0.5, 0.6, 12, color = 3), GroupOdds("B", 0.4, 0.5, 9, color = 5))), 0L, r).single()
+        assertEquals(listOf(3, 5), s.elements.first { it.type == Element.CHART }.chart?.groups)
     }
 }

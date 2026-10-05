@@ -64,6 +64,8 @@ import com.kaiharimoto.mastertool.core.layout.GridFitter
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.model.Format
 import com.kaiharimoto.mastertool.core.present.Chart
+import com.kaiharimoto.mastertool.core.present.ChartInk
+import com.kaiharimoto.mastertool.core.present.ChartInks
 import com.kaiharimoto.mastertool.core.present.ChartSeries
 import com.kaiharimoto.mastertool.core.present.DeckSnapshot
 import com.kaiharimoto.mastertool.core.present.Element
@@ -173,6 +175,9 @@ class SlideContext(
  * - [state] is each element's build state, read in the layer, likewise.
  * - [hidden] are elements not drawn (the one whose words are being edited in place).
  * - [camera] stands in the webcam zone: the live picture once there is one (phase 3).
+ * - [final] draws the slide as a finished picture — an export, a thumbnail, Ai's look, a recording's frame
+ *   (the audit's I2): the camera zone and camera elements only when a real picture fills them ([camera]),
+ *   never the empty panel or its border, and no guides ([Element.isGuide]).
  */
 @Composable
 fun SlideView(
@@ -191,6 +196,7 @@ fun SlideView(
     camera: (@Composable () -> Unit)? = null,
     /** How much of the background and the elements shows — never the deck, which glides on its own. */
     fade: () -> Float = { 1f },
+    final: Boolean = false,
 ) {
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val density = LocalDensity.current
@@ -209,11 +215,12 @@ fun SlideView(
                     Box(Modifier.fillMaxSize().graphicsLayer { alpha = fade().coerceIn(0f, 1f) }) {
                         slide.elements.forEach { e ->
                             if (e.id in hidden) return@forEach
+                            if (final && (e.isGuide || (e.type == Element.CAMERA && camera == null))) return@forEach
                             ElementView(ctx, e, stage, s, zone, state, editing, camera)
                         }
                     }
                 }
-                if (zone != null) CameraZone(ctx, zone, s, editing, camera)
+                if (zone != null && (!final || camera != null)) CameraZone(ctx, zone, s, editing, camera)
             }
         }
     }
@@ -944,14 +951,24 @@ private fun ChartBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
     val chart = e.chart ?: return
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val palette = listOf("@accent", "@accent2", "@accent3", "@accent4").map { ctx.color(it, "#888888") }
+    // The chart's own inks (B8): Master UI's ramp then hatching, the other themes' accents that differ.
+    val inks = remember(ctx.theme) { ChartInks.of(ctx.theme) }
+    // A chart about the deck's groups wears the groups' colours, as the deck draws them.
+    val bg = remember(ctx.theme) { SlideColor.argb("@bg", ctx.theme) ?: 0xFF000000 }
+    val labelInks = remember(chart, inks, ctx.deck?.palette) {
+        val n = chart.labels.size.coerceAtLeast(chart.series.firstOrNull()?.values?.size ?: 0)
+        ChartInks.forGroups(n, chart.groups, { ctx.groupColor(it).toArgbLong() }, inks, bg)
+    }
     Canvas(Modifier.fillMaxSize()) {
         val label = TextStyle(color = ctx.color("@muted", "#888888"), fontSize = with(density) { (24f * s).toSp() }, fontFamily = ctx.fonts.of(ctx.theme.bodyFont))
         val series = chart.series
         if (series.isEmpty()) return@Canvas
         val values = series.flatMap { it.values }
         val top = chart.max ?: (values.maxOrNull() ?: 1f).coerceAtLeast(0.0001f)
-        fun colorOf(i: Int, sr: ChartSeries) = ctx.color(sr.color) ?: palette[i % palette.size]
+        // A series the person coloured keeps its colour; any other takes the chart's next ink.
+        fun inkOf(i: Int, sr: ChartSeries): ChartInk = ctx.color(sr.color)?.let { ChartInk(it.toArgbLong()) } ?: ChartInks.at(inks, i)
+        // One series over many labels about groups: each bar in its group's colour.
+        fun barInk(si: Int, sr: ChartSeries, i: Int): ChartInk = if (series.size == 1 && chart.groups != null && sr.color == null) labelInks.getOrElse(i) { inkOf(si, sr) } else inkOf(si, sr)
         when (chart.kind) {
             Chart.PIE, Chart.DONUT -> {
                 val v = series.first().values
@@ -961,14 +978,26 @@ private fun ChartBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
                 var start = -90f
                 v.forEachIndexed { i, x ->
                     val sweep = 360f * x / total
-                    val color = palette[i % palette.size]
-                    if (chart.kind == Chart.DONUT) drawArc(color, start, sweep - 1f, false, tl + Offset(d * 0.12f, d * 0.12f), Size(d * 0.76f, d * 0.76f), style = DrawStroke(d * 0.2f))
-                    else drawArc(color, start, sweep, true, tl, Size(d, d))
+                    val ink = labelInks.getOrElse(i) { ChartInks.at(inks, i) }
+                    val color = Color(ink.argb)
+                    if (chart.kind == Chart.DONUT) {
+                        val ring = d * 0.2f
+                        drawArc(color, start, sweep - 1f, false, tl + Offset(d * 0.12f, d * 0.12f), Size(d * 0.76f, d * 0.76f), style = DrawStroke(ring))
+                        if (ink.hatched) drawArc(Color(bg), start, sweep - 1f, false, tl + Offset(d * 0.12f, d * 0.12f), Size(d * 0.76f, d * 0.76f), style = DrawStroke(ring * 0.4f))
+                    } else {
+                        val wedge = Path().apply {
+                            moveTo(tl.x + d / 2f, tl.y + d / 2f)
+                            arcTo(Rect(tl, Size(d, d)), start, sweep, false)
+                            close()
+                        }
+                        drawInked(wedge, ink, s)
+                    }
                     start += sweep
                 }
                 chart.labels.forEachIndexed { i, name ->
                     val y = size.height * 0.15f + i * 46f * s
-                    drawRect(palette[i % palette.size], Offset(size.width * 0.66f, y), Size(26f * s, 26f * s))
+                    val ink = labelInks.getOrElse(i) { ChartInks.at(inks, i) }
+                    drawInked(Path().apply { addRect(Rect(Offset(size.width * 0.66f, y), Size(26f * s, 26f * s))) }, ink, s)
                     val pct = v.getOrNull(i)?.let { if (chart.percent) " ${it.roundToInt()}%" else " ${(100 * it / total).roundToInt()}%" } ?: ""
                     drawText(measurer.measure(name + pct, label.copy(color = ctx.color("@text", "#000000"))), topLeft = Offset(size.width * 0.66f + 38f * s, y - 4f * s))
                 }
@@ -977,47 +1006,85 @@ private fun ChartBlock(ctx: SlideContext, e: Element, box: CanvasBox, s: Float) 
                 val n = chart.labels.size.coerceAtLeast(series.maxOf { it.values.size })
                 val bottom = size.height - 40f * s
                 series.forEachIndexed { si, sr ->
+                    val ink = inkOf(si, sr)
+                    val color = Color(ink.argb)
                     val p = Path()
                     sr.values.forEachIndexed { i, x ->
                         val px = if (n > 1) i * size.width / (n - 1) else size.width / 2f
                         val py = bottom - bottom * x / top
                         if (i == 0) p.moveTo(px, py) else p.lineTo(px, py)
-                        drawCircle(colorOf(si, sr), 7f * s, Offset(px, py))
+                        // A hatched series' points are open rings, its line dashed: told apart without colour.
+                        if (ink.hatched) drawCircle(color, 8f * s, Offset(px, py), style = DrawStroke(3f * s)) else drawCircle(color, 7f * s, Offset(px, py))
                     }
-                    drawPath(p, colorOf(si, sr), style = DrawStroke(5f * s, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    drawPath(
+                        p, color,
+                        style = DrawStroke(5f * s, cap = StrokeCap.Round, join = StrokeJoin.Round, pathEffect = if (ink.hatched) PathEffect.dashPathEffect(floatArrayOf(18f * s, 12f * s)) else null),
+                    )
                 }
                 drawLine(ctx.color("@line", "#000000").copy(alpha = 0.4f), Offset(0f, bottom), Offset(size.width, bottom), 2f * s)
             }
             else -> {
                 val n = chart.labels.size.coerceAtLeast(series.maxOf { it.values.size }).coerceAtLeast(1)
                 val horizontal = chart.kind == Chart.BAR
-                val groupSpan = (if (horizontal) size.height else size.width) / n
+                // Room above for a legend when there are several named series.
+                val legendRoom = if (series.size > 1 && series.any { it.name.isNotBlank() }) 40f * s else 0f
+                val groupSpan = (if (horizontal) size.height - legendRoom else size.width) / n
                 val barSpan = groupSpan * 0.72f / series.size
                 val labelRoom = 44f * s
                 // The names' column as wide as the longest name, up to two fifths: then a value's room.
                 val gutter = if (!horizontal) 0f else (chart.labels.maxOfOrNull { measurer.measure(it, label, maxLines = 1, softWrap = false).size.width.toFloat() } ?: 0f)
                     .plus(16f * s).coerceIn(size.width * 0.12f, size.width * 0.4f)
                 val valueRoom = 90f * s
-                val extent = (if (horizontal) size.width - gutter - valueRoom else size.height - labelRoom)
+                val extent = (if (horizontal) size.width - gutter - valueRoom else size.height - labelRoom - legendRoom)
                 for (i in 0 until n) {
                     series.forEachIndexed { si, sr ->
                         val x = sr.values.getOrNull(i) ?: return@forEachIndexed
                         val len = extent * (x / top).coerceIn(0f, 1f)
-                        val start = i * groupSpan + groupSpan * 0.14f + si * barSpan
-                        if (horizontal) drawRect(colorOf(si, sr), Offset(gutter, start), Size(len, barSpan * 0.92f))
-                        else drawRect(colorOf(si, sr), Offset(start, extent - len), Size(barSpan * 0.92f, len))
+                        val start = i * groupSpan + groupSpan * 0.14f + si * barSpan + if (horizontal) legendRoom else 0f
+                        val bar = if (horizontal) Rect(Offset(gutter, start), Size(len, barSpan * 0.92f)) else Rect(Offset(start, legendRoom + extent - len), Size(barSpan * 0.92f, len))
+                        drawInked(Path().apply { addRect(bar) }, barInk(si, sr, i), s)
                         val v = measurer.measure(if (chart.percent) "${x.roundToInt()}%" else trimNumber(x), label.copy(color = ctx.color("@text", "#000000")))
                         if (horizontal) drawText(v, topLeft = Offset(gutter + len + 8f * s, start + (barSpan - v.size.height) / 2f))
-                        else drawText(v, topLeft = Offset(start + (barSpan - v.size.width) / 2f, (extent - len - v.size.height - 4f * s).coerceAtLeast(0f)))
+                        else drawText(v, topLeft = Offset(start + (barSpan - v.size.width) / 2f, (legendRoom + extent - len - v.size.height - 4f * s).coerceAtLeast(legendRoom)))
                     }
                     val name = chart.labels.getOrNull(i) ?: continue
                     val t = measurer.measure(name, label, constraints = maxWidth((if (horizontal) gutter - 12f * s else groupSpan).roundToInt()), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    if (horizontal) drawText(t, topLeft = Offset(0f, i * groupSpan + (groupSpan - t.size.height) / 2f))
+                    if (horizontal) drawText(t, topLeft = Offset(0f, legendRoom + i * groupSpan + (groupSpan - t.size.height) / 2f))
                     else drawText(t, topLeft = Offset(i * groupSpan + (groupSpan - t.size.width) / 2f, size.height - t.size.height))
+                }
+                // A legend when there are several series: each named beside its ink.
+                if (legendRoom > 0f) {
+                    var x = if (horizontal) gutter else 0f
+                    series.forEachIndexed { si, sr ->
+                        if (sr.name.isBlank()) return@forEachIndexed
+                        val t = measurer.measure(sr.name, label.copy(color = ctx.color("@text", "#000000")), maxLines = 1)
+                        drawInked(Path().apply { addRect(Rect(Offset(x, 4f * s), Size(22f * s, 22f * s))) }, inkOf(si, sr), s)
+                        drawText(t, topLeft = Offset(x + 30f * s, 4f * s + (22f * s - t.size.height) / 2f))
+                        x += 30f * s + t.size.width + 28f * s
+                    }
                 }
             }
         }
     }
+}
+
+/** [path] filled with [ink]: solid, or Master UI's hatching — diagonal rules in the ink inside an outline of it. */
+private fun DrawScope.drawInked(path: Path, ink: ChartInk, s: Float) {
+    val color = Color(ink.argb)
+    if (!ink.hatched) {
+        drawPath(path, color)
+        return
+    }
+    val b = path.getBounds()
+    clipPath(path) {
+        val step = 12f * s
+        var x = b.left - b.height
+        while (x < b.right) {
+            drawLine(color, Offset(x, b.bottom), Offset(x + b.height, b.top), 3.5f * s)
+            x += step
+        }
+    }
+    drawPath(path, color, style = DrawStroke(3f * s))
 }
 
 private fun trimNumber(x: Float): String = if (x == x.roundToInt().toFloat()) x.roundToInt().toString() else "%.1f".format(x)

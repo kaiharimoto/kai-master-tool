@@ -120,13 +120,27 @@ internal object ModuleData {
         else -> base
     }
 
-    /** Slide [slide], a module's, made again from what its data says now. */
-    suspend fun refresh(h: NeueHolders, p: Presentation, slide: Slide): Slide? {
-        val ref = slide.module ?: return null
+    /**
+     * Slide [slide], a module's, made again from what its data says now — or why it cannot be. A siding
+     * slide follows its own matchup, never its title (B2, `Modules.refreshed`). Decklist and Get the deck
+     * read the presentation's snapshot, which "Refresh from the saved deck" takes again first (I3).
+     */
+    suspend fun refreshed(h: NeueHolders, p: Presentation, slide: Slide): Modules.Refreshed {
+        val ref = slide.module ?: return Modules.Refreshed.Gone("This slide was not made by a module.")
         val input = gather(h, p, ref.type, Modules.inputOf(ref))
-        val made = Modules.generate(ref.type, input, System.currentTimeMillis())
-        // A module that makes a slide per matchup refreshes the one this slide is.
-        val fresh = made.firstOrNull { it.title == slide.title } ?: made.firstOrNull() ?: return null
-        return Modules.refresh(slide, fresh)
+        return Modules.refreshed(slide, Modules.generate(ref.type, input, System.currentTimeMillis()))
     }
+
+    /** What Refresh does for a slide [type] made, said on the Slide tab. */
+    fun refreshHelp(type: String): String = when (type) {
+        Modules.DECKLIST, Modules.GET_THE_DECK, Modules.ODDS, Modules.RATIOS ->
+            "Refresh makes it again from this presentation's copy of the deck; what you changed by hand stays. " +
+                "If the saved deck changed, press Refresh from the saved deck on the Deck tab first."
+        Modules.SIDING -> "Refresh makes it again from this matchup's newest siding plan; what you changed by hand stays."
+        else -> "Refresh makes it again from the newest data; what you changed by hand stays."
+    }
+
+    /** [refreshed]'s slide, or null when it could not be made again. */
+    suspend fun refresh(h: NeueHolders, p: Presentation, slide: Slide): Slide? =
+        (refreshed(h, p, slide) as? Modules.Refreshed.Made)?.slide
 }

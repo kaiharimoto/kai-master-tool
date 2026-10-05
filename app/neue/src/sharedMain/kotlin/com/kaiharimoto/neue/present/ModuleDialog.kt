@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.present
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
@@ -116,7 +118,7 @@ internal fun ModuleDialog(h: NeueHolders) {
         description = Modules.line(type),
         footer = {
             MuButton("Cancel", { present.addingModule = null }, variant = BtnVariant.GHOST)
-            MuButton("Add to the presentation", ::make, variant = BtnVariant.PRIMARY, enabled = ready && canMake(type, input, chosen, event), reason = whyNot(type))
+            MuButton("Add to the presentation", ::make, variant = BtnVariant.PRIMARY, enabled = ready && canMake(type, input, chosen, event), reason = whyNot(type, input))
         },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -135,7 +137,7 @@ internal fun ModuleDialog(h: NeueHolders) {
                     Help("One slide per matchup: what comes out and goes in, going first and going second, with why.")
                 }
                 Modules.MATCHUPS -> {
-                    if (ready && input.rows.isEmpty()) Help("No practice games logged for this deck yet: log them on 05 Prep.")
+                    if (ready && input.rows.isEmpty()) Help("No practice games logged for this deck yet: log them on 05 Prep, then add this module.")
                     else Small("${input.rows.size} opponents, ${input.rows.sumOf { it.games }} games" + (input.expected?.let { " · ${(it * 100).toInt()}% match win to expect" } ?: ""))
                 }
                 Modules.TOURNAMENT -> {
@@ -145,7 +147,7 @@ internal fun ModuleDialog(h: NeueHolders) {
                     MuInput(input.placement, { input = input.copy(placement = it) }, Modifier.fillMaxWidth(), placeholder = "Top 8 · 1st after Swiss")
                 }
                 Modules.PERFORMERS -> {
-                    Help("Click a card once for strong, again for weak, a third time to leave it out.")
+                    Help("Click a card once for Strong (S), again for Weak (W), a third time to leave it out. ✕ beside a card below takes it off.")
                     DeckPicker(h, p, { id -> when { input.strong.any { it.card == id } -> "S"; input.weak.any { it.card == id } -> "W"; else -> null } }) { id ->
                         input = when {
                             input.strong.any { it.card == id } -> input.copy(strong = input.strong.filterNot { it.card == id }, weak = input.weak + Pick(id))
@@ -153,15 +155,15 @@ internal fun ModuleDialog(h: NeueHolders) {
                             else -> input.copy(strong = input.strong + Pick(id))
                         }
                     }
-                    PickNotes(h, "Strong", input.strong) { input = input.copy(strong = it) }
-                    PickNotes(h, "Weak", input.weak) { input = input.copy(weak = it) }
+                    PickNotes(h, "Strong", input.strong, ordered = false) { input = input.copy(strong = it) }
+                    PickNotes(h, "Weak", input.weak, ordered = false) { input = input.copy(weak = it) }
                 }
                 Modules.TECH, Modules.COMBO -> {
-                    Help(if (type == Modules.COMBO) "Click the cards in the order they are played." else "Click the cards to explain.")
+                    Help(if (type == Modules.COMBO) "Click the cards in the order they are played; a card can be played twice. Reorder or take a step off below." else "Click the cards to explain; click again to take one off.")
                     DeckPicker(h, p, { id -> input.picks.indexOfFirst { it.card == id }.takeIf { it >= 0 }?.let { "${it + 1}" } }) { id ->
                         input = if (input.picks.any { it.card == id } && type == Modules.TECH) input.copy(picks = input.picks.filterNot { it.card == id }) else input.copy(picks = input.picks + Pick(id))
                     }
-                    PickNotes(h, if (type == Modules.COMBO) "Steps" else "Why each", input.picks) { input = input.copy(picks = it) }
+                    PickNotes(h, if (type == Modules.COMBO) "Steps" else "Why each", input.picks, ordered = type == Modules.COMBO) { input = input.copy(picks = it) }
                 }
                 Modules.SHOUTOUTS -> {
                     input.shoutouts.forEachIndexed { i, s ->
@@ -205,14 +207,16 @@ private fun canMake(type: String, input: ModuleInput, chosen: Set<String>, event
     Modules.PERFORMERS -> input.strong.isNotEmpty() || input.weak.isNotEmpty()
     Modules.TECH, Modules.COMBO -> input.picks.isNotEmpty()
     Modules.SHOUTOUTS -> input.shoutouts.any { it.name.isNotBlank() || it.media != null }
-    else -> true
+    // A data module with nothing to show is refused, as Ai's add_module refuses it (I3).
+    else -> Modules.missing(type, input) == null
 }
 
-private fun whyNot(type: String): String = when (type) {
+private fun whyNot(type: String, input: ModuleInput): String = when (type) {
     Modules.SIDING -> "Choose a matchup"
     Modules.TOURNAMENT -> "Choose an event"
     Modules.SHOUTOUTS -> "Add someone"
-    else -> "Pick a card"
+    Modules.PERFORMERS, Modules.TECH, Modules.COMBO -> "Pick a card"
+    else -> Modules.missing(type, input) ?: "Nothing to show yet"
 }
 
 /** The presentation's deck, each card once, marked by [mark] and clicked by [onClick]. */
@@ -221,34 +225,60 @@ private fun whyNot(type: String): String = when (type) {
 private fun DeckPicker(h: NeueHolders, p: Presentation, mark: (Int) -> String?, onClick: (Int) -> Unit) {
     val c = Mu.colors
     val deck = p.deck ?: run { Help("This presentation has no deck."); return }
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Each card with its name under it (I3): at 52 dp and faded, a picker of art alone was a guessing game.
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         deck.distinct.forEach { id ->
             val card = h.builder.index.byId(CardId(id)) ?: return@forEach
             val m = mark(id)
-            Box(
-                Modifier.width(52.dp).aspectRatio(59f / 86f)
-                    .border(if (m != null) 2.dp else 0.dp, if (m != null) c.ink else c.ink12)
-                    .graphicsLayer { alpha = if (m != null) 1f else 0.6f }
+            Column(
+                Modifier.width(72.dp)
                     .cursorPointer(label = card.name)
                     .muClickable { onClick(id) },
+                verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                NeueCard(card, Modifier.fillMaxSize(), format = h.builder.format, foil = "off")
-                if (m != null) Box(Modifier.align(Alignment.TopStart).size(18.dp).border(1.dp, c.ink)) { Micro(m, Modifier.align(Alignment.Center), color = c.ink) }
+                Box(
+                    Modifier.fillMaxWidth().aspectRatio(59f / 86f)
+                        .border(if (m != null) 2.dp else 1.dp, if (m != null) c.ink else c.ink12)
+                        .graphicsLayer { alpha = if (m != null) 1f else 0.82f },
+                ) {
+                    NeueCard(card, Modifier.fillMaxSize(), format = h.builder.format, foil = "off")
+                    if (m != null) {
+                        Box(Modifier.align(Alignment.TopStart).background(c.paper).border(1.dp, c.ink).padding(horizontal = 4.dp, vertical = 1.dp)) {
+                            Micro(m, color = c.ink)
+                        }
+                    }
+                }
+                Help(card.name, color = if (m != null) c.ink else c.ink70, maxLines = 2)
             }
         }
     }
 }
 
-/** A line of words per pick, in order. */
+/**
+ * A line of words per pick, in order, each with ✕ to take it off and — when the order is the point
+ * ([ordered], a combo's steps) — ↑ and ↓ to move it (I3: a wrong click used to mean Cancel and start again).
+ */
 @Composable
-private fun PickNotes(h: NeueHolders, label: String, picks: List<Pick>, onChange: (List<Pick>) -> Unit) {
+private fun PickNotes(h: NeueHolders, label: String, picks: List<Pick>, ordered: Boolean, onChange: (List<Pick>) -> Unit) {
     if (picks.isEmpty()) return
     FieldLabel(label)
     picks.forEachIndexed { i, pk ->
         val name = h.builder.index.byId(CardId(pk.card))?.name ?: "Card"
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (ordered) Micro("${i + 1}", Modifier.width(18.dp), color = Mu.colors.ink70)
             Small(name, Modifier.width(200.dp), maxLines = 1)
             MuInput(pk.note, { v -> onChange(picks.toMutableList().also { it[i] = pk.copy(note = v) }) }, Modifier.weight(1f), dense = true, placeholder = "Why")
+            if (ordered) {
+                IconButton(Icons.ArrowUp, { onChange(moved(picks, i, -1)) }, enabled = i > 0, label = "Earlier", reason = "Already first")
+                IconButton(Icons.ArrowDown, { onChange(moved(picks, i, 1)) }, enabled = i < picks.lastIndex, label = "Later", reason = "Already last")
+            }
+            IconButton(Icons.X, { onChange(picks.filterIndexed { k, _ -> k != i }) }, label = "Take off")
         }
     }
+}
+
+private fun moved(picks: List<Pick>, i: Int, by: Int): List<Pick> {
+    val to = (i + by).coerceIn(0, picks.lastIndex)
+    if (to == i) return picks
+    return picks.toMutableList().also { val p = it.removeAt(i); it.add(to, p) }
 }

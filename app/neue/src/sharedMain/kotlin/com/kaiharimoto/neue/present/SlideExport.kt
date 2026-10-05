@@ -7,7 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -17,11 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.layer.drawLayer
-import androidx.compose.ui.graphics.rememberGraphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.pdf.PdfDocument
 import com.kaiharimoto.mastertool.core.pdf.PdfImage
@@ -37,17 +34,25 @@ import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.platform.deliverFile
 import com.kaiharimoto.neue.platform.encodeJpeg
 import com.kaiharimoto.neue.platform.encodePng
-import com.kaiharimoto.neue.present.paint.SlideView
+import com.kaiharimoto.neue.present.paint.SlidePreview
+import com.kaiharimoto.neue.present.paint.SlideRender
+import com.kaiharimoto.neue.present.paint.rememberSlideShot
 import com.kaiharimoto.neue.theme.Mu
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-/** What is being exported: a PDF of the slides, pictures of them, or a YouTube thumbnail of one. */
-class ExportJob(val kind: String, val slides: List<Int>) {
+/**
+ * What is being exported: a PDF of the slides, pictures of them, or a YouTube thumbnail of one. [sink]
+ * takes the finished file instead of the save dialog (the headless studio writes it to disk).
+ */
+class ExportJob(
+    val kind: String,
+    val slides: List<Int>,
+    val sink: (suspend (name: String, mime: String, bytes: ByteArray) -> String?)? = null,
+) {
     companion object {
         const val PDF = "PDF"
         const val PNG = "PNG"
@@ -59,10 +64,10 @@ class ExportJob(val kind: String, val slides: List<Int>) {
 }
 
 /**
- * Exporting slides (1.0.71): each drawn by the painter at full size with every build done,
- * caught as a picture once its art has arrived, then put in a PDF (a page a slide, 16:9),
- * a picture or a zip of pictures, or a 1280 × 720 YouTube thumbnail. The same drawing as on
- * screen, on the desk and the tablet alike.
+ * Exporting slides (1.0.71): each drawn offscreen by [SlideRender] at full size with every build done, as a
+ * finished picture — no empty camera panel, no end-card guides (1.1.x, the audit's I2) — caught once its art
+ * and pictures have arrived rather than after a fixed wait, then put in a PDF (a page a slide, 16:9), a
+ * picture or a zip of pictures, or a 1280 × 720 YouTube thumbnail. The window shows a preview fitted to it.
  */
 @Composable
 internal fun ExportOverlay(h: NeueHolders) {
@@ -71,18 +76,16 @@ internal fun ExportOverlay(h: NeueHolders) {
     val p = present.open ?: run { present.exporting = null; return }
     val ctx = rememberSlideContext(h, p)
     val show = remember(p) { CompiledShow(p) }
-    val density = LocalDensity.current
-    val layer = rememberGraphicsLayer()
+    val shot = rememberSlideShot()
     var at by remember(job) { mutableIntStateOf(0) }
     val shots = remember(job) { ArrayList<ImageBitmap>() }
     val c = Mu.colors
     val index = job.slides.getOrNull(at) ?: return
-    val slide = show.slides.getOrNull(index) ?: return
+    if (show.slides.getOrNull(index) == null) return
+    val last = (show.builds.getOrNull(index)?.count ?: 1) - 1
 
     LaunchedEffect(job, at) {
-        // The first picture waits for the art to arrive; the rest are mostly cached by then.
-        delay(if (at == 0) 1500 else 700)
-        shots += layer.toImageBitmap()
+        shots += shot.capture()
         if (at + 1 < job.slides.size) {
             at++
         } else {
@@ -97,34 +100,22 @@ internal fun ExportOverlay(h: NeueHolders) {
                 job.slides.size == 1 -> "${p.name}${if (job.kind == ExportJob.THUMBNAIL) " thumbnail" else " slide ${index + 1}"}.png" to "image/png"
                 else -> "${p.name} slides.zip" to "application/zip"
             }
-            deliverFile(name.replace(Regex("[\\\\/:*?\"<>|]"), " "), mime, bytes)?.let { h.neue.note = Note("Saved $it") }
+            val file = name.replace(Regex("[\\\\/:*?\"<>|]"), " ")
+            val sink = job.sink
+            (if (sink != null) sink(file, mime, bytes) else deliverFile(file, mime, bytes))?.let { h.neue.note = Note(it) }
         }
     }
 
     Box(Modifier.fillMaxSize().background(c.overlay), contentAlignment = Alignment.Center) {
-        // The slide at its full size, recorded into the layer as it is drawn.
-        Box(
-            Modifier
-                .requiredSize(with(density) { job.width.toDp() }, with(density) { job.height.toDp() })
-                .drawWithContent {
-                    layer.record { this@drawWithContent.drawContent() }
-                    drawLayer(layer)
-                },
-        ) {
-            val last = (show.builds.getOrNull(index)?.count ?: 1) - 1
-            SlideView(
-                ctx, slide, show.zone(index), show.stage(index), Modifier.fillMaxSize(),
-                deck = if (slide.deck != null) ({ show.deckFrame(index) }) else null,
-                deckKeys = show.deckFrame(index)?.cards?.map { it.key }.orEmpty(),
-                state = { e -> show.state(Cursor(index, last), e, Long.MAX_VALUE / 4) },
-            )
-        }
+        // The slide at its full size, offscreen; what shows is a preview of it fitted to the window.
+        SlideRender(shot, ctx, show, Cursor(index, last), job.width, job.height)
         Column(
             Modifier.width(360.dp).background(c.paper).border(1.dp, c.ink).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            SlidePreview(shot, job.width, job.height, Modifier.fillMaxWidth().aspectRatio(job.width / job.height.toFloat()).border(1.dp, c.ink25))
             Micro(if (job.kind == ExportJob.PDF) "Writing the PDF" else "Saving pictures", color = c.ink)
-            Small("Slide ${at + 1} of ${job.slides.size}", color = c.ink70)
+            Small("Slide ${at + 1} of ${job.slides.size}: waiting for its art, then caught", color = c.ink70)
             Progress((at + 1f) / job.slides.size)
             MuButton("Stop", { present.exporting = null })
         }

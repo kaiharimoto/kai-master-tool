@@ -159,10 +159,19 @@ internal class AiPresent(private val h: NeueHolders) {
                         failed = true
                         break
                     }
-                    val fresh = ModuleData.refresh(h, start, s) ?: s
-                    p = PresentEdits.updateSlide(start, s.id) { fresh }
-                    touched = s.id
-                    lines += "${lines.size + 1}. Refreshed slide ${start.indexOf(s.id) + 1} from its data; what was changed by hand stayed"
+                    // A siding slide follows its own matchup (the audit's B2); one whose matchup is gone is left, and said.
+                    when (val r = ModuleData.refreshed(h, start, s)) {
+                        is Modules.Refreshed.Made -> {
+                            p = PresentEdits.updateSlide(start, s.id) { r.slide }
+                            touched = s.id
+                            lines += "${lines.size + 1}. Refreshed slide ${start.indexOf(s.id) + 1} from its data; what was changed by hand stayed"
+                        }
+                        is Modules.Refreshed.Gone -> {
+                            lines += "${lines.size + 1}. refresh_module: slide ${start.indexOf(s.id) + 1} was left as it was. ${r.why}"
+                            failed = true
+                            break
+                        }
+                    }
                 }
                 null -> { lines += "${lines.size + 1}. An op has no action."; failed = true }
                 else -> {
@@ -271,6 +280,8 @@ internal class AiPresent(private val h: NeueHolders) {
         val gathered = ModuleData.gather(h, p, type, input)
         if (type == Modules.SIDING && gathered.matchups.isEmpty()) throw ModuleProblem("add_module siding: the deck has no siding plans (or none by those names). Make them with set_siding_plan first.")
         if (type == Modules.MATCHUPS && gathered.rows.isEmpty()) throw ModuleProblem("add_module matchups: no practice games are logged for this deck. Log them with log_game first.")
+        // Opening odds and Ratios with no groups, as the dialog refuses them (the audit's I3).
+        Modules.missing(type, gathered)?.let { throw ModuleProblem("add_module ${type.lowercase()}: $it") }
         val slides = Modules.generate(type, gathered, System.currentTimeMillis())
         var after = ToolArgs.string(op, "after")?.let { r -> p.slide(r)?.let { p.indexOf(it.id) } ?: r.toIntOrNull()?.minus(1) }
             ?: (p.slides.lastIndex - if (p.slides.lastOrNull()?.layout == SlideLayouts.END_CARD) 1 else 0)

@@ -104,6 +104,9 @@ object Modules {
     const val COMBO = "COMBO"
     const val DECKLIST = "DECKLIST"
 
+    /** On a siding slide's [ModuleRef]: the matchup the slide is about, which a Refresh follows (B2). */
+    const val PARAM_MATCHUP = "matchup"
+
     val all = listOf(SIDING, MATCHUPS, PERFORMERS, TOURNAMENT, SHOUTOUTS, ODDS, RATIOS, TECH, COMBO, GET_THE_DECK, DECKLIST)
 
     fun name(type: String): String = when (type) {
@@ -141,16 +144,19 @@ object Modules {
 
     /** The slides [type] makes from [input], new ids from [random]. */
     fun generate(type: String, input: ModuleInput, now: Long = 0L, random: Random = Random.Default): List<Slide> {
-        val ref = { ModuleRef(type, mapOf("input" to PresentCodec.json.encodeToString(ModuleInput.serializer(), input)), now) }
-        fun slide(title: String, build: Builder.() -> Unit): Slide {
+        val encoded = PresentCodec.json.encodeToString(ModuleInput.serializer(), input)
+        fun slide(title: String, link: Map<String, String> = emptyMap(), build: Builder.() -> Unit): Slide {
             val id = PresentIds.next("s", random)
-            val b = Builder(id).apply(build)
-            return Slide(id = id, title = title, elements = b.elements, module = ref(), notes = b.notes)
+            val b = Builder(id, random).apply(build)
+            return Slide(id = id, title = title, elements = b.elements, module = ModuleRef(type, mapOf("input" to encoded) + link, now), notes = b.notes)
         }
         return when (type) {
-            SIDING -> input.matchups.ifEmpty { listOf(SideMatchup("No matchups yet")) }.map { m ->
-                slide("Siding vs ${m.name}") {
-                    title("vs ${m.name}")
+            SIDING -> (if (input.matchups.isEmpty()) listOf(null) else input.matchups).map { real ->
+                val m = real ?: SideMatchup("No matchups yet")
+                // Each slide keeps the matchup it is about (B2): a Refresh follows this link, never the title.
+                slide("Siding vs ${m.name}", if (real != null) mapOf(PARAM_MATCHUP to real.name) else emptyMap()) {
+                    // The dialog's Title stands before the matchup's name when one is given (I3).
+                    title(if (input.title.isBlank()) "vs ${m.name}" else "${input.title} · vs ${m.name}")
                     // Bands that never touch: the note, then each turn's tags, cards and why (1.0.71).
                     if (m.note.isNotBlank()) caption(m.note, 0f, 0.13f, 1f, 0.06f, "note")
                     turn("Going first", m.first, 0.26f, "first", click = false)
@@ -237,7 +243,8 @@ object Modules {
                             Element(
                                 id("odds$i"), Element.STAT, (i % cols) * w + 0.01f, 0.23f + (i / cols) * h, w - 0.02f, h - 0.02f,
                                 anchor = Element.ANCHOR_STAGE,
-                                stat = Stat("${(g.opening * 100).roundToInt()}%", g.name, "${(g.openingSecond * 100).roundToInt()}% going second · ${g.count} cards"),
+                                // Short enough for a third of the stage (R10): the count goes with the name.
+                                stat = Stat("${(g.opening * 100).roundToInt()}%", "${g.name} (${g.count})", "${(g.openingSecond * 100).roundToInt()}% going second"),
                                 animations = listOf(Anim(PresentIds.next("a", random), effect = Anim.RISE, trigger = if (i == 0) Anim.ON_CLICK else Anim.AFTER_PREVIOUS, durationMs = 350, order = i)),
                             ),
                         )
@@ -251,7 +258,8 @@ object Modules {
                     add(
                         Element(
                             id("donut"), Element.CHART, 0.1f, 0.17f, 0.8f, 0.8f, anchor = Element.ANCHOR_STAGE,
-                            chart = Chart(Chart.DONUT, parts.map { "${it.name} (${it.count})" }, listOf(ChartSeries("Cards", parts.map { it.count.toFloat() }))),
+                            // Each slice in its group's own colour, as the deck draws it (B8).
+                            chart = Chart(Chart.DONUT, parts.map { "${it.name} (${it.count})" }, listOf(ChartSeries("Cards", parts.map { it.count.toFloat() })), groups = parts.map { it.color }),
                         ),
                     )
                 },
@@ -273,7 +281,9 @@ object Modules {
             )
             DECKLIST -> listOf(
                 slide(input.title.ifBlank { "Decklist" }) {
-                    add(Element(id("deck"), Element.DECK, 0f, 0f, 1f, 1f, anchor = Element.ANCHOR_STAGE, focus = DeckFocus(all = true)))
+                    // The title it is listed under is drawn too (I3), in a band as slim as a title allows.
+                    title(input.title.ifBlank { "Decklist" }, 0.1f)
+                    add(Element(id("deck"), Element.DECK, 0f, 0.11f, 1f, 0.89f, anchor = Element.ANCHOR_STAGE, focus = DeckFocus(all = true)))
                 },
             )
             else -> emptyList()
@@ -299,6 +309,63 @@ object Modules {
         return old.copy(elements = made + kept, module = fresh.module)
     }
 
+    /** A module slide made again ([Made]), or why it could not be ([Gone]): the slide is then left as it was. */
+    sealed interface Refreshed {
+        data class Made(val slide: Slide) : Refreshed
+        data class Gone(val why: String) : Refreshed
+    }
+
+    /**
+     * Which of [made] — the module made again from today's data — [old] is, and [old] refreshed from it
+     * (B2). A siding slide follows its own matchup ([matchupOf]), never its title, and says so when that
+     * matchup has no plan any more rather than taking another's; every other module makes one slide.
+     */
+    fun refreshed(old: Slide, made: List<Slide>): Refreshed {
+        val ref = old.module ?: return Refreshed.Gone("This slide was not made by a module.")
+        if (ref.type == SIDING) {
+            val name = matchupOf(old)
+            val fresh = if (name == null) {
+                // The "No matchups yet" slide: the first matchup there is now.
+                made.firstOrNull { it.module?.params?.get(PARAM_MATCHUP) != null }
+                    ?: return Refreshed.Gone("This deck has no siding plans yet. Make them on 03 Siding, then refresh.")
+            } else {
+                made.firstOrNull { it.module?.params?.get(PARAM_MATCHUP).equals(name, ignoreCase = true) }
+                    ?: return Refreshed.Gone("“$name” has no siding plan any more: it was renamed or deleted on 03 Siding. This slide was left as it was.")
+            }
+            return Refreshed.Made(refresh(old, fresh))
+        }
+        val fresh = made.firstOrNull() ?: return Refreshed.Gone("${name(ref.type)} made nothing from the data there is now.")
+        return Refreshed.Made(refresh(old, fresh))
+    }
+
+    /**
+     * The matchup a siding slide is about: its own link ([PARAM_MATCHUP]); for a slide made before the
+     * link (1.0.71–1.1.x), the matchup its untouched title element names, else the name its slide title
+     * was made with, else the one matchup it was made from. Null for the "No matchups yet" slide.
+     */
+    fun matchupOf(slide: Slide): String? {
+        val ref = slide.module ?: return null
+        ref.params[PARAM_MATCHUP]?.let { return it }
+        if (ref.type != SIDING) return null
+        val made = inputOf(ref).matchups.map { it.name }
+        slide.elements.firstOrNull { it.id == "${slide.id}-title" && !it.edited }?.plainText?.substringAfterLast("vs ", "")
+            ?.takeIf { it.isNotBlank() && it in made }?.let { return it }
+        slide.title.takeIf { it.startsWith("Siding vs ") }?.removePrefix("Siding vs ")?.takeIf { it in made }?.let { return it }
+        return made.singleOrNull()
+    }
+
+    /**
+     * Why [type] has nothing to show from [input], or null when it has: a data module with no data makes
+     * a slide that only says so, so the dialog and Ai's `add_module` refuse it and say what to make first (I3).
+     */
+    fun missing(type: String, input: ModuleInput): String? = when (type) {
+        SIDING -> if (input.matchups.isEmpty()) "The deck has no siding plans (or none by those names). Make them on 03 Siding first." else null
+        MATCHUPS -> if (input.rows.isEmpty()) "No practice games are logged for this deck. Log them on 05 Prep first." else null
+        ODDS -> if (input.odds.isEmpty()) "The deck has no groups to count. Make groups in the builder first." else null
+        RATIOS -> if (input.odds.none { it.count > 0 }) "The deck has no groups to count. Make groups in the builder first." else null
+        else -> null
+    }
+
     private fun slotOf(slideId: String, elementId: String): String? =
         if (elementId.startsWith("$slideId-")) elementId.removePrefix("$slideId-") else null
 
@@ -310,7 +377,7 @@ object Modules {
     private fun pct(rate: Double, games: Int): String = if (games == 0) "–" else "${(rate * 100).roundToInt()}%"
 
     /** Elements laid on a module slide, each id the slide's plus a slot. */
-    class Builder(private val slideId: String) {
+    class Builder(private val slideId: String, private val random: Random = Random.Default) {
         val elements = ArrayList<Element>()
         var notes = ""
 
@@ -320,19 +387,23 @@ object Modules {
             elements += e
         }
 
-        fun title(text: String) = add(
-            Element(id("title"), Element.TEXT, 0f, 0f, 1f, 0.13f, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_TITLE, vAlign = Element.V_MIDDLE, paras = listOf(Para.of(text))),
+        fun title(text: String, h: Float = 0.13f) = add(
+            Element(id("title"), Element.TEXT, 0f, 0f, 1f, h, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_TITLE, vAlign = Element.V_MIDDLE, paras = listOf(Para.of(text))),
         )
 
-        fun caption(text: String, x: Float, y: Float, w: Float, h: Float, slot: String) = add(
-            Element(id(slot), Element.TEXT, x, y, w, h, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_CAPTION, vAlign = Element.V_MIDDLE, paras = listOf(Para.of(text))),
+        fun caption(text: String, x: Float, y: Float, w: Float, h: Float, slot: String, animations: List<Anim> = emptyList()) = add(
+            Element(id(slot), Element.TEXT, x, y, w, h, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_CAPTION, vAlign = Element.V_MIDDLE, paras = listOf(Para.of(text)), animations = animations),
         )
 
+        /**
+         * One turn's band. A clicked turn ([click]) comes in whole on its click — the label, the tags,
+         * both rows of cards, the arrow, the why and "No change" alike (B7): nothing of it shows before.
+         */
         fun turn(label: String, t: SideTurn, top: Float, slot: String, click: Boolean) {
-            val anim = { order: Int -> if (click) listOf(Anim(PresentIds.next("a"), effect = Anim.RISE, trigger = if (order == 0) Anim.ON_CLICK else Anim.WITH_PREVIOUS, order = order)) else emptyList() }
+            val anim = { order: Int -> if (click) listOf(Anim(PresentIds.next("a", random), effect = Anim.RISE, trigger = if (order == 0) Anim.ON_CLICK else Anim.WITH_PREVIOUS, order = order)) else emptyList() }
             add(Element(id("$slot-label"), Element.TEXT, 0f, top, 0.16f, 0.3f, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_SUBTITLE, vAlign = Element.V_MIDDLE, paras = listOf(Para.of(label)), animations = anim(0)))
             if (t.out.isEmpty() && t.into.isEmpty()) {
-                caption("No change", 0.18f, top, 0.8f, 0.3f, "$slot-none")
+                caption("No change", 0.18f, top, 0.8f, 0.3f, "$slot-none", anim(1))
                 return
             }
             add(Element(id("$slot-out-tag"), Element.TEXT, 0.18f, top - 0.04f, 0.36f, 0.05f, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_CAPTION, paras = listOf(Para.of("OUT", RunStyle(weight = 700, color = "@accent2"))), animations = anim(1)))
@@ -345,7 +416,7 @@ object Modules {
             )
             add(Element(id("$slot-in-tag"), Element.TEXT, 0.62f, top - 0.04f, 0.36f, 0.05f, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_CAPTION, paras = listOf(Para.of("IN", RunStyle(weight = 700, color = "@accent3"))), animations = anim(4)))
             add(Element(id("$slot-in"), Element.CARDS, 0.62f, top + 0.01f, 0.38f, 0.27f, anchor = Element.ANCHOR_STAGE, cards = t.into, animations = anim(5)))
-            if (t.note.isNotBlank()) caption(t.note, 0.18f, top + 0.285f, 0.8f, 0.06f, "$slot-why")
+            if (t.note.isNotBlank()) caption(t.note, 0.18f, top + 0.285f, 0.8f, 0.06f, "$slot-why", anim(6))
         }
 
         fun column(label: String, picks: List<Pick>, left: Float, slot: String, accent: String) {
@@ -404,7 +475,7 @@ object Modules {
                 add(
                     Element(
                         id("combo$i"), Element.CARD, x, 0.2f, w, 0.5f, anchor = Element.ANCHOR_STAGE, cards = listOf(p.card),
-                        animations = listOf(Anim(PresentIds.next("a"), effect = Anim.RISE, trigger = Anim.ON_CLICK, order = i * 3)),
+                        animations = listOf(Anim(PresentIds.next("a", random), effect = Anim.RISE, trigger = Anim.ON_CLICK, order = i * 3)),
                     ),
                 )
                 if (p.note.isNotBlank()) {
@@ -412,7 +483,7 @@ object Modules {
                         Element(
                             id("comboNote$i"), Element.TEXT, x, 0.72f, w, 0.27f, anchor = Element.ANCHOR_STAGE, role = Element.ROLE_CAPTION,
                             paras = listOf(Para.of("${i + 1}. ${p.note}", align = Para.ALIGN_CENTER)),
-                            animations = listOf(Anim(PresentIds.next("a"), effect = Anim.FADE, trigger = Anim.WITH_PREVIOUS, order = i * 3 + 1)),
+                            animations = listOf(Anim(PresentIds.next("a", random), effect = Anim.FADE, trigger = Anim.WITH_PREVIOUS, order = i * 3 + 1)),
                         ),
                     )
                 }
@@ -421,7 +492,8 @@ object Modules {
                         Element(
                             id("comboArrow$i"), Element.SHAPE, x + w, 0.43f, gap, 0.04f, anchor = Element.ANCHOR_STAGE, shape = Element.SHAPE_ARROW_LINE,
                             stroke = Stroke("@muted", 5f),
-                            animations = listOf(Anim(PresentIds.next("a"), effect = Anim.WIPE, trigger = Anim.WITH_PREVIOUS, order = i * 3 + 2)),
+                            // The arrow to the next card comes in with that card, never pointing at nothing (B7).
+                            animations = listOf(Anim(PresentIds.next("a", random), effect = Anim.WIPE, trigger = Anim.WITH_PREVIOUS, order = (i + 1) * 3 + 2)),
                         ),
                     )
                 }
