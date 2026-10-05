@@ -38,6 +38,7 @@ import com.kaiharimoto.mastertool.core.duel.PileKind
 import com.kaiharimoto.mastertool.core.duel.Place
 import com.kaiharimoto.mastertool.core.duel.SeatSetup
 import com.kaiharimoto.mastertool.core.duel.ZoneKind
+import com.kaiharimoto.mastertool.core.duel.dice.DiceSim
 import com.kaiharimoto.mastertool.core.duel.dice.DiceStage
 import com.kaiharimoto.mastertool.core.duel.dice.DiceThrow
 import com.kaiharimoto.mastertool.core.duel.dice.Quat
@@ -259,7 +260,7 @@ fun neueMain(args: Array<String>) {
                     ))
                 }
                 val solo = mode == "solo"
-                // --duel-dice=rest|held|flying|settled|choose: the opening roll (1.0.87) — the dice resting in front of each
+                // --duel-dice=rest|held|flying|settled|choose|over: the opening roll (1.0.87) — the dice resting in front of each
                 // field, held in the hand over the near field, the near seat's throw mid-flight (the far seat's landed),
                 // the near seat's landed (the far still to throw), or both landed and the near seat choosing.
                 val dice = map["duel-dice"]
@@ -282,6 +283,22 @@ fun neueMain(args: Array<String>) {
                 }
                 h.duel.start(header(seed))
                 if (map["duel-play"] == "true") studioDuelMoves(h)
+                // --duel-chain=N: N links on the chain (the near hand's cards, then the field's), for the chain well under
+                // the table's windows (1.1.9); --duel-lp=near|far opens the life-point pad over it.
+                map["duel-chain"]?.toIntOrNull()?.let { n ->
+                    val d = h.duel
+                    val st = d.game!!.state
+                    val pool = st.seats[0].hand.map { 0 to it } + st.onField().mapNotNull { u -> st.cards[u]?.let { it.controller to u } }
+                    for ((seat, u) in pool) {
+                        if (d.game!!.state.chain.size >= n) break
+                        if (d.game!!.state.chain.any { it.uid == u }) continue
+                        d.act(DuelAction.ChainAdd(seat, u), seat)
+                    }
+                    println("[neue-studio] chain: ${d.game!!.state.chain.size} links")
+                }
+                map["duel-lp"]?.let { h.duel.lpPad = if (it == "far") 1 else 0 }
+                // --duel-drawer=card|log: that drawer open, where the rails are drawers (a phone).
+                map["duel-drawer"]?.let { h.duel.drawer = it }
                 map["duel-strip"]?.let { k ->
                     val kind = when (k) {
                         "deck" -> PileKind.DECK
@@ -442,7 +459,7 @@ fun neueMain(args: Array<String>) {
                 h.neue.page = Page.DUEL
                 clock.run(120)
                 if (dice != null) studioDice(h, dice, clock)
-                // --duel-chance=landed|flying|held: the table's die and coin (1.0.96) — both seats' thrown and lying on the
+                // --duel-chance=landed|flying|held|far|home|carried|stowed: the table's die and coin (1.0.96) — both seats' thrown and lying on the
                 // field, the near seat's coin mid-flip, or the near seat's die carried in the hand.
                 map["duel-chance"]?.let { studioChance(h, it, clock) }
                 val g = h.duel.game!!
@@ -1835,6 +1852,11 @@ private suspend fun studioDice(h: NeueHolders, how: String, clock: FrameClock) {
             d.throwDice(0, near)
             clock.run(240)
         }
+        // 1.1.9: thrown straight at the middle, so the dice come to rest where the opening roll's panel stands — drawn over it.
+        "over" -> {
+            d.throwDice(0, DiceThrow.fromDrag(V3(9.4, 7.0), held, V3(0.5, -27.0), 1.0))
+            clock.run(diceFrames ?: 240)
+        }
         "choose" -> {
             // The near seat first, as the seed was chosen for: it wins and chooses.
             d.throwDice(0, near)
@@ -1857,6 +1879,29 @@ private suspend fun studioChance(h: NeueHolders, how: String, clock: FrameClock)
         "held" -> {
             val at = stage.toTable(0, V3(6.0, 5.0, 0.0))
             d.chanceCarry = com.kaiharimoto.neue.duel.dice.ChanceCarry(0, false, at.x.toFloat(), at.y.toFloat(), Quat(0.93, 0.25, 0.2, 0.18).normalized())
+            clock.run(4)
+        }
+        // 1.1.9: thrown across the middle — the near seat's die and the far seat's coin each landed on the other's field.
+        "far" -> {
+            d.throwChance(0, coin = false, toss = Toss.die(V3(9.0, 7.0), DIE_HOME, V3(1.5, -25.0), 3.0, DiceSim.ACROSS))
+            d.throwChance(1, coin = true, toss = Toss.coin(V3(12.0, 7.0), Quat.IDENTITY, V3(-1.0, -38.0), -2.0, DiceSim.ACROSS))
+            clock.run(420)
+        }
+        // 1.1.9: the near die lying out, picked up and carried — over its home ("home") or across the field ("carried").
+        "home", "carried" -> {
+            d.throwChance(0, coin = false, toss = Toss.die(V3(5.0, 6.5), DIE_HOME, V3(12.0, -16.0), 3.0, DiceSim.ACROSS))
+            clock.run(420)
+            val home = stage.home(0)
+            val (x, y) = if (how == "home" && home != null) home.die else stage.toTable(0, V3(9.0, 3.0, 0.0)).let { it.x.toFloat() to it.y.toFloat() }
+            d.chanceCarry = com.kaiharimoto.neue.duel.dice.ChanceCarry(0, false, x, y, Quat(0.93, 0.25, 0.2, 0.18).normalized())
+            clock.run(4)
+        }
+        // 1.1.9: both thrown, then the near seat's put back by `stow` — the log's line, the pieces home.
+        "stowed" -> {
+            d.throwChance(0, coin = false, toss = Toss.die(V3(5.0, 6.5), DIE_HOME, V3(12.0, -16.0), 3.0, DiceSim.ACROSS))
+            d.throwChance(0, coin = true, toss = Toss.coin(V3(4.0, 6.5), Quat.IDENTITY, V3(10.0, -12.0), -2.0, DiceSim.ACROSS))
+            clock.run(420)
+            println("[neue-studio] stow: ${d.run("stow")}")
             clock.run(4)
         }
         "flying" -> {

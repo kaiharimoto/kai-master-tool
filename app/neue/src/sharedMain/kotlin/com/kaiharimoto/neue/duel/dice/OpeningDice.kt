@@ -203,8 +203,11 @@ private const val CAPTION_H = 16f
 private fun playing(run: DiceSim.Run?, start: Long?, now: Long): Boolean =
     run != null && start != null && (now - start) / 1e9 < run.duration
 
-/** The z the dice are drawn at: over the cards and the chain well, under a carried card and the Spotlight. */
+/** The z the dice are drawn at: over the cards, the chain well and the opening roll's panel, under a carried card and the Spotlight. */
 internal const val DICE_Z = 55f
+
+/** The opening roll's panel (1.1.9): over the arrows (50), under the dice that roll across it. */
+private const val PANEL_Z = DICE_Z - 1f
 
 /** Where [seat]'s resting dice are drawn, on the table in dp, grown a little to take a press: null when it has none. */
 internal fun restBox(stage: DiceStage, seat: Int): Slot? {
@@ -285,8 +288,10 @@ private fun OpeningPanel(duels: Duels, s: DuelState, o: Opening, l: DuelLayout, 
     // Over the shared row; where the table has room above it (a phone upright), there, off the dice's way.
     val above = l.spots.values.minOfOrNull { it.top } ?: 0f
     val top = if (above >= PANEL_ROOM) (above - PANEL_ROOM) / 2f + 4f else (chain.centerY - PANEL_H / 2f).coerceAtLeast(4f)
+    // Under the dice (1.1.9, kai: "let the dice roll over the opening roll window instead of under it"): the dice's canvas
+    // takes no press, so the panel's buttons still take every click where no die is.
     Column(
-        Modifier.zIndex(DICE_Z + 1f).offset(left.dp, top.dp).width(w.dp)
+        Modifier.zIndex(PANEL_Z).offset(left.dp, top.dp).width(w.dp)
             .background(c.paper).border(1.dp, c.ink).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {

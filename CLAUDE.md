@@ -697,6 +697,7 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **1.0.96, a die and a coin at the table**: each seat's beside its Extra Deck (`DiceStage.home`); click to roll or flip from
   the corner, drag to carry and throw (`TableChance`, `fling`); `DiceSim.Shape.COIN`, `Toss`, `TossRuns`; `Dice`/`Coin` carry
   an optional `toss` stamped after the value, `DuelState.chance` holds where they landed until the next move (`DuelChanceTest`).
+  **1.1.9**: put back by a carry home, a double-click, Alt R or `stow` (`DuelAction.Stow`, social); a hand's throw crosses onto their field (`Toss.reach` = `DiceSim.ACROSS`, none = `INNER`; the opening roll keeps `INNER`), folded onto what a window draws (`DiceStage.shown`); the opening dice draw over their panel; the chain well's words are `DuelFrames.Z_CHAIN`, under every window.
   **Phase C, the measured duel** (`docs/phases/C.md`): every entry carries who made it (`DuelEntry.by`, `Provenance`: person,
   Ai, guest or table; Ai's seat and knowledge; the person's eyes; for Ai's moves a hash of the `DuelView` it acted on, never
   the view), stamped on commit — **a new way into the log passes a `by`**. A finished duel is a `DuelResult` in

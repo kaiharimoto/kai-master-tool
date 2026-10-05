@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.isAltPressed
@@ -246,7 +247,8 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
         val seats = (0..1).filter { duels.mayRoll(it, playsBothNow) && stage.home(it) != null }
         for (seat in seats) for (ch in stateNow.chance.filter { it.seat == seat }) {
             val rest = TossRuns.of(shapeOf(ch.coin), ch.toss).rest.single()
-            val at = drawnAt(stage, seat, rest.p)
+            // Where this window draws it (1.1.9: past the middle row, folded onto the table drawn here).
+            val at = drawnAt(stage, seat, stage.shown(seat, rest.p, ch.toss.far))
             val home = stage.home(seat) ?: continue
             val r = if (ch.coin) home.coinRadius + home.size * 0.2f else home.size * 0.75f
             if (kotlin.math.abs(x - at.x) <= r && kotlin.math.abs(y - at.y) <= r) return Triple(seat, ch.coin, rest)
@@ -352,9 +354,12 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
     val arbiter = Modifier.pointerInput(Unit) {
         val d = density.density
         var lastPointer = Offset.Unspecified
+        // A press met while waiting out a die's double-click (1.1.9), handled as the next event.
+        var pending: PointerEvent? = null
         awaitPointerEventScope {
             while (true) {
-                var event = awaitPointerEvent()
+                var event = pending ?: awaitPointerEvent()
+                pending = null
                 // Hover, between presses: the card the keys act on.
                 if (event.type == PointerEventType.Move || event.type == PointerEventType.Enter) {
                     val p = event.changes.first().position
@@ -426,17 +431,47 @@ internal fun DuelTable(h: NeueHolders, duels: Duels, game: DuelGame, layout: Due
                         duels.chanceCarry = null
                         duels.carrying = false
                     }
+                    // Carried back onto its home (1.1.9): put back, thrown or not — one lying out is stowed, one picked up from
+                    // home is only set down again.
+                    if (f.moved && stage.home(seat)?.over(coin, f.p.x, f.p.y) == true) {
+                        if (lying != null) duels.stowChance(seat, coin)
+                        continue
+                    }
+                    // A double-click (a finger's double-tap) on one lying out puts it back (1.1.9): so its click waits the
+                    // double-click's time before it throws again, and a press anywhere else is the table's as ever.
+                    if (!f.moved && lying != null) {
+                        var second: PointerEvent? = null
+                        withTimeoutOrNull(DeskMouse.DOUBLE_CLICK_MS) {
+                            while (true) {
+                                val e = awaitPointerEvent()
+                                if (e.type == PointerEventType.Press) { second = e; break }
+                            }
+                        }
+                        val press = second?.changes?.firstOrNull()
+                        val same = press != null && !press.isConsumed &&
+                            chanceAt(press.position.x / d, press.position.y / d)?.let { it.first == seat && it.second == coin } == true
+                        if (same) {
+                            press!!.consume()
+                            do { val e = awaitPointerEvent(); e.changes.forEach { it.consume() } } while (e.changes.any { it.pressed })
+                            duels.stowChance(seat, coin)
+                            continue
+                        }
+                        pending = second
+                    }
+                    val reach = DiceSim.reachFor(stateNow.solo)
                     val toss = when {
                         f.moved -> {
-                            val at = stage.under(seat, f.p.x, f.p.y, DiceThrow.HELD)
+                            // Where the hand let go, back into the throw's own arena: the table past the middle row may be
+                            // drawn folded on this window ([DiceStage.shown]), never in the physics.
+                            val at = stage.unshown(seat, stage.under(seat, f.p.x, f.p.y, DiceThrow.HELD), reach)
                             val v = stage.velocity(seat, f.vx, f.vy, DiceThrow.HELD)
-                            if (coin) Toss.coin(at, f.held.first(), v, f.wobble) else Toss.die(at, f.held.first(), v, f.wobble)
+                            if (coin) Toss.coin(at, f.held.first(), v, f.wobble, reach) else Toss.die(at, f.held.first(), v, f.wobble, reach)
                         }
                         // Lying out: thrown again from where it lies, a short hop any way.
                         lying != null -> {
                             val r = kotlin.random.Random.Default
                             val v = V3((r.nextDouble() - 0.5) * 10.0, (r.nextDouble() - 0.5) * 10.0)
-                            if (coin) Toss.coin(lying.p, lying.q, v, (r.nextDouble() - 0.5) * 8.0) else Toss.die(lying.p, lying.q, v, (r.nextDouble() - 0.5) * 16.0)
+                            if (coin) Toss.coin(lying.p, lying.q, v, (r.nextDouble() - 0.5) * 8.0, reach) else Toss.die(lying.p, lying.q, v, (r.nextDouble() - 0.5) * 16.0, reach)
                         }
                         else -> null
                     }

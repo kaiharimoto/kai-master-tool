@@ -301,7 +301,8 @@ internal fun ChainWell(s: DuelState, l: DuelLayout, duels: Duels, viewers: Set<I
     val c = Mu.colors
     val slot = l[DuelSpot.Chain] ?: return
     Column(
-        Modifier.zIndex(20f).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp)
+        // In the table's own layer, under an open pile and every window (1.1.9): at 20 its words showed through them.
+        Modifier.zIndex(DuelFrames.Z_CHAIN).offset(slot.left.dp, slot.top.dp).size(slot.width.dp, slot.height.dp)
             // The table's one arbiter takes the press; this says what it will do (1.0.86).
             .then(if (s.chain.isEmpty()) Modifier else Modifier.cursorPointer(caption = "Resolve · right-click clears"))
             .padding(4.dp),

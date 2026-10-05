@@ -184,6 +184,15 @@ sealed class DuelAction {
     data class Dice(val seat: Int, val value: Int = 1, val toss: Toss? = null) : DuelAction()
 
     /**
+     * [seat] puts its die ([coin] false), its coin (true) or both (null) back beside its Extra Deck (1.1.9, kai: "the dice
+     * and coin … have no way of being stowed away back in their zone"): dragged onto its home, double-clicked, `stow`, Alt R.
+     * Nothing is left to chance, so nothing is stamped; it is housekeeping, as a lock is ([social]), so it never waits on a
+     * window or wakes Ai, and Undo takes it back as any step.
+     */
+    @Serializable @SerialName("stow")
+    data class Stow(val seat: Int, val coin: Boolean? = null) : DuelAction()
+
+    /**
      * [n] cards picked at random and moved to the pile [to] (1.0.87, kai: "card effects that banish, discard, or
      * shuffle/bottom of deck randomly"): from [among] when it names cards (to put them on the bottom of the Deck in a
      * random order), else from the pile [from]. The pick is [salt]'s, stamped on commit, so it is chance and the same
@@ -252,7 +261,7 @@ sealed class DuelAction {
     /** True for talk that never changes the table: it never ends a thinking mark or waits on a window. */
     val social: Boolean
         get() = this is Chat || this is Ping || this is Thinking || this is Note || this is Unknown ||
-            this is Propose || this is Decline || this is Lock || this is Unlock
+            this is Propose || this is Decline || this is Lock || this is Unlock || this is Stow
 
     companion object {
         const val PING_LOOK = "look"

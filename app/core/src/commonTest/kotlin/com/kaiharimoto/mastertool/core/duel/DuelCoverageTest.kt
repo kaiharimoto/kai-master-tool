@@ -32,6 +32,7 @@ class DuelCoverageTest {
         DuelCoverage.NEEDS_PROPOSAL -> ok(s, DuelAction.Propose(1, end = true), 1)
         DuelCoverage.NEEDS_OPENING -> s.copy(opening = Opening())
         DuelCoverage.NEEDS_CHOICE -> s.copy(opening = Opening(dice = listOf(listOf(6, 5), listOf(1, 2)), winner = 0))
+        DuelCoverage.NEEDS_CHANCE -> ok(s, DuelAction.Dice(0, 3, com.kaiharimoto.mastertool.core.duel.dice.Toss.randomDie(kotlin.random.Random(1))))
         else -> s
     }
 

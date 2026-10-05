@@ -79,6 +79,19 @@ class DiceStage(private val layout: DuelLayout) {
             val r = coinRadius + size * 0.2f
             return dx * dx + dy * dy <= r * r
         }
+
+        /**
+         * Where a carried die ([coin] false) or coin is let go to put it back (1.1.9): a box round its place, drawn as crop
+         * marks while it is carried. The die's and the coin's never overlap, so a drop means one of them.
+         */
+        fun target(coin: Boolean): Slot {
+            val (x, y) = if (coin) this.coin else die
+            val half = if (coin) coinRadius + size * 0.2f else size * 0.8f
+            return Slot(x - half, y - half, 2 * half, 2 * half)
+        }
+
+        /** Whether a die or coin carried to ([x], [y]) is let go onto its home. */
+        fun over(coin: Boolean, x: Float, y: Float): Boolean = target(coin).contains(x, y)
     }
 
     private val homes: Map<Int, Home> = (0..1).mapNotNull { seat -> homeFor(seat)?.let { seat to it } }.toMap()
@@ -116,6 +129,50 @@ class DiceStage(private val layout: DuelLayout) {
         val margin = coinW / 2f + pad
         val centre = ed.centerX.coerceIn(dx + margin, (layout.width - dx - margin).coerceAtLeast(dx + margin))
         return Home(seat, centre + dx * (if (far) -1f else 1f) to y, centre - dx * (if (far) -1f else 1f) to y, size)
+    }
+
+    /**
+     * How deep the table is drawn past [seat]'s field, in its arena's die edges (1.1.9): to the other seat's far edge when
+     * both sides are drawn, else to the shared row's — the room a throw's far side ([DiceSim.ACROSS], or [DiceSim.INNER] on a
+     * solo table) is folded onto. About 12.4 on a window that draws both fields at one size, so a throw there is drawn
+     * where it lies; less where the far side is drawn smaller, or not at all.
+     */
+    private val drawnAcross: Map<Int, Double> = arenas.mapValues { (seat, a) -> acrossFor(seat, a) }
+
+    private fun acrossFor(seat: Int, a: Arena): Double {
+        fun box(of: (DuelSpot) -> Boolean): List<Slot> = layout.spots.filterKeys(of).values.toList()
+        val theirs = box { spot ->
+            when (spot) {
+                is DuelSpot.Zone -> spot.zone.seat != seat && spot.zone.kind != ZoneKind.EMZ
+                is DuelSpot.Pile -> spot.seat != seat && spot.kind != PileKind.BANISHED
+                else -> false
+            }
+        }.takeIf { layout.twoSided && it.isNotEmpty() }
+        val beyond = theirs ?: box { it == DuelSpot.Chain || (it is DuelSpot.Zone && it.zone.kind == ZoneKind.EMZ) }
+        if (beyond.isEmpty()) return DiceSim.INNER
+        val far = beyond.flatMap { s -> listOf(s.top, s.bottom).map { y -> toArena(a, s.centerX, y).y } }.min()
+        return (-far).coerceAtLeast(1.0)
+    }
+
+    /**
+     * A table throw's point (its own arena, [reach] the wall it met) where this window draws it (1.1.9): on the thrower's
+     * field as it is; past it, its depth folded onto the table drawn there ([drawnAcross]), so it never leaves the table.
+     */
+    fun shown(seat: Int, p: V3, reach: Double): V3 {
+        if (p.y >= 0) return p
+        return p.copy(y = p.y * fold(seat, reach))
+    }
+
+    /** [shown] undone: a point as drawn back into the throw's own arena. */
+    fun unshown(seat: Int, p: V3, reach: Double): V3 {
+        if (p.y >= 0) return p
+        return p.copy(y = p.y / fold(seat, reach))
+    }
+
+    /** Only ever a squeeze: a throw that fits what is drawn (an old one at [DiceSim.INNER], say) is drawn where it lies. */
+    private fun fold(seat: Int, reach: Double): Double {
+        val drawn = drawnAcross[seat] ?: return 1.0
+        return (drawn / reach.coerceAtLeast(1.0)).coerceAtMost(1.0)
     }
 
     /** A point of [seat]'s arena on the table, in dp (z: its height in dp). */

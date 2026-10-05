@@ -282,6 +282,33 @@ class OldDataTest {
     }
 
     @Test
+    fun aThrowFrom1096PlaysAsItDidAnd119sStowReadsBack() {
+        // 1.0.96–1.1.8: a die thrown by a hand, its throw with no `reach` — it meets the middle row's wall (INNER), so it
+        // lands where it always landed. 1.1.9 adds `reach` (the whole table) and the `stow` entry that puts it back.
+        val old = """{"header":{"id":"d6","seed":5,"seats":[{"name":"Kai","main":[1,2,3,4,5,6]},{"name":"Rival","main":[7,8,9,10,11,12]}]},
+            "entries":[{"i":0,"group":0,"action":{"t":"draw","seat":0,"n":5}},
+            {"i":1,"seat":0,"group":1,"action":{"t":"dice","seat":0,"value":5,"toss":{"start":{"p":{"x":6.0,"y":6.0,"z":1.6},"q":{"w":1.0},"v":{"x":2.0,"y":-40.0,"z":3.0},"w":{"x":68.0,"y":3.4,"z":-1.0}}}}}],"cursor":2}"""
+        val r = assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(old))
+        val g = com.kaiharimoto.mastertool.core.duel.DuelGame.of(r)
+        val lying = g.state.chance.single()
+        assertEquals(null, lying.toss.reach)
+        val shape = com.kaiharimoto.mastertool.core.duel.dice.DiceSim.Shape.DIE
+        val run = com.kaiharimoto.mastertool.core.duel.dice.TossRuns.of(shape, lying.toss)
+        assertEquals(com.kaiharimoto.mastertool.core.duel.dice.DiceSim.run(shape, lying.toss.start).frames, run.frames)
+        assertTrue(run.rest.single().p.y >= -com.kaiharimoto.mastertool.core.duel.dice.DiceSim.INNER)
+        // 1.1.9's shape: a throw with its reach, then the stow — read back as written.
+        val stowed = g.act(com.kaiharimoto.mastertool.core.duel.DuelAction.Stow(0, coin = false), 0).game
+        val text = com.kaiharimoto.mastertool.core.duel.DuelCodec.encode(stowed.record("stow"))
+        assertTrue("\"t\":\"stow\"" in text, text)
+        val back = com.kaiharimoto.mastertool.core.duel.DuelGame.of(assertNotNull(com.kaiharimoto.mastertool.core.duel.DuelCodec.decode(text)))
+        assertEquals(com.kaiharimoto.mastertool.core.duel.DuelAction.Stow(0, coin = false), back.entries.last().action)
+        assertEquals(emptyList(), back.state.chance)
+        val far = """{"t":"dice","seat":0,"value":2,"toss":{"start":{"p":{"x":6.0,"y":6.0,"z":1.6}},"reach":12.3}}"""
+        val dice = com.kaiharimoto.mastertool.core.duel.DuelCodec.json.decodeFromString(com.kaiharimoto.mastertool.core.duel.DuelAction.serializer(), far)
+        assertEquals(12.3, (dice as com.kaiharimoto.mastertool.core.duel.DuelAction.Dice).toss?.reach)
+    }
+
+    @Test
     fun aDuelFrom1085WithUnstampedTokensAndLocksStillReads() {
         // 1.0.79–1.0.85: a token without its uid and a lock without its id — the fold numbered them — then a
         // move of that token and the lock lifted by its number. 1.0.86 stamps both on commit.

@@ -55,6 +55,12 @@ object DuelFrames {
     const val Z_PILE = 2f
     /** Every card of a pile but its top: hidden, never drawn, under the top card. */
     const val Z_PILE_HIDDEN = Z_PILE - 0.0001f
+    /**
+     * The chain well's words (1.1.9, kai: "the chain link box text is showing over some windows that its not supposed
+     * to"): the table's own layer — over the field's cards, a Defense Position card's overhang among them — and under the
+     * hands, an open pile ([Z_STRIP]) and every window over the table. At 20 it stood above an open pile's rows.
+     */
+    const val Z_CHAIN = 3f
     const val Z_HAND = 4f
     const val Z_STRIP = 8f
 
