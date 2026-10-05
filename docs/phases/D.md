@@ -232,6 +232,7 @@ sealed interface Op {
     // Lp(rel, delta);  PayLp(n) (a cost);  Counter(pick, kind, delta)
     // NormalSummonAgain(filter)   "you can Normal Summon 1 more"
     // Choose(options: List<List<Step>>, who);  If(cond, then: List<Step>, otherwise: List<Step>)
+    // Declare(kind: NAME | TYPE | ATTRIBUTE | LEVEL, among: Filter?, bind)   the answer bound for later steps
     // Restrict(Restriction)
 }
 
@@ -345,7 +346,8 @@ sealed interface Decision {
     data class Zone(val among: List<Place.Zone>) : Decision
     data class Order(val triggers: List<Pending>) : Decision
     data class YesNo(val why: String) : Decision        // an optional trigger, a "you can …", chaining more
-    data class Option(val among: List<String>) : Decision // Choose
+    data class Option(val among: List<String>) : Decision // Choose; also which of a card's Shortcuts
+    data class Declare(val kind: DeclareKind, val among: List<String>) : Decision // a card name, Type, Attribute, Level
 }
 fun interface Chooser { fun choose(d: Decision): List<Int> }
 
@@ -1045,6 +1047,31 @@ kai: "the default key staying. Shortcut should be a dedicated choice when intera
   - yes or no, and which option.
 
   Esc cancels the whole use, and nothing is committed.
+- **The choice window and targeting** (kai: "sometimes there are multiple shortcuts to do, and sometimes you'll need to
+  designate a target(s) or declare an effect before resolving the effect, so a choice window or targeting system will be
+  needed. Targeting should be able to include card(s) in the GY, banishment and field"). Every `Decision` the engine puts
+  (§2.5) is answered in one place, **the choice window**, a strip over the table like the ordering strip, which names
+  what is being chosen and why ("Target 1 face-up monster they control · for Bounce"), counts it ("1 of 2"), and
+  confirms with Enter or its button. Esc steps back one choice, then cancels the whole Shortcut with nothing committed.
+  - **Which Shortcut.** A card with several written effects asks first which, by short name, each with what it needs
+    ("Search · no target", "Revive · 1 target in your GY") and greyed with its rule where it cannot be used now.
+    Several cards with Shortcuts waiting at once (triggers that went off together, §2.3) are put as one ordered list:
+    which to use, in which chain order, each optional one with Skip.
+  - **Targeting reaches every place a target can be:** the field (both seats' Monster, Spell & Trap, Field and Extra
+    Monster Zones), **the GY and banishment** (both seats', face-up banished only unless the effect says otherwise),
+    the hand where an effect names it, and Xyz materials. The engine lists the legal cards (`Pick.from` × `Filter`, D.md
+    §2.2); only those are lit and every other card is dimmed. A GY or banished pile holding a legal target opens as a
+    row over the field (`DuelFrames.stripGrid`, as an open pile does today), its legal cards lit, so a target in a pile
+    is chosen as directly as one on the field. Each chosen target wears its order number ("1", "2") and the existing
+    target arrow (`DuelAction.Target`) from the activating card, so both players see what is targeted while the link
+    stands.
+  - **Declarations.** "Declare a card name / a Type / an Attribute / a Level" is a `Decision.Declare(kind, among)` (and an
+    `Op.Declare` binding the answer for later steps): a searchable list for a name, a short list for the rest.
+  - **Every input reaches it**, as every duel gesture does (`DuelInput`, `DuelCoverage`): a click or a tap on a lit card;
+    the arrows walking only the lit cards and Space choosing; typing its place in the table's notation (`gy3`, `ob2`,
+    `om1`); a finger's tap; and Ai answering in the op (`pick=` / `target=gy3,ob2`) or asked back with the options listed.
+  - **Targets are chosen at activation and checked again at resolution** (§2.3): a target that left or stopped matching
+    is dropped, and the window says so in the log, never silently.
 - **One undo group.** The cost, the targets and the chain link are one group. When nothing can respond, the
   resolution joins that same group, so one undo takes back the whole effect. That is a one-player table, or response
   windows off with the link resolved at once. When the other seat may respond, the resolution is its own group, made
@@ -1264,7 +1291,9 @@ Each step splits across agents in worktrees, with a red team beside them, as in 
   - the cost before (`Prices.estimate`) and after (`Prices.cost`);
 - **at the table** (§5½), on every surface, as soon as a card has a written effect (marked unverified until step 3):
   - **Shortcut** in the verb strip, the Enter menu, the inspector and a finger's menus, and on `U`;
-  - the table `Chooser`'s prompts;
+  - the table `Chooser`'s prompts: **the choice window** (which Shortcut, several waiting in order, cards, targets on
+    the field and in both seats' GY and banishment with the piles opened as rows, a zone, yes/no, an option, a
+    declaration), by mouse, keys, typing, finger and Ai;
   - **Resolve by Shortcut** in `ChainMenu` and on `Shift Q`'s strip;
   - the log's "(Shortcut)";
   - the verb refused at a networked table;
