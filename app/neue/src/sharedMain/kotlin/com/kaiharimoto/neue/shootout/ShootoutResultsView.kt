@@ -21,7 +21,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -43,6 +45,7 @@ import com.kaiharimoto.mastertool.core.shootout.teach.TeachModes
 import com.kaiharimoto.neue.NeueHolders
 import com.kaiharimoto.neue.cards.NeueCard
 import com.kaiharimoto.neue.cursor.cursorPointer
+import com.kaiharimoto.neue.kit.Body
 import com.kaiharimoto.neue.kit.Breathe
 import com.kaiharimoto.neue.kit.EmptyState
 import com.kaiharimoto.neue.kit.HRule
@@ -50,6 +53,7 @@ import com.kaiharimoto.neue.kit.Help
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.Mono
 import com.kaiharimoto.neue.kit.MuDialog
+import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.RowText
 import com.kaiharimoto.neue.kit.SectionTitle
 import com.kaiharimoto.neue.kit.Small
@@ -85,19 +89,24 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
         return
     }
     if (r.kept == 0) {
-        EmptyState("No trials yet.", "Begin a session: a few minutes of hands, and the first ratings stand here with their ranges.")
+        EmptyState("No hands judged yet.", "Begin a session: a few minutes of hands, and the first ratings stand here with their ranges.")
         return
     }
     val c = Mu.colors
     val scroll = rememberScrollState()
     val scale = scaleOf(r)
+    val alone = s.bench?.alone ?: true
+    // A phone shows one situation at a time (design review, 1.1.6): four stacked made a card's row a screen tall.
+    var one by remember(r) { mutableStateOf(r.strata.firstOrNull()) }
+    val shown = if (phone) listOfNotNull(one) else r.strata
     Column(
         Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = if (phone) 16.dp else 32.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        // The strata, side by side: each one's win rate over real hands, or why it waits.
+        SoFar(h, r)
+        // The situations, side by side: each one's win rate over real hands, or why it waits.
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Micro("Win rate over real hands, by their real odds", color = c.ink45)
+            Micro(if (alone) "How often a real hand does what the deck wants" else "Win rate over real hands, by their real odds", color = c.ink45)
             val tiles = r.strata + r.waiting.keys
             val rows = if (phone) tiles.chunked(2) else listOf(tiles)
             rows.forEachIndexed { i, row ->
@@ -108,19 +117,22 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
                 }
             }
             Small(
-                listOf(
+                listOfNotNull(
                     "${r.settled.known} of ${r.settled.of} cards known within ±${r.settled.halfWidth.toInt()} points" + if (r.settled.enough) ", enough to stop" else "",
-                    "your answers' noise ${"%.2f".format(r.noise)} (lower is steadier)",
-                    "${r.fitted} of ${r.kept} trials read",
-                ).joinToString(" · ") + if (r.olderPlans > 0) ". ${r.olderPlans} sided trials were dealt under an older plan: kept, labelled, and pooled." else "",
+                    r.steadiness?.let(ShootoutWords::steadiness),
+                    "${r.fitted} of ${ShootoutWords.hands(r.kept)} read",
+                ).joinToString(" · ") + if (r.olderPlans > 0) ". ${ShootoutWords.hands(r.olderPlans)} after siding were dealt under an older plan: kept, labelled, and pooled." else "",
             )
         }
         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
             SectionTitle(null, "Cards, per copy")
             Help(
-                "Points of win chance from one more copy in the opening hand, against the card the deck would have dealt instead. The thick line is the 80 % range, the thin one the 95 %; a press on a number lists the trials behind it.",
+                "A card's worth is in points of win chance: what one more copy in the opening hand adds, against the card the deck would have dealt instead. The thick line is the 80% range, the thin one the 95%; a press on a number lists the hands behind it.",
                 Modifier.padding(top = 8.dp, bottom = 12.dp).widthIn(max = 900.dp),
             )
+            if (phone && r.strata.size > 1) {
+                MuSelect(one, r.strata, { st -> st?.let { ShootoutWords.situation(it, null) } ?: "" }, { one = it }, Modifier.fillMaxWidth().padding(bottom = 8.dp), small = true)
+            }
             if (!phone) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Micro("Card", Modifier.width(CARD_COLUMN), color = c.ink45)
@@ -135,7 +147,7 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
                         Micro(row.role, Modifier.padding(top = 16.dp, bottom = 4.dp), color = c.ink70)
                         HRule()
                     }
-                    CardRow(h, r, row, scale, phone)
+                    CardRow(h, r, row, scale, phone, shown)
                     HRule()
                 }
                 role = row.role
@@ -144,15 +156,15 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SectionTitle(null, "Pairs")
             if (r.pairs.isEmpty()) {
-                Help("No pair yet whose 95 % range excludes zero. A pair must earn its place: it is shown once the trials make it plain.")
+                Help("No pair yet whose 95% range excludes zero. A pair must earn its place: it is shown once the hands make it plain.")
             } else {
                 Help("The extra win chance from holding both, beyond the two cards' own, in points.")
                 r.pairs.forEach { p ->
                     key(p.a, p.b, p.stratum) {
                         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                             RowText("${s.card(p.a)?.name ?: p.a} + ${s.card(p.b)?.name ?: p.b}", Modifier.weight(1f))
-                            Mono(ShootoutWords.stratum(p.stratum), color = c.ink45)
-                            Number(ShootoutWords.points(p.estimate.value), trials(p.trials)) { s.behind = Behind.Pair(p.a, p.b, p.stratum) }
+                            Small(ShootoutWords.stratum(p.stratum), color = c.ink45, maxLines = 1)
+                            Number(ShootoutWords.points(p.estimate.value), ShootoutWords.hands(p.trials)) { s.behind = Behind.Pair(p.a, p.b, p.stratum) }
                             Box(Modifier.width(160.dp).height(14.dp)) { RangeBar(p.estimate, scale) }
                         }
                         HRule()
@@ -165,7 +177,32 @@ internal fun ResultsView(h: NeueHolders, phone: Boolean) {
 
 private val CARD_COLUMN = 280.dp
 
-private fun trials(n: Int) = "$n trial" + if (n == 1) "" else "s"
+/**
+ * "So far", first (design review, 1.1.6; S.md §5: "a verdict only where the range supports one"): up to three cards the
+ * hands have called, each where its 80% range lies wholly on one side of zero, else how far there is to go.
+ */
+@Composable
+private fun SoFar(h: NeueHolders, r: ShootoutResults) {
+    val s = h.shootout
+    val c = Mu.colors
+    val calls = remember(r) { r.calls() }
+    val best = calls.filter { it.gains }.maxByOrNull { it.estimate.value }
+    Column(Modifier.widthIn(max = 900.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Micro("So far", color = c.ink45)
+        if (calls.isEmpty()) {
+            Body(ShootoutWords.tooEarly(r.settled, r.handsToSettle()), color = c.ink)
+        } else {
+            // One line a card, its clearest situation: three cards, not one card three times.
+            val lines = calls.distinctBy { it.card }.take(3)
+            lines.forEach { call ->
+                key(call.card, call.stratum) {
+                    Body(ShootoutWords.call(s.card(call.card)?.name ?: "#${call.card}", call, best = call === best), color = c.ink)
+                }
+            }
+            if (calls.size > lines.size) Help("And ${calls.size - lines.size} more below, each where its range is clear of zero.")
+        }
+    }
+}
 
 /** The bars' half-width in points: the widest 95 % range, rounded up to five, at least ten. */
 private fun scaleOf(r: ShootoutResults): Double {
@@ -185,20 +222,20 @@ private fun StratumTile(h: NeueHolders, r: ShootoutResults, stratum: Stratum, mo
         Micro(ShootoutWords.stratum(stratum), color = c.ink70)
         val e = r.winRates[stratum]
         if (why != null || e == null) {
-            Mono("Waiting", color = c.ink45, size = 18.sp)
+            Micro("Waiting", color = c.ink45, size = 14.sp)
             Small(why ?: "No hands dealt here yet.", maxLines = 3)
         } else {
-            Number("${"%.0f".format(e.value)} %", null, textSize = 22) { s.behind = Behind.WinRate(stratum) }
-            Small("± ${"%.0f".format(e.halfWidth95)} points · ${trials(n)}")
+            Number("${"%.0f".format(e.value)}%", null, textSize = 22) { s.behind = Behind.WinRate(stratum) }
+            Small("± ${"%.0f".format(e.halfWidth95)} points · ${ShootoutWords.hands(n)}")
             r.checks[stratum]?.takeIf { it.plainTrials >= 2 }?.let { k ->
-                Small("Plain hands say ${"%.0f".format(k.corrected)} % (${k.plainTrials} shuffled)", color = c.ink45)
+                Small("Random hands only: ${"%.0f".format(k.corrected)}% (${ShootoutWords.hands(k.plainTrials)})", color = c.ink45)
             }
         }
     }
 }
 
 @Composable
-private fun CardRow(h: NeueHolders, r: ShootoutResults, row: CardResult, scale: Double, phone: Boolean) {
+private fun CardRow(h: NeueHolders, r: ShootoutResults, row: CardResult, scale: Double, phone: Boolean, strata: List<Stratum>) {
     val s = h.shootout
     val c = Mu.colors
     val card = s.card(row.card)
@@ -214,13 +251,8 @@ private fun CardRow(h: NeueHolders, r: ShootoutResults, row: CardResult, scale: 
     if (phone) {
         Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             head(Modifier.fillMaxWidth())
-            r.strata.forEach { stratum ->
-                key(stratum) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Micro(ShootoutWords.stratum(stratum), Modifier.width(92.dp), color = c.ink45)
-                        Box(Modifier.weight(1f)) { Cell(s, row, stratum, row.cells[stratum], scale) }
-                    }
-                }
+            strata.forEach { stratum ->
+                key(stratum) { Cell(s, row, stratum, row.cells[stratum], scale) }
             }
         }
     } else {
@@ -240,11 +272,11 @@ private fun Cell(s: Shootouts, row: CardResult, stratum: Stratum, cell: CardCell
     }
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Number(ShootoutWords.points(cell.estimate.value), trials(cell.trials)) { s.behind = Behind.Card(row.card, stratum) }
+            Number(ShootoutWords.points(cell.estimate.value), ShootoutWords.hands(cell.trials)) { s.behind = Behind.Card(row.card, stratum) }
             Mono("± ${"%.1f".format(cell.estimate.halfWidth95)}", color = c.ink45)
         }
         Box(Modifier.fillMaxWidth().height(12.dp)) { RangeBar(cell.estimate, scale) }
-        Micro("${trials(cell.trials)} · drawn ${ShootoutWords.percent(cell.drawShare)}", color = c.ink45)
+        Micro("${ShootoutWords.hands(cell.trials)} · drawn ${ShootoutWords.percent(cell.drawShare)}", color = c.ink45)
     }
 }
 
@@ -257,7 +289,7 @@ internal fun Number(text: String, caption: String?, textSize: Int = 14, onClick:
     Box(
         Modifier
             .hoverable(source)
-            .cursorPointer(caption = caption ?: "Its trials", showsWords = true)
+            .cursorPointer(caption = caption ?: "Its hands", showsWords = true)
             .muClickable(interactionSource = source, onClick = onClick)
             .drawBehind {
                 if (hovered) drawLine(c.ink, Offset(0f, size.height - 1f), Offset(size.width, size.height - 1f), 1.dp.toPx())
@@ -288,7 +320,8 @@ internal fun RangeBar(e: Estimate, scale: Double) {
 
 // ---- the trials behind a number ---------------------------------------------------------------------------------
 
-private val WHEN: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM HH:mm")
+/** The app's short date and time, `3 Oct, 23:46` (design review, 1.1.6). */
+private val WHEN: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM, HH:mm")
 
 @Composable
 internal fun TrialsDialog(h: NeueHolders, behind: Behind) {
@@ -300,14 +333,14 @@ internal fun TrialsDialog(h: NeueHolders, behind: Behind) {
         is Behind.Card -> "${s.card(behind.card)?.name ?: behind.card} · ${ShootoutWords.stratum(behind.stratum)}"
         is Behind.Pair -> "${s.card(behind.a)?.name ?: behind.a} + ${s.card(behind.b)?.name ?: behind.b}"
         is Behind.WinRate -> "Every hand · ${ShootoutWords.stratum(behind.stratum)}"
-        Behind.All -> "Every trial"
-        Behind.Ai -> "Every answer of Ai's"
-        is Behind.Kind -> (if (behind.audits) "Audits · " else "Ai beside you · ") + (HandKind.parse(behind.key)?.words?.replaceFirstChar { it.uppercase() } ?: behind.key)
+        Behind.All -> "Every hand"
+        Behind.Ai -> "Every answer of ${h.ai.name}'s"
+        is Behind.Kind -> (if (behind.audits) "Audits · " else "${h.ai.name} beside you · ") + (HandKind.parse(behind.key)?.words?.replaceFirstChar { it.uppercase() } ?: behind.key)
     }
-    MuDialog(title, { s.behind = null }, width = 760.dp, description = "${trials.size} trial${if (trials.size == 1) "" else "s"} behind this number, newest first.") {
+    MuDialog(title, { s.behind = null }, width = 760.dp, description = "${ShootoutWords.hands(trials.size)} behind this number, newest first.") {
         trials.take(MAX_LISTED).forEach { t ->
             key(t.id) {
-                TrialLine(s, t, alone)
+                TrialLine(s, t, alone, h.ai.name)
                 HRule()
             }
         }
@@ -318,13 +351,13 @@ internal fun TrialsDialog(h: NeueHolders, behind: Behind) {
 private const val MAX_LISTED = 200
 
 @Composable
-private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean) {
+private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean, ai: String) {
     val c = Mu.colors
     fun names(ids: List<Int>) = ids.joinToString(", ") { s.card(it)?.name ?: it.toString() }
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Mono(if (t.at > 0) WHEN.format(Instant.ofEpochMilli(t.at).atZone(ZoneId.systemDefault())) else "", color = c.ink45)
-            Mono(Stratum.entries.firstOrNull { it.name == t.stratum }?.let(ShootoutWords::stratum) ?: t.stratum, color = c.ink45)
+            Small(Stratum.entries.firstOrNull { it.name == t.stratum }?.let(ShootoutWords::stratum) ?: t.stratum, color = c.ink45, maxLines = 1)
             val verdict = when (t.kind) {
                 StoredTrial.COMPARE -> if (t.prefer == StoredTrial.LEFT) "Chose the first" else "Chose the second"
                 else -> Answer.entries.firstOrNull { it.name == t.answer }?.let { ShootoutWords.label(it, alone) } ?: (t.answer ?: "")
@@ -333,16 +366,16 @@ private fun TrialLine(s: Shootouts, t: StoredTrial, alone: Boolean) {
             val marks = listOfNotNull(
                 t.reason.takeIf { it == "plain" && t.judge == StoredTrial.PERSON }?.let { "shuffled" },
                 t.reason.takeIf { it == "repeat" }?.let { "shown again" },
-                "seen Ai first".takeIf { t.sawAi },
-                (if (t.mode == TeachModes.SOLO) "Ai alone" else "Ai").takeIf { t.judge == StoredTrial.AI },
+                "saw $ai first".takeIf { t.sawAi },
+                (if (t.mode == TeachModes.SOLO) "$ai alone" else ai).takeIf { t.judge == StoredTrial.AI },
                 t.mode?.takeIf { it != TeachModes.SOLO }?.let(::modeWords),
                 "older plan".takeIf { s.bench?.underOlderPlan(t) == true },
             )
-            if (marks.isNotEmpty()) Mono(marks.joinToString(" · "), color = c.ink45)
+            if (marks.isNotEmpty()) Small(marks.joinToString(" · "), color = c.ink45, maxLines = 1)
         }
         // Ai's own line (stage 3): how sure it said it was, and why.
         t.ai?.takeIf { t.judge == StoredTrial.AI }?.let { v ->
-            val sure = v.sure?.let { "${(it * 100).toInt()} % sure" }
+            val sure = v.sure?.let(ShootoutWords::certainty)
             Small(listOfNotNull(sure, v.why?.let { "“$it”" }).joinToString(" · "), color = c.ink70, maxLines = 2)
         }
         s.log?.notesOn(t.id)?.forEach { n -> Small("Note: ${n.text}", color = c.ink70, maxLines = 3) }

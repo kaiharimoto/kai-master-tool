@@ -4124,19 +4124,41 @@ written whole and renamed into place after every answer. **Synced and backed up*
 reloaded after either), and **deleted with the deck** (the library's Delete and Ai's `delete_deck`).
 
 **The page** (`neue/shootout`: `Shootouts` the holder, lazy in `NeueHolders`; `ShootoutPage`, `ShootoutResultsView`):
-- **Setup**: the target's words, which hands ("Let the picker choose" or one stratum, `pinned`), the waiting strata,
-  Begin (`Enter`).
-- **A trial**: the situation (game one or sided, who goes first), the progress line ("6 of 24 cards known within ±5
-  points · 14 this session · 6 min" — read at each answer, no clock ticking), their hand smaller above yours, both as
-  **`NeueCard` art with the foil**, sized to the room (three to a row on a phone); a card is read below the hands on
-  hover (a finger holds it). A rating is **five boxes** under keys 1–5 (a click, or a swipe on a phone, its answer named
-  over the hands while the finger moves); a comparison is **two hands**, `←`/`→` or a press on either. After ten minutes
-  stopping is suggested; `Stop`, `Ctrl .` or `Esc` stops at once, every answer already on disk.
-- **Results** (`R`): the strata as tiles side by side (win rate, its range, trials; a waiting one says why), the settled
-  line and the noise; the cards grouped by role, one column per stratum, each cell a number, its ± and **a range bar in
-  ink** (zero a faint rule, 95 % thin, 80 % thick, the value a square); the pairs that earned a place. **A press on any
-  number lists the trials behind it** (`TrialsDialog`: when, stratum, the hands by name, the answer, marked shuffled,
-  shown again, older plan).
+- **One word per idea** (the design review, 1.1.6; `ShootoutWords`): a situation is "Game 1 · going first", "Sided ·
+  going second" (`situation`), shortened to "G1 first" in a column head (`stratum`), "Going first" for the deck alone;
+  people read **hands**, never trials ("60 hands judged"); **"%" is only a win chance**, written `85%` like the rest of the
+  app, and **"points" only a card's worth**; Ai's certainty is words (`certainty`: sure, fairly sure, unsure); the
+  person's noise is "You answer the same hand the same way about 7 in 10 times" (`ShootoutResults.steadiness`, the chance
+  of two equal answers by the fit, averaged over their hands). Status words are sentence case in micro caps, prose is
+  never mono.
+- **The header** (Setup, Results, the exam): the deck and opponent, **Results** (`R`; disabled with no hands judged, "Judge
+  a few hands first") and **Trust** (`T`) — each action once; **Begin** is the body's alone, disabled while Ai sits its
+  exam (`ShootoutTeach.examRunning`, which `start` refuses too).
+- **Setup**: the target's words, which hands ("Mixed (recommended)" or one situation, `pinned`; a menu on a phone, where the
+  sided ones fell off the edge), the waiting situations, the Teach row, Begin (`Enter`).
+- **A trial**: while a session runs **the page header folds away** and its deck, Results, Trust and Stop (`Esc`) stand in
+  the window's bar (`ShootoutBarItems`, as Duel's), or a slim row under a phone's bar (`PhoneSessionRow`); the deck and
+  opponent are locked for the session. The situation, the progress line ("6 of 24 cards known within ±5 points · 14 hands
+  this session · 6 min", or "Hand 12 of 32 · calibration" during a set — read at each answer, no clock ticking), their
+  hand smaller above yours, both as **`NeueCard` art with the foil**, sized to the room with no cap (three to a row on a
+  phone, two rows of four with draws); a card is read below the hands on hover (a finger holds it). **The turn's draw** is
+  marked `Draw` and named by its place ("6 cards · the 6th is their draw"); **cards drawn by effects** (`D`, `Shift D`,
+  `TrialDraws`) stand apart after a hairline under "Drawn by effects · not rated", marked +1, +2…; the cards' limit marks
+  are left off here, since the deck's legality is not the question and Forbidden's "0" read as a draw tag. A rating asks
+  its **question** over **five boxes** ("How does this game go for you?", or for the deck alone "How often does a hand like
+  this do what the deck wants?"), each a word and its band in tens ("Clear win · 8+ in 10"), under keys 1–5 on the desk (a
+  click, or a swipe on a phone, its answer named over the hands while the finger moves); a comparison is **two hands**,
+  `←`/`→` or a press on either. A line of keys stands under the scale on the desk. After ten minutes stopping is
+  suggested; `Stop`, `Ctrl .` or `Esc` stops at once, every answer already on disk.
+- **Results** (`R`): **So far** first — up to three cards whose 80% range is clear of zero ("worth about +20 points going
+  first, the best card called so far"; `ShootoutResults.calls`), else "Too early to call: 0 of 19 cards known within ±5
+  points. About N more hands." (`handsToSettle`, the ranges narrowing as one over the square root of the hands); the
+  situations as tiles side by side (win rate — for the deck alone "How often a real hand does what the deck wants" — its
+  range, hands, and "Random hands only: 45% (2 hands)"; a waiting one says why), the settled line and the steadiness; the
+  cards grouped by role, one column per situation (on a phone one situation at a time, chosen from a menu), each cell a
+  number, its ± and **a range bar in ink** (zero a faint rule, 95% thin, 80% thick, the value a square); the pairs that
+  earned a place. **A press on any number lists the hands behind it** (`TrialsDialog`: when, `3 Oct, 23:46`, the
+  situation, the hands by name, the answer, marked shuffled, shown again, older plan).
 
 **Idioms**: `DeskScope.SHOOTOUT` (1–5, ←/→, Enter, `Ctrl .`, R), `ShootoutMouse`/`ShootoutTouch` (`core/input/ShootoutInput.kt`,
 in the help dialog; `ShootoutInputTest` holds every mouse action to a finger's form), the palette, the Mac's View menu,
@@ -4151,20 +4173,29 @@ a phone tab and the ⋯ menu, `navigate`'s `SHOOTOUT`. Master UI throughout: ink
 - **Ai as a judge**: `judgeHand` (`neue/ai/AiShootout.kt`) is a request of its own — the `shootout-judge` skill and the rules
   primer, the brief, `shootout_judge` the only tool — so Ai never sees the person's answer to the hand; on an API
   connection. Its answer is a trial of its own (`judge: ai`, `of`, `mode`, `AiVerdict` with what it was shown).
-- **The four ways to teach**, the setup's **Teach** row (only while Ai is on): **Calibration set** (32 hands taken in turn
+- **The four ways to teach**, the setup's **Teach** row (only while Ai is on; **Just me** is the default — "Judge" read as
+  "Ai judges"): **Calibration set** (32 hands taken in turn
   from every kind, `CalibrationSet`; judged blind, then **the exam** — `View.EXAM`: Ai answers each blind from what came
   before it and the model as it stood before the set, its agreement per kind); **Apprentice** (Ai predicts each hand as it
   is shown; after the person answers, where it disagreed or was unsure, its one question — at most one in four trials,
   `Apprentice` — in a card over the scale whose answer is a note on that trial); **Supervised** (Ai's answer and reason over
-  the scale, **Accept** or `Space` takes it, 1–5 corrects; answered before it lands, the answer stays blind); **Interview**
-  (the Ai panel). Any hand can carry a note ("Note on the last hand").
+  the scale in a strip of one height whether waiting or answered, so the hands never move, its box on the scale marked with
+  a 2 px border and its name, **Accept** or `Space` takes it, 1–5 corrects; answered before it lands, the answer stays blind);
+  **Interview** (the Ai panel; a link, "Tell Ai how you judge (interview)"). Any hand can carry a note ("Note on the last
+  hand"). The exam's agreement is its page's figure ("30 of 32 · 94%"), with "about a minute left" while it runs, and
+  **Begin an apprentice session** as its first action.
 - **Ai alone**: with the switch on, a hand of a kind Ai has earned goes to Ai first; sure, it judges it alone (at most 12 in a
   row), else the hand goes to the person with Ai's answer kept beside it; a share come back as **audits**, shown blind.
-- **The trust panel** (`T`, the header's **Trust**, the palette): the switch, the bar (80–95 %) and how sure counts; per kind
-  its agreement (a press lists the pairs), the range drawn in ink with the bar's tick, OPEN / NOT YET with why / CLOSED; the
-  person's own agreement on repeats (the ceiling); the audits; how much of the data is Ai's, raw and weighted, how Ai and the
-  seen answers lean; Ai's certainty scored; and what Ai's answers moved, each card with and without them, LOOK beside a
-  change past its own range (`ShootoutTrust`, `ShootoutTrustWords`, which `shootout_state` hands Ai too).
+- **The trust panel** (`T`, the header's **Trust**, the palette; the switch and the bar live here alone, not on Setup): the
+  answer first — a headline ("Ai judges 2 of 8 kinds of hand for you. The other 6 need at least 25 more hands it is sure
+  of.", `ShootoutTrustWords.headline`) and the switch; the person's own agreement on repeats, **boxed as a warning when it
+  is under the bar** ("No judge can agree with you more often than that, so a bar of 85% may never open"); the kinds, Open
+  first, then Not yet, then Closed, each with its reason on its row ("Not yet · needs 6 more sure hands",
+  `ShootoutTrustWords.ordered`/`status`/`reason`), its agreement (a press lists the pairs) and the range drawn in ink under a
+  scale head (50%, 100%, "your bar"; on a phone too); the bar (80–95%) and Sure from, each with a line of why; the audits;
+  and **Details**, folded: how much of the data is Ai's, raw and weighted, how Ai and the seen answers lean, Ai's certainty
+  in words (no Brier), and what Ai's answers moved, each card with and without them, "Look" beside a change past its own
+  range (`ShootoutTrust`, `ShootoutTrustWords`; `describe` is what `shootout_state` hands Ai).
 - The trials list marks Ai's answers (alone or beside you), the mode, Ai's certainty and reason, and the notes.
 
 **Left** (S.md §7): Ai's priors from the cards, asking why on an answer the model did not expect, the ablation runner, the

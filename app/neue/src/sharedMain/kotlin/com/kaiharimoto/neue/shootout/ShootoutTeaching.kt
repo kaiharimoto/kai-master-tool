@@ -56,11 +56,18 @@ import kotlin.random.Random
  */
 class ShootoutTeach internal constructor(private val s: Shootouts, private val h: NeueHolders, private val scope: CoroutineScope) {
 
-    enum class Mode(val word: String?, val label: String, val help: String) {
-        JUDGE(null, "Judge", "You judge; Ai is not asked."),
-        CALIBRATION(TeachModes.CALIBRATION, "Calibration set", "A fixed set of hands covering every kind, judged by you blind; then Ai answers the same set blind as its first exam."),
-        APPRENTICE(TeachModes.APPRENTICE, "Apprentice", "You judge as normal. Ai predicts each hand silently and, where it disagreed or was unsure, may ask one question after you answer."),
-        SUPERVISED(TeachModes.SUPERVISED, "Supervised", "Ai judges first with its reason; take it with Space or correct it with 1–5. Your answers are marked as seen."),
+    /**
+     * The ways a session teaches. [help] is said with Ai's own name. The first is "Just me" (design review, 1.1.6): "Judge"
+     * read as "Ai judges", the opposite of what it meant.
+     */
+    enum class Mode(val word: String?, val label: String, private val helpWith: (String) -> String) {
+        JUDGE(null, "Just me", { ai -> "You judge; $ai is not asked." }),
+        CALIBRATION(TeachModes.CALIBRATION, "Calibration set", { ai -> "A fixed set of hands covering every kind, judged by you blind; then $ai answers the same set blind as its first exam." }),
+        APPRENTICE(TeachModes.APPRENTICE, "Apprentice", { ai -> "You judge as normal. $ai predicts each hand silently and, where it disagreed or was unsure, may ask one question after you answer." }),
+        SUPERVISED(TeachModes.SUPERVISED, "Supervised", { ai -> "$ai judges first with its reason; take it with one key or correct it with another. You see its answer first, so your answers count a little less." }),
+        ;
+
+        fun help(ai: String): String = helpWith(ai)
     }
 
     /** How the next session teaches Ai. */
@@ -71,6 +78,9 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
     /** Ai's answer to the hand on screen, shown in supervised mode. */
     var verdict by mutableStateOf<Judged.Verdict?>(null)
         private set
+
+    /** Ai's answer marked on its own box of the scale, supervised (design review, 1.1.6); null elsewhere. */
+    fun shownVerdict(enabled: Boolean): Answer? = verdict?.answer?.takeIf { enabled && mode == Mode.SUPERVISED }
 
     /** Ai is judging the hand on screen (supervised), or judging hands it has earned alone. */
     var judging by mutableStateOf(false)
@@ -113,7 +123,14 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
     private var setId: String? = null
 
     /** Ai's exam on a calibration set: its progress, then what it agreed. */
-    class Exam(val done: Int, val of: Int, val agreed: Int, val failed: Int, val finished: Boolean, val byKind: List<Triple<String, Int, Int>>, val problem: String?)
+    class Exam(
+        val done: Int, val of: Int, val agreed: Int, val failed: Int, val finished: Boolean, val byKind: List<Triple<String, Int, Int>>, val problem: String?,
+        /** About how long the rest will take, from the pace so far; null before the first hand is answered. */
+        val leftMs: Long? = null,
+    )
+
+    /** Ai is sitting its exam: nothing else begins meanwhile (design review, 1.1.6). */
+    val examRunning: Boolean get() = exam?.finished == false
 
     var exam by mutableStateOf<Exam?>(null)
         private set
@@ -365,6 +382,7 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
             val start = trials.minOfOrNull { it.at } ?: 0L
             val before = withContext(Dispatchers.Default) { ShootoutRun(run.bench, run.log.copy(trials = run.log.trials.filter { it.at < start }), seed = 3) }
             var failed = 0
+            val began = h.deps.now()
             todo.forEachIndexed { i, t ->
                 val p = run.bench.proposal(t) ?: return@forEachIndexed
                 val brief = briefFor(run, p, asOf = t.at, exclude = setOf(t.id), prediction = before.predict(p))
@@ -375,7 +393,9 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
                         trouble = got.why
                     }
                 }
-                exam = Exam(i + 1, todo.size, 0, failed, false, emptyList(), null)
+                // The pace so far, for "about a minute left": read at each answer, no clock ticking.
+                val each = (h.deps.now() - began) / (i + 1)
+                exam = Exam(i + 1, todo.size, 0, failed, false, emptyList(), null, leftMs = each * (todo.size - i - 1))
             }
             exam = examResult(run, id, failed)
             state = readState(run)
@@ -468,7 +488,7 @@ class ShootoutTeach internal constructor(private val s: Shootouts, private val h
                 lastAnswered = r.log.trials.lastOrNull()?.id
             }
             "exam" -> exam = examResult(r, r.log.trials.firstOrNull { it.mode == TeachModes.CALIBRATION }?.session ?: "", failed = 0)
-            "exam-running" -> exam = Exam(13, 32, 0, 0, false, emptyList(), null)
+            "exam-running" -> exam = Exam(13, 32, 0, 0, false, emptyList(), null, leftMs = 95_000)
             "trust" -> {
                 trust = ShootoutTrust.read(r)
                 trustOpen = true

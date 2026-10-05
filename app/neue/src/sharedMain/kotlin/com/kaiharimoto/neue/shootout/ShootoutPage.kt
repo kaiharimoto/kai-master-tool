@@ -1,11 +1,10 @@
 package com.kaiharimoto.neue.shootout
 
-import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import androidx.compose.foundation.border
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -41,9 +40,11 @@ import androidx.compose.ui.unit.min
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.mastertool.core.input.DeskAction
 import com.kaiharimoto.mastertool.core.input.DeskShortcuts
+import com.kaiharimoto.mastertool.core.model.BanStatus
 import com.kaiharimoto.mastertool.core.model.Card
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutRun
 import com.kaiharimoto.mastertool.core.shootout.bench.ShootoutWords
+import com.kaiharimoto.mastertool.core.shootout.bench.TrialDraws
 import com.kaiharimoto.mastertool.core.shootout.model.Answer
 import com.kaiharimoto.mastertool.core.shootout.model.Stratum
 import com.kaiharimoto.mastertool.core.shootout.select.Proposal
@@ -69,6 +70,7 @@ import com.kaiharimoto.neue.kit.MuButton
 import com.kaiharimoto.neue.kit.MuSelect
 import com.kaiharimoto.neue.kit.Segmented
 import com.kaiharimoto.neue.kit.Small
+import com.kaiharimoto.neue.kit.VRule
 import com.kaiharimoto.neue.kit.animatedColor
 import com.kaiharimoto.neue.kit.byFinger
 import com.kaiharimoto.neue.kit.collectIsHotAsState
@@ -82,10 +84,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * 09 Shootout (1.1.2, Phase S stage 2; kai: "a data proven rating for each card/card pair in a deck, gathered by
  * comparing hands"): the deck — the builder's unless another is chosen — judged alone or against an opponent of its
- * web. A session shows one trial at a time, chosen by the picker for what it teaches: your hand (and theirs) as large
- * card art, who goes first, game one or sided, and five answers under keys 1 to 5 (a click, or a swipe on a phone); a
- * comparison is two hands, ← or →. Its progress is the stop rule's line; it stops at any moment with every answer
- * kept. The results stand the strata side by side, and every number opens its trials.
+ * web. A session shows one hand at a time, each chosen for what it teaches: your hand (and theirs) as large card art,
+ * who goes first, game 1 or sided, the one question the hand asks and five answers under keys 1 to 5 (a click, or a
+ * swipe on a phone); a comparison is two hands, ← or →. Its progress is the stop rule's line; it stops at any moment
+ * with every answer kept. The results stand the situations side by side, and every number opens its hands.
+ *
+ * While a session runs the page header gives its room to the cards (design review, 1.1.6): the deck, Results, Trust
+ * and Stop stand in the window's bar ([ShootoutBarItems]), or a slim row on a phone ([PhoneSessionRow]), as on Duel.
  *
  * Master UI throughout: ink on paper, the cards the only colour, and nothing moves but them.
  */
@@ -99,7 +104,10 @@ fun ShootoutPage(h: NeueHolders) {
     val phone = LocalPhone.current
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            PageHeader(numeral = 9, title = "Shootout", subtitle = subtitle(s)) { HeaderActions(h) }
+            when {
+                !s.running -> PageHeader(numeral = 9, title = "Shootout", subtitle = subtitle(s)) { HeaderActions(h, phone) }
+                phone -> PhoneSessionRow(h)
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (s.view) {
                     Shootouts.View.SETUP -> SetupView(h)
@@ -115,14 +123,27 @@ fun ShootoutPage(h: NeueHolders) {
     }
 }
 
-private fun subtitle(s: Shootouts): String {
+/** The deck, the target and the hands judged: the header's line, and the bar's while a session runs. */
+internal fun subtitle(s: Shootouts): String {
     val target = s.bench?.opponentName?.let { "Against $it" } ?: "The deck alone"
-    val kept = s.log?.trials?.size ?: 0
-    return listOf(s.deckName.ifBlank { "No deck" }, target, "$kept trial${if (kept == 1) "" else "s"} kept").joinToString(" · ")
+    return listOf(s.deckName.ifBlank { "No deck" }, target, "${ShootoutWords.hands(s.handsJudged)} judged").joinToString(" · ")
 }
 
+/** A key's chord as the table writes it, else [fallback]. */
+internal fun keyOf(action: DeskAction, fallback: String) = DeskShortcuts.chordFor(action)?.let(DeskShortcuts::kbd) ?: fallback
+
+/** A key cap on the desk only: a phone has no keys to press (design review, 1.1.6), and [Kbd] hides it without a keyboard. */
 @Composable
-private fun HeaderActions(h: NeueHolders) {
+internal fun KeyCap(text: String) {
+    if (!LocalPhone.current) Kbd(text)
+}
+
+/**
+ * The header's actions on Setup, Results and the exam (design review, 1.1.6: each action once): the deck and opponent,
+ * Results and Trust with their keys. Begin is the body's; Stop is the bar's while a session runs.
+ */
+@Composable
+private fun HeaderActions(h: NeueHolders, phone: Boolean) {
     val s = h.shootout
     val chosen = s.deckId ?: h.builder.deckId
     if (s.decks.isNotEmpty()) {
@@ -134,12 +155,21 @@ private fun HeaderActions(h: NeueHolders) {
         val options = listOf<String?>(null) + s.opponents.map { it.id }
         MuSelect(s.opponentId, options, { id -> if (id == null) "The deck alone" else "Against " + (s.opponents.firstOrNull { it.id == id }?.name ?: "?") }, s::chooseOpponent, Modifier.width(240.dp), small = true)
     }
-    MuButton(if (s.view == Shootouts.View.RESULTS) "Trials" else "Results", s::toggleResults, size = BtnSize.SM, enabled = s.bench != null, reason = s.problem)
-    if (h.ai.enabled) MuButton("Trust", s.teach::openTrust, size = BtnSize.SM, variant = BtnVariant.GHOST, enabled = s.bench != null, reason = s.problem)
-    if (s.running) {
-        MuButton("Stop", s::stop, size = BtnSize.SM)
-    } else {
-        MuButton("Begin", s::start, size = BtnSize.SM, variant = BtnVariant.PRIMARY, enabled = s.bench != null && !s.thinking, reason = s.problem)
+    val onResults = s.view == Shootouts.View.RESULTS
+    val none = s.handsJudged == 0
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        MuButton(
+            if (onResults) "Setup" else "Results", s::toggleResults, size = BtnSize.SM,
+            enabled = s.bench != null && (onResults || !none),
+            reason = s.problem ?: "Judge a few hands first",
+        )
+        if (!phone) KeyCap(keyOf(DeskAction.SHOOTOUT_RESULTS, "R"))
+    }
+    if (h.ai.enabled) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            MuButton("Trust", s.teach::openTrust, size = BtnSize.SM, variant = BtnVariant.GHOST, enabled = s.bench != null, reason = s.problem)
+            if (!phone) KeyCap(keyOf(DeskAction.SHOOTOUT_TRUST, "T"))
+        }
     }
 }
 
@@ -151,6 +181,7 @@ private fun SetupView(h: NeueHolders) {
     val c = Mu.colors
     val bench = s.bench
     val problem = s.problem
+    val phone = LocalPhone.current
     if (bench == null) {
         if (problem != null) {
             EmptyState("Nothing to deal yet.", problem) {
@@ -166,16 +197,16 @@ private fun SetupView(h: NeueHolders) {
     }
     val scroll = rememberScrollState()
     Column(
-        Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = if (LocalPhone.current) 16.dp else 32.dp, vertical = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = if (phone) 16.dp else 32.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         Column(Modifier.widthIn(max = 760.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             H2(bench.opponentName?.let { "Against $it" } ?: "The deck alone")
             Body(
                 if (bench.alone) {
-                    "You are shown an opening hand and who goes first, and say how often a hand like it does what the deck wants: from plays through to bricks. The picker chooses each hand for what it would teach, so the ratings settle in far fewer hands than a shuffle would take."
+                    "You are shown an opening hand and who goes first, and say how often a hand like it does what the deck wants: from plays through to bricks. Each hand is chosen for what it would teach, so the ratings settle in far fewer hands than a shuffle would take."
                 } else {
-                    "You are shown your hand and theirs, who goes first and which game, and say how the game goes: from a clear win to a clear loss. Each card is rated per turn and per game, game one and after siding, pooled so a few sided hands borrow from many game-one ones."
+                    "You are shown your hand and theirs, which game and who goes first, and say how the game goes: from a clear win to a clear loss. Each card is rated per turn and per game, game 1 and after siding, pooled so a few sided hands borrow from many game 1 ones."
                 },
                 color = c.ink70,
             )
@@ -183,14 +214,20 @@ private fun SetupView(h: NeueHolders) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Micro("Which hands", color = c.ink45)
             val options = listOf<Stratum?>(null) + bench.strata
-            Segmented(s.pinned, options, { it?.let(ShootoutWords::stratum) ?: "Let the picker choose" }, { s.pinned = it }, small = true)
+            val words: (Stratum?) -> String = { st -> st?.let { ShootoutWords.situation(it, bench.opponentName) } ?: "Mixed (recommended)" }
+            // Five choices across a phone do not fit, and the sided ones fell off its edge: there it is a menu.
+            if (phone) {
+                MuSelect(s.pinned, options, words, { s.pinned = it }, Modifier.fillMaxWidth(), small = true)
+            } else {
+                Segmented(s.pinned, options, { it?.let(ShootoutWords::stratum) ?: "Mixed (recommended)" }, { s.pinned = it }, small = true)
+            }
         }
         if (bench.waiting.isNotEmpty()) {
             Column(Modifier.widthIn(max = 760.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Micro("Waiting", color = c.ink45)
                 bench.waiting.forEach { (stratum, why) ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Mono(ShootoutWords.stratum(stratum), color = c.ink)
+                        Small(ShootoutWords.situation(stratum, bench.opponentName), color = c.ink)
                         Small(why, Modifier.weight(1f, fill = false))
                     }
                 }
@@ -198,12 +235,16 @@ private fun SetupView(h: NeueHolders) {
                 if (deck != null) MicroLink("Write the plans on Siding", { h.webs.side(deck, s.opponentId) })
             }
         }
-        // Teaching Ai (Phase S stage 3): how the session teaches, the interview, the rubric, the trust panel.
+        // Teaching Ai (Phase S stage 3): how the session teaches, the interview, the rubric.
         TeachSetup(h)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            MuButton(if (s.teach.mode == ShootoutTeach.Mode.CALIBRATION && h.ai.enabled) "Begin the calibration set" else "Begin a session", s::start, variant = BtnVariant.PRIMARY, arrow = true, enabled = !s.thinking)
-            Kbd(DeskShortcuts.chordFor(DeskAction.SHOOTOUT_START)?.let(DeskShortcuts::kbd) ?: "Enter")
-            if ((s.log?.trials?.size ?: 0) > 0) MuButton("Results", s::showResults, variant = BtnVariant.GHOST)
+            val exam = s.teach.examRunning
+            MuButton(
+                if (s.teach.mode == ShootoutTeach.Mode.CALIBRATION && h.ai.enabled) "Begin the calibration set" else "Begin a session",
+                s::start, variant = BtnVariant.PRIMARY, arrow = true, enabled = !s.thinking && !exam,
+                reason = if (exam) "${h.ai.name} is sitting its exam" else null,
+            )
+            KeyCap(keyOf(DeskAction.SHOOTOUT_START, "Enter"))
         }
         Help("About ten minutes is a session. Stop whenever you like: every answer is kept, and the ratings carry over to the next one. The cards are rated per copy, against the card the deck would have dealt instead.")
     }
@@ -226,11 +267,11 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
     }
     var hint by remember { mutableStateOf<Answer?>(null) }
     val pad = if (phone) 12.dp else 32.dp
-    Column(Modifier.fillMaxSize().padding(horizontal = pad, vertical = if (phone) 12.dp else 20.dp), verticalArrangement = Arrangement.spacedBy(if (phone) 10.dp else 14.dp)) {
+    Column(Modifier.fillMaxSize().padding(horizontal = pad, vertical = if (phone) 10.dp else 16.dp), verticalArrangement = Arrangement.spacedBy(if (phone) 8.dp else 12.dp)) {
         // The situation, and the session's progress.
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             H2(ShootoutWords.situation(p.stratum, bench.opponentName), Modifier.weight(1f), maxLines = 2)
-            if (!phone) Mono(progressWords(s), color = c.ink45)
+            if (!phone) Small(progressWords(s), color = c.ink45, maxLines = 1)
         }
         if (phone) Small(progressWords(s), color = c.ink45, maxLines = 2)
         TeachBanner(h)
@@ -260,28 +301,68 @@ private fun TrialView(h: NeueHolders, phone: Boolean) {
         if (h.shootout.teach.ask == null) ReadingStrip(s.reading)
         VerdictBox(h, bench.alone)
         when (p) {
-            is Proposal.Rate -> AnswerScale(s, bench.alone, phone)
+            is Proposal.Rate -> {
+                // The one question every rating asks, over its answers (design review, 1.1.6).
+                Body(ShootoutWords.question(bench.alone), color = c.ink)
+                AnswerScale(s, bench.alone, phone, aiSaid = h.shootout.teach.shownVerdict(h.ai.enabled), aiName = h.ai.name)
+            }
             is Proposal.Compare -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Help("Which would you rather open with?", Modifier.weight(1f))
+                Body("Which would you rather open with?", Modifier.weight(1f), color = c.ink)
                 MuButton("← This one", { s.prefer(true) }, enabled = !s.thinking)
                 MuButton("This one →", { s.prefer(false) }, enabled = !s.thinking)
             }
         }
+        if (!phone) KeysLine(p is Proposal.Compare, bench.alone)
     }
 }
 
+/**
+ * The trial's keys in one line under the scale, read from the table (design review, 1.1.6; Duel's KEYS idiom):
+ * answer, draw, results, stop.
+ */
+@Composable
+private fun KeysLine(compare: Boolean, alone: Boolean) {
+    val c = Mu.colors
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (compare) {
+            KeyCap("${keyOf(DeskAction.SHOOTOUT_LEFT, "←")} ${keyOf(DeskAction.SHOOTOUT_RIGHT, "→")}")
+            Help("choose", color = c.ink45)
+        } else {
+            KeyCap("${keyOf(DeskAction.SHOOTOUT_ANSWER_1, "1")}–${keyOf(DeskAction.SHOOTOUT_ANSWER_5, "5")}")
+            Help("answer", color = c.ink45)
+        }
+        KeyCap(keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"))
+        Help(if (alone) "draw" else "draw for you", color = c.ink45)
+        if (!alone) {
+            KeyCap(keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"))
+            Help("for them", color = c.ink45)
+        }
+        KeyCap(keyOf(DeskAction.SHOOTOUT_RESULTS, "R"))
+        Help("results", color = c.ink45)
+        KeyCap("Esc")
+        Help("stop", color = c.ink45)
+    }
+}
+
+/** The progress line: the calibration set's while one runs (design review, 1.1.6), else the stop rule's. */
 private fun progressWords(s: Shootouts): String {
     val parts = mutableListOf<String>()
-    s.settled?.let { parts += "${it.known} of ${it.of} cards known within ±${it.halfWidth.toInt()} points" + if (it.enough) " · enough to stop" else "" }
-    parts += "${s.sessionAnswers} this session"
+    val set = s.teach.set
+    if (set != null) {
+        parts += "Hand ${(s.teach.setAt + 1).coerceAtMost(set.size)} of ${set.size} · calibration"
+    } else {
+        s.settled?.let { parts += "${it.known} of ${it.of} cards known within ±${it.halfWidth.toInt()} points" + if (it.enough) " · enough to stop" else "" }
+        parts += "${ShootoutWords.hands(s.sessionAnswers)} this session"
+    }
     if (s.sessionMs >= 60_000) parts += "${s.sessionMs / 60_000} min"
     return parts.joinToString(" · ")
 }
 
 /**
  * A rating's hands: theirs above (smaller), yours below, each as large as the room allows. A hand of six is the player
- * going second's, and its turn's draw stands last, marked; cards turned up for draws by effects follow it, marked +1, +2…
- * (1.1.5, kai: "The sixth card should be marked as their top deck").
+ * going second's, and its turn's draw stands sixth, marked; cards turned up for draws by effects stand apart after a
+ * hairline, marked +1, +2… and "not rated" (1.1.5, kai: "The sixth card should be marked as their top deck"; design
+ * review, 1.1.6).
  */
 @Composable
 private fun RateHands(h: NeueHolders, p: Proposal.Rate, width: Dp, height: Dp, phone: Boolean) {
@@ -294,31 +375,34 @@ private fun RateHands(h: NeueHolders, p: Proposal.Rate, width: Dp, height: Dp, p
     val label = 28.dp
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
         if (theirs != null) {
-            val rowH = (height - label * 2 - gap * 3) * 0.38f
-            val shown = theirs.opening + listOfNotNull(theirs.draw) + theirDrawn
-            HandHead(handWords("Their hand", theirs, theirDrawn), "Draw for them", "Shift D", phone) { s.drawTheirs() }
-            Hand(h, shown, marks(theirs, theirDrawn), cardWidth(width, rowH, shown.size, gap, phone), gap, phone)
-            val myShown = mine.opening + listOfNotNull(mine.draw) + myDrawn
-            HandHead(handWords("Your hand", mine, myDrawn), "Draw for you", "D", phone) { s.drawMine() }
-            Hand(h, myShown, marks(mine, myDrawn), cardWidth(width, (height - label * 2 - gap * 3) * 0.62f, myShown.size, gap, phone), gap, phone)
+            val room = height - label * 2 - gap * 3
+            HandHead(handWords("Their hand", theirs), "Draw for them", keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"), phone) { s.drawTheirs() }
+            Hand(h, theirs, theirDrawn, width, room * 0.38f, gap, phone)
+            HandHead(handWords("Your hand", mine), "Draw for you", keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"), phone) { s.drawMine() }
+            Hand(h, mine, myDrawn, width, room * 0.62f, gap, phone)
         } else {
-            val myShown = mine.opening + listOfNotNull(mine.draw) + myDrawn
-            HandHead(handWords("Your hand", mine, myDrawn), "Draw a card", "D", phone) { s.drawMine() }
-            Hand(h, myShown, marks(mine, myDrawn), cardWidth(width, height - label - gap, myShown.size, gap, phone), gap, phone)
+            HandHead(handWords("Your hand", mine), "Draw a card", keyOf(DeskAction.SHOOTOUT_DRAW_MINE, "D"), phone) { s.drawMine() }
+            Hand(h, mine, myDrawn, width, height - label - gap, gap, phone)
         }
     }
 }
 
-/** "Their hand · 6 cards · the last is their draw · 2 drawn by effects". */
-private fun handWords(whose: String, hand: TrialDraws.Ordered, drawn: List<Int>): String = buildList {
-    add("$whose · ${hand.opening.size + (if (hand.draw != null) 1 else 0)} cards")
-    if (hand.draw != null) add(if (whose == "Your hand") "the last is your draw for the turn" else "the last is their draw for the turn")
-    if (drawn.isNotEmpty()) add("${drawn.size} drawn by effects")
+/**
+ * "Their hand · 6 cards · the 6th is their draw": the draw named by its place, so the words stay true when cards drawn by
+ * effects follow it (design review, 1.1.6). Those carry their own words, over them.
+ */
+private fun handWords(whose: String, hand: TrialDraws.Ordered): String = buildList {
+    val n = hand.opening.size + (if (hand.draw != null) 1 else 0)
+    add("$whose · $n cards")
+    if (hand.draw != null) add(if (whose == "Your hand") "the ${ordinal(n)} is your draw" else "the ${ordinal(n)} is their draw")
 }.joinToString(" · ")
 
-/** Each card's mark: none for the opening five, Draw for the turn's draw, +1, +2… for cards drawn by effects. */
-private fun marks(hand: TrialDraws.Ordered, drawn: List<Int>): List<String?> =
-    List(hand.opening.size) { null } + listOfNotNull(hand.draw?.let { "Draw" }) + drawn.indices.map { "+${it + 1}" }
+private fun ordinal(n: Int): String = when (n) {
+    1 -> "1st"
+    2 -> "2nd"
+    3 -> "3rd"
+    else -> "${n}th"
+}
 
 /**
  * A hand's label and its draw button: a card turned up off that side's deck for an effect that draws — a look ahead
@@ -330,7 +414,7 @@ private fun HandHead(words: String, draw: String, key: String, phone: Boolean, o
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Micro(words, Modifier.weight(1f), color = c.ink45, maxLines = if (phone) 2 else 1)
         MuButton(draw, onDraw, variant = BtnVariant.GHOST, size = BtnSize.SM)
-        if (!phone) Kbd(key)
+        if (!phone) KeyCap(key)
     }
 }
 
@@ -345,23 +429,21 @@ private fun CompareHands(h: NeueHolders, p: Proposal.Compare, width: Dp, height:
         val room = if (theirs != null) height * 0.72f else height
         if (theirs != null) {
             val ordered = s.theirHand(p) ?: TrialDraws.Ordered(theirs, null)
-            val drawn = s.theirDrawn(p)
-            val shown = ordered.opening + listOfNotNull(ordered.draw) + drawn
-            HandHead(handWords("Their hand", ordered, drawn), "Draw for them", "Shift D", phone) { s.drawTheirs() }
-            Hand(h, shown, marks(ordered, drawn), cardWidth(width, height * 0.22f, shown.size, gap, phone), gap, phone)
+            HandHead(handWords("Their hand", ordered), "Draw for them", keyOf(DeskAction.SHOOTOUT_DRAW_THEIRS, "Shift D"), phone) { s.drawTheirs() }
+            Hand(h, ordered, s.theirDrawn(p), width, height * 0.22f, gap, phone)
         }
         val stacked = phone || width < 900.dp
         val pairs = listOf(true to bench.ids(p.left), false to bench.ids(p.right))
         if (stacked) {
             Column(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(gap)) {
                 pairs.forEach { (left, ids) ->
-                    key(left) { Choice(h, left, ids, cardWidth(width - 24.dp, room / 2 - 48.dp, ids.size, gap, phone), gap, phone, Modifier.fillMaxWidth().weight(1f)) }
+                    key(left) { Choice(h, left, ids, width - 24.dp, room / 2 - 48.dp, gap, phone, Modifier.fillMaxWidth().weight(1f)) }
                 }
             }
         } else {
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(gap * 2)) {
                 pairs.forEach { (left, ids) ->
-                    key(left) { Choice(h, left, ids, cardWidth(width / 2 - gap * 2 - 24.dp, room - 64.dp, ids.size, gap / 2, phone), gap / 2, phone, Modifier.weight(1f).fillMaxSize()) }
+                    key(left) { Choice(h, left, ids, width / 2 - gap * 2 - 24.dp, room - 64.dp, gap / 2, phone, Modifier.weight(1f).fillMaxSize()) }
                 }
             }
         }
@@ -369,7 +451,7 @@ private fun CompareHands(h: NeueHolders, p: Proposal.Compare, width: Dp, height:
 }
 
 @Composable
-private fun Choice(h: NeueHolders, left: Boolean, ids: List<Int>, cardW: Dp, gap: Dp, phone: Boolean, modifier: Modifier) {
+private fun Choice(h: NeueHolders, left: Boolean, ids: List<Int>, width: Dp, height: Dp, gap: Dp, phone: Boolean, modifier: Modifier) {
     val s = h.shootout
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
@@ -378,54 +460,104 @@ private fun Choice(h: NeueHolders, left: Boolean, ids: List<Int>, cardW: Dp, gap
         modifier
             .border(if (hovered) 2.dp else 1.dp, if (hovered) c.ink else c.ink25)
             .hoverable(source)
-            .cursorPointer(caption = if (left) "Open with this" else "Open with this", showsWords = true)
+            .cursorPointer(caption = "Open with this", showsWords = true)
             .muClickable(enabled = !s.thinking, interactionSource = source) { s.prefer(left) }
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Micro(if (left) "This hand" else "Or this hand", Modifier.weight(1f), color = c.ink70)
-            Kbd(if (left) "←" else "→")
+            KeyCap(if (left) "←" else "→")
         }
-        Hand(h, ids, List(ids.size) { null }, cardW, gap, phone)
+        Hand(h, TrialDraws.Ordered(ids, null), emptyList(), width, height, gap, phone)
     }
 }
 
-/** How wide a card can be: [n] across [width] with [gap]s, and no taller than [height]; on a phone, three to a row. */
-private fun cardWidth(width: Dp, height: Dp, n: Int, gap: Dp, phone: Boolean): Dp {
-    val across = phoneAcross(n, phone)
-    val rows = (n + across - 1) / across
-    val byWidth = (width - gap * (across - 1)) / across
-    val byHeight = ((height - gap * (rows - 1)) / rows) * CARD_RATIO
-    return min(min(byWidth, byHeight), 260.dp).coerceAtLeast(24.dp)
-}
+/** One row of a hand: the cards that are rated, then — apart — cards drawn by effects; [labelled] says the drawn ones' words go over them. */
+private class HandRow(val rated: List<Pair<Int, String?>>, val drawn: List<Pair<Int, String?>>, val labelled: Boolean)
+
+/** The micro words over cards drawn by effects. */
+private const val DRAWN_WORDS = "Drawn by effects · not rated"
+private const val DRAWN_SHORT = "Drawn · not rated"
+
+/** The drawn cards' label's height, and the hairline's room either side. */
+private val DRAWN_LABEL = 18.dp
 
 /**
- * Cards to a row on a phone: up to three in one row, else two rows of up to four — a hand of six with its draws stays
- * two rows, never three of thumbnails (1.1.5).
+ * How a hand's cards stand in rows. On the desk, one row: the rated cards, a hairline, the drawn ones. On a phone, up to
+ * three in a row, else rows of up to four — and with draws by effects, rows of four, the drawn cards after the rated ones
+ * in the last row, apart, so a hand of six with two draws is still two rows, never three of thumbnails (1.1.5).
  */
-private fun phoneAcross(n: Int, phone: Boolean): Int = when {
-    !phone || n <= 3 -> n.coerceAtLeast(1)
-    else -> minOf(4, (n + 1) / 2)
+private fun handRows(rated: List<Pair<Int, String?>>, drawn: List<Pair<Int, String?>>, phone: Boolean): List<HandRow> {
+    if (!phone) return listOf(HandRow(rated, drawn, drawn.isNotEmpty()))
+    val total = rated.size + drawn.size
+    val across = if (drawn.isEmpty()) phoneAcross(total) else 4
+    val rows = mutableListOf<HandRow>()
+    val ratedRows = rated.chunked(across)
+    var left = drawn
+    ratedRows.forEachIndexed { i, r ->
+        if (i == ratedRows.lastIndex && left.isNotEmpty()) {
+            val room = (across - r.size).coerceAtLeast(0)
+            val fits = left.take(room)
+            rows += HandRow(r, fits, fits.isNotEmpty())
+            left = left.drop(fits.size)
+        } else {
+            rows += HandRow(r, emptyList(), false)
+        }
+    }
+    left.chunked(across).forEachIndexed { i, d -> rows += HandRow(emptyList(), d, i == 0 && rows.none { it.labelled }) }
+    return rows
 }
 
-/** A hand as card art, in rows on a phone ([phoneAcross]); [marks] says which cards are draws (1.1.5). */
+/** Cards to a row on a phone without draws: up to three in one row, else two rows of up to four. */
+private fun phoneAcross(n: Int): Int = if (n <= 3) n.coerceAtLeast(1) else minOf(4, (n + 1) / 2)
+
+/** The hairline between the rated cards and the drawn ones, with its room either side. */
+private fun separator(gap: Dp): Dp = gap * 2 + 1.dp
+
+/**
+ * A hand as card art in [handRows], each card as large as [width] × [height] allows; the turn's draw wears "Draw", cards
+ * drawn by effects "+1", "+2"… after a hairline, under "Drawn by effects · not rated" (design review, 1.1.6).
+ */
 @Composable
-private fun Hand(h: NeueHolders, ids: List<Int>, marks: List<String?>, cardW: Dp, gap: Dp, phone: Boolean) {
-    val cards = ids.mapIndexed { i, id -> id to marks.getOrNull(i) }
-    val rows = if (phone && cards.size > 3) cards.chunked(phoneAcross(cards.size, true)) else listOf(cards)
+private fun Hand(h: NeueHolders, hand: TrialDraws.Ordered, drawn: List<Int>, width: Dp, height: Dp, gap: Dp, phone: Boolean) {
+    val c = Mu.colors
+    val rated = hand.opening.map { it to null } + listOfNotNull(hand.draw?.let { it to "Draw" })
+    val extra = drawn.mapIndexed { i, id -> id to "+${i + 1}" }
+    val rows = handRows(rated, extra, phone)
+    val across = rows.maxOf { it.rated.size + it.drawn.size }.coerceAtLeast(1)
+    val sep = if (rows.any { it.rated.isNotEmpty() && it.drawn.isNotEmpty() }) separator(gap) else 0.dp
+    val labels = if (rows.any { it.labelled }) DRAWN_LABEL else 0.dp
+    val byWidth = (width - sep - gap * (across - 1)) / across
+    val byHeight = ((height - labels - gap * (rows.size - 1)) / rows.size) * CARD_RATIO
+    val cardW = min(byWidth, byHeight).coerceAtLeast(24.dp)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap), horizontalAlignment = Alignment.CenterHorizontally) {
         rows.forEachIndexed { r, row ->
             key(r) {
-                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    row.forEachIndexed { i, (id, mark) -> key(i, id) { HandCard(h, id, cardW, mark) } }
+                Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Bottom) {
+                    row.rated.forEachIndexed { i, (id, mark) -> key("r", i, id) { HandCard(h, id, cardW, mark) } }
+                    if (row.rated.isNotEmpty() && row.drawn.isNotEmpty()) {
+                        VRule(Modifier.height(cardW / CARD_RATIO), color = c.ink45)
+                    }
+                    if (row.drawn.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            if (row.labelled) Micro(if (phone) DRAWN_SHORT else DRAWN_WORDS, Modifier.height(DRAWN_LABEL - 2.dp), color = c.ink45)
+                            Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                                row.drawn.forEachIndexed { i, (id, mark) -> key("d", i, id) { HandCard(h, id, cardW, mark) } }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/** One card, with its mark under it when it was drawn rather than dealt: ink on paper, the page's own tag. */
+/**
+ * One card, with its mark when it was drawn rather than dealt: ink on paper, the page's own tag. The card's limit mark
+ * is left off here (design review, 1.1.6): the deck's legality is not the question, and Forbidden's "0" in the same
+ * corner read as one more draw tag.
+ */
 @Composable
 private fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null) {
     val s = h.shootout
@@ -436,8 +568,9 @@ private fun HandCard(h: NeueHolders, id: Int, width: Dp, mark: String? = null) {
         if (card == null) {
             Box(size.border(1.dp, c.ink25), contentAlignment = Alignment.Center) { Mono(id.toString()) }
         } else {
+            val unmarked = remember(card) { card.copy(tcgBanStatus = BanStatus.UNLIMITED, ocgBanStatus = BanStatus.UNLIMITED) }
             NeueCard(
-                card,
+                unmarked,
                 size.reads(s, card),
                 format = h.builder.format,
                 foil = h.neue.prefs.foil,
@@ -508,41 +641,59 @@ private fun ReadingStrip(card: Card?) {
     }
 }
 
-/** The five answers, best to worst, each under its key. */
+/**
+ * The five answers, best to worst, each a word and its band in tens ("Clear win · 8+ in 10"); on the desk each under its
+ * key. In supervised mode Ai's answer is marked on its own box, [aiSaid], with its name inset (design review, 1.1.6).
+ */
 @Composable
-private fun AnswerScale(s: Shootouts, alone: Boolean, phone: Boolean) {
+private fun AnswerScale(s: Shootouts, alone: Boolean, phone: Boolean, aiSaid: Answer?, aiName: String) {
     Row(Modifier.fillMaxWidth().height(if (phone) 64.dp else 72.dp), horizontalArrangement = Arrangement.spacedBy(if (phone) 4.dp else 8.dp)) {
         ShootoutWords.SCALE.forEach { a ->
-            key(a) { AnswerBox(s, a, alone, phone, Modifier.weight(1f).fillMaxSize()) }
+            key(a) { AnswerBox(s, a, alone, phone, if (a == aiSaid) aiName else null, Modifier.weight(1f).fillMaxSize()) }
         }
     }
 }
 
 @Composable
-private fun AnswerBox(s: Shootouts, a: Answer, alone: Boolean, phone: Boolean, modifier: Modifier) {
+private fun AnswerBox(s: Shootouts, a: Answer, alone: Boolean, phone: Boolean, ai: String?, modifier: Modifier) {
     val c = Mu.colors
     val source = remember { MutableInteractionSource() }
     val hovered by source.collectIsHotAsState()
     val label = ShootoutWords.label(a, alone)
     Inverted(hovered) {
         val inner = Mu.colors
-        Column(
+        Box(
             modifier
                 .background(animatedColor(if (hovered) inner.paper else c.paper))
-                .border(1.dp, c.ink)
+                .border(if (ai != null) 2.dp else 1.dp, c.ink)
                 .hoverable(source)
                 .cursorPointer(caption = label, showsWords = true, enabled = !s.thinking)
-                .muClickable(enabled = !s.thinking, interactionSource = source) { s.answer(a) }
-                .padding(horizontal = if (phone) 6.dp else 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+                .muClickable(enabled = !s.thinking, interactionSource = source) { s.answer(a) },
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Mono(ShootoutWords.keyOf(a).toString(), color = inner.ink)
-                if (!phone) Mono(ShootoutWords.band(a), color = inner.ink45)
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = if (phone) 6.dp else 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // A phone has no keys: the band alone, which fits its width.
+                    if (!phone) Mono(ShootoutWords.keyOf(a).toString(), color = inner.ink)
+                    // A phone's box has room for the band or Ai's tag, not both side by side.
+                    if (phone && ai != null) AiTag(ai) else Mono(ShootoutWords.band(a), color = inner.ink45)
+                }
+                Micro(label, color = inner.ink, maxLines = if (phone) 2 else 1)
             }
-            Micro(label, color = inner.ink, maxLines = if (phone) 2 else 1)
+            if (ai != null && !phone) {
+                AiTag(ai, Modifier.align(Alignment.TopEnd))
+            }
         }
     }
+}
+
+/** Ai's name inset on the box it chose: ink, the page's own tag. */
+@Composable
+private fun AiTag(name: String, modifier: Modifier = Modifier) {
+    val c = Mu.colors
+    Box(modifier.background(c.ink).padding(horizontal = 6.dp, vertical = 2.dp)) { Micro(name, color = c.paper) }
 }
 
 /** The page's keys (`DeskScope.SHOOTOUT`), and the same actions from the palette and the menus. */
@@ -573,7 +724,8 @@ internal fun runShootout(h: NeueHolders, action: DeskAction) {
         DeskAction.SHOOTOUT_RESULTS -> {
             h.neue.go(Page.SHOOTOUT)
             s.behind = null
-            s.toggleResults()
+            // Nothing judged, nothing to show (design review, 1.1.6): the key does what the disabled button would.
+            if (s.view == Shootouts.View.RESULTS || s.handsJudged > 0 || s.running) s.toggleResults()
         }
         else -> Unit
     }

@@ -2,8 +2,12 @@ package com.kaiharimoto.mastertool.core.shootout.bench
 
 import com.kaiharimoto.mastertool.core.shootout.store.ShootoutLog
 import com.kaiharimoto.mastertool.core.shootout.store.StoredTrial
+import com.kaiharimoto.mastertool.core.shootout.teach.Calibration
 import com.kaiharimoto.mastertool.core.shootout.teach.KindTrust
 import com.kaiharimoto.mastertool.core.shootout.teach.Rubric
+import com.kaiharimoto.mastertool.core.shootout.teach.Trust
+import com.kaiharimoto.mastertool.core.shootout.teach.TrustState
+import kotlin.math.ceil
 import kotlin.math.round
 
 /**
@@ -23,10 +27,90 @@ object ShootoutTrustWords {
         }
     }
 
-    /** "38 % of answers are Ai's, weighted to 27 % by its accuracy." */
+    /** "38% of answers are Ai's, weighted to 27% by its accuracy." For Ai's own reading ([describe]). */
     fun share(r: TrustReport): String =
         if (r.aiShare == 0.0) "No answers of Ai's are in the ratings yet."
         else "${pct(r.aiShare)} of the answers are Ai's, weighted to ${pct(r.aiWeighted)} by its measured accuracy (one of its answers counts ${dec(r.aiWeight)} of one of yours)."
+
+    // ---- the trust panel, as the person reads it (design review, 1.1.6) --------------------------------------------
+
+    /** The kinds as the panel lists them: open first, then not yet, then closed by audits; the panel's own order within. */
+    fun ordered(kinds: List<KindTrust>): List<KindTrust> = kinds.sortedBy { k -> if (k.open) 0 else if (k.closedAt != null) 2 else 1 }
+
+    /** A kind's state in a word, sentence case (the page sets it in micro caps): Open, Not yet, Closed. */
+    fun status(k: KindTrust): String = when {
+        k.open -> "Open"
+        k.closedAt != null -> "Closed"
+        else -> "Not yet"
+    }
+
+    /** Hands it was sure of a kind still needs before it can open: what [Trust.MIN_SURE] asks, less what it has. */
+    fun sureNeeded(k: KindTrust): Int = if (k.open) 0 else ceil((Trust.MIN_SURE - k.surePairs).coerceAtLeast(0.0)).toInt()
+
+    /** Why a kind is not open, short enough to stand on its row beside the state: "needs 6 more sure hands". */
+    fun reason(k: KindTrust, bar: Double): String? {
+        if (k.open) return if (k.solo > 0) "${k.solo} judged alone" else null
+        val need = sureNeeded(k)
+        val closed = if (k.closedAt != null) "two audits missed; " else ""
+        return closed + when {
+            need > 0 -> "needs $need more sure hand${if (need == 1) "" else "s"}"
+            k.sureRange.lower < bar -> "its range starts at ${pct(k.sureRange.lower)}, under your bar"
+            else -> k.why ?: "not earned yet"
+        }
+    }
+
+    /**
+     * The panel's headline: "Ai judges 2 of 8 kinds of hand for you. The other 6 need at least 25 more hands it is sure
+     * of." With judging alone off, what it has earned and that the person judges every hand.
+     */
+    fun headline(state: TrustState, name: String): String {
+        val total = state.kinds.size
+        val open = state.kinds.count { it.open }
+        val rest = total - open
+        val first = when {
+            !state.settings.solo -> "$name has earned ${if (open == 0) "none" else "$open"} of $total kinds of hand. Judging alone is off, so you judge every hand."
+            open == 0 -> "$name judges none of the $total kinds of hand for you yet."
+            else -> "$name judges $open of $total kinds of hand for you."
+        }
+        if (rest == 0) return first
+        val need = state.kinds.sumOf { sureNeeded(it) }
+        val other = if (open == 0) "Every kind" else "The other $rest"
+        val verb = if (open == 0 || rest > 1) "need" else "needs"
+        return "$first " + if (need > 0) "$other $verb at least $need more hands it is sure of." else "$other $verb more agreement before your bar is cleared."
+    }
+
+    /**
+     * The person's own consistency on hands shown again, as a sentence; a warning when it is under the bar, since no judge
+     * can agree with the person more often than they agree with themselves (S.md §6¾ "The person is the ceiling").
+     */
+    fun ceiling(selfAgree: Double, repeats: Int, bar: Double): String {
+        val said = "Shown a hand again, you answer within one step of your first answer about ${ShootoutWords.inTen(selfAgree)} times (${ShootoutWords.hands(repeats)})."
+        return if (selfAgree < bar) "$said No judge can agree with you more often than that, so a bar of ${pct(bar)} may never open."
+        else "$said That is the most any judge can agree with you."
+    }
+
+    /** How the bar is read, in a line. */
+    fun barHelp(name: String) = "How often $name must agree with you, within one step, before it judges a kind of hand alone. Nine times in ten the truth is at least this."
+
+    /** How "sure" is read, in a line. */
+    fun sureHelp(name: String) = "Only hands $name says it is at least this sure of count toward opening a kind, and only those it judges alone."
+
+    /** What a kind of hand is, said once. */
+    fun kindHelp(name: String) = "A kind of hand is who goes first, whether you hold a starter, and whether they hold interaction. Agreement is counted within one step of your blind answer, on hands $name answered from only what came before."
+
+    /** Ai's certainty, scored, in words (no Brier): how far its "sure" sits from how often it agreed. */
+    fun certainty(c: Calibration): String =
+        "Scored on ${ShootoutWords.hands(c.n)}: what it says about how sure it is sits about ${round(c.ece * 100).toInt()} points from how often it agrees" +
+            if (c.calibrated) ", close enough to send you only what it is unsure of." else "."
+
+    /** One certainty bin in words: "Said about 8 in 10, agreed 9 in 10 (18 hands)". */
+    fun certaintyBin(b: Calibration.Bin): String =
+        "Said about ${ShootoutWords.inTen(b.said)}, agreed ${ShootoutWords.inTen(b.agreed)} (${ShootoutWords.hands(b.n)})"
+
+    /** How much of the data is Ai's, in words for the person. */
+    fun shareWords(r: TrustReport, name: String): String =
+        if (r.aiShare == 0.0) "No answers of $name's are in the ratings yet."
+        else "${pct(r.aiShare)} of the answers are $name's. Weighed by how well it agrees with you, they count as ${pct(r.aiWeighted)}: one of its answers is worth ${dec(r.aiWeight)} of one of yours."
 
     /** How Ai leans against the person's bands: "a little optimistic: +4 points at an even hand". */
     fun lean(points: Double): String = when {
@@ -64,7 +148,7 @@ object ShootoutTrustWords {
         }
     }.trim()
 
-    fun pct(x: Double): String = "${round(x * 100).toInt()} %"
+    fun pct(x: Double): String = "${round(x * 100).toInt()}%"
     private fun n(x: Double): String = if (x == round(x)) x.toInt().toString() else dec(x)
     private fun dec(x: Double): String = (round(x * 10) / 10).toString()
     private fun dec2(x: Double): String = (round(x * 100) / 100).toString()

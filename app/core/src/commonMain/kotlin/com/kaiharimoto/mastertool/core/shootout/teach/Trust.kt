@@ -288,6 +288,6 @@ object Trust {
     /** The share of solo hands audited: one in three for the first [EARLY] after a kind opens, then one in ten. */
     fun auditRate(soloSoFar: Int): Double = if (soloSoFar < EARLY) EARLY_RATE else RATE
 
-    private fun pct(x: Double) = "${(x * 100).toInt()} %"
+    private fun pct(x: Double) = "${(x * 100).toInt()}%"
     private fun fmt(x: Double) = if (x == x.toInt().toDouble()) x.toInt().toString() else ((x * 10).toInt() / 10.0).toString()
 }

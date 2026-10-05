@@ -126,6 +126,7 @@ import com.kaiharimoto.neue.cursor.CursorLayer
 import com.kaiharimoto.neue.cursor.FamilyCursor
 import com.kaiharimoto.neue.cursor.LocalCursor
 import com.kaiharimoto.neue.duel.DuelBarItems
+import com.kaiharimoto.neue.shootout.ShootoutBarItems
 import com.kaiharimoto.neue.duel.DuelPage
 import com.kaiharimoto.neue.duel.DuelVoice
 import com.kaiharimoto.neue.duel.Duels
@@ -728,6 +729,10 @@ private fun Shell(h: NeueHolders) {
                 BuilderBar(state, neue, h::setFormat, onScreenshot = { h.run(DeskAction.SCREENSHOT) }, onSave = { h.run(DeskAction.SAVE) }, narrow = narrow, webs = h.webs, onStepWeb = h::stepWeb, onOpenDeck = h::openDeck)
             } else if (neue.page == Page.DUEL) {
                 DuelBarItems(h, narrow)
+            } else if (neue.page == Page.SHOOTOUT && h.shootout.running) {
+                // A Shootout session's header folds into the bar (design review, 1.1.6), as Duel's does. The page makes the
+                // holder anyway; reading it here (never "started?") lets the bar hear the session begin.
+                ShootoutBarItems(h, narrow)
             } else {
                 Box(Modifier.weight(1f))
             }
