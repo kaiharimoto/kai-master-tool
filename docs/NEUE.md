@@ -2914,6 +2914,18 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     silliness — a sway (`ChessyAmie.wobble`), a line and a burst every 2.5 s — then a six-second nap, and again only
     after forty; the slot counts down). Each event (`ToyHit`: near, head, bell, batted, pounced, swatted) is answered by
     `ChessyAmie.toy` with its own lines.
+  - **The catnip is a bag you pour** (kai, 1.1.30: "have it be a bag and let me pour out the catnip from the bag so it
+    feels more physical. Chessy should roll around in the catnip"): `Catnip` in `PetToys.kt`. Carried, the bag swings
+    with the hand's way across; held up a quarter second it tips over toward her (`POUR`, 125°) and past `SPILL` (70°)
+    the catnip pours from its mouth, a flake at a time, faster the further over, until the bag is empty (`PER_BAG`); in its
+    slot it fills again over forty seconds, and a tap on it shakes a pinch out in front of her. The flakes (`Flakes`,
+    flat arrays, a few hundred at most) flutter down, settle on the floor and fade after 24 s. Where a dozen lie together
+    (`Flakes.patch`) **she goes and rolls in them** (`PlayState.ROLL`: down on the floor, over the way she faces and back
+    about her middle, squirming, kicking flakes up), and the roll is what gives her the catnip (`ToyHit.ROLL` →
+    `ChessyAmie.nip`). Drawn in `PetToysInk` (the bag paper and ink with a rolled cuff and a dark open mouth; the flakes
+    ink flecks); `--chessy-amie=pour|catnip` photographs it. **Her sound stops while the app is not the window in front**
+    (kai: "when I defocus the app in pet mode I still hear chessy"; `LocalWindowInfo.isWindowFocused`, which on Android
+    is the app in front too).
   - **They are drawn as the dice are** (`PetToysInk.kt`, paper and ink only): every surface placed in 3D, turned by its
     body's quaternion, filled by its step of shade (`toyShade`, the dice's steps, `TOY_LIGHT`): the yarn a sphere whose
     shade steps are its lit caps seen from the front, wound by bands of strands drawn on their near halves; the mouse an
@@ -2964,7 +2976,7 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     `--chessy-amie=finger` photographs it.
   - One arbiter takes every press on the room (a toy's, a slot's or hers, never two), so a press beside her no longer
     lets her go: Bye-bye, Esc or Back does. She watches the toy she is after, else the one in play (`PetToys.focus`),
-    else the hand. `tools/shoot.sh --persona=chessy --chessy-amie=toys|yarn|mouse|feather|catnip` photographs it.
+    else the hand. `tools/shoot.sh --persona=chessy --chessy-amie=toys|yarn|mouse|feather|catnip|pour` photographs it.
 - **Her name glitches** (kai: "a glitchy font for flavor"): `ChessyGlitchName`, the mono face with a pink and a violet
   copy split either side and a short tear every few seconds (no frames between tears), in the bar and the chat box.
 - **No white rim round her** (kai): her layers were cut from a sheet drawn on white, so a band of solid white stood

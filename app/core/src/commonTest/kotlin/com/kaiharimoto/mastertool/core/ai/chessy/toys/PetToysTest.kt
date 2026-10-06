@@ -138,6 +138,63 @@ class PetToysTest {
     }
 
     @Test
+    fun heldUpTheBagTipsTowardHerAndPoursCatnipThatSettlesOnTheFloor() {
+        val toys = PetToys(room())
+        holdHer(toys, .1f)
+        val nip = toys.catnip
+        nip.held = true
+        nip.x = toys.room.herX - 400f
+        nip.y = 300f
+        val pours = ArrayList<ToyEvent>()
+        repeat(150) { toys.her.touched(); pours += toys.step(1f / 60f).filter { it.hit == ToyHit.POUR } }
+        assertTrue(nip.angle > Catnip.SPILL, "tipped toward her: ${nip.angle}")
+        assertTrue(nip.flakes.count > 20 && nip.fill < .8f, "poured: ${nip.flakes.count}, ${nip.fill}")
+        assertTrue(pours.isNotEmpty(), "heard")
+        // it pours from its mouth, which leans toward her
+        assertTrue(nip.mouthX > nip.x)
+        // empty, it pours no more
+        repeat(300) { toys.her.touched(); toys.step(1f / 60f) }
+        assertEquals(0f, nip.fill)
+        val poured = nip.flakes.count
+        nip.held = false
+        holdHer(toys, 4f)
+        assertEquals(poured, nip.flakes.lying, "every flake settled")
+        for (i in 0 until nip.flakes.count) assertTrue(nip.flakes.y[i] <= 800f && nip.flakes.y[i] > 780f)
+        assertTrue(nip.fill > 0f, "filling again in its slot")
+        assertEquals(0f, nip.angle, .5f)
+    }
+
+    @Test
+    fun sheRollsInCatnipOnTheFloorAndKicksItAbout() {
+        val toys = PetToys(room(), seed = 6)
+        holdHer(toys, .1f)
+        val nip = toys.catnip
+        nip.sprinkle(toys.room.herX + 300f, 700f, 40, toys.room, toys.random())
+        holdHer(toys, 1.5f)
+        assertTrue(nip.patch(toys.room)!!.second >= ChessyPlay.ROLL_MIN)
+        val hits = ArrayList<ToyHit>()
+        var most = 0f
+        var kicked = false
+        repeat(8 * 60) {
+            toys.step(1f / 60f).forEach { hits += it.hit }
+            most = maxOf(most, kotlin.math.abs(toys.her.spin))
+            if (toys.her.state == PlayState.ROLL && nip.flakes.falling > 0) kicked = true
+        }
+        assertTrue(ToyHit.ROLL in hits, "$hits")
+        assertTrue(most > 300f, "she rolled over: $most")
+        assertTrue(kicked, "flakes kicked up")
+        assertTrue(toys.her.spin == 0f || toys.her.state == PlayState.ROLL)
+    }
+
+    @Test
+    fun catnipFadesAfterAWhile() {
+        val toys = PetToys(room())
+        toys.catnip.sprinkle(1500f, 700f, 10, toys.room, toys.random())
+        holdHer(toys, Flakes.LIFE + 1f)
+        assertEquals(0, toys.catnip.flakes.count)
+    }
+
+    @Test
     fun leftAloneSheWandersAboutTheRoomAndStaysInIt() {
         val toys = PetToys(room(), seed = 9)
         toys.step(1f / 60f)

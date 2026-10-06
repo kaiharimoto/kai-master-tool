@@ -32,6 +32,9 @@ enum class PlayState {
 
     /** Catnip has her: she bounces about. */
     SILLY,
+
+    /** Down in the catnip on the floor, rolling over in it and back. */
+    ROLL,
 }
 
 /**
@@ -54,6 +57,12 @@ class ChessyPlay {
     var sy = 1f
         private set
     var mouthOpen = false
+        private set
+
+    /** How far she has rolled over, degrees (0 upright), and how far down she has thrown herself, pixels. */
+    var spin = 0f
+        private set
+    var sink = 0f
         private set
     var state = PlayState.SIT
         private set
@@ -86,10 +95,12 @@ class ChessyPlay {
     private var dir = 1f
     private var bitten = false
     private var hopsLeft = 0
+    private var rollFrom = 0f
+    private var rollCool = 0f
 
     /** Whether anything of her is still moving: her loop may sleep when not. */
     val moving: Boolean
-        get() = state != PlayState.SIT || air > 0f || bob > .05f || abs(lean) > .2f || abs(sx - 1f) > .004f || abs(sy - 1f) > .004f || abs(vx) > 1f
+        get() = state != PlayState.SIT || abs(spin) > .2f || sink > .2f || air > 0f || bob > .05f || abs(lean) > .2f || abs(sx - 1f) > .004f || abs(sy - 1f) > .004f || abs(vx) > 1f
 
     /** A hand is on her: she holds still for a moment. */
     fun touched() {
@@ -108,6 +119,7 @@ class ChessyPlay {
         held = max(0f, held - dt)
         cool = max(0f, cool - dt)
         spotted = max(0f, spotted - dt)
+        rollCool = max(0f, rollCool - dt)
 
         // the air: a hop is up, and falls
         if (air > 0f || vy > 0f) {
@@ -126,7 +138,7 @@ class ChessyPlay {
             }
         }
 
-        if (silly > 0f && state != PlayState.SILLY && state != PlayState.POUNCE) { state = PlayState.SILLY; t = 0f; target = null; mouthOpen = false }
+        if (silly > 0f && state != PlayState.SILLY && state != PlayState.POUNCE && state != PlayState.ROLL) { state = PlayState.SILLY; t = 0f; target = null; mouthOpen = false }
         when (state) {
             PlayState.SIT -> {
                 leanTo = 0f; sxTo = 1f; syTo = 1f
@@ -160,6 +172,7 @@ class ChessyPlay {
                 x = (x + vx * dt).coerceIn(lo, hi)
             }
             PlayState.LUNGE -> lunge(dt, room, toys, random, events)
+            PlayState.ROLL -> roll(dt, room, toys, random)
             PlayState.AMUSED -> {
                 // giggling: a few little hops, a wiggle
                 leanTo = sin(t * 13f) * 9f
@@ -180,6 +193,13 @@ class ChessyPlay {
                 x = (x + vx * dt).coerceIn(lo, hi)
                 if (silly <= 0f) settle()
             }
+        }
+        // out of a roll she comes upright the short way round, and up off the floor
+        if (state != PlayState.ROLL) {
+            val upright = if (spin > 180f) 360f else if (spin < -180f) -360f else 0f
+            spin += (upright - spin) * (1f - exp(-dt * 9f))
+            if (abs(spin - upright) < .2f) spin = 0f
+            sink *= exp(-dt * 9f)
         }
         // her pose eases toward what the moment asks
         val k = 1f - exp(-dt * 14f)
@@ -203,6 +223,8 @@ class ChessyPlay {
                 spotted = 8f
                 go(ToyKind.MOUSE, m.x)
             }
+            // catnip on the floor: she has to roll in it (kai: "Chessy should roll around in the catnip")
+            rollCool <= 0f && (toys.catnip.patch(room)?.second ?: 0) >= ROLL_MIN -> go(ToyKind.CATNIP, toys.catnip.patch(room)!!.first)
             w.held && featherNear(room, w) -> go(ToyKind.FEATHER, w.endX)
             y.out && y.onFloor(room) && abs(y.vx) < 520f * u && abs(y.x - x) < room.reach * 7f -> go(ToyKind.YARN, y.x)
             else -> {
@@ -245,6 +267,7 @@ class ChessyPlay {
             ToyKind.MOUSE -> if (!m.out || m.held || m.wound <= 0f) return settle() else goal = m.x
             ToyKind.YARN -> if (!y.out || y.held || !y.onFloor(room)) return settle() else goal = y.x
             ToyKind.FEATHER -> if (!w.held || !featherNear(room, w)) return settle() else goal = w.endX
+            ToyKind.CATNIP -> goal = toys.catnip.patch(room)?.first ?: return settle()
             else -> Unit
         }
         val lo = room.left + room.halfW
@@ -257,6 +280,7 @@ class ChessyPlay {
         when (target) {
             ToyKind.MOUSE -> if (near < room.reach * 2.6f && cool <= 0f) { state = PlayState.STALK; t = 0f; return }
             ToyKind.YARN, ToyKind.FEATHER -> if (near < room.reach && cool <= 0f) { startLunge(); return }
+            ToyKind.CATNIP -> if (near < room.reach * .8f || abs(dx) < 2f * u) { startRoll(room, events); return }
             else -> if (abs(dx) < 4f * u) return settle()
         }
         // where she cannot go nearer (a wall), she bites from where she is
@@ -271,6 +295,41 @@ class ChessyPlay {
         sxTo = 1f; syTo = 1f
         if (abs(dx) < 1f * u && target == null) settle()
     }
+
+    private fun startRoll(room: PetRoom, events: MutableList<ToyEvent>) {
+        state = PlayState.ROLL
+        t = 0f
+        bob = 0f
+        rollFrom = x
+        mouthOpen = false
+        events += ToyEvent(ToyKind.CATNIP, ToyHit.ROLL, x, room.floor)
+    }
+
+    /**
+     * Rolling in the catnip: down onto the floor, over the way she faces and back, squirming, kicking flakes up as she
+     * goes; then up again.
+     */
+    private fun roll(dt: Float, room: PetRoom, toys: PetToys, random: Random) {
+        val u = ((t / ROLL_FOR)).coerceIn(0f, 1f)
+        val over = if (u < .5f) smooth(u / .5f) else 1f - smooth((u - .5f) / .5f)
+        val before = x
+        spin = dir * 360f * over + sin(t * 11f) * 7f * (1f - abs(2f * u - 1f))
+        sink = room.headR * .3f * smooth(t / .2f) * (1f - smooth((t - ROLL_FOR + .25f) / .25f))
+        val lo = room.left + room.halfW
+        val hi = max(lo, room.right - room.halfW)
+        // a ball's roll: as far across as her turn would carry her
+        x = (rollFrom + dir * over * 2f * PI.toFloat() * room.headR * .32f).coerceIn(lo, hi)
+        leanTo = 0f
+        sxTo = 1.06f; syTo = .92f
+        toys.catnip.flakes.kick(x, room.halfW * .7f, (x - before) / max(dt, 1e-4f), room, random)
+        if (t >= ROLL_FOR) {
+            spin = 0f
+            rollCool = ROLL_AGAIN
+            settle()
+        }
+    }
+
+    private fun smooth(v: Float): Float { val c = v.coerceIn(0f, 1f); return c * c * (3f - 2f * c) }
 
     private fun startLunge() {
         state = PlayState.LUNGE
@@ -370,6 +429,11 @@ class ChessyPlay {
 
         /** The highest she jumps for the feather, in her own heights (to the top of her head). */
         const val JUMP = 1.5f
+
+        /** Flakes lying together that she will roll in, how long a roll takes, and how soon she rolls again. */
+        const val ROLL_MIN = 12
+        const val ROLL_FOR = 2.6f
+        const val ROLL_AGAIN = 5f
 
         /** How often a pounce on the mouse catches it. */
         const val CATCH = .45f

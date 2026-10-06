@@ -210,7 +210,7 @@ class ChessyAmie(seed: Int = 7) {
     fun toy(kind: ToyKind?, hit: ToyHit, now: Double): AmieReaction? {
         if (high(now) > 0f) return null
         when (hit) {
-            ToyHit.BOUNCE, ToyHit.SWISH, ToyHit.POUNCE, ToyHit.LAND -> return null
+            ToyHit.BOUNCE, ToyHit.SWISH, ToyHit.POUNCE, ToyHit.LAND, ToyHit.POUR, ToyHit.ROLL -> return null
             ToyHit.NEAR, ToyHit.MISSED -> if (now - lastAnswer < ANSWER_EVERY * 1.5) return null
             else -> Unit
         }

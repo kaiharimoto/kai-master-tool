@@ -333,11 +333,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   reactions, lines with kaomoji, fondness and particles are `core/ai/chessy/ChessyAmie.kt`, tested; `--chessy-amie=`).
   **Petting her** is half the window with **her aura** (`chessyAura`) and **the takeover's box** (`ChessySay`; typed
   by `ChessyType`: whole line laid out first, emoticons unbreakable); **her room** (1.1.27): a paw for the pointer (`CursorMode.PAW`, `ChessyInk.drawPaw`), a toy box
-  of a yarn ball, a feather wand, a wind-up mouse and catnip with real physics (`core/ai/chessy/toys/PetToys`, tested) drawn as
+  of a yarn ball, a feather wand, a wind-up mouse and a bag of catnip to pour (1.1.30, `Catnip`, `Flakes`; she rolls in it, `PlayState.ROLL`) with real physics (`core/ai/chessy/toys/PetToys`, tested) drawn as
   the dice are (`PetToysInk`, paper and ink, a step of shade per facing), one arbiter for every press; **she plays**
   (1.1.29): roams, bites the yarn and feather, stalks and pounces on the mouse (`ChessyPlay`, tested), flat ink shadows
   under her and the toys (`floorShadow`, kai's word); **it sounds** (`core/audio/PetSounds`: her meows and purr in code,
-  the toys, chimes; `PetMix` into `Speaker.stream`, `PetAudio`; `AiPrefs.petSound`); **her name glitches** (`ChessyGlitchName`); her
+  the toys, chimes; `PetMix` into `Speaker.stream`, `PetAudio`; `AiPrefs.petSound`; silent while the window is not focused); **her name glitches** (`ChessyGlitchName`); her
   layers have **no white rim** (`tools/chessy/defringe.py`, run after `export.js`). **The takeover's horn is kai's
   tuning** (`TakeoverHorn`, never changed without kai). **The takeover** (1.1.25): `core/ai/chessy/Takeover` is the
   cinematic as pure functions of its clock (safety held by `TakeoverTest`), `core/audio/Synth` + `TakeoverSound` render

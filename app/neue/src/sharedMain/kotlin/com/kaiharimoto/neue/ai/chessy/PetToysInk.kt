@@ -323,63 +323,50 @@ internal object PetToysInk {
     }
 
     /**
-     * A pouch of catnip [size] pixels across at ([x], [y]): a puffed square of cloth lit from above on the left, its
-     * neck gathered and tied, a catnip leaf printed on it. [faded] is a pouch she has had and that is filling again.
+     * A bag of catnip [size] pixels across at ([x], [y]) (kai, 1.1.30: a bag to pour from), tipped [angle] degrees about
+     * its middle: paper lit from above on the left, its far side a step darker, its top rolled down into a cuff, its
+     * mouth open and dark when it tips, a few flakes at the rim while [fill] holds any, and a catnip leaf printed on it.
+     * [faded] is a bag she has had and that is filling again.
      */
-    fun DrawScope.catnip(x: Float, y: Float, size: Float, c: MuColors, s: Float, faded: Boolean = false) {
+    fun DrawScope.catnip(x: Float, y: Float, size: Float, c: MuColors, s: Float, angle: Float = 0f, fill: Float = 1f, faded: Boolean = false) {
         val alpha = if (faded) .35f else 1f
-        val h = size / 2f
-        val puff = size * .12f
-        fun pouch(dx: Float, dy: Float, k: Float) = Path().apply {
-            val l = x - h * k + dx
-            val r = x + h * k + dx
-            val t = y - h * .55f * k + dy
-            val b = y + h * k + dy
-            moveTo(l + puff, t)
-            quadraticTo(x + dx, t - puff * .6f, r - puff, t)
-            quadraticTo(r + puff * .9f, (t + b) / 2f, r - puff * .2f, b - puff * .4f)
-            quadraticTo(x + dx, b + puff * .8f, l + puff * .2f, b - puff * .4f)
-            quadraticTo(l - puff * .9f, (t + b) / 2f, l + puff, t)
-            close()
-        }
-        val body = pouch(0f, 0f, 1f)
-        drawPath(body, c.paper.copy(alpha = alpha))
-        clipPath(body) {
-            drawPath(body, c.ink25.copy(alpha = c.ink25.alpha * alpha))
-            val lit1 = pouch(-size * .07f, -size * .08f, .97f)
-            drawPath(lit1, c.paper.copy(alpha = alpha)); drawPath(lit1, c.ink12.copy(alpha = c.ink12.alpha * alpha))
-            val lit2 = pouch(-size * .13f, -size * .15f, .9f)
-            drawPath(lit2, c.paper.copy(alpha = alpha)); drawPath(lit2, c.ink06.copy(alpha = c.ink06.alpha * alpha))
-            val lit3 = pouch(-size * .2f, -size * .22f, .7f)
-            drawPath(lit3, c.paper.copy(alpha = alpha))
-        }
-        drawPath(body, c.ink.copy(alpha = alpha), style = Stroke(1.4f * s, join = StrokeJoin.Round))
-        // the gathered neck: a frill of cloth above the tie
-        val top = y - h * .55f
-        val frill = Path().apply {
-            moveTo(x - h * .45f, top + 1f * s)
-            for (k in 0..6) {
-                val fx = x - h * .45f + k * h * .15f
-                lineTo(fx + h * .075f, top - size * (if (k % 2 == 0) .2f else .14f))
-                lineTo(fx + h * .15f, top - size * .05f)
+        withTransform({ rotate(angle, Offset(x, y)) }) {
+            val top = y - size * .55f
+            val bottom = y + size * .45f
+            val tw = size * .36f
+            val bw = size * .4f
+            val body = Path().apply {
+                moveTo(x - tw, top); lineTo(x + tw, top); lineTo(x + bw, bottom); lineTo(x - bw, bottom); close()
             }
-            lineTo(x + h * .45f, top + 1f * s)
-            close()
-        }
-        drawPath(frill, c.paper.copy(alpha = alpha))
-        drawPath(frill, c.ink06.copy(alpha = c.ink06.alpha * alpha))
-        drawPath(frill, c.ink.copy(alpha = alpha), style = Stroke(1.2f * s, join = StrokeJoin.Round))
-        // the tie: a band and a bow
-        drawLine(c.ink.copy(alpha = alpha), Offset(x - h * .42f, top), Offset(x + h * .42f, top), strokeWidth = 2.2f * s, cap = StrokeCap.Round)
-        for (side in listOf(-1f, 1f)) {
-            drawOval(c.ink.copy(alpha = alpha), Offset(x + side * h * .1f - (if (side < 0) h * .32f else 0f), top - size * .08f), Size(h * .32f, size * .16f), style = Stroke(1.2f * s))
-        }
+            drawPath(body, c.paper.copy(alpha = alpha))
+            clipPath(body) {
+                // its far side a step darker, its fold down the middle of the near one
+                drawRect(c.ink12.copy(alpha = c.ink12.alpha * alpha), Offset(x + bw * .45f, top), Size(bw, size))
+                drawLine(c.ink25.copy(alpha = c.ink25.alpha * alpha), Offset(x + bw * .45f, top), Offset(x + bw * .45f, bottom), strokeWidth = .8f * s)
+                // the cuff, rolled down
+                drawRect(c.ink06.copy(alpha = c.ink06.alpha * alpha), Offset(x - bw, top), Size(bw * 2f, size * .15f))
+            }
+            drawLine(c.ink.copy(alpha = alpha), Offset(x - tw * 1.02f, top + size * .15f), Offset(x + tw * 1.04f, top + size * .15f), strokeWidth = 1f * s)
+            drawPath(body, c.ink.copy(alpha = alpha), style = Stroke(1.4f * s, join = StrokeJoin.Miter))
+            // the mouth: open and dark as it tips, flakes at the rim while there are any
+            val open = (kotlin.math.abs(angle) / 50f).coerceIn(.18f, 1f)
+            val mh = size * .1f * open
+            drawOval(c.ink.copy(alpha = .75f * alpha), Offset(x - tw * .9f, top - mh / 2f), Size(tw * 1.8f, mh))
+            drawOval(c.ink.copy(alpha = alpha), Offset(x - tw * .9f, top - mh / 2f), Size(tw * 1.8f, mh), style = Stroke(1.1f * s))
+            if (fill > 0f) {
+                val n = (2 + fill * 5f).toInt()
+                for (k in 0 until n) {
+                    val fx = x - tw * .7f + tw * 1.4f * (k + .5f) / n
+                    val fy = top - mh * .25f + (if (k % 2 == 0) -1f else 1f) * mh * .15f
+                    drawLine(c.ink70.copy(alpha = c.ink70.alpha * alpha), Offset(fx - size * .025f, fy), Offset(fx + size * .025f, fy - size * .012f), strokeWidth = 1.6f * s, cap = StrokeCap.Round)
+                }
+            }
         // the leaf printed on it: a catnip leaf, toothed, with its veins
-        withTransform({ rotate(-18f, Offset(x, y + h * .18f)) }) {
-            val lx = x
-            val ly = y + h * .2f
-            val lw = size * .22f
-            val ll = size * .34f
+        withTransform({ rotate(-14f, Offset(x, y + size * .12f)) }) {
+            val lx = x - size * .04f
+            val ly = y + size * .12f
+            val lw = size * .2f
+            val ll = size * .32f
             val leaf = Path().apply {
                 moveTo(lx, ly - ll / 2f)
                 for (k in 0..5) {
@@ -405,6 +392,24 @@ internal object PetToysInk {
                 drawLine(c.ink.copy(alpha = .6f * alpha), Offset(lx, yy), Offset(lx + lw * .55f, yy - ll * .1f), strokeWidth = .8f * s)
                 drawLine(c.ink.copy(alpha = .6f * alpha), Offset(lx, yy), Offset(lx - lw * .55f, yy - ll * .1f), strokeWidth = .8f * s)
             }
+        }
+    }
+    }
+
+    /**
+     * Catnip flakes ([Flakes]), in the air and on the floor: each a short dark fleck turned its own way, two shades of
+     * ink, fading as it goes.
+     */
+    fun DrawScope.flakes(f: com.kaiharimoto.mastertool.core.ai.chessy.toys.Flakes, c: MuColors, s: Float) {
+        val len = 3.2f * s
+        for (i in 0 until f.count) {
+            val a = f.alpha(i)
+            if (a <= 0f) continue
+            val r = f.turn[i] * (PI.toFloat() / 180f)
+            val dx = cos(r) * len
+            val dy = sin(r) * len * (if (f.down[i]) .35f else 1f)
+            val ink = if (i % 3 == 0) c.ink45 else c.ink70
+            drawLine(ink.copy(alpha = ink.alpha * a), Offset(f.x[i] - dx, f.y[i] - dy), Offset(f.x[i] + dx, f.y[i] + dy), strokeWidth = 1.7f * s, cap = StrokeCap.Round)
         }
     }
 }

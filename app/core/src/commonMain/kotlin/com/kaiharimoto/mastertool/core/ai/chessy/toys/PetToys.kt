@@ -3,10 +3,12 @@ package com.kaiharimoto.mastertool.core.ai.chessy.toys
 import com.kaiharimoto.mastertool.core.duel.dice.Quat
 import com.kaiharimoto.mastertool.core.duel.dice.V3
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -21,7 +23,7 @@ enum class ToyKind(val title: String, val short: String, val verb: String, val h
     YARN("Yarn ball", "Yarn", "Throw", "Drag and throw"),
     FEATHER("Feather wand", "Feather", "Wave", "Drag and wave"),
     MOUSE("Wind-up mouse", "Mouse", "Wind up", "Tap to wind"),
-    CATNIP("Catnip", "Catnip", "Give", "Drop on her"),
+    CATNIP("Catnip", "Catnip", "Pour", "Hold up to pour"),
 }
 
 /**
@@ -88,6 +90,12 @@ enum class ToyHit {
 
     /** She landed from a leap ([ToyEvent.strength] how hard). */
     LAND,
+
+    /** Catnip pouring out of the bag ([ToyEvent.strength] how fast): a sound. */
+    POUR,
+
+    /** She threw herself down and rolled in the catnip on the floor. */
+    ROLL,
 }
 
 class ToyEvent(val kind: ToyKind?, val hit: ToyHit, val x: Float, val y: Float, val strength: Float = 1f)
@@ -420,14 +428,256 @@ class FeatherWand(var stick: Float) {
     fun knock(vx: Float, vy: Float) = string.kick(vx, vy, dtLast)
 }
 
-/** A pouch of catnip in the hand: let go over her, it is given. */
+/**
+ * A bag of catnip (kai, 1.1.30: "have it be a bag and let me pour out the catnip from the bag so it feels more
+ * physical"). In the hand it hangs upright and swings with the hand's way across; held up a moment, it tips over toward
+ * her ([POUR] degrees) and the catnip pours from its mouth, a flake at a time ([Flakes]), until it is empty; back in its
+ * slot it fills again over [REFILL] seconds. The flakes flutter down, settle on the floor and fade after a while; where
+ * enough lie together ([patch]), she rolls in them ([ChessyPlay]).
+ */
 class Catnip(var size: Float) {
     var x = 0f
     var y = 0f
     var held = false
 
+    /** The bag's tip, degrees: 0 upright, positive leaning right (its mouth to the right). */
+    var angle = 0f
+        private set
+
+    /** What is left in it, 0 to 1. */
+    var fill = 1f
+
+    val flakes = Flakes(MAX_FLAKES)
+
+    private var spin = 0f
+    private var heldFor = 0f
+    private var lastX = Float.NaN
+    private var lastY = Float.NaN
+    private var handVx = 0f
+    private var handVy = 0f
+    private var owed = 0f
+    private var heard = 0f
+
+    /** The bag's mouth, room pixels: the middle of its open top, tipped with it about its middle. */
+    val mouthX: Float get() = x + sin(rad(angle)) * size * MOUTH
+    val mouthY: Float get() = y - cos(rad(angle)) * size * MOUTH
+
     /** Whether ([x], [y]) is over her: her head, or as near it as a sniff reaches. */
     fun over(room: PetRoom): Boolean = hypot(x - room.headX, y - room.headY) < room.headR * 1.15f
+
+    /** Whether anything of it is moving: the bag swinging or flakes in the air. */
+    val moving: Boolean get() = held || abs(angle) > .3f || abs(spin) > .3f || flakes.count > 0
+
+    fun step(dt: Float, room: PetRoom, random: Random, events: MutableList<ToyEvent>) {
+        val u = room.unit
+        val target = if (held) {
+            heldFor += dt
+            if (!lastX.isNaN() && dt > 0f) {
+                val k = min(1f, dt * 12f)
+                handVx += ((x - lastX) / dt - handVx) * k
+                handVy += ((y - lastY) / dt - handVy) * k
+            }
+            lastX = x
+            lastY = y
+            // held up a moment it tips toward her; the hand's way across swings it
+            val toward = if (x < room.herX) 1f else -1f
+            val tip = POUR * toward * smooth((heldFor - TIP_AFTER) / .45f)
+            tip + (handVx / u * .05f).coerceIn(-70f, 70f)
+        } else {
+            heldFor = 0f
+            lastX = Float.NaN
+            handVx = 0f
+            handVy = 0f
+            0f
+        }
+        spin += ((target - angle) * 60f - spin * 11f) * dt
+        angle += spin * dt
+        // tipped past the spill, it pours, faster the further over
+        val over = abs(angle) - SPILL
+        if (held && fill > 0f && over > 0f) {
+            val rate = (over / (POUR - SPILL)).coerceIn(0f, 1.2f)
+            owed += dt * FLOW * rate
+            while (owed >= 1f && fill > 0f) {
+                owed -= 1f
+                fill = max(0f, fill - 1f / PER_BAG)
+                spill(u, random)
+            }
+            heard -= dt
+            if (heard <= 0f) {
+                events += ToyEvent(ToyKind.CATNIP, ToyHit.POUR, mouthX, mouthY, rate.coerceIn(.3f, 1f))
+                heard = .3f
+            }
+        } else owed = 0f
+        if (!held) fill = min(1f, fill + dt / REFILL)
+        flakes.step(dt, room, random)
+    }
+
+    private fun spill(u: Float, random: Random) {
+        val a = rad(angle)
+        val speed = (50f + random.nextFloat() * 90f) * u
+        flakes.add(
+            mouthX + (random.nextFloat() - .5f) * size * .25f,
+            mouthY + (random.nextFloat() - .5f) * size * .1f,
+            handVx * .4f + sin(a) * speed + (random.nextFloat() - .5f) * 60f * u,
+            handVy * .4f - cos(a) * speed + (random.nextFloat() - .5f) * 40f * u,
+            random,
+        )
+    }
+
+    /** A pinch shaken out at [atX] from [fromY] (a tap on the bag in its slot): [n] flakes, as much as the bag holds. */
+    fun sprinkle(atX: Float, fromY: Float, n: Int, room: PetRoom, random: Random): Int {
+        val u = room.unit
+        val k = min(n, (fill * PER_BAG).toInt())
+        repeat(k) {
+            flakes.add(atX + (random.nextFloat() - .5f) * room.reach * 2.2f, fromY - random.nextFloat() * 60f * u, (random.nextFloat() - .5f) * 120f * u, random.nextFloat() * 60f * u, random)
+        }
+        fill = max(0f, fill - k / PER_BAG)
+        return k
+    }
+
+    /** Where catnip lies thickest on the floor: its middle and how many flakes, or null when there is too little. */
+    fun patch(room: PetRoom): Pair<Float, Int>? = flakes.patch(room)
+
+    private fun rad(d: Float) = d * PI_F / 180f
+    private fun smooth(v: Float): Float { val c = v.coerceIn(0f, 1f); return c * c * (3f - 2f * c) }
+
+    companion object {
+        /** Degrees it tips to, held up; past [SPILL] it pours. */
+        const val POUR = 125f
+        const val SPILL = 70f
+
+        /** How long it is held before it tips, seconds. */
+        const val TIP_AFTER = .25f
+
+        /** Flakes a second at full tip, and in a full bag. */
+        const val FLOW = 42f
+        const val PER_BAG = 70f
+
+        /** Seconds to fill again, in its slot. */
+        const val REFILL = 40f
+        const val MAX_FLAKES = 260
+
+        /** Its mouth from its middle, in its sizes. */
+        const val MOUTH = .55f
+        private const val PI_F = 3.1415927f
+    }
+}
+
+/**
+ * Catnip flakes: each falls, fluttering, settles on the floor and stays a while, then fades ([LIFE] seconds). Kept in
+ * flat arrays (a few hundred at most, stepped every frame), the live ones first.
+ */
+class Flakes(val max: Int) {
+    val x = FloatArray(max)
+    val y = FloatArray(max)
+    val vx = FloatArray(max)
+    val vy = FloatArray(max)
+    val turn = FloatArray(max)
+    val age = FloatArray(max)
+    private val spinRate = FloatArray(max)
+    val down = BooleanArray(max)
+
+    /** How many there are; they are the first [count]. */
+    var count = 0
+        private set
+
+    /** How many are still in the air. */
+    val falling: Int get() { var n = 0; for (i in 0 until count) if (!down[i]) n++; return n }
+
+    /** How many lie on the floor. */
+    val lying: Int get() = count - falling
+
+    fun add(px: Float, py: Float, pvx: Float, pvy: Float, random: Random) {
+        val i = if (count < max) count++ else oldest()
+        x[i] = px; y[i] = py; vx[i] = pvx; vy[i] = pvy
+        turn[i] = random.nextFloat() * 360f
+        spinRate[i] = (random.nextFloat() - .5f) * 900f
+        age[i] = 0f
+        down[i] = false
+    }
+
+    private fun oldest(): Int {
+        var k = 0
+        for (i in 1 until count) if (age[i] > age[k]) k = i
+        return k
+    }
+
+    fun step(dt: Float, room: PetRoom, random: Random) {
+        val u = room.unit
+        var i = 0
+        while (i < count) {
+            age[i] += dt
+            if (age[i] > LIFE) { remove(i); continue }
+            if (!down[i]) {
+                vy[i] = min(vy[i] + Yarn.GRAVITY * .5f * u * dt, FALL * u)
+                vx[i] *= exp(-dt * 2.5f)
+                x[i] += vx[i] * dt + sin(age[i] * 8f + i) * 24f * u * dt
+                y[i] += vy[i] * dt
+                turn[i] += spinRate[i] * dt
+                if (x[i] < room.left) { x[i] = room.left; vx[i] = abs(vx[i]) * .3f }
+                if (x[i] > room.right) { x[i] = room.right; vx[i] = -abs(vx[i]) * .3f }
+                val floor = room.floor - (1f + random.nextFloat() * 4f) * u
+                if (y[i] >= floor) { y[i] = floor; vx[i] = 0f; vy[i] = 0f; down[i] = true }
+            }
+            i++
+        }
+    }
+
+    private fun remove(i: Int) {
+        val last = count - 1
+        x[i] = x[last]; y[i] = y[last]; vx[i] = vx[last]; vy[i] = vy[last]
+        turn[i] = turn[last]; age[i] = age[last]; spinRate[i] = spinRate[last]; down[i] = down[last]
+        count--
+    }
+
+    /** How visible flake [i] is: whole, then fading over its last seconds. */
+    fun alpha(i: Int): Float = (1f - (age[i] - (LIFE - FADE)) / FADE).coerceIn(0f, 1f)
+
+    /** She rolls through flakes within [half] of [cx]: they jump up and aside, the way she pushes ([push], pixels a second). */
+    fun kick(cx: Float, half: Float, push: Float, room: PetRoom, random: Random) {
+        val u = room.unit
+        for (i in 0 until count) {
+            if (!down[i] || abs(x[i] - cx) > half || random.nextFloat() > .25f) continue
+            val side = if (x[i] >= cx) 1f else -1f
+            down[i] = false
+            vx[i] = side * (90f + random.nextFloat() * 220f) * u + push * .3f
+            vy[i] = -(90f + random.nextFloat() * 240f) * u
+        }
+    }
+
+    /** Where the flakes on the floor lie thickest, three of her reaches across: its middle and its count, or null. */
+    fun patch(room: PetRoom): Pair<Float, Int>? {
+        if (lying == 0) return null
+        val bin = max(1f, room.reach * 1.2f)
+        val bins = max(1, ((room.right - room.left) / bin).toInt() + 1)
+        val n = IntArray(bins)
+        val sx = FloatArray(bins)
+        for (i in 0 until count) if (down[i]) {
+            val b = ((x[i] - room.left) / bin).toInt().coerceIn(0, bins - 1)
+            n[b]++
+            sx[b] += x[i]
+        }
+        var best = -1
+        var bestN = 0
+        for (b in 0 until bins) {
+            val k = n[b] + (if (b > 0) n[b - 1] else 0) + (if (b + 1 < bins) n[b + 1] else 0)
+            if (k > bestN) { bestN = k; best = b }
+        }
+        if (best < 0) return null
+        var sum = 0f
+        var m = 0
+        for (b in max(0, best - 1)..min(bins - 1, best + 1)) { sum += sx[b]; m += n[b] }
+        return (sum / m) to bestN
+    }
+
+    companion object {
+        /** Seconds a flake stays, the last [FADE] of them fading. */
+        const val LIFE = 24f
+        const val FADE = 4f
+
+        /** How fast a flake falls at most, pixels a second (it flutters). */
+        const val FALL = 420f
+    }
 }
 
 /**
@@ -455,7 +705,7 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
         catnip.size = NIP_S * u
     }
 
-    val moving: Boolean get() = yarn.out && yarn.moving || mouse.out && mouse.moving || wand.held || yarn.held || mouse.held || catnip.held || her.moving
+    val moving: Boolean get() = yarn.out && yarn.moving || mouse.out && mouse.moving || wand.held || yarn.held || mouse.held || catnip.moving || her.moving
 
     /** Advance [dt] seconds (cut into steps of at most 1/120 s); what happened, for her to answer. */
     fun step(dt: Float): List<ToyEvent> {
@@ -467,6 +717,7 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
             yarn.step(h, room, random, events)
             mouse.step(h, room, random, events)
             wand.step(h, room, events)
+            catnip.step(h, room, random, events)
             her.step(h, room, this, random, events)
         }
         if (yarn.held || yarn.out && yarn.moving && hypot(yarn.vx, yarn.vy) > 60f * room.unit) lastMoving = ToyKind.YARN
@@ -485,7 +736,7 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
         ToyKind.YARN -> yarn.x to yarn.y
         ToyKind.MOUSE -> mouse.x to mouse.y
         ToyKind.FEATHER -> wand.endX to wand.endY
-        ToyKind.CATNIP -> catnip.x to catnip.y
+        ToyKind.CATNIP -> if (catnip.held) catnip.mouthX to catnip.mouthY else catnip.patch(room)?.let { it.first to room.floor } ?: (catnip.x to catnip.y)
         null -> null
     }
 

@@ -69,6 +69,7 @@ import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.ai.chessy.ChessyInk.particles
 import com.kaiharimoto.neue.ai.chessy.PetToysInk.catnip
 import com.kaiharimoto.neue.ai.chessy.PetToysInk.feather
+import com.kaiharimoto.neue.ai.chessy.PetToysInk.flakes
 import com.kaiharimoto.neue.ai.chessy.PetToysInk.mouse
 import com.kaiharimoto.neue.ai.chessy.PetToysInk.wand
 import com.kaiharimoto.neue.ai.chessy.PetToysInk.yarn
@@ -216,7 +217,9 @@ fun ChessyAmieLayer(ai: AiState) {
             "ear" -> react(amie.tap(AmieZone.EAR_R, now()), sheetToRoom(1050f, 200f))
             "hug" -> react(amie.hold(AmieZone.HEAD, now()), head())
             "sulk" -> repeat(ChessyAmie.POKES) { react(amie.tap(AmieZone.FACE, now() + it * .1), sheetToRoom(630f, 960f)) }
-            "catnip" -> giveNip()
+            // catnip on the floor at her feet, settled, and she goes to roll in it; or the bag held up, pouring
+            "catnip" -> { toys.catnip.sprinkle(room.herX + room.reach * 1.5f, room.floor - 4f, 40, room, toys.random()); toys.catnip.flakes.step(5f, room, toys.random()) }
+            "pour" -> { toys.catnip.held = true; toys.catnip.x = room.herX - room.headR * 1.6f; toys.catnip.y = room.headY - room.headR * .4f }
             "finger" -> {
                 // a finger stroking across her head, still down: its ring, the ripple it landed with, its prints
                 val h = head()
@@ -280,6 +283,9 @@ fun ChessyAmieLayer(ai: AiState) {
                     ToyHit.MISSED -> audio.play(PetSound.SNAP, .6f)
                     ToyHit.CAUGHT -> { audio.play(PetSound.BOING, .8f); burst(at, 1, 5) }
                     ToyHit.NEAR -> Unit
+                    ToyHit.POUR -> audio.play(PetSound.RUSTLE, .2f * e.strength)
+                    // down in the catnip: the catnip has her (or she has had enough for now, and says so)
+                    ToyHit.ROLL -> giveNip()
                 }
                 react(amie.toy(e.kind, e.hit, now()), at, voice = if (e.hit == ToyHit.CAUGHT) PetSound.GIGGLE else null)
             }
@@ -287,7 +293,7 @@ fun ChessyAmieLayer(ai: AiState) {
             if (biting != toys.her.mouthOpen) biting = toys.her.mouthOpen
             val side = box[2]
             box[0] = toys.room.herX - side / 2f
-            box[1] = toys.room.floor - side * SIT - toys.her.hop
+            box[1] = toys.room.floor - side * SIT - toys.her.hop + toys.her.sink
             toyFrame++
         }
         while (true) {
@@ -305,7 +311,8 @@ fun ChessyAmieLayer(ai: AiState) {
         }
     }
     // the sound: on while she is out, unless it is turned off
-    val soundOn = ai.prefs.petSound
+    // and quiet while the app is not the one in front (kai: "when I defocus the app in pet mode I still hear chessy")
+    val soundOn = ai.prefs.petSound && androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     androidx.compose.runtime.DisposableEffect(amie, soundOn) {
         audio.start(soundOn)
         onDispose { audio.stop() }
@@ -423,7 +430,7 @@ fun ChessyAmieLayer(ai: AiState) {
                                 ToyKind.YARN -> { y.out = true; y.place(p.x, p.y); y.held = true }
                                 ToyKind.MOUSE -> { m.out = true; m.facing = towardHer(p.x); m.place(p.x, p.y); m.held = true }
                                 ToyKind.FEATHER -> toys.wand.take(p.x, p.y, room)
-                                ToyKind.CATNIP -> { toys.catnip.held = true; audio.play(PetSound.RUSTLE, .5f) }
+                                ToyKind.CATNIP -> { toys.catnip.held = true; toys.catnip.x = p.x; toys.catnip.y = p.y; audio.play(PetSound.RUSTLE, .5f) }
                             }
                         }
                         when (taken) {
@@ -442,10 +449,8 @@ fun ChessyAmieLayer(ai: AiState) {
                         taken == ToyKind.YARN && moved >= slop -> { y.release(v.x, v.y, room, toys.random()); if (v.getDistance() > 600f * u) audio.play(PetSound.SWISH, .4f) }
                         taken == ToyKind.MOUSE && moved >= slop -> m.release(v.x, v.y, room)
                         taken == ToyKind.FEATHER -> toys.wand.held = false
-                        taken == ToyKind.CATNIP -> {
-                            toys.catnip.held = false
-                            if (toys.catnip.over(room)) giveNip()
-                        }
+                        // the bag let go: back in its slot; what was poured stays on the floor
+                        taken == ToyKind.CATNIP -> toys.catnip.held = false
                         // a tap on a toy in the room: the yarn hops toward her, the mouse is wound again
                         onYarn -> { y.held = false; y.vx = towardHer(y.x) * 260f * u; y.vy = -700f * u }
                         onMouse -> { m.held = false; m.facing = towardHer(m.x); m.wind(); windMouse() }
@@ -464,7 +469,8 @@ fun ChessyAmieLayer(ai: AiState) {
                             m.wind()
                             windMouse()
                         }
-                        slot == ToyKind.CATNIP -> giveNip()
+                        // a tap on the bag: a pinch shaken out in front of her
+                        slot == ToyKind.CATNIP -> if (toys.catnip.sprinkle(room.herX - towardHer(room.herX) * room.reach * 2f, room.headY, 24, room, toys.random()) > 0) audio.play(PetSound.RUSTLE, .6f)
                         else -> Unit
                     }
                     toyFrame++
@@ -526,15 +532,17 @@ fun ChessyAmieLayer(ai: AiState) {
             // her, where her body is: hopping, leaning, squashing and stretching about her base; swaying on catnip
             Box(
                 Modifier
-                    .offset { toyFrame; IntOffset((toys.room.herX - side / 2f).toInt(), (top - toys.her.hop).toInt()) }
+                    .offset { toyFrame; IntOffset((toys.room.herX - side / 2f).toInt(), (top - toys.her.hop + toys.her.sink).toInt()) }
                     .size(with(density) { side.toDp() })
                     .graphicsLayer {
                         auraT
                         toyFrame
-                        rotationZ = toys.her.lean + amie.wobble(now())
+                        // rolling in catnip she turns over about her middle, as a ball would
+                        val rolling = toys.her.spin != 0f
+                        rotationZ = toys.her.lean + amie.wobble(now()) + toys.her.spin
                         scaleX = toys.her.sx
                         scaleY = toys.her.sy
-                        transformOrigin = TransformOrigin(.5f, sit)
+                        transformOrigin = TransformOrigin(.5f, if (rolling) .55f else sit)
                     }
                     .chessyAura { auraT }
                     .cursor(CursorMode.PAW, caption = "Pet", holdOnPress = true),
@@ -718,7 +726,7 @@ private fun DrawScope.drawToys(toys: PetToys, c: MuColors, px: Float, nipFaded: 
         val ty = r.y - w.stick * .1f
         wand(hx, hy, tx, ty, null, 0f, w.stick * .26f, c, px)
     }
-    if (!nip.held) rest(ToyKind.CATNIP).let { catnip(it.x, it.y, nip.size, c, px, faded = nipFaded) }
+    if (!nip.held) rest(ToyKind.CATNIP).let { catnip(it.x, it.y, nip.size, c, px, angle = nip.angle, fill = nip.fill, faded = nipFaded) }
     // a toy out in the room leaves its place in the box drawn faintly, so the box shows what is missing
     val ghost = Stroke(1.2f * px, pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f * px, 4f * px)))
     if (y.out) rest(ToyKind.YARN).let { drawCircle(c.ink25, y.radius, it, style = ghost) }
@@ -729,6 +737,8 @@ private fun DrawScope.drawToys(toys: PetToys, c: MuColors, px: Float, nipFaded: 
     val room = toys.room
     if (m.out) floorShadow(c, m.x, room.floor, m.length * .42f, (room.floor - m.height / 2f - m.y) / (m.length * 2.5f), px)
     if (y.out) floorShadow(c, y.x, room.floor, y.radius * .95f, (room.floor - y.radius - y.y) / (y.radius * 6f), px)
+    // catnip on the floor and in the air
+    flakes(nip.flakes, c, px)
     // out in the room
     if (m.out) mouse(m.x, m.y + m.hop, m.length, m.q, m.key, c, m.tail, px)
     if (y.out) yarn(y.x, y.y, y.radius, y.q, c, y.strand, px)
@@ -736,7 +746,7 @@ private fun DrawScope.drawToys(toys: PetToys, c: MuColors, px: Float, nipFaded: 
         val (tx, ty) = w.tip(toys.room)
         wand(w.hx, w.hy, tx, ty, w.string, w.speed, w.stick * .3f, c, px)
     }
-    if (nip.held) catnip(nip.x, nip.y, nip.size, c, px)
+    if (nip.held) catnip(nip.x, nip.y, nip.size, c, px, angle = nip.angle, fill = nip.fill)
 }
 
 /**
