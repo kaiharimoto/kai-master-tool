@@ -180,7 +180,6 @@ object Goldfish {
         val main: List<Int> = setup.deck.main.map(kit::canonical)
         val extra: List<Int> = setup.deck.extra.map(kit::canonical)
         val reduce = GoldfishReduce(kit, setup.deck.copy(main = main, extra = extra), setup.target)
-        val memo: Boolean = setup.reduce && reduce.orderFree
         private val shared = HashMap<List<Int>, GoldfishSearch.Found>()
         private val sharing = Mutex()
 
@@ -214,6 +213,12 @@ object Goldfish {
             notComputable = nc
             combo = use
         }
+
+        /**
+         * Hands with one engine part share a search — never for a recorded line, whose steps name cards (a blank among
+         * them), nor when the scripts read the Deck's order.
+         */
+        val memo: Boolean = setup.reduce && reduce.orderFree && combo == null
 
         fun searchHand(k: Int, stop: () -> Boolean): GoldfishSearch.Found {
             val game = GoldfishHands.game(main, extra, setup.seed, k, setup.first)

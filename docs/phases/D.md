@@ -1959,6 +1959,103 @@ the table's surfaces — agent (e). Android was not compiled locally (no SDK in 
 - (b) targets, results, the ledger and the instrument;
 - (c) the pane and the replay opening.
 
+**As landed: agents (a) and (b)** (everything in `:core`, and the Ai tool host's wiring; read with §11's decision — the
+goldfish trusts what `FxTrust` trusts, never "verified"):
+- **`FxTrust`** (`core/duel/effects/FxTrust.kt`): built over the library's entries and the marks. **Used**: UNTESTED and
+  WARNED (VERIFIED too, should a later step set it); **inert**: BROKEN, UNSUPPORTED, MISSING (and FAILING). `book` is
+  `ScriptBook.trusted` (new; `trustedOnly`), exactly the trusted scripts whole. `openWarnings(card)`, `hash(card)`,
+  `playedByYou(card)` (the mark must carry the script's hash as it is now), and `library(cards)`: 12 hex over each trusted card
+  of the deck with its `FxCodec.hash`, sorted, and `FxVocab.ENGINE` — `Proof.library`. **The marks**: `FxPlayed`
+  (`<data>/effects/played.json`, `FxPaths.PLAYED`; synced newer wins and backed up by `FxPaths.syncs`), `FxMarks.mark`/`unmark`
+  (a use counted per card and script hash; an undo takes one back), `FxMarks.uses(tags)` (an `ACTIVATE` or `PROC` tag is a
+  use). neue: `DuelShortcuts.commit` marks a use the person made in the Shortcut window (not Ai's, not a play-out),
+  `DuelShortcuts.settle` (after undo and redo) lets it go when its group is undone and keeps it again when redone;
+  `Effects.played(uses, kept)` writes the file; `NeueHolders` wires `onPlayed`.
+- **Targets** (`goldfish/EndBoard.kt`): `EndBoard` (`by`: `person` or `ai`) and `BoardCond` — `controls`, `set`, `holds`, `gy`,
+  `banished`, `interruptions`, `any-of`, and `?` (a newer build's, kept as written; a target holding one is refused).
+  The filters are the vocabulary's own (discriminator `t`). `BoardCheck.meets`/`met`/`words`. **`Interruptions.count`** per
+  §5.2: a face-up monster's or Spell/Trap's or the Field Spell's `QUICK`, a set Trap's or Quick-Play's own `ACTIVATION`, a GY
+  card's `QUICK`, a `TRIGGER` on `ACTIVATED` — whose steps negate, or destroy, banish or return (or move off the field) a
+  card the pick can find on their side — one per once-per-turn group (by name and group; per copy; once per Duel).
+- **The file** (`GoldfishDoc`, `GoldfishCodec`): `<data>/effects/goldfish/<deck>.json` — `targets` (at most 40) and the kept
+  `results` (at most 20), versioned; `GoldfishCodec.target(...)` reads a target from what Ai or the instrument was given and
+  says what is wrong with a call that works. neue: `Effects.goldfish(deck)`, `updateGoldfish`, `putTarget`, `keepResult`,
+  `goldfishRevision`, `forgetDeck` (both deck deletions call it).
+- **Hands and seeds** (`GoldfishHands`): hand k's order is `DuelRandom.riffle(main, forRoll(seed, k).nextLong())`, top first;
+  `GoldfishHands.game` deals it on a **one-player table** (`solo`; going second, the turn passed once: 6 cards, an empty
+  field across) as the table's own entries, behind undo — what a replay opens on. `GoldfishSeedTest` pins three orders. (The
+  APK runs `:core`'s JVM build; `:core` has no Android unit-test source set, so the JVM test stands for it.)
+- **Reduced hands** (`GoldfishReduce`): blanks are cards the engine does not know (no trusted script, not a Normal Monster)
+  that no pick or count of a script in play looking at a hand or a Deck could match (a filter that cannot be judged off a
+  name is taken to match) and that no target names; `orderFree` when no script draws, mills from the top or waits for a
+  draw. Hands with one engine part share one search (`memo`), never for a recorded line. `zonesMatter` when the deck holds a
+  Link Monster; `endTriggers` when a script waits for the End Phase.
+- **`GoldfishSearch`**: DFS over `FxEngine.moves`; a move's choices are enumerated as **a tape** (the engine played again with
+  one more answer changed; each run is one engine move); `Options` collapses them (copies by identity and place —
+  `TableKey.choice`; zones by kind unless `zonesMatter`; face-up Attack and Defense as one; more than three triggers as asked
+  and reversed; at most 48 answers a decision, beyond which a "no line" becomes undecided). **The transposition table** is
+  `TableKey`: the table read without uids (each card as identity, place and face; per-copy uses only while that instance
+  stays; Levels, the turn's summons, sends and sets, restrictions, deeds; the chain only while it stands), two 64-bit hashes.
+  **Ordering**: End first when the target is met; then Resolve, Pass, procedures, Normal Summons, activations, Sets; within a
+  move, the answers that meet more conditions, then those leaving more on the field and in the hand. Phases other than End are
+  never entered; End only when the target is met, nothing else is legal, or `endTriggers`. **The end board** is read once the
+  End Phase is open with its triggers resolved; `EndSets` may Set Spells and Traps the engine knows from the hand into free
+  zones first (a rule, the fewest that meet it; `SetCards` and `Interruptions` read them). **Unknown cards** (§5.5): never in
+  the book (no activation), never Normal Summoned or Set (`FxSummons.known`), and `Options` refuses them as `SUMMON`,
+  `MATERIAL` or `TRIBUTE` — asked or `told` (one legal answer) — so the move is dropped; a line's `LineStep.touched` names
+  the inert cards its actions moved. Bounds: `DEFAULT_DEPTH` 60, `DEFAULT_BUDGET` 20,000.
+- **"This line"** (`GoldfishPlan`): a combo's needs in hand (`ComboRunner.missing`), then each step parsed on the engine's
+  table (`DuelCommand`, any copy; a Shortcut step through `ShortcutLine` with the trusted book) and **matched**: the engine's
+  moves (at most three, every answer tried) that leave the table as the step does, by identity and place (zones and the chain
+  aside); then what stands resolves and the End Phase is played (`finishOnly`). `GoldfishPlan.needsInert` reads, on the first
+  hand holding the needs, which inert cards the steps activate, summon, Set, attach or use as material: **not computable**,
+  named, and the search runs instead.
+- **`Goldfish`**: `refusal(setup, kit)` (a newer condition, no conditions, a target needing an inert card on the board —
+  `Controls`, `InGy`, `Banished` by `Filter.Name`, named for Write these — or a Main Deck shorter than a hand);
+  `run(setup, kit, workers, progress)` (suspend; `Dispatchers.Default`, `workers()` = cores less one; hands from a channel by
+  index into an array, so counts never depend on threads; cancelling its job stops every worker within one engine move, and a
+  search cut short is never shared); `runHere` (one thread); `runBlocking` (an instrument's thread; `goldfishBlocking`, an
+  `expect` with jvm and ios actuals); `hand(setup, kit, k)` (hand k alone). **`GoldfishReplay.of(setup, kit, k)`**: hand k
+  searched again on its own and its line committed through `DuelGame.act`, every entry tagged, one group a move; a hand with
+  no line opens as dealt.
+- **`GoldfishResult`** as §5.6, plus `used` (cards whose effects the reached lines activated or summoned by), `warned` (of
+  those, open warnings), `playedByYou`, `deckId`, `combo`, `ordered`, `depth`, `at`, `engine`; `HandOutcome` (`hand`,
+  `reduced`, `end`, `line`, `moves`, `heldUnknown`, `touchedUnknown`); `LineCount.touches`. **`GoldfishWords`**: the headline
+  ("Gets there in [at least] 63.1 % of 2,000 hands (95 %: 61.0–65.2 %), seed 7, going first; no line in …; undecided in …",
+  Wilson by `WorldStats.wilson`, the §5.5 shares with the inert cards and their copies), the lines ("the commonest in …"),
+  the trust sentence ("Uses the written effects of N cards: …. Uses K effects with open warnings: …. M of them played by
+  you."), the skeleton ("Example Scout → Example Spider", "Set Pond Wall", "as dealt").
+- **The `goldfish` instrument** (`core/world/GoldfishInstrument.kt`, in `Instruments.ALL` and `InstrumentForm`): `deck`,
+  `target` (a kept one's name or id, or `{name, all}`), `going`, `hands` (the host's default: 2,000, 500 on a phone; at most
+  20,000), `seed`, `budget`, `combo`. Its lines: the question, the method (with **`library <12 hex>`**), the headline, lines,
+  trust, warnings; boards `goldfish-rate` (a stat) and `goldfish-lines` (a table). Its host is `WorldHost.goldfish()`
+  (`GoldfishHost`: `trust`, `doc(deck)`, `defaultHands`); `WorldSnapshot` gives it from `h.effects`.
+- **The proof**: `Proof.library` (optional); `Evidence.judge` keeps the library a goldfish answer names (`Evidence.libraryOf`)
+  and charges the deck to it; **`Evidence.lineClaims`** — "gets there", "goes off", "makes the board" with a percentage is
+  traced to `goldfish` sources only (`Evidence.goldfish`: `world_tool` with name `goldfish`), else refused in words (a
+  `world_run` simulation cannot vouch); `Ledger.staleAgainst(list, deck, library)` marks a goldfish number stale with
+  `LIBRARY_MOVED` when the deck's library moved. neue: `guideEntries` passes `h.effects.trust().library(deck)`;
+  `recheckGuide` reruns on `Dispatchers.Default` and keeps the new library.
+- **`fx_target`** (`FxTools.target`, `AiEffects.target`): names a target as Ai's (`by: "ai"`), lists a deck's targets with whose
+  they are, takes away only Ai's own; says when a target is not computable yet. The `effects-author` skill ends on the
+  goldfish.
+- **Tests**: `GoldfishTest` (the Pond toy deck: every hand held to its rule, the rate to the exact multivariate
+  hypergeometric number; memo against plain hand for hand; 1, 3 and 6 workers against one thread; progress; cancel; a draw
+  keeps the order; a set Trap is an interruption; a replay tagged and on the target; "this line"), `GoldfishUnknownTest`
+  (never activated, summoned or Set; moved by a known effect and said; not-computable targets and lines; one unknown starter
+  reads "at least" with the exact share holding it), `GoldfishSeedTest`, `GoldfishBenchTest`, `EndBoardTest`, `FxTrustTest`,
+  `GoldfishInstrumentTest`, `EvidenceTest` (`lineClaims`, library staleness), `OldDataTest` (played.json, goldfish/<deck>.json,
+  a proof without `library`), `SyncTest`, `AiToolsTest`, `RulesTextTest`; neue: `EffectsTest` (the files, the marks, a deleted
+  deck), `DuelEffectTableTest` (a use kept is played by you; undo and redo).
+- **Measured** (`GoldfishBenchTest`, the fixture deck — the step-1 reference cards, seven blanks, an Extra Deck of seven —
+  against "an Extra Deck monster and an interruption", budget 5,000 moves a hand, the sandbox's 4 cores shared with other
+  builds): **one worker, 14.9–16.9 hands a second** (about 14,300 engine moves a second, 120–200 distinct engine parts in as
+  many hands: its seven blanks reduce little); **three workers, 36–42 hands a second**. About 12–14 % of its hands were
+  undecided at that budget. At the default 20,000 the undecided hands cost four times as much, so 2,000 hands take about a
+  minute on a 4-core desk: on target, without room to spare; a phone's 500 at a fifth of the speed, about the same.
+- **Not done by agents (a) and (b)**: the pane, the world board and the replay's opening on the Duel page (agent (c));
+  part D and the red team; a search-only mutable table (the engine's own copy still dominates).
+
 **Stored-data changes, named in each step's notes:**
 - step 1: `DuelEntry.fx`;
 - step 2: `<data>/effects/` (the asked list among it) and the device-only `<data>/fxcache/`;

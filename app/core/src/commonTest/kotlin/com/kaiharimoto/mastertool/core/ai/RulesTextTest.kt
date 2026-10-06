@@ -28,7 +28,7 @@ class RulesTextTest {
         "set_siding_plan", "prep_state", "log_game", "matchup_matrix", "expected_winrate", "set_event", "drill",
         "session_report", "resolve_cards", "new_deck", "watch_video", "list_decks", "list_webs", "session_search", "reader_guide",
         "present_state", "present_edit", "present_view", "analyze_deck",
-        "world_write", "fx_state", "fx_check", "fx_request",
+        "world_write", "fx_state", "fx_check", "fx_request", "fx_target", "world_tool",
     )
 
     private val skillBodies: Map<String, String> = mapOf(

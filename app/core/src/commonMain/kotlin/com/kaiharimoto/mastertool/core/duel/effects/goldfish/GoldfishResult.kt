@@ -104,7 +104,7 @@ data class GoldfishResult(
     val deckId: String? = null,
     /** The recorded line asked about (a combo's id): "this line". Null for the search. */
     val combo: String? = null,
-    /** Every hand searched on its own: the scripts read the Deck's order, so no hand was reduced (§5.3). */
+    /** Every hand searched on its own, none reduced (§5.3): the scripts read the Deck's order, or the run played a recorded line. */
     val ordered: Boolean = false,
     /** The most engine moves one line may hold. */
     val depth: Int = 0,

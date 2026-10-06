@@ -176,7 +176,8 @@ class GoldfishSearch(
             val p = FxEngine.play(t, seat, m, tape)
             spent++
             // Every answer past the prefix was the first of its options: each other option is a run of its own.
-            for (j in tape.taken.size - 1 downTo prefix.size) {
+            // A run refused for an inert card's use: answers past the one that made it cannot mend it.
+            for (j in minOf(tape.taken.size - 1, tape.cut) downTo prefix.size) {
                 val alts = tape.alts[j]
                 for (a in alts.size - 1 downTo 1) stack.addLast(tape.taken.subList(0, j) + listOf(alts[a]))
             }
@@ -202,25 +203,33 @@ class GoldfishSearch(
         val taken = ArrayList<List<Int>>()
         val alts = ArrayList<List<List<Int>>>()
         var violated = false
+
+        /** The last decision whose other answers may still mend a refused run. */
+        var cut = Int.MAX_VALUE
         private val key = TableKey(t, ordered)
         private val inert = { uid: Int -> kit.inertUid(uid, t) }
+
+        private fun refuse(at: Int) {
+            violated = true
+            cut = minOf(cut, at)
+        }
 
         override fun choose(d: Decision): List<Int> {
             val i = taken.size
             val opts = options.of(key, d, inert)
             if (opts.isEmpty()) {
-                violated = true
+                refuse(i - 1)
                 return Chooser.CANCEL
             }
             val a = if (i < prefix.size) prefix[i] else opts[0]
             alts += opts
             taken += a
-            if (options.inertUse(d, a, inert)) violated = true
+            if (options.inertUse(d, a, inert)) refuse(i)
             return a
         }
 
         override fun told(d: Decision, answer: List<Int>) {
-            if (options.inertUse(d, answer, inert)) violated = true
+            if (options.inertUse(d, answer, inert)) refuse(taken.size - 1)
         }
     }
 

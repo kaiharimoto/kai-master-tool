@@ -4722,6 +4722,15 @@ it is refused). Every write is checked (`FxCheck` and the text's `FxLints`) and 
   with Write these, then the library — status, words, warnings with Accept and why (the person's only), Withdraw, what each
   cost, Ask Ai. `tools/shoot.sh --effects=pane|request|viewer`.
 - Left for step 2: the table's Shortcut surfaces (agent (e)); step 3 brings tests, verdicts and the guide's coverage line.
+- **The goldfish** (Phase D step 4, `D.md` §5 and its "As landed"; kai: no step 3, so it trusts what `FxTrust` trusts — every
+  script that compiles and checks, warnings named, broken and missing inert): `core/duel/effects/goldfish` deals hand k from
+  a seed (`GoldfishHands`), searches the engine's moves for a target end board (`EndBoard`, `BoardCond`, `Interruptions`;
+  `GoldfishSearch`) or plays a combo through it (`GoldfishPlan`), on every core but one (`Goldfish.run`), and words the result
+  (`GoldfishWords`); any hand opens as a replay (`GoldfishReplay`). Targets and kept results live in
+  `<data>/effects/goldfish/<deck>.json`, the "played by you" marks in `effects/played.json` (a Shortcut kept at the table).
+  Ai names targets with `fx_target` and runs the `goldfish` instrument through `world_tool`; only its answer vouches for a
+  line's percentage in the guide (`Evidence.lineClaims`), and the number goes stale when a script it used changes
+  (`Proof.library`).
 
 ## 5. Releases, updates and feedback — the permanent numbers
 

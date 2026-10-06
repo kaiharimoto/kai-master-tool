@@ -85,7 +85,7 @@ data class GoldfishDeck(
  * An inert card a discard cost could take is not a blank: it is fodder. A hand is reduced to its engine part, and hands with
  * one engine part share their search — only while the scripts never read the Deck's order ([orderFree]).
  */
-class GoldfishReduce(private val kit: GoldfishKit, deck: GoldfishDeck, private val target: EndBoard) {
+class GoldfishReduce(private val kit: GoldfishKit, private val deck: GoldfishDeck, private val target: EndBoard) {
     private val inPlay: List<CardScript> = (deck.main + deck.extra).map(kit::canonical).distinct().mapNotNull { kit.book.script(it) }
 
     /** No script in play draws, mills from the top or waits for a draw: the Deck's order is never read. */
@@ -122,15 +122,19 @@ class GoldfishReduce(private val kit: GoldfishKit, deck: GoldfishDeck, private v
 
     private val scope = FxScope(FxTable(DuelState(), FxState(), kit.book, kit.facts), 0)
 
-    private val blanks = HashMap<Int, Boolean>()
+    /** The deck's blanks, worked out once: read-only from then on, so the run's workers share it. */
+    private val blanks: Map<Int, Boolean> by lazy {
+        (deck.main + deck.extra).map(kit::canonical).distinct().associateWith(::work)
+    }
+
+    private fun work(c: Int): Boolean {
+        if (kit.known(c)) return false
+        val facts = kit.facts[c] ?: return false
+        return looks.none { couldMatch(it, facts) } && named.none { couldMatch(it, facts) }
+    }
 
     /** Whether [code] is a blank. */
-    fun blank(code: Int): Boolean = blanks.getOrPut(kit.canonical(code)) {
-        val c = kit.canonical(code)
-        if (kit.known(c)) return@getOrPut false
-        val facts = kit.facts[c] ?: return@getOrPut false
-        looks.none { couldMatch(it, facts) } && named.none { couldMatch(it, facts) }
-    }
+    fun blank(code: Int): Boolean = kit.canonical(code).let { c -> blanks[c] ?: work(c) }
 
     /** [hand]'s engine part: its cards that are not blanks, canonical and sorted. */
     fun reduce(hand: List<Int>): List<Int> = hand.map(kit::canonical).filterNot(::blank).sorted()

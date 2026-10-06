@@ -12,6 +12,9 @@ import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.ch
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.deck
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.pondMonster
 import com.kaiharimoto.mastertool.core.duel.effects.goldfish.GoldfishFixtures.target
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.math.abs
 import kotlin.math.sqrt
@@ -120,6 +123,24 @@ class GoldfishTest {
     private fun synchronizedAdd(list: MutableList<GoldfishProgress>, p: GoldfishProgress) {
         // The run tells progress under its own lock: one at a time.
         list += p
+    }
+
+    @Test
+    fun aRunIsCancelledWithinAMoveAndTellsNoMore() = runTest {
+        // Twenty thousand hands, every one searched on its own: cancelled once a few are done, it stops and returns nothing.
+        val started = CompletableDeferred<Unit>()
+        var last = 0
+        val job = launch(Dispatchers.Default) {
+            Goldfish.run(GoldfishSetup(pond, two, hands = Goldfish.MOST_HANDS, seed = 3, reduce = false), kit, workers = 2, progress = { p ->
+                last = p.done
+                if (p.done >= 5) started.complete(Unit)
+            })
+        }
+        started.await()
+        job.cancel()
+        job.join()
+        assertTrue(job.isCancelled)
+        assertTrue(last < Goldfish.MOST_HANDS, "it stopped at $last")
     }
 
     @Test

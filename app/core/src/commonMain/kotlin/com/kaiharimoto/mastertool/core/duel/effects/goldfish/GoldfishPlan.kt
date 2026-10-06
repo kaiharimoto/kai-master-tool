@@ -98,7 +98,7 @@ class GoldfishPlan(
                     val tape = PlanTape(cur, prefix, options)
                     val p = FxEngine.play(cur, seat, m, tape)
                     spent++
-                    for (j in tape.taken.size - 1 downTo prefix.size) {
+                    for (j in minOf(tape.taken.size - 1, tape.cut) downTo prefix.size) {
                         val alts = tape.alts[j]
                         for (a in alts.size - 1 downTo 1) stack.addLast(tape.taken.subList(0, j) + listOf(alts[a]))
                     }
@@ -135,25 +135,32 @@ class GoldfishPlan(
         val taken = ArrayList<List<Int>>()
         val alts = ArrayList<List<List<Int>>>()
         var violated = false
+        var cut = Int.MAX_VALUE
         private val key = TableKey(t, ordered)
         private val inert = { uid: Int -> kit.inertUid(uid, t) }
 
+        private fun refuse(at: Int) {
+            violated = true
+            cut = minOf(cut, at)
+        }
+
         override fun choose(d: Decision): List<Int> {
             // Zones collapse as in the search: a step is matched by identity and place, never by its zone's number.
+            val i = taken.size
             val opts = options.of(key, d, inert)
             if (opts.isEmpty()) {
-                violated = true
+                refuse(i - 1)
                 return Chooser.CANCEL
             }
-            val a = if (taken.size < prefix.size) prefix[taken.size] else opts[0]
+            val a = if (i < prefix.size) prefix[i] else opts[0]
             alts += opts
             taken += a
-            if (options.inertUse(d, a, inert)) violated = true
+            if (options.inertUse(d, a, inert)) refuse(i)
             return a
         }
 
         override fun told(d: Decision, answer: List<Int>) {
-            if (options.inertUse(d, answer, inert)) violated = true
+            if (options.inertUse(d, answer, inert)) refuse(taken.size - 1)
         }
     }
 
