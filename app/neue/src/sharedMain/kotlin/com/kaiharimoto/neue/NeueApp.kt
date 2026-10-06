@@ -484,6 +484,7 @@ class NeueHolders(
         // Chessy's takeover, over everything: Esc skips to Ai's question, then answers it as it was
         if (takeoverPlaying) { takeoverBack(); return }
         // Chessy's petting mode, over everything: she goes back to the chat box first
+        if (amieOpen && ai.giftDrawer) { ai.giftDrawer = false; return }
         if (amieOpen) { ai.closeAmie(); return }
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
         // The Spotlight closes first, its field with it (1.0.87).
@@ -513,6 +514,7 @@ class NeueHolders(
     fun back(): Boolean {
         wake()
         if (takeoverPlaying) { takeoverBack(); return true }
+        if (amieOpen && ai.giftDrawer) { ai.giftDrawer = false; return true }
         if (amieOpen) { ai.closeAmie(); return true }
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return true

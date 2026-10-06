@@ -195,6 +195,30 @@ class PetToysTest {
     }
 
     @Test
+    fun aHandHeldStillCallsHerOverToRubAgainstIt() {
+        val toys = PetToys(room(), seed = 8)
+        toys.step(1f / 60f)
+        val start = toys.room.herX
+        val hits = ArrayList<ToyHit>()
+        var leanMin = 0f
+        var leanMax = 0f
+        repeat(6 * 60) {
+            toys.her.snuggle(start + 600f, 500f)
+            toys.step(1f / 60f).forEach { hits += it.hit }
+            if (toys.her.rubbing) { leanMin = minOf(leanMin, toys.her.lean); leanMax = maxOf(leanMax, toys.her.lean) }
+        }
+        assertEquals(PlayState.SNUGGLE, toys.her.state)
+        assertTrue(toys.her.rubbing, "she reached it")
+        assertTrue(ToyHit.SNUGGLE in hits)
+        // her cheek at the hand: she stands just to its side, leaning into it, to and fro
+        assertTrue(abs(toys.room.herX - (start + 600f)) < toys.room.halfW, "beside the hand: ${toys.room.herX}")
+        assertTrue(leanMax - leanMin > 8f && leanMax > 0f, "rubbing: $leanMin..$leanMax")
+        toys.her.unsnuggle()
+        toys.step(1f / 60f)
+        assertTrue(toys.her.state != PlayState.SNUGGLE && !toys.her.rubbing)
+    }
+
+    @Test
     fun leftAloneSheWandersAboutTheRoomAndStaysInIt() {
         val toys = PetToys(room(), seed = 9)
         toys.step(1f / 60f)

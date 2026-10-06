@@ -12,7 +12,7 @@ const val CHESSY_NAME = "Chessy"
 
 /** What the chat's composer can say to the app itself rather than to the model: a whole message, one command. */
 enum class SlashCommand(val word: String) {
-    /** Calls her: the takeover, unless she is already the assistant. */
+    /** Makes her the assistant at once, with no cinematic (kai, 1.1.31); [TAKEOVER] is the cinematic. */
     CHESSY("chessy"),
 
     /** Plays the takeover now, whoever the assistant is (kai: "let me invoke the takeover cinematic with /takeover"). */

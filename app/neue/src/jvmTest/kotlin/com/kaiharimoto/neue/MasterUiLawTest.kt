@@ -21,7 +21,8 @@ class MasterUiLawTest {
 
     // Every source set's Kotlin: the shared code and each platform's own (1.0.20).
     private val root = File("src")
-    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt", "WorldPaint.kt", "ChessyInk.kt", "TakeoverInk.kt")
+    // Chessy's gifts (kai, 1.1.31: a crystal heart "that glistens prismatically", a cupcake, a polaroid) are content, as card art is.
+    private val colourAllowed = setOf("Foil.kt", "Holo.kt", "GroupMarkers.kt", "AiAvatar.kt", "SlidePaint.kt", "SlideColors.kt", "WorldPaint.kt", "ChessyInk.kt", "TakeoverInk.kt", "GiftInk.kt")
 
     /**
      * Slides are the creator's content (kai, 1.0.70: "slides are content: full colour"): what

@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.update.DesktopOs
 import com.kaiharimoto.neue.ai.chessy.holdFace
 import com.kaiharimoto.neue.ai.chessy.chessySpot
 import androidx.compose.foundation.text.appendInlineContent
@@ -233,18 +234,27 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
             ai.express(Expression.WINK, 3)
         }
     }
+    val chessy = com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null
     Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        AiAvatar(
-            ai.face,
-            if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) com.kaiharimoto.neue.ai.chessy.ChessySizes.greeting else AvatarSizes.greeting,
-            pointer = { ai.h.cursor.position },
-            name = ai.name,
-        )
-        // her name glitches here, large, where a new chat meets her (kai: here and nowhere else)
-        if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) {
-            com.kaiharimoto.neue.ai.chessy.ChessyGlitchName(ai.name, c.ink, style = MuType.h1(LocalMuFonts.current))
+        val face: @Composable () -> Unit = {
+            AiAvatar(
+                ai.face,
+                if (chessy) com.kaiharimoto.neue.ai.chessy.ChessySizes.greeting else AvatarSizes.greeting,
+                pointer = { ai.h.cursor.position },
+                name = ai.name,
+            )
+        }
+        // her name glitches here, large, where a new chat meets her (kai: here and nowhere else), her ears beside it
+        val name: @Composable () -> Unit = {
+            if (chessy) com.kaiharimoto.neue.ai.chessy.ChessyGlitchName(ai.name, c.ink, style = MuType.h1(LocalMuFonts.current), ears = true)
+            else MuText(ai.name, style = MuType.h1(LocalMuFonts.current), color = c.ink)
+        }
+        // on Android her name stands at her side, not under her (kai, 1.1.31: "for better use of space")
+        if (chessy && Platform.os == DesktopOs.ANDROID) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { face(); name() }
         } else {
-            MuText(ai.name, style = MuType.h1(LocalMuFonts.current), color = c.ink)
+            face()
+            name()
         }
         Small(
             "Ask me anything about the game, or have me do it: build a deck, tune the one that is open, sort it into groups, " +

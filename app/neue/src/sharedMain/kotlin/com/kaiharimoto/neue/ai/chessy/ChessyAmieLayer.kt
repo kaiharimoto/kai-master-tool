@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,7 +61,19 @@ import com.kaiharimoto.mastertool.core.ai.chessy.ChessyAmie
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFit
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyRig
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyType
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftBody
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftCatalog
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftCollection
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftItem
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftKind
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftPlay
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftMeshes
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftModel
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.PetToys
+import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyEvent
+import com.kaiharimoto.mastertool.core.duel.dice.V3
+import com.kaiharimoto.mastertool.core.model.CardId
+import com.kaiharimoto.neue.ai.chessy.GiftInk.glitchIn
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyHit
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyKind
 import com.kaiharimoto.mastertool.core.audio.PetSound
@@ -144,6 +157,19 @@ fun ChessyAmieLayer(ai: AiState) {
     val box = remember { FloatArray(4) } // her canvas in the room: left, top, width, height
     val origin = remember { FloatArray(2) } // the room in the window
     val slots = remember { Array(ToyKind.entries.size) { Rect.Zero } } // the toy box's slots, in the room
+    // her gifts (1.1.31): what she can give (the Maliss cards from the pool), what you have, and what is out
+    val index = ai.h.builder.index
+    val catalog = remember(index) { GiftCatalog(GiftCatalog.cards(index.cards)) }
+    fun collection() = GiftCollection(ai.prefs.chessyGifts)
+    fun cardOf(passcode: Int) = index.byId(CardId(passcode))
+    var giftsOut by remember { mutableIntStateOf(0) } // bumped as gifts come and go, so they are drawn
+    var newGift by remember { mutableStateOf<Pair<GiftBody, Double>?>(null) } // a first-ever gift, marked New a moment
+    val giftRandom = remember { kotlin.random.Random(System.nanoTime()) }
+    // a hand held still in her room (kai: "Chessy will come up to it and snuggle and rub against it like a cat would and
+    // purr"): a press held on the floor, or a mouse left resting; where, and since when the mouse last moved
+    val nuzzle = remember { FloatArray(3) { Float.NaN } } // x, y of a held press; NaN when none
+    val hover = remember { FloatArray(3) { Float.NaN } } // the mouse's x, y and when it last moved (seconds)
+    var lastPurr by remember { mutableDoubleStateOf(0.0) }
     fun now() = System.nanoTime() / 1e9
     // where on the room a part of her sheet is, for the particles to rise from
     fun sheetToRoom(x: Float, y: Float): Offset {
@@ -199,6 +225,39 @@ fun ChessyAmieLayer(ai: AiState) {
         scurry = audio.play(PetSound.SCURRY, .5f)
     }
     fun towardHer(x: Float) = if (x < toys.room.middle) 1f else -1f
+    // her gift: at full hearts she makes a box in front of her (kai: "digitally create a present … in her glitchy effect")
+    fun makeGift() {
+        val r = toys.room
+        // just beside her, on the side with more room, clear of the chest
+        val side = if (r.herX <= r.middle) 1f else -1f
+        val x = (r.herX + side * (r.halfW * .78f + GiftPlay.BOX_SIZE * r.unit * .55f)).coerceIn(r.left + 90f * r.unit, toys.gifts.chest.x - toys.gifts.chest.w)
+        toys.gifts.make(x, r)
+        react(amie.makeGift(now()), head())
+        audio.play(PetSound.POP, .5f)
+        audio.play(PetSound.SPARKLE, .6f)
+        giftsOut++
+    }
+    // the box opened: one gift drawn, kept for good, and her own line for it
+    fun openGift(chosen: GiftItem? = null) {
+        val col = collection()
+        val item = chosen ?: catalog.roll(giftRandom, owned = col::owned)
+        val events = ArrayList<ToyEvent>()
+        val g = toys.gifts.open(item, toys.room, toys.random(), events) ?: return
+        val first = !col.owned(item.id)
+        ai.h.neue.update { it.copy(ai = it.ai.copy(chessyGifts = GiftCollection(it.ai.chessyGifts).record(item.id).counts)) }
+        audio.play(PetSound.BOING, .5f)
+        audio.play(PetSound.CHIME, .6f, take = 2)
+        if (first) { newGift = g to now(); audio.play(PetSound.SPARKLE, .7f) }
+        react(amie.gave(item, now()), Offset(g.x, g.y), voice = PetSound.TRILL)
+        giftsOut++
+    }
+    // a gift out of the drawer, into the room
+    fun takeOut(item: GiftItem) {
+        ai.giftDrawer = false
+        toys.gifts.takeOut(item, toys.room, toys.random(), ArrayList())
+        audio.play(PetSound.POP, .5f)
+        giftsOut++
+    }
     LaunchedEffect(amie) {
         react(amie.greet(now()), voice = PetSound.NYA)
         // the studio's pictures: a hand played through the same grammar a real one goes through
@@ -210,6 +269,15 @@ fun ChessyAmieLayer(ai: AiState) {
             repeat(n) { i -> t += .06; react(amie.stroke(zone, if (i % 4 < 2) 22f else -22f, 0f, t), at); if (zone == AmieZone.HEAD && i % 6 == 0) burst(at, 1, 0) }
         }
         val room = toys.room
+        if (demo.startsWith("gift-open")) {
+            makeGift()
+            repeat(240) { toys.gifts.step(1f / 120f, room, toys.random(), ArrayList()) }
+            val id = demo.substringAfter(":", "")
+            openGift(catalog.byId(id) ?: catalog.all.firstOrNull { it.id.startsWith(id) } ?: catalog.all.first())
+            repeat(360) { toys.gifts.step(1f / 120f, room, toys.random(), ArrayList()) }
+            giftsOut++
+            return@LaunchedEffect
+        }
         when (demo) {
             "pet" -> stroke(AmieZone.HEAD, head(), 160)
             "tickle" -> stroke(AmieZone.CHIN, sheetToRoom(630f, 1290f), 40)
@@ -219,6 +287,9 @@ fun ChessyAmieLayer(ai: AiState) {
             "sulk" -> repeat(ChessyAmie.POKES) { react(amie.tap(AmieZone.FACE, now() + it * .1), sheetToRoom(630f, 960f)) }
             // catnip on the floor at her feet, settled, and she goes to roll in it; or the bag held up, pouring
             "catnip" -> { toys.catnip.sprinkle(room.herX + room.reach * 1.5f, room.floor - 4f, 40, room, toys.random()); toys.catnip.flakes.step(5f, room, toys.random()) }
+            // her gift: the box glitching in; a gift opened (gift-open:<id>); the chest's drawer
+            "gift" -> { amie.greet(now()); makeGift() }
+            "drawer" -> ai.giftDrawer = true
             "pour" -> { toys.catnip.held = true; toys.catnip.x = room.herX - room.headR * 1.6f; toys.catnip.y = room.headY - room.headR * .4f }
             "finger" -> {
                 // a finger stroking across her head, still down: its ring, the ripple it landed with, its prints
@@ -264,6 +335,9 @@ fun ChessyAmieLayer(ai: AiState) {
             amie.idle(now())?.let { react(it, head(), voice = if (amie.high(now()) > 0f) (if (kotlin.random.Random.nextBoolean()) PetSound.NYAA else PetSound.GIGGLE) else null) }
             if (now() > moodUntil && mood != Expression.SLEEPING) mood = Expression.LISTENING
             refill = kotlin.math.ceil(amie.nipRefill(now())).toInt()
+            // every heart full: she makes you something
+            if (amie.giftDue(now()) && toys.gifts.box == null && !ai.giftDrawer) makeGift()
+            if (newGift?.let { now() - it.second > NEW_FOR } == true) newGift = null
         }
     }
     // the room's clock: every frame while she or a toy moves, a few times a second while all is still (her mind still
@@ -272,6 +346,16 @@ fun ChessyAmieLayer(ai: AiState) {
         var last = 0L
         fun advance(dt: Float) {
             toys.her.silly = amie.high(now())
+            // a hand held still: a press on the floor, or the mouse left resting in the room and off the chrome
+            val t = now()
+            val resting = !hover[0].isNaN() && t - hover[2] > NUZZLE_REST && hover[1] < toys.room.floor &&
+                !(hover[0] in box[0]..(box[0] + box[2]) && hover[1] in box[1]..(box[1] + box[3]))
+            val hand = if (!nuzzle[0].isNaN()) Offset(nuzzle[0], nuzzle[1]) else if (resting) Offset(hover[0], hover[1]) else null
+            if (hand != null && !ai.giftDrawer) toys.her.snuggle(hand.x, hand.y) else toys.her.unsnuggle()
+            if (toys.her.rubbing && hand != null) {
+                if (t - lastPurr > 1.5) { lastPurr = t; audio.play(PetSound.PURR, .55f) }
+                amie.snuggled(t)?.let { react(it, hand, voice = PetSound.PURR) } ?: run { if (t - lastHeart > 1.1) { lastHeart = t; burst(hand, 1, 1) } }
+            }
             for (e in toys.step(dt)) {
                 val at = Offset(e.x, e.y)
                 when (e.hit) {
@@ -286,6 +370,10 @@ fun ChessyAmieLayer(ai: AiState) {
                     ToyHit.POUR -> audio.play(PetSound.RUSTLE, .2f * e.strength)
                     // down in the catnip: the catnip has her (or she has had enough for now, and says so)
                     ToyHit.ROLL -> if (amie.nipRefill(now()) <= 0.0) giveNip() else audio.play(PetSound.TRILL, .6f)
+                    // she reached the hand and rubs against it
+                    ToyHit.SNUGGLE -> { lastPurr = now(); audio.play(PetSound.PURR, .55f); burst(at, 2, 1) }
+                    // a gift put away in the chest
+                    ToyHit.STORED -> { audio.play(PetSound.RUSTLE, .5f); audio.play(PetSound.POP, .3f); amie.stored(now())?.let { react(it, head()) }; giftsOut++ }
                 }
                 react(amie.toy(e.kind, e.hit, now()), at, voice = if (e.hit == ToyHit.CAUGHT) PetSound.GIGGLE else null)
             }
@@ -359,11 +447,83 @@ fun ChessyAmieLayer(ai: AiState) {
                     val room = toys.room
                     val y = toys.yarn
                     val m = toys.mouse
+                    // a gift (or her box) first, then the chest; they are in front of everything on the floor
+                    val gift = toys.gifts.at(start.x, start.y)
+                    val ch = toys.gifts.chest
+                    val onChest = gift == null && abs(start.x - ch.x) < ch.w * .62f && start.y > room.floor - ch.h * 1.2f && start.y < room.floor + 8f * density.density
+                    if (gift != null || onChest) {
+                        down.consume()
+                        val trail = ArrayDeque<Triple<Long, Float, Float>>()
+                        fun follow(t: Long, p: Offset) { trail.addLast(Triple(t, p.x, p.y)); while (trail.size > 2 && t - trail.first().first > 90) trail.removeFirst() }
+                        follow(down.uptimeMillis, start)
+                        var moved = 0f
+                        val carry = gift?.takeIf { it.item != null }
+                        val grab = carry?.let { Offset(start.x - it.x, start.y - it.y) } ?: Offset.Zero
+                        carry?.held = true
+                        while (true) {
+                            val e = awaitPointerEvent()
+                            val c0 = e.changes.firstOrNull() ?: break
+                            if (!c0.pressed) { c0.consume(); break }
+                            c0.consume()
+                            moved += (c0.position - c0.previousPosition).getDistance()
+                            follow(c0.uptimeMillis, c0.position)
+                            if (carry != null) { carry.x = c0.position.x - grab.x; carry.y = c0.position.y - grab.y; toyFrame++ }
+                        }
+                        val v = if (trail.size < 2) Offset.Zero else {
+                            val a = trail.first(); val b = trail.last()
+                            val dt = ((b.first - a.first).coerceAtLeast(8)) / 1000f
+                            Offset((b.second - a.second) / dt, (b.third - a.third) / dt)
+                        }
+                        when {
+                            // the box: a tap opens it, once it is made
+                            gift != null && gift.item == null -> if (moved < slop) openGift()
+                            // a gift carried and let go: into the chest over it, else thrown
+                            carry != null && moved >= slop -> {
+                                val events = ArrayList<ToyEvent>()
+                                if (toys.gifts.release(carry, v.x, v.y, room, toys.random(), events)) {
+                                    audio.play(PetSound.RUSTLE, .5f); audio.play(PetSound.POP, .3f)
+                                    amie.stored(now())?.let { react(it, head()) }
+                                    giftsOut++
+                                }
+                            }
+                            // a tap on a gift: a little toss toward her
+                            carry != null -> {
+                                carry.held = false
+                                carry.vx = towardHer(carry.x) * 240f * room.unit
+                                carry.vy = -720f * room.unit
+                                carry.w = V3(0.0, 4.0 * towardHer(carry.x), 0.0)
+                            }
+                            // the chest: a tap opens its drawer
+                            onChest && moved < slop -> ai.giftDrawer = true
+                        }
+                        toyFrame++
+                        return@awaitEachGesture
+                    }
                     val onYarn = y.out && hypot(start.x - y.x, start.y - y.y) < y.radius * 1.6f
                     val onMouse = !onYarn && m.out && abs(start.x - m.x) < m.length * .6f && abs(start.y - m.y) < m.height * 1.2f
                     val slot = if (onYarn || onMouse) null else slotAt(start)
                     val zone = if (onYarn || onMouse || slot != null) AmieZone.NONE else zoneAt(start)
-                    if (!onYarn && !onMouse && slot == null && zone == AmieZone.NONE) return@awaitEachGesture
+                    if (!onYarn && !onMouse && slot == null && zone == AmieZone.NONE) {
+                        // nothing here: held still a moment, the hand calls her over to rub against it
+                        down.consume()
+                        var moved = 0f
+                        val since = now()
+                        var at = start
+                        while (true) {
+                            val e = withTimeoutOrNull(60L) { awaitPointerEvent() }
+                            if (e != null) {
+                                val c0 = e.changes.firstOrNull() ?: break
+                                if (!c0.pressed) { c0.consume(); break }
+                                c0.consume()
+                                moved += (c0.position - c0.previousPosition).getDistance()
+                                at = c0.position
+                                if (nuzzle[0].isNaN() && moved > slop) break
+                            }
+                            if (now() - since > NUZZLE_HOLD && (moved <= slop || !nuzzle[0].isNaN())) { nuzzle[0] = at.x; nuzzle[1] = at.y }
+                        }
+                        nuzzle[0] = Float.NaN
+                        return@awaitEachGesture
+                    }
                     down.consume()
                     // the hand's last few places, for a throw's speed
                     val trail = ArrayDeque<Triple<Long, Float, Float>>()
@@ -482,6 +642,14 @@ fun ChessyAmieLayer(ai: AiState) {
                     while (true) {
                         val e = awaitPointerEvent()
                         val ch = e.changes.firstOrNull() ?: continue
+                        if (ch.type == PointerType.Mouse) {
+                            if (e.type == PointerEventType.Exit) hover[0] = Float.NaN
+                            else if (e.type == PointerEventType.Move || e.type == PointerEventType.Enter) {
+                                if (hover[0].isNaN() || hypot(ch.position.x - hover[0], ch.position.y - hover[1]) > 3f * density.density) {
+                                    hover[0] = ch.position.x; hover[1] = ch.position.y; hover[2] = now().toFloat()
+                                }
+                            }
+                        }
                         if (e.type == PointerEventType.Move && ch.type == PointerType.Mouse && !ch.pressed) {
                             val d = ch.position - ch.previousPosition
                             if (d != Offset.Zero) react(amie.stroke(zoneAt(ch.position), d.x / density.density, d.y / density.density, now()), ch.position)
@@ -519,6 +687,9 @@ fun ChessyAmieLayer(ai: AiState) {
             }
             if (box[2] != side) { box[2] = side; box[3] = side; box[0] = toys.room.herX - side / 2f; box[1] = top }
             toys.scale(if (compact) .6f else 1f)
+            // the chest of her gifts, at the right end of the floor
+            val chestW = (if (compact) 92f else 150f) * px
+            toys.gifts.chest.apply { x = w - 30f * px - chestW * .6f; this.w = chestW; this.h = chestW * .95f }
 
             // the room behind her: the floor, a rug, paw prints wandering to it
             Canvas(Modifier.fillMaxSize()) { room(c, floorY, w, left + side / 2f, min(side * .4f, w * .44f), px, prints = !compact) }
@@ -527,7 +698,29 @@ fun ChessyAmieLayer(ai: AiState) {
             Canvas(Modifier.fillMaxSize()) {
                 toyFrame
                 floorShadow(c, toys.room.herX, floorY, side * .26f, toys.her.hop / (side * .35f), px)
+                for (g in toys.gifts.out) floorShadow(c, g.x, floorY, g.size * .42f, (floorY - g.y - g.lowest()) / (g.size * 3f), px)
+                toys.gifts.box?.let { b -> floorShadow(c, b.x, floorY, b.size * .5f * toys.gifts.made(), (floorY - b.y - b.lowest()) / (b.size * 3f), px) }
+                val ch = toys.gifts.chest
+                floorShadow(c, ch.x, floorY, ch.w * .55f, 0f, px)
             }
+
+            // the chest of her gifts: a tap opens its drawer, and a gift let go over it goes in
+            val ch = toys.gifts.chest
+            GiftSolid(
+                GiftMeshes.chest, null,
+                Modifier
+                    .offset { IntOffset((ch.x - ch.w).toInt(), (floorY - ch.w * .53f - ch.w).toInt()) }
+                    .size(with(density) { (ch.w * 2f).toDp() }),
+                pose = { GiftBody.CHEST_REST }, frame = { toyFrame }, clock = { auraT },
+                unit = { ch.w }, shift = { part -> if (part == 1) V3(0.0, 0.0, toys.gifts.chest.drawer * .42) else V3.ZERO },
+            )
+            val collected = collection().progress(catalog)
+            Mono(
+                "${collected.have}/${collected.of}",
+                Modifier.offset { IntOffset((ch.x - 16f * px).toInt(), (floorY + 6f * px).toInt()) },
+                color = c.ink45,
+                size = if (compact) 9.sp else 11.sp,
+            )
 
             // her, where her body is: hopping, leaning, squashing and stretching about her base; swaying on catnip
             Box(
@@ -589,6 +782,46 @@ fun ChessyAmieLayer(ai: AiState) {
                 drawToys(toys, c, px, refill > 0) { rest(it) }
             }
 
+            // her gifts: the box she is making or made, its lid and the opened box fading, and the gifts out
+            giftsOut
+            val gp = toys.gifts
+            gp.box?.let { b ->
+                key(b) {
+                    GiftSolid(
+                        GiftMeshes.box, null,
+                        Modifier
+                            .offset { toyFrame; IntOffset((b.x - b.size).toInt(), (b.y - b.size).toInt()) }
+                            .size(with(density) { (b.size * 2f).toDp() })
+                            .glitchIn({ toys.gifts.made() }, { glitchSlot(auraT) }),
+                        pose = { b.q }, frame = { toyFrame }, clock = { auraT }, unit = { b.size },
+                    )
+                }
+            }
+            for (body in listOfNotNull(gp.opened, gp.lid)) key(body) {
+                GiftSolid(
+                    body.model, null,
+                    Modifier.offset { toyFrame; IntOffset((body.x - body.size).toInt(), (body.y - body.size).toInt()) }.size(with(density) { (body.size * 2f).toDp() }),
+                    pose = { body.q }, frame = { toyFrame }, clock = { auraT }, unit = { body.size },
+                    alpha = { (1f - body.age / (if (body === toys.gifts.opened) GiftPlay.FADE else GiftPlay.LID_LIFE)).coerceIn(0f, 1f) },
+                )
+            }
+            for (g in gp.out.toList()) key(g) {
+                GiftSolid(
+                    g.model, g.item,
+                    Modifier
+                        .offset { toyFrame; IntOffset((g.x - g.size).toInt(), (g.y - g.size).toInt()) }
+                        .size(with(density) { (g.size * 2f).toDp() }),
+                    pose = { g.q }, frame = { toyFrame }, clock = { auraT }, unit = { g.size },
+                    card = g.item?.takeIf { it.kind == GiftKind.CARD }?.let { cardOf(it.passcode) },
+                )
+            }
+            // a gift you have never had before: New, over it, a moment
+            newGift?.first?.let { g ->
+                Box(Modifier.offset { toyFrame; IntOffset((g.x - 24f * px).toInt(), (g.y + g.highest() - 30f * px).toInt()) }.background(c.ink).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                    Micro("New", color = c.paper, size = 10.sp)
+                }
+            }
+
             // what she says, in her box: beside her head, always on the same side, square to the page so it reads
             if (line.isNotEmpty()) {
                 val say: @Composable (Modifier, androidx.compose.ui.unit.TextUnit) -> Unit = { mod, size ->
@@ -633,6 +866,12 @@ fun ChessyAmieLayer(ai: AiState) {
                     )
                     MuButton("Bye-bye", { ai.closeAmie() })
                 }
+            }
+        }
+        // the chest's drawer: every gift she can give, yours in 3D, the rest silhouettes
+        if (ai.giftDrawer) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                GiftDrawer(catalog, collection(), ::cardOf, compact = maxWidth < 640.dp, name = ai.name, onTakeOut = ::takeOut, onClose = { ai.giftDrawer = false })
             }
         }
         // where a finger pets her, over her and under the hearts
@@ -828,3 +1067,10 @@ private class TouchMarks {
 
 /** How far down her sheet her hair tips touch the floor: where she sits. */
 private const val SIT = 1660f / ChessyFit.SHEET_H
+
+/** How long a press is held still before she comes to it, and a mouse rests before she does, seconds. */
+private const val NUZZLE_HOLD = .6
+private const val NUZZLE_REST = 1.6
+
+/** How long a first-ever gift wears its New mark, seconds. */
+private const val NEW_FOR = 4.0

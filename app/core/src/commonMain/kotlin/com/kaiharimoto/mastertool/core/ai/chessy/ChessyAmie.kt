@@ -215,7 +215,7 @@ class ChessyAmie(seed: Int = 7) {
     fun toy(kind: ToyKind?, hit: ToyHit, now: Double): AmieReaction? {
         if (high(now) > 0f) return null
         when (hit) {
-            ToyHit.BOUNCE, ToyHit.SWISH, ToyHit.POUNCE, ToyHit.LAND, ToyHit.POUR, ToyHit.ROLL, ToyHit.STORED -> return null
+            ToyHit.BOUNCE, ToyHit.SWISH, ToyHit.POUNCE, ToyHit.LAND, ToyHit.POUR, ToyHit.ROLL, ToyHit.STORED, ToyHit.SNUGGLE -> return null
             ToyHit.NEAR, ToyHit.MISSED -> if (now - lastAnswer < ANSWER_EVERY * 1.5) return null
             else -> Unit
         }
@@ -260,6 +260,14 @@ class ChessyAmie(seed: Int = 7) {
         touch(now)
         fondness = GIFT_AFTER
         return answer(now, AmieReaction(Expression.DELIGHTED, item.give, 4.2, hearts = 4, sparkles = 8))
+    }
+
+    /** Rubbing against a hand held still: now and then a purring word, and she grows fonder. */
+    fun snuggled(now: Double): AmieReaction? {
+        touch(now)
+        warm(.01f)
+        if (now - lastAnswer < ANSWER_EVERY * 2.5) return null
+        return answer(now, AmieReaction(Expression.LOVE, pick("snuggle"), 2.6, hearts = 2))
     }
 
     /** A gift put away in the chest: now and then she says something about it. */
@@ -459,6 +467,13 @@ class ChessyAmie(seed: Int = 7) {
                 "Wait wait— I'm making you something~ ✧(≖‿≖)✧",
                 "All hearts full… that means a present. Hold still, I'm compiling ฅ^•ﻌ•^ฅ",
                 "Close your eyes~ …okay you can't, but pretend (⁄ ⁄•⁄ω⁄•⁄ ⁄)",
+            ),
+            "snuggle" to listOf(
+                "Mrrr… your hand is my favourite spot (－ω－)♡",
+                "Prrrr… don't move. Ever (˘ω˘)",
+                "Scritch scritch… mine now ฅ(=´ω`=)ฅ",
+                "I'm leaving my scent on you. It's code. You'll never get it off (≖ᴗ≖)♡",
+                "Purr purr… this is the best update (=^‥^=)",
             ),
             "gift-store" to listOf(
                 "Put it somewhere safe~ that's MY gift (≖ᴗ≖)♡",

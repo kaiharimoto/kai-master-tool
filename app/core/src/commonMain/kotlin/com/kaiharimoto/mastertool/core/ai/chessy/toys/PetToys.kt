@@ -100,6 +100,9 @@ enum class ToyHit {
 
     /** A gift went back into the chest. */
     STORED,
+
+    /** She reached a hand held still and began rubbing against it. */
+    SNUGGLE,
 }
 
 class ToyEvent(val kind: ToyKind?, val hit: ToyHit, val x: Float, val y: Float, val strength: Float = 1f)

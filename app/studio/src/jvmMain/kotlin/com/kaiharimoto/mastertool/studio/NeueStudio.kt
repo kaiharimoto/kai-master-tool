@@ -957,6 +957,9 @@ fun neueMain(args: Array<String>) {
             }
             // --chessy-amie=pet|tickle|bell|ear|hug|sulk|toys|yarn|mouse|feather|catnip|finger (with --persona=chessy): her petting mode open, that hand
             // (or those toys) played through it.
+            // --chessy-gifts=heart,photo,note:visits,card:… (with --chessy-amie): her gifts already given, for the drawer's picture
+            map["chessy-gifts"]?.let { ids -> h.neue.update { it.copy(ai = it.ai.copy(chessyGifts = ids.split(",").filter { s -> s.isNotBlank() }.associateWith { 1 })) } }
+            // gift (the box glitching in), gift-open:<id> (that gift out), drawer (the chest's drawer) show her gifts.
             map["chessy-amie"]?.let { demo ->
                 h.ai.amieDemo = demo
                 h.ai.openAmie()

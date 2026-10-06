@@ -343,8 +343,8 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   cinematic as pure functions of its clock (safety held by `TakeoverTest`), `core/audio/Synth` + `TakeoverSound` render
   its sound in code, `platform/Speaker` streams it from the clock; it glitches **the live app**, recorded into a
   `GraphicsLayer` by the shell while it plays (`TakeoverLayer`, colour in `TakeoverInk.kt`). It plays after the fifth
-  reply, on `/takeover`, on `/chessy` and from Settings; Skip and Sound in its corner, Esc/Back skip; `takeoverSound`
-  turns its sound off; `--takeover=<s>,…` photographs it. 1.1.30 (kai's notes): red warning windows pile up (`Takeover.WARNINGS`), her lines leave 0.8 s to read, her voice is her nya's (`LINE_VOICES`), Ai holds her in a glitching frame she shoves against looking up (`TakeoverInk.contained`, `PUSHES`), and it lets go of the keyboard (`focusTaken`).
+  reply, on `/takeover` and from Settings (`/chessy` just switches, 1.1.31); Skip and Sound in its corner, Esc/Back skip; `takeoverSound`
+  turns its sound off; `--takeover=<s>,…` photographs it. 1.1.31: once held she faces you; **her gifts** at full hearts (`core/ai/chessy/gifts`: `GiftCatalog`, `GiftCollection` in `AiPrefs.chessyGifts`, `GiftMeshes` real 3D solids, `GiftBody`, `GiftPlay`, the chest and its drawer `GiftDrawer`; drawn by `GiftInk.kt`, the gifts' colour exception), and a hand held still she rubs against, purring (`PlayState.SNUGGLE`). 1.1.30 (kai's notes): red warning windows pile up (`Takeover.WARNINGS`), her lines leave 0.8 s to read, her voice is her nya's (`LINE_VOICES`), Ai holds her in a glitching frame she shoves against looking up (`TakeoverInk.contained`, `PUSHES`), and it lets go of the keyboard (`focusTaken`).
 - **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;

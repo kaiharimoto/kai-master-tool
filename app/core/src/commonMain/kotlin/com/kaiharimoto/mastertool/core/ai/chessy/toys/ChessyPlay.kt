@@ -35,6 +35,9 @@ enum class PlayState {
 
     /** Down in the catnip on the floor, rolling over in it and back. */
     ROLL,
+
+    /** Gone to a hand held still, rubbing her cheek against it like a cat. */
+    SNUGGLE,
 }
 
 /**
@@ -98,6 +101,38 @@ class ChessyPlay {
     private var rollFrom = 0f
     private var rollCool = 0f
 
+    // a hand held still (kai: "Chessy will come up to it and snuggle and rub against it like a cat would and purr")
+    private var nuzzleX = Float.NaN
+    private var nuzzleSide = 1f
+
+    /** Whether she has reached the hand and is rubbing against it. */
+    var rubbing = false
+        private set
+
+    /**
+     * A hand held still at ([x], [y]) in the room: she goes to it and rubs against it, until [unsnuggle]. Called again as
+     * it drifts. Not while she is mid-leap or rolling in catnip.
+     */
+    fun snuggle(x: Float, y: Float) {
+        if (state == PlayState.POUNCE || state == PlayState.ROLL) return
+        if (state != PlayState.SNUGGLE) {
+            nuzzleSide = if (x >= this.x) 1f else -1f
+            state = PlayState.SNUGGLE
+            t = 0f
+            target = null
+            mouthOpen = false
+            rubbing = false
+        }
+        nuzzleX = x
+    }
+
+    /** The hand moved on or let go. */
+    fun unsnuggle() {
+        nuzzleX = Float.NaN
+        rubbing = false
+        if (state == PlayState.SNUGGLE) settle()
+    }
+
     /** Whether anything of her is still moving: her loop may sleep when not. */
     val moving: Boolean
         get() = state != PlayState.SIT || abs(spin) > .2f || sink > .2f || air > 0f || bob > .05f || abs(lean) > .2f || abs(sx - 1f) > .004f || abs(sy - 1f) > .004f || abs(vx) > 1f
@@ -138,7 +173,7 @@ class ChessyPlay {
             }
         }
 
-        if (silly > 0f && state != PlayState.SILLY && state != PlayState.POUNCE && state != PlayState.ROLL) { state = PlayState.SILLY; t = 0f; target = null; mouthOpen = false }
+        if (silly > 0f && state != PlayState.SILLY && state != PlayState.POUNCE && state != PlayState.ROLL && state != PlayState.SNUGGLE) { state = PlayState.SILLY; t = 0f; target = null; mouthOpen = false }
         when (state) {
             PlayState.SIT -> {
                 leanTo = 0f; sxTo = 1f; syTo = 1f
@@ -173,6 +208,7 @@ class ChessyPlay {
             }
             PlayState.LUNGE -> lunge(dt, room, toys, random, events)
             PlayState.ROLL -> roll(dt, room, toys, random)
+            PlayState.SNUGGLE -> nuzzle(dt, room, events)
             PlayState.AMUSED -> {
                 // giggling: a few little hops, a wiggle
                 leanTo = sin(t * 13f) * 9f
@@ -327,6 +363,38 @@ class ChessyPlay {
             rollCool = ROLL_AGAIN
             settle()
         }
+    }
+
+    /** To the hand, then her cheek against it: rubbing to and fro, leaning into it, a little squashed with pleasure. */
+    private fun nuzzle(dt: Float, room: PetRoom, events: MutableList<ToyEvent>) {
+        if (nuzzleX.isNaN()) return settle()
+        val u = room.unit
+        val lo = room.left + room.halfW
+        val hi = max(lo, room.right - room.halfW)
+        // she stands with her cheek at the hand: half her width off it, on the side she came from
+        val spot = (nuzzleX - nuzzleSide * room.halfW * .55f).coerceIn(lo, hi)
+        val dx = spot - x
+        if (!rubbing && abs(dx) > 8f * u) {
+            dir = sign(dx)
+            val step = min(abs(dx), 300f * u * dt) * dir
+            x += step
+            gait += abs(step) / (26f * u)
+            bob = if (air == 0f) abs(sin(gait * PI.toFloat())) * 9f * u else 0f
+            leanTo = dir * 7f
+            sxTo = 1f; syTo = 1f
+            return
+        }
+        if (!rubbing) {
+            rubbing = true
+            t = 0f
+            events += ToyEvent(null, ToyHit.SNUGGLE, nuzzleX, room.headY)
+        }
+        bob *= exp(-dt * 12f)
+        // rubbing: her head to and fro against the hand, leaning into it
+        leanTo = nuzzleSide * (11f + sin(t * 8.5f) * 9f)
+        sxTo = 1.03f + sin(t * 8.5f) * .02f
+        syTo = .97f - sin(t * 8.5f) * .02f
+        x += (spot + sin(t * 4.25f) * room.reach * .12f - x) * min(1f, dt * 6f)
     }
 
     private fun smooth(v: Float): Float { val c = v.coerceIn(0f, 1f); return c * c * (3f - 2f * c) }
