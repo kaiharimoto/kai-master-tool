@@ -75,6 +75,8 @@ class TakeoverTest {
         assertEquals(TakeoverHorn.BLAST_S, horns.first().len)
         assertEquals(10, cues.count { it.sound == Takeover.Sound.RESTORE })
         assertTrue(cues.all { it.at in 0f..Takeover.END })
+        // kai, 1.1.34: no snare-like tick and no static
+        assertTrue(cues.none { it.sound == Takeover.Sound.TICK || it.sound == Takeover.Sound.STATIC })
     }
 
     @Test

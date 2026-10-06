@@ -3035,7 +3035,9 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   comb-and-all-pass room) renders every cue, kai's horn (`TakeoverHorn`) among them, and `TakeoverSound` lays them into
   one buffer at 32 kHz the first time it plays (off the frame thread). `platform/Speaker` streams it from wherever the
   clock is (Java Sound on the desk, `AudioTrack` on Android), so Skip is a seek and Sound off a stop.
-  `NEUE_TAKEOVER_WAV=<path>` with `SoundtrackWavTest` writes it to a file to listen to. **It glitches the live app**:
+  `NEUE_TAKEOVER_WAV=<path>` with `SoundtrackWavTest` writes it to a file to listen to, and `NEUE_TAKEOVER_AUDITION=<dir>`
+  writes it without each sound and with each alone (`TakeoverSound.render(mute = …)`), to find one by ear. The opening
+  ticks, the static and the pop-ups' click are gone (kai, 1.1.34: "a clicking sound that sounds like a snare"). **It glitches the live app**:
   the shell records its content into a `GraphicsLayer` while it plays (`NeueApp`, the paper too), and `TakeoverLayer`
   draws slipped, torn, colour-split copies of it (`TakeoverInk.kt`, the takeover's colour file, named in
   `MasterUiLawTest`), only where Ai has not swept the app clean; her heads (`ChessyAvatar`, still, colour split by

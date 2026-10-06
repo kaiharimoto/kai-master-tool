@@ -354,6 +354,7 @@ object Takeover {
 
     // ---- the soundtrack ------------------------------------------------------------------------------------------------
 
+    /** [TICK] and [STATIC] are no longer cued (kai, 1.1.34), kept so the audition can still name them. */
     enum class Sound { TICK, STATIC, CHIRP, HORN, BUZZ, CRUSH, POWERDOWN, NYA, KEY, RESTORE, POWERUP, POPUP, VOICE }
 
     /** A sound and when it starts; [len] for the horn's blast; [voice] for her voice ([Sound.VOICE]). */
@@ -362,13 +363,10 @@ object Takeover {
     /** Every sound of the takeover, in order: what the storyboard played, with kai's horn. */
     val CUES: List<Cue> by lazy {
         val c = ArrayList<Cue>()
-        for (i in 0 until 6) c += Cue(.25f + i * .32f, Sound.TICK)
-        c += Cue(1.2f, Sound.STATIC)
+        // no ticks and no static (kai, 1.1.34: the snare-like click and the static are gone)
         for ((at, len) in TakeoverHorn.blasts(from = CALM_TO, chaosAt = CHAOS_AT, until = SNAP_AT - .2f)) c += Cue(at, Sound.HORN, len)
         var t = 2.2f
         while (t < CHAOS_AT) { c += Cue(t + rnd((t * 100).toInt(), 0) * .1f, Sound.CHIRP); t += .27f }
-        t = 2.5f
-        while (t < SNAP_AT) { c += Cue(t, Sound.STATIC); t += .9f }
         c += Cue(CHAOS_AT, Sound.CRUSH)
         c += Cue(7.5f, Sound.CRUSH)
         for (h in HEADS) c += Cue(h.born, Sound.BUZZ)
@@ -385,7 +383,6 @@ object Takeover {
             val u = ChessyType.units(line.text)
             for (k in u.indices) if (u[k].isNotBlank()) c += Cue(line.at + (k + 1) / TYPE_RATE, Sound.KEY)
         }
-        c += Cue(FIGHT_AT, Sound.STATIC)
         c += Cue(KNOCK_AT, Sound.CRUSH)
         // a clean tick for each tenth Ai wins back
         var p = 10f
