@@ -47,7 +47,7 @@ data class FxPlayed(
 /** One use to mark: [card] (canonical), its script's [script] hash, the [effect] used. */
 data class FxPlayedUse(val card: Int, val script: String, val effect: String)
 
-object FxPlays {
+object FxMarks {
     val json = Json { ignoreUnknownKeys = true; encodeDefaults = false; explicitNulls = false }
 
     fun encode(p: FxPlayed): String = json.encodeToString(FxPlayed.serializer(), p)
