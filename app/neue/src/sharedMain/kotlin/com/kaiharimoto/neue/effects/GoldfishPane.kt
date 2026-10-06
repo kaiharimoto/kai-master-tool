@@ -277,6 +277,14 @@ private fun RunControls(h: NeueHolders, doc: GoldfishDoc) {
         val busy = runs.busy
         if (busy) {
             val p = runs.progress
+            // What is running, in its own words: the controls above may already be set for the next run.
+            runs.running?.let { s ->
+                RowText(
+                    "Running “${s.target.name}”: going ${if (s.first) "first" else "second"}, ${GoldfishWords.count(s.hands)} hands, seed ${s.seed}",
+                    color = c.ink,
+                    maxLines = 2,
+                )
+            }
             Progress(p?.let { if (it.total == 0) null else it.done.toFloat() / it.total })
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Mono(p?.let(GoldfishBrowse::progressWords) ?: "Starting…", Modifier.weight(1f), color = c.ink)

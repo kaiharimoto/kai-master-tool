@@ -130,7 +130,11 @@ internal suspend fun studioGoldfish(h: NeueHolders, mode: String, map: Map<Strin
         }
         "goldfish-target" -> {
             runs.editing = GoldfishRuns.Editing(set.id, TargetDraft.of(set), EndBoard.PERSON, picking = BoardPlace.FIELD)
-            clock.run(60)
+            // The picker's art decodes off the frame thread: frames and a moment for it to land.
+            repeat(12) {
+                clock.run(20)
+                Thread.sleep(150)
+            }
         }
         "goldfish-result", "goldfish-replay" -> {
             // An earlier run, kept, for the list under the result.
