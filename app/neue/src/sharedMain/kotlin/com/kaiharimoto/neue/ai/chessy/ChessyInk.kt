@@ -188,6 +188,47 @@ internal object ChessyInk {
     /** Foil hearts and sparkles of the petting mode, in canvas pixels: [list]'s marks with scale in pixels. */
     fun DrawScope.particles(list: MarkList, light: Offset, foils: MarkFoils? = null) = marks(list, 1f, 0f, 0f, light, foils)
 
+    /**
+     * The petting mode's cursor (kai, 2026-10: "design a new cursor instead of the crop in this mode because it would
+     * make more sense for sensitive interaction"): a soft paw, paper with an ink edge so it reads on her and on paper,
+     * her pink in its beans, centred on the point it touches; pressed, it squashes onto her a little. [ink] and [paper]
+     * are the theme's; [s] pixels a dp.
+     */
+    fun DrawScope.drawPaw(at: Offset, s: Float, pressed: Boolean, ink: Color, paper: Color) {
+        val squash = if (pressed) .86f else 1f
+        val spread = if (pressed) 1.08f else 1f
+        withTransform({
+            translate(at.x, at.y)
+            scale(spread * s, squash * s, Offset.Zero)
+        }) {
+            val edge = Stroke(1.4f)
+            // the pad: wide at the heel, three soft lobes along its top
+            val pad = Path().apply {
+                moveTo(-6.6f, 4.2f)
+                cubicTo(-7.6f, 1.2f, -4.6f, -1.6f, -2.2f, -.9f)
+                cubicTo(-1.2f, -1.8f, 1.2f, -1.8f, 2.2f, -.9f)
+                cubicTo(4.6f, -1.6f, 7.6f, 1.2f, 6.6f, 4.2f)
+                cubicTo(5.8f, 7.4f, 2.6f, 8.2f, 0f, 7.0f)
+                cubicTo(-2.6f, 8.2f, -5.8f, 7.4f, -6.6f, 4.2f)
+                close()
+            }
+            drawPath(pad, paper)
+            drawPath(pad, ink, style = edge)
+            drawOval(PINK.copy(alpha = .9f), Offset(-3.8f, 1.2f), Size(7.6f, 4.4f))
+            // four toes, fanned over it
+            for ((x, y, r) in TOES) {
+                withTransform({ rotate(r, Offset(x, y)) }) {
+                    drawOval(paper, Offset(x - 2.4f, y - 3f), Size(4.8f, 6f))
+                    drawOval(ink, Offset(x - 2.4f, y - 3f), Size(4.8f, 6f), style = edge)
+                    drawOval(PINK.copy(alpha = .9f), Offset(x - 1.25f, y - 1.6f), Size(2.5f, 3.2f))
+                }
+            }
+        }
+    }
+
+    /** The paw's toes: where each sits (dp from the touch) and how it leans. */
+    private val TOES = listOf(Triple(-8.4f, -3.4f, -24f), Triple(-3.1f, -7.6f, -8f), Triple(3.1f, -7.6f, 8f), Triple(8.4f, -3.4f, 24f))
+
     /** How finely the foil's light moves: twenty steps a unit. */
     private const val LIGHT_STEPS = 20f
 }

@@ -122,4 +122,13 @@ class CropCaptionTest {
         // At rest a card changes nothing: only framing it does.
         assertEquals(CropCaption.arm(CursorMode.DEFAULT), CropCaption.arm(CursorMode.DEFAULT, emphasis = true))
     }
+
+    @Test
+    fun thePawFramesItselfAndSaysItsVerb() {
+        val her = CursorTarget(CursorMode.PAW, CursorBox(100f, 100f, 400f, 400f), caption = "Pet")
+        val (box, wide) = CropCaption.geometry(CursorMode.PAW, her, 300f, 300f, 1920f, 1080f)
+        assertEquals(CursorBox(300f - CropCaption.PAW / 2f, 300f - CropCaption.PAW / 2f, CropCaption.PAW, CropCaption.PAW), box)
+        assertEquals(false, wide)
+        assertEquals(CursorCaption("Pet"), CropCaption.caption(CursorMode.PAW, her, null))
+    }
 }

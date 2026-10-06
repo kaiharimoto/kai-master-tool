@@ -15,7 +15,11 @@ import kotlin.math.roundToInt
  * so a Neue pointer and a web Master app's pointer are the same pointer, and a
  * change to either has to be made to both.
  */
-enum class CursorMode { DEFAULT, POINTER, TEXT, DRAG, NO, BUSY, NATIVE }
+/**
+ * [PAW] is Chessy's petting mode's own (kai, 2026-10: "design a new cursor instead of the crop in this mode because it
+ * would make more sense for sensitive interaction"): a soft paw in place of the marks, with the target's caption.
+ */
+enum class CursorMode { DEFAULT, POINTER, TEXT, DRAG, NO, BUSY, NATIVE, PAW }
 
 /** A rectangle in window pixels. */
 data class CursorBox(val x: Float, val y: Float, val w: Float, val h: Float) {
@@ -72,6 +76,9 @@ object CropCaption {
     const val WIDE_W = 480f
     const val WIDE_H = 160f
     const val REST = 16f
+
+    /** The petting mode's paw, across: its caption sits under it as under a frame. */
+    const val PAW = 26f
     const val CAPTION_H = 20f
     const val CAPTION_GAP = 6f
     const val EDGE = 4f
@@ -142,6 +149,7 @@ object CropCaption {
                     CursorBox(x - 18f, cy - 7f, 36f, 14f)
                 }
             }
+            mode == CursorMode.PAW -> CursorBox(x - PAW / 2f, y - PAW / 2f, PAW, PAW)
             else -> CursorBox(x - REST / 2f, y - REST / 2f, REST, REST)
         }
         // Keep the marks on screen.
@@ -172,6 +180,7 @@ object CropCaption {
                 if (name.isEmpty() && value.isEmpty()) null else CursorCaption(name, value)
             }
             CursorMode.NO -> (target.reason ?: target.caption)?.let { CursorCaption(it) }
+            CursorMode.PAW -> target.caption?.let { CursorCaption(it) }
             else -> null
         }
     }

@@ -1,9 +1,13 @@
 package com.kaiharimoto.mastertool.core.ai.chessy
 
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
+import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyHit
+import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyKind
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.random.Random
@@ -70,6 +74,20 @@ data class AmieReaction(
     val ring: Boolean = false,
 )
 
+/** Her favourite things, found one by one in the petting mode: what the stage's list of them shows. */
+enum class AmieLove(val title: String) {
+    PETS("Head pats"),
+    TICKLES("Chin tickles"),
+    CHEEKS("Cheek squishes"),
+    EARS("Her ears"),
+    BELL("Her bell"),
+    HUGS("Hugs"),
+    YARN("The yarn ball"),
+    FEATHER("The feather"),
+    MOUSE("The mouse"),
+    CATNIP("Catnip"),
+}
+
 /**
  * Chessy's petting mode (kai, 2026-10: "a cute interaction mode like Pokemon Amie … she'll say moe lines like 'That
  * tickles!' and 'Thank you~'"): the grammar of a hand on her, pure and tested. A tap is answered by where it lands; a
@@ -98,6 +116,17 @@ class ChessyAmie(seed: Int = 7) {
     var fondness = 0f
         private set
 
+    /** How many times she has answered each of her favourite things this visit ([AmieLove]); 0 is not found yet. */
+    val loves = IntArray(AmieLove.entries.size)
+
+    /** How many of her favourite things have been found. */
+    val found: Int get() = loves.count { it > 0 }
+
+    // catnip: when it was given (seconds), and the beat of its silliness
+    private var nipAt = -1000.0
+    private var nipBeat = 0.0
+    private var napped = true
+
     fun greet(now: Double): AmieReaction {
         lastTouch = now
         return AmieReaction(Expression.FOUND, pick("greet"), 3.0, hearts = 2, sparkles = 8)
@@ -119,10 +148,10 @@ class ChessyAmie(seed: Int = 7) {
         }
         if (sulking) return answer(now, AmieReaction(Expression.SAD, pick("still-sulking"), 2.4))
         return answer(now, when (zone) {
-            AmieZone.EAR_L, AmieZone.EAR_R -> AmieReaction(Expression.SHY, pick("ear"), 2.6, sparkles = 2, ear = if (zone == AmieZone.EAR_L) -1 else 1)
-            AmieZone.CHEEK_L, AmieZone.CHEEK_R -> AmieReaction(Expression.OOPS, pick("cheek"), 2.4, sparkles = 1)
-            AmieZone.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.4, sparkles = 5, ring = true)
-            AmieZone.CHIN -> AmieReaction(Expression.DELIGHTED, pick("tickle"), 2.4, hearts = 1, sparkles = 2)
+            AmieZone.EAR_L, AmieZone.EAR_R -> AmieReaction(Expression.SHY, pick("ear"), 2.6, sparkles = 2, ear = if (zone == AmieZone.EAR_L) -1 else 1).also { love(AmieLove.EARS) }
+            AmieZone.CHEEK_L, AmieZone.CHEEK_R -> AmieReaction(Expression.OOPS, pick("cheek"), 2.4, sparkles = 1).also { love(AmieLove.CHEEKS) }
+            AmieZone.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.4, sparkles = 5, ring = true).also { love(AmieLove.BELL) }
+            AmieZone.CHIN -> AmieReaction(Expression.DELIGHTED, pick("tickle"), 2.4, hearts = 1, sparkles = 2).also { love(AmieLove.TICKLES) }
             AmieZone.HEAD -> AmieReaction(Expression.WAITING, pick("head-tap"), 2.2)
             else -> AmieReaction(Expression.LISTENING, pick("face"), 2.2, sparkles = 1)
         })
@@ -150,12 +179,13 @@ class ChessyAmie(seed: Int = 7) {
             return answer(now, AmieReaction(Expression.SHY, pick("forgive"), 2.8, hearts = 2))
         }
         return answer(now, when (zone) {
-            AmieZone.CHIN -> AmieReaction(Expression.DELIGHTED, pick("tickle"), 2.4, hearts = 2, sparkles = 3).also { warm(.06f) }
-            AmieZone.CHEEK_L, AmieZone.CHEEK_R -> AmieReaction(Expression.SHY, pick("rub"), 2.4, hearts = 2).also { warm(.05f) }
-            AmieZone.EAR_L, AmieZone.EAR_R -> AmieReaction(Expression.SHY, pick("ear"), 2.4, hearts = 1, ear = if (zone == AmieZone.EAR_L) -1 else 1)
-            AmieZone.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.2, sparkles = 4, ring = true)
+            AmieZone.CHIN -> AmieReaction(Expression.DELIGHTED, pick("tickle"), 2.4, hearts = 2, sparkles = 3).also { warm(.06f); love(AmieLove.TICKLES) }
+            AmieZone.CHEEK_L, AmieZone.CHEEK_R -> AmieReaction(Expression.SHY, pick("rub"), 2.4, hearts = 2).also { warm(.05f); love(AmieLove.CHEEKS) }
+            AmieZone.EAR_L, AmieZone.EAR_R -> AmieReaction(Expression.SHY, pick("ear"), 2.4, hearts = 1, ear = if (zone == AmieZone.EAR_L) -1 else 1).also { love(AmieLove.EARS) }
+            AmieZone.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.2, sparkles = 4, ring = true).also { love(AmieLove.BELL) }
             else -> {
                 warm(.08f)
+                love(AmieLove.PETS)
                 if (fondness >= FOND) AmieReaction(Expression.LOVE, pick("adore"), 3.0, hearts = 5, sparkles = 3)
                 else AmieReaction(Expression.DELIGHTED, pick("pet"), 2.6, hearts = 3)
             }
@@ -167,17 +197,84 @@ class ChessyAmie(seed: Int = 7) {
         if (zone == AmieZone.NONE) return null
         touch(now)
         warm(.1f)
+        love(AmieLove.HUGS)
         sulking = false
         return answer(now, AmieReaction(Expression.LOVE, pick("hug"), 3.0, hearts = 4))
     }
 
     /** Nothing touched her for a while: she wonders where you went, then dozes. Null when there is nothing to say. */
     fun idle(now: Double): AmieReaction? {
+        // catnip has her: silly every few seconds while it lasts, then a nap
+        val since = now - nipAt
+        if (since in 0.0..NIP_HIGH) {
+            if (now - nipBeat >= NIP_BEAT) {
+                nipBeat = now
+                val mood = NIP_MOODS[((since / NIP_BEAT).toInt()) % NIP_MOODS.size]
+                return answer(now, AmieReaction(mood, pick("nip-high"), NIP_BEAT, hearts = 2, sparkles = 6, ear = if (random.nextBoolean()) 1 else -1, ring = random.nextFloat() < .4f))
+            }
+            return null
+        }
+        if (!napped && since > NIP_HIGH) {
+            napped = true
+            lastTouch = now
+            return answer(now, AmieReaction(Expression.SLEEPING, pick("nip-nap"), NIP_NAP))
+        }
         val quiet = now - lastTouch
         if (!asleep && quiet >= SLEEPY) { asleep = true; return answer(now, AmieReaction(Expression.SLEEPING, pick("sleepy"), 30.0)) }
         if (!lonely && quiet >= LONELY) { lonely = true; return answer(now, AmieReaction(Expression.WAITING, pick("lonely"), 3.0)) }
         return null
     }
+
+    /** A toy did something she answers ([ToyHit]); null while catnip has her, or for nothing to say. */
+    fun toy(kind: ToyKind, hit: ToyHit, now: Double): AmieReaction? {
+        touch(now)
+        love(when (kind) {
+            ToyKind.YARN -> AmieLove.YARN
+            ToyKind.FEATHER -> AmieLove.FEATHER
+            ToyKind.MOUSE -> AmieLove.MOUSE
+            ToyKind.CATNIP -> AmieLove.CATNIP
+        })
+        if (high(now) > 0f) return null
+        if (hit == ToyHit.NEAR && now - lastAnswer < ANSWER_EVERY) return null
+        sulking = false
+        return answer(now, when (hit) {
+            ToyHit.NEAR -> if (kind == ToyKind.MOUSE) AmieReaction(Expression.SURPRISED, pick("mouse-near"), 2.2, sparkles = 2, ear = 1)
+            else AmieReaction(Expression.FOUND, pick("yarn-near"), 2.0, sparkles = 3)
+            ToyHit.HEAD -> AmieReaction(Expression.OOPS, pick("yarn-bonk"), 2.4, sparkles = 4, ear = if (random.nextBoolean()) 1 else -1)
+            ToyHit.BELL -> AmieReaction(Expression.WINK, pick("bell"), 2.2, sparkles = 4, ring = true)
+            ToyHit.BATTED -> AmieReaction(Expression.DELIGHTED, pick("yarn-bat"), 2.4, hearts = 1, sparkles = 3).also { warm(.04f) }
+            ToyHit.POUNCED -> AmieReaction(Expression.DELIGHTED, pick("mouse-pounce"), 2.6, hearts = 2, sparkles = 5).also { warm(.05f) }
+            ToyHit.SWATTED -> AmieReaction(Expression.FOUND, pick("feather-swat"), 1.8, sparkles = 3, ear = if (random.nextBoolean()) 1 else -1).also { warm(.03f) }
+        })
+    }
+
+    /** Catnip given: silly for [NIP_HIGH] seconds, then a nap; again only after [NIP_AGAIN]. */
+    fun nip(now: Double): AmieReaction {
+        touch(now)
+        if (now - nipAt < NIP_AGAIN) return answer(now, AmieReaction(Expression.WINK, pick("nip-wait"), 2.4))
+        nipAt = now
+        nipBeat = now
+        napped = false
+        warm(.15f)
+        love(AmieLove.CATNIP)
+        sulking = false
+        return answer(now, AmieReaction(Expression.LOVE, pick("nip"), NIP_BEAT, hearts = 4, sparkles = 10, ring = true))
+    }
+
+    /** How much catnip has her now, 0 to 1: in over a second, out over the last one. */
+    fun high(now: Double): Float {
+        val t = now - nipAt
+        if (t < 0.0 || t > NIP_HIGH) return 0f
+        return min(1.0, min(t / 1.0, (NIP_HIGH - t) / 1.0)).toFloat()
+    }
+
+    /** Her sway while catnip has her, in degrees: a slow, happy wobble. */
+    fun wobble(now: Double): Float = high(now) * (sin(now * 2.6) * 5.0 + sin(now * 6.1) * 1.5).toFloat()
+
+    /** Seconds until she can have catnip again; 0 when she can. */
+    fun nipRefill(now: Double): Double = max(0.0, NIP_AGAIN - (now - nipAt))
+
+    private fun love(l: AmieLove) { loves[l.ordinal]++ }
 
     private fun touch(now: Double) {
         lastTouch = now
@@ -207,6 +304,11 @@ class ChessyAmie(seed: Int = 7) {
         const val FOND = .5f
         const val LONELY = 9.0
         const val SLEEPY = 24.0
+        const val NIP_HIGH = 10.0
+        const val NIP_BEAT = 2.5
+        const val NIP_NAP = 6.0
+        const val NIP_AGAIN = 40.0
+        private val NIP_MOODS = listOf(Expression.DELIGHTED, Expression.LOVE, Expression.WINK, Expression.SHY)
 
         /** Her words, by what happened (kai: "think of more to make her charming and adorable"). */
         val LINES: Map<String, List<String>> = mapOf(
@@ -285,6 +387,58 @@ class ChessyAmie(seed: Int = 7) {
             "sleepy" to listOf(
                 "Fuwaa… getting sleepy… (－ω－) zzZ",
                 "Nya… five more minutes… (￣o￣) zzZ",
+            ),
+            "yarn-near" to listOf(
+                "Ooh! Yarn! (✧ω✧)",
+                "Th-that's not fair, it's so bouncy~ (≧∇≦)",
+                "My eyes can't help it! (◎_◎)",
+            ),
+            "yarn-bonk" to listOf(
+                "Nyah! Right on my head! (＞_＜)",
+                "Ow~ a direct hit! (｡•́︿•̀｡)",
+                "Hey! Aim for my paws, not my face! (｀ε´)",
+            ),
+            "yarn-bat" to listOf(
+                "Hehe, mine! ฅ(=･ω･=)ฅ",
+                "Bap! (ﾉ≧∀≦)ﾉ",
+                "Go fetch~ …wait, that's your job (=^･ｪ･^=)",
+                "Too slow! (๑˃ᴗ˂)ﻭ",
+            ),
+            "feather-swat" to listOf(
+                "Nya! Nya! Nyaa! (ฅ`ω´ฅ)",
+                "Got it— no I didn't! (≧▽≦)",
+                "Hold still, you sneaky feather! (=｀ω´=)",
+                "Hehe, again again! ヽ(>∀<☆)ノ",
+            ),
+            "mouse-near" to listOf(
+                "A mouse?! (ﾟДﾟ;)",
+                "Is that… a snack? (๑•̀ㅂ•́)و✧",
+                "Something's running! Stay right there~ (=ↀωↀ=)",
+            ),
+            "mouse-pounce" to listOf(
+                "Pounce! ฅ^•ﻌ•^ฅ",
+                "Caught you~! (ﾉ´ヮ`)ﾉ*: ･ﾟ",
+                "Hehe, it flipped right over! (≧▽≦)",
+            ),
+            "nip" to listOf(
+                "Is that… catnip?! (✧ω✧)",
+                "Ohh, you didn't! …you did~ (〃▽〃)",
+            ),
+            "nip-high" to listOf(
+                "Everything is sparkly~ ✧(≖ ◡ ≖✿)",
+                "Nyaa~ the room is spinning~ (＠_＠)",
+                "I love you. I love the table. I love… the cards~ (*´▽`*)",
+                "Hehe… hehehe… (〃∀〃)",
+                "Wheee~ ヽ(♡‿♡)ノ",
+                "Who put stars in here? (☆ω☆)",
+            ),
+            "nip-nap" to listOf(
+                "…so… sleepy now… (－ω－) zzZ",
+                "That was… the best… (￣ω￣) zzZ",
+            ),
+            "nip-wait" to listOf(
+                "No more! …okay, maybe later (≖ᴗ≖)",
+                "A lady needs a break between treats~ (￣ー￣)",
             ),
             "bye" to listOf(
                 "Come back and play again soon~! (ﾉ´ヮ`)ﾉ*: ･ﾟ",

@@ -2896,6 +2896,35 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   rounded thing outside a slide, which `MasterUiLawTest` names). It types as the takeover does: `core/ai/chessy/ChessyType`
   lays the whole line out from the first letter and colours only what is typed, so nothing reflows, and an emoticon is
   one unit glued to the word before it (no-break spaces, word joiners), so it never splits or wraps away.
+- **Her room** (kai, 1.1.27: "Pet mode: design a new cursor … add more toys … cat toys and cat nip … in the same style
+  and build quality as the coin and dice in the duel simulator … expand more on the pet mode … this is our chance to
+  captivate the user and make them fall in love with our chessy's charms!"). The petting mode is a room now: she sits
+  on a woven rug on a hairline floor (paw prints wander to it), half the window, with **the toy box** down the right
+  (along the bottom on a phone) and **her favourite things** down the left.
+  - **The paw** is the pointer here: `CursorMode.PAW` (core, `CropCaption`: a 26 px frame for the caption, which is the
+    target's verb), drawn by `ChessyInk.drawPaw` — paper with an ink edge, her pink in its beans, squashing when pressed.
+    Over her it says *Pet*; over a slot of the toy box the crop cursor's drag says the toy's verb.
+  - **The toys** are `core/ai/chessy/toys/PetToys.kt`, pure and tested (`PetToysTest`), stepped in pieces of 1/120 s in
+    a room of pixels (y down, z toward the person), her head and her bell circles they bounce off: a **yarn ball**
+    (thrown, it flies and tumbles, bounces off the walls, the floor and her, and rolls to a stop with its spin matched to
+    its roll; its loose end a Verlet `Rope`; left by her paws, she bats it away), a **feather wand** (its handle follows
+    the hand, its string swings after it; waved fast in her face she swats at it and knocks it flying), a **wind-up
+    mouse** (wound — tapped, or let go — it runs along the floor, turns at the walls, and runs under her nose until she
+    pounces, flipping it; run down, it stops) and **catnip** (let go over her, or tapped in its slot: ten seconds of
+    silliness — a sway (`ChessyAmie.wobble`), a line and a burst every 2.5 s — then a six-second nap, and again only
+    after forty; the slot counts down). Each event (`ToyHit`: near, head, bell, batted, pounced, swatted) is answered by
+    `ChessyAmie.toy` with its own lines.
+  - **They are drawn as the dice are** (`PetToysInk.kt`, paper and ink only): every surface placed in 3D, turned by its
+    body's quaternion, filled by its step of shade (`toyShade`, the dice's steps, `TOY_LIGHT`): the yarn a sphere whose
+    shade steps are its lit caps seen from the front, wound by bands of strands drawn on their near halves; the mouse an
+    egg of quads, one path a shade step so no seams show, outlined where the body turns away, with ears, an eye,
+    whiskers and a key that turns as it runs; the wand a dowel with a ribbon and a feather of barbs that flutters with
+    its speed; the catnip a puffed pouch with a printed leaf.
+  - **Her favourite things** (`AmieLove`: head pats, chin tickles, cheek squishes, her ears, her bell, hugs, the yarn,
+    the feather, the mouse, catnip) are found one by one as she answers them, the rest a row of `? ? ?`; the head counts
+    them where the list has no room. One arbiter takes every press on the room (a toy's, a slot's or hers, never two), so
+    a press beside her no longer lets her go: Bye-bye, Esc or Back does. She watches the toy in play (`PetToys.focus`),
+    else the hand. `tools/shoot.sh --persona=chessy --chessy-amie=toys|yarn|mouse|feather|catnip` photographs it.
 - **Her name glitches** (kai: "a glitchy font for flavor"): `ChessyGlitchName`, the mono face with a pink and a violet
   copy split either side and a short tear every few seconds (no frames between tears), in the bar and the chat box.
 - **No white rim round her** (kai): her layers were cut from a sheet drawn on white, so a band of solid white stood

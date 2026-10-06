@@ -56,6 +56,7 @@ import com.kaiharimoto.mastertool.core.input.CursorBusy
 import com.kaiharimoto.mastertool.core.input.CursorCaption
 import com.kaiharimoto.mastertool.core.input.CursorMode
 import com.kaiharimoto.mastertool.core.input.CursorTarget
+import com.kaiharimoto.neue.ai.chessy.ChessyInk
 import com.kaiharimoto.neue.kit.LocalKeepCase
 import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
@@ -410,37 +411,42 @@ fun CursorLayer(cursor: FamilyCursor, modifier: Modifier = Modifier) {
         val arm = motion.arm(CropCaption.arm(mode, emphasis), clock)
         val s = density
 
-        // The marks and the point, in difference mode: they read on paper, on ink and on pictures.
-        val lit = if (mode == CursorMode.BUSY) CropCaption.litMark(clock) else -1
-        val markAlpha = if (mode == CursorMode.NO) 0.3f else 1f
-        val filled = cursor.pressed && mode != CursorMode.NO
-        val weight = CropCaption.weight(emphasis) * s
-        val rects = corners(box, arm, s).mapIndexed { i, (corner, dir) ->
-            val alpha = markAlpha * if (lit >= 0 && lit != i) 0.25f else 1f
-            alpha to markRects(corner, dir, arm * s, weight, filled)
-        }
-        if (emphasis) {
-            // Every edge first, then every fill, so no edge crosses a mark where its arms meet.
-            rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(c.ink.copy(alpha = alpha), r.topLeft - Offset(s, s), Size(r.width + 2 * s, r.height + 2 * s)) } }
-            rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(c.paper.copy(alpha = alpha), r.topLeft, r.size) } }
+        if (mode == CursorMode.PAW) {
+            // Chessy's petting mode: a paw in place of the marks (kai), her ink file draws it
+            with(ChessyInk) { drawPaw(at, s, cursor.pressed, c.ink, c.paper) }
         } else {
-            rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(Color.White.copy(alpha = alpha), r.topLeft, r.size, blendMode = BlendMode.Difference) } }
-        }
-        if (mode == CursorMode.NO) {
-            val cross = measurer.measure("✕", crossStyle)
-            drawText(
-                cross,
-                color = Color.White,
-                topLeft = Offset((box.x + box.w / 2f) * s - cross.size.width / 2f, (box.y + box.h / 2f) * s - cross.size.height / 2f),
-                blendMode = BlendMode.Difference,
-            )
-        } else {
-            val p = CropCaption.point(emphasis) * s
+            // The marks and the point, in difference mode: they read on paper, on ink and on pictures.
+            val lit = if (mode == CursorMode.BUSY) CropCaption.litMark(clock) else -1
+            val markAlpha = if (mode == CursorMode.NO) 0.3f else 1f
+            val filled = cursor.pressed && mode != CursorMode.NO
+            val weight = CropCaption.weight(emphasis) * s
+            val rects = corners(box, arm, s).mapIndexed { i, (corner, dir) ->
+                val alpha = markAlpha * if (lit >= 0 && lit != i) 0.25f else 1f
+                alpha to markRects(corner, dir, arm * s, weight, filled)
+            }
             if (emphasis) {
-                drawRect(c.ink, Offset(at.x - p / 2f - s, at.y - p / 2f - s), Size(p + 2 * s, p + 2 * s))
-                drawRect(c.paper, Offset(at.x - p / 2f, at.y - p / 2f), Size(p, p))
+                // Every edge first, then every fill, so no edge crosses a mark where its arms meet.
+                rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(c.ink.copy(alpha = alpha), r.topLeft - Offset(s, s), Size(r.width + 2 * s, r.height + 2 * s)) } }
+                rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(c.paper.copy(alpha = alpha), r.topLeft, r.size) } }
             } else {
-                drawRect(Color.White, Offset(at.x - p / 2f, at.y - p / 2f), Size(p, p), blendMode = BlendMode.Difference)
+                rects.forEach { (alpha, rs) -> rs.forEach { r -> drawRect(Color.White.copy(alpha = alpha), r.topLeft, r.size, blendMode = BlendMode.Difference) } }
+            }
+            if (mode == CursorMode.NO) {
+                val cross = measurer.measure("✕", crossStyle)
+                drawText(
+                    cross,
+                    color = Color.White,
+                    topLeft = Offset((box.x + box.w / 2f) * s - cross.size.width / 2f, (box.y + box.h / 2f) * s - cross.size.height / 2f),
+                    blendMode = BlendMode.Difference,
+                )
+            } else {
+                val p = CropCaption.point(emphasis) * s
+                if (emphasis) {
+                    drawRect(c.ink, Offset(at.x - p / 2f - s, at.y - p / 2f - s), Size(p + 2 * s, p + 2 * s))
+                    drawRect(c.paper, Offset(at.x - p / 2f, at.y - p / 2f), Size(p, p))
+                } else {
+                    drawRect(Color.White, Offset(at.x - p / 2f, at.y - p / 2f), Size(p, p), blendMode = BlendMode.Difference)
+                }
             }
         }
 

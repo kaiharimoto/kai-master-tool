@@ -332,7 +332,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   on her face in the chat box opens the petting mode** (kai's Pokemon-Amie Easter egg: `ChessyAmieLayer`; zones,
   reactions, lines with kaomoji, fondness and particles are `core/ai/chessy/ChessyAmie.kt`, tested; `--chessy-amie=`).
   **Petting her** is half the window with **her aura** (`chessyAura`) and **the takeover's box** (`ChessySay`; typed
-  by `ChessyType`: whole line laid out first, emoticons unbreakable); **her name glitches** (`ChessyGlitchName`); her
+  by `ChessyType`: whole line laid out first, emoticons unbreakable); **her room** (1.1.27): a paw for the pointer (`CursorMode.PAW`, `ChessyInk.drawPaw`), a toy box
+  of a yarn ball, a feather wand, a wind-up mouse and catnip with real physics (`core/ai/chessy/toys/PetToys`, tested) drawn as
+  the dice are (`PetToysInk`, paper and ink, a step of shade per facing), her favourite things (`AmieLove`), one arbiter for
+  every press; **her name glitches** (`ChessyGlitchName`); her
   layers have **no white rim** (`tools/chessy/defringe.py`, run after `export.js`). **The takeover's horn is kai's
   tuning** (`TakeoverHorn`, never changed without kai). **The takeover** (1.1.25): `core/ai/chessy/Takeover` is the
   cinematic as pure functions of its clock (safety held by `TakeoverTest`), `core/audio/Synth` + `TakeoverSound` render
