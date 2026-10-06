@@ -118,42 +118,58 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
 
     /**
      * A cat's "nya" (kai, 1.1.29: the meow "sounds too human … I want it to sound like a real cat, maybe not meow but a
-     * nya instead since it's Japanese themed"). What made the meow a person's was a person's mouth: its resonances where
-     * a human vowel has them. A cat's mouth is about half as long, so here they stand nearly twice as high ([CAT_MOUTH],
-     * scaled by [mouth], the upper two lifted by [bright]), there is no chest under the voice (a high-pass), the pitch is
-     * high and wanders as a cat's does (a little drift and flutter, [rough]), and the sound is shaped "n-y-a": closed and
-     * nasal for a moment, the "y" a high bright glide, the "a" open, falling away at the end. The pitch rises into the "a"
-     * by [rise] and falls off.
+     * nya instead since it's Japanese themed"), built on what was measured of real meows rather than on a person's
+     * vowels. Nicastro (2004), 96 calls: a domestic cat's meow is tonal (low noise), its pitch averaging 609 Hz and
+     * peaking at 880, its first resonance near 1,460 Hz and its second near 3,050 at the call's middle. Schötz's Meowsic
+     * work and the tube models after it: the pitch rises in an arch that peaks as the mouth is widest, and the vowel's
+     * change is one resonance (F1) moving with the jaw, not a person's vowel glide. So here one gesture drives everything:
+     * the jaw ([jaw]) opens and partly closes again, and with it F1 rises from ~720 to ~1,580 Hz, the pitch climbs its arch
+     * ([rise]), the voice grows louder and the closed, nasal start ("n") opens out; F2 and F3 stay high and nearly still,
+     * as a short tract's do ([mouth] scales all three). The throat is a sum of harmonics falling away by [tilt] (smooth,
+     * not a person's buzz), with a breath of air ([breath]) and a cat's wander of pitch and flutter ([rough]).
      */
-    private fun nya(len: Double, p: Double, mouth: Double = 1.0, rise: Double = 1.0, rough: Double = 1.0, breath: Double = .1, bright: Double = 1.0): DoubleArray {
+    private fun nya(len: Double, p: Double, mouth: Double = 1.0, jaw: Double = 1.0, rise: Double = 1.0, tilt: Double = 1.3, breath: Double = .08, rough: Double = 1.0): DoubleArray {
         val total = n(len)
         val out = DoubleArray(total)
-        val throat = Osc(Wave.SAW, rate)
-        val f = Array(3) { Biquad(rate) }
-        val open = Biquad(rate)
-        val chest = Biquad(rate).highpass(380.0)
-        val qs = doubleArrayOf(6.0, 9.0, 11.0)
-        val amps = doubleArrayOf(.8, 1.0 * bright, .65 * bright)
-        val contour = doubleArrayOf(560.0, 560.0 + 320.0 * rise, 560.0 + 260.0 * rise, 560.0 + 130.0 * rise, 500.0)
-        val cols = Array(3) { k -> DoubleArray(CAT_MOUTH.size) { CAT_MOUTH[it][k] * mouth } }
-        val phase = rng.nextDouble() * 6.28
+        val f1 = Biquad(rate)
+        val f2 = Biquad(rate)
+        val f3 = Biquad(rate)
+        val lips = Biquad(rate)
+        val air = Biquad(rate).highpass(2000.0)
+        val count = maxOf(1, (9000.0 / (880.0 * p)).toInt())
+        val phases = DoubleArray(count) { rng.nextDouble() }
+        val vib = rng.nextDouble() * 6.28
+        var ph = 0.0
         var drift = 0.0
         for (i in 0 until total) {
             val t = i * dt
             val u = t / len
+            // the jaw: shut for the "n", open into the "a", partly closing as it ends
+            val j = smooth((u - .06) / .3) * (1 - .62 * smooth((u - .55) / .45)) * jaw
             drift = drift * .997 + noise() * .0018
-            val pitch = along(contour, u) * p * (1 + drift * rough + .012 * sin(2 * PI * 6.0 * t + phase))
-            val src = throat.next(pitch) * .75 + noise() * breath
-            var y = 0.0
-            for (k in 0..2) y += f[k].bandpass(along(cols[k], u), qs[k]).next(src) * amps[k]
-            // the "n": the mouth shut for 40 ms, opening over the next 60
-            y = open.lowpass(600.0 + 7400.0 * ((t - .04) / .06).coerceIn(0.0, 1.0)).next(y)
-            y = chest.next(y)
-            val flutter = 1 + rough * .1 * sin(2 * PI * 37.0 * t + phase * 2)
-            val a = min(1.0, t / .02) * min(1.0, (len - t) / (len * .32)) * (if (t < .06) .55 + .45 * t / .06 else 1.0)
-            out[i] = y * a * flutter * 1.6
+            val f0 = p * (470.0 + 390.0 * rise * j.pow(1.2)) * (1 + drift * rough + .012 * sin(2 * PI * 6.0 * t + vib))
+            ph += f0 / rate
+            var src = 0.0
+            for (k in 1..count) {
+                if (k * f0 >= rate * .45) break
+                src += sin(2 * PI * (k * ph + phases[k - 1])) * k.toDouble().pow(-tilt)
+            }
+            src += air.next(noise()) * breath * (.3 + .7 * j)
+            val r1 = (720.0 + 860.0 * j) * mouth
+            val r2 = (2850.0 + 250.0 * j) * mouth
+            val r3 = (4700.0 + 150.0 * j) * mouth
+            var y = f1.bandpass(r1, r1 / 160.0).next(src) + f2.bandpass(r2, r2 / 260.0).next(src) * .45 + f3.bandpass(r3, r3 / 380.0).next(src) * .18
+            // the lips: muffled while shut, open with the jaw
+            y = lips.lowpass(900.0 + 9000.0 * j).next(y)
+            val a = (.25 + .75 * j) * min(1.0, t / .02) * min(1.0, (len - t) / (len * .25)) * (1 + rough * .08 * sin(2 * PI * 37.0 * t))
+            out[i] = y * a
         }
         return out
+    }
+
+    private fun smooth(x: Double): Double {
+        val c = x.coerceIn(0.0, 1.0)
+        return c * c * (3 - 2 * c)
     }
 
     /** A value along evenly spaced [points] at [u], 0 to 1, smoothly. */
@@ -361,19 +377,11 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
         const val SCURRY_FOR = 4.5
 
         /** The nya's length, seconds. */
-        const val NYA_LENGTH = .42
+        const val NYA_LENGTH = .5
 
         /** kai's tuning of the snap's pitch (1.1.29). */
         const val SNAP_PITCH = .96
 
-        /** A cat's mouth through "n-y-a" and its fall: F1, F2, F3 at evenly spaced points, near twice a person's. */
-        private val CAT_MOUTH = arrayOf(
-            doubleArrayOf(500.0, 1800.0, 3800.0),
-            doubleArrayOf(600.0, 3300.0, 4600.0),
-            doubleArrayOf(1350.0, 2350.0, 4000.0),
-            doubleArrayOf(1300.0, 2200.0, 3900.0),
-            doubleArrayOf(950.0, 2000.0, 3700.0),
-        )
         private val MEW_VOWELS = Vowels(doubleArrayOf(360.0, 2400.0, 3100.0), doubleArrayOf(700.0, 1800.0, 2900.0))
         private val NYAA_VOWELS = Vowels(doubleArrayOf(330.0, 2350.0, 3000.0), doubleArrayOf(850.0, 1700.0, 2800.0), doubleArrayOf(900.0, 1500.0, 2700.0), doubleArrayOf(800.0, 1350.0, 2700.0))
         private val HMPH_VOWELS = Vowels(doubleArrayOf(300.0, 1000.0, 2400.0), doubleArrayOf(450.0, 900.0, 2400.0))
