@@ -53,10 +53,11 @@ class ChessyRigTest {
     @Test
     fun lookingAsideTurnsHerHeadAndTheHairLagsThenSettles() {
         val rig = ChessyRig(seed = 3)
-        repeat(30) { rig.step(16f, 1f, 0f, talking = false, blinks = false) }
+        var swung = 0f
+        repeat(30) { rig.step(16f, 1f, 0f, talking = false, blinks = false); swung = maxOf(swung, abs(rig.frame.swingX[SwingGroup.SIDE.ordinal])) }
         val f = rig.frame
         assertTrue(f.yaw > .1f && f.roll < 0f, "yaw ${f.yaw} roll ${f.roll}")
-        assertTrue(abs(f.swingX[SwingGroup.SIDE.ordinal]) > 1f, "the side locks swing while she turns")
+        assertTrue(swung > 1f, "the side locks swing while she turns: $swung")
         repeat(600) { rig.step(16f, 1f, 0f, talking = false, blinks = false) }
         assertEquals(ChessyRig.YAW, f.yaw, .01f)
         for (g in SwingGroup.entries) {
@@ -81,13 +82,202 @@ class ChessyRigTest {
     }
 
     @Test
-    fun blinksLast130MsAndComeEveryFewSeconds() {
+    fun blinksCloseQuicklyOpenSlowlyAndComeAtPeoplesRate() {
         val rig = ChessyRig(seed = 5)
         var run = 0
         val runs = mutableListOf<Int>()
-        repeat(2000) { if (rig.step(10f, 0f, 0f, false).blink) run += 10 else if (run > 0) { runs += run; run = 0 } }
-        assertTrue(runs.size in 3..12, "blinks in 20 s: ${runs.size}")
-        assertTrue(runs.all { it in 120..140 }, "$runs")
+        var closing = 0
+        var opening = 0
+        var last = 1f
+        // a minute, blinks timed in 10 ms steps
+        repeat(6000) {
+            val f = rig.step(10f, 0f, 0f, false)
+            if (f.blink) {
+                run += 10
+                if (f.blinkOpen in .01f..0.99f) { if (f.blinkOpen < last) closing++ else opening++ }
+            } else if (run > 0) { runs += run; run = 0 }
+            last = f.blinkOpen
+        }
+        // people blink some seventeen times a minute at rest
+        assertTrue(runs.size in 9..28, "blinks in a minute: ${runs.size}")
+        val shortest = ChessyRig.BLINK_CLOSE + ChessyRig.BLINK_HOLD_MIN + ChessyRig.BLINK_OPEN
+        val longest = ChessyRig.BLINK_CLOSE + ChessyRig.BLINK_HOLD_MAX + ChessyRig.BLINK_OPEN
+        assertTrue(runs.all { it >= shortest - 10 && it <= longest + 10 }, "$runs")
+        // frames between, both ways, and more of them opening than closing
+        assertTrue(closing > 0 && opening > closing, "closing $closing opening $opening")
+    }
+
+    @Test
+    fun theBlinkCurveShutsHoldsAndOpens() {
+        val long = 200f
+        assertEquals(1f, ChessyRig.blinkCurve(0f, long), 1e-4f)
+        assertEquals(0f, ChessyRig.blinkCurve(ChessyRig.BLINK_CLOSE, long), 1e-4f)
+        assertEquals(0f, ChessyRig.blinkCurve(long - ChessyRig.BLINK_OPEN - 1f, long), 1e-4f)
+        val mid = ChessyRig.blinkCurve(long - ChessyRig.BLINK_OPEN / 2f, long)
+        assertTrue(mid > .5f && mid < 1f, "half way open it is past half: $mid")
+        assertEquals(1f, ChessyRig.blinkCurve(long, long), 1e-4f)
+    }
+
+    @Test
+    fun blinkGapsAreUnevenAndTalkingBlinksMore() {
+        fun gaps(talking: Boolean, rate: Float = 1f): List<Float> {
+            val rig = ChessyRig(seed = 7)
+            val out = mutableListOf<Float>()
+            var was = false
+            var since = 0f
+            repeat(600_000 / 20) {
+                val f = rig.step(20f, 0f, 0f, talking, blinkRate = rate)
+                if (f.blink && !was) { out += since; since = 0f }
+                since += 20f
+                was = f.blink
+            }
+            return out.drop(1)
+        }
+        val rest = gaps(false)
+        val talk = gaps(true)
+        val reading = gaps(false, rate = .55f)
+        val sorted = rest.sorted()
+        // never a metronome: the longest gap is several times the shortest (doubles aside, the bounds hold)
+        assertTrue(sorted.last() > sorted[sorted.size / 10] * 3f, "gaps $sorted")
+        // a gap is counted blink start to blink start, so its blink's own length rides on the bound
+        assertTrue(rest.all { it <= ChessyRig.GAP_MAX + ChessyRig.BLINK_CLOSE + ChessyRig.BLINK_HOLD_MAX + ChessyRig.BLINK_OPEN + 40f }, "gaps ${rest.max()}")
+        assertTrue(talk.size > rest.size * 1.2f, "talking ${talk.size} against ${rest.size} in ten minutes")
+        assertTrue(reading.size < rest.size * .8f, "reading ${reading.size} against ${rest.size}")
+    }
+
+    @Test
+    fun aLookThatJumpsUsuallyBlinksAndADriftNever() {
+        var blinked = 0
+        for (seed in 1..40) {
+            val rig = ChessyRig(seed = seed)
+            // settled on one side, well away from her first idle blink, then the pointer jumps across her
+            repeat(40) { rig.step(16f, -.8f, 0f, false, blinks = false) }
+            repeat(3) { rig.step(16f, -.8f, 0f, false) }
+            if (rig.frame.blink) continue
+            if (rig.step(16f, .8f, 0f, false).blink) blinked++
+        }
+        assertTrue(blinked in 14..38, "a jump across her blinked $blinked times in 40")
+        // a pointer that sweeps smoothly across her never jumps, so it never takes one
+        val sweep = ChessyRig(seed = 3)
+        var extra = 0
+        repeat(40) { sweep.step(16f, -.8f, 0f, false, blinks = false) }
+        repeat(50) { i -> if (sweep.step(16f, -.8f + 1.6f * i / 50f, 0f, false, blinkRate = .1f).blink) extra++ }
+        assertEquals(0, extra, "a smooth sweep blinked")
+    }
+
+    @Test
+    fun aBlinkAskedForComesAtOnceButNotTwiceInARowNorOnShutEyes() {
+        val rig = ChessyRig(seed = 3)
+        repeat(30) { rig.step(16f, 0f, 0f, false, blinks = false) }
+        rig.blinkNow()
+        assertTrue(rig.step(16f, 0f, 0f, false).blink, "asked, she blinks at once")
+        repeat(15) { rig.step(16f, 0f, 0f, false) }
+        assertTrue(!rig.frame.blink)
+        // a moment after one, a second ask is let go
+        rig.blinkNow()
+        assertTrue(!rig.step(16f, 0f, 0f, false).blink, "too soon after the last")
+        // eyes shut (a face that cannot blink): nothing, and nothing saved for later
+        repeat(60) { rig.step(16f, 0f, 0f, false, blinks = false) }
+        rig.blinkNow()
+        assertTrue(!rig.step(16f, 0f, 0f, false, blinks = false).blink)
+    }
+
+    @Test
+    fun aLookLandsWithTheFaintestOvershootAndSettles() {
+        val rig = ChessyRig(seed = 3)
+        var peak = 0f
+        var at = -1
+        repeat(200) { i ->
+            val f = rig.step(16f, 1f, 0f, talking = false, blinks = false)
+            if (f.yaw > peak) peak = f.yaw
+            if (at < 0 && abs(f.yaw - ChessyRig.YAW) < ChessyRig.YAW * .02f) at = i
+        }
+        assertTrue(peak > ChessyRig.YAW, "a spring lands past its mark: $peak")
+        assertTrue(peak < ChessyRig.YAW * 1.04f, "but barely: ${peak / ChessyRig.YAW}")
+        assertTrue(at in 1..30, "and arrives within half a second: step $at")
+    }
+
+    @Test
+    fun twoOfHerNeverDriftInStep() {
+        val a = ChessyRig(seed = 1)
+        val b = ChessyRig(seed = 2)
+        var apart = 0f
+        repeat(10_000 / 16) {
+            a.step(16f, null, null, false)
+            b.step(16f, null, null, false)
+            apart = maxOf(apart, abs(a.frame.yaw - b.frame.yaw))
+        }
+        assertTrue(apart > .05f, "two rigs left alone moved together: $apart")
+    }
+
+    @Test
+    fun aSwingAtItsLimitComesStraightBack() {
+        val rig = ChessyRig(seed = 3)
+        val bell = SwingGroup.BELL.ordinal
+        repeat(30) { rig.step(16f, 0f, 0f, false, blinks = false) }
+        // flicked hard enough to throw the bell to its limit
+        rig.ring(5f)
+        var held = 0
+        repeat(40) {
+            rig.step(16f, 0f, 0f, false, blinks = false)
+            if (abs(rig.frame.swingX[bell]) >= SwingGroup.BELL.maxX - 1e-4f) held++
+        }
+        assertTrue(held > 0, "the flick never reached the limit")
+        // it stops at the limit and swings back: it never clings there
+        assertTrue(held <= 3, "clung to its limit for $held frames")
+    }
+
+    @Test
+    fun theRibbonsFollowThroughAfterTheLock() {
+        val rig = ChessyRig(seed = 3)
+        var bow = 0f
+        repeat(40) { rig.step(16f, 1f, 0f, false, blinks = false); bow = maxOf(bow, abs(rig.frame.swingX[SwingGroup.BOW.ordinal])) }
+        assertTrue(bow > .5f, "the ribbons' own swing: $bow")
+    }
+
+    @Test
+    fun anEarFlicksAndSettlesAndAHopBouncesHerHair() {
+        val rig = ChessyRig(seed = 3)
+        repeat(30) { rig.step(16f, 0f, 0f, false, blinks = false) }
+        rig.twitch(1)
+        var peak = 0f
+        repeat(10) { peak = maxOf(peak, rig.step(16f, 0f, 0f, false, blinks = false).earR) }
+        assertTrue(peak in .06f..0.16f, "the flick's peak $peak")
+        // the twitch timer may fire its own flick meanwhile, so settle with no new ones in view: a fresh rig, held still
+        val calm = ChessyRig(seed = 4)
+        repeat(40) { calm.step(16f, 0f, 0f, false, blinks = false) }
+        val before = calm.frame.swingY[SwingGroup.SIDE.ordinal]
+        // a hop: up 40 sheet px in a tenth of a second
+        var moved = 0f
+        for (i in 1..12) {
+            val y = if (i <= 6) -40f * i / 6f else -40f + 40f * (i - 6) / 6f
+            calm.step(16f, 0f, 0f, false, blinks = false, bodyY = y)
+            moved = maxOf(moved, abs(calm.frame.swingY[SwingGroup.SIDE.ordinal] - before))
+        }
+        assertTrue(moved > 2f, "her hair felt the hop: $moved")
+    }
+
+    @Test
+    fun theWarpReadsItsTurnOnceAFrameAndLandsWhereItAlwaysDid() {
+        val out = FloatArray(2)
+        val p = LayerPose().apply { off = .06f }
+        for (yaw in listOf(-.3f, -.1f, 0f, .17f, .31f)) for (pitch in listOf(-.17f, 0f, .12f)) {
+            val f = ChessyFrame().apply { this.yaw = yaw; this.pitch = pitch }
+            for ((x, y) in listOf(100f to 200f, 629f to 900f, 900f to 1300f, 1200f to 1600f)) {
+                ChessyWarp.place(x, y, p, f, sphere, 629f, 1525f, out, 0)
+                // the warp as it was written before the pass: its trigonometry per point
+                val qx = (x - sphere.cx) / (sphere.rx * ChessyWarp.GROW)
+                val qy = (y - sphere.cy) / (sphere.ry * ChessyWarp.GROW)
+                var z = (1f - (qx * qx + qy * qy)).coerceIn(0f, 1f)
+                var t = ((y - 400f) / 260f).coerceIn(0f, 1f)
+                t = t * t * (3f - 2f * t)
+                z *= 1f + p.off * t
+                val ex = x + sphere.rx * kotlin.math.sin(yaw) * z + (x - sphere.cx) * (kotlin.math.cos(yaw) - 1f)
+                val ey = y - sphere.ry * kotlin.math.sin(pitch) * z + (y - sphere.cy) * (kotlin.math.cos(pitch) - 1f)
+                assertEquals(ex, out[0], 1e-3f)
+                assertEquals(ey, out[1], 1e-3f)
+            }
+        }
     }
 
     @Test

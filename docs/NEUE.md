@@ -2812,19 +2812,34 @@ heads of her burst out of the chaos, she introduces herself in a nya accent from
 back to ask whether to keep her. The roadmap is seven phases; this section grows with them.
 
 - **Her pictures are kai's approved mockup, exactly** (https://claude.ai/artifact/Q42YHqjvNELnJLV3qmax9U).
-  `tools/chessy/export.js` drives the mockup's stage and writes every picture its live look draws — layers, their
-  swing rims, each face's features, brows and tongue, the blink, the talking mouths — as WebP (0.57 MB) with one
+  `tools/chessy/build.py` (since round two of the rig red team; `export.js` drove the mockup's stage before) writes every picture its live look draws — layers, their
+  swing rims, each face's features, brows and tongue, the blink, the talking mouths — as WebP (2.2 MB since `defringe.py` saves lossless) with one
   `chessy.json` of boxes on the 1320 × 1740 sheet, into `composeResources/files/chessy/`. `ChessyPack` reads it.
-- **The rig is `core/ai/chessy`**, pure and tested: `ChessyRig` (the head eases to where she looks, or drifts;
-  side locks, curls, back hair, bows, bell and tongue are damped pendulums driven by its motion; breath, a 130 ms
-  swap blink now and then twice, an ear twitch, Flap talk on the mockup's own speech rhythm — `Speech`, bit for bit
-  its generator) writing one `ChessyFrame` in place; `ChessyWarp` is the mockup's vertex and light shaders as plain
+- **The rig is `core/ai/chessy`**, pure and tested: `ChessyRig` (the head springs to where she looks, or drifts and
+  glances; side locks, curls, back hair, bows, bell and tongue are damped pendulums driven by its motion; breath, a
+  130 ms swap blink now and then twice, an ear twitch, Flap talk on the mockup's own speech rhythm — `Speech`, bit for
+  bit its generator) writing one `ChessyFrame` in place; `ChessyWarp` is the mockup's vertex and light shaders as plain
   arithmetic (the head a sphere turning, each layer by its depth; hair swings from its roots; rigid pieces with
   their anchor). `still` is reduced motion.
-- **The renderer is `neue/ai/chessy/ChessyAvatar.kt`**: each picture a mesh (`Mesh`, 24-px cells) bent by the warp
+- **The rig red team** (2026-10, shipped in neue-v1.1.34 / v1.4.13; `docs/chessy/RIG-REDTEAM.md`): measured against Live2D
+  Cubism 5.x and VTuber practice. Moods fade instead of popping (`ChessyMoodBlend`: parts cross-fade over 120 ms,
+  brows and ears on a spring); a mood turned inward or with its eyes shut stops following the pointer
+  (`ChessyMood.follows`, `restX`/`restY`); blinks come on a log-normal clock, more while talking, fewer while reading,
+  shut at once and opened over their last 60 ms (`lidAlpha`); the head is a second-order spring, roll drifts of its
+  own, two of her never drift in step, and idle glances glide; ears, ribbons (`SwingGroup.BOW`, a second stage) and
+  her body's hops feed the pendulums (`step(bodyX, bodyY)`, `carry`); breath by mood; and Flap keeps kai's look but
+  takes its rhythm from the streamed reply (`SpeechText`; `ChessyLook.spoken`). `tools/shoot.sh --chessy=reel`
+  renders a scripted twelve seconds paced in real time, the same script on any build. **Round two** (shipped with it):
+  the pack is rebuilt from the mockup's own data by `tools/chessy/build.py` (`export.js`'s hook is gone from the
+  mockup; `--check` proves parity with the pack), a look that jumps and a mood change take a blink, and **half-lids**
+  (`lids.py` → `moods.json` `halfLids`; `ChessyLids`; `ChessyMood.openL`/`openR`) let the lid come down over kai's
+  irises, which never move: a blink with frames between, squints and a sleepy lid; a lid that reaches the pupil pushes it
+  down under the lash instead of covering it (`PupilSlide`, `ChessyLids.push`). `--chessy=eyes` photographs them.
+- **The renderer is `neue/ai/chessy/ChessyAvatar.kt`**: each picture a mesh (`Mesh`, cells of 24–96 sheet px by
+  drawn size, `Mesh.cellFor`) bent by the warp
   and lit per vertex, drawn by `drawMesh` — Skia's `drawVertices` on the desk, Android's `Canvas.drawVertices`
-  (GPU from Android 10; before it the picture goes flat). One frame loop steps the rig; below 80 dp she is her head
-  alone. `tools/shoot.sh --chessy` draws her sheet of poses through it; `--persona=chessy` puts her in Ai's place.
+  (GPU from Android 10; before it the picture goes flat). One frame loop steps the rig; below 150 dp (`ChessyFit.HEAD_BELOW_DP`) she is her
+  head alone. `tools/shoot.sh --chessy` draws her sheet of poses through it; `--persona=chessy` puts her in Ai's place.
 - **In Ai's place** while `AiPrefs.persona` is `chessy`: `LocalChessy` (provided at the root) makes Ai's live face
   draw her instead, wearing the mood Ai's tracker picked.
 - **Her twenty moods are built from parts** (Phase 3; kai: "I build from parts only"). Her face layer wears the

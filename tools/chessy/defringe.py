@@ -15,6 +15,7 @@ Nothing past her outline is touched, and a second run changes nothing.
 
     python3 tools/chessy/defringe.py            # rewrites app/neue/.../files/chessy/layer-*.webp and rim-*.webp in place, lossless (a lossy pass would bring a little white back each run)
     python3 tools/chessy/defringe.py --check    # says how many rim pixels each layer still has, changes nothing
+    python3 tools/chessy/defringe.py --pack DIR # another pack (build.py's scratch build)
 """
 import glob
 import os
@@ -83,8 +84,9 @@ def clean(rgba: np.ndarray) -> np.ndarray:
 
 def main():
     check = "--check" in sys.argv
+    pack = sys.argv[sys.argv.index("--pack") + 1] if "--pack" in sys.argv else PACK
     # each layer, and its rim-lit twin (drawn over it while she swings): both were cut the same way
-    for path in sorted(glob.glob(os.path.join(PACK, "layer-*.webp")) + glob.glob(os.path.join(PACK, "rim-*.webp"))):
+    for path in sorted(glob.glob(os.path.join(pack, "layer-*.webp")) + glob.glob(os.path.join(pack, "rim-*.webp"))):
         rgba = np.array(Image.open(path).convert("RGBA"))
         band, (found, _) = halo(rgba), rim(rgba)
         name = os.path.basename(path)

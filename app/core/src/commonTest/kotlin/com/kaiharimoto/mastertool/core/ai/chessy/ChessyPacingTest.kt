@@ -22,7 +22,8 @@ class ChessyPacingTest {
             if (f.blink && !f.lively) blinkCalm++
         }
         println("CHESSY PACING: lively ${lively * 100 / steps}% idle")
-        assertTrue(lively < steps * .3, "idle, lively ${lively * 100 / steps}% of the time")
+        // about a tenth (the rig red team's glances glide, so they stay calm): a bound that catches a regression
+        assertTrue(lively < steps * .15, "idle, lively ${lively * 100 / steps}% of the time")
         assertTrue(blinkCalm == 0, "a blink is always lively")
     }
 
@@ -46,6 +47,7 @@ class ChessyPacingTest {
         val a = every.frame
         val b = calm.frame
         assertTrue(kotlin.math.abs(a.yaw - b.yaw) < .01f, "turn ${a.yaw} against ${b.yaw}")
+        assertTrue(kotlin.math.abs(a.roll - b.roll) < .01f, "tilt ${a.roll} against ${b.roll}")
         assertTrue(kotlin.math.abs(a.bob - b.bob) < .2f, "breath ${a.bob} against ${b.bob}")
         for (i in a.swingX.indices) assertTrue(kotlin.math.abs(a.swingX[i] - b.swingX[i]) < .5f, "swing $i ${a.swingX[i]} against ${b.swingX[i]}")
     }

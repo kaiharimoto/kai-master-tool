@@ -36,10 +36,12 @@ import java.io.File
 /**
  * `tools/shoot.sh --chessy` (Chessy, Phase 2): her pictures through the app's own renderer, no app around them.
  * A sheet: each face at rest, turned each way, talking open and shut, blinking and with her hair swung — then the
- * live avatar at the sizes the app draws it (the bar's 28, the composer's 44, the greeting's 120).
+ * live avatar at a few sizes (below 104 dp, `ChessySizes.MIN`, the app shows her ears mark instead).
  */
 fun chessyShot(map: Map<String, String>, out: File, name: String) {
     if (map["chessy"] == "moods") return chessyMoods(map, out, name)
+    if (map["chessy"] == "reel") return chessyReel(map, out, name)
+    if (map["chessy"] == "eyes") return chessyEyes(map, out, name)
     val assets = runBlocking { ChessyAssets.load() } ?: error("Chessy's pack did not load")
     // a pose: a rig stepped toward an aim for a while, then a mouth, a blink or a swing set by hand
     fun pose(ax: Float, ay: Float, mouth: ChessyMouth = ChessyMouth.OWN, blink: Boolean = false, swing: Float = 0f): ChessyFrame {
@@ -48,6 +50,7 @@ fun chessyShot(map: Map<String, String>, out: File, name: String) {
         return rig.frame.also { f ->
             f.mouth = mouth
             f.blink = blink
+            f.blinkOpen = if (blink) 0f else 1f
             if (swing != 0f) for (i in f.swingX.indices) f.swingX[i] = if (i >= 4) swing * .01f else swing
             f.rimMix = if (swing != 0f) 1f else 0f
             f.bob = 0f
@@ -136,6 +139,129 @@ private fun chessyMoods(map: Map<String, String>, out: File, name: String) {
                 repeat(every) { nanos += 16_666_667L; scene.render(nanos) }
             }
             println("[neue-studio] chessy moods: ${Expression.entries.size} moods, $frames frame(s) → $out")
+        } finally {
+            scene.close()
+        }
+    }
+}
+
+/**
+ * `tools/shoot.sh --chessy=reel` (the rig red team): one scripted twelve seconds of her, live and paced in real time
+ * (so her calm steps are taken as the app takes them), written as `<name>-000.png …` at 30 a second. The same script
+ * runs on any build, so a reel before a change and one after it are the same moments side by side.
+ *
+ * 0–2.5 s left alone; 2.5–4 the pointer sweeps across her, then jumps back; angry, surprised, shy; 7.5–10 she says a
+ * reply streamed at reading speed (a code block in the middle); delighted, with a hop; asleep. Her bell is flicked at 3 s.
+ */
+private fun chessyReel(map: Map<String, String>, out: File, name: String) {
+    runBlocking { ChessyAssets.load() } ?: error("Chessy's pack did not load")
+    val size = (map["cell"] ?: "360").toInt()
+    val density = (map["density"] ?: "1").toFloat()
+    val w = size * 2
+    val h = (size * 1.5f).toInt()
+    val seconds = (map["seconds"] ?: "12").toFloat()
+    val reply = "Nya~ so you want to side out Ash Blossom, huh? Fine, fine. Here is the plan:\n```cards\nGhost Belle\nDroll & Lock Bird\n```\n" +
+        "Bring the Belles in on the play, and keep two Ash for the mirror. Trust me, nya. "
+    var clock = 0f
+    val mood = androidx.compose.runtime.mutableStateOf(Expression.IDLE)
+    val talking = androidx.compose.runtime.mutableStateOf(false)
+    var flicked = false
+    fun pointer(): androidx.compose.ui.geometry.Offset? = when {
+        clock < 2.5f -> null
+        clock < 4f -> androidx.compose.ui.geometry.Offset(w * (clock - 2.5f) / 1.5f, h * .35f)
+        clock < 7.5f -> androidx.compose.ui.geometry.Offset(w * .1f, h * .4f)
+        else -> androidx.compose.ui.geometry.Offset(w * .5f, h * .9f)
+    }
+    fun spoken(): String = if (clock < 7.5f) "" else reply.take(((clock - 7.5f) * 60f).toInt())
+    runBlocking(Dispatchers.Swing) {
+        val scene = ImageComposeScene((w * density).toInt(), (h * density).toInt(), Density(density), coroutineContext = coroutineContext) {
+            Box(Modifier.fillMaxSize().background(Color.White), contentAlignment = Alignment.Center) {
+                ChessyAvatar(
+                    mood.value, size.dp, talking = talking.value, pointer = { pointer() },
+                    rigHook = { rig -> if (!flicked && clock >= 3f) { rig.ring(1.2f); flicked = true } },
+                    spoken = { spoken() },
+                )
+            }
+        }
+        try {
+            val start = System.nanoTime()
+            var nanos = 0L
+            val frames = (seconds * 60).toInt()
+            for (i in 0 until frames) {
+                clock = nanos / 1e9f
+                mood.value = when {
+                    clock < 4.5f -> Expression.IDLE
+                    clock < 5.5f -> Expression.ANGRY
+                    clock < 6.5f -> Expression.SURPRISED
+                    clock < 7.5f -> Expression.SHY
+                    clock < 10f -> Expression.SPEAKING
+                    clock < 11f -> Expression.DELIGHTED
+                    else -> Expression.SLEEPING
+                }
+                talking.value = clock in 7.5f..10f
+                // in real time: her calm steps wait on the clock, as they do in the app
+                val due = start + nanos
+                val wait = (due - System.nanoTime()) / 1_000_000
+                // and always yield the thread: rendering is slower than real time, and her frame loop's calm wait (a
+                // timer on this same thread) would otherwise never be let back in
+                if (wait > 0) kotlinx.coroutines.delay(wait) else kotlinx.coroutines.yield()
+                val img = scene.render(nanos)
+                if (i % 2 == 0) {
+                    val png = img.encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
+                    File(out, "$name-${(i / 2).toString().padStart(3, '0')}.png").writeBytes(png.bytes)
+                }
+                nanos += 16_666_667L
+            }
+            println("[neue-studio] chessy reel: ${frames / 2} frames → $out")
+        } finally {
+            scene.close()
+        }
+    }
+}
+
+/**
+ * `tools/shoot.sh --chessy=eyes` (round two of the rig red team): her half-lids through the app's renderer, her head
+ * large, each open eye (the Grin's sly, the Fangs' wide) at openings 1, 0.75, 0.5, 0.25 and shut; then the moods that
+ * wear a squint or a sleepy lid, live.
+ */
+private fun chessyEyes(map: Map<String, String>, out: File, name: String) {
+    val assets = runBlocking { ChessyAssets.load() } ?: error("Chessy's pack did not load")
+    val cell = (map["cell"] ?: "300").toInt()
+    val opens = listOf(1f, .75f, .5f, .25f, 0f)
+    val kinds = listOf(
+        com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye.SLY to com.kaiharimoto.mastertool.core.ai.chessy.ChessyLips.SMILE,
+        com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye.WIDE to com.kaiharimoto.mastertool.core.ai.chessy.ChessyLips.SMILE,
+    )
+    val moods = listOf(Expression.THINKING, Expression.ANGRY, Expression.WAKING, Expression.WINK, Expression.SAD)
+    val width = opens.size * (cell + 8) + 40
+    val height = (kinds.size + 1) * (cell + 30) + 40
+    runBlocking(Dispatchers.Swing) {
+        val scene = ImageComposeScene(width, height, Density(1f), coroutineContext = coroutineContext) {
+            Column(Modifier.fillMaxSize().background(Color.White).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((eye, lips) in kinds) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (o in opens) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val mood = com.kaiharimoto.mastertool.core.ai.chessy.ChessyMood(
+                            eye, eye, lips, if (eye == com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye.WIDE) ChessyFaces.FANGS else ChessyFaces.GRIN,
+                            openL = o, openR = o,
+                        )
+                        Canvas(Modifier.size(cell.dp)) { drawChessy(assets, ChessyFrame(), mood, head = true) }
+                        BasicText("${eye.name.lowercase()} $o", style = TextStyle(fontSize = 12.sp))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (e in moods) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(cell.dp)) { ChessyAvatar(e, cell.dp, still = true) }
+                        BasicText(e.title, style = TextStyle(fontSize = 12.sp))
+                    }
+                }
+            }
+        }
+        try {
+            var nanos = 0L
+            repeat((map["settle"] ?: "60").toInt()) { scene.render(nanos); nanos += 16_666_667L }
+            val png = scene.render(nanos).encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
+            File(out, "$name.png").writeBytes(png.bytes)
+            println("[neue-studio] chessy eyes → ${File(out, "$name.png")}")
         } finally {
             scene.close()
         }

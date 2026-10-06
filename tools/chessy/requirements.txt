@@ -1,0 +1,5 @@
+# tools/chessy/build.py and the steps it runs (parts.py, lids.py, defringe.py, ears.py)
+numpy
+Pillow          # with WebP
+opencv-python-headless
+scipy

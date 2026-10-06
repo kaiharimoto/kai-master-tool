@@ -73,6 +73,11 @@ object ChessyWarp {
         GROUP[layerId]?.let { g ->
             out.swingX = f.swingX[g.ordinal]
             out.swingY = f.swingY[g.ordinal]
+            // the ribbons' own pendulum on top of the lock's (their follow-through)
+            if (host != null) {
+                out.swingX += f.swingX[SwingGroup.BOW.ordinal]
+                out.swingY += f.swingY[SwingGroup.BOW.ordinal]
+            }
             val box = host?.pic ?: pic
             if (box != null) {
                 when {
@@ -99,8 +104,8 @@ object ChessyWarp {
         var t = ((py - 400f) / 260f).coerceIn(0f, 1f)
         t = t * t * (3f - 2f * t)
         z *= 1f + off * t
-        out[0] = s.rx * sin(f.yaw) * z + (px - s.cx) * (cos(f.yaw) - 1f)
-        out[1] = -s.ry * sin(f.pitch) * z + (py - s.cy) * (cos(f.pitch) - 1f)
+        out[0] = s.rx * f.sinYaw * z + (px - s.cx) * (f.cosYaw - 1f)
+        out[1] = -s.ry * f.sinPitch * z + (py - s.cy) * (f.cosPitch - 1f)
     }
 
     private val d = FloatArray(2)
@@ -152,10 +157,10 @@ object ChessyWarp {
         var nz = sqrt(max(0f, 1f - min(r2, 1f))) + .15f
         val len = sqrt(nx * nx + ny * ny + nz * nz)
         nx /= len; ny /= len; nz /= len
-        val cy = cos(f.yaw)
-        val sy = sin(f.yaw)
-        val cp = cos(f.pitch)
-        val sp = sin(f.pitch)
+        val cy = f.cosYaw
+        val sy = f.sinYaw
+        val cp = f.cosPitch
+        val sp = f.sinPitch
         val x1 = nx * cy + nz * sy
         val z1 = -nx * sy + nz * cy
         val y2 = ny * cp - z1 * sp
