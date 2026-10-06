@@ -2905,9 +2905,28 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
 - **The takeover's horn is kai's** (`core/ai/chessy/TakeoverHorn.kt`, pinned by `TakeoverHornTest`): tuned on the
   storyboard's Tune the horn, a single 55 Hz air horn. When the takeover is built (phase 6), **`/takeover` plays it**
   on demand and **its sound can be turned off** (kai, both asked for).
+- **The takeover** (kai, 1.1.25; the storyboard kai approved, round three): `core/ai/chessy/Takeover.kt` is the whole
+  cinematic as pure functions of its clock (39 s): the beats, her lines and where their boxes stand on a wide window
+  and on a phone held upright, the breach's bar, the glitch, tear, static, red glow and dark, Ai's restore (up, knocked
+  back, through), her push into the corner, the heads, and every sound cue. `TakeoverTest` holds its safety: two
+  full-window flashes at most, 0.4 s apart, and a glow at 0.8 Hz that never flashes. **The sound is made in code**:
+  `core/audio/Synth` (polyBLEP oscillators, Web Audio's RBJ biquads, a wave shaper, Web Audio's envelopes, a small
+  comb-and-all-pass room) renders every cue, kai's horn (`TakeoverHorn`) among them, and `TakeoverSound` lays them into
+  one buffer at 32 kHz the first time it plays (off the frame thread). `platform/Speaker` streams it from wherever the
+  clock is (Java Sound on the desk, `AudioTrack` on Android), so Skip is a seek and Sound off a stop.
+  `NEUE_TAKEOVER_WAV=<path>` with `SoundtrackWavTest` writes it to a file to listen to. **It glitches the live app**:
+  the shell records its content into a `GraphicsLayer` while it plays (`NeueApp`, the paper too), and `TakeoverLayer`
+  draws slipped, torn, colour-split copies of it (`TakeoverInk.kt`, the takeover's colour file, named in
+  `MasterUiLawTest`), only where Ai has not swept the app clean; her heads (`ChessyAvatar`, still, colour split by
+  `headSplit`) pop in all over it; she lands with her aura and talks in `ChessySay`; Ai's restore bar and its question are
+  Master UI. **It plays** after the fifth reply (`TakeoverGate`, 1.5 s after the answer lands), on **`/takeover`**
+  (always) and **`/chessy`** (when she is not already the assistant), and from Settings › Assistant › Takeover › Play it.
+  **Skip** and **Sound** stand in its corner throughout; Esc and Back skip to the question, then leave things as they
+  were. Its sound can be turned off there or in Settings (`AiPrefs.takeoverSound`, synced). Keep Chessy or Switch back
+  sets `persona` and marks it seen. `tools/shoot.sh --takeover=1,4.5,7.2,…` photographs those moments (`<name>-t<s>.png`).
 - **`/chessy`, `/ai` and `/catmode`** are the app's, never the model's (`AiState.send` → `command`): `/chessy` makes
   her the assistant, `/ai` brings Ai back (the next message tells the model who it is now), `/catmode` turns her full
-  cat voice on or off. `/chessy` will play the takeover once it is built.
+  cat voice on or off. `/chessy` plays the takeover (unless she is already here) and `/takeover` always does.
 - **Her voice** (kai: "a more devilish and cute and loving personality … cute evil"): `core/ai/chessy/ChessyVoice.kt`
   is who she is in words the model is given, a section after the soul in both the chat's and the duel's prompt while
   she is the assistant: a little devil with a soft heart, smug about her evil plans, fiercely on the person's side,

@@ -117,6 +117,8 @@ data class AiPrefs(
     val takeover: String = TAKEOVER_NONE,
     /** Chessy's full voice in her replies, nya and all (`/catmode`); off, only her greetings and reactions have it. */
     val catMode: Boolean = false,
+    /** Whether the takeover plays its sound (kai: "the option to turn off sound in case its too much"). */
+    val takeoverSound: Boolean = true,
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()

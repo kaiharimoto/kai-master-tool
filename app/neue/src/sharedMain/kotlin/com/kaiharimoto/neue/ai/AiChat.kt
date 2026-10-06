@@ -240,7 +240,12 @@ private fun Greeting(ai: AiState, modifier: Modifier) {
             pointer = { ai.h.cursor.position },
             name = ai.name,
         )
-        MuText(ai.name, style = MuType.h1(LocalMuFonts.current), color = c.ink)
+        // her name glitches here, large, where a new chat meets her (kai: here and nowhere else)
+        if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) {
+            com.kaiharimoto.neue.ai.chessy.ChessyGlitchName(ai.name, c.ink, style = MuType.h1(LocalMuFonts.current))
+        } else {
+            MuText(ai.name, style = MuType.h1(LocalMuFonts.current), color = c.ink)
+        }
         Small(
             "Ask me anything about the game, or have me do it: build a deck, tune the one that is open, sort it into groups, " +
                 "write a siding plan, read the latest tournament results, change a setting. I remember what you tell me.",
@@ -826,8 +831,7 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // hers glitches, for flavour (kai)
-                if (chessy) com.kaiharimoto.neue.ai.chessy.ChessyGlitchName(ai.name, c.ink) else Micro(ai.name, color = c.ink)
+                Micro(ai.name, color = c.ink)
                 androidx.compose.animation.Crossfade(face.kaomoji, animationSpec = androidx.compose.animation.core.tween(MuMotion.FAST), label = "kaomoji") {
                     Mono(it, color = c.ink45)
                 }

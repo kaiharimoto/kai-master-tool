@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue
 
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
 import com.kaiharimoto.neue.effects.LocalEffectsHolders
 import com.kaiharimoto.mastertool.core.deck.PlayChoice
 import com.kaiharimoto.neue.builder.legalityRules
@@ -479,6 +481,8 @@ class NeueHolders(
 
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
     internal fun dismiss() {
+        // Chessy's takeover, over everything: Esc skips to Ai's question, then answers it as it was
+        if (takeoverPlaying) { takeoverBack(); return }
         // Chessy's petting mode, over everything: she goes back to the chat box first
         if (amieOpen) { ai.closeAmie(); return }
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
@@ -496,11 +500,19 @@ class NeueHolders(
     /** Chessy's petting mode is open (read without making the assistant when it was never opened). */
     private val amieOpen: Boolean get() = neue.prefs.ai.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY && ai.amie != null
 
-    fun canGoBack(): Boolean = amieOpen || present.playing != null || (neue.page == Page.PRESENT && present.open != null) || BackChain.back(backFlags()) != null
+    /** Chessy's takeover is playing (read without making the assistant when it never played). */
+    private val takeoverPlaying: Boolean get() = neue.prefs.ai.enabled && ai.takeovers.run != null
+
+    private fun takeoverBack() {
+        if (ai.takeovers.now() < com.kaiharimoto.mastertool.core.ai.chessy.Takeover.AI_ON) ai.takeovers.skip() else ai.takeovers.dismiss()
+    }
+
+    fun canGoBack(): Boolean = takeoverPlaying || amieOpen || present.playing != null || (neue.page == Page.PRESENT && present.open != null) || BackChain.back(backFlags()) != null
 
     /** Android's Back: one layer, as Esc — never focus or the selection. Returns false when there was nothing. */
     fun back(): Boolean {
         wake()
+        if (takeoverPlaying) { takeoverBack(); return true }
         if (amieOpen) { ai.closeAmie(); return true }
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return true
@@ -867,275 +879,292 @@ private fun Shell(h: NeueHolders) {
             .pointerHoverIcon(if (h.cursor.nativeNow.value) PointerIcon.Default else FamilyCursor.BLANK, overrideDescendants = true)
             .windowPointer(h, neue, state, measured),
     ) {
-        // A phone (v1.3.5): the slim bar, and the pages as tabs along the bottom — or,
-        // lying down, as a strip down the left, where the height is the deck's.
-        val phone = neue.phone
-        val phoneTall = phone && neue.posture.isTall
-        Column(Modifier.fillMaxSize()) {
-            if (!immersive) titleBar()
-            Row(Modifier.weight(1f).fillMaxWidth()) {
-                if (phone && !phoneTall && !immersive) {
-                    TabBar(neue, vertical = true, onSearch = { neue.paletteOpen = true })
-                } else if (pinned && !phone) rail()
-                Box(Modifier.weight(1f)) {
-                    // Siding asked for from anywhere (the builder's web switch, a matchup, the editor's
-                    // own deck menu) opens the Siding page (1.0.40).
-                    LaunchedEffect(h.webs.sidingAsked) { if (h.webs.sidingAsked > 0) neue.go(Page.SIDING) }
-                    // Another deck on the builder: the Siding page sides it, not the one asked for before (1.0.42).
-                    LaunchedEffect(state.deckId) { if (h.webs.sidingDeckId != null && h.webs.sidingDeckId != state.deckId) h.webs.sidingDeckId = null }
-                    Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
-                        when (page) {
-                            Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds, onDuplicated = { from, to -> if (neue.prefs.ai.enabled) h.ai.carryLearning(from, to) })
-                            Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
-                            Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
-                            Page.FORMAT -> FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
-                            Page.PREP -> PrepPage(h.prep, h.webs, state, neue, h.decksReload) { day -> h.legalityRules(neue.prefs.copy(legalAsOf = day), state.format) }
-                            Page.PRESENT -> PresentPage(h)
-                            Page.DUEL -> DuelPage(h)
-                            Page.WORLD -> WorldPage(h)
-                            Page.SHOOTOUT -> ShootoutPage(h)
-                            Page.SETTINGS -> SettingsPage(
-                                state,
-                                neue,
-                                SettingsHost(
-                                    version = Platform.version,
-                                    dataDir = Platform.dataDir.absolutePath,
-                                    updateStatus = h.updates.status,
-                                    checking = h.updates.checking,
-                                    onCheckUpdates = { h.updates.check(userInitiated = true) },
-                                    onReportIssue = { Platform.reportIssue() },
-                                    onOpenDataDir = { Platform.open(Platform.dataDir) },
-                                    onSearchEffects = h::setSearchEffects,
-                                    art = h.art,
-                                    ai = h.ai,
-                                    sync = h.sync,
-                                    backups = h.backups,
-                                    onSetupAgain = { scope.launch { h.offerStart(again = true) } },
-                                ),
-                            )
+        // The app drawn as it is, and held while Chessy's takeover plays: the takeover glitches the live app (kai, 2026-10).
+        val takeoverLayer = androidx.compose.ui.graphics.rememberGraphicsLayer()
+        Box(
+            Modifier.fillMaxSize().drawWithContent {
+                if (h.ai.takeovers.run != null) {
+                    // the window's paper too, which the shell draws outside this box: bare paper must glitch as paper
+                    takeoverLayer.record { drawRect(c.paper); this@drawWithContent.drawContent() }
+                    h.ai.takeovers.layer = takeoverLayer
+                    drawLayer(takeoverLayer)
+                } else {
+                    drawContent()
+                }
+            },
+        ) {
+            // A phone (v1.3.5): the slim bar, and the pages as tabs along the bottom — or,
+            // lying down, as a strip down the left, where the height is the deck's.
+            val phone = neue.phone
+            val phoneTall = phone && neue.posture.isTall
+            Column(Modifier.fillMaxSize()) {
+                if (!immersive) titleBar()
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    if (phone && !phoneTall && !immersive) {
+                        TabBar(neue, vertical = true, onSearch = { neue.paletteOpen = true })
+                    } else if (pinned && !phone) rail()
+                    Box(Modifier.weight(1f)) {
+                        // Siding asked for from anywhere (the builder's web switch, a matchup, the editor's
+                        // own deck menu) opens the Siding page (1.0.40).
+                        LaunchedEffect(h.webs.sidingAsked) { if (h.webs.sidingAsked > 0) neue.go(Page.SIDING) }
+                        // Another deck on the builder: the Siding page sides it, not the one asked for before (1.0.42).
+                        LaunchedEffect(state.deckId) { if (h.webs.sidingDeckId != null && h.webs.sidingDeckId != state.deckId) h.webs.sidingDeckId = null }
+                        Crossfade(neue.page, animationSpec = tween(MuMotion.PAGE, easing = MuMotion.ease), label = "page") { page ->
+                            when (page) {
+                                Page.DECKS -> DecksPage(h.deps, state, neue, h.decksReload, hidden = h.webs.library.deckIds, onDuplicated = { from, to -> if (neue.prefs.ai.enabled) h.ai.carryLearning(from, to) })
+                                Page.BUILDER -> BuilderPage(state, neue, h.drag, h::setSearchEffects)
+                                Page.SIDING -> SidingPage(h.webs, state, neue, h.decksReload, onSave = { h.run(DeskAction.SAVE) })
+                                Page.FORMAT -> FormatPage(h.deps, h.webs, state, neue, h.decksReload, onOpenDeck = h::openDeck)
+                                Page.PREP -> PrepPage(h.prep, h.webs, state, neue, h.decksReload) { day -> h.legalityRules(neue.prefs.copy(legalAsOf = day), state.format) }
+                                Page.PRESENT -> PresentPage(h)
+                                Page.DUEL -> DuelPage(h)
+                                Page.WORLD -> WorldPage(h)
+                                Page.SHOOTOUT -> ShootoutPage(h)
+                                Page.SETTINGS -> SettingsPage(
+                                    state,
+                                    neue,
+                                    SettingsHost(
+                                        version = Platform.version,
+                                        dataDir = Platform.dataDir.absolutePath,
+                                        updateStatus = h.updates.status,
+                                        checking = h.updates.checking,
+                                        onCheckUpdates = { h.updates.check(userInitiated = true) },
+                                        onReportIssue = { Platform.reportIssue() },
+                                        onOpenDataDir = { Platform.open(Platform.dataDir) },
+                                        onSearchEffects = h::setSearchEffects,
+                                        art = h.art,
+                                        ai = h.ai,
+                                        sync = h.sync,
+                                        backups = h.backups,
+                                        onSetupAgain = { scope.launch { h.offerStart(again = true) } },
+                                    ),
+                                )
+                            }
                         }
+                        Drawers(state, neue, eventForRules(h.prep.doc.events, h.prep.doc.activeEvent, state.today))
                     }
-                    Drawers(state, neue, eventForRules(h.prep.doc.events, h.prep.doc.activeEvent, state.today))
+                    // Ai's panel (1.0.43): docked beside every page, the page re-fitting beside it —
+                    // in immersive mode too (1.0.46); on a phone it is a sheet.
+                    if (neue.aiDocked) {
+                        AiPanel(h, Modifier.width((neue.prefs.ai.panelWidth / neue.prefs.scale).dp).fillMaxHeight())
+                    }
                 }
-                // Ai's panel (1.0.43): docked beside every page, the page re-fitting beside it —
-                // in immersive mode too (1.0.46); on a phone it is a sheet.
-                if (neue.aiDocked) {
-                    AiPanel(h, Modifier.width((neue.prefs.ai.panelWidth / neue.prefs.scale).dp).fillMaxHeight())
-                }
+                // Put away while the keyboard is up: the dock's field sits on the keyboard, not on the tabs.
+                if (phoneTall && !immersive && !imeOpen) TabBar(neue)
             }
-            // Put away while the keyboard is up: the dock's field sits on the keyboard, not on the tabs.
-            if (phoneTall && !immersive && !imeOpen) TabBar(neue)
-        }
 
-        // The bars that fold away slide over the page rather than pushing it:
-        // a bar that pushed would re-fit the deck, and every card would jump.
-        val out = neue.revealed.let { if (neue.railHeld) it.copy(left = true) else it }
-        if (immersive) {
-            val top by animateFloatAsState(if (out.top) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "top")
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .onSizeChanged { measured.top = it.height }
-                    .offset { IntOffset(0, (-(1f - top) * (measured.top + 2)).toInt()) }
-                    .background(c.paper),
-            ) {
-                titleBar()
-            }
-        }
-        if (!pinned) {
-            val left by animateFloatAsState(if (out.left) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "rail")
-            val railPx = with(density) { (if (neue.touchFirst) MuShell.strip else MuShell.rail).roundToPx() }
-            if (left > 0.001f) {
-                Box(
+            // The bars that fold away slide over the page rather than pushing it:
+            // a bar that pushed would re-fit the deck, and every card would jump.
+            val out = neue.revealed.let { if (neue.railHeld) it.copy(left = true) else it }
+            if (immersive) {
+                val top by animateFloatAsState(if (out.top) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "top")
+                Column(
                     Modifier
-                        .padding(top = if (immersive) 0.dp else MuShell.top)
-                        .fillMaxHeight()
-                        .offset { IntOffset((-(1f - left) * (railPx + 2)).toInt(), 0) },
+                        .fillMaxWidth()
+                        .onSizeChanged { measured.top = it.height }
+                        .offset { IntOffset(0, (-(1f - top) * (measured.top + 2)).toInt()) }
+                        .background(c.paper),
                 ) {
-                    rail()
+                    titleBar()
                 }
             }
-        }
+            if (!pinned) {
+                val left by animateFloatAsState(if (out.left) 1f else 0f, tween(MuMotion.BASE, easing = MuMotion.ease), label = "rail")
+                val railPx = with(density) { (if (neue.touchFirst) MuShell.strip else MuShell.rail).roundToPx() }
+                if (left > 0.001f) {
+                    Box(
+                        Modifier
+                            .padding(top = if (immersive) 0.dp else MuShell.top)
+                            .fillMaxHeight()
+                            .offset { IntOffset((-(1f - left) * (railPx + 2)).toInt(), 0) },
+                    ) {
+                        rail()
+                    }
+                }
+            }
 
-        // The card in the air: drawn where the pointer is, lifted off the page and
-        // leaning back against the motion (DeskLean.carried) — kai's one
-        // exception to Master UI's stillness, and only ever on a card.
-        // A finger's card rides above the finger, where it can be seen, and lands where it
-        // is drawn (touch swarm, rec 12: CarryOffset); a mouse's is centred on the pointer.
-        // Its own composable (1.0.92): the pointer is read as it is placed, not here, so the
-        // shell does not recompose on every move of a carried card.
-        val carry = rememberCarryMotion(h.drag)
-        h.drag.held?.let { held -> CarriedCard(h.drag, held, carry, state.format, neue.prefs.foil, state.marks) }
+            // The card in the air: drawn where the pointer is, lifted off the page and
+            // leaning back against the motion (DeskLean.carried) — kai's one
+            // exception to Master UI's stillness, and only ever on a card.
+            // A finger's card rides above the finger, where it can be seen, and lands where it
+            // is drawn (touch swarm, rec 12: CarryOffset); a mouse's is centred on the pointer.
+            // Its own composable (1.0.92): the pointer is read as it is placed, not here, so the
+            // shell does not recompose on every move of a carried card.
+            val carry = rememberCarryMotion(h.drag)
+            h.drag.held?.let { held -> CarriedCard(h.drag, held, carry, state.format, neue.prefs.foil, state.marks) }
 
-        // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
-        if (neue.aiSheet) AiPanel(h, Modifier.fillMaxSize(), phone = true)
-        // The setup offered on opening (1.0.69): under Ai's own setup, which its Ai step can open.
-        if (neue.starting) StartScreen(h, Modifier.fillMaxSize())
-        // Ai's first setup takes the whole window, bars and all (1.0.45).
-        if (neue.aiSetup) AiSetupScreen(h.ai, Modifier.fillMaxSize())
-        // The reader's guide, read as a book over the whole window (1.0.67); the card viewer opens over it.
-        neue.reading?.let { BookReader(h, it, Modifier.fillMaxSize()) }
-        if (neue.prefs.ai.enabled) {
-            AiFaceClock(h.ai)
-            MemoryDialog(h.ai)
-            ReviewDialog(h.ai)
-            TuneLauncher(h.ai)
-            ProfileLauncher(h.ai)
-            LivingDocDialog(h.ai)
-            TrustDialog(h.ai)
-            PictureDialog(h.ai)
-            ContextPanel(h.ai)
-            VoiceDialog(h.ai)
-            QuickSettings(h.ai)
-        } else {
-            // The duel's push-to-talk asks for the speech model whether or not Ai is on (1.0.87).
-            if (h.ai.voiceForDuel) VoiceDialog(h.ai)
-        }
-        if (neue.prefs.ai.enabled) {
-            if (h.ai.forgetAsked) {
+            // Ai on a phone: the whole screen, over the page and under its dialogs (1.0.43).
+            if (neue.aiSheet) AiPanel(h, Modifier.fillMaxSize(), phone = true)
+            // The setup offered on opening (1.0.69): under Ai's own setup, which its Ai step can open.
+            if (neue.starting) StartScreen(h, Modifier.fillMaxSize())
+            // Ai's first setup takes the whole window, bars and all (1.0.45).
+            if (neue.aiSetup) AiSetupScreen(h.ai, Modifier.fillMaxSize())
+            // The reader's guide, read as a book over the whole window (1.0.67); the card viewer opens over it.
+            neue.reading?.let { BookReader(h, it, Modifier.fillMaxSize()) }
+            if (neue.prefs.ai.enabled) {
+                AiFaceClock(h.ai)
+                MemoryDialog(h.ai)
+                ReviewDialog(h.ai)
+                TuneLauncher(h.ai)
+                ProfileLauncher(h.ai)
+                LivingDocDialog(h.ai)
+                TrustDialog(h.ai)
+                PictureDialog(h.ai)
+                ContextPanel(h.ai)
+                VoiceDialog(h.ai)
+                QuickSettings(h.ai)
+            } else {
+                // The duel's push-to-talk asks for the speech model whether or not Ai is on (1.0.87).
+                if (h.ai.voiceForDuel) VoiceDialog(h.ai)
+            }
+            if (neue.prefs.ai.enabled) {
+                if (h.ai.forgetAsked) {
+                    MuDialog(
+                        title = "Forget everything",
+                        onDismiss = { h.ai.forgetAsked = false },
+                        width = 384.dp,
+                        description = "${h.ai.name}'s memory, the skills it wrote and every conversation will be deleted. Its connections stay. This cannot be undone.",
+                        footer = {
+                            MuButton("Cancel", { h.ai.forgetAsked = false }, variant = BtnVariant.GHOST)
+                            MuButton("Forget", {
+                                h.ai.forgetAsked = false
+                                h.ai.forgetEverything()
+                                neue.note = Note("${h.ai.name} forgot everything")
+                            }, variant = BtnVariant.PRIMARY)
+                        },
+                    ) {}
+                }
+            }
+            if (neue.helpOpen) HelpDialog { neue.helpOpen = false }
+            neue.qr?.let { shown ->
+                QrDialog(
+                    shown,
+                    onCopy = {
+                        CardActions.copy(shown.ydke)
+                        neue.note = com.kaiharimoto.neue.Note("YDKe code copied")
+                    },
+                    onDismiss = { neue.qr = null },
+                )
+            }
+            neue.confirmRemoveArt?.let { (card, k) ->
                 MuDialog(
-                    title = "Forget everything",
-                    onDismiss = { h.ai.forgetAsked = false },
+                    title = "Remove your picture",
+                    onDismiss = { neue.confirmRemoveArt = null },
                     width = 384.dp,
-                    description = "${h.ai.name}'s memory, the skills it wrote and every conversation will be deleted. Its connections stay. This cannot be undone.",
+                    description = "Your picture for “${card.name}” will be deleted from this ${if (neue.touchFirst) "tablet" else "computer"}. This cannot be undone.",
                     footer = {
-                        MuButton("Cancel", { h.ai.forgetAsked = false }, variant = BtnVariant.GHOST)
-                        MuButton("Forget", {
-                            h.ai.forgetAsked = false
-                            h.ai.forgetEverything()
-                            neue.note = Note("${h.ai.name} forgot everything")
+                        MuButton("Cancel", { neue.confirmRemoveArt = null }, variant = BtnVariant.GHOST)
+                        MuButton("Remove", {
+                            neue.confirmRemoveArt = null
+                            neue.chooseArt(card, card.id.value)
+                            h.customArt.remove(card.id.value, k)
                         }, variant = BtnVariant.PRIMARY)
                     },
                 ) {}
             }
-        }
-        if (neue.helpOpen) HelpDialog { neue.helpOpen = false }
-        neue.qr?.let { shown ->
-            QrDialog(
-                shown,
-                onCopy = {
-                    CardActions.copy(shown.ydke)
-                    neue.note = com.kaiharimoto.neue.Note("YDKe code copied")
-                },
-                onDismiss = { neue.qr = null },
-            )
-        }
-        neue.confirmRemoveArt?.let { (card, k) ->
-            MuDialog(
-                title = "Remove your picture",
-                onDismiss = { neue.confirmRemoveArt = null },
-                width = 384.dp,
-                description = "Your picture for “${card.name}” will be deleted from this ${if (neue.touchFirst) "tablet" else "computer"}. This cannot be undone.",
-                footer = {
-                    MuButton("Cancel", { neue.confirmRemoveArt = null }, variant = BtnVariant.GHOST)
-                    MuButton("Remove", {
-                        neue.confirmRemoveArt = null
-                        neue.chooseArt(card, card.id.value)
-                        h.customArt.remove(card.id.value, k)
-                    }, variant = BtnVariant.PRIMARY)
-                },
-            ) {}
-        }
-        neue.confirmDelete?.let { (id, name) ->
-            MuDialog(
-                title = "Delete deck",
-                onDismiss = { neue.confirmDelete = null },
-                width = 384.dp,
-                description = "“$name” will be removed from this computer. This cannot be undone.",
-                footer = {
-                    MuButton("Cancel", { neue.confirmDelete = null }, variant = BtnVariant.GHOST)
-                    MuButton("Delete", {
-                        neue.confirmDelete = null
-                        scope.launch {
-                            h.deps.deckRepository.delete(id)
-                            // Ai's notes on the deck go with it (1.0.43).
-                            h.ai.files.delete(AiMemory.path(MemoryKind.DECK, id))
-                            h.ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
-                            h.ai.files.delete(GuideBook.path(id))
-                            h.ai.files.deleteReports(id)
-                            // Its Shootout trials too (1.1.2), and its goldfish's targets and results (Phase D step 4).
-                            h.shootout.forgetDeck(id)
-                            h.effects.forgetDeck(id)
-                            if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
-                                neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
+            neue.confirmDelete?.let { (id, name) ->
+                MuDialog(
+                    title = "Delete deck",
+                    onDismiss = { neue.confirmDelete = null },
+                    width = 384.dp,
+                    description = "“$name” will be removed from this computer. This cannot be undone.",
+                    footer = {
+                        MuButton("Cancel", { neue.confirmDelete = null }, variant = BtnVariant.GHOST)
+                        MuButton("Delete", {
+                            neue.confirmDelete = null
+                            scope.launch {
+                                h.deps.deckRepository.delete(id)
+                                // Ai's notes on the deck go with it (1.0.43).
+                                h.ai.files.delete(AiMemory.path(MemoryKind.DECK, id))
+                                h.ai.files.delete(AiMemory.path(MemoryKind.GUIDE, id))
+                                h.ai.files.delete(GuideBook.path(id))
+                                h.ai.files.deleteReports(id)
+                                // Its Shootout trials too (1.1.2), and its goldfish's targets and results (Phase D step 4).
+                                h.shootout.forgetDeck(id)
+                                h.effects.forgetDeck(id)
+                                if (neue.prefs.defaultDeckId == id || id in neue.prefs.covers) {
+                                    neue.update { it.copy(defaultDeckId = it.defaultDeckId?.takeIf { d -> d != id }, covers = it.covers - id) }
+                                }
+                                // The builder is never left empty while the library has a deck to open.
+                                if (state.deckId == id) {
+                                    val next = StartingDeck.pick(h.deps.deckRepository.all().map { it.entry }, neue.prefs.defaultDeckId)
+                                    if (next != null) state.load(next) else state.newDeck()
+                                }
+                                h.decksReload++
                             }
-                            // The builder is never left empty while the library has a deck to open.
-                            if (state.deckId == id) {
-                                val next = StartingDeck.pick(h.deps.deckRepository.all().map { it.entry }, neue.prefs.defaultDeckId)
-                                if (next != null) state.load(next) else state.newDeck()
-                            }
-                            h.decksReload++
-                        }
-                    }, variant = BtnVariant.PRIMARY)
-                },
-            ) {}
-        }
-        if (h.updates.dialogOpen) UpdateDialog(h.updates)
-        if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
-        if (immersive) {
-            ZenReset(
-                h.zen,
-                hasGroups = state.groups.groups.isNotEmpty(),
-                onLeave = { h.wake() },
-                labels = neue.prefs.zenLabels,
-                onLabels = { neue.update { it.copy(zenLabels = !it.zenLabels) } },
-                modifier = Modifier.align(Alignment.BottomEnd),
-                always = neue.touchFirst,
-                onLeaveFullScreen = if (neue.touchFirst) ({ h.wake(); h.run(DeskAction.IMMERSIVE) }) else null,
-            )
-        }
-        // The box being dragged over the table in deep zen: a hairline and the faintest wash.
-        h.zen.marquee?.let { box ->
-            Canvas(Modifier.fillMaxSize()) {
-                drawRect(c.ink06, box.topLeft, box.size)
-                drawRect(c.ink, box.topLeft, box.size, style = Stroke(1.dp.toPx()))
+                        }, variant = BtnVariant.PRIMARY)
+                    },
+                ) {}
+            }
+            if (h.updates.dialogOpen) UpdateDialog(h.updates)
+            if (neue.paletteOpen) CommandPalette(h::commands) { neue.paletteOpen = false }
+            if (immersive) {
+                ZenReset(
+                    h.zen,
+                    hasGroups = state.groups.groups.isNotEmpty(),
+                    onLeave = { h.wake() },
+                    labels = neue.prefs.zenLabels,
+                    onLabels = { neue.update { it.copy(zenLabels = !it.zenLabels) } },
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    always = neue.touchFirst,
+                    onLeaveFullScreen = if (neue.touchFirst) ({ h.wake(); h.run(DeskAction.IMMERSIVE) }) else null,
+                )
+            }
+            // The box being dragged over the table in deep zen: a hairline and the faintest wash.
+            h.zen.marquee?.let { box ->
+                Canvas(Modifier.fillMaxSize()) {
+                    drawRect(c.ink06, box.topLeft, box.size)
+                    drawRect(c.ink, box.topLeft, box.size, style = Stroke(1.dp.toPx()))
+                }
+            }
+            SearchStudio(state, neue)
+            CardViewer(state, neue)
+            // Over the viewer it was opened from (v1.3.6).
+            com.kaiharimoto.neue.builder.Showcase(state, neue)
+            // Over the viewer and the pop-out, whose art row opens it (1.0.34).
+            neue.cropping?.let { (card, picture) ->
+                ArtCropDialog(
+                    card = card,
+                    initial = picture,
+                    // The printing whose frame is kept: the artwork chosen, when the pool knows it.
+                    base = CardArt.show(
+                        card,
+                        neue.prefs.arts[card.id.value]?.takeIf { it > 0 }?.let { CardId(it) },
+                    ),
+                    custom = h.customArt,
+                    library = h.art,
+                    touch = neue.touchFirst,
+                    onChosen = { choice ->
+                        neue.cropping = null
+                        neue.chooseArt(card, choice)
+                    },
+                    onNote = { neue.note = Note(it) },
+                    onDismiss = { neue.cropping = null },
+                )
+            }
+            // A presentation playing, over everything but its own menus (1.0.70).
+            PresentOverlay(h)
+            MenuLayer(neue.menu) { neue.menu = null }
+            OverlayLayer(h.overlays)
+
+            Toasts(h, Modifier.align(Alignment.BottomEnd).imePadding().padding(end = 24.dp, bottom = 24.dp))
+            if (neue.frameMeter) FrameMeter(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp))
+
+            // Long jobs the whole window waits on: the cursor ticks and says so.
+            val job = when {
+                h.updates.downloading -> "Downloading" to h.updates.progress?.let { it * 100f }
+                h.shots.taking -> "Exporting" to null
+                else -> null
+            }
+            LaunchedEffect(job) { if (job == null) h.cursor.clearBusy() else h.cursor.setBusy(job.first, job.second) }
+            // Chessy's copies, over the page and its menus, under the cursor (kai, 2026-10)
+            if (neue.prefs.ai.enabled && neue.prefs.ai.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY) {
+                com.kaiharimoto.neue.ai.chessy.ChessyCrewLayer(h.ai.crew)
+                com.kaiharimoto.neue.ai.chessy.ChessyAmieLayer(h.ai)
             }
         }
-        SearchStudio(state, neue)
-        CardViewer(state, neue)
-        // Over the viewer it was opened from (v1.3.6).
-        com.kaiharimoto.neue.builder.Showcase(state, neue)
-        // Over the viewer and the pop-out, whose art row opens it (1.0.34).
-        neue.cropping?.let { (card, picture) ->
-            ArtCropDialog(
-                card = card,
-                initial = picture,
-                // The printing whose frame is kept: the artwork chosen, when the pool knows it.
-                base = CardArt.show(
-                    card,
-                    neue.prefs.arts[card.id.value]?.takeIf { it > 0 }?.let { CardId(it) },
-                ),
-                custom = h.customArt,
-                library = h.art,
-                touch = neue.touchFirst,
-                onChosen = { choice ->
-                    neue.cropping = null
-                    neue.chooseArt(card, choice)
-                },
-                onNote = { neue.note = Note(it) },
-                onDismiss = { neue.cropping = null },
-            )
-        }
-        // A presentation playing, over everything but its own menus (1.0.70).
-        PresentOverlay(h)
-        MenuLayer(neue.menu) { neue.menu = null }
-        OverlayLayer(h.overlays)
-
-        Toasts(h, Modifier.align(Alignment.BottomEnd).imePadding().padding(end = 24.dp, bottom = 24.dp))
-        if (neue.frameMeter) FrameMeter(Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp))
-
-        // Long jobs the whole window waits on: the cursor ticks and says so.
-        val job = when {
-            h.updates.downloading -> "Downloading" to h.updates.progress?.let { it * 100f }
-            h.shots.taking -> "Exporting" to null
-            else -> null
-        }
-        LaunchedEffect(job) { if (job == null) h.cursor.clearBusy() else h.cursor.setBusy(job.first, job.second) }
-        // Chessy's copies, over the page and its menus, under the cursor (kai, 2026-10)
-        if (neue.prefs.ai.enabled && neue.prefs.ai.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY) {
-            com.kaiharimoto.neue.ai.chessy.ChessyCrewLayer(h.ai.crew)
-            com.kaiharimoto.neue.ai.chessy.ChessyAmieLayer(h.ai)
-        }
+        // Chessy's takeover, over the whole app, under the cursor
+        if (neue.prefs.ai.enabled) com.kaiharimoto.neue.ai.chessy.TakeoverLayer(h.ai)
         // Last in the window, over everything in it.
         CursorLayer(h.cursor)
     }

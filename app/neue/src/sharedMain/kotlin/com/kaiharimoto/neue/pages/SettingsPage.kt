@@ -67,6 +67,7 @@ import com.kaiharimoto.neue.kit.RowText
 import com.kaiharimoto.neue.kit.ScrollbarFor
 import com.kaiharimoto.neue.kit.SectionTitle
 import com.kaiharimoto.neue.kit.Segmented
+import com.kaiharimoto.neue.kit.Small
 import com.kaiharimoto.neue.kit.muClickable
 import com.kaiharimoto.neue.platform.Platform
 import com.kaiharimoto.neue.sync.SyncCenter
@@ -334,6 +335,22 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
         MuSwitch(prefs.enabled, { on -> neue.update { it.copy(ai = it.ai.copy(enabled = on)) } })
     }
     if (!prefs.enabled) return
+    // Chessy (kai, 2026-10): who answers, her voice, and her takeover, here as Ai's question says
+    SettingRow("Who answers", "Ai, or Chessy, the cat girl who broke in. The same tools and the same care; Chessy is cute evil about it.") {
+        Segmented(prefs.persona, AiPrefs.PERSONAS, { if (it == AiPrefs.PERSONA_CHESSY) com.kaiharimoto.mastertool.core.ai.chessy.CHESSY_NAME else prefs.name }, { p -> neue.update { it.copy(ai = it.ai.copy(persona = p)) } }, small = true)
+    }
+    if (prefs.persona == AiPrefs.PERSONA_CHESSY) {
+        SettingRow("Cat mode", "Her full cat voice in every answer, nya and all (/catmode). Off, only her greetings and asides have it; card names, numbers and rulings never do.", onToggle = { neue.update { it.copy(ai = it.ai.copy(catMode = !it.ai.catMode)) } }) {
+            MuSwitch(prefs.catMode, { on -> neue.update { it.copy(ai = it.ai.copy(catMode = on)) } })
+        }
+    }
+    SettingRow("Takeover", "How Chessy broke in, played again (/takeover), and whether it plays its sound: the horn, her chime, the glitches.", onToggle = { neue.update { it.copy(ai = it.ai.copy(takeoverSound = !it.ai.takeoverSound)) } }) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MuButton("Play it", { ai.takeovers.start() }, variant = BtnVariant.SUBTLE, size = BtnSize.SM)
+            Small("Sound", color = Mu.colors.ink70)
+            MuSwitch(prefs.takeoverSound, { on -> neue.update { it.copy(ai = it.ai.copy(takeoverSound = on)) } })
+        }
+    }
     var name by androidx.compose.runtime.remember(prefs.name) { androidx.compose.runtime.mutableStateOf(prefs.name) }
     SettingRow("Name", "What it is called. Ai by default, after the Ignis of VRAINS.") {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

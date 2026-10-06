@@ -80,6 +80,7 @@ object AiSettings {
         "ai.speechRate" to "How fast replies are spoken aloud, 0.5 to 2; 1 is the voice's own pace.",
         "ai.persona" to "Who the assistant is: \"ai\", or \"chessy\" (the cat girl who took over, with her own face and voice).",
         "ai.catMode" to "Chessy's full cat voice in her replies (nya and all); off, only her greetings and reactions have it.",
+        "ai.takeoverSound" to "Whether Chessy's takeover plays its sound (the horn, her chime, the glitches); off, it plays silent.",
         "ai.factCheck" to "Whether each answer's claims about cards, rulings and numbers are checked against the card text once written, and corrected if wrong.",
         FORMAT to "What the builder plays, as its bar offers it: TCG, OCG or Genesys. Genesys turns genesys on and keeps the region TCG; TCG or OCG turns genesys off.",
         "legalAsOf" to "The day the builder checks legality on, yyyy-MM-dd: that day's Forbidden & Limited list and the cards released by then. \"\" is today.",

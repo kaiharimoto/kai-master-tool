@@ -334,8 +334,12 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   **Petting her** is half the window with **her aura** (`chessyAura`) and **the takeover's box** (`ChessySay`; typed
   by `ChessyType`: whole line laid out first, emoticons unbreakable); **her name glitches** (`ChessyGlitchName`); her
   layers have **no white rim** (`tools/chessy/defringe.py`, run after `export.js`). **The takeover's horn is kai's
-  tuning** (`TakeoverHorn`, never changed without kai); when it is built, **`/takeover` plays it and its sound can be
-  turned off**. The takeover itself comes in a later phase.
+  tuning** (`TakeoverHorn`, never changed without kai). **The takeover** (1.1.25): `core/ai/chessy/Takeover` is the
+  cinematic as pure functions of its clock (safety held by `TakeoverTest`), `core/audio/Synth` + `TakeoverSound` render
+  its sound in code, `platform/Speaker` streams it from the clock; it glitches **the live app**, recorded into a
+  `GraphicsLayer` by the shell while it plays (`TakeoverLayer`, colour in `TakeoverInk.kt`). It plays after the fifth
+  reply, on `/takeover`, on `/chessy` and from Settings; Skip and Sound in its corner, Esc/Back skip; `takeoverSound`
+  turns its sound off; `--takeover=<s>,…` photographs it.
 - **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;

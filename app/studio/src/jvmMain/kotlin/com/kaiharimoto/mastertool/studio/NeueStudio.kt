@@ -945,6 +945,16 @@ fun neueMain(args: Array<String>) {
             if (map["playmenu"] == "true") h.neue.menu = MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.playMenu())
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())
+            // --takeover=<seconds>[,<seconds>…]: Chessy's takeover held still at each moment over the app (no sound); every
+            // moment but the last is written as <name>-t<seconds>.png, the last as the run's own picture.
+            map["takeover"]?.split(",")?.mapNotNull { it.trim().toFloatOrNull() }?.takeIf { it.isNotEmpty() }?.let { moments ->
+                h.neue.update { it.copy(ai = it.ai.copy(enabled = true)) }
+                for ((k, at) in moments.withIndex()) {
+                    h.ai.takeovers.freeze(at)
+                    clock.run((map["takeover-frames"] ?: "24").toInt())
+                    if (k < moments.size - 1) clock.frame().encodeToData(EncodedImageFormat.PNG)?.let { File(out, "$name-t$at.png").writeBytes(it.bytes) }
+                }
+            }
             // --chessy-amie=pet|tickle|bell|ear|hug|sulk (with --persona=chessy): her petting mode open, that hand played through it.
             map["chessy-amie"]?.let { demo ->
                 h.ai.amieDemo = demo

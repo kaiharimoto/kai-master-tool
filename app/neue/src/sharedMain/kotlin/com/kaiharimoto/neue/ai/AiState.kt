@@ -93,6 +93,9 @@ class Question(
  */
 class AiState(internal val h: NeueHolders) {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** Chessy's takeover, when it plays (kai, 2026-10): its clock, its choice, its sound. */
+    val takeovers = com.kaiharimoto.neue.ai.chessy.Takeovers(this)
     val files = AiFiles(File(Platform.dataDir, "ai"))
     internal val host = AiHost(h, this)
 
@@ -437,11 +440,14 @@ class AiState(internal val h: NeueHolders) {
     private fun command(c: SlashCommand) {
         draft = ""
         when (c) {
-            SlashCommand.CHESSY -> {
-                // the next message tells the model who it is now (ChessyVoice.switched, in send)
-                h.neue.update { it.copy(ai = it.ai.copy(persona = AiPrefs.PERSONA_CHESSY)) }
-                h.neue.note = com.kaiharimoto.neue.Note("$CHESSY_NAME is your assistant now. Type /ai to bring Ai back")
+            // She comes in as she does: her takeover, which ends with the choice (the next message then tells the model
+            // who it is, ChessyVoice.switched, in send). Already here, she says so.
+            SlashCommand.CHESSY -> if (prefs.persona == AiPrefs.PERSONA_CHESSY) {
+                h.neue.note = com.kaiharimoto.neue.Note("$CHESSY_NAME is already here. Type /takeover to watch her break in again")
+            } else {
+                takeovers.start()
             }
+            SlashCommand.TAKEOVER -> takeovers.start()
             SlashCommand.AI -> {
                 h.neue.update { it.copy(ai = it.ai.copy(persona = AiPrefs.PERSONA_AI)) }
                 h.neue.note = com.kaiharimoto.neue.Note("$ownName is back. Type /chessy for $CHESSY_NAME")
@@ -737,7 +743,16 @@ class AiState(internal val h: NeueHolders) {
         } else if (problem == null) {
             mood.done(clock())
             // Another reply finished for the person (Chessy, kai): her takeover comes after a few (TakeoverGate).
-            if (s?.mode == AiSession.MODE_CHAT) h.neue.update { it.copy(ai = it.ai.copy(uses = it.ai.uses + 1)) }
+            if (s?.mode == AiSession.MODE_CHAT) {
+                h.neue.update { it.copy(ai = it.ai.copy(uses = it.ai.uses + 1)) }
+                // the fifth: she breaks in, a moment after the answer is there to read
+                if (com.kaiharimoto.mastertool.core.ai.chessy.TakeoverGate.due(prefs, busy = takeovers.run != null)) {
+                    scope.launch {
+                        kotlinx.coroutines.delay(1500)
+                        if (takeovers.run == null && !running) takeovers.start()
+                    }
+                }
+            }
             session?.turns?.lastOrNull { it.role == Role.ASSISTANT && it.text.isNotBlank() }?.let {
                 lastReply = firstLine(it.text)
                 repliedAt = System.currentTimeMillis()

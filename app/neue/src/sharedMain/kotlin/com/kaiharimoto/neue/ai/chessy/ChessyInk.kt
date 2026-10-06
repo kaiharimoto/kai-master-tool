@@ -278,11 +278,12 @@ internal fun Modifier.chessyAura(clock: () -> Float): Modifier {
 }
 
 /**
- * Her name with a glitch, for flavour (kai: "a glitchy font"): the mono face, a pink and a violet copy split either side
- * of it, and every few seconds a short tear, a slice of it thrown sideways for a few frames. Between tears nothing redraws.
+ * Her name with a glitch, for flavour (kai: "a glitchy font"), where a new chat meets her, large: a pink and a violet
+ * copy split either side of it, and every few seconds a short tear, a slice of it thrown sideways for a few frames.
+ * Between tears nothing redraws. [style] sets it (the mono face at [size] when none).
  */
 @Composable
-internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = Modifier, size: TextUnit = 12.sp) {
+internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = Modifier, size: TextUnit = 12.sp, style: TextStyle? = null) {
     var tear by remember { mutableIntStateOf(0) }
     LaunchedEffect(name) {
         val r = kotlin.random.Random(name.hashCode())
@@ -293,13 +294,16 @@ internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = M
         }
     }
     val tints = remember { listOf(ChessyInk.PINK, ChessyInk.VIOLET).map { Paint().apply { colorFilter = ColorFilter.tint(it, BlendMode.SrcIn); alpha = .85f } } }
+    val set = style?.copy(color = color) ?: TextStyle(fontFamily = LocalMuFonts.current.mono, fontWeight = FontWeight.Medium, fontSize = size, letterSpacing = .04.em, color = color)
+    // the split grows with the letters: a pixel at 12 sp
+    val reach = (if (set.fontSize.isSp) set.fontSize.value else 12f) / 12f
     BasicText(
         name,
-        style = TextStyle(fontFamily = LocalMuFonts.current.mono, fontWeight = FontWeight.Medium, fontSize = size, letterSpacing = .04.em, color = color),
+        style = set,
         maxLines = 1,
         modifier = modifier.drawWithContent {
             val t = tear
-            val split = 1.dp.toPx() * (if (t == 0) 1f else 2.6f)
+            val split = 1.dp.toPx() * reach * (if (t == 0) 1f else 2.6f)
             for ((i, paint) in tints.withIndex()) {
                 drawIntoCanvas { canvas ->
                     canvas.saveLayer(Rect(Offset.Zero, this.size).inflate(8.dp.toPx()), paint)
@@ -311,7 +315,7 @@ internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = M
             if (t != 0) {
                 val top = ChessyInk.hash(t, 1) * this.size.height * .7f
                 val tall = this.size.height * (.18f + ChessyInk.hash(t, 2) * .3f)
-                val dx = (ChessyInk.hash(t, 3) - .5f) * 8.dp.toPx()
+                val dx = (ChessyInk.hash(t, 3) - .5f) * 8.dp.toPx() * reach
                 clipRect(-8.dp.toPx(), top, this.size.width + 8.dp.toPx(), top + tall) { translate(dx, 0f) { this@drawWithContent.drawContent() } }
             }
         },
