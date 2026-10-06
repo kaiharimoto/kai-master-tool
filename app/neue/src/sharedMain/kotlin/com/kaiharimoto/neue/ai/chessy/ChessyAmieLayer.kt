@@ -214,6 +214,13 @@ fun ChessyAmieLayer(ai: AiState) {
         burst(at, r.hearts, r.sparkles)
     }
     fun head() = sheetToRoom(640f, 560f)
+    // a toy played with warms her too (kai, 1.1.33: "let toy interactions … count towards the heart meter"); a chime
+    // each time another half heart fills, so a long wave is not a peal
+    fun play(by: Float = ChessyAmie.PLAY_WARM) {
+        if (!amie.played(now(), by)) return
+        if ((amie.fondness * 10f).toInt() > (lastFond * 10f).toInt()) audio.play(PetSound.CHIME, .4f, take = (amie.fondness * 2.99f).toInt())
+        lastFond = amie.fondness
+    }
     fun giveNip() {
         audio.play(PetSound.RUSTLE, .8f)
         val r = amie.nip(now())
@@ -254,8 +261,10 @@ fun ChessyAmieLayer(ai: AiState) {
     // a gift out of the drawer, into the room
     fun takeOut(item: GiftItem) {
         ai.giftDrawer = false
-        toys.gifts.takeOut(item, toys.room, toys.random(), ArrayList())
+        val g = toys.gifts.takeOut(item, toys.room, toys.random(), ArrayList())
         audio.play(PetSound.POP, .5f)
+        // glad you brought it out (kai, 1.1.33), in her words about that one gift
+        react(amie.admired(item, now(), broughtOut = true), Offset(g.x, g.y), voice = PetSound.TRILL)
         giftsOut++
     }
     LaunchedEffect(amie) {
@@ -367,7 +376,7 @@ fun ChessyAmieLayer(ai: AiState) {
                     ToyHit.MISSED -> audio.play(PetSound.SNAP, .6f)
                     ToyHit.CAUGHT -> { audio.play(PetSound.BOING, .8f); burst(at, 1, 5) }
                     ToyHit.NEAR -> Unit
-                    ToyHit.POUR -> audio.play(PetSound.RUSTLE, .2f * e.strength)
+                    ToyHit.POUR -> { audio.play(PetSound.RUSTLE, .2f * e.strength); play(ChessyAmie.PLAY_WARM * .7f) }
                     // down in the catnip: the catnip has her (or she has had enough for now, and says so)
                     ToyHit.ROLL -> if (amie.nipRefill(now()) <= 0.0) giveNip() else audio.play(PetSound.TRILL, .6f)
                     // she reached the hand and rubs against it
@@ -460,6 +469,8 @@ fun ChessyAmieLayer(ai: AiState) {
                         val carry = gift?.takeIf { it.item != null }
                         val grab = carry?.let { Offset(start.x - it.x, start.y - it.y) } ?: Offset.Zero
                         carry?.held = true
+                        // a gift of hers in your hand: she talks about it, happy you are holding it
+                        carry?.item?.let { item -> react(amie.admired(item, now()), Offset(carry.x, carry.y - carry.size * .6f)) }
                         while (true) {
                             val e = awaitPointerEvent()
                             val c0 = e.changes.firstOrNull() ?: break
@@ -484,7 +495,7 @@ fun ChessyAmieLayer(ai: AiState) {
                                     audio.play(PetSound.RUSTLE, .5f); audio.play(PetSound.POP, .3f)
                                     amie.stored(now())?.let { react(it, head()) }
                                     giftsOut++
-                                }
+                                } else play()
                             }
                             // a tap on a gift: a little toss toward her
                             carry != null -> {
@@ -492,6 +503,7 @@ fun ChessyAmieLayer(ai: AiState) {
                                 carry.vx = towardHer(carry.x) * 240f * room.unit
                                 carry.vy = -720f * room.unit
                                 carry.w = V3(0.0, 4.0 * towardHer(carry.x), 0.0)
+                                play()
                             }
                             // the chest: a tap opens its drawer
                             onChest && moved < slop -> ai.giftDrawer = true
@@ -596,7 +608,7 @@ fun ChessyAmieLayer(ai: AiState) {
                         when (taken) {
                             ToyKind.YARN -> { y.x = p.x; y.y = p.y.coerceAtMost(room.floor - y.radius); y.vx = 0f; y.vy = 0f }
                             ToyKind.MOUSE -> { m.x = p.x; m.y = p.y.coerceAtMost(room.floor - m.height / 2f) }
-                            ToyKind.FEATHER -> { toys.wand.hx = p.x; toys.wand.hy = p.y }
+                            ToyKind.FEATHER -> { toys.wand.hx = p.x; toys.wand.hy = p.y; if (moved >= slop) play(ChessyAmie.PLAY_WARM * .5f) }
                             ToyKind.CATNIP -> { toys.catnip.x = p.x; toys.catnip.y = p.y }
                             null -> Unit
                         }
@@ -606,20 +618,21 @@ fun ChessyAmieLayer(ai: AiState) {
                     val u = room.unit
                     when {
                         // let go of a toy carried
-                        taken == ToyKind.YARN && moved >= slop -> { y.release(v.x, v.y, room, toys.random()); if (v.getDistance() > 600f * u) audio.play(PetSound.SWISH, .4f) }
-                        taken == ToyKind.MOUSE && moved >= slop -> m.release(v.x, v.y, room)
+                        taken == ToyKind.YARN && moved >= slop -> { y.release(v.x, v.y, room, toys.random()); if (v.getDistance() > 600f * u) audio.play(PetSound.SWISH, .4f); play() }
+                        taken == ToyKind.MOUSE && moved >= slop -> { m.release(v.x, v.y, room); play() }
                         taken == ToyKind.FEATHER -> toys.wand.held = false
                         // the bag let go: back in its slot; what was poured stays on the floor
                         taken == ToyKind.CATNIP -> toys.catnip.held = false
                         // a tap on a toy in the room: the yarn hops toward her, the mouse is wound again
-                        onYarn -> { y.held = false; y.vx = towardHer(y.x) * 260f * u; y.vy = -700f * u }
-                        onMouse -> { m.held = false; m.facing = towardHer(m.x); m.wind(); windMouse() }
+                        onYarn -> { y.held = false; y.vx = towardHer(y.x) * 260f * u; y.vy = -700f * u; play() }
+                        onMouse -> { m.held = false; m.facing = towardHer(m.x); m.wind(); windMouse(); play() }
                         // a tap on a slot: a toy out to her, or back in the box
                         slot == ToyKind.YARN -> if (y.out) y.out = false else {
                             val r = rest(ToyKind.YARN)
                             y.out = true
                             y.place(r.x, r.y)
                             y.release((room.middle - r.x) * 1.5f, -1100f * u, room, toys.random())
+                            play()
                         }
                         slot == ToyKind.MOUSE -> if (m.out) m.out = false else {
                             val r = rest(ToyKind.MOUSE)
@@ -628,9 +641,10 @@ fun ChessyAmieLayer(ai: AiState) {
                             m.place(r.x.coerceIn(room.left + m.length, room.right - m.length), room.floor - m.height / 2f)
                             m.wind()
                             windMouse()
+                            play()
                         }
                         // a tap on the bag: a pinch shaken out in front of her
-                        slot == ToyKind.CATNIP -> if (toys.catnip.sprinkle(room.herX - towardHer(room.herX) * room.reach * 2f, room.headY, 24, room, toys.random()) > 0) audio.play(PetSound.RUSTLE, .6f)
+                        slot == ToyKind.CATNIP -> if (toys.catnip.sprinkle(room.herX - towardHer(room.herX) * room.reach * 2f, room.headY, 24, room, toys.random()) > 0) { audio.play(PetSound.RUSTLE, .6f); play() }
                         else -> Unit
                     }
                     toyFrame++

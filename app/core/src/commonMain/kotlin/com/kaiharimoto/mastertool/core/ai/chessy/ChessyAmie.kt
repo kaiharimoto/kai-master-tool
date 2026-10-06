@@ -1,6 +1,7 @@
 package com.kaiharimoto.mastertool.core.ai.chessy
 
 import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftItem
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftKind
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyHit
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyKind
@@ -111,6 +112,11 @@ class ChessyAmie(seed: Int = 7) {
     // gifts: when she last made one, and how many stored since she last said so
     private var giftAt = -1000.0
     private var storedQuiet = 0
+    private var admiredId = ""
+    private var admiredAt = -1000.0
+
+    // toys: when play last warmed her
+    private var playAt = -1000.0
 
     fun greet(now: Double): AmieReaction {
         lastTouch = now
@@ -213,6 +219,13 @@ class ChessyAmie(seed: Int = 7) {
      * swish, a leap), while catnip has her, or while her last words are still being said (a miss).
      */
     fun toy(kind: ToyKind?, hit: ToyHit, now: Double): AmieReaction? {
+        // what she does with a toy warms her, catnip or not (kai, 1.1.33: toys count towards the hearts)
+        when (hit) {
+            ToyHit.BIT -> warm(if (kind == ToyKind.FEATHER) .03f else .04f)
+            ToyHit.CAUGHT -> warm(.06f)
+            ToyHit.POUNCE -> warm(.02f)
+            else -> Unit
+        }
         if (high(now) > 0f) return null
         when (hit) {
             ToyHit.BOUNCE, ToyHit.SWISH, ToyHit.POUNCE, ToyHit.LAND, ToyHit.POUR, ToyHit.ROLL, ToyHit.STORED, ToyHit.SNUGGLE -> return null
@@ -224,11 +237,24 @@ class ChessyAmie(seed: Int = 7) {
         return answer(now, when (hit) {
             ToyHit.NEAR -> if (kind == ToyKind.MOUSE) AmieReaction(Expression.SURPRISED, pick("mouse-near"), 2.2, sparkles = 2, ear = 1)
             else AmieReaction(Expression.FOUND, pick("yarn-near"), 2.0, sparkles = 3)
-            ToyHit.BIT -> if (kind == ToyKind.FEATHER) AmieReaction(Expression.DELIGHTED, pick("feather-bite"), 2.0, sparkles = 3, ear = if (random.nextBoolean()) 1 else -1).also { warm(.03f) }
-            else AmieReaction(Expression.DELIGHTED, pick("yarn-bite"), 2.2, hearts = 1, sparkles = 3).also { warm(.04f) }
-            ToyHit.CAUGHT -> AmieReaction(Expression.DELIGHTED, pick("mouse-caught"), 2.8, hearts = 2, sparkles = 6, ring = true).also { warm(.06f) }
+            ToyHit.BIT -> if (kind == ToyKind.FEATHER) AmieReaction(Expression.DELIGHTED, pick("feather-bite"), 2.0, sparkles = 3, ear = if (random.nextBoolean()) 1 else -1)
+            else AmieReaction(Expression.DELIGHTED, pick("yarn-bite"), 2.2, hearts = 1, sparkles = 3)
+            ToyHit.CAUGHT -> AmieReaction(Expression.DELIGHTED, pick("mouse-caught"), 2.8, hearts = 2, sparkles = 6, ring = true)
             else -> AmieReaction(Expression.OOPS, pick(if (kind == ToyKind.MOUSE) "mouse-miss" else "bite-miss"), 1.8, ear = if (random.nextBoolean()) 1 else -1)
         })
+    }
+
+    /**
+     * A toy played with by the person — a throw, a wave of the wand, a wind of the mouse, a pour, a gift tossed (kai,
+     * 1.1.33: "let toy interactions in pet mode count towards the heart meter"): she warms by [by], at most every
+     * [PLAY_EVERY] seconds so a long wave is not a flood, catnip or not. True when it warmed.
+     */
+    fun played(now: Double, by: Float = PLAY_WARM): Boolean {
+        touch(now)
+        if (now - playAt < PLAY_EVERY) return false
+        playAt = now
+        warm(by)
+        return true
     }
 
     /** Catnip given: silly for [NIP_HIGH] seconds, then a nap; again only after [NIP_AGAIN]. */
@@ -260,6 +286,33 @@ class ChessyAmie(seed: Int = 7) {
         touch(now)
         fondness = GIFT_AFTER
         return answer(now, AmieReaction(Expression.DELIGHTED, item.give, 4.2, hearts = 4, sparkles = 8))
+    }
+
+    /**
+     * A gift she made picked up, held or tossed — or [broughtOut] of the drawer (kai, 1.1.33: "let her talk about it and
+     * be happy I brought it out instead of doing nothing"): her words about that one thing, glad it is in your hand. Taken
+     * out it is always answered; handled, not while her last words are still being said, nor about the same gift again
+     * within [ADMIRE_AGAIN] seconds, nor while catnip has her. Each answer warms her a little.
+     */
+    fun admired(item: GiftItem, now: Double, broughtOut: Boolean = false): AmieReaction? {
+        touch(now)
+        if (!broughtOut) {
+            if (high(now) > 0f || now - lastAnswer < ANSWER_EVERY * 1.5) return null
+            if (admiredId == item.id && now - admiredAt < ADMIRE_AGAIN) return null
+        }
+        admiredId = item.id
+        admiredAt = now
+        sulking = false
+        warm(ADMIRE_WARM)
+        val self = item.kind == GiftKind.CARD && "Chessy" in item.name
+        val key = "gift-" + (if (broughtOut) "out" else "held") + ":" + (if (self) "self" else item.kind.name.lowercase())
+        val line = pick(key).replace("{name}", item.name).replace("{words}", item.words.removeSuffix(" ♡"))
+        val mood = when (item.kind) {
+            GiftKind.HEART, GiftKind.NOTE -> if (broughtOut) Expression.LOVE else Expression.SHY
+            GiftKind.PHOTO -> if (broughtOut) Expression.LOVE else Expression.WINK
+            else -> Expression.DELIGHTED
+        }
+        return answer(now, AmieReaction(mood, line, 3.2, hearts = if (broughtOut) 3 else 2, sparkles = if (item.kind == GiftKind.CUPCAKE) 2 else 4))
     }
 
     /** Rubbing against a hand held still: now and then a purring word, and she grows fonder. */
@@ -327,6 +380,14 @@ class ChessyAmie(seed: Int = 7) {
         /** Seconds before she makes another gift, and where her fondness eases back to once one is given. */
         const val GIFT_AGAIN = 90.0
         const val GIFT_AFTER = .4f
+
+        /** Play with a toy: how much it warms her, and how often at most. */
+        const val PLAY_WARM = .03f
+        const val PLAY_EVERY = .8
+
+        /** A gift handled: how much her words about it warm her, and how long before the same gift is talked about again. */
+        const val ADMIRE_WARM = .03f
+        const val ADMIRE_AGAIN = 10.0
         private val NIP_MOODS = listOf(Expression.DELIGHTED, Expression.LOVE, Expression.WINK, Expression.SHY)
 
         /** Her words, by what happened (kai: "think of more to make her charming and adorable"). */
@@ -479,6 +540,72 @@ class ChessyAmie(seed: Int = 7) {
                 "Put it somewhere safe~ that's MY gift (≖ᴗ≖)♡",
                 "Into the chest~ I'll guard it (=^･ω･^=)",
                 "You're keeping it? …good (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
+            ),
+            // a gift of hers in your hand (kai, 1.1.33); {name} is the gift's name, {words} a note's words
+            "gift-held:heart" to listOf(
+                "Careful~ that's my heart you're holding (⁄ ⁄•⁄ω⁄•⁄ ⁄)",
+                "See how it catches the light? I tuned every facet ✧",
+                "Hold it up~ rainbows everywhere (=^･ω･^=)",
+                "It's crystal, so don't drop it… or do, it's only code (≖ᴗ≖)",
+            ),
+            "gift-out:heart" to listOf(
+                "You brought out my heart! You DO keep it close ♡",
+                "The crystal heart~ it missed the light (˶ᵔ ᵕ ᵔ˶)",
+                "Out it comes~ still sparkling, just like me ✧(≖‿≖)✧",
+            ),
+            "gift-held:photo" to listOf(
+                "That's us~ Ai looks so stiff, hehe (≖ᴗ≖)",
+                "My good side. Every side is my good side (￣ー￣)",
+                "Don't stare too long… okay, stare (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
+                "I was SO close to the lens… so you'd see me first ♡",
+            ),
+            "gift-out:photo" to listOf(
+                "You kept our selfie! I'm framing you next ♡",
+                "The polaroid~ you look at it a lot, don't you (=^･ω･^=)",
+                "Ai still thinks I deleted that one. I didn't (≖ᴗ≖)♡",
+            ),
+            "gift-held:cupcake" to listOf(
+                "No eating it! …it's made of pixels anyway (＞﹏＜)",
+                "The cherry's the best part. I'm the cherry (≖‿≖)",
+                "Sprinkles! I counted every one ฅ^•ﻌ•^ฅ",
+                "Careful, the frosting's still glitchy~ ✧",
+            ),
+            "gift-out:cupcake" to listOf(
+                "The cupcake's back~ I made it so it never goes stale ✧",
+                "You saved it? That's so sweet. Literally (˶ᵔ ᵕ ᵔ˶)",
+                "Cupcake time~ just looking, no biting (=^‥^=)",
+            ),
+            "gift-held:note" to listOf(
+                "Reading it again? …I meant every word (⁄ ⁄•⁄ω⁄•⁄ ⁄)",
+                "I wrote that in my best handwriting~ ♡",
+                "“{words}” …yeah. I said that. Don't make it weird (＞_＜)",
+                "Keep it near you, okay? For the bad rounds (˘ω˘)♡",
+            ),
+            "gift-out:note" to listOf(
+                "My note! You kept it~ I'm not crying, it's a glitch (╥ω╥)♡",
+                "Read it out loud. …No, wait, don't (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
+                "You keep my notes? That's a little bit perfect ♡",
+            ),
+            "gift-held:card" to listOf(
+                "{name}~ shiny, right? I polished the foil myself ✧",
+                "Tilt it! Watch the foil dance (=^･ω･^=)",
+                "That one's real power, you know. Play it well (≖ᴗ≖)",
+                "{name}… it suits your hand ♡",
+            ),
+            "gift-out:card" to listOf(
+                "You brought out {name}! Good taste~ ✧(≖‿≖)✧",
+                "{name}, back on the table~ the Maliss never sleep (≖ᴗ≖)",
+                "Ooh, {name}. Shuffle it into your deck, I dare you ♡",
+            ),
+            "gift-held:self" to listOf(
+                "That's ME! Hold me nicely~ (=^･ω･^=)♡",
+                "My own card in your hand… this is the best timeline ✧",
+                "Look at that cat. Gorgeous. Dangerous. Yours (≖ᴗ≖)♡",
+            ),
+            "gift-out:self" to listOf(
+                "You picked ME out of the drawer! Of course you did ♡",
+                "Me, on a card, in your hand~ purrfect (=^‥^=)",
+                "Chessy Cat, summoned~ I knew you'd miss me (≖‿≖)",
             ),
             "bye" to listOf(
                 "Come back and play again soon~! (ﾉ´ヮ`)ﾉ*: ･ﾟ",

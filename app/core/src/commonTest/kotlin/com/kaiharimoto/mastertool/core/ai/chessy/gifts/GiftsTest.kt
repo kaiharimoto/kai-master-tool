@@ -212,4 +212,50 @@ class GiftsTest {
         assertEquals(ChessyAmie.GIFT_AFTER, amie.fondness)
         assertFalse(amie.giftDue(t + 10))
     }
+
+    @Test
+    fun playingWithToysFillsTheHeartsAndMakesAGift() {
+        val amie = ChessyAmie(seed = 5)
+        amie.greet(0.0)
+        var t = 1.0
+        // throws, waves and winds alone, once a second
+        while (amie.fondness < 1f && t < 200) { amie.played(t); t += 1.0 }
+        assertEquals(1f, amie.fondness)
+        assertTrue(amie.giftDue(t), "toy play alone earns her gift")
+    }
+
+    @Test
+    fun aLongWaveIsThrottledAndCatnipDoesNotStopPlayCounting() {
+        val amie = ChessyAmie(seed = 5)
+        amie.greet(0.0)
+        // sixty calls in half a second count once
+        repeat(60) { amie.played(1.0 + it / 120.0) }
+        assertEquals(ChessyAmie.PLAY_WARM, amie.fondness, 1e-6f)
+        amie.nip(3.0)
+        val before = amie.fondness
+        assertTrue(amie.high(5.0) > 0f)
+        assertTrue(amie.played(5.0))
+        assertNull(amie.toy(com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyKind.YARN, ToyHit.BIT, 5.5), "silly, no words")
+        assertTrue(amie.fondness > before + ChessyAmie.PLAY_WARM, "a bite still warms her while catnip has her")
+    }
+
+    @Test
+    fun aGiftInHandIsTalkedAboutAndBroughtOutAlwaysIs() {
+        val amie = ChessyAmie(seed = 6)
+        amie.greet(0.0)
+        val heart = GiftCatalog.KEEPSAKES.first { it.kind == GiftKind.HEART }
+        val held = assertNotNull(amie.admired(heart, 5.0))
+        assertTrue(held.line in ChessyAmie.LINES.getValue("gift-held:heart"))
+        assertNull(amie.admired(heart, 9.0), "not the same gift again so soon")
+        val out = assertNotNull(amie.admired(heart, 9.5, broughtOut = true), "brought out of the drawer, always answered")
+        assertTrue(out.line in ChessyAmie.LINES.getValue("gift-out:heart"))
+        // her own card is about her; another card names itself; a note can quote itself
+        val self = assertNotNull(amie.admired(maliss[2], 30.0))
+        assertTrue(self.line in ChessyAmie.LINES.getValue("gift-held:self"))
+        val card = assertNotNull(amie.admired(maliss[0], 50.0, broughtOut = true))
+        assertFalse("{name}" in card.line)
+        val note = GiftCatalog.NOTES.first()
+        repeat(8) { assertFalse("{words}" in assertNotNull(amie.admired(note, 100.0 + it * 20, broughtOut = true)).line) }
+        for (kind in GiftKind.entries) for (how in listOf("held", "out")) assertTrue(ChessyAmie.LINES.getValue("gift-$how:${kind.name.lowercase()}").size >= 3)
+    }
 }

@@ -3000,6 +3000,15 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     walks to it, stands with her cheek at it and rubs to and fro, leaning in (`rubbing`, `ToyHit.SNUGGLE`), purring every
     1.5 s, hearts rising, and now and then a purring word as she grows fonder (`ChessyAmie.snuggled`); the hand moving on
     or lifting lets her go.
+  - **Play fills the hearts too** (kai, 1.1.33: "let toy interactions in pet mode count towards the heart meter"): a throw,
+    a wave of the wand, a wind of the mouse, a pour or a pinch of catnip, a gift tossed (`ChessyAmie.played`, `PLAY_WARM`
+    at most every `PLAY_EVERY` 0.8 s, so a long wave is not a flood) and what she does with a toy (a bite, a pounce, a
+    catch) warm her, catnip or not; the room chimes once a half heart fills. Toy play alone earns her gift.
+  - **A gift in your hand is talked about** (kai, 1.1.33: "let her talk about it and be happy I brought it out instead of
+    doing nothing"): picking up one of her gifts, or taking it out of the drawer, has her say something about that one
+    thing (`ChessyAmie.admired`; lines `gift-held:<kind>` and `gift-out:<kind>`, her own card `…:self`, `{name}` and a
+    note's `{words}` filled in). Brought out is always answered; handled, not over her last words, not the same gift
+    within `ADMIRE_AGAIN` 10 s, nor while catnip has her.
   - **A finger shows where it pets her** (kai, 1.1.29: "for mobile also add a touch indicator showing where point is
     petting her to make it feel more physical"): on a touch screen a lilac ring stands round the fingertip, pressed a
     little smaller while it is down, a pink ripple widens where it lands, and a stroke leaves fading paw prints turned the
