@@ -2812,7 +2812,7 @@ heads of her burst out of the chaos, she introduces herself in a nya accent from
 back to ask whether to keep her. The roadmap is seven phases; this section grows with them.
 
 - **Her pictures are kai's approved mockup, exactly** (https://claude.ai/artifact/Q42YHqjvNELnJLV3qmax9U).
-  `tools/chessy/export.js` drives the mockup's stage and writes every picture its live look draws — layers, their
+  `tools/chessy/build.py` (since round two of the rig red team; `export.js` drove the mockup's stage before) writes every picture its live look draws — layers, their
   swing rims, each face's features, brows and tongue, the blink, the talking mouths — as WebP (2.2 MB since `defringe.py` saves lossless) with one
   `chessy.json` of boxes on the 1320 × 1740 sheet, into `composeResources/files/chessy/`. `ChessyPack` reads it.
 - **The rig is `core/ai/chessy`**, pure and tested: `ChessyRig` (the head springs to where she looks, or drifts and
@@ -2829,7 +2829,11 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   own, two of her never drift in step, and idle glances glide; ears, ribbons (`SwingGroup.BOW`, a second stage) and
   her body's hops feed the pendulums (`step(bodyX, bodyY)`, `carry`); breath by mood; and Flap keeps kai's look but
   takes its rhythm from the streamed reply (`SpeechText`; `ChessyLook.spoken`). `tools/shoot.sh --chessy=reel`
-  renders a scripted twelve seconds paced in real time, the same script on any build.
+  renders a scripted twelve seconds paced in real time, the same script on any build. **Round two** (also a preview):
+  the pack is rebuilt from the mockup's own data by `tools/chessy/build.py` (`export.js`'s hook is gone from the
+  mockup; `--check` proves parity with the pack), a look that jumps and a mood change take a blink, and **half-lids**
+  (`lids.py` → `moods.json` `halfLids`; `ChessyLids`; `ChessyMood.openL`/`openR`) let the lid come down over kai's
+  irises, which never move: a blink with frames between, squints and a sleepy lid. `--chessy=eyes` photographs them.
 - **The renderer is `neue/ai/chessy/ChessyAvatar.kt`**: each picture a mesh (`Mesh`, cells of 24–96 sheet px by
   drawn size, `Mesh.cellFor`) bent by the warp
   and lit per vertex, drawn by `drawMesh` — Skia's `drawVertices` on the desk, Android's `Canvas.drawVertices`

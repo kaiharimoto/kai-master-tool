@@ -69,8 +69,11 @@ class ChessyFrame {
     var earR = 0f
     var blink = false
 
-    /** How shut the blink's lid is drawn, 0 to 1: it snaps shut and opens more slowly, as eyelids do. */
-    var lidAlpha = 0f
+    /**
+     * The blink's opening, 1 open to 0 shut: it closes quickly and opens more slowly, as eyelids do, with frames between
+     * (drawn as a half-lid where the pack has them, else kai's lid faded in as it closes).
+     */
+    var blinkOpen = 1f
     var mouth = ChessyMouth.OWN
 
     /** How far the swinging layers are from rest: past a pixel or two, layers under them show their filled rims. */
@@ -124,7 +127,7 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
     private var clock = 0f
     private var nextBlink = 1000f + blinkDice.nextFloat() * 2500f
     private var blinkAt = -1f
-    private var blinkLong = BLINK_MIN
+    private var blinkLong = BLINK_CLOSE + BLINK_HOLD_MIN + BLINK_OPEN
     private var double = false
     private var nextEar = 2000f + earDice.nextFloat() * 4000f
     private var talkAt = -1f
@@ -308,19 +311,19 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
             // the blink: shut at once, held, opened over its last [BLINK_OPEN] ms; now and then twice
             if (blinks && clock >= nextBlink && blinkAt < 0) {
                 blinkAt = clock
-                blinkLong = BLINK_MIN + blinkDice.nextFloat() * (BLINK_MAX - BLINK_MIN)
+                blinkLong = BLINK_CLOSE + BLINK_HOLD_MIN + blinkDice.nextFloat() * (BLINK_HOLD_MAX - BLINK_HOLD_MIN) + BLINK_OPEN
             }
             if (blinkAt >= 0) {
                 val b = clock - blinkAt
                 f.blink = b < blinkLong
-                f.lidAlpha = if (!f.blink) 0f else ((blinkLong - b) / BLINK_OPEN).coerceIn(0f, 1f)
+                f.blinkOpen = if (!f.blink) 1f else blinkCurve(b, blinkLong)
                 if (b >= blinkLong) {
                     blinkAt = -1f
                     blinkEnded = clock
                     nextBlink = clock + if (double) DOUBLE_MIN + blinkDice.nextFloat() * DOUBLE_SPAN else blinkGap(blinkRate * if (talking) TALK_BLINKS else 1f)
                     double = !double && blinkDice.nextFloat() < DOUBLE
                 }
-            } else { f.blink = false; f.lidAlpha = 0f }
+            } else { f.blink = false; f.blinkOpen = 1f }
             // the ears: a flick every few seconds
             if (!still && clock > nextEar) {
                 twitch(if (earDice.nextFloat() < .5f) -1 else 1)
@@ -414,10 +417,25 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
         /** The breath's rise in sheet px at depth 1. */
         const val BREATH = 2.2f
 
-        /** A blink: shut between [BLINK_MIN] and [BLINK_MAX] ms, the last [BLINK_OPEN] opening. */
-        const val BLINK_MIN = 110f
-        const val BLINK_MAX = 150f
-        const val BLINK_OPEN = 60f
+        /**
+         * A blink: it closes over [BLINK_CLOSE] ms, stays shut [BLINK_HOLD_MIN] to [BLINK_HOLD_MAX], and opens over
+         * [BLINK_OPEN], about twice as slowly as it closed (people's lids close some 40 % faster than they open).
+         */
+        const val BLINK_CLOSE = 45f
+        const val BLINK_HOLD_MIN = 40f
+        const val BLINK_HOLD_MAX = 80f
+        const val BLINK_OPEN = 100f
+
+        /** A blink [long] ms long, [b] ms in: its opening, 1 to 0 and back, eased so it starts and lands softly open. */
+        fun blinkCurve(b: Float, long: Float): Float = when {
+            b < BLINK_CLOSE -> 1f - b / BLINK_CLOSE
+            b < long - BLINK_OPEN -> 0f
+            b < long -> {
+                val u = (b - (long - BLINK_OPEN)) / BLINK_OPEN
+                1f - (1f - u) * (1f - u)
+            }
+            else -> 1f
+        }
 
         /** The gap between blinks: its median (about 17 a minute), spread, and bounds, all in ms; talking blinks half as often again. */
         const val BLINK_MEDIAN = 3400f

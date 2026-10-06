@@ -48,6 +48,9 @@ class ChessyMood(
     val blinkRate: Float = 1f,
     val breathPeriod: Float = 4f,
     val breathDepth: Float = 1f,
+    /** How open each eye is (1 as painted; less a squint, a sleepy lid), drawn by her half-lids. */
+    val openL: Float = 1f,
+    val openR: Float = 1f,
 ) {
     /** Only an open eye blinks, and only one that has a lid to swap in (the Grin's and the Fangs'). */
     val blinks: Boolean get() = eyeL.blinks && eyeR.blinks
@@ -72,9 +75,9 @@ object ChessyMoods {
     fun of(e: Expression): ChessyMood = when (e) {
         Expression.IDLE -> ChessyMood(SLY, SLY, ChessyLips.SMILE)
         Expression.LISTENING -> ChessyMood(WIDE, WIDE, ChessyLips.SMILE, ChessyFaces.FANGS, browLiftL = -6f, browLiftR = -6f, ears = 7f)
-        Expression.THINKING -> ChessyMood(SLY, SLY, ChessyLips.SMILE, browLiftL = -16f, browLiftR = 4f, follows = false, restX = .24f, restY = -.3f, blinkRate = .6f)
-        Expression.WORKING -> ChessyMood(SLY, SLY, ChessyLips.GRIN, browTilt = 7f, follows = false, restY = .18f, blinkRate = .6f)
-        Expression.READING -> ChessyMood(SLY, SLY, ChessyLips.SMILE, browLiftL = 4f, browLiftR = 4f, follows = false, restX = -.06f, restY = .24f, blinkRate = .55f)
+        Expression.THINKING -> ChessyMood(SLY, SLY, ChessyLips.SMILE, browLiftL = -16f, browLiftR = 4f, follows = false, restX = .24f, restY = -.3f, blinkRate = .6f, openL = .75f, openR = .75f)
+        Expression.WORKING -> ChessyMood(SLY, SLY, ChessyLips.GRIN, browTilt = 7f, follows = false, restY = .18f, blinkRate = .6f, openL = .8f, openR = .8f)
+        Expression.READING -> ChessyMood(SLY, SLY, ChessyLips.SMILE, browLiftL = 4f, browLiftR = 4f, follows = false, restX = -.06f, restY = .24f, blinkRate = .55f, openL = .85f, openR = .85f)
         Expression.SPEAKING -> ChessyMood(WIDE, WIDE, ChessyLips.SMILE, ChessyFaces.FANGS)
         Expression.FOUND -> ChessyMood(WIDE, WIDE, ChessyLips.FANGS, ChessyFaces.FANGS, browLiftL = -12f, browLiftR = -12f, ears = 10f, breathPeriod = 3.2f, breathDepth = 1.1f)
         Expression.DONE -> ChessyMood(SHUT, SHUT, ChessyLips.SMILE, ChessyFaces.TONGUE)
@@ -82,14 +85,14 @@ object ChessyMoods {
         // tehepero: a wink and the tongue
         Expression.OOPS -> ChessyMood(WIDE, SHUT, ChessyLips.TONGUE, ChessyFaces.FANGS, browTilt = -8f, ears = -8f)
         Expression.SURPRISED -> ChessyMood(WIDE, WIDE, ChessyLips.FANGS, ChessyFaces.FANGS, browLiftL = -20f, browLiftR = -20f, ears = 14f, breathPeriod = 3f, breathDepth = 1.2f)
-        Expression.WINK -> ChessyMood(SLY, SHUT, ChessyLips.GRIN)
-        Expression.SAD -> ChessyMood(WIDE, WIDE, ChessyLips.FROWN, ChessyFaces.FANGS, browTilt = -12f, ears = -16f, follows = false, restY = .26f, breathPeriod = 4.8f)
+        Expression.WINK -> ChessyMood(SLY, SHUT, ChessyLips.GRIN, openL = .8f)
+        Expression.SAD -> ChessyMood(WIDE, WIDE, ChessyLips.FROWN, ChessyFaces.FANGS, browTilt = -12f, ears = -16f, follows = false, restY = .26f, breathPeriod = 4.8f, openL = .85f, openR = .85f)
         Expression.SLEEPING -> ChessyMood(CLOSED, CLOSED, ChessyLips.SMILE, browLiftL = 6f, browLiftR = 6f, ears = -12f, follows = false, restY = .2f, breathPeriod = 6.2f, breathDepth = 1.5f)
-        Expression.WAKING -> ChessyMood(WIDE, WIDE, ChessyLips.SMILE, ChessyFaces.FANGS, browLiftL = -8f, browLiftR = -8f, ears = 8f)
+        Expression.WAKING -> ChessyMood(WIDE, WIDE, ChessyLips.SMILE, ChessyFaces.FANGS, browLiftL = -8f, browLiftR = -8f, ears = 8f, openL = .55f, openR = .55f)
         Expression.DELIGHTED -> ChessyMood(SHUT, SHUT, ChessyLips.FANGS, ChessyFaces.TONGUE, browLiftL = -8f, browLiftR = -8f, ears = 10f, breathPeriod = 3.2f, breathDepth = 1.1f)
         Expression.LOVE -> ChessyMood(SHUT, SHUT, ChessyLips.TONGUE, ChessyFaces.TONGUE)
         Expression.SHY -> ChessyMood(SHUT, SHUT, ChessyLips.SMILE, ChessyFaces.TONGUE, browTilt = -8f, ears = -10f, follows = false, restX = -.22f, restY = .16f)
-        Expression.ANGRY -> ChessyMood(SLY, SLY, ChessyLips.FANGS, browTilt = 14f, ears = -14f)
+        Expression.ANGRY -> ChessyMood(SLY, SLY, ChessyLips.FANGS, browTilt = 14f, ears = -14f, openL = .6f, openR = .6f)
         Expression.CRYING -> ChessyMood(CLOSED, CLOSED, ChessyLips.FROWN, ChessyFaces.FANGS, browTilt = -14f, ears = -18f, follows = false, restY = .22f, breathPeriod = 2.8f, breathDepth = 1.3f)
     }
 }

@@ -41,6 +41,7 @@ import java.io.File
 fun chessyShot(map: Map<String, String>, out: File, name: String) {
     if (map["chessy"] == "moods") return chessyMoods(map, out, name)
     if (map["chessy"] == "reel") return chessyReel(map, out, name)
+    if (map["chessy"] == "eyes") return chessyEyes(map, out, name)
     val assets = runBlocking { ChessyAssets.load() } ?: error("Chessy's pack did not load")
     // a pose: a rig stepped toward an aim for a while, then a mouth, a blink or a swing set by hand
     fun pose(ax: Float, ay: Float, mouth: ChessyMouth = ChessyMouth.OWN, blink: Boolean = false, swing: Float = 0f): ChessyFrame {
@@ -49,7 +50,7 @@ fun chessyShot(map: Map<String, String>, out: File, name: String) {
         return rig.frame.also { f ->
             f.mouth = mouth
             f.blink = blink
-            f.lidAlpha = if (blink) 1f else 0f
+            f.blinkOpen = if (blink) 0f else 1f
             if (swing != 0f) for (i in f.swingX.indices) f.swingX[i] = if (i >= 4) swing * .01f else swing
             f.rimMix = if (swing != 0f) 1f else 0f
             f.bob = 0f
@@ -212,6 +213,55 @@ private fun chessyReel(map: Map<String, String>, out: File, name: String) {
                 nanos += 16_666_667L
             }
             println("[neue-studio] chessy reel: ${frames / 2} frames → $out")
+        } finally {
+            scene.close()
+        }
+    }
+}
+
+/**
+ * `tools/shoot.sh --chessy=eyes` (round two of the rig red team): her half-lids through the app's renderer, her head
+ * large, each open eye (the Grin's sly, the Fangs' wide) at openings 1, 0.75, 0.5, 0.25 and shut; then the moods that
+ * wear a squint or a sleepy lid, live.
+ */
+private fun chessyEyes(map: Map<String, String>, out: File, name: String) {
+    val assets = runBlocking { ChessyAssets.load() } ?: error("Chessy's pack did not load")
+    val cell = (map["cell"] ?: "300").toInt()
+    val opens = listOf(1f, .75f, .5f, .25f, 0f)
+    val kinds = listOf(
+        com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye.SLY to com.kaiharimoto.mastertool.core.ai.chessy.ChessyLips.SMILE,
+        com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye.WIDE to com.kaiharimoto.mastertool.core.ai.chessy.ChessyLips.SMILE,
+    )
+    val moods = listOf(Expression.THINKING, Expression.ANGRY, Expression.WAKING, Expression.WINK, Expression.SAD)
+    val width = opens.size * (cell + 8) + 40
+    val height = (kinds.size + 1) * (cell + 30) + 40
+    runBlocking(Dispatchers.Swing) {
+        val scene = ImageComposeScene(width, height, Density(1f), coroutineContext = coroutineContext) {
+            Column(Modifier.fillMaxSize().background(Color.White).padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((eye, lips) in kinds) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (o in opens) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val mood = com.kaiharimoto.mastertool.core.ai.chessy.ChessyMood(
+                            eye, eye, lips, if (eye == com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye.WIDE) ChessyFaces.FANGS else ChessyFaces.GRIN,
+                            openL = o, openR = o,
+                        )
+                        Canvas(Modifier.size(cell.dp)) { drawChessy(assets, ChessyFrame(), mood, head = true) }
+                        BasicText("${eye.name.lowercase()} $o", style = TextStyle(fontSize = 12.sp))
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (e in moods) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(cell.dp)) { ChessyAvatar(e, cell.dp, still = true) }
+                        BasicText(e.title, style = TextStyle(fontSize = 12.sp))
+                    }
+                }
+            }
+        }
+        try {
+            var nanos = 0L
+            repeat((map["settle"] ?: "60").toInt()) { scene.render(nanos); nanos += 16_666_667L }
+            val png = scene.render(nanos).encodeToData(EncodedImageFormat.PNG) ?: error("no encode")
+            File(out, "$name.png").writeBytes(png.bytes)
+            println("[neue-studio] chessy eyes → ${File(out, "$name.png")}")
         } finally {
             scene.close()
         }

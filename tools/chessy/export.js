@@ -1,5 +1,8 @@
 // Chessy's asset pack for Neue (app/neue/src/commonMain/composeResources/files/chessy/).
 //
+// REPLACED by build.py (tools/chessy/README.md): this needs the page's window.__chessyExport(), which the published
+// mockup no longer has. Kept for the record.
+//
 //   node tools/chessy/export.js path/to/chessy.html app/neue/src/commonMain/composeResources/files/chessy
 //
 // The input is the Chessy mockup page (kai's approved model, https://claude.ai/artifact/Q42YHqjvNELnJLV3qmax9U),

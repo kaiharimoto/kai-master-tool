@@ -82,25 +82,40 @@ class ChessyRigTest {
     }
 
     @Test
-    fun blinksSnapShutOpenSlowlyAndComeAtPeoplesRate() {
+    fun blinksCloseQuicklyOpenSlowlyAndComeAtPeoplesRate() {
         val rig = ChessyRig(seed = 5)
         var run = 0
         val runs = mutableListOf<Int>()
+        var closing = 0
         var opening = 0
+        var last = 1f
         // a minute, blinks timed in 10 ms steps
         repeat(6000) {
             val f = rig.step(10f, 0f, 0f, false)
             if (f.blink) {
                 run += 10
-                if (f.lidAlpha in .01f..0.99f) opening++
-                // shut at once: the first step of a blink shows the lid whole
-                if (run == 10) assertEquals(1f, f.lidAlpha, .001f)
+                if (f.blinkOpen in .01f..0.99f) { if (f.blinkOpen < last) closing++ else opening++ }
             } else if (run > 0) { runs += run; run = 0 }
+            last = f.blinkOpen
         }
         // people blink some seventeen times a minute at rest
         assertTrue(runs.size in 9..28, "blinks in a minute: ${runs.size}")
-        assertTrue(runs.all { it in 110..160 }, "$runs")
-        assertTrue(opening > 0, "the lid opens over a few steps")
+        val shortest = ChessyRig.BLINK_CLOSE + ChessyRig.BLINK_HOLD_MIN + ChessyRig.BLINK_OPEN
+        val longest = ChessyRig.BLINK_CLOSE + ChessyRig.BLINK_HOLD_MAX + ChessyRig.BLINK_OPEN
+        assertTrue(runs.all { it >= shortest - 10 && it <= longest + 10 }, "$runs")
+        // frames between, both ways, and more of them opening than closing
+        assertTrue(closing > 0 && opening > closing, "closing $closing opening $opening")
+    }
+
+    @Test
+    fun theBlinkCurveShutsHoldsAndOpens() {
+        val long = 200f
+        assertEquals(1f, ChessyRig.blinkCurve(0f, long), 1e-4f)
+        assertEquals(0f, ChessyRig.blinkCurve(ChessyRig.BLINK_CLOSE, long), 1e-4f)
+        assertEquals(0f, ChessyRig.blinkCurve(long - ChessyRig.BLINK_OPEN - 1f, long), 1e-4f)
+        val mid = ChessyRig.blinkCurve(long - ChessyRig.BLINK_OPEN / 2f, long)
+        assertTrue(mid > .5f && mid < 1f, "half way open it is past half: $mid")
+        assertEquals(1f, ChessyRig.blinkCurve(long, long), 1e-4f)
     }
 
     @Test
@@ -125,7 +140,7 @@ class ChessyRigTest {
         // never a metronome: the longest gap is several times the shortest (doubles aside, the bounds hold)
         assertTrue(sorted.last() > sorted[sorted.size / 10] * 3f, "gaps $sorted")
         // a gap is counted blink start to blink start, so its blink's own length rides on the bound
-        assertTrue(rest.all { it <= ChessyRig.GAP_MAX + ChessyRig.BLINK_MAX + 40f }, "gaps ${rest.max()}")
+        assertTrue(rest.all { it <= ChessyRig.GAP_MAX + ChessyRig.BLINK_CLOSE + ChessyRig.BLINK_HOLD_MAX + ChessyRig.BLINK_OPEN + 40f }, "gaps ${rest.max()}")
         assertTrue(talk.size > rest.size * 1.2f, "talking ${talk.size} against ${rest.size} in ten minutes")
         assertTrue(reading.size < rest.size * .8f, "reading ${reading.size} against ${rest.size}")
     }

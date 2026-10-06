@@ -36,7 +36,13 @@ class ChessyMoodBlend(private val still: Boolean = false) {
         private set
     var ears = 0f
         private set
-    private val v = FloatArray(4)
+
+    /** How open each eye is (her half-lids), eased like the brows. */
+    var openL = 1f
+        private set
+    var openR = 1f
+        private set
+    private val v = FloatArray(6)
 
     /** The old mood's parts' opacity. */
     val fromAlpha: Float get() = (2f * (1f - mix)).coerceIn(0f, 1f)
@@ -47,7 +53,8 @@ class ChessyMoodBlend(private val still: Boolean = false) {
     /** Whether it is still on its way: drawn every frame meanwhile. */
     val busy: Boolean
         get() = mix < 1f || abs(browTilt - to.browTilt) > .05f || abs(browLiftL - to.browLiftL) > .05f ||
-            abs(browLiftR - to.browLiftR) > .05f || abs(ears - to.ears) > .05f || v.any { abs(it) > .5f }
+            abs(browLiftR - to.browLiftR) > .05f || abs(ears - to.ears) > .05f ||
+            abs(openL - to.openL) > .005f || abs(openR - to.openR) > .005f || v.any { abs(it) > .5f }
 
     /** Wear [e] from now; the same mood again changes nothing. */
     fun show(e: Expression) {
@@ -58,6 +65,7 @@ class ChessyMoodBlend(private val still: Boolean = false) {
         if (first || still) {
             from = next; to = next; mix = 1f
             browTilt = next.browTilt; browLiftL = next.browLiftL; browLiftR = next.browLiftR; ears = next.ears
+            openL = next.openL; openR = next.openR
             v.fill(0f)
             return
         }
@@ -80,6 +88,8 @@ class ChessyMoodBlend(private val still: Boolean = false) {
             browLiftL = spring(1, browLiftL, to.browLiftL, h)
             browLiftR = spring(2, browLiftR, to.browLiftR, h)
             ears = spring(3, ears, to.ears, h)
+            openL = spring(4, openL, to.openL, h)
+            openR = spring(5, openR, to.openR, h)
         }
     }
 

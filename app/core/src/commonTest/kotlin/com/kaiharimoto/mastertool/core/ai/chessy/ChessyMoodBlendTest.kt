@@ -17,6 +17,7 @@ class ChessyMoodBlendTest {
             var tilt = m.browTilt
             var lift = m.browLiftL
             var ears = m.ears
+            var openL = m.openL
             var faded = -1
             var lastFrom = m.fromAlpha
             var lastTo = m.toAlpha
@@ -26,14 +27,16 @@ class ChessyMoodBlendTest {
                 assertTrue(abs(m.browTilt - tilt) < 4.5f, "${a.id}→${b.id} tilt ${tilt}→${m.browTilt}")
                 assertTrue(abs(m.browLiftL - lift) < 6.5f, "${a.id}→${b.id} lift ${lift}→${m.browLiftL}")
                 assertTrue(abs(m.ears - ears) < 9f, "${a.id}→${b.id} ears ${ears}→${m.ears}")
+                assertTrue(abs(m.openL - openL) < .15f, "${a.id}→${b.id} an eye snapped ${openL}→${m.openL}")
                 assertTrue(abs(m.fromAlpha - lastFrom) <= .3f && abs(m.toAlpha - lastTo) <= .3f, "${a.id}→${b.id} a part popped")
-                tilt = m.browTilt; lift = m.browLiftL; ears = m.ears; lastFrom = m.fromAlpha; lastTo = m.toAlpha
+                tilt = m.browTilt; lift = m.browLiftL; ears = m.ears; openL = m.openL; lastFrom = m.fromAlpha; lastTo = m.toAlpha
                 if (faded < 0 && m.mix >= 1f) faded = i
             }
             assertTrue(faded in 0..9, "${a.id}→${b.id} the fade took ${faded + 1} frames")
             val goal = ChessyMoods.of(b)
             assertEquals(goal.browTilt, m.browTilt, .1f)
             assertEquals(goal.ears, m.ears, .1f)
+            assertEquals(goal.openL, m.openL, .01f)
             assertTrue(!m.busy, "${a.id}→${b.id} still busy after a second")
         }
     }

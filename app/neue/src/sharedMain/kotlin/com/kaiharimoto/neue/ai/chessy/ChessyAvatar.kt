@@ -28,6 +28,7 @@ import com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFaces
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFit
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFrame
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyLids
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyLips
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyMarks
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyMood
@@ -38,6 +39,7 @@ import com.kaiharimoto.mastertool.core.ai.chessy.ChessyPack
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyParts
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyRig
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyWarp
+import com.kaiharimoto.mastertool.core.ai.chessy.HalfLid
 import com.kaiharimoto.mastertool.core.ai.chessy.LayerPose
 import com.kaiharimoto.mastertool.core.ai.chessy.Pic
 import com.kaiharimoto.mastertool.core.ai.chessy.SpeechText
@@ -179,9 +181,13 @@ val LocalChessy = androidx.compose.runtime.staticCompositionLocalOf<ChessyLook?>
 /** Chessy's pack and pictures, read once for the app's lifetime. */
 class ChessyAssets(val pack: ChessyPack, val parts: ChessyParts?, val images: Map<String, ImageBitmap>) {
     private val meshes = HashMap<Pair<Pic, Float>, Mesh>()
+    private val lidMeshes = HashMap<Pair<Pic, Float>, LidMesh>()
 
     /** [p]'s grid with cells of [cell] sheet pixels, made once per size of cell. */
     internal fun mesh(p: Pic, cell: Float = Mesh.CELL): Mesh = meshes.getOrPut(p to cell) { Mesh(p, cell) }
+
+    /** A half-lid picture's grid ([LidMesh]), made once per size of cell. */
+    internal fun lidMesh(p: Pic, cell: Float = Mesh.CELL): LidMesh = lidMeshes.getOrPut(p to cell) { LidMesh(p, cell) }
 
     companion object {
         var loaded: ChessyAssets? = null
@@ -248,6 +254,33 @@ internal class Mesh(val pic: Pic, cell: Float = CELL) {
     }
 }
 
+/**
+ * A half-lid picture's grid (round two of the rig red team): a column every cell across, [ROWS] rows down, the same
+ * shape every frame (Skia draws the arrays whole), its rows placed each frame — the lid's skin cropped column by column
+ * at the cut, the lash moved down column by column.
+ */
+internal class LidMesh(val pic: Pic, cell: Float) {
+    val nx = maxOf(2, ceil(pic.w / cell).toInt())
+    val count = (nx + 1) * (ROWS + 1)
+    val texs = FloatArray(count * 2)
+    val positions = FloatArray(count * 2)
+    val colors = IntArray(count)
+    val indices = ShortArray(nx * ROWS * 6)
+
+    init {
+        var k = 0
+        for (j in 0 until ROWS) for (i in 0 until nx) {
+            val a = j * (nx + 1) + i
+            indices[k++] = a.toShort(); indices[k++] = (a + 1).toShort(); indices[k++] = (a + nx + 1).toShort()
+            indices[k++] = (a + 1).toShort(); indices[k++] = (a + nx + 2).toShort(); indices[k++] = (a + nx + 1).toShort()
+        }
+    }
+
+    companion object {
+        const val ROWS = 4
+    }
+}
+
 private val pose = LayerPose()
 
 
@@ -285,6 +318,8 @@ fun DrawScope.drawChessy(
     val browTilt = blend?.browTilt ?: mood.browTilt
     val browLiftL = blend?.browLiftL ?: mood.browLiftL
     val browLiftR = blend?.browLiftR ?: mood.browLiftR
+    val openL = blend?.openL ?: mood.openL
+    val openR = blend?.openR ?: mood.openR
     // without the mood parts she shows the nearest whole sheet face
     val face = if (parts == null) ChessyFaces.ofMood(mood) else ChessyFaces.GRIN
     fun pic(p: Pic?, layerId: String, alpha: Float = 1f, tune: (LayerPose.() -> Unit)? = null) {
@@ -316,9 +351,55 @@ fun DrawScope.drawChessy(
         ChessyEye.SHUT -> pic(side(parts?.eyes?.get(ChessyFaces.TONGUE), left), "features", alpha)
         ChessyEye.CLOSED -> pic(side(parts?.lids?.get(ChessyFaces.GRIN), left), "features", alpha)
     }
+    // a half-lid's picture bent like the eye patches: [crop] keeps the skin above the cut; else the lash moved down
+    fun halfLidPic(h: HalfLid, p: Pic, open: Float, crop: Boolean) {
+        val img = a.images[p.file] ?: return
+        val m = a.lidMesh(p, cell)
+        ChessyWarp.pose(pack, "features", p, f, face, pose)
+        var v = 0
+        for (j in 0..LidMesh.ROWS) for (i in 0..m.nx) {
+            val x = p.x + p.w * i / m.nx.toFloat()
+            val y0 = p.y.toFloat()
+            val y1 = (p.y + p.h).toFloat()
+            val sy: Float
+            val ly: Float
+            if (crop) {
+                val bottom = ChessyLids.cut(h, x, open).coerceIn(y0, y1)
+                sy = y0 + (bottom - y0) * j / LidMesh.ROWS
+                ly = sy
+            } else {
+                sy = y0 + (y1 - y0) * j / LidMesh.ROWS
+                ly = sy + ChessyLids.drop(h, x, open)
+            }
+            m.texs[v * 2] = x - p.x
+            m.texs[v * 2 + 1] = sy - p.y
+            ChessyWarp.place(x, ly, pose, f, pack.sphere, neckX, neckY, m.positions, v * 2)
+            m.positions[v * 2] = ox + m.positions[v * 2] * s
+            m.positions[v * 2 + 1] = oy + m.positions[v * 2 + 1] * s
+            val l = (ChessyWarp.shade(x, ly, f, pack.sphere) * 255f).toInt().coerceIn(0, 255)
+            m.colors[v] = (0xFF shl 24) or (l shl 16) or (l shl 8) or l
+            v++
+        }
+        drawMesh(img, m.positions, m.texs, m.colors, m.indices, m.count, 1f)
+    }
     fun lid(e: ChessyEye, left: Boolean) {
-        // the blink's lid: shut at once, opened over its last moments (its alpha), only on the mood she is in
-        if (f.blink && to.blinks) pic(side(parts?.lids?.get(to.lidOf(e)), left), "features", f.lidAlpha)
+        // how open this eye is: its mood's opening (a squint, a sleepy lid) times the blink's
+        val open = (if (left) openL else openR) * (if (to.blinks) f.blinkOpen else 1f)
+        val kind = when (e) { ChessyEye.SLY -> "sly"; ChessyEye.WIDE -> "wide"; else -> null }
+        val h = kind?.let { parts?.halfLid(it, if (left) "l" else "r") }
+        val shut = side(parts?.lids?.get(to.lidOf(e)), left)
+        if (h == null) {
+            // no half-lids in the pack: kai's lid swapped in as the blink closes
+            if (f.blink && to.blinks) pic(shut, "features", ((1f - f.blinkOpen) * 2f).coerceIn(0f, 1f))
+            return
+        }
+        // the lid's skin down to the cut, the lash on it; near shut, kai's own lid over them
+        if (ChessyLids.drawn(open)) {
+            halfLidPic(h, h.skin, open, crop = true)
+            halfLidPic(h, h.lash, open, crop = false)
+        }
+        val fade = ChessyLids.lidFade(open)
+        if (fade > 0f) pic(shut, "features", fade)
     }
     fun lips(m: ChessyMood, alpha: Float) {
         if (parts == null) return
@@ -361,7 +442,7 @@ fun DrawScope.drawChessy(
                             ChessyMouth.CLOSED -> { pic(P.closedBy[face] ?: P.closed, "features"); smile() }
                             ChessyMouth.OWN -> Unit
                         }
-                        if (f.blink && face != ChessyFaces.TONGUE) pic(P.blinkBy[face] ?: P.blink, "features", f.lidAlpha)
+                        if (f.blink && face != ChessyFaces.TONGUE) pic(P.blinkBy[face] ?: P.blink, "features", ((1f - f.blinkOpen) * 2f).coerceIn(0f, 1f))
                         continue
                     }
                     // the eyes first, then the mouth, so a mouth always wins where the two meet; the blink last. While a

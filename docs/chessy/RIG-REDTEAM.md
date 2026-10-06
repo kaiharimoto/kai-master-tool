@@ -197,15 +197,15 @@ convincing turn has three features:
 
 | # | Sev | Finding | Practice it misses | Status |
 |---|---|---|---|---|
-| 15 | H | **Layer edges are near-binary.** Every `layer-*`/`rim-*` picture has only five alpha levels (0, 64, 128, 191, 255), and has since the first export, so it comes from the mockup's export rather than `defringe.py`. `drawVertices` does not anti-alias triangle edges, so the silhouettes stair-step wherever she is drawn large: the pet room (up to about 0.46 scale), the 168 dp greeting, the takeover. Several layers also have opaque pixels touching their box edge, where the mesh border becomes the edge. | Clean, fully anti-aliased alpha; gutters | **R2**: re-export from the mockup with full 8-bit alpha and a transparent gutter of a few px. |
-| 16 | H | **The eyes are baked.** There is no separate eye white, iris, pupil or highlight, so the eyes cannot track or saccade, and the blink cannot be a lid moving down. | Eye stack (white / iris / highlight / lids); EyeBallX/Y; EyeOpen 0–1 | **R2**: paint the eye white under the lids and split out iris and highlight. That opens real gaze (eyes lead, head follows), saccades, a graded blink, and a closed-eye smile shape. |
+| 15 | L *(was H)* | **Layer edges have five alpha levels** (0, 64, 128, 191, 255). *Corrected in round two:* the levels are the mockup's own: its packed mask keeps kai's ink coverage in two bits, and the Live look's alpha is `ink + fill·(1 − ink)`. She is drawn below her sheet's size almost everywhere, which blends the steps; they show only magnified (the pet room or the takeover on a 4K screen). Several layers also have opaque pixels touching their box edge. | Clean, fully anti-aliased alpha; gutters | **Later** (kai chose not to this round): smooth the edge by supersampling the mask's contour, with a gutter. |
+| 16 | H | **The eyes are baked.** There is no separate eye white, iris, pupil or highlight, so the eyes cannot track or saccade, and the blink cannot be a lid moving down. | Eye stack (white / iris / highlight / lids); EyeBallX/Y; EyeOpen 0–1 | **R2, kai's choice**: the irises stay where kai painted them. The lid moves instead: **half-lids** (an opening from 0 to 1 per eye, the lash cut from kai's ink), giving a blink with frames between, squints and a sleepy lid. See §4. |
 | 17 | M | **Patches can slip against the face.** The eye and mouth patches sit at z 0.01 over the face at z 0, on their own grids, so a full turn shifts them about 2 sheet px and a feathered patch can show a faint doubled line (the earlier "line under her nose" was this kind). | Parts parented to one face warp, glued | **R2**: give per-face patches the face layer's depth and grid origin, or glue them by warping both through one shared lattice. |
-| 18 | M | **Holes behind moved parts.** Rims (`rim-*`) fade in with how far the hair has swung, not with parallax. The ear's lower part sweeps about 80 sheet px when it droops 18°. The bell, the side locks and the bows have no rims. | Paint everything a move can uncover | **R2**: paint skin and hair under the ear bases, the side locks, the bell and the bows. Then check every mood at full turn with `--chessy` frames. |
+| 18 | L *(was M)* | **Holes behind moved parts.** *Corrected in round two:* the mockup paints what is hidden. Every layer's packed mask carries a hidden fill (its blue channel): skin under the hair, the ear bases under the back hair, the neck under the face and bell. The app's pictures include all of it (checked pixel for pixel). Only the bows have none. | Paint everything a move can uncover | **Later**: only the bows, if a turn ever shows a gap there. |
 | 19 | M | **The turn is a sphere, not keyforms.** The height is a paraboloid (1 − r²) rather than a sphere's; yaw and pitch add rather than compose; layer depth applies only below sheet y≈400–660, so ears and bangs get almost none; layer order is fixed, so a turned pose cannot change what overlaps what. | Keyform grids with near/far parallax and a curving centre line | **Later**: a 3×3 grid of hand-tuned warp offsets per layer, AngleX × AngleY, interpolated bilinearly. It needs kai's eye per keyform. The cheap part (depth for the bangs and ears) could be tried in a preview. |
 | 20 | M | **Android 8.0–9 (API 26–28) on a hardware canvas draws her flat**, stretched between two corners: no warp, no light, no rotation (`ChessyMesh.android.kt`). | — | **Later**: draw into a software bitmap there, or a `Picture`. It needs an emulator at API 28. |
-| 21 | L | **Six talk frames ship unused**, with about 4.9 MB of decoded pictures loaded and never drawn (`part-talk0..5`, `part-blink`, `part-closed`, and an empty `features-grin`). | — | **R2**: decide with kai. A graded mouth (MouthOpenY) would use them; otherwise drop them from the pack. |
+| 21 | L | **Six talk frames ship unused**, with about 4.9 MB of decoded pictures loaded and never drawn (`part-talk0..5`, `part-blink`, `part-closed`, and an empty `features-grin`). | — | **Later** (kai chose not to this round; Flap stays). |
 | 22 | L | **Android mipmaps may not apply to a `BitmapShader` under `drawVertices`**, which would make the 6–12× minification shimmer. | Trilinear filtering when drawn small | **Later**: check on a device with `--chessy` at 112–132 dp. |
-| 23 | L | **The sheet coordinates are written in many places** (`parts.py`, `ChessyMarks`, `AmieZones`, `ChessyFit.HEAD`), and the pipeline's order is manual: running `export.js` again silently undoes `parts.py` and `defringe.py`. | One source of truth for the rig's landmarks | **R2**: a `tools/chessy/build.sh` that runs the steps in order, and landmarks written once into `chessy.json`. |
+| 23 | M *(was L)* | **The pack could not be rebuilt.** `export.js` drives the page's `window.__chessyExport()`, which the published mockup no longer has; the steps' order was manual, and running `export.js` again would undo `parts.py` and `defringe.py`. The sheet coordinates are written in many places (`parts.py`, `ChessyMarks`, `AmieZones`, `ChessyFit.HEAD`). | A reproducible build from the source | **R2, done**: `tools/chessy/build.py` reads the mockup's data and builds the whole pack in order, with a parity check (§4). The landmarks in many places remain. |
 
 ### Docs found stale
 These are fixed in this round:
@@ -271,3 +271,73 @@ Skia: no worse, without claiming more.
 **Seeing it.** `tools/shoot.sh --chessy=reel` renders a scripted twelve seconds paced in real time, so calm steps are
 taken as the app takes them: drift, a sweep and a jump, three mood changes, a streamed reply with a code block, a
 hop, and sleep. The same script run on `main` gives the "before".
+
+---
+
+## 4. Round two: a pipeline that rebuilds her, and eyes that live without moving the irises
+
+*A preview, like round one: nothing has shipped. kai chose to keep the irises where they are painted and asked what
+the eyes could gain without moving them; round two is the reproducible pipeline, blinks with purpose and half-lids.*
+
+### Reading the mockup
+The mockup's script holds every picture as data (`const LD`):
+- per layer, a packed mask (`png`: red the ink, green the fill, blue the fill hidden under other layers), the paint
+  (`paint_live`, the restored sheet at twice its size, a JPEG with a 3 px margin), and the paint with its rim filled;
+- per face, its features, brows and tongue with a soft alpha (`live_a`);
+- the parts (the blinks, the closed and talking mouths), each a JPEG and an alpha.
+
+The Live look (`paintView`) lays the paint over all the piece covers. Its alpha is `ink + fill·(1 − ink)`: that is
+where the five steps of #15 come from. The masks' hidden fill is why #18 was mostly wrong.
+
+### Blinks with purpose (`ChessyRig`)
+- A look that jumps across her (more than 0.35 of her width in a step) blinks with it six times in ten, never within
+  600 ms of the last blink. Her drift, her glances and a smooth sweep never do.
+- A mood change asks for a blink (`blinkNow`), so the new face arrives behind the lid, as good rigs hide their swaps.
+  A face with its eyes shut lets the ask go.
+
+### The pipeline (`tools/chessy/build.py`, `tools/chessy/README.md`)
+- It reads the mockup's data and composites every picture exactly as the Live look does, then runs `parts.py`,
+  `lids.py`, `defringe.py` and `ears.py` in order.
+- `--check` compares the build with the app's pack on the sheet:
+  - the box;
+  - the silhouette (IoU);
+  - colour bias (a shift one way, a real change);
+  - colour noise (the old export's lossy WebP).
+- **Parity**: 62 of 62 pictures match. Every bias is under 1 / 255. Every box is the same, except `parts.py`'s
+  derived eye and mouth patches, whose feathered edge moves a pixel. The ears' traced outline moved under 1 % of
+  their width.
+- The pack is now the build's (`--install`). `SOURCE.json` records the mockup version and the sha-256 of its data.
+
+### Half-lids (`tools/chessy/lids.py`, `ChessyLids`, `drawChessy`)
+- **Built from kai's own art**, for each open eye (the Grin's sly ones, the Fangs' wide ones) and side:
+  - the open lash's lower edge, found in kai's ink as the pair of strokes enclosing the lash's dark fill (the crease
+    above encloses skin);
+  - where the closed lid's lash rests;
+  - the lash itself (kai's ink and the paint's dark fill);
+  - the closed lid with its lash painted out, inside a band round the eye only, keeping her face's outline.
+- **The lid travels most at its middle**, nothing at the outer corner and half at the inner, so the lash's flick never
+  doubles.
+- **At opening `o`** the app draws, after the eye:
+  - the lid's skin down to a cut between the two lines (a mesh cropped column by column);
+  - then the lash moved down onto it.
+
+  Below 0.15, kai's own lid fades in, whole when shut.
+- **The blink** is an opening: it closes over 45 ms, holds 40–80, and opens over 100, with frames between.
+- **Moods carry an opening** (`ChessyMood.openL`/`openR`, eased by `ChessyMoodBlend`):
+
+| Mood | Opening |
+|---|---|
+| Thinking | 0.75 |
+| Working | 0.8 |
+| Reading | 0.85 |
+| Angry | 0.6 |
+| Waking | 0.55 |
+| Sad | 0.85 |
+| Wink's open eye | 0.8 |
+
+- `tools/shoot.sh --chessy=eyes` draws each eye at 1, 0.75, 0.5, 0.25 and shut through the app's renderer, then those
+  moods.
+- **Constants to tune**: `lids.py`'s `OUTER_TAPER`, `INNER_TAPER`, `INNER_FLOOR`, `LASH_REACH`, `EXTEND`; `ChessyLids.FADE_BELOW`;
+  the blink's `BLINK_CLOSE`, `BLINK_HOLD_*` and `BLINK_OPEN`; the moods' openings.
+
+**Pacing** stays at 10 % idle. The half-lid meshes are four rows of a dozen columns each.
