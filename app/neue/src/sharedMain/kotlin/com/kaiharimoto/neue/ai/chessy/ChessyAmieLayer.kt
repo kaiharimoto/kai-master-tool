@@ -123,6 +123,9 @@ fun ChessyAmieLayer(ai: AiState) {
     var toyFrame by remember { mutableIntStateOf(0) } // read only in the draw
     var bursts by remember { mutableIntStateOf(0) } // wakes the particles' clock
     val audio = remember { PetAudio() }
+    val touch = remember { TouchMarks() }
+    var touchFrame by remember { mutableIntStateOf(0) } // read only in the draw
+    var touchWake by remember { mutableIntStateOf(0) } // wakes the touch marks' clock
     var biting by remember { mutableStateOf(false) } // her jaws open, mid-bite
     var lastFond by remember { mutableFloatStateOf(0f) }
     var scurry by remember { mutableIntStateOf(0) } // the mouse's running sound, cut when it stops
@@ -214,6 +217,15 @@ fun ChessyAmieLayer(ai: AiState) {
             "hug" -> react(amie.hold(AmieZone.HEAD, now()), head())
             "sulk" -> repeat(ChessyAmie.POKES) { react(amie.tap(AmieZone.FACE, now() + it * .1), sheetToRoom(630f, 960f)) }
             "catnip" -> giveNip()
+            "finger" -> {
+                // a finger stroking across her head, still down: its ring, the ripple it landed with, its prints
+                val h = head()
+                val step = 26f * density.density
+                touch.land(Offset(h.x - step * 4f, h.y + step), now())
+                for (k in 1..8) touch.move(Offset(h.x - step * 4f + k * step, h.y + step - kotlin.math.sin(k * .7f) * step * .6f), step * .8f, now() - (8 - k) * .07)
+                touchWake++
+                stroke(AmieZone.HEAD, h, 60)
+            }
             "toys", "yarn", "mouse", "feather" -> {
                 if (demo == "toys" || demo == "yarn") {
                     toys.yarn.out = true
@@ -298,6 +310,11 @@ fun ChessyAmieLayer(ai: AiState) {
         audio.start(soundOn)
         onDispose { audio.stop() }
     }
+    // the touch marks' clock, asleep when no finger is down and nothing is fading
+    LaunchedEffect(touchWake) {
+        while (touch.live(now())) withFrameNanos { touchFrame++ }
+        touchFrame++
+    }
     // the particles' clock, asleep when none are out
     LaunchedEffect(bursts) {
         var last = 0L
@@ -355,6 +372,9 @@ fun ChessyAmieLayer(ai: AiState) {
                     if (zone != AmieZone.NONE) {
                         // her: a tap, a stroke (petting, tickling, a rub) or a hold (a hug); a hand on her holds her still
                         toys.her.touched()
+                        // a finger shows where it touches her: a ring round it, a ripple as it lands, paw prints as it strokes
+                        val finger = down.type != PointerType.Mouse
+                        if (finger) { touch.land(start, now()); touchWake++ }
                         var moved = 0f
                         var held = false
                         val hold = scope.launch {
@@ -369,6 +389,7 @@ fun ChessyAmieLayer(ai: AiState) {
                             moved += d.getDistance()
                             toys.her.touched()
                             if (moved >= slop) hold.cancel()
+                            if (finger) touch.move(ch.position, 22f * density.density, now())
                             if (d != Offset.Zero) {
                                 ch.consume()
                                 val z = zoneAt(ch.position)
@@ -377,6 +398,7 @@ fun ChessyAmieLayer(ai: AiState) {
                             }
                         }
                         hold.cancel()
+                        touch.at = null
                         if (!held && moved < slop) react(amie.tap(zone, now()), start)
                         return@awaitEachGesture
                     }
@@ -605,6 +627,17 @@ fun ChessyAmieLayer(ai: AiState) {
                 }
             }
         }
+        // where a finger pets her, over her and under the hearts
+        Canvas(Modifier.fillMaxSize()) {
+            touchFrame
+            val t = now()
+            val s = this.density
+            with(ChessyInk) {
+                for (p in touch.prints) touchPrint(Offset(p[0].toFloat(), p[1].toFloat()), p[2].toFloat(), s, ((t - p[3]) / TouchMarks.PRINT_LIFE).toFloat(), c.ink, c.paper)
+                for (r in touch.ripples) touchRipple(Offset(r[0].toFloat(), r[1].toFloat()), s, ((t - r[2]) / TouchMarks.RIPPLE_LIFE).toFloat())
+                touch.at?.let { touchRing(it, s, (((t - touch.downAt) / .12).toFloat()).coerceIn(0f, 1f)) }
+            }
+        }
         // the hearts and sparkles, over everything, never in the hand's way
         Canvas(Modifier.fillMaxSize()) {
             frame
@@ -739,6 +772,49 @@ private fun Fondness(fondness: () -> Float, frame: () -> Int, large: Boolean = t
 
 /** What a held press on her in the chat box does while she is the assistant: her petting mode, and Ai's hold otherwise. */
 internal fun AiState.holdFace(longer: Boolean): AvatarPlay.Reaction? = if (prefs.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY) { openAmie(); null } else play.hold(longer)
+
+/**
+ * Where a finger is on her and what it left (1.1.29): [at] while it is down (since [downAt]), a ripple where each touch
+ * landed, and a paw print every [step] pixels of a stroke, turned the way the stroke went; each fades and is let go.
+ * Times are seconds; plain, read in the draw.
+ */
+private class TouchMarks {
+    var at: Offset? = null
+    var downAt = 0.0
+    private var last: Offset? = null
+    val prints = ArrayList<DoubleArray>() // x, y, angle (degrees), born
+    val ripples = ArrayList<DoubleArray>() // x, y, born
+
+    fun land(p: Offset, now: Double) {
+        at = p
+        downAt = now
+        last = p
+        ripples += doubleArrayOf(p.x.toDouble(), p.y.toDouble(), now)
+    }
+
+    fun move(p: Offset, step: Float, now: Double) {
+        at = p
+        val l = last ?: return run { last = p }
+        val d = p - l
+        if (d.getDistance() < step) return
+        val angle = kotlin.math.atan2(d.y.toDouble(), d.x.toDouble()) * 180.0 / kotlin.math.PI + 90.0
+        prints += doubleArrayOf(p.x.toDouble(), p.y.toDouble(), angle, now)
+        last = p
+        while (prints.size > 24) prints.removeAt(0)
+    }
+
+    /** Whether anything is still to be drawn at [now]: a finger down, or marks still fading. */
+    fun live(now: Double): Boolean {
+        prints.removeAll { now - it[3] > PRINT_LIFE }
+        ripples.removeAll { now - it[2] > RIPPLE_LIFE }
+        return at != null || prints.isNotEmpty() || ripples.isNotEmpty()
+    }
+
+    companion object {
+        const val PRINT_LIFE = .8
+        const val RIPPLE_LIFE = .5
+    }
+}
 
 /** How far down her sheet her hair tips touch the floor: where she sits. */
 private const val SIT = 1660f / ChessyFit.SHEET_H

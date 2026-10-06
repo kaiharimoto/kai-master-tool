@@ -69,7 +69,7 @@ fun TakeoverLayer(ai: AiState) {
     // the clock: one frame loop while it plays, read where it is drawn
     LaunchedEffect(run) {
         if (run.frozen != null) return@LaunchedEffect
-        while (true) withFrameNanos { tk.t = tk.now() }
+        while (true) withFrameNanos { tk.tick() }
     }
     val noise = remember { TakeoverInk.noise() }
     val c = Mu.colors

@@ -955,7 +955,7 @@ fun neueMain(args: Array<String>) {
                     if (k < moments.size - 1) clock.frame().encodeToData(EncodedImageFormat.PNG)?.let { File(out, "$name-t$at.png").writeBytes(it.bytes) }
                 }
             }
-            // --chessy-amie=pet|tickle|bell|ear|hug|sulk|toys|yarn|mouse|feather|catnip (with --persona=chessy): her petting mode open, that hand
+            // --chessy-amie=pet|tickle|bell|ear|hug|sulk|toys|yarn|mouse|feather|catnip|finger (with --persona=chessy): her petting mode open, that hand
             // (or those toys) played through it.
             map["chessy-amie"]?.let { demo ->
                 h.ai.amieDemo = demo

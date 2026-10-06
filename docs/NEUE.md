@@ -2956,6 +2956,11 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     rising chimes. `PetMix` mixes them (fourteen at once, softly limited) into `Speaker.stream` (new: a small buffer fed
     from the speaker's own thread, on the desk and on Android), rendered once off the frame thread (`PetAudio`). **Sound
     on/off** stands by Bye-bye and in Settings (`AiPrefs.petSound`, synced).
+  - **A finger shows where it pets her** (kai, 1.1.29: "for mobile also add a touch indicator showing where point is
+    petting her to make it feel more physical"): on a touch screen a lilac ring stands round the fingertip, pressed a
+    little smaller while it is down, a pink ripple widens where it lands, and a stroke leaves fading paw prints turned the
+    way it went (`TouchMarks` in the layer; `touchRing`, `touchRipple`, `touchPrint` in `ChessyInk.kt`, her colours).
+    `--chessy-amie=finger` photographs it.
   - One arbiter takes every press on the room (a toy's, a slot's or hers, never two), so a press beside her no longer
     lets her go: Bye-bye, Esc or Back does. She watches the toy she is after, else the one in play (`PetToys.focus`),
     else the hand. `tools/shoot.sh --persona=chessy --chessy-amie=toys|yarn|mouse|feather|catnip` photographs it.
@@ -2986,7 +2991,9 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   (always) and **`/chessy`** (when she is not already the assistant), and from Settings › Assistant › Takeover › Play it.
   **Skip** and **Sound** stand in its corner throughout; Esc and Back skip to the question, then leave things as they
   were. Its sound can be turned off there or in Settings (`AiPrefs.takeoverSound`, synced). Keep Chessy or Switch back
-  sets `persona` and marks it seen. `tools/shoot.sh --takeover=1,4.5,7.2,…` photographs those moments (`<name>-t<s>.png`).
+  sets `persona` and marks it seen. **On a phone** (kai, 1.1.29) the chat sheet covers the app, so a takeover started with it open puts
+  it away and shows the builder for her to break into, and opens it again as Ai returns (`Takeovers.tick`, at
+  `Takeover.AI_ON`, or at the choice if skipped past). `tools/shoot.sh --takeover=1,4.5,7.2,…` photographs those moments (`<name>-t<s>.png`).
 - **`/chessy`, `/ai` and `/catmode`** are the app's, never the model's (`AiState.send` → `command`): `/chessy` makes
   her the assistant, `/ai` brings Ai back (the next message tells the model who it is now), `/catmode` turns her full
   cat voice on or off. `/chessy` plays the takeover (unless she is already here) and `/takeover` always does.

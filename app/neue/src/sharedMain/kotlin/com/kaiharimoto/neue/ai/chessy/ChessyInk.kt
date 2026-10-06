@@ -194,7 +194,7 @@ internal object ChessyInk {
      * her pink in its beans, centred on the point it touches; pressed, it squashes onto her a little. [ink] and [paper]
      * are the theme's; [s] pixels a dp.
      */
-    fun DrawScope.drawPaw(at: Offset, s: Float, pressed: Boolean, ink: Color, paper: Color) {
+    fun DrawScope.drawPaw(at: Offset, s: Float, pressed: Boolean, ink: Color, paper: Color, alpha: Float = 1f) {
         val squash = if (pressed) .86f else 1f
         val spread = if (pressed) 1.08f else 1f
         withTransform({
@@ -212,18 +212,41 @@ internal object ChessyInk {
                 cubicTo(-2.6f, 8.2f, -5.8f, 7.4f, -6.6f, 4.2f)
                 close()
             }
-            drawPath(pad, paper)
-            drawPath(pad, ink, style = edge)
-            drawOval(PINK.copy(alpha = .9f), Offset(-3.8f, 1.2f), Size(7.6f, 4.4f))
+            drawPath(pad, paper.copy(alpha = paper.alpha * alpha))
+            drawPath(pad, ink.copy(alpha = ink.alpha * alpha), style = edge)
+            drawOval(PINK.copy(alpha = .9f * alpha), Offset(-3.8f, 1.2f), Size(7.6f, 4.4f))
             // four toes, fanned over it
             for ((x, y, r) in TOES) {
                 withTransform({ rotate(r, Offset(x, y)) }) {
-                    drawOval(paper, Offset(x - 2.4f, y - 3f), Size(4.8f, 6f))
-                    drawOval(ink, Offset(x - 2.4f, y - 3f), Size(4.8f, 6f), style = edge)
-                    drawOval(PINK.copy(alpha = .9f), Offset(x - 1.25f, y - 1.6f), Size(2.5f, 3.2f))
+                    drawOval(paper.copy(alpha = paper.alpha * alpha), Offset(x - 2.4f, y - 3f), Size(4.8f, 6f))
+                    drawOval(ink.copy(alpha = ink.alpha * alpha), Offset(x - 2.4f, y - 3f), Size(4.8f, 6f), style = edge)
+                    drawOval(PINK.copy(alpha = .9f * alpha), Offset(x - 1.25f, y - 1.6f), Size(2.5f, 3.2f))
                 }
             }
         }
+    }
+
+    /**
+     * Where a finger pets her on a touch screen (kai, 1.1.29: "add a touch indicator showing where point is petting her to
+     * make it feel more physical"): a ring of her lilac round the finger, a soft wash inside it, and the ring pressed a
+     * little smaller while the finger is down ([press], 0 to 1); [s] pixels a dp. Large enough to show round a fingertip.
+     */
+    fun DrawScope.touchRing(at: Offset, s: Float, press: Float, alpha: Float = 1f) {
+        val r = (36f - 6f * press) * s
+        drawCircle(LILAC.copy(alpha = .16f * alpha), r, at)
+        drawCircle(LILAC_DEEP.copy(alpha = .9f * alpha), r, at, style = Stroke(2.5f * s))
+        drawCircle(PAPER.copy(alpha = .8f * alpha), r + 2f * s, at, style = Stroke(1.2f * s))
+    }
+
+    /** The ripple of a touch landing on her: a lilac ring widening and fading over its [age], 0 to 1. */
+    fun DrawScope.touchRipple(at: Offset, s: Float, age: Float) {
+        val k = age.coerceIn(0f, 1f)
+        drawCircle(PINK.copy(alpha = .7f * (1f - k)), (16f + 44f * k) * s, at, style = Stroke((3f - 2f * k) * s))
+    }
+
+    /** A paw print left behind as the finger strokes her, turned the way it went, fading over its [age], 0 to 1. */
+    fun DrawScope.touchPrint(at: Offset, angle: Float, s: Float, age: Float, ink: Color, paper: Color) {
+        withTransform({ rotate(angle, at) }) { drawPaw(at, s * .8f, false, ink, paper, alpha = .75f * (1f - age.coerceIn(0f, 1f))) }
     }
 
     /** The paw's toes: where each sits (dp from the touch) and how it leans. */

@@ -10,6 +10,7 @@ import com.kaiharimoto.mastertool.core.ai.chessy.Takeover
 import com.kaiharimoto.mastertool.core.audio.TakeoverSound
 import com.kaiharimoto.mastertool.core.prefs.AiPrefs
 import com.kaiharimoto.neue.Note
+import com.kaiharimoto.neue.Page
 import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.platform.Playing
 import com.kaiharimoto.neue.platform.Speaker
@@ -37,6 +38,9 @@ class Takeovers(private val ai: AiState) {
     /** The app as drawn while the takeover plays, for the takeover to glitch. */
     var layer: GraphicsLayer? = null
 
+    // on a phone, the chat put away for the takeover, to come back when Ai does
+    private var chatBack = false
+
     private var pcm: ShortArray? = null
     private var rendering: Job? = null
     private var playing: Playing? = null
@@ -54,7 +58,26 @@ class Takeovers(private val ai: AiState) {
         run = Run(System.nanoTime(), at)
         t = at
         ai.h.neue.menu = null
+        // on a phone the chat covers the app (kai: "close the ai chat window and show the deck builder and open it back up
+        // when Ai returns"): it is put away, the builder shown for her to break into, and the chat comes back with Ai
+        val neue = ai.h.neue
+        if (neue.phone && neue.prefs.ai.panelOpen) {
+            chatBack = true
+            neue.update { it.copy(ai = it.ai.copy(panelOpen = false)) }
+            neue.page = Page.BUILDER
+        }
         sound()
+    }
+
+    /** The frame loop's tick: the clock read again, and on a phone the chat back once Ai returns. */
+    fun tick() {
+        t = now()
+        if (chatBack && t >= Takeover.AI_ON) chatReturns()
+    }
+
+    private fun chatReturns() {
+        chatBack = false
+        ai.h.neue.update { it.copy(ai = it.ai.copy(panelOpen = true)) }
     }
 
     /** Holds it still at [at] seconds: the studio's photographs. */
@@ -76,6 +99,7 @@ class Takeovers(private val ai: AiState) {
         stopSound()
         run = null
         layer = null
+        if (chatBack) chatReturns()
         val persona = if (keep) AiPrefs.PERSONA_CHESSY else AiPrefs.PERSONA_AI
         ai.h.neue.update { it.copy(ai = it.ai.copy(persona = persona, takeover = AiPrefs.TAKEOVER_SEEN)) }
         ai.h.neue.note = Note(
