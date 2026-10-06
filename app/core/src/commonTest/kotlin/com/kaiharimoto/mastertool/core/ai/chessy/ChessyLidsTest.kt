@@ -55,4 +55,18 @@ class ChessyLidsTest {
         assertEquals(931.5f, parts.halfLid("sly", "l")!!.bottom[1])
         assertEquals(null, parts.halfLid("wide", "l"))
     }
+
+    @Test
+    fun thePupilIsPushedUnderTheLashNotCovered() {
+        val slide = PupilSlide(pic, pic, cx = 108f, top = 900f, bottom = 930f, floor = 950f)
+        val withPupil = lid.copy(pupil = slide)
+        // open: the lash (894 at the middle) is above the pupil's top
+        assertEquals(0f, ChessyLids.push(withPupil, 1f))
+        // half way the lash is at 914: the pupil's top goes just under it
+        assertEquals(914f + ChessyLids.PUPIL_GAP - 900f, ChessyLids.push(withPupil, .5f), 1e-3f)
+        // nearly shut, never past its floor
+        assertEquals(20f, ChessyLids.push(withPupil, 0f), 1e-3f)
+        // without a pupil, nothing is pushed
+        assertEquals(0f, ChessyLids.push(lid, 0f))
+    }
 }

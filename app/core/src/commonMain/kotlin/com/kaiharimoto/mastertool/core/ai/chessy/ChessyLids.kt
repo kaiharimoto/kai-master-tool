@@ -22,6 +22,19 @@ object ChessyLids {
     /** Where the lid's skin ends at sheet column [x]: the lash's lower edge, moved down. */
     fun cut(h: HalfLid, x: Float, open: Float): Float = at(h.top, h, x) + drop(h, x, open)
 
+    /** How far under the lash's lower edge a pushed pupil's top sits (sheet px). */
+    const val PUPIL_GAP = 3f
+
+    /**
+     * How far the lid pushes the pupil down at [open] (sheet px): none while the lash is above it; then enough to keep
+     * its top [PUPIL_GAP] under the lash, never past its floor (from there the lid covers it, as a closing eye does).
+     */
+    fun push(h: HalfLid, open: Float): Float {
+        val p = h.pupil ?: return 0f
+        val need = cut(h, p.cx, open) + PUPIL_GAP - p.top
+        return need.coerceIn(0f, (p.floor - p.bottom).coerceAtLeast(0f))
+    }
+
     /** How much of kai's closed lid shows over the half-lid at [open]: none above [FADE_BELOW], all at 0. */
     fun lidFade(open: Float): Float = (1f - open / FADE_BELOW).coerceIn(0f, 1f)
 

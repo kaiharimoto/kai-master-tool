@@ -198,6 +198,9 @@ TOL_BIAS = 1.0
 TOL_NOISE = 4.0
 TOL_P99 = 24.0
 DERIVED = ('eye-', 'mouth-')
+# pictures the build makes itself rather than cuts from kai's (the half-lids): never held to the pack, since changing
+# them is what a change to lids.py is for
+GENERATED = ('halflid-',)
 DERIVED_BOX = 2
 DERIVED_IOU = .95
 
@@ -243,6 +246,8 @@ def check(built, against):
     mb = json.load(open(os.path.join(built, 'moods.json')))
     A, B = pics(pa, ma), pics(pb, {k: v for k, v in mb.items() if k != 'halfLids'})
     for name in sorted(set(A) | set(B)):
+        if name.startswith(GENERATED):
+            rows.append((name, 'regenerated (the half-lids are the build\'s own; judged with --chessy=eyes)', '')); continue
         if name not in B:
             bad.append(name); rows.append((name, 'missing from the build', '')); continue
         if name not in A:

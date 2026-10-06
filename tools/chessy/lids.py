@@ -11,6 +11,7 @@ and each side, this finds:
     bottom   the bottom edge of kai's closed lid's lash, where the lash comes to rest when the eye is shut
     lash     the open eye's upper lash itself, its lashes and all, cut out with a soft edge (its ink, not its skin)
     skin     kai's closed lid with its ink painted out: the lid's skin, to cover the eye above the lash as it comes down
+    pupil    the eye's pupil and the iris without it (bed), so a lid reaching the pupil pushes it down, not covers it
 
 and writes them into moods.json as halfLids.<sly|wide>.<l|r>. The app draws an eye at opening o (1 open, 0 shut) as the
 eye, then the skin down to a line between top and bottom, then the lash moved down onto that line; near shut it fades
@@ -45,7 +46,17 @@ OPEN_W = 11            # the horizontal opening that keeps the lash band and dro
 OUTER_TAPER = .35      # the share of the eye's width over which the lid's travel grows from its outer corner
 INNER_TAPER = .12      # and falls to its inner corner, where it keeps INNER_FLOOR of it
 INNER_FLOOR = .5
+PUPIL_W = (8, 45)      # a pupil's loop in kai's ink: its inside this wide (sheet px)
+PUPIL_H = (15, 70)     # and this tall, taller than wide
+PUPIL_DARK = 100       # the pupil's ink is darker than this; her irises are far lighter
+PUPIL_RING = 5         # a pupil's ring of ink round its inside (sheet px)
+PUPIL_MARGIN = 6 
+FLOOR_LINE = 185       # the eye's lower line under the pupil is darker than this      # how far above the eye's lower line the pupil's bottom may come to rest
+PUPIL_GAP = 3          # how far under the lash's lower edge a pushed pupil's top sits
 EXTEND = 24            # how far past its ends a lid's lines are held (sheet px)
+LASH_THICK = 16        # the most a painted lash is thick where the snap may use its edge (sheet px)
+SNAP = 10              # how far the painted lash's edge may sit from kai's traced one (sheet px)
+LASH_PAINT = 100       # the painted lash is darker than this
 LASH_GAP = 40          # the most the lash's two outlines are apart (sheet px)
 LASH_DARK = 120        # and the paint between them is darker than this: the lash's own fill
 ZONE_FEATHER = 4       # the skin's edge, round the eye, softened over this many pixels
@@ -149,6 +160,32 @@ def lash_line(lines, lum, x0, x1):
     return x0 + a, np.array([np.median(padded[i:i + SMOOTH]) for i in range(ys.size)])
 
 
+def snap_to_paint(lum, x0, ys):
+    """The lash's lower edge as painted: kai's traced ink can sit a few pixels off the paint, so from where the ink puts
+    it, each column moves to the end of the painted lash's dark run (within SNAP pixels), then a light median."""
+    out = ys.copy()
+    for i, y in enumerate(ys):
+        x = x0 + i
+        y = int(round(y))
+        col = lum[y - SNAP:y + SNAP + 1, x] < LASH_PAINT
+        if not col.any():
+            continue
+        # the dark run nearest the ink's line, and where it ends
+        idx = np.nonzero(col)[0]
+        k = idx[np.argmin(np.abs(idx - SNAP))]
+        start = k
+        while start > 0 and col[start - 1]:
+            start -= 1
+        while k + 1 < col.size and col[k + 1]:
+            k += 1
+        # only a lash's run: one that runs on (into a pupil touching the lash) keeps the ink's line
+        if k - start <= LASH_THICK:
+            out[i] = y - SNAP + k
+    half = 4
+    padded = np.pad(out, half, mode='edge')
+    return np.array([np.median(padded[i:i + 2 * half + 1]) for i in range(out.size)])
+
+
 def save(rgba, name):
     a = rgba[..., 3]
     ys, xs = np.nonzero(a > 1)
@@ -160,6 +197,80 @@ def save(rgba, name):
 
 face = layers['face']['pic']
 eyes = moods['eyes']
+
+
+def pupil_slide(opened, ink_map, lo, hi, kind, s, lash_line):
+    """The pupil, so it can slide down under a lid that would cover it (kai: the pupil should never be lost in a blink):
+    found in the paint as the dark ring under the lash, cut out with what it holds ([pic]); the iris under it
+    with the pupil painted out ([bed], drawn over its old place while it is pushed); its top and bottom, and the floor
+    its bottom may slide to (just above the eye's lower line under it)."""
+    # found in the paint, which is what is drawn (kai's traced ink can sit a little off it): below the lash's line, a
+    # dark ring of a pupil's size that encloses something (its highlight, its lighter middle), nearest the eye's middle
+    y0, y1 = EYES
+    rows = np.arange(H)[:, None]
+    under = rows > np.nan_to_num(lash_line, nan=1e9)[None, :] + 2
+    region = np.zeros((H, W), bool)
+    region[y0:y1, lo:hi] = True
+    dark = ((luma(opened) < PUPIL_DARK) & under & region).astype(np.uint8)
+    n, lab, stats, cents = cv2.connectedComponentsWithStats(dark)
+    best = None
+    for i in range(1, n):
+        x, y, w, h, area = stats[i]
+        if not (PUPIL_W[0] < w < PUPIL_W[1] + 20 and PUPIL_H[0] < h < PUPIL_H[1] + 20 and h > w * .8):
+            continue
+        comp = (lab[y:y + h, x:x + w] == i).astype(np.uint8)
+        # a pupil touching the lash is a ring open at the top, the lash closing it: close it for the test
+        wall = comp.copy()
+        if y <= int(np.nanmin(lash_line[x:x + w])) + 6:
+            wall[0, :] = 1
+        inv = (1 - wall).astype(np.uint8)
+        ff = np.zeros((h + 2, w + 2), np.uint8)
+        for sx, sy in ((0, h - 1), (w - 1, h - 1), (0, h // 2), (w - 1, h // 2)):
+            if inv[sy, sx]:
+                cv2.floodFill(inv, ff, (sx, sy), 0)
+        enclosed = int(inv.sum())
+        if enclosed < area * .15:
+            continue  # a stroke, not a ring
+        # of the rings, the one nearest the middle of the eye (an iris's rim can enclose a little too)
+        centre = (np.nanmin(np.where(np.isnan(lash_line[lo:hi]), np.inf, np.arange(lo, hi))) +
+                  np.nanmax(np.where(np.isnan(lash_line[lo:hi]), -np.inf, np.arange(lo, hi)))) / 2
+        off = abs(x + w / 2 - centre)
+        if best is None or off < best[1]:
+            best = (i, off, comp | inv)
+    if best is None:
+        print(f'{kind}-{s}: no pupil found; it stays under the lid')
+        return None
+    i, _, filled = best
+    x, y, w, h, _ = stats[i]
+    mask = np.zeros((H, W), np.uint8)
+    mask[y:y + h, x:x + w] = filled
+    mask = cv2.dilate(mask, np.ones((3, 3), np.uint8))
+    hole = mask.copy()
+    ys_, xs_ = np.nonzero(mask)
+    x, y, w, h = int(xs_.min()), int(ys_.min()), int(xs_.max() - xs_.min() + 1), int(ys_.max() - ys_.min() + 1)
+    cx = x + w / 2
+    # the floor: the eye's lower line under the pupil's middle, less a margin
+    # (the eye's lower line is dark on the Grin, a light grey on the Fangs: anything clearly darker than the iris)
+    col = luma(opened)[y + h + 8:y1, int(cx)] < FLOOR_LINE
+    below = np.nonzero(col)[0]
+    floor = (y + h + 8 + below[0] - PUPIL_MARGIN) if below.size else y + h
+    soft = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), .8)
+    pupil = np.zeros_like(opened)
+    pupil[..., :3] = opened[..., :3]
+    pupil[..., 3] = np.clip(soft * 1.4, 0, 1) * opened[..., 3]
+    # the bed: the iris where the pupil was, painted from the iris round it
+    hole = cv2.dilate(mask, np.ones((5, 5), np.uint8))
+    rgb = np.clip(opened[..., :3], 0, 255).astype(np.uint8)
+    filled = cv2.inpaint(rgb, hole, 7, cv2.INPAINT_TELEA).astype(np.float32)
+    bed = np.zeros_like(opened)
+    bed[..., :3] = filled
+    bed[..., 3] = np.clip(cv2.GaussianBlur(hole.astype(np.float32), (0, 0), 1.0) * 1.3, 0, 1) * 255
+    print(f'{kind}-{s}: pupil x{x}-{x + w} y{y}-{y + h}, may slide {floor - (y + h):.0f} px')
+    return {
+        'pic': save(pupil, f'halflid-{kind}-{s}-pupil'),
+        'bed': save(bed, f'halflid-{kind}-{s}-bed'),
+        'cx': round(float(cx), 1), 'top': float(y), 'bottom': float(y + h), 'floor': float(max(floor, y + h)),
+    }
 
 
 def mockup_ink():
@@ -213,6 +324,8 @@ for kind, (open_pics, lid_face) in KINDS.items():
         band_shut = cv2.morphologyEx(ink(shut).astype(np.uint8), cv2.MORPH_OPEN, np.ones((1, OPEN_W), np.uint8)) > 0
         top = lash_line(band_open, luma(opened), lx0, lx1) if INK is not None else line(band_open, lx0, lx1, from_top=True)
         bottom = line(band_shut, lx0, lx1, from_top=False)
+        if top is not None:
+            top = (top[0], snap_to_paint(luma(opened), top[0], top[1]))
         if top is None or bottom is None:
             print(f'{kind}-{s}: no lash found; left as the lid swap')
             continue
@@ -283,6 +396,9 @@ for kind, (open_pics, lid_face) in KINDS.items():
             'top': [round(float(v), 1) for v in t],
             'bottom': [round(float(v), 1) for v in b],
         }
+        slide = pupil_slide(opened, k if INK is not None else None, lo, hi, kind, s, tl)
+        if slide:
+            half_lids[kind][s]['pupil'] = slide
         print(f'{kind}-{s}: {xs.size} columns from x {x0}, the lash comes down {float(np.median(b - t)):.0f} px')
 
 moods['halfLids'] = half_lids
@@ -318,6 +434,21 @@ def at(o, kind, s):
             a = layer[..., 3:4] / 255
             base[..., :3] = layer[..., :3] * a + base[..., :3] * (1 - a)
             base[..., 3:4] = np.maximum(base[..., 3:4], layer[..., 3:4])
+    def paste(base, p, dy=0):
+        layer = np.zeros((H, W, 4), np.float32)
+        layer[p['y'] + dy:p['y'] + dy + p['h'], p['x']:p['x'] + p['w']] = np.asarray(load(p)).astype(np.float32)
+        a = layer[..., 3:4] / 255
+        base[..., :3] = layer[..., :3] * a + base[..., :3] * (1 - a)
+    pu = h.get('pupil')
+    if pu and o < .98:
+        push = min(max(0., np.interp(pu['cx'], xs, t + (1 - o) * (b - t)) + PUPIL_GAP - pu['top']), pu['floor'] - pu['bottom'])
+        if push > .3:
+            paste(base, pu['bed'])
+            paste(base, pu['pic'], int(round(push)))
+            # the skin and lash again over it
+            for layer in (sk, moved):
+                a = layer[..., 3:4] / 255
+                base[..., :3] = layer[..., :3] * a + base[..., :3] * (1 - a)
     fade = max(0., 1 - o / .15)
     if fade > 0:
         lp = lids[lid_face][s]

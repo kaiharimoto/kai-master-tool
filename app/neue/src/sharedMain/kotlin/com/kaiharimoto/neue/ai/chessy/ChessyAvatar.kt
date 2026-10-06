@@ -393,8 +393,15 @@ fun DrawScope.drawChessy(
             if (f.blink && to.blinks) pic(shut, "features", ((1f - f.blinkOpen) * 2f).coerceIn(0f, 1f))
             return
         }
-        // the lid's skin down to the cut, the lash on it; near shut, kai's own lid over them
+        // the lid's skin down to the cut, the lash on it; near shut, kai's own lid over them. A lid reaching the pupil
+        // pushes it down instead of covering it (kai): the iris without it over its old place, the pupil lower
         if (ChessyLids.drawn(open)) {
+            val pupil = h.pupil
+            val push = ChessyLids.push(h, open)
+            if (pupil != null && push > .3f) {
+                pic(pupil.bed, "features")
+                pic(pupil.pic, "features") { sizeDy = push }
+            }
             halfLidPic(h, h.skin, open, crop = true)
             halfLidPic(h, h.lash, open, crop = false)
         }

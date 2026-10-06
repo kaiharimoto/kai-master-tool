@@ -91,7 +91,25 @@ data class PackParts(
  * columns from [x0] ([ChessyLids] reads them).
  */
 @Serializable
-data class HalfLid(val skin: Pic, val lash: Pic, val x0: Int, val dx: Int, val top: List<Float>, val bottom: List<Float>)
+data class HalfLid(
+    val skin: Pic,
+    val lash: Pic,
+    val x0: Int,
+    val dx: Int,
+    val top: List<Float>,
+    val bottom: List<Float>,
+    /** The eye's pupil, so the lid pushes it down rather than covering it (kai); none, and the lid covers it. */
+    val pupil: PupilSlide? = null,
+)
+
+/**
+ * A pupil that slides down under a lid instead of being lost under it (kai, round two: "the pupil is covered in some
+ * of the blinks"): [pic] is the pupil with its ring and highlight, [bed] the iris with the pupil painted out (drawn
+ * over its old place while it is pushed), [cx] its middle column, [top] and [bottom] its edges, and [floor] the lowest
+ * its bottom may come (just above the eye's lower line): past that the lid covers it, as a closing eye does.
+ */
+@Serializable
+data class PupilSlide(val pic: Pic, val bed: Pic, val cx: Float, val top: Float, val bottom: Float, val floor: Float)
 
 /** A part on each side of her face: left, right. */
 @Serializable
@@ -119,7 +137,7 @@ data class ChessyParts(
 ) {
     val files: List<String>
         get() = ((eyes.values + lids.values + brows.values).flatMap { listOf(it.l, it.r) } + mouths.values + listOfNotNull(frown) +
-            halfLids.values.flatMap { it.values }.flatMap { listOf(it.skin, it.lash) }).map { it.file }.distinct()
+            halfLids.values.flatMap { it.values }.flatMap { listOfNotNull(it.skin, it.lash, it.pupil?.pic, it.pupil?.bed) }).map { it.file }.distinct()
 
     /** The half-lid for an eye of [kind] on [side] (`l`, `r`), if the pack has one. */
     fun halfLid(kind: String, side: String): HalfLid? = halfLids[kind]?.get(side)

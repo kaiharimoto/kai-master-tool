@@ -2833,7 +2833,8 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   the pack is rebuilt from the mockup's own data by `tools/chessy/build.py` (`export.js`'s hook is gone from the
   mockup; `--check` proves parity with the pack), a look that jumps and a mood change take a blink, and **half-lids**
   (`lids.py` → `moods.json` `halfLids`; `ChessyLids`; `ChessyMood.openL`/`openR`) let the lid come down over kai's
-  irises, which never move: a blink with frames between, squints and a sleepy lid. `--chessy=eyes` photographs them.
+  irises, which never move: a blink with frames between, squints and a sleepy lid; a lid that reaches the pupil pushes it
+  down under the lash instead of covering it (`PupilSlide`, `ChessyLids.push`). `--chessy=eyes` photographs them.
 - **The renderer is `neue/ai/chessy/ChessyAvatar.kt`**: each picture a mesh (`Mesh`, cells of 24–96 sheet px by
   drawn size, `Mesh.cellFor`) bent by the warp
   and lit per vertex, drawn by `drawMesh` — Skia's `drawVertices` on the desk, Android's `Canvas.drawVertices`

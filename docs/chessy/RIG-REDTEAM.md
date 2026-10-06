@@ -322,6 +322,15 @@ where the five steps of #15 come from. The masks' hidden fill is why #18 was mos
   - then the lash moved down onto it.
 
   Below 0.15, kai's own lid fades in, whole when shut.
+- **The pupil is never lost under the lid** (kai: "the pupil is covered in some of the blinks"):
+  - The Fangs' wide eyes have their pupil painted right up against the lash, so any lid covered it at once.
+  - Now a lid that reaches the pupil pushes it down, three pixels under the lash, never past the eye's lower line. The
+    iris with the pupil painted out covers its old place.
+  - The pupil is found in the paint (a dark ring of a pupil's size under the lash, nearest the eye's middle; a ring the
+    lash closes counts), since kai's traced ink sits up to 14 px off the paint on the right eye.
+  - For the same reason the lash's line is snapped to the painted lash's edge, which also fixed a strip of lash the
+    right eyes left behind.
+  - The iris never tracks; the pupil only moves while a lid presses on it (`HalfLid.pupil`, `ChessyLids.push`).
 - **The blink** is an opening: it closes over 45 ms, holds 40–80, and opens over 100, with frames between.
 - **Moods carry an opening** (`ChessyMood.openL`/`openR`, eased by `ChessyMoodBlend`):
 
