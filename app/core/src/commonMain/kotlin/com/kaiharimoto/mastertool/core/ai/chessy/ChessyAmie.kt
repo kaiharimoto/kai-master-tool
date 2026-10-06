@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai.chessy
 
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftItem
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyHit
 import com.kaiharimoto.mastertool.core.ai.chessy.toys.ToyKind
@@ -107,6 +108,10 @@ class ChessyAmie(seed: Int = 7) {
     private var nipBeat = 0.0
     private var napped = true
 
+    // gifts: when she last made one, and how many stored since she last said so
+    private var giftAt = -1000.0
+    private var storedQuiet = 0
+
     fun greet(now: Double): AmieReaction {
         lastTouch = now
         return AmieReaction(Expression.FOUND, pick("greet"), 3.0, hearts = 2, sparkles = 8)
@@ -210,7 +215,7 @@ class ChessyAmie(seed: Int = 7) {
     fun toy(kind: ToyKind?, hit: ToyHit, now: Double): AmieReaction? {
         if (high(now) > 0f) return null
         when (hit) {
-            ToyHit.BOUNCE, ToyHit.SWISH, ToyHit.POUNCE, ToyHit.LAND, ToyHit.POUR, ToyHit.ROLL -> return null
+            ToyHit.BOUNCE, ToyHit.SWISH, ToyHit.POUNCE, ToyHit.LAND, ToyHit.POUR, ToyHit.ROLL, ToyHit.STORED -> return null
             ToyHit.NEAR, ToyHit.MISSED -> if (now - lastAnswer < ANSWER_EVERY * 1.5) return null
             else -> Unit
         }
@@ -236,6 +241,33 @@ class ChessyAmie(seed: Int = 7) {
         warm(.15f)
         sulking = false
         return answer(now, AmieReaction(Expression.LOVE, pick("nip"), NIP_BEAT, hearts = 4, sparkles = 10, ring = true))
+    }
+
+    // ---- gifts (kai, 1.1.31: "when she reaches full hearts have her digitally create a present") ------------------------
+
+    /** Whether she is ready to make you a gift: every heart full, not sulking, and not too soon after the last one. */
+    fun giftDue(now: Double): Boolean = fondness >= 1f && !sulking && now - giftAt >= GIFT_AGAIN
+
+    /** She starts making one: a box glitches into being in front of her. */
+    fun makeGift(now: Double): AmieReaction {
+        touch(now)
+        giftAt = now
+        return answer(now, AmieReaction(Expression.FOUND, pick("gift-make"), 2.8, sparkles = 10))
+    }
+
+    /** The box opened on [item]: she says its own line; fondness eases back so a later round makes another. */
+    fun gave(item: GiftItem, now: Double): AmieReaction {
+        touch(now)
+        fondness = GIFT_AFTER
+        return answer(now, AmieReaction(Expression.DELIGHTED, item.give, 4.2, hearts = 4, sparkles = 8))
+    }
+
+    /** A gift put away in the chest: now and then she says something about it. */
+    fun stored(now: Double): AmieReaction? {
+        touch(now)
+        if (++storedQuiet < 2 && now - lastAnswer < ANSWER_EVERY * 4) return null
+        storedQuiet = 0
+        return answer(now, AmieReaction(Expression.SHY, pick("gift-store"), 2.4, hearts = 1))
     }
 
     /** How much catnip has her now, 0 to 1: in over a second, out over the last one. */
@@ -283,6 +315,10 @@ class ChessyAmie(seed: Int = 7) {
         const val NIP_BEAT = 2.5
         const val NIP_NAP = 6.0
         const val NIP_AGAIN = 40.0
+
+        /** Seconds before she makes another gift, and where her fondness eases back to once one is given. */
+        const val GIFT_AGAIN = 90.0
+        const val GIFT_AFTER = .4f
         private val NIP_MOODS = listOf(Expression.DELIGHTED, Expression.LOVE, Expression.WINK, Expression.SHY)
 
         /** Her words, by what happened (kai: "think of more to make her charming and adorable"). */
@@ -418,6 +454,16 @@ class ChessyAmie(seed: Int = 7) {
             "nip-wait" to listOf(
                 "No more! …okay, maybe later (≖ᴗ≖)",
                 "A lady needs a break between treats~ (￣ー￣)",
+            ),
+            "gift-make" to listOf(
+                "Wait wait— I'm making you something~ ✧(≖‿≖)✧",
+                "All hearts full… that means a present. Hold still, I'm compiling ฅ^•ﻌ•^ฅ",
+                "Close your eyes~ …okay you can't, but pretend (⁄ ⁄•⁄ω⁄•⁄ ⁄)",
+            ),
+            "gift-store" to listOf(
+                "Put it somewhere safe~ that's MY gift (≖ᴗ≖)♡",
+                "Into the chest~ I'll guard it (=^･ω･^=)",
+                "You're keeping it? …good (⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)",
             ),
             "bye" to listOf(
                 "Come back and play again soon~! (ﾉ´ヮ`)ﾉ*: ･ﾟ",

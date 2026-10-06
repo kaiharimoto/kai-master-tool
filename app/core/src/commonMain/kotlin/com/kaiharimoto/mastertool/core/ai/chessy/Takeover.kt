@@ -246,8 +246,11 @@ object Takeover {
         return maxOf(.22f * c, closing, pushing(t))
     }
 
-    /** Where she looks: up at Ai's box once she is in the corner, or null (she looks about). */
-    fun looksUp(t: Float) = t >= PUSH_AT
+    /** She looks up at Ai's box while she is pushed into the corner; once held in the frame she faces the person (kai). */
+    fun looksUp(t: Float) = t >= PUSH_AT && t < AI_ON
+
+    /** Held in Ai's frame: she faces the person, straight out of the screen. */
+    fun facesYou(t: Float) = t >= AI_ON
 
     /** Whether she flickers at [t] (landing, her knock-back, being pushed); [fr] a frame slot for the coin. */
     fun flicker(t: Float): Boolean {
