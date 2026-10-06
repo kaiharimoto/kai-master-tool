@@ -1996,6 +1996,23 @@ is.
 
 ## 11. Decisions for kai
 
+**Decided (after step 2): no step 3; the goldfish trusts what is written and checked.**
+- kai: "Don't need step 3." The tests against recorded duels and combos (§4, step 3) are not built. Nothing is ever
+  `VERIFIED` by a test.
+- So the goldfish's rule is no longer "verified effects only". It is **`FxTrust`**:
+  - **Used:** every effect whose script compiles and passes `FxCheck` (status `UNTESTED` or `WARNED`). A `BROKEN`,
+    `UNSUPPORTED` or `MISSING` script is inert, as an unknown card is (§5.5).
+  - **Open warnings are named:** a result that used an effect with warnings not yet accepted says so, card by card
+    ("uses 3 effects with open warnings: …"). Accepting the warning in the Effects app clears it from the next run.
+  - **The headline names the effects it used,** so a wrong number can be traced to a wrong script: open the hand, watch
+    its replay, **Repair it**.
+  - **"Played by you":** a card used by Shortcut at the table and kept (its group not undone) is marked, per card and
+    script hash, in `<data>/effects/played.json` (synced, backed up; a changed script loses the mark). The result counts
+    how many of the effects it used were played by you. It is a light confirmation, never a test.
+- Everywhere this note says "verified" for the goldfish (§5.3–§5.6, step 4), read "trusted by `FxTrust`". `Proof.library`
+  fingerprints the trusted scripts. `Evidence.lineClaims` still holds a line's percentage to a `goldfish` source.
+- `Combo.by`/`confirmed`, `FxEpisodes`, `RecordMatcher`, the mutants and `effects/decks/` (step 3) are not built.
+
 **Decided.** **Who writes effects, and for which cards.**
 - The roadmap's default was "Ai writes them, tests verify them, you see coverage", with Ai writing every card.
 - kai: "I think effects as code should be done by the Ai for cards the user wants because otherwise the whole
