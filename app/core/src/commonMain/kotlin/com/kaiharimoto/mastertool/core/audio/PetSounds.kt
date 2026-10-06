@@ -55,11 +55,11 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
         val p = 1.0 + (take - (VARIANTS - 1) / 2.0) * .06
         return when (sound) {
             PetSound.NYA -> nya(NYA, p * NYA.pitch)
-            PetSound.MEW -> voice(.24, doubleArrayOf(980.0, 1180.0, 1040.0).scaled(p), MEW_VOWELS, vibrato = .01, gain = .8)
-            PetSound.NYAA -> voice(1.0, doubleArrayOf(700.0, 980.0, 900.0, 760.0, 620.0).scaled(p), NYAA_VOWELS, vibrato = .045, wobble = 6.5)
-            PetSound.HMPH -> voice(.3, doubleArrayOf(420.0, 380.0, 300.0).scaled(p), HMPH_VOWELS, vibrato = .0, gain = .7)
-            PetSound.TRILL -> voice(.34, doubleArrayOf(720.0, 1040.0, 980.0).scaled(p), TRILL_VOWELS, roll = 27.0, gain = .85)
-            PetSound.MRRP -> voice(.2, doubleArrayOf(560.0, 840.0).scaled(p), TRILL_VOWELS, roll = 30.0, gain = .75)
+            PetSound.MEW -> nya(MEW, p * MEW.pitch)
+            PetSound.NYAA -> nya(NYAA, p * NYAA.pitch)
+            PetSound.HMPH -> nya(HMPH, p * HMPH.pitch)
+            PetSound.TRILL -> nya(TRILL, p * TRILL.pitch)
+            PetSound.MRRP -> nya(MRRP, p * MRRP.pitch)
             PetSound.GIGGLE -> giggle(p)
             PetSound.PURR -> purr(1.7, p)
             PetSound.NOM -> nom(p)
@@ -76,44 +76,6 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
             PetSound.CHIME -> chime(take)
             PetSound.POP -> pop(p)
         }
-    }
-
-    private fun DoubleArray.scaled(k: Double) = DoubleArray(size) { this[it] * k }
-
-    /** Vowel targets along a sound: F1, F2, F3 at evenly spaced points. */
-    private class Vowels(vararg val points: DoubleArray)
-
-    /**
-     * A cat's voice of [len] seconds: a throat at the pitch contour [f0] (evenly spaced points, glided), with vibrato
-     * [vibrato] (a share of the pitch), through formants gliding through [vowels]; an "m" at its start (the resonances
-     * closed, opening), [roll] Hz of trill if any, and [wobble] Hz of happy warble.
-     */
-    private fun voice(len: Double, f0: DoubleArray, vowels: Vowels, vibrato: Double = .015, roll: Double = 0.0, wobble: Double = 5.5, gain: Double = 1.0): DoubleArray {
-        val total = n(len)
-        val out = DoubleArray(total)
-        val throat = Osc(Wave.SAW, rate)
-        val f = Array(3) { Biquad(rate) }
-        val open = Biquad(rate)
-        val qs = doubleArrayOf(7.0, 11.0, 13.0)
-        val amps = doubleArrayOf(1.0, .7, .35)
-        val jitter = rng.nextDouble() * 6.28
-        for (i in 0 until total) {
-            val t = i * dt
-            val u = t / len
-            val pitch = along(f0, u) * (1 + vibrato * sin(2 * PI * wobble * t + jitter))
-            val src = throat.next(pitch) * .8 + noise() * .12
-            var y = 0.0
-            for (k in 0..2) {
-                val fk = along(DoubleArray(vowels.points.size) { vowels.points[it][k] }, u)
-                y += f[k].bandpass(fk, qs[k]).next(src) * amps[k]
-            }
-            // the "m": the mouth opening over the first 70 ms
-            y = open.lowpass(450.0 + 6000.0 * min(1.0, t / .07)).next(y)
-            if (roll > 0) y *= .55 + .45 * sin(2 * PI * roll * t).let { it * it }
-            val a = min(1.0, t / .03) * min(1.0, (len - t) / (len * .35))
-            out[i] = y * a * gain * 1.6
-        }
-        return out
     }
 
     /**
@@ -213,21 +175,12 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
         return c * c * (3 - 2 * c)
     }
 
-    /** A value along evenly spaced [points] at [u], 0 to 1, smoothly. */
-    private fun along(points: DoubleArray, u: Double): Double {
-        if (points.size == 1) return points[0]
-        val x = u.coerceIn(0.0, 1.0) * (points.size - 1)
-        val i = min(points.size - 2, x.toInt())
-        val f = x - i
-        val s = f * f * (3 - 2 * f)
-        return points[i] + (points[i + 1] - points[i]) * s
-    }
-
+    /** A giggle: four quick little nyas, each a step lower, in her own voice. */
     private fun giggle(p: Double): DoubleArray {
         val out = DoubleArray(n(.5))
-        for ((k, pitch) in listOf(1150.0, 1040.0, 960.0).withIndex()) {
-            val h = voice(.12, doubleArrayOf(pitch * p, pitch * p * 1.08), MEW_VOWELS, vibrato = .0, gain = .7)
-            val at = n(k * .13)
+        for ((k, step) in GIGGLE_STEPS.withIndex()) {
+            val h = nya(GIGGLE, p * GIGGLE.pitch * step)
+            val at = n(k * GIGGLE_SPACING)
             for (i in h.indices) if (at + i < out.size) out[at + i] += h[i]
         }
         return out
@@ -417,8 +370,35 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
         const val CEILING = .9
         const val SCURRY_FOR = 4.5
 
-        /** Her nya: one of the tuner page's options, as tuned there. */
-        val NYA = Nya()
+        /** Her nya, as kai tuned it on the tuner page (from Mrrnya: a rolled "mrr", a hum, then a nya that rises). */
+        val NYA = Nya(
+            pitch = 1.37, length = .37, start = 400.0, peak = 645.0, end = 795.0, peakAt = .41, tail = .13,
+            open = 1260.0, shut = 710.0, mouth = 1.3, jawAt = .36, close = .88, trill = .13, roll = 38.5, hum = .14,
+            tilt = 1.65, breath = .09, rough = .15, vib = .008, purr = .04, attack = .02, release = .31,
+        )
+
+        // Her other sounds are the same voice (kai: "apply the voice for the other sounds too, but not the exact same
+        // meow"): the nya's throat, mouth and pitch, each with a gesture of its own.
+
+        /** Shy, surprised, an oops, a sad face: a small, short mew, the mouth barely opening. */
+        val MEW = NYA.copy(length = .22, trill = 0.0, hum = .05, start = 520.0, peak = 640.0, end = 660.0, peakAt = .5, tail = .05, open = 1080.0, jawAt = .4, close = .5, attack = .012, release = .35)
+
+        /** Delighted: rolled all the way through as it opens, rising. */
+        val TRILL = NYA.copy(length = .36, trill = .3, hum = 0.0, roll = 27.0, start = 420.0, peak = 560.0, end = 700.0, peakAt = .75, tail = .08, open = 1080.0, jawAt = .45, close = .3)
+
+        /** A leap, or finding something: a quick rolled chirp up. */
+        val MRRP = NYA.copy(length = .2, trill = .08, hum = 0.0, roll = 30.0, start = 480.0, peak = 700.0, end = 760.0, peakAt = .8, tail = .05, open = 1050.0, jawAt = .5, close = .2, attack = .01, release = .3)
+
+        /** Catnip: her nya drawn out and dreamy, a swell in the middle, a little vibrato and purr. */
+        val NYAA = NYA.copy(length = .9, hump = 1.0, vib = .03, start = 400.0, peak = 660.0, end = 520.0, peakAt = .3, tail = 0.0, jawAt = .25, close = .6, breath = .12, purr = .1)
+
+        /** Cross: a closed-mouth "mm-hm" that barely opens, falling. */
+        val HMPH = NYA.copy(length = .32, trill = 0.0, hum = .2, start = 520.0, peak = 560.0, end = 420.0, peakAt = .3, tail = 0.0, open = 860.0, shut = 680.0, jawAt = .4, close = .6, breath = .14)
+
+        /** One syllable of the giggle; [GIGGLE_STEPS] are their pitches, [GIGGLE_SPACING] seconds apart. */
+        val GIGGLE = NYA.copy(length = .1, trill = 0.0, hum = 0.0, start = 600.0, peak = 700.0, end = 660.0, peakAt = .4, tail = 0.0, open = 1150.0, jawAt = .35, close = .5, attack = .008, release = .4)
+        val GIGGLE_STEPS = listOf(1.1, 1.04, .98, .94)
+        const val GIGGLE_SPACING = .12
 
         /** The nya's length, seconds. */
         val NYA_LENGTH get() = NYA.length
@@ -426,10 +406,6 @@ class PetSounds(val rate: Int = RATE, seed: Int = 21) {
         /** kai's tuning of the snap's pitch (1.1.29). */
         const val SNAP_PITCH = .96
 
-        private val MEW_VOWELS = Vowels(doubleArrayOf(360.0, 2400.0, 3100.0), doubleArrayOf(700.0, 1800.0, 2900.0))
-        private val NYAA_VOWELS = Vowels(doubleArrayOf(330.0, 2350.0, 3000.0), doubleArrayOf(850.0, 1700.0, 2800.0), doubleArrayOf(900.0, 1500.0, 2700.0), doubleArrayOf(800.0, 1350.0, 2700.0))
-        private val HMPH_VOWELS = Vowels(doubleArrayOf(300.0, 1000.0, 2400.0), doubleArrayOf(450.0, 900.0, 2400.0))
-        private val TRILL_VOWELS = Vowels(doubleArrayOf(420.0, 1300.0, 2600.0), doubleArrayOf(500.0, 1100.0, 2500.0), doubleArrayOf(380.0, 900.0, 2500.0))
     }
 }
 

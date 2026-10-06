@@ -171,7 +171,7 @@ fun ChessyAmieLayer(ai: AiState) {
         r ?: return
         // a cute pop for the face she makes, her voice, a twinkle for sparkles, a ring, and chimes as she grows fond of you
         audio.play(PetSound.POP, .35f)
-        (voice ?: voiceOf(r.mood))?.let { v -> audio.play(v, when { v == PetSound.PURR && r.mood == Expression.SLEEPING -> .45f; v == PetSound.NYA -> 1.2f; else -> .9f }) }
+        (voice ?: voiceOf(r.mood))?.let { v -> audio.play(v, when { v == PetSound.PURR && r.mood == Expression.SLEEPING -> .45f; v == PetSound.NYA -> .81f; v == PetSound.PURR -> .9f; else -> .8f }) }
         if (r.sparkles > 0) audio.play(PetSound.SPARKLE, .35f)
         if (r.ring) audio.play(PetSound.BELL, .5f)
         if (amie.fondness > lastFond + .001f) audio.play(PetSound.CHIME, .45f, take = (amie.fondness * 2.99f).toInt())
