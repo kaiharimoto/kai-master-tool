@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
  */
 fun AiState.openWizard(adding: Boolean = false) {
     if (wizard.step == SetupStep.NAME || adding) {
-        wizard.name = name
+        wizard.name = ownName
         wizard.saved = configured && !adding
         if (adding && configured) wizard.step = SetupStep.CONNECT
     }
@@ -117,7 +117,7 @@ fun AiState.use(connectionId: String) {
 }
 
 fun AiState.rename(to: String) {
-    val old = name
+    val old = ownName
     val clean = to.trim().take(AiPrefs.MAX_NAME).ifBlank { AiPrefs.DEFAULT_NAME }
     if (clean == old) return
     files.read(Persona.FILE)?.let { files.write(Persona.FILE, Persona.rename(it, old, clean)) }

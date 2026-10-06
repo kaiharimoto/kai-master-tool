@@ -99,7 +99,8 @@ def trim(p):
     """A pack picture faded out above her chin line, written back over itself."""
     img = np.asarray(load(p)).astype(np.float32)
     m = chin[p['y']:p['y'] + p['h'], p['x']:p['x'] + p['w']]
-    img[..., 3] *= m
+    # a ceiling, not a product: running this again changes nothing
+    img[..., 3] = np.minimum(img[..., 3], 255 * m)
     Image.fromarray(np.clip(img + .5, 0, 255).astype(np.uint8), 'RGBA').save(os.path.join(out, p['file']), lossless=True)
 
 
@@ -112,9 +113,18 @@ moods = {'eyes': {}, 'mouths': {}, 'lids': {}, 'brows': {}}
 for face in ('fangs', 'tongue'):
     whole = comp([base, pack['faces'][face]['features']])
     changed = np.abs(whole[..., :3] - grin[..., :3]).sum(-1) > 22
+    # an eye stops above this face's own mouth (kai's "line where the nose is": the Fangs' eyes carried the top of
+    # their open mouth under her nose); beside the mouth its lower lashes keep the whole band
+    lips = mouth(changed)
+    top = np.full(W, H, np.float32)
+    cols = np.nonzero(lips.any(0))[0]
+    for x in cols:
+        top[x] = np.nonzero(lips[:, x])[0].min()
+    top = np.array([top[max(0, x - 30):x + 31].min() for x in range(W)], np.float32)
+    above = np.clip(((top[None, :] - 6) - rows) / 8, 0, 1).astype(np.float32)
     moods['eyes'][face] = {
-        'l': save(whole, soft(region(changed, 0, SPLIT, *EYES)), f'eye-{face}-l'),
-        'r': save(whole, soft(region(changed, SPLIT, W, *EYES)), f'eye-{face}-r'),
+        'l': save(whole, soft(region(changed, 0, SPLIT, *EYES)) * above, f'eye-{face}-l'),
+        'r': save(whole, soft(region(changed, SPLIT, W, *EYES)) * above, f'eye-{face}-r'),
     }
     moods['mouths'][face] = save(whole, soft(mouth(changed)) * chin, f'mouth-{face}')
 

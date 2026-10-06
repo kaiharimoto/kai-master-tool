@@ -21,9 +21,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.drawscope.withTransform
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye
@@ -112,17 +110,13 @@ fun ChessyAvatar(
 }
 
 /**
- * Where Chessy has no room to be read (a 28 dp spot in a bar), her initial in a square, in ink: kai wants her face
- * never drawn too small to read, so a small spot names her instead.
+ * Where Chessy has no room to be read (a 28 dp spot in a bar): kai wants her face never drawn too small to read, so a
+ * small spot shows her ears mark instead, centred in it.
  */
 @Composable
 fun ChessyTag(name: String, size: Dp, modifier: Modifier = Modifier) {
-    val c = com.kaiharimoto.neue.theme.Mu.colors
-    androidx.compose.foundation.layout.Box(
-        modifier.size(size).border(1.dp, c.ink).semantics { contentDescription = name },
-        contentAlignment = androidx.compose.ui.Alignment.Center,
-    ) {
-        com.kaiharimoto.neue.kit.Mono(name.take(1).uppercase(), color = c.ink, size = (size.value * .42f).sp)
+    androidx.compose.foundation.layout.Box(modifier.size(size), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        ChessyMark(size * .62f, name = name)
     }
 }
 
@@ -242,15 +236,15 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
     }
     val P = pack.parts
     fun smile() = pic(P.cline, "features") { sizeX = pack.closedCx; sizeK = pack.closedLength; sizeDy = pack.closedDy }
-    fun eye(e: ChessyEye, left: Boolean) {
-        val pick = { sides: com.kaiharimoto.mastertool.core.ai.chessy.Sides? -> sides?.let { if (left) it.l else it.r } }
-        when (e) {
-            ChessyEye.SLY -> Unit
-            ChessyEye.WIDE -> pic(pick(parts?.eyes?.get(ChessyFaces.FANGS)), "features")
-            ChessyEye.SHUT -> pic(pick(parts?.eyes?.get(ChessyFaces.TONGUE)), "features")
-            ChessyEye.CLOSED -> pic(pick(parts?.lids?.get(ChessyFaces.GRIN)), "features")
-        }
-        if (f.blink && mood.blinks) pic(pick(parts?.lids?.get(mood.lidOf(e))), "features")
+    fun side(sides: com.kaiharimoto.mastertool.core.ai.chessy.Sides?, left: Boolean) = sides?.let { if (left) it.l else it.r }
+    fun eye(e: ChessyEye, left: Boolean) = when (e) {
+        ChessyEye.SLY -> Unit
+        ChessyEye.WIDE -> pic(side(parts?.eyes?.get(ChessyFaces.FANGS), left), "features")
+        ChessyEye.SHUT -> pic(side(parts?.eyes?.get(ChessyFaces.TONGUE), left), "features")
+        ChessyEye.CLOSED -> pic(side(parts?.lids?.get(ChessyFaces.GRIN), left), "features")
+    }
+    fun lid(e: ChessyEye, left: Boolean) {
+        if (f.blink && mood.blinks) pic(side(parts?.lids?.get(mood.lidOf(e)), left), "features")
     }
     fun brow(left: Boolean) {
         val sides = parts?.brows?.get(mood.brows) ?: return
@@ -283,6 +277,9 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
                         if (f.blink && face != ChessyFaces.TONGUE) pic(P.blinkBy[face] ?: P.blink, "features")
                         continue
                     }
+                    // the eyes first, then the mouth, so a mouth always wins where the two meet; the blink last
+                    eye(mood.eyeL, left = true)
+                    eye(mood.eyeR, left = false)
                     // the mouth: talking, the Grin's closed and open mouths; else the mood's own
                     when (f.mouth) {
                         ChessyMouth.OPEN -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); pic(P.openBy[ChessyFaces.GRIN], "features") }
@@ -295,8 +292,8 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
                             ChessyLips.FROWN -> { pic(P.closedBy[ChessyFaces.GRIN], "features"); pic(parts.frown, "features") }
                         }
                     }
-                    eye(mood.eyeL, left = true)
-                    eye(mood.eyeR, left = false)
+                    lid(mood.eyeL, left = true)
+                    lid(mood.eyeR, left = false)
                 }
                 "tongue" -> if (f.mouth == ChessyMouth.OWN && (if (parts == null) face == ChessyFaces.TONGUE else mood.lips == ChessyLips.TONGUE)) {
                     pic(pack.faces[ChessyFaces.TONGUE]?.tongue, "tongue")

@@ -7,6 +7,9 @@ import com.kaiharimoto.mastertool.core.prefs.AiPrefs
  * the rules of her story that are not a picture: the words typed to call her up, and when her takeover is due.
  */
 
+/** Her name, shown wherever the assistant is named while she is the assistant (kai: "have the button … be called Chessy"). */
+const val CHESSY_NAME = "Chessy"
+
 /** What the chat's composer can say to the app itself rather than to the model: a whole message, one command. */
 enum class SlashCommand(val word: String) {
     /** Calls the takeover now, or plays it again. */

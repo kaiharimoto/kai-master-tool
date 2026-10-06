@@ -269,7 +269,7 @@ private fun SavedStep(ai: AiState, w: WizardState) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         MuButton("Add a connection", {
             w.saved = false
-            w.name = ai.name
+            w.name = ai.ownName
             w.message = null
             w.good = null
             w.step = SetupStep.CONNECT
@@ -286,14 +286,14 @@ private fun WizardState.next() {
 
 @Composable
 private fun NameStep(ai: AiState, w: WizardState) {
-    Help("Your assistant is called ${ai.name} unless you name it something else. It answers to the name, and it remembers what you tell it.")
+    Help("Your assistant is called ${ai.ownName} unless you name it something else. It answers to the name, and it remembers what you tell it.")
     MuInput(w.name, { w.name = it.take(24) }, Modifier.fillMaxWidth(), placeholder = "Ai", onSubmit = {
-        if (w.name.isNotBlank() && w.name != ai.name) ai.rename(w.name)
+        if (w.name.isNotBlank() && w.name != ai.ownName) ai.rename(w.name)
         w.next()
     })
     Help("Ai is the dueling partner from Yu-Gi-Oh! VRAINS: playful, a little cheeky, and on your side. You can rename it any time: click its name at the top of its panel.")
     MuButton("Next", {
-        if (w.name.isNotBlank() && w.name != ai.name) ai.rename(w.name)
+        if (w.name.isNotBlank() && w.name != ai.ownName) ai.rename(w.name)
         w.next()
     }, variant = BtnVariant.PRIMARY, arrow = true)
 }
@@ -671,7 +671,7 @@ private fun DoneStep(ai: AiState, w: WizardState) {
         val connection = SavedConnections.replaced(ai.prefs.connections, made)?.let { old -> made.copy(id = old.id, window = old.window) } ?: made
         ai.h.neue.update { it.copy(ai = it.ai.copy(effort = w.effort, alwaysAllow = w.alwaysAllow)) }
         ai.connect(connection, w.key.takeIf { p.needsKey || it.isNotBlank() })
-        ai.wizard = WizardState(ai.name)
+        ai.wizard = WizardState(ai.ownName)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         MuButton("Start chatting", { connect() }, variant = BtnVariant.PRIMARY, arrow = true)

@@ -2861,6 +2861,20 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   Export, each rail row); a spot folded out of the window is never pointed at. `ChessyCrewLayer` draws them over the
   window, under the cursor, passing every press through. `tools/shoot.sh --persona=chessy --ai=panel
   --chessy-crew="edit_deck:Editing+the+deck>Added+3+Ash+Blossom;search_cards:Searching+cards"` photographs them.
+- **No line under her nose** (kai: "a line artifact where the nose is"): the Fangs' eye patches feathered down over the
+  top of their own open mouth, so every wide-eyed mood (Listening, Speaking, Waiting, Sad, Waking, Oops) wore a faded
+  copy of it. `parts.py` now stops each face's eyes above that face's own mouth, near the middle (lower lashes beside
+  it keep the whole band), and `drawChessy` draws the eyes, then the mouth, then the blink, so a mouth always wins.
+  `trim` is a ceiling now, so running `parts.py` again changes nothing.
+- **Her name** (kai: "have the button … be called Chessy", and everywhere she is named): `AiState.name` is `Chessy`
+  while she is the assistant, so every label, tip, the bar's button and the model's own prompt say it;
+  `AiState.ownName` is Ai's own name, which renaming and setup edit. The panel's head does not rename her.
+  **Her mark is her ears** (kai), traced from her art by `tools/chessy/ears.py` into `core/ai/chessy/ChessyEars.kt`
+  (generated, never edited by hand) and drawn in ink by `ChessyMark`: `AiMark` draws it while she is the assistant,
+  so it stands by every mention of her, and `ChessyTag` (a spot too small for her face) is the ears.
+- **`/chessy`, `/ai` and `/catmode`** are the app's, never the model's (`AiState.send` → `command`): `/chessy` makes
+  her the assistant, `/ai` brings Ai back (the next message tells the model who it is now), `/catmode` turns her full
+  cat voice on or off. `/chessy` will play the takeover once it is built.
 - **The story's numbers** are `AiPrefs.uses` (replies finished in chat, counted in `AiState.finish`),
   `AiPrefs.takeover` (`none`/`seen`) and `catMode`; `TakeoverGate.due` says when (5 replies, never mid-work) and
   `SlashCommand` reads `/chessy`, `/catmode`, `/ai` — a whole message only.

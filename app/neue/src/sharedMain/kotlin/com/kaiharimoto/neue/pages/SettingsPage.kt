@@ -324,10 +324,10 @@ private fun AssistantSection(ai: AiState, neue: NeueState) {
     val prefs = neue.prefs.ai
     SectionTitle(3, "Assistant")
     // Ai's mark by its name, for flavour (1.0.63).
-    if (prefs.enabled) AiName(prefs.name, Mu.colors.ink, mark = 28.dp)
+    if (prefs.enabled) AiName(ai.name, Mu.colors.ink, mark = 28.dp)
     SettingRow(
         "Assistant",
-        if (prefs.enabled) "${prefs.name} is on: in the bar, on ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL).ifEmpty { "its button" }}, beside every page. Off hides every trace of it; what it remembers is kept."
+        if (prefs.enabled) "${ai.name} is on: in the bar, on ${chord(com.kaiharimoto.mastertool.core.input.DeskAction.AI_PANEL).ifEmpty { "its button" }}, beside every page. Off hides every trace of it; what it remembers is kept."
         else "Off: nothing of the assistant shows anywhere in the app. Turn it on to set it up.",
         onToggle = { neue.update { it.copy(ai = it.ai.copy(enabled = !it.ai.enabled)) } },
     ) {

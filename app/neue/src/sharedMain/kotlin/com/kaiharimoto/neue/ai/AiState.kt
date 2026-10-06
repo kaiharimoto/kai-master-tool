@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.mastertool.core.ai.chessy.SlashCommand
+import com.kaiharimoto.mastertool.core.ai.chessy.CHESSY_NAME
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -197,7 +199,11 @@ class AiState(internal val h: NeueHolders) {
     var draft by mutableStateOf("")
 
     val prefs: AiPrefs get() = h.neue.prefs.ai
-    val name: String get() = prefs.name
+    /** The assistant's name as shown and as the model is told it: Chessy while she is the assistant, else Ai's own. */
+    val name: String get() = if (prefs.persona == AiPrefs.PERSONA_CHESSY) CHESSY_NAME else prefs.name
+
+    /** Ai's own name, the one the person can change: renaming and setup read and write this, never [name]. */
+    val ownName: String get() = prefs.name
     val enabled: Boolean get() = prefs.enabled
     val configured: Boolean get() = prefs.connection != null
 
@@ -404,11 +410,38 @@ class AiState(internal val h: NeueHolders) {
         get() = prefs.connection?.let { Vision.of(it.provider, it.model) }
             ?: Vision.Sight.MAYBE
 
+    /**
+     * A command typed in the message box (Chessy, kai): `/chessy` makes her the assistant, `/ai` brings Ai back,
+     * `/catmode` turns her full cat voice on or off. The conversation's next message tells the model who it is now.
+     */
+    private fun command(c: SlashCommand) {
+        draft = ""
+        when (c) {
+            SlashCommand.CHESSY -> {
+                h.neue.update { it.copy(ai = it.ai.copy(persona = AiPrefs.PERSONA_CHESSY)) }
+                if (session?.turns?.isNotEmpty() == true) renamedTo = CHESSY_NAME
+                h.neue.note = com.kaiharimoto.neue.Note("$CHESSY_NAME is your assistant now. Type /ai to bring Ai back")
+            }
+            SlashCommand.AI -> {
+                h.neue.update { it.copy(ai = it.ai.copy(persona = AiPrefs.PERSONA_AI)) }
+                if (session?.turns?.isNotEmpty() == true) renamedTo = ownName
+                h.neue.note = com.kaiharimoto.neue.Note("$ownName is back. Type /chessy for $CHESSY_NAME")
+            }
+            SlashCommand.CAT_MODE -> {
+                val on = !prefs.catMode
+                h.neue.update { it.copy(ai = it.ai.copy(catMode = on)) }
+                h.neue.note = com.kaiharimoto.neue.Note(if (on) "Cat mode on" else "Cat mode off")
+            }
+        }
+    }
+
     /** The person's message, sent; Ai answers, acting through its tools. */
     fun send(text: String) {
         val words = text.trim()
         val pictures = attached
         if ((words.isEmpty() && pictures.isEmpty()) || running) return
+        // A whole message that is a command is the app's, never the model's (/chessy, /catmode, /ai).
+        if (pictures.isEmpty()) SlashCommand.parse(words)?.let { command(it); return }
         val connection = prefs.connection ?: run {
             openWizard()
             return

@@ -135,6 +135,11 @@ fun AiAvatar(
  */
 @Composable
 fun AiMark(size: Dp, modifier: Modifier = Modifier, expression: Expression = Expression.IDLE, name: String = "Ai") {
+    // While Chessy is the assistant her ears stand by every mention of her (kai)
+    if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) {
+        com.kaiharimoto.neue.ai.chessy.ChessyMark(size, modifier, name)
+        return
+    }
     val glyph = size.value < AvatarRig.GLYPH_BELOW_DP
     val frame = remember(glyph, expression) { AvatarRig(glyph = glyph, seed = 7).apply { show(expression) }.step(0.4f) }
     Canvas(modifier.size(size).semantics { contentDescription = name }) { drawAvatar(frame, glyph) }

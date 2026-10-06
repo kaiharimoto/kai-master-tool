@@ -186,8 +186,13 @@ private fun Head(ai: AiState, phone: Boolean) {
 @Composable
 private fun NameInHead(ai: AiState) {
     val c = Mu.colors
+    // Chessy's name is her own (kai): shown, never renamed here; Ai's name waits for Ai to come back
+    if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) {
+        Tip("${ai.name}'s name is her own. Switch back to Ai in Settings to rename Ai.") { AiName(ai.name, c.ink) }
+        return
+    }
     var editing by remember { mutableStateOf(false) }
-    var draft by remember { mutableStateOf(ai.name) }
+    var draft by remember { mutableStateOf(ai.ownName) }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     if (editing) {
         fun keep() {
@@ -200,7 +205,7 @@ private fun NameInHead(ai: AiState) {
             { draft = it.take(AiPrefs.MAX_NAME) },
             Modifier.width(180.dp).onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) {
-                    draft = ai.name
+                    draft = ai.ownName
                     editing = false
                     true
                 } else {
@@ -221,7 +226,7 @@ private fun NameInHead(ai: AiState) {
                 .hoverable(source)
                 .cursorPointer(caption = "Rename")
                 .muClickable(interactionSource = source) {
-                    draft = ai.name
+                    draft = ai.ownName
                     editing = true
                 },
             verticalAlignment = Alignment.CenterVertically,
