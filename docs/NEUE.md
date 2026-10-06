@@ -2889,6 +2889,22 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   `ChessyAmie` (gestures to reactions, fondness, the lines), `AmieParticles` (bounded at 60). Ai keeps its own face's
   play (`AvatarPlay`); only Chessy has this. `tools/shoot.sh --persona=chessy --ai=panel --chessy-amie=pet|tickle|bell|ear|hug|sulk
   --amie-frames=N` photographs it.
+- **Petting her, restyled** (kai, 1.1.24): she takes about half the window (`min(width × 0.8, height × 0.5)`), wears
+  **her aura** (`Modifier.chessyAura` in `ChessyInk.kt`: her drawing recorded once in a `GraphicsLayer` and drawn again
+  tinted violet and pink, slipping and now and then tearing, over a breathing radial glow), and speaks in **the
+  takeover's box** (`ChessySay`: white and lilac, her name on top, a lilac sticker edge, a slight tilt, round, the one
+  rounded thing outside a slide, which `MasterUiLawTest` names). It types as the takeover does: `core/ai/chessy/ChessyType`
+  lays the whole line out from the first letter and colours only what is typed, so nothing reflows, and an emoticon is
+  one unit glued to the word before it (no-break spaces, word joiners), so it never splits or wraps away.
+- **Her name glitches** (kai: "a glitchy font for flavor"): `ChessyGlitchName`, the mono face with a pink and a violet
+  copy split either side and a short tear every few seconds (no frames between tears), in the bar and the chat box.
+- **No white rim round her** (kai): her layers were cut from a sheet drawn on white, so a band of solid white stood
+  outside her outline on some (the left ear, lock and side) and a white soft edge on all; on ink it was a line round
+  her. `tools/chessy/defringe.py` clears the band (untinted sheet white reached from outside, at most 14 px in) and
+  recolours the soft edge from just inside, over `layer-*` and `rim-*`, lossless; run again, it changes nothing.
+- **The takeover's horn is kai's** (`core/ai/chessy/TakeoverHorn.kt`, pinned by `TakeoverHornTest`): tuned on the
+  storyboard's Tune the horn, a single 55 Hz air horn. When the takeover is built (phase 6), **`/takeover` plays it**
+  on demand and **its sound can be turned off** (kai, both asked for).
 - **`/chessy`, `/ai` and `/catmode`** are the app's, never the model's (`AiState.send` → `command`): `/chessy` makes
   her the assistant, `/ai` brings Ai back (the next message tells the model who it is now), `/catmode` turns her full
   cat voice on or off. `/chessy` will play the takeover once it is built.

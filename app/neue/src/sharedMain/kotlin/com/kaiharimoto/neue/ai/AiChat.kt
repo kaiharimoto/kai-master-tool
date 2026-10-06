@@ -826,7 +826,8 @@ private fun FaceStrip(ai: AiState, phone: Boolean) {
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Micro(ai.name, color = c.ink)
+                // hers glitches, for flavour (kai)
+                if (chessy) com.kaiharimoto.neue.ai.chessy.ChessyGlitchName(ai.name, c.ink) else Micro(ai.name, color = c.ink)
                 androidx.compose.animation.Crossfade(face.kaomoji, animationSpec = androidx.compose.animation.core.tween(MuMotion.FAST), label = "kaomoji") {
                     Mono(it, color = c.ink45)
                 }

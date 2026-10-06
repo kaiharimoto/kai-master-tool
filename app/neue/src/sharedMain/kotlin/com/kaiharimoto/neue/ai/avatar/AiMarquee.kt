@@ -92,7 +92,7 @@ fun AiBadge(h: NeueHolders, height: Dp = 40.dp) {
         ) {
             // Chessy is never drawn too small to read (kai): in the bar she is her name
             if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) {
-                Micro(ai.name, color = c.ink, modifier = Modifier.padding(horizontal = 4.dp))
+                com.kaiharimoto.neue.ai.chessy.ChessyGlitchName(ai.name, c.ink, Modifier.padding(horizontal = 4.dp))
             } else {
                 AiAvatar(ai.face, face, pointer = { h.cursor.position }, name = ai.name)
             }

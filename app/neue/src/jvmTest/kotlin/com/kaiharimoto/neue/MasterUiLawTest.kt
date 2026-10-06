@@ -60,7 +60,8 @@ class MasterUiLawTest {
 
     @Test
     fun zeroRadius() = assertNone(
-        scan("§1 law 2 · zero radius", Regex("""RoundedCornerShape|CircleShape|CutCornerShape|CornerRadius\(|drawRoundRect|clip\(\s*RoundedCorner"""), allowIn = slideAllowed),
+        // and Chessy's speech box, round as the takeover's (kai, 2026-10: "apply the same text box styling"), in her ink file
+        scan("§1 law 2 · zero radius", Regex("""RoundedCornerShape|CircleShape|CutCornerShape|CornerRadius\(|drawRoundRect|clip\(\s*RoundedCorner"""), allowIn = slideAllowed + "ChessyInk.kt"),
     )
 
     @Test

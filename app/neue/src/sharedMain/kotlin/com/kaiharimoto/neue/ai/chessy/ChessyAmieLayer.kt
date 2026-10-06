@@ -2,7 +2,6 @@ package com.kaiharimoto.neue.ai.chessy
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -19,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,7 +34,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.kaiharimoto.mastertool.core.ai.avatar.AvatarPlay
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
@@ -48,15 +47,13 @@ import com.kaiharimoto.mastertool.core.ai.chessy.CHESSY_NAME
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyAmie
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFit
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyRig
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyType
 import com.kaiharimoto.neue.ai.AiState
 import com.kaiharimoto.neue.ai.chessy.ChessyInk.particles
 import com.kaiharimoto.neue.cursor.cursorPointer
 import com.kaiharimoto.neue.kit.Micro
 import com.kaiharimoto.neue.kit.MuButton
-import com.kaiharimoto.neue.kit.MuText
-import com.kaiharimoto.neue.theme.LocalMuFonts
 import com.kaiharimoto.neue.theme.Mu
-import com.kaiharimoto.neue.theme.MuType
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -83,6 +80,10 @@ fun ChessyAmieLayer(ai: AiState) {
     var mood by remember { mutableStateOf(Expression.FOUND) }
     var moodUntil by remember { mutableDoubleStateOf(0.0) }
     var line by remember { mutableStateOf("") }
+    var lineAt by remember { mutableDoubleStateOf(0.0) }
+    var typedUnits by remember { mutableIntStateOf(0) }
+    // her aura's clock, in seconds, read only when drawn
+    var auraT by remember { mutableFloatStateOf(0f) }
     var speaking by remember { mutableStateOf(false) }
     var lastHeart by remember { mutableDoubleStateOf(0.0) }
     val kick = remember { IntArray(2) } // [ear to twitch, bell to ring]
@@ -105,6 +106,7 @@ fun ChessyAmieLayer(ai: AiState) {
         mood = r.mood
         moodUntil = now() + r.seconds
         line = r.line
+        lineAt = now()
         talk?.cancel()
         talk = scope.launch { speaking = true; delay(min(2200L, 300L + r.line.length * 38L)); speaking = false }
         if (r.ear != 0) kick[0] = r.ear
@@ -130,6 +132,17 @@ fun ChessyAmieLayer(ai: AiState) {
             "sulk" -> repeat(ChessyAmie.POKES) { react(amie.tap(AmieZone.FACE, now() + it * .1), sheetToWindow(630f, 960f)) }
         }
     }
+    // her words typed as the takeover types them: a unit at a time, 26 a second, an emoticon whole
+    LaunchedEffect(line, lineAt) {
+        val units = ChessyType.layout(line).units
+        typedUnits = 0
+        while (typedUnits < units) {
+            withFrameNanos { }
+            typedUnits = ((now() - lineAt) * 26).toInt().coerceIn(0, units)
+        }
+    }
+    // the aura breathes and tears while she is out
+    LaunchedEffect(amie) { while (true) withFrameNanos { auraT = (it / 1_000_000L % 1_000_000L) / 1000f } }
     // left alone she wonders where you went, then dozes; a worn face goes back to listening
     LaunchedEffect(amie) {
         while (true) {
@@ -164,7 +177,8 @@ fun ChessyAmieLayer(ai: AiState) {
             .pointerInput(amie) { detectTapGestures { ai.closeAmie() } },
     ) {
         BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val side = min(maxWidth.value * .86f, maxHeight.value * .62f).coerceAtMost(560f).dp
+            // about half the window (kai: "just 50% of the screen proportionally"), narrower where the window is
+            val side = min(maxWidth.value * .8f, maxHeight.value * .5f).dp
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // her name and how fond of you she has grown: five foil hearts
                 Fondness({ amie.fondness }, { frame })
@@ -172,6 +186,7 @@ fun ChessyAmieLayer(ai: AiState) {
                     Modifier
                         .size(side)
                         .onGloballyPositioned { co -> val r = co.boundsInWindow(); box[0] = r.left; box[1] = r.top; box[2] = r.width; box[3] = r.height }
+                        .chessyAura { auraT }
                         .cursorPointer(caption = "Pet")
                         // a press: a tap, a stroke (petting, tickling, a rub) or a hold (a hug)
                         .pointerInput(amie) {
@@ -229,17 +244,18 @@ fun ChessyAmieLayer(ai: AiState) {
                         },
                     )
                 }
-                // what she says, square and quiet: her words are the colour here
-                Box(
-                    Modifier
-                        .widthIn(max = side.coerceAtLeast(260.dp))
-                        .height(64.dp)
-                        .border(1.dp, c.ink)
-                        .background(c.paper)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    MuText(line, style = MuType.body(LocalMuFonts.current), color = c.ink, maxLines = 2, align = TextAlign.Center)
+                // what she says, in the takeover's box: tilted a little, one way then the other, a short glitch as it lands
+                if (line.isNotEmpty()) {
+                    val tilt = if (line.hashCode() % 2 == 0) -1.5f else 1.5f
+                    ChessySay(
+                        line,
+                        typedUnits,
+                        ai.name,
+                        tilt,
+                        caretOn = { (auraT * 2f).toInt() % 2 == 0 },
+                        modifier = Modifier.widthIn(max = maxOf(side, 280.dp)),
+                        jitter = { val since = (now() - lineAt).toFloat(); if (since < .22f) (ChessyInk.hash((auraT * 30f).toInt(), 9) - .5f) * 10f else 0f },
+                    )
                 }
                 MuButton("Bye-bye", { ai.closeAmie() })
             }

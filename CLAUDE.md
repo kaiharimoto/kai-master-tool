@@ -331,7 +331,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   foil** (`ChessyInk.foil`: the mark, then `Holo.drawHoloSheet` with `SrcIn` in a layer the mark's size). **A press held
   on her face in the chat box opens the petting mode** (kai's Pokemon-Amie Easter egg: `ChessyAmieLayer`; zones,
   reactions, lines with kaomoji, fondness and particles are `core/ai/chessy/ChessyAmie.kt`, tested; `--chessy-amie=`).
-  The takeover, her voice and the sound come in later phases.
+  **Petting her** is half the window with **her aura** (`chessyAura`) and **the takeover's box** (`ChessySay`; typed
+  by `ChessyType`: whole line laid out first, emoticons unbreakable); **her name glitches** (`ChessyGlitchName`); her
+  layers have **no white rim** (`tools/chessy/defringe.py`, run after `export.js`). **The takeover's horn is kai's
+  tuning** (`TakeoverHorn`, never changed without kai); when it is built, **`/takeover` plays it and its sound can be
+  turned off**. The takeover itself comes in a later phase.
 - **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;

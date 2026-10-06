@@ -1,5 +1,42 @@
 package com.kaiharimoto.neue.ai.chessy
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyType
+import com.kaiharimoto.neue.theme.LocalMuFonts
+import kotlinx.coroutines.delay
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.BlendMode
@@ -29,10 +66,14 @@ import com.kaiharimoto.neue.cards.Holo
  * violet and pink. One of the files `MasterUiLawTest` allows colour, with `AiAvatar.kt`: a character's art is content.
  */
 internal object ChessyInk {
-    private val VIOLET = Color(0xFF9A76DA)
-    private val PINK = Color(0xFFF08DB8)
+    internal val VIOLET = Color(0xFF9A76DA)
+    internal val PINK = Color(0xFFF08DB8)
     private val PLUM = Color(0xFF3B2C4D)
-    private val PAPER = Color(0xFFFFFFFF)
+    internal val PAPER = Color(0xFFFFFFFF)
+    // the takeover's box: lilac on white, plum words
+    internal val LILAC = Color(0xFFC6AEF2)
+    internal val LILAC_DEEP = Color(0xFFB59CEC)
+    internal val WORDS = Color(0xFF4A3566)
 
     private class Shape(val parts: List<Pair<Path, Float>>, val bounds: Rect)
 
@@ -120,6 +161,159 @@ internal object ChessyInk {
         return drawn
     }
 
+    /** A steady random in [0, 1) for a frame slot and a salt: the same glitch for the same moment. */
+    fun hash(a: Int, b: Int): Float {
+        var h = a * 374761393 + b * 668265263
+        h = (h xor (h ushr 13)) * 1274126177
+        h = h xor (h ushr 16)
+        return ((h.toLong() and 0xFFFFFFFFL) % 100000L) / 100000f
+    }
+
+    /** The takeover's box behind [ChessySay]: a soft lilac glow, a lilac sticker edge, white, a lilac line; round. */
+    fun DrawScope.sayBox() {
+        val r = CornerRadius(18.dp.toPx())
+        val small = CornerRadius(6.dp.toPx())
+        fun shape(dx: Float, dy: Float) = Path().apply { addRoundRect(RoundRect(Rect(dx, dy, size.width + dx, size.height + dy), r, r, r, small)) }
+        val box = shape(0f, 0f)
+        for (k in 3 downTo 1) drawPath(box, LILAC.copy(alpha = .1f), style = Stroke(2.dp.toPx() + k * 5.dp.toPx()))
+        drawPath(shape(4.dp.toPx(), 5.dp.toPx()), LILAC_DEEP)
+        drawPath(box, PAPER)
+        drawPath(box, LILAC, style = Stroke(2.dp.toPx()))
+    }
+
     /** Foil hearts and sparkles of the petting mode, in canvas pixels: [list]'s marks with scale in pixels. */
     fun DrawScope.particles(list: MarkList, light: Offset) = marks(list, 1f, 0f, 0f, light)
+}
+
+// ---- her box, her aura and her name (kai, 2026-10) -----------------------------------------------------------------
+
+/**
+ * What she says in the petting mode, set as the takeover sets it (kai: "apply the same text box styling and animations"):
+ * white and lilac, her name on top, a little tilted, round where Master UI is square: the box is hers, not the app's
+ * (kai's word; `MasterUiLawTest` names this file for its corners, and the lilac block behind it is a sticker's edge,
+ * not a shadow). The whole line is laid out from its first letter ([ChessyType.layout]) and only what is typed is
+ * coloured, so nothing reflows as it types and an emoticon arrives whole, never split across lines.
+ */
+@Composable
+internal fun ChessySay(line: String, typed: Int, name: String, tilt: Float, caretOn: () -> Boolean, modifier: Modifier = Modifier, jitter: () -> Float = { 0f }) {
+    val laid = remember(line) { ChessyType.layout(line) }
+    val shownTo = laid.typedTo(typed)
+    val text = remember(laid, shownTo) {
+        buildAnnotatedString {
+            append(laid.text)
+            if (shownTo < laid.text.length) addStyle(SpanStyle(color = Color.Transparent), shownTo, laid.text.length)
+        }
+    }
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val fonts = LocalMuFonts.current
+    Column(
+        modifier
+            .graphicsLayer { rotationZ = tilt; translationX = jitter() }
+            .drawBehind { with(ChessyInk) { sayBox() } }
+            .padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 12.dp),
+    ) {
+        BasicText(
+            name.uppercase() + " ♡",
+            style = TextStyle(fontFamily = fonts.sans, fontWeight = FontWeight.Bold, fontSize = 9.sp, letterSpacing = .14.em, color = ChessyInk.VIOLET),
+        )
+        Spacer(Modifier.height(6.dp))
+        BasicText(
+            text,
+            style = TextStyle(fontFamily = fonts.sans, fontSize = 15.sp, lineHeight = 21.sp, color = ChessyInk.WORDS),
+            onTextLayout = { layout = it },
+            modifier = Modifier.drawWithContent {
+                drawContent()
+                // the caret where the next letter goes; it takes no room
+                val l = layout
+                if (l != null && shownTo < laid.text.length && caretOn()) {
+                    val r = l.getCursorRect(shownTo)
+                    drawRect(ChessyInk.LILAC, Offset(r.left + 1.dp.toPx(), r.top + r.height * .08f), Size(6.dp.toPx(), r.height * .84f))
+                }
+            },
+        )
+    }
+}
+
+/**
+ * Her aura (kai: "give her a cute aura similar to the takeover"): her own violet and pink, as two copies of her that
+ * slip to either side and now and then tear, over a glow that breathes. The copies are her drawing recorded once and
+ * drawn again tinted, so they blink and turn exactly as she does. [clock] is read when drawn, in seconds.
+ */
+@Composable
+internal fun Modifier.chessyAura(clock: () -> Float): Modifier {
+    val layer = rememberGraphicsLayer()
+    val tints = remember { listOf(ChessyInk.VIOLET, ChessyInk.PINK).map { Paint().apply { colorFilter = ColorFilter.tint(it, BlendMode.SrcIn) } } }
+    return drawWithContent {
+        layer.record { this@drawWithContent.drawContent() }
+        val t = clock()
+        val breath = .75f + .25f * kotlin.math.sin(t * 2.4f)
+        val radius = size.minDimension * .62f
+        drawCircle(
+            Brush.radialGradient(0f to ChessyInk.VIOLET.copy(alpha = .5f * breath), .6f to ChessyInk.PINK.copy(alpha = .24f * breath), 1f to Color.Transparent, center = center, radius = radius),
+            radius,
+            center,
+        )
+        val slot = kotlin.math.floor(t * 12f).toInt()
+        for (i in 0..1) {
+            val tear = ChessyInk.hash(slot, 40 + i) < .45f
+            val off = (if (i == 0) 1f else -1f) * size.width * (.022f + ChessyInk.hash(slot, 50 + i) * (if (tear) .06f else .022f))
+            val paint = tints[i]
+            paint.alpha = if (tear) .9f else .62f
+            drawIntoCanvas { canvas ->
+                canvas.saveLayer(Rect(Offset.Zero, size).inflate(size.width * .2f), paint)
+                translate(off, 0f) {
+                    if (tear) {
+                        val top = ChessyInk.hash(slot, 60 + i) * .75f * size.height
+                        val tall = (.12f + ChessyInk.hash(slot, 70 + i) * .3f) * size.height
+                        clipRect(0f, top, size.width, top + tall) { drawLayer(layer) }
+                    } else {
+                        drawLayer(layer)
+                    }
+                }
+                canvas.restore()
+            }
+        }
+        drawLayer(layer)
+    }
+}
+
+/**
+ * Her name with a glitch, for flavour (kai: "a glitchy font"): the mono face, a pink and a violet copy split either side
+ * of it, and every few seconds a short tear, a slice of it thrown sideways for a few frames. Between tears nothing redraws.
+ */
+@Composable
+internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = Modifier, size: TextUnit = 12.sp) {
+    var tear by remember { mutableIntStateOf(0) }
+    LaunchedEffect(name) {
+        val r = kotlin.random.Random(name.hashCode())
+        while (true) {
+            delay(1800L + r.nextLong(3200L))
+            repeat(5) { tear = r.nextInt(1, 1000); delay(55L) }
+            tear = 0
+        }
+    }
+    val tints = remember { listOf(ChessyInk.PINK, ChessyInk.VIOLET).map { Paint().apply { colorFilter = ColorFilter.tint(it, BlendMode.SrcIn); alpha = .85f } } }
+    BasicText(
+        name,
+        style = TextStyle(fontFamily = LocalMuFonts.current.mono, fontWeight = FontWeight.Medium, fontSize = size, letterSpacing = .04.em, color = color),
+        maxLines = 1,
+        modifier = modifier.drawWithContent {
+            val t = tear
+            val split = 1.dp.toPx() * (if (t == 0) 1f else 2.6f)
+            for ((i, paint) in tints.withIndex()) {
+                drawIntoCanvas { canvas ->
+                    canvas.saveLayer(Rect(Offset.Zero, this.size).inflate(8.dp.toPx()), paint)
+                    translate(if (i == 0) split else -split, 0f) { this@drawWithContent.drawContent() }
+                    canvas.restore()
+                }
+            }
+            drawContent()
+            if (t != 0) {
+                val top = ChessyInk.hash(t, 1) * this.size.height * .7f
+                val tall = this.size.height * (.18f + ChessyInk.hash(t, 2) * .3f)
+                val dx = (ChessyInk.hash(t, 3) - .5f) * 8.dp.toPx()
+                clipRect(-8.dp.toPx(), top, this.size.width + 8.dp.toPx(), top + tall) { translate(dx, 0f) { this@drawWithContent.drawContent() } }
+            }
+        },
+    )
 }
