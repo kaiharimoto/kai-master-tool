@@ -92,7 +92,10 @@ fun ChessyAvatar(
                 last = now
                 body.show(showing)
                 body.step(dt / 1000f)
+                // a new mood arrives behind a blink, as a good rig hides its swaps (not the first, nor a face with its eyes shut)
+                val was = blend.showing
                 blend.show(showing)
+                if (was != null && was != showing) rig.blinkNow()
                 blend.step(dt / 1000f)
                 // a mood turned inward, or with its eyes shut, looks where it is going, not at the pointer
                 val mood = blend.to

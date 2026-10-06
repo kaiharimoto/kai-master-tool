@@ -107,6 +107,13 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
     /** Her blinks' and ears' own dice, apart from the glances', so stepping her finer or coarser never reorders a draw. */
     private val blinkDice = Random(seed * 31 + 1)
     private val earDice = Random(seed * 31 + 2)
+    private val purposeDice = Random(seed * 31 + 3)
+
+    /** Where she was looking last piece (to see a look jump), when her last blink ended, and a blink asked for. */
+    private var lastGx = Float.NaN
+    private var lastGy = Float.NaN
+    private var blinkEnded = -1e9f
+    private var asked = false
     private var tx = 0f
     private var ty = 0f
     private var tvx = 0f
@@ -155,6 +162,15 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
     fun twitch(side: Int) {
         if (still) return
         if (side < 0) vx[SwingGroup.EAR_L.ordinal] += EAR_FLICK else vx[SwingGroup.EAR_R.ordinal] += EAR_FLICK
+    }
+
+    /**
+     * She blinks now (her mood just changed: the new face arrives behind the lid, as a good rig hides its swaps), unless
+     * she is mid-blink, blinked a moment ago ([BLINK_REST]), or wears a face with its eyes shut (the next step's `blinks`).
+     */
+    fun blinkNow() {
+        if (blinkAt >= 0 || clock - blinkEnded < BLINK_REST) return
+        asked = true
     }
 
     /** Her bell swings as if flicked, by [strength] (1 a good flick), her tongue with it. */
@@ -279,8 +295,18 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
                 // how fast it moves (sheet px a second; the bell's, tongue's and ears' angles as the bell's offset counts them)
                 sway = max(sway, if (ear) abs(vx[i]) * 15f else if (g.angle) abs(vx[i]) * 90f else hypot(vx[i], vy[i]))
             }
+            // a look that jumps takes a blink with it, as eyes do on a big shift of gaze (never a drift or a glance)
+            if (!idle && !still && !lastGx.isNaN() && hypot(gx - lastGx, gy - lastGy) > GLANCE_BLINK &&
+                blinkAt < 0 && clock - blinkEnded > BLINK_REST && purposeDice.nextFloat() < P_GLANCE_BLINK
+            ) asked = true
+            lastGx = gx
+            lastGy = gy
+            if (asked) {
+                asked = false
+                if (blinks && blinkAt < 0) nextBlink = clock
+            }
             // the blink: shut at once, held, opened over its last [BLINK_OPEN] ms; now and then twice
-            if (blinks && clock > nextBlink && blinkAt < 0) {
+            if (blinks && clock >= nextBlink && blinkAt < 0) {
                 blinkAt = clock
                 blinkLong = BLINK_MIN + blinkDice.nextFloat() * (BLINK_MAX - BLINK_MIN)
             }
@@ -290,6 +316,7 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
                 f.lidAlpha = if (!f.blink) 0f else ((blinkLong - b) / BLINK_OPEN).coerceIn(0f, 1f)
                 if (b >= blinkLong) {
                     blinkAt = -1f
+                    blinkEnded = clock
                     nextBlink = clock + if (double) DOUBLE_MIN + blinkDice.nextFloat() * DOUBLE_SPAN else blinkGap(blinkRate * if (talking) TALK_BLINKS else 1f)
                     double = !double && blinkDice.nextFloat() < DOUBLE
                 }
@@ -398,6 +425,14 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
         const val GAP_MIN = 1200f
         const val GAP_MAX = 9000f
         const val TALK_BLINKS = 1.45f
+
+        /**
+         * Blinks with purpose: a look that jumps further than [GLANCE_BLINK] (across her, -1 to 1) blinks with chance
+         * [P_GLANCE_BLINK]; neither it nor [blinkNow] comes within [BLINK_REST] ms of the last blink's end.
+         */
+        const val GLANCE_BLINK = .35f
+        const val P_GLANCE_BLINK = .6f
+        const val BLINK_REST = 600f
 
         /** A double blink's chance and the gap to its second, in ms. */
         const val DOUBLE = .15f

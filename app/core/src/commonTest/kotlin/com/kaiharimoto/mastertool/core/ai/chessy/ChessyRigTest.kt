@@ -131,6 +131,43 @@ class ChessyRigTest {
     }
 
     @Test
+    fun aLookThatJumpsUsuallyBlinksAndADriftNever() {
+        var blinked = 0
+        for (seed in 1..40) {
+            val rig = ChessyRig(seed = seed)
+            // settled on one side, well away from her first idle blink, then the pointer jumps across her
+            repeat(40) { rig.step(16f, -.8f, 0f, false, blinks = false) }
+            repeat(3) { rig.step(16f, -.8f, 0f, false) }
+            if (rig.frame.blink) continue
+            if (rig.step(16f, .8f, 0f, false).blink) blinked++
+        }
+        assertTrue(blinked in 14..38, "a jump across her blinked $blinked times in 40")
+        // a pointer that sweeps smoothly across her never jumps, so it never takes one
+        val sweep = ChessyRig(seed = 3)
+        var extra = 0
+        repeat(40) { sweep.step(16f, -.8f, 0f, false, blinks = false) }
+        repeat(50) { i -> if (sweep.step(16f, -.8f + 1.6f * i / 50f, 0f, false, blinkRate = .1f).blink) extra++ }
+        assertEquals(0, extra, "a smooth sweep blinked")
+    }
+
+    @Test
+    fun aBlinkAskedForComesAtOnceButNotTwiceInARowNorOnShutEyes() {
+        val rig = ChessyRig(seed = 3)
+        repeat(30) { rig.step(16f, 0f, 0f, false, blinks = false) }
+        rig.blinkNow()
+        assertTrue(rig.step(16f, 0f, 0f, false).blink, "asked, she blinks at once")
+        repeat(15) { rig.step(16f, 0f, 0f, false) }
+        assertTrue(!rig.frame.blink)
+        // a moment after one, a second ask is let go
+        rig.blinkNow()
+        assertTrue(!rig.step(16f, 0f, 0f, false).blink, "too soon after the last")
+        // eyes shut (a face that cannot blink): nothing, and nothing saved for later
+        repeat(60) { rig.step(16f, 0f, 0f, false, blinks = false) }
+        rig.blinkNow()
+        assertTrue(!rig.step(16f, 0f, 0f, false, blinks = false).blink)
+    }
+
+    @Test
     fun aLookLandsWithTheFaintestOvershootAndSettles() {
         val rig = ChessyRig(seed = 3)
         var peak = 0f
