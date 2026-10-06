@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.ai.chessy.toys
 
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftPlay
 import com.kaiharimoto.mastertool.core.duel.dice.Quat
 import com.kaiharimoto.mastertool.core.duel.dice.V3
 import kotlin.math.abs
@@ -96,6 +97,12 @@ enum class ToyHit {
 
     /** She threw herself down and rolled in the catnip on the floor. */
     ROLL,
+
+    /** A gift went back into the chest. */
+    STORED,
+
+    /** She reached a hand held still and began rubbing against it. */
+    SNUGGLE,
 }
 
 class ToyEvent(val kind: ToyKind?, val hit: ToyHit, val x: Float, val y: Float, val strength: Float = 1f)
@@ -691,6 +698,9 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
     val wand = FeatherWand(WAND_L)
     val catnip = Catnip(NIP_S)
 
+    /** Her gifts: the box she makes, the gifts out, the chest (1.1.31). */
+    val gifts = GiftPlay()
+
     /** Her, playing with them. */
     val her = ChessyPlay()
     private val events = ArrayList<ToyEvent>()
@@ -705,7 +715,7 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
         catnip.size = NIP_S * u
     }
 
-    val moving: Boolean get() = yarn.out && yarn.moving || mouse.out && mouse.moving || wand.held || yarn.held || mouse.held || catnip.moving || her.moving
+    val moving: Boolean get() = yarn.out && yarn.moving || mouse.out && mouse.moving || wand.held || yarn.held || mouse.held || catnip.moving || her.moving || gifts.moving
 
     /** Advance [dt] seconds (cut into steps of at most 1/120 s); what happened, for her to answer. */
     fun step(dt: Float): List<ToyEvent> {
@@ -718,6 +728,7 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
             mouse.step(h, room, random, events)
             wand.step(h, room, events)
             catnip.step(h, room, random, events)
+            gifts.step(h, room, random, events)
             her.step(h, room, this, random, events)
         }
         if (yarn.held || yarn.out && yarn.moving && hypot(yarn.vx, yarn.vy) > 60f * room.unit) lastMoving = ToyKind.YARN
@@ -732,7 +743,14 @@ class PetToys(val room: PetRoom = PetRoom(), seed: Int = 3) {
     }
 
     /** What she is watching, in room pixels: the toy in play, or null for the person's hand. */
-    fun focus(): Pair<Float, Float>? = when (her.target ?: lastMoving) {
+    fun focus(): Pair<Float, Float>? {
+        // a gift in the hand or in the air, or the box she is making, before anything else
+        gifts.out.firstOrNull { it.held || !it.onFloor(room) }?.let { return it.x to it.y }
+        gifts.box?.let { return it.x to it.y }
+        return toyFocus()
+    }
+
+    private fun toyFocus(): Pair<Float, Float>? = when (her.target ?: lastMoving) {
         ToyKind.YARN -> yarn.x to yarn.y
         ToyKind.MOUSE -> mouse.x to mouse.y
         ToyKind.FEATHER -> wand.endX to wand.endY

@@ -100,7 +100,7 @@ object AiSettings {
         "window", "touchIntroSeen", "lensKeys", "extraSideVisible", "inspectorFolded",
         "ai.connections", "ai.introSeen",
         // Chessy (kai): how many replies have been finished, and whether her takeover has played, are the story's, not Ai's.
-        "ai.uses", "ai.takeover", "sync", "start", "present", "duel",
+        "ai.uses", "ai.takeover", "ai.chessyGifts", "sync", "start", "present", "duel",
         // Ai World (1.0.97): whether Python runs on this computer is the person's decision alone, never Ai's.
         "world",
         // Recording (1.1.13): which camera and microphone open is the person's choice alone.

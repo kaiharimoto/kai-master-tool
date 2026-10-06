@@ -1,5 +1,6 @@
 package com.kaiharimoto.mastertool.core.prefs
 
+import com.kaiharimoto.mastertool.core.ai.chessy.gifts.GiftCollection
 import com.kaiharimoto.mastertool.core.deck.Legality
 import com.kaiharimoto.mastertool.core.deck.GenesysRules
 import com.kaiharimoto.mastertool.core.ai.voice.VoiceModel
@@ -121,6 +122,8 @@ data class AiPrefs(
     val takeoverSound: Boolean = true,
     /** Whether her petting mode plays its sounds: her meows and purrs, the toys, the chimes (1.1.29). */
     val petSound: Boolean = true,
+    /** What Chessy has given you in her room (1.1.31): each gift's id and how many times. Once received, yours for good. */
+    val chessyGifts: Map<String, Int> = emptyMap(),
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()
@@ -139,6 +142,7 @@ data class AiPrefs(
         persona = persona.takeIf { it in PERSONAS } ?: PERSONA_AI,
         uses = uses.coerceAtLeast(0),
         takeover = takeover.takeIf { it in listOf(TAKEOVER_NONE, TAKEOVER_SEEN) } ?: TAKEOVER_NONE,
+        chessyGifts = GiftCollection.sanitised(chessyGifts),
     )
 
     companion object {

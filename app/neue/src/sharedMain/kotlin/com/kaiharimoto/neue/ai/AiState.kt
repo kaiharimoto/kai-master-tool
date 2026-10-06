@@ -109,6 +109,9 @@ class AiState(internal val h: NeueHolders) {
     /** For the studio's pictures: a hand to play through the petting mode once it opens (pet, tickle, bell, ear, hug, sulk). */
     var amieDemo: String? = null
 
+    /** The chest's drawer of her gifts is open over her room (1.1.31): Esc and Back close it first. */
+    var giftDrawer by mutableStateOf(false)
+
     fun openAmie() {
         if (amie == null) amie = com.kaiharimoto.mastertool.core.ai.chessy.ChessyAmie(seed = (System.nanoTime() % 100_000).toInt())
     }
@@ -116,6 +119,7 @@ class AiState(internal val h: NeueHolders) {
     /** She goes back to the chat box, waving, and says goodbye there. */
     fun closeAmie() {
         val was = amie ?: return
+        giftDrawer = false
         amie = null
         val bye = was.bye()
         touched(AvatarPlay.Reaction(bye.mood, bye.seconds, bye.line))
@@ -443,12 +447,14 @@ class AiState(internal val h: NeueHolders) {
     private fun command(c: SlashCommand) {
         draft = ""
         when (c) {
-            // She comes in as she does: her takeover, which ends with the choice (the next message then tells the model
-            // who it is, ChessyVoice.switched, in send). Already here, she says so.
+            // She takes over the chat at once, no cinematic (kai: "have /Chessy just switch to Chessy and /takeover be the
+            // dedicated cinematic trigger"); the next message tells the model who it is (ChessyVoice.switched, in send).
+            // Her break-in is counted as seen, so it does not play by itself later.
             SlashCommand.CHESSY -> if (prefs.persona == AiPrefs.PERSONA_CHESSY) {
-                h.neue.note = com.kaiharimoto.neue.Note("$CHESSY_NAME is already here. Type /takeover to watch her break in again")
+                h.neue.note = com.kaiharimoto.neue.Note("$CHESSY_NAME is already here. Type /takeover to watch her break in")
             } else {
-                takeovers.start()
+                h.neue.update { it.copy(ai = it.ai.copy(persona = AiPrefs.PERSONA_CHESSY, takeover = AiPrefs.TAKEOVER_SEEN)) }
+                h.neue.note = com.kaiharimoto.neue.Note("$CHESSY_NAME is your assistant now. Type /ai for $ownName, /takeover for her break-in")
             }
             SlashCommand.TAKEOVER -> takeovers.start()
             SlashCommand.AI -> {

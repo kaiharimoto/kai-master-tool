@@ -1,5 +1,9 @@
 package com.kaiharimoto.neue.ai.chessy
 
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -355,7 +359,7 @@ internal fun Modifier.chessyAura(clock: () -> Float): Modifier {
  * Between tears nothing redraws. [style] sets it (the mono face at [size] when none).
  */
 @Composable
-internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = Modifier, size: TextUnit = 12.sp, style: TextStyle? = null) {
+internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = Modifier, size: TextUnit = 12.sp, style: TextStyle? = null, ears: Boolean = false, stacked: Boolean = false) {
     var tear by remember { mutableIntStateOf(0) }
     LaunchedEffect(name) {
         val r = kotlin.random.Random(name.hashCode())
@@ -369,11 +373,9 @@ internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = M
     val set = style?.copy(color = color) ?: TextStyle(fontFamily = LocalMuFonts.current.mono, fontWeight = FontWeight.Medium, fontSize = size, letterSpacing = .04.em, color = color)
     // the split grows with the letters: a pixel at 12 sp
     val reach = (if (set.fontSize.isSp) set.fontSize.value else 12f) / 12f
-    BasicText(
-        name,
-        style = set,
-        maxLines = 1,
-        modifier = modifier.drawWithContent {
+    // her ears beside her name (kai, 1.1.31), torn and split with it: the effect is laid over the pair
+    val em = with(LocalDensity.current) { set.fontSize.toDp() }
+    val glitch = modifier.drawWithContent {
             val t = tear
             val split = 1.dp.toPx() * reach * (if (t == 0) 1f else 2.6f)
             for ((i, paint) in tints.withIndex()) {
@@ -390,8 +392,19 @@ internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = M
                 val dx = (ChessyInk.hash(t, 3) - .5f) * 8.dp.toPx() * reach
                 clipRect(-8.dp.toPx(), top, this.size.width + 8.dp.toPx(), top + tall) { translate(dx, 0f) { this@drawWithContent.drawContent() } }
             }
-        },
-    )
+        }
+    // stacked (beside her where the chat is narrow): her ears over her name, so neither is cut
+    if (stacked) {
+        Column(glitch, verticalArrangement = Arrangement.spacedBy(em * .15f)) {
+            if (ears) ChessyMark(em * 1.15f, name = name)
+            BasicText(name, style = set, maxLines = 1, softWrap = false)
+        }
+    } else {
+        Row(glitch, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(em * .3f)) {
+            if (ears) ChessyMark(em * 1.15f, name = name)
+            BasicText(name, style = set, maxLines = 1, softWrap = false)
+        }
+    }
 }
 
 /**

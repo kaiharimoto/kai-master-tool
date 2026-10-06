@@ -110,7 +110,10 @@ class TakeoverTest {
             assertTrue(Takeover.frameGlitch(at + .12f) > .9f)
             assertEquals(Expression.ANGRY, Takeover.chessyMood(at + .12f))
         }
-        assertTrue(Takeover.looksUp(Takeover.AI_ON + 1f))
+        assertTrue(Takeover.looksUp(Takeover.PUSH_AT + .5f))
+        // once held in the frame she faces the person instead (kai)
+        assertFalse(Takeover.looksUp(Takeover.AI_ON + 1f))
+        assertTrue(Takeover.facesYou(Takeover.AI_ON + 1f))
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.kaiharimoto.neue.ai
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import com.kaiharimoto.neue.ai.chessy.chessySpot
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
@@ -75,7 +77,18 @@ fun AiPanel(h: NeueHolders, modifier: Modifier = Modifier, phone: Boolean = fals
     val c = Mu.colors
     // The history's lines read ahead, off the main thread, so the list opens at once (1.0.92).
     LaunchedEffect(ai) { withContext(Dispatchers.IO) { runCatching { ai.files.warm() } } }
-    Row(modifier.background(c.paper).then(if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) Modifier.chessySpot(com.kaiharimoto.neue.ai.chessy.ChessyCrew.PANEL) else Modifier)) {
+    Row(
+        modifier
+            .background(c.paper)
+            // the panel is a surface, not a window onto the page (kai: "on the android app I'm able to touch elements
+            // behind the Ai chat window like a card"): a press anywhere on it is the panel's, so nothing under it hears one
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) awaitPointerEvent(PointerEventPass.Final).changes.forEach { if (!it.isConsumed) it.consume() }
+                }
+            }
+            .then(if (com.kaiharimoto.neue.ai.chessy.LocalChessy.current != null) Modifier.chessySpot(com.kaiharimoto.neue.ai.chessy.ChessyCrew.PANEL) else Modifier),
+    ) {
         if (!phone) PanelEdge(h)
         Column(
             Modifier

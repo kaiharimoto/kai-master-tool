@@ -2984,6 +2984,46 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
     rising chimes. `PetMix` mixes them (fourteen at once, softly limited) into `Speaker.stream` (new: a small buffer fed
     from the speaker's own thread, on the desk and on Android), rendered once off the frame thread (`PetAudio`). **Sound
     on/off** stands by Bye-bye and in Settings (`AiPrefs.petSound`, synced).
+  - **Her gifts** (kai, 1.1.31: "when she reaches full hearts have her digitally create a present … a Maliss Yugioh card
+    … in foil that sparkles, a crystal heart that glistens prismatically, a written thank you note … a polaroid photo of her
+    and Ai … and a cupcake. These gifts are 3D … stored away by dropping them back into the chest … collected … a chest
+    drawer … gray out their silhouette with a question mark … a progress tracker"; "everything should be 3D"). The model is
+    `core/ai/chessy/gifts`: `GiftCatalog` (the keepsakes, 24 thank-you notes in four tiers weighted 10/6/3/1, and every
+    Maliss card the pool holds — `GiftCatalog.cards`, by archetype or name; her own card, Chessy Cat, at half weight; kinds
+    weighted card 30, note 30, photo 14, cupcake 14, heart 12, anything not yet owned doubled), each item with its own line
+    as she gives it, which is also the quote shown in the drawer; `GiftCollection` (`AiPrefs.chessyGifts`, id → times,
+    synced, `AiSettings.INTERNAL`); `GiftMeshes` (every gift a real solid wound outward: the box and lid with ribbon and
+    bow, the card slab, the polaroid, the half-open note, the faceted crystal heart, the pleated cupcake with its swirl,
+    cherry and sprinkles, and the chest of drawers); `GiftBody` (thrown, tumbles, bounces on its lowest turned corner,
+    settles into the way it rests facing you); `GiftPlay` (the box made and opened, at most three gifts out, the chest that
+    takes one let go over it, `ToyHit.STORED`); `ChessyAmie.giftDue`/`makeGift`/`gave`/`stored` (full hearts, a gift, then
+    fondness back to 0.4 and 90 s before the next). Drawn by `GiftInk.kt` (**kai's colour exception for the gifts**, named
+    in `MasterUiLawTest`): one painter turns a solid, sorts its seen faces far to near and fills them lit by the toys'
+    light; the crystal heart is a heart brilliant (kai: "heart facets patterns for crystals … more clear with prismatic diffractions": a table, 8 stars, 8 kites and 16 upper girdles at ~34°, 8 pavilion mains and 16 lower girdles, researched and built in `GiftMeshes.heart`) painted as clear glass reflecting a studio of softboxes and cards, its far facets seen through the table, a faint turning rainbow, and fire where a facet catches a small light, fanned red to violet across its tilt (whole on small facets, a tint on big ones), with one foil glint; a face with a picture
+    — the card's face (`NeueCard` in holo foil, two foil stars twinkling) and back, the polaroid (a selfie, kai: her face close to the lens, tipped and
+    cropped by the frame, Ai's own face smaller over her shoulder, `LocalChessy provides null`, a heart, "us ♡"), the note's cover and her words inside — has it drawn out of sight into a
+    layer and laid on by the affine map of its corners (`GiftSolid`). The box glitches into being in her pink and cyan
+    bands (`glitchIn`); a tap opens it, the lid flies and the gift jumps out with her line (a first-ever one marked New).
+    **The chest** stands at the right end of the floor with the count under it; a gift let go over it goes in (its drawer
+    slides out under it), a tap opens **the drawer** (`GiftDrawer`): Keepsakes, Maliss cards and notes in 3D, what is not
+    yet yours a grey silhouette with a "?", the progress and the count per kind, and the one looked at turning beside its
+    name, description, "Received ×N", her quote in her box and **Take out**. Esc and Back close the drawer first.
+    `--chessy-amie=gift|gift-open:<id>|drawer`, `--chessy-gifts=heart,…` photograph it.
+  - **A hand held still is hers to rub against** (kai, 1.1.31: "when the user holds their cursor or touch on the screen idly,
+    Chessy will come up to it and snuggle and rub against it like a cat would and purr"): a press held on the floor for
+    0.6 s, or the mouse resting 1.6 s in the room off her, calls her over (`ChessyPlay.snuggle`, `PlayState.SNUGGLE`): she
+    walks to it, stands with her cheek at it and rubs to and fro, leaning in (`rubbing`, `ToyHit.SNUGGLE`), purring every
+    1.5 s, hearts rising, and now and then a purring word as she grows fonder (`ChessyAmie.snuggled`); the hand moving on
+    or lifting lets her go.
+  - **Play fills the hearts too** (kai, 1.1.33: "let toy interactions in pet mode count towards the heart meter"): a throw,
+    a wave of the wand, a wind of the mouse, a pour or a pinch of catnip, a gift tossed (`ChessyAmie.played`, `PLAY_WARM`
+    at most every `PLAY_EVERY` 0.8 s, so a long wave is not a flood) and what she does with a toy (a bite, a pounce, a
+    catch) warm her, catnip or not; the room chimes once a half heart fills. Toy play alone earns her gift.
+  - **A gift in your hand is talked about** (kai, 1.1.33: "let her talk about it and be happy I brought it out instead of
+    doing nothing"): picking up one of her gifts, or taking it out of the drawer, has her say something about that one
+    thing (`ChessyAmie.admired`; lines `gift-held:<kind>` and `gift-out:<kind>`, her own card `…:self`, `{name}` and a
+    note's `{words}` filled in). Brought out is always answered; handled, not over her last words, not the same gift
+    within `ADMIRE_AGAIN` 10 s, nor while catnip has her.
   - **A finger shows where it pets her** (kai, 1.1.29: "for mobile also add a touch indicator showing where point is
     petting her to make it feel more physical"): on a touch screen a lilac ring stands round the fingertip, pressed a
     little smaller while it is down, a pink ripple widens where it lands, and a stroke leaves fading paw prints turned the
@@ -3016,7 +3056,7 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   `MasterUiLawTest`), only where Ai has not swept the app clean; her heads (`ChessyAvatar`, still, colour split by
   `headSplit`) pop in all over it; she lands with her aura and talks in `ChessySay`; Ai's restore bar and its question are
   Master UI. **It plays** after the fifth reply (`TakeoverGate`, 1.5 s after the answer lands), on **`/takeover`**
-  (always) and **`/chessy`** (when she is not already the assistant), and from Settings › Assistant › Takeover › Play it.
+  (always), and from Settings › Assistant › Takeover › Play it (`/chessy` played it too until 1.1.31).
   **Skip** and **Sound** stand in its corner throughout; Esc and Back skip to the question, then leave things as they
   were. Its sound can be turned off there or in Settings (`AiPrefs.takeoverSound`, synced). Keep Chessy or Switch back
   sets `persona` and marks it seen. **On a phone** (kai, 1.1.29) the chat sheet covers the app, so a takeover started with it open puts
@@ -3035,7 +3075,12 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   looks up at Ai's box (`looksUp`, her rig's pointer) and shoves up against it, cross while she does.
 - **`/chessy`, `/ai` and `/catmode`** are the app's, never the model's (`AiState.send` → `command`): `/chessy` makes
   her the assistant, `/ai` brings Ai back (the next message tells the model who it is now), `/catmode` turns her full
-  cat voice on or off. `/chessy` plays the takeover (unless she is already here) and `/takeover` always does.
+  cat voice on or off. Since 1.1.31 (kai: "have /Chessy just switch to Chessy and /takeover be the dedicated cinematic
+  trigger") `/chessy` switches at once, counting her break-in as seen, and `/takeover` alone plays the cinematic.
+- **The chat panel is a surface** (kai, 1.1.31: on Android a touch on the chat reached a card behind it): `AiPanel`
+  takes every press that lands on it (a `Final`-pass pointer input), so nothing under it hears one. **Her big name** in a
+  new chat wears her ears beside it in the same glitch (`ChessyGlitchName(ears = true)`), and on Android stands at her
+  side rather than under her, for the room it gives the chat.
 - **Her voice** (kai: "a more devilish and cute and loving personality … cute evil"): `core/ai/chessy/ChessyVoice.kt`
   is who she is in words the model is given, a section after the soul in both the chat's and the duel's prompt while
   she is the assistant: a little devil with a soft heart, smug about her evil plans, fiercely on the person's side,

@@ -184,6 +184,8 @@ fun TakeoverLayer(ai: AiState) {
             // once in the corner she looks up at Ai's box and shoves against the frame it holds her in (kai: "look up
             // more like she's pushing back against Ai")
             val up = Offset(wPx * (if (tall) .5f else .42f), hPx * .04f)
+            // and once held there she faces the person: her own middle, so her head turns to neither side
+            val facing = Offset(kx * wPx, ky * hPx)
             Box(
                 Modifier
                     .graphicsLayer {
@@ -202,7 +204,7 @@ fun TakeoverLayer(ai: AiState) {
                     .contained({ tk.t }, c.paper, c.ink)
                     .chessyAura { tk.t },
             ) {
-                ChessyAvatar(mood, side, talking = talking, pointer = { if (Takeover.looksUp(tk.t)) up else null })
+                ChessyAvatar(mood, side, talking = talking, pointer = { val t = tk.t; if (Takeover.looksUp(t)) up else if (Takeover.facesYou(t)) facing else null })
             }
         }
 
