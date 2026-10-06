@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import com.kaiharimoto.neue.kit.keepsPresses
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -93,8 +94,8 @@ internal fun GiftDrawer(
         Modifier
             .fillMaxSize()
             .background(c.paper.copy(alpha = .86f))
-            // nothing under the drawer hears a press while it is open
-            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
+            // nothing under the drawer hears a press while it is open, and its own scroll and buttons keep theirs
+            .keepsPresses(),
         contentAlignment = Alignment.Center,
     ) {
         Column(

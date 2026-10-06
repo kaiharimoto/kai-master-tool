@@ -3080,7 +3080,13 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   cat voice on or off. Since 1.1.31 (kai: "have /Chessy just switch to Chessy and /takeover be the dedicated cinematic
   trigger") `/chessy` switches at once, counting her break-in as seen, and `/takeover` alone plays the cinematic.
 - **The chat panel is a surface** (kai, 1.1.31: on Android a touch on the chat reached a card behind it): `AiPanel`
-  takes every press that lands on it (a `Final`-pass pointer input), so nothing under it hears one. **Her big name** in a
+  takes every press that lands on it, so nothing under it hears one: since 1.1.36 through `Modifier.keepsPresses()`
+  (`kit/Pointer.kt`), a hit target that spends only the presses and lifts nothing inside took. The 1.1.31 blocker and the
+  Keepsakes drawer's spent every move too, and a finger always moves a little: Compose's scroll and buttons give up a
+  gesture once an ancestor has spent a move they were still weighing, so the drawer neither scrolled nor took Take out on
+  the phone (kai) — `KeepsPressesTest` drags a finger through both. A surface over the page uses `keepsPresses`; a shield
+  with nothing inside it (zen's, the takeover's) may still spend everything. In the takeover, her shoves against Ai's
+  frame are silent (kai, 1.1.36: once contained she "seems to continually make noises"); her voice comes with her lines. **Her big name** in a
   new chat wears her ears beside it in the same glitch (`ChessyGlitchName(ears = true)`), and on Android stands at her
   side rather than under her, for the room it gives the chat.
 - **Her voice** (kai: "a more devilish and cute and loving personality … cute evil"): `core/ai/chessy/ChessyVoice.kt`

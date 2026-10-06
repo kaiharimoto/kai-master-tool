@@ -452,7 +452,10 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
   focus), taps counted per surface (`TapBurst`), a carried card above the finger
   (`CarryOffset`), haptics for hand events only (`DeskFeel`), two- and
   three-finger undo and redo (`MultiTap`), `muClickable` (a resting thumb fires
-  nothing) and `TouchMetrics` for chrome outside the deck.
+  nothing) and `TouchMetrics` for chrome outside the deck. **A surface over the page blocks
+  touches with `Modifier.keepsPresses()`, never by spending every move** — a finger always
+  moves a little, and a scroll or button inside then gives up (1.1.36, the Keepsakes drawer;
+  `KeepsPressesTest`).
 - **On a phone** (v1.3.5, `NEUE.md` §1c): `FormFactor` (smallest width under
   600 dp and touch) is `NeueState.form`/`LocalPhone`; the screen turns by
   `NeuePreferences.orientation` (Portrait/Landscape/Auto, `MainActivity.applyOrientation`,

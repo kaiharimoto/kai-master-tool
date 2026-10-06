@@ -376,8 +376,8 @@ object Takeover {
         c += Cue(10f, Sound.NYA)
         c += Cue(10.15f, Sound.VOICE, voice = PetSound.NYA)
         for ((line, voice) in LINES.zip(LINE_VOICES)) c += Cue(line.at, Sound.VOICE, voice = voice)
-        // pushing back against Ai's frame
-        for ((k, at) in PUSHES.withIndex()) c += Cue(at, Sound.VOICE, voice = if (k % 2 == 0) PetSound.HMPH else PetSound.MRRP)
+        // her shoves against Ai's frame are silent (kai, 1.1.36: once contained "she seems to continually make noises even
+        // when she's not talking"): her voice is heard only with her lines
         // a tick for each letter she types (not her spaces)
         for (line in LINES) {
             val u = ChessyType.units(line.text)
