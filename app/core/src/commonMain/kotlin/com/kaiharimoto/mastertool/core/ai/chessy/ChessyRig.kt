@@ -2,6 +2,7 @@ package com.kaiharimoto.mastertool.core.ai.chessy
 
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
@@ -47,6 +48,13 @@ class ChessyFrame {
 
     /** Whether anything is still moving: the frame loop sleeps when this goes false. */
     var moving = false
+
+    /**
+     * Whether something quick is happening (a blink, an ear, talking, a swing, her head catching up with a look):
+     * every frame is drawn. Otherwise only her drift and breath move, slow enough to step a few times less often
+     * (the performance pass, kai: "my hardware was lagging quite badly when chessy was live").
+     */
+    var lively = false
 }
 
 /**
@@ -92,7 +100,8 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
      * starts and stops her speech; [blinks] off holds her eyes open (a face with its eyes shut has no blink).
      */
     fun step(dtMs: Float, aimX: Float?, aimY: Float?, talking: Boolean, blinks: Boolean = true): ChessyFrame {
-        val dt = dtMs.coerceIn(0f, 64f)
+        // up to a calm step's length (the performance pass steps her less often while she is calm), never a pause's
+        val dt = dtMs.coerceIn(0f, MAX_STEP)
         clock += dt
         val t = clock / 1000f
         val idle = aimX == null || aimY == null
@@ -109,8 +118,11 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
         val f = frame
         f.bob = if (still) 0f else sin(t * PI.toFloat() * 2f / 4f) * 2.2f
         // each group: pulled to rest, pushed against the head's motion (lag) and by its turn (it hangs)
-        val h = min(dt, 40f) / 1000f
+        // in pieces of at most 20 ms, so a long calm step swings as the same frames would have
+        val pieces = max(1, ceil(dt / 20f).toInt())
+        val h = dt / pieces / 1000f
         var swing = 0f
+        var sway = 0f
         for (g in SwingGroup.entries) {
             val i = g.ordinal
             if (still) { f.swingX[i] = 0f; f.swingY[i] = 0f; vx[i] = 0f; vy[i] = 0f; continue }
@@ -120,11 +132,15 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
                 else -> -hvx * g.g * .35f + tx * g.g * .25f
             }
             val targetY = if (g.angle) 0f else -hvy * g.g * .2f + f.bob * .4f
-            vx[i] += (-g.k * (f.swingX[i] - targetX) - g.c * vx[i]) * h
-            vy[i] += (-g.k * (f.swingY[i] - targetY) - g.c * vy[i]) * h
-            f.swingX[i] = (f.swingX[i] + vx[i] * h).coerceIn(-g.maxX, g.maxX)
-            f.swingY[i] = if (g.angle) 0f else (f.swingY[i] + vy[i] * h).coerceIn(-g.maxY, g.maxY)
+            repeat(pieces) {
+                vx[i] += (-g.k * (f.swingX[i] - targetX) - g.c * vx[i]) * h
+                vy[i] += (-g.k * (f.swingY[i] - targetY) - g.c * vy[i]) * h
+                f.swingX[i] = (f.swingX[i] + vx[i] * h).coerceIn(-g.maxX, g.maxX)
+                f.swingY[i] = if (g.angle) 0f else (f.swingY[i] + vy[i] * h).coerceIn(-g.maxY, g.maxY)
+            }
             swing = max(swing, if (g == SwingGroup.BELL) abs(f.swingX[i]) * 90f else if (g.angle) 0f else kotlin.math.hypot(f.swingX[i], f.swingY[i]))
+            // how fast it moves (sheet px a second; the bell's and tongue's angles as the bell's offset counts them)
+            sway = max(sway, if (g.angle) abs(vx[i]) * 90f else kotlin.math.hypot(vx[i], vy[i]))
         }
         f.rimMix = ((swing - .5f) / 2.5f).coerceIn(0f, 1f)
         // the blink: the shut eyes swapped in for 130 ms, now and then twice
@@ -159,10 +175,26 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
         f.pitch = -(ty + nod) * PITCH * depth
         f.roll = -tx * ROLL * depth
         f.moving = talking || f.blink || earAt >= 0 || abs(gx - tx) > 1e-3f || abs(gy - ty) > 1e-3f || swing > .05f || abs(nod) > 1e-3f || (!still)
+        // her idle drift keeps her head close behind where it is going; a look moves it further
+        f.lively = talking || f.blink || earAt >= 0 || blinkSoon() || abs(gx - tx) > LIVELY_TURN || abs(gy - ty) > LIVELY_TURN || sway > LIVELY_SWAY || abs(nod) > 1e-3f
         return f
     }
 
+    /** A blink about to start: stepped every frame just before, so it is never caught late. */
+    private fun blinkSoon() = nextBlink - clock < 70f || nextEar - clock < 70f
+
     companion object {
+        /**
+         * How far her head may lag where it is going and still be calm: her idle drift moves at most about 0.23 a second,
+         * which her 140 ms follow trails by about 0.03; a look (the pointer moved) puts her far behind at once.
+         */
+        const val LIVELY_TURN = .045f
+
+        /** The longest step she takes in one go, in ms: a sleeping calm step's, with room; a longer pause is cut to it. */
+        const val MAX_STEP = 160f
+
+        /** How fast a swinging layer may move and still be calm, in sheet px a second: her breath sways the hair slowly. */
+        const val LIVELY_SWAY = 12f
         val YAW = (18 * PI / 180).toFloat()
         val PITCH = (10 * PI / 180).toFloat()
         val ROLL = (4 * PI / 180).toFloat()

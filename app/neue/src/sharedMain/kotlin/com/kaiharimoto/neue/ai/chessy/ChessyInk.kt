@@ -56,6 +56,7 @@ import com.kaiharimoto.mastertool.core.ai.avatar.MarkInk
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkList
 import com.kaiharimoto.mastertool.core.ai.avatar.MarkShape
 import com.kaiharimoto.neue.cards.Holo
+import com.kaiharimoto.neue.cards.HoloCache
 
 /**
  * Chessy's manga marks (kai, 2026-10): Ai's shapes ([MarkShape]) placed round her by `core/ai/chessy`'s ChessyMarks,
@@ -91,8 +92,10 @@ internal object ChessyInk {
      * ([ox], [oy]): all of them white and wide, then plum, then each filled with foil. Borders are in screen pixels,
      * so a small Chessy keeps a readable sticker.
      */
-    fun DrawScope.marks(list: MarkList, s: Float, ox: Float = 0f, oy: Float = 0f, light: Offset = Offset(-.4f, -.6f)) {
+    fun DrawScope.marks(list: MarkList, s: Float, ox: Float = 0f, oy: Float = 0f, light: Offset = Offset(-.4f, -.6f), foils: MarkFoils? = null) {
         if (list.size == 0 || s <= 0f) return
+        // the light in small steps, so a mark's foil brush is made again a few times a second, not every frame
+        val lit = Offset(kotlin.math.round(light.x * LIGHT_STEPS) / LIGHT_STEPS, kotlin.math.round(light.y * LIGHT_STEPS) / LIGHT_STEPS)
         val white = (5.5f * s * 3f).coerceIn(2.5f, 7f)
         val dark = white * .45f
         for (pass in 0..2) {
@@ -107,7 +110,7 @@ internal object ChessyInk {
                 val cx = ox + m.x * s
                 val cy = oy + m.y * s
                 val shape = shapes.getValue(m.shape)
-                if (pass == 2 && m.shape != MarkShape.BLUSH && foil(shape, cx, cy, k, m.rot, m.alpha, s, light)) continue
+                if (pass == 2 && m.shape != MarkShape.BLUSH && foil(shape, cx, cy, k, m.rot, m.alpha, s, lit, foils?.at(i))) continue
                 val colour = when (pass) {
                     0 -> PAPER
                     1 -> PLUM
@@ -138,9 +141,10 @@ internal object ChessyInk {
      * The mark at ([cx], [cy]), [k] pixels per mark unit, turned [rot]: its own foil sheet the size of its bounds, kept
      * only inside the mark. False where there is no runtime shader, and the flat colour is drawn instead.
      */
-    private fun DrawScope.foil(shape: Shape, cx: Float, cy: Float, k: Float, rot: Float, alpha: Float, s: Float, light: Offset): Boolean {
+    private fun DrawScope.foil(shape: Shape, cx: Float, cy: Float, k: Float, rot: Float, alpha: Float, s: Float, light: Offset, cache: HoloCache?): Boolean {
         if (!Holo.available) return false
-        val r = maxOf(shape.bounds.width, shape.bounds.height) * k * .75f + 2f
+        // whole pixels, so the sheet's size (one of its inputs) holds still while the mark does
+        val r = kotlin.math.ceil(maxOf(shape.bounds.width, shape.bounds.height) * k * .75f + 2f)
         val box = Rect(cx - r, cy - r, cx + r, cy + r)
         var drawn = false
         drawIntoCanvas { canvas ->
@@ -154,7 +158,7 @@ internal object ChessyInk {
             }) { fillOf(shape, Color.Black, alpha, s, k, 0f) }
             // the sheet sized to the mark, so its whole rainbow crosses it
             inset(box.left, box.top, size.width - box.right, size.height - box.bottom) {
-                drawn = with(Holo) { drawHoloSheet(Rect(Offset.Zero, size), light, blend = BlendMode.SrcIn) }
+                drawn = with(Holo) { drawHoloSheet(Rect(Offset.Zero, size), light, cache, blend = BlendMode.SrcIn) }
             }
             canvas.restore()
         }
@@ -182,7 +186,10 @@ internal object ChessyInk {
     }
 
     /** Foil hearts and sparkles of the petting mode, in canvas pixels: [list]'s marks with scale in pixels. */
-    fun DrawScope.particles(list: MarkList, light: Offset) = marks(list, 1f, 0f, 0f, light)
+    fun DrawScope.particles(list: MarkList, light: Offset, foils: MarkFoils? = null) = marks(list, 1f, 0f, 0f, light, foils)
+
+    /** How finely the foil's light moves: twenty steps a unit. */
+    private const val LIGHT_STEPS = 20f
 }
 
 // ---- her box, her aura and her name (kai, 2026-10) -----------------------------------------------------------------
@@ -320,4 +327,19 @@ internal fun ChessyGlitchName(name: String, color: Color, modifier: Modifier = M
             }
         },
     )
+}
+
+/**
+ * Each mark's foil brush, kept between frames by its place in its run (the performance pass, kai: "my hardware was
+ * lagging quite badly when chessy was live, especially if left on for long periods"): a brush is a native shader, and
+ * one made for every mark on every frame was garbage the size of the hours she was on screen. Kept, it is made again
+ * only when its light or size changes. One per run of marks, drawn on the thread that draws it.
+ */
+class MarkFoils {
+    private val caches = ArrayList<HoloCache>()
+
+    fun at(i: Int): HoloCache {
+        while (caches.size <= i) caches += HoloCache()
+        return caches[i]
+    }
 }

@@ -897,7 +897,9 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
 
 kai's ask: "run the best while maintaining the graphics quality". A performance change keeps **the same pixels**, and
 proves it (a raster comparison, a memo-against-old test, studio shots). The rules the red team left:
-- Nothing requests frames while nothing moves (`AiAvatar` sleeps to its next step). Measure with the palette's *Show
+- Nothing requests frames while nothing moves (`AiAvatar` sleeps to its next step). Something always on screen paces
+  itself: Chessy steps every frame only while she is `lively`, else every ~65 ms (`ChessyPacingTest`); each frame asked
+  for is the whole window repainted. Measure with the palette's *Show
   frame times* (`FrameStats`, `FrameMeter`).
 - A modifier on every card is a `Modifier.Node` (`CursorNode`, `onPointer`), never a keyless `composed {}`; never read
   layout-written state (bounds) in composition.

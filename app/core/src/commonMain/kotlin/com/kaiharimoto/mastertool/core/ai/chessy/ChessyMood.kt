@@ -109,6 +109,9 @@ class ChessyMarks(var still: Boolean = false) {
     val fx = MarkList(24)
     val top = MarkList(12)
 
+    /** Whether a mood has just changed and her body is still easing into it: drawn every frame meanwhile. */
+    val busy: Boolean get() = !still && clock - since < 1f
+
     /** Wear [e] from now; the same mood again changes nothing, so its loop carries on. */
     fun show(e: Expression) {
         if (e == mood) return

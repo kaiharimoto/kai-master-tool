@@ -2938,6 +2938,17 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
 - **The story's numbers** are `AiPrefs.uses` (replies finished in chat, counted in `AiState.finish`),
   `AiPrefs.takeover` (`none`/`seen`) and `catMode`; `TakeoverGate.due` says when (5 replies, never mid-work) and
   `SlashCommand` reads `/chessy`, `/catmode`, `/ai` — a whole message only.
+- **She is cheap to leave on** (1.1.26, kai: "my hardware was lagging quite badly when chessy was live, especially if
+  left on for long periods"). On the desk every frame she asks for repaints the whole window, foil and all, so her
+  frame loop takes a step every frame only while she is **lively** (`ChessyFrame.lively`: talking, a blink or ear
+  twitch and the frames just before it, her head catching up with a look, a swinging layer moving faster than 12 sheet
+  pixels a second, a nod, a new mood's first second). Calm — only her drift and breath moving — she steps every
+  ~65 ms, asleep every ~115; the rig steps by the real time between (its pendulums in pieces of at most 20 ms, up to
+  `ChessyRig.MAX_STEP`), so it is the same motion drawn less often, under half a pixel a step at the chat box's size.
+  Left alone she is lively about a tenth of the time (`ChessyPacingTest`). Her pictures are meshed at about eight
+  screen pixels a cell (`Mesh.cellFor`, shared grids at 24–96 sheet px), and her marks' foil keeps its brush per mark
+  (`MarkFoils`, the light stepped in twentieths): a new native shader for every mark on every frame was garbage the
+  size of the hours she was on screen.
 
 ### 4l. Prep: tournament preparation (1.0.50)
 
@@ -4365,6 +4376,10 @@ size, loops that sleep — but a few patterns repeated over every card or every 
   through the zip's directory (`ZipFile`) and are written streaming; sync lists blobs only when it sends, skips a
   device's manifest whose Drive checksum is unchanged, and writes its state only when it changed; Prep's typing saves
   400 ms after the last key and on close.
+
+**A live figure paces itself** (1.1.26, Chessy): a frame loop for something that is always on screen steps every frame
+only while something quick happens, and otherwise every few frames by the real time between — `ChessyAvatar`'s
+`lively`, held by `ChessyPacingTest`. Every frame it asks for is a whole window repainted.
 
 Left for later, because they could change a pixel: the foil name masked inside the shader instead of a layer per card,
 dimming pool cards with an overlay instead of a layer, smaller decoded art on the desk.

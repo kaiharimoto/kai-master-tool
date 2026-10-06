@@ -75,6 +75,7 @@ fun ChessyAmieLayer(ai: AiState) {
     val scope = rememberCoroutineScope()
     val particles = remember { AmieParticles() }
     val marks = remember { MarkList(AmieParticles.MAX) }
+    val foils = remember { MarkFoils() }
     var frame by remember { mutableIntStateOf(0) } // read only in the draw
     var bursts by remember { mutableIntStateOf(0) } // wakes the particles' clock
     var mood by remember { mutableStateOf(Expression.FOUND) }
@@ -269,7 +270,7 @@ fun ChessyAmieLayer(ai: AiState) {
             }
             val at = ai.h.cursor.position
             val light = if (at != null && size.width > 0f) Offset((at.x / size.width) * 2f - 1f, (at.y / size.height) * 2f - 1f) else Offset(-.4f, -.6f)
-            particles(marks, light)
+            particles(marks, light, foils)
         }
     }
 }

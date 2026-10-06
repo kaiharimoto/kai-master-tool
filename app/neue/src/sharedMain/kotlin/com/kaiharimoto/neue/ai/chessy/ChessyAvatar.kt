@@ -77,11 +77,12 @@ fun ChessyAvatar(
     val look by rememberUpdatedState(pointer)
     val hook by rememberUpdatedState(rigHook)
     val centre = remember { FloatArray(3) }
+    val foils = remember { ChessyFoils() }
     LaunchedEffect(rig) {
         var last = 0L
         while (true) {
             withFrameNanos { now ->
-                val dt = if (last == 0L) 16f else ((now - last) / 1e6f).coerceIn(0f, 64f)
+                val dt = if (last == 0L) 16f else ((now - last) / 1e6f).coerceIn(0f, ChessyRig.MAX_STEP)
                 last = now
                 val at = look()
                 val w = centre[2]
@@ -92,6 +93,12 @@ fun ChessyAvatar(
                 body.step(dt / 1000f)
                 rig.step(dt, ax, ay, speaking, blinks = ChessyMoods.of(showing).blinks)
                 tick.intValue++
+            }
+            // calm (only her drift and breath moving): a step every ~65 ms instead of every frame, asleep every ~115; her
+            // motion is computed from the real time between steps, so it is the same motion, drawn less often. On the desk
+            // every frame she asks for repaints the whole window, so this is the window's rest as much as hers.
+            if (!rig.frame.lively && !speaking && !body.busy) {
+                kotlinx.coroutines.delay(if (showing == Expression.SLEEPING) SLEEP_STEP_MS else CALM_STEP_MS)
             }
         }
     }
@@ -109,9 +116,24 @@ fun ChessyAvatar(
     ) {
         tick.intValue
         val a = assets ?: return@Canvas
-        drawChessy(a, rig.frame, ChessyMoods.of(showing), body, head = size.value < ChessyFit.HEAD_BELOW_DP)
+        drawChessy(a, rig.frame, ChessyMoods.of(showing), body, head = size.value < ChessyFit.HEAD_BELOW_DP, foils = foils)
     }
 }
+
+/** Her two runs of marks' foil brushes, kept with her between frames ([MarkFoils]). */
+class ChessyFoils {
+    val fx = MarkFoils()
+    val top = MarkFoils()
+}
+
+/**
+ * Between calm steps (the performance pass): with a frame's own wait, about fifteen a second. Her drift is at most some
+ * seven screen pixels a second at the chat box's size, so a step moves her under half a pixel, which nobody sees as a step.
+ */
+private const val CALM_STEP_MS = 50L
+
+/** Between steps while she sleeps (only her breath moves): about eight a second. */
+private const val SLEEP_STEP_MS = 100L
 
 /**
  * Where Chessy has no room to be read (a 28 dp spot in a bar): kai wants her face never drawn too small to read, so a
@@ -134,8 +156,10 @@ val LocalChessy = androidx.compose.runtime.staticCompositionLocalOf<ChessyLook?>
 
 /** Chessy's pack and pictures, read once for the app's lifetime. */
 class ChessyAssets(val pack: ChessyPack, val parts: ChessyParts?, val images: Map<String, ImageBitmap>) {
-    private val meshes = HashMap<Pic, Mesh>()
-    internal fun mesh(p: Pic): Mesh = meshes.getOrPut(p) { Mesh(p) }
+    private val meshes = HashMap<Pair<Pic, Float>, Mesh>()
+
+    /** [p]'s grid with cells of [cell] sheet pixels, made once per size of cell. */
+    internal fun mesh(p: Pic, cell: Float = Mesh.CELL): Mesh = meshes.getOrPut(p to cell) { Mesh(p, cell) }
 
     companion object {
         var loaded: ChessyAssets? = null
@@ -156,9 +180,9 @@ class ChessyAssets(val pack: ChessyPack, val parts: ChessyParts?, val images: Ma
 }
 
 /** A picture's grid: where each vertex samples it, the triangles, and room for where they land each frame. */
-internal class Mesh(val pic: Pic) {
-    val nx = maxOf(2, ceil(pic.w / CELL).toInt())
-    val ny = maxOf(2, ceil(pic.h / CELL).toInt())
+internal class Mesh(val pic: Pic, cell: Float = CELL) {
+    val nx = maxOf(2, ceil(pic.w / cell).toInt())
+    val ny = maxOf(2, ceil(pic.h / cell).toInt())
     val count = (nx + 1) * (ny + 1)
     val texs = FloatArray(count * 2)
     val sheet = FloatArray(count * 2)
@@ -184,8 +208,21 @@ internal class Mesh(val pic: Pic) {
     }
 
     companion object {
-        /** Sheet pixels a cell spans: fine enough for the turn's curve, few enough for the bar's glyph. */
+        /** Sheet pixels a cell spans at its finest: fine enough for the turn's curve drawn large. */
         const val CELL = 24f
+
+        /**
+         * The cell for a drawing at [scale] screen pixels per sheet pixel (the performance pass): about [ON_SCREEN] screen
+         * pixels a side, never finer than [CELL], in a few steps so the grids are shared. Her 132 dp in the chat box is a
+         * grid some fifteen times smaller than her whole sheet's, and the warp's curve is still under a pixel.
+         */
+        fun cellFor(scale: Float): Float {
+            val want = if (scale > 0f) ON_SCREEN / scale else CELL
+            return STEPS.lastOrNull { it <= want } ?: CELL
+        }
+
+        const val ON_SCREEN = 8f
+        private val STEPS = floatArrayOf(CELL, 32f, 48f, 64f, 96f)
     }
 }
 
@@ -196,13 +233,14 @@ private val pose = LayerPose()
  * Chessy as one frame shows her wearing [mood], fitted to the canvas: back to front, her face's parts over the Grin her
  * face layer wears, [body]'s lean and marks round her (the studio draws set poses with it; a null [body] stands still).
  */
-fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body: ChessyMarks? = null, head: Boolean = false) {
+fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body: ChessyMarks? = null, head: Boolean = false, foils: ChessyFoils? = null) {
     val pack = a.pack
     // her whole figure, or (small, the bar's and the composer's) her head alone: ears to chin
     val fit = ChessyFit.of(size.width, size.height, head)
     val s = fit[0]
     val ox = fit[1]
     val oy = fit[2]
+    val cell = Mesh.cellFor(s)
     val neckX = pack.sphere.cx
     val neckY = pack.sphere.cy + pack.sphere.ry * .95f
     val parts = a.parts
@@ -211,7 +249,7 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
     fun pic(p: Pic?, layerId: String, alpha: Float = 1f, tune: (LayerPose.() -> Unit)? = null) {
         p ?: return
         val img = a.images[p.file] ?: return
-        val m = a.mesh(p)
+        val m = a.mesh(p, cell)
         ChessyWarp.pose(pack, layerId, p, f, if (layerId == "tongue") ChessyFaces.TONGUE else face, pose)
         if (layerId == "ear-l") pose.rot -= mood.ears * DEG
         if (layerId == "ear-r") pose.rot += mood.ears * DEG
@@ -311,9 +349,9 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
         scale(body.sx, body.sy, Offset(px, py))
     }) {
         drawn()
-        marks(body.fx, s, ox, oy, light)
+        marks(body.fx, s, ox, oy, light, foils?.fx)
     }
-    marks(body.top, s, ox, oy, light)
+    marks(body.top, s, ox, oy, light, foils?.top)
 }
 
 private const val DEG = (PI / 180).toFloat()
