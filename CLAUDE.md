@@ -314,6 +314,11 @@ numerals. **`docs/NEUE.md` is the authority.** The short version:
     still `AiMark` stands by the name (`AiName`: replies, the panel's head, Settings) — kai: "every
     mention of Ai is a chance for the art".
   - Only the whole head moves; the net never distorts.
+- **Chessy, the ghost in the system** (kai, 2026-10, `NEUE.md` §4k″): a cat girl who hacks the app and takes Ai's
+  place after five replies (or `/chessy`). Her pictures are kai's approved mockup exactly (`tools/chessy/export.js` →
+  `composeResources/files/chessy/`); the rig and warp are `core/ai/chessy` (pure, tested); `ChessyAvatar` draws each
+  picture as a bent mesh (`drawMesh`: Skia/Android `drawVertices`). `AiPrefs.persona = chessy` puts her face where
+  Ai's is (`LocalChessy`). The takeover, her twenty moods, her voice and the sound come in later phases.
 - **The pages are `01` Builder (home), `02` Decks, `03` Siding, `04` Format, `05` Prep, `06` Present, `07` Duel, `08` World, `09` Shootout** (1.0.40, kai:
   Odds and Stats removed; Builder first since 1.0.89, the logo opens the index (`NeueState.railHeld`); the siding editor its own page, `SidingPage`, opened by
   anything that asks `Webs.side`). Siding sides the deck asked for, else the builder's;

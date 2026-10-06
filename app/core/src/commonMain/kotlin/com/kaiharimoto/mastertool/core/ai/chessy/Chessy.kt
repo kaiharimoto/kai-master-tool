@@ -1,0 +1,63 @@
+package com.kaiharimoto.mastertool.core.ai.chessy
+
+import com.kaiharimoto.mastertool.core.prefs.AiPrefs
+
+/**
+ * Chessy (kai, 2026-10): a cat girl, a ghost in the system, who hacks the app and takes over Ai's role. These are
+ * the rules of her story that are not a picture: the words typed to call her up, and when her takeover is due.
+ */
+
+/** What the chat's composer can say to the app itself rather than to the model: a whole message, one command. */
+enum class SlashCommand(val word: String) {
+    /** Calls the takeover now, or plays it again. */
+    CHESSY("chessy"),
+
+    /** Chessy's full cat voice in her replies, on or off. */
+    CAT_MODE("catmode"),
+
+    /** Ai back as the assistant. */
+    AI("ai");
+
+    companion object {
+        /**
+         * The command a message is, or null: the whole message, after trimming, is a slash and a command's word, in
+         * any case. Anything else (a slash inside a sentence, `/chessy please`) goes to the model as it is.
+         */
+        fun parse(text: String): SlashCommand? {
+            val t = text.trim()
+            if (!t.startsWith("/") || t.length < 2) return null
+            val word = t.drop(1).lowercase()
+            return entries.firstOrNull { it.word == word }
+        }
+    }
+}
+
+/** When Chessy's takeover plays by itself. */
+object TakeoverGate {
+    /** Replies Ai finishes before she breaks in (kai: after 5 uses). */
+    const val USES = 5
+
+    /**
+     * Whether it is due now: the assistant is on, it has not played, enough replies are done, and nothing is under
+     * way — a reply being written, a card carried, a key held. [busy] is the app's say on that last part; the
+     * takeover never interrupts.
+     */
+    fun due(prefs: AiPrefs, busy: Boolean): Boolean =
+        prefs.enabled && !busy && prefs.takeover == AiPrefs.TAKEOVER_NONE && prefs.uses >= USES
+}
+
+/**
+ * Which of Chessy's three sheet faces shows each of Ai's moods, until she has a face for every one (Phase 3): the
+ * Grin for her ordinary moments, the Fangs for a start or a fright, the Tongue (eyes shut, pleased) for good news.
+ */
+object ChessyFaces {
+    const val GRIN = "grin"
+    const val FANGS = "fangs"
+    const val TONGUE = "tongue"
+
+    fun of(e: com.kaiharimoto.mastertool.core.ai.avatar.Expression): String = when (e.id) {
+        "found", "surprised", "waking", "angry", "oops" -> FANGS
+        "done", "delighted", "love", "shy", "wink", "sleeping" -> TONGUE
+        else -> GRIN
+    }
+}

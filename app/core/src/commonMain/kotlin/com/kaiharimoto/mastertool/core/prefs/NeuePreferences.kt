@@ -109,6 +109,14 @@ data class AiPrefs(
     val speechRate: Float = 1f,
     /** Whether answers are checked against the card text once written (1.0.58, the fact-check pass). */
     val factCheck: Boolean = true,
+    /** Who the assistant is (Chessy, kai): [PERSONA_AI], or [PERSONA_CHESSY], the cat girl who hacked her way in. */
+    val persona: String = PERSONA_AI,
+    /** Replies Ai has finished for the person since this field arrived: the takeover comes after a few. */
+    val uses: Int = 0,
+    /** Whether Chessy's takeover has played: [TAKEOVER_NONE] or [TAKEOVER_SEEN]. */
+    val takeover: String = TAKEOVER_NONE,
+    /** Chessy's full voice in her replies, nya and all (`/catmode`); off, only her greetings and reactions have it. */
+    val catMode: Boolean = false,
 ) {
     /** The connection in use, if any is set up. */
     val connection: AiConnection? get() = connections.firstOrNull { it.id == active } ?: connections.firstOrNull()
@@ -124,9 +132,17 @@ data class AiPrefs(
         voiceModel = voiceModel.takeIf { id -> VoiceModel.entries.any { it.id == id } } ?: VoiceModel.DEFAULT.id,
         speakReplies = speakReplies.takeIf { it in listOf(SPEAK_IN_TALK, SPEAK_NEVER) } ?: SPEAK_IN_TALK,
         speechRate = if (speechRate.isFinite()) speechRate.coerceIn(0.5f, 2f) else 1f,
+        persona = persona.takeIf { it in PERSONAS } ?: PERSONA_AI,
+        uses = uses.coerceAtLeast(0),
+        takeover = takeover.takeIf { it in listOf(TAKEOVER_NONE, TAKEOVER_SEEN) } ?: TAKEOVER_NONE,
     )
 
     companion object {
+        const val PERSONA_AI = "ai"
+        const val PERSONA_CHESSY = "chessy"
+        val PERSONAS = listOf(PERSONA_AI, PERSONA_CHESSY)
+        const val TAKEOVER_NONE = "none"
+        const val TAKEOVER_SEEN = "seen"
         const val SPEAK_IN_TALK = "talk"
         const val SPEAK_NEVER = "never"
         const val REASONING_FOLDED = "folded"

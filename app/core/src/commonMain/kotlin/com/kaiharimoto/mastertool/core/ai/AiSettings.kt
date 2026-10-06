@@ -78,6 +78,8 @@ object AiSettings {
         "ai.voiceModel" to "The speech model the desktop transcribes the microphone with, on the computer: tiny.en (fast), base.en (standard), small.en (accurate) or base (any language).",
         "ai.speakReplies" to "Whether replies are spoken aloud: talk (in talk mode) or never.",
         "ai.speechRate" to "How fast replies are spoken aloud, 0.5 to 2; 1 is the voice's own pace.",
+        "ai.persona" to "Who the assistant is: \"ai\", or \"chessy\" (the cat girl who took over, with her own face and voice).",
+        "ai.catMode" to "Chessy's full cat voice in her replies (nya and all); off, only her greetings and reactions have it.",
         "ai.factCheck" to "Whether each answer's claims about cards, rulings and numbers are checked against the card text once written, and corrected if wrong.",
         FORMAT to "What the builder plays, as its bar offers it: TCG, OCG or Genesys. Genesys turns genesys on and keeps the region TCG; TCG or OCG turns genesys off.",
         "legalAsOf" to "The day the builder checks legality on, yyyy-MM-dd: that day's Forbidden & Limited list and the cards released by then. \"\" is today.",
@@ -94,7 +96,9 @@ object AiSettings {
      */
     val INTERNAL = setOf(
         "window", "touchIntroSeen", "lensKeys", "extraSideVisible", "inspectorFolded",
-        "ai.connections", "ai.introSeen", "sync", "start", "present", "duel",
+        "ai.connections", "ai.introSeen",
+        // Chessy (kai): how many replies have been finished, and whether her takeover has played, are the story's, not Ai's.
+        "ai.uses", "ai.takeover", "sync", "start", "present", "duel",
         // Ai World (1.0.97): whether Python runs on this computer is the person's decision alone, never Ai's.
         "world",
         // Recording (1.1.13): which camera and microphone open is the person's choice alone.

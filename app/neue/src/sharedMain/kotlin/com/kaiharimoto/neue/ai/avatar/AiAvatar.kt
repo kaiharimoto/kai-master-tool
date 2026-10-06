@@ -63,6 +63,13 @@ fun AiAvatar(
     pointer: () -> Offset? = { null },
     name: String = "Ai",
 ) {
+    // Chessy has taken Ai's place (kai): her face, in the same spot, at the same size
+    com.kaiharimoto.neue.ai.chessy.LocalChessy.current?.let { look ->
+        com.kaiharimoto.neue.ai.chessy.ChessyAvatar(
+            com.kaiharimoto.mastertool.core.ai.chessy.ChessyFaces.of(expression), size, modifier, talking = look.talking(), pointer = pointer,
+        )
+        return
+    }
     val glyph = size.value < AvatarRig.GLYPH_BELOW_DP
     val rig = remember(glyph) { AvatarRig(glyph = glyph, seed = (System.nanoTime() % 100_000).toInt()) }
     val tick = remember { mutableIntStateOf(0) }

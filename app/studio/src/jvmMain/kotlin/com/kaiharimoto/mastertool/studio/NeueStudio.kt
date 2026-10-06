@@ -170,6 +170,8 @@ fun neueMain(args: Array<String>) {
     val name = map["name"] ?: "neue-${map["page"] ?: "builder"}"
     val data = File(map["data"] ?: File(System.getProperty("user.home"), ".cache/mastertool-studio").path).apply { mkdirs() }
     val deck = File(map["deck"] ?: "../ydk/lab.ydkx")
+    // --chessy[=grin,fangs]: Chessy's sheet through the app's renderer, no app around her (ChessyStudio)
+    if (map["chessy"] != null) return chessyShot(map, out, if (map["name"] != null) name else "chessy")
 
     val deps = dependencies(data, deck)
     runBlocking { println("[neue-studio] card pool: ${deps.cardRepository.sync(force = false)}") }
@@ -196,6 +198,8 @@ fun neueMain(args: Array<String>) {
                 h.neue.formOverride = FormFactor.PHONE
                 h.neue.form = FormFactor.PHONE
             }
+            // --persona=chessy: Chessy in Ai's place (her face wherever Ai's is)
+            map["persona"]?.let { p -> h.neue.update { it.copy(ai = it.ai.copy(persona = p)) } }
             // --touch=true: a tablet's touch idioms on the desk (a finger's switches, hints that say tap).
             map["touch"]?.let { h.neue.touchOverride = it == "true" }
             // --lens=roles etc. is below; --dock=PEEK|HALF|FULL sets the phone's pool dock.
