@@ -73,6 +73,20 @@ class ChessyRig(seed: Int = 1, private val still: Boolean = false, private val d
     private var earSide = 0
     private var talkAt = -1f
 
+    /** An ear twitches now: −1 her left, 1 her right (a hand on it, in the petting mode). */
+    fun twitch(side: Int) {
+        if (still) return
+        earAt = clock
+        earSide = if (side < 0) 0 else 1
+    }
+
+    /** Her bell swings as if flicked, by [strength] (1 a good flick), her tongue with it. */
+    fun ring(strength: Float = 1f) {
+        if (still) return
+        vx[SwingGroup.BELL.ordinal] += .9f * strength
+        vx[SwingGroup.TONGUE.ordinal] += .4f * strength
+    }
+
     /**
      * Advance [dtMs]. [aimX], [aimY] are where she looks, -1 to 1 across her (null: nobody near, she drifts); [talking]
      * starts and stops her speech; [blinks] off holds her eyes open (a face with its eyes shut has no blink).

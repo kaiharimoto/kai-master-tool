@@ -945,6 +945,12 @@ fun neueMain(args: Array<String>) {
             if (map["playmenu"] == "true") h.neue.menu = MenuSpec(androidx.compose.ui.geometry.Offset(width.toFloat(), 48f), h.playMenu())
             if (map["goal"] == "true") h.builder.newGoal()
             clock.run((map["frames"] ?: "90").toInt())
+            // --chessy-amie=pet|tickle|bell|ear|hug|sulk (with --persona=chessy): her petting mode open, that hand played through it.
+            map["chessy-amie"]?.let { demo ->
+                h.ai.amieDemo = demo
+                h.ai.openAmie()
+                clock.run((map["amie-frames"] ?: "50").toInt())
+            }
             // --chessy-crew="edit_deck:Editing+the+deck>Added+3+Ash+Blossom;search_cards:Searching+cards" (with --persona=chessy; + is a space):
             // her copies sent out as those tools ran, each saying its line (or, after >, what came of it), held there for the picture.
             map["chessy-crew"]?.let { spec ->

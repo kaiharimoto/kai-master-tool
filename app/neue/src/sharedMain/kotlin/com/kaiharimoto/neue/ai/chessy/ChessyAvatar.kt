@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import com.kaiharimoto.mastertool.core.ai.avatar.Expression
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyEye
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFaces
+import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFit
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyFrame
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyLips
 import com.kaiharimoto.mastertool.core.ai.chessy.ChessyMarks
@@ -64,6 +65,7 @@ fun ChessyAvatar(
     talking: Boolean = false,
     pointer: () -> Offset? = { null },
     still: Boolean = false,
+    rigHook: (ChessyRig) -> Unit = {},
 ) {
     var assets by remember { mutableStateOf(ChessyAssets.loaded) }
     LaunchedEffect(Unit) { if (assets == null) assets = ChessyAssets.load() }
@@ -73,6 +75,7 @@ fun ChessyAvatar(
     val showing by rememberUpdatedState(expression)
     val speaking by rememberUpdatedState(talking)
     val look by rememberUpdatedState(pointer)
+    val hook by rememberUpdatedState(rigHook)
     val centre = remember { FloatArray(3) }
     LaunchedEffect(rig) {
         var last = 0L
@@ -84,6 +87,7 @@ fun ChessyAvatar(
                 val w = centre[2]
                 val ax = if (at != null && w > 0f) ((at.x - centre[0]) / (w * 1.5f)).coerceIn(-1f, 1f) else null
                 val ay = if (at != null && w > 0f) ((at.y - centre[1]) / (w * 1.5f)).coerceIn(-1f, 1f) else null
+                hook(rig)
                 body.show(showing)
                 body.step(dt / 1000f)
                 rig.step(dt, ax, ay, speaking, blinks = ChessyMoods.of(showing).blinks)
@@ -105,7 +109,7 @@ fun ChessyAvatar(
     ) {
         tick.intValue
         val a = assets ?: return@Canvas
-        drawChessy(a, rig.frame, ChessyMoods.of(showing), body, head = size.value < HEAD_BELOW_DP)
+        drawChessy(a, rig.frame, ChessyMoods.of(showing), body, head = size.value < ChessyFit.HEAD_BELOW_DP)
     }
 }
 
@@ -187,14 +191,6 @@ internal class Mesh(val pic: Pic) {
 
 private val pose = LayerPose()
 
-/**
- * Her head on the sheet, ears to the tips of her hair and the bell under her chin (left, top, right, bottom): what a
- * small avatar shows, everything of her inside its box so nothing hangs over what is below it.
- */
-private val HEAD = floatArrayOf(17f, 80f, 1262f, 1660f)
-
-/** Below this she is drawn as her head alone. */
-private const val HEAD_BELOW_DP = 150f
 
 /**
  * Chessy as one frame shows her wearing [mood], fitted to the canvas: back to front, her face's parts over the Grin her
@@ -203,13 +199,10 @@ private const val HEAD_BELOW_DP = 150f
 fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body: ChessyMarks? = null, head: Boolean = false) {
     val pack = a.pack
     // her whole figure, or (small, the bar's and the composer's) her head alone: ears to chin
-    val l0 = if (head) HEAD[0] else 0f
-    val t0 = if (head) HEAD[1] else 0f
-    val bw = if (head) HEAD[2] - HEAD[0] else pack.w.toFloat()
-    val bh = if (head) HEAD[3] - HEAD[1] else pack.h.toFloat()
-    val s = minOf(size.width / bw, size.height / bh)
-    val ox = (size.width - bw * s) / 2f - l0 * s
-    val oy = (size.height - bh * s) / 2f - t0 * s
+    val fit = ChessyFit.of(size.width, size.height, head)
+    val s = fit[0]
+    val ox = fit[1]
+    val oy = fit[2]
     val neckX = pack.sphere.cx
     val neckY = pack.sphere.cy + pack.sphere.ry * .95f
     val parts = a.parts
@@ -306,6 +299,9 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
         drawn()
         return
     }
+    // the foil on her marks catches a light that drifts slowly round them
+    val clock = System.nanoTime() / 1e9
+    val light = Offset((kotlin.math.sin(clock * .6) * .7).toFloat(), (kotlin.math.cos(clock * .45) * .7).toFloat())
     // Ai's body language on her: a hop, a lean about her neck, a squash; and her marks, riding her head
     val px = ox + neckX * s
     val py = oy + neckY * s
@@ -315,9 +311,9 @@ fun DrawScope.drawChessy(a: ChessyAssets, f: ChessyFrame, mood: ChessyMood, body
         scale(body.sx, body.sy, Offset(px, py))
     }) {
         drawn()
-        withTransform({ translate(ox, oy); scale(s, s, Offset.Zero) }) { marks(body.fx, s) }
+        marks(body.fx, s, ox, oy, light)
     }
-    withTransform({ translate(ox, oy); scale(s, s, Offset.Zero) }) { marks(body.top, s) }
+    marks(body.top, s, ox, oy, light)
 }
 
 private const val DEG = (PI / 180).toFloat()

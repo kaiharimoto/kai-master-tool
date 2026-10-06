@@ -479,6 +479,8 @@ class NeueHolders(
 
     /** Esc unwinds one layer at a time, from the top: overlays, then modes, then focus, then selection. */
     internal fun dismiss() {
+        // Chessy's petting mode, over everything: she goes back to the chat box first
+        if (amieOpen) { ai.closeAmie(); return }
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = true)) return
         // The Spotlight closes first, its field with it (1.0.87).
         if (neue.page == Page.DUEL && duel.spotlight != null && com.kaiharimoto.neue.duel.dismissDuel(this)) return
@@ -491,11 +493,15 @@ class NeueHolders(
     }
 
     /** Whether Back has anything to close; with nothing, the system's own back (and its predictive preview) is right. */
-    fun canGoBack(): Boolean = present.playing != null || (neue.page == Page.PRESENT && present.open != null) || BackChain.back(backFlags()) != null
+    /** Chessy's petting mode is open (read without making the assistant when it was never opened). */
+    private val amieOpen: Boolean get() = neue.prefs.ai.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY && ai.amie != null
+
+    fun canGoBack(): Boolean = amieOpen || present.playing != null || (neue.page == Page.PRESENT && present.open != null) || BackChain.back(backFlags()) != null
 
     /** Android's Back: one layer, as Esc — never focus or the selection. Returns false when there was nothing. */
     fun back(): Boolean {
         wake()
+        if (amieOpen) { ai.closeAmie(); return true }
         if (com.kaiharimoto.neue.present.dismissPresent(this, esc = false)) return true
         if (com.kaiharimoto.neue.duel.dismissDuel(this)) return true
         if (com.kaiharimoto.neue.world.dismissWorld(this)) return true
@@ -1128,6 +1134,7 @@ private fun Shell(h: NeueHolders) {
         // Chessy's copies, over the page and its menus, under the cursor (kai, 2026-10)
         if (neue.prefs.ai.enabled && neue.prefs.ai.persona == com.kaiharimoto.mastertool.core.prefs.AiPrefs.PERSONA_CHESSY) {
             com.kaiharimoto.neue.ai.chessy.ChessyCrewLayer(h.ai.crew)
+            com.kaiharimoto.neue.ai.chessy.ChessyAmieLayer(h.ai)
         }
         // Last in the window, over everything in it.
         CursorLayer(h.cursor)

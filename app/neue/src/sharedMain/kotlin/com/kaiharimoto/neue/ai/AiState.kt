@@ -97,6 +97,25 @@ class AiState(internal val h: NeueHolders) {
 
     /** Chessy's copies at work, while she is the assistant (kai, 2026-10). */
     val crew = com.kaiharimoto.neue.ai.chessy.ChessyCrew()
+
+    /** Chessy's petting mode, while it is open: held on in the chat box, she comes out large (kai's Easter egg). */
+    var amie by mutableStateOf<com.kaiharimoto.mastertool.core.ai.chessy.ChessyAmie?>(null)
+        private set
+
+    /** For the studio's pictures: a hand to play through the petting mode once it opens (pet, tickle, bell, ear, hug, sulk). */
+    var amieDemo: String? = null
+
+    fun openAmie() {
+        if (amie == null) amie = com.kaiharimoto.mastertool.core.ai.chessy.ChessyAmie(seed = (System.nanoTime() % 100_000).toInt())
+    }
+
+    /** She goes back to the chat box, waving, and says goodbye there. */
+    fun closeAmie() {
+        val was = amie ?: return
+        amie = null
+        val bye = was.bye()
+        touched(AvatarPlay.Reaction(bye.mood, bye.seconds, bye.line))
+    }
     internal val http by lazy { HttpClientFactory.create() }
 
     /** The conversation on screen. */

@@ -2872,6 +2872,23 @@ back to ask whether to keep her. The roadmap is seven phases; this section grows
   **Her mark is her ears** (kai), traced from her art by `tools/chessy/ears.py` into `core/ai/chessy/ChessyEars.kt`
   (generated, never edited by hand) and drawn in ink by `ChessyMark`: `AiMark` draws it while she is the assistant,
   so it stands by every mention of her, and `ChessyTag` (a spot too small for her face) is the ears.
+- **Her marks are foil** (kai: "have the effect particles and symbols be the foil texture"): every heart, sparkle,
+  tear, sweat drop, anger cross and zzz round her keeps its white and plum sticker border and is filled with the cards'
+  holographic sheet (`ChessyInk.foil`: the mark drawn, then `Holo.drawHoloSheet` laid on with `SrcIn` inside a layer the
+  size of the mark, so each mark carries the whole rainbow, its light drifting). Her blush stays pink, and where there is
+  no runtime shader (Android before 13) the marks keep her flat violet and pink.
+- **Petting her** (kai's Easter egg, "like Pokemon Amie"): a press held on her face in the chat box (a finger's hold, or
+  the mouse's) brings her out large in the middle of the window over a paper veil (`ChessyAmieLayer`), with her name and
+  five foil hearts for how fond of you she is. Stroke her head back and forth to pet her, rub her cheeks, tickle her chin,
+  touch an ear (it twitches) or her bell (it rings), hold a finger on her for a hug; a mouse resting over her pets her too.
+  She answers in her moods with a line and a kaomoji ("That tickles! (≧▽≦)", "Thank you~ ♡", "Purrr… (ฅ´ω`ฅ)"),
+  never chattering (one answer every 1.6 s at most), foil hearts and sparkles rising from where she was touched. Poke her
+  face five times fast and she sulks until she is petted again; left alone she wonders where you went, then dozes.
+  Bye-bye, Esc, Back or a tap beside her puts her back in the chat box, waving. `core/ai/chessy/ChessyAmie.kt` is all of
+  it, tested: `ChessyFit` (where her picture lands in a box, both ways), `AmieZones` (what a touch on the sheet is),
+  `ChessyAmie` (gestures to reactions, fondness, the lines), `AmieParticles` (bounded at 60). Ai keeps its own face's
+  play (`AvatarPlay`); only Chessy has this. `tools/shoot.sh --persona=chessy --ai=panel --chessy-amie=pet|tickle|bell|ear|hug|sulk
+  --amie-frames=N` photographs it.
 - **`/chessy`, `/ai` and `/catmode`** are the app's, never the model's (`AiState.send` → `command`): `/chessy` makes
   her the assistant, `/ai` brings Ai back (the next message tells the model who it is now), `/catmode` turns her full
   cat voice on or off. `/chessy` will play the takeover once it is built.

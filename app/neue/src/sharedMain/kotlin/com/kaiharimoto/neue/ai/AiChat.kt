@@ -1,5 +1,6 @@
 package com.kaiharimoto.neue.ai
 
+import com.kaiharimoto.neue.ai.chessy.holdFace
 import com.kaiharimoto.neue.ai.chessy.chessySpot
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -992,8 +993,9 @@ private fun Modifier.avatarHand(ai: AiState): Modifier = composed {
                 onTap = { ai.touched(ai.play.tap(ai.clock(), ai.mood.sleeping)) },
                 onDoubleTap = { ai.touched(ai.play.doubleTap(ai.clock())) },
                 onLongPress = {
-                    ai.touched(ai.play.hold(longer = false))
-                    scope.launch {
+                    // held on Chessy, she comes out to play (kai's Easter egg); held on Ai, Ai is surprised, then shy
+                    ai.touched(ai.holdFace(longer = false))
+                    if (ai.amie == null) scope.launch {
                         kotlinx.coroutines.delay(((AvatarPlay.HOLD_LONGER - AvatarPlay.HOLD) * 1000).toLong())
                         if (pressed) ai.touched(ai.play.hold(longer = true))
                     }

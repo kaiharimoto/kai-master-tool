@@ -267,7 +267,7 @@ half4 main(float2 at) {
      * this size — for a shape the caller then masks. The foil-name exploration
      * draws it under a mask of the printed letters.
      */
-    fun DrawScope.drawHoloSheet(area: Rect, feel: Offset, cache: HoloCache? = null): Boolean {
+    fun DrawScope.drawHoloSheet(area: Rect, feel: Offset, cache: HoloCache? = null, blend: androidx.compose.ui.graphics.BlendMode = androidx.compose.ui.graphics.BlendMode.SrcOver): Boolean {
         val program = shader ?: return false
         val w = size.width
         val brush = program.brushOf(cache?.sheet) {
@@ -285,7 +285,7 @@ half4 main(float2 at) {
             float("uEdge", 0f)
             float("uSheet", 1f)
         }
-        drawRect(brush, topLeft = area.topLeft, size = area.size)
+        drawRect(brush, topLeft = area.topLeft, size = area.size, blendMode = blend)
         return true
     }
 }
