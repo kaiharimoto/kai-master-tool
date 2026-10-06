@@ -23,6 +23,11 @@ data class Proof(
     val at: Long = 0,
     /** The deck it was computed on ([fingerprint]); empty when the number does not depend on the deck. */
     val deck: String = "",
+    /**
+     * The written effects a goldfish number was computed with (Phase D step 4, `FxTrust.library`: the trusted scripts of
+     * the deck's cards and the engine's version); empty for every other tool. A changed script makes the number stale.
+     */
+    val library: String = "",
 )
 
 @Serializable
@@ -85,18 +90,28 @@ object Ledger {
         return list.filter { it.entry in held }
     }
 
-    /** [list] with every entry computed on another deck than [now] marked stale (estimates stay what they are). */
-    fun staleAgainst(list: List<Proven>, now: String): List<Proven> = list.map { p ->
-        if (p.status == Proven.Status.ESTIMATE || p.proofs.all { it.deck.isEmpty() || it.deck == now }) p
-        else if (p.status == Proven.Status.CHECKED) p.copy(status = Proven.Status.STALE)
+    /**
+     * [list] with every entry computed on another deck than [now] marked stale (estimates stay what they are) — and, given
+     * the deck's [library] of written effects as it is now (`FxTrust.library`), every goldfish number computed with other
+     * scripts: a script it used changed, was repaired or was newly written (Phase D step 4).
+     */
+    fun staleAgainst(list: List<Proven>, now: String, library: String? = null): List<Proven> = list.map { p ->
+        val deckMoved = p.proofs.any { it.deck.isNotEmpty() && it.deck != now }
+        val libraryMoved = library != null && p.proofs.any { it.library.isNotEmpty() && it.library != library }
+        if (p.status == Proven.Status.ESTIMATE || (!deckMoved && !libraryMoved)) p
+        else if (p.status == Proven.Status.CHECKED) p.copy(status = Proven.Status.STALE, note = if (libraryMoved && !deckMoved) LIBRARY_MOVED else p.note)
         else p
     }
+
+    /** Why a number went stale though the deck did not change. */
+    const val LIBRARY_MOVED = "a written effect it used has changed since"
 
     /** The mark an entry wears where the guide is read — by Ai in its prompt, by the person in the guide. */
     fun mark(p: Proven?): String? = when (p?.status) {
         null -> null
         Proven.Status.CHECKED -> "checked by ${p.proofs.map { it.tool }.distinct().joinToString()}"
-        Proven.Status.STALE -> "stale: the deck changed since this was computed — check it again before relying on it"
+        Proven.Status.STALE -> if (p.note == LIBRARY_MOVED) "stale: $LIBRARY_MOVED — run the goldfish again before relying on it"
+        else "stale: the deck changed since this was computed — check it again before relying on it"
         Proven.Status.CONTRADICTED -> "contradicted: checked again, it no longer holds${p.note.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()}"
         Proven.Status.ESTIMATE -> "estimate, not computed"
     }

@@ -110,12 +110,7 @@ object GoldfishInstrument {
                 ?: throw IllegalArgumentException("no target “$w” kept for this deck: ${kept.joinToString { it.name }.ifEmpty { "none yet — fx_target names one, or give it whole" }}")
         }
         val o = raw as? JsonObject ?: throw IllegalArgumentException("target is a kept target's name or {name, all: [conditions]}")
-        val filled = JsonObject(o + mapOf("id" to (o["id"] ?: JsonPrimitive("given")), "deck" to (o["deck"] ?: JsonPrimitive(deckId)), "name" to (o["name"] ?: JsonPrimitive("Given target"))))
-        val t = runCatching { GoldfishCodec.json.decodeFromJsonElement(EndBoard.serializer(), filled) }.getOrElse {
-            throw IllegalArgumentException("the target does not read: ${it.message?.lineSequence()?.firstOrNull()} — conditions are {\"t\": \"controls\" | \"set\" | \"holds\" | \"gy\" | \"banished\" | \"interruptions\" | \"any-of\", …}")
-        }
-        require(t.all.isNotEmpty()) { "the target has no conditions: give all: [{\"t\": \"interruptions\", \"n\": 1}]" }
-        return t
+        return GoldfishCodec.target("given", o.str("name") ?: "Given target", deckId, o["all"], EndBoard.AI)
     }
 
     /** The answer to build on: the counts, the fingerprints and the lines. */

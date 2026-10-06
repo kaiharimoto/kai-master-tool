@@ -1,10 +1,11 @@
 package com.kaiharimoto.mastertool.core.ai
 
 /**
- * Effects as code, Ai's tools (Phase D step 2, `docs/phases/D.md` §3.6): reading the library, checking a card's script, and
- * offering cards to write ([request]: an offer only — the person's click puts cards on the asked list). Targets and the
- * goldfish come after. Writing a script is `world_write` to `lib/effects/<passcode>.js`, as for any file of a world, and is
- * refused for a card nobody asked for (`FxAsks.gate`).
+ * Effects as code, Ai's tools (Phase D step 2, `docs/phases/D.md` §3.6): reading the library, checking a card's script,
+ * offering cards to write ([request]: an offer only — the person's click puts cards on the asked list), and naming the
+ * goldfish's targets ([target], Phase D step 4; the goldfish itself is the `goldfish` instrument, through `world_tool`).
+ * Writing a script is `world_write` to `lib/effects/<passcode>.js`, as for any file of a world, and is refused for a card
+ * nobody asked for (`FxAsks.gate`).
  */
 object FxTools {
     val state = ToolSpec(
@@ -52,5 +53,24 @@ object FxTools {
         phase = 3,
     )
 
-    val all: List<ToolSpec> = listOf(state, check, request)
+    val target = ToolSpec(
+        "fx_target",
+        "Effects as code, the goldfish: names an end board a deck wants after one turn — a target the goldfish (world_tool " +
+            "goldfish) is run against — kept with the deck and shown as yours (Ai's), beside the person's. Give name and all: " +
+            "conditions on the board once the End Phase is over, each {\"t\": \"controls\", \"where\": <filter>, \"n\": 2} " +
+            "(face-up on the field), set (set Spells/Traps, n), holds (in hand: a hand trap kept), gy, banished, interruptions (n, " +
+            "counted from the written effects: negate, destroy, banish or return, one per once-per-turn group) or any-of " +
+            "{\"any\": [...]}; a filter is the fx vocabulary's own ({\"t\": \"name-has\", \"word\": \"Branded\"}, " +
+            "{\"t\": \"name\", \"card\": <passcode>}). With remove, takes one of yours away; with neither, lists the deck's targets.",
+        schema {
+            string("deck_id", "A deck's id, or 'open' for the builder's deck (the default)")
+            string("name", "The target's name: \"Mirrorjade + one negate\"")
+            any("all", "Its conditions, a list")
+            string("remove", "A target's id or name to take away (only Ai's own)")
+        },
+        ToolGroup.APP,
+        phase = 3,
+    )
+
+    val all: List<ToolSpec> = listOf(state, check, request, target)
 }

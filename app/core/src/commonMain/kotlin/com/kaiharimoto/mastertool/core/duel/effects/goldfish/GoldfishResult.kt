@@ -4,6 +4,8 @@ import com.kaiharimoto.mastertool.core.ai.memory.AiMemory
 import com.kaiharimoto.mastertool.core.duel.effects.FxPaths
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 
 /*
  * What a goldfish run comes to (Phase D step 4, `docs/phases/D.md` §5.6), and the deck's file that keeps its targets and the
@@ -172,4 +174,29 @@ object GoldfishCodec {
 
     /** [d] with [r] kept, newest last, at most [GoldfishDoc.MOST_RESULTS]. */
     fun keep(d: GoldfishDoc, r: GoldfishResult): GoldfishDoc = d.copy(results = (d.results + r).takeLast(GoldfishDoc.MOST_RESULTS))
+
+    /** How a target's conditions are written, for an error that teaches. */
+    const val EXAMPLE = "[{\"t\": \"controls\", \"where\": {\"t\": \"name-has\", \"word\": \"Example\"}, \"n\": 2}, {\"t\": \"interruptions\", \"n\": 1}]"
+
+    /**
+     * A target read from what Ai or the instrument was given: [name] and the conditions [all] (a list of conditions as the
+     * vocabulary writes them). Throws [IllegalArgumentException] in words that show a call that works.
+     */
+    fun target(id: String, name: String, deck: String, all: JsonElement?, by: String, at: Long = 0L): EndBoard {
+        require(name.isNotBlank()) { "a target needs a name, like \"Two Example monsters + one negate\"" }
+        val list = all as? JsonArray ?: throw IllegalArgumentException("all is a list of conditions, like $EXAMPLE")
+        require(list.isNotEmpty()) { "all is empty: give at least one condition, like $EXAMPLE" }
+        require(list.size <= MOST_CONDITIONS) { "at most $MOST_CONDITIONS conditions a target (${list.size} given)" }
+        val conds = list.mapIndexed { i, e ->
+            val c = runCatching { json.decodeFromJsonElement(LenientBoardCond, e) }.getOrElse {
+                throw IllegalArgumentException("condition ${i + 1} does not read (${it.message?.lineSequence()?.firstOrNull()}): conditions are like $EXAMPLE")
+            }
+            require(c !is BoardCond.Unknown) { "condition ${i + 1} is no condition this build knows: “t” is controls, set, holds, gy, banished, interruptions or any-of — like $EXAMPLE" }
+            c
+        }
+        return EndBoard(id, name.trim().take(120), deck, conds, by, at)
+    }
+
+    /** The most conditions one target holds. */
+    const val MOST_CONDITIONS = 12
 }
